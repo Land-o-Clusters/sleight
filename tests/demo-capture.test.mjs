@@ -47,9 +47,9 @@ test('encoding is silent, 2x, bounded GIF retries and standard MP4', () => {
   assert.equal(demo.gifFits(0), false);
 });
 test('resume needs successful exits, complete metadata, intact digests and cleanup', t => {
-  const dir = world(t), files = ['demo.gif', 'demo.mp4', 'poster.png', 'sync.json', 'events.json'];
+  const dir = world(t), files = ['demo.gif', 'demo.mp4', 'poster.png', 'sync.json', 'events.json', 'probes.json'];
   for (const name of files) writeFileSync(join(dir, name), name);
-  const marker = demo.completedMarker(dir, { id: '01-ring', seconds: 8, fps: 30, gifFps: 12, gifBytes: 8, mp4Bytes: 8, encoder: 'ffmpeg', cleanup: true });
+  const marker = demo.completedMarker(dir, { id: '01-ring', seconds: 8, fps: 30, gifFps: 20, gifBytes: 8, mp4Bytes: 8, encoder: 'ffmpeg', cleanup: true, probes: { passed: true } });
   assert.equal(demo.reusable(marker), true);
   assert.equal(demo.reusable({ ...marker, cleanup: false }), false);
   assert.equal(demo.reusable({ ...marker, status: 'failed' }), false);
@@ -107,7 +107,7 @@ test('owner detection observes a real quiet gap, physical pointer changes and un
 });
 test('hold/lock waits cap without mutating either path', async () => {
   let clock = 0, reads = 0;
-  await assert.rejects(demo.waitClear({ exists: () => { reads++; return true; }, now: () => clock, wait: async ms => { clock += ms; } }), /BUSY/);
+  await assert.rejects(demo.waitClear({ exists: () => { reads++; return true; }, now: () => clock, wait: async ms => { clock += ms; }, log: () => {} }), /BUSY/);
   assert.equal(clock, 1200000); assert.ok(reads > 2);
 });
 test('child deadlines collect only an owned process and report its exit', async () => {

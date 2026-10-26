@@ -4,7 +4,7 @@
 import { spawn, execFileSync } from 'node:child_process';
 import { createHash, randomBytes } from 'node:crypto';
 import { existsSync, lstatSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, renameSync, rmSync, statSync, writeFileSync } from 'node:fs';
-import { homedir } from 'node:os';
+import { homedir, getPriority } from 'node:os';
 import { basename, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { setTimeout as sleep } from 'node:timers/promises';
@@ -13,6 +13,7 @@ import { prepareCharacterImport, installCharacter, checkCharacter, checkBuiltinC
 import { characterFrame } from '../../plugins/sleight/lib/hand/character-frame.mjs';
 import { readHandConfig } from '../../plugins/sleight/lib/hand/settings.mjs';
 import { writeHandSetting } from '../../plugins/sleight/lib/hand/command.mjs';
+import { verifyDrawing } from './probes.mjs';
 
 export const ROOT = fileURLToPath(new URL('../../', import.meta.url)).replace(/\/$/, '');
 const LOGS = join(homedir(), 'Library/Logs/sleight');
@@ -38,7 +39,7 @@ export function shotPlan() {
 export function recipe(id) {
   const click = atMs => ({ atMs, op: 'click', index: 0 });
   const status = (atMs, state) => ({ atMs, op: 'status', state });
-  if (id === '01-ring') return [click(500), { atMs: 2800, op: 'click', index: 1 }, { atMs: 5500, op: 'drag' }, click(9000), status(12500, 'done')];
+  if (id === '01-ring') return [click(500), { atMs: 1500, op: 'click', index: 1 }, click(2500), { atMs: 3700, op: 'drag' }, click(6500), status(9500, 'done')];
   if (id === '02-states') return [status(400, 'thinking'), status(3500, 'thinking'), status(6500, 'waiting'), status(13000, 'done')];
   if (id === '03-tsugi' || id === '03-kit') return [click(800), click(4000), status(8000, 'done'), status(12000, 'handback')];
   if (id === '04-narration') return [{ ...click(800), say: 'I will move the blue tile into the tray.' }, { atMs: 4800, op: 'drag', say: 'I will move the blue tile into the tray.' }, status(12000, 'done')];
@@ -53,22 +54,24 @@ export function recordPlan({ out, fixture, target, panel, seconds }) {
     streams: [{ name: 'take', windows: ids, composite: true, crop: 'first', followOwners: true }] };
 }
 export const gifFits = bytes => Number.isSafeInteger(bytes) && bytes > 0 && bytes <= 2_000_000;
-export function encodingPlan(source, out) {
+export const gifLadder = id => (id === '06-import' ? [[720, 128, 20], [720, 96, 16], [720, 64, 12]] :
+  [[720, 128, 20], [640, 96, 20], [640, 96, 16], [560, 64, 16], [480, 48, 12]]);
+export function encodingPlan(source, out, id) {
   const common = ['-hide_banner', '-loglevel', 'error', '-nostdin', '-y', '-threads', '1', '-filter_threads', '1', '-filter_complex_threads', '1', '-ss', '1', '-t', '16', '-i', source, '-an'];
   return {
     mp4: [...common, '-vf', 'setpts=PTS/2,fps=30,scale=960:-2', '-t', '8', '-c:v', 'libx264', '-threads', '1', '-preset', 'fast', '-crf', '23', '-pix_fmt', 'yuv420p', '-movflags', '+faststart', join(out, 'demo.mp4')],
-    gifs: [[720, 128], [640, 96], [560, 64], [480, 48]].map(([width, colors]) => [...common, '-vf',
-      `setpts=PTS/2,fps=12,scale=${width}:-2:flags=lanczos,split[a][b];[a]palettegen=max_colors=${colors}:stats_mode=diff[p];[b][p]paletteuse=dither=bayer:bayer_scale=5:diff_mode=rectangle`,
+    gifs: gifLadder(id).map(([width, colors, fps]) => [...common, '-vf',
+      `setpts=PTS/2,fps=${fps},scale=${width}:-2:flags=lanczos,split[a][b];[a]palettegen=max_colors=${colors}:stats_mode=diff[p];[b][p]paletteuse=dither=bayer:bayer_scale=5:diff_mode=rectangle`,
       '-t', '8', '-loop', '0', join(out, 'demo.gif')]),
   };
 }
-const EVIDENCE = ['demo.gif', 'demo.mp4', 'poster.png', 'sync.json', 'events.json'];
+const EVIDENCE = ['demo.gif', 'demo.mp4', 'poster.png', 'sync.json', 'events.json', 'probes.json'];
 export function completedMarker(directory, meta) {
   return { ...meta, directory, status: 'complete', files: Object.fromEntries(EVIDENCE.map(name => [name, digest(join(directory, name))])) };
 }
 export function reusable(marker) {
   try {
-    return marker?.status === 'complete' && marker.cleanup === true && marker.encoder === 'ffmpeg' && marker.seconds === 8 && marker.fps === 30 && marker.gifFps === 12 &&
+    return marker?.status === 'complete' && marker.cleanup === true && marker.encoder === 'ffmpeg' && marker.seconds === 8 && marker.fps === 30 && [12, 16, 20].includes(marker.gifFps) && marker.probes?.passed === true &&
       gifFits(marker.gifBytes) && marker.mp4Bytes > 0 && EVIDENCE.every(name => {
         const p = join(marker.directory, name), st = lstatSync(p);
         return st.isFile() && !st.isSymbolicLink() && st.size > 0 && (name !== 'demo.gif' || st.size === marker.gifBytes) &&
@@ -115,22 +118,44 @@ export function makePet(base) {
   return { sourceSheet, root, pack, callout: characterCallout(prepared) };
 }
 
+export const compileSources = [['plugins/sleight/lib/direct-browser/native/consent-host.swift', 'consent-host'],
+  ['bench/demo/fixture.swift', 'fixture'], ['bench/hand/capture.swift', 'helper'], ['bench/capture/recorder.swift', 'recorder']];
+export const commandLine = (command, args) => [command, ...args].map(v => `'${String(v).replaceAll("'", "'\\''")}'`).join(' ');
 export function dryRunPlan(opts) {
   return ['DM1 dry run: no children, files, screen inspection or hold/lock access.',
+    `Process nice: ${getPriority()}. Dry-run command placeholders resolve inside this run's private work and evidence bank.`,
     'Live requires --owner-away, macOS, a clean pinned checkout and existing Screen Recording permission. Never requests permissions.',
-    'Wait at most 30 min for the hold and 20 min for the live lock. Acquire the lock only when clear; never remove a foreign lock.',
-    'caffeinate -dims holds the display awake. Every child has a deadline. Every exit collects owned children before releasing the lock.',
+    'Wait at most DM1_WAIT_CAP_MS (default 30 min) for the hold and 20 min for the live lock, logging every 30 s. Acquire the lock only when clear; never remove a foreign lock.',
+    'caffeinate -dims holds the display awake; caffeinate -u -t 5 precedes compilation and every shot quiet gap. Display-asleep or screen-locked preflight refuses with exit 7.',
     'Compile host, fixture, capture helper and recorder serially in a private temporary directory. No app installation or owner settings.',
-    '15 s input-free gap, then HID/pointer watch; unknown telemetry or owner input stops. A new hold closes fixtures and stops for resume.',
+    '15 s input-free gap before every attempt, then HID/pointer watch; unknown telemetry or owner input stops. A hold closes fixtures, releases the lock, waits and reruns the shot.',
     'Fixture-local AppKit mouse dispatch invokes actual mouseDown/mouseDragged/mouseUp handlers; no posted system input, engine, model or Apple events.',
     'ScreenCaptureKit includes only the fixture and renderer applications pinned by their window ids, cropped to the outer fixture at 2x resolution, 60 fps.',
-    'Record 18 s per take including 1 s preroll and tail; cut 16 s to 8 s at 2x. MP4 30 fps, GIF 12 fps, silent.',
+    'Record 18 s per take including 1 s preroll and tail; cut 16 s to 8 s at 2x. MP4 30 fps; GIF tries 20, then 16, then 12 fps, silent.',
     'Encoder: ffmpeg if already installed; no pure Node GIF encoder exists in this checkout. Missing ffmpeg refuses before windows. Never installs anything.',
     'GIF budget: 2 MB (2,000,000 bytes). Retry 720/640/560/480 px and 128/96/64/48 colors; oversize fails without a completed marker.',
+    'Import callout: 13 pt in a 304 pt panel, 720 px GIF on every rung (11.7 px font); native layout refuses clipping. Fixture needs an 850x780 pt visible screen.',
+    'Each shot requires ring pixels; character shots require sprite pixels; narration requires bubble pixels. Probe frames come only from the owned recording.',
+    'A failed shot retries once, records both failures and continues. Resume skips finished shots and puts old failures after untried shots. Contact sheet includes successful shots.',
+    commandLine('/usr/bin/caffeinate', ['-dims', '-w', '<node-pid>']),
+    commandLine('/usr/bin/caffeinate', ['-u', '-t', '5']),
+    commandLine('ffmpeg', ['-version']),
+    ...compileSources.map(([source, name]) => commandLine('/usr/bin/xcrun', ['swiftc', '-module-cache-path', '<work>/modules', join(ROOT, source), '-o', `<work>/bin/${name}`]) + ' (600 s deadline)'),
+    commandLine('<work>/bin/helper', ['preflight']),
+    commandLine('<work>/bin/fixture', ['--preflight']),
+    commandLine('<work>/bin/helper', ['watch-input', '1000', '16']),
+    commandLine('<work>/bin/helper', ['watch-input', '1000', '14400']),
+    commandLine('<work>/bin/fixture', ['--serve']),
+    commandLine('<work>/bin/consent-host', ['--hand', '--capture=visible', '--cursor-style=ring']),
+    commandLine('<work>/bin/consent-host', ['--ring-plan-dump', '--cursor-style=ring', '--clip=<target-frame>']),
+    commandLine('<work>/bin/recorder', ['record', '<shot>/capture-plan.json']),
+    ...[undefined, '06-import'].flatMap(id => { const plan = encodingPlan('<shot>/take.mov', '<shot>', id); return [plan.mp4, ...plan.gifs].map(args => commandLine('ffmpeg', args)); }),
+    commandLine('ffmpeg', ['-hide_banner', '-loglevel', 'error', '-nostdin', '-y', '-threads', '1', '-filter_threads', '1',
+      '-i', '<shot>/take.mov', '-ss', '<recorder-clock-offset>', '-frames:v', '1', '-vf', 'scale=800:740', '-threads', '1', '-pix_fmt', 'rgb24', '-f', 'rawvideo', '<shot>/probe-<kind>.rgb']),
     ...shotPlan().map(s => `${s.id}: ${s.seconds} s at 2x; ${s.caption} Deadline ${s.deadlineMs / 1000} s.`),
     `resume state: ${safeText(join(opts.night, 'dm1-state.json'))}; only intact hashes, complete encodes and collected children count as done.`,
     'Output: ~/Library/Logs/sleight/demo-<stamp>/, shots.json, contact-sheet.png, contact-sheet.html, per-shot GIF/MP4/poster/sync/events and captions.',
-    'Partial takes are kept. Signals, owner return, hold, deadline and cleanup failure never produce completion markers. Cleanup failure retains the lock.',
+    'Partial takes are kept. Shot deadlines fail that shot. Signals, owner return, hold cap, telemetry and cleanup failure stop the loop. Cleanup failure retains any owned lock.',
   ];
 }
 
@@ -212,16 +237,90 @@ export async function closeScene(channels) {
   const bad = results.find(r => r.value.code !== 0);
   if (bad) throw Error(`Native scene exited ${bad.value.code ?? bad.value.signal}`);
 }
-export async function waitClear({ exists = existsSync, now = Date.now, wait = sleep, signal } = {}) {
-  let holdSince, lockSince;
+export function waitCap(value = process.env.DM1_WAIT_CAP_MS) {
+  if (value === undefined) return 1800000;
+  if (!/^[1-9]\d*$/.test(String(value)) || !Number.isSafeInteger(Number(value))) throw Error('Invalid DM1_WAIT_CAP_MS');
+  return Number(value);
+}
+export async function waitClear({ exists = existsSync, now = Date.now, wait = sleep, signal,
+  capMs = waitCap(), started = now(), log = console.log } = {}) {
   while (true) {
     signal?.throwIfAborted(); const held = exists(HOLD), locked = exists(LOCK);
     if (!held && !locked) return;
-    if (held) holdSince ??= now(); else holdSince = undefined;
-    if (locked) lockSince ??= now(); else lockSince = undefined;
-    if (held && now() - holdSince >= 1800000 || locked && now() - lockSince >= 1200000) throw fail('BUSY');
-    await wait(1000, undefined, { signal });
+    const limit = locked ? Math.min(capMs, 1200000) : capMs, elapsed = now() - started;
+    if (elapsed >= limit) throw fail('BUSY');
+    log(`DM1 waiting: ${held && locked ? 'hold and live lock' : held ? 'hold' : 'live lock'}, ${Math.round(elapsed / 1000)} s elapsed, ${Math.ceil((limit - elapsed) / 1000)} s left`);
+    await wait(Math.min(30000, limit - elapsed), undefined, { signal });
   }
+}
+// One budget spans the clear/mkdir race and a hold arriving immediately after acquisition.
+export async function acquireForShot(acquire, { exists = existsSync, now = Date.now, signal, ...options } = {}) {
+  const started = now();
+  for (;;) {
+    await waitClear({ ...options, exists, now, signal, started });
+    let release;
+    try { release = await acquire(LOCK, { wait: false, signal }); }
+    catch (e) {
+      if (e.code === 'EEXIST' || /^Another live run holds /.test(e.message)) {
+        if (now() - started >= Math.min(options.capMs ?? waitCap(), 1200000)) throw fail('BUSY');
+        continue;
+      }
+      throw e;
+    }
+    if (!exists(HOLD)) return release;
+    try { await release(); } catch { throw fail('CLEANUP'); }
+  }
+}
+export const failureReason = (e, signal) => signal?.reason?.code ?? e.cause?.code ?? e.code ?? e.message;
+// Compile phases own no live lock. Their callback collects every child before a hold can be waited out.
+export async function withHoldRetry(run, { signal, exists = existsSync, now = Date.now, capMs = waitCap(), log = console.log, ...options } = {}) {
+  let episode;
+  for (;;) {
+    if (episode !== undefined && now() - episode >= capMs) throw fail('BUSY');
+    await waitClear({ ...options, signal, exists, now, capMs, log, started: episode ?? now() });
+    const phase = new AbortController(), forward = () => phase.abort(signal.reason);
+    signal?.addEventListener('abort', forward, { once: true });
+    const poll = setInterval(() => { if (exists(HOLD) && !phase.signal.aborted) phase.abort(fail('HOLD')); }, 250);
+    try {
+      signal?.throwIfAborted();
+      if (exists(HOLD)) throw fail('HOLD');
+      const result = await run(phase.signal); phase.signal.throwIfAborted(); return result;
+    } catch (e) {
+      if (e.code === 'CLEANUP') throw e;
+      const reason = failureReason(e, phase.signal);
+      if (reason !== 'HOLD') throw fail(reason);
+      episode ??= now(); log('DM1 compile: owned children collected; wait out hold and retry source');
+    } finally { clearInterval(poll); signal?.removeEventListener('abort', forward); }
+  }
+}
+const terminalReason = reason => ['OWNER', 'BUSY', 'TELEMETRY', 'CLEANUP', 'SIGINT', 'SIGTERM', 'SIGHUP',
+  'display-asleep', 'screen-locked', 'screen-lock-state-unknown'].includes(reason);
+
+// New shots precede old failures on resume. A hold reruns the interrupted shot without spending its retry.
+export async function runShots(state, { take, save = () => {}, signal, log = console.log, ready = reusable } = {}) {
+  const pending = shotPlan().filter(s => !ready(state.markers[s.id]));
+  pending.sort((a, b) => Number(state.markers[a.id]?.status === 'failed') - Number(state.markers[b.id]?.status === 'failed'));
+  for (const shot of pending) {
+    let failures = 0;
+    while (failures < 2) {
+      signal?.throwIfAborted();
+      try {
+        const marker = await take(shot, failures + 1);
+        if (!ready(marker)) throw Error('Completed marker failed validation');
+        state.markers[shot.id] = { ...marker, attempts: state.markers[shot.id]?.attempts ?? [] };
+        save(state); break;
+      } catch (e) {
+        const reason = safeText(failureReason(e, signal));
+        const attempts = [...state.markers[shot.id]?.attempts ?? [], { reason, directory: e.directory, at: new Date().toISOString() }];
+        state.markers[shot.id] = { status: 'failed', directory: e.directory, reason, attempts };
+        save(state);
+        if (terminalReason(reason)) throw e;
+        if (reason === 'HOLD') { log(`DM1 ${shot.id}: hold interrupted take; release, wait, wake and rerun`); continue; }
+        failures++; log(`DM1 ${shot.id}: attempt ${failures}/2 failed: ${reason}`);
+      }
+    }
+  }
+  return shotPlan().filter(s => ready(state.markers[s.id])).length;
 }
 export function inputWatch(quietSince) {
   let rest;
@@ -232,27 +331,27 @@ export function inputWatch(quietSince) {
   };
 }
 
-export async function encode(children, dir) {
-  const commands = encodingPlan(join(dir, 'take.mov'), dir);
+export async function encode(children, dir, id) {
+  const commands = encodingPlan(join(dir, 'take.mov'), dir, id);
   await children.run('ffmpeg', commands.mp4, { timeoutMs: 45000 });
-  let gifBytes = 0;
-  for (const args of commands.gifs) {
+  let gifBytes = 0, gifFps, gifWidth;
+  for (const [index, args] of commands.gifs.entries()) {
     await children.run('ffmpeg', args, { timeoutMs: 45000 }); gifBytes = statSync(join(dir, 'demo.gif')).size;
-    if (gifFits(gifBytes)) break;
+    if (gifFits(gifBytes)) { [gifWidth, , gifFps] = gifLadder(id)[index]; break; }
   }
   if (!gifFits(gifBytes)) throw Error(`GIF exceeds 2 MB: ${gifBytes} bytes`);
   await children.run('ffmpeg', ['-hide_banner', '-loglevel', 'error', '-nostdin', '-y', '-threads', '1', '-i', join(dir, 'demo.mp4'), '-ss', '4', '-frames:v', '1', '-threads', '1', join(dir, 'poster.png')]);
   const decoded = await children.run('ffmpeg', ['-hide_banner', '-loglevel', 'error', '-nostdin', '-threads', '1', '-progress', 'pipe:1', '-nostats', '-i', join(dir, 'demo.mp4'), '-an', '-f', 'null', '-']);
   const frames = Number([...decoded.matchAll(/^frame=(\d+)$/gm)].at(-1)?.[1]), seconds = Number([...decoded.matchAll(/^out_time_us=(\d+)$/gm)].at(-1)?.[1]) / 1e6;
   if (frames !== 240 || Math.abs(seconds - 8) > 0.05) throw Error(`Unexpected MP4 timing: ${frames} frames, ${seconds} seconds`);
-  return { encoder: 'ffmpeg', seconds: 8, measuredSeconds: seconds, frames, fps: 30, gifFps: 12, gifBytes, mp4Bytes: statSync(join(dir, 'demo.mp4')).size };
+  return { encoder: 'ffmpeg', seconds: 8, measuredSeconds: seconds, frames, fps: 30, gifFps, gifWidth, gifBytes, mp4Bytes: statSync(join(dir, 'demo.mp4')).size };
 }
 
 async function captureShot(shot, directory, { bin, children, work, signal, abort }) {
   const events = [], nonce = randomBytes(32).toString('hex'); let seq = 0;
   const pet = shot.id === '06-import' ? makePet(work) : undefined;
   const env = { ...children.env, SLEIGHT_CURSOR_TEST: '1', SLEIGHT_CURSOR_CHARACTERS_ROOT: pet?.root ?? work,
-    SLEIGHT_BUILTIN_CHARACTERS: builtinCharactersDirectory() };
+    SLEIGHT_BUILTIN_CHARACTERS: builtinCharactersDirectory(), SLEIGHT_CURSOR_THUMBS_ROOT: join(work, 'thumbs') };
   const fixture = children.start(join(bin, 'fixture'), ['--serve'], { env });
   const f = await fixture.wait(r => r.event === 'ready');
   const host = children.start(join(bin, 'consent-host'), ['--hand', '--capture=visible', '--cursor-style=ring'], { env });
@@ -290,7 +389,7 @@ async function captureShot(shot, directory, { bin, children, work, signal, abort
   });
   const telemetry = setInterval(() => { if (Date.now() - lastTelemetry > 3500) abort('TELEMETRY'); }, 500);
   try {
-    await request({ op: 'caption', text: shot.caption + '  |  2x', notice: pet?.callout ?? (shot.id === '05-picker' ? 'Fixture picker preview\nRing     Tsugi     Kit\nSelection uses private hand.json settings, not a hardware picker click.' : '') });
+    const caption = await request({ op: 'caption', text: shot.caption + '  |  2x', notice: pet?.callout ?? (shot.id === '05-picker' ? 'Fixture picker preview\nRing     Tsugi     Kit\nSelection uses private hand.json settings, not a hardware picker click.' : '') });
     // No input is generated by any harness step. Fresh HID telemetry covers both quiet gap and the take.
     const idleRow = await fixture.wait(r => r.event === 'input');
     if (!Number.isFinite(idleRow.idle) || idleRow.idle < 15) throw fail('OWNER');
@@ -313,22 +412,55 @@ async function captureShot(shot, directory, { bin, children, work, signal, abort
     const planPath = join(directory, 'capture-plan.json'); atomic(planPath, plan);
     const recorder = children.start(join(bin, 'recorder'), ['record', planPath]);
     await recorder.wait(r => r.event === 'ready', 10000);
-    await sleep(1000, undefined, { signal }); const began = Date.now();
+    send({ hand: 'hide', nonce });
+    await sleep(500, undefined, { signal });
+    const probePlan = { width: f.crop[2], height: f.crop[3], baselineAt: Date.now(), samples: [] };
+    const local = rect => [rect[0] - f.crop[0], rect[1] - f.crop[1], rect[2], rect[3]];
+    const probe = (kind, region, exclude, time = Date.now()) => {
+      if (!probePlan.samples.some(s => s.kind === kind)) probePlan.samples.push({ kind, region: local(region),
+        ...(exclude ? { exclude: local(exclude) } : {}), at: time });
+    };
+    await sleep(500, undefined, { signal }); const began = Date.now();
     for (const event of recipe(shot.id)) {
       await sleep(Math.max(0, event.atMs - (Date.now() - began)), undefined, { signal });
       if (event.op === 'select') {
         await select(event.character); await request({ op: 'caption', text: shot.caption + '  |  2x', notice: 'Fixture picker preview\nRing     [Tsugi selected]     Kit\nPrivate settings applied. Hardware selection not shown.' }); continue;
       }
-      if (event.op === 'status') { send({ ...base(), hand: 'status', state: event.state, ...event.state === 'done' ? { ok: true } : {} }); continue; }
+      if (event.op === 'status') {
+        send({ ...base(), hand: 'status', state: event.state, ...event.state === 'done' ? { ok: true } : {} });
+        if (!probePlan.samples.some(s => s.kind === 'ring')) {
+          await sleep(250, undefined, { signal }); probe('ring', [at[0] - 40, at[1] - 40, 80, 80]);
+        }
+        continue;
+      }
       const aimed = await request({ op: 'geometry', index: event.op === 'drag' ? 2 : event.index });
       const target = aimed.at, rect = aimed.rect;
       send({ ...base(), hand: 'aim', kind: event.op === 'drag' ? 'drag' : 'click', at: target, rect, ...event.say ? { say: event.say } : {} });
       await sleep(350, undefined, { signal });
+      probe('ring', [rect[0] - 10, rect[1] - 10, rect[2] + 20, rect[3] + 20], [rect[0] + 5, rect[1] + 5, rect[2] - 10, rect[3] - 10]);
+      if (character || shot.id === '05-picker' && event.atMs > 5000) {
+        if (pet) {
+          const w = pet.pack.manifest.frame.w * pet.pack.manifest.scale, h = pet.pack.manifest.frame.h * pet.pack.manifest.scale;
+          probe('sprite', [target[0] + 18 + w <= f.frame[0] + f.frame[2] ? target[0] + 18 : target[0] - 18 - w,
+            target[1] + 18 + h <= f.frame[1] + f.frame[3] ? target[1] + 18 : target[1] - 18 - h, w, h]);
+        } else probe('sprite', [f.frame[0], f.frame[1] - 200, f.frame[2], 195]);
+      }
+      if (event.say) {
+        // Ask the same headless planner for the bubble's exact box; the pixel check still requires the live drawing.
+        const sampleAt = Date.now();
+        const frame = { ...base(), hand: 'aim', kind: 'click', at: target, rect, say: event.say };
+        const dump = await children.run(join(bin, 'consent-host'), ['--ring-plan-dump', '--cursor-style=ring', `--clip=${f.frame.join(',')}`],
+          { env, input: [JSON.stringify({ hand: 'menu', nonce, enabled: true, capture: 'visible', version: '1.5.0', narration: 'bubbles' }), JSON.stringify(frame)].join('\n') + '\n' });
+        const bubble = dump.trim().split('\n').map(JSON.parse).find(r => r.bubble)?.bubble;
+        if (!bubble?.frame) throw Error('Narration bubble plan absent');
+        // This timestamp is before fixture dispatch; a counter change cannot satisfy the bubble probe.
+        probe('bubble', bubble.frame, undefined, sampleAt);
+      }
       currentAction = { rect, say: event.say };
       const result = await request(event.op === 'drag' ? { op: 'drag', to: [440, 120] } : { op: 'click', index: event.index });
       currentAction = undefined;
       events.push({ t: Date.now(), input: result });
-      if (event.op === 'click' && result.clicks < 1 || event.op === 'drag' && result.drags < 1) throw Error('Fixture input not acknowledged');
+      assertAction(aimed, result, event.op);
     }
     const recorded = await bounded(recorder.closed, 30000, signal);
     if (recorded.code !== 0) throw Error(`Recorder failed: ${recorded.stderr}`);
@@ -337,18 +469,25 @@ async function captureShot(shot, directory, { bin, children, work, signal, abort
     atomic(join(directory, 'events.json'), events);
     writeFileSync(join(directory, 'caption.txt'), shot.caption + ' Playback: 2x.\n', { mode: 0o600 });
     return { seconds: sync.stopHostTime - stream.firstFrameHostTime, frames: stream.frames, droppedFrames: stream.droppedFrames,
-      fps: 60, scale: stream.scale, bytes: statSync(join(directory, 'take.mov')).size };
+      fps: 60, scale: stream.scale, bytes: statSync(join(directory, 'take.mov')).size, wallClockStart: stream.wallClockStart,
+      noticeLayout: caption.noticeLayout, probePlan };
   } finally { clearInterval(telemetry); await closeScene([host, fixture]); }
 }
 
-async function contactSheet(children, state) {
+export function assertAction(before, after, op) {
+  const key = op === 'drag' ? 'drags' : 'clicks', other = op === 'drag' ? 'clicks' : 'drags';
+  if (!Number.isSafeInteger(before[key]) || after[key] !== before[key] + 1 || after[other] !== before[other]) throw Error('Fixture input not acknowledged');
+}
+
+export async function contactSheet(children, state) {
   const shots = shotPlan().map(s => ({ ...s, ...state.markers[s.id] }));
   atomic(join(state.out, 'shots.json'), { version: 1, head: state.head, encoder: 'ffmpeg', shots });
   const complete = shots.filter(reusable);
   if (!complete.length) return;
   const escape = s => String(s).replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('"', '&quot;');
   writeFileSync(join(state.out, 'contact-sheet.html'), '<!doctype html><meta charset="utf-8"><title>sleight demo takes</title><style>body{background:#141a26;color:#eee;font:16px system-ui;margin:24px}main{display:grid;grid-template-columns:repeat(2,1fr);gap:24px}img{width:100%}p{max-width:70ch}</style><h1>sleight demo takes</h1><p>Fixture demonstrations, 2x playback. Review before publication.</p><main>' +
-    complete.map(s => `<article><a href="${escape(basename(s.directory))}/demo.mp4"><img src="${escape(basename(s.directory))}/poster.png"></a><p>${escape(s.id)}: ${escape(s.caption)} GIF ${s.gifBytes} bytes; MP4 ${s.mp4Bytes} bytes; 8 s; 12/30 fps.</p></article>`).join('') + '</main>', { mode: 0o600 });
+    complete.map(s => `<article><a href="${escape(basename(s.directory))}/demo.mp4"><img src="${escape(basename(s.directory))}/poster.png"></a><p>${escape(s.id)}: ${escape(s.caption)} GIF ${s.gifBytes} bytes; MP4 ${s.mp4Bytes} bytes; 8 s; ${s.gifFps}/30 fps.</p></article>`).join('') + '</main>', { mode: 0o600 });
+  if (complete.length === 1) return; // xstack requires at least two inputs; HTML still includes the one poster.
   const args = complete.flatMap(s => ['-i', join(s.directory, 'poster.png')]);
   const filters = complete.map((_, i) => `[${i}:v]scale=400:300:force_original_aspect_ratio=decrease,pad=400:300:(ow-iw)/2:(oh-ih)/2:color=0x141a26[v${i}]`);
   const positions = complete.map((_, i) => `${i % 2 * 400}_${Math.floor(i / 2) * 300}`).join('|');
@@ -368,9 +507,9 @@ export async function main(argv) {
   for (const [s, f] of Object.entries(signals)) process.on(s, f);
   const work = privateWork();
   const cfg = mkdtempSync('/tmp/lane-claude-');
-  const env = { ...Object.fromEntries(Object.entries(process.env).filter(([k]) => !k.startsWith('CLAUDE') && !k.startsWith('SLEIGHT_'))),
+  const env = { ...Object.fromEntries(['PATH', 'HOME', 'LANG', 'LC_ALL'].filter(k => process.env[k]).map(k => [k, process.env[k]])),
     CLAUDE_CONFIG_DIR: cfg, TMPDIR: work, DISABLE_AUTOUPDATER: '1', SLEIGHT_NO_HUB: '1', SLEIGHT_REMOTE_APPROVALS: '0' };
-  const children = new Children(env, signal); let release, state, stopped, clean = false, holdPoll, telemetryPoll;
+  const children = new Children(env, signal); let release, state, stopped, clean = false;
   try {
     const awake = children.start('/usr/bin/caffeinate', ['-dims', '-w', String(process.pid)]);
     awake.closed.then(() => { if (!clean) abort('TELEMETRY'); });
@@ -389,66 +528,106 @@ export async function main(argv) {
       const out = join(realpathSync(LOGS), 'demo-' + new Date().toISOString().replace(/[:.]/g, '-'));
       mkdirSync(out, { mode: 0o700 }); state = { ...identity, out, markers: {}, startedAt: new Date().toISOString() }; atomic(statePath, state);
     }
-    await waitClear({ signal });
-    const { acquireLiveLock } = await import('../live-lock.mjs'); release = await acquireLiveLock(LOCK, { wait: false, signal });
-    // A hold between the clear check and mkdir must stop before any window can appear.
-    if (existsSync(HOLD)) throw fail('HOLD');
-    holdPoll = setInterval(() => { if (existsSync(HOLD)) abort('HOLD'); }, 250);
+    const capMs = waitCap();
+    await waitClear({ signal, capMs });
+    // Wake before compilation as well as before each shot. No HID watch spans an intentional wake.
+    await children.run('/usr/bin/caffeinate', ['-u', '-t', '5'], { timeoutMs: 10000 });
+    const { acquireLiveLock } = await import('../live-lock.mjs');
     const bin = join(work, 'bin'); mkdirSync(bin, { mode: 0o700 });
-    for (const [source, name] of [['plugins/sleight/lib/direct-browser/native/consent-host.swift', 'consent-host'], ['bench/demo/fixture.swift', 'fixture'], ['bench/hand/capture.swift', 'helper'], ['bench/capture/recorder.swift', 'recorder']]) {
-      await children.run('/usr/bin/xcrun', ['swiftc', '-module-cache-path', join(work, 'modules'), join(ROOT, source), '-o', join(bin, name)], { timeoutMs: 300000 });
+    for (const [source, name] of compileSources) {
+      await withHoldRetry(async phaseSignal => {
+        const compiling = new Children(env, phaseSignal);
+        try { await compiling.run('/usr/bin/xcrun', ['swiftc', '-module-cache-path', join(work, 'modules'), join(ROOT, source), '-o', join(bin, name)], { timeoutMs: 600000 }); }
+        finally { await compiling.close(); }
+      }, { signal, capMs });
     }
     const grants = JSON.parse(await children.run(join(bin, 'helper'), ['preflight']));
     if (!grants.screenRecording) throw Error('Existing Screen Recording grant required; no prompt requested');
-    // A real input-free gap, before the first window, read by the compiled read-only helper.
-    const detect = inputWatch(Date.now()), gap = children.start(join(bin, 'helper'), ['watch-input', '1000', '16']);
-    const samples = [];
-    gap.onRow(row => { if (!row.done) { samples.push(row); const reason = detect(row); if (reason) abort(reason); } });
-    const watched = await bounded(gap.closed, 20000, signal);
-    if (watched.code !== 0 || samples.length < 15 || samples.at(-1).idle < 15) throw fail('TELEMETRY');
-    const monitor = children.start(join(bin, 'helper'), ['watch-input', '1000', '14400']);
-    let lastTelemetry = Date.now(); const observe = inputWatch(Date.now());
-    monitor.onRow(row => { lastTelemetry = Date.now(); const reason = observe(row); if (reason) abort(reason); });
-    monitor.closed.then(() => { if (!clean) abort('TELEMETRY'); });
-    telemetryPoll = setInterval(() => { if (Date.now() - lastTelemetry > 3500) abort('TELEMETRY'); }, 500);
-    for (const shot of shotPlan()) {
-      signal.throwIfAborted();
-      if (reusable(state.markers[shot.id])) continue;
+    let holdEpisode;
+    const take = async shot => {
+      // A mid-shot hold starts one budget that also covers repeated hold interruptions of this shot.
+      if (holdEpisode !== undefined && Date.now() - holdEpisode >= capMs) throw fail('BUSY');
       const directory = join(state.out, shot.id + '-' + randomBytes(4).toString('hex')); mkdirSync(directory, { mode: 0o700 });
       const attemptWork = mkdtempSync(join(work, 'shot-'));
       const phase = new AbortController(), forward = () => phase.abort(signal.reason);
       signal.addEventListener('abort', forward, { once: true });
-      const timer = setTimeout(() => phase.abort(fail('DEADLINE')), shot.deadlineMs);
+      const interrupt = code => { if (!phase.signal.aborted) phase.abort(fail(code)); };
+      let timer, holdPoll, telemetryPoll, monitorClosing = false, marker, problem, cleaned = false;
       const shotChildren = new Children(env, phase.signal);
       try {
+        release = await acquireForShot(acquireLiveLock, { signal, capMs: holdEpisode === undefined ? capMs : Math.max(1, capMs - (Date.now() - holdEpisode)) });
+        holdPoll = setInterval(() => { if (existsSync(HOLD)) interrupt('HOLD'); }, 250);
+        await shotChildren.run('/usr/bin/caffeinate', ['-u', '-t', '5'], { timeoutMs: 10000 });
+        const display = JSON.parse(await shotChildren.run(join(bin, 'fixture'), ['--preflight']));
+        if (!display.ok) throw fail(display.error);
+        const detect = inputWatch(Date.now()), gap = shotChildren.start(join(bin, 'helper'), ['watch-input', '1000', '16']);
+        const samples = [];
+        gap.onRow(row => { if (!row.done) { samples.push(row); const reason = detect(row); if (reason) abort(reason); } });
+        const watched = await bounded(gap.closed, 20000, phase.signal);
+        if (watched.code !== 0 || samples.length < 15 || samples.at(-1).idle < 15) throw fail('TELEMETRY');
+        // Check once more after the quiet gap, immediately before allowing any fixture window.
+        const checked = JSON.parse(await shotChildren.run(join(bin, 'fixture'), ['--preflight']));
+        if (!checked.ok) throw fail(checked.error);
+        if (existsSync(HOLD)) throw fail('HOLD');
+        const monitor = shotChildren.start(join(bin, 'helper'), ['watch-input', '1000', '14400']);
+        let lastTelemetry = Date.now(); const observe = inputWatch(Date.now());
+        monitor.onRow(row => { lastTelemetry = Date.now(); const reason = observe(row); if (reason) abort(reason); });
+        monitor.closed.then(() => { if (!monitorClosing && !phase.signal.aborted) abort('TELEMETRY'); });
+        telemetryPoll = setInterval(() => { if (Date.now() - lastTelemetry > 3500) abort('TELEMETRY'); }, 500);
+        timer = setTimeout(() => interrupt('SHOT_DEADLINE'), shot.deadlineMs);
         const capture = await captureShot(shot, directory, { bin, children: shotChildren, work: attemptWork, signal: phase.signal, abort });
-        await shotChildren.close();
-        const meta = await encode(shotChildren, directory);
-        await shotChildren.close(); phase.signal.throwIfAborted();
-        state.markers[shot.id] = completedMarker(directory, { id: shot.id, caption: shot.caption, capture, ...meta, cleanup: true });
-        if (!reusable(state.markers[shot.id])) throw Error('Completed marker failed validation');
+        const probes = await verifyDrawing(shotChildren, directory, shot, capture);
+        atomic(join(directory, 'probes.json'), probes);
+        const meta = await encode(shotChildren, directory, shot.id);
+        if (shot.id === '06-import' && (meta.gifWidth !== 720 || capture.noticeLayout?.fits !== true || !(capture.noticeLayout.gifFontPixels >= 11))) throw Error('Import callout too small or clipped at GIF output size');
+        phase.signal.throwIfAborted();
+        marker = { id: shot.id, caption: shot.caption, capture, probes, ...meta, cleanup: true };
       } catch (e) {
-        state.markers[shot.id] = { status: 'failed', directory, reason: safeText(e.code ?? e.message) }; throw e;
+        const reason = failureReason(e, phase.signal);
+        if (reason === 'HOLD') holdEpisode ??= Date.now();
+        problem = Object.assign(fail(reason), { directory });
       } finally {
-        clearTimeout(timer); signal.removeEventListener('abort', forward);
-        try { await shotChildren.close(); } catch { throw fail('CLEANUP'); }
-        atomic(statePath, state); rmSync(attemptWork, { recursive: true, force: true });
+        clearTimeout(timer); clearInterval(telemetryPoll); monitorClosing = true;
+        try { await shotChildren.close(); cleaned = true; } catch { problem = Object.assign(fail('CLEANUP'), { directory }); }
+        clearInterval(holdPoll); signal.removeEventListener('abort', forward);
+        // The hold can arrive while a child is being collected. It still invalidates this take.
+        if (phase.signal.reason?.code === 'HOLD' && problem?.code !== 'CLEANUP') {
+          holdEpisode ??= Date.now(); problem = Object.assign(fail('HOLD'), { directory });
+        }
+        if (cleaned) {
+          try { if (release) await release(); release = undefined; } catch { problem = Object.assign(fail('CLEANUP'), { directory }); }
+          if (problem?.code !== 'CLEANUP') {
+            try { rmSync(attemptWork, { recursive: true, force: true }); } catch { problem = Object.assign(fail('CLEANUP'), { directory }); }
+          }
+        }
       }
-    }
+      if (problem) throw problem;
+      signal.throwIfAborted(); phase.signal.throwIfAborted();
+      holdEpisode = undefined;
+      return completedMarker(directory, marker);
+    };
+    const count = await runShots(state, { take, save: value => atomic(statePath, value), signal });
     await contactSheet(children, state);
-    console.log(`DM1: ${shotPlan().filter(s => reusable(state.markers[s.id])).length}/7 clips encoded with ffmpeg in ${safeText(state.out)}`);
+    if (count < shotPlan().length) stopped = 'INCOMPLETE';
+    console.log(`DM1: ${count}/7 clips encoded with ffmpeg in ${safeText(state.out)}`);
   } catch (e) { stopped = e.code === 'CLEANUP' ? 'CLEANUP' : signal.reason?.code ?? e.code ?? e.message; console.error(`DM1 stopped: ${safeText(stopped)}`); }
   finally {
-    clearInterval(holdPoll); clearInterval(telemetryPoll); clean = true;
+    clean = true;
     try { await children.close(); } catch { stopped = 'CLEANUP'; }
     if (state) {
       // Do not launch an encoder here: final cleanup also runs on signals and owner return.
-      atomic(join(state.out, 'shots.json'), { version: 1, head: state.head, stopped: stopped ?? null, encoder: 'ffmpeg', shots: shotPlan().map(s => ({ ...s, ...state.markers[s.id] })) });
+      try { atomic(join(state.out, 'shots.json'), { version: 1, head: state.head, stopped: stopped ?? null, encoder: 'ffmpeg', shots: shotPlan().map(s => ({ ...s, ...state.markers[s.id] })) }); }
+      catch (e) { stopped ??= 'EVIDENCE'; console.error(`DM1 evidence write failed: ${safeText(e.message)}`); }
     }
-    if (stopped !== 'CLEANUP') { if (release) await release(); rmSync(work, { recursive: true, force: true }); rmSync(cfg, { recursive: true, force: true }); }
-    else console.error(`Cleanup unproved; lock retained. Private work: ${work}`);
+    if (stopped !== 'CLEANUP' && release) {
+      try { await release(); release = undefined; } catch (e) { stopped = 'CLEANUP'; console.error(`DM1 release failed: ${safeText(e.message)}`); }
+    }
+    if (stopped !== 'CLEANUP') {
+      for (const path of [work, cfg]) try { rmSync(path, { recursive: true, force: true }); } catch (e) { stopped = 'CLEANUP'; console.error(`DM1 removal failed: ${safeText(e.message)}`); }
+    }
+    if (stopped === 'CLEANUP') console.error(`Cleanup unproved; any owned lock retained. Private work: ${work}`);
     for (const [s, f] of Object.entries(signals)) process.removeListener(s, f);
   }
-  return stopped ? ({ OWNER: 4, HOLD: 5, BUSY: 5, TELEMETRY: 6, SIGINT: 130, SIGTERM: 143, SIGHUP: 129 })[stopped] ?? 1 : 0;
+  return stopped ? ({ OWNER: 4, HOLD: 5, BUSY: 5, TELEMETRY: 6, 'display-asleep': 7, 'screen-locked': 7, 'screen-lock-state-unknown': 7, SIGINT: 130, SIGTERM: 143, SIGHUP: 129 })[stopped] ?? 1 : 0;
 }
 if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) process.exitCode = await main(process.argv.slice(2));

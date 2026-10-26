@@ -50,6 +50,36 @@ struct InputModel {
     mutating func up() { if grabbed { drags += 1 }; grabbed = false }
 }
 let arguments = CommandLine.arguments
+func displayRefusal(_ asleep: Bool, _ locked: Bool?) -> String? {
+    guard let locked = locked else { return "screen-lock-state-unknown" }
+    if locked { return "screen-locked" }
+    return asleep ? "display-asleep" : nil
+}
+if arguments.count == 2 && arguments[1] == "--display-selftest" {
+    guard let row = try? JSONSerialization.jsonObject(with: FileHandle.standardInput.readDataToEndOfFile()) as? [String: Any],
+          let asleep = row["asleep"] as? Bool else { exit(65) }
+    emit(["windowsCreated": 0, "reason": displayRefusal(asleep, row["locked"] as? Bool) as Any? ?? NSNull()]); exit(0)
+}
+if arguments.count == 2 && arguments[1] == "--preflight" {
+    let session = CGSessionCopyCurrentDictionary() as? [String: Any]
+    let locked = session.map { $0["CGSSessionScreenIsLocked"] as? Bool ?? false }
+    if let reason = displayRefusal(CGDisplayIsAsleep(CGMainDisplayID()) != 0, locked) { emit(["ok": false, "error": reason]) }
+    else { emit(["ok": true]) }
+    exit(0)
+}
+let noticeFrame = CGRect(x: 24, y: 365, width: 752, height: 304)
+let noticeFont = NSFont.monospacedSystemFont(ofSize: 13, weight: .regular)
+func noticeLayout(_ text: String) -> [String: Any] {
+    let size = (text as NSString).boundingRect(with: CGSize(width: noticeFrame.width - 8, height: 10000),
+        options: [.usesLineFragmentOrigin, .usesFontLeading], attributes: [.font: noticeFont]).size
+    return ["width": Double(size.width), "height": Double(size.height), "availableHeight": Double(noticeFrame.height),
+        "fontPoints": 13, "gifWidth": 720, "gifFontPixels": 13 * 720.0 / 800,
+        "fits": size.height + 8 <= noticeFrame.height && size.width <= noticeFrame.width - 8]
+}
+if arguments.count == 2 && arguments[1] == "--layout-selftest" {
+    guard let text = String(data: FileHandle.standardInput.readDataToEndOfFile(), encoding: .utf8), text.utf8.count <= 12000 else { exit(65) }
+    emit(noticeLayout(text).merging(["windowsCreated": 0]) { _, b in b }); exit(0)
+}
 if arguments.count == 2 && arguments[1] == "--selftest" {
     let data = FileHandle.standardInput.readDataToEndOfFile()
     guard data.count < 16384, let row = try? JSONSerialization.jsonObject(with: data) as? [String: Any], valid(row, token: false) else { exit(65) }
@@ -90,19 +120,19 @@ final class Fixture: NSObject, NSApplicationDelegate {
     func position(_ index: Int) -> CGPoint { index == 2 ? canvas.model.tile : CGPoint(x: index == 0 ? 180 : 380, y: 220) }
     func applicationDidFinishLaunching(_ note: Notification) {
         NSApp.setActivationPolicy(.accessory)
-        guard let screen = NSScreen.main, screen.visibleFrame.width >= 850, screen.visibleFrame.height >= 680 else { finish(2) }
-        let frame = CGRect(x: screen.visibleFrame.midX - 400, y: screen.visibleFrame.midY - 320, width: 800, height: 640)
+        guard let screen = NSScreen.main, screen.visibleFrame.width >= 850, screen.visibleFrame.height >= 780 else { finish(2) }
+        let frame = CGRect(x: screen.visibleFrame.midX - 400, y: screen.visibleFrame.midY - 370, width: 800, height: 740)
         backdrop = NSWindow(contentRect: frame, styleMask: [.borderless], backing: .buffered, defer: false)
         backdrop.isReleasedWhenClosed = false; backdrop.backgroundColor = NSColor(calibratedRed: 0.08, green: 0.1, blue: 0.15, alpha: 1)
         backdrop.sharingType = .readOnly; backdrop.ignoresMouseEvents = true
-        label.frame = CGRect(x: 24, y: 575, width: 752, height: 52); label.font = .systemFont(ofSize: 12); label.textColor = .white
-        notice.frame = CGRect(x: 24, y: 370, width: 752, height: 200); notice.font = .monospacedSystemFont(ofSize: 10, weight: .regular); notice.textColor = .white
+        label.frame = CGRect(x: 24, y: 675, width: 752, height: 52); label.font = .systemFont(ofSize: 12); label.textColor = .white
+        notice.frame = noticeFrame; notice.font = noticeFont; notice.textColor = .white
         backdrop.contentView?.addSubview(label); backdrop.contentView?.addSubview(notice)
-        target = NSWindow(contentRect: CGRect(x: frame.minX + 80, y: frame.minY + 50, width: 640, height: 300), styleMask: [.titled], backing: .buffered, defer: false)
+        target = NSWindow(contentRect: CGRect(x: frame.minX + 80, y: frame.minY + 30, width: 640, height: 300), styleMask: [.titled], backing: .buffered, defer: false)
         target.title = "sleight demo fixture"; target.isReleasedWhenClosed = false; target.sharingType = .readOnly
         target.contentView = canvas
         backdrop.orderFrontRegardless(); target.orderFrontRegardless()
-        emit(["event": "ready", "pid": Int(getpid()), "fixture": backdrop.windowNumber, "target": target.windowNumber, "frame": top(target.frame)])
+        emit(["event": "ready", "pid": Int(getpid()), "fixture": backdrop.windowNumber, "target": target.windowNumber, "frame": top(target.frame), "crop": top(backdrop.frame)])
         watch = Timer.scheduledTimer(withTimeInterval: 0.5, repeats: true) { [weak self] _ in
             guard let self = self else { return }; if getppid() != self.parent { self.finish(0) }
             guard let p = CGEvent(source: nil)?.location, let seconds = idle() else { emit(["event": "input", "idle": NSNull()]); return }
@@ -133,7 +163,10 @@ final class Fixture: NSObject, NSApplicationDelegate {
     func receive(_ row: [String: Any]) {
         let token = row["token"] as! String, op = row["op"] as! String
         switch op {
-        case "caption": label.stringValue = row["text"] as! String; notice.stringValue = row["notice"] as! String; reply(token)
+        case "caption":
+            let text = row["notice"] as! String, layout = noticeLayout(text)
+            guard layout["fits"] as? Bool == true else { reply(token, ["error": "notice-clipped"]); return }
+            label.stringValue = row["text"] as! String; notice.stringValue = text; reply(token, ["noticeLayout": layout])
         case "geometry":
             let p = position(row["index"] as! Int), r = target.convertToScreen(CGRect(x: p.x - 60, y: p.y - 18, width: 120, height: 36))
             reply(token, ["at": global(p), "rect": top(r)])
