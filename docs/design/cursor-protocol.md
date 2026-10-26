@@ -67,6 +67,10 @@ independently of approval beats. Native `done` and `failed` are confirmed call r
 timestamp or prove each individual action's effect. A result confirms every action immediately and cancels future scheduled
 acts. Geometry arriving after the terminal result doesn't produce another aim or act.
 
+The stream has every planned aim of a call at plan time, so a renderer can preview the next target. sleight's own ring
+gets them paced instead: the aim for the first planned action at plan time, and each later aim right after the act before it
+is sent. The ring then shows one target at a time.
+
 Turbo, Electron and local events use `confirmed` timing. Browser geometry is sampled beside input without holding it, so an
 event can arrive after the input. A local drag or hover has `act` and a terminal result, with geometry omitted when the local
 helper has not supplied global points. The stream never interprets screenshot pixels as screen points.
@@ -92,7 +96,7 @@ Browser point steps retain the hand's existing exclusion and can report `skipped
 
 `waiting` means an approval or Always-allow card is pending. `error` means a call failed. `done` marks a successful call or
 turn end. `handback` marks sign-in handoff or takeover. `thinking` marks time between calls, emitted at call results without
-polling. The initial status is `thinking` when no other status has been published. Turn end also emits `idle`.
+polling. The first status of a session is `idle` when no other status has been published. Turn end also emits `idle`.
 Statuses describe the current call or turn. `done` followed by `thinking` after a call does not end the session.
 
 ## Discovery and delivery

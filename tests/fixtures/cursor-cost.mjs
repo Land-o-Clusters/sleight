@@ -66,12 +66,12 @@ try {
       row.setting = summary(reads);
       for (const [name, code] of [['single', 'await app.click([20,20])'], ['long', Array(16).fill('await app.click([20,20])').join(';')]]) {
         const admission = [], complete = [];
-        for (let i = 0; i < 350; i++) {
+        for (let i = 0; i < 900; i++) {
           const id = 100 + i, start = performance.now(); request(id, code);
           assert.equal(last, id, 'dispatch must remain synchronous'); const admitted = performance.now() - start;
           await settle(); const resultStart = performance.now(); response(id); const resultTime = performance.now() - resultStart;
           await settle();
-          if (i >= 50) { admission.push(admitted); complete.push(admitted + resultTime); }
+          if (i >= 600) { admission.push(admitted); complete.push(admitted + resultTime); }
         }
         row[name] = { admission: summary(admission), requestAndResult: summary(complete) };
       }
@@ -86,5 +86,5 @@ try {
     for (const row of rows.filter(r => r.mode.startsWith('stream-'))) for (const name of ['single', 'long'])
       assert.ok(row[name].admission.medianUs - hand[name].admission.medianUs < 250, `${row.mode} ${name} adds at least 250 us`);
   }
-  console.log(JSON.stringify({ root, revisionHasCursor: !!cursorModule, warmupPerRow: 50, rows }, null, 2));
+  console.log(JSON.stringify({ root, revisionHasCursor: !!cursorModule, warmupPerRow: 600, rows }, null, 2));
 } finally { rmSync(dir, { recursive: true, force: true }); }

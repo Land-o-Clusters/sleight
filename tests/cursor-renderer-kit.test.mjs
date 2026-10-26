@@ -215,7 +215,8 @@ test('Swift overlay keeps the passive panel safety properties', async () => {
   for (const property of ['canBecomeKey: Bool { false }', 'canBecomeMain: Bool { false }',
     '.nonactivatingPanel', 'ignoresMouseEvents = true', 'sharingType = .none', '.canJoinAllSpaces',
     'setActivationPolicy(.accessory)']) assert.ok(source.includes(property), property);
-  assert.doesNotMatch(source, /makeKey|\bactivate\s*\(|orderFrontRegardless/);
+  assert.doesNotMatch(source, /makeKey|\bactivate\s*\(/);
+  assert.ok(source.includes('orderFrontRegardless()'));
 });
 
 test('listener bounds sessions, hides drags across a call and prunes terminal states', async t => {
@@ -232,6 +233,11 @@ test('listener bounds sessions, hides drags across a call and prunes terminal st
     await until(() => views.at(-1)?.seq === seq);
     return views.at(-1).visible;
   };
+  assert.equal(await emit({}), true);
+  assert.equal(await emit({ kind: 'drag', call: 'batch', index: 1 }), false);
+  assert.equal(await emit({ kind: 'click', call: 'batch', index: 0, phase: 'done' }), false);
+  assert.equal(await emit({ kind: 'click', call: 'batch', index: 2 }), false);
+  assert.equal(await emit({ kind: 'drag', call: 'batch', index: 1, phase: 'skipped' }), false);
   assert.equal(await emit({}), true);
   assert.equal(await emit({ kind: 'drag', call: 'drag-1' }), false);
   assert.equal(await emit({ call: 'other', point: [500, 300] }), false);
@@ -257,6 +263,17 @@ test('listener bounds sessions, hides drags across a call and prunes terminal st
   assert.ok(removed.includes('1'.padStart(32, '0')));
   socket.end(); await once(socket, 'close');
   await until(() => listener.sessions.size === 0);
+});
+
+test('readers own state, phase and kind by type and reject unknown action kinds', async () => {
+  const { parseEvent } = await modules();
+  const action = parseEvent(JSON.stringify({ ...event(), state: { secret: true } }));
+  assert.equal(action.state, undefined);
+  for (const type of ['session', 'status']) {
+    const parsed = parseEvent(JSON.stringify({ ...event(), type, state: type === 'session' ? 'start' : 'idle', phase: {}, kind: {} }));
+    assert.ok(parsed); assert.equal(parsed.kind, undefined); assert.equal(parsed.phase, undefined);
+  }
+  assert.equal(parseEvent(JSON.stringify({ ...event(), kind: 'future' })), undefined);
 });
 
 test('listener expires silent sessions after three seconds using receipt time', { timeout: 7000 }, async t => {
@@ -410,7 +427,9 @@ test('Swift source bounds readers, queued lines and sessions with local TTLs', a
     'CFGetTypeID(number) != CFBooleanGetTypeID()', 'number.rounded() == number',
     'location.y <= $0.frame.maxY', '"done", "handback", "idle", "error"',
     '"done", "failed", "declined"', '"aim", "act"', 'view.panel?.orderOut(nil)',
-    'view.owners.isEmpty', 'safeInteger(e["seq"])', 'e["kind"] is String',
+    'view.owners.isEmpty', 'safeInteger(e["seq"])', '.contains(e["kind"] as? String ?? "")',
+    'e.removeValue(forKey: "state")', 'e.removeValue(forKey: "phase")', 'e.removeValue(forKey: "kind")',
+    'event["index"] as? Int ?? 0', '"done", "failed", "declined", "skipped"',
     'coordinates(r, count: 4)', 'array.count <= 64', 'window["exposure"]', 'display["scale"]']) {
     assert.ok(source.includes(property), property);
   }

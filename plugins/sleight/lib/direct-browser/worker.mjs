@@ -73,7 +73,7 @@ export const transientStartup = error => error?.stage === 'worker-disconnect' ||
   error?.stage === 'worker-exit' && error.reason !== 'EXIT_0' || transientReasons.has(error?.reason);
 const phases = new Set(('worker-spawn-start worker-spawned bridge-ready tools-registered turn-begin first-call-admitted call-start call-result '
   + 'turn-end-requested turn-end worker-entry helpers-check-start helpers-check-end connection-select-start connection-select-end '
-  + 'worker-ready connection-start connection-end runtime-ready '
+  + 'worker-ready worker-hand-dropped connection-start connection-end runtime-ready '
   + 'browser-open-start browser-open-create-start browser-open-create-end browser-open-attach-end browser-open-identify-end '
   + 'browser-open-adopt-end browser-open-ready-end browser-open-goto-start browser-open-goto-end browser-open-capture-start '
   + 'browser-open-capture-end browser-open-end').split(' '));
@@ -207,7 +207,10 @@ export async function createV3Bridge({ startupTimeoutMs = 120000, timeoutMs = 31
     if (lost) return;
     if (exact(frame, ['version', 'cursorStatus']) && frame.version === 3) { (dependencies.cursorEvents ?? sessionCursorEvents()).status(frame.cursorStatus?.state, frame.cursorStatus); return; }
     if (exact(frame, ['version', 'cursor']) && frame.version === 3) { (dependencies.cursorEvents ?? sessionCursorEvents()).action(frame.cursor); return; }
-    if (exact(frame, ['version', 'hand']) && frame.version === 3) { shared?.send?.(frame.hand); return; }
+    if (exact(frame, ['version', 'hand']) && frame.version === 3) {
+      if (shared?.send) shared.send(frame.hand); else trace('worker-hand-dropped');
+      return;
+    }
     if (!hello && (exact(frame, ['version', 'status', 'code']) || exact(frame, ['version', 'status', 'code', 'stage', 'reason'])) &&
         frame.version === 3 && frame.status === 'unavailable') {
       const code = unsafeStartup.has(frame.code) ? frame.code : 'V3_RUNTIME_UNAVAILABLE';

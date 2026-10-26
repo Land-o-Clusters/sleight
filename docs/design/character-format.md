@@ -224,8 +224,8 @@ Import and remove are user commands. Claude's shell guard refuses them through t
 Claude can call list and check. This guard covers ordinary shell spellings, including nested shells. It does not sandbox
 arbitrary scripts a model writes and runs.
 
-Importing leaves the sprite hidden. Turn it on with `sleight-mcp cursor style sprite` when style selection is available.
-The style command currently prints `coming in 1.5.1`.
+Importing leaves the sprite hidden. Turn it on with `sleight-mcp cursor style sprite <id>`. Until sleight has a sprite renderer,
+the sprite style draws as the ring.
 
 ## Loader interface for renderers
 

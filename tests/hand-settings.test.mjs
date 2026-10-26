@@ -6,6 +6,26 @@ import { join } from 'node:path';
 import { registerTemp, trackTemp } from '../scripts/temp-leftovers.mjs';
 import { handConfigPath, handDoctorLines, handSetting, handStatusLines, readHandConfig } from '../plugins/sleight/lib/hand/settings.mjs';
 import { handCommand } from '../plugins/sleight/lib/hand/command.mjs';
+import { writeHandSetting } from '../plugins/sleight/lib/hand/command.mjs';
+
+test('cursor style and character use the private v1 settings file and style environment precedence', t => {
+  const w = world(t);
+  w.write({ version: 1, enabled: true, style: 'sprite', character: 'test-cat', stream: true, labels: 'role' });
+  assert.equal(w.setting().style, 'sprite');
+  assert.equal(w.setting().character, 'test-cat');
+  assert.equal(w.setting({ SLEIGHT_CURSOR_STYLE: 'ring' }).style, 'ring');
+  assert.equal(w.setting({ SLEIGHT_CURSOR_STYLE: 'bogus' }).style, 'glove');
+  assert.equal(w.setting({ SLEIGHT_CURSOR_STYLE: 'bogus' }).styleReason, 'env-invalid');
+  writeHandSetting({ capture: 'visible' }, { path: w.path });
+  assert.equal(w.setting().style, 'sprite');
+  assert.equal(w.setting().character, 'test-cat');
+  for (const extra of [{ style: 'other' }, { style: null }, { character: '../x' }, { character: '' }, { character: 'Cat' }]) {
+    w.write({ version: 1, enabled: true, ...extra });
+    assert.equal(readHandConfig(w.path).state, 'unsafe');
+  }
+  w.write({ version: 1, enabled: true, style: 'ring' }, 0o644);
+  assert.equal(w.setting().style, undefined);
+});
 
 function world(t) {
   const home = registerTemp(t, trackTemp(realpathSync(mkdtempSync(join(tmpdir(), 'sleight-hand-settings-')))));

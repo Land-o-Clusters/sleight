@@ -1060,7 +1060,11 @@ export async function run({ leaseDirectory, inspectInput: inspectStoppedInput, h
   const earlyHandTrace = [];
   const cursor = sessionCursorEvents();
   process.once('exit', () => cursor.close());
-  const hand = (await import('./hand/client.mjs')).sessionHandClient({ trace: (direction, msg) => { if (handTrace) handTrace(direction, msg); else if (earlyHandTrace.length < 64) earlyHandTrace.push([direction, msg]); } });
+  // The relay always starts: a hand that can't be created leaves the session without one.
+  let hand;
+  try {
+    hand = (await import('./hand/client.mjs')).sessionHandClient({ trace: (direction, msg) => { if (handTrace) handTrace(direction, msg); else if (earlyHandTrace.length < 64) earlyHandTrace.push([direction, msg]); } });
+  } catch { if (earlyHandTrace.length < 64) earlyHandTrace.push(['hand-off', { reason: 'client', code: 'HAND_CLIENT_FAILED' }]); }
   process.once('exit', () => hand?.close());
   const prepared = shellRoute ? { turboUnavailable: shellRelayOptions().turboUnavailable }
     : directBrowser === undefined ? await prepareInstalledStartup(undefined, undefined, { ensure: ensureTurbo ? ensureInstalledTurbo : undefined }) : { directBrowser };

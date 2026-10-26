@@ -14,7 +14,8 @@ This kit includes a plain circle and synthetic events, without character packs o
    inconclusive probe. Remove your socket on exit only while you still own its identity.
    `SLEIGHT_CURSOR_STREAM_DIR` selects a different directory for fixtures. macOS socket paths allow 103 UTF-8 bytes.
 2. Accept multiple connections. Each relay session connects as a client and sends UTF-8 JSON objects, one per line.
-   Connections are independent of session lifetimes. Key your view by `session`, a random 128-bit hex id, and keep its
+   Several sessions can use one connection. Closing it removes views that have no other connection. Key your view by
+   `session`, a random 128-bit hex id, and keep its
    last `point`, action `phase` and `status` state. Sequence gaps can occur when a writer drops events under pressure.
 3. Read `v` before interpreting fields. Drop other versions with one warning, ignore unknown fields and unknown event
    types, and discard malformed records. The reference reader bounds a line at 65,536 bytes and resumes at the next newline.
@@ -24,8 +25,8 @@ This kit includes a plain circle and synthetic events, without character packs o
    as a capture exclusion request, then verify it on your macOS version. Use a non-activating panel with `ignoresMouseEvents = true`,
    `.canJoinAllSpaces`, and `canBecomeKey = false`. Any window outside sleight's own host counts as cover for sleight's
    drag checks, including a third-party renderer window. A ring left over a drag's start or drop point makes sleight
-   refuse the drag as covered. Hide at the drag's `aim`, or `act` if no aim arrived, through that call's `done`, `failed`
-   or `declined`. The examples do this per session, including overlapping calls. Event delivery is asynchronous and may
+   refuse the drag as covered. Hide at the drag's `aim`, or `act` if no aim arrived, through that action's `done`, `failed`,
+   `declined` or `skipped`. Match both `call` and `index`. The examples track overlapping drags per session. Event delivery is asynchronous and may
    drop records. This kit cannot guarantee that hiding precedes a drag check. Hide the renderer entirely
    if you need to rule out its cover. This lane did not measure live drags.
    Keep the stream read-only: sleight never reads from the socket. Do not send acknowledgments, commands or input events.

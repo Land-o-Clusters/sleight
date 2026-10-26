@@ -18,12 +18,34 @@ import { PassThrough } from 'node:stream';
 import { performance } from 'node:perf_hooks';
 import { lstat } from 'node:fs/promises';
 import { createConsentUi } from '../plugins/sleight/lib/direct-browser/consent-ui.mjs';
+import { createHandClient } from '../plugins/sleight/lib/hand/client.mjs';
+import { setHandPid } from '../plugins/sleight/lib/hand/pid.mjs';
 import { createV3Bridge, serveV3Worker } from '../plugins/sleight/lib/direct-browser/worker.mjs';
 
 const settle = async () => { for (let i = 0; i < 12; i++) await new Promise(r => setImmediate(r)); };
 const until = async fn => { const end = Date.now() + 2000; while (!fn()) { assert.ok(Date.now() < end, 'fixture state did not arrive'); await new Promise(r => setTimeout(r, 5)); } };
 const world = t => { const dir = realpathSync(mkdtempSync(join(tmpdir(), 'vc1-'))); chmodSync(dir, 0o700); t.after(() => rmSync(dir, { recursive: true, force: true })); return dir; };
 const frame = { kind: 'type', pid: 42, windowId: 7, at: [10, 20], path: [[10, 20]], beats: 8, delayMs: 0 };
+
+test('ring records reach the built-in client with public stream off, with no socket work or discovery timer', () => {
+  const records = []; let writes = 0, timers = 0;
+  const events = createCursorEvents({ setting: () => ({ enabled: true, style: 'ring', stream: false, labels: 'role' }),
+    sink: { write() { writes++; }, close() {} }, repeat() { timers++; } });
+  events.connectHost({ cursor: record => records.push(record) });
+  assert.equal(events.enabled, true);
+  events.action({ call: events.call(), index: 0, phase: 'aim', source: 'native', kind: 'click', point: [10, 20], window: { pid: 42, id: 7 }, role: 'AXButton', label: 'SECRET' });
+  events.status('waiting'); events.close();
+  assert.equal(records.find(r => r.phase === 'aim').label, 'button');
+  assert.ok(records.some(r => r.state === 'waiting')); assert.equal(writes, 0); assert.equal(timers, 0);
+});
+test('an idle stream session starts with idle, and a sink with no peers does not serialize actions', async t => {
+  const records = [], tick = [];
+  const events = createCursorEvents({ setting: () => ({ stream: true }), sink: { write: e => records.push(e), refresh() {}, close() {} }, repeat: fn => { tick.push(fn); return { unref() {} }; }, cancelRepeat() {} });
+  tick[0](); assert.deepEqual(records.map(r => r.state), ['start', 'idle']); events.close();
+  let serialized = 0; const sink = createRendererSink({ dir: world(t) }); t.after(() => sink.close());
+  sink.write({ type: 'action', toJSON() { serialized++; return {}; } }); await settle();
+  assert.equal(serialized, 0);
+});
 
 test('real settings cache refreshes at 250 ms for absent, changed, replaced and unsafe files', t => {
   const path = join(world(t), 'hand.json'); let now = 0;
@@ -172,8 +194,9 @@ test('discovery requires socket mode 0600 before and after connecting', async t 
 test('a forked worker with hand on and no shared host keeps turbo alive and draws nothing', async t => {
   const path = join(world(t), 'hand.json');
   writeFileSync(path, JSON.stringify({ version: 1, enabled: true, stream: false }), { mode: 0o600 });
-  let child; const frames = [];
+  let child; const frames = [], phases = [];
   const bridge = await createV3Bridge({}, { readConfig: () => ({}), acceptPackage: () => ({ current: () => true }), shareConsent: () => undefined,
+    tracePhase: phase => phases.push(phase),
     forkWorker(_path, args) {
       assert.ok(!args.includes('--shared-ui'));
       child = fork(new URL('./fixtures/cursor-no-shared-worker.mjs', import.meta.url), args,
@@ -190,6 +213,7 @@ test('a forked worker with hand on and no shared host keeps turbo alive and draw
       assert.equal(child.connected, true);
     }
     assert.equal(frames.length, 2, 'only the two deliberately stray frames, no generated host frames');
+    assert.equal(phases.filter(p => p === 'worker-hand-dropped').length, 2);
   } finally { await bridge.detach(); await exited; }
 });
 
@@ -286,6 +310,122 @@ const geometry = { ok: true, window: { pid: 42, windowId: 7, bounds: { X: 0, Y: 
   elements: { 1: { X: 10, Y: 10, Width: 20, Height: 20 } } };
 const capture = () => { const out = []; const events = createCursorEvents({ onEvent: e => out.push(e), setting: () => ({ stream: true, labels: 'role' }), sink: { write() {}, close() {} } }); return { out, events }; };
 
+test('native ring aim and labeled acts use the same record with public streaming off', async () => {
+  const frames = [], records = [], order = [];
+  const setting = () => ({ enabled: true, style: 'ring', labels: 'role', stream: false });
+  const events = createCursorEvents({ setting });
+  const hand = createRelayHand({ events, setting, now: () => 0, locate: async () => geometry,
+    client: { enabled: true, cursor(e) { records.push(e); if (e.point) order.push('aim'); }, send(f) { frames.push(f); order.push('act'); }, close() {} } });
+  hand.admit(1, { code: 'await app.click(1)', lines: { 1: 'button Description: PRIVATE' }, target: { app: 'Editor' } });
+  await settle();
+  const aim = records.find(r => r.phase === 'aim' && r.point);
+  assert.equal(aim.label, 'button'); assert.deepEqual(aim.rect, [10, 10, 20, 20]);
+  assert.deepEqual(aim.point, frames[0].at); assert.equal(frames[0].label, aim.label);
+  assert.deepEqual(order, ['aim', 'act']);
+  hand.approval(2, { tool_name: 'click' }); hand.result(1, false);
+  assert.ok(records.some(r => r.state === 'waiting')); assert.ok(!JSON.stringify([frames, records]).includes('PRIVATE'));
+  hand.close(); events.close();
+});
+test('worker ring records and labels survive with stream off, and secure input has no host label', async () => {
+  const packets = [], frames = [], setting = () => ({ enabled: true, style: 'ring', labels: 'title', stream: false });
+  const client = workerHandClient({ connected: true, send: p => packets.push(p) }, undefined, { setting });
+  const hand = createBrowserHand({ client: { ...client, send: f => frames.push(f) }, setting, locate: async () => geometry,
+    readMetrics: async () => ({ screenX: 0, screenY: 0, outerWidth: 500, outerHeight: 400, innerWidth: 500, innerHeight: 400, dpr: 1, visible: true, focusOnBody: false }) });
+  for (const input of [{ op: 'click', role: 'button', title: 'Save' }, { op: 'type', role: 'textbox', inputType: 'password', title: 'SECRET', text: 'SECRET' }]) {
+    const token = hand.step({ ...input, page: {}, locator: { boundingBox: async () => ({ x: 10, y: 10, width: 20, height: 20 }) } });
+    await settle(); hand.finish(token);
+  }
+  assert.equal(frames[0].label, 'Save'); assert.equal(frames[1].label, undefined);
+  const aims = packets.filter(p => p.cursor?.phase === 'aim').map(p => p.cursor);
+  assert.equal(aims.length, 2); assert.deepEqual(aims[0].point, frames[0].at);
+  assert.equal(aims[1].kind, 'key'); assert.equal(aims[1].count, undefined); assert.ok(!JSON.stringify(packets).includes('SECRET'));
+  hand.close();
+});
+test('ring aim and labels precede an approval answered before geometry arrives', async () => {
+  const order = []; let release;
+  const setting = () => ({ enabled: true, style: 'ring', labels: 'role' });
+  const events = createCursorEvents({ setting });
+  const hand = createRelayHand({ events, setting, now: () => 0, locate: () => new Promise(r => { release = r; }),
+    client: { enabled: true, cursor(e) { if (e.phase === 'aim' && e.point) order.push('aim'); },
+      send(f) { order.push(f.label ?? 'unlabeled'); }, hide() {}, close() {} } });
+  hand.admit(1, { code: 'await app.click(1)', lines: { 1: 'button Description: Save' }, target: { app: 'Editor' } });
+  await settle(); hand.approval(2, { tool_name: 'click', tool_params: { app: 'Editor' } }); hand.answered(2, 'accept');
+  release(geometry); await settle();
+  assert.deepEqual(order, ['aim', 'button']); hand.close(); events.close();
+});
+
+// A fake consent host behind the real client: stdin lines in arrival order, nothing drawn.
+function hostFixture(style, traces = []) {
+  const lines = [], child = new EventEmitter();
+  child.pid = 4300; child.stdout = new EventEmitter();
+  child.stdin = Object.assign(new EventEmitter(), { writableLength: 0, end() {},
+    write(text) { for (const line of text.trimEnd().split('\n')) { const frame = JSON.parse(line); if (frame.hand !== 'menu') lines.push(frame); } return true; } });
+  child.stdio = [child.stdin, child.stdout, null, Object.assign(new EventEmitter(), { write() {}, destroy() {} }), Object.assign(new EventEmitter(), { destroy() {} })];
+  const client = createHandClient({ cursorStyle: style, setting: () => ({ enabled: true, style }), built: () => true, watch: () => undefined,
+    permissions: null, usage: null, currentApp: () => undefined, trace: (d, detail) => traces.push([d, detail]),
+    prepare: async () => ({ status: 'ready', spawn: () => child }) });
+  return { client, lines, traces };
+}
+const three = { ...geometry, elements: { 1: { X: 10, Y: 10, Width: 20, Height: 20 }, 2: { X: 200, Y: 100, Width: 20, Height: 20 }, 3: { X: 300, Y: 300, Width: 20, Height: 20 } } };
+const threeClicks = { code: 'await app.click(1); await app.click(2); await app.click(3)',
+  lines: { 1: 'button Description: One', 2: 'button Description: Two', 3: 'button Description: Three' }, screenshotSize: [500, 400], target: { app: 'Editor' } };
+
+test('a 3-action ring call reaches the host as aim, act, aim, act, aim, act, then its statuses, while the stream has every aim at plan time', async t => {
+  t.after(() => setHandPid(0));
+  const setting = () => ({ enabled: true, style: 'ring', labels: 'role', stream: false }), stream = [];
+  const host = hostFixture('ring');
+  const events = createCursorEvents({ setting, onEvent: e => stream.push(e) });
+  const hand = createRelayHand({ events, setting, client: host.client, locate: async () => three });
+  t.after(() => { hand.close(); events.close(); host.client.close(); });
+  hand.admit(1, threeClicks); await settle();
+  assert.deepEqual(host.lines.map(l => l.hand), ['aim', 'act', 'aim', 'act', 'aim', 'act']);
+  const aims = host.lines.filter(l => l.hand === 'aim'), acts = host.lines.filter(l => l.hand === 'act');
+  for (let i = 0; i < 3; i++) assert.deepEqual(aims[i].at, acts[i].at, `aim ${i} names its own act's point`);
+  assert.ok(acts[0].delayMs < acts[1].delayMs && acts[1].delayMs < acts[2].delayMs, 'acts keep the planner schedule');
+  assert.deepEqual(host.lines.map(l => l.seq), [1, 2, 3, 4, 5, 6]);
+  const planned = stream.filter(e => e.type === 'action' && e.phase === 'aim' && e.point);
+  assert.equal(planned.length, 3, 'the public stream has all three aims');
+  const firstAct = stream.find(e => e.phase === 'act')?.seq ?? Infinity;
+  assert.ok(planned.every(e => e.seq < firstAct), 'the stream aims precede any act record');
+  hand.result(1, false); events.status('done', { call: planned[0].call }); events.status('thinking'); await settle();
+  assert.deepEqual(host.lines.slice(6).map(l => [l.hand, l.state]), [['status', 'done'], ['status', 'thinking']]);
+  assert.equal(host.lines[6].ok, true);
+  assert.deepEqual(host.traces.filter(([d]) => d === 'hand-dropped'), [], 'the admission preview aims are no dropped frames');
+});
+
+test('a host aim waits for the act before it when approvals pace the acts', async t => {
+  t.after(() => setHandPid(0));
+  const setting = () => ({ enabled: true, style: 'ring', labels: 'role', stream: false }), host = hostFixture('ring');
+  const events = createCursorEvents({ setting });
+  const hand = createRelayHand({ events, setting, client: host.client, locate: async () => three });
+  t.after(() => { hand.close(); events.close(); host.client.close(); });
+  // An earlier call's approval marks Editor as an app whose actions come with approvals.
+  hand.admit(1, { ...threeClicks, code: 'await app.click(1)' }); hand.approval(10, { tool_name: 'click', tool_params: { app: 'Editor' } });
+  hand.answered(10, 'accept'); await settle(); hand.result(1, false); await settle();
+  host.lines.length = 0;
+  hand.admit(2, threeClicks); await settle();
+  assert.deepEqual(host.lines.map(l => l.hand), ['aim'], 'the first aim goes out at plan time, the acts wait for their approvals');
+  for (const id of [11, 12, 13]) {
+    hand.approval(id, { tool_name: 'click', tool_params: { app: 'Editor' } }); hand.answered(id, 'accept'); await settle();
+  }
+  // Each approval also shows waiting, ahead of the act it lets go.
+  assert.deepEqual(host.lines.map(l => l.hand === 'status' ? l.state : l.hand), ['aim', 'waiting', 'act', 'aim', 'waiting', 'act', 'aim', 'waiting', 'act']);
+});
+
+test('a dead host client plans, locates and projects nothing for drawing when the stream is off', async () => {
+  let located = 0, cursors = 0;
+  const setting = () => ({ enabled: true, style: 'ring', stream: false });
+  const events = createCursorEvents({ setting });
+  const client = { enabled: false, send() {}, cursor() { cursors++; }, hide() {}, close() {} };
+  const hand = createRelayHand({ events, setting, client, locate: async () => { located++; return three; } });
+  assert.equal(events.enabled, false, 'drawing is off with the host client dead');
+  hand.admit(1, threeClicks); await settle(); hand.result(1, false);
+  assert.deepEqual([located, cursors], [0, 0]);
+  events.connectHost(null); assert.equal(events.enabled, false, 'no client could be created');
+  events.connectHost({ enabled: true, cursor() {} }); assert.equal(events.enabled, true);
+  hand.close(); events.close();
+});
+
 test('native records share the host point, aim immediately after planning, act on schedule, result confirmed', async () => {
   const { out, events } = capture(), frames = [], timers = [];
   const hand = createRelayHand({ events, client: { enabled: true, send: f => frames.push(f), close() {} }, setting: () => ({ enabled: true, stream: true }),
@@ -373,7 +513,7 @@ test('native stream stays usable with drawing disabled and late geometry emits n
   hand.close(); events.close();
 });
 
-test('admission remains synchronous with two renderer sockets connected, measured against hand off and hand only', async t => {
+test('admission remains synchronous with two renderer sockets connected, measured in turns against hand off, hand only and ring', async t => {
   const dir = world(t), clients = [], servers = [];
   for (let i = 0; i < 2; i++) {
     const server = net.createServer(c => { clients.push(c); c.resume(); }); servers.push(server);
@@ -383,37 +523,51 @@ test('admission remains synchronous with two renderer sockets connected, measure
   const median = xs => [...xs].sort((a, b) => a - b)[Math.floor(xs.length / 2)];
   const tree = 'Window: "Editor", App: Editor.\n0 standard window Editor\n\t1 button Description: Save, ID: Save';
   const png = Buffer.alloc(33); png.writeUInt32BE(0x89504e47); png.writeUInt32BE(0x0d0a1a0a, 4); png.writeUInt32BE(13, 8); png.write('IHDR', 12); png.writeUInt32BE(500, 16); png.writeUInt32BE(400, 20);
-  async function measure(mode) {
-    let frames = 0, count = 0;
+  // Each mode gets its own relay. The modes take turns in 60-sample batches (ABAB, the order reversed every other round),
+  // so load changes during the run hit every mode alike, and each round compares its own batches.
+  async function setup(mode) {
+    const state = { frames: 0, events: 0, cursors: 0, next: 100 };
     const sink = mode === 'stream' ? createRendererSink({ dir }) : { write() {}, close() {} };
     const path = join(world(t), 'hand.json');
-    if (mode !== 'off') writeFileSync(path, JSON.stringify({ version: 1, enabled: true, stream: mode === 'stream' }), { mode: 0o600 });
+    if (mode !== 'off') writeFileSync(path, JSON.stringify({ version: 1, enabled: true, stream: mode === 'stream', ...mode === 'ring' ? { style: 'ring' } : {} }), { mode: 0o600 });
     const setting = createHandSettingReader({ path, env: {}, platform: 'darwin' });
-    const events = createCursorEvents({ setting, sink, onEvent: () => count++ });
+    const events = createCursorEvents({ setting, sink, onEvent: () => state.events++ });
     if (mode === 'stream') { events.status('idle'); await until(() => sink.stats().connected === 2); }
     const hand = mode === 'off' ? undefined : createRelayHand({ events, now: () => 0, setting,
-      client: { enabled: true, send() { frames++; }, close() {} }, locate: async () => geometry });
+      client: { enabled: true, send() { state.frames++; }, cursor() { state.cursors++; }, close() {} }, locate: async () => geometry });
     const h = relayFixture(t, { hand, cursor: events });
     const request = (id, code) => h.request({ jsonrpc: '2.0', id, method: 'tools/call', params: { name: 'js', arguments: { code } } });
     const response = id => h.response({ jsonrpc: '2.0', id, result: { content: [{ type: 'text', text: tree }] } });
     request(1, 'let app = await cua.getApp("Editor")'); await settle();
     h.response({ jsonrpc: '2.0', id: 1, result: { content: [{ type: 'text', text: tree }, { type: 'image', data: png.toString('base64'), mimeType: 'image/png' }] } }); await settle();
-    const samples = [];
-    for (let i = 0; i < 350; i++) {
-      const id = i + 100, start = performance.now(); request(id, 'await app.click([20,20])');
-      assert.equal(h.sent.at(-1)?.id, id, 'engine dispatch needs no event loop tick');
-      const elapsed = performance.now() - start;
-      if (i >= 50) samples.push(elapsed);
-      response(id); await settle();
-    }
-    const connected = mode === 'stream' ? sink.stats().connected : 0;
-    h.relay.close();
-    return { medianMs: median(samples), frames, events: count, connected, samples: samples.length };
+    return { state, async batch(n) {
+      const samples = [];
+      for (let i = 0; i < n; i++) {
+        const id = state.next++, start = performance.now(); request(id, 'await app.click([20,20])');
+        assert.equal(h.sent.at(-1)?.id, id, 'engine dispatch needs no event loop tick');
+        samples.push(performance.now() - start);
+        response(id); await settle();
+      }
+      return median(samples);
+    }, close() { state.connected = mode === 'stream' ? sink.stats().connected : 0; h.relay.close(); } };
   }
-  const off = await measure('off'), hand = await measure('hand'), stream = await measure('stream');
-  t.diagnostic(JSON.stringify({ admission: { off, hand, stream } }));
-  assert.equal(stream.connected, 2); assert.ok(stream.frames >= 300 && stream.events >= 600);
-  assert.ok(stream.medianMs - hand.medianMs < 0.25, 'stream admission adds less than 0.25 ms');
+  const modes = ['off', 'hand', 'ring', 'stream'], runs = {};
+  for (const mode of modes) runs[mode] = await setup(mode);
+  const batches = Object.fromEntries(modes.map(mode => [mode, []]));
+  for (let round = 0; round < 15; round++) {
+    for (const mode of round % 2 ? [...modes].reverse() : modes) {
+      const value = await runs[mode].batch(60);
+      if (round >= 10) batches[mode].push(value); // 10 rounds (600 calls a mode) warm up
+    }
+  }
+  for (const mode of modes) runs[mode].close();
+  const added = mode => median(batches[mode].map((value, i) => value - batches.hand[i]));
+  const result = Object.fromEntries(modes.map(mode => [mode, { batches: batches[mode], medianMs: median(batches[mode]), ...runs[mode].state }]));
+  t.diagnostic(JSON.stringify({ admission: result, addedMs: { ring: added('ring'), stream: added('stream') } }));
+  assert.equal(runs.stream.state.connected, 2); assert.ok(runs.stream.state.frames >= 300 && runs.stream.state.events >= 600);
+  assert.ok(runs.ring.state.frames >= 300 && runs.ring.state.cursors >= 300, 'ring mode plans, previews and sends to the client');
+  assert.ok(added('stream') < 0.25, 'stream admission adds less than 0.25 ms');
+  assert.ok(added('ring') < 0.25, 'ring admission adds less than 0.25 ms');
 });
 
 test('writers reject invalid enum values and omit unknown nested and top-level fields', () => {
