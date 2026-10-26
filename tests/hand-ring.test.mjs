@@ -38,6 +38,7 @@ function run(t, frames, flags = ['--cursor-style=ring']) {
 const near = (a, b, e = 1e-6) => assert.ok(Math.abs(a - b) < e, `${a} != ${b}`);
 // Every drawn plan: monotonic keyTimes from 0 to 1, a value per time, every track inside the plan, and D2's budget.
 function check(p) {
+  if (!p.animations) return;
   for (const a of p.animations) {
     assert.equal(a.values.length, a.times.length, `${a.layer}/${a.keyPath}`);
     for (let i = 1; i < a.times.length; i++) assert.ok(a.times[i] >= a.times[i - 1], `${a.layer}/${a.keyPath} keyTimes decrease`);
@@ -49,8 +50,11 @@ function check(p) {
   assert.ok(p.budget.visible <= 14, `visible ${p.budget.visible} in ${p.state}`);
   assert.ok(p.budget.clickAnimated <= 9, `click animations ${p.budget.clickAnimated}`);
 }
+// The dump's clock moves only on dumpClock lines. A frame list without any is spaced 1 s apart here, so each plan's motion
+// has ended (and nothing has faded yet) when the next frame lands. Tests of overlaps give their own clock lines.
+const spaced = frames => frames.some(f => 'dumpClock' in f) ? frames : frames.flatMap((f, i) => [clock(i), f]);
 function effects(t, frames, flags) {
-  const result = run(t, frames, flags);
+  const result = run(t, spaced(frames), flags);
   assert.equal(result.status, 0, result.stderr);
   const lines = result.stdout.trim().split('\n').map(JSON.parse);
   for (const line of lines) if (line.effect === 'draw') check(line);
@@ -141,7 +145,15 @@ test('Split Seam+ glide: distance timing, glance and reach in the first 70 ms, o
   assert.ok(track(p, 'halves', 'transform').values.some(m => m[0] > 1.2), 'it stretches along travel');
   assert.ok(track(p, 'kC', 'transform.translation'), 'the halves lean');
   const position = track(p, 'cursor', 'position');
-  assert.ok(position.values.some(xy => xy[0] > 300 && xy[0] <= 304.01), 'overshoot up to 4 pt');
+  assert.ok(position.values.some(xy => xy[0] > 300 && xy[0] <= 304.0001), 'overshoot up to 4 pt');
+  let most = 0, least = Infinity;
+  for (let seed = 1; seed <= 60; seed++) {
+    const [, q] = plans(t, [act(), act('click', { seq: 2, at: [500, 100], path: [[500, 100]] })], ['--cursor-style=ring', '--seed=' + seed]);
+    const over = Math.max(...track(q, 'cursor', 'position').values.map(xy => xy[0])) - 500;
+    most = Math.max(most, over); least = Math.min(least, over);
+  }
+  assert.ok(most <= 4 + 1e-6 && least > 0, `overshoot ${least} to ${most} pt over 60 seeds`);
+  t.diagnostic(`overshoot ${least.toFixed(2)} to ${most.toFixed(2)} pt over 60 seeds`);
   assert.deepEqual(position.values.at(-1), [300, 100]);
   const [far] = plans(t, [act('click', { path: [[-1000, 100], [100, 100]] })]).map(x => x);
   near(far.glide, .32);
@@ -151,7 +163,7 @@ test('Split Seam+ glide: distance timing, glance and reach in the first 70 ms, o
 });
 
 test('Split Seam+ early action: an act landing mid-glide finishes the glide in 60 ms from where the ring is', options, t => {
-  const [, glide, early] = plans(t, [act(), aim({ seq: 2, at: [400, 300] }), clock(.43 + .1), act('click', { seq: 3, at: [400, 300], path: [[400, 300]] })]);
+  const [, glide, early] = plans(t, [act(), clock(1), aim({ seq: 2, at: [400, 300] }), clock(1.1), act('click', { seq: 3, at: [400, 300], path: [[400, 300]] })]);
   assert.ok(glide.glide > .2);
   near(span(early, 'snap'), .06); near(early.glide, .06);
   const start = track(early, 'cursor', 'position').values[0];
@@ -223,7 +235,7 @@ test('Split Seam+ reduced motion: crossfades, no momentum, no orbit, no steps, n
 });
 
 test('ring runtime: every state parks with 0 running animations, then fades and releases with 0 timers left', options, t => {
-  for (const frame of [status('thinking'), status('waiting'), act('click'), aim({ rect: [60, 90, 100, 24] }), status('error')]) {
+  for (const frame of [status('thinking'), act('click'), aim({ rect: [60, 90, 100, 24] }), status('error')]) {
     const lines = effects(t, [act(), { ...frame, seq: 2 }]);
     const draws = lines.filter(l => l.effect === 'draw'), last = draws.at(-1);
     const after = lines.slice(lines.indexOf(last) + 1);
@@ -234,18 +246,33 @@ test('ring runtime: every state parks with 0 running animations, then fades and 
     near(after[1].time, park + 1.2); near(after[2].time, park + 1.42);
     assert.deepEqual(after.at(-1), { effect: 'end', idle: true, pending: 0, timers: 0 });
   }
+  // Waiting parks still and stays up until the next frame, up to the 120 s cap.
+  const waiting = effects(t, after(status('waiting')));
+  const last = waiting.filter(l => l.effect === 'draw').at(-1), rest = waiting.slice(waiting.indexOf(last) + 1);
+  assert.deepEqual(rest.map(l => l.effect), ['park', 'fade', 'release', 'end']);
+  near(rest[0].time, last.time + last.total); near(rest[1].time, last.time + 120); near(rest[2].time, last.time + 120.22);
+  const answered = effects(t, [act(), clock(1), status('waiting', { seq: 2 }), clock(60), act('click', { seq: 3 })]);
+  assert.deepEqual(answered.filter(l => l.effect === 'draw').map(l => l.state), ['click', 'waiting', 'click']);
+  assert.ok(!answered.some(l => l.effect === 'fade' && l.time < 60), 'waiting is still up a minute later');
   // Done and handback release when the dissolve ends.
   const done = effects(t, after(status('done')));
   assert.deepEqual(done.slice(-3).map(l => l.effect), ['park', 'release', 'end']);
   assert.equal(done.at(-1).idle, true);
 });
 
-test('ring runtime: a delayed act survives aim, thinking and waiting, and a terminal status or hide cancels it', options, t => {
+test('ring runtime: aim and statuses queue behind a delayed act, and a terminal status or hide cancels it', options, t => {
   const lines = effects(t, [act('click', { delayMs: 300, at: [200, 100], path: [[200, 100]] }), clock(.1), aim({ seq: 2, at: [150, 100] }),
     clock(.15), status('thinking', { seq: 3 }), clock(.2), status('waiting', { seq: 4 })]);
   const draws = lines.filter(l => l.effect === 'draw');
-  assert.deepEqual(draws.map(d => d.state), ['aim', 'thinking', 'waiting', 'click']);
-  near(draws.at(-1).time, .3);
+  assert.deepEqual(draws.map(d => d.state), ['click', 'aim', 'thinking', 'waiting']);
+  for (const d of draws) near(d.time, .3);
+  // The reviewer's case: a thinking status that lands while the click waits out its delay plays after it and stays.
+  const review = effects(t, [act(), clock(1), act('click', { seq: 2, delayMs: 470, at: [300, 100], path: [[300, 100]] }), clock(1.001), status('thinking', { seq: 3 })]);
+  const order = review.filter(l => l.effect === 'draw');
+  assert.deepEqual(order.map(d => d.state), ['click', 'click', 'thinking']);
+  near(order[1].time, 1.47); near(order[2].time, 1.47);
+  assert.deepEqual(order[2].at, [300, 100], 'thinking plays at the click');
+  assert.equal(review.filter(l => l.effect === 'park').at(-1).time > 1.47 + 4.8, true, 'thinking parks after its cycles');
   for (const terminal of [status('done', { seq: 2, at: [10, 10] }), status('error', { seq: 2, at: [10, 10] }), status('handback', { seq: 2, at: [10, 10] }), { hand: 'hide', nonce }]) {
     const states = effects(t, [act('click', { delayMs: 300 }), clock(.1), terminal]).filter(l => l.effect === 'draw').map(d => d.state);
     assert.ok(!states.includes('click'), JSON.stringify(terminal));
@@ -334,9 +361,40 @@ test('ring plans: palette and layer budget across a full session', options, t =>
     clickAnimated: Math.max(m.clickAnimated, p.budget.clickAnimated) }), { layers: 0, visible: 0, clickAnimated: 0 }))}`);
 });
 
-test('ring plans: target memory is window-bound and a point-free status for another window is dropped and hides', options, t => {
-  const lines = effects(t, [act(), status('waiting', { seq: 2, windowId: 1 }), status('thinking', { seq: 3 })]);
-  assert.deepEqual(lines.filter(l => ['draw', 'drop', 'hide'].includes(l.effect)).map(l => l.effect), ['draw', 'drop', 'hide', 'drop', 'hide']);
+test('ring plans: target memory is window-bound, and a status with no point is dropped without hiding or cancelling', options, t => {
+  const lines = effects(t, [act(), clock(.5), status('waiting', { seq: 2, windowId: 1 }), clock(.6), status('thinking', { seq: 3 })]);
+  assert.deepEqual(lines.filter(l => ['draw', 'drop', 'hide'].includes(l.effect)).map(l => l.effect + ':' + l.state), ['draw:click', 'drop:waiting', 'draw:thinking']);
+  assert.equal(lines.filter(l => l.effect === 'drop').length, 1);
+  // The reviewer's case: a delayed click, then a point-free thinking before anything was placed. The click still draws.
+  const pending = effects(t, [act('click', { delayMs: 300 }), clock(.05), status('thinking', { seq: 2 })]);
+  assert.deepEqual(pending.filter(l => ['draw', 'drop', 'hide'].includes(l.effect)).map(l => l.effect + ':' + l.state), ['draw:click', 'draw:thinking']);
+  const unplaced = effects(t, [status('thinking')]);
+  assert.deepEqual(unplaced.map(l => l.effect), ['drop', 'end']);
+});
+
+test('ring runtime: a point-free status mid-glide plays at the glide destination', options, t => {
+  for (const state of ['thinking', 'error', 'done']) {
+    const lines = effects(t, [act(), clock(1), act('click', { seq: 2, at: [300, 100], path: [[300, 100]] }), clock(1.1), status(state, { seq: 3 })]);
+    const p = lines.filter(l => l.effect === 'draw').at(-1);
+    assert.deepEqual(p.at, [300, 100], state);
+    near(span(p, 'snap'), .06);
+    const start = track(p, 'cursor', 'position').values[0];
+    assert.ok(start[0] > 100 && start[0] < 300, `${state} starts from the glide at ${start}`);
+  }
+});
+
+test('ring runtime: an act during a done or handback dissolve enters again', options, t => {
+  for (const state of ['done', 'handback']) {
+    const lines = effects(t, [act(), clock(1), status(state, { seq: 2 }), clock(1.2), act('click', { seq: 3, at: [200, 100], path: [[200, 100]] })]);
+    const p = lines.filter(l => l.effect === 'draw').at(-1);
+    assert.equal(p.state, 'click'); assert.ok(p.entrance, state);
+    assert.ok(span(p, 'entrance') > 0); near(p.shape.o, 1); near(p.shape.ho, 1); near(p.shape.pdis, 0);
+  }
+});
+
+test('ring runtime: a repeated status inside its plan changes nothing', options, t => {
+  const lines = effects(t, [act(), clock(1), status('thinking', { seq: 2 }), clock(1.5), status('thinking', { seq: 3 }), clock(7), status('thinking', { seq: 4 })]);
+  assert.deepEqual(lines.filter(l => l.effect === 'draw').map(l => l.time), [0, 1, 7]);
 });
 
 test('ring frames enforce exact keys, nonce, sequence, numeric bounds and types', options, t => {
@@ -394,4 +452,12 @@ test('ring source: Core Animation only, no timer, display link or per-frame Swif
   const ringHost = host.slice(host.indexOf('var ringEnvironment'), host.indexOf('func installRing'));
   assert.equal((ringHost.match(/asyncAfter/g) ?? []).length, 1);
   assert.doesNotMatch(ringHost, /Timer/);
+});
+
+test('ring dump: --time-plans reports each draw with its planning time and no plan', options, t => {
+  const lines = effects(t, [act(), status('thinking', { seq: 2 })], ['--cursor-style=ring', '--time-plans']);
+  const draws = lines.filter(l => l.effect === 'draw');
+  assert.deepEqual(draws.map(d => d.state), ['click', 'thinking']);
+  for (const d of draws) { assert.equal(typeof d.planMs, 'number'); assert.ok(d.planMs >= 0); assert.equal(d.animations, undefined); }
+  t.diagnostic(`planMs ${draws.map(d => d.planMs.toFixed(2)).join(' ')}`);
 });

@@ -1828,7 +1828,7 @@ struct RingTheme {
     var name: String
     var warm: [Double] = [1, 122.0/255, 61.0/255, 1], cool: [Double] = [91.0/255, 141.0/255, 1, 1]
     var ink: [Double] = [11.0/255, 13.0/255, 20.0/255, 0.55], white: [Double] = [1, 1, 1, 1], error: [Double] = [1, 61.0/255, 96.0/255, 1]
-    var silence = 1.2, fade = 0.22, gap = 6.0, size = 28.0, carry = 0.42
+    var silence = 1.2, fade = 0.22, gap = 6.0, size = 28.0, carry = 0.42, waitingCap = 120.0
     var wrap = true          // type, scroll and drag wrap the target's rect (aim always does)
     var momentum = true      // wind-up, stretch, lean, overshoot and the squash settle
     var reach = true         // the reach line and the spark's glance in a glide's first 70 ms
@@ -1891,20 +1891,26 @@ struct SeamGeo {
     func point(_ s0: Double) -> (x: Double, y: Double, nx: Double, ny: Double) {
         var s = s0.truncatingRemainder(dividingBy: P)
         if s < 0 { s += P }
-        let parts: [(arc: Bool, v: [Double], length: Double)] = [(true, [x + r, y + r, 225, 270], a / 2), (false, [x + r, y, x + w - r, y, 0, -1], ew),
-            (true, [x + w - r, y + r, 270, 360], a), (false, [x + w, y + r, x + w, y + h - r, 1, 0], eh), (true, [x + w - r, y + h - r, 0, 90], a),
-            (false, [x + w - r, y + h, x + r, y + h, 0, 1], ew), (true, [x + r, y + h - r, 90, 180], a), (false, [x, y + h - r, x, y + r, -1, 0], eh),
-            (true, [x + r, y + r, 180, 225], a / 2)]
-        for (i, part) in parts.enumerated() {
-            if s <= part.length || i == parts.count - 1 {
-                let f = part.length > 0 ? min(1, max(0, s / part.length)) : 0, v = part.v
-                if part.arc {
-                    let angle = (v[2] + (v[3] - v[2]) * f) * Double.pi / 180
-                    return (v[0] + r * cos(angle), v[1] + r * sin(angle), cos(angle), sin(angle))
+        // Segment i alternates corner (even) and side (odd); no allocation, since planning samples this per pixel.
+        let x = self.x, y = self.y
+        for i in 0..<9 {
+            let length = i == 0 || i == 8 ? a / 2 : (i % 2 == 0 ? a : (i == 1 || i == 5 ? ew : eh))
+            if s <= length || i == 8 {
+                let f = length > 0 ? min(1, max(0, s / length)) : 0
+                if i % 2 == 0 {
+                    let cx = i == 2 || i == 4 ? x + w - r : x + r, cy = i == 4 || i == 6 ? y + h - r : y + r
+                    let from = i == 0 ? 225.0 : Double(i / 2) * 90 + 180, span = i == 0 || i == 8 ? 45.0 : 90
+                    let angle = (from.truncatingRemainder(dividingBy: 360) + span * f) * Double.pi / 180
+                    return (cx + r * cos(angle), cy + r * sin(angle), cos(angle), sin(angle))
                 }
-                return (v[0] + (v[2] - v[0]) * f, v[1] + (v[3] - v[1]) * f, v[4], v[5])
+                switch i {
+                case 1: return (x + r + ew * f, y, 0, -1)
+                case 3: return (x + w, y + r + eh * f, 1, 0)
+                case 5: return (x + w - r - ew * f, y + h, 0, 1)
+                default: return (x, y + h - r - eh * f, -1, 0)
+                }
             }
-            s -= part.length
+            s -= length
         }
         return (0, 0, 0, 0)
     }
@@ -1989,36 +1995,70 @@ func ringChip(_ text: String, at: CGPoint, clip: CGRect) -> RingChip {
         tether: [[0, Double(at.x) + (right ? 11 : -11), Double(at.y) - 11], [1, right ? x : x + width, above ? y + height : y]])
 }
 struct RingContext {
-    var from: CGPoint?, previous: RingPlan?, elapsed = Double.infinity
+    var from: CGPoint?, destination: CGPoint? = nil, previous: RingPlan?, elapsed = Double.infinity
     var reduced = false, secure = false, clip = CGRect(x: 0, y: 0, width: 1000, height: 1000), seed: UInt64 = 1
+}
+// The planner's state values. A typo is a compile error, and a state is a plain array indexed by the key.
+enum RingKey: Int, CaseIterable {
+    case o, w, h, rr, qz, ox, oy, gap, fray, rot, sep, sq, sqa, tw, tc, fillO, sp, ss, sr, sx, sy, hol, err, sh, ml, ho, xo,
+         px, pstep, pdim, pdis, porb, tph, pm, burst, bo, bx, by, bs
+    var name: String { String(describing: self) }
+    static let names = allCases.map { $0.name }
 }
 // The value tweens of one plan. A later tween of a value overrides an earlier one from its start, as in D2's engine.
 final class SeamTimeline {
     struct Tween { let start: Double, duration: Double, from: Double, to: Double, ease: (Double) -> Double }
     struct Move { let start: Double, duration: Double, a: CGPoint, c: CGPoint, b: CGPoint, ux: Double, uy: Double, windup: Bool, curved: Bool,
         ease: (Double) -> Double }
-    let initial: [String: Double], origin: CGPoint
-    var tweens: [String: [Tween]] = [:], moves: [Move] = [], marks: [Double] = [0]
-    init(_ initial: [String: Double], origin: CGPoint) { self.initial = initial; self.origin = origin }
-    func value(_ key: String, _ t: Double) -> Double {
-        guard let list = tweens[key], let tween = list.last(where: { $0.start <= t + 1e-9 }) else { return initial[key] ?? 0 }
+    let initial: [Double], origin: CGPoint
+    var tweens: [[Tween]] = Array(repeating: [], count: RingKey.allCases.count), moves: [Move] = [], marks: [Double] = [0]
+    init(_ initial: [Double], origin: CGPoint) { self.initial = initial; self.origin = origin }
+    func value(_ key: RingKey, _ t: Double) -> Double { value(key.rawValue, t) }
+    func value(_ key: Int, _ t: Double) -> Double {
+        let list = tweens[key]
+        var i = list.count - 1
+        while i >= 0, list[i].start > t + 1e-9 { i -= 1 }
+        guard i >= 0 else { return initial[key] }
+        let tween = list[i]
         if tween.duration <= 0 || t >= tween.start + tween.duration { return tween.to }
         return tween.from + (tween.to - tween.from) * tween.ease((t - tween.start) / tween.duration)
     }
-    @discardableResult func to(_ targets: [String: Double], _ start: Double, _ duration: Double, _ ease: @escaping (Double) -> Double = Seam.out) -> Double {
+    // Every value at one time. Index loops, because the host is built without optimization and ranges cost there.
+    func state(_ t: Double) -> [Double] {
+        var result = initial, key = 0
+        let count = result.count
+        while key < count {
+            let list = tweens[key]
+            var i = list.count - 1
+            while i >= 0, list[i].start > t + 1e-9 { i -= 1 }
+            if i >= 0 {
+                let tween = list[i]
+                result[key] = tween.duration <= 0 || t >= tween.start + tween.duration ? tween.to
+                    : tween.from + (tween.to - tween.from) * tween.ease((t - tween.start) / tween.duration)
+            }
+            key += 1
+        }
+        return result
+    }
+    @discardableResult func to(_ targets: [RingKey: Double], _ start: Double, _ duration: Double, _ ease: @escaping (Double) -> Double = Seam.out) -> Double {
         for (key, target) in targets {
-            var list = tweens[key] ?? []
             let tween = Tween(start: start, duration: duration, from: value(key, start), to: target, ease: ease)
-            list.insert(tween, at: list.firstIndex(where: { $0.start > start }) ?? list.count)
-            tweens[key] = list
+            var i = tweens[key.rawValue].count
+            while i > 0, tweens[key.rawValue][i - 1].start > start { i -= 1 }
+            tweens[key.rawValue].insert(tween, at: i)
         }
         marks += [start, start + duration]
         return start + duration
     }
-    func set(_ targets: [String: Double], _ at: Double) { to(targets, at, 0, Seam.linear) }
+    func set(_ targets: [RingKey: Double], _ at: Double) { to(targets, at, 0, Seam.linear) }
     func move(_ m: Move) { moves.append(m); marks += [m.start, m.start + m.duration] }
+    func current(_ t: Double) -> Move? {
+        var i = moves.count - 1
+        while i >= 0, moves[i].start > t + 1e-9 { i -= 1 }
+        return i >= 0 ? moves[i] : nil
+    }
     func position(_ t: Double) -> CGPoint {
-        guard let m = moves.last(where: { $0.start <= t + 1e-9 }) else { return origin }
+        guard let m = current(t) else { return origin }
         if m.duration <= 0 || t >= m.start + m.duration { return m.b }
         let q = m.ease((t - m.start) / m.duration), u = 1 - q
         var x = u * u * Double(m.a.x) + 2 * u * q * Double(m.c.x) + q * q * Double(m.b.x)
@@ -2028,19 +2068,21 @@ final class SeamTimeline {
     }
     // Points per millisecond inside a curved move, from the move's own bezier and easing.
     func velocity(_ t: Double) -> (Double, Double)? {
-        guard let m = moves.last(where: { $0.start <= t + 1e-9 }), m.curved, m.duration > 0, t < m.start + m.duration else { return nil }
+        guard let m = current(t), m.curved, m.duration > 0, t < m.start + m.duration else { return nil }
         let t0 = max(m.start, t - 0.004), t1 = min(m.start + m.duration - 1e-6, t + 0.004)
         guard t1 > t0 else { return nil }
         let a = position(t0), b = position(t1), dt = (t1 - t0) * 1000
         return (Double(b.x - a.x) / dt, Double(b.y - a.y) / dt)
     }
 }
+// Orbit pixel paths by shape and phase. Plans run on one thread (the host's main thread, or the dump's).
+var ringOrbitCache: [[Double]: [RingValue]] = [:]
 // Per-state planners shared by every theme. Statuses and aim glide from the last point like acts.
 final class RingPlanner {
-    static let base: [String: Double] = ["o": 1, "w": 28, "h": 28, "rr": 14, "qz": 0, "ox": 0, "oy": 0, "gap": 6, "fray": 0, "rot": 0,
-        "sep": 0, "sq": 0, "sqa": 0, "tw": 0, "tc": 0, "fillO": 0, "sp": 0, "ss": 1, "sr": 0, "sx": 0, "sy": 0, "hol": 0, "err": 0,
-        "sh": 0, "ml": 0, "ho": 1, "xo": 0, "px": 0, "pstep": 0, "pdim": 0, "pdis": 0, "porb": 0, "tph": 0, "pm": 0, "burst": 0,
-        "bo": 0, "bx": 0, "by": 0, "bs": 0]
+    static let base: [RingKey: Double] = [.o: 1, .w: 28, .h: 28, .rr: 14, .qz: 0, .ox: 0, .oy: 0, .gap: 6, .fray: 0, .rot: 0,
+        .sep: 0, .sq: 0, .sqa: 0, .tw: 0, .tc: 0, .fillO: 0, .sp: 0, .ss: 1, .sr: 0, .sx: 0, .sy: 0, .hol: 0, .err: 0,
+        .sh: 0, .ml: 0, .ho: 1, .xo: 0, .px: 0, .pstep: 0, .pdim: 0, .pdis: 0, .porb: 0, .tph: 0, .pm: 0, .burst: 0,
+        .bo: 0, .bx: 0, .by: 0, .bs: 0]
     static let orbitHome: [Double] = [0, 0.035, 0.07, 0.5, 0.535, 0.57], orbitSpeed: [Double] = [1, 2, -1, 1, -2, 1]
     static let pixels = ["px0", "px1", "px2", "px3"]
     struct Segment { let start: Double, duration: Double, a: CGPoint, c: CGPoint, b: CGPoint, ease: (Double) -> Double }
@@ -2051,35 +2093,36 @@ final class RingPlanner {
     var wrap: CGRect?, glideEnd = 0.0, glideTime = 0.0, entrance: String?, variation: Double?
     init(_ event: RingEvent, _ theme: RingTheme, _ c: RingContext) {
         self.event = event; self.theme = theme; self.c = c
-        let at = event.at ?? c.from ?? .zero
+        let at = event.at ?? c.destination ?? c.from ?? .zero
         var route = handPoints((c.from.map { [$0] } ?? []) + [at])
         if c.from == nil, event.path.count > 1, event.state != "drag" { route = handPoints(event.path + [at]) }
         self.at = at; self.route = route
-        var initial = Self.base
-        initial["gap"] = theme.gap; initial["w"] = theme.size; initial["h"] = theme.size; initial["rr"] = theme.size / 2
-        if c.from != nil, let end = c.previous?.shape { initial.merge(end) { $1 } }
+        var initial = RingKey.allCases.map { Self.base[$0] ?? 0 }
+        initial[RingKey.gap.rawValue] = theme.gap; initial[RingKey.w.rawValue] = theme.size; initial[RingKey.h.rawValue] = theme.size
+        initial[RingKey.rr.rawValue] = theme.size / 2
+        if let end = c.previous?.shape { for key in RingKey.allCases { if let value = end[key.name] { initial[key.rawValue] = value } } }
         tl = SeamTimeline(initial, origin: route.first ?? at)
-        wrap = c.from != nil ? c.previous?.rect : nil
+        wrap = c.previous?.rect
     }
     var reduced: Bool { c.reduced }
     func r(_ salt: Int) -> Double { theme.seeded ? seamRandom(c.seed, event.seq, salt) : 0.5 }
-    func v(_ key: String) -> Double { tl.value(key, t) }
-    var wrapped: Bool { max(v("w"), v("h")) > theme.size + 1 }
+    func v(_ key: RingKey) -> Double { tl.value(key, t) }
+    var wrapped: Bool { max(v(.w), v(.h)) > theme.size + 1 }
     func mark(_ name: String, _ start: Double) { phases[name] = [start, t - start] }
-    var circle: [String: Double] { ["w": theme.size, "h": theme.size, "rr": theme.size / 2, "rot": 0, "gap": theme.gap, "ox": 0, "oy": 0, "qz": 0] }
-    func shape(_ rect: CGRect, pad: Double, radius: Double, _ extra: [String: Double]) -> [String: Double] {
-        ["w": Double(rect.width) + pad, "h": Double(rect.height) + pad, "rr": radius, "ox": Double(rect.midX - at.x),
-         "oy": Double(rect.midY - at.y)].merging(extra) { $1 }
+    var circle: [RingKey: Double] { [.w: theme.size, .h: theme.size, .rr: theme.size / 2, .rot: 0, .gap: theme.gap, .ox: 0, .oy: 0, .qz: 0] }
+    func shape(_ rect: CGRect, pad: Double, radius: Double, _ extra: [RingKey: Double]) -> [RingKey: Double] {
+        [.w: Double(rect.width) + pad, .h: Double(rect.height) + pad, .rr: radius, .ox: Double(rect.midX - at.x),
+         .oy: Double(rect.midY - at.y)].merging(extra) { $1 }
     }
     // The act's own rect, else the one the halves already wrap when the act lands inside it.
     func target() -> CGRect? { event.rect ?? wrap.flatMap { $0.insetBy(dx: -1, dy: -1).contains(at) ? $0 : nil } }
     // Reduced motion crossfades a shape change instead of morphing it.
-    func wrapTo(_ values: [String: Double], _ duration: Double) {
-        if reduced { tl.to(["o": 0], t, 0.06, Seam.linear); tl.set(values, t + 0.06); t = tl.to(["o": 1], t + 0.06, 0.08, Seam.linear) }
+    func wrapTo(_ values: [RingKey: Double], _ duration: Double) {
+        if reduced { tl.to([.o: 0], t, 0.06, Seam.linear); tl.set(values, t + 0.06); t = tl.to([.o: 1], t + 0.06, 0.08, Seam.linear) }
         else { t = tl.to(values, t, duration) }
     }
     func plan() -> RingPlan {
-        if c.from == nil { enter() } else { leave(c.previous?.state ?? "") }
+        if c.previous == nil { enter() } else { leave(c.previous?.state ?? "") }
         glide()
         switch event.state {
         case "aim": aim()
@@ -2100,18 +2143,18 @@ final class RingPlanner {
     // Entrance, seeded per appearance: the halves clasp in from their corners, pixels assemble, or the spark pops.
     func enter() {
         if reduced || !theme.seeded {
-            tl.set(["o": 0], 0); t = tl.to(["o": 1], 0, 0.12, Seam.linear); entrance = "fade"; mark("entrance", 0); return
+            tl.set([.o: 0], 0); t = tl.to([.o: 1], 0, 0.12, Seam.linear); entrance = "fade"; mark("entrance", 0); return
         }
         let pick = Int(r(1) * 3) % 3
         entrance = ["clasp", "assemble", "pop"][pick]
         switch pick {
-        case 0: tl.set(["o": 0, "sep": 10], 0); t = tl.to(["o": 1, "sep": 0], 0, 0.18, Seam.back)
+        case 0: tl.set([.o: 0, .sep: 10], 0); t = tl.to([.o: 1, .sep: 0], 0, 0.18, Seam.back)
         case 1:
-            tl.set(["ho": 0, "pm": 1, "px": 1, "pdis": 1], 0); t = tl.to(["pdis": 0], 0, 0.15)
-            t = tl.to(["px": 0, "ho": 1], t, 0.07, Seam.linear); tl.set(["pm": 0], t)
+            tl.set([.ho: 0, .pm: 1, .px: 1, .pdis: 1], 0); t = tl.to([.pdis: 0], 0, 0.15)
+            t = tl.to([.px: 0, .ho: 1], t, 0.07, Seam.linear); tl.set([.pm: 0], t)
         default:
-            tl.set(["fray": 22, "sp": 1, "ss": 0], 0); tl.to(["ss": 1.4], 0, 0.09); tl.to(["ss": 1, "sp": 0], 0.09, 0.11, Seam.linear)
-            t = tl.to(["fray": 0], 0, 0.2, Seam.back)
+            tl.set([.fray: 22, .sp: 1, .ss: 0], 0); tl.to([.ss: 1.4], 0, 0.09); tl.to([.ss: 1, .sp: 0], 0.09, 0.11, Seam.linear)
+            t = tl.to([.fray: 0], 0, 0.2, Seam.back)
         }
         mark("entrance", 0)
     }
@@ -2120,9 +2163,9 @@ final class RingPlanner {
         guard previous != event.state else { return }
         let start = t
         switch previous {
-        case "thinking": t = tl.to(["fray": 0, "porb": 0, "sx": 0, "sy": 0, "sp": 0, "ss": 1, "o": 1], t, 0.12)
-        case "waiting": t = tl.to(["ho": 1, "fray": 0, "px": 0, "pdim": 0, "hol": 0, "sp": 0, "ss": 1, "sep": 0, "gap": theme.gap, "qz": 0], t, 0.14)
-        case "error": t = tl.to(["err": 0, "sep": 0, "xo": 0, "gap": theme.gap], t, 0.16)
+        case "thinking": t = tl.to([.fray: 0, .porb: 0, .sx: 0, .sy: 0, .sp: 0, .ss: 1, .o: 1], t, 0.12)
+        case "waiting": t = tl.to([.ho: 1, .fray: 0, .px: 0, .pdim: 0, .hol: 0, .sp: 0, .ss: 1, .sep: 0, .gap: theme.gap, .qz: 0], t, 0.14)
+        case "error": t = tl.to([.err: 0, .sep: 0, .xo: 0, .gap: theme.gap], t, 0.16)
         default: return
         }
         mark("exit", start)
@@ -2140,11 +2183,11 @@ final class RingPlanner {
         let start = t, unwrap = !carry && wrapped
         if unwrap { wrap = nil; if !reduced { tl.to(circle, t, 0.12) } }
         if reduced {
-            tl.to(["o": 0], t, 0.07, Seam.linear)
+            tl.to([.o: 0], t, 0.07, Seam.linear)
             tl.move(.init(start: t + 0.07, duration: 0, a: points[0], c: points[0], b: points[points.count - 1], ux: 0, uy: 0, windup: false,
                 curved: false, ease: Seam.linear))
             if unwrap { tl.set(circle, t + 0.07) }
-            t = tl.to(["o": 1], t + 0.07, 0.07, Seam.linear)
+            t = tl.to([.o: 1], t + 0.07, 0.07, Seam.linear)
         } else {
             var time = t
             let momentum = theme.momentum && !carry && !snap
@@ -2153,7 +2196,7 @@ final class RingPlanner {
                 guard d > 0 else { continue }
                 let ux = Double(b.x - a.x) / d, uy = Double(b.y - a.y) / d, bow = min(d * 0.12, 26)
                 let control = CGPoint(x: Double(a.x + b.x) / 2 - uy * bow, y: Double(a.y + b.y) / 2 + ux * bow)
-                let over = last && momentum ? min(4, d * 0.025) * (0.7 + 0.6 * r(10)) : 0
+                let over = last && momentum ? min(4, d * 0.025) * (0.55 + 0.45 * r(10)) : 0
                 let end = CGPoint(x: Double(b.x) + ux * over, y: Double(b.y) + uy * over)
                 let ease: (Double) -> Double
                 if lengths.count == 1 { ease = snap ? Seam.out : Seam.inOut } else if first { ease = Seam.quadIn } else if last { ease = Seam.quadOut } else { ease = Seam.linear }
@@ -2166,18 +2209,18 @@ final class RingPlanner {
                 }
                 time += ms
                 if last {
-                    tl.set(["sqa": atan2(uy, ux)], time)
+                    tl.set([.sqa: atan2(uy, ux)], time)
                     if momentum {
                         tl.move(.init(start: time, duration: 0.06, a: end, c: CGPoint(x: (end.x + b.x) / 2, y: (end.y + b.y) / 2), b: b, ux: 0, uy: 0,
                             windup: false, curved: false, ease: Seam.out))
-                        tl.to(["sq": -0.12], time, 0.06); tl.to(["sq": 0], time + 0.06, 0.09, Seam.back)
+                        tl.to([.sq: -0.12], time, 0.06); tl.to([.sq: 0], time + 0.06, 0.09, Seam.back)
                     }
                 }
             }
             if theme.reach, !carry, !snap, let a = points.first, let b = points.last {
                 let ux = Double(b.x - a.x) / distance, uy = Double(b.y - a.y) / distance
-                tl.to(["sx": ux * 3, "sy": uy * 3, "sp": 0.7, "ss": 0.7], t, 0.07)
-                tl.to(["sx": 0, "sy": 0, "sp": 0, "ss": 1], t + 0.07, max(0.06, duration - 0.07), Seam.inOut)
+                tl.to([.sx: ux * 3, .sy: uy * 3, .sp: 0.7, .ss: 0.7], t, 0.07)
+                tl.to([.sx: 0, .sy: 0, .sp: 0, .ss: 1], t + 0.07, max(0.06, duration - 0.07), Seam.inOut)
             }
             t = time
         }
@@ -2190,16 +2233,16 @@ final class RingPlanner {
         let start = t, hold = Double(event.holdMs) / 1000
         if let rect = event.rect {
             wrap = rect
-            wrapTo(shape(rect, pad: 8, radius: 7, ["gap": 16, "sp": 0.55, "ss": 0.8, "sx": 0, "sy": 0, "rot": 0, "qz": 0]), 0.14)
+            wrapTo(shape(rect, pad: 8, radius: 7, [.gap: 16, .sp: 0.55, .ss: 0.8, .sx: 0, .sy: 0, .rot: 0, .qz: 0]), 0.14)
             mark("wrap", start)
-            breathe(["qz": -2.5], ["qz": 0], 1.2, hold)
+            breathe([.qz: -2.5], [.qz: 0], 1.2, hold)
         } else {
-            t = tl.to(reduced ? ["gap": 14, "sp": 0.55] : ["gap": 14, "qz": -4, "sp": 0.55, "ss": 0.8], t, 0.12)
+            t = tl.to(reduced ? [.gap: 14, .sp: 0.55] : [.gap: 14, .qz: -4, .sp: 0.55, .ss: 0.8], t, 0.12)
             mark("open", start)
-            breathe(["qz": -2.6], ["qz": -4.4], 0.9, hold)
+            breathe([.qz: -2.6], [.qz: -4.4], 0.9, hold)
         }
     }
-    func breathe(_ low: [String: Double], _ high: [String: Double], _ period: Double, _ total: Double) {
+    func breathe(_ low: [RingKey: Double], _ high: [RingKey: Double], _ period: Double, _ total: Double) {
         guard total > 0, !reduced else { return }
         let start = t
         var elapsed = 0.0, down = true
@@ -2210,22 +2253,22 @@ final class RingPlanner {
         mark("hold", start)
     }
     func useTint() {
-        let g = SeamGeo(v("w"), v("h"), v("rr"))
-        tintPath = g.path(v("ox"), v("oy"), laps: 1, close: true)
+        let g = SeamGeo(v(.w), v(.h), v(.rr))
+        tintPath = g.path(v(.ox), v(.oy), laps: 1, close: true)
     }
     // Click: the seams snap shut, the shape squeezes, the spark flashes at a seeded angle and size, and it rebounds.
     func click() {
         let start = t, value = r(20), wide = wrapped, q = wide ? 6.0 : 8.0
         variation = value
         if wide { useTint() }
-        tl.set(["sr": value * 45], t)
+        tl.set([.sr: value * 45], t)
         if reduced {
-            tl.to(["gap": 0, "sp": 1, "fillO": wide ? 0.25 : 0], t, 0.06, Seam.linear)
-            t = tl.to(["gap": theme.gap, "sp": 0, "fillO": 0], t + 0.06, 0.15)
+            tl.to([.gap: 0, .sp: 1, .fillO: wide ? 0.25 : 0], t, 0.06, Seam.linear)
+            t = tl.to([.gap: theme.gap, .sp: 0, .fillO: 0], t + 0.06, 0.15)
         } else {
-            tl.to(["gap": 0, "qz": q, "sp": 1, "ss": 1.5 + 0.4 * value, "fillO": wide ? 0.28 : 0, "sx": 0, "sy": 0], t, 0.06, Seam.cubicIn)
-            tl.to(["qz": -(1 + 1.6 * value), "sp": 0, "ss": 1, "fillO": 0, "gap": theme.gap], t + 0.06, 0.09)
-            t = tl.to(["qz": 0], t + 0.15, 0.06, Seam.inOut)
+            tl.to([.gap: 0, .qz: q, .sp: 1, .ss: 1.5 + 0.4 * value, .fillO: wide ? 0.28 : 0, .sx: 0, .sy: 0], t, 0.06, Seam.cubicIn)
+            tl.to([.qz: -(1 + 1.6 * value), .sp: 0, .ss: 1, .fillO: 0, .gap: theme.gap], t + 0.06, 0.09)
+            t = tl.to([.qz: 0], t + 0.15, 0.06, Seam.inOut)
         }
         mark("click", start)
     }
@@ -2233,19 +2276,19 @@ final class RingPlanner {
         let start = t, value = r(21), wide = wrapped, q = reduced ? 0 : (wide ? 6.0 : 8.0)
         variation = value
         if wide { useTint() }
-        tl.set(["sr": value * 45], t)
-        tl.to(["gap": 0, "qz": q * 0.8, "sp": 1, "ss": reduced ? 1 : 1.2 + 0.2 * value, "fillO": wide ? 0.2 : 0], t, 0.05, Seam.cubicIn)
-        tl.to(["gap": 4, "qz": q * 0.1, "sp": 0.3, "ss": 1, "fillO": wide ? 0.04 : 0], t + 0.05, 0.06)
-        tl.to(["gap": 0, "qz": q, "sp": 1, "ss": reduced ? 1 : 1.7 + 0.3 * value, "sr": value * 45 + 45, "fillO": wide ? 0.3 : 0], t + 0.13, 0.05, Seam.cubicIn)
-        t = tl.to(["gap": theme.gap, "qz": 0, "sp": 0, "ss": 1, "fillO": 0], t + 0.18, 0.07)
+        tl.set([.sr: value * 45], t)
+        tl.to([.gap: 0, .qz: q * 0.8, .sp: 1, .ss: reduced ? 1 : 1.2 + 0.2 * value, .fillO: wide ? 0.2 : 0], t, 0.05, Seam.cubicIn)
+        tl.to([.gap: 4, .qz: q * 0.1, .sp: 0.3, .ss: 1, .fillO: wide ? 0.04 : 0], t + 0.05, 0.06)
+        tl.to([.gap: 0, .qz: q, .sp: 1, .ss: reduced ? 1 : 1.7 + 0.3 * value, .sr: value * 45 + 45, .fillO: wide ? 0.3 : 0], t + 0.13, 0.05, Seam.cubicIn)
+        t = tl.to([.gap: theme.gap, .qz: 0, .sp: 0, .ss: 1, .fillO: 0], t + 0.18, 0.07)
         mark("double", start)
     }
     // Right: the seams twist a quarter lap and back, and a corner mark shows where the menu opens.
     func right() {
-        let start = t, turn = v("rot"), q = wrapped ? 5.0 : 6.0, w = v("w"), h = v("h"), ox = v("ox"), oy = v("oy")
+        let start = t, turn = v(.rot), q = wrapped ? 5.0 : 6.0, w = v(.w), h = v(.h), ox = v(.ox), oy = v(.oy)
         markPath = [[0, ox + w / 2 + 3, oy + h / 2 - 5], [1, ox + w / 2 + 3, oy + h / 2 + 3], [1, ox + w / 2 - 5, oy + h / 2 + 3]]
-        if reduced { tl.to(["gap": 0, "ml": 1], t, 0.09); t = tl.to(["gap": theme.gap, "ml": 0], t + 0.09, 0.13) }
-        else { tl.to(["rot": turn + 0.25, "gap": 0, "qz": q, "ml": 1], t, 0.09); t = tl.to(["rot": turn, "gap": theme.gap, "qz": 0, "ml": 0], t + 0.09, 0.13, Seam.inOut) }
+        if reduced { tl.to([.gap: 0, .ml: 1], t, 0.09); t = tl.to([.gap: theme.gap, .ml: 0], t + 0.09, 0.13) }
+        else { tl.to([.rot: turn + 0.25, .gap: 0, .qz: q, .ml: 1], t, 0.09); t = tl.to([.rot: turn, .gap: theme.gap, .qz: 0, .ml: 0], t + 0.09, 0.13, Seam.inOut) }
         mark("right", start)
     }
     // Type wraps the field (or shrinks the circle) and taps the halves in turn per key. The bottom seam rides the caret from
@@ -2256,17 +2299,17 @@ final class RingPlanner {
         if !single {
             if theme.wrap, let rect = target() {
                 wrap = rect
-                var values = shape(rect, pad: 8, radius: 7, ["gap": 3, "qz": 0, "rot": 0, "sp": 0])
-                if let x = caret, let w = values["w"], let h = values["h"], let ox = values["ox"], let oy = values["oy"] {
+                var values = shape(rect, pad: 8, radius: 7, [.gap: 3, .qz: 0, .rot: 0, .sp: 0])
+                if let x = caret, let w = values[.w], let h = values[.h], let ox = values[.ox], let oy = values[.oy] {
                     let local = x - Double(at.x) - ox
-                    values["rot"] = SeamGeo(w, h, 7).rotation(under: local)
-                    values["sx"] = ox + min(max(local, -w / 2 + 7), w / 2 - 7); values["sy"] = oy + h / 2; values["sp"] = 0.95; values["ss"] = 0.6
+                    values[.rot] = SeamGeo(w, h, 7).rotation(under: local)
+                    values[.sx] = ox + min(max(local, -w / 2 + 7), w / 2 - 7); values[.sy] = oy + h / 2; values[.sp] = 0.95; values[.ss] = 0.6
                     riding = true
                 }
                 wrapTo(values, 0.14)
             } else {
-                var values: [String: Double] = ["qz": reduced ? 0 : theme.size - 19, "gap": 8]
-                if let x = caret { values["ox"] = x - Double(at.x); riding = true }
+                var values: [RingKey: Double] = [.qz: reduced ? 0 : theme.size - 19, .gap: 8]
+                if let x = caret { values[.ox] = x - Double(at.x); riding = true }
                 t = tl.to(values, t, 0.12)
             }
             mark("enter", start)
@@ -2274,14 +2317,14 @@ final class RingPlanner {
         guard !c.secure else { return }
         let keys = t
         for i in 0..<(single ? 1 : event.beats) {
-            let half = i % 2 == 0 ? "tw" : "tc"
+            let half: RingKey = i % 2 == 0 ? .tw : .tc
             if !reduced { tl.to([half: 1.8], t, 0.025); tl.to([half: 0], t + 0.025, 0.035) }
             if riding, let x0 = caret {
                 let x = x0 + 5.5 * Double(i + 1) - Double(at.x)
                 if wrapped {
-                    let w = v("w"), local = x - v("ox")
-                    tl.to(["rot": SeamGeo(w, v("h"), v("rr")).rotation(under: local), "sx": v("ox") + min(max(local, -w / 2 + 7), w / 2 - 7)], t, 0.04)
-                } else { tl.to(["ox": x], t, 0.04) }
+                    let w = v(.w), local = x - v(.ox)
+                    tl.to([.rot: SeamGeo(w, v(.h), v(.rr)).rotation(under: local), .sx: v(.ox) + min(max(local, -w / 2 + 7), w / 2 - 7)], t, 0.04)
+                } else { tl.to([.ox: x], t, 0.04) }
             }
             t += 0.06
         }
@@ -2290,70 +2333,70 @@ final class RingPlanner {
     // Scroll wraps the list and treads the halves around it, one step per tick, at most 4.
     func scroll() {
         let start = t
-        if theme.wrap, let rect = target() { wrap = rect; wrapTo(shape(rect, pad: 8, radius: 7, ["sp": 0, "gap": theme.gap, "rot": 0, "qz": 0]), 0.14) }
-        else { t = tl.to(["sp": 0, "gap": theme.gap], t, 0.14) }
+        if theme.wrap, let rect = target() { wrap = rect; wrapTo(shape(rect, pad: 8, radius: 7, [.sp: 0, .gap: theme.gap, .rot: 0, .qz: 0]), 0.14) }
+        else { t = tl.to([.sp: 0, .gap: theme.gap], t, 0.14) }
         mark("enter", start)
-        let turn = v("rot"), ticks = t
+        let turn = v(.rot), ticks = t
         for i in 0..<min(event.beats, 4) {
-            if !reduced { tl.to(["rot": turn + 0.035 * Double(i + 1)], t, 0.12, Seam.inOut) }
+            if !reduced { tl.to([.rot: turn + 0.035 * Double(i + 1)], t, 0.12, Seam.inOut) }
             t += 0.12
         }
         mark("ticks", ticks)
         let exit = t
-        t = tl.to(["rot": turn], t, 0.12)
+        t = tl.to([.rot: turn], t, 0.12)
         mark("exit", exit)
     }
     // Drag: grab wraps the card with the seams shut, the carry follows the path, drop opens the seams wide with a tint.
     func drag() {
         let start = t
-        if theme.wrap, let rect = target() { wrap = rect; wrapTo(shape(rect, pad: 4, radius: 6, ["gap": 0, "sp": 0, "qz": 0]), 0.12) }
-        else { t = tl.to(["gap": 0, "qz": reduced ? 0 : 3, "sp": 0.9, "ss": 0.75], t, 0.09) }
+        if theme.wrap, let rect = target() { wrap = rect; wrapTo(shape(rect, pad: 4, radius: 6, [.gap: 0, .sp: 0, .qz: 0]), 0.12) }
+        else { t = tl.to([.gap: 0, .qz: reduced ? 0 : 3, .sp: 0.9, .ss: 0.75], t, 0.09) }
         mark("grab", start)
         glide(handPoints([at] + event.path), carry: true)
         let drop = t, wide = wrapped
         if wide { useTint() }
-        tl.to(["gap": 14, "qz": reduced ? 0 : -8, "fillO": wide ? 0.25 : 0, "sp": 0], t, 0.09)
-        t = tl.to(["gap": theme.gap, "qz": 0, "fillO": 0], t + 0.09, 0.11)
+        tl.to([.gap: 14, .qz: reduced ? 0 : -8, .fillO: wide ? 0.25 : 0, .sp: 0], t, 0.09)
+        t = tl.to([.gap: theme.gap, .qz: 0, .fillO: 0], t + 0.09, 0.11)
         mark("drop", drop)
     }
     // Thinking: the seams fray and six pixels orbit at mixed speeds while the spark glances around, three 1.6 s cycles, then
     // it parks still. The plain theme dims.
     func thinking() {
         let start = t
-        guard theme.pixels else { t = tl.to(["o": 0.35], t, 0.12); mark("enter", start); return }
-        tl.set(["tph": 0], t)
-        t = tl.to(["fray": 4.5, "porb": 1, "sp": 0.8, "ss": 0.75], t, 0.14)
+        guard theme.pixels else { t = tl.to([.o: 0.35], t, 0.12); mark("enter", start); return }
+        tl.set([.tph: 0], t)
+        t = tl.to([.fray: 4.5, .porb: 1, .sp: 0.8, .ss: 0.75], t, 0.14)
         mark("enter", start)
         guard !reduced else { return }
         let cycles = t
         for cycle in 0..<3 {
-            tl.to(["tph": Double(cycle + 1)], t, 1.6, Seam.linear)
+            tl.to([.tph: Double(cycle + 1)], t, 1.6, Seam.linear)
             var elapsed = 0.0, k = 0
             while elapsed + 0.14 <= 1.6 + 1e-9 {
                 let angle = r(100 + cycle * 8 + k) * 2 * Double.pi
-                tl.to(["sx": cos(angle) * 2.6, "sy": sin(angle) * 2.6], t + elapsed, 0.14, Seam.inOut)
+                tl.to([.sx: cos(angle) * 2.6, .sy: sin(angle) * 2.6], t + elapsed, 0.14, Seam.inOut)
                 elapsed += 0.533; k += 1
             }
             t += 1.6
         }
         mark("cycles", cycles)
         let settle = t
-        t = tl.to(["sx": 0, "sy": 0], t, 0.16, Seam.inOut)
+        t = tl.to([.sx: 0, .sy: 0], t, 0.16, Seam.inOut)
         mark("settle", settle)
     }
     // Waiting: the halves unravel into twelve pixels, every other one dim, that step once per 800 ms with a hollow spark's
     // nod, six steps, then park. The plain theme opens its seams wide.
     func waiting() {
         let start = t
-        guard theme.pixels else { t = tl.to(["gap": 18, "sep": 5, "qz": -2, "sp": 0], t, 0.16); mark("enter", start); return }
-        tl.set(["pm": 0, "pstep": 0, "pdim": 1], t)
-        t = tl.to(["ho": 0, "fray": 6, "px": 1, "sp": 0.9, "hol": 1, "ss": 1.1, "sx": 0, "sy": 0, "gap": theme.gap, "qz": 0], t, 0.16)
+        guard theme.pixels else { t = tl.to([.gap: 18, .sep: 5, .qz: -2, .sp: 0], t, 0.16); mark("enter", start); return }
+        tl.set([.pm: 0, .pstep: 0, .pdim: 1], t)
+        t = tl.to([.ho: 0, .fray: 6, .px: 1, .sp: 0.9, .hol: 1, .ss: 1.1, .sx: 0, .sy: 0, .gap: theme.gap, .qz: 0], t, 0.16)
         mark("enter", start)
         guard !reduced else { return }
         let steps = t
         for n in 0..<6 {
-            tl.to(["sy": -1.4], t, 0.1); tl.to(["sy": 0], t + 0.1, 0.16, Seam.inOut)
-            tl.to(["pstep": Double(n + 1) / 12], t, 0.2, Seam.inOut)
+            tl.to([.sy: -1.4], t, 0.1); tl.to([.sy: 0], t + 0.1, 0.16, Seam.inOut)
+            tl.to([.pstep: Double(n + 1) / 12], t, 0.2, Seam.inOut)
             t += 0.8
         }
         mark("steps", steps)
@@ -2362,8 +2405,8 @@ final class RingPlanner {
     func error() {
         let start = t
         cross = true
-        tl.to(["err": 1, "sep": 3.5, "xo": 1, "gap": 14, "sp": 0, "ho": 1, "px": 0, "porb": 0, "o": 1], t, 0.09)
-        if !reduced { var s = t; for value in [3.0, -3, 2, -2, 1, 0] { tl.to(["sh": value], s, 0.04, Seam.inOut); s += 0.04 } }
+        tl.to([.err: 1, .sep: 3.5, .xo: 1, .gap: 14, .sp: 0, .ho: 1, .px: 0, .porb: 0, .o: 1], t, 0.09)
+        if !reduced { var s = t; for value in [3.0, -3, 2, -2, 1, 0] { tl.to([.sh: value], s, 0.04, Seam.inOut); s += 0.04 } }
         t += 0.24
         mark("error", start)
     }
@@ -2371,16 +2414,16 @@ final class RingPlanner {
     func done() {
         if event.state == "done", event.ok, theme.burst, !reduced {
             let start = t
-            tl.set(["bx": v("sx"), "by": v("sy"), "bs": r(30) * 60, "burst": 0, "bo": 1], t)
-            t = tl.to(["burst": 1], t, 0.22); tl.set(["bo": 0], t)
+            tl.set([.bx: v(.sx), .by: v(.sy), .bs: r(30) * 60, .burst: 0, .bo: 1], t)
+            t = tl.to([.burst: 1], t, 0.22); tl.set([.bo: 0], t)
             mark("burst", start)
         }
         let start = t
-        if reduced { t = tl.to(["o": 0], t, 0.38) }
+        if reduced { t = tl.to([.o: 0], t, 0.38) }
         else {
-            tl.set(["pm": 1, "pdis": 0, "pstep": 0, "pdim": 0, "porb": 0], t)
-            tl.to(["ho": 0, "px": 1, "sp": 0, "xo": 0], t, 0.06)
-            t = tl.to(["pdis": 1], t + 0.06, 0.32); tl.set(["o": 0], t)
+            tl.set([.pm: 1, .pdis: 0, .pstep: 0, .pdim: 0, .porb: 0], t)
+            tl.to([.ho: 0, .px: 1, .sp: 0, .xo: 0], t, 0.06)
+            t = tl.to([.pdis: 1], t + 0.06, 0.32); tl.set([.o: 0], t)
         }
         mark("dissolve", start)
     }
@@ -2395,24 +2438,58 @@ final class RingPlanner {
     }
     func squares(_ list: [(Double, Double, Double)]) -> [[Double]] {
         guard let first = list.first else { return [] }
-        return (0..<6).flatMap { i -> [[Double]] in
-            let (x, y, s) = i < list.count ? list[i] : first
-            return [[0, x - s / 2, y - s / 2], [1, x + s / 2, y - s / 2], [1, x + s / 2, y + s / 2], [1, x - s / 2, y + s / 2], [3]]
+        var result: [[Double]] = []
+        result.reserveCapacity(30)
+        for i in 0..<6 {
+            let (x, y, s) = i < list.count ? list[i] : first, e = s / 2
+            result.append([0, x - e, y - e]); result.append([1, x + e, y - e]); result.append([1, x + e, y + e])
+            result.append([1, x - e, y + e]); result.append([3])
         }
+        return result
     }
-    // Every layer property at one time.
-    func derive(_ time: Double, lengths: [Double], whole: Double) -> [String: RingValue] {
-        var s: [String: Double] = [:]
-        for key in Self.base.keys { s[key] = tl.value(key, time) }
-        func n(_ key: String) -> Double { s[key] ?? 0 }
-        func mix(_ a: [Double], _ b: [Double], _ f: Double) -> [Double] { zip(a, b).map { $0 + ($1 - $0) * f } }
-        var out: [String: RingValue] = [:]
-        let pos = tl.position(time), o = min(1, max(0, n("o")))
-        out["cursor/position"] = .vector([Double(pos.x), Double(pos.y)])
-        out["cursor/opacity"] = .number(o)
-        out["cursor/transform.translation.x"] = .number(n("sh"))
-        var sq = n("sq"), angle = n("sqa"), lx = 0.0, ly = 0.0
-        if let (vx, vy) = tl.velocity(time) {
+    // The halves' path changes only when the shape does; one array serves every sample with the same shape, so comparing
+    // samples is a reference check.
+    var pathCache: (key: [Double], path: [[Double]])?
+    func ringPath(_ g: SeamGeo, _ ox: Double, _ oy: Double) -> [[Double]] {
+        let key = [g.w, g.h, g.r, ox, oy]
+        if let cached = pathCache, cached.key == key { return cached.path }
+        let path = g.path(ox, oy, laps: 3)
+        pathCache = (key, path)
+        return path
+    }
+    // The last sample, so a group of channels whose inputs did not change copies its values instead of rebuilding them.
+    var lastState: [Double]?, lastRow: [RingValue?] = [], lastMoving = true, halvesSlots = 0..<0, sparkSlots = 0..<0
+    // Channels whose value differed between two samples; only these become tracks.
+    var changed: [Bool] = []
+    static let halvesKeys = ([.sq, .sqa, .w, .h, .qz, .rr, .ox, .oy, .gap, .fray, .ho, .rot, .sep, .tc, .tw, .err] as [RingKey]).map { $0.rawValue }
+    static let sparkKeys = ([.ss, .sr, .sx, .sy, .sp, .hol] as [RingKey]).map { $0.rawValue }
+    static let pixelKeys = ([.bo, .burst, .bs, .bx, .by, .porb, .tph, .px, .pm, .pstep, .pdis, .pdim, .rot, .w, .h, .qz, .rr, .ox, .oy] as [RingKey]).map { $0.rawValue }
+    var pixelSlots = 0..<0
+    // Every layer property at one time, as channels in a fixed order. The first call also records the channel names.
+    func derive(_ time: Double, lengths: [Double], whole: Double, into out: inout [RingValue?], names: inout [String]) {
+        let s = tl.state(time), first = names.isEmpty, velocity = tl.velocity(time)
+        defer { lastState = s; lastRow = out; lastMoving = velocity != nil }
+        func same(_ keys: [Int]) -> Bool {
+            guard let last = lastState else { return false }
+            var i = 0
+            while i < keys.count { if last[keys[i]] != s[keys[i]] { return false }; i += 1 }
+            return true
+        }
+        func n(_ key: RingKey) -> Double { s[key.rawValue] }
+        func put(_ name: @autoclosure () -> String, _ value: RingValue?) {
+            if first { names.append(name()); changed.append(false) } else if !changed[out.count], lastRow[out.count] != value { changed[out.count] = true }
+            out.append(value)
+        }
+        func mix(_ a: [Double], _ b: [Double], _ f: Double) -> [Double] { [a[0] + (b[0] - a[0]) * f, a[1] + (b[1] - a[1]) * f, a[2] + (b[2] - a[2]) * f, a[3] + (b[3] - a[3]) * f] }
+        let pos = tl.position(time), o = min(1, max(0, n(.o)))
+        put("cursor/position", .vector([Double(pos.x), Double(pos.y)]))
+        put("cursor/opacity", .number(o))
+        put("cursor/transform.translation.x", .number(n(.sh)))
+        let g = SeamGeo(n(.w) - n(.qz), n(.h) - n(.qz), n(.rr)), ox = n(.ox), oy = n(.oy), P = g.P, d = sqrt(0.5)
+        if velocity == nil, !lastMoving, !first, same(Self.halvesKeys) { out.append(contentsOf: lastRow[halvesSlots]) } else {
+        let halvesStart = out.count
+        var sq = n(.sq), angle = n(.sqa), lx = 0.0, ly = 0.0
+        if let (vx, vy) = velocity {
             let speed = hypot(vx, vy), stretch = min(0.28, max(0, speed * 0.13))
             sq += stretch
             if speed > 0.05 { angle = atan2(vy, vx) }
@@ -2422,74 +2499,86 @@ final class RingPlanner {
             }
         }
         let ca = cos(angle), sa = sin(angle), kx = 1 + sq, ky = 1 - 0.6 * sq
-        out["halves/transform"] = .vector([ca * ca * kx + sa * sa * ky, ca * sa * (kx - ky), ca * sa * (kx - ky), sa * sa * kx + ca * ca * ky, 0, 0])
-        let g = SeamGeo(n("w") - n("qz"), n("h") - n("qz"), n("rr")), ox = n("ox"), oy = n("oy"), P = g.P, d = sqrt(0.5)
-        let path = g.path(ox, oy, laps: 3), length = P / 2 - n("gap") - 2 * n("fray")
-        let shown = length > 0.2 ? n("ho") : 0, span = max(length, 0.001)
-        let coolStart = P + max(-0.9, min(0.9, n("rot"))) * P + n("gap") / 2 + n("fray")
+        put("halves/transform", .vector([ca * ca * kx + sa * sa * ky, ca * sa * (kx - ky), ca * sa * (kx - ky), sa * sa * kx + ca * ca * ky, 0, 0]))
+        let path = RingValue.path(ringPath(g, ox, oy)), length = P / 2 - n(.gap) - 2 * n(.fray)
+        let shown = RingValue.number(min(1, max(0, length > 0.2 ? n(.ho) : 0))), span = max(length, 0.001)
+        let coolStart = P + max(-0.9, min(0.9, n(.rot))) * P + n(.gap) / 2 + n(.fray)
         for (side, begin) in [("C", coolStart), ("W", coolStart + P / 2)] {
-            let shift: [Double] = side == "C" ? [lx + d * n("sep") - d * n("tc"), ly - d * n("sep") + d * n("tc")]
-                : [-lx - d * n("sep") + d * n("tw"), -ly + d * n("sep") - d * n("tw")]
-            for layer in ["k" + side, "a" + side] {
-                out[layer + "/path"] = .path(path)
-                out[layer + "/strokeStart"] = .number(max(0, min(1, begin / (3 * P))))
-                out[layer + "/strokeEnd"] = .number(max(0, min(1, (begin + span) / (3 * P))))
-                out[layer + "/transform.translation"] = .vector(shift)
-                out[layer + "/opacity"] = .number(min(1, max(0, shown)))
+            let shift = RingValue.vector(side == "C" ? [lx + d * n(.sep) - d * n(.tc), ly - d * n(.sep) + d * n(.tc)]
+                : [-lx - d * n(.sep) + d * n(.tw), -ly + d * n(.sep) - d * n(.tw)])
+            let start = RingValue.number(max(0, min(1, begin / (3 * P)))), end = RingValue.number(max(0, min(1, (begin + span) / (3 * P))))
+            for layer in ["k", "a"] {
+                put(layer + side + "/path", path); put(layer + side + "/strokeStart", start); put(layer + side + "/strokeEnd", end)
+                put(layer + side + "/transform.translation", shift); put(layer + side + "/opacity", shown)
             }
         }
-        out["aW/strokeColor"] = .vector(mix(theme.warm, theme.error, n("err")))
-        out["aC/strokeColor"] = .vector(mix(theme.cool, theme.error, n("err")))
-        if tintPath != nil { out["tint/opacity"] = .number(n("fillO")) }
-        let ss = n("ss"), sr = n("sr") * Double.pi / 180
-        out["spark/transform"] = .vector([ss * cos(sr), ss * sin(sr), -ss * sin(sr), ss * cos(sr), n("sx"), n("sy")])
-        out["spark/opacity"] = .number(min(1, max(0, n("sp"))))
-        out["spark/fillColor"] = .vector([1, 1, 1, 1 - 0.85 * n("hol")])
-        out["spark/strokeColor"] = .vector(mix(theme.ink, theme.white, n("hol")))
-        if cross { out["cross/opacity"] = .number(n("xo")) }
-        if markPath != nil { out["mark/opacity"] = .number(n("ml")) }
+        put("aW/strokeColor", .vector(mix(theme.warm, theme.error, n(.err))))
+        put("aC/strokeColor", .vector(mix(theme.cool, theme.error, n(.err))))
+        halvesSlots = halvesStart..<out.count
+        }
+        if tintPath != nil { put("tint/opacity", .number(n(.fillO))) }
+        if !first, same(Self.sparkKeys) { out.append(contentsOf: lastRow[sparkSlots]) } else {
+            let sparkStart = out.count, ss = n(.ss), sr = n(.sr) * Double.pi / 180
+            put("spark/transform", .vector([ss * cos(sr), ss * sin(sr), -ss * sin(sr), ss * cos(sr), n(.sx), n(.sy)]))
+            put("spark/opacity", .number(min(1, max(0, n(.sp)))))
+            put("spark/fillColor", .vector([1, 1, 1, 1 - 0.85 * n(.hol)]))
+            put("spark/strokeColor", .vector(mix(theme.ink, theme.white, n(.hol))))
+            sparkSlots = sparkStart..<out.count
+        }
+        if cross { put("cross/opacity", .number(n(.xo))) }
+        if markPath != nil { put("mark/opacity", .number(n(.ml))) }
         // Pixels: four layers of six squares (warm, cool, then their dim twins), reused by every pixel move.
-        var spots: [String: [(Double, Double, Double)]] = [:], alpha: [String: Double] = [:]
-        let turn = max(-0.9, min(0.9, n("rot"))) * P
-        if n("bo") > 0, n("burst") < 1 {
+        if !first, same(Self.pixelKeys) { out.append(contentsOf: lastRow[pixelSlots]) } else {
+        let pixelStart = out.count
+        var spots: [[(Double, Double, Double)]] = [[], [], [], []], alpha: [Double] = [0, 0, 0, 0], orbit: [RingValue]?
+        let turn = max(-0.9, min(0.9, n(.rot))) * P
+        if n(.bo) > 0, n(.burst) < 1 {
             for k in 0..<6 {
-                let a = (n("bs") + Double(k) * 60) * Double.pi / 180, reach = 5 + 10 * n("burst")
-                spots[k % 2 == 0 ? "px2" : "px3", default: []].append((n("bx") + cos(a) * reach, n("by") + sin(a) * reach, 2.4 * (1 - 0.4 * n("burst"))))
+                let a = (n(.bs) + Double(k) * 60) * Double.pi / 180, reach = 5 + 10 * n(.burst)
+                spots[k % 2 == 0 ? 2 : 3].append((n(.bx) + cos(a) * reach, n(.by) + sin(a) * reach, 2.4 * (1 - 0.4 * n(.burst))))
             }
-            alpha["px2"] = (1 - n("burst")) * n("bo"); alpha["px3"] = alpha["px2"]
+            alpha[2] = (1 - n(.burst)) * n(.bo); alpha[3] = alpha[2]
         }
-        if n("porb") > 0 {
-            for k in 0..<6 {
-                let f = Self.orbitHome[k] + n("tph") * Self.orbitSpeed[k], p = g.point(turn + f * P)
-                let lift = 3.2 + 1.2 * sin(2 * Double.pi * (n("tph") * 2 + Double(k) / 6))
-                spots[k < 3 ? "px0" : "px1", default: []].append((ox + p.x + p.nx * lift, oy + p.y + p.ny * lift, 3))
+        if n(.porb) > 0 {
+            // Orbit paths depend only on the shape and the phase, so they are kept for the life of the process.
+            let key = [g.w, g.h, g.r, ox, oy, turn, n(.tph)]
+            if let cached = ringOrbitCache[key] { orbit = cached } else {
+                for k in 0..<6 {
+                    let f = Self.orbitHome[k] + n(.tph) * Self.orbitSpeed[k], p = g.point(turn + f * P)
+                    let lift = 3.2 + 1.2 * sin(2 * Double.pi * (n(.tph) * 2 + Double(k) / 6))
+                    spots[k < 3 ? 0 : 1].append((ox + p.x + p.nx * lift, oy + p.y + p.ny * lift, 3))
+                }
+                let paths: [RingValue] = [.path(squares(spots[0])), .path(squares(spots[1]))]
+                if ringOrbitCache.count > 4096 { ringOrbitCache.removeAll() }
+                ringOrbitCache[key] = paths; orbit = paths
             }
-            alpha["px0"] = n("porb"); alpha["px1"] = n("porb")
-        } else if n("px") > 0 {
-            let split = n("pm") > 0.5
+            alpha[0] = n(.porb); alpha[1] = n(.porb)
+        } else if n(.px) > 0 {
+            let split = n(.pm) > 0.5
             for k in 0..<12 {
-                let p = g.point(turn + (Double(k) / 12 + n("pstep")) * P), cool = k < 6
+                let p = g.point(turn + (Double(k) / 12 + n(.pstep)) * P), cool = k < 6
                 var x = ox + p.x, y = oy + p.y
-                if n("pdis") > 0 {
-                    let m = n("pdis") * (8 + seamRandom(c.seed, 0, 200 + k) * 16), dir = cool ? 1.0 : -1.0
+                if n(.pdis) > 0 {
+                    let m = n(.pdis) * (8 + seamRandom(c.seed, 0, 200 + k) * 16), dir = cool ? 1.0 : -1.0
                     x += dir * m; y -= dir * m
                 }
-                let layer = split || k % 2 == 0 ? (cool ? "px1" : "px0") : (cool ? "px3" : "px2")
-                spots[layer, default: []].append((x, y, 3.4))
+                spots[split || k % 2 == 0 ? (cool ? 1 : 0) : (cool ? 3 : 2)].append((x, y, 3.4))
             }
-            let base = n("px") * (1 - n("pdis"))
-            alpha["px0"] = base; alpha["px1"] = base
-            if !split { alpha["px2"] = base * (1 - 0.75 * n("pdim")); alpha["px3"] = alpha["px2"] }
+            let base = n(.px) * (1 - n(.pdis))
+            alpha[0] = base; alpha[1] = base
+            if !split { alpha[2] = base * (1 - 0.75 * n(.pdim)); alpha[3] = alpha[2] }
         }
-        for name in Self.pixels {
-            out[name + "/opacity"] = .number(min(1, max(0, alpha[name] ?? 0)))
-            if let list = spots[name] { out[name + "/path"] = .path(squares(list)) }
+        for (i, name) in Self.pixels.enumerated() {
+            put(name + "/opacity", .number(min(1, max(0, alpha[i]))))
+            put(name + "/path", i < 2 && orbit != nil ? orbit?[i] : spots[i].isEmpty ? nil : .path(squares(spots[i])))
+        }
+        pixelSlots = pixelStart..<out.count
         }
         if !ribbon.isEmpty, whole > 0 {
             let head = ribbonHead(time, lengths, whole), tail = ribbonHead(time - 0.17, lengths, whole)
             for name in ["ribbonW", "ribbonC"] {
-                out[name + "/strokeEnd"] = .number(head); out[name + "/strokeStart"] = .number(tail)
-                out[name + "/opacity"] = .number(head - tail > 0.002 ? o : 0)
+                put(name + "/strokeEnd", .number(head)); put(name + "/strokeStart", .number(tail))
+                put(name + "/opacity", .number(head - tail > 0.002 ? o : 0))
             }
         }
         if let rc = reach {
@@ -2497,11 +2586,10 @@ final class RingPlanner {
             let grow = inside ? Seam.out(min(1, (time - rc.start) / 0.06)) : (f > 1 ? 1 : 0), q = inside ? rc.ease(f) : (f > 1 ? 1 : 0)
             let fade = inside ? (q < 0.75 ? 1 : (1 - q) / 0.25) : 0
             for (name, scale) in [("reachInk", 0.3), ("reach", 0.9)] {
-                out[name + "/strokeEnd"] = .number(grow); out[name + "/strokeStart"] = .number(min(q, grow))
-                out[name + "/opacity"] = .number(fade * scale * o)
+                put(name + "/strokeEnd", .number(grow)); put(name + "/strokeStart", .number(min(q, grow)))
+                put(name + "/opacity", .number(fade * scale * o))
             }
         }
-        return out
     }
     func finish() -> RingPlan {
         var p = RingPlan(state: event.state, at: at, label: c.secure ? nil : event.label, rect: wrap)
@@ -2519,24 +2607,38 @@ final class RingPlanner {
         if let last = ribbon.last { total = max(total, last.start + last.duration + 0.17) }
         var keys = Set<Int>(tl.marks.filter { $0 <= total + 1e-9 }.map { Int(($0 * 10000).rounded()) })
         var s = 0.0
-        while s < total { keys.insert(Int((s * 10000).rounded())); s += Seam.step }
+        // Long plans (thinking, waiting) sample every 75 ms, which keeps a thinking frame near 1.5 ms of planning in the unoptimized
+        // host build. Core Animation interpolates between samples; the fastest orbit pixel cuts a corner by at most 0.7 pt.
+        let step = total > 1 ? Seam.step * 3 : Seam.step
+        while s < total { keys.insert(Int((s * 10000).rounded())); s += step }
         for m in tl.moves where m.duration > 0 {
             for i in 1..<12 { keys.insert(Int(((m.start + m.duration * Double(i) / 12) * 10000).rounded())) }
         }
         keys.insert(Int((total * 10000).rounded()))
         let times = keys.sorted().map { Double($0) / 10000 }
-        let frames = times.map { derive($0, lengths: lengths, whole: whole) }
+        var names: [String] = [], frames: [[RingValue?]] = []
+        frames.reserveCapacity(times.count)
+        for time in times {
+            var row: [RingValue?] = []
+            row.reserveCapacity(max(names.count, 64))
+            derive(time, lengths: lengths, whole: whole, into: &row, names: &names)
+            frames.append(row)
+        }
+        let channel = Dictionary(uniqueKeysWithValues: names.enumerated().map { ($1, $0) })
         // Tracks: a property that changes gets one track from the sample before its first change to its last change.
         var statics: [String: RingValue] = [:], tracks: [RingTrack] = []
-        let names = Set(frames.flatMap { $0.keys })
-        for key in names.sorted() {
-            var column = frames.map { $0[key] }
-            guard let firstKnown = column.firstIndex(where: { $0 != nil }) else { continue }
-            for i in 0..<firstKnown { column[i] = column[firstKnown] }
-            for i in column.indices where column[i] == nil { column[i] = column[i - 1] }
-            let values = column.map { $0! }, first = values[0]
+        for (index, key) in names.enumerated().sorted(by: { $0.element < $1.element }) {
+            guard changed[index] else { if let value = frames.first?[index] { statics[key] = value }; continue }
+            var values: [RingValue] = [], known: RingValue?
+            values.reserveCapacity(frames.count)
+            for row in frames { if let value = row[index] { known = value; break } }
+            guard let firstKnown = known else { continue }
+            for row in frames { let value = row[index] ?? values.last ?? firstKnown; values.append(value) }
+            let first = values[0]
             statics[key] = first
-            guard let change = values.firstIndex(where: { $0 != first }), let end = values.indices.last(where: { $0 > 0 && values[$0] != values[$0 - 1] }) else { continue }
+            var change = -1, end = -1
+            for i in 1..<max(1, values.count) where values[i] != values[i - 1] { if change < 0 { change = i }; end = i }
+            guard change > 0 else { continue }
             let from = change - 1
             var kept: [Int] = []
             for i in from...end where i == from || i == end || values[i] != values[i - 1] || values[i] != values[i + 1] { kept.append(i) }
@@ -2589,7 +2691,7 @@ final class RingPlanner {
             }
         }
         // The label chip fades in only when its text changes; the old chip and its tether fade out in 60 ms.
-        let previous = c.secure || c.from == nil ? nil : c.previous?.label
+        let previous = c.secure ? nil : c.previous?.label
         if let label = p.label, !label.isEmpty {
             let chip = ringChip(label, at: at, clip: c.clip)
             p.chip = chip
@@ -2610,34 +2712,43 @@ final class RingPlanner {
         total = max(total, tracks.map { $0.begin + $0.duration }.max() ?? 0)
         p.layers = layers; p.tracks = tracks; p.total = total; p.glide = glideTime; p.glideEnd = glideEnd; p.fade = theme.fade
         p.phases = phases; p.entrance = entrance; p.variation = variation
-        p.shape = Self.base.keys.reduce(into: [:]) { $0[$1] = tl.value($1, total) }
+        p.shape = Dictionary(uniqueKeysWithValues: RingKey.allCases.map { ($0.name, tl.value($0, total)) })
+        let place = channel["cursor/position"] ?? 0
         p.positions = zip(times, frames).compactMap { time, frame in
-            if case let .vector(xy)? = frame["cursor/position"] { return (time, CGPoint(x: xy[0], y: xy[1])) }
+            if case let .vector(xy)? = frame[place] { return (time, CGPoint(x: xy[0], y: xy[1])) }
             return nil
         }
         // The panel holds the route, every shape extent and the chip.
         var box = (minX: Double.infinity, minY: Double.infinity, maxX: -Double.infinity, maxY: -Double.infinity)
         for (time, point) in p.positions {
-            let w = tl.value("w", time) / 2 + 4, h = tl.value("h", time) / 2 + 4, ox = tl.value("ox", time), oy = tl.value("oy", time)
+            let w = tl.value(.w, time) / 2 + 4, h = tl.value(.h, time) / 2 + 4, ox = tl.value(.ox, time), oy = tl.value(.oy, time)
             box = (min(box.minX, Double(point.x) + ox - w), min(box.minY, Double(point.y) + oy - h), max(box.maxX, Double(point.x) + ox + w), max(box.maxY, Double(point.y) + oy + h))
         }
         p.points = route + (box.minX.isFinite ? [CGPoint(x: box.minX, y: box.minY), CGPoint(x: box.maxX, y: box.maxY)] : [])
+        // Waiting stays up, parked, until the next frame or the cap: an approval can take minutes and a still layer costs nothing.
+        let quiet = event.state == "waiting" ? max(total, theme.waitingCap) : total + theme.silence
         p.timers = ["done", "handback"].contains(event.state) ? [RingTimer(at: total, action: "park"), RingTimer(at: total, action: "release")]
-            : [RingTimer(at: total, action: "park"), RingTimer(at: total + theme.silence, action: "fade"), RingTimer(at: total + theme.silence + theme.fade, action: "release")]
+            : [RingTimer(at: total, action: "park"), RingTimer(at: quiet, action: "fade"), RingTimer(at: quiet + theme.fade, action: "release")]
         // Budget: layers built, drawing layers shown at once, and animated layers (one animation group each) at once.
         let drawing = layers.filter { $0.kind != .group }
         let chipCount = p.label?.isEmpty == false ? 2.0 : 0, oldCount = p.oldLabel == nil ? 0.0 : 2
         var mostVisible = 0.0, mostAnimated = 0.0, clickAnimated = 0.0
         let click = phases["click"] ?? phases["double"] ?? phases["right"]
+        let shownLayers = drawing.filter { $0.kind != .text && $0.name != "tether" }.map { layer in
+            (global: layer.global, index: channel[layer.name + "/opacity"], fixed: statics[layer.name + "/opacity"]?.number ?? (layer.props["opacity"]?.number ?? 1)) }
+        let spans = Dictionary(grouping: tracks, by: { $0.layer }).values.map { list in list.map { ($0.begin, $0.begin + $0.duration) } }
+        let opacity = channel["cursor/opacity"]
         for (time, frame) in zip(times, frames) {
-            let o = frame["cursor/opacity"]?.number ?? 1
+            let o = opacity.flatMap { frame[$0]?.number } ?? 1
             var visible = chipCount + (time < 0.06 ? oldCount : 0)
-            for layer in drawing where layer.kind != .text && layer.name != "tether" {
-                let alpha = (frame[layer.name + "/opacity"] ?? statics[layer.name + "/opacity"])?.number ?? 1
+            for layer in shownLayers {
+                let alpha = layer.index.flatMap { frame[$0]?.number } ?? layer.fixed
                 if alpha * (layer.global ? 1 : o) > 0.01 { visible += 1 }
             }
             mostVisible = max(mostVisible, visible)
-            let animated = Double(Set(tracks.filter { $0.begin <= time + 1e-9 && time < $0.begin + $0.duration - 1e-9 }.map { $0.layer }).count)
+            var active = 0
+            for list in spans { for span in list where span.0 <= time + 1e-9 && time < span.1 - 1e-9 { active += 1; break } }
+            let animated = Double(active)
             mostAnimated = max(mostAnimated, animated)
             if let window = click, time >= window[0] - 1e-9, time <= window[0] + window[1] + 1e-9 { clickAnimated = max(clickAnimated, animated) }
         }
@@ -2647,16 +2758,19 @@ final class RingPlanner {
     }
 }
 // Position memory is bound to one target, so a point-free status never leaks onto a different window. A frame that lands
-// while the last glide is still moving starts from where the glide is at that moment.
+// while the last glide is still moving starts from where the glide is at that moment, and a point-free status plays at the
+// glide's destination. A ring that has dissolved or faded out is never continued: the next frame enters again.
 struct RingSession {
     var point: CGPoint?, pid: Int32?, window: UInt32?, previous: RingPlan?, began = 0.0
     mutating func reset() { point = nil; pid = nil; window = nil; previous = nil }
     mutating func plan(_ event: RingEvent, theme: RingTheme, now: Double, reduced: Bool, secure: Bool, clip: CGRect, seed: UInt64) -> RingPlan {
         let same = pid == event.pid && window == event.windowId, elapsed = now - began
+        let live = same ? previous.flatMap { last in (last.shape["o"] ?? 1) > 0.01 && !["done", "handback"].contains(last.state) ? last : nil } : nil
         var from = same ? point : nil
-        if same, let last = previous, elapsed < last.glideEnd { from = last.position(at: elapsed) }
-        guard event.at != nil || from != nil else { reset(); var p = RingPlan(state: event.state, at: .zero); p.dropped = true; return p }
-        let context = RingContext(from: from, previous: from == nil ? nil : previous, elapsed: elapsed, reduced: reduced, secure: secure, clip: clip, seed: seed)
+        if let last = live, elapsed < last.glideEnd { from = last.position(at: elapsed) }
+        guard event.at != nil || from != nil else { var p = RingPlan(state: event.state, at: .zero); p.dropped = true; return p }
+        let context = RingContext(from: from, destination: same ? point : nil, previous: live, elapsed: elapsed, reduced: reduced, secure: secure,
+            clip: clip, seed: seed)
         let plan = RingPlanner(event, theme, context).plan()
         point = plan.at; pid = event.pid; window = event.windowId; previous = plan; began = now
         return plan
@@ -2669,10 +2783,11 @@ func ringEvent(_ act: HandAct) -> RingEvent {
 // END RING PLAN
 
 // BEGIN RING RUNTIME
-// The ring's scheduling, a pure state machine the host and the dump both drive. An act waits out its delay; aim, thinking
-// and waiting never cancel a waiting act, while error, done, handback and hide do. Every plan parks (its animations come
-// off), then fades after the silence and releases, waiting and thinking included. A target window that can't be found hides
-// the ring. Nothing repeats: the host keeps one one-shot wake-up for the earliest due item.
+// The ring's scheduling, a pure state machine the host and the dump both drive. An act waits out its delay. Aim and
+// statuses queue behind waiting acts in arrival order, except error, done and handback, which cancel them and draw at once,
+// as hide cancels them. Every plan parks (its animations come off), then fades after the silence and releases. Waiting
+// stays up until the next frame, up to a 120 s cap. A status with no point to use is dropped and changes nothing. A target
+// window that can't be found hides the ring. Nothing repeats: the host keeps one one-shot wake-up for the earliest due item.
 struct RingEnvironment {
     var bounds: (Int32, UInt32) -> CGRect?
     var reduced: () -> Bool
@@ -2691,11 +2806,12 @@ struct RingRuntime {
     var next: Double? { (pending.map { $0.due } + timers.map { $0.at }).min() }
     mutating func receive(_ event: RingEvent, delay: Double, now: Double, _ env: RingEnvironment) -> [(Double, RingEffect)] {
         var out = advance(to: now, env)
-        if handKinds.contains(event.state), delay > 0 {
-            if pending.count < 64 { pending.append((now + delay, event)) }
+        let terminal = ["error", "done", "handback"].contains(event.state)
+        if terminal { pending.removeAll() }
+        if (handKinds.contains(event.state) && delay > 0) || (!terminal && !pending.isEmpty) {
+            if pending.count < 64 { pending.append((max(now + delay, pending.map { $0.due }.max() ?? now), event)) }
             return out
         }
-        if ["error", "done", "handback"].contains(event.state) { pending.removeAll() }
         out += draw(event, now, env)
         return out
     }
@@ -2723,9 +2839,14 @@ struct RingRuntime {
         return out
     }
     mutating func draw(_ event: RingEvent, _ now: Double, _ env: RingEnvironment) -> [(Double, RingEffect)] {
+        let known = session.pid == event.pid && session.window == event.windowId && session.point != nil
+        guard event.at != nil || known else { return [(now, .drop(event.state))] }
+        // A repeat of the state the ring already shows at the same point, inside that plan, changes nothing.
+        if known, ["thinking", "waiting", "error", "done", "handback"].contains(event.state), let last = session.previous, last.state == event.state, event.at == nil || event.at == last.at,
+            event.label == last.label, now - session.began < last.total { return [] }
         guard let clip = env.bounds(event.pid, event.windowId) else { return hide(now) }
         var plan = session.plan(event, theme: theme, now: now, reduced: env.reduced(), secure: env.secure(), clip: clip, seed: seed)
-        guard !plan.dropped else { return [(now, .drop(event.state))] + hide(now) }
+        guard !plan.dropped else { return [(now, .drop(event.state))] }
         if let character = character { plan.sprite = SpritePlan.make(plan, character: character, reduced: env.reduced(), secure: env.secure(), clip: clip) }
         let chip = plan.chip.map { [$0.frame.origin, CGPoint(x: $0.frame.maxX, y: $0.frame.maxY)] } ?? []
         var frame = handBox(plan.points + [plan.at] + chip)
@@ -3517,7 +3638,9 @@ final class HandHost: NSObject, NSApplicationDelegate {
                 let animation = CABasicAnimation(keyPath: "opacity")
                 animation.fromValue = root.opacity; animation.toValue = 0; animation.duration = duration
                 animation.timingFunction = CAMediaTimingFunction(name: .easeIn)
+                CATransaction.begin(); CATransaction.setDisableActions(true)
                 root.opacity = 0; root.add(animation, forKey: "fade")
+                CATransaction.commit()
             }
         }
     }
@@ -3821,11 +3944,12 @@ func handDump(capture: String) -> [String: Any] {
 let ringThemes: [String: RingTheme] = ["ring": .seamPlus, "seam": .seam, "sprite": .seamPlus]
 let cursorStyles = ["--cursor-style=glove"] + ringThemes.keys.sorted().map { "--cursor-style=" + $0 }
 // A synchronous, bounded reader for plan tests. It never constructs an application, panel, view or layer. It drives the
-// same RingRuntime as the host on a simulated clock: a {"dumpClock": seconds} line moves the clock (firing what falls due);
-// otherwise each frame lands when the last drawn plan's motion ends. At the end of input the clock runs out and an "end"
+// same RingRuntime as the host on a simulated clock. Only a {"dumpClock": seconds} line moves the clock, firing what falls
+// due; frames between two clock lines land at the same moment, as a burst from the relay would. At the end of input the clock runs out and an "end"
 // line reports whether anything is still pending.
-func ringPlanDump(theme: RingTheme?, reduced: Bool, secure: Bool, clip: CGRect, seed: UInt64, gone: Set<UInt32>, sprite: Bool = false) {
-    var buffer = Data(), bound: String?, last = -1, clock = 0.0, explicit = false
+// --time-plans prints each draw as its state and the milliseconds receive took, without the plan.
+func ringPlanDump(theme: RingTheme?, reduced: Bool, secure: Bool, clip: CGRect, seed: UInt64, gone: Set<UInt32>, timed: Bool = false, sprite: Bool = false) {
+    var buffer = Data(), bound: String?, last = -1, clock = 0.0
     var runtime = RingRuntime(theme: theme ?? .seamPlus, seed: seed)
     // The live host's loader. A finished load joins before the next line; {"dumpAwait":"character"} and the end of input
     // wait for the one in flight (real time, not the simulated clock).
@@ -3846,9 +3970,10 @@ func ringPlanDump(theme: RingTheme?, reduced: Bool, secure: Bool, clip: CGRect, 
             "warnings": ready.result.warnings, "time": clock, "selfMaxRss": usage.ru_maxrss])
     }
     func awaitLoad() { while loading { finished.wait(); joinFinished() } }
-    func emit(_ effects: [(Double, RingEffect)]) {
+    func emit(_ effects: [(Double, RingEffect)], ms: Double? = nil) {
         for (time, effect) in effects {
             switch effect {
+            case let .draw(plan, _) where timed: write(["effect": "draw", "state": plan.state, "time": time, "planMs": ms ?? -1])
             case let .draw(plan, frame): write(plan.json.merging(["effect": "draw", "time": time, "frame": [frame.minX, frame.minY, frame.width, frame.height]]) { $1 })
             case let .drop(state): write(["effect": "drop", "state": state, "dropped": true, "animations": [], "time": time])
             case .hide: write(["effect": "hide", "state": "hidden", "time": time])
@@ -3879,7 +4004,7 @@ func ringPlanDump(theme: RingTheme?, reduced: Bool, secure: Bool, clip: CGRect, 
             if Set(data.keys) == ["dumpClock"] {
                 guard let value = data["dumpClock"] as? NSNumber, CFGetTypeID(value) != CFBooleanGetTypeID(), value.doubleValue.isFinite,
                     value.doubleValue >= clock else { exit(65) }
-                clock = value.doubleValue; explicit = true
+                clock = value.doubleValue
                 if theme != nil { emit(runtime.advance(to: clock, env)) }
                 continue
             }
@@ -3908,9 +4033,9 @@ func ringPlanDump(theme: RingTheme?, reduced: Bool, secure: Bool, clip: CGRect, 
             guard event.seq > last else { exit(65) }
             last = event.seq
             guard theme != nil else { write(["effect": "drop", "state": event.state, "dropped": true, "animations": [], "time": clock]); continue }
-            if !explicit, let previous = runtime.session.previous, runtime.shown { clock = max(clock, runtime.session.began + previous.total) }
-            explicit = false
-            emit(runtime.receive(event, delay: delay, now: clock, env))
+            let started = ProcessInfo.processInfo.systemUptime
+            let effects = runtime.receive(event, delay: delay, now: clock, env)
+            emit(effects, ms: (ProcessInfo.processInfo.systemUptime - started) * 1000)
         }
     }
 }
@@ -3952,9 +4077,9 @@ if arguments.first == "--ring-plan-dump" {
     let gone = Set((rawGone ?? "").split(separator: ",").compactMap { UInt32($0) })
     guard rawGone == nil || gone.count == rawGone!.split(separator: ",", omittingEmptySubsequences: false).count else { exit(64) }
     guard rawStyle == nil || cursorStyles.contains("--cursor-style=" + rawStyle!), Set(flags).count == flags.count,
-        flags.allSatisfy({ ["--reduce-motion", "--secure-input"].contains($0) }) else { exit(64) }
+        flags.allSatisfy({ ["--reduce-motion", "--secure-input", "--time-plans"].contains($0) }) else { exit(64) }
     ringPlanDump(theme: rawStyle.flatMap { ringThemes[$0] }, reduced: flags.contains("--reduce-motion"), secure: flags.contains("--secure-input"),
-        clip: clip, seed: seed, gone: gone, sprite: rawStyle == "sprite")
+        clip: clip, seed: seed, gone: gone, timed: flags.contains("--time-plans"), sprite: rawStyle == "sprite")
     exit(0)
 }
 let app = NSApplication.shared

@@ -1,3 +1,4 @@
+import { sessionCursorEvents, withCursorCall, workerCursorStatus, workerCursorAction, cursorStep, cursorStreamEnabled } from '../hand/events.mjs';
 import { fork } from 'node:child_process';
 import { appendFileSync, closeSync, constants, mkdirSync, openSync, readFileSync, realpathSync, writeSync } from 'node:fs';
 import { homedir } from 'node:os';
@@ -72,7 +73,7 @@ export const transientStartup = error => error?.stage === 'worker-disconnect' ||
   error?.stage === 'worker-exit' && error.reason !== 'EXIT_0' || transientReasons.has(error?.reason);
 const phases = new Set(('worker-spawn-start worker-spawned bridge-ready tools-registered turn-begin first-call-admitted call-start call-result '
   + 'turn-end-requested turn-end worker-entry helpers-check-start helpers-check-end connection-select-start connection-select-end '
-  + 'worker-ready connection-start connection-end runtime-ready '
+  + 'worker-ready worker-hand-dropped connection-start connection-end runtime-ready '
   + 'browser-open-start browser-open-create-start browser-open-create-end browser-open-attach-end browser-open-identify-end '
   + 'browser-open-adopt-end browser-open-ready-end browser-open-goto-start browser-open-goto-end browser-open-capture-start '
   + 'browser-open-capture-end browser-open-end').split(' '));
@@ -204,7 +205,12 @@ export async function createV3Bridge({ startupTimeoutMs = 120000, timeoutMs = 31
   }
   child.on('message', frame => {
     if (lost) return;
-    if (shared && exact(frame, ['version', 'hand']) && frame.version === 3) { shared.send?.(frame.hand); return; }
+    if (exact(frame, ['version', 'cursorStatus']) && frame.version === 3) { (dependencies.cursorEvents ?? sessionCursorEvents()).status(frame.cursorStatus?.state, frame.cursorStatus); return; }
+    if (exact(frame, ['version', 'cursor']) && frame.version === 3) { (dependencies.cursorEvents ?? sessionCursorEvents()).action(frame.cursor); return; }
+    if (exact(frame, ['version', 'hand']) && frame.version === 3) {
+      if (shared?.send) shared.send(frame.hand); else trace('worker-hand-dropped');
+      return;
+    }
     if (!hello && (exact(frame, ['version', 'status', 'code']) || exact(frame, ['version', 'status', 'code', 'stage', 'reason'])) &&
         frame.version === 3 && frame.status === 'unavailable') {
       const code = unsafeStartup.has(frame.code) ? frame.code : 'V3_RUNTIME_UNAVAILABLE';
@@ -793,7 +799,17 @@ export async function startInstalledV3Worker({ channel }, dependencies = {}) {
             try {
               const runtime = await (preparing ??= prepare());
               if (!current() || turnEnded || !await verified()) throw Error('STALE_INSTANCE');
-              return await runtime.call(request, options);
+              return await withCursorCall(resource.apps ? 'electron' : 'turbo', async () => {
+                if (request.name === 'browser_tabs' && request.arguments.do === 'handoff') workerCursorStatus('handback');
+                // Opening a document has no element point and doesn't pass through the action runner.
+                const navigation = request.name === 'browser_open' && cursorStreamEnabled() ? { ...cursorStep(), kind: 'navigate' } : undefined;
+                if (navigation) workerCursorAction({ ...navigation, phase: 'act' });
+                try {
+                  const result = await runtime.call(request, options);
+                  if (navigation) workerCursorAction({ ...navigation, phase: result.isError ? 'failed' : 'done' });
+                  return result;
+                } catch (error) { if (navigation) workerCursorAction({ ...navigation, phase: 'failed' }); throw error; }
+              });
             } catch (error) { return error?.message === 'ELECTRON_HOST_FOREIGN' ? foreignHost(error.appName) : appNotice(error) ?? failure(); }
           },
           ...(selections.length ? { waitMs: Math.min(APP_PREPARE_CAP_MS, selections.length * APP_PREPARE_WAIT_MS) } : {}),

@@ -90,6 +90,7 @@ import { checkedStop, stopText } from './checked-stop.mjs';
 import { TurnOutcomes, unconfirmedInput } from './turn-outcomes.mjs';
 import { resultCompleteness, filteredRead } from './read-completeness.mjs';
 import { stripHandBindings } from './hand/bindings.mjs';
+import { cursorRecord } from './hand/events.mjs';
 import { stripGuardTiming } from './guard-timing.mjs';
 import { stripDP1Trace } from './dp1-trace.mjs';
 import { createStuckEscapes } from './stuck-escape.mjs';
@@ -911,7 +912,17 @@ export function createRelay({
   // The ghost hand (hand/relay-hand.mjs), told about admitted calls, approvals and results. Fire-and-forget:
   // the relay never awaits it or reads its state, and without it nothing changes.
   hand,
+  cursor,
 }) {
+  const localCursor = new Map();
+  const cursorStatus = (state, detail) => { try { cursor?.status(state, detail); } catch {} };
+  const localCursorResult = (id, failed, phase) => {
+    const record = localCursor.get(id); if (!record) return;
+    localCursor.delete(id);
+    try { cursor.action({ ...record, phase: phase ?? (failed ? 'failed' : 'done') }); } catch {}
+    cursorStatus(failed ? 'error' : 'done', record);
+    if (!failed) cursorStatus('thinking', record);
+  };
   if (rs !== undefined && rs !== '0' && rs !== '1') {
     stderr.write('sleight: unknown SLEIGHT_RS value; using previous account policy and submit instruction. Use 1 or unset to enable, 0 to disable.\n');
   }
@@ -1832,6 +1843,7 @@ export function createRelay({
       !appLine(target.appId, target.app);
     state.cancel = () => { state.cancelled = true; };
     nativeHandoff = state;
+    cursorStatus('handback', { app: target.app });
     running.add(msg.id); localRunning.add(msg.id); leaseCalls.set(msg.id, { key });
     callDetails.set(msg.id, 'native sign-in handoff'); clearTimeout(idleTimer); refreshHeartbeat();
     let ui, waiter;
@@ -3054,6 +3066,7 @@ export function createRelay({
       if (!auditFailed && scoped && approved.has(key)) return true;
       let action;
       try {
+        cursorStatus('waiting', localCursor.get(callId));
         action = await physicalDecision(() => ask
           ? askPrompt([callId], message, scoped, options.kind ? { kind: options.kind, detail: options.detail } : undefined)
           : elicit(options.detail ? `${message} ${options.detail}` : message, id => { elicitation = id; }), [callId], present);
@@ -3062,7 +3075,7 @@ export function createRelay({
       }
       trace('local-approval', { key, action, ...(options.once ? { once: true } : {}), ...(withdrawn ? { withdrawn } : {}) });
       if (withdrawn || generation !== stopGeneration || closing || disposed) return false;
-      if (action !== 'accept') return false;
+      if (action !== 'accept') { localCursorResult(callId, true, 'declined'); return false; }
       if (scoped) approved.add(key);
       return true;
     })();
@@ -3286,6 +3299,7 @@ export function createRelay({
       result = { content: [{ type: 'text', text: String(err?.message ?? err) }], isError: true };
     }
     localRunning.delete(msg.id);
+    localCursorResult(msg.id, !!result?.isError);
     if (!running.has(msg.id)) return; // Stop already settled this request after collection.
     if (plan) flowRules.observe(result, plan);
     finishedCall(msg.id);
@@ -3374,6 +3388,7 @@ export function createRelay({
   }
 
   function rotateTurn(carryId) {
+    cursorStatus('done'); cursorStatus('idle');
     const outcome = outcomeCalls.get(carryId), read = completenessCalls.get(carryId);
     releaseLeases();
     turnOutcomes = new TurnOutcomes();
@@ -4197,6 +4212,8 @@ export function createRelay({
       callDetails.set(msg.id, msg.params.name);
       recordAction('sent', msg.id);
       directBrowser.call({ name: msg.params.name, arguments: msg.params.arguments }).then(result => {
+        cursorStatus(result.isError ? 'error' : 'done');
+        if (!result.isError) cursorStatus('thinking');
         finishedCall(msg.id);
         const rendered = result.text;
         const content = [{ type: 'text', text: rendered }, ...(result.images ?? [])];
@@ -4210,6 +4227,7 @@ export function createRelay({
               item.text === rendered)) directBrowser.delivered(result);
         });
       }).catch(() => {
+        cursorStatus('error');
         finishedCall(msg.id);
         toClient({ jsonrpc: '2.0', id: msg.id, error: { code: -32603, message: 'Direct browser route unavailable.' } });
       });
@@ -4218,6 +4236,7 @@ export function createRelay({
     if (replWarmup.hold(msg)) return;
     if (msg.method === 'tools/call' && msg.id !== undefined && !callGenerations.has(msg.id)) callGenerations.set(msg.id, stopGeneration);
     if (msg.method === 'initialize') {
+      try { cursor?.host(/codex/i.test(msg.params?.clientInfo?.name ?? '') ? 'codex' : /claude/i.test(msg.params?.clientInfo?.name ?? '') ? 'claude-code' : 'other'); } catch {}
       onInitialize(msg.params?.clientInfo);
       clientHost = hostLabel(msg.params?.clientInfo);
       grokClient = isGrokClient(msg.params?.clientInfo);
@@ -4547,6 +4566,15 @@ export function createRelay({
     if (msg.method === 'tools/call' && localNames.has(msg.params?.name)) {
       // The local pointer tools check what covers the window and move the real pointer: no hand on screen.
       if (msg.params.name === 'drag' || msg.params.name === 'hover') hand?.hide();
+      try {
+        const name = msg.params.name, op = msg.params.arguments?.op;
+        const kind = ({ drag: 'drag', hover: 'move', open_file: 'navigate', select_window: 'select' })[name] ??
+          (name === 'menu_bar' && op !== 'apps' ? 'select' : name === 'notifications' && op === 'press' ? 'click' : undefined);
+        if (kind && cursor?.enabled) {
+          const record = { ...cursorRecord({ action: { kind } }), call: cursor.call(), index: 0, source: 'local' };
+          localCursor.set(msg.id, record); cursor.action({ ...record, phase: 'act' });
+        }
+      } catch {}
       trace('from-client', msg);
       if (flowPlan) flowRules.forward(flowPlan);
       turnUsed = true;
@@ -4786,9 +4814,9 @@ export function createRelay({
       if (msg.id !== undefined) running.add(msg.id);
       if (flowPlan) { flowRules.forward(flowPlan); flowCalls.set(msg.id, flowPlan); }
       // Admission has decided. The hand plans on a later tick, outside the guard path, from what Claude last saw.
-      if (hand && name === 'js' && !browser && msg.id !== undefined && typeof originalCode === 'string' && ACTION.test(originalCode)) {
+      if (hand && name === 'js' && (!browser || cursor?.enabled) && msg.id !== undefined && typeof originalCode === 'string' && ACTION.test(originalCode)) {
         const target = documentMode ? observedDocument : inputLease ? leaseWindow : lastWindow, seen = numberWindow(originalCode, target);
-        hand.admit(msg.id, { code: originalCode, target, lines: () => compactor.seenLines(seen),
+        hand.admit(msg.id, { code: originalCode, target, ...(browser ? { unplanned: true } : {}), lines: () => compactor.seenLines(seen),
           screenshotSize: () => screenshots.get(target?.app?.toLowerCase())?.byTitle[target?.title] });
       }
     }
@@ -5723,6 +5751,8 @@ export function createRelay({
         if (!msg.error && !msg.result?.isError) openedWindows.set(handle, target);
         else if (openedWindows.get(handle) !== target) openedWindows.delete(handle);
       }
+      cursorStatus(msg.error || msg.result?.isError ? 'error' : 'done');
+      if (!msg.error && !msg.result?.isError) cursorStatus('thinking');
       hand?.result(msg.id, !!(msg.error || msg.result?.isError)); reportPreapprovals(msg); finishedCall(msg.id);
     }
     if (remoteApprovals && isAppApproval(msg) && !shellAppCards.has(msg)) shellAppCards.set(msg, plainAppCard(msg));
@@ -6233,6 +6263,8 @@ export function createRelay({
     clipboardReplies.clear();
     clearTimeout(idleTimer);
     hand?.close();
+    localCursor.clear();
+    cursor?.close();
     try { dispose(); } finally { releaseLeases(); }
     return Promise.all([clipboard?.close(), directBrowser?.end()]);
   }

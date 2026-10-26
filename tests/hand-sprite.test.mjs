@@ -90,6 +90,8 @@ const testEnv = more => ({ PATH: '/usr/bin:/bin', LANG: 'en_US.UTF-8', SLEIGHT_C
 // Loads run off the dump's thread as in the live host. Unless told otherwise, run() waits for each character's load
 // before the next frame ({"dumpAwait":"character"}), so the frames after it see the sprite.
 const awaitLoad = { dumpAwait: 'character' };
+// The dump's clock moves only on these lines; frames between two of them land at the same moment.
+const clock = seconds => ({ dumpClock: seconds });
 function run(t, frames, flags = [], env = {}, { wait = true } = {}) {
   const lines = frames.flatMap(f => wait && f?.hand === 'character' ? [f, awaitLoad] : [f]);
   const result = spawnSync(build(t), ['--ring-plan-dump', '--cursor-style=sprite', ...flags], {
@@ -155,13 +157,13 @@ test('eight glide headings choose the nearest of 16 direction cells, and long ho
   const f = character({ image: { cells }, table });
   for (let d = 0; d < 16; d += 2) {
     const a = d * Math.PI / 8, at = [500 + Math.sin(a) * 50, 500 - Math.cos(a) * 50];
-    const [first, p] = draws(good(t, [f, act('click', { at: [500, 500], path: [[500, 500]] }), act('click', { seq: 2, at, path: [at] })]));
+    const [first, p] = draws(good(t, [f, act('click', { at: [500, 500], path: [[500, 500]] }), clock(1), act('click', { seq: 2, at, path: [at] })]));
     // No movement has no direction and keeps the base entry.
     assert.ok(first.sprite.poses.every(p => p.direction === -1 && p.state === 'click' && p.row === 0));
     const move = p.sprite.poses.find(p => p.state === 'move');
     assert.equal(move.direction, d); assert.equal(move.row, d < 8 ? 1 : 2); assert.equal(move.column, d % 8);
   }
-  const far = draws(good(t, [f, act('click', { at: [300, 500], path: [[300, 500]] }), act('click', { seq: 2, at: [500, 500], path: [[500, 500]] })]))[1];
+  const far = draws(good(t, [f, act('click', { at: [300, 500], path: [[300, 500]] }), clock(1), act('click', { seq: 2, at: [500, 500], path: [[500, 500]] })]))[1];
   assert.deepEqual(far.sprite.poses.filter(p => p.state === 'move').map(p => [p.direction, p.row, p.column])[0], [4, 0, 1]);
 });
 
@@ -171,7 +173,7 @@ test('status mappings, drag phases, loops parking on their first cell, handoff t
     handoff: entry(1, [2], { then: 'idle' }), 'drag-grab': entry(1, [0]), 'drag-carry': entry(1, [1]), 'drag-drop': entry(1, [2]),
   } });
   for (const [state, expected] of [['thinking', 'thinking'], ['waiting', 'waiting-approval'], ['error', 'error'], ['done', 'success']]) {
-    const r = good(t, [f, act(), status(state, { seq: 2 })]); const p = draws(r)[1];
+    const r = good(t, [f, act(), clock(1), status(state, { seq: 2 })]); const p = draws(r)[1];
     assert.ok(p.sprite.poses.every(p => p.state === expected));
     if (['thinking', 'waiting'].includes(state)) {
       // 48 cells of 100 ms, then the first cell at 4.8 s.
@@ -180,14 +182,14 @@ test('status mappings, drag phases, loops parking on their first cell, handoff t
       assert.ok(r.lines.some(l => l.effect === 'park')); assert.ok(r.lines.some(l => l.effect === 'fade'));
     }
   }
-  const handoff = draws(good(t, [f, act(), status('handback', { seq: 2 })]))[1];
+  const handoff = draws(good(t, [f, act(), clock(1), status('handback', { seq: 2 })]))[1];
   assert.deepEqual(handoff.sprite.poses.map(p => [p.state, p.row, p.column]).slice(0, 2), [['handoff', 1, 2], ['idle', 0, 0]]);
   for (const path of [[[200, 200]], [[100, 100], [160, 100], [220, 100], [300, 100]]]) {
     const p = draws(good(t, [f, act('drag', { at: [300, 100], path })]))[0];
     for (const state of ['drag-grab', 'drag-carry', 'drag-drop']) assert.ok(p.sprite.poses.some(p => p.state === state));
     assert.equal(p.sprite.poses[0].time, 0);
   }
-  const reduced = draws(good(t, [f, act(), status('thinking', { seq: 2 })], ['--reduce-motion']))[1];
+  const reduced = draws(good(t, [f, act(), clock(1), status('thinking', { seq: 2 })], ['--reduce-motion']))[1];
   assert.equal(reduced.sprite.poses.length, 1); assert.equal(reduced.sprite.poses[0].column, 0);
   const secure = draws(good(t, [f, act('type')], ['--secure-input']))[0];
   assert.equal(secure.sprite.poses[0].state, 'idle');
@@ -195,7 +197,7 @@ test('status mappings, drag phases, loops parking on their first cell, handoff t
 
 test('a flip change jumps the layer instead of sliding it across the cell', options, t => {
   const f = character({ image: { cells: [[0, 0], [1, 0]] }, table: { idle: entry(), move: entry(1, [0]), click: entry(0, [0], { flip: true }) } });
-  const p = draws(good(t, [f, act('click', { at: [300, 300], path: [[300, 300]] }), act('click', { seq: 2, at: [500, 300], path: [[500, 300]] })]))[1];
+  const p = draws(good(t, [f, act('click', { at: [300, 300], path: [[300, 300]] }), clock(1), act('click', { seq: 2, at: [500, 300], path: [[500, 300]] })]))[1];
   const flipAt = p.sprite.poses.find(x => x.flip).time, position = p.sprite.tracks[3], unit = p.sprite.duration;
   const i = position.keyTimes.findIndex(k => Math.abs(k - flipAt / unit) < 1e-9);
   assert.ok(i > 0); assert.ok(Math.abs(position.keyTimes[i - 1] - (flipAt - 1e-4) / unit) < 1e-9);
@@ -271,7 +273,7 @@ test('a child killed mid-write or hung gives the ring alone', options, t => {
 test('the load runs off the dump\'s thread: acts during a slow decode draw the ring, the sprite joins after', options, t => {
   build(t);
   const f = character(), started = performance.now();
-  const r = good(t, [f, act(), act('click', { seq: 2, at: [300, 300], path: [[300, 300]] }), awaitLoad, act('click', { seq: 3 })], [],
+  const r = good(t, [f, act(), clock(1), act('click', { seq: 2, at: [300, 300], path: [[300, 300]] }), awaitLoad, clock(2), act('click', { seq: 3 })], [],
     { SLEIGHT_CURSOR_DECODE_FAULT: 'slow' }, { wait: false });
   const ms = performance.now() - started, [first, second, third] = draws(r), start = r.lines.find(l => l.effect === 'character-start');
   // The character line cost its thread only the parse; the decode (1 s in the child) ran elsewhere.
@@ -377,7 +379,7 @@ test('exact keys, value types, caps, nonce and shared seq reject malformed frame
 
 test('a second character replaces the first; non-sprite styles never decode', options, t => {
   const f = character(), second = character(); second.seq = 1; second.sheet = source;
-  const r = good(t, [f, act(), { ...second, seq: 2 }, act('click', { seq: 3 })]);
+  const r = good(t, [f, act(), clock(1), { ...second, seq: 2 }, act('click', { seq: 3 })]);
   assert.deepEqual(r.lines.filter(l => l.effect === 'character').map(l => l.loaded), [true, false]);
   assert.ok(draws(r)[0].sprite); assert.equal(draws(r)[1].sprite, null);
   const result = spawnSync(build(t), ['--ring-plan-dump', '--cursor-style=ring'], { input: JSON.stringify(f) + '\n' + JSON.stringify(act()) + '\n', encoding: 'utf8', env: testEnv() });
@@ -441,7 +443,7 @@ test('the host accepts the adapter\'s snapshot frame and plays the far row on a 
   const folder = join(root(), 'snapshot');
   const { character: c, resolve } = snapshot(t, { folder, cells: [[0, 0], ...Array.from({ length: 8 }, (_, i) => [1, i]), [2, 0], [2, 1]] });
   const wire = characterFrame(c, { nonce, seq: 0, resolve });
-  const r = good(t, [wire, act('click', { at: [300, 300], path: [[300, 300]] }), act('click', { seq: 2, at: [500, 300], path: [[500, 300]] })]);
+  const r = good(t, [wire, act('click', { at: [300, 300], path: [[300, 300]] }), clock(1), act('click', { seq: 2, at: [500, 300], path: [[500, 300]] })]);
   assert.equal(loaded(r).loaded, true, r.stderr);
   assert.deepEqual(draws(r)[1].sprite.poses.filter(p => p.state === 'move').map(p => [p.row, p.column]).slice(0, 2), [[2, 0], [2, 1]]);
 });
@@ -489,8 +491,8 @@ test('a Codex v2 pet imports as it is, as WebP, and renders through character-fr
   writeFileSync(join(pet, 'spritesheet.webp'), webp({ w: 1536, h: 2288, cw: 192, ch: 208, cells }), { mode: 0o600 });
   const folder = m3.installCharacter(m3.prepareCharacterImport(pet), { root: root() });
   const wire = characterFrame(m3.loadCharacter(folder, { installed: true }), { nonce, seq: 0, resolve: m3.resolveCharacterStates });
-  const r = good(t, [wire, act('click', { at: [300, 300], path: [[300, 300]] }), act('click', { seq: 2, at: [600, 300], path: [[600, 300]] }),
-    status('waiting', { seq: 3 })]);
+  const r = good(t, [wire, act('click', { at: [300, 300], path: [[300, 300]] }), clock(1), act('click', { seq: 2, at: [600, 300], path: [[600, 300]] }),
+    clock(2), status('waiting', { seq: 3 })]);
   assert.equal(loaded(r).loaded, true); assert.equal(r.stderr, '');
   const [first, second, waiting] = draws(r);
   assert.deepEqual(first.sprite.poses.map(p => [p.row, p.column]), [[4, 1], [4, 2], [4, 3]]);

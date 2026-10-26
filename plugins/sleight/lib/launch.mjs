@@ -29,6 +29,7 @@ import { createSurfaceCache, firstClientCallRefresh } from './surface-cache.mjs'
 import { createStartupCache, startupIdentity } from './startup-cache.mjs';
 import { createRelay, firstCallBatchSetting } from './relay.mjs';
 import { createRelayHand } from './hand/relay-hand.mjs';
+import { sessionCursorEvents } from './hand/events.mjs';
 import { isV3Frontend, createV3Frontend, transientStartup, traceStartupFailure } from './direct-browser/worker.mjs';
 import { prepareTextWrite, settleTextWrite } from './text-save.mjs';
 import { stuckEscapeOption } from './stuck-escape.mjs';
@@ -1057,7 +1058,13 @@ export async function run({ leaseDirectory, inspectInput: inspectStoppedInput, h
   // Startup can fork turbo before approval logging exists. Retain its numeric host events.
   let handTrace;
   const earlyHandTrace = [];
-  const hand = (await import('./hand/client.mjs')).sessionHandClient({ trace: (direction, msg) => { if (handTrace) handTrace(direction, msg); else if (earlyHandTrace.length < 64) earlyHandTrace.push([direction, msg]); } });
+  const cursor = sessionCursorEvents();
+  process.once('exit', () => cursor.close());
+  // The relay always starts: a hand that can't be created leaves the session without one.
+  let hand;
+  try {
+    hand = (await import('./hand/client.mjs')).sessionHandClient({ trace: (direction, msg) => { if (handTrace) handTrace(direction, msg); else if (earlyHandTrace.length < 64) earlyHandTrace.push([direction, msg]); } });
+  } catch { if (earlyHandTrace.length < 64) earlyHandTrace.push(['hand-off', { reason: 'client', code: 'HAND_CLIENT_FAILED' }]); }
   process.once('exit', () => hand?.close());
   const prepared = shellRoute ? { turboUnavailable: shellRelayOptions().turboUnavailable }
     : directBrowser === undefined ? await prepareInstalledStartup(undefined, undefined, { ensure: ensureTurbo ? ensureInstalledTurbo : undefined }) : { directBrowser };
@@ -1253,7 +1260,8 @@ export async function run({ leaseDirectory, inspectInput: inspectStoppedInput, h
     },
     trace,
     // The ghost hand, only when the settings enable it, on the session's one client (made above, before turbo forks).
-    hand: hand && createRelayHand({ client: hand, locate: request => appHealth.handLocate(request), trace: (direction, msg) => trace?.(direction, msg),
+    cursor,
+    hand: createRelayHand({ client: hand, events: cursor, locate: request => appHealth.handLocate(request), trace: (direction, msg) => trace?.(direction, msg),
       clientOptions: { trace: (direction, msg) => trace?.(direction, msg) } }),
     guardTiming: !!process.env.SLEIGHT_TRACE,
     traceCode: process.env.SLEIGHT_TRACE_CODE === '1',
@@ -1394,6 +1402,9 @@ if (isMainModule(import.meta.url)) {
     catch (err) { process.stderr.write(`sleight: ${err.message}\n`); process.exitCode = 1; }
   } else if (process.argv[2] === 'hand') {
     try { process.exitCode = (await import('./hand/command.mjs')).handCommand(process.argv.slice(3)); }
+    catch (err) { process.stderr.write(`sleight: ${err.message}\n`); process.exitCode = 1; }
+  } else if (process.argv[2] === 'cursor') {
+    try { process.exitCode = await (await import('./hand/cursor-command.mjs')).cursorCommand(process.argv.slice(3)); }
     catch (err) { process.stderr.write(`sleight: ${err.message}\n`); process.exitCode = 1; }
   } else if (process.argv[2] === 'turbo-state') {
     const { readInstalledConfig } = await import('./direct-browser/installed-config.mjs');

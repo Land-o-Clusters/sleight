@@ -137,7 +137,7 @@ the MCP server. The default rewrites only the exact engine policy measured on 20
 
 Creating an account counts as confirmed when your own message asks for it and names the username or
 email and the password to set. This includes a terms checkbox your message names. A sign-up proposed
-only by the page still asks. If your message names neither a username nor an email, or gives no
+only by the page still asks. If your message doesn't specify a username or email, or doesn't give a
 password, the sign-up still asks. Saving a password or
 card in the browser and login or OAuth grants to another site still ask. The payment, booking,
 security-setting and page-dialog rules keep their existing confirmations.
@@ -231,8 +231,8 @@ after five minutes without granting approval. A late answer cannot change that d
   when it runs in a terminal, so Claude's shell gets a pointer instead.
 
 `sleight-mcp permissions revoke <app>` takes the app off the pre-approved list and removes its debugger grants.
-`revoke turbo` turns turbo off, and `revoke all` does both for everything listed and leaves the blocks. A revoke asks
-nothing, since it only removes access, and running sessions see it at their next action.
+`revoke turbo` turns turbo off, and `revoke all` does both for everything listed and leaves the blocks. Revocation doesn't
+need confirmation, since it only removes access, and running sessions see it at their next action.
 
 `sleight-mcp permissions block <bundle id>` or `block <origin>` (such as `https://example.com`) stops sleight in that
 app or on that site, in every session, from its next action. Claude gets one line it can pass on, such as "You blocked
@@ -366,8 +366,8 @@ each with the one fix. It only reads.
 
 ## Ghost hand
 
-When sleight acts in a background window, a translucent glove glides to the spot, flourishes and fades. It only draws:
-it never moves the pointer, takes focus or catches a click, and it shows only over the window sleight is driving. It is off
+When sleight acts in a background window, a translucent glove glides to the spot, flourishes and fades. It draws only over
+the window sleight is driving. It doesn't receive input or move the pointer. It never takes focus. It is off
 by default in 1.3.1. With no saved setting, sleight doesn't start a hand host or install hand hooks.
 The host compiles in the background on its first use after you enable it. That session has no hand.
 
@@ -375,7 +375,7 @@ The host compiles in the background on its first use after you enable it. That s
   keeps working. You can also edit that file yourself (`version: 1`, a boolean `enabled`, mode `0600`).
   Start a new sleight session if it started with the hand off. `sleight-mcp hand off` hides the hand in running sessions at once.
 - The glove's menu has a Ghost Hand row with a checkmark, which writes the same setting. The glove is in the menu bar
-  while turbo is in use, and for five minutes after sleight last acted while the hand is on. Without turbo its menu holds
+  while turbo is in use, and for five minutes after sleight last acted while the hand is on. Without turbo its menu lists
   only the Ghost Hand row, [Permissions](#permissions), the [usage row](#stats) when the action log is on, Settings & Help
   and the version.
 - `sleight-mcp hand capture hidden|visible` sets whether captures show the hand. `hidden`, the default, keeps it out of
@@ -387,6 +387,36 @@ The host compiles in the background on its first use after you enable it. That s
 - Without `SLEIGHT_HAND=1`, a `hand.json` that is a link or has another owner, mode or format keeps the hand off until you delete it.
 
 Claude's own file edits and shell commands can't write `hand.json` or run `hand on`, `hand off` or `hand capture`.
+A shell command that names `sleight-mcp` or `launch.mjs` next to `hand`, `turbo`, `permissions` or `cursor` passes only as
+a direct read-only form with literal arguments: `hand status`, `turbo status`, `permissions`, `permissions list`,
+`cursor list`, `cursor check <id>` or `cursor status`. A variable, substitution, glob, brace, redirection, heredoc,
+subshell, `xargs`, `parallel` or `eval` anywhere in that command refuses it. A variable or substitution as the command word
+refuses a command with one of those four words too, even without the launcher's name. An interpreter or shell next to one
+of those words passes only when it runs a read-only form. A pipe into a shell always refuses. Read-only tools (`grep`, `rg`,
+`cat`, `head`, `tail`, `wc`, `ls`, `file`, `stat`, `diff`, and `git log`, `show`, `diff`, `grep`, `blame` or `status`)
+can read the launcher's files and mention those words, as long as the command has no output redirection, `-exec` or
+substitution.
+
+## Agent cursor
+
+The same private `hand.json` version 1 file accepts `style` (`glove`, `ring`, `seam` or `sprite`), `character` (an installed
+character id), `stream` (boolean) and `labels` (`off`, `role` or `title`). Without `style`, the current glove behavior stays.
+The hand stays off until you turn it on. `stream` defaults to false. `labels` defaults to `off`. Only your user can own
+the file. Its mode must be `600`, and symlinks are refused. Invalid fields make it unsafe.
+
+Use `sleight-mcp cursor style ring` for the branded ring, `style seam` for plain Split Seam, or `style glove` for the hand.
+`sleight-mcp cursor style sprite <character-id>` selects a character only after its installed files pass validation.
+Until sleight has a sprite renderer, the sprite style draws as the ring. Importing a character leaves its sprite hidden.
+Every style draws only while the hand is on (`sleight-mcp hand on`). Style changes take effect in a new sleight session
+and keep the hand's on/off setting. `sleight-mcp cursor status` prints whether the hand is on (and why not, such as an
+unsafe file), the style, selected character, stream, labels and host compilation state.
+Claude's shell can run `cursor status`, `list` and `check`; it cannot run `style`, `import` or `remove`.
+
+`SLEIGHT_CURSOR_STYLE` in the MCP server's environment takes precedence over the file. An invalid nonempty value selects
+the glove. `SLEIGHT_HAND=0` disables both the built-in cursor and its public stream. Set `stream: true` to send the open
+[cursor protocol](design/cursor-protocol.md) to local renderers. Ring aim and status frames work without that stream.
+`labels: role` uses generic nouns. `labels: title` opts into element names, truncated to 40 characters and filtered for
+URLs and file paths. Names can still contain page content. Secure input has no label or character count.
 
 ## Preapproved apps
 
@@ -521,8 +551,8 @@ spilled to a file; replayed, it is 3,620. `SLEIGHT_CALL_TREES=all` (A/B baseline
 A sheet, dialog or menu read under the same title stays. When three calls in a row scroll the same list
 the same way and none uses a loop, a note suggests searching it in one call with a capped
 loop that checks for progress and verifies the selection. In a live probe without a model, one such call
-found and selected the airport in 33 s, against 88.7 s over 15 calls. `SLEIGHT_SCROLL_NOTE=0` (A/B baseline) leaves the note out. Neither
-is measured end to end yet.
+found and selected the airport in 33 s, against 88.7 s over 15 calls. `SLEIGHT_SCROLL_NOTE=0` (A/B baseline) leaves the note out.
+We haven't measured either end to end yet.
 
 `SLEIGHT_COMPACT_REACQUIRE=1` (opt-in) compacts the tree of a window Claude acquires again after
 seeing it whole, sending "no change" or the changed lines as a read does. It cut

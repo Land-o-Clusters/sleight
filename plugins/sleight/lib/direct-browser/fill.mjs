@@ -97,7 +97,7 @@ function refusal(result) {
   throw new FieldError(message || 'rules refused input' + (process.env.SLEIGHT_MT === '0' ? '; use the engine browser path' : ''));
 }
 
-export function createFillFields({ check, runSteps, backgroundClick = guardedClick, inspectElement = inspect, now = Date.now, sleep = pause } = {}) {
+export function createFillFields({ check, runSteps, backgroundClick = guardedClick, inspectElement = inspect, now = Date.now, sleep = pause, hand } = {}) {
   if (typeof check !== 'function' || typeof runSteps !== 'function') throw new FieldError('fill requires rules and actions');
   return async function fillFields(tab, fields, { submit, onAction } = {}, ctx) {
     validate(fields, submit);
@@ -194,7 +194,13 @@ export function createFillFields({ check, runSteps, backgroundClick = guardedCli
                 if (tab.state.actionPending) throw new FieldError('an earlier input is still pending; wait before filling');
                 tab.state.actionPending = pending;
                 if (trusted && modifier) ctx.beginInput(target);
-                sent = true; return await action(trusted ? target.locator : locator, target, extra);
+                let cursorToken;
+                try { cursorToken = hand?.step({ op: kind, page, locator: trusted ? target.locator : locator, role: element.role, inputType: element.inputType }); } catch {}
+                try {
+                  sent = true; const result = await action(trusted ? target.locator : locator, target, extra);
+                  try { hand?.finish?.(cursorToken, false); } catch {}
+                  return result;
+                } catch (error) { try { hand?.finish?.(cursorToken, true); } catch {} throw error; }
               };
               return modifier ? await backgroundClick(tab, trusted ? target.locator : locator, perform, { modifier }) : await perform();
             } finally {
@@ -420,6 +426,6 @@ export function createFillFields({ check, runSteps, backgroundClick = guardedCli
 // field strategies testable against the fixed interfaces before the join lands.
 export async function fillFields(tab, fields, options, ctx) {
   if (!isV3Context(ctx)) throw Error('TRUSTED_TURN_REQUIRED');
-  const [{ check, inspectElement }, { runSteps }] = await Promise.all([import('./rules.mjs'), import('./act.mjs')]);
-  return createFillFields({ check, runSteps, inspectElement })(tab, fields, options, ctx);
+  const [{ check, inspectElement }, { runSteps }, { sharedBrowserHand }] = await Promise.all([import('./rules.mjs'), import('./act.mjs'), import('../hand/browser-hand.mjs')]);
+  return createFillFields({ check, runSteps, inspectElement, hand: sharedBrowserHand() })(tab, fields, options, ctx);
 }
