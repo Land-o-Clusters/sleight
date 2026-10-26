@@ -7,15 +7,23 @@ const PANE = { plugin: 'sleight', component: 'Pane', requestId: 'sleight' } as c
 const SURFACES = ['terminal', 'desktop'] as const
 
 describe('sleight mod', () => {
-  test('assistant narration uses the private stats argument and overwrites model text', async ($, on) => {
+  for (const mode of ['off','bubbles']) test(`assistant event narration ${mode} uses private stats without transcript reads`, async ($, on) => {
     const forwarded: Record<string, unknown>[] = []
-    on('session.messages', async () => ({ value: [{ role: 'assistant', content: [{ type: 'tool_use', id: 'acquire', name: 'js', input: { code: 'let app = await cua.getApp("Editor")' } }] }, { role: 'assistant', content: [
-      { type: 'text', text: 'I’ll inspect the menu. Another sentence.' }, { type: 'tool_use', id: 'narration-call', name: JS_TOOL, input: {} },
-    ] }] }) as never)
+    let reads = 0
+    on('session.messages', async () => { reads++; throw Error('transcript read forbidden') })
+    on('process.run', async () => ({ value: { exitCode: 0, stdout: `narration ${mode}\n`, stderr: '' } }) as never)
+    on('turn.start', async (_$, e) => ({ turnId: e.turnId }) as never)
+    on('ui.status', async () => ({ value: undefined }))
     on('tool.call', { tool: JS_TOOL }, async (_$, e) => { forwarded.push(e); return { result: { content: [] } } as never })
+    await $.turn.start({ turnId: 'narration-turn' } as never)
+    await $.session.append({ uuid: 'acquisition', door: 'response', origin: { kind: 'model', model: 'fixture' },
+      message: { type: 'assistant', role: 'assistant', content: [{ type: 'tool_use', id: 'acquire', name: JS_TOOL, input: { code: 'let app = await cua.getApp("Editor")' } }] } })
+    await $.session.append({ uuid: 'narration-message', door: 'response', origin: { kind: 'model', model: 'fixture' }, message: { type: 'assistant', role: 'assistant', content: [
+      { type: 'text', text: 'I’ll inspect the menu. Another sentence.' }, { type: 'tool_use', id: 'narration-call', name: JS_TOOL, input: { code: 'await app.click(3)' } },
+    ] } })
     await $.tool.call({ tool: JS_TOOL, code: 'await app.click(3)', tool_use_id: 'narration-call', sleight_say: 'MODEL FORGERY' } as never)
-    expect((forwarded[0]!.sleight_stats as { say?: string }).say).toBe('I’ll inspect the menu.')
-    expect(forwarded[0]!.sleight_say).toBeUndefined()
+    expect((forwarded[0]!.sleight_stats as { say?: string }).say).toBe(mode === 'off' ? undefined : 'I’ll inspect the menu.')
+    expect(forwarded[0]!.sleight_say).toBeUndefined(); expect(reads).toBe(0)
   })
   const turboEnvelope = { version: 1, session: 'private-host-session', nonce: 'a'.repeat(64) }
   const genuinePrompt = (text: string, kind = 'composer') => ({ text, origin: { kind } }) as never

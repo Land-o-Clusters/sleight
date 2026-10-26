@@ -10,7 +10,7 @@ export const handConfigPath = (home = userInfo().homedir) => join(home, 'Library
 export const NARRATION_MODES = Object.freeze(['off', 'bubbles', 'voice']);
 export const voiceSettingValid = value => value && typeof value === 'object' && !Array.isArray(value) &&
   Object.keys(value).every(k => ['id', 'rate'].includes(k)) && typeof value.id === 'string' && /^[A-Za-z0-9._-]{1,200}$/.test(value.id) &&
-  typeof value.rate === 'number' && Number.isFinite(value.rate) && value.rate >= 0.1 && value.rate <= 0.6;
+  (value.rate === undefined || typeof value.rate === 'number' && Number.isFinite(value.rate) && value.rate >= 0.1 && value.rate <= 0.6);
 export const CAPTURE_MODES = Object.freeze(['hidden', 'visible']);
 export const CURSOR_STYLES = Object.freeze(['glove', 'ring', 'seam', 'sprite']);
 export const characterIdValid = value => typeof value === 'string' && /^[a-z0-9-]{1,48}$/.test(value);

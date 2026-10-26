@@ -1,6 +1,6 @@
-import { assistantNarration } from './narration.mjs'
+import { createNarrationCache } from './narration.mjs'
 import { atom, read, update } from 'claude-code'
-import type { Register } from 'claude-code'
+import type { Register, EngineInterface } from 'claude-code'
 
 import type { Frame, LogEntry, ViewStatus } from '../types'
 import { FRAME_MARKER, snapshotCode } from './snapshot'
@@ -336,18 +336,25 @@ function ownCallVerdict(e: { tool: string; input: unknown }, origin: { plugin: s
   return undefined
 }
 
-async function sayFor($: any, e: { tool_use_id?: string; agentId?: string }) {
-  try {
-    const messages = await $.session.messages({ as: 'api', ...(e.agentId ? { agentId: e.agentId } : {}) })
-    return assistantNarration(messages, e.tool_use_id, e) ?? ''
-  } catch { return '' }
+const narration = createNarrationCache()
+let narrationRefresh = 0
+// Refresh settings outside tool calls. A failed/late read stays off. No transcript is fetched.
+function refreshNarration($: Pick<EngineInterface, 'process' | 'plugin'>) {
+  const generation = ++narrationRefresh
+  void $.process.run([`${$.plugin.root}/bin/sleight-mcp`, 'cursor', 'status'], { timeoutMs: 1000 }).then(result => {
+    if (generation !== narrationRefresh) return
+    if (result.exitCode !== 0 || result.isStdoutTruncated || result.stdout.length > 4096) { narration.configure('off'); return }
+    narration.configure(/^narration +((?:bubbles|voice))$/m.exec(result.stdout)?.[1] ?? 'off')
+  }).catch(() => { if (generation === narrationRefresh) narration.configure('off') })
 }
-
-async function narrated<T>($: any, event: T): Promise<T> {
-  return { ...event, sleight_say: await sayFor($, event as { tool_use_id?: string; agentId?: string }) }
+function narrated<T extends { tool_use_id?: string; agentId?: string }>(event: T) {
+  return { ...event, sleight_say: narration.take(event) ?? '' }
 }
 
 export const register: Register = on => {
+  on('session.append', ($, e, next) => { narration.observe(e); return next(e) })
+  on('session.compact', ($, e, next) => { narration.reset(); return next(e) })
+
   on('classic.PreToolUse', async ($, e, next) => {
     if (!['Write', 'Edit', 'MultiEdit', 'NotebookEdit', 'Bash'].includes(e.tool)) return next(e)
     if (usedThisTurn && shellLaunchDenied(e) && await $.env.get('SLEIGHT_SHELL_GUARD') !== '0') return { deny: shellGuardReason }
@@ -367,6 +374,7 @@ export const register: Register = on => {
   on('session.start', async ($, e, next) => {
     turboEnvelope = undefined
     remoteTurnBound = false
+    refreshNarration($)
     await $.command.register({
       name: 'sleight',
       description: 'Open the sleight pane; show turn stats, replay, record, or stop computer use',
@@ -402,6 +410,7 @@ export const register: Register = on => {
     turnRunning = true
     // Older host captures omit agentId from turn.start's type, as with prompt.submit above.
     if ((e as { agentId?: string }).agentId !== undefined) return next(e)
+    refreshNarration($)
     const owner: StatsTurn = { id: e.turnId, used: false, forwarded: 0, stoppedStats: null }
     statsTurn = owner
     // Never hold up a turn for the ledger, including turns that never use sleight.
@@ -413,10 +422,11 @@ export const register: Register = on => {
   // A private argument, removed by the relay before forwarding. Subagents are outside
   // these main-loop counters, even when an old child calls during a later turn.
   const counted = <T extends { agentId?: string; sleight_say?: string }>(e: T, owner: StatsTurn | undefined) => {
-    const { sleight_say, ...event } = e
+    const sleight_say = e.sleight_say
+    const event = { ...e }; delete event.sleight_say
     const say = sleight_say ? { say: sleight_say } : {}
-    if (e.agentId !== undefined || !owner) return { ...event, sleight_stats: { internal: true, ...say } } as unknown as T
-    return { ...event, sleight_stats: { turn: owner.id, ...say } } as unknown as T
+    if (e.agentId !== undefined || !owner) return { ...event, sleight_stats: { internal: true, ...say } }
+    return { ...event, sleight_stats: { turn: owner.id, ...say } }
   }
 
   const forward = async <T extends { agentId?: string }, R>(e: T, owner: StatsTurn | undefined, next: (event: T) => Promise<R>) => {
@@ -447,7 +457,7 @@ export const register: Register = on => {
       at: now(),
     }
     await update($, log, list => [...list, entry].slice(-LOG_LIMIT))
-    const ran = await forward(await narrated($, e), owner, next)
+    const ran = await forward(narrated(e), owner, next)
     const app = appFrom(code, ran.text)
     if (app) lastApp = app
     actions++
@@ -465,7 +475,7 @@ export const register: Register = on => {
     if (await read($, stopped)) return { deny: 'The user stopped sleight with /sleight stop. Do not use it again until they ask.' }
     if (replayActive) return { deny: 'A replay is running. Wait for it to stop before sending another tool call.' }
     usedThisTurn = true
-    return forward(await narrated($, e), owner, next)
+    return forward(narrated(e), owner, next)
   })
 
   // Compact browser verbs are session work too. The fixed completion hook must
@@ -479,7 +489,7 @@ export const register: Register = on => {
     usedThisTurn = true
     const entry: LogEntry = { id: (e as { tool_use_id: string }).tool_use_id, title: name, status: 'running', at: now() }
     await update($, log, list => [...list, entry].slice(-LOG_LIMIT))
-    const ran = await forward(await narrated($, e), owner, next)
+    const ran = await forward(narrated(e), owner, next)
     actions++
     const status: LogEntry['status'] = ran.deny !== undefined ? 'refused' : ran.isError ? 'error' : 'done'
     await update($, log, list => list.map(one => one.id === entry.id ? { ...one, status } : one))

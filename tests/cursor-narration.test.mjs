@@ -4,7 +4,7 @@ import { chmodSync, mkdtempSync, realpathSync, writeFileSync } from 'node:fs';
 import net from 'node:net';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { narrationLine, assistantNarration } from '../plugins/sleight/hooks/narration.mjs';
+import { narrationLine, assistantNarration, createNarrationCache, boundedNarration } from '../plugins/sleight/hooks/narration.mjs';
 import { readHandConfig, handSetting } from '../plugins/sleight/lib/hand/settings.mjs';
 import { writeHandSetting } from '../plugins/sleight/lib/hand/command.mjs';
 import { handWireFrame } from '../plugins/sleight/lib/hand/client.mjs';
@@ -12,6 +12,7 @@ import { createCursorEvents, createRendererSink } from '../plugins/sleight/lib/h
 import { createRelayHand } from '../plugins/sleight/lib/hand/relay-hand.mjs';
 import { createRelay } from '../plugins/sleight/lib/relay.mjs';
 import { registerTemp } from '../scripts/temp-leftovers.mjs';
+import { cursorCommand } from '../plugins/sleight/lib/hand/cursor-command.mjs';
 import { createNarrationSink } from '../plugins/sleight/lib/hand/narration-sink.mjs';
 import { PassThrough } from 'node:stream';
 
@@ -24,7 +25,7 @@ const fixtures = [
 ];
 test('assistant prose becomes its first sentence with markup and code removed', () => {
   for (const [input, expected] of fixtures) assert.equal(narrationLine(input), expected);
-  assert.ok([...narrationLine('A'.repeat(150))].length <= 90);
+  assert.ok([...narrationLine('An ordinary sentence with enough words '.repeat(8))].length <= 90);
   assert.ok([...narrationLine('🐈'.repeat(150))].length <= 90);
 });
 test('privacy removes URLs, paths, quoted values, email and control characters before truncation', () => {
@@ -178,4 +179,96 @@ test('relay strips the private argument before engine and logs and binds result 
   assert.equal(sent.length, 2);
   assert.ok(!JSON.stringify(sent).includes('sleight_say')); assert.ok(!logs.join('').includes('menu.'));
   assert.deepEqual(statuses.filter(s => s.state === 'done').map(s => s.say), ['First menu.', 'Second menu.']);
+});
+
+const realistic = [
+  ['Clicking the confirm button.', { steps: [{ do: 'click', ref: 'e12' }] }],
+  ['Reading the page to find the price.', { op: 'read' }],
+  ['Opening the settings page.', { op: 'open' }],
+  ['Scrolling down the list.', { steps: [{ do: 'scroll', direction: 'down' }] }],
+  ['Opening the file menu.', { code: 'await app.click({label:"File"})' }],
+  ['Selecting an item in a.', { code: 'await app.click({label:"a"})' }],
+];
+test('enum and label fixtures all survive; only whole user-value words of at least four characters suppress', () => {
+  for (const [line, input] of realistic) assert.equal(narrationLine(line, input), line);
+  for (const key of ['text', 'value', 'content', 'query', 'searchQuery']) {
+    assert.equal(narrationLine('Checking the accounting menu.', { [key]: 'account' }), 'Checking the accounting menu.');
+    assert.equal(narrationLine('Checking the account menu.', { [key]: 'account' }), undefined);
+    assert.equal(narrationLine('Selecting an item in a.', { [key]: 'a' }), 'Selecting an item in a.');
+  }
+});
+test('32 KB adversarial tokens are bounded before regex and each cutter call stays below 5 ms', t => {
+  narrationLine('Warm up the sentence cutter.');
+  const timings = [];
+  for (const token of ['a'.repeat(32768), 'a.'.repeat(16384), "x'".repeat(16384), '['.repeat(32768), '🐈'.repeat(8192)]) {
+    const start = performance.now(); assert.equal(narrationLine(token), undefined); timings.push(performance.now() - start);
+    assert.equal(narrationLine('Opening the menu. ' + token), 'Opening the menu.');
+  }
+  assert.ok(timings.every(ms => ms < 5), JSON.stringify(timings)); t.diagnostic(`cutterMs=${JSON.stringify(timings)}`);
+  assert.ok(Buffer.byteLength(boundedNarration('word '.repeat(1000))) <= 1024);
+  assert.ok(Buffer.byteLength(boundedNarration('猫 '.repeat(1000))) <= 1024);
+});
+test('key-shaped tokens, long base64 or hex, mixed identifiers and Luhn card candidates are removed before punctuation cleanup', () => {
+  for (const token of ['sk-secretAbCdEf123456', 'sk-ant-api03-AbCdEf123456', 'ghp_abcdefghijklmnop1234', 'gho_abcdefghijklmnop1234',
+    'xoxb-123456-abcdefghijklmnop', 'AKIAIOSFODNN7EXAMPLE', 'a'.repeat(48), 'ab12'.repeat(12), 'YWJj'.repeat(12),
+    '4111 1111 1111 1111', '4111-1111-1111-1111', '4111111111111111', '4222222222222', '4000000000000000006']) {
+    const line = narrationLine(`Checking ${token} now.`);
+    assert.equal(line, 'Checking now.', token);
+  }
+  assert.equal(narrationLine('Checking 1234 now.'), 'Checking 1234 now.');
+});
+const append = (id, content, extra = {}) => ({ uuid: id, door: 'response', origin: { kind: 'model' }, message: { role: 'assistant', content }, ...extra });
+test('off cache touches no message fields, enabled cache binds tool ids and agent loops without reading media', () => {
+  const cache = createNarrationCache();
+  cache.observe({ get message() { throw Error('off read'); } });
+  assert.equal(cache.take({ get tool_use_id() { throw Error('off read'); } }), undefined);
+  cache.configure('bubbles');
+  const event = append('a', [{ type: 'text', text: 'Reading the page.' }, { type: 'image', get source() { throw Error('media read'); } }, { type: 'tool_use', id: 'current', name: 'browser_read', input: {} }], { agentId: 'child' });
+  cache.observe(event);
+  assert.equal(cache.take({ tool_use_id: 'current' }), undefined);
+  assert.equal(cache.take({ tool_use_id: 'current', agentId: 'child' }), 'Reading the page.');
+  assert.equal(cache.take({ tool_use_id: 'current', agentId: 'child' }), undefined);
+  cache.observe(event); assert.equal(cache.take({ tool_use_id: 'current', agentId: 'child' }), undefined, 'duplicate message does not resurrect a consumed call');
+});
+test('incremental native tracker preserves acquisitions and revokes aliases, compaction and configuration changes', () => {
+  const cache = createNarrationCache(); cache.configure('voice');
+  const call = (id, code) => cache.observe(append(id, [{ type: 'text', text: 'Opening the file menu.' }, { type: 'tool_use', id, name: 'js', input: { code } }]));
+  call('a', 'let app = await cua.getApp("Editor")'); call('b', 'await app.click({label:"File"})');
+  assert.equal(cache.take({ tool_use_id: 'b', code: 'await app.click({label:"File"})' }), 'Opening the file menu.');
+  call('c', 'entry = {click: app.typeText.bind(app)}'); call('d', 'await app.click(3)');
+  assert.equal(cache.take({ tool_use_id: 'd', code: 'await app.click(3)' }), undefined);
+  call('e', 'let app = await cua.getApp("Editor")'); cache.reset(); call('f', 'await app.click(3)');
+  assert.equal(cache.take({ tool_use_id: 'f', code: 'await app.click(3)' }), undefined);
+  cache.configure('off'); cache.configure('voice'); call('g', 'await app.click(3)');
+  assert.equal(cache.take({ tool_use_id: 'g', code: 'await app.click(3)' }), undefined);
+});
+test('bounded event cache cost on 300 media-bearing messages with narration on and off', t => {
+  for (const mode of ['off', 'bubbles']) {
+    const cache = createNarrationCache(); cache.configure(mode);
+    const costs = [], takeCosts = [];
+    for (let i = 0; i < 300; i++) {
+      const event = append(`message-${i}`, [{ type: 'image', get source() { throw Error('cloned media'); } },
+        { type: 'text', text: 'Reading the page to find the price.' }, { type: 'tool_use', id: `call-${i}`, name: 'browser_read', input: { op: 'read' } }]);
+      const start = performance.now(); cache.observe(event); const observed = performance.now();
+      const line = cache.take({ tool_use_id: `call-${i}`, op: 'read' });
+      takeCosts.push(performance.now() - observed); costs.push(observed - start);
+      assert.equal(line, mode === 'off' ? undefined : 'Reading the page to find the price.');
+    }
+    const mean = values => values.reduce((a,b) => a+b,0) / values.length;
+    t.diagnostic(JSON.stringify({ mode, messages: 300, transcriptRPCs: 0, observeMeanMs: mean(costs), perCallMeanMs: mean(takeCosts), perCallMaxMs: Math.max(...takeCosts) }));
+  }
+});
+test('voice id alone defaults its rate and ordinary writes preserve its omitted field', t => {
+  const dir = registerTemp(t, realpathSync(mkdtempSync(join(tmpdir(), 'c2-rate-')))), path = join(dir, 'hand.json');
+  writeFileSync(path, JSON.stringify({ version: 1, enabled: true, narration: 'voice', voice: { id: 'local-a' } }), { mode: 0o600 });
+  assert.equal(readHandConfig(path).state, 'on'); writeHandSetting({ labels: 'role' }, { path });
+  assert.deepEqual(readHandConfig(path).voice, { id: 'local-a' });
+});
+
+test('cursor status exposes narration mode and id-only voice for the mod settings reader', async t => {
+  const dir = registerTemp(t, realpathSync(mkdtempSync(join(tmpdir(), 'c2-status-')))), path = join(dir, 'hand.json');
+  writeFileSync(path, JSON.stringify({ version: 1, enabled: true, narration: 'voice', voice: { id: 'local-a' } }), { mode: 0o600 });
+  let output = '';
+  assert.equal(await cursorCommand(['status'], { root: dir, path, platform: 'darwin', env: {}, built: () => false, out: text => { output += text; } }), 0);
+  assert.match(output, /^narration voice$/m); assert.match(output, /^voice +local-a \(rate 0.5\)$/m);
 });
