@@ -48,8 +48,8 @@ DispatchQueue.main.async {
         alert.informativeText = "Fake request. This test cannot approve an app or save a grant."
         alert.addButton(withTitle: "Always allow")
         alert.addButton(withTitle: "Cancel")
-        alert.buttons[0].keyEquivalent = "\r"
-        // Always is the default on this fake card so the physical Return step tests a protected key equivalent.
+        // personModal adds the word field and removes the protected Return default, as on real cards.
+        // The person-return step must type the displayed word before Return.
         let ready = Timer.scheduledTimer(withTimeInterval: 0.1, repeats: true) { timer in
             guard alert.window.isVisible, let screen = NSScreen.screens.first else { return }
             timer.invalidate()

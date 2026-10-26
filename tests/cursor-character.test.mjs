@@ -61,7 +61,7 @@ test('cursor style saves only valid installed sprites and status is read-only', 
 test('cursor check runs the host\'s own checks on the character frame when the host is compiled', async t => {
   const w = world(t); api.installCharacter(api.prepareCharacterImport(w.folder), { root: w.root });
   let output = '', frames = [];
-  const opts = { root: w.root, path: join(w.base, 'hand.json'), out: s => output += s };
+  const opts = { builtins: false, root: w.root, path: join(w.base, 'hand.json'), out: s => output += s };
   const host = result => async frame => { frames.push(frame); return result; };
   assert.equal(await cli.cursorCommand(['check', 'test-cat'], { ...opts, built: () => false, hostCheck: host() }), 0);
   assert.match(output, /Host check skipped: the hand host is not compiled yet/); assert.equal(frames.length, 0);
@@ -97,7 +97,7 @@ test('cursor status and style say when the hand is off or the file is unsafe, an
 });
 test('installed checks omit source-copy text, symlinks offer removal, and malformed folder names can be removed', async t => {
   const w = world(t); api.installCharacter(api.prepareCharacterImport(w.folder), { root: w.root });
-  let output = ''; const opts = { root: w.root, out: s => output += s, built: () => false };
+  let output = ''; const opts = { builtins: false, root: w.root, out: s => output += s, built: () => false };
   assert.equal(await cli.cursorCommand(['check', 'test-cat'], opts), 0); assert.doesNotMatch(output, /Your source files/);
   fs.symlinkSync(w.folder, join(w.root, 'linked')); output = '';
   assert.equal(await cli.cursorCommand(['list'], opts), 1); assert.match(output, /remove the link by hand/);
@@ -172,7 +172,7 @@ test('list reports stray entries and broken packs while listing healthy packs; r
   fs.cpSync(join(w.root, 'test-cat'), join(w.root, 'bad-cat'), { recursive: true });
   fs.writeFileSync(join(w.root, 'bad-cat/character.json'), '{');
   fs.writeFileSync(join(w.root, '.DS_Store'), 'Finder data'); fs.writeFileSync(join(w.root, 'notes'), 'stray');
-  let output = ''; const opts = { root: w.root, out: s => output += s };
+  let output = ''; const opts = { builtins: false, root: w.root, out: s => output += s };
   assert.equal(await cli.cursorCommand(['list'], opts), 1);
   assert.match(output, /test-cat: Test Cat/); assert.match(output, /bad-cat: needs repair: .*character\.json.*JSON/);
   assert.match(output, /Skipped "\.DS_Store"/); assert.match(output, /Skipped "notes"/);
@@ -486,7 +486,7 @@ test('imports refuse old Codex, unsafe manifests and unexpected files', t => {
 test('staging remains invisible until rename; failure cleans staging and preserves existing installs', t => {
   const w = world(t), source = api.prepareCharacterImport(w.folder);
   const io = { ...fs, renameSync(from, to) {
-    assert.equal(fs.existsSync(to), false); assert.equal(api.listCharacters({ root: w.root }).length, 0);
+    assert.equal(fs.existsSync(to), false); assert.equal(api.listCharacters({ root: w.root, builtins: false }).length, 0);
     assert.equal(api.loadCharacter(from, { expectedId: 'test-cat' }).resolved.length, 19); throw Error('rename failed');
   } };
   assert.throws(() => api.installCharacter(source, { root: w.root, io }), /rename failed/); assert.deepEqual(fs.readdirSync(w.root), []);
@@ -509,7 +509,7 @@ test('total byte and pixel caps cover both sheets and preview', t => {
 });
 
 test('CLI refuses non-TTY without --yes after printing details, accepts --yes, checks, lists and removes', async t => {
-  const w = world(t); let output = ''; const opts = { root: w.root, path: join(w.base, 'hand.json'), out: text => output += text, input: { isTTY: false }, built: () => false };
+  const w = world(t); let output = ''; const opts = { builtins: false, root: w.root, path: join(w.base, 'hand.json'), out: text => output += text, input: { isTTY: false }, built: () => false };
   assert.equal(await cli.cursorCommand(['import', w.folder], opts), 1); assert.match(output, /1 of sleight's 19 moves/); assert.match(output, /--yes/); assert.equal(fs.existsSync(w.root), false);
   assert.equal(await cli.cursorCommand(['import', w.folder, '--yes'], opts), 0); assert.match(output, /Turn it on with sleight-mcp cursor style sprite/);
   assert.equal(await cli.cursorCommand(['check', 'test-cat'], opts), 0); assert.equal(await cli.cursorCommand(['list'], opts), 0);
@@ -533,7 +533,7 @@ test('real readline confirmation handles a TTY-shaped stream and EOF defaults No
 });
 test('real CLI routes cursor without starting an engine or touching settings', t => {
   const w = world(t); const result = spawnSync(process.execPath, ['plugins/sleight/lib/launch.mjs', 'cursor', 'list'], { encoding: 'utf8', env: { ...process.env, SLEIGHT_CURSOR_TEST: '1', SLEIGHT_CHARACTERS_DIR: w.root } });
-  assert.equal(result.status, 0, result.stderr); assert.match(result.stdout, /No characters installed/); assert.equal(fs.existsSync(w.root), false);
+  assert.equal(result.status, 0, result.stderr); assert.match(result.stdout, /tsugi: Tsugi \[built-in\]/); assert.equal(fs.existsSync(w.root), false);
 });
 
 test('Codex optional events use the specified row slices, with source names in the callout', t => {
@@ -588,9 +588,9 @@ test('successful publish uses one rename after complete private validation', t =
   const w = world(t); let renames = 0;
   api.installCharacter(api.prepareCharacterImport(w.folder), { root: w.root, io: { ...fs, renameSync(from, to) {
     renames++; assert.equal(fs.existsSync(to), false); assert.equal(fs.readdirSync(from).length, 2);
-    assert.equal(api.listCharacters({ root: w.root }).length, 0); fs.renameSync(from, to);
+    assert.equal(api.listCharacters({ root: w.root, builtins: false }).length, 0); fs.renameSync(from, to);
   } } });
-  assert.equal(renames, 1); assert.equal(api.listCharacters({ root: w.root }).length, 1);
+  assert.equal(renames, 1); assert.equal(api.listCharacters({ root: w.root, builtins: false }).length, 1);
 });
 for (const [name, action] of [
   ['extra sheet cap', w => { w.data.extra = 'extra.webp'; w.put('extra.webp', webp()); fs.truncateSync(join(w.folder, 'extra.webp'), 8 * 1024 ** 2 + 1); w.save(); }],
