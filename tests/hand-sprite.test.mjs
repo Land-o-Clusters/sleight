@@ -623,7 +623,7 @@ test('native built-ins accept exactly the cache modes and refuse noncanonical ro
   };
   for (const mode of [0o600, 0o644, 0o400, 0o440, 0o444, 0o640, 0o660, 0o664, 0o666, 0o700, 0o744, 0o1644, 0o2644, 0o4644]) {
     for (const file of ['sheet', 'extra', 'perchSheet']) {
-      // /private/tmp inherits group wheel; macOS clears setgid unless the fixture's group is ours.
+      // The system temp folder's group is wheel; macOS clears setgid unless the fixture's group is ours.
       chownSync(frame[file], process.getuid(), process.getgid());
       chmodSync(frame[file], mode);
       assert.equal(statSync(frame[file]).mode & 0o7777, mode, 'fixture must retain the requested mode');

@@ -557,8 +557,9 @@ export function checkCharacter(id, { root = charactersDirectory(), uid = process
   if (BUILTIN_CHARACTER_IDS.includes(id)) return checkBuiltinCharacter(id, { builtinRoot, uid });
   storage(root, uid); return loadCharacter(join(root, id), { uid, installed: true });
 }
+const lexists = path => { try { fs.lstatSync(path); return true; } catch { return false; } };
 export function removeCharacter(id, { root = charactersDirectory(), uid = process.getuid() } = {}) {
-  if (BUILTIN_CHARACTER_IDS.includes(id) && (resolve(root) === builtinCharactersDirectory() || !fs.existsSync(join(root, id)))) fail('built-in character cannot be removed', 'id');
+  if (BUILTIN_CHARACTER_IDS.includes(id) && (resolve(root) === builtinCharactersDirectory() || !lexists(join(root, id)))) fail('built-in character cannot be removed', 'id');
   if (typeof id !== 'string' || !id || id === '.' || id === '..' || /[/\\\u0000-\u001f\u007f]/u.test(id)) fail('invalid character id for removal', 'id', String(id));
   storage(root, uid); const folder = join(root, id), stat = fileOperation(folder, 'directory', () => fs.lstatSync(folder));
   if (stat.isSymbolicLink() || fileOperation(folder, 'directory', () => fs.realpathSync(folder)) !== folder) fail('symlink character directory refused; remove the link by hand (leave its target)', 'directory', folder);

@@ -12,7 +12,8 @@ const source = readFileSync(new URL('../plugins/sleight/lib/direct-browser/nativ
 test('standalone and shared cached consent hosts receive the installed icon through a closed environment', () => {
   assert.equal(typeof nativeHost.consentEnvironment, 'function');
   const env = nativeHost.consentEnvironment();
-  assert.deepEqual(Object.keys(env).sort(), ['LANG', 'PATH', 'SLEIGHT_CONSENT_ICON']);
+  assert.deepEqual(Object.keys(env).sort(), ['LANG', 'PATH', 'SLEIGHT_BUILTIN_CHARACTERS', 'SLEIGHT_CONSENT_ICON']);
+  assert.equal(env.SLEIGHT_BUILTIN_CHARACTERS, new URL('../plugins/sleight/characters', import.meta.url).pathname);
   assert.equal(env.SLEIGHT_CONSENT_ICON, new URL('../plugins/sleight/assets/icon.png', import.meta.url).pathname);
   const launcher = readFileSync(new URL('../plugins/sleight/lib/direct-browser/host.mjs', import.meta.url), 'utf8');
   assert.match(launcher, /consent \? '--consent' : '--menu'\][\s\S]*?env: consentEnvironment\(\)/);

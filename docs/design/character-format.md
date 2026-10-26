@@ -73,8 +73,9 @@ macOS `sips` rasterizes the SVGs without a browser or window. After PNG metadata
 with lossless WebP (`-lossless -z 9 -exact`). `sheet.webp` is already allowed by format v1. Each pack includes the main sheet,
 extra sheet, perch sheet, preview and personality lines. The committed art is the owner-approved Chromium render,
 converted losslessly to WebP. Conversion verifies all RGBA values, including hidden RGB, before publishing. Removing the
-sRGB ICC metadata does not change pixel values. The sips generator
-uses luminance masks for hair shine. `tools/characters/proof.mjs` compares every generated frame with approved art and
+sRGB ICC metadata does not change pixel values. A fresh sips build is close to the committed art, not identical: mean RGB
+difference 0.26 to 0.64 of 255 per pack and up to 125 on single edge pixels, mostly in eyes and glints. The sips generator uses
+luminance masks for hair shine. `tools/characters/proof.mjs` compares every generated frame with approved art and
 checks isolated shine against the hair's alpha support on all three sheets.
 
 `tests/character-rebuild.test.mjs` compares manifests, resolved states, sheet dimensions and alpha structure, without
