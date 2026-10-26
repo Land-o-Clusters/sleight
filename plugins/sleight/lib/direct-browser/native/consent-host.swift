@@ -1826,7 +1826,7 @@ struct RingTheme {
     var name: String
     var warm: [Double] = [1, 122.0/255, 61.0/255, 1], cool: [Double] = [91.0/255, 141.0/255, 1, 1]
     var ink: [Double] = [11.0/255, 13.0/255, 20.0/255, 0.55], white: [Double] = [1, 1, 1, 1], error: [Double] = [1, 61.0/255, 96.0/255, 1]
-    var silence = 1.2, fade = 0.22, gap = 6.0, size = 28.0, carry = 0.42
+    var silence = 1.2, fade = 0.22, gap = 6.0, size = 28.0, carry = 0.42, waitingCap = 120.0
     var wrap = true          // type, scroll and drag wrap the target's rect (aim always does)
     var momentum = true      // wind-up, stretch, lean, overshoot and the squash settle
     var reach = true         // the reach line and the spark's glance in a glide's first 70 ms
@@ -1986,7 +1986,7 @@ func ringChip(_ text: String, at: CGPoint, clip: CGRect) -> RingChip {
         tether: [[0, Double(at.x) + (right ? 11 : -11), Double(at.y) - 11], [1, right ? x : x + width, above ? y + height : y]])
 }
 struct RingContext {
-    var from: CGPoint?, previous: RingPlan?, elapsed = Double.infinity
+    var from: CGPoint?, destination: CGPoint? = nil, previous: RingPlan?, elapsed = Double.infinity
     var reduced = false, secure = false, clip = CGRect(x: 0, y: 0, width: 1000, height: 1000), seed: UInt64 = 1
 }
 // The value tweens of one plan. A later tween of a value overrides an earlier one from its start, as in D2's engine.
@@ -2048,15 +2048,15 @@ final class RingPlanner {
     var wrap: CGRect?, glideEnd = 0.0, glideTime = 0.0, entrance: String?, variation: Double?
     init(_ event: RingEvent, _ theme: RingTheme, _ c: RingContext) {
         self.event = event; self.theme = theme; self.c = c
-        let at = event.at ?? c.from ?? .zero
+        let at = event.at ?? c.destination ?? c.from ?? .zero
         var route = handPoints((c.from.map { [$0] } ?? []) + [at])
         if c.from == nil, event.path.count > 1, event.state != "drag" { route = handPoints(event.path + [at]) }
         self.at = at; self.route = route
         var initial = Self.base
         initial["gap"] = theme.gap; initial["w"] = theme.size; initial["h"] = theme.size; initial["rr"] = theme.size / 2
-        if c.from != nil, let end = c.previous?.shape { initial.merge(end) { $1 } }
+        if let end = c.previous?.shape { initial.merge(end) { $1 } }
         tl = SeamTimeline(initial, origin: route.first ?? at)
-        wrap = c.from != nil ? c.previous?.rect : nil
+        wrap = c.previous?.rect
     }
     var reduced: Bool { c.reduced }
     func r(_ salt: Int) -> Double { theme.seeded ? seamRandom(c.seed, event.seq, salt) : 0.5 }
@@ -2076,7 +2076,7 @@ final class RingPlanner {
         else { t = tl.to(values, t, duration) }
     }
     func plan() -> RingPlan {
-        if c.from == nil { enter() } else { leave(c.previous?.state ?? "") }
+        if c.previous == nil { enter() } else { leave(c.previous?.state ?? "") }
         glide()
         switch event.state {
         case "aim": aim()
@@ -2150,7 +2150,7 @@ final class RingPlanner {
                 guard d > 0 else { continue }
                 let ux = Double(b.x - a.x) / d, uy = Double(b.y - a.y) / d, bow = min(d * 0.12, 26)
                 let control = CGPoint(x: Double(a.x + b.x) / 2 - uy * bow, y: Double(a.y + b.y) / 2 + ux * bow)
-                let over = last && momentum ? min(4, d * 0.025) * (0.7 + 0.6 * r(10)) : 0
+                let over = last && momentum ? min(4, d * 0.025) * (0.55 + 0.45 * r(10)) : 0
                 let end = CGPoint(x: Double(b.x) + ux * over, y: Double(b.y) + uy * over)
                 let ease: (Double) -> Double
                 if lengths.count == 1 { ease = snap ? Seam.out : Seam.inOut } else if first { ease = Seam.quadIn } else if last { ease = Seam.quadOut } else { ease = Seam.linear }
@@ -2586,7 +2586,7 @@ final class RingPlanner {
             }
         }
         // The label chip fades in only when its text changes; the old chip and its tether fade out in 60 ms.
-        let previous = c.secure || c.from == nil ? nil : c.previous?.label
+        let previous = c.secure ? nil : c.previous?.label
         if let label = p.label, !label.isEmpty {
             let chip = ringChip(label, at: at, clip: c.clip)
             p.chip = chip
@@ -2619,8 +2619,10 @@ final class RingPlanner {
             box = (min(box.minX, Double(point.x) + ox - w), min(box.minY, Double(point.y) + oy - h), max(box.maxX, Double(point.x) + ox + w), max(box.maxY, Double(point.y) + oy + h))
         }
         p.points = route + (box.minX.isFinite ? [CGPoint(x: box.minX, y: box.minY), CGPoint(x: box.maxX, y: box.maxY)] : [])
+        // Waiting stays up, parked, until the next frame or the cap: an approval can take minutes and a still layer costs nothing.
+        let quiet = event.state == "waiting" ? max(total, theme.waitingCap) : total + theme.silence
         p.timers = ["done", "handback"].contains(event.state) ? [RingTimer(at: total, action: "park"), RingTimer(at: total, action: "release")]
-            : [RingTimer(at: total, action: "park"), RingTimer(at: total + theme.silence, action: "fade"), RingTimer(at: total + theme.silence + theme.fade, action: "release")]
+            : [RingTimer(at: total, action: "park"), RingTimer(at: quiet, action: "fade"), RingTimer(at: quiet + theme.fade, action: "release")]
         // Budget: layers built, drawing layers shown at once, and animated layers (one animation group each) at once.
         let drawing = layers.filter { $0.kind != .group }
         let chipCount = p.label?.isEmpty == false ? 2.0 : 0, oldCount = p.oldLabel == nil ? 0.0 : 2
@@ -2644,16 +2646,19 @@ final class RingPlanner {
     }
 }
 // Position memory is bound to one target, so a point-free status never leaks onto a different window. A frame that lands
-// while the last glide is still moving starts from where the glide is at that moment.
+// while the last glide is still moving starts from where the glide is at that moment, and a point-free status plays at the
+// glide's destination. A ring that has dissolved or faded out is never continued: the next frame enters again.
 struct RingSession {
     var point: CGPoint?, pid: Int32?, window: UInt32?, previous: RingPlan?, began = 0.0
     mutating func reset() { point = nil; pid = nil; window = nil; previous = nil }
     mutating func plan(_ event: RingEvent, theme: RingTheme, now: Double, reduced: Bool, secure: Bool, clip: CGRect, seed: UInt64) -> RingPlan {
         let same = pid == event.pid && window == event.windowId, elapsed = now - began
+        let live = same ? previous.flatMap { last in (last.shape["o"] ?? 1) > 0.01 && !["done", "handback"].contains(last.state) ? last : nil } : nil
         var from = same ? point : nil
-        if same, let last = previous, elapsed < last.glideEnd { from = last.position(at: elapsed) }
-        guard event.at != nil || from != nil else { reset(); var p = RingPlan(state: event.state, at: .zero); p.dropped = true; return p }
-        let context = RingContext(from: from, previous: from == nil ? nil : previous, elapsed: elapsed, reduced: reduced, secure: secure, clip: clip, seed: seed)
+        if let last = live, elapsed < last.glideEnd { from = last.position(at: elapsed) }
+        guard event.at != nil || from != nil else { var p = RingPlan(state: event.state, at: .zero); p.dropped = true; return p }
+        let context = RingContext(from: from, destination: same ? point : nil, previous: live, elapsed: elapsed, reduced: reduced, secure: secure,
+            clip: clip, seed: seed)
         let plan = RingPlanner(event, theme, context).plan()
         point = plan.at; pid = event.pid; window = event.windowId; previous = plan; began = now
         return plan
@@ -2666,10 +2671,11 @@ func ringEvent(_ act: HandAct) -> RingEvent {
 // END RING PLAN
 
 // BEGIN RING RUNTIME
-// The ring's scheduling, a pure state machine the host and the dump both drive. An act waits out its delay; aim, thinking
-// and waiting never cancel a waiting act, while error, done, handback and hide do. Every plan parks (its animations come
-// off), then fades after the silence and releases, waiting and thinking included. A target window that can't be found hides
-// the ring. Nothing repeats: the host keeps one one-shot wake-up for the earliest due item.
+// The ring's scheduling, a pure state machine the host and the dump both drive. An act waits out its delay. Aim and
+// statuses queue behind waiting acts in arrival order, except error, done and handback, which cancel them and draw at once,
+// as hide cancels them. Every plan parks (its animations come off), then fades after the silence and releases. Waiting
+// stays up until the next frame, up to a 120 s cap. A status with no point to use is dropped and changes nothing. A target
+// window that can't be found hides the ring. Nothing repeats: the host keeps one one-shot wake-up for the earliest due item.
 struct RingEnvironment {
     var bounds: (Int32, UInt32) -> CGRect?
     var reduced: () -> Bool
@@ -2687,11 +2693,12 @@ struct RingRuntime {
     var next: Double? { (pending.map { $0.due } + timers.map { $0.at }).min() }
     mutating func receive(_ event: RingEvent, delay: Double, now: Double, _ env: RingEnvironment) -> [(Double, RingEffect)] {
         var out = advance(to: now, env)
-        if handKinds.contains(event.state), delay > 0 {
-            if pending.count < 64 { pending.append((now + delay, event)) }
+        let terminal = ["error", "done", "handback"].contains(event.state)
+        if terminal { pending.removeAll() }
+        if (handKinds.contains(event.state) && delay > 0) || (!terminal && !pending.isEmpty) {
+            if pending.count < 64 { pending.append((max(now + delay, pending.map { $0.due }.max() ?? now), event)) }
             return out
         }
-        if ["error", "done", "handback"].contains(event.state) { pending.removeAll() }
         out += draw(event, now, env)
         return out
     }
@@ -2719,9 +2726,14 @@ struct RingRuntime {
         return out
     }
     mutating func draw(_ event: RingEvent, _ now: Double, _ env: RingEnvironment) -> [(Double, RingEffect)] {
+        let known = session.pid == event.pid && session.window == event.windowId && session.point != nil
+        guard event.at != nil || known else { return [(now, .drop(event.state))] }
+        // A repeat of the state the ring already shows at the same point, inside that plan, changes nothing.
+        if known, ["thinking", "waiting", "error", "done", "handback"].contains(event.state), let last = session.previous, last.state == event.state, event.at == nil || event.at == last.at,
+            event.label == last.label, now - session.began < last.total { return [] }
         guard let clip = env.bounds(event.pid, event.windowId) else { return hide(now) }
         let plan = session.plan(event, theme: theme, now: now, reduced: env.reduced(), secure: env.secure(), clip: clip, seed: seed)
-        guard !plan.dropped else { return [(now, .drop(event.state))] + hide(now) }
+        guard !plan.dropped else { return [(now, .drop(event.state))] }
         let chip = plan.chip.map { [$0.frame.origin, CGPoint(x: $0.frame.maxX, y: $0.frame.maxY)] } ?? []
         let frame = handBox(plan.points + [plan.at] + chip).intersection(clip)
         guard !frame.isNull, frame.width >= 1, frame.height >= 1 else { return hide(now) }
@@ -2954,7 +2966,9 @@ final class HandHost: NSObject, NSApplicationDelegate {
                 let animation = CABasicAnimation(keyPath: "opacity")
                 animation.fromValue = root.opacity; animation.toValue = 0; animation.duration = duration
                 animation.timingFunction = CAMediaTimingFunction(name: .easeIn)
+                CATransaction.begin(); CATransaction.setDisableActions(true)
                 root.opacity = 0; root.add(animation, forKey: "fade")
+                CATransaction.commit()
             }
         }
     }
@@ -3257,11 +3271,11 @@ func handDump(capture: String) -> [String: Any] {
 let ringThemes: [String: RingTheme] = ["ring": .seamPlus, "seam": .seam]
 let cursorStyles = ["--cursor-style=glove"] + ringThemes.keys.sorted().map { "--cursor-style=" + $0 }
 // A synchronous, bounded reader for plan tests. It never constructs an application, panel, view or layer. It drives the
-// same RingRuntime as the host on a simulated clock: a {"dumpClock": seconds} line moves the clock (firing what falls due);
-// otherwise each frame lands when the last drawn plan's motion ends. At the end of input the clock runs out and an "end"
+// same RingRuntime as the host on a simulated clock. Only a {"dumpClock": seconds} line moves the clock, firing what falls
+// due; frames between two clock lines land at the same moment, as a burst from the relay would. At the end of input the clock runs out and an "end"
 // line reports whether anything is still pending.
 func ringPlanDump(theme: RingTheme?, reduced: Bool, secure: Bool, clip: CGRect, seed: UInt64, gone: Set<UInt32>) {
-    var buffer = Data(), bound: String?, last = -1, clock = 0.0, explicit = false
+    var buffer = Data(), bound: String?, last = -1, clock = 0.0
     var runtime = RingRuntime(theme: theme ?? .seamPlus, seed: seed)
     let env = RingEnvironment(bounds: { _, window in gone.contains(window) ? nil : clip }, reduced: { reduced }, secure: { secure })
     func write(_ object: [String: Any]) {
@@ -3296,7 +3310,7 @@ func ringPlanDump(theme: RingTheme?, reduced: Bool, secure: Bool, clip: CGRect, 
             if Set(data.keys) == ["dumpClock"] {
                 guard let value = data["dumpClock"] as? NSNumber, CFGetTypeID(value) != CFBooleanGetTypeID(), value.doubleValue.isFinite,
                     value.doubleValue >= clock else { exit(65) }
-                clock = value.doubleValue; explicit = true
+                clock = value.doubleValue
                 if theme != nil { emit(runtime.advance(to: clock, env)) }
                 continue
             }
@@ -3312,8 +3326,6 @@ func ringPlanDump(theme: RingTheme?, reduced: Bool, secure: Bool, clip: CGRect, 
             guard event.seq > last else { exit(65) }
             last = event.seq
             guard theme != nil else { write(["effect": "drop", "state": event.state, "dropped": true, "animations": [], "time": clock]); continue }
-            if !explicit, let previous = runtime.session.previous, runtime.shown { clock = max(clock, runtime.session.began + previous.total) }
-            explicit = false
             emit(runtime.receive(event, delay: delay, now: clock, env))
         }
     }

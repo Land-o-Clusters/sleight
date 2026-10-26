@@ -51,9 +51,15 @@ The spark always marks the exact point, also when the halves wrap a rect.
 
 `RingRuntime` holds the rules, and the host and the dump both drive it:
 
-- An act waits out its `delayMs`. Aim, thinking and waiting never cancel a waiting act. Error, done, handback and hide do.
+- An act waits out its `delayMs`. Aim, thinking and waiting that arrive meanwhile queue behind it in arrival order.
+- Error, done, handback and hide cancel waiting acts. Error, done and handback then draw at once.
+- A status without `at` plays at the last plan's destination. Mid-glide, a 60 ms snap finishes the glide first.
+- A status with no point to use (nothing placed yet, or another window) is dropped. The ring and waiting acts stay as they are.
+- A repeat of the shown status at the same point, inside that plan, is ignored.
+- A frame during a done or handback dissolve, or after a fade, starts with an entrance.
 - Every plan parks when its motion ends: its animations come off and the layers keep their final values.
-- Then the ring fades after 1.2 s of silence (220 ms) and releases its panel. Thinking and waiting fade the same way.
+- Then the ring fades after 1.2 s of silence (220 ms) and releases its panel. Thinking fades the same way.
+- Waiting parks still and stays up until the next frame or a hide, for at most 120 s, then fades.
 - Done and handback release when the dissolve ends.
 - A target window that can't be found hides the ring at once.
 - The host keeps one one-shot wake-up for the earliest pending act or timer.
@@ -82,7 +88,7 @@ A changed label fades the old chip and tether out in 60 ms.
 
 `--ring-plan-dump --cursor-style=ring|seam` reads frames and prints one JSON line per effect (draw, drop, hide, park,
 fade, release), then an `end` line with `idle`, `pending` and `timers`. It builds no application, panel or layer.
-A `{"dumpClock": seconds}` line moves the simulated clock. Otherwise each frame lands when the last plan's motion ends.
+Only a `{"dumpClock": seconds}` line moves the simulated clock. Frames between two clock lines arrive at the same moment.
 Flags: `--reduce-motion`, `--secure-input`, `--clip=X,Y,W,H`, `--seed=N`, `--gone=W1,W2` (windows whose bounds lookup fails).
 `tests/hand-ring.test.mjs` drives every state, fallback and scheduling rule through it.
 Appearance, capture exclusion, idle CPU and WindowServer cost still need VC7's live checks.
