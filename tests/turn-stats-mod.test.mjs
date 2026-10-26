@@ -208,10 +208,16 @@ for (const key of ['HOME', 'CLAUDE_CONFIG_DIR']) for (const value of [undefined,
     assert.equal((await h.emit('classic.PreToolUse', { tool: 'Write', file_path: '/fixture/output' }, { allowed: true })).allowed, true);
     const paths = key === 'HOME' ? ['~/notes', '$HOME/notes', '${HOME}/notes', '~/notes with spaces']
       : ['$CLAUDE_CONFIG_DIR/notes', '${CLAUDE_CONFIG_DIR}/notes', '$CLAUDE_CONFIG_DIR/notes with spaces'];
+    // An unset CLAUDE_CONFIG_DIR is Claude Code's default, ~/.claude, so its paths resolve against HOME.
+    const resolves = key === 'CLAUDE_CONFIG_DIR' && value === undefined;
     for (const path of paths) {
-      for (const event of [{ tool: 'Write', file_path: path }, { tool: 'Bash', command: `printf ok > "${path}"` }])
-        assert.match((await h.emit('classic.PreToolUse', event)).deny, /cannot resolve.*path/i, JSON.stringify(event));
+      for (const event of [{ tool: 'Write', file_path: path }, { tool: 'Bash', command: `printf ok > "${path}"` }]) {
+        if (resolves) assert.equal((await h.emit('classic.PreToolUse', event, { allowed: true })).allowed, true, JSON.stringify(event));
+        else assert.match((await h.emit('classic.PreToolUse', event)).deny, /cannot resolve.*path/i, JSON.stringify(event));
+      }
     }
+    if (resolves) assert.ok((await h.emit('classic.PreToolUse', { tool: 'Bash', command: 'rm -rf "$CLAUDE_CONFIG_DIR/plugins"' })).deny,
+      'the default config folder keeps sleight\'s plugin install protected');
     assert.match((await h.emit('classic.PreToolUse', { tool: 'Write', file_path: '/fixture/home/Library/Application Support/sleight/hand.json' })).deny, /Only the user/);
   });
 
@@ -280,12 +286,14 @@ for (const boundary of ['session.start', 'session.compact', 'stop', 'lead.comple
     assert.match((await h.command('record')).text, /Wait for the current run/);
     if (boundary === 'lead.complete') await h.complete();
     else if (boundary === 'stop') await h.command('stop');
+    // Compaction lands mid-turn and keeps the lead's turn running; the lead's next completion then frees the child's hold.
+    else if (boundary === 'session.compact') { await h.emit(boundary); await h.complete(); }
     else await h.emit(boundary);
     assert.ok((await paneLabels(h)).includes('Refresh'));
     assert.doesNotMatch((await h.command('record')).text, /Wait for the current run/);
     assert.doesNotMatch((await h.command('replay fixture.json')).text, /Wait for the current run/);
     const shell = await h.emit('tool.call', { tool: 'Bash', command: 'open -a Safari' }, { allowed: true });
-    if (boundary === 'lead.complete') assert.match(shell.deny, /shell guard/, 'busy expiry must preserve the shell fence');
+    if (boundary === 'lead.complete' || boundary === 'session.compact') assert.match(shell.deny, /shell guard/, 'busy expiry must preserve the shell fence');
     else assert.equal(shell.allowed, true);
   });
 
@@ -787,4 +795,13 @@ test('cost displays session total and a validated delta since this turn started'
   for (const baseline of [null, { startedAt: 200, usd: 1 }, { startedAt: 100, usd: 2 }]) {
     assert.equal(turnSummary({}, end, baseline).costDeltaUsd, null);
   }
+});
+
+test('compaction mid-turn keeps the shell fence and the running turn', async () => {
+  const h = host(); await h.start();
+  await h.emit('tool.call', { tool: prefix + 'browser_read' });
+  assert.match((await h.emit('tool.call', { tool: 'Bash', command: 'open -a Safari' }, { allowed: true })).deny, /shell guard/);
+  await h.emit('session.compact');
+  assert.match((await h.emit('tool.call', { tool: 'Bash', command: 'open -a Safari' }, { allowed: true })).deny, /shell guard/);
+  assert.match((await h.command('record')).text, /Wait for the current run/);
 });

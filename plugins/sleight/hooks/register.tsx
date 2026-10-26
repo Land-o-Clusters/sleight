@@ -382,10 +382,9 @@ export const register: Register = on => {
   const state = createModState()
   on('session.append', { door: 'response' }, ($, e, next) => { state.narration.observe(e); return next(e) })
   on('session.compact', ($, e, next) => {
+    // Compaction can land mid-turn: the shell fence and the turn stay as they were; only abandoned children go.
     state.narration.reset()
     state.runningAgents.clear()
-    state.shellUsers.clear()
-    state.turnRunning = false
     return next(e)
   })
 
@@ -394,10 +393,13 @@ export const register: Register = on => {
     if (!['Write', 'Edit', 'MultiEdit', 'NotebookEdit', 'Bash'].includes(event.tool)) return next(e)
     if (loggingSwitchWriteDenied(event)) return { deny: "Only the user turns on sleight's action log and outcome lines. Ask them to make this change." }
     const home = await $.env.get('HOME'), configDir = await $.env.get('CLAUDE_CONFIG_DIR')
+    const absoluteHome = typeof home === 'string' && home.startsWith('/') ? home : undefined
     const denied = await preapprovedWriteTarget(event, {
       stat: (path: string) => $.fs.stat(path, { resolve: true }),
-      home: typeof home === 'string' && home.startsWith('/') ? home : undefined,
-      configDir: typeof configDir === 'string' && configDir.startsWith('/') ? configDir : undefined,
+      home: absoluteHome,
+      // Unset CLAUDE_CONFIG_DIR means Claude Code's default, ~/.claude.
+      configDir: typeof configDir === 'string' && configDir.startsWith('/') ? configDir
+        : configDir === undefined && absoluteHome ? absoluteHome + '/.claude' : undefined,
     })
     return denied ? { deny: preapprovedWriteReason(denied) } : next(e)
   }).catch(() => ({ deny: guardUnavailableReason }))
