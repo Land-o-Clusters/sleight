@@ -391,7 +391,7 @@ export async function appleToolsPresent({ run = promisify(execFile), exists = ex
     return ['swiftc', 'clang'].every(tool => ['usr/bin', 'Toolchains/XcodeDefault.xctoolchain/usr/bin'].some(folder => exists(join(dir, folder, tool))));
   } catch { return false; }
 }
-export const handCursorStyles = Object.freeze(['glove', 'ring', 'seam']);
+export const handCursorStyles = Object.freeze(['glove', 'ring', 'seam', 'sprite']);
 export async function prepareHandHost({ cacheRoot = defaultHelperCache(), sourceRoot = sources, compile = compileNative,
   tools = appleToolsPresent, onProgress, signal } = {}) {
   let inventory;

@@ -450,6 +450,7 @@ test('prepareHandHost builds through the helper pipeline and its handle starts o
     [{ capture: 'visible' }, '--hand --capture=visible --cursor-style=glove --menu', 3],
     [{ consent: true }, '--hand --capture=hidden --cursor-style=glove --consent', 5],
     [{ cursorStyle: 'ring' }, '--hand --capture=hidden --cursor-style=ring --menu', 3],
+    [{ cursorStyle: 'sprite' }, '--hand --capture=hidden --cursor-style=sprite --menu', 3],
     [{ cursorStyle: 'seam', consent: true }, '--hand --capture=hidden --cursor-style=seam --consent', 5],
     [{ cursorStyle: 'glove', capture: 'visible' }, '--hand --capture=visible --cursor-style=glove --menu', 3]]) {
     const child = ready.spawn(options);
@@ -462,7 +463,7 @@ test('prepareHandHost builds through the helper pipeline and its handle starts o
     assert.equal(readFileSync(join(cacheRoot, key, 'consent-host.args'), 'utf8'), args);
   }
   assert.throws(() => ready.spawn({ capture: 'readOnly' }), /HAND_CAPTURE_INVALID/);
-  for (const cursorStyle of ['Ring', 'sprite', '', null, 1]) assert.throws(() => ready.spawn({ cursorStyle }), /HAND_CURSOR_STYLE_INVALID/);
+  for (const cursorStyle of ['Ring', 'Sprite', '', null, 1]) assert.throws(() => ready.spawn({ cursorStyle }), /HAND_CURSOR_STYLE_INVALID/);
   // The cached build is reused without asking for the tools, and a changed source is a different build.
   assert.equal((await host.prepareHandHost({ cacheRoot, sourceRoot, compile, tools: async () => false })).status, 'ready'); assert.equal(builds, 2);
   writeFileSync(join(sourceRoot, 'consent-host.swift'), 'changed', { mode: 0o600 });
@@ -575,7 +576,7 @@ test('with the action log off the menu frame has no usage, and a failing read on
 
 test('cursorStyle is an optional spawn option and adds no wait to send', async t => {
   t.after(() => setHandPid(0));
-  for (const cursorStyle of ['ring', 'seam', 'glove']) {
+  for (const cursorStyle of ['ring', 'seam', 'glove', 'sprite']) {
     const spawns = [], child = fakeChild();
     const client = createHandClient({ cursorStyle, setting: () => ({ enabled: true }), watch: () => undefined,
       permissions: null, usage: null, built: () => true,

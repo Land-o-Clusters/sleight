@@ -1,6 +1,6 @@
 # Agent cursor ring
 
-The hand host accepts `--cursor-style=glove|ring|seam`. Glove stays the default until the setting changes.
+The hand host accepts `--cursor-style=glove|ring|seam|sprite`. Glove stays the default until the setting changes.
 `ring` is Split Seam+ (design D2), the default ring. `seam` is plain Split Seam, kept for comparison.
 `prepareHandHost().spawn({ cursorStyle })` validates the value and passes it before `--menu` or `--consent`.
 
@@ -86,3 +86,67 @@ A `{"dumpClock": seconds}` line moves the simulated clock. Otherwise each frame 
 Flags: `--reduce-motion`, `--secure-input`, `--clip=X,Y,W,H`, `--seed=N`, `--gone=W1,W2` (windows whose bounds lookup fails).
 `tests/hand-ring.test.mjs` drives every state, fallback and scheduling rule through it.
 Appearance, capture exclusion, idle CPU and WindowServer cost still need VC7's live checks.
+
+## Sprite
+
+`--cursor-style=sprite` adds a character beside Split Seam+, off until the user picks that style. The ring keeps the exact
+target point. The character's cell box sits 18 pt below and to the right of that point and never covers it: near the
+target window's right or bottom edge the box moves to the left of or above the point. In v1 the hotspot leaves the box
+where it is. Moving the box never mirrors the artwork. Only a resolved entry's `flip` mirrors it.
+Without a loaded character the host draws the ring alone.
+
+One `CALayer` draws the character. Its `contents` is the decoded sheet, and a discrete keyframe animation of
+`contentsRect` steps through cells. A state on the extra sheet switches `contents` at its boundary. Position follows
+the ring's planned positions without its stretch or rotation, and opacity copies the ring cursor's entrance, crossfades and dissolve. The
+ring's fade, park and release cover the character too. Looping art stops stepping at 4.8 s and shows its last cell until
+the ring fades. Reduced motion shows each state's first cell. Under secure input, type and key show idle art. Core
+Animation does all of this from the installed animations, without sprite timers or frame callbacks.
+
+The relay calls `loadCharacter(folder, { installed: true })` from VC3's `hand/character.mjs`, then
+`characterFrame(character, { nonce, seq })` from `hand/character-frame.mjs`, and sends the result once after spawn on
+the act sequence counter. A later character frame replaces the earlier one, even when the new one fails to load. VC4
+adds the adapter and the host side. Integration adds the relay call.
+
+The frame's keys are exactly `hand`, `nonce`, `seq`, `id`, `sheet`, `extra` (a path or null), `cell` and `table`. Table
+entries have exactly `sheet`, `row`, `frames`, `ms`, `loop`, `flip` and `hotspot`, and may add `size` and `scale`.
+`frames` is a count from column 0 or an array of columns 0 to 7. The adapter sends arrays, which keep a state's start
+column and the doubled double-click fallback. `ms` is one number or one per column. `size` is the expected sheet's
+`[width,height]` and `scale` is the manifest's. The adapter always sends both. Without `size`, the host checks cell
+alignment and the image header only.
+
+The table holds VC3's 19 resolved states. `move@N`, `aim@N` and `drag-carry@N` (N 0 to 15, clockwise from up) override
+them where a direction changes the art. A glide picks the nearest direction, and a stage without movement uses the
+base entry. The host picks entries from the table and never resolves states itself. A state missing from the table
+uses idle. Scroll frames have no direction field, and the host shows scroll-down for both. Drag shows grab, carry and drop at
+the ring's phase boundaries.
+
+A character frame may be 32 KiB, and other frames keep the 8 KiB limit. Unknown keys, malformed values, a wrong nonce
+or a sequence that doesn't increase take the existing exit-65 fault path. The consent channel keeps its isolation rule.
+An image that fails a check leaves the ring alone on screen and writes one stderr line.
+
+The host loads images only from below `~/Library/Application Support/sleight/characters/<id>/`. Each path must equal
+its realpath. Files must be regular, single-link, owned by the user, mode 0600 and at most 8 MiB. The bank and the
+character folder must be owned by the user, with no group or world write. ImageIO opens the checked descriptor through
+`CGImageSourceCreateWithURL` with caching off and decodes one PNG or WebP image per sheet, matched by UTI and extension.
+Each sheet is capped at 1536 by 2288 pixels, the extra sheet included. Before decoding, the host compares the header's
+size with the cap, the cell grid and the adapter's `size`. After decoding it checks alpha, then at least 50 visible
+pixels and under 95 percent fully opaque pixels in every used cell. Chroma fringe in a used cell and ink in an unused
+cell of a referenced row are warnings. The host knows resolved columns, not each row's declared frame count, so it
+can't refuse unused ink safely. Row 0, column 6 is Codex's neutral pose and never warns. The host skips rows with no
+resolved reference. It converts to premultiplied RGBA, which loses hidden RGB under zero alpha, so it can't see that.
+
+The checks read one bitmap the host draws from the decoded image, and the layer shows that same bitmap. Core Animation
+never decodes the file again. A full-size sheet's bitmap is 13.4 MiB. The host keeps the images between actions and
+frees them on a replacement, a style other than sprite, or exit. The test bank override,
+`SLEIGHT_CURSOR_CHARACTERS_ROOT`, works only with `SLEIGHT_CURSOR_TEST=1` and a path below `/private/tmp/`. Tests draw
+synthetic PNGs. sleight includes no character artwork.
+
+Measured in the dump mode (2026-10-26, three runs each, all equal to 0.1 MB): maximum RSS 16.9 MB with the ring alone,
+39.7 MB with a full-size sheet, 53.3 MB with a full-size extra sheet as well. Loading a full-size sheet took about
+0.25 s once, on the main thread, in the unoptimized build that users get.
+
+`--ring-plan-dump --cursor-style=sprite` decodes real images and runs the same sprite planner, with no application,
+panel or window. Each draw record gains a `sprite` object with the cell poses, the normalized `contentsRect`
+keyframes and the box positions. An offscreen `CALayer.render(in:)` check of the host's layer tree (unflipped panel layer, flipped ring root,
+sprite layer) drew the sheet upright, with `contentsRect` y 0 at row 0. The window server's rendering, appearance,
+capture exclusion and live cost need VC7.

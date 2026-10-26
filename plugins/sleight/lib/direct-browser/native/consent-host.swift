@@ -5,6 +5,7 @@ import AppKit
 import Foundation
 import CoreFoundation
 import QuartzCore
+import ImageIO
 import Carbon.HIToolbox
 import ObjectiveC
 import Darwin
@@ -1462,7 +1463,7 @@ func handLabel(_ raw: Any?) -> String? {
     }
     return result
 }
-enum HandFrame { case act(String, HandAct), aim(String, RingEvent), status(String, RingEvent), hide(String), menu(String, enabled: Bool, capture: String, version: String, permissions: PermissionsData?, usage: UsageStats?) }
+enum HandFrame { case character(String, SpriteFrame), act(String, HandAct), aim(String, RingEvent), status(String, RingEvent), hide(String), menu(String, enabled: Bool, capture: String, version: String, permissions: PermissionsData?, usage: UsageStats?) }
 let handKinds: Set<String> = ["click", "double", "right", "key", "type", "drag", "scroll"]
 func handFrame(_ data: [String: Any]) -> HandFrame? {
     func number(_ value: Any?) -> Double? {
@@ -1487,6 +1488,7 @@ func handFrame(_ data: [String: Any]) -> HandFrame? {
         return .some(CGRect(origin: origin, size: CGSize(width: w, height: h)))
     }
     guard let nonce = data["nonce"] as? String, nonce.range(of: "^[0-9a-f]{64}$", options: .regularExpression) != nil else { return nil }
+    if data["hand"] as? String == "character" { return spriteFrame(data).map { .character(nonce, $0) } }
     if data["hand"] as? String == "hide" { return Set(data.keys) == ["hand", "nonce"] ? .hide(nonce) : nil }
     if data["hand"] as? String == "menu" {
         let keys: Set<String> = ["hand", "nonce", "enabled", "capture", "version"]
@@ -1953,6 +1955,7 @@ struct RingChip {
 struct RingTimer { let at: Double, action: String }
 struct RingPlan {
     var state: String, at: CGPoint
+    var sprite: SpritePlan? = nil
     var layers: [RingLayer] = [], tracks: [RingTrack] = []
     var total = 0.0, glide = 0.0, glideEnd = 0.0, fade = 0.22
     var dropped = false
@@ -1974,7 +1977,7 @@ struct RingPlan {
          "glide": glide, "glideEnd": glideEnd, "dropped": dropped, "label": label as Any? ?? NSNull(),
          "rect": rect.map { [$0.minX, $0.minY, $0.width, $0.height] } as Any? ?? NSNull(), "chip": chip?.json as Any? ?? NSNull(),
          "phases": phases, "timers": timers.map { [$0.at, $0.action] as [Any] }, "budget": budget, "shape": shape,
-         "entrance": entrance as Any? ?? NSNull(), "variation": variation as Any? ?? NSNull()]
+         "entrance": entrance as Any? ?? NSNull(), "variation": variation as Any? ?? NSNull(), "sprite": sprite.map { $0.json(self) } as Any? ?? NSNull()]
     }
 }
 func ringChip(_ text: String, at: CGPoint, clip: CGRect) -> RingChip {
@@ -2678,6 +2681,7 @@ struct RingEnvironment {
 enum RingEffect { case draw(RingPlan, CGRect), hide, drop(String), park, fade(Double), release }
 struct RingRuntime {
     var theme: RingTheme, seed: UInt64
+    var character: SpriteCharacter? = nil
     var session = RingSession()
     var pending: [(due: Double, event: RingEvent)] = []
     var timers: [(at: Double, action: String)] = []
@@ -2720,10 +2724,13 @@ struct RingRuntime {
     }
     mutating func draw(_ event: RingEvent, _ now: Double, _ env: RingEnvironment) -> [(Double, RingEffect)] {
         guard let clip = env.bounds(event.pid, event.windowId) else { return hide(now) }
-        let plan = session.plan(event, theme: theme, now: now, reduced: env.reduced(), secure: env.secure(), clip: clip, seed: seed)
+        var plan = session.plan(event, theme: theme, now: now, reduced: env.reduced(), secure: env.secure(), clip: clip, seed: seed)
         guard !plan.dropped else { return [(now, .drop(event.state))] + hide(now) }
+        if let character = character { plan.sprite = SpritePlan.make(plan, character: character, reduced: env.reduced(), secure: env.secure(), clip: clip) }
         let chip = plan.chip.map { [$0.frame.origin, CGPoint(x: $0.frame.maxX, y: $0.frame.maxY)] } ?? []
-        let frame = handBox(plan.points + [plan.at] + chip).intersection(clip)
+        var frame = handBox(plan.points + [plan.at] + chip)
+        if let sprite = plan.sprite { frame = frame.union(sprite.bounds(plan)) }
+        frame = frame.intersection(clip)
         guard !frame.isNull, frame.width >= 1, frame.height >= 1 else { return hide(now) }
         timers = plan.timers.map { (now + $0.at, $0.action) }
         fade = plan.fade; shown = true
@@ -2731,6 +2738,301 @@ struct RingRuntime {
     }
 }
 // END RING RUNTIME
+
+// BEGIN SPRITE
+// Data-only sprite seam. The ring planners stay independent of image IO and character state resolution.
+let spriteStates: Set<String> = ["idle", "move", "aim", "click", "double-click", "right-click", "type", "key", "scroll-up", "scroll-down",
+    "drag-grab", "drag-carry", "drag-drop", "waiting-approval", "error", "success", "thinking", "handoff", "working"]
+struct SpriteEntry {
+    let sheet: String, row: Int, columns: [Int], ms: [Double], loop: Bool, flip: Bool, hotspot: CGPoint
+    let size: CGSize?, scale: Double
+}
+struct SpriteFrame {
+    let seq: Int, id: String, sheet: String, extra: String?, cell: CGSize, table: [String: SpriteEntry]
+}
+func spriteFrame(_ data: [String: Any]) -> SpriteFrame? {
+    func n(_ raw: Any?, _ range: ClosedRange<Double>) -> Double? {
+        guard let n = raw as? NSNumber, CFGetTypeID(n) != CFBooleanGetTypeID(), n.doubleValue.isFinite, range.contains(n.doubleValue) else { return nil }
+        return n.doubleValue
+    }
+    func int(_ raw: Any?, _ range: ClosedRange<Double>) -> Int? {
+        guard let v = n(raw, range), v.rounded() == v else { return nil }; return Int(v)
+    }
+    func bool(_ raw: Any?) -> Bool? {
+        guard let v = raw as? NSNumber, CFGetTypeID(v) == CFBooleanGetTypeID() else { return nil }; return v.boolValue
+    }
+    func pair(_ raw: Any?, _ range: ClosedRange<Double>) -> [Double]? {
+        guard let a = raw as? [Any], a.count == 2, let x = n(a[0], range), let y = n(a[1], range) else { return nil }; return [x, y]
+    }
+    func path(_ raw: Any?) -> String? {
+        guard let p = raw as? String, p.utf8.count <= 4096, p.hasPrefix("/"), !p.contains("\0") else { return nil }; return p
+    }
+    guard Set(data.keys) == ["hand", "nonce", "seq", "id", "sheet", "extra", "cell", "table"],
+        let seq = int(data["seq"], 0...9007199254740991), let id = data["id"] as? String,
+        id.range(of: "^[a-z0-9-]{1,48}$", options: .regularExpression) != nil,
+        let sheet = path(data["sheet"]), data["extra"] is NSNull || path(data["extra"]) != nil,
+        let cell = pair(data["cell"], 64...512), cell.allSatisfy({ $0.rounded() == $0 }),
+        let raw = data["table"] as? [String: Any], raw["idle"] != nil, raw.count <= 67 else { return nil }
+    var table: [String: SpriteEntry] = [:]
+    for (key, value) in raw {
+        let parts = key.split(separator: "@", omittingEmptySubsequences: false)
+        guard parts.count == 1 && spriteStates.contains(key) || parts.count == 2 && ["move", "aim", "drag-carry"].contains(String(parts[0]))
+            && Int(parts[1]).map({ (0...15).contains($0) && String($0) == parts[1] }) == true,
+            let v = value as? [String: Any] else { return nil }
+        let required: Set<String> = ["sheet", "row", "frames", "ms", "loop", "flip", "hotspot"]
+        guard required.isSubset(of: Set(v.keys)), Set(v.keys).subtracting(required).isSubset(of: ["size", "scale"]),
+            let s = v["sheet"] as? String, ["sheet", "extra"].contains(s), s != "extra" || path(data["extra"]) != nil,
+            let row = int(v["row"], 0...63), let loop = bool(v["loop"]), let flip = bool(v["flip"]),
+            let hotspot = pair(v["hotspot"], -1024...1024),
+            (-cell[0]...2 * cell[0]).contains(hotspot[0]), (-cell[1]...2 * cell[1]).contains(hotspot[1]),
+            v["scale"] == nil || n(v["scale"], 0.25...2) != nil else { return nil }
+        let columns: [Int]
+        if let count = int(v["frames"], 1...8) { columns = Array(0..<count) }
+        else if let a = v["frames"] as? [Any], (1...16).contains(a.count) {
+            columns = a.compactMap { int($0, 0...7) }; guard columns.count == a.count else { return nil }
+        } else { return nil }
+        let durations = (v["ms"] as? [Any]) ?? Array(repeating: v["ms"] as Any, count: columns.count)
+        let ms = durations.compactMap { n($0, (loop ? 40.0 : 20.0)...2000) }
+        guard ms.count == columns.count, durations.count == columns.count, ms.reduce(0, +) <= 8000 else { return nil }
+        var size: CGSize?
+        if v["size"] != nil {
+            guard let xy = pair(v["size"], 1...2288), xy.allSatisfy({ $0.rounded() == $0 }),
+                xy[0] == cell[0] * 8, xy[0] <= 1536, xy[1].truncatingRemainder(dividingBy: cell[1]) == 0,
+                Double(row + 1) * cell[1] <= xy[1] else { return nil }
+            size = CGSize(width: xy[0], height: xy[1])
+        }
+        table[key] = SpriteEntry(sheet: s, row: row, columns: columns, ms: ms, loop: loop, flip: flip,
+            hotspot: CGPoint(x: hotspot[0], y: hotspot[1]), size: size, scale: n(v["scale"], 0.25...2) ?? 1)
+    }
+    return SpriteFrame(seq: seq, id: id, sheet: sheet, extra: path(data["extra"]), cell: CGSize(width: cell[0], height: cell[1]), table: table)
+}
+enum SpriteLoadError: String, Error { case path, permissions, size, type, decode, alpha, pixels, changed }
+func spriteWarning(_ message: String) { FileHandle.standardError.write(Data(("sleight sprite: " + message + "\n").utf8)) }
+struct SpriteCharacter {
+    let frame: SpriteFrame, images: [String: CGImage]
+    static func root() -> String {
+        let env = ProcessInfo.processInfo.environment
+        if env["SLEIGHT_CURSOR_TEST"] == "1", let p = env["SLEIGHT_CURSOR_CHARACTERS_ROOT"], p.hasPrefix("/private/tmp/") { return p }
+        return FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent("Library/Application Support/sleight/characters").path
+    }
+    static func load(_ frame: SpriteFrame) -> SpriteCharacter? {
+        do {
+            var images: [String: CGImage] = [:], warnings = Set<String>()
+            for (key, path) in [("sheet", Optional(frame.sheet)), ("extra", frame.extra)] {
+                guard let path = path else { continue }
+                let loaded = try decode(path, key: key, frame: frame)
+                images[key] = loaded.0; warnings.formUnion(loaded.1)
+            }
+            if !warnings.isEmpty { spriteWarning(warnings.sorted().joined(separator: ", ") + " (warning)") }
+            return SpriteCharacter(frame: frame, images: images)
+        } catch { spriteWarning("character refused (\((error as? SpriteLoadError)?.rawValue ?? "decode")); using ring"); return nil }
+    }
+    static func decode(_ path: String, key: String, frame: SpriteFrame) throws -> (CGImage, Set<String>) {
+        let root = root(), expectedParent = root + "/" + frame.id
+        func canonical(_ path: String) -> Bool {
+            var bytes = [CChar](repeating: 0, count: Int(PATH_MAX))
+            return realpath(path, &bytes) != nil && String(cString: bytes) == path
+        }
+        guard canonical(path), canonical(root),
+            (path as NSString).deletingLastPathComponent == expectedParent else { throw SpriteLoadError.path }
+        // Check every directory within the private character bank, not just the leaf filename.
+        for directory in [root, expectedParent] {
+            var st = stat()
+            guard lstat(directory, &st) == 0, st.st_mode & S_IFMT == S_IFDIR, st.st_uid == getuid(), st.st_mode & 0o7022 == 0 else { throw SpriteLoadError.permissions }
+        }
+        var before = stat()
+        guard lstat(path, &before) == 0, before.st_mode & S_IFMT == S_IFREG, before.st_uid == getuid(),
+            before.st_mode & 0o7777 == 0o600, before.st_nlink == 1 else { throw SpriteLoadError.permissions }
+        guard before.st_size > 0, before.st_size <= 8 * 1024 * 1024 else { throw SpriteLoadError.size }
+        let fd = open(path, O_RDONLY | O_NOFOLLOW | O_NONBLOCK)
+        guard fd >= 0 else { throw SpriteLoadError.path }; defer { close(fd) }
+        var opened = stat()
+        guard fstat(fd, &opened) == 0, opened.st_dev == before.st_dev, opened.st_ino == before.st_ino,
+            opened.st_mode == before.st_mode, opened.st_uid == before.st_uid, opened.st_size == before.st_size else { throw SpriteLoadError.changed }
+        // ImageIO reads the already opened inode. Renaming the path cannot redirect its decode.
+        let url = URL(fileURLWithPath: "/dev/fd/\(fd)") as CFURL
+        let options = [kCGImageSourceShouldCache: false] as CFDictionary
+        guard let source = CGImageSourceCreateWithURL(url, options), let uti = CGImageSourceGetType(source) as String?,
+            ["public.png", "org.webmproject.webp"].contains(uti), CGImageSourceGetCount(source) == 1 else { throw SpriteLoadError.type }
+        let ext = (path as NSString).pathExtension.lowercased()
+        guard (uti == "public.png" && ext == "png") || (uti == "org.webmproject.webp" && ext == "webp") else { throw SpriteLoadError.type }
+        guard let props = CGImageSourceCopyPropertiesAtIndex(source, 0, options) as? [CFString: Any],
+            let w = props[kCGImagePropertyPixelWidth] as? Int, let h = props[kCGImagePropertyPixelHeight] as? Int,
+            w > 0, h > 0, w <= 1536, h <= 2288, w == Int(frame.cell.width) * 8, h % Int(frame.cell.height) == 0 else { throw SpriteLoadError.size }
+        let entries = frame.table.values.filter { $0.sheet == key }
+        guard entries.allSatisfy({ ($0.row + 1) * Int(frame.cell.height) <= h && ($0.size == nil || $0.size == CGSize(width: w, height: h)) }) else { throw SpriteLoadError.size }
+        guard let image = CGImageSourceCreateImageAtIndex(source, 0, options), image.width == w, image.height == h else { throw SpriteLoadError.decode }
+        guard [.premultipliedFirst, .premultipliedLast, .first, .last].contains(image.alphaInfo) else { throw SpriteLoadError.alpha }
+        // Rasterize once into a bitmap the context owns. The layer shows this checked bitmap, so Core Animation never
+        // decodes the file again (the source is uncached and its descriptor closes on return).
+        guard let context = CGContext(data: nil, width: w, height: h, bitsPerComponent: 8, bytesPerRow: w * 4,
+            space: CGColorSpaceCreateDeviceRGB(), bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue | CGBitmapInfo.byteOrder32Big.rawValue),
+            context.bytesPerRow == w * 4 else { throw SpriteLoadError.decode }
+        context.draw(image, in: CGRect(x: 0, y: 0, width: w, height: h))
+        guard let raw = context.data else { throw SpriteLoadError.decode }
+        let pixels = raw.bindMemory(to: UInt8.self, capacity: w * h * 4)
+        var used = Set<Int>(), rows = Set<Int>(), warnings = Set<String>()
+        for entry in entries { rows.insert(entry.row); for col in entry.columns { used.insert(entry.row * 8 + col) } }
+        let cw = Int(frame.cell.width), ch = Int(frame.cell.height)
+        for row in rows {
+            for col in 0..<8 {
+                var visible = 0, opaque = 0, green = 0
+                for y in row * ch..<(row + 1) * ch {
+                    for x in col * cw..<(col + 1) * cw {
+                        let p = (y * w + x) * 4, a = pixels[p + 3]
+                        if a > 0 { visible += 1 }
+                        if a == 255 { opaque += 1 }
+                        if a > 0, pixels[p + 1] > 100, Int(pixels[p + 1]) > Int(pixels[p]) * 2, Int(pixels[p + 1]) > Int(pixels[p + 2]) * 2 { green += 1 }
+                    }
+                }
+                if used.contains(row * 8 + col) {
+                    guard visible >= 50, Double(opaque) < Double(cw * ch) * 0.95 else { throw SpriteLoadError.pixels }
+                    if green > 0 { warnings.insert("chroma fringe") }
+                } else if visible > 0, !(row == 0 && col == 6) { // Codex v2 permits its optional neutral look pose here.
+                    // The host sees only resolved columns, not each row's declared frame count, so this is a warning.
+                    warnings.insert("ink in an unused cell")
+                }
+            }
+        }
+        guard let checked = context.makeImage() else { throw SpriteLoadError.decode }
+        var after = stat()
+        guard fstat(fd, &after) == 0, after.st_size == opened.st_size,
+            after.st_mtimespec.tv_sec == opened.st_mtimespec.tv_sec, after.st_mtimespec.tv_nsec == opened.st_mtimespec.tv_nsec,
+            after.st_ctimespec.tv_sec == opened.st_ctimespec.tv_sec, after.st_ctimespec.tv_nsec == opened.st_ctimespec.tv_nsec else { throw SpriteLoadError.changed }
+        return (checked, warnings)
+    }
+}
+struct SpritePose {
+    var time: Double, state: String, entry: SpriteEntry, column: Int, direction: Int
+}
+struct SpritePlan {
+    let poses: [SpritePose], character: SpriteCharacter, duration: Double, reduced: Bool, clip: CGRect
+    func rect(_ pose: SpritePose) -> CGRect {
+        let image = character.images[pose.entry.sheet]!, cell = character.frame.cell
+        return CGRect(x: Double(pose.column) * cell.width / Double(image.width), y: Double(pose.entry.row) * cell.height / Double(image.height),
+            width: cell.width / Double(image.width), height: cell.height / Double(image.height))
+    }
+    func origin(_ at: CGPoint, _ entry: SpriteEntry) -> CGPoint {
+        // The cell's box trails the ring's point by 18 pt and never covers it, so the hotspot does not move it (PLAN call 1).
+        let w = character.frame.cell.width * entry.scale, h = character.frame.cell.height * entry.scale
+        let right = at.x + 18 + w <= clip.maxX, below = at.y + 18 + h <= clip.maxY
+        return CGPoint(x: right ? at.x + 18 : at.x - 18 - w, y: below ? at.y + 18 : at.y - 18 - h)
+    }
+    func bounds(_ ring: RingPlan) -> CGRect {
+        var out = CGRect.null
+        for (_, p) in ring.positions + [(0, ring.at)] {
+            for pose in poses {
+                out = out.union(CGRect(origin: origin(p, pose.entry), size: CGSize(width: character.frame.cell.width * pose.entry.scale, height: character.frame.cell.height * pose.entry.scale)))
+            }
+        }
+        return out
+    }
+    var samples: [SpritePose] {
+        guard let last = poses.last else { return [] }
+        return poses + [SpritePose(time: duration, state: last.state, entry: last.entry, column: last.column, direction: last.direction)]
+    }
+    func positions(_ ring: RingPlan, frame: CGRect) -> (times: [Double], values: [CGPoint]) {
+        let times = Set(ring.positions.map { $0.0 } + samples.map { $0.time } + [0, duration]).sorted()
+        let values = times.map { t -> CGPoint in
+            let entry = samples.last(where: { $0.time <= t })?.entry ?? poses[0].entry
+            var p = origin(ring.position(at: t), entry)
+            if entry.flip { p.x += character.frame.cell.width * entry.scale }
+            return CGPoint(x: p.x - frame.minX, y: p.y - frame.minY)
+        }
+        return (times, values)
+    }
+    func json(_ ring: RingPlan) -> [String: Any] {
+        let movement = positions(ring, frame: .zero)
+        return ["duration": duration, "reduced": reduced, "layers": 1, "calculationMode": "discrete", "keyPath": "contentsRect",
+            "values": samples.map { p -> [Double] in let r = rect(p); return [r.minX, r.minY, r.width, r.height] },
+            "times": samples.map { $0.time / max(duration, 0.001) },
+            "positionTimes": movement.times, "positions": movement.values.map { [$0.x, $0.y] },
+            "placements": poses.map { p -> [Double] in
+                let origin = origin(ring.position(at: p.time), p.entry)
+                return [origin.x, origin.y, character.frame.cell.width * p.entry.scale, character.frame.cell.height * p.entry.scale]
+            },
+            "poses": poses.map { p -> [String: Any] in
+                let r = rect(p)
+                return ["time": p.time, "state": p.state, "row": p.entry.row, "column": p.column, "sheet": p.entry.sheet,
+                    "direction": p.direction, "flip": p.entry.flip, "rect": [r.minX, r.minY, r.width, r.height]]
+            }]
+    }
+    static func make(_ ring: RingPlan, character: SpriteCharacter, reduced: Bool, secure: Bool, clip: CGRect) -> SpritePlan {
+        let f = character.frame
+        // Clockwise from up in screen points (y grows down). -1 means no movement, which uses the state's base entry.
+        func direction(_ from: CGPoint, _ to: CGPoint) -> Int {
+            guard hypot(to.x - from.x, to.y - from.y) >= 1 else { return -1 }
+            let heading = atan2(to.x - from.x, from.y - to.y) * 180 / .pi
+            return (Int((heading / 22.5).rounded()) + 16) % 16
+        }
+        let first = ring.positions.first?.1 ?? ring.at
+        let d = direction(first, ring.at)
+        let names = ["double": "double-click", "right": "right-click", "waiting": "waiting-approval", "done": "success", "handback": "handoff", "scroll": "scroll-down"]
+        let state = secure && ["type", "key"].contains(ring.state) ? "idle" : names[ring.state] ?? ring.state
+        var stages: [(Double, String, Int)] = [(0, state, d)]
+        if ring.glideEnd > 0, !reduced { stages = [(0, "move", d), (ring.glideEnd, state, d)] }
+        if ring.state == "drag" {
+            stages = stages.filter { $0.1 == "move" }
+            for (phase, s) in [("grab", "drag-grab"), ("carry", "drag-carry"), ("drop", "drag-drop")] {
+                if let span = ring.phases[phase] {
+                    let from = ring.position(at: span[0]), to = ring.position(at: span[0] + span[1])
+                    stages.append((span[0], s, direction(from, to)))
+                }
+            }
+            if stages.isEmpty { stages = [(0, "drag-drop", d)] }
+        }
+        stages.sort { $0.0 < $1.0 }
+        var poses: [SpritePose] = []
+        for (i, stage) in stages.enumerated() {
+            let (start, name, dir) = stage, entry = f.table["\(name)@\(dir)"] ?? f.table[name] ?? f.table["idle"]!
+            let end = i + 1 < stages.count ? stages[i + 1].0 : ring.total
+            var time = start, index = 0
+            repeat {
+                poses.append(SpritePose(time: time, state: name, entry: entry, column: entry.columns[index], direction: dir))
+                if reduced { break }
+                time += entry.ms[index] / 1000; index += 1
+                if index == entry.columns.count { if !entry.loop { break }; index = 0 }
+            } while time < end - 1e-9 && time < start + 4.8 - 1e-9
+        }
+        return SpritePlan(poses: poses, character: character, duration: ring.total, reduced: reduced, clip: clip)
+    }
+}
+// One sprite layer. contents changes only at state/sheet boundaries; contentsRect steps on the GPU's discrete track.
+func installSprite(_ sprite: SpritePlan, ring: RingPlan, root: CALayer, frame: CGRect, begin: Double) {
+    guard !sprite.poses.isEmpty else { return }
+    let layer = CALayer(), cell = sprite.character.frame.cell
+    layer.name = "sprite"
+    layer.anchorPoint = .zero; layer.bounds = CGRect(origin: .zero, size: cell)
+    layer.contentsGravity = .resize; layer.minificationFilter = .nearest; layer.magnificationFilter = .nearest
+    root.addSublayer(layer)
+    func track(_ key: String, values: [Any], times: [Double], discrete: Bool) {
+        layer.setValue(values.last, forKeyPath: key)
+        guard values.count > 1 else { return }
+        let animation = CAKeyframeAnimation(keyPath: key)
+        animation.values = values; animation.keyTimes = times.map { NSNumber(value: $0 / max(sprite.duration, 0.001)) }
+        animation.calculationMode = discrete ? .discrete : .linear; animation.duration = max(sprite.duration, 0.001)
+        animation.beginTime = begin; animation.fillMode = .both; animation.isRemovedOnCompletion = false
+        layer.add(animation, forKey: key)
+    }
+    let poses = sprite.samples
+    track("contents", values: poses.map { sprite.character.images[$0.entry.sheet]! }, times: poses.map { $0.time }, discrete: true)
+    track("contentsRect", values: poses.map { NSValue(rect: sprite.rect($0)) }, times: poses.map { $0.time }, discrete: true)
+    track("transform", values: poses.map { p in
+        NSValue(caTransform3D: CATransform3DMakeScale(p.entry.scale * (p.entry.flip ? -1 : 1), p.entry.scale, 1))
+    }, times: poses.map { $0.time }, discrete: true)
+    // Sample only when planning the frame. Core Animation drives both movement and cell stepping after installation.
+    let movement = sprite.positions(ring, frame: frame)
+    track("position", values: movement.values.map { NSValue(point: $0) }, times: movement.times, discrete: sprite.reduced)
+    // Opacity shares the ring's entrance, reduced-motion crossfade and terminal dissolve.
+    if let spec = ring.layers.first(where: { $0.name == "cursor" }) { layer.opacity = Float(spec.props["opacity"]?.number ?? 1) }
+    if let opacity = ring.tracks.first(where: { $0.layer == "cursor" && $0.keyPath == "opacity" }) {
+        let a = CAKeyframeAnimation(keyPath: "opacity")
+        a.values = opacity.values.map { NSNumber(value: $0.number) }; a.keyTimes = opacity.times.map { NSNumber(value: $0) }
+        a.duration = opacity.duration; a.beginTime = begin + opacity.begin; a.fillMode = .both; a.isRemovedOnCompletion = false
+        layer.opacity = Float(opacity.values.last?.number ?? 1); layer.add(a, forKey: "opacity")
+    }
+}
+// END SPRITE
 
 // BEGIN HAND HOST
 // The ghost hand (ROADMAP 2.7): a glove that glides to where sleight acts in a background window, flourishes and fades. It only
@@ -2790,7 +3092,7 @@ func handDemoRect(_ text: String) -> CGRect? {
 }
 
 final class HandHost: NSObject, NSApplicationDelegate {
-    var cursorStyle = "glove"
+    var cursorStyle = "glove" { didSet { if cursorStyle != "sprite" { ringRuntime.character = nil } } }
     var ringRuntime = RingRuntime(theme: .seamPlus, seed: 1)
     var ringWake: DispatchWorkItem?
     var ringRoot: CALayer?
@@ -2861,9 +3163,18 @@ final class HandHost: NSObject, NSApplicationDelegate {
             lines: while !faulted, let end = buffer.firstIndex(of: 10) {
                 let line = buffer.prefix(upTo: end)
                 buffer.removeSubrange(...end)
-                guard line.count <= 8192, let data = try? JSONSerialization.jsonObject(with: line) as? [String: Any],
+                guard line.count <= 32768, let data = try? JSONSerialization.jsonObject(with: line) as? [String: Any],
+                    line.count <= 8192 || data["hand"] as? String == "character",
                     let frame = handFrame(data) else { fault(); continue lines }
                 switch frame {
+                case let .character(nonce, value):
+                    guard nonceBook.admit("hand", nonce), value.seq > last else { fault(); continue lines }
+                    last = value.seq
+                    DispatchQueue.main.async {
+                        self.ringRoot?.sublayers?.filter { $0.name == "sprite" }.forEach { $0.removeFromSuperlayer() }
+                        self.ringRuntime.character = nil
+                        if self.cursorStyle == "sprite" { self.ringRuntime.character = SpriteCharacter.load(value) }
+                    }
                 case let .hide(nonce):
                     guard nonceBook.admit("hand", nonce) else { fault(); continue lines }
                     DispatchQueue.main.async { self.hide() }
@@ -3070,6 +3381,7 @@ final class HandHost: NSObject, NSApplicationDelegate {
                 layer.add(group, forKey: "ring")
             }
         }
+        if let sprite = plan.sprite { installSprite(sprite, ring: plan, root: root, frame: frame, begin: begin) }
         CATransaction.commit()
         if !panel.isVisible { panel.orderFrontRegardless() }
     }
@@ -3254,13 +3566,13 @@ func handDump(capture: String) -> [String: Any] {
 // END HAND DUMP
 
 // The launch styles in one place: glove, or a ring theme.
-let ringThemes: [String: RingTheme] = ["ring": .seamPlus, "seam": .seam]
+let ringThemes: [String: RingTheme] = ["ring": .seamPlus, "seam": .seam, "sprite": .seamPlus]
 let cursorStyles = ["--cursor-style=glove"] + ringThemes.keys.sorted().map { "--cursor-style=" + $0 }
 // A synchronous, bounded reader for plan tests. It never constructs an application, panel, view or layer. It drives the
 // same RingRuntime as the host on a simulated clock: a {"dumpClock": seconds} line moves the clock (firing what falls due);
 // otherwise each frame lands when the last drawn plan's motion ends. At the end of input the clock runs out and an "end"
 // line reports whether anything is still pending.
-func ringPlanDump(theme: RingTheme?, reduced: Bool, secure: Bool, clip: CGRect, seed: UInt64, gone: Set<UInt32>) {
+func ringPlanDump(theme: RingTheme?, reduced: Bool, secure: Bool, clip: CGRect, seed: UInt64, gone: Set<UInt32>, sprite: Bool = false) {
     var buffer = Data(), bound: String?, last = -1, clock = 0.0, explicit = false
     var runtime = RingRuntime(theme: theme ?? .seamPlus, seed: seed)
     let env = RingEnvironment(bounds: { _, window in gone.contains(window) ? nil : clip }, reduced: { reduced }, secure: { secure })
@@ -3292,7 +3604,8 @@ func ringPlanDump(theme: RingTheme?, reduced: Bool, secure: Bool, clip: CGRect, 
         guard buffer.count <= 131072 else { exit(65) }
         while let end = buffer.firstIndex(of: 10) {
             let line = buffer.prefix(upTo: end); buffer.removeSubrange(...end)
-            guard line.count <= 8192, let data = try? JSONSerialization.jsonObject(with: line) as? [String: Any] else { exit(65) }
+            guard line.count <= 32768, let data = try? JSONSerialization.jsonObject(with: line) as? [String: Any],
+                line.count <= 8192 || data["hand"] as? String == "character" else { exit(65) }
             if Set(data.keys) == ["dumpClock"] {
                 guard let value = data["dumpClock"] as? NSNumber, CFGetTypeID(value) != CFBooleanGetTypeID(), value.doubleValue.isFinite,
                     value.doubleValue >= clock else { exit(65) }
@@ -3304,6 +3617,11 @@ func ringPlanDump(theme: RingTheme?, reduced: Bool, secure: Bool, clip: CGRect, 
             bound = nonce
             let event: RingEvent, delay: Double
             switch frame {
+            case let .character(_, value):
+                guard value.seq > last else { exit(65) }; last = value.seq
+                runtime.character = nil
+                if sprite { runtime.character = SpriteCharacter.load(value) }
+                write(["effect": "character", "loaded": runtime.character != nil, "time": clock]); continue
             case let .act(_, act): event = ringEvent(act); delay = act.delay
             case let .aim(_, value), let .status(_, value): event = value; delay = 0
             case .hide: emit(runtime.hide(clock)); continue
@@ -3342,7 +3660,7 @@ if arguments.first == "--ring-plan-dump" {
     guard rawStyle == nil || cursorStyles.contains("--cursor-style=" + rawStyle!), Set(flags).count == flags.count,
         flags.allSatisfy({ ["--reduce-motion", "--secure-input"].contains($0) }) else { exit(64) }
     ringPlanDump(theme: rawStyle.flatMap { ringThemes[$0] }, reduced: flags.contains("--reduce-motion"), secure: flags.contains("--secure-input"),
-        clip: clip, seed: seed, gone: gone)
+        clip: clip, seed: seed, gone: gone, sprite: rawStyle == "sprite")
     exit(0)
 }
 let app = NSApplication.shared
