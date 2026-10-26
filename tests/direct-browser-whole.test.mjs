@@ -6,8 +6,8 @@ const call = whole => validateToolCall({name:'browser_read',arguments:{tab:'t1',
 test('whole is an option on the existing five tools, with bounded budgets', () => {
   assert.equal(browserTools().length, 5);
   assert.doesNotThrow(() => call({}));
-  assert.doesNotThrow(() => call({direction:'both',max_items:5000,max_seconds:120,from:1,find:'invoice'}));
-  for (const whole of [{max_items:5001},{max_items:0},{max_items:1.5},{max_seconds:121},{max_seconds:0},{max_seconds:.09},{direction:'left'},{from:0},{expand:false}])
+  assert.doesNotThrow(() => call({direction:'both',max_items:5000,max_seconds:120,max_steps:500,from:1,find:'invoice'}));
+  for (const whole of [{max_items:5001},{max_items:0},{max_items:1.5},{max_seconds:121},{max_seconds:0},{max_seconds:.09},{max_steps:0},{max_steps:501},{max_steps:1.5},{direction:'left'},{from:0},{expand:false}])
     assert.throws(() => call(whole));
   const schema=browserTools().find(t=>t.name==='browser_read').inputSchema.properties.whole.properties;
   assert.deepEqual(schema.max_items,{type:'integer'});
@@ -16,8 +16,8 @@ test('whole is an option on the existing five tools, with bounded budgets', () =
 
 const whole = await import('../plugins/sleight/lib/direct-browser/whole.mjs').catch(() => ({}));
 test('direct whole reads enforce item/time limits before touching the tab',async()=>{
- for(const options of [{max_items:0},{max_items:5001},{max_items:1.5},{max_seconds:0},{max_seconds:121},{max_seconds:NaN},{max_seconds:Infinity}])
-  await assert.rejects(whole.readWhole({},options),/whole\.(max_items|max_seconds).*range/);
+ for(const options of [{max_items:0},{max_items:5001},{max_items:1.5},{max_seconds:0},{max_seconds:121},{max_seconds:NaN},{max_seconds:Infinity},{max_steps:0},{max_steps:501},{max_steps:NaN},{max_steps:1.5}])
+  await assert.rejects(whole.readWhole({},options),/whole\.(max_items|max_seconds|max_steps).*range/);
 });
 test('held request receipts aggregate separately from completeness',()=>{
  const bank={items:[{text:'first'},{text:'last'}],ends:{start:{state:'reached'},end:{state:'reached'}},reasons:[],refused:[],blocked:[],held:[{method:'POST',origin:'https://fixture.test',count:3}],clicks:1,seconds:5};

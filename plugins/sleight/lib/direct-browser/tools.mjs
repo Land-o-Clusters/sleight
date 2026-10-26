@@ -44,7 +44,7 @@ export function browserTools(browser) {
         export: ref, format: { type: 'string', enum: ['csv', 'json'] }, path: text, bom: { type: 'boolean' },
         console: { type: 'boolean' }, network: { type: 'boolean' }, performance: { type: 'boolean' },
         whole: object({ direction: { type: 'string', enum: ['both', 'up', 'down'] }, max_items: { type: 'integer' },
-          max_seconds: { type: 'number' }, max_clicks: { type: 'integer', minimum: 0, maximum: 100 },
+          max_seconds: { type: 'number' }, max_steps: { type: 'integer', minimum: 1, maximum: 500 }, max_clicks: { type: 'integer', minimum: 0, maximum: 100 },
           from: { type: 'integer', minimum: 1, maximum: 5000 }, find: { type: 'string', maxLength: 512 } }, []) }, []) },
     { name: 'browser_act', description: (process.env.SLEIGHT_MT !== '0'
       ? 'Run 1 to 12 steps on observed refs, returning outcome lines and a diff. A step that navigates, opens a tab, raises a dialog, loads or closes the page, or reaches the settle cap ends the batch (later steps read "not reached"), so put one such step last. Never blindly resend an uncertain submit. click accepts modifier:cmd/ctrl.' + pointDescription + ' paste(ref,text) inserts nonempty TSV/editor text in browsers, restoring the clipboard. Electron refuses paste. viewport: width/height, color_scheme:light/dark, reduced_motion:boolean, touch:boolean for user-asked tests; empty resets all. touch emulates a touch layout; clicks stay mouse clicks. scroll with until:text finds a row in a long list. navigate with a link ref follows it.'

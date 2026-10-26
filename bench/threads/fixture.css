@@ -1,0 +1,5 @@
+body { margin: 0; font: 16px sans-serif; }
+#thread { width: 860px; height: 560px; overflow: auto; overflow-anchor: none; }
+#rows { position: relative; }
+article { box-sizing: border-box; height: 24px; padding-left: 8px; }
+p { margin: 0; height: 24px; }

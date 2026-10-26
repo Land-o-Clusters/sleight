@@ -435,8 +435,9 @@ for (const mode of [undefined, '0']) test(`MT browser descriptions stay pinned i
   // G13E opt-in discovery adds 64 catalog characters (62 description characters).
   // Release trim: the 65536 string limit is validate()'s default, so the catalog drops it (-252 in each mode).
   // G11F's cookie sentence adds 94 catalog characters in each mode.
+  // TL1's max_steps schema adds 57 catalog characters; descriptions stay unchanged.
   assert.equal(tools.find(tool => tool.name === 'browser_act').description.length, mode === '0' ? 1034 : 1183);
-  assert.equal(JSON.stringify(tools).length, mode === '0' ? 6108 : 6390);
+  assert.equal(JSON.stringify(tools).length, mode === '0' ? 6165 : 6447);
   const descriptions = tools.map(tool => tool.description).join('\n');
   for (const prompt of [undefined, 'lean']) {
     const combined = skillRules(skillPath, { SLEIGHT_PROMPT: prompt }).length + descriptions.length;

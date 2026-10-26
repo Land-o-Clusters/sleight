@@ -4,7 +4,7 @@ import { backgroundClick } from './page.mjs';
 
 // This closure lives only in the pristine utility world, with held DOM identities.
 function wholeDOM(ref) {
-  const ids=new WeakMap();let serial=0,box,root,lastChange=performance.now();
+  const ids=new WeakMap();let serial=0,box,root,region,lastChange=performance.now();
   const id=node=>{if(!ids.has(node))ids.set(node,++serial);return ids.get(node);};
   const attr=(node,key)=>node?.getAttribute?.(key);
   const role=node=>attr(node,'role')??'';
@@ -16,7 +16,7 @@ function wholeDOM(ref) {
   const scrollable=node=>node===document.scrollingElement||/(auto|scroll)/.test(getComputedStyle(node).overflowY)&&node.scrollHeight>node.clientHeight;
   const nodes=all(document);
   if(ref){for(let n=ref;n;n=parent(n))if(scrollable(n)){box=n;break;}}
-  if(!box){const candidates=nodes.filter(n=>{const r=n.getBoundingClientRect();return visible(n)&&r.width>=200&&r.height>=150&&scrollable(n);});
+  if(!box){const candidates=nodes.filter(n=>{const r=n.getBoundingClientRect();return n!==document.scrollingElement&&visible(n)&&r.width>=200&&r.height>=150&&scrollable(n);});
     candidates.sort((a,b)=>(/^(log|feed|list|grid|main)$/.test(role(b))-/^(log|feed|list|grid|main)$/.test(role(a)))||text(b).length-text(a).length);
     box=candidates[0];
     if(box){const r=box.getBoundingClientRect();if(r.width*r.height<innerWidth*innerHeight/2)box=null;}}
@@ -33,7 +33,7 @@ function wholeDOM(ref) {
   const localized=/^(?:mostrar (?:m[aá]s|mensajes anteriores|respuestas)|cargar m[aá]s|ver (?:m[aá]s|respuestas)|afficher (?:plus|les messages pr[eé]c[eé]dents|les r[eé]ponses)|voir les r[eé]ponses|charger plus|mehr (?:anzeigen|laden)|[aä]ltere nachrichten|vorherige nachrichten|antworten anzeigen|mostrar mais|carregar mais|ver respostas|mostra (?:altro|di pi[uù]|risposte)|carica altri|messaggi precedenti|もっと見る|以前のメッセージ|返信を表示|显示更多|顯示更多|加载更多|載入更多|较早的消息|較早的訊息|查看回复|查看回覆|더 보기|이전 메시지|답글 보기)$/iu;
   const deny=/\b(send|like|delete|archive|report|block|follow|buy|pay|mark|share|vote|accept|edit|save|sign in|settings)\b/i;
   const keyOf=node=>{for(const {name,value}of node.attributes??[])if(/^(?:data-key|data-(?:message|row|post|comment)-?id)$/.test(name)&&value)return name+':'+value;return undefined;};
-  const controls=()=>all(box).filter(n=>n.matches('button,a,[role],[aria-expanded]')).flatMap(n=>{
+  const controls=()=>all(region).filter(n=>n.matches('button,a,[role],[aria-expanded]')).flatMap(n=>{
     const name=(attr(n,'aria-label')??text(n)).normalize('NFKC').replace(/\s+/g,' ').trim().slice(0,60);
     let item=n,depth=0;while(item&&depth++<4&&!item.matches('li,[role=listitem],[role=row],[role=article]'))item=parent(item);
     const collapsed=attr(n,'aria-expanded')==='false'&&item&&depth<=4;
@@ -52,15 +52,25 @@ function wholeDOM(ref) {
     if(box===document.scrollingElement&&root)for(let n=parent(root);n&&n!==document.scrollingElement;n=parent(n))if(scrollable(n)){box=n;break;}
     if(!box.isConnected)throw Error('whole DOM scroller removed');
     const descendants=all(box);
-    const list=descendants.find(n=>{
+    const lists=descendants.filter(n=>{
       if(!(/^(feed|list|grid)$/.test(role(n))||n.matches('ul,ol,tbody')))return false;
       const r=n.getBoundingClientRect();if(r.width<=0||r.height<=0||getComputedStyle(n).visibility==='hidden')return false;
       const outsideControls=descendants.filter(c=>!n.contains(c)&&(c.matches('button,a,[role=button],[role=status],[role=progressbar]')||c.children.length===0&&/^(beginning of (?:chat|thread)|start of (?:feed|thread|chat)|you['’]re all caught up|end of (?:chat|thread|feed)|\d+\s+(?:messages|posts|items))$/i.test(text(c)))).reduce((sum,c)=>sum+text(c).length,0);
       return text(n).replace(/\s+/g,' ').length>=Math.max(0,text(box).replace(/\s+/g,' ').length-outsideControls)*.5;
     });
-    root=list??box;
+    // A feed can wrap a separate list plus markers and loaders. Prefer the
+    // container with actual row children over treating its list as one item.
+    const rowSelector='li,article,tr,[role=listitem],[role=row],[role=article]';
+    root=lists.find(n=>[...n.children].some(c=>c.matches(rowSelector)))??lists[0]??box;
     // A layout wrapper around the row children is not itself one transcript item.
     for(let depth=0;depth<4&&root.children.length===1&&!root.firstElementChild.matches('li,article,tr,[role=listitem],[role=row],[role=article],button');depth++)root=root.firstElementChild;
+    // Sibling loaders belong to the closest semantic thread or its scroller.
+    // Document-wide scrolling must not activate another feed's buttons.
+    region=root;
+    if(root!==box)for(let n=parent(root);n&&n!==document.scrollingElement;n=parent(n)){
+      if(n===box){region=box;break;}
+      if(/^(log|feed|list|grid|main)$/.test(role(n))||n.localName==='main'){region=n;break;}
+    }
     observeItems();
   };
   const view=()=>{
