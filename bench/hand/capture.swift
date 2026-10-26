@@ -138,8 +138,20 @@ func sckComposite(_ id: CGWindowID, _ pid: pid_t, _ out: String) async {
 }
 
 let args = CommandLine.arguments
+func displayRefusal(_ asleep: Bool, _ locked: Bool?) -> String? {
+    if locked == nil { return "screen-lock-state-unknown" }
+    if locked == true { return "screen-locked" }
+    return asleep ? "display-asleep" : nil
+}
 switch (args.count, args.count > 1 ? args[1] : "") {
-case (2, "preflight"):
+case (2, "--display-selftest"):
+    guard let row = try? JSONSerialization.jsonObject(with: FileHandle.standardInput.readDataToEndOfFile()) as? [String: Any],
+          let asleep = row["asleep"] as? Bool else { exit(65) }
+    emit(["windowsCreated": 0, "reason": displayRefusal(asleep, row["locked"] as? Bool) as Any? ?? NSNull()])
+case (2, "preflight"), (2, "--preflight"):
+    let session = CGSessionCopyCurrentDictionary() as? [String: Any]
+    let locked = session.map { $0["CGSSessionScreenIsLocked"] as? Bool ?? false }
+    if let refusal = displayRefusal(CGDisplayIsAsleep(CGMainDisplayID()) != 0, locked) { fail(refusal) }
     emit(["ok": true, "screenRecording": CGPreflightScreenCaptureAccess(), "accessibility": AXIsProcessTrusted()])
 case (2, "windows"):
     emit(["ok": true, "front": Int(NSWorkspace.shared.frontmostApplication?.processIdentifier ?? 0), "windows": windowList()])

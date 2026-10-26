@@ -20,7 +20,7 @@ import { phases, phaseFigures, costVerdict, rssBudget, parseArgs as costArgs, SE
 import { recordPlan, panelWindow, asideName, parseArgs as recordArgs } from '../bench/hand/cursor-record.mjs';
 import { perTask, speedVerdict, speedRule, t975, perTaskMarkdown, runSide, runCostPass, compareSides, parseArgs as passArgs, resumeKey, dryRunPlan as passPlan } from '../bench/hand/cost-pass.mjs';
 import { hostStyle } from '../bench/hand/cost-sampler.mjs';
-import { nightSteps, estimate, overheadMin, timeoutMs, outcome, childEnv, strays, descendants, orphanedLock, launchedApps, resultLine, HOLD_WAIT_MS, LOCK_WAIT_MS, summaryMarkdown, parseArgs as nightArgs, TARGET_MIN } from '../bench/hand/vc7-night.mjs';
+import { prepareCaptureStep, nightSteps, estimate, overheadMin, timeoutMs, outcome, childEnv, strays, descendants, orphanedLock, launchedApps, resultLine, HOLD_WAIT_MS, LOCK_WAIT_MS, summaryMarkdown, parseArgs as nightArgs, TARGET_MIN } from '../bench/hand/vc7-night.mjs';
 import { hostArgs, commonArgs, liveRefusal, compileArgs, playRect, quitFixture } from '../bench/hand/vc7-live.mjs';
 import { handWire, runCaptureTest, underLiveLock } from '../bench/hand/h5-capture.mjs';
 import { EventEmitter } from 'node:events';
@@ -418,6 +418,20 @@ test('speed A/B pass: the on side gets the style and the capture mode, a resume 
   assert.match(plan[3], /SLEIGHT_BENCH_HAND=1 SLEIGHT_HAND_CAPTURE=hidden SLEIGHT_CURSOR_STYLE=ring node bench\/run\.mjs --suite world --arm sleight --tasks calculator-click/);
 });
 
+test('capture steps wake before preflight and propagate a locked or sleeping screen refusal', async () => {
+  const commands = [];
+  await prepareCaptureStep('/fixture/capture-helper', async (cmd, args) => {
+    commands.push([cmd, args]); return { stdout: '{"ok":true,"screenRecording":true}' };
+  });
+  assert.deepEqual(commands, [['/usr/bin/caffeinate', ['-u', '-t', '5']], ['/fixture/capture-helper', ['--preflight']]]);
+  for (const error of ['display-asleep', 'screen-locked', 'screen-lock-state-unknown']) {
+    await assert.rejects(prepareCaptureStep('/fixture/capture-helper', async cmd => {
+      if (cmd.endsWith('capture-helper')) throw Object.assign(Error('exit 2'), { stdout: JSON.stringify({ ok: false, error }) });
+      return { stdout: '' };
+    }), new RegExp(error));
+  }
+});
+
 test('night runner: steps, timeouts, outcomes (measured only with a result line), the child environment, strays and temp sweep', () => {
   const steps = nightSteps({ out: '/o', bin: '/o/bin' });
   assert.deepEqual(steps.map(s => s.id), ['build', 'capture-ring', 'capture-seam', 'capture-sprite', 'engine-cursor', 'cursor-cost', 'speed-ab', 'record']);
@@ -509,15 +523,15 @@ test('fixture quit escalates: quit, SIGTERM, SIGKILL, by the launched pid and la
   assert.equal(asideName('/r/record-ring', p => p === '/r/record-ring.partial-1'), '/r/record-ring.partial-2');
 });
 
-test('a hangup in a check runs its cleanup and releases the lock, then exits 129', async () => {
+for (const [signal, expected] of [['SIGHUP', 129], ['SIGINT', 130]]) test(`${signal} in a check collects children and releases the lock before a runner hold wait`, async () => {
   const signals = new EventEmitter(), order = [];
   let exited;
   const done = underLiveLock({ acquire: async () => async () => order.push('unlock'), signals, exit: code => { exited = code; }, log: () => {} },
-    async ({ cleanups }) => { cleanups.push(() => order.push('cleanup')); signals.emit('SIGHUP'); await new Promise(r => setTimeout(r, 20)); return 0; });
+    async ({ cleanups }) => { cleanups.push(() => order.push('cleanup')); signals.emit(signal); await new Promise(r => setTimeout(r, 20)); return 0; });
   await done;
   await new Promise(r => setTimeout(r, 20));
   assert.deepEqual(order, ['cleanup', 'unlock']);
-  assert.equal(exited, 129);
+  assert.equal(exited, expected);
 });
 
 test('shared live pieces: host flags as the relay passes them, the product\'s compiler flags, and the refusals', () => {
@@ -556,6 +570,17 @@ test('every VC7 script\'s --dry-run exits 0, prints its plan and opens nothing',
 });
 
 // The scripted frames through the real host's planner on a simulated clock: no application, panel or layer is made.
+test('capture helper display refusal selftest draws nothing and needs no display query', { skip: macCommandSkip('xcrun') }, () => {
+  const dir = trackTemp(realpathSync(mkdtempSync(join(tmpdir(), 'vc7-preflight-test-')))), helper = join(dir, 'capture-helper');
+  const built = spawnSync('/usr/bin/xcrun', ['swiftc', '-module-cache-path', swiftModuleCache(), join(root, 'bench/hand/capture.swift'), '-o', helper], { encoding: 'utf8', timeout: 300000 });
+  assert.equal(built.status, 0, built.stderr);
+  for (const [state, expected] of [[{ asleep: false, locked: false }, null], [{ asleep: true, locked: false }, 'display-asleep'],
+    [{ asleep: false, locked: true }, 'screen-locked'], [{ asleep: false }, 'screen-lock-state-unknown']]) {
+    const p = spawnSync(helper, ['--display-selftest'], { input: JSON.stringify(state), encoding: 'utf8', timeout: 5000 });
+    assert.equal(p.status, 0, p.stderr); assert.deepEqual(JSON.parse(p.stdout), { reason: expected, windowsCreated: 0 });
+  }
+});
+
 let binary;
 function buildHost(t) {
   if (binary) return binary;

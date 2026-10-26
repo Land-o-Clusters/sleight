@@ -36,6 +36,14 @@ import { createOwnerWatch, ownerWords, parseInputLine, createInputDetector, QUIE
 import { ROOT, HOST_SOURCE, HELPER_SOURCE, RECORDER_SOURCE, TEXTEDIT, tilde, stamp as makeStamp, logsRoot } from './vc7-live.mjs';
 
 const execute = promisify(execFile);
+export async function prepareCaptureStep(helper, run = execute) {
+  await run('/usr/bin/caffeinate', ['-u', '-t', '5'], { timeout: 10000 });
+  const { stdout } = await run(helper, ['--preflight'], { timeout: 20000 }).catch(error => {
+    throw Error(`capture preflight refused: ${String(error.stdout || error.message).trim()}`);
+  });
+  const pre = JSON.parse(stdout);
+  if (!pre.ok || !pre.screenRecording) throw Error(`capture preflight refused: ${pre.error ?? 'Screen Recording permission missing'}`);
+}
 export const HOLD = '/tmp/sleight-hold', LOCK = '/tmp/sleight-live.lock';
 export const NIGHT = join(homedir(), 'Projects/sleight-wt/ledger/vc/night');
 export const BUSY_RETRIES = 3;
@@ -180,6 +188,7 @@ async function dryRun(opts) {
   console.log(`  output ${tilde(out)}${saved ? ' (resuming the saved run)' : ''}; state ${tilde(statePath)}`);
   console.log(`  estimate ${estimate(steps)} min of steps plus about ${overheadMin(steps)} min of quiet gaps (target under ${TARGET_MIN}); waits for ${HOLD} and ${LOCK} add to it`);
   console.log(`  /usr/bin/caffeinate -dims -w <runner pid> for the runner's life`);
+  console.log('  before each capture step: caffeinate -u -t 5, then capture-helper --preflight; asleep or locked screens refuse with a reason');
   console.log(`  before each step: wait up to ${HOLD_WAIT_MS / 60000} min while ${HOLD} exists (caffeinate -ims, the display may sleep) and up to ${LOCK_WAIT_MS / 60000} min while ${LOCK} does, then skip the step; ${QUIET_GAP_MS / 1000} s with no input, then ioreg HIDIdleTime: input in that gap stops the night (exit 4)`);
   console.log(`  during each step: ${tilde(join(bin, 'capture-helper'))} watch-input 1000 (pointer moved and stayed away, or HID input in a step that makes none: stop); the hold polled every 5 s (interrupt, rerun after it); a timeout of twice the estimate (SIGINT, then SIGKILL of its process tree after ${KILL_GRACE_MS / 1000} s, then rmdir ${LOCK} only if it is newer than the attempt and the tree is dead)`);
   console.log(`  each step: a child of this runner (no new session), env without CLAUDE*, CLAUDE_CONFIG_DIR=$(mktemp -d /tmp/lane-claude-XXXXXX), DISABLE_AUTOUPDATER=1 SLEIGHT_NO_HUB=1 SLEIGHT_REMOTE_APPROVALS=0, TMPDIR=${tilde(join(out, 'tmp'))}/<step>-XXXXXX (not the A/B), VC7_CHARACTERS_BASE=/private/tmp/sleight-vc7-night-XXXXXX`);
@@ -421,6 +430,13 @@ async function main(argv) {
         const skip = await waitClear();
         if (skip === 'interrupted') break;
         if (skip) { result = { rc: null, result: `skipped: ${skip}` }; meaning = { status: `skipped (${skip})`, done: false }; break; }
+        if (!step.internal) {
+          try { await prepareCaptureStep(join(bin, 'capture-helper')); }
+          catch (error) {
+            result = { rc: 2, measured: false, result: String(error.message).slice(0, 200) }; meaning = outcome(2);
+            log(`${step.id}: ${tilde(error.message)}`); break;
+          }
+        }
         const back = await watch.gapCheck();
         if (back.back) { stoppedFor = ownerWords(back); break; }
         attempt++; started = Date.now();
