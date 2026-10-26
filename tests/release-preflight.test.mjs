@@ -270,7 +270,7 @@ test('a hub check that crashes or cannot run is a hub-error, never stale-output,
 
 test('the committed hub output is fresh, and a data file that moved on without its pages fails the same check', () => {
   const hub = new URL('../bench/results-hub.mjs', import.meta.url).pathname;
-  const run = (...extra) => spawnSync(process.execPath, [hub, '--render-only', '--check', ...extra], { encoding: 'utf8' });
+  const run = (...extra) => spawnSync(process.execPath, [hub, '--render-only', '--hub-only', '--check', ...extra], { encoding: 'utf8' });
   assert.equal(run().status, 0, run().stdout);
   const results = new URL('../docs/results', import.meta.url).pathname;
   const copy = mkdtempSync(join(tmpdir(), 'hub-stale-'));
@@ -292,6 +292,26 @@ test('the committed hub output is fresh, and a data file that moved on without i
       assert.doesNotMatch(crashed.stdout, /^would change /m);
     } finally { rmSync(empty, { recursive: true, force: true }); }
   } finally { rmSync(copy, { recursive: true, force: true }); }
+});
+
+test('release hub collection rejects stale data even when every page matches that data, and hub-only preserves the root README', () => {
+  const root = new URL('..', import.meta.url).pathname;
+  const hub = join(root, 'bench/results-hub.mjs');
+  const readme = readFileSync(join(root, 'README.md'), 'utf8');
+  const out = mkdtempSync(join(tmpdir(), 'hub-collect-check-'));
+  const run = (...args) => spawnSync(process.execPath, [hub, '--hub-only', '--out', out, ...args], { encoding: 'utf8' });
+  try {
+    cpSync(join(root, 'docs/results'), out, { recursive: true });
+    const file = join(out, 'data/release-passes.json'), data = JSON.parse(readFileSync(file, 'utf8'));
+    data.runs[0].seconds += 1;
+    writeFileSync(file, JSON.stringify(data));
+    assert.equal(run('--render-only').status, 0);
+    assert.equal(run('--render-only', '--check').status, 0, 'render consistency alone accepts stale data');
+    const checked = run('--check', '--wt', join(out, 'no-external-banks'));
+    assert.equal(checked.status, 1);
+    assert.match(checked.stdout, /would change data\/release-passes\.json/);
+    assert.equal(readFileSync(join(root, 'README.md'), 'utf8'), readme, 'temp output never rewrites the root README');
+  } finally { rmSync(out, { recursive: true, force: true }); }
 });
 
 test('Linux receipt must confirm Linux npm test success, not a plan or local Mac result', async () => {
@@ -377,7 +397,7 @@ test('reviewed runner owns fixed Git/history argv and throwaway config cleanup',
     ['rev-parse', '--verify', 'origin/main^{commit}'],
     ['merge-base', '--is-ancestor', base, head],
     ['ls-files', '--error-unmatch', '--', 'scripts/release-history-scan.mjs', 'scripts/linux-preflight.mjs', 'bench/results-hub.mjs'],
-    ['bench/results-hub.mjs', '--render-only', '--check'],
+    ['bench/results-hub.mjs', '--check'],
     ['scripts/release-history-scan.mjs', `${base}..${head}`],
   ]);
   assert.equal(new Set(calls.map(c => c.options.env.CLAUDE_CONFIG_DIR)).size, calls.length);

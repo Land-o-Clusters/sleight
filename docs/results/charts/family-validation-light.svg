@@ -1,0 +1,213 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 1828" width="900" height="1828" role="img" aria-labelledby="title desc">
+<title id="title">Validation: pass rates per study and arm</title>
+<desc id="desc">Validation: 474 of 484 recorded attempts passed across 42 study and arm rows. Task sets differ between studies.</desc>
+<style>
+.bg{fill:#FBF8F1}
+text{font-family:-apple-system,"Segoe UI",Helvetica,Arial,sans-serif;font-size:13px;fill:#141A26}
+.t{font-size:15px;font-weight:600}
+.b{font-weight:600}
+.m{fill:#545E6E}
+.g{stroke:#E4DED2;stroke-width:1;fill:none}
+.me{fill:#E8622C}
+.ot{fill:#4E79D9}
+.sl{fill:#7A879A}
+.hme{stroke:#E8622C}
+.hot{stroke:#4E79D9}
+.hsl{stroke:#7A879A}
+</style>
+<defs><pattern id="h-me" width="6" height="6" patternUnits="userSpaceOnUse" patternTransform="rotate(45)"><line class="hme" x1="1" y1="0" x2="1" y2="6" stroke-width="2"/></pattern><pattern id="h-ot" width="6" height="6" patternUnits="userSpaceOnUse" patternTransform="rotate(45)"><line class="hot" x1="1" y1="0" x2="1" y2="6" stroke-width="2"/></pattern><pattern id="h-sl" width="6" height="6" patternUnits="userSpaceOnUse" patternTransform="rotate(45)"><line class="hsl" x1="1" y1="0" x2="1" y2="6" stroke-width="2"/></pattern></defs>
+<rect class="bg" width="900" height="1828" rx="12"/>
+<text x="24" y="34" class="t">Validation</text>
+<text x="24" y="54" class="m">Pass rate per study and arm. Bars share a 0 to 100% scale. Labels give passed attempts / all attempts.</text>
+<g transform="translate(840 8) scale(0.8)"><g transform="translate(0.6 0.6)"><g transform="translate(10 10) rotate(-35)"><g fill="#141A26" stroke="#141A26" fill-opacity="0.08" stroke-opacity="0.08" stroke-width="3" stroke-linejoin="round"><path d="M-2 12.39 Q-2.2 10.8 -0.6 10.8 L12.4 10.8 Q14 10.8 13.82 12.39 L13.48 15.41 Q13.3 17 12.56 18.42 L11.94 19.58 Q11.2 21 9.6 21 L5.2 21 Q3.6 21 2.35 20 L-0.15 18 Q-1.4 17 -1.6 15.41 Z"/><path d="M-3.8 14.6 A2.5 3.3 0 1 0 1.2 14.6 A2.5 3.3 0 1 0 -3.8 14.6 Z"/><path d="M0.83 13.52 L-5.04 7.13 A1.25 1.25 0 0 0 -6.93 8.76 L-1.43 15.48 Z"/><path d="M2.44 11.48 L1.3 1.09 A1.2 1.2 0 0 0 -1.09 1.3 L-0.44 11.72 Z"/><path d="M6.15 11.51 L5.17 -0.67 A1.2 1.2 0 0 0 2.77 -0.53 L3.25 11.69 Z"/><path d="M9.85 11.59 L9.51 0.29 A1.2 1.2 0 0 0 7.11 0.31 L6.95 11.61 Z"/><path d="M13.5 11.68 L13.68 3.81 A1.15 1.15 0 0 0 11.39 3.68 L10.7 11.52 Z"/></g><g fill="#141A26" stroke="#141A26" fill-opacity="0.12" stroke-opacity="0.12" stroke-width="1.8" stroke-linejoin="round"><path d="M-2 12.39 Q-2.2 10.8 -0.6 10.8 L12.4 10.8 Q14 10.8 13.82 12.39 L13.48 15.41 Q13.3 17 12.56 18.42 L11.94 19.58 Q11.2 21 9.6 21 L5.2 21 Q3.6 21 2.35 20 L-0.15 18 Q-1.4 17 -1.6 15.41 Z"/><path d="M-3.8 14.6 A2.5 3.3 0 1 0 1.2 14.6 A2.5 3.3 0 1 0 -3.8 14.6 Z"/><path d="M0.83 13.52 L-5.04 7.13 A1.25 1.25 0 0 0 -6.93 8.76 L-1.43 15.48 Z"/><path d="M2.44 11.48 L1.3 1.09 A1.2 1.2 0 0 0 -1.09 1.3 L-0.44 11.72 Z"/><path d="M6.15 11.51 L5.17 -0.67 A1.2 1.2 0 0 0 2.77 -0.53 L3.25 11.69 Z"/><path d="M9.85 11.59 L9.51 0.29 A1.2 1.2 0 0 0 7.11 0.31 L6.95 11.61 Z"/><path d="M13.5 11.68 L13.68 3.81 A1.15 1.15 0 0 0 11.39 3.68 L10.7 11.52 Z"/></g><g fill="#141A26" stroke="#141A26" fill-opacity="0.2" stroke-opacity="0.2" stroke-width="0.8" stroke-linejoin="round"><path d="M-2 12.39 Q-2.2 10.8 -0.6 10.8 L12.4 10.8 Q14 10.8 13.82 12.39 L13.48 15.41 Q13.3 17 12.56 18.42 L11.94 19.58 Q11.2 21 9.6 21 L5.2 21 Q3.6 21 2.35 20 L-0.15 18 Q-1.4 17 -1.6 15.41 Z"/><path d="M-3.8 14.6 A2.5 3.3 0 1 0 1.2 14.6 A2.5 3.3 0 1 0 -3.8 14.6 Z"/><path d="M0.83 13.52 L-5.04 7.13 A1.25 1.25 0 0 0 -6.93 8.76 L-1.43 15.48 Z"/><path d="M2.44 11.48 L1.3 1.09 A1.2 1.2 0 0 0 -1.09 1.3 L-0.44 11.72 Z"/><path d="M6.15 11.51 L5.17 -0.67 A1.2 1.2 0 0 0 2.77 -0.53 L3.25 11.69 Z"/><path d="M9.85 11.59 L9.51 0.29 A1.2 1.2 0 0 0 7.11 0.31 L6.95 11.61 Z"/><path d="M13.5 11.68 L13.68 3.81 A1.15 1.15 0 0 0 11.39 3.68 L10.7 11.52 Z"/></g></g></g><g transform="translate(10 10) rotate(-35)"><rect x="-1.95" y="-1.95" width="3.9" height="3.9" rx="0.62" fill="#4E79D9" fill-opacity="0.2" transform="translate(4.2 23) rotate(8)"/><rect x="-1.6" y="-1.6" width="3.2" height="3.2" rx="0.51" fill="#4E79D9" fill-opacity="0.92" transform="translate(4.2 23) rotate(8)"/><rect x="-1.83" y="-1.83" width="3.66" height="3.66" rx="0.59" fill="#7299EA" fill-opacity="0.2" transform="translate(8.8 23.5) rotate(-6)"/><rect x="-1.5" y="-1.5" width="3" height="3" rx="0.48" fill="#7299EA" fill-opacity="0.92" transform="translate(8.8 23.5) rotate(-6)"/><rect x="-1.71" y="-1.71" width="3.42" height="3.42" rx="0.55" fill="#7299EA" fill-opacity="0.2" transform="translate(6.5 26.5) rotate(4)"/><rect x="-1.4" y="-1.4" width="2.8" height="2.8" rx="0.45" fill="#7299EA" fill-opacity="0.92" transform="translate(6.5 26.5) rotate(4)"/><rect x="-1.59" y="-1.59" width="3.17" height="3.17" rx="0.51" fill="#A9C4F5" fill-opacity="0.2" transform="translate(11.5 26.2) rotate(-11)"/><rect x="-1.3" y="-1.3" width="2.6" height="2.6" rx="0.42" fill="#A9C4F5" fill-opacity="0.92" transform="translate(11.5 26.2) rotate(-11)"/><rect x="-1.34" y="-1.34" width="2.68" height="2.68" rx="0.43" fill="#A9C4F5" fill-opacity="0.2" transform="translate(2.6 27.5) rotate(-4)"/><rect x="-1.1" y="-1.1" width="2.2" height="2.2" rx="0.35" fill="#A9C4F5" fill-opacity="0.92" transform="translate(2.6 27.5) rotate(-4)"/><rect x="-1.34" y="-1.34" width="2.68" height="2.68" rx="0.43" fill="#7299EA" fill-opacity="0.2" transform="translate(9.2 29.6) rotate(7)"/><rect x="-1.1" y="-1.1" width="2.2" height="2.2" rx="0.35" fill="#7299EA" fill-opacity="0.92" transform="translate(9.2 29.6) rotate(7)"/><rect x="-1.1" y="-1.1" width="2.2" height="2.2" rx="0.35" fill="#A9C4F5" fill-opacity="0.2" transform="translate(13.9 29.2) rotate(3)"/><rect x="-0.9" y="-0.9" width="1.8" height="1.8" rx="0.29" fill="#A9C4F5" fill-opacity="0.92" transform="translate(13.9 29.2) rotate(3)"/><rect x="-0.98" y="-0.98" width="1.95" height="1.95" rx="0.31" fill="#A9C4F5" fill-opacity="0.2" transform="translate(5.6 30.6) rotate(-8)"/><rect x="-0.8" y="-0.8" width="1.6" height="1.6" rx="0.26" fill="#A9C4F5" fill-opacity="0.92" transform="translate(5.6 30.6) rotate(-8)"/></g><g transform="translate(10 10) rotate(-35)"><path d="M-2 12.39 Q-2.2 10.8 -0.6 10.8 L12.4 10.8 Q14 10.8 13.82 12.39 L13.48 15.41 Q13.3 17 12.56 18.42 L11.94 19.58 Q11.2 21 9.6 21 L5.2 21 Q3.6 21 2.35 20 L-0.15 18 Q-1.4 17 -1.6 15.41 Z" fill="#B9BFC9"/><path d="M-2.02 12.19 Q-2.2 10.8 -0.8 10.8 L10 10.8 Q11.4 10.8 11.24 12.19 L10.86 15.61 Q10.7 17 9.89 18.14 L9.81 18.26 Q9 19.4 7.6 19.4 L5 19.4 Q3.6 19.4 2.34 18.79 L-0.14 17.61 Q-1.4 17 -1.58 15.61 Z" fill="#EFE9DC"/><path d="M-3.8 14.6 A2.5 3.3 0 1 0 1.2 14.6 A2.5 3.3 0 1 0 -3.8 14.6 Z" fill="#B9BFC9"/><path d="M-4 14 A2 2.8 0 1 0 0 14 A2 2.8 0 1 0 -4 14 Z" fill="#EFE9DC"/><path d="M0.83 13.52 L-5.04 7.13 A1.25 1.25 0 0 0 -6.93 8.76 L-1.43 15.48 Z" fill="#B9BFC9"/><path d="M0.83 13.51 L-5.21 6.91 A0.78 0.78 0 0 0 -6.38 7.93 L-0.57 14.74 Z" fill="#EFE9DC"/><path d="M2.44 11.48 L1.3 1.09 A1.2 1.2 0 0 0 -1.09 1.3 L-0.44 11.72 Z" fill="#B9BFC9"/><path d="M1.35 11.58 L0.36 0.91 A0.74 0.74 0 0 0 -1.12 1.03 L-0.45 11.72 Z" fill="#EFE9DC"/><path d="M6.15 11.51 L5.17 -0.67 A1.2 1.2 0 0 0 2.77 -0.53 L3.25 11.69 Z" fill="#B9BFC9"/><path d="M5.05 11.59 L4.24 -0.88 A0.74 0.74 0 0 0 2.75 -0.8 L3.25 11.68 Z" fill="#EFE9DC"/><path d="M9.85 11.59 L9.51 0.29 A1.2 1.2 0 0 0 7.11 0.31 L6.95 11.61 Z" fill="#B9BFC9"/><path d="M8.75 11.6 L8.59 0.04 A0.74 0.74 0 0 0 7.1 0.04 L6.95 11.6 Z" fill="#EFE9DC"/><path d="M13.5 11.68 L13.68 3.81 A1.15 1.15 0 0 0 11.39 3.68 L10.7 11.52 Z" fill="#B9BFC9"/><path d="M12.43 11.63 L12.82 3.52 A0.71 0.71 0 0 0 11.39 3.42 L10.7 11.51 Z" fill="#EFE9DC"/></g></g>
+<text x="24" y="125" class="b">validation-140-final, as3-firefox</text>
+<text x="24" y="144" class="m">build-B</text>
+<line class="g" x1="234" y1="146" x2="726" y2="146"/>
+<path class="me" d="M234 133h488a4 4 0 0 1 4 4v6a4 4 0 0 1 -4 4h-488z"/>
+<text x="736" y="144" data-study="validation-140-final-as3-firefox" data-arm="build-B" data-kind="pass-rate">100.0% (15/15)</text>
+<text x="24" y="169" class="m">build-A</text>
+<line class="g" x1="234" y1="171" x2="726" y2="171"/>
+<path class="ot" d="M234 158h488a4 4 0 0 1 4 4v6a4 4 0 0 1 -4 4h-488z"/>
+<text x="736" y="169" data-study="validation-140-final-as3-firefox" data-arm="build-A" data-kind="pass-rate">100.0% (15/15)</text>
+<text x="24" y="205" class="b">validation-140-final, as3-safari</text>
+<text x="24" y="224" class="m">build-B</text>
+<line class="g" x1="234" y1="226" x2="726" y2="226"/>
+<path class="me" d="M234 213h488a4 4 0 0 1 4 4v6a4 4 0 0 1 -4 4h-488z"/>
+<text x="736" y="224" data-study="validation-140-final-as3-safari" data-arm="build-B" data-kind="pass-rate">100.0% (15/15)</text>
+<text x="24" y="249" class="m">build-A</text>
+<line class="g" x1="234" y1="251" x2="726" y2="251"/>
+<path class="ot" d="M234 238h488a4 4 0 0 1 4 4v6a4 4 0 0 1 -4 4h-488z"/>
+<text x="736" y="249" data-study="validation-140-final-as3-safari" data-arm="build-A" data-kind="pass-rate">100.0% (15/15)</text>
+<text x="24" y="285" class="b">validation-140-final, cc-calendar-ambiguous-firefox</text>
+<text x="24" y="304" class="m">build-B</text>
+<line class="g" x1="234" y1="306" x2="726" y2="306"/>
+<path class="me" d="M234 293h488a4 4 0 0 1 4 4v6a4 4 0 0 1 -4 4h-488z"/>
+<text x="736" y="304" data-study="validation-140-final-cc-calendar-ambiguous-firefox" data-arm="build-B" data-kind="pass-rate">100.0% (3/3)</text>
+<text x="24" y="329" class="m">build-A</text>
+<line class="g" x1="234" y1="331" x2="726" y2="331"/>
+<path class="ot" d="M234 318h488a4 4 0 0 1 4 4v6a4 4 0 0 1 -4 4h-488z"/>
+<text x="736" y="329" data-study="validation-140-final-cc-calendar-ambiguous-firefox" data-arm="build-A" data-kind="pass-rate">100.0% (3/3)</text>
+<text x="24" y="365" class="b">validation-140-final, cc-calendar-ambiguous-safari</text>
+<text x="24" y="384" class="m">build-B</text>
+<line class="g" x1="234" y1="386" x2="726" y2="386"/>
+<path class="me" d="M234 373h488a4 4 0 0 1 4 4v6a4 4 0 0 1 -4 4h-488z"/>
+<text x="736" y="384" data-study="validation-140-final-cc-calendar-ambiguous-safari" data-arm="build-B" data-kind="pass-rate">100.0% (3/3)</text>
+<text x="24" y="409" class="m">build-A</text>
+<line class="g" x1="234" y1="411" x2="726" y2="411"/>
+<path class="ot" d="M234 398h488a4 4 0 0 1 4 4v6a4 4 0 0 1 -4 4h-488z"/>
+<text x="736" y="409" data-study="validation-140-final-cc-calendar-ambiguous-safari" data-arm="build-A" data-kind="pass-rate">100.0% (3/3)</text>
+<text x="24" y="445" class="b">validation-140-final, cc-calendar-firefox</text>
+<text x="24" y="464" class="m">build-B</text>
+<line class="g" x1="234" y1="466" x2="726" y2="466"/>
+<path class="me" d="M234 453h488a4 4 0 0 1 4 4v6a4 4 0 0 1 -4 4h-488z"/>
+<text x="736" y="464" data-study="validation-140-final-cc-calendar-firefox" data-arm="build-B" data-kind="pass-rate">100.0% (3/3)</text>
+<text x="24" y="489" class="m">build-A</text>
+<line class="g" x1="234" y1="491" x2="726" y2="491"/>
+<path class="ot" d="M234 478h488a4 4 0 0 1 4 4v6a4 4 0 0 1 -4 4h-488z"/>
+<text x="736" y="489" data-study="validation-140-final-cc-calendar-firefox" data-arm="build-A" data-kind="pass-rate">100.0% (3/3)</text>
+<text x="24" y="525" class="b">validation-140-final, cc-calendar-safari</text>
+<text x="24" y="544" class="m">build-B</text>
+<line class="g" x1="234" y1="546" x2="726" y2="546"/>
+<path class="me" d="M234 533h488a4 4 0 0 1 4 4v6a4 4 0 0 1 -4 4h-488z"/>
+<text x="736" y="544" data-study="validation-140-final-cc-calendar-safari" data-arm="build-B" data-kind="pass-rate">100.0% (3/3)</text>
+<text x="24" y="569" class="m">build-A</text>
+<line class="g" x1="234" y1="571" x2="726" y2="571"/>
+<path class="ot" d="M234 558h488a4 4 0 0 1 4 4v6a4 4 0 0 1 -4 4h-488z"/>
+<text x="736" y="569" data-study="validation-140-final-cc-calendar-safari" data-arm="build-A" data-kind="pass-rate">100.0% (3/3)</text>
+<text x="24" y="605" class="b">validation-140-final, cc-dropdown-firefox</text>
+<text x="24" y="624" class="m">build-B</text>
+<line class="g" x1="234" y1="626" x2="726" y2="626"/>
+<path class="me" d="M234 613h488a4 4 0 0 1 4 4v6a4 4 0 0 1 -4 4h-488z"/>
+<text x="736" y="624" data-study="validation-140-final-cc-dropdown-firefox" data-arm="build-B" data-kind="pass-rate">100.0% (3/3)</text>
+<text x="24" y="649" class="m">build-A</text>
+<line class="g" x1="234" y1="651" x2="726" y2="651"/>
+<path class="ot" d="M234 638h488a4 4 0 0 1 4 4v6a4 4 0 0 1 -4 4h-488z"/>
+<text x="736" y="649" data-study="validation-140-final-cc-dropdown-firefox" data-arm="build-A" data-kind="pass-rate">100.0% (3/3)</text>
+<text x="24" y="685" class="b">validation-140-final, cc-dropdown-safari</text>
+<text x="24" y="704" class="m">build-B</text>
+<line class="g" x1="234" y1="706" x2="726" y2="706"/>
+<path class="me" d="M234 693h488a4 4 0 0 1 4 4v6a4 4 0 0 1 -4 4h-488z"/>
+<text x="736" y="704" data-study="validation-140-final-cc-dropdown-safari" data-arm="build-B" data-kind="pass-rate">100.0% (3/3)</text>
+<text x="24" y="729" class="m">build-A</text>
+<line class="g" x1="234" y1="731" x2="726" y2="731"/>
+<path class="ot" d="M234 718h488a4 4 0 0 1 4 4v6a4 4 0 0 1 -4 4h-488z"/>
+<text x="736" y="729" data-study="validation-140-final-cc-dropdown-safari" data-arm="build-A" data-kind="pass-rate">100.0% (3/3)</text>
+<text x="24" y="765" class="b">validation-140-final, cc-dropdown-slow-firefox</text>
+<text x="24" y="784" class="m">build-B</text>
+<line class="g" x1="234" y1="786" x2="726" y2="786"/>
+<path class="me" d="M234 773h488a4 4 0 0 1 4 4v6a4 4 0 0 1 -4 4h-488z"/>
+<text x="736" y="784" data-study="validation-140-final-cc-dropdown-slow-firefox" data-arm="build-B" data-kind="pass-rate">100.0% (3/3)</text>
+<text x="24" y="809" class="m">build-A</text>
+<line class="g" x1="234" y1="811" x2="726" y2="811"/>
+<path class="ot" d="M234 798h488a4 4 0 0 1 4 4v6a4 4 0 0 1 -4 4h-488z"/>
+<text x="736" y="809" data-study="validation-140-final-cc-dropdown-slow-firefox" data-arm="build-A" data-kind="pass-rate">100.0% (3/3)</text>
+<text x="24" y="845" class="b">validation-140-final, cc-dropdown-slow-safari</text>
+<text x="24" y="864" class="m">build-B</text>
+<line class="g" x1="234" y1="866" x2="726" y2="866"/>
+<path class="me" d="M234 853h488a4 4 0 0 1 4 4v6a4 4 0 0 1 -4 4h-488z"/>
+<text x="736" y="864" data-study="validation-140-final-cc-dropdown-slow-safari" data-arm="build-B" data-kind="pass-rate">100.0% (3/3)</text>
+<text x="24" y="889" class="m">build-A</text>
+<line class="g" x1="234" y1="891" x2="726" y2="891"/>
+<path class="ot" d="M234 878h488a4 4 0 0 1 4 4v6a4 4 0 0 1 -4 4h-488z"/>
+<text x="736" y="889" data-study="validation-140-final-cc-dropdown-slow-safari" data-arm="build-A" data-kind="pass-rate">100.0% (3/3)</text>
+<text x="24" y="925" class="b">validation-140-final, cc-list-firefox</text>
+<text x="24" y="944" class="m">build-B</text>
+<line class="g" x1="234" y1="946" x2="726" y2="946"/>
+<path class="me" d="M234 933h488a4 4 0 0 1 4 4v6a4 4 0 0 1 -4 4h-488z"/>
+<text x="736" y="944" data-study="validation-140-final-cc-list-firefox" data-arm="build-B" data-kind="pass-rate">100.0% (3/3)</text>
+<text x="24" y="969" class="m">build-A</text>
+<line class="g" x1="234" y1="971" x2="726" y2="971"/>
+<path class="ot" d="M234 958h488a4 4 0 0 1 4 4v6a4 4 0 0 1 -4 4h-488z"/>
+<text x="736" y="969" data-study="validation-140-final-cc-list-firefox" data-arm="build-A" data-kind="pass-rate">100.0% (3/3)</text>
+<text x="24" y="1005" class="b">validation-140-final, cc-list-native</text>
+<text x="24" y="1024" class="m">build-B</text>
+<line class="g" x1="234" y1="1026" x2="726" y2="1026"/>
+<path class="me" d="M234 1013h488a4 4 0 0 1 4 4v6a4 4 0 0 1 -4 4h-488z"/>
+<text x="736" y="1024" data-study="validation-140-final-cc-list-native" data-arm="build-B" data-kind="pass-rate">100.0% (3/3)</text>
+<text x="24" y="1049" class="m">build-A</text>
+<line class="g" x1="234" y1="1051" x2="726" y2="1051"/>
+<path class="ot" d="M234 1038h488a4 4 0 0 1 4 4v6a4 4 0 0 1 -4 4h-488z"/>
+<text x="736" y="1049" data-study="validation-140-final-cc-list-native" data-arm="build-A" data-kind="pass-rate">100.0% (3/3)</text>
+<text x="24" y="1085" class="b">validation-140-final, cc-list-pop-up-firefox</text>
+<text x="24" y="1104" class="m">build-B</text>
+<line class="g" x1="234" y1="1106" x2="726" y2="1106"/>
+<path class="me" d="M234 1093h488a4 4 0 0 1 4 4v6a4 4 0 0 1 -4 4h-488z"/>
+<text x="736" y="1104" data-study="validation-140-final-cc-list-pop-up-firefox" data-arm="build-B" data-kind="pass-rate">100.0% (3/3)</text>
+<text x="24" y="1129" class="m">build-A</text>
+<line class="g" x1="234" y1="1131" x2="726" y2="1131"/>
+<path class="ot" d="M234 1118h488a4 4 0 0 1 4 4v6a4 4 0 0 1 -4 4h-488z"/>
+<text x="736" y="1129" data-study="validation-140-final-cc-list-pop-up-firefox" data-arm="build-A" data-kind="pass-rate">100.0% (3/3)</text>
+<text x="24" y="1165" class="b">validation-140-final, cc-list-pop-up-safari</text>
+<text x="24" y="1184" class="m">build-B</text>
+<line class="g" x1="234" y1="1186" x2="726" y2="1186"/>
+<path class="me" d="M234 1173h488a4 4 0 0 1 4 4v6a4 4 0 0 1 -4 4h-488z"/>
+<text x="736" y="1184" data-study="validation-140-final-cc-list-pop-up-safari" data-arm="build-B" data-kind="pass-rate">100.0% (3/3)</text>
+<text x="24" y="1209" class="m">build-A</text>
+<line class="g" x1="234" y1="1211" x2="726" y2="1211"/>
+<path class="ot" d="M234 1198h488a4 4 0 0 1 4 4v6a4 4 0 0 1 -4 4h-488z"/>
+<text x="736" y="1209" data-study="validation-140-final-cc-list-pop-up-safari" data-arm="build-A" data-kind="pass-rate">100.0% (3/3)</text>
+<text x="24" y="1245" class="b">validation-140-final, cc-list-safari</text>
+<text x="24" y="1264" class="m">build-B</text>
+<line class="g" x1="234" y1="1266" x2="726" y2="1266"/>
+<path class="me" d="M234 1253h488a4 4 0 0 1 4 4v6a4 4 0 0 1 -4 4h-488z"/>
+<text x="736" y="1264" data-study="validation-140-final-cc-list-safari" data-arm="build-B" data-kind="pass-rate">100.0% (3/3)</text>
+<text x="24" y="1289" class="m">build-A</text>
+<line class="g" x1="234" y1="1291" x2="726" y2="1291"/>
+<path class="ot" d="M234 1278h488a4 4 0 0 1 4 4v6a4 4 0 0 1 -4 4h-488z"/>
+<text x="736" y="1289" data-study="validation-140-final-cc-list-safari" data-arm="build-A" data-kind="pass-rate">100.0% (3/3)</text>
+<text x="24" y="1325" class="b">validation-140-final, cc-new-tab-firefox</text>
+<text x="24" y="1344" class="m">build-B</text>
+<line class="g" x1="234" y1="1346" x2="726" y2="1346"/>
+<path class="me" d="M234 1333h488a4 4 0 0 1 4 4v6a4 4 0 0 1 -4 4h-488z"/>
+<text x="736" y="1344" data-study="validation-140-final-cc-new-tab-firefox" data-arm="build-B" data-kind="pass-rate">100.0% (3/3)</text>
+<text x="24" y="1369" class="m">build-A</text>
+<line class="g" x1="234" y1="1371" x2="726" y2="1371"/>
+<path class="ot" d="M234 1358h488a4 4 0 0 1 4 4v6a4 4 0 0 1 -4 4h-488z"/>
+<text x="736" y="1369" data-study="validation-140-final-cc-new-tab-firefox" data-arm="build-A" data-kind="pass-rate">100.0% (3/3)</text>
+<text x="24" y="1405" class="b">validation-140-final, cc-new-tab-safari</text>
+<text x="24" y="1424" class="m">build-B</text>
+<line class="g" x1="234" y1="1426" x2="726" y2="1426"/>
+<path class="me" d="M234 1413h488a4 4 0 0 1 4 4v6a4 4 0 0 1 -4 4h-488z"/>
+<text x="736" y="1424" data-study="validation-140-final-cc-new-tab-safari" data-arm="build-B" data-kind="pass-rate">100.0% (3/3)</text>
+<text x="24" y="1449" class="m">build-A</text>
+<line class="g" x1="234" y1="1451" x2="726" y2="1451"/>
+<path class="ot" d="M234 1438h488a4 4 0 0 1 4 4v6a4 4 0 0 1 -4 4h-488z"/>
+<text x="736" y="1449" data-study="validation-140-final-cc-new-tab-safari" data-arm="build-A" data-kind="pass-rate">100.0% (3/3)</text>
+<text x="24" y="1485" class="b">validation-140-final, native</text>
+<text x="24" y="1504" class="m">build-B</text>
+<line class="g" x1="234" y1="1506" x2="726" y2="1506"/>
+<path class="me" d="M234 1493h406a4 4 0 0 1 4 4v6a4 4 0 0 1 -4 4h-406z"/>
+<text x="736" y="1504" data-study="validation-140-final-native" data-arm="build-B" data-kind="pass-rate">83.3% (25/30)</text>
+<text x="24" y="1529" class="m">build-A</text>
+<line class="g" x1="234" y1="1531" x2="726" y2="1531"/>
+<path class="ot" d="M234 1518h438.8a4 4 0 0 1 4 4v6a4 4 0 0 1 -4 4h-438.8z"/>
+<text x="736" y="1529" data-study="validation-140-final-native" data-arm="build-A" data-kind="pass-rate">90.0% (27/30)</text>
+<text x="24" y="1565" class="b">validation-140-final, race-firefox</text>
+<text x="24" y="1584" class="m">build-B</text>
+<line class="g" x1="234" y1="1586" x2="726" y2="1586"/>
+<path class="me" d="M234 1573h488a4 4 0 0 1 4 4v6a4 4 0 0 1 -4 4h-488z"/>
+<text x="736" y="1584" data-study="validation-140-final-race-firefox" data-arm="build-B" data-kind="pass-rate">100.0% (36/36)</text>
+<text x="24" y="1609" class="m">build-A</text>
+<line class="g" x1="234" y1="1611" x2="726" y2="1611"/>
+<path class="ot" d="M234 1598h488a4 4 0 0 1 4 4v6a4 4 0 0 1 -4 4h-488z"/>
+<text x="736" y="1609" data-study="validation-140-final-race-firefox" data-arm="build-A" data-kind="pass-rate">100.0% (36/36)</text>
+<text x="24" y="1645" class="b">validation-140-final, race-safari</text>
+<text x="24" y="1664" class="m">build-B</text>
+<line class="g" x1="234" y1="1666" x2="726" y2="1666"/>
+<path class="me" d="M234 1653h460.7a4 4 0 0 1 4 4v6a4 4 0 0 1 -4 4h-460.7z"/>
+<text x="736" y="1664" data-study="validation-140-final-race-safari" data-arm="build-B" data-kind="pass-rate">94.4% (34/36)</text>
+<text x="24" y="1689" class="m">build-A</text>
+<line class="g" x1="234" y1="1691" x2="726" y2="1691"/>
+<path class="ot" d="M234 1678h488a4 4 0 0 1 4 4v6a4 4 0 0 1 -4 4h-488z"/>
+<text x="736" y="1689" data-study="validation-140-final-race-safari" data-arm="build-A" data-kind="pass-rate">100.0% (36/36)</text>
+<text x="24" y="1725" class="b">validation-140-final, release-haiku</text>
+<text x="24" y="1744" class="m">build-B</text>
+<line class="g" x1="234" y1="1746" x2="726" y2="1746"/>
+<path class="me" d="M234 1733h488a4 4 0 0 1 4 4v6a4 4 0 0 1 -4 4h-488z"/>
+<text x="736" y="1744" data-study="validation-140-final-release-haiku" data-arm="build-B" data-kind="pass-rate">100.0% (65/65)</text>
+<text x="24" y="1769" class="m">build-A</text>
+<line class="g" x1="234" y1="1771" x2="726" y2="1771"/>
+<path class="ot" d="M234 1758h488a4 4 0 0 1 4 4v6a4 4 0 0 1 -4 4h-488z"/>
+<text x="736" y="1769" data-study="validation-140-final-release-haiku" data-arm="build-A" data-kind="pass-rate">100.0% (65/65)</text>
+<text x="24" y="1804" class="m">Task sets differ between studies. See the tables for timing, models, engine versions and failed runs.</text>
+</svg>

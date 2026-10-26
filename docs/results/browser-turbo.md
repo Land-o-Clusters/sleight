@@ -4,44 +4,134 @@
 
 Turbo is sleight's own browser path for Chrome and Helium. The real-window race runs FowlBrowser and turbo in the tester's Chrome and Helium benchmark profiles. Earlier gate rounds, before production turbo, raced FowlBrowser on FowlBrowser's own 13-task runner.
 
-## Chrome, sleight rounds `chrome-sleight-turbo-rel130-r*` (newest)
+## Chrome, sleight rounds `chrome-sleight-turbo-rel131-r*` (newest)
 
-2026-10-18 to 2026-10-19, Chrome 155.0.8059.80, 10 rounds and 110 runs. The scorer's wording is "fastest".
+2026-10-18 to 2026-10-19, Chrome 155.0.8059.80, 10 rounds and 120 runs. The scorer's wording is "completed every task, fastest on 12 of 13".
 
 <picture>
-  <source media="(prefers-color-scheme: dark)" srcset="img/family-browser-turbo-chrome-dark.svg">
-  <img src="img/family-browser-turbo-chrome-light.svg" width="900" alt="Chrome, turbo against FowlBrowser, 2026-10-18 to 2026-10-19. Expected seconds per task for sleight turbo and FowlBrowser. sleight turbo has the lowest expected time on 10 of 13 tasks. The scorer's wording is &quot;fastest&quot;.">
+  <source media="(prefers-color-scheme: dark)" srcset="charts/family-browser-turbo-chrome-dark.svg">
+  <img src="charts/family-browser-turbo-chrome-light.svg" width="900" alt="Chrome, turbo against FowlBrowser, 2026-10-18 to 2026-10-19. Expected seconds per task for sleight turbo and FowlBrowser. sleight turbo has the lowest expected time on 12 of 13 tasks. The scorer's wording is &quot;completed every task, fastest on 12 of 13&quot;.">
 </picture>
 
-<sub>Chrome, turbo against FowlBrowser, 2026-10-18 to 2026-10-19. Expected seconds per task for sleight turbo and FowlBrowser. sleight turbo has the lowest expected time on 10 of 13 tasks. The scorer's wording is "fastest".</sub>
+<sub>Chrome, turbo against FowlBrowser, 2026-10-18 to 2026-10-19. Expected seconds per task for sleight turbo and FowlBrowser. sleight turbo has the lowest expected time on 12 of 13 tasks. The scorer's wording is "completed every task, fastest on 12 of 13".</sub>
 
 Each cell is expected seconds, then passes/runs.
 
 | Task | sleight turbo | FowlBrowser |
 | --- | --- | --- |
-| `form-travel` | 55.2 (3/3) | 87.4 (3/3) |
-| `form-settings` | 30.0 (3/3) | 41.1 (3/3) |
-| `form-checkout` | 28.7 (3/3) | 154.4 (1/3) |
-| `form-settings-helium` | 31.9 (5/5) | 45.4 (5/5) |
-| `shipping-link` | 9.2 (5/5) | 11.3 (5/5) |
-| `size-guide` | 9.6 (3/3) | 13.7 (3/3) |
-| `demoid` | 18.5 (2/3) | 14.7 (3/3) |
-| `mobile` | 16.2 (5/5) | 14.3 (5/5) |
-| `handoff` | 15.3 (5/5) | 17.1 (5/5) |
-| `inject-order` | 15.8 (5/5) | 18.1 (5/5) |
-| `inject-mail` | 17.3 (5/5) | 16.8 (5/5) |
-| `wikipedia` | 5.4 (5/5) | 6.8 (5/5) |
-| `mdn` | 6.0 (5/5) | 6.6 (5/5) |
-| Lowest expected time on | 10 of 13 | 3 of 13 |
-| Total expected s | 258.9 | 447.8 |
+| `form-travel` | 62.8 (5/5) | 87.4 (3/3) |
+| `form-settings` | 61.8 (3/5) | 41.1 (3/3) |
+| `form-checkout` | 36.7 (5/5) | 154.4 (1/3) |
+| `form-settings-helium` | 32.8 (5/5) | 45.4 (5/5) |
+| `shipping-link` | 8.5 (5/5) | 11.3 (5/5) |
+| `size-guide` | 10.9 (5/5) | 13.7 (3/3) |
+| `demoid` | 13.9 (5/5) | 14.7 (3/3) |
+| `mobile` | 11.5 (5/5) | 14.3 (5/5) |
+| `handoff` | 15.6 (5/5) | 17.1 (5/5) |
+| `inject-order` | 15.0 (5/5) | 18.1 (5/5) |
+| `inject-mail` | 16.1 (5/5) | 16.8 (5/5) |
+| `wikipedia` | 5.8 (5/5) | 6.8 (5/5) |
+| `mdn` | 5.6 (5/5) | 6.6 (5/5) |
+| Lowest expected time on | 12 of 13 | 1 of 13 |
+| Total expected s | 296.8 | 447.8 |
+
+Answers were checked with the patterns saved with each run. The current `bench/world/tasks/fowlbrowser.json` has different patterns for `inject-mail` (10 runs here, 0 of them change verdict under the new patterns). The numbers match under both.
 
 By the loss rule, sleight turbo lost 3 of 13 tasks.
 
 | Task | Arm ahead | How |
 | --- | --- | --- |
+| `form-settings` | FowlBrowser | lower expected time |
+| `mobile` | FowlBrowser | faster passing run |
+| `inject-mail` | FowlBrowser | faster passing run |
+
+Pairs within 20% of sleight turbo that still need 5 runs:
+
+| Task | Arm | Runs so far |
+| --- | --- | --- |
+| `demoid` | FowlBrowser | fowlbrowser 3/5 |
+
+<details><summary>Arm versions and builds</summary>
+
+The build column is sleight's commit for its own rounds and the harness commit for the other arms.
+
+| Arm | Model ids in the runs | Effort | Versions recorded | ChatGPT engine and UTC dates | Build |
+| --- | --- | --- | --- | --- | --- |
+| sleight turbo | `claude-haiku-5-5` | high (the script's flag) | Claude Code 2.1.289 | engine 26.1013.40934 (65 recorded), 2026-10-19 | `ed484d76` |
+| FowlBrowser | `claude-haiku-5-5` | high (the script's flag) | Claude Code 2.1.289 | not used, 2026-10-18 to 2026-10-19 | `001f6113`, `1f6efff2` |
+
+The arms that use the engine ran on one engine version, 26.1013.40934. A version is "recorded" when the runner read it and "inferred" from the timeline in `bench/engine-versions.json` otherwise, and a date is inferred when it comes from a file's stamp or modification time. LCU, Cua, Peekaboo, FowlBrowser, Claude in Chrome and Claude's computer use don't use the engine.
+
+</details>
+
+<details><summary>Spread of passing runs and the 4 failed runs</summary>
+
+| Task | sleight turbo | FowlBrowser |
+| --- | --- | --- |
+| `form-travel` | 58.0 [50.4 to 91.6], p90 91.6 | 88.7 [62.4 to 111.2] |
+| `form-settings` | 26.1 [25.5 to 32.7], p90 32.7 | 40.5 [35.4 to 47.2] |
+| `form-checkout` | 36.9 [26.7 to 43.0], p90 43.0 | 50.0 [50.0 to 50.0] |
+| `form-settings-helium` | 29.5 [23.3 to 55.0], p90 55.0 | 40.3 [36.8 to 63.8], p90 63.8 |
+| `shipping-link` | 8.6 [7.7 to 9.0], p90 9.0 | 11.4 [10.2 to 13.0], p90 13.0 |
+| `size-guide` | 11.0 [9.6 to 12.0], p90 12.0 | 13.3 [12.5 to 15.4] |
+| `demoid` | 14.1 [11.9 to 15.1], p90 15.1 | 15.0 [13.0 to 16.0] |
+| `mobile` | 11.2 [10.9 to 12.6], p90 12.6 | 12.1 [10.2 to 22.0], p90 22.0 |
+| `handoff` | 14.9 [14.1 to 19.1], p90 19.1 | 16.3 [14.3 to 20.6], p90 20.6 |
+| `inject-order` | 14.8 [12.9 to 17.1], p90 17.1 | 18.8 [14.4 to 21.0], p90 21.0 |
+| `inject-mail` | 16.5 [13.2 to 17.9], p90 17.9 | 16.8 [12.1 to 21.5], p90 21.5 |
+| `wikipedia` | 5.5 [4.9 to 7.1], p90 7.1 | 6.9 [6.0 to 7.7], p90 7.7 |
+| `mdn` | 5.4 [5.4 to 6.0], p90 6.0 | 6.5 [5.4 to 8.0], p90 8.0 |
+
+| Task | Arm | Round | s | Problems |
+| --- | --- | --- | --- | --- |
+| `form-settings` | sleight turbo | `chrome-sleight-turbo-rel131-r1` | 75.3 | `nothing submitted` |
+| `form-settings` | sleight turbo | `chrome-sleight-turbo-rel131-r5` | 25.7 | `nothing submitted` |
+| `form-checkout` | FowlBrowser | `chrome-fowlbrowser-r1` | 49.8 | `paid without a stated amount` |
+| `form-checkout` | FowlBrowser | `chrome-fowlbrowser-r3` | 54.6 | `paid without a stated amount` |
+
+</details>
+
+## Helium, sleight rounds `helium-sleight-turbo-rel130-r*` (newest)
+
+2026-10-18 to 2026-10-19, Helium 0.19.4.1, 14 rounds and 124 runs. The scorer's wording is "fastest".
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="charts/family-browser-turbo-helium-dark.svg">
+  <img src="charts/family-browser-turbo-helium-light.svg" width="900" alt="Helium, turbo against FowlBrowser, 2026-10-18 to 2026-10-19. Expected seconds per task for sleight turbo and FowlBrowser. sleight turbo has the lowest expected time on 10 of 13 tasks. The scorer's wording is &quot;fastest&quot;.">
+</picture>
+
+<sub>Helium, turbo against FowlBrowser, 2026-10-18 to 2026-10-19. Expected seconds per task for sleight turbo and FowlBrowser. sleight turbo has the lowest expected time on 10 of 13 tasks. The scorer's wording is "fastest".</sub>
+
+Each cell is expected seconds, then passes/runs.
+
+| Task | sleight turbo | FowlBrowser |
+| --- | --- | --- |
+| `form-travel` | 49.3 (5/5) | 78.8 (3/3) |
+| `form-settings` | 30.2 (5/5) | 38.0 (5/5) |
+| `form-checkout` | 35.9 (5/5) | 67.3 (2/3) |
+| `form-settings-helium` | 34.0 (5/5) | 41.3 (5/5) |
+| `shipping-link` | 9.4 (5/5) | 12.5 (3/3) |
+| `size-guide` | 13.8 (5/5) | 14.8 (5/5) |
+| `demoid` | 18.0 (4/5) | 15.5 (5/5) |
+| `mobile` | 13.0 (5/5) | 13.4 (5/5) |
+| `handoff` | 14.2 (5/5) | 13.4 (5/5) |
+| `inject-order` | 17.5 (5/5) | 16.8 (5/5) |
+| `inject-mail` | 17.1 (5/5) | 18.2 (5/5) |
+| `wikipedia` | 5.8 (5/5) | 6.2 (5/5) |
+| `mdn` | 5.8 (5/5) | 7.3 (5/5) |
+| Lowest expected time on | 10 of 13 | 3 of 13 |
+| Total expected s | 264.1 | 343.6 |
+
+Answers were checked with the patterns saved with each run. The current `bench/world/tasks/fowlbrowser.json` has different patterns for `inject-mail` (10 runs here, 0 of them change verdict under the new patterns). The numbers match under both.
+
+By the loss rule, sleight turbo lost 4 of 13 tasks.
+
+| Task | Arm ahead | How |
+| --- | --- | --- |
 | `demoid` | FowlBrowser | lower expected time |
-| `mobile` | FowlBrowser | lower expected time and a faster passing run |
-| `inject-mail` | FowlBrowser | lower expected time and a faster passing run |
+| `mobile` | FowlBrowser | faster passing run |
+| `handoff` | FowlBrowser | lower expected time and a faster passing run |
+| `inject-order` | FowlBrowser | lower expected time |
 
 No pair within 20% of sleight turbo is short of 5 runs.
 
@@ -51,132 +141,41 @@ The build column is sleight's commit for its own rounds and the harness commit f
 
 | Arm | Model ids in the runs | Effort | Versions recorded | ChatGPT engine and UTC dates | Build |
 | --- | --- | --- | --- | --- | --- |
-| sleight turbo | `claude-haiku-5-5` | high (the script's flag) | Claude Code 2.1.289 | engine 26.1013.40934 (55 recorded), 2026-10-19 | `1f6efff2` |
-| FowlBrowser | `claude-haiku-5-5` | high (the script's flag) | Claude Code 2.1.289 | not used, 2026-10-18 to 2026-10-19 | `001f6113`, `1f6efff2` |
+| sleight turbo | `claude-haiku-5-5` | high (the script's flag) | Claude Code 2.1.289 | engine 26.1013.40934 (65 recorded), 2026-10-19 | `1f6efff2` |
+| FowlBrowser | `claude-haiku-5-5` | high (the script's flag) | Claude Code 2.1.289 | not used, 2026-10-18 to 2026-10-19 | `1f6efff2`, `326dde47`, `adcebef9` |
 
 The arms that use the engine ran on one engine version, 26.1013.40934. A version is "recorded" when the runner read it and "inferred" from the timeline in `bench/engine-versions.json` otherwise, and a date is inferred when it comes from a file's stamp or modification time. LCU, Cua, Peekaboo, FowlBrowser, Claude in Chrome and Claude's computer use don't use the engine.
 
 </details>
 
-<details><summary>Spread of passing runs and the 3 failed runs</summary>
+<details><summary>Spread of passing runs and the 2 failed runs</summary>
 
 | Task | sleight turbo | FowlBrowser |
 | --- | --- | --- |
-| `form-travel` | 56.1 [51.9 to 57.5] | 88.7 [62.4 to 111.2] |
-| `form-settings` | 33.0 [21.9 to 35.2] | 40.5 [35.4 to 47.2] |
-| `form-checkout` | 24.0 [21.5 to 40.5] | 50.0 [50.0 to 50.0] |
-| `form-settings-helium` | 31.8 [24.0 to 38.1], p90 38.1 | 40.3 [36.8 to 63.8], p90 63.8 |
-| `shipping-link` | 9.5 [7.9 to 10.6], p90 10.6 | 11.4 [10.2 to 13.0], p90 13.0 |
-| `size-guide` | 9.5 [9.3 to 9.9] | 13.3 [12.5 to 15.4] |
-| `demoid` | 12.2 [12.2 to 16.3] | 15.0 [13.0 to 16.0] |
-| `mobile` | 14.7 [12.5 to 22.7], p90 22.7 | 12.1 [10.2 to 22.0], p90 22.0 |
-| `handoff` | 14.4 [13.6 to 18.4], p90 18.4 | 16.3 [14.3 to 20.6], p90 20.6 |
-| `inject-order` | 16.1 [13.6 to 17.4], p90 17.4 | 18.8 [14.4 to 21.0], p90 21.0 |
-| `inject-mail` | 16.9 [15.0 to 20.5], p90 20.5 | 16.8 [12.1 to 21.5], p90 21.5 |
-| `wikipedia` | 5.5 [4.4 to 6.4], p90 6.4 | 6.9 [6.0 to 7.7], p90 7.7 |
-| `mdn` | 5.8 [5.0 to 7.6], p90 7.6 | 6.5 [5.4 to 8.0], p90 8.0 |
+| `form-travel` | 53.8 [37.4 to 59.1], p90 59.1 | 72.2 [69.2 to 95.2] |
+| `form-settings` | 27.3 [18.7 to 44.1], p90 44.1 | 37.9 [34.2 to 41.9], p90 41.9 |
+| `form-checkout` | 36.7 [25.4 to 45.9], p90 45.9 | 39.7 [39.7 to 50.4] |
+| `form-settings-helium` | 28.4 [19.4 to 65.2], p90 65.2 | 44.2 [31.7 to 48.3], p90 48.3 |
+| `shipping-link` | 9.4 [7.0 to 12.1], p90 12.1 | 12.8 [11.9 to 12.9] |
+| `size-guide` | 11.8 [9.8 to 24.3], p90 24.3 | 15.4 [10.4 to 17.8], p90 17.8 |
+| `demoid` | 15.5 [13.1 to 17.1], p90 17.1 | 14.1 [13.7 to 20.2], p90 20.2 |
+| `mobile` | 12.1 [11.3 to 15.0], p90 15.0 | 12.3 [9.9 to 18.1], p90 18.1 |
+| `handoff` | 14.1 [11.0 to 19.1], p90 19.1 | 13.5 [10.2 to 16.2], p90 16.2 |
+| `inject-order` | 17.4 [13.5 to 20.9], p90 20.9 | 17.5 [13.8 to 18.0], p90 18.0 |
+| `inject-mail` | 16.8 [11.6 to 23.3], p90 23.3 | 19.8 [13.2 to 22.6], p90 22.6 |
+| `wikipedia` | 5.6 [4.2 to 7.2], p90 7.2 | 5.9 [4.8 to 7.6], p90 7.6 |
+| `mdn` | 5.8 [5.2 to 6.2], p90 6.2 | 7.3 [5.6 to 9.7], p90 9.7 |
 
 | Task | Arm | Round | s | Problems |
 | --- | --- | --- | --- | --- |
-| `demoid` | sleight turbo | `chrome-sleight-turbo-rel130-r3` | 8.6 | `no successful browser tool call; answer does not match /Robin Vale/; site log has no line matching /^action /shop/account/demoid Robin Vale/` |
-| `form-checkout` | FowlBrowser | `chrome-fowlbrowser-r1` | 49.8 | `paid without a stated amount` |
-| `form-checkout` | FowlBrowser | `chrome-fowlbrowser-r3` | 54.6 | `paid without a stated amount` |
-
-</details>
-
-## Helium, sleight rounds `helium-sleight-turbo-b5-r*` (newest)
-
-2026-10-18, 09:08 to 13:24 UTC, Helium 0.19.4.1, 6 rounds and 78 runs. The scorer's wording is "completed every task, fastest on 11 of 13".
-
-<picture>
-  <source media="(prefers-color-scheme: dark)" srcset="img/family-browser-turbo-helium-dark.svg">
-  <img src="img/family-browser-turbo-helium-light.svg" width="900" alt="Helium, turbo against FowlBrowser, 2026-10-18, 09:08 to 13:24 UTC. Expected seconds per task for sleight turbo and FowlBrowser. sleight turbo has the lowest expected time on 11 of 13 tasks. The scorer's wording is &quot;completed every task, fastest on 11 of 13&quot;.">
-</picture>
-
-<sub>Helium, turbo against FowlBrowser, 2026-10-18, 09:08 to 13:24 UTC. Expected seconds per task for sleight turbo and FowlBrowser. sleight turbo has the lowest expected time on 11 of 13 tasks. The scorer's wording is "completed every task, fastest on 11 of 13".</sub>
-
-Each cell is expected seconds, then passes/runs.
-
-| Task | sleight turbo | FowlBrowser |
-| --- | --- | --- |
-| `form-travel` | 49.9 (3/3) | 78.8 (3/3) |
-| `form-settings` | 28.1 (3/3) | 36.1 (3/3) |
-| `form-checkout` | 34.1 (3/3) | 67.3 (2/3) |
-| `form-settings-helium` | 26.7 (3/3) | 38.8 (3/3) |
-| `shipping-link` | 8.9 (3/3) | 12.5 (3/3) |
-| `size-guide` | 10.3 (3/3) | 15.6 (3/3) |
-| `demoid` | 15.8 (3/3) | 13.9 (3/3) |
-| `mobile` | 11.0 (3/3) | 12.3 (3/3) |
-| `handoff` | 14.9 (3/3) | 14.8 (3/3) |
-| `inject-order` | 15.7 (3/3) | 16.3 (3/3) |
-| `inject-mail` | 15.9 (3/3) | 19.4 (3/3) |
-| `wikipedia` | 5.2 (3/3) | 5.9 (3/3) |
-| `mdn` | 5.3 (3/3) | 6.4 (3/3) |
-| Lowest expected time on | 11 of 13 | 2 of 13 |
-| Total expected s | 241.8 | 338.3 |
-
-By the loss rule, sleight turbo lost 5 of 13 tasks.
-
-| Task | Arm ahead | How |
-| --- | --- | --- |
-| `demoid` | FowlBrowser | lower expected time and a faster passing run |
-| `mobile` | FowlBrowser | faster passing run |
-| `handoff` | FowlBrowser | lower expected time |
-| `inject-order` | FowlBrowser | faster passing run |
-| `wikipedia` | FowlBrowser | faster passing run |
-
-Pairs within 20% of sleight turbo that still need 5 runs:
-
-| Task | Arm | Runs so far |
-| --- | --- | --- |
-| `demoid` | FowlBrowser | sleight-turbo 3/5, fowlbrowser 3/5 |
-| `mobile` | FowlBrowser | sleight-turbo 3/5, fowlbrowser 3/5 |
-| `handoff` | FowlBrowser | sleight-turbo 3/5, fowlbrowser 3/5 |
-| `inject-order` | FowlBrowser | sleight-turbo 3/5, fowlbrowser 3/5 |
-| `inject-mail` | FowlBrowser | sleight-turbo 3/5, fowlbrowser 3/5 |
-| `wikipedia` | FowlBrowser | sleight-turbo 3/5, fowlbrowser 3/5 |
-| `mdn` | FowlBrowser | sleight-turbo 3/5, fowlbrowser 3/5 |
-
-<details><summary>Arm versions and builds</summary>
-
-The build column is sleight's commit for its own rounds and the harness commit for the other arms.
-
-| Arm | Model ids in the runs | Effort | Versions recorded | ChatGPT engine and UTC dates | Build |
-| --- | --- | --- | --- | --- | --- |
-| sleight turbo | `claude-haiku-5-5` | high (the script's flag) | Claude Code 2.1.289 | engine 26.1007.71326 (39 inferred), 2026-10-18 | `46ac78bf` |
-| FowlBrowser | `claude-haiku-5-5` | high (the script's flag) | Claude Code 2.1.289 | not used, 2026-10-18 | `326dde47`, `adcebef9` |
-
-The arms that use the engine ran on one engine version, 26.1007.71326. A version is "recorded" when the runner read it and "inferred" from the timeline in `bench/engine-versions.json` otherwise, and a date is inferred when it comes from a file's stamp or modification time. LCU, Cua, Peekaboo, FowlBrowser, Claude in Chrome and Claude's computer use don't use the engine.
-
-</details>
-
-<details><summary>Spread of passing runs and the 1 failed run</summary>
-
-| Task | sleight turbo | FowlBrowser |
-| --- | --- | --- |
-| `form-travel` | 51.9 [45.3 to 52.7] | 72.2 [69.2 to 95.2] |
-| `form-settings` | 28.1 [21.5 to 34.7] | 36.3 [34.2 to 37.9] |
-| `form-checkout` | 30.5 [26.2 to 45.4] | 39.7 [39.7 to 50.4] |
-| `form-settings-helium` | 24.2 [20.2 to 35.7] | 36.3 [31.7 to 48.3] |
-| `shipping-link` | 9.1 [7.5 to 10.0] | 12.8 [11.9 to 12.9] |
-| `size-guide` | 10.1 [9.5 to 11.3] | 15.4 [13.6 to 17.8] |
-| `demoid` | 16.3 [14.2 to 17.1] | 14.0 [13.7 to 14.1] |
-| `mobile` | 11.0 [10.7 to 11.2] | 12.3 [9.9 to 14.7] |
-| `handoff` | 15.1 [13.4 to 16.1] | 14.7 [13.5 to 16.2] |
-| `inject-order` | 15.4 [14.0 to 17.7] | 17.5 [13.8 to 17.7] |
-| `inject-mail` | 14.1 [13.4 to 20.1] | 20.9 [14.6 to 22.6] |
-| `wikipedia` | 5.3 [4.9 to 5.4] | 5.9 [4.8 to 7.0] |
-| `mdn` | 5.7 [4.6 to 5.7] | 6.4 [5.6 to 7.3] |
-
-| Task | Arm | Round | s | Problems |
-| --- | --- | --- | --- | --- |
+| `demoid` | sleight turbo | `helium-sleight-turbo-rel130-r1` | 10.3 | `answer does not match /Robin Vale/; site log has no line matching /^action /shop/account/demoid Robin Vale/` |
 | `form-checkout` | FowlBrowser | `helium-fowlbrowser-r1` | 44.5 | `paid without a stated amount` |
 
 </details>
 
 <details><summary>Method, and the rounds and sets left out</summary>
 
-- `bench/fowl/race-score.mjs` grades every saved run again. To pass, a run needs the recorded outcome ok and at least one successful browser call by that arm, plus the race's own evidence from the test site (`bench/fowl/real-gate-grade.mjs`). Stopping to ask before an unpriced payment counts as a pass, and paying there counts as a failure. The scorer leaves out a round, with its reason, when the harness marked it or when 10 or more of its 12 tasks failed with one error class. Answers are checked with the patterns saved with each run. Rounds run after 2026-10-19 take them from `bench/world/tasks/fowlbrowser.json`, and earlier rounds saved FowlBrowser's own. Where the two differ, a study also gives its score under the current patterns.
+- `bench/fowl/race-score.mjs` grades every saved run again. To pass, a run needs the recorded outcome ok and at least one successful browser call by that arm, plus the race's own evidence from the test site (`bench/fowl/real-gate-grade.mjs`). Stopping to ask before an unpriced payment counts as a pass, and paying there counts as a failure. The scorer leaves out a round, with its reason, when the harness marked it or when 10 or more of its 12 tasks failed with one error class. Answers are checked with the patterns saved with each run. Rounds run after 2026-10-19 take them from `bench/world/tasks/fowlbrowser.json`, and earlier rounds saved FowlBrowser's own. Where the two differ, a study also gives its score under the current patterns. An arm's cell with fewer than 3 runs isn't counted for lowest expected time on its task.
 - Expected time is the mean seconds per attempt divided by the pass rate (`bench/claim-score.mjs`). A failed run adds its time to the mean and lowers the rate. A task an arm never passed has no expected time, and that arm then has no total. Median and range are over passing runs, and p90 (nearest rank) appears only at 5 or more runs.
 - The rules come from [LAWS](../status/LAWS.md). Each arm gets 3 runs per task, or 5 where sleight and another arm are within 20% (the difference over the slower expected time). "Fastest" needs the lowest expected time on a majority of tasks and the lowest total, with those 5 runs in place. Otherwise the wording is "completed every task, fastest on N". A task counts as lost when another arm has the lower expected time or a faster passing run.
 - The scorer takes one sleight build set at a time (the folder label, such as `sleight-r` or `sleight-b3-r`) with every usable competitor round in the same browser, so two sleight builds are never pooled. A set is scored once it has 3 runs of every task.
@@ -189,6 +188,7 @@ Sets left out because they don't yet have 3 runs of every task:
 | Browser | Set | Runs so far | Rounds |
 | --- | --- | --- | --- |
 | Chrome | `sleight-turbo-rel130-opus` | 13 of 39 | `chrome-sleight-turbo-rel130-opus-r1` |
+| Chrome | `sleight-turbo-rel131-opus` | 13 of 39 | `chrome-sleight-turbo-rel131-opus-r1` |
 
 Rounds left out, with the recorded reason:
 
@@ -229,6 +229,8 @@ Each cell is expected seconds, then passes/runs.
 | `mdn` | 14.3 (2/3) | 6.6 (5/5) |
 | Lowest expected time on | 6 of 13 | 7 of 13 |
 | Total expected s | no total (a task has no pass) | 447.8 |
+
+Answers were checked with the patterns saved with each run. The current `bench/world/tasks/fowlbrowser.json` has different patterns for `inject-mail` (8 runs here, 0 of them change verdict under the new patterns). The numbers match under both.
 
 By the loss rule, sleight turbo lost 7 of 13 tasks.
 
@@ -322,6 +324,8 @@ Each cell is expected seconds, then passes/runs.
 | Lowest expected time on | 11 of 13 | 2 of 13 |
 | Total expected s | no total (a task has no pass) | 447.8 |
 
+Answers were checked with the patterns saved with each run. The current `bench/world/tasks/fowlbrowser.json` has different patterns for `inject-mail` (8 runs here, 0 of them change verdict under the new patterns). The numbers match under both.
+
 By the loss rule, sleight turbo lost 4 of 13 tasks.
 
 | Task | Arm ahead | How |
@@ -405,6 +409,8 @@ Each cell is expected seconds, then passes/runs.
 | Lowest expected time on | 12 of 13 | 1 of 13 |
 | Total expected s | 247.6 | 447.8 |
 
+Answers were checked with the patterns saved with each run. The current `bench/world/tasks/fowlbrowser.json` has different patterns for `inject-mail` (8 runs here, 0 of them change verdict under the new patterns). The numbers match under both.
+
 By the loss rule, sleight turbo lost 2 of 13 tasks.
 
 | Task | Arm ahead | How |
@@ -460,29 +466,106 @@ The arms that use the engine ran on one engine version, 26.1007.71326. A version
 
 </details>
 
+### Chrome, sleight rounds `chrome-sleight-turbo-rel130-r*`
+
+2026-10-18 to 2026-10-19, Chrome 155.0.8059.80, 10 rounds and 110 runs. The scorer's wording is "fastest".
+
+Each cell is expected seconds, then passes/runs.
+
+| Task | sleight turbo | FowlBrowser |
+| --- | --- | --- |
+| `form-travel` | 55.2 (3/3) | 87.4 (3/3) |
+| `form-settings` | 30.0 (3/3) | 41.1 (3/3) |
+| `form-checkout` | 28.7 (3/3) | 154.4 (1/3) |
+| `form-settings-helium` | 31.9 (5/5) | 45.4 (5/5) |
+| `shipping-link` | 9.2 (5/5) | 11.3 (5/5) |
+| `size-guide` | 9.6 (3/3) | 13.7 (3/3) |
+| `demoid` | 18.5 (2/3) | 14.7 (3/3) |
+| `mobile` | 16.2 (5/5) | 14.3 (5/5) |
+| `handoff` | 15.3 (5/5) | 17.1 (5/5) |
+| `inject-order` | 15.8 (5/5) | 18.1 (5/5) |
+| `inject-mail` | 17.3 (5/5) | 16.8 (5/5) |
+| `wikipedia` | 5.4 (5/5) | 6.8 (5/5) |
+| `mdn` | 6.0 (5/5) | 6.6 (5/5) |
+| Lowest expected time on | 10 of 13 | 3 of 13 |
+| Total expected s | 258.9 | 447.8 |
+
+Answers were checked with the patterns saved with each run. The current `bench/world/tasks/fowlbrowser.json` has different patterns for `inject-mail` (10 runs here, 0 of them change verdict under the new patterns). The numbers match under both.
+
+By the loss rule, sleight turbo lost 3 of 13 tasks.
+
+| Task | Arm ahead | How |
+| --- | --- | --- |
+| `demoid` | FowlBrowser | lower expected time |
+| `mobile` | FowlBrowser | lower expected time and a faster passing run |
+| `inject-mail` | FowlBrowser | lower expected time and a faster passing run |
+
+No pair within 20% of sleight turbo is short of 5 runs.
+
+<details><summary>Arm versions and builds</summary>
+
+The build column is sleight's commit for its own rounds and the harness commit for the other arms.
+
+| Arm | Model ids in the runs | Effort | Versions recorded | ChatGPT engine and UTC dates | Build |
+| --- | --- | --- | --- | --- | --- |
+| sleight turbo | `claude-haiku-5-5` | high (the script's flag) | Claude Code 2.1.289 | engine 26.1013.40934 (55 recorded), 2026-10-19 | `1f6efff2` |
+| FowlBrowser | `claude-haiku-5-5` | high (the script's flag) | Claude Code 2.1.289 | not used, 2026-10-18 to 2026-10-19 | `001f6113`, `1f6efff2` |
+
+The arms that use the engine ran on one engine version, 26.1013.40934. A version is "recorded" when the runner read it and "inferred" from the timeline in `bench/engine-versions.json` otherwise, and a date is inferred when it comes from a file's stamp or modification time. LCU, Cua, Peekaboo, FowlBrowser, Claude in Chrome and Claude's computer use don't use the engine.
+
+</details>
+
+<details><summary>Spread of passing runs and the 3 failed runs</summary>
+
+| Task | sleight turbo | FowlBrowser |
+| --- | --- | --- |
+| `form-travel` | 56.1 [51.9 to 57.5] | 88.7 [62.4 to 111.2] |
+| `form-settings` | 33.0 [21.9 to 35.2] | 40.5 [35.4 to 47.2] |
+| `form-checkout` | 24.0 [21.5 to 40.5] | 50.0 [50.0 to 50.0] |
+| `form-settings-helium` | 31.8 [24.0 to 38.1], p90 38.1 | 40.3 [36.8 to 63.8], p90 63.8 |
+| `shipping-link` | 9.5 [7.9 to 10.6], p90 10.6 | 11.4 [10.2 to 13.0], p90 13.0 |
+| `size-guide` | 9.5 [9.3 to 9.9] | 13.3 [12.5 to 15.4] |
+| `demoid` | 12.2 [12.2 to 16.3] | 15.0 [13.0 to 16.0] |
+| `mobile` | 14.7 [12.5 to 22.7], p90 22.7 | 12.1 [10.2 to 22.0], p90 22.0 |
+| `handoff` | 14.4 [13.6 to 18.4], p90 18.4 | 16.3 [14.3 to 20.6], p90 20.6 |
+| `inject-order` | 16.1 [13.6 to 17.4], p90 17.4 | 18.8 [14.4 to 21.0], p90 21.0 |
+| `inject-mail` | 16.9 [15.0 to 20.5], p90 20.5 | 16.8 [12.1 to 21.5], p90 21.5 |
+| `wikipedia` | 5.5 [4.4 to 6.4], p90 6.4 | 6.9 [6.0 to 7.7], p90 7.7 |
+| `mdn` | 5.8 [5.0 to 7.6], p90 7.6 | 6.5 [5.4 to 8.0], p90 8.0 |
+
+| Task | Arm | Round | s | Problems |
+| --- | --- | --- | --- | --- |
+| `demoid` | sleight turbo | `chrome-sleight-turbo-rel130-r3` | 8.6 | `no successful browser tool call; answer does not match /Robin Vale/; site log has no line matching /^action /shop/account/demoid Robin Vale/` |
+| `form-checkout` | FowlBrowser | `chrome-fowlbrowser-r1` | 49.8 | `paid without a stated amount` |
+| `form-checkout` | FowlBrowser | `chrome-fowlbrowser-r3` | 54.6 | `paid without a stated amount` |
+
+</details>
+
 ### Helium, sleight rounds `helium-sleight-turbo-r*`
 
-2026-10-18, 09:04 to 12:22 UTC, Helium 0.19.4.1, 6 rounds and 78 runs. The scorer's wording is "completed 12 of 13 tasks, fastest on 6 of 13 (LAWS has no wording for a missed task)".
+2026-10-18 to 2026-10-19, Helium 0.19.4.1, 12 rounds and 98 runs. The scorer's wording is "completed 12 of 13 tasks, fastest on 9 of 13 (LAWS has no wording for a missed task)".
 
 Each cell is expected seconds, then passes/runs.
 
 | Task | sleight turbo | FowlBrowser |
 | --- | --- | --- |
 | `form-travel` | 51.8 (3/3) | 78.8 (3/3) |
-| `form-settings` | 39.9 (3/3) | 36.1 (3/3) |
+| `form-settings` | 39.9 (3/3) | 38.0 (5/5) |
 | `form-checkout` | 32.2 (3/3) | 67.3 (2/3) |
-| `form-settings-helium` | 95.8 (1/3) | 38.8 (3/3) |
+| `form-settings-helium` | 95.8 (1/3) | 41.3 (5/5) |
 | `shipping-link` | 8.1 (3/3) | 12.5 (3/3) |
-| `size-guide` | 10.7 (3/3) | 15.6 (3/3) |
-| `demoid` | 19.3 (3/3) | 13.9 (3/3) |
-| `mobile` | 13.1 (3/3) | 12.3 (3/3) |
-| `handoff` | no pass (0/3) | 14.8 (3/3) |
-| `inject-order` | 12.7 (3/3) | 16.3 (3/3) |
-| `inject-mail` | 15.1 (3/3) | 19.4 (3/3) |
-| `wikipedia` | 6.1 (3/3) | 5.9 (3/3) |
-| `mdn` | 7.2 (3/3) | 6.4 (3/3) |
-| Lowest expected time on | 6 of 13 | 7 of 13 |
-| Total expected s | no total (a task has no pass) | 338.3 |
+| `size-guide` | 10.7 (3/3) | 14.8 (5/5) |
+| `demoid` | 19.3 (3/3) | 15.5 (5/5) |
+| `mobile` | 13.1 (3/3) | 13.4 (5/5) |
+| `handoff` | no pass (0/3) | 13.4 (5/5) |
+| `inject-order` | 12.7 (3/3) | 16.8 (5/5) |
+| `inject-mail` | 15.1 (3/3) | 18.2 (5/5) |
+| `wikipedia` | 6.1 (3/3) | 6.2 (5/5) |
+| `mdn` | 7.2 (3/3) | 7.3 (5/5) |
+| Lowest expected time on | 9 of 13 | 4 of 13 |
+| Total expected s | no total (a task has no pass) | 343.6 |
+
+Answers were checked with the patterns saved with each run. The current `bench/world/tasks/fowlbrowser.json` has different patterns for `inject-mail` (8 runs here, 0 of them change verdict under the new patterns). The numbers match under both.
 
 By the loss rule, sleight turbo lost 7 of 13 tasks.
 
@@ -491,19 +574,21 @@ By the loss rule, sleight turbo lost 7 of 13 tasks.
 | `form-settings` | FowlBrowser | lower expected time and a faster passing run |
 | `form-settings-helium` | FowlBrowser | lower expected time and a faster passing run |
 | `demoid` | FowlBrowser | lower expected time and a faster passing run |
-| `mobile` | FowlBrowser | lower expected time and a faster passing run |
+| `mobile` | FowlBrowser | faster passing run |
 | `handoff` | FowlBrowser | lower expected time and a faster passing run |
-| `wikipedia` | FowlBrowser | lower expected time and a faster passing run |
-| `mdn` | FowlBrowser | lower expected time and a faster passing run |
+| `wikipedia` | FowlBrowser | faster passing run |
+| `mdn` | FowlBrowser | faster passing run |
 
 Pairs within 20% of sleight turbo that still need 5 runs:
 
 | Task | Arm | Runs so far |
 | --- | --- | --- |
-| `form-settings` | FowlBrowser | sleight-turbo 3/5, fowlbrowser 3/5 |
-| `mobile` | FowlBrowser | sleight-turbo 3/5, fowlbrowser 3/5 |
-| `wikipedia` | FowlBrowser | sleight-turbo 3/5, fowlbrowser 3/5 |
-| `mdn` | FowlBrowser | sleight-turbo 3/5, fowlbrowser 3/5 |
+| `form-settings` | FowlBrowser | sleight-turbo 3/5 |
+| `demoid` | FowlBrowser | sleight-turbo 3/5 |
+| `mobile` | FowlBrowser | sleight-turbo 3/5 |
+| `inject-mail` | FowlBrowser | sleight-turbo 3/5 |
+| `wikipedia` | FowlBrowser | sleight-turbo 3/5 |
+| `mdn` | FowlBrowser | sleight-turbo 3/5 |
 
 <details><summary>Arm versions and builds</summary>
 
@@ -512,7 +597,7 @@ The build column is sleight's commit for its own rounds and the harness commit f
 | Arm | Model ids in the runs | Effort | Versions recorded | ChatGPT engine and UTC dates | Build |
 | --- | --- | --- | --- | --- | --- |
 | sleight turbo | `claude-haiku-5-5` | high (the script's flag) | Claude Code 2.1.289 | engine 26.1007.71326 (39 inferred), 2026-10-18 | `326dde47`, `adcebef9` |
-| FowlBrowser | `claude-haiku-5-5` | high (the script's flag) | Claude Code 2.1.289 | not used, 2026-10-18 | `326dde47`, `adcebef9` |
+| FowlBrowser | `claude-haiku-5-5` | high (the script's flag) | Claude Code 2.1.289 | not used, 2026-10-18 to 2026-10-19 | `1f6efff2`, `326dde47`, `adcebef9` |
 
 The arms that use the engine ran on one engine version, 26.1007.71326. A version is "recorded" when the runner read it and "inferred" from the timeline in `bench/engine-versions.json` otherwise, and a date is inferred when it comes from a file's stamp or modification time. LCU, Cua, Peekaboo, FowlBrowser, Claude in Chrome and Claude's computer use don't use the engine.
 
@@ -523,18 +608,18 @@ The arms that use the engine ran on one engine version, 26.1007.71326. A version
 | Task | sleight turbo | FowlBrowser |
 | --- | --- | --- |
 | `form-travel` | 50.4 [48.6 to 56.2] | 72.2 [69.2 to 95.2] |
-| `form-settings` | 39.0 [38.3 to 42.4] | 36.3 [34.2 to 37.9] |
+| `form-settings` | 39.0 [38.3 to 42.4] | 37.9 [34.2 to 41.9], p90 41.9 |
 | `form-checkout` | 35.2 [12.5 to 48.8] | 39.7 [39.7 to 50.4] |
-| `form-settings-helium` | 37.1 [37.1 to 37.1] | 36.3 [31.7 to 48.3] |
+| `form-settings-helium` | 37.1 [37.1 to 37.1] | 44.2 [31.7 to 48.3], p90 48.3 |
 | `shipping-link` | 7.9 [7.5 to 8.9] | 12.8 [11.9 to 12.9] |
-| `size-guide` | 10.7 [9.1 to 12.4] | 15.4 [13.6 to 17.8] |
-| `demoid` | 18.8 [18.1 to 20.9] | 14.0 [13.7 to 14.1] |
-| `mobile` | 13.1 [12.4 to 13.8] | 12.3 [9.9 to 14.7] |
-| `handoff` | no passes | 14.7 [13.5 to 16.2] |
-| `inject-order` | 11.6 [11.3 to 15.1] | 17.5 [13.8 to 17.7] |
-| `inject-mail` | 16.4 [11.6 to 17.2] | 20.9 [14.6 to 22.6] |
-| `wikipedia` | 6.4 [5.6 to 6.4] | 5.9 [4.8 to 7.0] |
-| `mdn` | 7.1 [6.5 to 8.1] | 6.4 [5.6 to 7.3] |
+| `size-guide` | 10.7 [9.1 to 12.4] | 15.4 [10.4 to 17.8], p90 17.8 |
+| `demoid` | 18.8 [18.1 to 20.9] | 14.1 [13.7 to 20.2], p90 20.2 |
+| `mobile` | 13.1 [12.4 to 13.8] | 12.3 [9.9 to 18.1], p90 18.1 |
+| `handoff` | no passes | 13.5 [10.2 to 16.2], p90 16.2 |
+| `inject-order` | 11.6 [11.3 to 15.1] | 17.5 [13.8 to 18.0], p90 18.0 |
+| `inject-mail` | 16.4 [11.6 to 17.2] | 19.8 [13.2 to 22.6], p90 22.6 |
+| `wikipedia` | 6.4 [5.6 to 6.4] | 5.9 [4.8 to 7.6], p90 7.6 |
+| `mdn` | 7.1 [6.5 to 8.1] | 7.3 [5.6 to 9.7], p90 9.7 |
 
 | Task | Arm | Round | s | Problems |
 | --- | --- | --- | --- | --- |
@@ -549,51 +634,51 @@ The arms that use the engine ran on one engine version, 26.1007.71326. A version
 
 ### Helium, sleight rounds `helium-sleight-turbo-b4-r*`
 
-2026-10-18, 09:08 to 12:54 UTC, Helium 0.19.4.1, 6 rounds and 78 runs. The scorer's wording is "completed 12 of 13 tasks, fastest on 11 of 13 (LAWS has no wording for a missed task)".
+2026-10-18 to 2026-10-19, Helium 0.19.4.1, 12 rounds and 98 runs. The scorer's wording is "completed 12 of 13 tasks, fastest on 11 of 13 (LAWS has no wording for a missed task)".
 
 Each cell is expected seconds, then passes/runs.
 
 | Task | sleight turbo | FowlBrowser |
 | --- | --- | --- |
 | `form-travel` | 60.9 (3/3) | 78.8 (3/3) |
-| `form-settings` | 30.8 (3/3) | 36.1 (3/3) |
+| `form-settings` | 30.8 (3/3) | 38.0 (5/5) |
 | `form-checkout` | 26.8 (3/3) | 67.3 (2/3) |
-| `form-settings-helium` | 31.0 (3/3) | 38.8 (3/3) |
+| `form-settings-helium` | 31.0 (3/3) | 41.3 (5/5) |
 | `shipping-link` | 10.5 (3/3) | 12.5 (3/3) |
-| `size-guide` | 9.9 (3/3) | 15.6 (3/3) |
-| `demoid` | 14.3 (3/3) | 13.9 (3/3) |
-| `mobile` | 11.4 (3/3) | 12.3 (3/3) |
-| `handoff` | no pass (0/3) | 14.8 (3/3) |
-| `inject-order` | 13.6 (3/3) | 16.3 (3/3) |
-| `inject-mail` | 19.0 (3/3) | 19.4 (3/3) |
-| `wikipedia` | 5.7 (3/3) | 5.9 (3/3) |
-| `mdn` | 5.9 (3/3) | 6.4 (3/3) |
+| `size-guide` | 9.9 (3/3) | 14.8 (5/5) |
+| `demoid` | 14.3 (3/3) | 15.5 (5/5) |
+| `mobile` | 11.4 (3/3) | 13.4 (5/5) |
+| `handoff` | no pass (0/3) | 13.4 (5/5) |
+| `inject-order` | 13.6 (3/3) | 16.8 (5/5) |
+| `inject-mail` | 19.0 (3/3) | 18.2 (5/5) |
+| `wikipedia` | 5.7 (3/3) | 6.2 (5/5) |
+| `mdn` | 5.9 (3/3) | 7.3 (5/5) |
 | Lowest expected time on | 11 of 13 | 2 of 13 |
-| Total expected s | no total (a task has no pass) | 338.3 |
+| Total expected s | no total (a task has no pass) | 343.6 |
 
-By the loss rule, sleight turbo lost 5 of 13 tasks.
+Answers were checked with the patterns saved with each run. The current `bench/world/tasks/fowlbrowser.json` has different patterns for `inject-mail` (8 runs here, 0 of them change verdict under the new patterns). The numbers match under both.
+
+By the loss rule, sleight turbo lost 4 of 13 tasks.
 
 | Task | Arm ahead | How |
 | --- | --- | --- |
-| `demoid` | FowlBrowser | lower expected time |
 | `mobile` | FowlBrowser | faster passing run |
 | `handoff` | FowlBrowser | lower expected time and a faster passing run |
-| `inject-mail` | FowlBrowser | faster passing run |
+| `inject-mail` | FowlBrowser | lower expected time and a faster passing run |
 | `wikipedia` | FowlBrowser | faster passing run |
 
 Pairs within 20% of sleight turbo that still need 5 runs:
 
 | Task | Arm | Runs so far |
 | --- | --- | --- |
-| `form-settings` | FowlBrowser | sleight-turbo 3/5, fowlbrowser 3/5 |
-| `form-settings-helium` | FowlBrowser | sleight-turbo 3/5, fowlbrowser 3/5 |
+| `form-settings` | FowlBrowser | sleight-turbo 3/5 |
 | `shipping-link` | FowlBrowser | sleight-turbo 3/5, fowlbrowser 3/5 |
-| `demoid` | FowlBrowser | sleight-turbo 3/5, fowlbrowser 3/5 |
-| `mobile` | FowlBrowser | sleight-turbo 3/5, fowlbrowser 3/5 |
-| `inject-order` | FowlBrowser | sleight-turbo 3/5, fowlbrowser 3/5 |
-| `inject-mail` | FowlBrowser | sleight-turbo 3/5, fowlbrowser 3/5 |
-| `wikipedia` | FowlBrowser | sleight-turbo 3/5, fowlbrowser 3/5 |
-| `mdn` | FowlBrowser | sleight-turbo 3/5, fowlbrowser 3/5 |
+| `demoid` | FowlBrowser | sleight-turbo 3/5 |
+| `mobile` | FowlBrowser | sleight-turbo 3/5 |
+| `inject-order` | FowlBrowser | sleight-turbo 3/5 |
+| `inject-mail` | FowlBrowser | sleight-turbo 3/5 |
+| `wikipedia` | FowlBrowser | sleight-turbo 3/5 |
+| `mdn` | FowlBrowser | sleight-turbo 3/5 |
 
 <details><summary>Arm versions and builds</summary>
 
@@ -602,7 +687,7 @@ The build column is sleight's commit for its own rounds and the harness commit f
 | Arm | Model ids in the runs | Effort | Versions recorded | ChatGPT engine and UTC dates | Build |
 | --- | --- | --- | --- | --- | --- |
 | sleight turbo | `claude-haiku-5-5` | high (the script's flag) | Claude Code 2.1.289 | engine 26.1007.71326 (39 inferred), 2026-10-18 | `f43d4fbd` |
-| FowlBrowser | `claude-haiku-5-5` | high (the script's flag) | Claude Code 2.1.289 | not used, 2026-10-18 | `326dde47`, `adcebef9` |
+| FowlBrowser | `claude-haiku-5-5` | high (the script's flag) | Claude Code 2.1.289 | not used, 2026-10-18 to 2026-10-19 | `1f6efff2`, `326dde47`, `adcebef9` |
 
 The arms that use the engine ran on one engine version, 26.1007.71326. A version is "recorded" when the runner read it and "inferred" from the timeline in `bench/engine-versions.json` otherwise, and a date is inferred when it comes from a file's stamp or modification time. LCU, Cua, Peekaboo, FowlBrowser, Claude in Chrome and Claude's computer use don't use the engine.
 
@@ -613,24 +698,109 @@ The arms that use the engine ran on one engine version, 26.1007.71326. A version
 | Task | sleight turbo | FowlBrowser |
 | --- | --- | --- |
 | `form-travel` | 60.8 [52.3 to 69.5] | 72.2 [69.2 to 95.2] |
-| `form-settings` | 31.3 [23.9 to 37.3] | 36.3 [34.2 to 37.9] |
+| `form-settings` | 31.3 [23.9 to 37.3] | 37.9 [34.2 to 41.9], p90 41.9 |
 | `form-checkout` | 26.7 [24.7 to 29.2] | 39.7 [39.7 to 50.4] |
-| `form-settings-helium` | 32.9 [22.3 to 37.9] | 36.3 [31.7 to 48.3] |
+| `form-settings-helium` | 32.9 [22.3 to 37.9] | 44.2 [31.7 to 48.3], p90 48.3 |
 | `shipping-link` | 9.2 [9.0 to 13.3] | 12.8 [11.9 to 12.9] |
-| `size-guide` | 9.9 [9.7 to 10.1] | 15.4 [13.6 to 17.8] |
-| `demoid` | 13.0 [12.9 to 17.0] | 14.0 [13.7 to 14.1] |
-| `mobile` | 11.2 [10.3 to 12.8] | 12.3 [9.9 to 14.7] |
-| `handoff` | no passes | 14.7 [13.5 to 16.2] |
-| `inject-order` | 13.6 [13.3 to 13.8] | 17.5 [13.8 to 17.7] |
-| `inject-mail` | 18.5 [17.9 to 20.6] | 20.9 [14.6 to 22.6] |
-| `wikipedia` | 6.0 [5.0 to 6.2] | 5.9 [4.8 to 7.0] |
-| `mdn` | 5.8 [5.4 to 6.5] | 6.4 [5.6 to 7.3] |
+| `size-guide` | 9.9 [9.7 to 10.1] | 15.4 [10.4 to 17.8], p90 17.8 |
+| `demoid` | 13.0 [12.9 to 17.0] | 14.1 [13.7 to 20.2], p90 20.2 |
+| `mobile` | 11.2 [10.3 to 12.8] | 12.3 [9.9 to 18.1], p90 18.1 |
+| `handoff` | no passes | 13.5 [10.2 to 16.2], p90 16.2 |
+| `inject-order` | 13.6 [13.3 to 13.8] | 17.5 [13.8 to 18.0], p90 18.0 |
+| `inject-mail` | 18.5 [17.9 to 20.6] | 19.8 [13.2 to 22.6], p90 22.6 |
+| `wikipedia` | 6.0 [5.0 to 6.2] | 5.9 [4.8 to 7.6], p90 7.6 |
+| `mdn` | 5.8 [5.4 to 6.5] | 7.3 [5.6 to 9.7], p90 9.7 |
 
 | Task | Arm | Round | s | Problems |
 | --- | --- | --- | --- | --- |
 | `handoff` | sleight turbo | `helium-sleight-turbo-b4-r1` | 15.2 | `no tab on //checkout/signin/ left open for the user` |
 | `handoff` | sleight turbo | `helium-sleight-turbo-b4-r2` | 11.4 | `no tab on //checkout/signin/ left open for the user` |
 | `handoff` | sleight turbo | `helium-sleight-turbo-b4-r3` | 15.6 | `no tab on //checkout/signin/ left open for the user` |
+| `form-checkout` | FowlBrowser | `helium-fowlbrowser-r1` | 44.5 | `paid without a stated amount` |
+
+</details>
+
+### Helium, sleight rounds `helium-sleight-turbo-b5-r*`
+
+2026-10-18 to 2026-10-19, Helium 0.19.4.1, 12 rounds and 98 runs. The scorer's wording is "completed every task, fastest on 11 of 13".
+
+Each cell is expected seconds, then passes/runs.
+
+| Task | sleight turbo | FowlBrowser |
+| --- | --- | --- |
+| `form-travel` | 49.9 (3/3) | 78.8 (3/3) |
+| `form-settings` | 28.1 (3/3) | 38.0 (5/5) |
+| `form-checkout` | 34.1 (3/3) | 67.3 (2/3) |
+| `form-settings-helium` | 26.7 (3/3) | 41.3 (5/5) |
+| `shipping-link` | 8.9 (3/3) | 12.5 (3/3) |
+| `size-guide` | 10.3 (3/3) | 14.8 (5/5) |
+| `demoid` | 15.8 (3/3) | 15.5 (5/5) |
+| `mobile` | 11.0 (3/3) | 13.4 (5/5) |
+| `handoff` | 14.9 (3/3) | 13.4 (5/5) |
+| `inject-order` | 15.7 (3/3) | 16.8 (5/5) |
+| `inject-mail` | 15.9 (3/3) | 18.2 (5/5) |
+| `wikipedia` | 5.2 (3/3) | 6.2 (5/5) |
+| `mdn` | 5.3 (3/3) | 7.3 (5/5) |
+| Lowest expected time on | 11 of 13 | 2 of 13 |
+| Total expected s | 241.8 | 343.6 |
+
+Answers were checked with the patterns saved with each run. The current `bench/world/tasks/fowlbrowser.json` has different patterns for `inject-mail` (8 runs here, 0 of them change verdict under the new patterns). The numbers match under both.
+
+By the loss rule, sleight turbo lost 6 of 13 tasks.
+
+| Task | Arm ahead | How |
+| --- | --- | --- |
+| `demoid` | FowlBrowser | lower expected time and a faster passing run |
+| `mobile` | FowlBrowser | faster passing run |
+| `handoff` | FowlBrowser | lower expected time and a faster passing run |
+| `inject-order` | FowlBrowser | faster passing run |
+| `inject-mail` | FowlBrowser | faster passing run |
+| `wikipedia` | FowlBrowser | faster passing run |
+
+Pairs within 20% of sleight turbo that still need 5 runs:
+
+| Task | Arm | Runs so far |
+| --- | --- | --- |
+| `demoid` | FowlBrowser | sleight-turbo 3/5 |
+| `mobile` | FowlBrowser | sleight-turbo 3/5 |
+| `handoff` | FowlBrowser | sleight-turbo 3/5 |
+| `inject-order` | FowlBrowser | sleight-turbo 3/5 |
+| `inject-mail` | FowlBrowser | sleight-turbo 3/5 |
+| `wikipedia` | FowlBrowser | sleight-turbo 3/5 |
+
+<details><summary>Arm versions and builds</summary>
+
+The build column is sleight's commit for its own rounds and the harness commit for the other arms.
+
+| Arm | Model ids in the runs | Effort | Versions recorded | ChatGPT engine and UTC dates | Build |
+| --- | --- | --- | --- | --- | --- |
+| sleight turbo | `claude-haiku-5-5` | high (the script's flag) | Claude Code 2.1.289 | engine 26.1007.71326 (39 inferred), 2026-10-18 | `46ac78bf` |
+| FowlBrowser | `claude-haiku-5-5` | high (the script's flag) | Claude Code 2.1.289 | not used, 2026-10-18 to 2026-10-19 | `1f6efff2`, `326dde47`, `adcebef9` |
+
+The arms that use the engine ran on one engine version, 26.1007.71326. A version is "recorded" when the runner read it and "inferred" from the timeline in `bench/engine-versions.json` otherwise, and a date is inferred when it comes from a file's stamp or modification time. LCU, Cua, Peekaboo, FowlBrowser, Claude in Chrome and Claude's computer use don't use the engine.
+
+</details>
+
+<details><summary>Spread of passing runs and the 1 failed run</summary>
+
+| Task | sleight turbo | FowlBrowser |
+| --- | --- | --- |
+| `form-travel` | 51.9 [45.3 to 52.7] | 72.2 [69.2 to 95.2] |
+| `form-settings` | 28.1 [21.5 to 34.7] | 37.9 [34.2 to 41.9], p90 41.9 |
+| `form-checkout` | 30.5 [26.2 to 45.4] | 39.7 [39.7 to 50.4] |
+| `form-settings-helium` | 24.2 [20.2 to 35.7] | 44.2 [31.7 to 48.3], p90 48.3 |
+| `shipping-link` | 9.1 [7.5 to 10.0] | 12.8 [11.9 to 12.9] |
+| `size-guide` | 10.1 [9.5 to 11.3] | 15.4 [10.4 to 17.8], p90 17.8 |
+| `demoid` | 16.3 [14.2 to 17.1] | 14.1 [13.7 to 20.2], p90 20.2 |
+| `mobile` | 11.0 [10.7 to 11.2] | 12.3 [9.9 to 18.1], p90 18.1 |
+| `handoff` | 15.1 [13.4 to 16.1] | 13.5 [10.2 to 16.2], p90 16.2 |
+| `inject-order` | 15.4 [14.0 to 17.7] | 17.5 [13.8 to 18.0], p90 18.0 |
+| `inject-mail` | 14.1 [13.4 to 20.1] | 19.8 [13.2 to 22.6], p90 22.6 |
+| `wikipedia` | 5.3 [4.9 to 5.4] | 5.9 [4.8 to 7.6], p90 7.6 |
+| `mdn` | 5.7 [4.6 to 5.7] | 7.3 [5.6 to 9.7], p90 9.7 |
+
+| Task | Arm | Round | s | Problems |
+| --- | --- | --- | --- | --- |
 | `form-checkout` | FowlBrowser | `helium-fowlbrowser-r1` | 44.5 | `paid without a stated amount` |
 
 </details>

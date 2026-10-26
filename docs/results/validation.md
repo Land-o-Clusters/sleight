@@ -2,6 +2,13 @@
 
 # Validation: build A against build B
 
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="charts/family-validation-dark.svg">
+  <img src="charts/family-validation-light.svg" width="900" alt="Validation: 474 of 484 recorded attempts passed across 42 study and arm rows. Task sets differ between studies.">
+</picture>
+
+<sub>Validation: 474 of 484 recorded attempts passed across 42 study and arm rows. Task sets differ between studies.</sub>
+
 These banks compare two builds of sleight on the same tasks, build A (an earlier build, usually the last release) against build B (the build under test). No other tool is in these tables, and they never count toward a claim. A mark means build B has a higher expected time than build A, or a lower pass rate. It is not a significance test.
 
 1 scored bank: 1 validation, 0 re-measure. 6 more have no score file. 21 A/B groups in all. Build B has a higher expected time or a lower pass rate than build A on 37 of 72 task comparisons. Newest scored bank: validation-140-final (2026-10-20).
