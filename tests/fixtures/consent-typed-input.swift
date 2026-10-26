@@ -3,6 +3,11 @@ var fixtureKeyWindow: NSWindow?
 var fixtureCurrentEvent: NSEvent?
 var fixtureHIDMouseDownAge = Double.infinity
 var fixtureMouseLocation = NSPoint.zero
+var fixtureWindowsFrontToBack: [NSWindow] = []
+func fixtureWindowNumber(at point: NSPoint, belowWindowWithWindowNumber number: Int) -> Int {
+    check(number == 0, "HID lookup starts at the topmost window")
+    return fixtureWindowsFrontToBack.first { $0.frame.contains(point) }?.windowNumber ?? 0
+}
 var fixtureVoiceOver = false
 var fixtureSwitchControl = false
 var fixtureKeyAllowed = true
@@ -373,7 +378,7 @@ for kind in ["action", "debugger", "relaunch", "handoff", "app"] {
 }
 
 // A fully armed inactive card accepts its first activating click, but an early press cannot be held through the delay.
-for downDelay in [0.7, 0.2] {
+for downDelay in [0.7, 0.5, 0.2] {
     let (alert, view, actions, receipt) = modal(true)
     let action = actions[0], button = alert.buttons[0], arming = consentArming(alert.window)
     let up = mouse(view, type: .leftMouseUp), shown = up.timestamp - 0.75
@@ -393,8 +398,8 @@ for downDelay in [0.7, 0.2] {
         fixtureCurrentEvent = up
         accepted = action.press(button)
     }
-    check(accepted == (downDelay == 0.7), "inactive card click at \(downDelay * 1000) ms, up at 750 ms")
-    check(receipt.choices == (downDelay == 0.7 ? ["Always allow"] : []), "activating click emits exact expected choice")
+    check(accepted == (downDelay >= consentArmingDelay), "inactive card click at \(downDelay * 1000) ms, up at 750 ms")
+    check(receipt.choices == (downDelay >= consentArmingDelay ? ["Always allow"] : []), "activating click emits exact expected choice")
     check(button.acceptsFirstMouse(for: down), "protected button accepts the first inactive click")
     fixtureCurrentEvent = nil; fixtureVisibleWindows.remove(ObjectIdentifier(alert.window))
     trustedEvents.remove(ObjectIdentifier(down)); trustedEvents.remove(ObjectIdentifier(up))
@@ -405,28 +410,28 @@ for row in ["posted down", "future down", "stale up", "old down"] {
     let (alert, view, actions, receipt) = modal(true)
     let arming = consentArming(alert.window), shown = ProcessInfo.processInfo.systemUptime - 10
     arming.presented(at: shown)
-    let previous = mouse(view, age: 2)
-    arming.mouseBegan(previous)
     let event = mouse(view, trusted: row != "posted down", age: row == "future down" ? -1 : row == "old down" ? 2 : 0,
         type: row == "stale up" ? .leftMouseUp : .leftMouseDown)
     fixtureCurrentEvent = event
     fixtureHIDMouseDownAge = 0.01; fixtureMouseLocation = NSPoint(x: alert.window.frame.midX, y: alert.window.frame.midY)
+    fixtureWindowsFrontToBack = [alert.window]
     fixtureVisibleWindows.insert(ObjectIdentifier(alert.window))
     NotificationCenter.default.post(name: NSApplication.willBecomeActiveNotification, object: NSApp)
     check(arming.presentedAt > shown, "\(row) activation rearms instead of exempting")
     check(!arming.accepts(mouse(view, trusted: false)), "\(row) starts a new delay")
     check(receipt.choices.isEmpty, "\(row) grants nothing")
-    fixtureCurrentEvent = nil; fixtureHIDMouseDownAge = .infinity
+    fixtureCurrentEvent = nil; fixtureHIDMouseDownAge = .infinity; fixtureWindowsFrontToBack = []
     fixtureVisibleWindows.remove(ObjectIdentifier(alert.window))
-    trustedEvents.remove(ObjectIdentifier(previous)); trustedEvents.remove(ObjectIdentifier(event)); _ = actions
+    trustedEvents.remove(ObjectIdentifier(event)); _ = actions
 }
 
 // An app-defined or absent current event uses HID timing and global AppKit pointer coordinates, without reading live input.
 for appDefined in [false, true] {
-    for (age, inside, armed, expected) in [
-        (0.05, true, true, true), (0.05, false, true, false), (0.1, true, true, false),
-        (1.0, true, true, false), (-0.01, true, true, false), (Double.infinity, true, true, false),
-        (Double.nan, true, true, false), (0.05, true, false, false)
+    for (age, inside, covered, armed, expected) in [
+        (0.05, true, false, true, true), (0.05, true, true, true, false),
+        (0.05, false, false, true, false), (0.1, true, false, true, false),
+        (1.0, true, false, true, false), (-0.01, true, false, true, false), (Double.infinity, true, false, true, false),
+        (Double.nan, true, false, true, false), (0.05, true, false, false, false)
     ] {
         let (alert, view, actions, receipt) = modal(true)
         let arming = consentArming(alert.window), shown = ProcessInfo.processInfo.systemUptime - (armed ? 10 : 0.2)
@@ -435,11 +440,18 @@ for appDefined in [false, true] {
             timestamp: ProcessInfo.processInfo.systemUptime, windowNumber: 0, context: nil, subtype: 0, data1: 0, data2: 0) : nil
         fixtureHIDMouseDownAge = age
         fixtureMouseLocation = inside ? NSPoint(x: alert.window.frame.midX, y: alert.window.frame.midY) : .zero
+        let cover = NSWindow(contentRect: alert.window.frame, styleMask: [.borderless], backing: .buffered, defer: false)
+        if covered {
+            check(cover.frame.contains(fixtureMouseLocation) && alert.window.frame.contains(fixtureMouseLocation), "another window overlaps the card under the pointer")
+        }
+        fixtureWindowsFrontToBack = covered ? [cover, alert.window] : [alert.window]
         fixtureVisibleWindows.insert(ObjectIdentifier(alert.window))
         NotificationCenter.default.post(name: NSApplication.willBecomeActiveNotification, object: NSApp)
-        check((arming.presentedAt == shown) == expected, "HID fallback app-defined=\(appDefined), age=\(age), inside=\(inside), armed=\(armed)")
+        check((arming.presentedAt == shown) == expected, "HID fallback app-defined=\(appDefined), age=\(age), inside=\(inside), covered=\(covered), armed=\(armed)")
+        if !expected { check(!arming.accepts(mouse(view, trusted: false)), "HID refusal starts a new delay") }
         check(receipt.choices.isEmpty, "HID exemption grants nothing")
         fixtureCurrentEvent = nil; fixtureHIDMouseDownAge = .infinity; fixtureMouseLocation = .zero
+        fixtureWindowsFrontToBack = []
         fixtureVisibleWindows.remove(ObjectIdentifier(alert.window)); _ = actions; _ = view
     }
 }
@@ -454,12 +466,14 @@ for downDelay in [0.7, 0.2] {
     // Model activation 50 ms after the down; both paths must require the card to have armed before that down.
     fixtureHIDMouseDownAge = 0.05
     fixtureMouseLocation = NSPoint(x: alert.window.frame.midX, y: alert.window.frame.midY)
+    fixtureWindowsFrontToBack = [alert.window]
     NotificationCenter.default.post(name: NSApplication.willBecomeActiveNotification, object: NSApp)
     check((arming.presentedAt == shown) == (downDelay == 0.7), "HID activation preserves only an armed presentation")
     let accepted = click(actions[0], alert.buttons[0], up, downAt: down.timestamp)
     check(accepted == (downDelay == 0.7), "HID activating click at \(downDelay * 1000) ms validates both ends")
     check(receipt.choices == (downDelay == 0.7 ? ["Always allow"] : []), "HID activating click emits exact expected choice")
     fixtureCurrentEvent = nil; fixtureHIDMouseDownAge = .infinity; fixtureMouseLocation = .zero
+    fixtureWindowsFrontToBack = []
     fixtureVisibleWindows.remove(ObjectIdentifier(alert.window))
     trustedEvents.remove(ObjectIdentifier(down)); trustedEvents.remove(ObjectIdentifier(up))
 }
@@ -480,11 +494,17 @@ for foreign in [false, true] {
     let arming = consentArming(alert.window), shown = ProcessInfo.processInfo.systemUptime - 10
     arming.presented(at: shown)
     fixtureVisibleWindows.insert(ObjectIdentifier(alert.window))
-    let event = foreign ? mouse(otherView) : key("o", in: alert.window)
+    let event = foreign ? mouse(otherView, type: .leftMouseDown) : key("o", in: alert.window)
+    fixtureHIDMouseDownAge = foreign ? 0.01 : .infinity
+    fixtureMouseLocation = NSPoint(x: alert.window.frame.midX, y: alert.window.frame.midY)
+    fixtureWindowsFrontToBack = [alert.window]
     fixtureCurrentEvent = event
     NotificationCenter.default.post(name: NSApplication.willBecomeActiveNotification, object: NSApp)
     check(arming.presentedAt > shown, "keyboard or another window's mouse activation rearms the card")
+    check(!arming.accepts(mouse(view, trusted: false)), "another window's down cannot use the fresh HID fallback")
+    check(receipt.choices.isEmpty, "foreign activation grants nothing")
     fixtureCurrentEvent = nil; fixtureVisibleWindows.remove(ObjectIdentifier(alert.window))
+    fixtureHIDMouseDownAge = .infinity; fixtureMouseLocation = .zero; fixtureWindowsFrontToBack = []
     trustedEvents.remove(ObjectIdentifier(event)); _ = actions; _ = otherActions; _ = other; _ = view; _ = receipt
 }
 

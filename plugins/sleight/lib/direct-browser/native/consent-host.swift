@@ -22,7 +22,6 @@ private var consentArmingKey: UInt8 = 0
 let consentArmingDelay: TimeInterval = 0.5
 final class ConsentArming {
     private(set) var presentedAt = Double.infinity
-    private var mouseDownAt: Double?
     private var observers: [(NotificationCenter, NSObjectProtocol)] = []
     init(_ window: NSWindow) {
         func observe(_ center: NotificationCenter, _ name: Notification.Name, object: AnyObject? = nil, activation: Bool = false) {
@@ -41,27 +40,25 @@ final class ConsentArming {
         observe(DistributedNotificationCenter.default(), Notification.Name("com.apple.screenIsUnlocked"))
     }
     deinit { for (center, observer) in observers { center.removeObserver(observer) } }
-    func presented(at timestamp: Double = ProcessInfo.processInfo.systemUptime) { presentedAt = timestamp; mouseDownAt = nil }
-    func mouseBegan(_ event: NSEvent) { mouseDownAt = event.timestamp }
+    func presented(at timestamp: Double = ProcessInfo.processInfo.systemUptime) { presentedAt = timestamp }
     private func activated(_ window: NSWindow) {
         if !activationExempts(window) { presented() }
     }
     private func activationExempts(_ window: NSWindow, now: Double = ProcessInfo.processInfo.systemUptime) -> Bool {
-        defer { mouseDownAt = nil }
         var path = "current-event", began: Double?
         if let event = NSApp.currentEvent, [.leftMouseDown, .leftMouseUp].contains(event.type) {
             // Never let an invalid mouse event fall through to the HID fallback or reuse an earlier down.
             if event.type == .leftMouseDown, event.window === window,
                 event.timestamp.isFinite, event.timestamp >= 0, event.timestamp <= now,
                 now - event.timestamp < 1, personInput(event.cgEvent) {
-                mouseBegan(event)
-                began = mouseDownAt
+                began = event.timestamp
             }
         } else {
             // NSAlert activation can carry an app-defined event instead of the activating click.
             path = "hid"
             let age = CGEventSource.secondsSinceLastEventType(.hidSystemState, eventType: .leftMouseDown)
-            if age.isFinite, age >= 0, age < 0.1, window.frame.contains(NSEvent.mouseLocation) {
+            if age.isFinite, age >= 0, age < 0.1, window.frame.contains(NSEvent.mouseLocation),
+                NSWindow.windowNumber(at: NSEvent.mouseLocation, belowWindowWithWindowNumber: 0) == window.windowNumber {
                 began = now - age
             }
         }
@@ -205,7 +202,6 @@ final class ConsentInputAction: NSObject {
     }
     func trackMouseDown(_ event: NSEvent, perform: () -> Void) {
         mouseDown = event
-        if let window = button?.window { consentArming(window).mouseBegan(event) }
         defer { mouseDown = nil }
         perform()
     }

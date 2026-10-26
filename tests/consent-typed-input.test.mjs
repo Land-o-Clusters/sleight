@@ -24,13 +24,14 @@ test('real modal and handoff events route typed choices only after field focus w
   const blocks = ['PERSON INPUT', 'APP FRAME', 'ASK CARD'].map(name => {
     const block = source.split(`// BEGIN ${name}\n`)[1]?.split(`// END ${name}`)[0];
     assert.ok(block, name);
-    // Headless seams supply CGEvent provenance and key-window/current-event state only.
+    // Headless seams supply CGEvent provenance, input state and the window stack under the pointer.
     // Real NSEvents, window association, key equivalents and responder dispatch stay intact.
     return block.replaceAll('window.isKeyWindow', '(window === fixtureKeyWindow)')
       .replaceAll('window.isVisible', 'fixtureVisibleWindows.contains(ObjectIdentifier(window))')
       .replaceAll('NSWorkspace.shared.notificationCenter', 'fixtureWorkspaceCenter')
       .replaceAll('DistributedNotificationCenter.default()', 'fixtureUnlockCenter')
       .replaceAll('CGEventSource.secondsSinceLastEventType(.hidSystemState, eventType: .leftMouseDown)', 'fixtureHIDMouseDownAge')
+      .replaceAll('NSWindow.windowNumber(at: NSEvent.mouseLocation, belowWindowWithWindowNumber: 0)', 'fixtureWindowNumber(at: fixtureMouseLocation, belowWindowWithWindowNumber: 0)')
       .replaceAll('NSEvent.mouseLocation', 'fixtureMouseLocation')
       .replaceAll('NSWorkspace.shared.isVoiceOverEnabled', 'fixtureVoiceOver')
       .replaceAll('NSWorkspace.shared.isSwitchControlEnabled', 'fixtureSwitchControl')
