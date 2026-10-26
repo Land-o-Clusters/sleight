@@ -31,6 +31,15 @@ async function fixture(config = {}, tracePhase, bridgeOptions = {}, call) {
     forkWorker(path, args, options) { assert.match(path, /worker\.mjs$/); assert.deepEqual(args, []); forkOptions = options; queueMicrotask(() => session.ready()); return child; } });
   return { child, endpoint, events, bridge, forkOptions };
 }
+test('private narration crosses worker IPC as call context, outside the runtime tool arguments', async () => {
+  const received = [];
+  const f = await fixture({}, undefined, {}, async (request, options) => { received.push({ request, say: options.say }); return { text: 'fixture', isError: false }; });
+  try {
+    await f.bridge.bind({ ...f.bridge.bootstrapEnvelope(), event: 'begin', turn: 'narration-turn', text: 'Inspect the menu.' });
+    await f.bridge.call({ name: 'browser_read', arguments: { tab: 't1' }, say: 'I’ll inspect the menu. https://private.test/x' });
+    assert.deepEqual(received, [{ request: { name: 'browser_read', arguments: { tab: 't1' } }, say: 'I’ll inspect the menu.' }]);
+  } finally { await f.bridge.detach(); }
+});
 test('waiting handoff can exceed the normal RPC timeout without losing the worker', async () => {
   const f = await fixture({}, undefined, { timeoutMs: 10 }, async request => {
     if (request.name === 'browser_tabs') await new Promise(resolve => setTimeout(resolve, 30));

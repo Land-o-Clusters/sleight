@@ -14,7 +14,7 @@ const metrics = { calls: 3, reads: 1, characters: 55, text: { docs: 10, tree: 40
   paths: { native: { actions: 2, estimatedActions: 2, estimatedCalls: 1, actionMs: 0, timedActions: 0 }, turbo: { actions: 0, estimatedActions: 0, estimatedCalls: 0, actionMs: 0, timedActions: 0 }, engine: { actions: 0, estimatedActions: 0, estimatedCalls: 0, actionMs: 0, timedActions: 0 } } };
 const usage = { input_tokens: 12, output_tokens: 34, cache_read_input_tokens: 56, cache_creation_input_tokens: 78, model: 'host-model' };
 
-function host({ cost = true, missingUsage = false, marker = false, malicious = false, paneOpen = false, usageRead } = {}) {
+function host({ cost = true, missingUsage = false, marker = false, malicious = false, paneOpen = false, usageRead, messages } = {}) {
   const hooks = [], state = new Map(), work = [], statuses = [], replies = [], forwarded = [];
   let usageReads = 0;
   const elements = Object.fromEntries(['Box', 'Text', 'Button'].map(name => [name, name]));
@@ -47,7 +47,7 @@ function host({ cost = true, missingUsage = false, marker = false, malicious = f
   let usd = 1;
   const $ = {
     ui: { status: text => statuses.push(text), log() {}, toast() {}, panes: async () => paneOpen ? [{ id: 'sleight' }] : [], open: async () => work.push('open'), resolve: () => elements },
-    session: { usage: async () => {
+    session: { messages: async args => typeof messages === 'function' ? messages(args) : messages ?? [], usage: async () => {
       usageReads++;
       if (missingUsage) throw Error('older host');
       if (usageRead) return usageRead(usageReads, usd);
@@ -95,6 +95,18 @@ const deferred = () => {
   return { promise, resolve, reject };
 };
 const nextTick = () => new Promise(resolve => setImmediate(resolve));
+test('mod overwrites model narration with assistant-only text scoped to this tool and agent', async () => {
+  const reads = [];
+  const h = host({ messages: args => { reads.push(args); return [{ role: 'assistant', content: [{ type: 'tool_use', id: 'acquire', name: 'js', input: { code: 'let app = await cua.getApp("Editor")' } }] }, { role: 'assistant', content: [
+    { type: 'text', text: 'I’ll inspect the menu. Next sentence.' }, { type: 'tool_use', id: 'current' },
+  ] }]; } });
+  await h.start();
+  await h.emit('tool.call', { tool: prefix + 'js', code: 'await app.click(1)', tool_use_id: 'current', agentId: 'child', sleight_say: 'MODEL FORGERY' }, { text: 'PRIVATE RESULT' });
+  assert.deepEqual(JSON.parse(JSON.stringify(reads)), [{ as: 'api', agentId: 'child' }]);
+  assert.equal(h.forwarded[0].sleight_stats.say, 'I’ll inspect the menu.');
+  await h.emit('tool.call', { tool: prefix + 'browser_read', tab: 't1', tool_use_id: 'missing', sleight_say: 'MODEL FORGERY' });
+  assert.equal(h.forwarded[1].sleight_stats.say, undefined);
+});
 async function paneLabels(h) {
   const tree = await h.emit('ui.render', { component: 'Pane', requestId: 'sleight', surface: 'terminal', props: {} });
   const labels = node => Array.isArray(node) ? node.flatMap(labels) : node && typeof node === 'object' ? [node.props?.label, ...labels(node.children)] : [];

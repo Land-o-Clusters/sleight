@@ -1,3 +1,4 @@
+import { assistantNarration } from './narration.mjs'
 import { atom, read, update } from 'claude-code'
 import type { Register } from 'claude-code'
 
@@ -335,6 +336,17 @@ function ownCallVerdict(e: { tool: string; input: unknown }, origin: { plugin: s
   return undefined
 }
 
+async function sayFor($: any, e: { tool_use_id?: string; agentId?: string }) {
+  try {
+    const messages = await $.session.messages({ as: 'api', ...(e.agentId ? { agentId: e.agentId } : {}) })
+    return assistantNarration(messages, e.tool_use_id, e) ?? ''
+  } catch { return '' }
+}
+
+async function narrated<T>($: any, event: T): Promise<T> {
+  return { ...event, sleight_say: await sayFor($, event as { tool_use_id?: string; agentId?: string }) }
+}
+
 export const register: Register = on => {
   on('classic.PreToolUse', async ($, e, next) => {
     if (!['Write', 'Edit', 'MultiEdit', 'NotebookEdit', 'Bash'].includes(e.tool)) return next(e)
@@ -400,9 +412,11 @@ export const register: Register = on => {
 
   // A private argument, removed by the relay before forwarding. Subagents are outside
   // these main-loop counters, even when an old child calls during a later turn.
-  const counted = <T extends { agentId?: string }>(e: T, owner: StatsTurn | undefined) => {
-    if (e.agentId !== undefined || !owner) return { ...e, sleight_stats: { internal: true } }
-    return { ...e, sleight_stats: { turn: owner.id } }
+  const counted = <T extends { agentId?: string; sleight_say?: string }>(e: T, owner: StatsTurn | undefined) => {
+    const { sleight_say, ...event } = e
+    const say = sleight_say ? { say: sleight_say } : {}
+    if (e.agentId !== undefined || !owner) return { ...event, sleight_stats: { internal: true, ...say } } as unknown as T
+    return { ...event, sleight_stats: { turn: owner.id, ...say } } as unknown as T
   }
 
   const forward = async <T extends { agentId?: string }, R>(e: T, owner: StatsTurn | undefined, next: (event: T) => Promise<R>) => {
@@ -433,7 +447,7 @@ export const register: Register = on => {
       at: now(),
     }
     await update($, log, list => [...list, entry].slice(-LOG_LIMIT))
-    const ran = await forward(e, owner, next)
+    const ran = await forward(await narrated($, e), owner, next)
     const app = appFrom(code, ran.text)
     if (app) lastApp = app
     actions++
@@ -451,7 +465,7 @@ export const register: Register = on => {
     if (await read($, stopped)) return { deny: 'The user stopped sleight with /sleight stop. Do not use it again until they ask.' }
     if (replayActive) return { deny: 'A replay is running. Wait for it to stop before sending another tool call.' }
     usedThisTurn = true
-    return forward(e, owner, next)
+    return forward(await narrated($, e), owner, next)
   })
 
   // Compact browser verbs are session work too. The fixed completion hook must
@@ -463,9 +477,9 @@ export const register: Register = on => {
     if (await read($, stopped)) return { deny: 'The user stopped sleight with /sleight stop. Do not use it again until they ask.' }
     if (replayActive) return { deny: 'A replay is running. Wait for it to stop before sending another tool call.' }
     usedThisTurn = true
-    const entry: LogEntry = { id: e.tool_use_id, title: name, status: 'running', at: now() }
+    const entry: LogEntry = { id: (e as { tool_use_id: string }).tool_use_id, title: name, status: 'running', at: now() }
     await update($, log, list => [...list, entry].slice(-LOG_LIMIT))
-    const ran = await forward(e, owner, next)
+    const ran = await forward(await narrated($, e), owner, next)
     actions++
     const status: LogEntry['status'] = ran.deny !== undefined ? 'refused' : ran.isError ? 'error' : 'done'
     await update($, log, list => list.map(one => one.id === entry.id ? { ...one, status } : one))

@@ -452,6 +452,34 @@ the glove. `SLEIGHT_HAND=0` disables both the built-in cursor and its public str
 `labels: role` uses generic nouns. `labels: title` opts into element names, truncated to 40 characters and filtered for
 URLs and file paths. Names can still contain page content. Secure input has no label or character count.
 
+### Narration
+
+`narration` in `hand.json` is `off` (the default), `bubbles` or `voice`. With the ring or sprite enabled,
+`bubbles` shows Claude's latest sentence before its sleight call, limited to 90 characters and two lines.
+It uses the text Claude already wrote, with no model request or added prompt tokens. A call without suitable
+assistant text doesn't show a bubble. Tool results, code, quoted values, URLs and path-like tokens are excluded.
+Text-entry calls omit narration because their values may be computed. Native calls also need a recognized app acquisition.
+Unknown JavaScript or assignments clear that narration context until Claude acquires the app again. Secure input hides the bubble and stops voice.
+
+`voice` shows the same bubble and speaks it with an installed macOS system voice. An optional `voice` object
+sets `id` (the system voice identifier) and `rate` (0.1 to 0.6, default 0.5). Without that object, sleight picks
+an installed voice matching the system language when available. An unavailable identifier leaves speech silent.
+No voice is downloaded, and Personal Voice is excluded. One utterance can speak at a time; a newer line replaces
+the pending line. Repeated aim, act and status frames do not repeat the same utterance.
+
+Voice skips muted output, unreadable audio state and any process using microphone input. Microphone use is a
+conservative call check: it also silences narration during recording and may miss a call that has stopped input.
+While a bubble or utterance exists, the host rechecks secure input and active voice safety every 100 ms. It has no
+narration timer when idle. The bubble uses one text layer and fades with the ring. These settings have the same
+owner, mode and symlink rules as the rest of `hand.json`. Claude's guard protects the entire file.
+
+Add `"narration":"bubbles"` to an existing ring configuration. Set it to `"voice"` for local speech,
+or `"off"` to stop both. A running host reads changes through the existing settings watcher.
+With `stream: true`, the opted-in sentence can also appear as `say` on cursor action and status events for local renderers.
+The relay omits it unless the native host confirms that secure input is off. A missing host or a check taking over 100 ms
+omits the line without holding up the tool. A stream-only session with no native host has no narration.
+Because the stream does not report secure-input transitions, external renderers must suppress parked lines themselves.
+
 ## Preapproved apps
 
 Write `~/Library/Application Support/sleight/preapproved.json` yourself to allow selected apps without

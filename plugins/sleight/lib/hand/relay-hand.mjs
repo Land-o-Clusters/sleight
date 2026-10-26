@@ -47,7 +47,7 @@ export function createRelayHand({ client, loadClient = () => import('./client.mj
   const cursorById = new Map();
   const publish = (call, entry, phase, reason, held = false) => {
     if (!call.cursor) return;
-    try { return events.action({ ...entry.record, call: call.cursor, index: entry.index, source: 'native', phase, ...(reason ? { reason: cursorReason(reason) } : {}) }, { held }); } catch {}
+    try { return events.action({ ...entry.record, say: call.input.say, call: call.cursor, index: entry.index, source: 'native', phase, ...(reason ? { reason: cursorReason(reason) } : {}) }, { held }); } catch {}
   };
   const cancelActs = call => { for (const timer of call.timers ?? []) cancel(timer); call.timers = []; call.heldAims?.clear(); };
   // The host draws an action's aim once the act before it goes out, so the ring shows one target at a time. The public
@@ -127,7 +127,7 @@ export function createRelayHand({ client, loadClient = () => import('./client.mj
 
   function send(call, entry, delayMs) {
     entry.sent = true; entry.due = now() + delayMs;
-    try { if (live()) resolved?.send({ ...entry.frame, delayMs: Math.max(0, Math.round(delayMs)) }); } catch {}
+    try { if (live()) resolved?.send({ ...entry.frame, say: call.input.say, delayMs: Math.max(0, Math.round(delayMs)) }); } catch {}
     releaseAim(call, entry.action);
   }
 
@@ -233,7 +233,7 @@ export function createRelayHand({ client, loadClient = () => import('./client.mj
       const app = meta?.tool_params?.app;
       if (typeof app === 'string') approvalApps.add(app.toLowerCase());
       approvals.set(requestId, { call, tool: meta?.tool_name });
-      if (call.cursor) events.status('waiting', { call: call.cursor, app: call.target?.app });
+      if (call.cursor) events.status('waiting', { call: call.cursor, app: call.target?.app, say: call.input.say });
     }),
     // The relay's answer to an approval request, on its way to the engine.
     answered: guarded((requestId, action) => {

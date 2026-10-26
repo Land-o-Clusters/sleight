@@ -40,6 +40,25 @@ function harness({ enabled = true, built = true, capture = 'hidden', style, resu
 }
 const frame = (over = {}) => ({ kind: 'click', pid: 501, windowId: 77, at: [10.123, 20], path: [[0, 0], [10.123, 20]], ...over });
 
+test('public narration checks accept only the native host nonce and pending token, and cancellation drops late replies', async t => {
+  const h = harness({ style: 'ring' }); t.after(() => h.client.close());
+  const answered = [];
+  h.client.checkNarration(value => answered.push(value)); assert.deepEqual(answered, [false]);
+  h.client.send(frame()); await settle(); answered.length = 0;
+  const child = h.children[0];
+  h.client.checkNarration(value => answered.push(value)); const request = child.lines.at(-1);
+  assert.deepEqual(Object.keys(request).sort(), ['hand', 'nonce', 'token']);
+  const reply = value => child.stdout.emit('data', JSON.stringify({ ...request, secure: false, ...value }) + '\n');
+  reply({ nonce: 'f'.repeat(64) }); reply({ token: 'f'.repeat(32) }); reply({ secure: 'false' });
+  assert.deepEqual(answered, []); reply({ secure: true }); assert.deepEqual(answered, [false]);
+  const cancel = h.client.checkNarration(value => answered.push(value)); cancel();
+  child.stdout.emit('data', JSON.stringify({ ...child.lines.at(-1), secure: false }) + '\n');
+  assert.deepEqual(answered, [false]);
+  h.client.checkNarration(value => answered.push(value));
+  child.stdout.emit('data', JSON.stringify({ ...child.lines.at(-1), secure: false }) + '\n');
+  assert.deepEqual(answered, [false, true]);
+});
+
 test('ring host frames share one nonce and sequence, retain filtered labels, and pass the selected style to spawn', async t => {
   const h = harness({ style: 'seam' }); t.after(() => h.client.close());
   const record = { type: 'action', phase: 'aim', kind: 'click', point: [10, 20], rect: [1, 2, 30, 40], window: { pid: 501, id: 77 }, label: 'button' };

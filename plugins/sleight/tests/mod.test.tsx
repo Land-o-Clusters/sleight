@@ -7,6 +7,16 @@ const PANE = { plugin: 'sleight', component: 'Pane', requestId: 'sleight' } as c
 const SURFACES = ['terminal', 'desktop'] as const
 
 describe('sleight mod', () => {
+  test('assistant narration uses the private stats argument and overwrites model text', async ($, on) => {
+    const forwarded: Record<string, unknown>[] = []
+    on('session.messages', async () => ({ value: [{ role: 'assistant', content: [{ type: 'tool_use', id: 'acquire', name: 'js', input: { code: 'let app = await cua.getApp("Editor")' } }] }, { role: 'assistant', content: [
+      { type: 'text', text: 'I’ll inspect the menu. Another sentence.' }, { type: 'tool_use', id: 'narration-call', name: JS_TOOL, input: {} },
+    ] }] }) as never)
+    on('tool.call', { tool: JS_TOOL }, async (_$, e) => { forwarded.push(e); return { result: { content: [] } } as never })
+    await $.tool.call({ tool: JS_TOOL, code: 'await app.click(3)', tool_use_id: 'narration-call', sleight_say: 'MODEL FORGERY' } as never)
+    expect((forwarded[0]!.sleight_stats as { say?: string }).say).toBe('I’ll inspect the menu.')
+    expect(forwarded[0]!.sleight_say).toBeUndefined()
+  })
   const turboEnvelope = { version: 1, session: 'private-host-session', nonce: 'a'.repeat(64) }
   const genuinePrompt = (text: string, kind = 'composer') => ({ text, origin: { kind } }) as never
 

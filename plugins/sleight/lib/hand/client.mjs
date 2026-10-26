@@ -6,6 +6,7 @@
 // Caller frames: { kind, pid, windowId, at: [x, y], path: [[x, y], ...], delayMs, beats } in global top-left screen points
 // (kCGWindowBounds and AX frames). kind is click, double, right, key, type, drag or scroll. The hand glides along path into at
 // and flourishes there beats times; a drag grabs at at and carries along path. path defaults to [at], delayMs to 0 and beats to 1.
+import { narrationLine } from '../../hooks/narration.mjs';
 import { randomBytes } from 'node:crypto';
 import { readFileSync, watch as fsWatch } from 'node:fs';
 import { dirname, join } from 'node:path';
@@ -38,14 +39,16 @@ export function handWireFrame(frame) {
   if (!extra && !kinds.has(frame.kind)) return 'kind';
   const pid = id(frame.pid, 2147483647), windowId = id(frame.windowId, 4294967295), at = point(frame.at);
   if (!pid || !windowId || (!at && frame.hand !== 'status')) return 'target';
+  const say = narrationLine(frame.say);
+  const spoken = say ? { say } : {};
   const label = typeof frame.label === 'string' && !/[\x00-\x1f\x7f]/.test(frame.label) ? [...frame.label].slice(0, 40).join('') : undefined;
   if (frame.hand === 'status') return ['waiting', 'error', 'done', 'handback', 'thinking'].includes(frame.state)
-    ? { hand: 'status', state: frame.state, pid, windowId, ...at ? { at } : {}, ...frame.state === 'done' && typeof frame.ok === 'boolean' ? { ok: frame.ok } : {} } : 'state';
+    ? { hand: 'status', state: frame.state, pid, windowId, ...spoken, ...at ? { at } : {}, ...frame.state === 'done' && typeof frame.ok === 'boolean' ? { ok: frame.ok } : {} } : 'state';
   const rect = Array.isArray(frame.rect) && frame.rect.length === 4 && frame.rect.every(v => Number.isFinite(v) && Math.abs(v) <= 100000) && frame.rect[2] > 0 && frame.rect[3] > 0 ? frame.rect.map(round) : undefined;
   if (frame.hand === 'aim') {
     // The host's aim draws the same for every kind and its kind list has no move, so a move aim goes as click.
     if (frame.kind !== 'move' && !kinds.has(frame.kind)) return 'kind';
-    return { hand: 'aim', kind: frame.kind === 'move' ? 'click' : frame.kind, pid, windowId, at, holdMs: 0, ...rect ? { rect } : {}, ...label ? { label } : {} };
+    return { hand: 'aim', ...spoken, kind: frame.kind === 'move' ? 'click' : frame.kind, pid, windowId, at, holdMs: 0, ...rect ? { rect } : {}, ...label ? { label } : {} };
   }
   const raw = frame.path === undefined || Array.isArray(frame.path) && !frame.path.length ? [frame.at] : frame.path;
   if (!Array.isArray(raw)) return 'path';
@@ -55,7 +58,7 @@ export function handWireFrame(frame) {
   const beats = Math.min(20, Math.max(1, Math.round(Number.isFinite(frame.beats) ? frame.beats : 1)));
   // caretX: the type or key caret's x in global points, which the ring's bottom gap rides.
   const caretX = ['type', 'key'].includes(frame.kind) && Number.isFinite(frame.caretX) && Math.abs(frame.caretX) <= 100000 ? round(frame.caretX) : undefined;
-  return { kind: frame.kind, pid, windowId, at, path, delayMs, beats, ...label ? { label } : {}, ...rect ? { rect } : {}, ...caretX !== undefined ? { caretX } : {} };
+  return { kind: frame.kind, pid, windowId, at, ...spoken, path, delayMs, beats, ...label ? { label } : {}, ...rect ? { rect } : {}, ...caretX !== undefined ? { caretX } : {} };
 }
 
 // The process's latest open client: turbo's bridge shares its host.
@@ -121,12 +124,12 @@ export function createHandClient({ env = process.env, setting = () => handSettin
   const nonce = randomBytes(32).toString('hex'), queue = [];
   // host: none, starting, running or dead (failed or closed this session; final). hand: the settings allow the hand.
   let seq = 0, child, host = 'none', starting, hand = false, capture = 'hidden', checked = now(), checking = false, events = '', target;
-  let style = cursorStyle;
+  let style = cursorStyle, narration = 'off', voice;
   let buildController, buildStarted;
   // Hosts with an attached worker are left to finish their consent channel before exiting.
   const attached = new WeakSet();
   let consentClaimed = false, resetting;
-  const resetWaiters = new Map();
+  const resetWaiters = new Map(), narrationChecks = new Map();
   const resetConsent = started => {
     const token = randomBytes(16).toString('hex');
     return new Promise((resolve, reject) => {
@@ -142,6 +145,7 @@ export function createHandClient({ env = process.env, setting = () => handSettin
       const value = setting();
       style ??= handCursorStyles.includes(value?.style) ? value.style : 'glove';
       character ??= value?.character;
+      narration = ['bubbles', 'voice'].includes(value?.narration) ? value.narration : 'off'; voice = value?.voice;
       capture = value?.capture === 'visible' ? 'visible' : 'hidden';
       return value?.enabled === true;
     } catch { return false; }
@@ -157,14 +161,14 @@ export function createHandClient({ env = process.env, setting = () => handSettin
   const act = (wire, delayMs = wire.delayMs) => JSON.stringify(wire.hand
     ? { ...wire, nonce, seq: ++seq }
     : { hand: 'act', nonce, seq: ++seq, kind: wire.kind, pid: wire.pid,
-      windowId: wire.windowId, at: wire.at, path: wire.path, delayMs, beats: wire.beats,
+      windowId: wire.windowId, at: wire.at, ...wire.say ? { say: wire.say } : {}, path: wire.path, delayMs, beats: wire.beats,
       ...style !== 'glove' ? { ...wire.label ? { label: wire.label } : {}, ...wire.rect ? { rect: wire.rect } : {},
         ...wire.caretX !== undefined ? { caretX: wire.caretX } : {} } : {} }) + '\n';
   // perms: the last Permissions rows sent, with the targets a click may act on; permsText detects a change.
   let perms, permsText, permsApp, refreshing = false, again = false;
   // stats: the usage row last sent, and when the log was last read.
   let stats, statsText = 'null', statsAt = -Infinity;
-  const menu = () => JSON.stringify({ hand: 'menu', nonce, enabled: hand, capture, version, ...perms?.payload ? { permissions: perms.payload } : {},
+  const menu = () => JSON.stringify({ hand: 'menu', nonce, enabled: hand, capture, version, ...narration !== 'off' ? { narration } : {}, ...voice ? { voice } : {}, ...perms?.payload ? { permissions: perms.payload } : {},
     ...stats ? { usage: stats } : {} }) + '\n';
   async function loadUsage() {
     if (!usage) return false;
@@ -246,6 +250,9 @@ export function createHandClient({ env = process.env, setting = () => handSettin
       const text = events.slice(0, end); events = events.slice(end + 1);
       let event;
       try { event = JSON.parse(text); } catch {}
+      if (event?.hand === 'narration-check' && event.nonce === nonce && Object.keys(event).sort().join() === 'hand,nonce,secure,token' && typeof event.secure === 'boolean') {
+        const done = narrationChecks.get(event.token); narrationChecks.delete(event.token); done?.(!event.secure); continue;
+      }
       if (event?.hand === 'consent-ready' && event.nonce === nonce && Object.keys(event).sort().join() === 'hand,nonce,token') {
         resetWaiters.get(event.token)?.(); continue;
       }
@@ -339,10 +346,10 @@ export function createHandClient({ env = process.env, setting = () => handSettin
     checking = true;
     defer(() => {
       checking = false; checked = now();
-      const before = [hand, capture];
+      const before = JSON.stringify([hand, capture, narration, voice]);
       hand = read();
       if (!hand) queue.length = 0;
-      if (host === 'running' && (before[0] !== hand || before[1] !== capture)) {
+      if (host === 'running' && before !== JSON.stringify([hand, capture, narration, voice])) {
         if (!hand) { write(JSON.stringify({ hand: 'hide', nonce }) + '\n'); note('hand-off', { reason: 'setting' }); }
         write(menu());
       }
@@ -361,13 +368,19 @@ export function createHandClient({ env = process.env, setting = () => handSettin
   catch {} // no settings folder yet: the minute's recheck covers it
 
   const client = Object.freeze({
+    checkNarration(done) {
+      if (host !== 'running' || narrationChecks.size >= 32) { done(false); return; }
+      const token = randomBytes(16).toString('hex'); narrationChecks.set(token, done);
+      write(JSON.stringify({ hand: 'narration-check', nonce, token }) + '\n');
+      return () => narrationChecks.delete(token);
+    },
     send(frame) {
       recheck();
       // A new app to act in changes the menu's Never Act in row.
       if (host === 'running' && currentApp()?.bundleId !== permsApp) refreshPermissions();
       if (!hand || host === 'dead') return;
       if (style === 'glove' && ['aim', 'status'].includes(frame?.hand)) return;
-      const wire = handWireFrame(frame);
+      const wire = handWireFrame({ ...frame, say: narration === 'off' ? undefined : frame.say });
       if (typeof wire === 'string') { note('hand-dropped', { reason: wire }); return; }
       if (wire.hand !== 'status') target = { pid: wire.pid, windowId: wire.windowId, at: wire.at };
       if (host === 'running') { write(act(wire)); return; }
@@ -381,10 +394,10 @@ export function createHandClient({ env = process.env, setting = () => handSettin
       if (event?.type === 'action' && event.phase === 'aim') {
         if (!event.point || !event.window?.pid || !event.window?.id) return;
         client.send({ hand: 'aim', kind: ['select', 'navigate'].includes(event.kind) ? 'click' : event.kind, pid: event.window.pid, windowId: event.window.id,
-          at: event.point, rect: event.rect, label: event.label });
+          at: event.point, rect: event.rect, label: event.label, say: event.say });
       } else if (event?.type === 'status' && target && event.state !== 'idle') {
         // A call's done is its success; the ring bursts for it.
-        client.send({ hand: 'status', state: event.state, ...target, ...event.state === 'done' && event.call ? { ok: true } : {} });
+        client.send({ hand: 'status', state: event.state, ...target, say: event.say, ...event.state === 'done' && event.call ? { ok: true } : {} });
       }
     },
     hide() {
@@ -392,6 +405,7 @@ export function createHandClient({ env = process.env, setting = () => handSettin
       else queue.length = 0;
     },
     close() {
+      for (const done of narrationChecks.values()) done(false); narrationChecks.clear();
       try { watcher?.close(); } catch {}
       watcher = undefined;
       if (current === client) current = undefined;
