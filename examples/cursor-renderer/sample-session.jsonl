@@ -1,6 +1,6 @@
 {"v":"sleight.cursor/1","seq":1,"ts":1793016000000,"session":"0123456789abcdef0123456789abcdef","type":"session","state":"start","host":"claude-code","version":"1.5.1"}
 {"v":"sleight.cursor/1","seq":2,"ts":1793016000200,"session":"0123456789abcdef0123456789abcdef","type":"status","state":"thinking"}
-{"v":"sleight.cursor/1","seq":3,"ts":1793016001000,"session":"0123456789abcdef0123456789abcdef","type":"action","call":"c1","index":0,"phase":"aim","kind":"click","source":"native","timing":"scheduled","point":[640,360],"rect":[600,344,80,32],"role":"AXButton"}
+{"v":"sleight.cursor/1","seq":3,"ts":1793016001000,"session":"0123456789abcdef0123456789abcdef","type":"action","call":"c1","index":0,"phase":"aim","kind":"click","source":"native","timing":"scheduled","point":[640,360],"rect":[600,344,80,32],"role":"AXButton","window":{"id":101,"pid":202,"app":"Example","bundle":"org.example.synthetic","rect":[300,200,800,600],"exposure":"exposed"},"display":{"id":1,"scale":2},"label":"button"}
 {"v":"sleight.cursor/1","seq":4,"ts":1793016001300,"session":"0123456789abcdef0123456789abcdef","type":"action","call":"c1","index":0,"phase":"act","kind":"click","source":"native","timing":"scheduled","point":[640,360]}
 {"v":"sleight.cursor/1","seq":5,"ts":1793016001800,"session":"0123456789abcdef0123456789abcdef","type":"action","call":"c1","index":0,"phase":"done","kind":"click","source":"native","timing":"confirmed","point":[640,360]}
 {"v":"sleight.cursor/1","seq":6,"ts":1793016002300,"session":"0123456789abcdef0123456789abcdef","type":"action","call":"c2","index":0,"phase":"aim","kind":"type","source":"turbo","timing":"confirmed","point":[560,420],"count":8,"role":"textbox"}
@@ -17,5 +17,8 @@
 {"v":"sleight.cursor/1","seq":17,"ts":1793016007400,"session":"0123456789abcdef0123456789abcdef","type":"action","call":"c6","index":0,"phase":"aim","kind":"click","source":"native","timing":"scheduled","point":[720,440]}
 {"v":"sleight.cursor/1","seq":18,"ts":1793016007800,"session":"0123456789abcdef0123456789abcdef","type":"action","call":"c6","index":0,"phase":"failed","kind":"click","source":"native","timing":"confirmed","point":[720,440]}
 {"v":"sleight.cursor/1","seq":19,"ts":1793016007900,"session":"0123456789abcdef0123456789abcdef","type":"status","state":"error","call":"c6"}
-{"v":"sleight.cursor/1","seq":20,"ts":1793016008500,"session":"0123456789abcdef0123456789abcdef","type":"status","state":"handback"}
-{"v":"sleight.cursor/1","seq":21,"ts":1793016009000,"session":"0123456789abcdef0123456789abcdef","type":"session","state":"end","host":"claude-code","version":"1.5.1"}
+{"v":"sleight.cursor/1","session":"0123456789abcdef0123456789abcdef","ts":1793016008100,"type":"status","state":"waiting","call":"c7","seq":20}
+{"v":"sleight.cursor/1","session":"0123456789abcdef0123456789abcdef","ts":1793016008200,"type":"action","call":"c7","index":0,"phase":"declined","kind":"click","source":"native","timing":"confirmed","seq":21}
+{"v":"sleight.cursor/1","session":"0123456789abcdef0123456789abcdef","ts":1793016008300,"type":"status","state":"idle","seq":22}
+{"v":"sleight.cursor/1","seq":23,"ts":1793016008500,"session":"0123456789abcdef0123456789abcdef","type":"status","state":"handback"}
+{"v":"sleight.cursor/1","seq":24,"ts":1793016009000,"session":"0123456789abcdef0123456789abcdef","type":"session","state":"end","host":"claude-code","version":"1.5.1"}

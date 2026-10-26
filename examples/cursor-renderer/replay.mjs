@@ -1,21 +1,20 @@
 // Replay a synthetic JSONL recording without starting sleight or an app.
 import net from 'node:net';
 import { lstat, readdir, readFile } from 'node:fs/promises';
-import { join, resolve } from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { join } from 'node:path';
 import { setTimeout as delay } from 'node:timers/promises';
-import { defaultDirectory } from './listen.mjs';
+import { defaultDirectory, isMain } from './listen.mjs';
 
 export async function discoverSockets(dir = defaultDirectory()) {
   try {
     const info = await lstat(dir);
-    if (!info.isDirectory() || info.isSymbolicLink() || info.uid !== process.getuid() || (info.mode & 0o777) !== 0o700) return [];
+    if (!info.isDirectory() || info.isSymbolicLink() || info.uid !== process.getuid() || (info.mode & 0o7777) !== 0o700) return [];
     const paths = [];
     for (const name of (await readdir(dir)).sort()) {
       if (!name.endsWith('.sock')) continue;
       const path = join(dir, name);
       const stat = await lstat(path).catch(() => null);
-      if (stat?.isSocket() && !stat.isSymbolicLink() && stat.uid === process.getuid() && (stat.mode & 0o777) === 0o600) paths.push(path);
+      if (stat?.isSocket() && !stat.isSymbolicLink() && stat.uid === process.getuid() && (stat.mode & 0o7777) === 0o600) paths.push(path);
     }
     return paths;
   } catch (error) { if (error.code === 'ENOENT') return []; throw error; }
@@ -72,7 +71,7 @@ export async function replayFile({ file, dir = defaultDirectory(), speed = 1, sl
   return { events: records.length, renderers: sockets.length };
 }
 
-if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
+if (isMain(import.meta.url)) {
   try {
     const [file, flag, speed, ...rest] = process.argv.slice(2);
     if (!file || rest.length || (flag !== undefined && (flag !== '--speed' || speed === undefined))) {
