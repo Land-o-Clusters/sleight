@@ -21,7 +21,7 @@ export function createRelayHand({ client, loadClient = () => import('./client.mj
   trace = () => {}, now = () => performance.now(), defer = fn => setImmediate(fn), locateTimeoutMs = 2000, lateMs = 1500,
   env = process.env, setting = handSettingReader(env), events, record = cursorRecord, schedule = setTimeout, cancel = clearTimeout } = {}) {
   setting = createHandSettingReader({ setting });
-  if (env.SLEIGHT_HAND === '0' || !(setting().enabled || setting().stream) || typeof locate !== 'function') return undefined;
+  if (env.SLEIGHT_HAND === '0' || !(setting().enabled || setting().stream || setting().record_runs) || typeof locate !== 'function') return undefined;
   const ownsEvents = !events;
   events ??= createCursorEvents({ setting, env });
   try { events.connectHost?.(client); } catch {}
@@ -158,6 +158,8 @@ export function createRelayHand({ client, loadClient = () => import('./client.mj
   }
 
   async function plan(call) {
+    // Recording consumes points already known to the cursor. It never buys another engine/helper read.
+    if (!setting().enabled && !setting().stream) { forget(call); return; }
     // The read and screenshot as the relay knows them now, before any later result changes them.
     const lines = typeof call.input.lines === 'function' ? call.input.lines() : call.input.lines;
     const screenshotSize = typeof call.input.screenshotSize === 'function' ? call.input.screenshotSize() : call.input.screenshotSize;

@@ -60,7 +60,7 @@ test('a tree of only the window and menu bar is chrome-only; a real tree is not'
 });
 
 test('after an action, a chrome-only screenshot waits until two shots match and traces the wait', async () => {
-  const h = harness();
+  const recorded = [], h = harness({ cursor: { status() {}, close() {}, screenshot: content => recorded.push(...content.filter(c => c.type === 'image').map(c => c.data)) } });
   js(h, 1, 'await app.click([200, 860]); await app.getScreenshot()');
   await settle();
   h.fromServer({ jsonrpc: '2.0', id: 1, result: { content: [{ type: 'text', text: IPHONE }, image('moving')] } });
@@ -79,6 +79,7 @@ test('after an action, a chrome-only screenshot waits until two shots match and 
   assert.equal(h.toClient.length, 1);
   const images = h.toClient[0].result.content.filter(b => b.type === 'image').map(b => b.data);
   assert.deepEqual(images, ['still']);
+  assert.deepEqual(recorded, ['still'], 'only the replacement delivered to Claude reaches the recording');
   const wait = h.traces.find(([d]) => d === 'chrome-settle');
   assert.ok(wait, 'records the wait in the trace');
   assert.equal(wait[1].matched, true);

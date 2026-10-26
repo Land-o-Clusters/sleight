@@ -916,6 +916,9 @@ export function createRelay({
 }) {
   const localCursor = new Map();
   const cursorStatus = (state, detail) => { try { cursor?.status(state, detail); } catch {} };
+  const runScreenshotDetails = new WeakMap();
+  // Tags carry geometry through split replies without saving pixels before final delivery.
+  const tagRunScreenshots = (content, detail) => { for (const item of content ?? []) if (item?.type === 'image') runScreenshotDetails.set(item, detail); };
   const localCursorResult = (id, failed, phase) => {
     const record = localCursor.get(id); if (!record) return;
     localCursor.delete(id);
@@ -2778,7 +2781,14 @@ export function createRelay({
     if (msg.method === undefined && msg.id !== undefined) onClientReply(msg);
     const retainedGuidance = modelVisible && Array.isArray(msg.result?.content)
       ? msg.result.content.filter(item => ruleBlocks.trusted(item) || engineDocs([item], true).length) : [];
+    const runImages = msg.method === undefined && !msg.error && !msg.result?.isError
+      ? msg.result?.content?.filter(item => item?.type === 'image') : undefined;
+    const runDetail = runScreenshotDetails.get(runImages?.at(-1)) ?? { source: 'native' };
+    // Keep immutable image fields from exactly this serialized reply, even if a caller later mutates its objects.
+    const deliveredImages = runImages?.map(({ type, data, mimeType }) => ({ type, data, mimeType }));
     clientOut.write(JSON.stringify(msg) + '\n', error => {
+      // Every replacement, cap, split and helper-probe return is above this boundary. Never record a failed write or refusal.
+      if (!error && deliveredImages?.length) try { cursor?.screenshot?.(deliveredImages, runDetail); } catch {}
       const missing = docOrigin.settle(documentationDelivery, msg.result, error);
       if (error) ruleBlocks.retry(retainedGuidance);
       for (const item of [...missing, ...(error ? retainedGuidance : [])]) {
@@ -3306,6 +3316,7 @@ export function createRelay({
       result = { content: [{ type: 'text', text: String(err?.message ?? err) }], isError: true };
     }
     localRunning.delete(msg.id);
+    tagRunScreenshots(result?.content, { source: 'local' });
     localCursorResult(msg.id, !!result?.isError);
     if (!running.has(msg.id)) return; // Stop already settled this request after collection.
     if (plan) flowRules.observe(result, plan);
@@ -4225,6 +4236,7 @@ export function createRelay({
         finishedCall(msg.id);
         const rendered = result.text;
         const content = [{ type: 'text', text: rendered }, ...(result.images ?? [])];
+        tagRunScreenshots(result.images, { source: 'turbo' });
         const rules = rulesFor(true);
         if (rules) content.push(ruleItem(rules));
         toClient({ jsonrpc: '2.0', id: msg.id, result: { isError: result.isError,
@@ -5859,7 +5871,10 @@ export function createRelay({
       const screenshotAppId = msg.result._meta?.['codex/toolSurface']?.app?.appId;
       const screenshotWindow = !automatic && !confirmedBrowser && !msg.result.isError && screenshotTarget &&
         (!screenshotAppId || screenshotAppId === screenshotTarget.appId) ? screenshotTarget : undefined;
-      if (jsCode !== undefined) recordScreenshot(msg.result.content, certifiedRead, screenshotWindow);
+      if (jsCode !== undefined) {
+        recordScreenshot(msg.result.content, certifiedRead, screenshotWindow);
+        tagRunScreenshots(msg.result.content, { source: 'native', windowId: certifiedRead?.number ?? screenshotWindow?.windowNumber ?? screenshotWindow?.nativeIdentity?.windowNumber });
+      }
       if (simFocusNote && !automatic && !confirmedBrowser && !msg.result.isError && typeof jsCode === 'string') {
         // A screenshot need not contain a Window header. Associate only the one acquired handle the
         // code screenshots and doesn't reassign, never the session's most recently observed app.
@@ -6272,9 +6287,9 @@ export function createRelay({
     clearTimeout(idleTimer);
     hand?.close();
     localCursor.clear();
-    cursor?.close();
+    const recordingClosed = cursor?.close();
     try { dispose(); } finally { releaseLeases(); }
-    return Promise.all([clipboard?.close(), directBrowser?.end()]);
+    return Promise.all([clipboard?.close(), directBrowser?.end(), recordingClosed]);
   }
   async function shutdown() {
     closing = true;

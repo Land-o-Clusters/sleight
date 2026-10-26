@@ -248,8 +248,8 @@ function commandWord(segment, prefixes = PREFIXES) {
   }
   return { assigned };
 }
-const READ_FORMS = ['hand status', 'turbo status', 'permissions', 'permissions list', 'cursor list', 'cursor status'];
-const readForm = args => READ_FORMS.includes(args.join(' ')) || args.length === 3 && args[0] === 'cursor' && args[1] === 'check' && /^[\w-]{1,64}$/.test(args[2]);
+const READ_FORMS = ['hand status', 'turbo status', 'permissions', 'permissions list', 'cursor list', 'cursor status', 'runs list'];
+const readForm = args => args.length === 3 && args[0] === 'runs' && args[1] === 'open' && /^\d{4}-\d{2}-\d{2}-[a-f0-9]{32}$/.test(args[2]) || READ_FORMS.includes(args.join(' ')) || args.length === 3 && args[0] === 'cursor' && args[1] === 'check' && /^[\w-]{1,64}$/.test(args[2]);
 // The launcher run directly, or by node with -- options, with literal arguments in a read form. at is its first word.
 function launcherReadForm(plain, at) {
   if (plain[at]?.split('/').at(-1) === 'node') { at++; while (plain[at]?.startsWith('--')) at++; }
@@ -305,10 +305,16 @@ function runsInput(segment) {
   if (INTERPRETERS.test(name)) return args.includes('-') || !args.some(arg => /^-(?:c|e|m|p|E|-eval|-print)(?:=|$)/.test(arg) || !arg.startsWith('-')) ? 'code' : false;
   return false;
 }
+function runsSubcommand(segment) {
+  let { index } = commandWord(segment);
+  if (index === undefined) return false;
+  if (segment[index].text.split('/').at(-1) === 'node') { index++; while (segment[index]?.text.startsWith('--')) index++; }
+  return launcher(segment[index]?.text.split('/').at(-1) ?? '') && segment[index + 1]?.text === 'runs';
+}
 function launcherRefused(command, depth = 0) {
   if (depth > 8) return true;
   const words = shellWords(command), texts = [command, ...words.map(word => word.text)];
-  const named = texts.some(text => LAUNCHER_NAME.test(text)), sub = texts.some(text => SUBCOMMAND.test(text));
+  const named = texts.some(text => LAUNCHER_NAME.test(text));
   // Pipelines split on ; & && || and newline; their segments on | and |&. Subshell parentheses stay in the segment.
   const pipelines = [[[]]];
   for (const word of words) {
@@ -316,6 +322,7 @@ function launcherRefused(command, depth = 0) {
     else if (word.operator && ['|', '|&'].includes(word.text)) pipelines.at(-1).push([]);
     else pipelines.at(-1).at(-1).push(word);
   }
+  const sub = texts.some(text => SUBCOMMAND.test(text)) || pipelines.flat().some(runsSubcommand);
   // Piped text run as code can be anything. Piped text as xargs arguments refuses once the launcher or a subcommand shows.
   for (const pipeline of pipelines) for (const segment of pipeline.slice(1)) {
     const runs = segment.length && runsInput(segment);
@@ -327,11 +334,11 @@ function launcherRefused(command, depth = 0) {
   const exempt = named && reads && launcherSegments.every(readTool);
   if (named && !exempt && texts.some(text => (sub ? UNPLAIN : GENERATES).test(text))) return true;
   for (const pipeline of pipelines) {
-    const pipeSub = pipeline.flat().some(word => !word.operator && SUBCOMMAND.test(word.text));
+    const pipeSub = pipeline.flat().some(word => !word.operator && SUBCOMMAND.test(word.text)) || pipeline.some(runsSubcommand);
     for (const segment of pipeline) {
       if (!segment.length || reads && readTool(segment)) continue;
       const segNamed = segment.some(word => !word.operator && LAUNCHER_NAME.test(word.text));
-      const segSub = segment.some(word => !word.operator && SUBCOMMAND.test(word.text));
+      const segSub = segment.some(word => !word.operator && SUBCOMMAND.test(word.text)) || runsSubcommand(segment);
       const { index, unreadable } = commandWord(segment);
       // A command word the guard can't read beside a subcommand word may be the launcher under another spelling.
       if (unreadable && pipeSub) return true;
@@ -353,7 +360,7 @@ function launcherRefused(command, depth = 0) {
       if (!launcher(plain[at]?.split('/').at(-1) ?? '')) return true;
       const args = plain.slice(at + 1);
       if (args.some(arg => arg.startsWith('~') || LAUNCHER_NAME.test(arg))) return true;
-      if (args.some(arg => SUBCOMMAND.test(arg)) && !readForm(args)) return true;
+      if ((args[0] === 'runs' || args.some(arg => SUBCOMMAND.test(arg))) && !readForm(args)) return true;
     }
   }
   return false;

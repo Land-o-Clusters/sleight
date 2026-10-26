@@ -1,5 +1,6 @@
 // Public cursor records are projections, never copies of tool arguments or engine replies.
 // The relay owns the session, sequence and socket clients. Workers send only projected records over IPC.
+import { createRunRecorder } from '../runs/store.mjs';
 import { randomBytes } from 'node:crypto';
 import { AsyncLocalStorage } from 'node:async_hooks';
 import { lstat, realpath, readdir } from 'node:fs/promises';
@@ -163,10 +164,10 @@ export function createRendererSink({ dir = process.env.SLEIGHT_CURSOR_STREAM_DIR
 }
 
 const version = (() => { try { return JSON.parse(readFileSync(new URL('../../.claude-plugin/plugin.json', import.meta.url))).version; } catch { return '0.0.0'; } })();
-export function createCursorEvents({ env = process.env, setting = handSettingReader(env), sink, onEvent = () => {}, now = Date.now, version: release = version,
+export function createCursorEvents({ env = process.env, setting = handSettingReader(env), sink, recorder = createRunRecorder, onEvent = () => {}, now = Date.now, version: release = version,
   host = 'claude-code', repeat = setInterval, cancelRepeat = clearInterval } = {}) {
   setting = createHandSettingReader({ setting, now });
-  const session = opaque(); let seq = 0, closed = false, started = false, output = sink, discoveryTimer, hostClient;
+  const session = opaque(); let seq = 0, closed = false, started = false, output = sink, discoveryTimer, hostClient, recording, recordingClosed, sessionStart;
   const options = () => { try { return env.SLEIGHT_HAND === '0' ? {} : setting(); } catch { return {}; } };
   // The built-in host draws while the settings pick a drawn style and its client isn't dead (null: none could be created).
   const drawing = () => cursorDrawing(options()) && hostClient !== null && hostClient?.enabled !== false;
@@ -174,6 +175,13 @@ export function createCursorEvents({ env = process.env, setting = handSettingRea
   // held: the host gets this record later, through forward (the relay paces native aims behind the act before them).
   const emit = (fields, held = false) => {
     const event = { v: CURSOR_VERSION, seq: ++seq, ts: now(), session, ...fields };
+    if (event.type === 'session' && event.state === 'start') sessionStart = event;
+    try {
+      if (options().record_runs === true) {
+        if (!recording) { recording = recorder({ enabled: () => options().record_runs === true, now }); if (sessionStart !== event && sessionStart) recording.write(sessionStart); }
+        recording.write(event);
+      }
+    } catch {}
     try { onEvent(event); } catch {}
     if (!held) toHost(event);
     try { if (options().stream === true) (output ??= createRendererSink({ dir: env.SLEIGHT_CURSOR_STREAM_DIR })).write(event); } catch {}
@@ -193,7 +201,7 @@ export function createCursorEvents({ env = process.env, setting = handSettingRea
       }, 2000);
       discoveryTimer.unref?.();
     } else if (!enabled && discoveryTimer) { cancelRepeat(discoveryTimer); discoveryTimer = undefined; }
-    return !closed && (enabled || drawing());
+    return !closed && (enabled || options().record_runs === true || drawing());
   };
   const api = {
     call: opaque,
@@ -208,12 +216,27 @@ export function createCursorEvents({ env = process.env, setting = handSettingRea
       if (record) { start(); return emit({ type: 'action', ...record }, held); }
     },
     forward(event) { if (!closed && event) toHost(event); },
+    screenshot(content, detail) {
+      if (closed || options().record_runs !== true) return;
+      start();
+      try {
+        if (!recording) { recording = recorder({ enabled: () => options().record_runs === true, now }); if (sessionStart) recording.write(sessionStart); }
+        recording.screenshot(content, detail);
+      } catch {}
+    },
+    flushRecording: () => recording?.flush(),
     status(state, detail = {}) {
       if (!allowed() || !states.has(state)) return;
       detail ??= {};
       start(false); const record = { type: 'status', state }; if (callId(detail.call)) record.call = detail.call; put(record, 'app', text(detail.app)); emit(record);
     },
-    close() { if (closed) return; if (started && allowed()) emit({ type: 'session', state: 'end', host, version: release }); closed = true; cancelRepeat(discoveryTimer); discoveryTimer = undefined; output?.close(); },
+    close() {
+      if (closed) return recordingClosed;
+      if (started && allowed()) emit({ type: 'session', state: 'end', host, version: release });
+      closed = true; cancelRepeat(discoveryTimer); discoveryTimer = undefined; output?.close();
+      recordingClosed = recording?.close()?.catch?.(() => {});
+      return recordingClosed;
+    },
   };
   allowed();
   return api;
@@ -223,7 +246,7 @@ let sharedEvents;
 export const sessionCursorEvents = () => sharedEvents ??= createCursorEvents();
 // One asynchronous call context in a worker, shared by browser and Electron action runners.
 const context = new AsyncLocalStorage();
-export const cursorStreamEnabled = () => process.env.SLEIGHT_HAND !== '0' && (cachedHandSetting().stream === true || cursorDrawing(cachedHandSetting()));
+export const cursorStreamEnabled = () => process.env.SLEIGHT_HAND !== '0' && (cachedHandSetting().stream === true || cachedHandSetting().record_runs === true || cursorDrawing(cachedHandSetting()));
 export const withCursorCall = (source, fn, enabled = cursorStreamEnabled()) =>
   enabled ? context.run({ call: opaque(), index: 0, source }, fn) : fn();
 export function cursorStep() {
@@ -243,7 +266,7 @@ export function workerCursorStatus(state, detail = {}) {
 export function workerCursorAction(record) {
   try {
     const setting = cachedHandSetting();
-    if (process.connected && (setting.stream || cursorDrawing(setting)) && process.env.SLEIGHT_HAND !== '0') {
+    if (process.connected && (setting.stream || setting.record_runs || cursorDrawing(setting)) && process.env.SLEIGHT_HAND !== '0') {
       const event = actionRecord(record, setting.labels ?? 'off');
       if (event) process.send({ version: 3, cursor: event });
     }

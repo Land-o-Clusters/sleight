@@ -17,6 +17,7 @@ const READS = {
   // run-now runs a saved routine or watch the person installed; it changes no setting.
   routine: a => a.length === 1 && a[0] === 'list' || a[0] === 'run-now',
   watch: a => a.length === 1 && ['list', 'notes'].includes(a[0]) || a[0] === 'run-now',
+  runs: a => a.length === 1 && a[0] === 'list' || a.length === 2 && a[0] === 'open' && /^\d{4}-\d{2}-\d{2}-[a-f0-9]{32}$/.test(a[1]),
 };
 export const GATED_COMMANDS = Object.keys(READS);
 
