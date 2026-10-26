@@ -55,7 +55,7 @@ func coordinates(_ value: Any?, count: Int) -> Bool {
     return count != 4 || (finiteNumber(array[2])! >= 0 && finiteNumber(array[3])! >= 0)
 }
 func parseEvent(_ data: Data, warn: () -> Void) -> [String: Any]? {
-    guard let e = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any] else { return nil }
+    guard var e = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any] else { return nil }
     guard e["v"] as? String == "sleight.cursor/1" else { warn(); return nil }
     guard let session = e["session"] as? String,
           session.utf8.count == 32,
@@ -67,9 +67,11 @@ func parseEvent(_ data: Data, warn: () -> Void) -> [String: Any]? {
     case "status": guard ["thinking", "waiting", "error", "done", "handback", "idle"].contains(e["state"] as? String ?? "") else { return nil }
     case "action":
         guard ["aim", "act", "done", "failed", "declined", "skipped"].contains(e["phase"] as? String ?? ""),
-              e["kind"] is String else { return nil }
+              ["click", "double", "right", "key", "type", "drag", "scroll", "select", "navigate", "move"].contains(e["kind"] as? String ?? "") else { return nil }
     default: return nil
     }
+    if type == "action" { e.removeValue(forKey: "state") }
+    else { e.removeValue(forKey: "phase"); e.removeValue(forKey: "kind") }
     if let p = e["point"], !coordinates(p, count: 2) { return nil }
     if let p = e["path"] {
         guard let array = p as? [Any], array.count <= 64,
@@ -327,12 +329,13 @@ final class SocketReader {
             expiry.resume()
         } else { view.expiry?.schedule(deadline: .now() + 3) }
         guard type == "action" else { return }
-        let phase = event["phase"] as! String, call = event["call"] as? String ?? ""
+        let phase = event["phase"] as! String
+        let call = "\(event["call"] as? String ?? ""):\(event["index"] as? Int ?? 0)"
         if event["kind"] as? String == "drag" && ["aim", "act"].contains(phase) {
             if view.drags.contains(call) || view.drags.count < 64 { view.drags.insert(call) } else { view.overflow = true }
         }
         let dragging = !view.drags.isEmpty || view.overflow
-        if ["done", "failed", "declined"].contains(phase) { view.drags.remove(call) }
+        if event["kind"] as? String == "drag" && ["done", "failed", "declined", "skipped"].contains(phase) { view.drags.remove(call) }
         guard !dragging, !["skipped", "declined", "failed"].contains(phase) else {
             view.panel?.orderOut(nil); return
         }
@@ -352,7 +355,7 @@ final class SocketReader {
         let panel = view.panel ?? RingPanel()
         view.panel = panel
         panel.setFrameOrigin(NSPoint(x: location.x - 16, y: location.y - 16))
-        panel.orderFront(nil)
+        panel.orderFrontRegardless()
     }
 
     func stop() {

@@ -139,9 +139,9 @@ function shellWritePaths(command, initialDirectory, depth = 0) {
     // `hand on|off|capture` writes hand.json the same way, and only `hand status` passes.
     if (launcherToggle(allWords, 'turbo')) add('~/Library/Application Support/sleight/turbo.json', true);
     if (launcherToggle(allWords, 'hand')) add('~/Library/Application Support/sleight/hand.json', true);
-    // Character writes and the cursor style are the user's commands too. Only `cursor list` and `cursor check` pass: an
+    // Character writes and the cursor style are the user's commands too. Only cursor list, check and status pass: an
     // allow-list, so an argument the guard can't read (a variable, a substitution, xargs input) is refused.
-    if (launcherToggle(allWords, 'cursor', rest => ['list', 'check'].includes(rest[0]))) add('~/Library/Application Support/sleight/hand.json', true);
+    if (launcherToggle(allWords, 'cursor', rest => ['list', 'check', 'status'].includes(rest[0]))) add('~/Library/Application Support/sleight/hand.json', true);
     // `permissions block|unblock|revoke|sites` change what sleight may do, and only the listing passes.
     if (launcherToggle(allWords, 'permissions', listingOnly)) add('~/Library/Application Support/sleight/permissions.json', true);
     if (xargs && piped) operands.push(...piped.filter(word => !word.operator).map(word => word.text));

@@ -9,7 +9,7 @@
 // the window's width to the viewport's CSS width, refined by devicePixelRatio (display scale times zoom). Pinch zoom
 // goes through the visual viewport. Turbo moves no real pointer, so it has nothing to hide the hand before.
 import { createAppHealthHelper } from '../read-failure.mjs';
-import { createHandSettingReader, handSettingReader } from './settings.mjs';
+import { createHandSettingReader, handSettingReader, cursorDrawing } from './settings.mjs';
 import { appendFileSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { join } from 'node:path';
@@ -92,7 +92,7 @@ export function createBrowserHand({ client, loadClient = () => import('./client.
   let closed = false, resolved = client ?? undefined, loading;
   const load = () => loading ??= (client ? Promise.resolve(client) : Promise.resolve().then(loadClient).then(m => m.createHandClient(clientOptions)))
     .then(c => (resolved = c && typeof c.send === 'function' ? c : null), () => (resolved = null));
-  const stream = () => { try { return events ? events.enabled : setting().stream === true; } catch { return false; } };
+  const stream = () => { try { return events ? events.enabled : setting().stream === true || cursorDrawing(setting()); } catch { return false; } };
   const live = () => !closed && (resolved && resolved.enabled !== false || stream());
   const publish = (token, phase, reason) => {
     if (!token?.cursor || closed) return;
@@ -124,16 +124,17 @@ export function createBrowserHand({ client, loadClient = () => import('./client.
     const planned = planBrowserFrame({ op, text, box, toBox, metrics, geometry, ignorePids: [resolved?.pid].filter(Number.isSafeInteger) });
     if (planned?.skip) return skip(planned.skip);
     if (planned?.frame) {
-      try { resolved?.send(planned.frame); trace('hand-shown', { op, kind: planned.frame.kind }); } catch {}
+      let label;
       if (token.cursor) try {
         const scale = zoomOf(metrics) * (metrics.vv?.scale > 0 ? metrics.vv.scale : 1);
         const rect = box && [planned.frame.at[0] - box.width * scale / 2, planned.frame.at[1] - box.height * scale / 2, box.width * scale, box.height * scale];
         token.record = record({ frame: planned.frame, action: { kind: EVENT_KINDS[op], role, inputType, title, description,
           rect, secure: EVENT_KINDS[op] === 'type' && !inputType }, geometry, labels: events?.labels ?? setting().labels ?? 'off' });
+        label = token.record.label;
         publish(token, 'aim'); publish(token, 'act'); token.shown = true;
         if (token.ended) publish(token, token.failed ? 'failed' : 'done');
       } catch {}
-
+      try { resolved?.send({ ...planned.frame, ...cursorDrawing(setting()) && label ? { label } : {} }); trace('hand-shown', { op, kind: planned.frame.kind }); } catch {}
     }
   }
   return {
@@ -192,13 +193,13 @@ export function workerHandClient(channel, pid, { env = process.env, setting = ha
     const at = now();
     if (at < checked || at - checked >= 250) {
       checked = at;
-      try { const s = setting(); enabled = env.SLEIGHT_HAND !== '0' && (sharedUi && s?.enabled === true || s?.stream === true); } catch { enabled = false; }
+      try { const s = setting(); enabled = env.SLEIGHT_HAND !== '0' && (sharedUi && s?.enabled === true || s?.stream === true || cursorDrawing(s)); } catch { enabled = false; }
     }
     return enabled && channel.connected !== false;
   };
   return { get enabled() { return live() && sharedUi && setting().enabled === true; }, pid,
     send(frame) { if (sharedUi && live() && setting().enabled) try { channel.send({ version: 3, hand: frame }); } catch {} },
-    event(record) { if (live() && setting().stream) try { channel.send({ version: 3, cursor: record }); } catch {} },
+    event(record) { if (live() && (setting().stream || cursorDrawing(setting()))) try { channel.send({ version: 3, cursor: record }); } catch {} },
     close() {} };
 }
 

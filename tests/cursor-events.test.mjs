@@ -25,6 +25,26 @@ const until = async fn => { const end = Date.now() + 2000; while (!fn()) { asser
 const world = t => { const dir = realpathSync(mkdtempSync(join(tmpdir(), 'vc1-'))); chmodSync(dir, 0o700); t.after(() => rmSync(dir, { recursive: true, force: true })); return dir; };
 const frame = { kind: 'type', pid: 42, windowId: 7, at: [10, 20], path: [[10, 20]], beats: 8, delayMs: 0 };
 
+test('ring records reach the built-in client with public stream off, with no socket work or discovery timer', () => {
+  const records = []; let writes = 0, timers = 0;
+  const events = createCursorEvents({ setting: () => ({ enabled: true, style: 'ring', stream: false, labels: 'role' }),
+    sink: { write() { writes++; }, close() {} }, repeat() { timers++; } });
+  events.connectHost({ cursor: record => records.push(record) });
+  assert.equal(events.enabled, true);
+  events.action({ call: events.call(), index: 0, phase: 'aim', source: 'native', kind: 'click', point: [10, 20], window: { pid: 42, id: 7 }, role: 'AXButton', label: 'SECRET' });
+  events.status('waiting'); events.close();
+  assert.equal(records.find(r => r.phase === 'aim').label, 'button');
+  assert.ok(records.some(r => r.state === 'waiting')); assert.equal(writes, 0); assert.equal(timers, 0);
+});
+test('an idle stream session starts with idle, and a sink with no peers does not serialize actions', async t => {
+  const records = [], tick = [];
+  const events = createCursorEvents({ setting: () => ({ stream: true }), sink: { write: e => records.push(e), refresh() {}, close() {} }, repeat: fn => { tick.push(fn); return { unref() {} }; }, cancelRepeat() {} });
+  tick[0](); assert.deepEqual(records.map(r => r.state), ['start', 'idle']); events.close();
+  let serialized = 0; const sink = createRendererSink({ dir: world(t) }); t.after(() => sink.close());
+  sink.write({ type: 'action', toJSON() { serialized++; return {}; } }); await settle();
+  assert.equal(serialized, 0);
+});
+
 test('real settings cache refreshes at 250 ms for absent, changed, replaced and unsafe files', t => {
   const path = join(world(t), 'hand.json'); let now = 0;
   const setting = createHandSettingReader({ path, env: {}, platform: 'darwin', now: () => now });
@@ -172,8 +192,9 @@ test('discovery requires socket mode 0600 before and after connecting', async t 
 test('a forked worker with hand on and no shared host keeps turbo alive and draws nothing', async t => {
   const path = join(world(t), 'hand.json');
   writeFileSync(path, JSON.stringify({ version: 1, enabled: true, stream: false }), { mode: 0o600 });
-  let child; const frames = [];
+  let child; const frames = [], phases = [];
   const bridge = await createV3Bridge({}, { readConfig: () => ({}), acceptPackage: () => ({ current: () => true }), shareConsent: () => undefined,
+    tracePhase: phase => phases.push(phase),
     forkWorker(_path, args) {
       assert.ok(!args.includes('--shared-ui'));
       child = fork(new URL('./fixtures/cursor-no-shared-worker.mjs', import.meta.url), args,
@@ -190,6 +211,7 @@ test('a forked worker with hand on and no shared host keeps turbo alive and draw
       assert.equal(child.connected, true);
     }
     assert.equal(frames.length, 2, 'only the two deliberately stray frames, no generated host frames');
+    assert.equal(phases.filter(p => p === 'worker-hand-dropped').length, 2);
   } finally { await bridge.detach(); await exited; }
 });
 
@@ -285,6 +307,50 @@ const geometry = { ok: true, window: { pid: 42, windowId: 7, bounds: { X: 0, Y: 
   windows: [{ id: 7, pid: 42, bounds: { X: 0, Y: 0, Width: 500, Height: 400 } }], displays: [{ X: 0, Y: 0, Width: 1000, Height: 800 }],
   elements: { 1: { X: 10, Y: 10, Width: 20, Height: 20 } } };
 const capture = () => { const out = []; const events = createCursorEvents({ onEvent: e => out.push(e), setting: () => ({ stream: true, labels: 'role' }), sink: { write() {}, close() {} } }); return { out, events }; };
+
+test('native ring aim and labeled acts use the same record with public streaming off', async () => {
+  const frames = [], records = [], order = [];
+  const setting = () => ({ enabled: true, style: 'ring', labels: 'role', stream: false });
+  const events = createCursorEvents({ setting });
+  const hand = createRelayHand({ events, setting, now: () => 0, locate: async () => geometry,
+    client: { enabled: true, cursor(e) { records.push(e); if (e.point) order.push('aim'); }, send(f) { frames.push(f); order.push('act'); }, close() {} } });
+  hand.admit(1, { code: 'await app.click(1)', lines: { 1: 'button Description: PRIVATE' }, target: { app: 'Editor' } });
+  await settle();
+  const aim = records.find(r => r.phase === 'aim' && r.point);
+  assert.equal(aim.label, 'button'); assert.deepEqual(aim.rect, [10, 10, 20, 20]);
+  assert.deepEqual(aim.point, frames[0].at); assert.equal(frames[0].label, aim.label);
+  assert.deepEqual(order, ['aim', 'act']);
+  hand.approval(2, { tool_name: 'click' }); hand.result(1, false);
+  assert.ok(records.some(r => r.state === 'waiting')); assert.ok(!JSON.stringify([frames, records]).includes('PRIVATE'));
+  hand.close(); events.close();
+});
+test('worker ring records and labels survive with stream off, and secure input has no host label', async () => {
+  const packets = [], frames = [], setting = () => ({ enabled: true, style: 'ring', labels: 'title', stream: false });
+  const client = workerHandClient({ connected: true, send: p => packets.push(p) }, undefined, { setting });
+  const hand = createBrowserHand({ client: { ...client, send: f => frames.push(f) }, setting, locate: async () => geometry,
+    readMetrics: async () => ({ screenX: 0, screenY: 0, outerWidth: 500, outerHeight: 400, innerWidth: 500, innerHeight: 400, dpr: 1, visible: true, focusOnBody: false }) });
+  for (const input of [{ op: 'click', role: 'button', title: 'Save' }, { op: 'type', role: 'textbox', inputType: 'password', title: 'SECRET', text: 'SECRET' }]) {
+    const token = hand.step({ ...input, page: {}, locator: { boundingBox: async () => ({ x: 10, y: 10, width: 20, height: 20 }) } });
+    await settle(); hand.finish(token);
+  }
+  assert.equal(frames[0].label, 'Save'); assert.equal(frames[1].label, undefined);
+  const aims = packets.filter(p => p.cursor?.phase === 'aim').map(p => p.cursor);
+  assert.equal(aims.length, 2); assert.deepEqual(aims[0].point, frames[0].at);
+  assert.equal(aims[1].kind, 'key'); assert.equal(aims[1].count, undefined); assert.ok(!JSON.stringify(packets).includes('SECRET'));
+  hand.close();
+});
+test('ring aim and labels precede an approval answered before geometry arrives', async () => {
+  const order = []; let release;
+  const setting = () => ({ enabled: true, style: 'ring', labels: 'role' });
+  const events = createCursorEvents({ setting });
+  const hand = createRelayHand({ events, setting, now: () => 0, locate: () => new Promise(r => { release = r; }),
+    client: { enabled: true, cursor(e) { if (e.phase === 'aim' && e.point) order.push('aim'); },
+      send(f) { order.push(f.label ?? 'unlabeled'); }, hide() {}, close() {} } });
+  hand.admit(1, { code: 'await app.click(1)', lines: { 1: 'button Description: Save' }, target: { app: 'Editor' } });
+  await settle(); hand.approval(2, { tool_name: 'click', tool_params: { app: 'Editor' } }); hand.answered(2, 'accept');
+  release(geometry); await settle();
+  assert.deepEqual(order, ['aim', 'button']); hand.close(); events.close();
+});
 
 test('native records share the host point, aim immediately after planning, act on schedule, result confirmed', async () => {
   const { out, events } = capture(), frames = [], timers = [];
@@ -399,16 +465,17 @@ test('admission remains synchronous with two renderer sockets connected, measure
     request(1, 'let app = await cua.getApp("Editor")'); await settle();
     h.response({ jsonrpc: '2.0', id: 1, result: { content: [{ type: 'text', text: tree }, { type: 'image', data: png.toString('base64'), mimeType: 'image/png' }] } }); await settle();
     const samples = [];
-    for (let i = 0; i < 350; i++) {
+    for (let i = 0; i < 900; i++) {
       const id = i + 100, start = performance.now(); request(id, 'await app.click([20,20])');
       assert.equal(h.sent.at(-1)?.id, id, 'engine dispatch needs no event loop tick');
       const elapsed = performance.now() - start;
-      if (i >= 50) samples.push(elapsed);
+      if (i >= 600) samples.push(elapsed);
       response(id); await settle();
     }
     const connected = mode === 'stream' ? sink.stats().connected : 0;
     h.relay.close();
-    return { medianMs: median(samples), frames, events: count, connected, samples: samples.length };
+    const batches = Array.from({ length: 5 }, (_, i) => median(samples.slice(i * 60, (i + 1) * 60)));
+    return { medianMs: median(batches), batches, frames, events: count, connected, samples: samples.length };
   }
   const off = await measure('off'), hand = await measure('hand'), stream = await measure('stream');
   t.diagnostic(JSON.stringify({ admission: { off, hand, stream } }));

@@ -28,9 +28,9 @@ function fakeChild(pid = 4242, consent = true) {
   child.lines = lines; child.menus = menus;
   return child;
 }
-function harness({ enabled = true, built = true, capture = 'hidden', result, now, setHand, killAfterMs, permissions = null, usage = null, currentApp = () => undefined, watch = () => undefined } = {}) {
+function harness({ enabled = true, built = true, capture = 'hidden', style, result, now, setHand, killAfterMs, permissions = null, usage = null, currentApp = () => undefined, watch = () => undefined } = {}) {
   const children = [], traces = [], spawns = [];
-  let preparing = 0, setting = { enabled, capture };
+  let preparing = 0, setting = { enabled, capture, style };
   const client = createHandClient({
     setting: () => setting, built: () => built, now, watch, setHand, permissions, usage, currentApp, ...killAfterMs ? { killAfterMs } : {},
     prepare: async () => { preparing++; return result ?? { status: 'ready', spawn: options => { spawns.push(options); const c = fakeChild(4242 + children.length, options?.consent); children.push(c); return c; } }; },
@@ -39,6 +39,26 @@ function harness({ enabled = true, built = true, capture = 'hidden', result, now
   return { client, children, traces, spawns, preparing: () => preparing, set: next => { setting = next; } };
 }
 const frame = (over = {}) => ({ kind: 'click', pid: 501, windowId: 77, at: [10.123, 20], path: [[0, 0], [10.123, 20]], ...over });
+
+test('ring host frames share one nonce and sequence, retain filtered labels, and pass the selected style to spawn', async t => {
+  const h = harness({ style: 'seam' }); t.after(() => h.client.close());
+  const record = { type: 'action', phase: 'aim', kind: 'click', point: [10, 20], rect: [1, 2, 30, 40], window: { pid: 501, id: 77 }, label: 'button' };
+  h.client.cursor(record); h.client.send(frame({ label: 'button' }));
+  for (const state of ['waiting', 'error', 'done', 'handback', 'thinking', 'idle']) h.client.cursor({ type: 'status', state });
+  await settle();
+  assert.equal(h.spawns[0].cursorStyle, 'seam');
+  const lines = h.children[0].lines;
+  assert.deepEqual(lines.map(l => l.hand), ['aim', 'act', 'status', 'status', 'status', 'status', 'status']);
+  assert.equal(lines[0].holdMs, 0); assert.deepEqual(lines[0].rect, record.rect); assert.equal(lines[1].label, 'button');
+  assert.deepEqual(lines.map(l => l.seq), [1, 2, 3, 4, 5, 6, 7]); assert.ok(lines.every(l => l.nonce === lines[0].nonce));
+});
+test('glove sends no new frames or labels, and a targetless status cannot start a host', async t => {
+  const h = harness(); t.after(() => h.client.close());
+  h.client.cursor({ type: 'status', state: 'waiting' });
+  h.client.cursor({ type: 'action', phase: 'aim', kind: 'click', point: [1, 2], window: { pid: 501, id: 77 } });
+  await settle(); assert.equal(h.children.length, 0);
+  h.client.send(frame({ label: 'button' })); await settle(); assert.equal(h.children[0].lines[0].label, undefined);
+});
 
 test('send and hide return at once without a promise, and the host gets exact nonce-bound frames with rising seq', async t => {
   t.after(() => setHandPid(0));

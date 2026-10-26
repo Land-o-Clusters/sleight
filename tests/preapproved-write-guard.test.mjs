@@ -167,7 +167,7 @@ test('cursor import and remove use the hand shell guard while list and check sta
     "printf 'remove' | xargs -I{} sleight-mcp cursor {} x", 'sleight-mcp cursor style sprite', 'sleight-mcp cursor']) {
     assert.equal(await guard({ tool: 'Bash', command }, { stat }), true, command);
   }
-  for (const command of ['sleight-mcp cursor list', 'sleight-mcp cursor check cat', 'env sleight-mcp cursor list',
+  for (const command of ['sleight-mcp cursor status', 'node /x/lib/launch.mjs cursor status', 'sh -c "sleight-mcp cursor status"', 'sleight-mcp cursor list', 'sleight-mcp cursor check cat', 'env sleight-mcp cursor list',
     'node /x/lib/launch.mjs cursor check cat', 'sh -c "sleight-mcp cursor list"', 'echo cursor remove cat']) {
     assert.equal(await guard({ tool: 'Bash', command }, { stat }), false, command);
   }

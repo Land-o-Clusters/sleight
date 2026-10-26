@@ -12,6 +12,7 @@ export const defaultDirectory = () => process.env.SLEIGHT_CURSOR_STREAM_DIR ||
 const fields = 'v seq ts session type state host version call index phase kind source timing point path rect window display count role reason label app'.split(' ');
 const phases = new Set(['aim', 'act', 'done', 'failed', 'declined', 'skipped']);
 const statuses = new Set(['thinking', 'waiting', 'error', 'done', 'handback', 'idle']);
+const kinds = new Set(['click', 'double', 'right', 'key', 'type', 'drag', 'scroll', 'select', 'navigate', 'move']);
 const point = p => Array.isArray(p) && p.length === 2 && p.every(Number.isFinite);
 const rect = r => Array.isArray(r) && r.length === 4 && r.every(Number.isFinite) && r[2] >= 0 && r[3] >= 0;
 const object = o => o !== null && typeof o === 'object' && !Array.isArray(o);
@@ -32,8 +33,10 @@ export function parseEvent(line, warn = () => {}) {
   } else if (e.type === 'status') {
     if (!statuses.has(e.state)) return;
   } else if (e.type === 'action') {
-    if (!phases.has(e.phase) || typeof e.kind !== 'string') return;
+    if (!phases.has(e.phase) || !kinds.has(e.kind)) return;
   } else return;
+  if (e.type === 'action') delete e.state;
+  else { delete e.phase; delete e.kind; }
   if (e.point !== undefined && !point(e.point)) return;
   if (e.path !== undefined && (!Array.isArray(e.path) || e.path.length > 64 || !e.path.every(point))) return;
   if (e.rect !== undefined && !rect(e.rect)) return;
@@ -158,11 +161,12 @@ export async function createCursorListener({ dir = defaultDirectory(), name = 'r
         lifetimes.set(event.session, life);
         const dragStart = event.type === 'action' && event.kind === 'drag' && ['aim', 'act'].includes(event.phase);
         if (dragStart) {
-          if (life.drags.has(event.call ?? '') || life.drags.size < 64) life.drags.add(event.call ?? '');
+          const key = `${event.call ?? ''}:${event.index ?? 0}`;
+          if (life.drags.has(key) || life.drags.size < 64) life.drags.add(key);
           else life.overflow = true; // Missing completions keep the ring hidden until expiry.
         }
         const dragging = life.drags.size > 0 || life.overflow;
-        if (event.type === 'action' && ['done', 'failed', 'declined'].includes(event.phase)) life.drags.delete(event.call ?? '');
+        if (event.type === 'action' && event.kind === 'drag' && ['done', 'failed', 'declined', 'skipped'].includes(event.phase)) life.drags.delete(`${event.call ?? ''}:${event.index ?? 0}`);
         const hiddenAction = event.type === 'action' && ['skipped', 'failed', 'declined'].includes(event.phase);
         const visible = event.type === 'action' && event.point ? true : (view.visible ?? false);
         view.visible = visible && !dragging && !hiddenAction;

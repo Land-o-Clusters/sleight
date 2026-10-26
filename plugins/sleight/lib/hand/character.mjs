@@ -335,9 +335,12 @@ export function loadCharacter(folder, { uid = process.getuid(), shared = false, 
 
 function codexManifest(pet, sheet) {
   if (!object(pet) || pet.spriteVersionNumber !== 2) fail('Codex pet must have spriteVersionNumber 2', 'spriteVersionNumber', 'pet.json');
-  idCheck(pet.id, 'pet.json'); text(pet.displayName, 'displayName', 1, 60, 'pet.json'); text(pet.description ?? '', 'description', 0, 200, 'pet.json');
+  text(pet.id, 'id', 1, 48, 'pet.json');
+  if (!/^[A-Za-z0-9_ -]+$/.test(pet.id)) fail('invalid Codex pet id', 'id', 'pet.json');
+  const slug = pet.id.toLowerCase().replace(/[^a-z0-9-]/g, '-'); idCheck(slug, 'pet.json');
+  text(pet.displayName, 'displayName', 1, 60, 'pet.json'); text(pet.description ?? '', 'description', 0, 200, 'pet.json');
   const timed = (row, frames, ms, loop = true, start = 0) => ({ row, frames, ms, loop, ...start ? { start } : {} });
-  return { format: 'sleight-character', version: 1, id: pet.id, name: pet.displayName, description: pet.description ?? '', author: pet.author ?? 'Local import', license: pet.license ?? 'unknown', sheet,
+  return { format: 'sleight-character', version: 1, id: slug, name: slug === pet.id ? pet.displayName : pet.id, description: pet.description ?? '', author: pet.author ?? 'Local import', license: pet.license ?? 'unknown', sheet,
     frame: { w: 192, h: 208 }, grid: { cols: 8, rows: 11 }, scale: 1, anchor: { x: 96, y: 196 }, hotspot: { x: 96, y: 104 },
     states: { idle: timed(0, 6, [280, 110, 110, 140, 140, 320]), move: { dir16: { rowA: 9, rowB: 10 } },
       aim: timed(9, 1, 160, false, 4), click: timed(4, 3, 140, false, 1), type: timed(7, 6, [120, 120, 120, 120, 120, 220]),
@@ -410,6 +413,7 @@ export function listCharacters({ root = charactersDirectory(), uid = process.get
     try {
       const stat = fileOperation(folder, 'directory', () => fs.lstatSync(folder));
       if (!stat.isSymbolicLink() && (!stat.isDirectory() || !/^[a-z0-9-]{1,48}$/.test(id))) return { id, skipped: true, reason: 'not a character folder' };
+      if (stat.isSymbolicLink()) fail('symlink character directory refused; remove the link by hand (leave its target)', 'directory', folder);
       idCheck(id); return loadCharacter(folder, { uid, installed: true });
     } catch (error) { return { id, error: error.message }; }
   });
@@ -418,15 +422,15 @@ export function checkCharacter(id, { root = charactersDirectory(), uid = process
   idCheck(id); storage(root, uid); return loadCharacter(join(root, id), { uid, installed: true });
 }
 export function removeCharacter(id, { root = charactersDirectory(), uid = process.getuid() } = {}) {
-  if (typeof id !== 'string' || !id || id === '.' || id === '..' || /[/\\\u0000-\u001f\u007f]/u.test(id)) idCheck(id);
+  if (typeof id !== 'string' || !id || id === '.' || id === '..' || /[/\\\u0000-\u001f\u007f]/u.test(id)) fail('invalid character id for removal', 'id', String(id));
   storage(root, uid); const folder = join(root, id), stat = fileOperation(folder, 'directory', () => fs.lstatSync(folder));
-  if (stat.isSymbolicLink() || fileOperation(folder, 'directory', () => fs.realpathSync(folder)) !== folder) fail('symlink character directory refused', 'directory', folder);
-  if (!stat.isDirectory() || !/^[a-z0-9-]{1,48}$/.test(id)) return false;
+  if (stat.isSymbolicLink() || fileOperation(folder, 'directory', () => fs.realpathSync(folder)) !== folder) fail('symlink character directory refused; remove the link by hand (leave its target)', 'directory', folder);
+  if (!stat.isDirectory()) return false;
   if (stat.uid !== uid) fail('directory owner must be current user', 'directory', folder);
   // rm does not follow child symlinks. A broken manifest or mode must not trap an installed character.
   fileOperation(folder, 'directory', () => fs.rmSync(folder, { recursive: true })); return true;
 }
-export function characterCallout(character) {
+export function characterCallout(character, { installed = false } = {}) {
   const { manifest: m, resolved, total, warnings } = character, own = resolved.filter(s => s.own).length;
   const noun = m.codex ? 'pet' : 'character';
   const labels = { idle: 'resting', move: 'moving', aim: 'aiming', click: 'clicking', 'double-click': 'double-clicking',
@@ -446,6 +450,6 @@ export function characterCallout(character) {
   return [own === resolved.length ? `This ${noun} has its own animation for all ${own} of sleight's moves.`
     : `This ${noun} has its own animation for ${own} of sleight's ${resolved.length} moves. To animate all of them it needs ${resolved.length - own} more:`,
     ...missing, `Character: ${m.name}`, `Size: ${total} bytes`, `License: ${m.license === 'unknown' ? 'not stated' : m.license}`,
-    ...warnings.map(w => `Warning: ${w}`), 'Your source files are not changed. sleight copies them.',
+    ...warnings.map(w => `Warning: ${w}`), ...installed ? [] : ['Your source files are not changed. sleight copies them.'],
     'To add animations, draw an extra.webp sheet; see docs/design/character-format.md.'].join('\n') + '\n';
 }

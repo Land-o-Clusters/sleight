@@ -24,10 +24,11 @@ export function createRelayHand({ client, loadClient = () => import('./client.mj
   if (env.SLEIGHT_HAND === '0' || !(setting().enabled || setting().stream) || typeof locate !== 'function') return undefined;
   const ownsEvents = !events;
   events ??= createCursorEvents({ setting, env });
+  try { events.connectHost?.(client); } catch {}
   let closed = false, locating = false, resolved = client ?? undefined, loading, pendingHide = false;
-  const load = () => loading ??= (client ? Promise.resolve(client) : Promise.resolve().then(loadClient).then(m => m.createHandClient(clientOptions)))
+  const load = () => loading ??= (client ? Promise.resolve(client) : Promise.resolve().then(loadClient).then(m => m.createHandClient({ ...clientOptions, cursorStyle: setting().style })))
     .then(c => (resolved = c && typeof c.send === 'function' ? c : null), () => (resolved = null))
-    .then(() => { if (pendingHide) hideClient(); });
+    .then(() => { try { events.connectHost?.(resolved); } catch {} if (pendingHide) hideClient(); });
   // Hides now, or as soon as a client still loading arrives.
   function hideClient() {
     if (resolved === undefined) { pendingHide = true; return; }
@@ -68,6 +69,10 @@ export function createRelayHand({ client, loadClient = () => import('./client.mj
         secure: identity?.role === 'AXSecureTextField' || (['type', 'key'].includes(action.kind) && !identity?.role) }, geometry,
         target: call.target, labels: events.labels });
       const entry = { index, record: projected };
+      if (frame && projected.label && setting().style && setting().style !== 'glove') {
+        const hostEntry = call.entries?.find(e => e.action === index);
+        if (hostEntry) hostEntry.frame = { ...hostEntry.frame, label: projected.label };
+      }
       const skip = reason ?? planned?.skipped.find(s => s.action === index)?.reason;
       if (!frame || skip) { entry.skipped = true; entry.ended = true; publish(call, entry, 'skipped', skip ?? 'unplanned'); }
       else {
@@ -173,10 +178,14 @@ export function createRelayHand({ client, loadClient = () => import('./client.mj
     for (const skip of planned.skipped) note(skip.reason, call, skip.action === undefined ? {} : { action: skip.action, method: skip.method });
     call.kinds = targets.actions.map(a => a.kind);
     call.entries = planned.frames.map((frame, i) => ({ frame, action: planned.actions[i], plannedAt: call.startedAt + frame.delayMs }));
+    const ring = setting().style && setting().style !== 'glove';
+    // Include labels and aim before an early approval can dispatch the first act.
+    if (ring) cursorPlan(call, geometry, planned);
     const early = call.beats; call.beats = undefined;
     for (const { tool, at } of early) beat(call, tool, at);
+    // Ring aim precedes its scheduled acts. Projection faults still cannot drop the original frames.
     dispatch(call);
-    cursorPlan(call, geometry, planned);
+    if (!ring) cursorPlan(call, geometry, planned);
     if (call.done) traceBeats(call);
   }
 

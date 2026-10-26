@@ -10,7 +10,7 @@ import { randomBytes } from 'node:crypto';
 import { readFileSync, watch as fsWatch } from 'node:fs';
 import { dirname } from 'node:path';
 import { handHostBuilt, prepareHandHost } from '../direct-browser/host.mjs';
-import { handConfigPath, handSetting } from './settings.mjs';
+import { CURSOR_STYLES, handConfigPath, handSetting } from './settings.mjs';
 import { setHandPid } from './pid.mjs';
 import { currentApp as noted } from '../permissions.mjs';
 import { actionLogPath } from '../action-outcomes.mjs';
@@ -32,16 +32,26 @@ const version = (() => {
 
 /** The host's frame for a caller frame, without nonce or seq, or a reason string when it can't be drawn. */
 export function handWireFrame(frame) {
-  if (!frame || typeof frame !== 'object' || !kinds.has(frame.kind)) return 'kind';
+  if (!frame || typeof frame !== 'object') return 'kind';
+  const extra = frame.hand === 'aim' || frame.hand === 'status';
+  if (!extra && !kinds.has(frame.kind)) return 'kind';
   const pid = id(frame.pid, 2147483647), windowId = id(frame.windowId, 4294967295), at = point(frame.at);
-  if (!pid || !windowId || !at) return 'target';
+  if (!pid || !windowId || (!at && frame.hand !== 'status')) return 'target';
+  const label = typeof frame.label === 'string' && !/[\x00-\x1f\x7f]/.test(frame.label) ? [...frame.label].slice(0, 40).join('') : undefined;
+  if (frame.hand === 'status') return ['waiting', 'error', 'done', 'handback', 'thinking'].includes(frame.state)
+    ? { hand: 'status', state: frame.state, pid, windowId, ...at ? { at } : {} } : 'state';
+  if (frame.hand === 'aim') {
+    if (!kinds.has(frame.kind)) return 'kind';
+    const rect = Array.isArray(frame.rect) && frame.rect.length === 4 && frame.rect.every(v => Number.isFinite(v) && Math.abs(v) <= 100000) && frame.rect[2] > 0 && frame.rect[3] > 0 ? frame.rect.map(round) : undefined;
+    return { hand: 'aim', kind: frame.kind, pid, windowId, at, holdMs: 0, ...rect ? { rect } : {}, ...label ? { label } : {} };
+  }
   const raw = frame.path === undefined || Array.isArray(frame.path) && !frame.path.length ? [frame.at] : frame.path;
   if (!Array.isArray(raw)) return 'path';
   const path = thin(raw).map(point);
   if (path.some(p => !p)) return 'path';
   const delayMs = Math.min(10000, Math.max(0, Math.round(Number.isFinite(frame.delayMs) ? frame.delayMs : 0)));
   const beats = Math.min(20, Math.max(1, Math.round(Number.isFinite(frame.beats) ? frame.beats : 1)));
-  return { kind: frame.kind, pid, windowId, at, path, delayMs, beats };
+  return { kind: frame.kind, pid, windowId, at, path, delayMs, beats, ...label ? { label } : {} };
 }
 
 // The process's latest open client: turbo's bridge shares its host.
@@ -58,8 +68,9 @@ export async function shareConsent() {
  *  can share its host. */
 export function sessionHandClient(options = {}) {
   const env = options.env ?? process.env;
-  if (env.SLEIGHT_HAND === '0' || !(options.setting ?? (() => handSetting({ env })))().enabled) return undefined;
-  return current ?? createHandClient(options);
+  const setting = (options.setting ?? (() => handSetting({ env })))();
+  if (env.SLEIGHT_HAND === '0' || !setting.enabled) return undefined;
+  return current ?? createHandClient({ ...options, cursorStyle: options.cursorStyle ?? setting.style });
 }
 
 // The files behind the menu's Permissions rows. A change to any of them sends the host a fresh menu frame.
@@ -83,6 +94,7 @@ export function usageFrame(value) {
  *  permissions: the menu's Permissions rows (menu() gives { payload, offered }) and their clicks (apply), or null for none.
  *  usage: the menu's usage row ({ native?, turbo?, saved } or undefined), read at most every usageMs, or null for none. */
 export function createHandClient({ env = process.env, setting = () => handSetting({ env }), built = handHostBuilt, prepare = prepareHandHost,
+  cursorStyle,
   trace = () => {}, now = Date.now, defer = setImmediate, recheckMs = 60000, killAfterMs = 2000,
   setHand = async enabled => (await import('./command.mjs')).writeHandSetting({ enabled }),
   permissions = { menu: async () => (await command()).permissionsMenu(), apply: async (event, offered) => (await command()).applyMenuEvent(event, offered) },
@@ -90,7 +102,8 @@ export function createHandClient({ env = process.env, setting = () => handSettin
   watch = (folder, listener) => process.platform === 'darwin' ? fsWatch(folder, { persistent: false }, listener) : undefined } = {}) {
   const nonce = randomBytes(32).toString('hex'), queue = [];
   // host: none, starting, running or dead (failed or closed this session; final). hand: the settings allow the hand.
-  let seq = 0, child, host = 'none', starting, hand = false, capture = 'hidden', checked = now(), checking = false, events = '';
+  let seq = 0, child, host = 'none', starting, hand = false, capture = 'hidden', checked = now(), checking = false, events = '', target;
+  let style = CURSOR_STYLES.includes(cursorStyle) ? cursorStyle : undefined;
   let buildController, buildStarted;
   // Hosts with an attached worker are left to finish their consent channel before exiting.
   const attached = new WeakSet();
@@ -109,6 +122,7 @@ export function createHandClient({ env = process.env, setting = () => handSettin
   const read = () => {
     try {
       const value = setting();
+      style ??= CURSOR_STYLES.includes(value?.style) ? value.style : 'glove';
       capture = value?.capture === 'visible' ? 'visible' : 'hidden';
       return value?.enabled === true;
     } catch { return false; }
@@ -121,8 +135,11 @@ export function createHandClient({ env = process.env, setting = () => handSettin
       child.stdin.write(line);
     } catch (error) { note('hand-dropped', { reason: error?.code ?? 'write' }); }
   };
-  const act = (wire, delayMs = wire.delayMs) => JSON.stringify({ hand: 'act', nonce, seq: ++seq, kind: wire.kind, pid: wire.pid,
-    windowId: wire.windowId, at: wire.at, path: wire.path, delayMs, beats: wire.beats }) + '\n';
+  const act = (wire, delayMs = wire.delayMs) => JSON.stringify(wire.hand
+    ? { ...wire, nonce, seq: ++seq }
+    : { hand: 'act', nonce, seq: ++seq, kind: wire.kind, pid: wire.pid,
+      windowId: wire.windowId, at: wire.at, path: wire.path, delayMs, beats: wire.beats,
+      ...style !== 'glove' && wire.label ? { label: wire.label } : {} }) + '\n';
   // perms: the last Permissions rows sent, with the targets a click may act on; permsText detects a change.
   let perms, permsText, permsApp, refreshing = false, again = false;
   // stats: the usage row last sent, and when the log was last read.
@@ -226,7 +243,7 @@ export function createHandClient({ env = process.env, setting = () => handSettin
       // The first menu frame already carries the Permissions rows. The usage row follows once the log is read.
       await loadPermissions();
       if (host === 'dead') return undefined;
-      const started = result.spawn({ capture, consent });
+      const started = result.spawn({ capture, consent, ...style !== 'glove' ? { cursorStyle: style } : {} });
       started.on('error', error => { if (child === started) die('spawn', { code: error?.code }); });
       started.stdin.on('error', error => note('hand-dropped', { reason: error?.code ?? 'pipe' }));
       started.stdout?.on('data', onEvents);
@@ -239,8 +256,8 @@ export function createHandClient({ env = process.env, setting = () => handSettin
       statsAt = -Infinity;
       refreshUsage();
       for (const { wire, at } of queue.splice(0)) {
-        if (cold && now() - at > wire.delayMs + 1500) { note('hand-dropped', { reason: 'build-delay' }); continue; }
-        write(act(wire, Math.max(0, wire.delayMs - (now() - at))));
+        if (cold && now() - at > (wire.delayMs ?? 0) + 1500) { note('hand-dropped', { reason: 'build-delay' }); continue; }
+        write(act(wire, Math.max(0, (wire.delayMs ?? 0) - (now() - at))));
       }
       return started;
     } catch (error) { buildController = undefined; die('spawn', { code: error?.code ?? error?.message }); return undefined; }
@@ -302,11 +319,21 @@ export function createHandClient({ env = process.env, setting = () => handSettin
       // A new app to act in changes the menu's Never Act in row.
       if (host === 'running' && currentApp()?.bundleId !== permsApp) refreshPermissions();
       if (!hand || host === 'dead') return;
+      if (style === 'glove' && ['aim', 'status'].includes(frame?.hand)) return;
       const wire = handWireFrame(frame);
       if (typeof wire === 'string') { note('hand-dropped', { reason: wire }); return; }
+      if (wire.hand !== 'status') target = { pid: wire.pid, windowId: wire.windowId, at: wire.at };
       if (host === 'running') { write(act(wire)); return; }
       if (queue.length < 32) queue.push({ wire, at: now() });
       ensure();
+    },
+    // Records already passed the cursor privacy projection. Aim and status share act's nonce and sequence.
+    cursor(event) {
+      if (style === 'glove' || !hand || host === 'dead') return;
+      if (event?.type === 'action' && event.phase === 'aim') {
+        client.send({ hand: 'aim', kind: ['select', 'navigate'].includes(event.kind) ? 'click' : event.kind, pid: event.window?.pid, windowId: event.window?.id,
+          at: event.point, rect: event.rect, label: event.label });
+      } else if (event?.type === 'status' && target && event.state !== 'idle') client.send({ hand: 'status', state: event.state, ...target });
     },
     hide() {
       if (host === 'running') write(JSON.stringify({ hand: 'hide', nonce }) + '\n');

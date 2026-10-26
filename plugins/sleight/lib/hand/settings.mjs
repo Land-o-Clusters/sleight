@@ -8,9 +8,12 @@ import { isAbsolute, join, normalize } from 'node:path';
 
 export const handConfigPath = (home = userInfo().homedir) => join(home, 'Library/Application Support/sleight/hand.json');
 export const CAPTURE_MODES = Object.freeze(['hidden', 'visible']);
+export const CURSOR_STYLES = Object.freeze(['glove', 'ring', 'seam', 'sprite']);
+export const characterIdValid = value => typeof value === 'string' && /^[a-z0-9-]{1,48}$/.test(value);
+export const cursorDrawing = setting => setting?.enabled === true && ['ring', 'seam', 'sprite'].includes(setting.style);
 
 /** { state: 'absent' | 'on' | 'off' | 'unsafe', capture? }. Unsafe is a link, another owner, a mode other than 0600, or anything
- *  but { version: 1, enabled, capture?, stream?, labels? }. */
+ *  but { version: 1, enabled, capture?, stream?, labels?, style?, character? }. */
 export function readHandConfig(path = handConfigPath(), uid = process.getuid()) {
   let stat;
   try { stat = lstatSync(path); } catch (error) { return { state: error.code === 'ENOENT' ? 'absent' : 'unsafe' }; }
@@ -18,11 +21,13 @@ export function readHandConfig(path = handConfigPath(), uid = process.getuid()) 
     if (!isAbsolute(path) || normalize(path) !== path || !stat.isFile() || stat.isSymbolicLink() || realpathSync(path) !== path ||
         stat.uid !== uid || (stat.mode & 0o777) !== 0o600 || stat.size > 4096) return { state: 'unsafe' };
     const data = JSON.parse(readFileSync(path, 'utf8'));
-    if (!data || typeof data !== 'object' || Array.isArray(data) || Object.keys(data).some(key => !['version', 'enabled', 'capture', 'stream', 'labels'].includes(key)) ||
+    if (!data || typeof data !== 'object' || Array.isArray(data) || Object.keys(data).some(key => !['version', 'enabled', 'capture', 'stream', 'labels', 'style', 'character'].includes(key)) ||
         data.version !== 1 || typeof data.enabled !== 'boolean' || data.capture !== undefined && !CAPTURE_MODES.includes(data.capture) ||
-        data.stream !== undefined && typeof data.stream !== 'boolean' || data.labels !== undefined && !['off', 'role', 'title'].includes(data.labels)) return { state: 'unsafe' };
+        data.stream !== undefined && typeof data.stream !== 'boolean' || data.labels !== undefined && !['off', 'role', 'title'].includes(data.labels) ||
+        data.style !== undefined && !CURSOR_STYLES.includes(data.style) || data.character !== undefined && !characterIdValid(data.character)) return { state: 'unsafe' };
     return { state: data.enabled ? 'on' : 'off', ...data.capture ? { capture: data.capture } : {},
-      ...data.stream !== undefined ? { stream: data.stream } : {}, ...data.labels !== undefined ? { labels: data.labels } : {} };
+      ...data.stream !== undefined ? { stream: data.stream } : {}, ...data.labels !== undefined ? { labels: data.labels } : {},
+      ...data.style !== undefined ? { style: data.style } : {}, ...data.character !== undefined ? { character: data.character } : {} };
   } catch { return { state: 'unsafe' }; }
 }
 
@@ -34,6 +39,10 @@ export function handSetting({ env = process.env, platform = process.platform, pa
   const [capture, captureReason] = asked !== undefined && asked !== '' ? CAPTURE_MODES.includes(asked) ? [asked, 'env'] : ['hidden', 'env-invalid']
     : file.capture ? [file.capture, 'user'] : ['hidden', 'default'];
   const result = (enabled, reason) => ({ enabled, reason, capture, captureReason,
+    ...(env.SLEIGHT_CURSOR_STYLE ? { style: CURSOR_STYLES.includes(env.SLEIGHT_CURSOR_STYLE) ? env.SLEIGHT_CURSOR_STYLE : 'glove',
+      styleReason: CURSOR_STYLES.includes(env.SLEIGHT_CURSOR_STYLE) ? 'env' : 'env-invalid' }
+      : file.style ? { style: file.style, styleReason: 'user' } : {}),
+    ...file.character !== undefined ? { character: file.character } : {},
     ...file.stream !== undefined ? { stream: env.SLEIGHT_HAND !== '0' && file.state !== 'unsafe' && file.stream } : {},
     ...file.labels !== undefined ? { labels: file.labels } : {} });
   if (platform !== 'darwin') return result(false, 'platform');

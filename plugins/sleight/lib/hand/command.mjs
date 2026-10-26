@@ -4,23 +4,26 @@
 import { userInfo } from 'node:os';
 import { writeConfigFile } from '../direct-browser/turbo-setup.mjs';
 import { handHostBuilt } from '../direct-browser/host.mjs';
-import { CAPTURE_MODES, handConfigPath, handSetting, handStatusLines, readHandConfig } from './settings.mjs';
+import { CAPTURE_MODES, CURSOR_STYLES, characterIdValid, handConfigPath, handSetting, handStatusLines, readHandConfig } from './settings.mjs';
 
 const usage = 'usage: sleight-mcp hand on\n       sleight-mcp hand off\n       sleight-mcp hand capture hidden|visible\n       sleight-mcp hand status\n';
 
 /** Writes one field and keeps the other. An unsafe file is replaced only when enabled is given, since that says everything.
  *  Throws an error whose message is a code. */
-export function writeHandSetting({ enabled, capture }, { path = handConfigPath(userInfo().homedir), uid = process.getuid() } = {}) {
+export function writeHandSetting({ enabled, capture, style, character }, { path = handConfigPath(userInfo().homedir), uid = process.getuid() } = {}) {
+  if (style !== undefined && !CURSOR_STYLES.includes(style) || character !== undefined && !characterIdValid(character)) throw Error('HAND_CONFIG_INVALID');
   const before = readHandConfig(path, uid);
   if (enabled === undefined && before.state === 'unsafe') throw Error('HAND_CONFIG_UNSAFE');
   const data = { version: 1, enabled: enabled ?? before.state === 'on' };
-  if (before.state !== 'unsafe') for (const key of ['stream', 'labels']) if (before[key] !== undefined) data[key] = before[key];
+  if (before.state !== 'unsafe') for (const key of ['stream', 'labels', 'style', 'character']) if (before[key] !== undefined) data[key] = before[key];
+  if (style !== undefined) data.style = style;
+  if (character !== undefined) data.character = character;
   const kept = capture ?? (before.state !== 'unsafe' ? before.capture : undefined);
   if (kept) data.capture = kept;
   try { writeConfigFile(path, data, uid); }
   catch (error) { throw Error(/^[A-Z][A-Z0-9_]{0,127}$/.test(error?.message) ? error.message.replace(/^TURBO_/, 'HAND_') : error?.code ?? 'HAND_SETUP_FAILED'); }
   const after = readHandConfig(path, uid);
-  if (after.state !== (data.enabled ? 'on' : 'off') || after.capture !== data.capture) throw Error('HAND_CONFIG_UNSAFE');
+  if (after.state !== (data.enabled ? 'on' : 'off') || ['capture', 'style', 'character', 'stream', 'labels'].some(key => after[key] !== data[key])) throw Error('HAND_CONFIG_UNSAFE');
 }
 
 /** Exit code 0 on success, 1 on failure, 2 on usage. */
