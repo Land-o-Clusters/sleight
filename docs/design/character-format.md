@@ -1,6 +1,6 @@
 # sleight character format v1
 
-A character is a local folder of images and a `character.json` manifest. sleight does not include characters, pets or vendor art.
+A character is a local folder of images and a `character.json` manifest. sleight includes Tsugi, Shizu, Bit, Kit, Yori and Tab, six original MIT characters. Codex pets and vendor art are never bundled.
 The default cursor is sleight's ring. Importing a character leaves its sprite hidden. In overlay mode the sprite trails
 that ring, which always marks the exact point. The sprite's anchor controls its offset. Rendering and style selection
 are separate from importing.
@@ -24,13 +24,13 @@ Installed folder names must equal the manifest's `id`. A source folder can have 
 copied. Other files or subfolders are refused. This CLI accepts folders.
 Archive extraction is outside this version of the importer. Do not put a `pet.json` beside `character.json`.
 
-Characters install under `~/Library/Application Support/sleight/characters/<id>/`. Directories have mode 0700 and files
+Imported characters install under `~/Library/Application Support/sleight/characters/<id>/`. Directories have mode 0700 and files
 have mode 0600, owned by the current user. Sources must be user-owned, have no executable files and have no group or world
 write permission. The importer resolves the source path first, so `/tmp` and download-folder aliases work. Symlinks inside
 the source folder and hardlinked files are refused. Installed paths cannot contain symlinks. A wrong directory mode prints
 a `chmod 700` command to fix it.
 
-Renderers use the current user's fixed characters directory and ignore environment overrides. CLI tests can set
+Renderers use the current user's fixed characters directory and the plugin's built-in packs. They ignore environment overrides. CLI tests can set
 `SLEIGHT_CURSOR_TEST=1` and `SLEIGHT_CHARACTERS_DIR` to an absolute, normalized private directory with no symlink in its path.
 Renderer tests pass an explicit `root` to the loader functions.
 
@@ -38,6 +38,54 @@ The importer copies a validated snapshot into a private staging directory, valid
 rename. An existing character is never replaced. Remove it before importing a revised version. Import never writes
 `hand.json` or selects a character. The next import removes private, user-owned `.import-*` staging folders older than
 60 seconds. Fresh staging folders and symlinks are left alone.
+
+## Built-in characters
+
+Built-in packs live at `plugins/sleight/characters/<id>/` inside the plugin. They are read-only built-ins and are never
+copied to the user character directory. List and the picker show them first, marked as built-in. Selecting one enables
+its sprite style. Installing the plugin leaves the current cursor settings unchanged.
+
+`plugins/sleight/characters/manifest.json` pins every pack file with SHA-256. A failed hash skips the pack in the picker;
+list reports the failure and doctor prints a `PROBLEM` line. The native host also pins each built-in sheet's hash before
+sending it to the same sandboxed decoder and pixel checks used for imported art. Built-in files accept exactly 0600 and
+0644. Temporary Claude Code and Codex plugin installs each produced 338 non-executable data files, all 0644 (2026-10-26).
+Imported files still require 0600. Both loaders require absolute canonical built-in paths, with no symlink in the root,
+its ancestors or the pack. Hardlinks and writable shared files are refused for both.
+
+The manifest and native sheet pins detect accidental corruption. They do not protect against a process running as the
+same user: it can rewrite the manifest and art together, and it can write the open inode between the host's hash check
+and decoder read. The native pins cover sheets only, not character names, personality lines or previews. The same-user
+write window also exists for the private user bank.
+
+The IDs `tsugi`, `shizu`, `bit`, `kit`, `yori` and `tab` are reserved, including when a bundled file needs repair.
+Import refuses those IDs regardless of display name. To make a variant, give it a different manifest ID.
+Remove refuses built-ins. An old user folder with a reserved ID cannot shadow the bundled pack, but remains removable
+with `sleight-mcp cursor remove <id>`. The picker shows a separate "renamed needed" row that opens the user bank for repair.
+
+The build tool is `tools/characters/build.mjs`, outside the plugin. Its cast data, poses and styles draw all six characters
+in code under MIT. On macOS with `cwebp` 1.6.0 on PATH, build into a new directory:
+
+```sh
+nice -n 20 node tools/characters/build.mjs --out /tmp/sleight-cast-build
+```
+
+macOS `sips` rasterizes the SVGs without a browser or window. After PNG metadata is stripped, `cwebp` encodes every atlas
+with lossless WebP (`-lossless -z 9 -exact`). `sheet.webp` is already allowed by format v1. Each pack includes the main sheet,
+extra sheet, perch sheet, preview and personality lines. The committed art is the owner-approved Chromium render,
+converted losslessly to WebP. Conversion verifies all RGBA values, including hidden RGB, before publishing. Removing the
+sRGB ICC metadata does not change pixel values. The sips generator
+uses luminance masks for hair shine. `tools/characters/proof.mjs` compares every generated frame with approved art and
+checks isolated shine against the hair's alpha support on all three sheets.
+
+`tests/character-rebuild.test.mjs` compares manifests, resolved states, sheet dimensions and alpha structure, without
+requiring identical image bytes. Its tested toolchain is macOS 27.0.1 and cwebp 1.6.0, recorded in
+`tools/characters/toolchain.mjs`. The test skips raster qualification with a reason when cwebp is missing or
+the operating system or encoder version is untested. The native pin and packaged hash checks still run on every platform.
+
+After replacing the committed packs and manifest with reviewed output, run
+`node tools/characters/build.mjs --sync-native-pins` to update the host's compiled sheet pins. The pin test checks that
+these match. Run `node tools/characters/check.mjs` to verify hashes, lossless encoding and the 8,000,000-byte character
+budget, including the hash manifest. It also reports the complete plugin's uncompressed size.
 
 ## Manifest
 
@@ -278,7 +326,8 @@ host's caps.
 `plugins/sleight/lib/hand/character.mjs` exports `loadCharacter(folder)` and `checkCharacter(id)` for validated loads.
 Results contain the normalized `manifest`, header-only `sheets`, `files` as a map of snapshot buffers, total byte count,
 `warnings`, a 19-entry `resolved` table and the `perch` table from `resolvePerchStates`. Installed loads use `installed: true` to enforce private file modes.
-`listCharacters()` also returns `{ id, skipped, reason }` for stray entries and `{ id, error }` for broken characters.
+`checkCharacter(id)` resolves built-ins through their hash manifest. Built-in results have `builtin: true`.
+`listCharacters()` returns built-ins first, then user packs. It also returns `{ id, skipped, reason }` for stray entries and `{ id, error }` for broken characters.
 
 `resolveCharacterStates(manifest, { heading, distance })` resolves a validated manifest for one heading in degrees and a
 travel distance in pixels. Each entry has `state`, `label`, `own`, `source`, `shows`, concrete `sheet` filename, `row`,

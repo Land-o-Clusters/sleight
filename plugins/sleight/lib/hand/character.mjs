@@ -3,6 +3,8 @@ import * as fs from 'node:fs';
 import { userInfo } from 'node:os';
 import { basename, dirname, extname, isAbsolute, join, resolve } from 'node:path';
 import { TextDecoder } from 'node:util';
+import { fileURLToPath } from 'node:url';
+import { createHash } from 'node:crypto';
 
 const MiB = 1024 ** 2;
 export const CHARACTER_LIMITS = Object.freeze({ json: 16384, sheet: 8 * MiB, extra: 8 * MiB, preview: MiB, license: 65536, total: 16 * MiB, pixels: 16_000_000, filePixels: 4096 ** 2 });
@@ -156,14 +158,14 @@ function safeDirectory(path, uid, { privateMode = false, io = fs } = {}) {
     return full;
   });
 }
-function readSafe(path, cap, uid, installed, io = fs) {
+function readSafe(path, cap, uid, installed, io = fs, builtin = false) {
   return fileOperation(path, 'file', () => {
     const refuse = message => fail(message, 'file', path);
     const before = io.lstatSync(path);
     const check = stat => {
       if (!stat.isFile() || stat.isSymbolicLink() || stat.nlink !== 1) refuse('sheet files must be regular, without symlinks or hardlinks');
       if (stat.uid !== uid) refuse('file owner must be current user');
-      if (stat.mode & 0o7133 || installed && (stat.mode & 0o777) !== 0o600) refuse('unsafe character file mode or executable bits');
+      if (builtin ? ![0o600, 0o644].includes(stat.mode & 0o7777) : stat.mode & 0o7133 || installed && (stat.mode & 0o777) !== 0o600) refuse('unsafe character file mode or executable bits');
       if (stat.size > cap) refuse('character file size cap exceeded');
     };
     check(before); const fd = io.openSync(path, fs.constants.O_RDONLY | fs.constants.O_NOFOLLOW | fs.constants.O_NONBLOCK);
@@ -179,7 +181,7 @@ function readSafe(path, cap, uid, installed, io = fs) {
     } finally { io.closeSync(fd); }
   });
 }
-function snapshot(folder, uid, installed = false, io = fs) {
+function snapshot(folder, uid, installed = false, io = fs, builtin = false) {
   folder = safeDirectory(folder, uid, { privateMode: installed, io });
   const entries = fileOperation(folder, 'entries', () => io.readdirSync(folder)).filter(name => {
     if (name !== '.DS_Store') return true;
@@ -196,7 +198,7 @@ function snapshot(folder, uid, installed = false, io = fs) {
     else if (name === 'preview.png') cap = CHARACTER_LIMITS.preview;
     else if (/^[a-zA-Z0-9][a-zA-Z0-9_.-]{0,79}\.(png|webp)$/.test(name)) cap = CHARACTER_LIMITS.sheet;
     else fail('extra character file refused', 'entry', name);
-    const bytes = readSafe(join(folder, name), cap, uid, installed, io); total += bytes.length;
+    const bytes = readSafe(join(folder, name), cap, uid, installed, io, builtin); total += bytes.length;
     if (total > CHARACTER_LIMITS.total) fail('total character size exceeds 16 MiB', 'entries', folder); files.set(name, bytes);
   }
   return { folder, files, total };
@@ -428,8 +430,8 @@ export function resolvePerchStates(m) {
   return { anchor: m.perch?.anchor ?? m.anchor, states: out };
 }
 
-export function loadCharacter(folder, { uid = process.getuid(), shared = false, expectedId = basename(resolve(folder)), installed = false, io = fs } = {}) {
-  const snap = snapshot(folder, uid, installed, io);
+export function loadCharacter(folder, { uid = process.getuid(), shared = false, expectedId = basename(resolve(folder)), installed = false, io = fs, builtin = false } = {}) {
+  const snap = snapshot(folder, uid, installed, io, builtin);
   if (!snap.files.has('character.json')) fail('character.json missing', 'manifest', join(folder, 'character.json'));
   return { ...snap, ...validateManifest(parseCharacterJSON(snap.files.get('character.json')), snap.files, { expectedId, shared }) };
 }
@@ -454,17 +456,42 @@ function codexManifest(pet, sheet) {
     codex: { spriteVersionNumber: 2, importedFrom: pet.id } };
 }
 
+export const BUILTIN_CHARACTER_IDS = Object.freeze(['tsugi', 'shizu', 'bit', 'kit', 'yori', 'tab']);
+export const builtinCharactersDirectory = () => fileURLToPath(new URL('../../characters/', import.meta.url)).replace(/\/$/, '');
+const reservedId = id => { if (BUILTIN_CHARACTER_IDS.includes(id)) fail('built-in character id is reserved; choose a different id', 'id'); };
+export function checkBuiltinCharacter(id, { builtinRoot = builtinCharactersDirectory(), uid = process.getuid() } = {}) {
+  if (!BUILTIN_CHARACTER_IDS.includes(id)) fail('unknown built-in character id', 'id');
+  if (!isAbsolute(builtinRoot) || resolve(builtinRoot) !== builtinRoot) fail('built-in root must be an absolute canonical path', 'directory', builtinRoot);
+  safeDirectory(builtinRoot, uid);
+  const pins = parseCharacterJSON(readSafe(join(builtinRoot, 'manifest.json'), CHARACTER_LIMITS.json - 1, uid, false, fs, true));
+  const expected = pins.version === 1 && pins.packs?.[id];
+  const pack = loadCharacter(join(builtinRoot, id), { uid, shared: true, builtin: true });
+  if (!object(expected) || Object.keys(expected).sort().join() !== [...pack.files.keys()].sort().join() ||
+      [...pack.files].some(([name, bytes]) => createHash('sha256').update(bytes).digest('hex') !== expected[name])) fail('built-in hash mismatch; pack skipped', 'hash', id);
+  return { ...pack, builtin: true };
+}
+export function builtinCharacterDoctorLines(options) {
+  return BUILTIN_CHARACTER_IDS.flatMap(id => {
+    try { checkBuiltinCharacter(id, options); return []; }
+    catch (error) { return [`PROBLEM   built-in character ${id} skipped: ${error.message}`]; }
+  });
+}
+
 export function prepareCharacterImport(folder, { uid = process.getuid(), shared = false } = {}) {
   folder = fileOperation(folder, 'source', () => fs.realpathSync(folder));
   const snap = snapshot(folder, uid);
-  if (snap.files.has('character.json')) return { ...snap, ...validateManifest(parseCharacterJSON(snap.files.get('character.json')), snap.files, { shared: true }) };
+  if (snap.files.has('character.json')) {
+    const result = { ...snap, ...validateManifest(parseCharacterJSON(snap.files.get('character.json')), snap.files, { shared: true }) };
+    reservedId(result.manifest.id); return result;
+  }
   if (!snap.files.has('pet.json')) fail('character.json or Codex pet.json required', 'entries', folder);
   const pet = parseCharacterJSON(snap.files.get('pet.json'), 'pet.json');
   if (!object(pet)) fail('Codex manifest must be an object', 'manifest', 'pet.json');
   plainData(pet, '', 'pet.json'); filename(pet.spritesheetPath, 'spritesheetPath', 'pet.json');
   const ext = extname(pet.spritesheetPath); if (!['.png', '.webp'].includes(ext) || !snap.files.has(pet.spritesheetPath)) fail('Codex sheet missing or invalid', 'spritesheetPath', 'pet.json');
   for (const name of snap.files.keys()) if (!['pet.json', pet.spritesheetPath, 'LICENSE.txt', 'preview.png'].includes(name)) fail('extra Codex character file refused', 'entry', name);
-  const sheet = `sheet${ext}`, m = codexManifest(pet, sheet), files = new Map([[sheet, snap.files.get(pet.spritesheetPath)]]);
+  const sheet = `sheet${ext}`, m = codexManifest(pet, sheet); reservedId(m.id);
+  const files = new Map([[sheet, snap.files.get(pet.spritesheetPath)]]);
   for (const name of ['LICENSE.txt', 'preview.png']) if (snap.files.has(name)) files.set(name, snap.files.get(name));
   files.set('character.json', Buffer.from(JSON.stringify(m, null, 2) + '\n'));
   const total = [...files.values()].reduce((n, b) => n + b.length, 0); if (total > CHARACTER_LIMITS.total) fail('total character size exceeds 16 MiB');
@@ -486,7 +513,7 @@ function storage(root, uid, create = false, io = fs) {
 export function installCharacter(character, { root = charactersDirectory(), uid = process.getuid(), io = fs } = {}) {
   // Revalidate the captured data, not a source folder which may have changed during confirmation.
   const files = new Map([...character.files].map(([name, bytes]) => [name, Buffer.from(bytes)]));
-  const m = parseCharacterJSON(files.get('character.json')); validateManifest(m, files);
+  const m = parseCharacterJSON(files.get('character.json')); validateManifest(m, files); reservedId(m.id);
   if ([...files.values()].reduce((n, b) => n + b.length, 0) > CHARACTER_LIMITS.total) fail('total character size exceeds 16 MiB');
   root = storage(root, uid, true, io); const target = join(root, m.id);
   if (io.existsSync(target)) fail('character already exists; remove it first', 'directory', target);
@@ -508,22 +535,30 @@ export function installCharacter(character, { root = charactersDirectory(), uid 
   } catch (error) { fileOperation(staging, 'directory', () => io.rmSync(staging, { recursive: true, force: true })); throw error; }
   return target;
 }
-export function listCharacters({ root = charactersDirectory(), uid = process.getuid() } = {}) {
-  try { storage(root, uid); } catch (error) { if (error.code === 'ENOENT') return []; throw error; }
-  return fileOperation(root, 'entries', () => fs.readdirSync(root)).filter(name => !name.startsWith('.import-')).sort().map(id => {
+export function listCharacters({ root = charactersDirectory(), uid = process.getuid(), builtins = true, builtinRoot = builtinCharactersDirectory() } = {}) {
+  const bundled = builtins ? BUILTIN_CHARACTER_IDS.map(id => {
+    try { return checkBuiltinCharacter(id, { builtinRoot, uid }); }
+    catch (error) { return { id, builtin: true, error: error.message }; }
+  }) : [];
+  try { storage(root, uid); } catch (error) { if (error.code === 'ENOENT') return bundled; throw error; }
+  return [...bundled, ...fileOperation(root, 'entries', () => fs.readdirSync(root)).filter(name => !name.startsWith('.import-')).sort().map(id => {
     const folder = join(root, id);
+    if (BUILTIN_CHARACTER_IDS.includes(id)) return { id, skipped: true, reason: `built-in id collision; renamed needed; rename the user pack or run sleight-mcp cursor remove ${id}` };
     try {
       const stat = fileOperation(folder, 'directory', () => fs.lstatSync(folder));
       if (!stat.isSymbolicLink() && (!stat.isDirectory() || !/^[a-z0-9-]{1,48}$/.test(id))) return { id, skipped: true, reason: 'not a character folder' };
       if (stat.isSymbolicLink()) fail('symlink character directory refused; remove the link by hand (leave its target)', 'directory', folder);
       idCheck(id); return loadCharacter(folder, { uid, installed: true });
     } catch (error) { return { id, error: error.message }; }
-  });
+  })];
 }
-export function checkCharacter(id, { root = charactersDirectory(), uid = process.getuid() } = {}) {
-  idCheck(id); storage(root, uid); return loadCharacter(join(root, id), { uid, installed: true });
+export function checkCharacter(id, { root = charactersDirectory(), uid = process.getuid(), builtinRoot = builtinCharactersDirectory() } = {}) {
+  idCheck(id);
+  if (BUILTIN_CHARACTER_IDS.includes(id)) return checkBuiltinCharacter(id, { builtinRoot, uid });
+  storage(root, uid); return loadCharacter(join(root, id), { uid, installed: true });
 }
 export function removeCharacter(id, { root = charactersDirectory(), uid = process.getuid() } = {}) {
+  if (BUILTIN_CHARACTER_IDS.includes(id) && (resolve(root) === builtinCharactersDirectory() || !fs.existsSync(join(root, id)))) fail('built-in character cannot be removed', 'id');
   if (typeof id !== 'string' || !id || id === '.' || id === '..' || /[/\\\u0000-\u001f\u007f]/u.test(id)) fail('invalid character id for removal', 'id', String(id));
   storage(root, uid); const folder = join(root, id), stat = fileOperation(folder, 'directory', () => fs.lstatSync(folder));
   if (stat.isSymbolicLink() || fileOperation(folder, 'directory', () => fs.realpathSync(folder)) !== folder) fail('symlink character directory refused; remove the link by hand (leave its target)', 'directory', folder);
