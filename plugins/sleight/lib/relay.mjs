@@ -91,6 +91,7 @@ import { TurnOutcomes, unconfirmedInput } from './turn-outcomes.mjs';
 import { resultCompleteness, filteredRead } from './read-completeness.mjs';
 import { stripHandBindings } from './hand/bindings.mjs';
 import { cursorRecord } from './hand/events.mjs';
+import { createSessionPause, PAUSED_NOTE, PAUSE_DRAIN_NOTE } from './session-pause.mjs';
 import { stripGuardTiming } from './guard-timing.mjs';
 import { stripDP1Trace } from './dp1-trace.mjs';
 import { createStuckEscapes } from './stuck-escape.mjs';
@@ -913,7 +914,30 @@ export function createRelay({
   // the relay never awaits it or reads its state, and without it nothing changes.
   hand,
   cursor,
+  pause = createSessionPause(),
+  pauseHost,
 }) {
+  const pauseChecks = new Map(), pausedCalls = new Set();
+  const applyPause = value => {
+    if (value) for (const id of engineCalls) if (running.has(id) && !localRunning.has(id)) pausedCalls.add(id);
+    cursor?.setPaused?.(value);
+    directBrowser?.setPaused?.(value);
+    if (value) hand?.pause?.();
+  };
+  const releasePause = pause.subscribe(applyPause);
+  function pauseBlocked(msg) {
+    if (msg.method !== 'tools/call' || [TURN_END_TOOL, TURN_START_TOOL].includes(msg.params?.name)) return false;
+    try {
+      if (!pauseChecks.has(msg.id)) pauseChecks.set(msg.id, pause.checkpoint());
+      pauseChecks.get(msg.id)();
+      return false;
+    } catch { return true; }
+  }
+  function pauseReply(msg, text = PAUSED_NOTE) {
+    const response = { jsonrpc: '2.0', id: msg.id, result: { isError: true, content: [{ type: 'text', text }] } };
+    // Internal split calls still need their normal callback and bookkeeping.
+    observeServerMessage(response);
+  }
   const localCursor = new Map();
   const cursorStatus = (state, detail) => { try { cursor?.status(state, detail); } catch {} };
   const localCursorResult = (id, failed, phase) => {
@@ -2432,6 +2456,12 @@ export function createRelay({
   let nextElicitId = 0;
 
   const toServer = (msg, continuationChecked = false) => {
+    if (pauseBlocked(msg)) { pauseReply(msg); return; }
+    // Native approval tokens carry no parent call ID. Keep fresh calls out of that ambiguity until the old call drains.
+    if (pausedCalls.size && msg.method === 'tools/call' && msg.params?.name !== TURN_END_TOOL && !pausedCalls.has(msg.id)) {
+      pauseReply(msg, PAUSE_DRAIN_NOTE); return;
+    }
+    if (msg.result?.action === 'accept' && (pause.paused || pausedCalls.size)) msg = { ...msg, result: { action: 'decline' } };
     let closeKeyApp;
     // An accepted app approval is the exact beat of its action.
     if (hand && msg.method === undefined && msg.id !== undefined) hand.answered(msg.id, msg.result?.action);
@@ -2489,6 +2519,7 @@ export function createRelay({
     if (msg.method === 'tools/call' && menuCalls.has(msg.id)) menuCalls.get(msg.id).forwardedAt ??= clock();
     // The action log times a call from here, after sleight's own checks and waits.
     if (msg.method === 'tools/call' && msg.id !== undefined) recordAction('sent', msg.id);
+    if (msg.method === 'tools/call' && msg.params?.name !== TURN_END_TOOL) pauseHost?.activity();
     serverIn.write(JSON.stringify(msg) + '\n');
     replWarmup.sent(msg);
   };
@@ -2582,6 +2613,7 @@ export function createRelay({
     msg.result.content = [...dropAcquisitionTree(msg.result.content, reply.result.content, undefined, compactReacquire), ...reply.result.content];
   }
   const toClient = (msg, afterWrite, remoteNotice = false) => {
+    if (msg.method === undefined) { pauseChecks.delete(msg.id); pausedCalls.delete(msg.id); }
     // An approval prompt's time comes off the action log's call times (the engine's prompts and sleight's own).
     if (msg.method === 'elicitation/create' && msg.id !== undefined) recordAction('waitStart', 'c:' + msg.id);
     // Every call's reply ends it, by whatever path: its parent lease pin ends too.
@@ -2965,6 +2997,7 @@ export function createRelay({
 
   function askUser(msg, ignoreMemory = false) {
     const generation = stopGeneration;
+    const pauseCheck = pause.checkpoint();
     const appApproval = plainCard(msg);
     const key = approvalScope === 'session' && (!panelOnly || appApproval) ? approvalKey(msg) : undefined;
     // Only a repeated pending RPC ID in this engine epoch proves a retry. Equal text or metadata can describe
@@ -2975,6 +3008,7 @@ export function createRelay({
     let decision = pendingKey && pendingShellAsks.get(pendingKey);
     if (!decision) {
       decision = asking.then(async () => {
+        try { pauseCheck(); } catch { return { action: 'decline' }; }
         if (generation !== stopGeneration) return { action: 'cancel' };
         if (!ignoreMemory && key !== undefined && approved.has(key)) {
           trace('answered-for-session', msg);
@@ -2992,6 +3026,7 @@ export function createRelay({
           action = 'cancel';
         }
         if (generation !== stopGeneration) return { action: 'cancel' };
+        try { pauseCheck(); } catch { return { action: 'decline' }; }
         if (action === 'always' && always) { rememberAlways(always); action = 'accept'; }
         if (action !== 'accept') return { action };
         if (key === undefined) return { action, content: {} };
@@ -3140,7 +3175,9 @@ export function createRelay({
 
   async function callLocal(msg, plan) {
     const generation = stopGeneration;
+    const pauseCheck = pauseChecks.get(msg.id) ?? pause.checkpoint();
     const current = () => {
+      pauseCheck();
       if (closing || disposed) throw new Error(/* notice */ 'Input lease: this session is closing.');
       if (generation !== stopGeneration) throw new Error(/* notice */ 'Input lease: this call was stopped.');
     };
@@ -3273,6 +3310,8 @@ export function createRelay({
         callArgs = { ...callArgs, ...endpoints, screenshot: shot ? [shot.latest.width, shot.latest.height] : undefined, screenshots: shot?.byTitle,
           screenshotsByWindow: shot?.byWindow, toElementLines: undefined, toElementWindow: undefined, ...evidence };
       }
+      current();
+      pauseHost?.activity();
       result = await localTools.call(name, callArgs, async (parts, message, options) => {
         const allowed = await (prepared?.approval ?? approve(parts, message, msg.id, options));
         current();
@@ -3418,6 +3457,7 @@ export function createRelay({
       serverIn.write(line + '\n');
       return;
     }
+    if (pauseBlocked(msg)) { pauseReply(msg); return; }
     if (msg.method === 'initialize') codexClient = codexTurnClient(msg.params?.clientInfo);
     if (msg.method === 'tools/call') {
       if (docOrigin.owns(msg.id)) {
@@ -3630,6 +3670,7 @@ export function createRelay({
   const continuedLeads = new Map();
   const skippedSettle = (id, reason) => saveNotes.set(id, promptNotice(`Text-write settle skipped: ${String(reason).replace(/\s+/g, ' ')}.`, prompt));
   function splitSave(msg) {
+    if (pauseBlocked(msg)) { pauseReply(msg); return true; }
     if (!inputLease || msg.method !== 'tools/call' || msg.params?.name !== 'js' ||
         msg.id === undefined || typeof msg.params.arguments?.code !== 'string' || browserPlan(msg.params.arguments.code)) return false;
     const plan = splitTextSave(msg.params.arguments.code);
@@ -3643,18 +3684,20 @@ export function createRelay({
     }
     const expected = handleBundles.get(plan.handle);
     if (!expected?.appId || expected.appId !== leaseWindow?.appId || !sameWindow(expected, leaseWindow)) return false;
-    const generation = stopGeneration, prefixId = `sleight-text-write-${nextInternalId++}`;
-    const current = () => generation === stopGeneration && !closing && !disposed && !stopCollected &&
+    const generation = stopGeneration, prefixId = `sleight-text-write-${nextInternalId++}`, pauseCheck = pauseChecks.get(msg.id);
+    const current = () => !pauseBlocked(msg) && generation === stopGeneration && !closing && !disposed && !stopCollected &&
       expected.appId === leaseWindow?.appId && sameWindow(expected, leaseWindow);
     if (prepareTextWrite && !preparedSaves.delete(msg.id)) {
       running.add(msg.id); callDetails.set(msg.id, 'text-write preflight');
       Promise.resolve().then(() => prepareTextWrite(expected, current)).then(() => {
         finishedCall(msg.id);
+        if (pauseBlocked(msg)) { pauseReply(msg); return; }
         if (!current()) { if (!disposed && !stopCollected) leaseStop(msg, 'Text save was stopped before the write.'); return; }
         preparedSaves.add(msg.id);
         if (!splitSave(msg)) handleClient(msg);
       }, error => {
         finishedCall(msg.id);
+        if (pauseBlocked(msg)) { pauseReply(msg); return; }
         if (!current()) { if (!disposed && !stopCollected) leaseStop(msg, 'Text save was stopped before the write.'); return; }
         if (error.textSaveStop) { leaseStop(msg, error.message); return; }
         skippedSettle(msg.id, error.message);
@@ -3663,12 +3706,14 @@ export function createRelay({
       return true;
     }
     callGenerations.set(prefixId, generation);
+    pauseChecks.set(prefixId, pauseCheck);
     splitCalls.set(prefixId, reply => {
       if (reply.error || reply.result?.isError) { toClient({ ...reply, id: msg.id }); return; }
       splitInputs.add(msg.id);
       const content = reply.result?.content ?? [];
       const stop = error => toClient({ jsonrpc: '2.0', id: msg.id, result: { isError: true, content: [...content,
         { type: 'text', text: promptNotice(`Text save stopped after the write: ${error.message}. The save was not sent. Read the intended window before continuing.`, prompt) }] } });
+      try { pauseCheck(); } catch (error) { stop(error); return; }
       if (!current()) { stop(new Error(/* notice */ 'window changed or call stopped')); return; }
       let key;
       try { key = inputLease.acquire(expected); }
@@ -3676,6 +3721,7 @@ export function createRelay({
       running.add(msg.id); callDetails.set(msg.id, 'text-write settle');
       leaseCalls.set(msg.id, { key }); refreshHeartbeat();
       Promise.resolve().then(() => {
+        pauseCheck();
         if (!current()) throw new Error(/* notice */ 'call stopped');
         inputLease.renew([key]);
         return Promise.resolve().then(() => settleTextWrite(leaseWindow, current, inputLease.grant(key)))
@@ -3685,6 +3731,7 @@ export function createRelay({
             skippedSettle(msg.id, error.message);
           });
       }).then(() => {
+        pauseCheck();
         if (!current()) throw new Error(/* notice */ 'window changed or call stopped');
         inputLease.renew([key]);
         finishedCall(msg.id);
@@ -3785,6 +3832,7 @@ export function createRelay({
     handleClient({ jsonrpc: '2.0', id, method: 'tools/call', params: { name: 'js', arguments: { code: acquisitionCode(handle, open.browser) } } });
   }
   function splitAcquisition(msg, probed) {
+    if (pauseBlocked(msg)) { pauseReply(msg); return true; }
     if (documentMode || msg.method !== 'tools/call' || msg.params?.name !== 'js' ||
         msg.id === undefined || typeof msg.params.arguments?.code !== 'string') return false;
     const code = msg.params.arguments.code;
@@ -4178,6 +4226,8 @@ export function createRelay({
     return true;
   }
   function handleClient(msg) {
+    if (pauseBlocked(msg)) { pauseReply(msg); return; }
+    if (msg.result?.action === 'accept' && (pause.paused || pausedCalls.size)) msg = { ...msg, result: { action: 'decline' } };
     if (nativeHandoff && msg.method === 'notifications/cancelled' && msg.params?.requestId === nativeHandoff.id) {
       nativeHandoff.cancel?.(); return;
     }
@@ -4219,6 +4269,7 @@ export function createRelay({
       running.add(msg.id);
       callDetails.set(msg.id, msg.params.name);
       recordAction('sent', msg.id);
+      pauseHost?.activity();
       directBrowser.call({ name: msg.params.name, arguments: msg.params.arguments }).then(result => {
         cursorStatus(result.isError ? 'error' : 'done');
         if (!result.isError) cursorStatus('thinking');
@@ -4988,6 +5039,13 @@ export function createRelay({
     observeServerMessage(msg);
   }
   function observeServerMessage(msg) {
+    if (msg.method === 'elicitation/create' && (pause.paused || pausedCalls.size)) {
+      toServer({ jsonrpc: '2.0', id: msg.id, result: { action: 'decline' } }); return;
+    }
+    if (msg.method === undefined && pausedCalls.delete(msg.id) && msg.result) {
+      const content = msg.result.content ?? [];
+      msg.result = { ...msg.result, content: content.some(c => c.text === PAUSED_NOTE) ? content : [...content, { type: 'text', text: PAUSED_NOTE }] };
+    }
     docOrigin.reply(msg, documentationContext());
     if (msg.method === 'elicitation/create' || msg.error || msg.result?.isError) docOrigin.invalidate();
     // A completed warmup ID remains private, including duplicate engine replies.
@@ -6267,6 +6325,7 @@ export function createRelay({
   }
   function close() {
     closing = true;
+    releasePause(); pauseChecks.clear(); pausedCalls.clear();
     for (const pending of clipboardReplies.values()) pending.reject(new Error(/* notice */ 'Clipboard guard: engine connection closed.'));
     clipboardReplies.clear();
     clearTimeout(idleTimer);
@@ -6284,5 +6343,6 @@ export function createRelay({
     await close();
     return true;
   }
+  if (pause.paused) applyPause(true);
   return { endOpenTurn, shutdown, engineEnded, close, dispose: close, get snapshotDirectory() { return changes.directory; }, get sessionId() { return sessionId; }, get turnId() { return turnId; } };
 }

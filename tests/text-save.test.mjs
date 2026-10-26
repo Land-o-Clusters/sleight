@@ -8,6 +8,7 @@ import { createRelay } from '../plugins/sleight/lib/relay.mjs';
 import { InputLease } from '../plugins/sleight/lib/input-lease.mjs';
 import { registerTemp, trackTemp } from '../scripts/temp-leftovers.mjs';
 import { splitTextSave, prepareTextWrite, settleTextWrite } from '../plugins/sleight/lib/text-save.mjs';
+import { createSessionPause } from '../plugins/sleight/lib/session-pause.mjs';
 import { FlowRules } from '../plugins/sleight/lib/flow-rules.mjs';
 
 const header = 'Window: "a.txt", App: Editor.\n0 standard window, URL: file:///tmp/a.txt\n2 text area';
@@ -212,6 +213,15 @@ test('disposing a pending preflight prevents both write and save', async t => {
   await tick(); h.relay.dispose(); ready(); await tick();
   assert.equal(h.sent.length, 0);
   assert.equal(h.settled.length, 0);
+});
+test('pause and resume during text-save preflight cannot admit a new internal prefix', async t => {
+  let ready;
+  const pause = createSessionPause();
+  const h = fixture(t, { pause, prepareTextWrite: () => new Promise(resolve => { ready = resolve; }) });
+  h.call(1, 'await app.setValue(2, "updated"); await app.pressKey("cmd+s");');
+  await tick(); pause.set(true); pause.set(false); ready(); await tick();
+  assert.equal(h.sent.length, 0); assert.equal(h.settled.length, 0);
+  assert.match(JSON.stringify(h.received), /Paused by the user/);
 });
 
 test('a confirmed native mismatch during preflight still stops before writing', async t => {

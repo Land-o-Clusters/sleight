@@ -67,6 +67,14 @@ const options = { skip: macCommandSkip('xcrun') };
 // A second frame after the first one, at the same point, so no entrance or glide runs.
 const after = (frame, seq = 2) => [act(), { ...frame, seq }];
 
+test('paused is additive, drops pending acts and parks without a fade or a release timer', options, t => {
+  const rows = effects(t, [clock(0), act(), clock(0.5), act('click', { seq: 2, delayMs: 1000 }), status('paused', { seq: 3 }), clock(1000)]);
+  assert.ok(rows.some(row => row.effect === 'draw' && row.state === 'paused'));
+  assert.equal(rows.filter(row => row.effect === 'draw' && row.state === 'click').length, 1);
+  assert.equal(rows.some(row => row.effect === 'fade' || row.effect === 'release'), false);
+  assert.deepEqual(rows.at(-1), { effect: 'end', idle: false, pending: 0, timers: 0 });
+});
+
 test('Split Seam+ timings follow D2 for every act state', options, t => {
   for (const [frame, phase, seconds] of [[act('click', { seq: 2 }), 'click', .21], [act('double', { seq: 2 }), 'double', .25],
     [act('right', { seq: 2 }), 'right', .22], [act('key', { seq: 2 }), 'keys', .06], [act('type', { seq: 2, beats: 3 }), 'keys', .18],

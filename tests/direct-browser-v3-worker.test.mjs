@@ -7,6 +7,7 @@ import { createRelay } from '../plugins/sleight/lib/relay.mjs';
 import { PassThrough } from 'node:stream';
 import { failure } from '../plugins/sleight/lib/direct-browser/worker.mjs';
 import { withMT } from './fixtures/mt-env.mjs';
+import { PAUSED_NOTE } from '../plugins/sleight/lib/session-pause.mjs';
 
 for (const mode of [undefined, '0']) test(`MTb worker distinguishes uncertain input from capability loss, switch=${mode}`, async () => withMT(mode, async () => {
   assert.equal(failure(true).text, 'Input outcome is unconfirmed. Read state before retrying' + (mode === '0' ? '; use the engine browser path if needed.' : '.'));
@@ -31,6 +32,24 @@ async function fixture(config = {}, tracePhase, bridgeOptions = {}, call) {
     forkWorker(path, args, options) { assert.match(path, /worker\.mjs$/); assert.deepEqual(args, []); forkOptions = options; queueMicrotask(() => session.ready()); return child; } });
   return { child, endpoint, events, bridge, forkOptions };
 }
+test('human pause crosses worker IPC immediately and invalidates the in-flight remainder through resume', async () => {
+  let entered, finish, steps = 0;
+  const started = new Promise(resolve => { entered = resolve; });
+  const f = await fixture({}, undefined, {}, async (_request, options) => {
+    steps++; entered(); await new Promise(resolve => { finish = resolve; });
+    try { options.pauseCheck(); } catch (error) { return { text: error.message, isError: true }; }
+    steps++; return { text: 'two steps', isError: false };
+  });
+  try {
+    await f.bridge.bind({ ...f.bridge.bootstrapEnvelope(), event: 'begin', turn: 'pause-turn', text: 'Work.' });
+    const first = f.bridge.call({ name: 'browser_read', arguments: { tab: 't1' } });
+    await started;
+    f.bridge.setPaused(true);
+    assert.equal((await f.bridge.call({ name: 'browser_read', arguments: { tab: 't1' } })).text, PAUSED_NOTE);
+    f.bridge.setPaused(false); finish();
+    assert.equal((await first).text, PAUSED_NOTE); assert.equal(steps, 1);
+  } finally { await f.bridge.detach(); }
+});
 test('waiting handoff can exceed the normal RPC timeout without losing the worker', async () => {
   const f = await fixture({}, undefined, { timeoutMs: 10 }, async request => {
     if (request.name === 'browser_tabs') await new Promise(resolve => setTimeout(resolve, 30));

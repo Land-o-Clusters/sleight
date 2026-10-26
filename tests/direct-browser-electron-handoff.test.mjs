@@ -8,6 +8,7 @@ import { check as rulesCheck, captureSnapshot, deliverSnapshot } from '../plugin
 import { app, identity, recipe, page as target, rect, fakeUpstream, fakeWindows, nativeWindow, fakeBrowser } from './fixtures/electron-graph.mjs';
 import { utilityLocator } from './direct-browser-utility-fixture.mjs';
 import { siteRefusal } from '../plugins/sleight/lib/permissions.mjs';
+import { createSessionPause } from '../plugins/sleight/lib/session-pause.mjs';
 import { mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { qualificationDiagnostic } from '../plugins/sleight/lib/direct-browser/electron-diagnostics.mjs';
@@ -90,6 +91,14 @@ async function world({ check = rulesCheck, dom = {}, inspect = {}, onClick, onSl
   return s;
 }
 const notRun = pattern => error => { assert.match(error.message, pattern); assert.equal(error.notRun, true); return true; };
+
+test('person pause during an Electron step drops the rest even after resume', async t => {
+  const pause = createSessionPause();
+  const s = await world({ onClick() { pause.set(true); pause.set(false); } }); t.after(() => s.filter.dispose());
+  const result = await s.act([{ do: 'click', ref: 'e1' }, { do: 'click', ref: 'e2' }], {}, { pauseCheck: pause.checkpoint() });
+  assert.deepEqual(s.sends, [['click', 'e1']]);
+  assert.match(result.lines.join('\n'), /Paused by the user/);
+});
 
 for (const key of ['Meta+N', 'Meta+Shift+N', 'Shift+Cmd+KeyN']) test(`window-opening chord ${key} refuses the whole batch before sending input`, async t => {
   const s = await world(); t.after(() => s.filter.dispose());

@@ -39,7 +39,7 @@ export function handWireFrame(frame) {
   const pid = id(frame.pid, 2147483647), windowId = id(frame.windowId, 4294967295), at = point(frame.at);
   if (!pid || !windowId || (!at && frame.hand !== 'status')) return 'target';
   const label = typeof frame.label === 'string' && !/[\x00-\x1f\x7f]/.test(frame.label) ? [...frame.label].slice(0, 40).join('') : undefined;
-  if (frame.hand === 'status') return ['waiting', 'error', 'done', 'handback', 'thinking'].includes(frame.state)
+  if (frame.hand === 'status') return ['waiting', 'error', 'done', 'handback', 'thinking', 'paused'].includes(frame.state)
     ? { hand: 'status', state: frame.state, pid, windowId, ...at ? { at } : {}, ...frame.state === 'done' && typeof frame.ok === 'boolean' ? { ok: frame.ok } : {} } : 'state';
   const rect = Array.isArray(frame.rect) && frame.rect.length === 4 && frame.rect.every(v => Number.isFinite(v) && Math.abs(v) <= 100000) && frame.rect[2] > 0 && frame.rect[3] > 0 ? frame.rect.map(round) : undefined;
   if (frame.hand === 'aim') {
@@ -74,7 +74,7 @@ export function sessionHandClient(options = {}) {
   try {
     const env = options.env ?? process.env;
     const setting = (options.setting ?? (() => handSetting({ env })))();
-    if (env.SLEIGHT_HAND === '0' || !setting.enabled) return undefined;
+    if (env.SLEIGHT_HAND === '0' || !setting.enabled && !options.controls) return undefined;
     if (current) return current;
     const cursorStyle = options.cursorStyle ?? setting.style, character = options.character ?? setting.character;
     try { return createHandClient({ ...options, cursorStyle, ...character !== undefined ? { character } : {} }); }
@@ -112,7 +112,7 @@ export function usageFrame(value) {
  *  permissions: the menu's Permissions rows (menu() gives { payload, offered }) and their clicks (apply), or null for none.
  *  usage: the menu's usage row ({ native?, turbo?, saved } or undefined), read at most every usageMs, or null for none. */
 export function createHandClient({ env = process.env, setting = () => handSetting({ env }), built = handHostBuilt, prepare = prepareHandHost,
-  trace = () => {}, now = Date.now, defer = setImmediate, recheckMs = 60000, killAfterMs = 2000,
+  trace = () => {}, onPause = () => {}, now = Date.now, defer = setImmediate, recheckMs = 60000, killAfterMs = 2000,
   setHand = async enabled => (await import('./command.mjs')).writeHandSetting({ enabled }),
   permissions = { menu: async () => (await command()).permissionsMenu(), apply: async (event, offered) => (await command()).applyMenuEvent(event, offered) },
   currentApp = noted, usage = logUsage(env), usageMs = 300000, cursorStyle, character, loadSprite = installedSprite,
@@ -122,6 +122,8 @@ export function createHandClient({ env = process.env, setting = () => handSettin
   // host: none, starting, running or dead (failed or closed this session; final). hand: the settings allow the hand.
   let seq = 0, child, host = 'none', starting, hand = false, capture = 'hidden', checked = now(), checking = false, events = '', target;
   let style = cursorStyle;
+  let paused = false;
+  let activityAt = -Infinity;
   let buildController, buildStarted;
   // Hosts with an attached worker are left to finish their consent channel before exiting.
   const attached = new WeakSet();
@@ -251,6 +253,15 @@ export function createHandClient({ env = process.env, setting = () => handSettin
       }
       if (event && typeof event === 'object' && Object.hasOwn(event, 'permissions') && permissionEvent(event)) continue;
       if (event?.hand === 'character' && characterEvent(event)) continue;
+      if (event?.hand === 'pause' && event.nonce === nonce && Object.keys(event).sort().join() === 'hand,nonce,paused' && typeof event.paused === 'boolean') {
+        if (paused !== event.paused) {
+          paused = event.paused;
+          // No settings write or command handler: only this host's human click controls this relay session.
+          onPause(paused);
+          note('hand-pause', { paused });
+        }
+        continue;
+      }
       if (!event || typeof event !== 'object' || Object.keys(event).sort().join() !== 'enabled,hand,nonce' || event.hand !== 'toggle' ||
           event.nonce !== nonce || typeof event.enabled !== 'boolean') { note('hand-toggle-refused', {}); continue; }
       Promise.resolve().then(() => setHand(event.enabled)).then(() => recheck(true),
@@ -361,11 +372,16 @@ export function createHandClient({ env = process.env, setting = () => handSettin
   catch {} // no settings folder yet: the minute's recheck covers it
 
   const client = Object.freeze({
+    activity() {
+      if (host === 'dead' || now() - activityAt < 60000) return;
+      activityAt = now();
+      ensure().then(ok => { if (ok && host === 'running') write(JSON.stringify({ hand: 'activity', nonce }) + '\n'); });
+    },
     send(frame) {
       recheck();
       // A new app to act in changes the menu's Never Act in row.
       if (host === 'running' && currentApp()?.bundleId !== permsApp) refreshPermissions();
-      if (!hand || host === 'dead') return;
+      if (!hand || host === 'dead' || paused && frame?.state !== 'paused') return;
       if (style === 'glove' && ['aim', 'status'].includes(frame?.hand)) return;
       const wire = handWireFrame(frame);
       if (typeof wire === 'string') { note('hand-dropped', { reason: wire }); return; }

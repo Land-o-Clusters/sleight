@@ -86,7 +86,7 @@ Browser point steps retain the hand's existing exclusion and can report `skipped
 
 | Field | Value |
 | --- | --- |
-| `state` | `thinking`, `waiting`, `error`, `done`, `handback` or `idle` |
+| `state` | `thinking`, `waiting`, `error`, `done`, `handback`, `idle` or `paused` |
 | `app` | Optional app name |
 | `call` | Optional opaque call identifier |
 
@@ -98,6 +98,14 @@ Browser point steps retain the hand's existing exclusion and can report `skipped
 turn end. `handback` marks sign-in handoff or takeover. `thinking` marks time between calls, emitted at call results without
 polling. The first status of a session is `idle` when no other status has been published. Turn end also emits `idle`.
 Statuses describe the current call or turn. `done` followed by `thinking` after a call does not end the session.
+
+`paused` is an additive state in v1. It means a person paused this relay session through its native cursor or menu control.
+No new engine, turbo or local tool call is admitted. An action already sent may finish; the remaining batch stops at the next
+available checkpoint. Turbo and Electron check between steps and fields. Native calls check at engine approvals and relay
+continuations. A call with no further checkpoint can finish. While paused, later lifecycle statuses cannot replace it.
+A person's resume emits `idle` and never replays dropped actions. Fresh native calls wait for an older paused call to return,
+since the engine's approval tokens have no parent call id. The built-in host receives the same paused state. This stream
+remains output-only: renderer messages cannot pause or resume sleight.
 
 ## Discovery and delivery
 

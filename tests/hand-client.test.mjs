@@ -11,6 +11,32 @@ import { handPid, setHandPid } from '../plugins/sleight/lib/hand/pid.mjs';
 import * as host from '../plugins/sleight/lib/direct-browser/host.mjs';
 
 const tick = () => new Promise(resolve => setImmediate(resolve));
+test('pause clicks require an exact nonce-bound host event and emit once per state change', async t => {
+  const child = fakeChild(), values = [];
+  const client = createHandClient({ setting: () => ({ enabled: true, style: 'ring' }), built: () => true,
+    watch: () => undefined, permissions: null, usage: null, onPause: value => values.push(value),
+    prepare: async () => ({ status: 'ready', spawn: () => child }) });
+  t.after(() => client.close());
+  client.send(frame()); await settle();
+  const nonce = child.menus[0].nonce;
+  const send = event => child.stdout.emit('data', JSON.stringify(event) + '\n');
+  for (const event of [{ hand: 'pause', nonce: 'b'.repeat(64), paused: true }, { hand: 'pause', nonce, paused: 'yes' },
+    { hand: 'pause', nonce, paused: true, extra: true }]) send(event);
+  assert.deepEqual(values, []);
+  send({ hand: 'pause', nonce, paused: true }); send({ hand: 'pause', nonce, paused: true });
+  assert.deepEqual(values, [true]);
+  send({ hand: 'pause', nonce, paused: false }); assert.deepEqual(values, [true, false]);
+  assert.deepEqual(child.lines.filter(f => f.hand === 'pause'), [], 'echoing old values could replay stale state over a newer human click');
+});
+test('a session with drawing off can expose its pause menu without sending artwork', async t => {
+  const child = fakeChild();
+  const client = createHandClient({ setting: () => ({ enabled: false }), built: () => true, watch: () => undefined,
+    permissions: null, usage: null, prepare: async () => ({ status: 'ready', spawn: () => child }) });
+  t.after(() => client.close());
+  client.activity(); await settle();
+  assert.equal(child.menus[0].enabled, false);
+  assert.deepEqual(child.lines.map(line => line.hand), ['activity']);
+});
 const settle = async () => { for (let i = 0; i < 5; i++) await tick(); };
 // A fake shared host: act and hide frames land in lines, menu frames in menus, and stdout and fds 3 and 4 are streams.
 function fakeChild(pid = 4242, consent = true) {

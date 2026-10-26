@@ -11,7 +11,7 @@ export const defaultDirectory = () => process.env.SLEIGHT_CURSOR_STREAM_DIR ||
   join(homedir(), 'Library/Application Support/sleight/cursor/renderers');
 const fields = 'v seq ts session type state host version call index phase kind source timing point path rect window display count role reason label app'.split(' ');
 const phases = new Set(['aim', 'act', 'done', 'failed', 'declined', 'skipped']);
-const statuses = new Set(['thinking', 'waiting', 'error', 'done', 'handback', 'idle']);
+const statuses = new Set(['thinking', 'waiting', 'error', 'done', 'handback', 'idle', 'paused']);
 const kinds = new Set(['click', 'double', 'right', 'key', 'type', 'drag', 'scroll', 'select', 'navigate', 'move']);
 const point = p => Array.isArray(p) && p.length === 2 && p.every(Number.isFinite);
 const rect = r => Array.isArray(r) && r.length === 4 && r.every(Number.isFinite) && r[2] >= 0 && r[3] >= 0;
@@ -143,10 +143,10 @@ export async function createCursorListener({ dir = defaultDirectory(), name = 'r
         view.seq = event.seq;
         if (event.point) view.point = [...event.point];
         if (event.type === 'action') view.phase = event.phase;
-        if (event.type === 'status') view.status = event.state;
+        if (event.type === 'status') { view.status = event.state; if (event.state === 'paused') view.paused = true; }
         if (event.type === 'session') view.state = event.state;
         const terminal = (event.type === 'session' && event.state === 'end') ||
-          (event.type === 'status' && ['done', 'handback', 'idle', 'error'].includes(event.state));
+          (event.type === 'status' && ['done', 'handback', 'idle', 'error'].includes(event.state) && (!view.paused || event.state === 'idle'));
         if (terminal) {
           view.visible = false;
           invoke(onEvent, event, view);
@@ -157,7 +157,7 @@ export async function createCursorListener({ dir = defaultDirectory(), name = 'r
         const life = lifetimes.get(event.session) || { owners: new Set(), drags: new Set(), overflow: false };
         life.owners.add(socket);
         clearTimeout(life.timer);
-        life.timer = setTimeout(() => remove(event.session), 3000);
+        life.timer = view.paused ? undefined : setTimeout(() => remove(event.session), 3000);
         lifetimes.set(event.session, life);
         const dragStart = event.type === 'action' && event.kind === 'drag' && ['aim', 'act'].includes(event.phase);
         if (dragStart) {
@@ -169,7 +169,7 @@ export async function createCursorListener({ dir = defaultDirectory(), name = 'r
         if (event.type === 'action' && event.kind === 'drag' && ['done', 'failed', 'declined', 'skipped'].includes(event.phase)) life.drags.delete(`${event.call ?? ''}:${event.index ?? 0}`);
         const hiddenAction = event.type === 'action' && ['skipped', 'failed', 'declined'].includes(event.phase);
         const visible = event.type === 'action' && event.point ? true : (view.visible ?? false);
-        view.visible = visible && !dragging && !hiddenAction;
+        view.visible = visible && !dragging && !hiddenAction && !view.paused;
         sessions.set(event.session, view);
         invoke(onEvent, event, view);
       }

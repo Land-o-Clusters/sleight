@@ -5,6 +5,37 @@ import { createFillFields } from '../plugins/sleight/lib/direct-browser/fill.mjs
 import { readOptions, moveList, pickElement, findPopup } from '../plugins/sleight/lib/direct-browser/pick-option.mjs';
 import { AIRPORTS, label, virtualList } from './fixtures/virtual-list.mjs';
 import { withMT } from './fixtures/mt-env.mjs';
+import { createSessionPause } from '../plugins/sleight/lib/session-pause.mjs';
+
+test('pause during a field fill drops the remaining fields and submit', async () => {
+  const pause = createSessionPause();
+  const h = harness({ e1: element(), e2: element() }, { mutate() { pause.set(true); pause.set(false); } });
+  const result = await h.fill([{ ref: 'e1', value: 'first' }, { ref: 'e2', value: 'second' }], { submit: 'e3', pauseCheck: pause.checkpoint() });
+  assert.equal(h.input.length, 1); assert.equal(result.rows[0].status, 'set');
+  assert.equal(result.rows[1].status, 'failed'); assert.match(result.rows[1].reason, /Paused by the user/);
+  assert.equal(result.submitted.status, 'not reached');
+});
+test('file-field upload receives the same pause checkpoint as every other field action', async () => {
+  const pause = createSessionPause(), check = pause.checkpoint(); let sent = 0;
+  const h = harness({ e1: element('INPUT', { type: 'file' }) }, { submit: async (_tab, _steps, _ctx, options) => {
+    pause.set(true); pause.set(false); options?.pauseCheck?.(); sent++;
+    return { lines: ['1 upload e1: input sent'], stoppedAt: null };
+  } });
+  const result = await h.fill([{ ref: 'e1', value: ['/tmp/user-fixture.txt'] }], { pauseCheck: check });
+  assert.equal(sent, 0); assert.equal(result.paused, true);
+});
+test('pause just before the optional submit is reported with its actionable pause state', async () => {
+  const pause = createSessionPause();
+  const h = harness({ e1: element() }, { mutate() { pause.set(true); } });
+  const result = await h.fill([{ ref: 'e1', value: 'first' }], { submit: 'e2', pauseCheck: pause.checkpoint() });
+  assert.equal(result.rows[0].status, 'set'); assert.equal(result.paused, true);
+  assert.match(result.submitted.reason, /Paused by the user/);
+});
+test('delegated closed-root fields preserve a pause returned by the action runner', async () => {
+  const h = harness({}, { submit: async () => ({ paused: true, lines: ["1 check s1: not run: Paused by the user. Wait for them to resume; don't retry."] }) });
+  const result = await h.fill([{ ref: 's1', value: true }]);
+  assert.equal(result.paused, true); assert.equal(result.rows[0].status, 'failed');
+});
 
 for (const mode of [undefined, '0']) for (const verdict of ['confirm', 'refuse'])
   test(`MTb fill ${verdict} stops every field and submit, switch=${mode}`, async () => withMT(mode, async () => {

@@ -29,6 +29,7 @@ import { createSurfaceCache, firstClientCallRefresh } from './surface-cache.mjs'
 import { createStartupCache, startupIdentity } from './startup-cache.mjs';
 import { createRelay, firstCallBatchSetting } from './relay.mjs';
 import { createRelayHand } from './hand/relay-hand.mjs';
+import { createSessionPause } from './session-pause.mjs';
 import { sessionCursorEvents } from './hand/events.mjs';
 import { isV3Frontend, createV3Frontend, transientStartup, traceStartupFailure } from './direct-browser/worker.mjs';
 import { prepareTextWrite, settleTextWrite } from './text-save.mjs';
@@ -1059,11 +1060,12 @@ export async function run({ leaseDirectory, inspectInput: inspectStoppedInput, h
   let handTrace;
   const earlyHandTrace = [];
   const cursor = sessionCursorEvents();
+  const pause = createSessionPause();
   process.once('exit', () => cursor.close());
   // The relay always starts: a hand that can't be created leaves the session without one.
   let hand;
   try {
-    hand = (await import('./hand/client.mjs')).sessionHandClient({ trace: (direction, msg) => { if (handTrace) handTrace(direction, msg); else if (earlyHandTrace.length < 64) earlyHandTrace.push([direction, msg]); } });
+    hand = (await import('./hand/client.mjs')).sessionHandClient({ controls: true, onPause: value => pause.set(value), trace: (direction, msg) => { if (handTrace) handTrace(direction, msg); else if (earlyHandTrace.length < 64) earlyHandTrace.push([direction, msg]); } });
   } catch { if (earlyHandTrace.length < 64) earlyHandTrace.push(['hand-off', { reason: 'client', code: 'HAND_CLIENT_FAILED' }]); }
   process.once('exit', () => hand?.close());
   const prepared = shellRoute ? { turboUnavailable: shellRelayOptions().turboUnavailable }
@@ -1260,7 +1262,7 @@ export async function run({ leaseDirectory, inspectInput: inspectStoppedInput, h
     },
     trace,
     // The ghost hand, only when the settings enable it, on the session's one client (made above, before turbo forks).
-    cursor,
+    cursor, pause, pauseHost: hand,
     hand: createRelayHand({ client: hand, events: cursor, locate: request => appHealth.handLocate(request), trace: (direction, msg) => trace?.(direction, msg),
       clientOptions: { trace: (direction, msg) => trace?.(direction, msg) } }),
     guardTiming: !!process.env.SLEIGHT_TRACE,

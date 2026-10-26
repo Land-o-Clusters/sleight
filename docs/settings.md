@@ -431,6 +431,18 @@ substitution.
 
 ## Agent cursor
 
+Click the character to pause this sleight session. Other cursor styles have a small pause chip beside the target.
+Click again to resume, or use Pause sleight and Resume sleight in the menu bar. The ring lets clicks pass through to the app.
+The chip and character hit box stay away from the target point and disappear during drags. These controls accept only
+your mouse clicks. Claude has no pause or resume command, and pause is held in memory for this session without a saved setting.
+The menu remains available when character drawing is off. `SLEIGHT_HAND=0` disables that host and its controls too.
+
+A paused session refuses new engine, turbo and local calls at once. An action already sent may finish. Turbo and Electron
+batches stop before their next step or field. A native call stops at its next engine approval or relay continuation, so a
+call that never asks again can finish its remaining actions. After you resume, the session admits fresh calls without
+replaying a dropped batch. If an older native call has not returned, new native calls wait for its result so that its
+approval cannot be mistaken for theirs. The cursor stream reports `paused` until you resume.
+
 The same private `hand.json` version 1 file accepts `style` (`glove`, `ring`, `seam` or `sprite`), `character` (an installed
 character id), `stream` (boolean) and `labels` (`off`, `role` or `title`). Without `style`, the current glove behavior stays.
 The hand stays off until you turn it on. `stream` defaults to false. `labels` defaults to `off`. Only your user can own

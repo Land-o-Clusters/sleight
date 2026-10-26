@@ -198,6 +198,16 @@ test('status mappings, drag phases, loops parking on their first cell, handoff t
   assert.equal(secure.sprite.poses[0].state, 'idle');
 });
 
+test('sprite pause hit bounds wait for the final scale transition and match the displayed cell', options, t => {
+  const f = character({ image: { cells: [[0, 0], [1, 0]] }, table: {
+    idle: entry(0, [0], { scale: .5 }), click: entry(1, [0], { ms: [100], scale: 1, then: 'idle' }),
+  } });
+  const p = draws(good(t, [f, act()]))[0], last = p.sprite.placements.at(-1);
+  assert.ok(p.pauseControl.after >= .1);
+  assert.deepEqual(p.pauseControl.rect, last);
+  assert.equal(p.pauseControl.sprite, true);
+});
+
 test('a flip change jumps the layer instead of sliding it across the cell', options, t => {
   const f = character({ image: { cells: [[0, 0], [1, 0]] }, table: { idle: entry(), move: entry(1, [0]), click: entry(0, [0], { flip: true }) } });
   const p = draws(good(t, [f, act('click', { at: [300, 300], path: [[300, 300]] }), clock(1), act('click', { seq: 2, at: [500, 300], path: [[500, 300]] })]))[1];
