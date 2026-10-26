@@ -497,7 +497,7 @@ test('all seven check drivers emit frames accepted by the native validator throu
     for (const step of plan) {
       const directory = join(work, `${step.id}-${scenario}`); (await import('node:fs')).mkdirSync(directory, { mode: 0o700 });
       const sessions = [];
-      let shown = false, style = 'sprite', covered = false, active, now = 0, voiceRequestedAt;
+      let shown = false, style = 'sprite', covered = false, active, now = 0, voiceRequestedAt, pausedAt, clearedAt;
       const ready = { pid: 42, id: 7, frame: [200, 200, 800, 500], displays: [{ frame: [0, 0, 1440, 900], top: 25 }, { frame: [1440, 0, 1440, 900], top: 25 }], clusterRightPt: 68 };
       const children = { env: process.env,
         run: (command, args, options) => {
@@ -506,15 +506,18 @@ test('all seven check drivers emit frames accepted by the native validator throu
         },
         start: (_command, _args, options) => {
           const input = [], rows = []; sessions.push({ input, env: options.env });
+          let cleared = false;
           const channel = { child: { pid: 100 + sessions.length }, rows,
             send(frame) {
               input.push(frame);
               if (frame.hand === 'act' && frame.say && step.id === 'voice') voiceRequestedAt = now;
               if (frame.hand === 'character') { rows.push({ hand: 'character', id: frame.id, loaded: true }); input.push({ dumpAwait: 'character' }); }
               if (frame.hand === 'pause-ack') rows.push({ hand: 'pause', token: frame.token, phase: 'restored', paused: frame.paused });
-              if (frame.hand === 'clear') { shown = false; rows.push({ hand: 'clear-ready', token: frame.token }); }
+              if (frame.hand === 'clear') { cleared = true; clearedAt = now; shown = false; rows.push({ hand: 'clear-ready', token: frame.token }); }
               if (frame.hand === 'picker' && frame.op === 'style') style = frame.style;
-              if (['aim', 'act', 'status'].includes(frame.hand)) shown = true;
+              if (frame.hand === 'status' && ['done', 'error'].includes(frame.state)) cleared = false;
+              if (frame.hand === 'status' && frame.state === 'paused') pausedAt = now;
+              if (!cleared && ['aim', 'act', 'status'].includes(frame.hand)) shown = true;
             },
             wait(predicate, _ms, after = 0) { const row = rows.slice(after).find(predicate); assert.ok(row, 'ack emitted'); return Promise.resolve(row); },
             close: async () => ({ code: 0 }),
@@ -527,6 +530,8 @@ test('all seven check drivers emit frames accepted by the native validator throu
           this.reply = { ...ready, token: row.token };
           if (row.op === 'audio') this.reply = { ...this.reply, muted: scenario === 'muted-voice', zeroVolume: false };
           if (row.op === 'shot') {
+            if (row.name === 'second-display-baseline.png') assert.ok(now - clearedAt >= 250, 'clear settles before the baseline');
+            if (row.name === 'voice-paused.png') assert.ok(now - pausedAt >= 150, 'pause settles before capture');
             if (scenario === 'capture-errors' && ['error.png', 'error-retry.png', 'done.png', 'done-retry.png'].includes(row.name)) {
               this.reply.error = 'capture-failed'; return;
             }

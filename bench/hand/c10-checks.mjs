@@ -313,7 +313,7 @@ export async function runCheck(id, ctx) {
           sleep, now, requestedAt, signal: ctx.signal });
         const speaking = observed.image, detected = observed.firstSeenMs >= 0, pauseAtMs = now() - requestedAt;
         const key = token(); host.send({ hand: 'pause-ack', nonce, phase: 'restore', token: key, paused: true }); await host.wait(r => r.token === key && r.phase === 'restored');
-        host.send(f.status('paused')); const paused = await shot('voice-paused', { bubble, ocr: false });
+        host.send(f.status('paused')); await sleep(150); const paused = await shot('voice-paused', { bubble, ocr: false });
         const cancellation = JSON.parse(await children.run(join(bin, 'consent-host'), ['--narration-selftest'], { input: jsonl([{ installed: ['fixture'], voice: { id: 'fixture', rate: 0.5 }, lines: ['One line.', { cancel: true }] }]) }));
         writeFileSync(join(directory, 'voice-cancellation.json'), JSON.stringify(cancellation), { mode: 0o600 });
         check('unit: narrator cancellation model', cancellation.started.length === 1 && cancellation.active === null, { requestedLines: 1, installedVoices: voices.length, modelStarts: cancellation.started.length, modelStops: cancellation.stops }, baseline, 'Selftest cancellation; baseline screenshot is context. Physical pause and audible playback were not exercised.');
@@ -391,7 +391,9 @@ export async function runCheck(id, ctx) {
       else {
         const second = await request({ op: 'display', index: 1 });
         const clear = f.clear(); host.send(clear); await host.wait(r => r.hand === 'clear-ready' && r.token === clear.token);
+        await sleep(250);
         const secondBaseline = await shot('second-display-baseline');
+        host.send(f.status('done'));
         host.send(f.aim({ at: [second.frame[0] + second.frame[2] / 2, second.frame[1] + second.frame[3] / 2] })); await sleep(1200);
         const image = await shot('second-display'); check('second display seat', spriteDrew(secondBaseline, image),
           { displays: ready.displays.length, displayIndex: 1, spritePixels: image.spritePixels, baselinePixels: secondBaseline.spritePixels, marginPixels: spriteMargin(secondBaseline) }, image);

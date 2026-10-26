@@ -19,8 +19,8 @@
 // makes no input any HID input, is the owner), and enforces a timeout of twice the step's estimate. Owner back: the step is
 // interrupted and the night stops with STOPPED-owner. Steps run as children of this runner, never in a new session (Terminal
 // keeps the Screen Recording grant), with host CLAUDE* variables dropped, a throwaway CLAUDE_CONFIG_DIR and (all but the A/B)
-// a TMPDIR under the night's folder. caffeinate -dims holds the display and the Mac awake for the runner's life (-ims while
-// a hold is waited out). After every step and on any exit it quits a TextEdit a step started, and any TextEdit or
+// a TMPDIR under the night's folder. caffeinate -dims holds the display and the Mac awake for the runner's life, including
+// hold waits. After every step and on any exit it quits a TextEdit a step started, and any TextEdit or
 // Calculator the step launched (quit, then SIGTERM, then SIGKILL, by the launched pid and its launch time only; no System
 // Events), kills processes started from this run's bin/, and empties only the night's own temp folders. summary.md lists
 // every step and every fixture that needed a signal.
@@ -189,7 +189,7 @@ async function dryRun(opts) {
   console.log(`  estimate ${estimate(steps)} min of steps plus about ${overheadMin(steps)} min of quiet gaps (target under ${TARGET_MIN}); waits for ${HOLD} and ${LOCK} add to it`);
   console.log(`  /usr/bin/caffeinate -dims -w <runner pid> for the runner's life`);
   console.log('  before each capture step: caffeinate -u -t 5, then capture-helper --preflight; asleep or locked screens refuse with a reason');
-  console.log(`  before each step: wait up to ${HOLD_WAIT_MS / 60000} min while ${HOLD} exists (caffeinate -ims, the display may sleep) and up to ${LOCK_WAIT_MS / 60000} min while ${LOCK} does, then skip the step; ${QUIET_GAP_MS / 1000} s with no input, then ioreg HIDIdleTime: input in that gap stops the night (exit 4)`);
+  console.log(`  before each step: wait up to ${HOLD_WAIT_MS / 60000} min while ${HOLD} exists (caffeinate -dims, the display stays awake) and up to ${LOCK_WAIT_MS / 60000} min while ${LOCK} does, then skip the step; ${QUIET_GAP_MS / 1000} s with no input, then ioreg HIDIdleTime: input in that gap stops the night (exit 4)`);
   console.log(`  during each step: ${tilde(join(bin, 'capture-helper'))} watch-input 1000 (pointer moved and stayed away, or HID input in a step that makes none: stop); the hold polled every 5 s (interrupt, rerun after it); a timeout of twice the estimate (SIGINT, then SIGKILL of its process tree after ${KILL_GRACE_MS / 1000} s, then rmdir ${LOCK} only if it is newer than the attempt and the tree is dead)`);
   console.log(`  each step: a child of this runner (no new session), env without CLAUDE*, CLAUDE_CONFIG_DIR=$(mktemp -d /tmp/lane-claude-XXXXXX), DISABLE_AUTOUPDATER=1 SLEIGHT_NO_HUB=1 SLEIGHT_REMOTE_APPROVALS=0, TMPDIR=${tilde(join(out, 'tmp'))}/<step>-XXXXXX (not the A/B), VC7_CHARACTERS_BASE=/private/tmp/sleight-vc7-night-XXXXXX`);
   console.log(`  done only with exit 0 or 1 and a "VC7 RESULT:" line; a failed step retries once after 60 s and reruns on resume`);
@@ -253,7 +253,7 @@ async function main(argv) {
   const watch = createOwnerWatch();
   const sleep = ms => new Promise(r => setTimeout(r, ms));
   let child, interrupted = false, stoppedFor, ending;
-  // caffeinate for the runner's life: -dims while checks run, -ims (the display may sleep) while a hold is waited out.
+  // caffeinate -dims for the runner's life, including hold waits.
   let caffeinate, caffeinateMode;
   const awake = mode => {
     if (mode === caffeinateMode) return;
@@ -398,7 +398,7 @@ async function main(argv) {
     return { rc: 0, measured: true, result: 'built' };
   };
 
-  // Waits out a hold (up to HOLD_WAIT_MS, with the display allowed to sleep) and the live lock (up to LOCK_WAIT_MS).
+  // Waits out a hold (up to HOLD_WAIT_MS) and the live lock (up to LOCK_WAIT_MS), keeping the display awake.
   // Returns a reason to skip the step, or undefined.
   const waitClear = async () => {
     let lockSince, holdSince, said = 0;
@@ -407,7 +407,7 @@ async function main(argv) {
         const hold = existsSync(HOLD), lock = existsSync(LOCK);
         if (!hold && !lock) { if (holdSince || lockSince) watch.quiet(); return undefined; }
         if (hold) {
-          holdSince ??= Date.now(); lockSince = undefined; awake('-ims');
+          holdSince ??= Date.now(); lockSince = undefined; awake('-dims');
           if (Date.now() - holdSince > HOLD_WAIT_MS) return `${HOLD} held for ${HOLD_WAIT_MS / 60000} min`;
         } else {
           lockSince ??= Date.now(); awake('-dims');

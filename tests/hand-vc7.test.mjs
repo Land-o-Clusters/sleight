@@ -489,7 +489,8 @@ test('night runner: steps, timeouts, outcomes (measured only with a result line)
   assert.throws(() => nightArgs(['x']), /unexpected argument/);
   const source = readFileSync(join(root, 'bench/hand/vc7-night.mjs'), 'utf8');
   assert.match(source, /spawn\('\/usr\/bin\/caffeinate', \[mode, '-w', String\(process\.pid\)\]/);
-  assert.match(source, /awake\('-ims'\)/); assert.match(source, /awake\('-dims'\)/); assert.match(source, /rmdirSync\(LOCK\)/); assert.doesNotMatch(source, /rmSync\(LOCK/);
+  assert.doesNotMatch(source, /awake\('-ims'\)/); assert.match(source, /holdSince \?\?= Date\.now\(\); lockSince = undefined; awake\('-dims'\)/);
+  assert.match(source, /awake\('-dims'\)/); assert.match(source, /rmdirSync\(LOCK\)/); assert.doesNotMatch(source, /rmSync\(LOCK/);
   assert.match(source, /\['SIGINT', 130\], \['SIGTERM', 143\], \['SIGHUP', 129\]/);
   assert.doesNotMatch(source, /detached: true|pkill/);
 });
