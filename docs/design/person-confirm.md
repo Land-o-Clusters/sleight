@@ -89,7 +89,9 @@ Within that model, two cheap paths are closed:
 - The guard also refuses removing or moving the folders above an installed copy: `~/.claude`, `~/.codex`, `~/.cursor` and
   their `plugins` and `plugins/cache` folders, the same under the session's `CLAUDE_CONFIG_DIR` when it has a plugin cache,
   and a marketplace folder with a `sleight` child. Real folders under `~/Library/Caches/sleight-bench/` (the
-  benchmark's throwaway configs) aren't protected. The bench arm links its `plugins` folder to the real one, so its plugin
+  benchmark's throwaway configs) aren't protected, once the path still resolves there with every existing component
+  followed. Inline code's paths under that folder are resolved the same way, and a `plugins` folder there never counts as
+  the bench's own. The bench arm links its `plugins` folder to the real one, so its plugin
   copy resolves to the protected `~/.claude/plugins/cache/<marketplace>/sleight`. The arm still works, since it loads
   sleight with `--plugin-dir`. The marketplace clone (`<host>/plugins/marketplaces/`) is outside the guard.
 

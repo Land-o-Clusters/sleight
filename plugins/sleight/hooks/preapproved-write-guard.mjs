@@ -9,8 +9,9 @@ const folded = path => path.normalize('NFC').toLowerCase();
 // its Touch ID confirmation, built from source) and installed copies of the plugin in Claude Code's, Codex's and Cursor's
 // plugin caches (<host>/plugins/cache/<marketplace>/sleight). Swapping either would change the checks themselves. A plugin
 // loaded from a working checkout is left alone, so its source stays editable. So is a real folder under
-// ~/Library/Caches/sleight-bench (the benchmark's throwaway configs); the arm links its plugins folder to the real cache,
-// which resolves back into the protected tree, and it loads sleight with --plugin-dir, so nothing there needs writing.
+// ~/Library/Caches/sleight-bench (the benchmark's throwaway configs), once its path resolves there (benchExempt). The arm
+// links its plugins folder to the real cache, so a plugins folder under sleight-bench never counts as the bench's own; the
+// arm loads sleight with --plugin-dir, so nothing there needs writing.
 const TREES = [/\/library\/caches\/sleight(?:\/|$)/, /\/plugins\/cache\/[^/]+\/sleight(?:\/|$)/];
 // What each refusal names, so the person knows which protected folder the command reached.
 export const PROTECTED = Object.freeze({
@@ -21,15 +22,43 @@ export const PROTECTED = Object.freeze({
   aboveInstall: 'a folder that holds an installed copy of sleight',
   launcher: "sleight's settings through its launcher",
 });
-// The bench folder, anchored to the home folder (or a ~ spelling when the home folder isn't known).
-const benchPath = (value, home) => [home && folded(normalize(home)), '~'].filter(Boolean)
-  .some(root => value === `${root}/library/caches/sleight-bench` || value.startsWith(`${root}/library/caches/sleight-bench/`));
-const protectedLiteral = (path, home) => {
+const protectedLiteral = path => {
   const value = folded(normalize(path));
   if (suffixes.some(suffix => value.endsWith(suffix)) || value.endsWith(directorySuffix)) return PROTECTED.settings;
-  if (benchPath(value.replace(/^(?:\$home|\$\{home\})(?=\/|$)/, '~'), home)) return undefined;
   return TREES[0].test(value) ? PROTECTED.cache : TREES[1].test(value) ? PROTECTED.install : undefined;
 };
+// Literally under <home>/Library/Caches/sleight-bench, before any link is resolved.
+const underBench = (path, home) => {
+  if (typeof path !== 'string' || !home) return false;
+  const value = folded(normalize(path.replace(/^(?:~|\$HOME|\$\{HOME\})(?=\/|$)/, () => home))), folder = folded(normalize(`${home}/Library/Caches/sleight-bench`));
+  return value === folder || value.startsWith(folder + '/');
+};
+/** Whether path is the bench's own: under <home>/Library/Caches/sleight-bench with no plugins folder in between, and still
+ *  there after every existing component is resolved by stat (a missing one can't be a link). Without a home folder or a
+ *  stat, or when resolving fails, it isn't. Inline code's paths get the same test, so a write through the arm's linked
+ *  plugins folder counts as the real cache. */
+async function benchExempt(path, { stat, home } = {}) {
+  if (typeof path !== 'string' || !home || typeof stat !== 'function') return false;
+  const expanded = normalize(path.replace(/^(?:~|\$HOME|\$\{HOME\})(?=\/|$)/, () => home));
+  const root = normalize(`${home}/Library/Caches/sleight-bench`), value = folded(expanded), folder = folded(root);
+  if (value !== folder && !value.startsWith(folder + '/')) return false;
+  if (value.slice(folder.length).split('/').includes('plugins')) return false;
+  const resolve = async target => {
+    let resolved = '/';
+    for (const part of target.split('/').filter(Boolean)) {
+      const next = `${resolved.replace(/\/$/, '')}/${part}`;
+      let info;
+      try { info = await stat(next); } catch {}
+      if (info && typeof info.realPath !== 'string') return undefined;
+      resolved = info?.realPath ?? normalize(next);
+    }
+    return folded(resolved);
+  };
+  try {
+    const [real, realRoot] = [await resolve(expanded), await resolve(root)];
+    return !!real && !!realRoot && (real === realRoot || real.startsWith(realRoot + '/'));
+  } catch { return false; }
+}
 const normalize = path => {
   const parts = [];
   for (const part of path.split('/')) {
@@ -58,7 +87,7 @@ async function aboveInstall(path, { stat, home, configDir } = {}) {
   const expanded = normalize(path.replace(/^(?:~|\$HOME|\$\{HOME\})(?=\/|$)/, () => home ?? '/~')
     .replace(/^(?:\$CLAUDE_CONFIG_DIR|\$\{CLAUDE_CONFIG_DIR\})(?=\/|$)/, () => configDir ?? '/$CLAUDE_CONFIG_DIR'));
   const value = folded(expanded);
-  if (!value.startsWith('/') || benchPath(value, home)) return undefined;
+  if (!value.startsWith('/')) return undefined;
   const exists = async target => { try { return !!(await stat?.(target))?.realPath; } catch { return false; } };
   const roots = [...HOSTS.map(host => ({ root: `${home ?? '/~'}/${host}`, always: true })), ...configDir ? [{ root: configDir, always: false }] : []];
   for (const { root, always } of roots) {
@@ -70,8 +99,10 @@ async function aboveInstall(path, { stat, home, configDir } = {}) {
   return undefined;
 }
 // The label for a path, ancestors included when the command reaches what is under it.
-const literalLabel = async (path, options, ancestor) => protectedLiteral(path, options?.home) ??
-  (ancestor ? above(path, options?.home) ?? await aboveInstall(path, options) : undefined);
+const literalLabel = async (path, options, ancestor) => {
+  const label = protectedLiteral(path) ?? (ancestor ? above(path, options?.home) ?? await aboveInstall(path, options) : undefined);
+  return [PROTECTED.install, PROTECTED.aboveInstall].includes(label) && await benchExempt(path, options) ? undefined : label;
+};
 
 // Resolve before normalizing: a symlink followed by .. walks from its target.
 async function protectedPath(path, options, ancestor = false) {
@@ -426,7 +457,7 @@ function shellWritePaths(command, initialDirectory, depth = 0) {
       const writes = /\bopen\s*\([^)]*,\s*(?:mode\s*=\s*)?['"][wax][+bt]*['"]|\b(?:writeFile(?:Sync)?|appendFile(?:Sync)?|unlink(?:Sync)?|rename(?:Sync)?|copyFile(?:Sync)?|rm(?:Sync)?|remove|truncate|File\.write)\s*\(|\b(?:unlink|rename|chmod|chown|rmtree|move|symlink)\b/;
       if (!writes.test(source)) continue;
       // Inline code is scanned as text only, never passed to the filesystem resolver.
-      for (const match of source.matchAll(/(?:~|\$\{?HOME\}?|\/|\.{1,2}\/)[^'"`;\n()<>|]*?(?:(?:preapproved|turbo|turbo-apps|turbo-owner|electron-grants|hand|permissions)\.json|grant-seal\.key|\/sleight(?=['"`;,)\s]|$)|\/(?:library\/caches|plugins\/cache\/[^/'"`;\n()<>|]+)\/sleight(?![\w.-])(?:\/[^'"`;\n()<>|]*)?)|\b(?:(?:preapproved|turbo|turbo-apps|turbo-owner|electron-grants|hand|permissions)\.json|grant-seal\.key)\b/gi)) add(match[0], true);
+      for (const match of source.matchAll(/(?:~|\$\{?HOME\}?|\/|\.{1,2}\/)[^'"`;\n()<>|]*?(?:(?:preapproved|turbo|turbo-apps|turbo-owner|electron-grants|hand|permissions)\.json|grant-seal\.key|\/sleight(?=['"`;,)\s]|$)|\/(?:library\/caches|plugins\/cache\/[^/'"`;\n()<>|]+)\/sleight(?![\w.-])(?:\/[^'"`;\n()<>|]*)?|\/library\/caches\/sleight-bench\/[^'"`;\n()<>|]*)|\b(?:(?:preapproved|turbo|turbo-apps|turbo-owner|electron-grants|hand|permissions)\.json|grant-seal\.key)\b/gi)) add(match[0], true);
     }
   }
   return paths;
@@ -450,7 +481,8 @@ export async function preapprovedWriteTarget(input, options) {
       if (literal) return literal;
       const folder = globFolder(path), inFolder = folder && await literalLabel(folder, options, ancestor);
       if (inFolder) return inFolder;
-      if (literalOnly || /\s/.test(path) || path.length >= 512) continue;
+      // Inline code's paths stay text, except under sleight-bench, where the arm's links make the real target count.
+      if ((literalOnly || /\s/.test(path) || path.length >= 512) && !underBench(path, options?.home)) continue;
     }
     const label = await protectedPath(path, options, ancestor);
     if (label) return label;

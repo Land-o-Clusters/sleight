@@ -416,24 +416,36 @@ test('the helper cache and installed plugin copies deny every mutation; a source
     `${MAC_USERS}fixture/.claude/plugins/cache/other/other-plugin/x.mjs`, `${MAC_USERS}fixture/Library/Caches/com.example/sleight.txt`]) {
     assert.equal(await guard({ tool: 'Write', file_path: path }, { stat }), false, path);
   }
-  // The benchmark's own caches and lookalike names pass, inline code included (Sonnet review finding 5).
-  const bench = `${MAC_USERS}fixture/Library/Caches/sleight-bench/claude-config/plugins/cache/mkt/sleight/lib/launch.mjs`;
-  for (const path of [bench, `${MAC_USERS}fixture/Library/Caches/sleight-bench/a.json`, '~/Library/Caches/sleight-bench/claude-config/plugins/cache/m/sleight/x']) {
-    for (const tool of ['Write', 'Edit']) assert.equal(await guard({ tool, file_path: path }, { stat, home: `${MAC_USERS}fixture` }), false, `${tool} ${path}`);
+  // The benchmark's own caches and lookalike names pass, inline code included (Sonnet review finding 5). A plugins folder
+  // under sleight-bench never counts as the bench's own, since the arm links it to the real cache (automated finding on
+  // 9d72b52e), so the arm's installed copy is protected like any other.
+  const home = `${MAC_USERS}fixture`, configDir = `${home}/Library/Caches/sleight-bench/claude-config`;
+  const bench = `${configDir}/plugins/cache/mkt/sleight/lib/launch.mjs`;
+  for (const path of [`${home}/Library/Caches/sleight-bench/a.json`, `${configDir}/settings.json`]) {
+    for (const tool of ['Write', 'Edit']) assert.equal(await guard({ tool, file_path: path }, { stat, home }), false, `${tool} ${path}`);
+  }
+  for (const path of [bench, '~/Library/Caches/sleight-bench/claude-config/plugins/cache/m/sleight/x']) {
+    for (const tool of ['Write', 'Edit']) assert.equal(await guard({ tool, file_path: path }, { stat, home }), true, `${tool} ${path}`);
   }
   // Re-review D: the exemption is anchored to the home folder's Library/Caches, so a sleight-bench folder made inside a
   // protected tree, or elsewhere, doesn't open it.
-  for (const path of [`${MAC_USERS}fixture/Library/Caches/sleight/Library/Caches/sleight-bench/x`,
-    `${MAC_USERS}fixture/.claude/plugins/cache/m/sleight/Library/Caches/sleight-bench/x`, `/tmp/Library/Caches/sleight-bench/plugins/cache/m/sleight/x`]) {
-    assert.equal(await guard({ tool: 'Write', file_path: path }, { stat, home: `${MAC_USERS}fixture` }), true, path);
+  for (const path of [`${home}/Library/Caches/sleight/Library/Caches/sleight-bench/x`,
+    `${home}/.claude/plugins/cache/m/sleight/Library/Caches/sleight-bench/x`, `/tmp/Library/Caches/sleight-bench/plugins/cache/m/sleight/x`]) {
+    assert.equal(await guard({ tool: 'Write', file_path: path }, { stat, home }), true, path);
   }
+  const benchOptions = { stat, home, configDir };
   for (const command of [`python3 -c "open('${MAC_USERS}x/Library/Caches/sleight-bench/a.json','w').write('x')"`,
     `node -e "require('fs').writeFileSync('~/Library/Caches/sleight-bench/a.json','x')"`,
     `node -e "require('fs').writeFileSync('${MAC_USERS}x/.claude/plugins/cache/mk/sleight-other/x','x')"`,
-    `python3 -c "open('${bench}','w').write('x')"`, `cp a ${bench}`, 'rm -rf ~/Library/Caches/sleight-bench/claude-config',
-    `rm -rf ${MAC_USERS}fixture/Library/Caches/sleight-bench/claude-config/plugins/cache`]) {
-    assert.equal(await guard({ tool: 'Bash', command }, { stat, home: `${MAC_USERS}fixture`, configDir: `${MAC_USERS}fixture/Library/Caches/sleight-bench/claude-config` }), false, command);
+    'rm -rf ~/Library/Caches/sleight-bench/claude-config', 'rm -rf ~/Library/Caches/sleight-bench']) {
+    assert.equal(await guard({ tool: 'Bash', command }, benchOptions), false, command);
   }
+  for (const command of [`python3 -c "open('${bench}','w').write('x')"`, `cp a ${bench}`, `rm -rf ${configDir}/plugins/cache`, `rm -rf ${configDir}/plugins`]) {
+    assert.equal(await guard({ tool: 'Bash', command }, benchOptions), true, command);
+  }
+  // Without a home folder the exemption can't be anchored, so the bench copy is protected like any installed copy.
+  assert.equal(await guard({ tool: 'Write', file_path: `${home}/Library/Caches/sleight-bench/x/plugins/cache/m/sleight/y` }, { stat }), true);
+  assert.equal(await guard({ tool: 'Write', file_path: `${home}/Library/Caches/sleight-bench/arm/cache/m/sleight/y` }, { stat }), false);
   for (const command of [`cat ${helper}`, `ls ~/Library/Caches/sleight/turbo-host`, `shasum -a 256 ${installed[0]}`, 'rm -rf ~/Library/Caches/com.example']) {
     assert.equal(await guard({ tool: 'Bash', command }, { stat, home: `${MAC_USERS}fixture` }), false, command);
   }
@@ -503,4 +515,33 @@ test('the refusal names the protected folder the call reached', async () => {
   assert.equal(preapprovedWriteReason(PROTECTED.cache), "Only the user changes sleight's helper cache (~/Library/Caches/sleight). Ask them to make this change.");
   const register = readFileSync(new URL('../plugins/sleight/hooks/register.tsx', import.meta.url), 'utf8');
   assert.match(register, /return denied \? \{ deny: preapprovedWriteReason\(denied\) \} : next\(e\)/);
+});
+
+// Automated finding on 9d72b52e: the bench arm's plugins folder is a link into the real plugin cache, so a write through it,
+// inline code included, reaches the real installed copy and is refused. Real folders under sleight-bench still pass.
+test('a write through the bench arm\'s linked plugins folder is refused, with a real link in a temp home', async t => {
+  const home = registerTemp(t, realpathSync(mkdtempSync(join(tmpdir(), 'sleight-guard-bench-'))));
+  const real = join(home, '.claude/plugins'), arm = join(home, 'Library/Caches/sleight-bench/arm-1/claude-config');
+  mkdirSync(join(real, 'cache/mkt/sleight/lib'), { recursive: true }); writeFileSync(join(real, 'cache/mkt/sleight/lib/launch.mjs'), 'x');
+  mkdirSync(arm, { recursive: true });
+  symlinkSync(real, join(arm, 'plugins'));
+  // A real folder under sleight-bench whose name only looks like a link target.
+  mkdirSync(join(home, 'Library/Caches/sleight-bench/arm-2/notes'), { recursive: true });
+  symlinkSync(join(home, '.claude/plugins/cache/mkt/sleight'), join(home, 'Library/Caches/sleight-bench/arm-2/sneaky'));
+  const { lstat, realpath } = await import('node:fs/promises');
+  const stat = async path => { await lstat(path); return { realPath: await realpath(path) }; };
+  const options = { stat, home, configDir: arm };
+  const through = join(arm, 'plugins/cache/mkt/sleight/lib/launch.mjs'), sneaky = join(home, 'Library/Caches/sleight-bench/arm-2/sneaky/lib/launch.mjs');
+  for (const command of [`python3 -c "open('${through}','w').write('x')"`, `node -e "require('fs').writeFileSync('${through}','x')"`,
+    `printf x > ${through}`, `rm -rf ${arm}/plugins/cache/mkt`, `node -e "require('fs').writeFileSync('${sneaky}','x')"`, `cp a ${sneaky}`]) {
+    assert.equal(await guard({ tool: 'Bash', command }, options), true, command);
+  }
+  for (const tool of ['Write', 'Edit']) {
+    assert.equal(await guard({ tool, file_path: through }, options), true, `${tool} through the link`);
+    assert.equal(await guard({ tool, file_path: sneaky }, options), true, `${tool} through a link without plugins in its name`);
+  }
+  for (const command of [`node -e "require('fs').writeFileSync('${join(home, 'Library/Caches/sleight-bench/arm-2/notes/a.json')}','x')"`,
+    `rm -rf ${join(home, 'Library/Caches/sleight-bench/arm-2/notes')}`]) {
+    assert.equal(await guard({ tool: 'Bash', command }, options), false, command);
+  }
 });
