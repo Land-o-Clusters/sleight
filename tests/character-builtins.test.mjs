@@ -21,6 +21,7 @@ test('six bundled characters load before any user bank exists without writing it
     assert.equal(Object.keys(c.manifest.lines).length, 10);
     assert.equal(api.checkCharacter(c.manifest.id, { root: w.root }).folder, c.folder);
     assert.throws(() => api.removeCharacter(c.manifest.id, { root: w.root }), /built.in/i);
+    assert.throws(() => api.removeCharacter(c.manifest.id, { root: api.builtinCharactersDirectory() }), /built.in/i);
   }
   assert.ok(packs.reduce((n, c) => n + c.total, 0) < 8_000_000);
   assert.equal(fs.existsSync(w.root), false);
@@ -65,7 +66,7 @@ test('tampering with any bundled file skips that pack and produces a doctor line
   const sheet = join(builtinRoot, 'tsugi', 'sheet.webp'); fs.chmodSync(sheet, 0o666);
   assert.throws(() => api.checkCharacter('tsugi', { root: w.root, builtinRoot }), /unsafe character file mode/);
 });
-test('a user pack cannot shadow a built-in, while a new id installs independently', t => {
+test('a colliding user pack stays visible for repair and can be removed without touching the built-in', async t => {
   const w = world(t), builtin = api.checkCharacter('bit', { root: w.root });
   const files = new Map(builtin.files), m = structuredClone(builtin.manifest); m.id = 'my-bit'; m.name = 'My Bit';
   files.set('character.json', Buffer.from(JSON.stringify(m)));
@@ -74,7 +75,17 @@ test('a user pack cannot shadow a built-in, while a new id installs independentl
   const list = api.listCharacters({ root: w.root });
   assert.deepEqual(list.filter(c => c.manifest).map(c => c.manifest.id), [...ids, 'my-bit']);
   assert.equal(api.checkCharacter('bit', { root: w.root }).builtin, true);
-  assert.match(list.find(c => c.skipped).reason, /collision/);
+  assert.match(list.find(c => c.skipped).reason, /collision.*cursor remove bit/);
+  const controller = createCursorPicker({ home: w.base, env: {}, root: w.root, writeSetting: () => {} });
+  const catalog = await controller.catalog();
+  const repair = catalog.rows.find(r => r.title === 'bit (renamed needed)');
+  assert.deepEqual(repair, { title: 'bit (renamed needed)', op: 'folder' });
+  assert.equal(catalog.thumbnails.filter(r => r.id === 'bit').length, 1);
+  const before = new Map(api.checkCharacter('bit', { root: w.root }).files);
+  assert.equal(api.removeCharacter('bit', { root: w.root }), true);
+  assert.equal(fs.existsSync(join(w.root, 'bit')), false);
+  assert.deepEqual(api.checkCharacter('bit', { root: w.root }).files, before);
+  assert.throws(() => api.removeCharacter('bit', { root: w.root }), /built.in/i);
 });
 test('picker cache drops a changed built-in and its thumbnail on the next catalog read', async t => {
   const w = world(t), builtinRoot = join(w.base, 'bundled');
@@ -89,4 +100,26 @@ test('picker cache drops a changed built-in and its thumbnail on the next catalo
   assert.equal((await controller.apply({ op: 'select', style: 'sprite', character: 'kit' })).ok, false);
   fs.chmodSync(builtinRoot, 0o777);
   assert.deepEqual((await controller.catalog()).installed, []);
+});
+
+test('built-in modes and canonical roots agree with the native loader', t => {
+  const w = world(t), builtinRoot = join(w.base, 'bundled');
+  fs.cpSync(api.builtinCharactersDirectory(), builtinRoot, { recursive: true });
+  const files = [join(builtinRoot, 'manifest.json'), ...fs.readdirSync(join(builtinRoot, 'bit')).map(n => join(builtinRoot, 'bit', n))];
+  for (const mode of [0o600, 0o644, 0o400, 0o440, 0o444, 0o640, 0o660, 0o664, 0o666, 0o700, 0o744, 0o1644, 0o2644, 0o4644]) {
+    for (const file of files) {
+      fs.chmodSync(file, mode);
+      if ([0o600, 0o644].includes(mode)) assert.equal(api.checkCharacter('bit', { root: w.root, builtinRoot }).builtin, true);
+      else assert.throws(() => api.checkCharacter('bit', { root: w.root, builtinRoot }), /unsafe character file mode/, `${file} ${mode.toString(8)}`);
+      fs.chmodSync(file, 0o644);
+    }
+  }
+  const alias = join(w.base, 'alias'); fs.symlinkSync(builtinRoot, alias);
+  assert.throws(() => api.checkCharacter('bit', { builtinRoot: alias }), /symlink/);
+  const parentAlias = join(w.base, 'parent-alias'); fs.symlinkSync(w.base, parentAlias);
+  assert.throws(() => api.checkCharacter('bit', { builtinRoot: join(parentAlias, 'bundled') }), /symlink/);
+  assert.throws(() => api.checkCharacter('bit', { builtinRoot: builtinRoot + '/.' }), /canonical/);
+  fs.renameSync(join(builtinRoot, 'bit'), join(w.base, 'bit-real'));
+  fs.symlinkSync(join(w.base, 'bit-real'), join(builtinRoot, 'bit'));
+  assert.throws(() => api.checkCharacter('bit', { builtinRoot }), /symlink/);
 });

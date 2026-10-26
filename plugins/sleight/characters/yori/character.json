@@ -278,6 +278,18 @@
       "ms": 200,
       "loop": true
     },
+    "move": {
+      "dir16": {
+        "rowA": 9,
+        "rowB": 10
+      }
+    },
+    "look": {
+      "dir16": {
+        "rowA": 9,
+        "rowB": 10
+      }
+    },
     "perch": {
       "sheet": "perch",
       "row": 0,
@@ -378,18 +390,6 @@
         110
       ],
       "loop": false
-    },
-    "move": {
-      "dir16": {
-        "rowA": 9,
-        "rowB": 10
-      }
-    },
-    "look": {
-      "dir16": {
-        "rowA": 9,
-        "rowB": 10
-      }
     }
   },
   "perch": {

@@ -29,7 +29,10 @@ function buildBank({ root, uid, builtin = false }) {
   } catch (error) { if (error.code === 'ENOENT') return { characters: [], thumbnails: [], hashes: 0, hits: 0 }; throw error; }
   const bankKey = JSON.stringify([root, uid, builtin]), old = banks.get(bankKey) ?? new Map(), next = new Map();
   const characters = [], thumbnails = []; let hashes = 0, hits = 0;
-  for (const id of builtin ? BUILTIN_CHARACTER_IDS : fs.readdirSync(root).filter(id => !id.startsWith('.import-') && !BUILTIN_CHARACTER_IDS.includes(id)).sort()) {
+  for (const id of builtin ? BUILTIN_CHARACTER_IDS : fs.readdirSync(root).filter(id => !id.startsWith('.import-')).sort()) {
+    if (!builtin && BUILTIN_CHARACTER_IDS.includes(id)) {
+      characters.push({ id, name: id, renameNeeded: true }); continue;
+    }
     const folder = join(root, id);
     let st; try { st = fs.lstatSync(folder); } catch { continue; }
     if (!st.isSymbolicLink() && (!st.isDirectory() || !/^[a-z0-9-]{1,48}$/.test(id))) continue;

@@ -6,14 +6,24 @@ import { Doc, f, path, g, ellD, rrD, starD, capsuleD, smoothD, lockD, leafD, lea
 import { recordAnchors } from '../lib/poses.mjs';
 import { drawFx, sweatDrop, FX } from '../lib/fx.mjs';
 
+// CoreSVG (sips) drops these multi-path clip groups. Luminance masks preserve the
+// union of the hair shapes and keep the shine inside the fringe on every pose.
+function hairShine(doc, hair, shine, color) {
+  const id = doc.id('shine');
+  doc.def(`<mask id="${id}" maskUnits="userSpaceOnUse" x="-100" y="-100" width="200" height="240">${hair.map(d => path(d, { fill: '#ffffff' })).join('')}</mask>`);
+  const painted = g(shine.map(d => path(d, { fill: color })).join(''), { mask: `url(#${id})` });
+  doc.hairProof?.push({ hair: hair.map(d => path(d, { fill: '#ffffff' })).join(''), shine: painted });
+  return painted;
+}
 const CX = 96;
 // Skeleton per design. The default is the 2.3-head chibi; `build` in a design overrides any of these.
 const CHIBI = { hipY: 150, shY: 113, headY: 70, leg: 37, upper: 15, fore: 13, head: 1, shoulder: 18, hipW: 9, limb: 1, neck: [94, 108] };
 const buildOf = D => ({ ...CHIBI, ...D.build });
 const sideSign = s => (s === 'l' ? -1 : 1);
 
-export function renderAnime(D, pose) {
+export function renderAnime(D, pose, { proof } = {}) {
   const doc = new Doc(192, 208);
+  if (proof) doc.hairProof = [];
   const p = temper(D, pose);
   const ink = D.ink, t = clamp(p.head.turn, -1, 1), bt = t * 0.45;
   const L = [-2.6, -2.6], B = buildOf(D);
@@ -53,6 +63,10 @@ export function renderAnime(D, pose) {
   const hl = rot(L, -p.head.tilt - p.lean); // light shift in head space
   const H = { doc, D, t, pitch: p.head.pitch, ink, hl, face: p.face, sweat: p.fx.filter(x => x.type === 'sweat') };
   const hair = HAIR[D.hair.style](H);
+  // Headless generator evidence: isolate actual masked shine and its hair support,
+  // with the same pose transforms, without outlines or effects widening the alpha.
+  const rootTransform = `translate(${f(p.x)},${f(p.y)}) translate(96,196) rotate(${f(p.lean)}) scale(${f(p.sx)},${f(p.sy)}) translate(-96,-196)`;
+  if (proof) return doc.wrap(g(g(doc.hairProof.map(s => s[proof]).join(''), { transform: headT }), { transform: rootTransform }));
 
   let back = g(hair.back, { transform: headT });
   let body = '';
@@ -71,7 +85,7 @@ export function renderAnime(D, pose) {
   const fxs = p.fx.map(x => x.at === 'head' && B.head !== 1 ? { ...x, dx: (x.dx ?? 0) * B.head, dy: (x.dy ?? 0) * B.head } : x);
   const fxBack = drawFx(fxs, anchor, ink, 'back'), fxFront = drawFx(fxs, anchor, ink, 'front');
   recordAnchors(anchor, p);
-  const root = `translate(${f(p.x)},${f(p.y)}) translate(96,196) rotate(${f(p.lean)}) scale(${f(p.sx)},${f(p.sy)}) translate(-96,-196)`;
+  const root = rootTransform;
   return doc.wrap(g(fxBack + character + fxFront, { transform: root }));
 }
 
@@ -329,11 +343,10 @@ const HAIR = {
     const tail = leafD(29 + ox, 16, 7, [36 + ox, 80], 7, 0.7);
     const strand = `M${X(-6)},-44Q${X(-22)},-30 ${X(-30)},-4M${X(2)},-46Q${X(-8)},-34 ${X(-14)},-17`;
     const shine = [-24, -14, -4, 6].map(x => { const X2 = x + ox, y = -35 + 0.007 * x * x; return `M${f(X2 - 3.4)},${f(y + 1)}Q${f(X2)},${f(y - 2.2)} ${f(X2 + 3.6)},${f(y + 0.6)}Q${f(X2)},${f(y + 2.4)} ${f(X2 - 3.4)},${f(y + 1)}Z`; });
-    const bid = doc.id('sb'); doc.def(`<clipPath id="${bid}"><path d="${cap}"/><path d="${bang}"/></clipPath>`);
     const back = cel(doc, blob, pal, { shift: hl, lw: 1.2 });
     let front = cel(doc, cap, pal, { shift: hl, lw: 0 }) + cel(doc, sideL, pal, { shift: hl }) + cel(doc, sideR, pal, { shift: hl });
     front += cel(doc, bang2, pal, { shift: hl, lw: 1.1 }) + cel(doc, bang, pal, { shift: hl, lw: 1.1 });
-    front += g(shine.map(d => path(d, { fill: pal.light })).join(''), { 'clip-path': `url(#${bid})` }) + path(strand, { fill: 'none', stroke: pal.line, 'stroke-width': 1, 'stroke-linecap': 'round' });
+    front += hairShine(doc, [cap, bang], shine, pal.light) + path(strand, { fill: 'none', stroke: pal.line, 'stroke-width': 1, 'stroke-linecap': 'round' });
     front += cel(doc, tail, pal, { shift: hl, lw: 1.2 }) + cel(doc, rrD(24 + ox, 18, 10, 5, 2.2), D.hair.tie, { shift: hl, lw: 1 });
     return { back, front, cast: [bang, bang2, sideL, sideR] };
   },
@@ -353,8 +366,7 @@ const HAIR = {
     const shine = [-21, -11, -1, 9, 19].map(x => { const X = x + ox, y = -33 + 0.006 * x * x; return `M${f(X - 3.4)},${f(y + 1)}Q${f(X)},${f(y - 2.2)} ${f(X + 3.6)},${f(y + 0.6)}Q${f(X)},${f(y + 2.4)} ${f(X - 3.4)},${f(y + 1)}Z`; });
     const paint = (pal, clip) => {
       const back = spikes.map(d => cel(doc, d, pal, { shift: hl })).join('') + cel(doc, blob, pal, { shift: hl, lw: 1.2 }) + (hr.ahoge ? cel(doc, ahoge, pal, { shift: hl, lw: 1.2 }) : '');
-      const bid = doc.id('bg'); doc.def(`<clipPath id="${bid}">${[cap, ...locks].map(d => `<path d="${d}"/>`).join('')}</clipPath>`);
-      const front = cel(doc, cap, pal, { shift: hl, lw: 0 }) + locks.map((d, i) => cel(doc, d, pal, { shift: hl, lw: 1.1, outline: lockSides[i] })).join('') + g(shine.map(d => path(d, { fill: pal.light })).join(''), { 'clip-path': `url(#${bid})` });
+      const front = cel(doc, cap, pal, { shift: hl, lw: 0 }) + locks.map((d, i) => cel(doc, d, pal, { shift: hl, lw: 1.1, outline: lockSides[i] })).join('') + hairShine(doc, [cap, ...locks], shine, pal.light);
       return clip ? { back: g(back, { 'clip-path': `url(#${clip})` }), front: g(front, { 'clip-path': `url(#${clip})` }) } : { back, front };
     };
     let back, front;
@@ -378,10 +390,9 @@ const HAIR = {
     const side = sg => { const x0 = sg * 36 + ox, x1 = sg * 26.5 + ox; return `M${f(x0)},-18L${f(x1)},-18L${f(x1 + sg * 0.6)},31L${f(x0 - sg * 0.4)},34Z`; };
     const strands = [-15, 1, 17].map(x => `M${f(x + ox)},${fb - 0.2}L${f(x + ox - 0.8)},${fb - 8}`).join('') + `M${f(ox - 2)},-45Q${f(ox - 4)},-38 ${f(ox - 9)},-33`;
     const shine = [-20, -9, 2, 13, 23].map(x => { const X = x + ox, y = -32 + 0.005 * x * x; return `M${f(X - 3.6)},${f(y + 1)}Q${f(X)},${f(y - 2.2)} ${f(X + 3.6)},${f(y + 0.6)}Q${f(X)},${f(y + 2.4)} ${f(X - 3.6)},${f(y + 1)}Z`; });
-    const fid = doc.id('fr'); doc.def(`<clipPath id="${fid}"><path d="${fringe}"/></clipPath>`);
     const back = cel(doc, backD, pal, { shift: hl, lw: 1.2, shade: [`M${f(-30 + bx)},20L${f(30 + bx)},20L${f(34 + bx)},56L${f(-34 + bx)},56Z`] });
     let front = cel(doc, side(-1), pal, { shift: hl }) + cel(doc, side(1), pal, { shift: hl });
-    front += cel(doc, fringe, pal, { shift: hl, lw: 1.2, outline: fringeEdge }) + g(shine.map(d => path(d, { fill: pal.light })).join(''), { 'clip-path': `url(#${fid})` });
+    front += cel(doc, fringe, pal, { shift: hl, lw: 1.2, outline: fringeEdge }) + hairShine(doc, [fringe], shine, pal.light);
     front += path(strands, { fill: 'none', stroke: pal.line, 'stroke-width': 1, 'stroke-linecap': 'round' });
     if (hr.clip === 'bar') front += g(path(rrD(-6, -2, 12, 4, 2), { fill: hr.clipColor, stroke: D.ink, 'stroke-width': 1.2 }), { transform: `translate(${f(24 + ox)},-20) rotate(-28)` });
     return { back, front, cast: [fringe, side(-1), side(1)] };

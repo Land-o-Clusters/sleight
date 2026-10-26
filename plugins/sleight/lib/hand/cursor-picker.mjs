@@ -16,7 +16,7 @@ export function cursorMenuModel({ installed = [], found = [], style = 'glove', c
   const ids = new Set(installed.map(c => c.id));
   return [
     ...[['ring', 'Ring (Split Seam+)'], ['seam', 'Plain ring'], ['glove', 'Glove']].map(([value, name]) => ({ title: name, op: 'select', style: value, selected: style === value })),
-    ...sort(installed).map(c => ({ title: c.builtin ? `${menuTitle(c.name, c.id).slice(0, 49)} (built-in)` : menuTitle(c.name, c.id), op: 'select', style: 'sprite', character: c.id, selected: style === 'sprite' && character === c.id })),
+    ...sort(installed).map(c => c.renameNeeded ? { title: `${c.id} (renamed needed)`, op: 'folder' } : ({ title: c.builtin ? `${menuTitle(c.name, c.id).slice(0, 49)} (built-in)` : menuTitle(c.name, c.id), op: 'select', style: 'sprite', character: c.id, selected: style === 'sprite' && character === c.id })),
     // A2: the character's lines, a toggle shown with a sprite selected.
     ...style === 'sprite' ? [{ title: 'Character lines', op: 'lines', selected: lines !== 'off' }] : [],
     { title: 'Add your Codex pets', children: sort(found.filter(p => !ids.has(p.id))).map(p => ({ title: menuTitle(p.name, p.id), op: 'import', key: p.key })) },
@@ -67,7 +67,7 @@ export function createCursorPicker({ home = userInfo().homedir, env = process.en
       // Every installed folder gets a row, including refused packs, so a click can explain the refusal.
       const { characters, thumbnails } = await installedCursorCatalog({ root, uid, builtins, builtinRoot });
       const found = findCodexPets({ home, env, uid, trace: discoveryTrace }).filter(p => !characters.some(c => c.id === p.id));
-      offered = new Map(found.map(p => [p.key, p])); installed = new Set(characters.map(c => c.id));
+      offered = new Map(found.map(p => [p.key, p])); installed = new Set(characters.filter(c => !c.renameNeeded).map(c => c.id));
       return { installed: characters, pets: found.map(({ folder, ...p }) => p), thumbnails,
         rows: cursorMenuModel({ installed: characters, found, style, character, lines }) };
     },
