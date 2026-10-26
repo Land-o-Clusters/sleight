@@ -134,7 +134,7 @@ export function createBrowserHand({ client, loadClient = () => import('./client.
         publish(token, 'aim'); publish(token, 'act'); token.shown = true;
         if (token.ended) publish(token, token.failed ? 'failed' : 'done');
       } catch {}
-      try { resolved?.send({ ...planned.frame, ...cursorDrawing(setting()) ? { ...label ? { label } : {}, ...wrap ? { rect: wrap } : {} } : {} }); trace('hand-shown', { op, kind: planned.frame.kind }); } catch {}
+      try { resolved?.send({ ...planned.frame, ...token.cursor?.say ? { say: token.cursor.say } : {}, ...cursorDrawing(setting()) ? { ...label ? { label } : {}, ...wrap ? { rect: wrap } : {} } : {} }); trace('hand-shown', { op, kind: planned.frame.kind }); } catch {}
     }
   }
   return {

@@ -1,3 +1,4 @@
+import { narrationLine } from '../../hooks/narration.mjs';
 import { sessionCursorEvents, withCursorCall, workerCursorStatus, workerCursorAction, cursorStep, cursorStreamEnabled } from '../hand/events.mjs';
 import { fork } from 'node:child_process';
 import { appendFileSync, closeSync, constants, mkdirSync, openSync, readFileSync, realpathSync, writeSync } from 'node:fs';
@@ -17,6 +18,7 @@ import { createPermissionCheck, stampUse } from '../permissions.mjs';
 import { validHostLabel } from '../host-label.mjs';
 import { isMainModule } from '../main-module.mjs';
 import { recoverNativeClipboard } from '../clipboard.mjs';
+import { createSessionPause, PAUSED_NOTE } from '../session-pause.mjs';
 
 const bridges = new WeakSet(), frontends = new WeakSet();
 export const isV3Bridge = value => !!value && bridges.has(value);
@@ -185,6 +187,8 @@ export async function createV3Bridge({ startupTimeoutMs = 120000, timeoutMs = 31
   child.once('exit', () => shared?.detached?.());
   trace('worker-spawned');
   let hello, active = false, lost = false, generation = 0, sequence = 0, ending, callTimeoutMs = timeoutMs;
+  let paused = false, pauseSync = Promise.resolve();
+  const latePauseIds = new Set();
   let traceTurn = 0, traceCall = 0, toolsRegistered = false;
   const pending = new Map(), turns = new Set(); let deliveries = new WeakMap(), resolveReady, rejectReady;
   const ready = new Promise((resolve, reject) => { resolveReady = resolve; rejectReady = reject; });
@@ -248,6 +252,7 @@ export async function createV3Bridge({ startupTimeoutMs = 120000, timeoutMs = 31
       entry.pdfBuild = true; clearTimeout(entry.timer);
       entry.timer = setTimeout(() => lose(), PDF_BUILD_WAIT_MS); return;
     }
+    if (hello && exact(frame, ['version', 'id', 'result']) && frame.version === 3 && latePauseIds.delete(frame.id)) return;
     if (!hello || !exact(frame, ['version', 'id', 'result']) || frame.version !== 3 || !pending.has(frame.id)) { lose(undefined, 'worker-protocol'); return; }
     const entry = pending.get(frame.id); pending.delete(frame.id); clearTimeout(entry.timer); entry.resolve(frame.result);
   });
@@ -260,11 +265,20 @@ export async function createV3Bridge({ startupTimeoutMs = 120000, timeoutMs = 31
   function rpc(method, params, deadlineMs = timeoutMs) {
     if (lost || !current() || pending.size >= 32) return Promise.reject(Error('V3_WORKER_UNAVAILABLE'));
     const frame = { version: 3, id: 'q' + (++sequence), method, params };
+    const retirePause = () => {
+      pending.delete(frame.id); latePauseIds.add(frame.id);
+      if (latePauseIds.size > 32) latePauseIds.delete(latePauseIds.values().next().value);
+    };
     if (Buffer.byteLength(JSON.stringify(frame)) > 131072) return Promise.reject(Error('INVALID_ARGUMENT'));
     return new Promise((resolve, reject) => {
-      const timer = setTimeout(() => { lose(); reject(Error('V3_WORKER_UNAVAILABLE')); }, deadlineMs);
+      const timer = setTimeout(() => { if (method === 'pause') retirePause(); else lose(); reject(Error('V3_WORKER_UNAVAILABLE')); }, deadlineMs);
       pending.set(frame.id, { resolve, reject, timer, handoff: method === 'call' && params.name === 'browser_tabs' && params.arguments?.do === 'handoff' && params.arguments.wait === true, ...(method === 'call' ? { tool: params.name } : {}) });
-      try { child.send(frame, error => { if (error) lose(); }); } catch { lose(); }
+      const failed = () => {
+        if (method !== 'pause') { lose(); return; }
+        const entry = pending.get(frame.id); if (!entry) return;
+        retirePause(); clearTimeout(entry.timer); entry.reject(Error('V3_WORKER_UNAVAILABLE'));
+      };
+      try { child.send(frame, error => { if (error) failed(); }); } catch { failed(); }
     });
   }
   await ready;
@@ -278,6 +292,14 @@ export async function createV3Bridge({ startupTimeoutMs = 120000, timeoutMs = 31
     return ending;
   }
   const bridge = Object.freeze({ browser: hello.browser, application: applicationName(config.executable),
+    setPaused(value) {
+      if (typeof value !== 'boolean' || paused === value) return;
+      paused = value;
+      // Out of band with respect to work: the worker changes its fence before the call in flight drains.
+      const valueForMessage = paused;
+      const sync = async deadline => { if (await rpc('pause', { paused: valueForMessage }, deadline) !== true) throw Error('PAUSE_IPC_FAILED'); };
+      pauseSync = pauseSync.then(() => sync(500).catch(() => sync(timeoutMs))).catch(() => lose());
+    },
     bootstrapEnvelope: () => ({ version: 1, session: hello.session, nonce: hello.nonce }),
     tools: () => {
       const tools = browserTools(hello.browser);
@@ -290,7 +312,11 @@ export async function createV3Bridge({ startupTimeoutMs = 120000, timeoutMs = 31
       if (!exact(frame, ['version', 'session', 'nonce', 'event', 'turn', 'text']) || frame.version !== 1 ||
           frame.session !== hello.session || frame.nonce !== hello.nonce || frame.event !== 'begin' || !id(frame.turn) ||
           typeof frame.text !== 'string' || Buffer.byteLength(frame.text) > 65536 || !approvedApps(apps) || turns.has(frame.turn) || lost || !current()) throw Error('TRUSTED_TURN_REQUIRED');
-      turns.add(frame.turn); fence(); const epoch = generation;
+      turns.add(frame.turn);
+      // Binding carries the user's prompt, including questions asked during pause. Only tool input waits for Resume.
+      await pauseSync;
+      if (lost || !current()) return false;
+      fence(); const epoch = generation;
       callTimeoutMs = timeoutMs;
       trace('turn-begin', ++traceTurn); traceCall = 0;
       const result = await rpc('begin', { turn: frame.turn, text: frame.text, apps: [...apps], appSecret: serverAppSecret(),
@@ -303,8 +329,10 @@ export async function createV3Bridge({ startupTimeoutMs = 120000, timeoutMs = 31
       return active;
     },
     async call(input) {
+      if (paused) return { text: PAUSED_NOTE, isError: true };
       let request;
-      try { request = validateToolCall(input, hello.browser); } catch { return { text: 'Invalid turbo arguments. Use the documented five tool schemas.', isError: true }; }
+      try { const { say, ...tool } = input; request = validateToolCall(tool, hello.browser);
+        const line = narrationLine(say, request.arguments); if (line) request.say = line; } catch { return { text: 'Invalid turbo arguments. Use the documented five tool schemas.', isError: true }; }
       if (!active || lost || !current()) return failure();
       const epoch = generation;
       const turn = traceTurn, call = ++traceCall;
@@ -342,7 +370,7 @@ export async function createV3Bridge({ startupTimeoutMs = 120000, timeoutMs = 31
 }
 export function createV3Frontend(bridge) {
   if (!isV3Bridge(bridge)) throw Error('TRUSTED_ROUTE_REQUIRED');
-  const frontend = Object.freeze({ browser: bridge.browser, application: bridge.application, tools: bridge.tools, call: bridge.call, delivered: bridge.delivered, end: bridge.endTurn });
+  const frontend = Object.freeze({ browser: bridge.browser, application: bridge.application, tools: bridge.tools, call: bridge.call, delivered: bridge.delivered, end: bridge.endTurn, setPaused: bridge.setPaused });
   frontends.add(frontend); return frontend;
 }
 
@@ -436,6 +464,7 @@ export function createAppTurnRuntime({ surface, binding, browser, ui, sites, onS
 // Only an inherited fork channel reaches this entry. MCP calls carry tool JSON,
 // while begin frames carry the relay hook's authenticated user message separately.
 export function serveV3Worker({ channel, browser, begin, current = () => true, close = async () => ({ revoked: true, cleanup: [] }) }) {
+  const pause = createSessionPause();
   const session = 'v3' + randomBytes(16).toString('hex'), nonce = randomBytes(32).toString('hex');
   let runtime, generation = 0, work = Promise.resolve(), queued = 0, ended = false;
   const seen = new Set(), turns = new Set(), results = new Map();
@@ -452,6 +481,10 @@ export function serveV3Worker({ channel, browser, begin, current = () => true, c
         seen.size >= 65536 || Buffer.byteLength(JSON.stringify(frame)) > 131072) { ended = true; Promise.resolve(fence()).catch(() => {}); return; }
     seen.add(frame.id);
     const respond = result => send({ version: 3, id: frame.id, result });
+    if (frame.method === 'pause') {
+      if (!exact(frame.params, ['paused']) || typeof frame.params.paused !== 'boolean') return respond(false);
+      pause.set(frame.params.paused); respond(true); return;
+    }
     if (frame.method === 'end' || frame.method === 'close') {
       if (!exact(frame.params, [])) return respond(unproved());
       if (frame.method === 'close') ended = true;
@@ -481,7 +514,7 @@ export function serveV3Worker({ channel, browser, begin, current = () => true, c
       work.then(respond, () => respond({ available: false })); return;
     }
     if (!['call', 'delivered'].includes(frame.method) || queued >= 32) return respond({ resultId: frame.id, result: failure() });
-    const epoch = generation; queued++;
+    const epoch = generation, pauseCheck = pause.checkpoint(); queued++;
     const operation = work.catch(() => {}).then(async () => {
       if (!runtime || ended || epoch !== generation || !current()) return { resultId: frame.id, result: failure() };
       if (frame.method === 'delivered') {
@@ -489,8 +522,10 @@ export function serveV3Worker({ channel, browser, begin, current = () => true, c
         const record = results.get(frame.params.resultId); results.delete(frame.params.resultId);
         return !!record && record.runtime === runtime && record.hash === frame.params.hash && record.hash === hash(record.result) && runtime.delivered(record.result) === true;
       }
-      const request = validateToolCall(frame.params, browser), owner = runtime;
-      const result = await owner.call(request, { handoffDrain: detail => send({ version: 3, id: frame.id, handoffDrain: detail }),
+      try { pauseCheck(); } catch { return { resultId: frame.id, result: { text: PAUSED_NOTE, isError: true } }; }
+      const { say, ...tool } = frame.params;
+      const request = validateToolCall(tool, browser), owner = runtime;
+      const result = await owner.call(request, { say: narrationLine(say, request.arguments), pauseCheck, handoffDrain: detail => send({ version: 3, id: frame.id, handoffDrain: detail }),
         handoffDeadline: detail => send({ version: 3, id: frame.id, handoff: detail }), pdfBuilding: () => {
         if (epoch === generation && !ended && runtime === owner && ['browser_read', 'browser_open', 'browser_act', 'browser_fill'].includes(request.name))
           send({ version: 3, id: frame.id, pdfBuild: true });
@@ -809,7 +844,7 @@ export async function startInstalledV3Worker({ channel }, dependencies = {}) {
                   if (navigation) workerCursorAction({ ...navigation, phase: result.isError ? 'failed' : 'done' });
                   return result;
                 } catch (error) { if (navigation) workerCursorAction({ ...navigation, phase: 'failed' }); throw error; }
-              });
+              }, cursorStreamEnabled(), options?.say);
             } catch (error) { return error?.message === 'ELECTRON_HOST_FOREIGN' ? foreignHost(error.appName) : appNotice(error) ?? failure(); }
           },
           ...(selections.length ? { waitMs: Math.min(APP_PREPARE_CAP_MS, selections.length * APP_PREPARE_WAIT_MS) } : {}),

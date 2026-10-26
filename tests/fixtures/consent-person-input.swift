@@ -15,7 +15,16 @@ final class AXFixtureButton: NSButton {
         if action == .press { _ = accessibilityPerformPress() }
     }
 }
-func button(_ title: String) -> NSButton { AXFixtureButton(title: title, target: receipt, action: #selector(Receipt.accept(_:))) }
+// Each protected button sits in its own window, created but never ordered in, because a person's event must name the
+// button's window and spends that window's events. Field 51 is the window number AppKit reads from a CGEvent.
+var windows: [NSWindow] = []
+func button(_ title: String) -> NSButton {
+    let button = AXFixtureButton(title: title, target: receipt, action: #selector(Receipt.accept(_:)))
+    let window = NSWindow(contentRect: NSRect(x: -20000, y: -20000, width: 200, height: 40), styleMask: .borderless, backing: .buffered, defer: false)
+    window.contentView!.addSubview(button); windows.append(window)
+    return button
+}
+var eventWindow = 0
 func event(_ state: CGEventSourceStateID, _ pid: Int64 = 0, _ data: Int64 = 0, key: Bool = false) -> NSEvent {
     let source = CGEventSource(stateID: state)!
     let cg = key ? CGEvent(keyboardEventSource: source, virtualKey: 49, keyDown: true)!
@@ -23,6 +32,7 @@ func event(_ state: CGEventSourceStateID, _ pid: Int64 = 0, _ data: Int64 = 0, k
     cg.setIntegerValueField(.eventSourceStateID, value: Int64(state.rawValue))
     cg.setIntegerValueField(.eventSourceUnixProcessID, value: pid)
     cg.setIntegerValueField(.eventSourceUserData, value: data)
+    cg.setIntegerValueField(CGEventField(rawValue: 51)!, value: Int64(eventWindow))
     cg.timestamp = DispatchTime.now().uptimeNanoseconds
     return NSEvent(cgEvent: cg)!
 }
@@ -30,6 +40,7 @@ func event(_ state: CGEventSourceStateID, _ pid: Int64 = 0, _ data: Int64 = 0, k
 let always = button("Always allow")
 var current: NSEvent?
 let guarded = ConsentInputAction(always, currentEvent: { current })
+eventWindow = always.window!.windowNumber
 check(!always.accessibilityPerformPress(), "AXPress refused")
 check(receipt.choices.isEmpty, "AX writes no pre-approval receipt")
 guarded.press(always)
@@ -50,6 +61,12 @@ check(receipt.choices.isEmpty, "legacy AX refused even with current HID event")
 let refused = receipt.choices
 guarded.press(always)
 check(receipt.choices == ["Always allow"], "HID click reaches original action exactly once")
+guarded.press(always)
+check(receipt.choices == ["Always allow"], "the same HID event is spent after one action")
+let loose = AXFixtureButton(title: "Always allow", target: receipt, action: #selector(Receipt.accept(_:)))
+let looseGuard = ConsentInputAction(loose, currentEvent: { current })
+current = event(.hidSystemState); looseGuard.press(loose)
+check(receipt.choices == ["Always allow"], "a button without a window refuses a fresh HID click")
 current = event(.hidSystemState, 0, key: true); guarded.press(always)
 check(receipt.choices.count == 2, "HID key reaches original action")
 let session = button("Allow this session"), decline = button("Decline")
@@ -66,16 +83,21 @@ let old = event(.hidSystemState).cgEvent!
 old.timestamp = 1
 current = NSEvent(cgEvent: old); guarded.press(always)
 check(receipt.choices.count == 4, "old hardware event is refused")
-// A busy main thread may dispatch a genuine event after more than one second.
+// A busy main thread may dispatch a genuine event after more than one second. A fresh window has spent nothing yet.
+let late = button("Always allow")
+let lateGuard = ConsentInputAction(late, currentEvent: { current })
+eventWindow = late.window!.windowNumber
 func aged(_ seconds: Double) -> NSEvent {
     let cg = event(.hidSystemState).cgEvent!
     cg.timestamp = DispatchTime.now().uptimeNanoseconds - UInt64(seconds * 1_000_000_000)
     return NSEvent(cgEvent: cg)!
 }
-current = aged(4); guarded.press(always)
+current = aged(5.1); lateGuard.press(late)
+check(receipt.choices.count == 4, "HID click beyond five seconds is refused")
+current = aged(4); lateGuard.press(late)
 check(receipt.choices.count == 5, "four-second HID click is accepted")
-current = aged(5.1); guarded.press(always)
-check(receipt.choices.count == 5, "HID click beyond five seconds is refused")
+current = aged(4.5); lateGuard.press(late)
+check(receipt.choices.count == 5, "an event older than one this window spent is refused")
 let future = event(.hidSystemState).cgEvent!
 future.timestamp = DispatchTime.now().uptimeNanoseconds + 1_000_000_000
 current = NSEvent(cgEvent: future); guarded.press(always)
@@ -125,6 +147,7 @@ check(personChoice("handoff", "continue"), "Continue is person-only")
 let continuation = button("Continue")
 var continueEvent: NSEvent?
 let continueGuard = ConsentInputAction(continuation, mouseOnly: true, currentEvent: { continueEvent })
+eventWindow = continuation.window!.windowNumber
 let beforeContinue = receipt.choices
 check(!continuation.accessibilityPerformPress(), "Continue refuses AXPress")
 continuation.accessibilityPerformAction(.press)
@@ -136,5 +159,6 @@ check(receipt.choices == beforeContinue, "Continue refuses posted events and Spa
 continueEvent = event(.hidSystemState); continueGuard.press(continuation)
 check(receipt.choices == beforeContinue + ["Continue"], "deliberate HID Continue click reaches original action")
 receipt.choices = beforeContinue
+check(windows.allSatisfy { !$0.isVisible }, "button windows stay unordered")
 let result: [String: Any] = ["refused": refused, "accepted": receipt.choices]
 print(String(data: try! JSONSerialization.data(withJSONObject: result), encoding: .utf8)!)

@@ -431,6 +431,34 @@ substitution.
 
 ## Agent cursor
 
+When the cursor is on, click the character to pause this sleight session. Ring styles have a small pause chip beside the
+target. The glove uses the menu bar only. Click again to resume, or choose Pause sleight and Resume sleight in the menu bar.
+The ring lets clicks pass through to the app. Only opaque sprite pixels accept clicks. The chip and sprite control stay away
+from the target point and disappear before foreground pointer actions. After a clear, waiting statuses keep the controls
+hidden until the action reports done. The menu accepts your mouse click or
+Space, Return or Enter on its highlighted row. Synthetic input and screen-reader presses are refused, as with consent cards.
+Claude has no pause or resume command. Pause is held in memory for this session without a saved setting. Controls start only
+when the hand is enabled, in any style. `SLEIGHT_HAND=0` disables the cursor host and its controls for headless runs and bench arms.
+
+While a control waits for the relay's acknowledgment, sleight keeps running. A successful exchange shows paused. After
+500 ms without confirmation, the chip shows a retry mark and the menu says the pause was not confirmed. An unconfirmed pause leaves admission running. Before a foreground
+drag, hover or menu-bar action, sleight waits up to 100 ms for the host to confirm that its panel is hidden, including pipe
+backpressure. If that wait expires, sleight sends a direct hide frame and proceeds. It keeps the host and shared consent
+channel alive. A stalled host may process that hide after pointer input. This timing still needs a live check under load.
+
+A confirmed pause refuses new engine, turbo and local calls on the next pipe read. An action already sent may finish. Turbo
+and Electron batches stop before their next step or field. A native call stops at its next engine approval or relay
+continuation. An opaque call may finish all its actions. Only a call cut short gets a pause note, with the completed and
+unsent actions when the engine provides a receipt. After you resume, fresh calls run without replaying a dropped batch.
+A prompt submitted during pause reaches Claude immediately, with turbo binding in the background. Calls stay refused until
+you resume. An older paused native call must return before new calls run,
+so its approval cannot be mistaken for theirs. The cursor stream reports `paused` until you resume.
+
+If the cursor host exits during pause, sleight starts one replacement in the paused state. It never resumes because the host
+died. If that replacement fails or exits too, the tool result says: "Resume from the sleight menu bar, or start a new session."
+A new session is the recovery path when no menu remains. On a control-channel fault, the old host hides its status item
+before reporting the fault. The relay tells it to exit before starting a replacement.
+
 The same private `hand.json` version 1 file accepts `style` (`glove`, `ring`, `seam` or `sprite`), `character` (an installed
 character id), `stream` (boolean) and `labels` (`off`, `role` or `title`). Without `style`, the current glove behavior stays.
 The hand stays off until you turn it on. `stream` defaults to false. `labels` defaults to `off`. Only your user can own
@@ -458,6 +486,47 @@ the glove. `SLEIGHT_HAND=0` disables both the built-in cursor and its public str
 [cursor protocol](design/cursor-protocol.md) to local renderers. Ring aim and status frames work without that stream.
 `labels: role` uses generic nouns. `labels: title` opts into element names, truncated to 40 characters and filtered for
 URLs and file paths. Names can still contain page content. Secure input has no label or character count.
+
+### Narration
+
+`narration` in `hand.json` is `off` (the default), `bubbles` or `voice`. With the ring or sprite enabled,
+`bubbles` shows Claude's latest sentence before its sleight call, limited to 90 characters and two lines.
+It uses the text Claude already wrote, with no model request or added prompt tokens. A call without suitable
+assistant text doesn't show a bubble. The mod caches assistant message events without fetching a transcript
+and gets its mode from the existing prompt settings reply. It ignores message content while off.
+Code, quoted values, URLs, file paths, email addresses, tokens with API-key prefixes, long base64 or hex runs,
+and Luhn-valid card numbers of 13 to 19 digits are stripped. Echo checks suppress whole user-value words of
+at least four characters, excluding enums and labels. Text-entry calls omit narration because their values may
+be computed. Native calls also need a recognized app acquisition. Unknown JavaScript or assignments clear that
+context until Claude acquires the app again. Secure input hides the bubble and stops voice.
+
+These filters cannot identify every secret. Claude's prose can paraphrase screen text, including personal names
+and short secrets that the filters don't recognize. Tool-result blocks are excluded from the source, but
+Claude can repeat their contents in its own sentence. Turn narration off for sensitive work.
+
+`voice` shows the same bubble and speaks it with an installed macOS system voice. An optional `voice` object
+sets `id` (the system voice identifier) and optional `rate` (0.1 to 0.6, default 0.5). An object with only `id` is valid.
+Without that object, sleight prefers an installed voice matching the system language, then quality.
+The compiled host's `--narration-voices` mode lists installed IDs without a window. `sleight-mcp cursor status`
+shows the requested ID and rate. The host uses installed voices other than Personal Voice without downloading
+any, and skips speech when the requested ID is unavailable. It plays one utterance at a time, keeps one replaceable
+queued line and ignores repeats of the same line for 10 seconds. A missing finish callback times out after 15 seconds and clears speech and its watcher.
+
+Voice skips muted or zero-volume output, unreadable audio state and any process using audio input.
+Microphone use is a conservative call check that also silences narration during recording and may miss a call
+that has stopped input. The host checks audio metadata off the main thread at most once per 500 ms, with
+per-channel mute and volume as a fallback. Unreadable metadata produces one trace explanation and skips speech.
+While a bubble or utterance exists, the host checks secure input every 100 ms and uses cached audio safety.
+It doesn't start a narration timer while idle. One text layer fades with the ring and shares a stack with the
+label chip, separated by 4 pt. The pair moves below the target when it doesn't fit above. These settings have the same owner, mode and symlink rules as the rest of `hand.json`.
+Claude's guard protects the entire file.
+
+Add `"narration":"bubbles"` to an existing ring configuration. Set it to `"voice"` for local speech,
+or `"off"` to stop both. A running host reads changes through the existing settings watcher.
+With `stream: true`, the opted-in sentence can also appear as `say` on cursor action and status events for local renderers.
+The relay omits it unless the native host confirms that secure input is off. A missing host or a check taking over 100 ms
+omits the line without holding up the tool. A stream-only session with no native host has no narration.
+Because the stream does not report secure-input transitions, external renderers must suppress parked lines themselves.
 
 ### Run recording and replay
 

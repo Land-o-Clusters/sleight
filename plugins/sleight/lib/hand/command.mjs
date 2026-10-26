@@ -16,7 +16,7 @@ export function writeHandSetting({ enabled, capture, style, character, perch, li
   const before = readHandConfig(path, uid);
   if (enabled === undefined && before.state === 'unsafe') throw Error('HAND_CONFIG_UNSAFE');
   const data = { version: 1, enabled: enabled ?? before.state === 'on' };
-  if (before.state !== 'unsafe') for (const key of ['stream', 'labels', 'style', 'character', 'record_runs', 'perch', 'lines']) if (before[key] !== undefined) data[key] = before[key];
+  if (before.state !== 'unsafe') for (const key of ['stream', 'labels', 'style', 'character', 'record_runs', 'narration', 'voice', 'perch', 'lines']) if (before[key] !== undefined) data[key] = before[key];
   if (style !== undefined) data.style = style;
   if (character !== undefined) data.character = character;
   if (perch !== undefined) data.perch = perch;
@@ -26,7 +26,7 @@ export function writeHandSetting({ enabled, capture, style, character, perch, li
   try { writeConfigFile(path, data, uid); }
   catch (error) { throw Error(/^[A-Z][A-Z0-9_]{0,127}$/.test(error?.message) ? error.message.replace(/^TURBO_/, 'HAND_') : error?.code ?? 'HAND_SETUP_FAILED'); }
   const after = readHandConfig(path, uid);
-  if (after.state !== (data.enabled ? 'on' : 'off') || ['capture', 'style', 'character', 'stream', 'labels', 'record_runs', 'perch', 'lines'].some(key => after[key] !== data[key])) throw Error('HAND_CONFIG_UNSAFE');
+  if (after.state !== (data.enabled ? 'on' : 'off') || ['capture', 'style', 'character', 'stream', 'labels', 'record_runs', 'narration', 'voice', 'perch', 'lines'].some(key => JSON.stringify(after[key]) !== JSON.stringify(data[key]))) throw Error('HAND_CONFIG_UNSAFE');
 }
 
 /** Exit code 0 on success, 1 on failure, 2 on usage. */

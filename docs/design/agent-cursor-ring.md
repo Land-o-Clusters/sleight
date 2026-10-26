@@ -246,3 +246,21 @@ input is refused. `lines: off` turns them off.
 from `{"dumpWorld": ...}` lines, plus `dumpNarration`, `dumpPaused` and `dumpClick`. It builds no panel or layer and
 decodes nothing. `tests/hand-perch.test.mjs` drives the seat rules, moves, reactions, sleep, hide rules and the lines' caps
 through it (19 tests). Appearance, the mask's direction in the flipped layer tree and live CPU need VC7.
+
+## Narration
+
+Aim, act and status frames accept sanitized `say`, capped at 90 characters. Menu frames accept `narration`
+(`off`, `bubbles`, `voice`) and optional `voice: { id, rate? }`. Rate defaults to 0.5.
+The nonce-bound `narration-check` contains a random token and returns the secure-input state without prose.
+See [cursor-protocol.md](cursor-protocol.md#narration) for filtering and delivery limits.
+
+The bubble follows A1: radius 8 pt, 0.6 pt rim, chip-ink fill, 9 by 6 pt padding, width 60 to 240 pt,
+and 11 pt system text at 14 pt line height. Its height is 26 or 40 pt. With a label chip it is above
+with a 4 pt gap. The whole stack flips below together and avoids the target rectangle. The overlay panel
+includes the bubble beyond the target window's bounds. Sprite bubbles have an 8 by 5 pt tail toward the character.
+
+Entrance fades over 90 ms with a 4 pt rise. A changed line fades the old bubble over 60 ms, then the new one
+over 90 ms. Glides change position only. Done and handback fade the bubble over the first 220 ms of the dissolve.
+Reduced motion uses fades only. Speech start shows three cool bars, 2 pt wide with 1 pt gaps and heights 5, 9
+and 6 pt. Finish and cancel remove them. Secure input removes the bubble, chip and voice. An active-only watcher
+checks secure input every 100 ms and stops a missing speech completion after 15 seconds.

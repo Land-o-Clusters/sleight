@@ -14,7 +14,7 @@ test('the menu bar item starts hidden, carries the glove template glyph and has 
   assert.match(source, /item\.isVisible = false/);
   assert.match(source, /image\.isTemplate = true/);
   assert.doesNotMatch(source, /"sleight disconnected"/);
-  assert.match(source, /item\.isVisible = menuVisible\(status, requests: requests, handEnabled: hand\?\.enabled \?\? false\)/);
+  assert.match(source, /item\.isVisible = !controlRetiring && \(cursorPause\.paused \|\| menuVisible\(status, requests: requests, handEnabled: hand\?\.enabled \?\? false\)\)/);
   // The hookup runs on the bar button only, starts on a connect transition and leaves no timer behind.
   assert.match(source, /if hookupConnects\(from: previous, to: status\)/);
   assert.match(source, /if index == hookupFrameCount \{ timer\.invalidate\(\); self\.hookupTimer = nil \}/);
@@ -39,7 +39,7 @@ test('Turn Turbo Off asks first, and Settings & Help opens only the fixed docs a
 });
 
 test('the Permissions rows only remove access: Revoke and Never Act answer at once on the hand channel, and nothing lifts a block', () => {
-  assert.match(source, /@objc func permissionClick\(_ sender: NSMenuItem\) \{\n {8}guard let event = sender\.representedObject as\? \[String: String\] else \{ return \}\n {8}writePermissionEvent\(event\)\n {4}\}/);
+  assert.match(source, /@objc func permissionClick\(_ sender: NSMenuItem\) \{\n {8}guard personMenuActivation\(sender\) else \{ return \}\n {8}guard let event = sender\.representedObject as\? \[String: String\] else \{ return \}\n {8}writePermissionEvent\(event\)\n {4}\}/);
   assert.match(source, /\["revoke", "revoke-all", "block"\]\.contains\(op\)/);
   // The CLI confirmation's reason table names unblock (VC10); no menu row does.
   assert.doesNotMatch(source.replace(/\/\/ BEGIN PERSON CONFIRM[\s\S]*?\/\/ END PERSON CONFIRM/, ''), /[Uu]nblock"/, 'no menu row unblocks');

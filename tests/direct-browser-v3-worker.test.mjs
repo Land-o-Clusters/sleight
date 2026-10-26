@@ -7,6 +7,8 @@ import { createRelay } from '../plugins/sleight/lib/relay.mjs';
 import { PassThrough } from 'node:stream';
 import { failure } from '../plugins/sleight/lib/direct-browser/worker.mjs';
 import { withMT } from './fixtures/mt-env.mjs';
+import { PAUSED_NOTE } from '../plugins/sleight/lib/session-pause.mjs';
+import { createSessionPause } from '../plugins/sleight/lib/session-pause.mjs';
 
 for (const mode of [undefined, '0']) test(`MTb worker distinguishes uncertain input from capability loss, switch=${mode}`, async () => withMT(mode, async () => {
   assert.equal(failure(true).text, 'Input outcome is unconfirmed. Read state before retrying' + (mode === '0' ? '; use the engine browser path if needed.' : '.'));
@@ -31,6 +33,176 @@ async function fixture(config = {}, tracePhase, bridgeOptions = {}, call) {
     forkWorker(path, args, options) { assert.match(path, /worker\.mjs$/); assert.deepEqual(args, []); forkOptions = options; queueMicrotask(() => session.ready()); return child; } });
   return { child, endpoint, events, bridge, forkOptions };
 }
+test('private narration crosses worker IPC as call context, outside the runtime tool arguments', async () => {
+  const received = [];
+  const f = await fixture({}, undefined, {}, async (request, options) => { received.push({ request, say: options.say }); return { text: 'fixture', isError: false }; });
+  try {
+    await f.bridge.bind({ ...f.bridge.bootstrapEnvelope(), event: 'begin', turn: 'narration-turn', text: 'Inspect the menu.' });
+    await f.bridge.call({ name: 'browser_read', arguments: { tab: 't1' }, say: 'I’ll inspect the menu. https://private.test/x' });
+    assert.deepEqual(received, [{ request: { name: 'browser_read', arguments: { tab: 't1' } }, say: 'I’ll inspect the menu.' }]);
+  } finally { await f.bridge.detach(); }
+});
+test('human pause crosses worker IPC immediately and invalidates the in-flight remainder through resume', async () => {
+  let entered, finish, steps = 0;
+  const started = new Promise(resolve => { entered = resolve; });
+  const f = await fixture({}, undefined, {}, async (_request, options) => {
+    steps++; entered(); await new Promise(resolve => { finish = resolve; });
+    try { options.pauseCheck(); } catch (error) { return { text: error.message, isError: true }; }
+    steps++; return { text: 'two steps', isError: false };
+  });
+  try {
+    await f.bridge.bind({ ...f.bridge.bootstrapEnvelope(), event: 'begin', turn: 'pause-turn', text: 'Work.' });
+    const first = f.bridge.call({ name: 'browser_read', arguments: { tab: 't1' } });
+    await started;
+    f.bridge.setPaused(true);
+    assert.equal((await f.bridge.call({ name: 'browser_read', arguments: { tab: 't1' } })).text, PAUSED_NOTE);
+    f.bridge.setPaused(false); finish();
+    assert.equal((await first).text, PAUSED_NOTE); assert.equal(steps, 1);
+  } finally { await f.bridge.detach(); }
+});
+test('a turn starting during pause binds at once, refuses calls, and keeps turbo on resume', async () => {
+  const f = await fixture();
+  try {
+    f.bridge.setPaused(true);
+    let bound;
+    f.bridge.bind({ ...f.bridge.bootstrapEnvelope(), event: 'begin', turn: 'paused-start', text: 'Work.' }).then(value => { bound = value; });
+    for (let i = 0; i < 10; i++) await new Promise(resolve => setImmediate(resolve));
+    assert.equal(bound, true);
+    assert.equal((await f.bridge.call({ name: 'browser_read', arguments: { tab: 't1' } })).text, PAUSED_NOTE);
+    assert.equal(f.events.some(e => e[0] === 'call'), false);
+    f.bridge.setPaused(false);
+    assert.equal((await f.bridge.call({ name: 'browser_read', arguments: { tab: 't1' } })).text, 'plain result');
+  } finally { await f.bridge.detach(); }
+});
+test('ending a turn bound during pause fences calls after resume', async () => {
+  const f = await fixture();
+  try {
+    f.bridge.setPaused(true);
+    let bound;
+    f.bridge.bind({ ...f.bridge.bootstrapEnvelope(), event: 'begin', turn: 'paused-end', text: 'Work.' }).then(value => { bound = value; });
+    for (let i = 0; i < 10; i++) await new Promise(resolve => setImmediate(resolve));
+    assert.equal(bound, true);
+    await f.bridge.endTurn(); f.bridge.setPaused(false);
+    assert.equal((await f.bridge.call({ name: 'browser_read', arguments: { tab: 't1' } })).isError, true);
+    assert.equal(f.events.some(e => e[0] === 'call'), false);
+  } finally { await f.bridge.detach(); }
+});
+for (const modern of [false, true]) test(`pause then submit a prompt replies without Resume, modern=${modern}`, async () => {
+  const f = await fixture(), pause = createSessionPause();
+  const streams = Array.from({ length: 4 }, () => new PassThrough());
+  const [clientIn, clientOut, serverIn, serverOut] = streams, replies = [];
+  clientOut.on('data', bytes => replies.push(...bytes.toString().trim().split('\n').map(JSON.parse)));
+  const settle = async () => { for (let i = 0; i < 20; i++) await new Promise(resolve => setImmediate(resolve)); };
+  let relay;
+  const submit = (id, frame) => clientIn.write(JSON.stringify({ id, method: 'tools/call',
+    params: { name: 'turn_ended', arguments: { sleight_turbo: frame } } }) + '\n');
+  try {
+    const prepared = await prepareInstalledStartup(() => f.bridge);
+    relay = createRelay({ clientIn, clientOut, serverIn, serverOut, ...prepared, pause, changeReview: false });
+    submit(1, { event: 'bootstrap' }); await settle();
+    const envelope = JSON.parse(replies.find(r => r.id === 1).result.content[0].text).sleightTurbo;
+    pause.set(true);
+    submit('forged', { ...envelope, nonce: '0'.repeat(64), event: 'begin', turn: 'forged', text: 'Invalid prompt',
+      ...modern ? { origin: 'composer', turbo: true } : {} });
+    await settle();
+    assert.equal(replies.find(r => r.id === 'forged').result.isError, true);
+    for (const turn of ['question1', 'question2']) {
+      submit(turn, { ...envelope, event: 'begin', turn, text: 'What happened?',
+        ...modern ? { origin: 'composer', turbo: true } : {} });
+      await settle();
+      const reply = replies.find(r => r.id === turn);
+      assert.ok(reply, 'prompt.submit must receive turn_ended without a Resume click');
+      assert.equal(reply.result.isError, false);
+      if (modern) assert.equal(JSON.parse(reply.result.content[0].text).sleightRemote.turboBound, false);
+      assert.equal(pause.paused, true);
+    }
+    assert.equal(f.events.filter(e => e[0] === 'begin').length, 2);
+    assert.equal(f.events.some(e => e[0] === 'call'), false);
+  } finally {
+    relay?.dispose(); await f.bridge.detach(); streams.forEach(s => s.destroy());
+  }
+});
+test('a paused prompt reply does not wait for a busy worker begin', async () => {
+  const f = await fixture(), pause = createSessionPause();
+  const streams = Array.from({ length: 4 }, () => new PassThrough());
+  const [clientIn, clientOut, serverIn, serverOut] = streams, replies = [], held = [];
+  const send = f.child.send;
+  f.child.send = frame => { if (frame.method === 'begin') held.push(frame); else send(frame); };
+  clientOut.on('data', bytes => replies.push(...bytes.toString().trim().split('\n').map(JSON.parse)));
+  const settle = async () => { for (let i = 0; i < 20; i++) await new Promise(resolve => setImmediate(resolve)); };
+  let relay;
+  const submit = (id, frame) => clientIn.write(JSON.stringify({ id, method: 'tools/call',
+    params: { name: 'turn_ended', arguments: { sleight_turbo: frame } } }) + '\n');
+  try {
+    const prepared = await prepareInstalledStartup(() => f.bridge);
+    relay = createRelay({ clientIn, clientOut, serverIn, serverOut, ...prepared, pause, changeReview: false });
+    submit(1, { event: 'bootstrap' }); await settle();
+    const envelope = JSON.parse(replies.find(r => r.id === 1).result.content[0].text).sleightTurbo;
+    pause.set(true);
+    submit(2, { ...envelope, event: 'begin', turn: 'question', text: 'What happened?', origin: 'composer', turbo: true });
+    await settle();
+    const reply = replies.find(r => r.id === 2);
+    assert.ok(reply, 'a busy worker cannot hold the user prompt during pause');
+    assert.equal(JSON.parse(reply.result.content[0].text).sleightRemote.turboBound, false);
+    assert.equal(held.length, 1); send(held[0]); await settle();
+    pause.set(false); await settle();
+    assert.equal((await f.bridge.call({ name: 'browser_read', arguments: { tab: 't1' } })).text, 'plain result');
+  } finally { relay?.dispose(); await f.bridge.detach(); streams.forEach(s => s.destroy()); }
+});
+for (const failures of [1, 2]) test(`pause IPC retries once after ${failures} send failure(s)`, async () => {
+  const f = await fixture(), send = f.child.send; let attempts = 0;
+  f.child.send = (frame, callback) => {
+    if (frame.method === 'pause' && ++attempts <= failures) { callback?.(Error('transient IPC')); return; }
+    send(frame);
+  };
+  try {
+    f.bridge.setPaused(true);
+    for (let i = 0; i < 6; i++) await new Promise(resolve => setImmediate(resolve));
+    assert.equal(attempts, 2); assert.equal(f.child.connected, failures === 1);
+    if (failures === 1) {
+      f.bridge.setPaused(false);
+      assert.equal(await f.bridge.bind({ ...f.bridge.bootstrapEnvelope(), event: 'begin', turn: 'retry-turn', text: 'Work.' }), true);
+    }
+  } finally { await f.bridge.detach(); }
+});
+test('a timed-out pause retries once and its late first reply does not drop the worker', async t => {
+  const f = await fixture(), send = f.child.send; let held, attempts = 0;
+  try {
+    f.child.send = frame => {
+      if (frame.method === 'pause' && ++attempts === 1) { held = frame; return; }
+      send(frame);
+    };
+    t.mock.timers.enable({ apis: ['setTimeout'] });
+    f.bridge.setPaused(true); for (let i = 0; i < 5; i++) await Promise.resolve();
+    assert.ok(held); t.mock.timers.tick(500);
+    for (let i = 0; i < 8; i++) await Promise.resolve();
+    assert.equal(attempts, 2); assert.equal(f.child.connected, true);
+    f.child.emit('message', { version: 3, id: held.id, result: true });
+    assert.equal(f.child.connected, true);
+    t.mock.timers.reset();
+  } finally { t.mock.timers.reset(); await f.bridge.detach(); }
+});
+test('the second pause attempt survives a busy worker beyond 500 ms using the normal deadline', async t => {
+  const f = await fixture({}, undefined, { timeoutMs: 31000 }), send = f.child.send, held = [];
+  try {
+    f.child.send = frame => { if (frame.method === 'pause') held.push(frame); else send(frame); };
+    t.mock.timers.enable({ apis: ['setTimeout'] });
+    f.bridge.setPaused(true);
+    for (let i = 0; i < 8; i++) await Promise.resolve();
+    t.mock.timers.tick(500);
+    for (let i = 0; i < 8; i++) await Promise.resolve();
+    assert.equal(held.length, 2);
+    t.mock.timers.tick(1000);
+    for (let i = 0; i < 8; i++) await Promise.resolve();
+    assert.equal(f.child.connected, true);
+    send(held[1]);
+    for (let i = 0; i < 8; i++) await Promise.resolve();
+    assert.equal(f.child.connected, true);
+    t.mock.timers.reset();
+    assert.equal(await f.bridge.bind({ ...f.bridge.bootstrapEnvelope(), event: 'begin', turn: 'slow-pause', text: 'A question.' }), true);
+    assert.equal((await f.bridge.call({ name: 'browser_read', arguments: { tab: 't1' } })).text, PAUSED_NOTE);
+  } finally { t.mock.timers.reset(); await f.bridge.detach(); }
+});
 test('waiting handoff can exceed the normal RPC timeout without losing the worker', async () => {
   const f = await fixture({}, undefined, { timeoutMs: 10 }, async request => {
     if (request.name === 'browser_tabs') await new Promise(resolve => setTimeout(resolve, 30));

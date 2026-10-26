@@ -152,21 +152,24 @@ export function createAppRunners({ pages, invalidateRefs, check, snapshot, inspe
     }
   }
 
-  async function runSteps(entry, steps, ctx, { siteCheck } = {}) {
+  async function runSteps(entry, steps, ctx, { siteCheck, pauseCheck } = {}) {
     await validated(tab => runner(tab, steps, ctx));
     for (const step of steps) { const message = staticRefusal(step); if (message) throw refused(message); }
-    const lines = []; let observe, confirmation, stoppedAt = null;
+    const lines = []; let observe, confirmation, stoppedAt = null, paused = false;
     for (let index = 0; index < steps.length; index++) {
       const step = steps[index], n = index + 1;
       let phase = 'pre', result;
       try {
+        pauseCheck?.();
         await pages.guard(entry, async () => {
           await preflight(entry, step);
+          pauseCheck?.();
           phase = 'running';
-          result = await runner(entry, [step], ctx, { nextStep: steps[index + 1], siteCheck });
+          result = await runner(entry, [step], ctx, { pauseCheck, nextStep: steps[index + 1], siteCheck });
           phase = 'ran';
         });
       } catch (error) {
+        paused ||= error.paused === true;
         if (phase === 'pre' || phase === 'running' && error.notRun) {
           if (index === 0) {
             const reason = pages.connectionParked?.();
@@ -186,6 +189,7 @@ export function createAppRunners({ pages, invalidateRefs, check, snapshot, inspe
         observe = undefined; stoppedAt = n; break;
       }
       lines.push(...renumber(result.lines, n));
+      paused ||= result.paused === true;
       if (result.confirmation) confirmation = { ...result.confirmation, step: n };
       observe = result.observe;
       if (scrolls(step)) { invalidateRefs(entry.page); lines.push('refs invalidated by scrolling. Read again.'); }
@@ -194,7 +198,7 @@ export function createAppRunners({ pages, invalidateRefs, check, snapshot, inspe
     if (stoppedAt !== null) for (let i = stoppedAt; i < steps.length; i++) lines.push(`${i + 1} ${steps[i].do}: not reached`);
     const parked = stoppedAt !== null ? pages.connectionParked?.() : undefined;
     if (parked) return { lines: [parkedSummary(clean(parked), lines, stoppedAt, steps.length), ...lines], stoppedAt, observe: undefined, parked: clean(parked) };
-    return { lines, stoppedAt, observe, ...(confirmation ? { confirmation } : {}) };
+    return { lines, stoppedAt, observe, ...(paused ? { paused: true } : {}), ...(confirmation ? { confirmation } : {}) };
   }
   // The per-step runner labels its one step "1 <do>"; in the batch it is step n.
   function renumber(stepLines, n) { return stepLines.map(line => /^1 \S/.test(line) ? n + line.slice(1) : line); }
@@ -203,7 +207,7 @@ export function createAppRunners({ pages, invalidateRefs, check, snapshot, inspe
     const submit = options?.submit;
     await validated(tab => fill(tab, fields, { submit }, ctx));
     const { page } = entry, rows = fields.map(({ ref }) => ({ ref, status: 'not reached' }));
-    let stopped, submitted = { status: submit === undefined ? 'not requested' : 'not reached' };
+    let stopped, paused = false, submitted = { status: submit === undefined ? 'not requested' : 'not reached' };
     // fill.mjs stops a form on these within one call; one call per field needs them across the whole fill.
     const handlers = { framenavigated: () => { stopped ??= 'new document; read the page before continuing'; },
       dialog: () => { stopped ??= 'dialog is waiting; answer it before continuing'; },
@@ -215,15 +219,19 @@ export function createAppRunners({ pages, invalidateRefs, check, snapshot, inspe
         const field = fields[i];
         let phase = 'pre', result;
         try {
+          options.pauseCheck?.();
           await pages.guard(entry, async () => {
             await preflight(entry, { do: 'fill', ref: field.ref });
+            options.pauseCheck?.();
             phase = 'running';
-            result = await fill(entry, [field], {}, ctx);
+            result = await fill(entry, [field], { pauseCheck: options.pauseCheck }, ctx);
             phase = 'ran';
           });
           rows[i] = result.rows[0];
+          paused ||= result.paused === true;
           if (result.stopped) stopped = result.stopped;
         } catch (error) {
+          paused ||= error.paused === true;
           if (phase === 'pre' && i === 0) { error.notRun = true; throw error; }
           rows[i] = { ref: field.ref, status: 'failed', reason: phase === 'pre' ? clean(error.message)
             : phase === 'ran' ? `${result.rows[0]?.status === 'set' ? 'sent' : 'field may have changed'}. The app window then ${clean(entry.parked ?? error.message)}. Read before continuing.`
@@ -233,15 +241,17 @@ export function createAppRunners({ pages, invalidateRefs, check, snapshot, inspe
       }
       if (submit !== undefined && !stopped && rows.every(row => row.status === 'set')) {
         try {
-          const result = await runSteps(entry, [{ do: 'click', ref: submit }], ctx);
+          const result = await runSteps(entry, [{ do: 'click', ref: submit }], ctx, { pauseCheck: options.pauseCheck });
+          paused ||= result.paused === true;
           submitted = { ...result, status: failedLine(result) ? 'failed'
             : entry.state.submitUnconfirmed || result.lines.some(line => / The app window then /.test(line)) ? 'unconfirmed' : 'done' };
         } catch (error) {
+          paused ||= error.paused === true;
           const reason = clean(error.message);
           submitted = error.notRun ? { status: 'failed', reason, lines: [`1 click ${submit}: not run: ${reason}`] } : { status: 'failed', reason: 'submit stopped; read the page before retrying' };
         }
       }
-      return { rows, submitted, ...(stopped ? { stopped } : {}) };
+      return { rows, submitted, ...(paused ? { paused: true } : {}), ...(stopped ? { stopped } : {}) };
     } finally { for (const [name, fn] of Object.entries(handlers)) page.off(name, fn); }
   }
 

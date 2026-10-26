@@ -1,4 +1,5 @@
 import { assertEndpointRead, endpointURL, endpointBlock } from './endpoint-guard.mjs';
+import { PAUSED_NOTE } from '../session-pause.mjs';
 import { originOf, chooserNote } from './output-hygiene.mjs'; // a page picks its title and URL path, so trusted lines carry only the origin
 import { screenshot } from './screenshot.mjs';
 import { startMotion, userRequestedMotion, motionOps } from './motion.mjs';
@@ -227,11 +228,12 @@ export function createToolDispatcher({ browser, pages, snapshot, runSteps, fillF
     return result;
   };
   return Object.freeze({ tools: () => browserTools(browser),
-    async call(input, { handoffDeadline, handoffDrain } = {}) {
+    async call(input, { handoffDeadline, handoffDrain, pauseCheck } = {}) {
       let request, started = false;
       const ordinal = ++callNo;
       const phase = name => { try { tracePhase?.(name, ordinal); } catch {} };
       try {
+        pauseCheck?.();
         request = validateToolCall(input, browser);
         if (ended) throw Error('turn ended');
         if (handingOff) throw Error(handoffMessages.pending);
@@ -297,6 +299,7 @@ export function createToolDispatcher({ browser, pages, snapshot, runSteps, fillF
         if (opener && a.export !== undefined) throw Error('Export ref belongs to a closed tab; read its opener for a fresh ref');
         if (opener) { closedNote = `${a.tab} closed itself; reading its opener ${opener}.`; const { ref: _stale, ...rest } = a; a = { ...rest, tab: opener }; }
         return await pages.enqueue(a.tab, async entry => {
+          pauseCheck?.();
           if (ended) throw Error('turn ended');
           await entry.checkAttachment?.();
           const recovery = request.name === 'browser_act' && a.steps.length === 1 && a.steps[0].do === 'navigate' && a.steps[0].url !== undefined;
@@ -320,6 +323,7 @@ export function createToolDispatcher({ browser, pages, snapshot, runSteps, fillF
                 : await check(context ?? {}, 'reload', { page: entry.page, state: entry.state, session: context?.session, turn: context?.turn });
               if (verdict?.verdict !== 'allow') throw Object.assign(Error(verdict?.message ?? 'Recovery navigation requires the user request; tab retained'), { notRun: true });
             }
+            pauseCheck?.();
             started = true;
             try { await recoverPage(entry, destination, { siteCheck: siteLine, allowCrossOrigin: !!namedURL }); }
             catch { throw Object.assign(Error('Recovery did not finish; tab retained and still marked stuck. ' +
@@ -383,7 +387,7 @@ export function createToolDispatcher({ browser, pages, snapshot, runSteps, fillF
             // One stalled pre-click read disables optional observation only on this page, until this turn ends.
             if (siteMemory && !controlObservations.has(entry.page)) controlObservations.set(entry.page, {});
             try {
-              result = await guardPageTask(entry, () => runSteps(entry, a.steps, privateContext, { observe: a.observe, ...(onAction ? { onAction } : {}), siteCheck: () => siteLine(pageURL(entry)),
+              result = await guardPageTask(entry, () => runSteps(entry, a.steps, privateContext, { pauseCheck, observe: a.observe, ...(onAction ? { onAction } : {}), siteCheck: () => siteLine(pageURL(entry)),
                 ...(siteMemory ? { controlObservation: controlObservations.get(entry.page), onControl(event) {
                   const prior = openers.get(entry);
                   siteMemory.record({ ...event, ...(prior?.origin === event.origin && prior.url === pageURL(entry) && !event.expanded ? { via: prior.target } : {}) }, epoch);
@@ -415,6 +419,7 @@ export function createToolDispatcher({ browser, pages, snapshot, runSteps, fillF
             });
             // An app batch the host stopped by parking the connection (electron-handoff.mjs): an error, with what ran, and no page.
             if (typeof result.parked === 'string') return textResult(result.lines.join('\n'), true);
+            if (result.paused) return textResult(result.lines.join('\n'), true);
             await assertEndpointRead(entry.page, endpoint);
             const lines = [...result.lines, ...blocked().filter(line => !result.lines.includes(line))];
             // A step that landed on a blocked site: what ran, then the user's line, and nothing of the page.
@@ -429,7 +434,8 @@ export function createToolDispatcher({ browser, pages, snapshot, runSteps, fillF
             if (a.observe === 'none' && (!lossFixes || result.stoppedAt == null) && !lines.some(line => /\[ref=/.test(line))) observed = undefined;
             return await finish(lines, observed?.text, entry, observed, picture ?? a.observe === 'screenshot');
           }
-          const result = await guardPageTask(entry, () => fillFields(entry, a.fields, { submit: a.submit, ...(onAction ? { onAction } : {}) }, privateContext));
+          const result = await guardPageTask(entry, () => fillFields(entry, a.fields, { ...(pauseCheck ? { pauseCheck } : {}), submit: a.submit, ...(onAction ? { onAction } : {}) }, privateContext));
+          if (result.paused) return textResult(JSON.stringify(result) + '\n' + PAUSED_NOTE, true);
           await assertEndpointRead(entry.page, endpoint);
           const lines = result.rows.map(row => `${clean(row.ref)}: ${clean(row.status)}${row.reason ? ': ' + clean(row.reason) : row.note ? ' (' + clean(row.note) + ')' : ''}`);
           lines.push(...blocked());
@@ -441,6 +447,7 @@ export function createToolDispatcher({ browser, pages, snapshot, runSteps, fillF
           return await finish(lines, observed?.text, entry, observed);
         });
       } catch (error) {
+        if (error.paused) return textResult(PAUSED_NOTE, true);
         if (error.recoveryOutcome) return textResult(error.message, true);
         if (error.stuckPage) return textResult((error.ownedTab ? error.ownedTab + ': ' : '') + error.message, true);
         if (error.message === endpointBlock) return textResult(endpointBlock, true);

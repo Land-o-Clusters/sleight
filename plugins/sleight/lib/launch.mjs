@@ -30,6 +30,7 @@ import { createStartupCache, startupIdentity } from './startup-cache.mjs';
 import { createRelay, firstCallBatchSetting } from './relay.mjs';
 import { createRelayHand } from './hand/relay-hand.mjs';
 import { startRunRetention } from './runs/retention.mjs';
+import { createSessionPause } from './session-pause.mjs';
 import { sessionCursorEvents } from './hand/events.mjs';
 import { isV3Frontend, createV3Frontend, transientStartup, traceStartupFailure } from './direct-browser/worker.mjs';
 import { prepareTextWrite, settleTextWrite } from './text-save.mjs';
@@ -1066,11 +1067,12 @@ export async function run({ leaseDirectory, inspectInput: inspectStoppedInput, h
   });
   await runRetention.ready;
   process.once('exit', () => runRetention.close());
+  const pause = createSessionPause();
   process.once('exit', () => cursor.close());
   // The relay always starts: a hand that can't be created leaves the session without one.
   let hand;
   try {
-    hand = (await import('./hand/client.mjs')).sessionHandClient({ trace: (direction, msg) => { if (handTrace) handTrace(direction, msg); else if (earlyHandTrace.length < 64) earlyHandTrace.push([direction, msg]); } });
+    hand = (await import('./hand/client.mjs')).sessionHandClient({ onPause: value => pause.set(value), trace: (direction, msg) => { if (handTrace) handTrace(direction, msg); else if (earlyHandTrace.length < 64) earlyHandTrace.push([direction, msg]); } });
   } catch { if (earlyHandTrace.length < 64) earlyHandTrace.push(['hand-off', { reason: 'client', code: 'HAND_CLIENT_FAILED' }]); }
   process.once('exit', () => hand?.close());
   const prepared = shellRoute ? { turboUnavailable: shellRelayOptions().turboUnavailable }
@@ -1267,7 +1269,7 @@ export async function run({ leaseDirectory, inspectInput: inspectStoppedInput, h
     },
     trace,
     // The ghost hand, only when the settings enable it, on the session's one client (made above, before turbo forks).
-    cursor,
+    cursor, pause, pauseHost: hand,
     hand: createRelayHand({ client: hand, events: cursor, locate: request => appHealth.handLocate(request), trace: (direction, msg) => trace?.(direction, msg),
       clientOptions: { trace: (direction, msg) => trace?.(direction, msg) } }),
     guardTiming: !!process.env.SLEIGHT_TRACE,
@@ -1457,7 +1459,9 @@ if (isMainModule(import.meta.url)) {
     catch (err) { process.stderr.write(`sleight: ${err.message}\n`); process.exitCode = 1; }
   } else if (process.argv[2] === 'turbo-state') {
     const { readInstalledConfig } = await import('./direct-browser/installed-config.mjs');
-    process.stdout.write(JSON.stringify({ ...turboState(readInstalledConfig), presence: await runScript('remote-approvals.js', { operation: 'presence' }) }) + '\n');
+    const { cachedHandSetting } = await import('./hand/settings.mjs');
+    process.stdout.write(JSON.stringify({ ...turboState(readInstalledConfig), narration: cachedHandSetting().narration,
+      presence: await runScript('remote-approvals.js', { operation: 'presence' }) }) + '\n');
   } else if (process.argv[2] === 'permissions') {
     try { process.exitCode = (await import('./permissions-command.mjs')).permissionsCommand(process.argv.slice(3), { out: text => process.stdout.write(text) }); }
     catch (err) { process.stderr.write(`sleight: ${err.message}\n`); process.exitCode = 1; }

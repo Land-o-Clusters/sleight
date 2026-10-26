@@ -4,6 +4,7 @@ import assert from 'node:assert/strict';
 import { EventEmitter } from 'node:events';
 import { createActionRunner, overlaySignature, inspectTarget, placeClear } from '../plugins/sleight/lib/direct-browser/act.mjs';
 import { deliverSnapshot } from '../plugins/sleight/lib/direct-browser/rules.mjs';
+import { createSessionPause, PAUSED_NOTE } from '../plugins/sleight/lib/session-pause.mjs';
 
 // Playwright boundary only. There is no engine object and no catch-all method fake.
 function fixture({ effect = '', submit = false, fail, onClick, snapshotFail = false, onCheck, backgroundClick } = {}) {
@@ -51,6 +52,23 @@ function fixture({ effect = '', submit = false, fail, onClick, snapshotFail = fa
       return { text: effect || 'No visible changes.', number: ++number, options }; } });
   return { page, tab, run, checks, actions, states, time: () => time, setOverlay: next => { overlay = next; } };
 }
+
+test('pause during a turbo step finishes that input and drops later steps', async () => {
+  const pause = createSessionPause();
+  const f = fixture({ onClick() { pause.set(true); pause.set(false); } });
+  const result = await f.run(f.tab, [{ do: 'click', ref: 'e1' }, { do: 'click', ref: 'e2' }], {}, { pauseCheck: pause.checkpoint() });
+  assert.equal(f.actions.filter(a => a[0] === 'click').length, 1);
+  assert.match(result.lines.join('\n'), /Paused by the user/);
+  assert.equal(result.stoppedAt, 2);
+});
+
+test('pause while turbo awaits a confirmation stops before the first input', async () => {
+  const pause = createSessionPause();
+  const f = fixture({ onCheck() { pause.set(true); } });
+  const result = await f.run(f.tab, [{ do: 'click', ref: 'e1' }], {}, { pauseCheck: pause.checkpoint() });
+  assert.equal(f.actions.filter(a => a[0] === 'click').length, 0);
+  assert.ok(result.lines.some(line => line.includes(PAUSED_NOTE)));
+});
 
 test('v3 action reports an unproved click as an observation and returns a diff', async () => {
   const f = fixture(); const result = await f.run(f.tab, [{ do: 'click', ref: 'e1' }], {});

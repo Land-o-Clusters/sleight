@@ -7,6 +7,10 @@ import { userInfo } from 'node:os';
 import { isAbsolute, join, normalize } from 'node:path';
 
 export const handConfigPath = (home = userInfo().homedir) => join(home, 'Library/Application Support/sleight/hand.json');
+export const NARRATION_MODES = Object.freeze(['off', 'bubbles', 'voice']);
+export const voiceSettingValid = value => value && typeof value === 'object' && !Array.isArray(value) &&
+  Object.keys(value).every(k => ['id', 'rate'].includes(k)) && typeof value.id === 'string' && /^[A-Za-z0-9._-]{1,200}$/.test(value.id) &&
+  (value.rate === undefined || typeof value.rate === 'number' && Number.isFinite(value.rate) && value.rate >= 0.1 && value.rate <= 0.6);
 export const CAPTURE_MODES = Object.freeze(['hidden', 'visible']);
 export const CURSOR_STYLES = Object.freeze(['glove', 'ring', 'seam', 'sprite']);
 // Sprite options (A2): perch (the character sits on the target window) and the character's lines, on unless turned off.
@@ -15,7 +19,7 @@ export const characterIdValid = value => typeof value === 'string' && /^[a-z0-9-
 export const cursorDrawing = setting => setting?.enabled === true && ['ring', 'seam', 'sprite'].includes(setting.style);
 
 /** { state: 'absent' | 'on' | 'off' | 'unsafe', capture? }. Unsafe is a link, another owner, a mode other than 0600, or anything
- *  but { version: 1, enabled, capture?, stream?, labels?, style?, character?, record_runs?, perch?, lines? }. */
+ *  but { version: 1, enabled, capture?, stream?, labels?, style?, character?, record_runs?, narration?, voice?, perch?, lines? }. */
 export function readHandConfig(path = handConfigPath(), uid = process.getuid()) {
   let stat;
   try { stat = lstatSync(path); } catch (error) { return { state: error.code === 'ENOENT' ? 'absent' : 'unsafe' }; }
@@ -23,12 +27,13 @@ export function readHandConfig(path = handConfigPath(), uid = process.getuid()) 
     if (!isAbsolute(path) || normalize(path) !== path || !stat.isFile() || stat.isSymbolicLink() || realpathSync(path) !== path ||
         stat.uid !== uid || (stat.mode & 0o777) !== 0o600 || stat.size > 4096) return { state: 'unsafe' };
     const data = JSON.parse(readFileSync(path, 'utf8'));
-    if (!data || typeof data !== 'object' || Array.isArray(data) || Object.keys(data).some(key => !['version', 'enabled', 'capture', 'stream', 'labels', 'style', 'character', 'record_runs', 'perch', 'lines'].includes(key)) ||
+    if (!data || typeof data !== 'object' || Array.isArray(data) || Object.keys(data).some(key => !['version', 'enabled', 'capture', 'stream', 'labels', 'style', 'character', 'record_runs', 'narration', 'voice', 'perch', 'lines'].includes(key)) ||
         data.version !== 1 || typeof data.enabled !== 'boolean' || data.capture !== undefined && !CAPTURE_MODES.includes(data.capture) ||
         data.stream !== undefined && typeof data.stream !== 'boolean' || data.record_runs !== undefined && typeof data.record_runs !== 'boolean' || data.labels !== undefined && !['off', 'role', 'title'].includes(data.labels) ||
-        data.style !== undefined && !CURSOR_STYLES.includes(data.style) || data.character !== undefined && !characterIdValid(data.character) ||
+        data.style !== undefined && !CURSOR_STYLES.includes(data.style) || data.character !== undefined && !characterIdValid(data.character) || data.narration !== undefined && !NARRATION_MODES.includes(data.narration) ||
+        data.voice !== undefined && !voiceSettingValid(data.voice) ||
         data.perch !== undefined && typeof data.perch !== 'boolean' || data.lines !== undefined && !LINES_MODES.includes(data.lines)) return { state: 'unsafe' };
-    return { state: data.enabled ? 'on' : 'off', ...data.capture ? { capture: data.capture } : {},
+    return { ...data.narration !== undefined ? { narration: data.narration } : {}, ...data.voice !== undefined ? { voice: data.voice } : {}, state: data.enabled ? 'on' : 'off', ...data.capture ? { capture: data.capture } : {},
       ...data.record_runs !== undefined ? { record_runs: data.record_runs } : {}, ...data.stream !== undefined ? { stream: data.stream } : {}, ...data.labels !== undefined ? { labels: data.labels } : {},
       ...data.style !== undefined ? { style: data.style } : {}, ...data.character !== undefined ? { character: data.character } : {},
       ...data.perch !== undefined ? { perch: data.perch } : {}, ...data.lines !== undefined ? { lines: data.lines } : {} };
@@ -42,7 +47,8 @@ export function handSetting({ env = process.env, platform = process.platform, pa
   const asked = env.SLEIGHT_HAND_CAPTURE;
   const [capture, captureReason] = asked !== undefined && asked !== '' ? CAPTURE_MODES.includes(asked) ? [asked, 'env'] : ['hidden', 'env-invalid']
     : file.capture ? [file.capture, 'user'] : ['hidden', 'default'];
-  const result = (enabled, reason) => ({ enabled, reason, capture, captureReason,
+  const result = (enabled, reason) => ({ enabled, reason, capture, captureReason, narration: file.narration ?? 'off',
+    ...file.voice !== undefined ? { voice: file.voice } : {},
     ...(env.SLEIGHT_CURSOR_STYLE ? { style: CURSOR_STYLES.includes(env.SLEIGHT_CURSOR_STYLE) ? env.SLEIGHT_CURSOR_STYLE : 'glove',
       styleReason: CURSOR_STYLES.includes(env.SLEIGHT_CURSOR_STYLE) ? 'env' : 'env-invalid' }
       : file.style ? { style: file.style, styleReason: 'user' } : {}),

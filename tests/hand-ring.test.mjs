@@ -67,6 +67,27 @@ const options = { skip: macCommandSkip('xcrun') };
 // A second frame after the first one, at the same point, so no entrance or glide runs.
 const after = (frame, seq = 2) => [act(), { ...frame, seq }];
 
+test('a clear suppresses waiting and later action chips until done, including after a repeated clear', options, t => {
+  const rows = effects(t, [act(), { hand: 'clear', nonce, token: '1'.repeat(32) },
+    status('waiting', { seq: 2, at: [100, 100] }), aim({ seq: 3 }), act('click', { seq: 4 }),
+    { hand: 'clear', nonce, token: '2'.repeat(32) }, status('waiting', { seq: 5, at: [100, 100] }),
+    status('done', { seq: 6, at: [100, 100] }), status('waiting', { seq: 7, at: [100, 100] })]);
+  const draws = rows.filter(row => row.effect === 'draw');
+  assert.ok(draws[0].pauseControl.rect);
+  const during = draws.filter(row => row.time > 1 && row.time < 7);
+  assert.ok(during.some(row => row.state === 'waiting'));
+  for (const row of during) assert.equal(row.pauseControl.rect, null, row.state);
+  assert.ok(draws.find(row => row.state === 'waiting' && row.time === 8).pauseControl.rect);
+});
+
+test('paused is additive, drops pending acts and parks without a fade or a release timer', options, t => {
+  const rows = effects(t, [clock(0), act(), clock(0.5), act('click', { seq: 2, delayMs: 1000 }), status('paused', { seq: 3 }), clock(1000)]);
+  assert.ok(rows.some(row => row.effect === 'draw' && row.state === 'paused'));
+  assert.equal(rows.filter(row => row.effect === 'draw' && row.state === 'click').length, 1);
+  assert.equal(rows.some(row => row.effect === 'fade' || row.effect === 'release'), false);
+  assert.deepEqual(rows.at(-1), { effect: 'end', idle: false, pending: 0, timers: 0 });
+});
+
 test('Split Seam+ timings follow D2 for every act state', options, t => {
   for (const [frame, phase, seconds] of [[act('click', { seq: 2 }), 'click', .21], [act('double', { seq: 2 }), 'double', .25],
     [act('right', { seq: 2 }), 'right', .22], [act('key', { seq: 2 }), 'keys', .06], [act('type', { seq: 2, beats: 3 }), 'keys', .18],
@@ -447,7 +468,10 @@ test('ring source: Core Animation only, no timer, display link or per-frame Swif
   const ring = section('RING PLAN') + section('RING RUNTIME');
   assert.doesNotMatch(ring, /\bTimer\b|CADisplayLink|DispatchQueue|asyncAfter|repeatCount/);
   const host = section('HAND HOST');
-  assert.doesNotMatch(host, /CADisplayLink|repeatCount/);
+  const withoutVoiceBars = host.replace(/    func voiceBars[\s\S]*?(?=    func installRing)/, '');
+  assert.doesNotMatch(withoutVoiceBars, /CADisplayLink|repeatCount/);
+  assert.match(host.match(/    func voiceBars[\s\S]*?(?=    func installRing)/)?.[0] ?? '', /animation.duration = 0.6/);
+  assert.match(host.match(/    func voiceBars[\s\S]*?(?=    func installRing)/)?.[0] ?? '', /animation.repeatCount = .infinity/);
   // The host's ring code keeps one one-shot wake-up.
   const ringHost = host.slice(host.indexOf('var ringEnvironment'), host.indexOf('func installRing'));
   assert.equal((ringHost.match(/asyncAfter/g) ?? []).length, 1);

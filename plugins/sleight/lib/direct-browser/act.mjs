@@ -208,11 +208,11 @@ export function createActionRunner({ check, snapshot, backgroundClick = (tab, lo
   const lossFixes = process.env.SLEIGHT_LB12 !== '0';
   // siteCheck() gives the user's line when the page now shows a site sleight may not act on (permissions.mjs). It runs in the
   // gate, right before each step's input, so a step that moved the page to such a site stops every step after it.
-  return async function runSteps(tab, steps, ctx = {}, { nextStep, siteCheck, observe, beforeObserve, download, downloadAllowed, onControl, onStep, onAction, controlObservation = {} } = {}) {
+  return async function runSteps(tab, steps, ctx = {}, { pauseCheck, nextStep, siteCheck, observe, beforeObserve, download, downloadAllowed, onControl, onStep, onAction, controlObservation = {} } = {}) {
     // A bad step list is refused before any input, so the caller must not report it as an unconfirmed outcome.
     try { validate(steps); } catch (error) { error.notRun = true; throw error; }
     const { page, state } = tab, since = state.snapshotNo > 0 ? state.snapshotNo : undefined, lines = []; let stoppedAt = null;
-    let observed, observeError, confirmation, blocker, carry, closed = false, observeWaitMs = 600, recordingStopped = false;
+    let observed, observeError, confirmation, blocker, carry, closed = false, observeWaitMs = 600, recordingStopped = false, paused = false;
     const read = async options => { const capturedAt = now(), result = await snapshot(page, options); observed = { ...result, capturedAt }; return observed; };
     // Keep requests across step watchers: a wait after a click must see work that click left in flight.
     const batchWatch = watch(page, state, now);
@@ -236,6 +236,7 @@ export function createActionRunner({ check, snapshot, backgroundClick = (tab, lo
         await pointHandle?.dispose().catch(() => {}); await endHandle?.dispose().catch(() => {});
       };
       try {
+        pauseCheck?.();
         await ensurePageResponsive(tab);
         if (state.dialog && step.do !== 'dialog') throw Error('a page dialog is waiting; answer it with the dialog operation');
         if (step.do === 'dialog' && !state.dialog) throw Error('no waiting dialog; read the page');
@@ -275,6 +276,7 @@ export function createActionRunner({ check, snapshot, backgroundClick = (tab, lo
           ...(step.do === 'dialog' ? { type: state.dialog.type(), message: state.dialog.message(), accept: step.accept } : {}) };
         const trusted = isV3Context(ctx);
         const gate = async () => {
+          pauseCheck?.();
           assertPageResponsive(tab);
           const refused = siteCheck?.();
           if (refused) throw Error(refused);
@@ -296,6 +298,7 @@ export function createActionRunner({ check, snapshot, backgroundClick = (tab, lo
             submit = { startedAt: now(), snapshotNo: state.snapshotNo ?? 0 };
             state.submitUnconfirmed = submit;
           }
+          pauseCheck?.();
         };
         // Pin the element before popup preparation. Check final risk and consume
         // authority inside the actual click callback, after that preparation.
@@ -316,6 +319,7 @@ export function createActionRunner({ check, snapshot, backgroundClick = (tab, lo
         const options = { timeout: TIMEOUT };
         // The input starts now: the ghost hand may show it. Never awaited.
         const begin = () => {
+          pauseCheck?.();
           assertPageResponsive(tab);
           started = true;
           if (hand && !point && !cursorToken) try { cursorToken = hand.step({ op: named.do, page, locator, ref: step.ref, text: step.text,
@@ -565,6 +569,7 @@ export function createActionRunner({ check, snapshot, backgroundClick = (tab, lo
         if (boundary || settleCapped) { stoppedAt = index + 1; break; }
       } catch (error) {
         cursorFailed = true;
+        paused ||= error.paused === true;
         if (error.stuckPage) throw error;
         if (!state.dialog && /timeout|timed out|deadline|Snapshot (unavailable|acquisition)/i.test(error.message)) await probePage(tab);
         if (lossFixes && started && armed?.boundary?.kind === 'close' && !consentDecline) {
@@ -645,7 +650,7 @@ export function createActionRunner({ check, snapshot, backgroundClick = (tab, lo
     }
     if (observeError) lines.push('Read unavailable: ' + observeError + '; use browser_read before retrying.');
     if (!needsRead) for (let i = 0; i < lines.length; i++) lines[i] = lines[i].replace('input sent; observation below', 'input sent');
-    return { lines, stoppedAt, observe: observed, ...(closed ? { closed: true } : {}), ...(confirmation ? { confirmation } : {}) };
+    return { lines, stoppedAt, observe: observed, ...(paused ? { paused: true } : {}), ...(closed ? { closed: true } : {}), ...(confirmation ? { confirmation } : {}) };
     } finally { batchWatch.stop(); if (recordingStopped) carry?.stop(); }
   };
 }

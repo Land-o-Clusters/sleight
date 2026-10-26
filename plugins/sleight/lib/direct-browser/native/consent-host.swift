@@ -12,6 +12,8 @@ import Darwin
 import os.log
 import LocalAuthentication
 import CryptoKit
+import AVFoundation
+import CoreAudio
 
 // BEGIN PERSON INPUT
 private var consentFeedbackKey: UInt8 = 0
@@ -39,16 +41,22 @@ func personInput(_ event: CGEvent?) -> Bool {
 }
 // One activation rule for consent, the cursor picker and the pause control. AX entry points refuse separately,
 // even if AppKit still has a fresh hardware event from an earlier interaction.
+private var personSpentByWindow: [Int: Double] = [:]
 func personActivation(_ event: NSEvent?, windowMatches: Bool, keyboard: Bool = true,
-    highlighted: Bool = true, accessibility: Bool = false, now: Double = ProcessInfo.processInfo.systemUptime) -> Bool {
+    highlighted: Bool = true, accessibility: Bool = false, now: Double = ProcessInfo.processInfo.systemUptime,
+    windowNumber: Int? = nil) -> Bool {
     guard !accessibility, let event = event, windowMatches,
         event.timestamp.isFinite, event.timestamp >= 0, event.timestamp <= now, now - event.timestamp < 5,
         let cg = event.cgEvent, cg.getIntegerValueField(.eventSourceUnixProcessID) == 0, personInput(cg) else { return false }
-    if event.type == .leftMouseUp { return true }
-    return keyboard && highlighted && event.type == .keyDown && !event.isARepeat && [36, 49, 76].contains(event.keyCode)
+    guard event.type == .leftMouseUp || keyboard && highlighted && event.type == .keyDown && !event.isARepeat && [36, 49, 76].contains(event.keyCode) else { return false }
+    let window = windowNumber ?? event.windowNumber
+    guard event.timestamp > (personSpentByWindow[window] ?? -Double.infinity) else { return false }
+    personSpentByWindow[window] = event.timestamp
+    return true
 }
 func personActivation(_ event: NSEvent?, in window: NSWindow?, keyboard: Bool = true, highlighted: Bool = true) -> Bool {
-    personActivation(event, windowMatches: event?.window === window, keyboard: keyboard, highlighted: highlighted)
+    guard let window = window else { return false }
+    return personActivation(event, windowMatches: event?.window === window, keyboard: keyboard, highlighted: highlighted, windowNumber: window.windowNumber)
 }
 func personChoice(_ kind: String, _ choice: String) -> Bool {
     if ["cancel", "decline", "session"].contains(choice) { return false }
@@ -1140,6 +1148,70 @@ func writeHandToggle(_ enabled: Bool) {
         let bytes = try? JSONSerialization.data(withJSONObject: ["hand": "toggle", "nonce": nonce, "enabled": enabled], options: [.sortedKeys]) else { return }
     FileHandle.standardOutput.write(bytes + Data([10]))
 }
+// A hand fault may leave the shared consent process alive, so process exit alone cannot detect control loss.
+func writeHandControlGone() {
+    guard let nonce = nonceBook.nonce("hand"), let bytes = try? JSONSerialization.data(withJSONObject: ["hand": "control-gone", "nonce": nonce]) else { return }
+    FileHandle.standardOutput.write(bytes + Data([10]))
+}
+func handControlExit(_ frame: [String: Any], nonce: String?) -> Bool {
+    guard let nonce = nonce else { return false }
+    return Set(frame.keys) == ["hand", "nonce"] && frame["hand"] as? String == "control-exit" && frame["nonce"] as? String == nonce
+}
+// Pause requests are prepared, committed, then confirmed on the hand's nonce-bound channel.
+// A missed acknowledgment leaves the displayed state unchanged and exposes a retry mark.
+final class CursorPauseControl {
+    private(set) var paused = false, failed = false
+    private(set) var pending: (token: String, value: Bool, before: Bool, deadline: Double)?
+    private var applied: (token: String, before: Bool)?
+    var changed: ((Bool) -> Void)?
+    var nonce: () -> String? = { nonceBook.nonce("hand") }
+    var now: () -> Double = { ProcessInfo.processInfo.systemUptime }
+    var send: ([String: Any]) -> Bool = { frame in
+        guard let data = try? JSONSerialization.data(withJSONObject: frame, options: [.sortedKeys]) else { return false }
+        do { try FileHandle.standardOutput.write(contentsOf: data + Data([10])); return true } catch { return false }
+    }
+    var schedule: (Double, @escaping () -> Void) -> Void = { delay, task in DispatchQueue.main.asyncAfter(deadline: .now() + delay, execute: task) }
+    func set(_ value: Bool) { paused = value; changed?(value) }
+    func emit(_ phase: String, _ token: String, _ value: Bool) -> Bool {
+        guard let nonce = nonce() else { return false }
+        return send(["hand": "pause", "nonce": nonce, "paused": value, "token": token, "phase": phase])
+    }
+    @discardableResult func click(_ event: NSEvent?, windowMatches: Bool, highlighted: Bool = true, accessibility: Bool = false) -> Bool {
+        guard pending == nil,
+            personActivation(event, windowMatches: windowMatches, highlighted: highlighted, accessibility: accessibility, now: now()) else { return false }
+        applied = nil
+        guard nonce() != nil else { failed = true; changed?(paused); return false }
+        let token = UUID().uuidString.lowercased().replacingOccurrences(of: "-", with: "")
+        pending = (token, !paused, paused, now() + 0.5); failed = false
+        guard emit("request", token, !paused) else { pending = nil; failed = true; changed?(paused); return false }
+        schedule(0.5) { [weak self] in if self?.pending?.token == token { self?.expire() } }
+        return true
+    }
+    func expire() {
+        guard let request = pending else { return }
+        pending = nil; failed = true
+        _ = emit("cancel", request.token, request.value)
+        set(request.before)
+    }
+    func receive(_ phase: String, token: String, value: Bool) {
+        if phase == "restore" { pending = nil; applied = nil; failed = false; set(value); _ = emit("restored", token, value); return }
+        if phase == "aborted", let previous = applied, previous.token == token {
+            applied = nil; pending = nil; failed = true; set(previous.before); return
+        }
+        guard let request = pending, request.token == token, request.value == value else { return }
+        guard now() < request.deadline else { expire(); return }
+        if phase == "ready" { _ = emit("commit", token, value) }
+        else if phase == "applied" {
+            guard emit("confirm", token, value) else { expire(); return }
+            applied = (token, request.before); pending = nil; failed = false; set(value)
+        } else if phase == "aborted" { pending = nil; failed = true; set(request.before) }
+    }
+}
+final class CursorPauseMenuItem: NSMenuItem {
+    var refused: (() -> Void)?
+    override func accessibilityPerformPress() -> Bool { refused?(); return false }
+    override func accessibilityPerformAction(_ action: NSAccessibility.Action) { if action == .press { refused?() } else { super.accessibilityPerformAction(action) } }
+}
 // A Permissions row's click, on the hand channel's stdout beside the toggle: revoke or block with its target, or revoke-all.
 func writePermissionEvent(_ event: [String: String]) {
     guard let nonce = nonceBook.nonce("hand"), let op = event["permissions"], ["revoke", "revoke-all", "block"].contains(op),
@@ -1154,6 +1226,9 @@ func glyphImage(_ svg: String) -> NSImage? {
 }
 
 final class ConsentHost: NSObject, NSApplicationDelegate, NSMenuDelegate {
+    let cursorPause = CursorPauseControl()
+    var cursorControlSession = false
+    var controlRetiring = false
     let item = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
     var pending: [String: [String: Any]] = [:]
     var nonce: String?
@@ -1250,6 +1325,11 @@ final class ConsentHost: NSObject, NSApplicationDelegate, NSMenuDelegate {
         }
     }
     func receive(_ frame: [String: Any], resetDeadline: Date? = nil) {
+        if shared, frame["hand"] as? String == "control-exit" {
+            guard handControlExit(frame, nonce: nonceBook.nonce("hand")) else { exit(65) }
+            retireControl(); closeAsk(); modal.close(); pending.removeAll()
+            NSApp.terminate(nil); return
+        }
         // Parent-only reset on the consent pipe, after every byte from the exited worker.
         // It carries the hand channel's secret, which no worker receives.
         if shared, frame["hand"] as? String == "consent-reset" {
@@ -1328,7 +1408,8 @@ final class ConsentHost: NSObject, NSApplicationDelegate, NSMenuDelegate {
                 entry.state = on ? .on : .off
                 entry.target = self; entry.representedObject = ["id": id, "choice": choice]; menu.addItem(entry)
             case .permissions:
-                let entry = NSMenuItem(title: "Permissions", action: nil, keyEquivalent: ""), submenu = NSMenu()
+                let entry = NSMenuItem(title: "Permissions", action: nil, keyEquivalent: ""), submenu = CursorPickerMenu()
+                submenu.permissionsRoot = true
                 submenu.delegate = self
                 fillPermissions(submenu)
                 entry.submenu = submenu; menu.addItem(entry)
@@ -1342,7 +1423,11 @@ final class ConsentHost: NSObject, NSApplicationDelegate, NSMenuDelegate {
         }
     }
     func rebuildMenu() {
-        let menu = NSMenu()
+        let menu = CursorPickerMenu(); menu.addWindowProbe()
+        if hand?.enabled == true || cursorPause.paused {
+            let entry = CursorPauseMenuItem(title: cursorPause.failed ? "Pause not confirmed. Try again" : cursorPause.paused ? "Resume sleight" : "Pause sleight", action: #selector(cursorPauseClick(_:)), keyEquivalent: "")
+            entry.target = self; menu.addItem(entry); menu.addItem(NSMenuItem.separator())
+        }
         var statusShown = false
         for id in pending.keys.sorted() {
             guard let frame = pending[id], let choices = frame["choices"] as? [String],
@@ -1364,23 +1449,27 @@ final class ConsentHost: NSObject, NSApplicationDelegate, NSMenuDelegate {
         menu.delegate = self
         item.menu = menu
         let requests = pending.values.filter { ($0["data"] as? [String: Any])?["status"] == nil }.count
-        item.isVisible = menuVisible(status, requests: requests, handEnabled: hand?.enabled ?? false)
+        item.isVisible = !controlRetiring && (cursorPause.paused || menuVisible(status, requests: requests, handEnabled: hand?.enabled ?? false))
     }
+    // Hide before reporting the fault, so a replacement never appears beside an obsolete status item.
+    func retireControl() { controlRetiring = true; hookupTimer?.invalidate(); hookupTimer = nil; item.isVisible = false }
     // The shared host's consent channel ended (its worker exited): an open card is aborted, its requests and status go, and the
     // hand stays.
     func channelClosed() { closeAsk(); modal.close(); pending.removeAll(); status = nil; consentOpen = false; rebuildMenu(); if !handOpen { NSApp.terminate(nil) } }
     // The hand channel ended or faulted: its state goes, and turbo's channel, if open, keeps the host.
-    func handGone() { handOpen = false; hand = nil; permissions = nil; usage = nil; rebuildMenu(); if !consentOpen { NSApp.terminate(nil) } }
+    func handGone() { handOpen = false; hand = nil; permissions = nil; usage = nil; cursorControlSession = false; cursorPause.changed = nil; cursorPause.set(false); rebuildMenu(); if !consentOpen { NSApp.terminate(nil) } }
     func handState(enabled: Bool, version: String, permissions: PermissionsData?, usage: UsageStats?) {
         hand = (enabled, version); self.permissions = permissions; self.usage = usage; rebuildMenu()
     }
     var permissionMenu: [PermissionRow]? { permissions.map { permissionRows($0, now: Date().timeIntervalSince1970) } }
     func fillPermissions(_ submenu: NSMenu) {
         submenu.removeAllItems()
+        (submenu as? CursorPickerMenu)?.addWindowProbe()
         for row in permissionMenu ?? [] {
             switch row {
             case let .grant(title, target):
-                let entry = NSMenuItem(title: title, action: nil, keyEquivalent: ""), inner = NSMenu()
+                let entry = NSMenuItem(title: title, action: nil, keyEquivalent: ""), inner = CursorPickerMenu()
+                inner.delegate = self; inner.addWindowProbe()
                 let revoke = NSMenuItem(title: "Revoke", action: #selector(permissionClick(_:)), keyEquivalent: "")
                 revoke.target = self; revoke.representedObject = ["permissions": "revoke", "target": target]
                 inner.addItem(revoke); entry.submenu = inner; submenu.addItem(entry)
@@ -1398,16 +1487,25 @@ final class ConsentHost: NSObject, NSApplicationDelegate, NSMenuDelegate {
     // Opening the submenu words the last-use times against the current time. Only Permissions submenus have this delegate.
     func menuNeedsUpdate(_ menu: NSMenu) {
         if menu === item.menu { if hand?.enabled == true { writeCursorPickerEvent(["op": "refresh"]) }; return }
-        fillPermissions(menu)
+        if (menu as? CursorPickerMenu)?.permissionsRoot == true { fillPermissions(menu) }
     }
     // Revoke and block only remove access, so they don't ask.
     @objc func permissionClick(_ sender: NSMenuItem) {
+        guard personMenuActivation(sender) else { return }
         guard let event = sender.representedObject as? [String: String] else { return }
         writePermissionEvent(event)
     }
     @objc func handToggle(_ sender: NSMenuItem) {
+        guard personMenuActivation(sender) else { return }
         guard let hand = hand else { return }
         writeHandToggle(!hand.enabled)
+    }
+    func menuWillOpen(_ menu: NSMenu) { (menu as? CursorPickerMenu)?.lastHighlighted = nil }
+    func menu(_ menu: NSMenu, willHighlight entry: NSMenuItem?) { if let entry = entry { (menu as? CursorPickerMenu)?.lastHighlighted = entry } }
+    @objc func cursorPauseClick(_ sender: NSMenuItem) {
+        guard let menu = sender.menu as? CursorPickerMenu, let window = menu.trackingWindow else { return }
+        _ = cursorPause.click(NSApp.currentEvent, windowMatches: NSApp.currentEvent?.window === window,
+            highlighted: sender.isHighlighted || menu.lastHighlighted === sender)
     }
     // Turbo's connect hookup on the menu bar button: a template image per frame, then the glyph, and the timer is gone.
     func hookup() {
@@ -1421,11 +1519,13 @@ final class ConsentHost: NSObject, NSApplicationDelegate, NSMenuDelegate {
         }
     }
     @objc func control(_ sender: NSMenuItem) {
+        guard personMenuActivation(sender) else { return }
         guard let event = sender.representedObject as? [String: String], let id = event["id"], let choice = event["choice"] else { return }
         respond(id, choice)
     }
     // Turning turbo off lasts past this session and reaches every session, so it asks once.
     @objc func confirmOff(_ sender: NSMenuItem) {
+        guard personMenuActivation(sender) else { return }
         guard let event = sender.representedObject as? [String: String], let id = event["id"], let choice = event["choice"] else { return }
         let alert = NSAlert()
         alert.messageText = "Turn turbo off?"
@@ -1436,6 +1536,7 @@ final class ConsentHost: NSObject, NSApplicationDelegate, NSMenuDelegate {
         if answer == .alertFirstButtonReturn { respond(id, choice) }
     }
     @objc func help(_ sender: NSMenuItem) {
+        guard personMenuActivation(sender) else { return }
         if let url = URL(string: "https://github.com/Land-o-Clusters/sleight/blob/main/docs/settings.md#" + (status == nil ? "ghost-hand" : "turbo")) { NSWorkspace.shared.open(url) }
     }
     // The status block: a coloured dot and the state in bold, then quiet detail lines under it. A view, so it never highlights.
@@ -1461,6 +1562,7 @@ final class ConsentHost: NSObject, NSApplicationDelegate, NSMenuDelegate {
         return stack
     }
     @objc func review(_ sender: NSMenuItem) {
+        guard personMenuActivation(sender) else { return }
         guard let id = sender.representedObject as? String, let frame = pending[id],
             let data = frame["data"] as? [String: Any], let choices = frame["choices"] as? [String],
             pending[id] != nil else { return }
@@ -1505,11 +1607,468 @@ final class ConsentHost: NSObject, NSApplicationDelegate, NSMenuDelegate {
     }
 }
 
+
+// BEGIN NARRATION
+// Data-only assistant prose. Recheck here even when a caller bypasses the relay's cutter.
+func narrationText(_ raw: Any?) -> String? {
+    guard let raw = raw as? String, raw.utf8.count <= 1024 else { return nil }
+    var text = raw.precomposedStringWithCanonicalMapping
+    for pattern in [#"```[\s\S]*?(?:```|$)|~~~[\s\S]*?(?:~~~|$)|`[^`]*(?:`|$)"#,
+        #"\"[^\"\n]*(?:\"|$)|“[^”\n]*(?:”|$)|(?<![\p{L}])'[^'\n]+'(?=\s|[.,!?]|$)"#] {
+        text = text.replacingOccurrences(of: pattern, with: " ", options: .regularExpression)
+    }
+    // Check every card-sized window in a numeric run, including adjacent digit groups.
+    if let re = try? NSRegularExpression(pattern: #"[0-9](?:[ -]?[0-9])*"#) {
+        for match in re.matches(in: text, range: NSRange(text.startIndex..., in: text)).reversed() {
+            guard let range = Range(match.range, in: text) else { continue }
+            let digits = text[range].compactMap { $0.wholeNumberValue }
+            guard digits.count >= 13 else { continue }
+            var card = false
+            for start in 0...(digits.count - 13) {
+                var plainFirst = 0, doubledFirst = 0
+                for length in 1...min(19, digits.count - start) {
+                    let n = digits[start + length - 1], doubled = n * 2 > 9 ? n * 2 - 9 : n * 2
+                    plainFirst += length % 2 == 1 ? n : doubled
+                    doubledFirst += length % 2 == 1 ? doubled : n
+                    if length >= 13, (length % 2 == 1 ? plainFirst : doubledFirst) % 10 == 0 { card = true; break }
+                }
+                if card { break }
+            }
+            if card { text.replaceSubrange(range, with: " ") }
+        }
+    }
+    text = text.components(separatedBy: .whitespacesAndNewlines).filter { token in
+        ![#"[/:\\@]|\.[a-zA-Z]{2,8}(?:\b|$)"#,
+          #"(?i)(?:sk-(?:ant-)?|gh[pousr]_|xox[a-z]?[-_]|AKIA)[A-Za-z0-9_+\-]+"#,
+          #"[A-Fa-f0-9]{24,}|[A-Za-z0-9+/=_\-]{32,}|[0-9]{6,}"#,
+          #"(?=[A-Za-z0-9_\-]*[A-Za-z])(?=[A-Za-z0-9_\-]*[0-9])[A-Za-z0-9_\-]{8,}"#].contains {
+            token.range(of: $0, options: .regularExpression) != nil
+        }
+    }.joined(separator: " ")
+    text = text.replacingOccurrences(of: #"[\p{Cc}\p{Cf}\p{Zl}\p{Zp}\p{Co}\p{Cn}]|[*_#>|\[\]{}]"#, with: " ", options: .regularExpression)
+    text = text.replacingOccurrences(of: #"\s+([.!?,])"#, with: "$1", options: .regularExpression)
+        .replacingOccurrences(of: #"\s+"#, with: " ", options: .regularExpression).trimmingCharacters(in: .whitespacesAndNewlines)
+    if let end = text.range(of: #"[.!?](?=\s|$)"#, options: .regularExpression) { text = String(text[...end.lowerBound]) }
+    var out = ""
+    for character in text.prefix(90) {
+        guard out.unicodeScalars.count + character.unicodeScalars.count <= 180 else { break }
+        out.append(character)
+    }
+    return out.range(of: #"[\p{L}\p{N}\p{So}]"#, options: .regularExpression) == nil ? nil : out
+}
+struct NarrationOptions: Equatable {
+    var mode = "off", id: String? = nil, rate: Float = 0.5
+    static func parse(_ data: [String: Any]) -> NarrationOptions? {
+        var result = NarrationOptions()
+        if let mode = data["narration"] {
+            guard let mode = mode as? String, ["off", "bubbles", "voice"].contains(mode) else { return nil }
+            result.mode = mode
+        }
+        if let raw = data["voice"] {
+            guard let voice = raw as? [String: Any], Set(voice.keys).isSubset(of: ["id", "rate"]), let id = voice["id"] as? String,
+                id.range(of: #"^[A-Za-z0-9._-]{1,200}$"#, options: .regularExpression) != nil,
+                voice["rate"] == nil || (voice["rate"] is NSNumber) else { return nil }
+            if let raw = voice["rate"] {
+                guard let rate = raw as? NSNumber, CFGetTypeID(rate) != CFBooleanGetTypeID(), rate.doubleValue.isFinite,
+                    (0.1...0.6).contains(rate.doubleValue) else { return nil }
+                result.rate = rate.floatValue
+            }
+            result.id = id
+        }
+        return result
+    }
+    func select(_ installed: [String]) -> String? { id == nil ? installed.first : installed.first { $0 == id } }
+}
+struct NarrationQueue {
+    var active: String?, queued: String?, last: String?, lastAt = -Double.infinity
+    mutating func offer(_ text: String, now: Double = ProcessInfo.processInfo.systemUptime) -> String? {
+        guard text != last || now - lastAt >= 10 else { return nil }; last = text; lastAt = now
+        if active != nil { queued = text; return nil }
+        active = text; return text
+    }
+    mutating func finish() -> String? { active = queued; queued = nil; return active }
+    mutating func cancel() { active = nil; queued = nil }
+}
+struct NarrationBubble {
+    let text: String, spoken: String, frame: CGRect
+    var tail: String? = nil
+    var json: [String: Any] { ["text": text, "spoken": spoken, "frame": [frame.minX, frame.minY, frame.width, frame.height],
+        "fontSize": 11, "lineHeight": 14, "padding": [9, 6], "radius": 8, "rim": 0.6, "tail": tail as Any? ?? NSNull()] }
+    static func attach(_ plan: inout RingPlan, say: String?, clip: CGRect, secure: Bool, options: NarrationOptions,
+                       previous: NarrationBubble?, reduced: Bool, ink: [Double]) {
+        guard options.mode != "off", !secure, let text = narrationText(say) else { return }
+        let font = NSFont.systemFont(ofSize: 11)
+        func measure(_ t: String) -> Double { Double((t as NSString).size(withAttributes: [.font: font]).width) }
+        // Reserve the 12 pt voice inset so speaking never changes line wrapping or stack geometry.
+        let inset = options.mode == "voice" ? 12.0 : 0, contentCap = 222.0 - inset
+        var lines = [String](), current = "", truncated = false
+        for word in text.split(separator: " ").map(String.init) {
+            let trial = current.isEmpty ? word : current + " " + word
+            if !current.isEmpty && measure(trial) > contentCap {
+                lines.append(current); current = word
+                if lines.count == 2 { truncated = true; break }
+            } else { current = trial }
+        }
+        if lines.count < 2 && !current.isEmpty { lines.append(current) }
+        guard !lines.isEmpty else { return }
+        if truncated || measure(lines.last!) > contentCap {
+            var last = lines.removeLast()
+            while !last.isEmpty && measure(last + "…") > contentCap { last.removeLast() }
+            lines.append(last + "…")
+        }
+        let width = min(240, max(60, (lines.map(measure).max() ?? 0) + 18 + inset)), height = lines.count == 1 ? 26.0 : 40.0
+        let point = CGRect(x: plan.at.x - 12, y: plan.at.y - 12, width: 24, height: 24)
+        let avoid = plan.rect.map { $0.union(point) } ?? point
+        var frame: CGRect, tail: String? = nil
+        if let sprite = plan.sprite {
+            let box = sprite.bounds(plan)
+            let candidate = CGRect(x: box.midX - width / 2, y: box.minY - 6 - height, width: width, height: height)
+            let above = candidate.minY >= clip.minY && !candidate.intersects(avoid) && !(plan.chip?.frame.intersects(candidate) ?? false)
+            frame = CGRect(x: candidate.minX, y: above ? candidate.minY : max(box.maxY + 6, avoid.maxY + 4), width: width, height: height)
+            tail = above ? "down" : "up"
+        } else {
+            let chipHeight = plan.chip == nil ? 0.0 : 16.0, gap = chipHeight == 0 ? 0.0 : 4.0
+            let stackWidth = max(width, plan.chip?.frame.width ?? 0)
+            let right = plan.at.x + 18 + stackWidth <= clip.maxX
+            let x = max(clip.minX, right ? plan.at.x + 18 : plan.at.x - 18 - stackWidth)
+            let bottom = min(plan.at.y - 25, avoid.minY - 4)
+            let above = bottom - chipHeight - gap - height >= clip.minY
+            let chipY = above ? bottom - chipHeight : max(plan.at.y + 25, avoid.maxY + 4)
+            frame = CGRect(x: x, y: above ? bottom - chipHeight - gap - height : chipY + chipHeight + gap, width: width, height: height)
+            if let chip = plan.chip {
+                let newFrame = CGRect(x: x, y: chipY, width: chip.frame.width, height: 16)
+                let tether = [[0.0, Double(plan.at.x) + (right ? 11 : -11), Double(plan.at.y) - 11],
+                    [1, right ? x : x + newFrame.width, above ? newFrame.maxY : newFrame.minY]]
+                plan.chip = RingChip(frame: newFrame, tether: tether)
+                for i in plan.layers.indices {
+                    if plan.layers[i].name == "chip" { plan.layers[i].frame = newFrame }
+                    if plan.layers[i].name == "tether" { plan.layers[i].props["path"] = .path(tether) }
+                }
+            } else {
+                plan.layers.append(RingLayer(name: "narrationTether", parent: "root", global: true, stroke: ink, width: 1,
+                    props: ["path": .path([[0, Double(plan.at.x) + (right ? 11 : -11), Double(plan.at.y) - 11],
+                        [1, right ? x : x + width, above ? frame.maxY : frame.minY]])]))
+            }
+        }
+        guard !frame.intersects(avoid), !(plan.chip?.frame.intersects(frame) ?? false) else { return }
+        let bubble = NarrationBubble(text: lines.joined(separator: "\n"), spoken: text, frame: frame, tail: tail)
+        plan.bubble = bubble
+        let same = previous?.spoken == text, changed = previous != nil && !same
+        if changed { plan.oldBubble = previous }
+        // A group follows position only. Its body includes the sprite tail in the same path.
+        let x = Double(frame.minX), y = Double(frame.minY), w = Double(frame.width), h = Double(frame.height), r = 8.0
+        var body: [[Double]] = [[0,x+r,y]]
+        if tail == "up" { body += [[1,x+w/2-4,y],[1,x+w/2,y-5],[1,x+w/2+4,y]] }
+        body += [[1,x+w-r,y], [2,x+w,y,x+w,y+r], [1,x+w,y+h-r], [2,x+w,y+h,x+w-r,y+h]]
+        if tail == "down" { body += [[1,x+w/2+4,y+h],[1,x+w/2,y+h+5],[1,x+w/2-4,y+h]] }
+        body += [[1,x+r,y+h],[2,x,y+h,x,y+h-r],[1,x,y+r],[2,x,y,x+r,y]]
+        body.append([3])
+        let tether = plan.layers.filter { $0.name == "narrationTether" }
+        plan.layers.removeAll { $0.name == "narrationTether" }
+        plan.layers.append(RingLayer(name: "narration", parent: "root", global: true, stroke: [1,1,1,0.12], fill: ink, width: 0.6,
+            props: ["path": .path(body), "opacity": .number(1)]))
+        for var layer in tether { layer.parent = "narration"; plan.layers.append(layer) }
+        plan.layers.append(RingLayer(name: "narrationText", kind: .text, parent: "narration", global: true,
+            stroke: [1,1,1,0.92], text: bubble.text, frame: frame.insetBy(dx: 9, dy: 6), props: [:]))
+        // Copy position without the ring's scale, lean, stretch or rotation.
+        if !plan.positions.isEmpty {
+            let values = plan.positions.map { RingValue.vector([Double($0.1.x - plan.at.x), Double($0.1.y - plan.at.y)]) }
+            let end = max(0.001, plan.positions.last!.0)
+            for name in ["narration", "chip", "tether"] where plan.layers.contains(where: { $0.name == name }) {
+                plan.tracks.append(RingTrack(layer: name, keyPath: "transform.translation", begin: 0, duration: end,
+                    values: values, times: plan.positions.map { $0.0 / end }))
+            }
+        }
+        let start = changed ? 0.06 : 0.0
+        if !same {
+            plan.tracks.append(RingTrack(layer: "narration", keyPath: "opacity", begin: start, duration: 0.09,
+                values: [.number(0), .number(1)], times: [0,1]))
+            if !reduced { plan.tracks.append(RingTrack(layer: "narration", keyPath: "position.y", begin: start, duration: 0.09,
+                values: [.number(4), .number(0)], times: [0,1])) }
+        }
+        if changed { plan.tracks.append(RingTrack(layer: "oldNarration", keyPath: "opacity", begin: 0, duration: 0.06,
+            values: [.number(1), .number(0)], times: [0,1])) }
+        if ["done", "handback"].contains(plan.state) {
+            plan.tracks.removeAll { $0.layer == "narration" && $0.keyPath == "opacity" }
+            plan.tracks.append(RingTrack(layer: "narration", keyPath: "opacity", begin: 0, duration: 0.22,
+                values: [.number(1), .number(0)], times: [0,1]))
+        }
+        let motionEnd = plan.tracks.map { $0.begin + $0.duration }.max() ?? plan.total
+        if motionEnd > plan.total {
+            plan.total = motionEnd
+            plan.timers = plan.timers.map { RingTimer(at: $0.action == "park" ? max($0.at, motionEnd) : $0.at, action: $0.action) }
+        }
+        plan.budget["layers", default: 0] += 2; plan.budget["visible", default: 0] += 2
+    }
+}
+// Read-only Core Audio metadata, never a microphone capture or audio-session activation.
+// Unknown output state fails closed. Running input is a conservative call proxy, including recordings.
+struct NarrationAudioLayer {
+    var secure: () -> Bool
+    var word: (AudioObjectID, AudioObjectPropertySelector, AudioObjectPropertyScope, AudioObjectPropertyElement) -> UInt32?
+    var scalar: (AudioObjectID, AudioObjectPropertySelector, AudioObjectPropertyScope, AudioObjectPropertyElement) -> Float32?
+    var processes: () -> [AudioObjectID]?
+}
+enum NarrationAudio {
+    static let system = NarrationAudioLayer(secure: { IsSecureEventInputEnabled() }, word: { object, selector, scope, element in
+        var address = AudioObjectPropertyAddress(mSelector: selector, mScope: scope, mElement: element), value: UInt32 = 0, size: UInt32 = 4
+        guard AudioObjectGetPropertyData(object, &address, 0, nil, &size, &value) == noErr, size == 4 else { return nil }
+        return value
+    }, scalar: { object, selector, scope, element in
+        var address = AudioObjectPropertyAddress(mSelector: selector, mScope: scope, mElement: element), value: Float32 = 0, size: UInt32 = 4
+        guard AudioObjectGetPropertyData(object, &address, 0, nil, &size, &value) == noErr, size == 4 else { return nil }
+        return value.isFinite ? value : nil
+    }, processes: {
+        guard #available(macOS 14.2, *) else { return nil }
+        var address = AudioObjectPropertyAddress(mSelector: kAudioHardwarePropertyProcessObjectList, mScope: kAudioObjectPropertyScopeGlobal, mElement: kAudioObjectPropertyElementMain)
+        var size: UInt32 = 0
+        guard AudioObjectGetPropertyDataSize(AudioObjectID(kAudioObjectSystemObject), &address, 0, nil, &size) == noErr,
+            size <= 65536, size % 4 == 0 else { return nil }
+        if size == 0 { return [] }
+        var objects = [AudioObjectID](repeating: 0, count: Int(size) / 4)
+        let expected = size
+        let status = objects.withUnsafeMutableBytes { AudioObjectGetPropertyData(AudioObjectID(kAudioObjectSystemObject), &address, 0, nil, &size, $0.baseAddress!) }
+        return status == noErr && size == expected ? objects : nil
+    })
+    // The same function runs against the live Core Audio adapter or the selftest's fake adapter.
+    static func safe(_ audio: NarrationAudioLayer = system, explain: (String) -> Void = { _ in }) -> Bool {
+        func no(_ reason: String) -> Bool { explain(reason); return false }
+        guard !audio.secure() else { return no("secure-input") }
+        guard let output = audio.word(AudioObjectID(kAudioObjectSystemObject), kAudioHardwarePropertyDefaultOutputDevice,
+            kAudioObjectPropertyScopeGlobal, kAudioObjectPropertyElementMain), output != 0 else { return no("unknown-output") }
+        let scope = kAudioDevicePropertyScopeOutput, main = kAudioObjectPropertyElementMain
+        let mainMute = audio.word(output, kAudioDevicePropertyMute, scope, main)
+        let mainVolume = audio.scalar(output, kAudioDevicePropertyVolumeScalar, scope, main)
+        var audible = false
+        let channels: [UInt32] = mainMute != nil && mainVolume != nil ? [main] : [1,2]
+        for channel in channels {
+            guard let mute = mainMute ?? audio.word(output, kAudioDevicePropertyMute, scope, channel) else { return no("unknown-mute") }
+            guard let volume = mainVolume ?? audio.scalar(output, kAudioDevicePropertyVolumeScalar, scope, channel), volume.isFinite else { return no("unknown-volume") }
+            audible = audible || mute == 0 && volume > 0
+        }
+        guard audible else { return no("muted-output") }
+        guard let objects = audio.processes() else { return no("unknown-input") }
+        if #available(macOS 14.2, *) {
+            for object in objects {
+                guard let running = audio.word(object, kAudioProcessPropertyIsRunningInput, kAudioObjectPropertyScopeGlobal, main) else { return no("unknown-input") }
+                if running != 0 { return no("input-active") }
+            }
+            return true
+        }
+        return no("unknown-input")
+    }
+}
+// No polling thread or timer while idle. Main-thread callers only inspect this cached result.
+// Each refresh runs all Core Audio property reads on a utility queue, at most once per 500 ms.
+final class NarrationAudioMonitor {
+    var checked = -Double.infinity, refreshed = -Double.infinity, pending = false, allowed = false, explained = false
+    var onChecked: ((Bool) -> Void)?
+    var audio = NarrationAudio.system
+    func safe(now: Double = ProcessInfo.processInfo.systemUptime) -> Bool {
+        if !pending && now - checked >= 0.5 {
+            checked = now; pending = true
+            let layer = audio
+            DispatchQueue.global(qos: .utility).async { [weak self] in
+                var reason: String?
+                let result = NarrationAudio.safe(layer, explain: { reason = $0 })
+                DispatchQueue.main.async {
+                    guard let self = self else { return }
+                    self.pending = false; self.allowed = result; self.refreshed = ProcessInfo.processInfo.systemUptime
+                    if !result {
+                        if !self.explained { self.explained = true
+                            FileHandle.standardError.write(Data(("sleight narration silent: " + (reason ?? "unknown-audio") + ". Unknown audio metadata fails closed.\n").utf8)) }
+                    }
+                    self.onChecked?(result)
+                }
+            }
+        }
+        return allowed && now - refreshed <= 1
+    }
+}
+func narrationVoices() -> [AVSpeechSynthesisVoice] {
+    AVSpeechSynthesisVoice.speechVoices().filter { !$0.voiceTraits.contains(.isPersonalVoice) }.sorted {
+        let language = AVSpeechSynthesisVoice.currentLanguageCode()
+        let a = $0.language == language, b = $1.language == language
+        if a != b { return a }
+        if $0.quality != $1.quality { return $0.quality.rawValue > $1.quality.rawValue }
+        return $0.identifier < $1.identifier
+    }
+}
+final class LocalNarrator: NSObject, AVSpeechSynthesizerDelegate {
+    var options = NarrationOptions(), queue = NarrationQueue()
+    var synthesizer: AVSpeechSynthesizer?, selected: AVSpeechSynthesisVoice?, utterance: AVSpeechUtterance?
+    var selectedId: String?, pendingLine: String?, began = 0.0, speaking = false
+    let monitor = NarrationAudioMonitor()
+    var testInstalled: [String]?, testSafe: (() -> Bool)?, testPlay: ((String) -> Void)?, testStop: (() -> Void)?
+    var clock: () -> Double = { ProcessInfo.processInfo.systemUptime }
+    var secure: () -> Bool = { IsSecureEventInputEnabled() }
+    var speakingChanged: ((Bool) -> Void)?
+    override init() {
+        super.init()
+        monitor.onChecked = { [weak self] allowed in
+            guard let self = self else { return }
+            if !allowed { self.stop() }
+            else if let line = self.pendingLine { self.pendingLine = nil; self.offer(line) }
+        }
+    }
+    func configure(_ next: NarrationOptions) {
+        guard next != options else { return }; stop(); queue = NarrationQueue(); options = next; selected = nil; selectedId = nil
+        if next.mode == "voice" {
+            if let installed = testInstalled { selectedId = next.select(installed) }
+            else {
+                let voices = narrationVoices()
+                selected = next.select(voices.map { $0.identifier }).flatMap { id in voices.first { $0.identifier == id } }
+                selectedId = selected?.identifier
+            }
+        }
+    }
+    func safe() -> Bool { testSafe?() ?? (!secure() && monitor.safe()) }
+    func offer(_ raw: String?) {
+        guard options.mode == "voice", selectedId != nil, let line = narrationText(raw) else { return }
+        guard safe() else {
+            if testSafe == nil, !secure(), monitor.pending { pendingLine = line }
+            else { stop() }
+            return
+        }
+        pendingLine = nil
+        if let start = queue.offer(line, now: clock()) { speak(start) }
+    }
+    func speak(_ line: String) {
+        guard safe() else { stop(); return }
+        began = clock()
+        if let play = testPlay { play(line); return }
+        guard let voice = selected else { stop(); return }
+        if synthesizer == nil { synthesizer = AVSpeechSynthesizer(); synthesizer?.delegate = self }
+        let u = AVSpeechUtterance(string: line); u.voice = voice; u.rate = options.rate
+        utterance = u; synthesizer?.speak(u)
+    }
+    func stop() { utterance = nil; pendingLine = nil; queue.cancel(); speaking = false; speakingChanged?(false); testStop?(); synthesizer?.stopSpeaking(at: .immediate) }
+    @discardableResult func tick() -> Bool {
+        guard queue.active != nil else { return false }
+        let timedOut = clock() - began >= 15
+        if timedOut || !safe() { stop() }
+        return timedOut
+    }
+    func finished() { utterance = nil; speaking = false; speakingChanged?(false); if let next = queue.finish() { speak(next) } }
+    func speechSynthesizer(_ synthesizer: AVSpeechSynthesizer, didStart utterance: AVSpeechUtterance) {
+        guard self.utterance === utterance else { return }; speaking = true; speakingChanged?(true)
+    }
+    func speechSynthesizer(_ synthesizer: AVSpeechSynthesizer, didFinish utterance: AVSpeechUtterance) {
+        guard self.utterance === utterance else { return }; finished()
+    }
+    func speechSynthesizer(_ synthesizer: AVSpeechSynthesizer, didCancel utterance: AVSpeechUtterance) {
+        guard self.utterance === utterance else { return }; stop()
+    }
+}
+func narrationJSON(_ value: Any) {
+    guard let bytes = try? JSONSerialization.data(withJSONObject: value, options: [.sortedKeys, .withoutEscapingSlashes]) else { exit(70) }
+    FileHandle.standardOutput.write(bytes + Data([10]))
+}
+func narrationInput() -> [String: Any] {
+    var bytes = Data()
+    while bytes.count <= 8192 { let chunk = FileHandle.standardInput.availableData; if chunk.isEmpty { break }; bytes.append(chunk) }
+    guard bytes.count <= 8192, let input = try? JSONSerialization.jsonObject(with: bytes) as? [String: Any] else { exit(65) }
+    return input
+}
+func narrationAudioSelftest() {
+    let input = narrationInput(), gate = input["gate"] as? String ?? "safe"
+    var reads = 0, reasons = [String]()
+    let layer = NarrationAudioLayer(secure: { gate == "secure" }, word: { _, selector, _, element in
+        reads += 1
+        if selector == kAudioHardwarePropertyDefaultOutputDevice { return gate == "unknown-output" ? nil : 42 }
+        if selector == kAudioDevicePropertyMute {
+            if gate == "unknown-mute" { return nil }
+            if ["channels", "split-muted"].contains(gate), element == kAudioObjectPropertyElementMain { return nil }
+            if gate == "split-muted" { return element == 1 ? 0 : 1 }
+            return gate == "muted" ? 1 : 0
+        }
+        return gate == "microphone" ? 1 : gate == "unknown-process" ? nil : 0
+    }, scalar: { _, _, _, element in
+        if gate == "split-muted" { return element == kAudioObjectPropertyElementMain ? nil : element == 1 ? 0 : 0.5 }
+        return gate == "unknown-volume" ? nil : gate == "zero-volume" ? 0 : 0.5
+    },
+        processes: { gate == "unknown-input" ? nil : [100,101] })
+    if input["monitor"] as? Bool == true {
+        let monitor = NarrationAudioMonitor()
+        var probes = 0, offMain = true
+        var fake = layer
+        let original = layer.processes
+        fake.processes = { probes += 1; offMain = offMain && !Thread.isMainThread; return original() }
+        monitor.audio = fake
+        func wait() { let until = Date().addingTimeInterval(2)
+            while monitor.pending && Date() < until { _ = RunLoop.current.run(mode: .default, before: Date().addingTimeInterval(0.001)) }
+        }
+        _ = monitor.safe(now: 0); wait()
+        _ = monitor.safe(now: 0.1); _ = monitor.safe(now: 0.499); wait()
+        _ = monitor.safe(now: 0.5); wait()
+        _ = monitor.safe(now: 0.999); _ = monitor.safe(now: 1); wait()
+        narrationJSON(["probes": probes, "offMain": offMain, "pending": monitor.pending]); return
+    }
+    let allowed = NarrationAudio.safe(layer, explain: { reasons.append($0) })
+    narrationJSON(["safe": allowed, "reasons": reasons, "propertyReads": reads])
+}
+func narrationSelftest() {
+    let input = narrationInput()
+    guard let installed = input["installed"] as? [String], let lines = input["lines"] as? [Any], let options = NarrationOptions.parse(input) else { exit(65) }
+    let narrator = LocalNarrator()
+    var started = [String](), stops = 0, clock = 0.0, safe = true
+    narrator.testInstalled = installed; narrator.testSafe = { safe }; narrator.testPlay = { started.append($0) }; narrator.testStop = { stops += 1 }
+    narrator.clock = { clock }
+    if input["asyncAudio"] as? Bool == true {
+        narrator.testSafe = nil; narrator.secure = { false }
+        narrator.monitor.audio = NarrationAudioLayer(secure: { false }, word: { _, selector, _, _ in
+            selector == kAudioHardwarePropertyDefaultOutputDevice ? 42 : 0
+        }, scalar: { _,_,_,_ in 0.5 }, processes: { [] })
+    }
+    var configured = options; configured.mode = "voice"; narrator.configure(configured)
+    for line in lines {
+        if line is NSNull { narrator.finished() }
+        else if let event = line as? [String: Any] {
+            if let time = event["time"] as? Double { clock = time; narrator.tick() }
+            if event["gate"] != nil { safe = false; narrator.tick() }
+            if event["cancel"] != nil { narrator.stop() }
+        } else { narrator.offer(line as? String) }
+    }
+    let until = Date().addingTimeInterval(2)
+    while narrator.monitor.pending && Date() < until { _ = RunLoop.current.run(mode: .default, before: Date().addingTimeInterval(0.001)) }
+    narrationJSON(["selected": narrator.selectedId as Any? ?? NSNull(), "rate": narrator.options.rate, "started": started, "stops": stops,
+        "active": narrator.queue.active as Any? ?? NSNull(), "queued": narrator.queue.queued as Any? ?? NSNull()])
+}
+func narrationBufferDump() {
+    let input = narrationInput()
+    guard let line = narrationText(input["say"]), let options = NarrationOptions.parse(input) else { exit(65) }
+    let voices = narrationVoices()
+    guard let id = options.select(voices.map { $0.identifier }), let voice = voices.first(where: { $0.identifier == id }) else {
+        narrationJSON(["played": false, "reason": "voice-not-installed", "frames": 0]); return
+    }
+    func cpu() -> Double { var usage = rusage(); getrusage(RUSAGE_SELF, &usage)
+        return Double(usage.ru_utime.tv_sec + usage.ru_stime.tv_sec) * 1000 + Double(usage.ru_utime.tv_usec + usage.ru_stime.tv_usec) / 1000 }
+    let synthesizer = AVSpeechSynthesizer(), utterance = AVSpeechUtterance(string: line), lock = NSLock()
+    utterance.voice = voice; utterance.rate = options.rate
+    var frames: UInt64 = 0, done = false
+    let start = ProcessInfo.processInfo.systemUptime, before = cpu()
+    synthesizer.write(utterance) { buffer in
+        guard let pcm = buffer as? AVAudioPCMBuffer else { return }
+        lock.lock(); frames += UInt64(pcm.frameLength); if pcm.frameLength == 0 { done = true }; lock.unlock()
+    }
+    while ProcessInfo.processInfo.systemUptime - start < 15 {
+        lock.lock(); let finished = done; lock.unlock(); if finished { break }
+        _ = RunLoop.current.run(mode: .default, before: Date().addingTimeInterval(0.01))
+    }
+    lock.lock(); let count = frames, completed = done; lock.unlock()
+    let wall = (ProcessInfo.processInfo.systemUptime - start) * 1000, cost = cpu() - before
+    if !completed { synthesizer.stopSpeaking(at: .immediate) }
+    narrationJSON(["played": false, "completed": completed, "frames": count, "cpuMs": cost, "wallMs": wall, "hostCpuPercent": cost / max(1, wall) * 100])
+    if !completed { exit(70) }
+}
+// END NARRATION
+
 // BEGIN HAND FRAME
 // The ghost hand's stdin frames: a kind and global top-left screen points, nonce-bound and never answered. Exact keys only.
 struct HandAct {
     let seq: Int, kind: String, pid: Int32, windowId: UInt32, at: CGPoint, path: [CGPoint], delay: Double, beats: Int
     var label: String? = nil
+    var say: String? = nil
     var rect: CGRect? = nil, caretX: Double? = nil
 }
 // menu: the hand's setting, capture mode and the plugin version, for the shared host's Ghost Hand row.
@@ -1518,6 +2077,7 @@ struct HandAct {
 // a bad number must never take the glove down.
 struct RingEvent {
     let seq: Int, state: String, pid: Int32, windowId: UInt32, at: CGPoint?, rect: CGRect?, label: String?
+    var say: String? = nil
     var path: [CGPoint] = []
     var beats: Int = 1
     var caretX: Double? = nil, holdMs = 0, ok = false
@@ -1812,12 +2372,19 @@ final class CursorPickerWindowProbe: NSView {
 final class CursorPickerMenu: NSMenu {
     weak var trackingWindow: NSWindow?
     weak var lastHighlighted: NSMenuItem?
+    var permissionsRoot = false
     func addWindowProbe() {
         let probe = CursorPickerWindowProbe(frame: NSRect(x: 0, y: 0, width: 1, height: 1))
         probe.owner = self; probe.setAccessibilityElement(false)
         let item = NSMenuItem(title: "", action: nil, keyEquivalent: "")
         item.view = probe; item.isEnabled = false; addItem(item)
     }
+}
+func personMenuActivation(_ sender: NSMenuItem) -> Bool {
+    guard let menu = sender.menu as? CursorPickerMenu, let window = menu.trackingWindow,
+        personActivation(NSApp.currentEvent, in: window, highlighted: sender.isHighlighted || menu.lastHighlighted === sender)
+        else { refuseConsentInput(); return false }
+    return true
 }
 final class CursorPickerHost: NSObject, NSMenuDelegate {
     var rows = CursorPickerRow.defaults("glove"), images: [String: NSImage] = [:]
@@ -1864,10 +2431,7 @@ final class CursorPickerHost: NSObject, NSMenuDelegate {
         if let item = item { (menu as? CursorPickerMenu)?.lastHighlighted = item }
     }
     @objc func click(_ sender: NSMenuItem) {
-        let current = NSApp.currentEvent
-        guard let menu = sender.menu as? CursorPickerMenu, let window = menu.trackingWindow,
-            personActivation(current, in: window, highlighted: sender.isHighlighted || menu.lastHighlighted === sender)
-            else { refuseSelection(); return }
+        guard personMenuActivation(sender) else { refuseSelection(); return }
         guard let row = sender.representedObject as? [String: Any], CursorPickerRow.valid(row, nested: row["op"] as? String == "import") else { return }
         if row["op"] as? String == "folder" {
             // A click opens the existing folder in Finder. No shell or script receives the path.
@@ -1994,7 +2558,7 @@ func cursorMenuDump() {
 }
 // END CURSOR PICKER
 // BEGIN HAND FRAME TAIL
-enum HandFrame { case picker(String, CursorPickerMessage), character(String, SpriteFrame), act(String, HandAct), aim(String, RingEvent), status(String, RingEvent), hide(String), menu(String, enabled: Bool, capture: String, version: String, permissions: PermissionsData?, usage: UsageStats?) }
+enum HandFrame { case pause(String, String, String, Bool), clear(String, String), activity(String), picker(String, CursorPickerMessage), narrationCheck(String, String), character(String, SpriteFrame), act(String, HandAct), aim(String, RingEvent), status(String, RingEvent), hide(String), menu(String, enabled: Bool, capture: String, version: String, permissions: PermissionsData?, usage: UsageStats?) }
 let handKinds: Set<String> = ["click", "double", "right", "key", "type", "drag", "scroll"]
 func handFrame(_ data: [String: Any]) -> HandFrame? {
     func number(_ value: Any?) -> Double? {
@@ -2019,12 +2583,30 @@ func handFrame(_ data: [String: Any]) -> HandFrame? {
         return .some(CGRect(origin: origin, size: CGSize(width: w, height: h)))
     }
     guard let nonce = data["nonce"] as? String, nonce.range(of: "^[0-9a-f]{64}$", options: .regularExpression) != nil else { return nil }
+    if data["hand"] as? String == "pause-ack" {
+        guard Set(data.keys) == ["hand", "nonce", "phase", "token", "paused"],
+            let phase = data["phase"] as? String, ["ready", "applied", "restore", "aborted"].contains(phase),
+            let token = data["token"] as? String, token.range(of: "^[0-9a-f]{32}$", options: .regularExpression) != nil,
+            let value = data["paused"] as? Bool else { return nil }
+        return .pause(nonce, phase, token, value)
+    }
+    if data["hand"] as? String == "clear" {
+        guard Set(data.keys) == ["hand", "nonce", "token"], let token = data["token"] as? String,
+            token.range(of: "^[0-9a-f]{32}$", options: .regularExpression) != nil else { return nil }
+        return .clear(nonce, token)
+    }
+    if data["hand"] as? String == "activity" { return Set(data.keys) == ["hand", "nonce"] ? .activity(nonce) : nil }
     if data["hand"] as? String == "picker" { return CursorPickerMessage.parse(data).map { .picker(nonce, $0) } }
+    if data["hand"] as? String == "narration-check" {
+        guard Set(data.keys) == ["hand", "nonce", "token"], let token = data["token"] as? String,
+            token.range(of: "^[a-f0-9]{32}$", options: .regularExpression) != nil else { return nil }
+        return .narrationCheck(nonce, token)
+    }
     if data["hand"] as? String == "character" { return spriteFrame(data).map { .character(nonce, $0) } }
     if data["hand"] as? String == "hide" { return Set(data.keys) == ["hand", "nonce"] ? .hide(nonce) : nil }
     if data["hand"] as? String == "menu" {
         let keys: Set<String> = ["hand", "nonce", "enabled", "capture", "version"]
-        guard keys.isSubset(of: Set(data.keys)), Set(data.keys).subtracting(keys).isSubset(of: ["permissions", "usage"]),
+        guard keys.isSubset(of: Set(data.keys)), Set(data.keys).subtracting(keys).isSubset(of: ["permissions", "usage", "narration", "voice"]), NarrationOptions.parse(data) != nil,
             let enabled = data["enabled"] as? NSNumber, CFGetTypeID(enabled) == CFBooleanGetTypeID(),
             let capture = data["capture"] as? String, ["hidden", "visible"].contains(capture),
             let version = data["version"] as? String, version.range(of: #"^\d{1,3}\.\d{1,3}\.\d{1,3}$"#, options: .regularExpression) != nil
@@ -2035,8 +2617,9 @@ func handFrame(_ data: [String: Any]) -> HandFrame? {
     }
     if let tag = data["hand"] as? String, ["aim", "status"].contains(tag) {
         let keys: Set<String> = tag == "aim" ? ["hand", "nonce", "seq", "kind", "pid", "windowId", "at"] : ["hand", "nonce", "seq", "state", "pid", "windowId"]
-        let optional: Set<String> = tag == "aim" ? ["rect", "holdMs", "label"] : ["at", "ok"]
+        let optional: Set<String> = tag == "aim" ? ["rect", "holdMs", "label", "say"] : ["at", "ok", "say"]
         guard keys.isSubset(of: Set(data.keys)), Set(data.keys).subtracting(keys).isSubset(of: optional),
+            data["say"] == nil || (data["say"] as? String).map({ $0.utf8.count <= 1024 }) == true,
             data["ok"] == nil || (data["state"] as? String == "done" && (data["ok"] as? NSNumber).map { CFGetTypeID($0) == CFBooleanGetTypeID() } == true),
             let seq = integer(data["seq"], 0...9007199254740991),
             let pid = integer(data["pid"], 1...2147483647), let window = integer(data["windowId"], 1...4294967295),
@@ -2049,16 +2632,17 @@ func handFrame(_ data: [String: Any]) -> HandFrame? {
                 data["holdMs"] == nil || integer(data["holdMs"], 0...600) != nil else { return nil }
             state = "aim"
         } else {
-            guard let value = data["state"] as? String, ["waiting", "error", "done", "handback", "thinking"].contains(value) else { return nil }
+            guard let value = data["state"] as? String, ["waiting", "error", "done", "handback", "thinking", "paused"].contains(value) else { return nil }
             state = value
         }
         let event = RingEvent(seq: seq, state: state, pid: Int32(pid), windowId: UInt32(window), at: point(data["at"]), rect: rect,
-            label: handLabel(data["label"]), holdMs: integer(data["holdMs"], 0...600) ?? 0, ok: (data["ok"] as? NSNumber)?.boolValue ?? false)
+            label: handLabel(data["label"]), say: narrationText(data["say"]), holdMs: integer(data["holdMs"], 0...600) ?? 0, ok: (data["ok"] as? NSNumber)?.boolValue ?? false)
         return tag == "aim" ? .aim(nonce, event) : .status(nonce, event)
     }
     let actKeys: Set<String> = ["hand", "nonce", "seq", "kind", "pid", "windowId", "at", "path", "delayMs", "beats"]
     guard data["hand"] as? String == "act", actKeys.isSubset(of: Set(data.keys)),
-        Set(data.keys).subtracting(actKeys).isSubset(of: ["label", "rect", "caretX"]), data["label"] == nil || data["label"] is String,
+        Set(data.keys).subtracting(actKeys).isSubset(of: ["label", "rect", "caretX", "say"]),
+        data["say"] == nil || (data["say"] as? String).map({ $0.utf8.count <= 1024 }) == true, data["label"] == nil || data["label"] is String,
         let rect = rectValue(data["rect"]), data["caretX"] == nil || ((data["kind"] as? String).map { ["type", "key"].contains($0) } == true
             && number(data["caretX"]).map { abs($0) <= 100000 } == true),
         let seq = integer(data["seq"], 0...9007199254740991), let kind = data["kind"] as? String, handKinds.contains(kind),
@@ -2068,7 +2652,7 @@ func handFrame(_ data: [String: Any]) -> HandFrame? {
     let path = raw.compactMap(point)
     guard path.count == raw.count else { return nil }
     return .act(nonce, HandAct(seq: seq, kind: kind, pid: Int32(pid), windowId: UInt32(windowId), at: at, path: path,
-        delay: Double(delay) / 1000, beats: beats, label: handLabel(data["label"]), rect: rect, caretX: number(data["caretX"])))
+        delay: Double(delay) / 1000, beats: beats, label: handLabel(data["label"]), say: narrationText(data["say"]), rect: rect, caretX: number(data["caretX"])))
 }
 // Consecutive repeats dropped, so a one-point route means the hand appears there without a glide.
 func handPoints(_ points: [CGPoint]) -> [CGPoint] {
@@ -2494,6 +3078,7 @@ struct RingTimer { let at: Double, action: String }
 struct RingPlan {
     var state: String, at: CGPoint
     var sprite: SpritePlan? = nil
+    var bubble: NarrationBubble? = nil, oldBubble: NarrationBubble? = nil
     var layers: [RingLayer] = [], tracks: [RingTrack] = []
     var total = 0.0, glide = 0.0, glideEnd = 0.0, fade = 0.22
     var dropped = false
@@ -2512,7 +3097,7 @@ struct RingPlan {
         return positions.last?.1 ?? at
     }
     var json: [String: Any] {
-        ["state": state, "at": [at.x, at.y], "layers": layers.map { $0.json }, "animations": tracks.map { $0.json }, "total": total,
+        ["state": state, "at": [at.x, at.y], "bubble": bubble?.json as Any? ?? NSNull(), "layers": layers.map { $0.json }, "animations": tracks.map { $0.json }, "total": total,
          "glide": glide, "glideEnd": glideEnd, "dropped": dropped, "label": label as Any? ?? NSNull(),
          "rect": rect.map { [$0.minX, $0.minY, $0.width, $0.height] } as Any? ?? NSNull(), "chip": chip?.json as Any? ?? NSNull(),
          "phases": phases, "timers": timers.map { [$0.at, $0.action] as [Any] }, "budget": budget, "shape": shape,
@@ -2668,6 +3253,7 @@ final class RingPlanner {
         case "drag": drag()
         case "thinking": thinking()
         case "waiting": waiting()
+        case "paused": tl.to([.o: 1, .hol: 1, .sp: 0, .px: 0, .fray: 0], t, 0.12)
         case "error": error()
         default: done()
         }
@@ -3262,6 +3848,7 @@ final class RingPlanner {
         let quiet = event.state == "waiting" ? max(total, theme.waitingCap) : total + theme.silence
         p.timers = ["done", "handback"].contains(event.state) ? [RingTimer(at: total, action: "park"), RingTimer(at: total, action: "release")]
             : [RingTimer(at: total, action: "park"), RingTimer(at: quiet, action: "fade"), RingTimer(at: quiet + theme.fade, action: "release")]
+        if event.state == "paused" { p.timers = [RingTimer(at: total, action: "park")] }
         // Budget: layers built, drawing layers shown at once, and animated layers (one animation group each) at once.
         let drawing = layers.filter { $0.kind != .group }
         let chipCount = p.label?.isEmpty == false ? 2.0 : 0, oldCount = p.oldLabel == nil ? 0.0 : 2
@@ -3311,7 +3898,7 @@ struct RingSession {
 }
 func ringEvent(_ act: HandAct) -> RingEvent {
     RingEvent(seq: act.seq, state: act.kind, pid: act.pid, windowId: act.windowId, at: act.at, rect: act.rect, label: act.label,
-        path: act.path, beats: act.beats, caretX: act.caretX)
+        say: act.say, path: act.path, beats: act.beats, caretX: act.caretX)
 }
 // END RING PLAN
 
@@ -3335,12 +3922,13 @@ struct RingRuntime {
     var pending: [(due: Double, event: RingEvent)] = []
     var timers: [(at: Double, action: String)] = []
     var fade = 0.22, shown = false
+    var narration = NarrationOptions()
     init(theme: RingTheme, seed: UInt64) { self.theme = theme; self.seed = seed }
     var idle: Bool { pending.isEmpty && timers.isEmpty && !shown }
     var next: Double? { (pending.map { $0.due } + timers.map { $0.at }).min() }
     mutating func receive(_ event: RingEvent, delay: Double, now: Double, _ env: RingEnvironment) -> [(Double, RingEffect)] {
         var out = advance(to: now, env)
-        let terminal = ["error", "done", "handback"].contains(event.state)
+        let terminal = ["error", "done", "handback", "paused"].contains(event.state)
         if terminal { pending.removeAll() }
         if (handKinds.contains(event.state) && delay > 0) || (!terminal && !pending.isEmpty) {
             if pending.count < 64 { pending.append((max(now + delay, pending.map { $0.due }.max() ?? now), event)) }
@@ -3377,18 +3965,25 @@ struct RingRuntime {
         let known = session.pid == event.pid && session.window == event.windowId && session.point != nil
         guard event.at != nil || known else { return [(now, .drop(event.state))] }
         // A repeat of the state the ring already shows at the same point, inside that plan, changes nothing.
-        if known, ["thinking", "waiting", "error", "done", "handback"].contains(event.state), let last = session.previous, last.state == event.state, event.at == nil || event.at == last.at,
-            event.label == last.label, now - session.began < last.total { return [] }
+        if known, ["thinking", "waiting", "error", "done", "handback", "paused"].contains(event.state), let last = session.previous, last.state == event.state, event.at == nil || event.at == last.at,
+            event.label == last.label, narrationText(event.say) == last.bubble?.spoken, now - session.began < last.total { return [] }
         guard let bounds = env.bounds(event.pid, event.windowId) else { return hide(now) }
         let clip = palm.isNull ? bounds : bounds.union(palm)
+        let previousBubble = known ? session.previous?.bubble : nil
         var plan = session.plan(event, theme: theme, now: now, reduced: env.reduced(), secure: env.secure(), clip: clip, seed: seed)
         guard !plan.dropped else { return [(now, .drop(event.state))] }
         plan.pid = event.pid; plan.window = event.windowId; plan.ok = frameOk
         if let character = character { plan.sprite = SpritePlan.make(plan, character: character, reduced: env.reduced(), secure: env.secure(), clip: clip) }
+        NarrationBubble.attach(&plan, say: event.say, clip: clip, secure: env.secure(), options: narration,
+            previous: previousBubble, reduced: env.reduced(), ink: theme.ink)
+        session.previous = plan
+        let oldBubble = plan.oldBubble.map { [$0.frame.origin, CGPoint(x: $0.frame.maxX, y: $0.frame.maxY)] } ?? []
+        let bubble = plan.bubble.map { [$0.frame.origin, CGPoint(x: $0.frame.maxX, y: $0.frame.maxY + ($0.tail == "down" ? 5 : 0)),
+            CGPoint(x: $0.frame.minX, y: $0.frame.minY - ($0.tail == "up" ? 5 : 0))] } ?? []
         let chip = plan.chip.map { [$0.frame.origin, CGPoint(x: $0.frame.maxX, y: $0.frame.maxY)] } ?? []
-        var frame = handBox(plan.points + [plan.at] + chip)
+        var frame = handBox(plan.points + [plan.at] + chip + bubble + oldBubble)
         if let sprite = plan.sprite { frame = frame.union(sprite.bounds(plan)) }
-        frame = frame.intersection(clip)
+        if plan.bubble == nil { frame = frame.intersection(clip) }
         guard !frame.isNull, frame.width >= 1, frame.height >= 1 else { return hide(now) }
         timers = plan.timers.map { (now + $0.at, $0.action) }
         fade = plan.fade; shown = true
@@ -4880,7 +5475,276 @@ func handDemoRect(_ text: String) -> CGRect? {
     return CGRect(x: x, y: y, width: width, height: height)
 }
 
+// BEGIN CURSOR PAUSE PANEL
+// A separate hit rectangle, never the ring's large click-through panel. There is no timer while parked.
+func cursorPauseRect(at: CGPoint, size: CGSize, clip: CGRect, drag: Bool) -> CGRect? {
+    guard !drag, size.width > 0, size.height > 0, size.width <= clip.width, size.height <= clip.height else { return nil }
+    let right = at.x + 18 + size.width <= clip.maxX, below = at.y + 18 + size.height <= clip.maxY
+    let x = min(max(right ? at.x + 18 : at.x - 18 - size.width, clip.minX), clip.maxX - size.width)
+    let y = min(max(below ? at.y + 18 : at.y - 18 - size.height, clip.minY), clip.maxY - size.height)
+    let box = CGRect(x: x, y: y, width: size.width, height: size.height)
+    // Include the boundary in the exclusion, even though CGRect.contains excludes the max edges.
+    guard !(at.x >= box.minX && at.x <= box.maxX && at.y >= box.minY && at.y <= box.maxY) else { return nil }
+    return box
+}
+struct CursorPausePlacement {
+    let rect: CGRect?, sprite: Bool, after: Double
+    var json: [String: Any] { ["rect": rect.map { [$0.minX, $0.minY, $0.width, $0.height] } as Any? ?? NSNull(), "sprite": sprite, "after": after] }
+    static func make(_ plan: RingPlan, clip: CGRect, sprite: Bool) -> CursorPausePlacement {
+        var settled = 0.0
+        for i in plan.positions.indices.dropFirst() where hypot(plan.positions[i].1.x - plan.positions[i - 1].1.x, plan.positions[i].1.y - plan.positions[i - 1].1.y) > 0.01 { settled = plan.positions[i].0 }
+        if sprite, let art = plan.sprite, let pose = art.poses.last {
+            for i in art.poses.indices.dropFirst() where art.poses[i].entry.scale != art.poses[i - 1].entry.scale { settled = max(settled, art.poses[i].time) }
+            // Use the artwork's actual origin, including clipping, rather than moving its hit box into empty space.
+            let cell = art.character.frame.cell
+            let box = CGRect(origin: art.origin(plan.at, pose.entry), size: CGSize(width: cell.width * pose.entry.scale, height: cell.height * pose.entry.scale)).intersection(clip)
+            return CursorPausePlacement(rect: plan.state == "drag" || box.isNull || box.isEmpty ? nil : box, sprite: true, after: max(settled, plan.total))
+        }
+        return CursorPausePlacement(rect: cursorPauseRect(at: plan.at, size: CGSize(width: 24, height: 24), clip: clip, drag: plan.state == "drag"), sprite: false, after: max(settled, plan.total))
+    }
+}
+func cursorPauseCurrent(_ expected: CGRect, _ observed: CGRect?) -> Bool { observed == expected }
+// A clear owns input-panel visibility through the action, including any waiting statuses from approval.
+struct CursorPauseVisibility {
+    private(set) var cleared = false
+    mutating func clear() { cleared = true }
+    mutating func status(_ state: String) { if state == "done" || state == "idle" { cleared = false } }
+    func placement(_ plan: RingPlan, clip: CGRect, sprite: Bool) -> CursorPausePlacement {
+        let hit = CursorPausePlacement.make(plan, clip: clip, sprite: sprite)
+        return CursorPausePlacement(rect: cleared ? nil : hit.rect, sprite: hit.sprite, after: hit.after)
+    }
+}
+// The final displayed cell, sampled in its decoded RGBA image. Transparent atlas pixels never become controls.
+struct CursorPauseMask {
+    let image: CGImage, cell: CGSize, row: Int, column: Int, scale: Double, flip: Bool, origin: CGPoint
+    func contains(_ point: CGPoint) -> Bool {
+        var x = Int(floor((point.x - origin.x) / scale)), y = Int(floor((point.y - origin.y) / scale))
+        guard x >= 0, y >= 0, x < Int(cell.width), y < Int(cell.height) else { return false }
+        if flip { x = Int(cell.width) - 1 - x }
+        x += column * Int(cell.width); y += row * Int(cell.height)
+        guard x < image.width, y < image.height, let data = image.dataProvider?.data, let bytes = CFDataGetBytePtr(data) else { return false }
+        return bytes[y * image.bytesPerRow + x * 4 + 3] == 255
+    }
+    static func make(_ plan: RingPlan) -> CursorPauseMask? {
+        guard let art = plan.sprite, let pose = art.poses.last, let image = art.character.images[pose.entry.sheet] else { return nil }
+        return CursorPauseMask(image: image, cell: art.character.frame.cell, row: pose.entry.row, column: pose.column,
+            scale: pose.entry.scale, flip: pose.entry.flip, origin: art.origin(plan.at, pose.entry))
+    }
+}
+final class CursorPausePanel: NSPanel {
+    static let mask: NSWindow.StyleMask = [.borderless, .nonactivatingPanel]
+    static let key = false, main = false, firstMouse = true
+    override var canBecomeKey: Bool { Self.key }
+    override var canBecomeMain: Bool { Self.main }
+}
+final class CursorPauseView: NSView {
+    let control: CursorPauseControl
+    let current: () -> Bool
+    var sprite = false, pressed = false
+    var hitOpaque: (NSPoint) -> Bool = { _ in true }
+    override func hitTest(_ point: NSPoint) -> NSView? { hitOpaque(point) ? super.hitTest(point) : nil }
+    init(_ control: CursorPauseControl, current: @escaping () -> Bool) { self.control = control; self.current = current; super.init(frame: .zero); setAccessibilityElement(false) }
+    required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
+    override var acceptsFirstResponder: Bool { false }
+    override func acceptsFirstMouse(for event: NSEvent?) -> Bool { CursorPausePanel.firstMouse }
+    override func shouldDelayWindowOrdering(for event: NSEvent) -> Bool { true }
+    override func accessibilityPerformPress() -> Bool { false }
+    override func mouseDown(with event: NSEvent) {
+        guard current(), hitOpaque(convert(event.locationInWindow, from: nil)) else { pressed = false; window?.orderOut(nil); return }
+        pressed = event.cgEvent.map { $0.type == .leftMouseDown && $0.getIntegerValueField(.eventSourceUnixProcessID) == 0 } ?? false
+    }
+    override func mouseUp(with event: NSEvent) {
+        defer { pressed = false }
+        guard let window = window, current(), pressed, hitOpaque(convert(event.locationInWindow, from: nil)), bounds.contains(convert(event.locationInWindow, from: nil)) else { return }
+        _ = control.click(event, windowMatches: event.window === window)
+    }
+    override func draw(_ dirtyRect: NSRect) {
+        guard !sprite else { return }
+        NSColor(calibratedWhite: 0.08, alpha: 0.92).setFill()
+        NSBezierPath(roundedRect: bounds.insetBy(dx: 1, dy: 1), xRadius: 8, yRadius: 8).fill()
+        (control.failed ? NSColor.systemOrange : NSColor.white).setFill()
+        if control.failed {
+            NSRect(x: 11, y: 10, width: 3, height: 8).fill(); NSRect(x: 11, y: 6, width: 3, height: 2).fill()
+        } else if control.paused {
+            let path = NSBezierPath(); path.move(to: NSPoint(x: 9, y: 6)); path.line(to: NSPoint(x: 17, y: 12)); path.line(to: NSPoint(x: 9, y: 18)); path.close(); path.fill()
+        } else {
+            NSRect(x: 8, y: 6, width: 3, height: 12).fill(); NSRect(x: 14, y: 6, width: 3, height: 12).fill()
+        }
+    }
+}
+final class CursorPauseOverlay {
+    var panel: CursorPausePanel?, pending: DispatchWorkItem?
+    var generation = 0
+    var globalMonitor: Any?, localMonitor: Any?
+    func hide() {
+        if let monitor = globalMonitor { NSEvent.removeMonitor(monitor) }; globalMonitor = nil
+        if let monitor = localMonitor { NSEvent.removeMonitor(monitor) }; localMonitor = nil
+        generation += 1; pending?.cancel(); pending = nil; panel?.ignoresMouseEvents = true; panel?.orderOut(nil); panel?.close(); panel = nil }
+    func show(_ rect: CGRect?, sprite: Bool, after delay: Double, capture: String, control: CursorPauseControl, mask: CursorPauseMask? = nil, current: @escaping () -> Bool) {
+        hide()
+        guard let rect = rect else { return }
+        let expected = generation
+        let show = { [weak self] in
+            guard let self = self, self.generation == expected else { return }
+            self.pending = nil
+            guard current() else { return }
+            let panel = CursorPausePanel(contentRect: appKitRect(rect), styleMask: CursorPausePanel.mask, backing: .buffered, defer: true)
+            panel.level = .floating; panel.hasShadow = false; panel.isOpaque = false; panel.backgroundColor = .clear
+            panel.ignoresMouseEvents = false; panel.hidesOnDeactivate = false; panel.isReleasedWhenClosed = false
+            panel.animationBehavior = .none; panel.becomesKeyOnlyIfNeeded = true
+            panel.collectionBehavior = [.transient, .ignoresCycle, .fullScreenAuxiliary, .stationary]
+            panel.sharingType = handCaptureModes[capture] ?? NSWindow.SharingType.none
+            panel.setAccessibilityElement(false)
+            let view = CursorPauseView(control, current: current); view.sprite = sprite
+            view.toolTip = control.paused ? "Resume sleight" : "Pause sleight"
+            panel.contentView = view
+            self.panel = panel
+            if sprite, let mask = mask {
+                view.hitOpaque = { point in mask.contains(CGPoint(x: rect.minX + point.x, y: rect.maxY - point.y)) }
+                let update = { [weak panel] in
+                    guard let panel = panel else { return }
+                    let mouse = NSEvent.mouseLocation
+                    let point = CGPoint(x: mouse.x, y: (NSScreen.screens.first?.frame.maxY ?? 0) - mouse.y)
+                    panel.ignoresMouseEvents = !mask.contains(point)
+                }
+                update()
+                self.globalMonitor = NSEvent.addGlobalMonitorForEvents(matching: [.mouseMoved, .leftMouseDragged]) { _ in update() }
+                self.localMonitor = NSEvent.addLocalMonitorForEvents(matching: [.mouseMoved, .leftMouseDragged]) { event in update(); return event }
+                panel.acceptsMouseMovedEvents = true
+            } else if sprite { panel.ignoresMouseEvents = true }
+            panel.orderFrontRegardless()
+        }
+        if delay <= 0 { show() }
+        else {
+            let item = DispatchWorkItem(block: show); pending = item
+            DispatchQueue.main.asyncAfter(deadline: .now() + delay, execute: item)
+        }
+    }
+}
+// Validation and geometry only. This mode never creates NSApplication, NSPanel, NSView or CALayer.
+func cursorPauseDump() {
+    let control = CursorPauseControl()
+    var clock = 1000.0, emitted: [[String: Any]] = [], lastEvent: NSEvent?
+    var scheduled: [() -> Void] = [], appliedToken: String?, appliedValue = false
+    control.now = { clock }; control.nonce = { String(repeating: "a", count: 64) }
+    control.send = { emitted.append($0); return true }; control.schedule = { _, task in scheduled.append(task) }
+    func rect(_ raw: Any?) -> CGRect? {
+        guard let values = raw as? [Double], values.count == 4, values.allSatisfy({ $0.isFinite && abs($0) <= 100000 }) else { return nil }
+        return CGRect(x: values[0], y: values[1], width: values[2], height: values[3])
+    }
+    while let line = readLine() {
+        guard line.utf8.count <= 8192, let bytes = line.data(using: .utf8),
+            let data = try? JSONSerialization.jsonObject(with: bytes) as? [String: Any] else { exit(65) }
+        var output: [String: Any] = ["canBecomeKey": CursorPausePanel.key, "canBecomeMain": CursorPausePanel.main,
+            "acceptsFirstMouse": CursorPausePanel.firstMouse, "nonactivating": CursorPausePanel.mask.contains(.nonactivatingPanel)]
+        if let frame = data["exitFrame"] as? [String: Any] {
+            output["exitAccepted"] = handControlExit(frame, nonce: String(repeating: "a", count: 64))
+        } else if data["alphaCheck"] as? Bool == true {
+            // Synthetic RGBA bytes, no graphics context or drawing.
+            var pixels = [UInt8](repeating: 0, count: 16 * 2 * 4)
+            pixels[7] = 255; pixels[(16 + 0) * 4 + 3] = 128
+            let provider = CGDataProvider(data: Data(pixels) as CFData)!
+            let image = CGImage(width: 16, height: 2, bitsPerComponent: 8, bitsPerPixel: 32, bytesPerRow: 64,
+                space: CGColorSpaceCreateDeviceRGB(), bitmapInfo: CGBitmapInfo(rawValue: CGImageAlphaInfo.premultipliedLast.rawValue),
+                provider: provider, decode: nil, shouldInterpolate: false, intent: .defaultIntent)!
+            func mask(_ flip: Bool) -> CursorPauseMask { CursorPauseMask(image: image, cell: CGSize(width: 2, height: 2), row: 0, column: 0,
+                scale: 2, flip: flip, origin: CGPoint(x: 10, y: 20)) }
+            output["opaque"] = mask(false).contains(CGPoint(x: 12, y: 20))
+            output["transparent"] = mask(false).contains(CGPoint(x: 10, y: 20))
+            output["translucent"] = mask(false).contains(CGPoint(x: 10, y: 22))
+            output["outside"] = mask(false).contains(CGPoint(x: 14, y: 20))
+            output["flipped"] = mask(true).contains(CGPoint(x: 10, y: 20))
+        } else if let validity = data["validity"] as? [String: Any] {
+            guard let expected = rect(validity["expected"]) else { exit(65) }
+            output["current"] = cursorPauseCurrent(expected, rect(validity["observed"]))
+        } else if let idle = data["idleMs"] as? Double, idle >= 100, idle <= 5000 {
+            var before = rusage(), after = rusage(); getrusage(RUSAGE_SELF, &before)
+            let start = ProcessInfo.processInfo.systemUptime
+            // Dispatch and Foundation only, with the control instantiated. No application or windows.
+            let deadline = Date(timeIntervalSinceNow: idle / 1000)
+            let timer = Timer(fire: deadline, interval: 0, repeats: false) { _ in }
+            RunLoop.current.add(timer, forMode: .default)
+            RunLoop.current.run(until: deadline); timer.invalidate()
+            getrusage(RUSAGE_SELF, &after)
+            func cpu(_ value: rusage) -> Double { Double(value.ru_utime.tv_sec + value.ru_stime.tv_sec) + Double(value.ru_utime.tv_usec + value.ru_stime.tv_usec) / 1e6 }
+            let elapsed = ProcessInfo.processInfo.systemUptime - start
+            output["idleSeconds"] = elapsed; output["cpuSeconds"] = cpu(after) - cpu(before)
+            output["cpuPercent"] = (cpu(after) - cpu(before)) / elapsed * 100; output["maxRssBytes"] = after.ru_maxrss
+            var info = mach_task_basic_info(), count = mach_msg_type_number_t(MemoryLayout<mach_task_basic_info>.size / MemoryLayout<natural_t>.size)
+            let status = withUnsafeMutablePointer(to: &info) { pointer in
+                pointer.withMemoryRebound(to: integer_t.self, capacity: Int(count)) { task_info(mach_task_self_, task_flavor_t(MACH_TASK_BASIC_INFO), $0, &count) }
+            }
+            if status == KERN_SUCCESS { output["rssBytes"] = info.resident_size }
+            output["controls"] = 1; output["windows"] = 0
+        } else if data["click"] != nil || data["ack"] != nil || data["expire"] != nil || data["ax"] != nil || data["oldTimer"] != nil || data["aborted"] != nil {
+            emitted = []
+            if let click = data["click"] as? [String: Any] {
+                clock += 0.01
+                var event: NSEvent?
+                if click["reuse"] as? Bool == true { event = lastEvent }
+                else if click["nil"] as? Bool != true {
+                    let source = CGEventSource(stateID: click["wrongSource"] as? Bool == true ? .privateState : .hidSystemState)!
+                    let cg = CGEvent(keyboardEventSource: source, virtualKey: CGKeyCode(click["key"] as? Int ?? 49), keyDown: true)!
+                    cg.type = click["type"] as? String == "key" ? .keyDown : .leftMouseUp
+                    cg.setIntegerValueField(.eventSourceUnixProcessID, value: (click["pid"] as? NSNumber)?.int64Value ?? 1234)
+                    cg.setIntegerValueField(.eventSourceUserData, value: (click["userData"] as? NSNumber)?.int64Value ?? 0)
+                    cg.timestamp = UInt64(max(0, clock - (click["age"] as? Double ?? 0)) * 1e9)
+                    event = NSEvent(cgEvent: cg); lastEvent = event
+                }
+                control.nonce = { click["noNonce"] as? Bool == true ? nil : String(repeating: "a", count: 64) }
+                if click["consumer"] as? String == "shared" {
+                    output["accepted"] = personActivation(event, windowMatches: click["wrongWindow"] as? Bool != true,
+                        highlighted: click["unhighlighted"] as? Bool != true, accessibility: click["ax"] as? Bool == true,
+                        now: clock, windowNumber: click["windowNumber"] as? Int)
+                } else {
+                    output["accepted"] = control.click(event, windowMatches: click["wrongWindow"] as? Bool != true,
+                        highlighted: click["unhighlighted"] as? Bool != true, accessibility: click["ax"] as? Bool == true)
+                }
+            }
+            if data["ack"] as? Bool == true, let request = control.pending {
+                control.receive("ready", token: request.token, value: request.value)
+                control.receive("applied", token: request.token, value: request.value)
+                appliedToken = request.token; appliedValue = request.value
+            }
+            if data["oldTimer"] as? Bool == true, !scheduled.isEmpty { scheduled.removeFirst()() }
+            if data["aborted"] as? Bool == true, let token = appliedToken { control.receive("aborted", token: token, value: appliedValue) }
+            if data["expire"] as? Bool == true { clock += 0.501; control.expire() }
+            if data["ax"] as? Bool == true {
+                let item = CursorPauseMenuItem(title: "Resume sleight", action: nil, keyEquivalent: "")
+                var refused = 0; item.refused = { refused += 1 }
+                output["axPress"] = item.accessibilityPerformPress(); item.accessibilityPerformAction(.press)
+                output["axRefusals"] = refused
+            }
+            output["paused"] = control.paused; output["failed"] = control.failed; output["pending"] = control.pending != nil
+            output["events"] = emitted
+        } else {
+            guard let at = data["at"] as? [Double], at.count == 2, let size = data["size"] as? [Double], size.count == 2,
+                let clip = data["clip"] as? [Double], clip.count == 4,
+                (at + size + clip).allSatisfy({ $0.isFinite && abs($0) <= 100000 }) else { exit(65) }
+            let rect = cursorPauseRect(at: CGPoint(x: at[0], y: at[1]), size: CGSize(width: size[0], height: size[1]),
+                clip: CGRect(x: clip[0], y: clip[1], width: clip[2], height: clip[3]), drag: data["drag"] as? Bool ?? false)
+            output["rect"] = rect.map { [$0.minX, $0.minY, $0.width, $0.height] } as Any? ?? NSNull()
+        }
+        guard let result = try? JSONSerialization.data(withJSONObject: output, options: [.sortedKeys]) else { exit(70) }
+        FileHandle.standardOutput.write(result + Data([10]))
+    }
+}
+// END CURSOR PAUSE PANEL
+
 final class HandHost: NSObject, NSApplicationDelegate {
+    let pauseOverlay = CursorPauseOverlay(), ownPause = CursorPauseControl()
+    var pauseVisibility = CursorPauseVisibility()
+    var pauseControl: CursorPauseControl { consent?.cursorPause ?? ownPause }
+    var pauseTarget: RingEvent?
+    func pauseChanged(_ paused: Bool) {
+        let target = pauseTarget
+        hide()
+        if cursorStyle != "glove", paused || pauseControl.failed, let target = target {
+            let event = RingEvent(seq: target.seq, state: paused ? "paused" : "error", pid: target.pid, windowId: target.windowId, at: target.at, rect: nil, label: nil)
+            ringFrame(event, delay: 0)
+        }
+        consent?.rebuildMenu()
+    }
     var cursorStyle = "glove" { didSet { if cursorStyle != "sprite" { spriteLoader.cancel(); ringRuntime.character = nil; perch.configure(replace: true) } } }
     let spriteLoader = SpriteLoader()
     lazy var perch = PerchHost(host: self)   // perch mode and lines (BEGIN PERCH)
@@ -4901,6 +5765,8 @@ final class HandHost: NSObject, NSApplicationDelegate {
     var next = 0
     var demo: CGRect?
     var capture = "hidden"
+    let narrator = LocalNarrator()
+    var narrationWatch: DispatchWorkItem?
     var consent: ConsentHost?    // the shared host's consent channel and menu, with --consent
     var images: [String: CGImage] = [:]
     var captureHolds: [String: Date] = [:]
@@ -4917,6 +5783,7 @@ final class HandHost: NSObject, NSApplicationDelegate {
     func applicationDidFinishLaunching(_ notification: Notification) {
         if let demo = demo { play(demo); return }
         consent?.applicationDidFinishLaunching(notification)
+        pauseControl.changed = { [weak self] paused in self?.pauseChanged(paused) }
         // Only suppresses artwork. No notification can answer a consent card or change a setting.
         let name = "com.sleight.hand.capture.\(ProcessInfo.processInfo.processIdentifier)"
         captureObserver = DistributedNotificationCenter.default().addObserver(forName: Notification.Name(name), object: nil, queue: .main) { [weak self] note in
@@ -4940,12 +5807,13 @@ final class HandHost: NSObject, NSApplicationDelegate {
         var buffer = Data(), last = -1, faulted = false
         func fault() {
             faulted = true; buffer.removeAll()
-            DispatchQueue.main.async { if self.consent?.consentOpen == true { self.hide(); self.consent?.handGone() } else { exit(65) } }
+            DispatchQueue.main.async { self.consent?.retireControl(); writeHandControlGone(); if self.consent?.consentOpen == true { self.hide(); self.consent?.handGone() } else { exit(65) } }
         }
         while true {
             let chunk = FileHandle.standardInput.availableData
             if chunk.isEmpty {
-                DispatchQueue.main.async { if self.consent?.consentOpen == true { self.hide(); self.consent?.handGone() } else { NSApp.terminate(nil) } }
+                let retired = faulted
+                DispatchQueue.main.async { if !retired && self.consent?.consentOpen == true { self.hide(); self.consent?.handGone() } else { NSApp.terminate(nil) } }
                 return
             }
             if faulted { continue }
@@ -4958,16 +5826,39 @@ final class HandHost: NSObject, NSApplicationDelegate {
                     line.count <= 8192 || data["hand"] as? String == "character" && line.count <= 32768 || data["hand"] as? String == "picker",
                     let frame = handFrame(data) else { fault(); continue lines }
                 switch frame {
+                case let .pause(nonce, phase, token, value):
+                    guard nonceBook.admit("hand", nonce) else { fault(); continue lines }
+                    DispatchQueue.main.async { self.pauseControl.receive(phase, token: token, value: value) }
+                case let .clear(nonce, token):
+                    guard nonceBook.admit("hand", nonce) else { fault(); continue lines }
+                    DispatchQueue.main.async {
+                        self.pauseVisibility.clear()
+                        self.hide()
+                        if let bytes = try? JSONSerialization.data(withJSONObject: ["hand": "clear-ready", "nonce": nonce, "token": token]) {
+                            FileHandle.standardOutput.write(bytes + Data([10]))
+                        }
+                    }
+                case let .activity(nonce):
+                    guard nonceBook.admit("hand", nonce) else { fault(); continue lines }
+                    DispatchQueue.main.async { self.consent?.cursorControlSession = true; self.consent?.rebuildMenu() }
                 case let .picker(nonce, message):
                     guard nonceBook.admit("hand", nonce), message.op != "input-check" else { fault(); continue lines }
                     DispatchQueue.main.async {
                         if message.op == "style", let style = message.data["style"] as? String {
                             self.hide(); self.cursorStyle = style
+                            // A new runtime keeps the menu frame's narration options, which arrive only with the next menu frame.
+                            let narration = self.ringRuntime.narration
                             self.ringRuntime = RingRuntime(theme: ringThemes[style] ?? .seamPlus, seed: UInt64.random(in: 1...UInt64.max))
+                            self.ringRuntime.narration = narration
                             self.consent?.cursorPicker.rows = CursorPickerRow.defaults(style)
                         } else if message.op == "options" {
                             self.perch.configure(perch: message.data["perch"] as? Bool, lines: message.data["lines"] as? Bool)
                         } else { self.consent?.cursorPicker.receive(message) }
+                    }
+                case let .narrationCheck(nonce, token):
+                    guard nonceBook.admit("hand", nonce) else { fault(); continue lines }
+                    DispatchQueue.main.async {
+                        narrationJSON(["hand": "narration-check", "nonce": nonce, "token": token, "secure": IsSecureEventInputEnabled()])
                     }
                 case let .character(nonce, value):
                     guard nonceBook.admit("hand", nonce), value.seq > last else { fault(); continue lines }
@@ -4991,16 +5882,32 @@ final class HandHost: NSObject, NSApplicationDelegate {
                 case let .act(nonce, act):
                     guard nonceBook.admit("hand", nonce), act.seq > last else { fault(); continue lines }
                     last = act.seq
-                    DispatchQueue.main.async { if self.cursorStyle == "glove" { self.schedule(act) } else { self.ringFrame(ringEvent(act), delay: act.delay) } }
+                    DispatchQueue.main.async {
+                        self.pauseOverlay.hide()
+                        guard !self.pauseControl.paused else { return }
+                         self.pauseTarget = ringEvent(act)
+                        if self.cursorStyle == "glove" { self.schedule(act) } else { self.ringFrame(ringEvent(act), delay: act.delay) }
+                    }
                 case let .aim(nonce, event), let .status(nonce, event):
                     guard nonceBook.admit("hand", nonce), event.seq > last else { fault(); continue lines }
                     last = event.seq
-                    DispatchQueue.main.async { if self.cursorStyle != "glove" { self.ringFrame(event, delay: 0) } }
+                    DispatchQueue.main.async {
+                        self.pauseVisibility.status(event.state)
+                        if event.state == "aim" { self.pauseOverlay.hide() }
+                        guard event.state == "paused" ? self.pauseControl.paused : !self.pauseControl.paused else { return }
+                        if event.at != nil { self.pauseTarget = event }
+                        if self.cursorStyle != "glove" { self.ringFrame(event, delay: 0) }
+                    }
                 case let .menu(nonce, enabled, capture, version, permissions, usage):
                     guard nonceBook.admit("hand", nonce) else { fault(); continue lines }
                     DispatchQueue.main.async {
+                        if let options = NarrationOptions.parse(data) {
+                            self.ringRuntime.narration = options; self.narrator.configure(options)
+                            if options.mode == "off" { self.ringRoot?.sublayers?.filter { ["narration", "oldNarration", "narrationTether"].contains($0.name ?? "") }.forEach { $0.removeFromSuperlayer() } }
+                        }
                         self.capture = capture
                         if let panel = self.panel { panel.sharingType = handCaptureModes[capture] ?? NSWindow.SharingType.none }
+                        self.pauseOverlay.panel?.sharingType = handCaptureModes[capture] ?? NSWindow.SharingType.none
                         if !enabled { self.hide() }
                         self.consent?.handState(enabled: enabled, version: version, permissions: permissions, usage: usage)
                     }
@@ -5020,6 +5927,7 @@ final class HandHost: NSObject, NSApplicationDelegate {
         DispatchQueue.main.asyncAfter(deadline: .now() + act.delay, execute: item)
     }
     func hide() {
+        narrator.stop(); narrationWatch?.cancel(); narrationWatch = nil
         pending.values.forEach { $0.cancel() }; pending.removeAll()
         ringWake?.cancel(); ringWake = nil; _ = ringRuntime.hide(0)
         fading?.cancel(); release(); perch.takeDown()
@@ -5035,6 +5943,24 @@ final class HandHost: NSObject, NSApplicationDelegate {
         shown = .rest; fadeTo = plan.fadeTo; windowId = act.windowId
         if !panel.isVisible { panel.orderFrontRegardless() }
         fade(after: plan.total + HandTiming.silence)
+
+    }
+    // Only while a bubble or utterance exists. No idle timer and no secure-input text left parked on screen.
+    func watchNarration() {
+        narrationWatch?.cancel(); narrationWatch = nil
+        guard ringRoot?.sublayers?.contains(where: { $0.name == "narration" }) == true || narrator.queue.active != nil else { return }
+        let item = DispatchWorkItem { [weak self] in
+            guard let self = self else { return }
+            if IsSecureEventInputEnabled() {
+                self.ringRoot?.sublayers?.filter { ["narration", "oldNarration", "narrationTether", "chip", "tether", "oldChip", "oldTether"].contains($0.name ?? "") }.forEach { $0.removeFromSuperlayer() }
+                self.narrator.stop()
+            } else if self.narrator.tick() {
+                self.ringRoot?.sublayers?.filter { ["narration", "oldNarration", "narrationTether"].contains($0.name ?? "") }.forEach { $0.removeFromSuperlayer() }
+            }
+            self.watchNarration()
+        }
+        narrationWatch = item
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.1, execute: item)
     }
     // The ring: the runtime decides, this adapter installs plans on one clipped panel with a flipped root, so all geometry
     // keeps the wire's top-left coordinates. One one-shot wake-up serves the runtime's earliest pending act or timer.
@@ -5043,7 +5969,7 @@ final class HandHost: NSObject, NSApplicationDelegate {
             reduced: { NSWorkspace.shared.accessibilityDisplayShouldReduceMotion }, secure: { IsSecureEventInputEnabled() })
     }
     func ringFrame(_ event: RingEvent, delay: Double) {
-        guard !captureHeld else { return }
+        guard !captureHeld, !pauseControl.paused || event.state == "paused" else { return }
         ringRuntime.dissolveAt = perch.dissolve(event)
         ringPerform(ringRuntime.receive(event, delay: delay, now: CACurrentMediaTime(), ringEnvironment))
         ringWakeUp()
@@ -5066,12 +5992,17 @@ final class HandHost: NSObject, NSApplicationDelegate {
             case let .draw(plan, frame):
                 if captureHeld { hide(); return }
                 installRing(plan, frame: frame); perch.ringDrew(plan)
+                narrator.speakingChanged = { [weak self] active in self?.voiceBars(active) }
+                narrator.offer(plan.bubble?.spoken)
+                voiceBars(narrator.speaking)
+                watchNarration()
             case .hide, .release: release()
             case .drop: break
             case .park:
-                func strip(_ layer: CALayer) { layer.removeAllAnimations(); layer.sublayers?.forEach(strip) }
+                func strip(_ layer: CALayer) { if layer.name?.hasPrefix("voiceBar") == true && layer.superlayer?.name == "narration" { return }; layer.removeAllAnimations(); layer.sublayers?.forEach(strip) }
                 ringRoot?.sublayers?.forEach(strip)
             case let .fade(duration):
+                pauseOverlay.hide()
                 guard let root = ringRoot else { continue }
                 let animation = CABasicAnimation(keyPath: "opacity")
                 animation.fromValue = root.opacity; animation.toValue = 0; animation.duration = duration
@@ -5082,14 +6013,41 @@ final class HandHost: NSObject, NSApplicationDelegate {
             }
         }
     }
+    func voiceBars(_ active: Bool) {
+        guard let bubble = ringRoot?.sublayers?.first(where: { $0.name == "narration" }),
+            let text = bubble.sublayers?.first(where: { $0.name == "narrationText" }) as? CATextLayer,
+            let frame = ringRuntime.session.previous?.bubble?.frame else { return }
+        CATransaction.begin(); CATransaction.setDisableActions(true)
+        bubble.sublayers?.filter { $0.name?.hasPrefix("voiceBar") == true }.forEach { $0.removeFromSuperlayer() }
+        text.frame = frame.insetBy(dx: 9, dy: 6).offsetBy(dx: -box.minX, dy: -box.minY)
+        if active {
+            text.frame.origin.x += 12; text.frame.size.width -= 12
+            for (i, height) in [5.0,9,6].enumerated() {
+                let bar = CALayer(); bar.name = "voiceBar\(i)"; bar.anchorPoint = CGPoint(x: 0.5, y: 1)
+                bar.bounds = CGRect(x: 0, y: 0, width: 2, height: height)
+                bar.position = CGPoint(x: frame.minX + 10 + Double(i) * 3 - box.minX, y: frame.minY + 17 - box.minY)
+                bar.backgroundColor = CGColor(red: 91.0/255, green: 141.0/255, blue: 1, alpha: 1)
+                if !NSWorkspace.shared.accessibilityDisplayShouldReduceMotion {
+                    let animation = CAKeyframeAnimation(keyPath: "transform.scale.y")
+                    animation.values = [1,0.45,1]; animation.keyTimes = [0,0.5,1]; animation.duration = 0.6
+                    animation.beginTime = CACurrentMediaTime() - Double(i) * 0.15; animation.repeatCount = .infinity
+                    bar.add(animation, forKey: "speaking")
+                }
+                bubble.addSublayer(bar)
+            }
+        }
+        CATransaction.commit()
+    }
     func installRing(_ plan: RingPlan, frame: CGRect) {
+        pauseOverlay.hide()
         fading?.cancel(); fading = nil
         let panel = self.panel ?? makeHandPanel(capture: capture)
         let previousBox = box
         self.panel = panel; box = frame
         panel.setFrame(appKitRect(frame), display: false)
         // A changed label carries the old chip and tether over to fade out.
-        let carried = plan.oldLabel == nil ? [] : [("oldChip", ringLabel), ("oldTether", ringTether)].compactMap { name, layer in layer.map { (name, $0) } }
+        var carried = plan.oldLabel == nil ? [] : [("oldChip", ringLabel), ("oldTether", ringTether)].compactMap { name, layer in layer.map { (name, $0) } }
+        if plan.oldBubble != nil, let old = ringRoot?.sublayers?.first(where: { $0.name == "narration" }) { carried.append(("oldNarration", old)) }
         CATransaction.begin(); CATransaction.setDisableActions(true)
         for (_, layer) in carried { layer.removeFromSuperlayer() }
         ringRoot?.removeAllAnimations(); ringRoot?.removeFromSuperlayer()
@@ -5099,6 +6057,7 @@ final class HandHost: NSObject, NSApplicationDelegate {
         ringRoot = root; ringLabel = nil; ringTether = nil
         var layers: [String: CALayer] = ["root": root], specs: [String: RingLayer] = [:]
         for (name, layer) in carried {
+            layer.name = name
             layer.position = CGPoint(x: layer.position.x + previousBox.minX - frame.minX, y: layer.position.y + previousBox.minY - frame.minY)
             root.addSublayer(layer); layers[name] = layer
         }
@@ -5139,7 +6098,15 @@ final class HandHost: NSObject, NSApplicationDelegate {
             case .text:
                 let text = CATextLayer()
                 text.frame = (spec.frame ?? .zero).offsetBy(dx: -frame.minX, dy: -frame.minY); text.cornerRadius = 8
-                text.string = spec.text ?? ""; text.fontSize = 8; text.alignmentMode = .center; text.truncationMode = .end
+                text.string = spec.text ?? ""; text.fontSize = spec.name == "narrationText" ? 11 : 8
+                text.font = NSFont.systemFont(ofSize: text.fontSize)
+                text.isWrapped = spec.name == "narrationText"; text.masksToBounds = true
+                text.alignmentMode = spec.name == "narrationText" ? .left : .center; text.truncationMode = .end
+                if spec.name == "narrationText" {
+                    let paragraph = NSMutableParagraphStyle(); paragraph.minimumLineHeight = 14; paragraph.maximumLineHeight = 14
+                    text.string = NSAttributedString(string: spec.text ?? "", attributes: [.font: NSFont.systemFont(ofSize: 11),
+                        .foregroundColor: NSColor.white.withAlphaComponent(0.92), .paragraphStyle: paragraph])
+                }
                 text.foregroundColor = spec.stroke.map(color); text.backgroundColor = spec.fill.map(color); text.contentsScale = scale
                 layer = text
             case .gradient:
@@ -5160,6 +6127,7 @@ final class HandHost: NSObject, NSApplicationDelegate {
                 if !spec.dash.isEmpty { shape.lineDashPattern = spec.dash.map { NSNumber(value: $0) } }
                 layer = shape
             }
+            layer.name = spec.name
             for (key, v) in spec.props where !(spec.kind == .gradient && key == "path") { layer.setValue(value(v, key, spec), forKeyPath: key) }
             if spec.keyline, let shape = layer as? CAShapeLayer {
                 shape.shadowPath = shape.path?.copy(strokingWithWidth: shape.lineWidth + 2.4, lineCap: .round, lineJoin: .round, miterLimit: 1)
@@ -5180,6 +6148,9 @@ final class HandHost: NSObject, NSApplicationDelegate {
                 animation.values = track.values.map { value($0, track.keyPath, specs[name]) }
                 animation.keyTimes = track.times.map { NSNumber(value: $0) }
                 animation.duration = max(track.duration, 0.001); animation.beginTime = track.begin
+                if name == "narration", track.duration == 0.09 {
+                    animation.timingFunctions = Array(repeating: CAMediaTimingFunction(name: .easeOut), count: max(1, track.values.count - 1))
+                }
                 animation.fillMode = .both; animation.isRemovedOnCompletion = false
                 layer.setValue(animation.values?.last, forKeyPath: track.keyPath)
                 return animation
@@ -5197,6 +6168,13 @@ final class HandHost: NSObject, NSApplicationDelegate {
         if let sprite = plan.sprite { installSprite(sprite, ring: plan, root: root, frame: frame, begin: begin) }
         CATransaction.commit()
         if !panel.isVisible { panel.orderFrontRegardless() }
+        guard let pid = ringRuntime.session.pid, let window = ringRuntime.session.window,
+            let clip = ringEnvironment.bounds(pid, window) else { return }
+        // Wait until the moving art parks. A static hit box must never sit over a moving target or a drag route.
+        let hit = pauseVisibility.placement(plan, clip: clip, sprite: cursorStyle == "sprite")
+        pauseOverlay.show(hit.rect, sprite: hit.sprite, after: hit.after, capture: capture, control: pauseControl, mask: CursorPauseMask.make(plan), current: { [weak self] in
+            self?.pauseVisibility.cleared == false && self?.captureHeld == false && cursorPauseCurrent(clip, handWindowBounds(window, pid: pid))
+        })
     }
 
     // Every animation of a plan on the glove and the dabs, which run the position track 50 ms behind (the trail).
@@ -5274,6 +6252,7 @@ final class HandHost: NSObject, NSApplicationDelegate {
         DispatchQueue.main.asyncAfter(deadline: .now() + delay, execute: item)
     }
     func release() {
+        pauseOverlay.hide()
         ringRoot?.removeAllAnimations(); ringRoot?.removeFromSuperlayer(); ringRoot = nil; ringCursor = nil; ringLabel = nil; ringTether = nil
         panel?.orderOut(nil); panel?.close(); hand?.removeFromSuperlayer()
         panel = nil; hand = nil; glove = nil; dabs = nil; box = .null; fading = nil; shown = .rest
@@ -5509,7 +6488,7 @@ func perchDump(reduced: Bool, seed: UInt64) {
             case let .act(_, act): event = ringEvent(act); delay = act.delay
             case let .aim(_, value), let .status(_, value): event = value; delay = 0
             case .hide: ringEmit(ring.hide(clock)); emit(perch.hide(clock, "hide")); continue
-            case .menu: continue
+            case .menu, .pause, .clear, .activity, .narrationCheck: continue
             }
             guard event.seq > last else { exit(65) }
             last = event.seq
@@ -5532,6 +6511,7 @@ let cursorStyles = ["--cursor-style=glove"] + ringThemes.keys.sorted().map { "--
 func ringPlanDump(theme: RingTheme?, reduced: Bool, secure: Bool, clip: CGRect, seed: UInt64, gone: Set<UInt32>, timed: Bool = false, sprite: Bool = false) {
     var buffer = Data(), bound: String?, last = -1, clock = 0.0
     var runtime = RingRuntime(theme: theme ?? .seamPlus, seed: seed)
+    var pauseVisibility = CursorPauseVisibility()
     // The live host's loader. A finished load joins before the next line; {"dumpAwait":"character"} and the end of input
     // wait for the one in flight (real time, not the simulated clock).
     let loader = SpriteLoader(), finished = DispatchSemaphore(value: 0), slotLock = NSLock()
@@ -5555,7 +6535,8 @@ func ringPlanDump(theme: RingTheme?, reduced: Bool, secure: Bool, clip: CGRect, 
         for (time, effect) in effects {
             switch effect {
             case let .draw(plan, _) where timed: write(["effect": "draw", "state": plan.state, "time": time, "planMs": ms ?? -1])
-            case let .draw(plan, frame): write(plan.json.merging(["effect": "draw", "time": time, "frame": [frame.minX, frame.minY, frame.width, frame.height]]) { $1 })
+            case let .draw(plan, frame): write(plan.json.merging(["effect": "draw", "time": time, "frame": [frame.minX, frame.minY, frame.width, frame.height],
+                "pauseControl": pauseVisibility.placement(plan, clip: clip, sprite: sprite).json]) { $1 })
             case let .drop(state): write(["effect": "drop", "state": state, "dropped": true, "animations": [], "time": time])
             case .hide: write(["effect": "hide", "state": "hidden", "time": time])
             case .park: write(["effect": "park", "time": time])
@@ -5593,7 +6574,12 @@ func ringPlanDump(theme: RingTheme?, reduced: Bool, secure: Bool, clip: CGRect, 
             bound = nonce
             let event: RingEvent, delay: Double
             switch frame {
+            case .pause: write(["effect": "drop", "state": "pause-channel", "time": clock]); continue
+            case .clear: pauseVisibility.clear(); emit(runtime.hide(clock)); continue
+            case .activity: write(["effect": "drop", "state": "pause-control", "time": clock]); continue
             case .picker: write(["effect": "drop", "state": "picker", "dropped": true, "animations": [], "time": clock]); continue
+            case let .narrationCheck(_, token):
+                write(["effect": "narration-check", "token": token, "secure": secure, "time": clock]); continue
             case let .character(_, value):
                 guard value.seq > last else { exit(65) }; last = value.seq
                 runtime.character = nil
@@ -5608,9 +6594,11 @@ func ringPlanDump(theme: RingTheme?, reduced: Bool, secure: Bool, clip: CGRect, 
                 // handleMs: what this line cost the dump's thread, the parse included (the live host's main thread does the same).
                 write(["effect": "character-start", "id": value.id, "handleMs": Date().timeIntervalSince(received) * 1000, "time": clock]); continue
             case let .act(_, act): event = ringEvent(act); delay = act.delay
-            case let .aim(_, value), let .status(_, value): event = value; delay = 0
+            case let .aim(_, value), let .status(_, value): pauseVisibility.status(value.state); event = value; delay = 0
             case .hide: emit(runtime.hide(clock)); continue
-            case .menu: write(["effect": "drop", "state": "menu", "dropped": true, "animations": [], "time": clock]); continue
+            case .menu:
+                runtime.narration = NarrationOptions.parse(data) ?? NarrationOptions()
+                write(["effect": "drop", "state": "menu", "dropped": true, "animations": [], "time": clock]); continue
             }
             guard event.seq > last else { exit(65) }
             last = event.seq
@@ -5627,7 +6615,13 @@ func ringPlanDump(theme: RingTheme?, reduced: Bool, secure: Bool, clip: CGRect, 
 // consent channel runs on fds 3 (in) and 4 (out) beside the hand's stdin, and the menu bar glove serves both. --menu is the
 // hand-only host: the glove and its hand-only menu, with no consent channel.
 let arguments = Array(CommandLine.arguments.dropFirst())
+if arguments == ["--pause-control-dump"] { cursorPauseDump(); exit(0) }
 if arguments.first == "--cursor-menu-dump" { guard arguments.count == 1 else { exit(64) }; cursorMenuDump(); exit(0) }
+if arguments.first == "--narration-audio-selftest" { guard arguments.count == 1 else { exit(64) }; narrationAudioSelftest(); exit(0) }
+if arguments.first == "--narration-selftest" { guard arguments.count == 1 else { exit(64) }; narrationSelftest(); exit(0) }
+if arguments.first == "--narration-voices" { guard arguments.count == 1 else { exit(64) }
+    narrationJSON(narrationVoices().map { ["id": $0.identifier, "name": $0.name, "language": $0.language] }); exit(0) }
+if arguments.first == "--narration-buffer-dump" { guard arguments.count == 1 else { exit(64) }; narrationBufferDump(); exit(0) }
 if arguments.first == "--decode-sheet" { spriteDecodeChild(Array(arguments.dropFirst())) }
 // `--check-character`: one character frame on stdin, the same checks and decode child as the live host, one JSON line out
 // (loaded, reason, warnings). `sleight-mcp cursor check` runs it so the user sees why a character shows the ring alone.

@@ -43,6 +43,7 @@ export async function cursorCommand(args, { out = text => process.stdout.write(t
         `style     ${s.style ?? 'glove'}${s.styleReason === 'env' ? ' (SLEIGHT_CURSOR_STYLE)' : s.styleReason === 'env-invalid' ? ' (invalid SLEIGHT_CURSOR_STYLE)' : ''}`,
         `character ${s.character ?? 'none'}`, `perch     ${s.perch ? 'on' : 'off'}`, `lines     ${s.lines ?? 'on'}`,
         `stream    ${s.stream ? 'on' : 'off'}`, `labels    ${s.labels ?? 'off'}`,
+        `narration ${s.narration ?? 'off'}`, `voice     ${s.voice?.id ?? 'system default'} (rate ${s.voice?.rate ?? 0.5})`,
         `host      ${built() ? 'compiled' : 'not compiled'}`].join('\n') + '\n');
       if (!s.enabled && (s.style ?? 'glove') !== 'glove') out('The hand is off, so no style draws. Turn it on with sleight-mcp hand on.\n');
     } else if (op === 'style') {
