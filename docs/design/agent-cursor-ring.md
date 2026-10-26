@@ -1,53 +1,88 @@
 # Agent cursor ring
 
-The hand host accepts `--cursor-style=glove|ring`. Glove remains the default.
-Split Seam is the ring style: a 14 pt warm lower-left half and cool upper-right half,
-with diagonal seams and a white spark. The host draws without answering an action frame.
+The hand host accepts `--cursor-style=glove|ring|seam`. Glove stays the default until the setting changes.
+`ring` is Split Seam+ (design D2), the default ring. `seam` is plain Split Seam, kept for comparison.
+`prepareHandHost().spawn({ cursorStyle })` validates the value and passes it before `--menu` or `--consent`.
+
+Both rings are themes of one state machine. `RingTheme` holds the palette, timings and which moves a theme has.
+`RingPlanner` has one planner per state. Each move is a value tween. When a frame arrives the planner samples
+every tween at 25 ms steps plus each tween's ends, and emits one keyframe track per layer property.
+The host installs one animation, or one animation group, per layer. Core Animation alone runs the motion, and every animation ends.
+
+## States (Split Seam+)
 
 | State | Motion | Time |
 | --- | --- | --- |
-| Glide | Quadratic bow and two seam ribbons | 160 to 320 ms by distance |
-| Aim | Open seams, or one rounded frame on `rect` | 120 ms, 140 ms with a rect |
-| Click | Close seams, spark, spring return | 210 ms |
-| Double | Repeated snap and spark | 250 ms |
-| Right | Quarter twist and menu tick | 220 ms |
-| Type | Small ring, alternating half taps | 120 ms entry, 60 ms per key |
-| Key | One tap | 60 ms |
-| Scroll | Turn seams sideways, nudge per tick | 120 ms entry, 120 ms per tick, 120 ms exit |
-| Drag | Close on spark, carry with ribbons, open on drop | 90 ms grab, distance glide, 200 ms drop |
-| Waiting | Wide seams, one repeating opacity breath | 160 ms entry, 1.6 s breath until the next action or status |
-| Error | Red recoil, white cross, one shake, then fade | 90 ms recoil within a 240 ms shake |
-| Done or handback | Warm and cool square pixels dissolve along the diagonal | 380 ms |
-| Thinking | Static dim at the last point | No animation |
+| Entrance | Seeded per appearance: clasp (the halves close in), assemble (pixels) or pop (the spark) | 180, 220 or 200 ms |
+| Glide | Bezier bow, wind-up, stretch and lean from the curve's velocity, overshoot up to 4 pt, ribbon | 160 to 320 ms by route length |
+| Glide start | Reach line from the cool half and the spark's glance, both in the first 70 ms | Inside the glide |
+| Settle | Back onto the point with a squash, alongside the next move | 150 ms |
+| Early action | A frame that lands mid-glide finishes it from where the ring is | 60 ms |
+| Aim | Wrap the rect with wide gaps, or widen the gaps on the circle, then breathe through `holdMs` | 140 ms, 120 ms |
+| Click | Gaps snap shut, squeeze, seeded spark and rebound; a wrapped frame flashes a warm-to-cool tint | 210 ms |
+| Double | Two snaps, the second spark turned 45 degrees | 250 ms |
+| Right | Gaps twist a quarter lap and back, a corner mark | 220 ms |
+| Type | Wrap the field, halves tap one after the other, the bottom gap follows the caret | 140 ms, 60 ms per key |
+| Scroll | Wrap the list, the halves tread one step per tick (at most 4) | 140 ms, 120 ms per tick, 120 ms exit |
+| Drag | Grab wraps the card, the carry follows the path, drop opens wide with the tint | 120 ms, at most 420 ms, 200 ms |
+| Thinking | Gaps fray, 6 pixels orbit at mixed speeds, the spark glances, then it parks | 140 ms, 3 x 1.6 s, 160 ms |
+| Waiting | 12 pixels, every other one dim, one step per 800 ms with a hollow spark's nod, then it parks | 160 ms, 6 x 800 ms |
+| Leaving thinking, waiting, error | Halves come back, pixels go, red clears | 120, 140, 160 ms |
+| Error | Red halves recoil on the diagonal, a cross, one shake | 240 ms |
+| Done with `ok: true` | A 6-pixel burst from the spark | 220 ms, then the dissolve |
+| Done, handback | Pixels drift apart on the diagonal | 380 ms |
 
-Colors are warm `#ff7a3d`, cool `#5b8dff`, spark white and error `#ff3d60`.
-A `rgba(11,13,20,.55)` ink keyline backs the strokes. Error and menu marks use a zero-blur
-ink backing on one CAShapeLayer. The label is an ink pill with 8 pt white text and
-a tether from the cool side. It flips horizontally and vertically inside the target window.
-Text truncates at 40 Swift characters. A changed label fades out in 60 ms and in over 90 ms.
-Secure input suppresses labels and type taps.
+The click's spark angle, flare and rebound, the overshoot and the entrance come from the session seed and the
+frame's `seq`. The same seed and seq always give the same plan. The host draws a seed at launch. The dump takes `--seed=N`.
 
-`aim` and `status` share the existing nonce and increasing sequence admission with `act`.
-They accept only their declared keys. `holdMs` defaults to zero and validates from 0 to 600.
-The host does not wait for it. An optional label on `act` also validates as plain text.
-Glove mode accepts and drops aim, status and labels. A status without `at` uses the last
-point only when both pid and window match. Hide and panel release clear that memory.
+## Data and fallbacks
 
-The ring reuses the glove's click-through, nonactivating panel, target-window clipping,
-capture sharing setting and capture-hold suppression. Ordinary states fade after 1.2 s
-of silence using the existing 300 ms fade, then release the panel and layers. Waiting
-holds until the next action or status. Reduced motion uses a 70 ms opacity glide and
-omits shakes, breaths, scale pulses, type stepping and dissolve particles.
-Motion uses Core Animation without a repeating timer or display link.
+| Move | Needs | Without it |
+| --- | --- | --- |
+| Wrap | `rect` on aim, or on a type, scroll or drag act, or an earlier aim rect that holds the act's point | A circle at the point |
+| Caret ride | `caretX` on a type or key act | The halves tap one after the other, the spark stays off |
+| Burst | A done status with `ok: true` | No burst |
+| Thinking, waiting | Those statuses | The ring fades 1.2 s after the last act |
 
-`RingStyle` owns paths, colors, chip geometry and animation timings. `RingStyling.plan`
-returns layer specifications and `RingAnimation` values. `RingSession` owns only target
-memory. A second concept supplies another type that adopts `RingStyling`. `HandHost` handles
-admission, clipping, capture and panel lifetime.
+The bottom gap starts at the known caret x and moves an estimated 5.5 pt per key. The host gets one caret x per act.
+The spark always marks the exact point, also when the halves wrap a rect.
 
-`--ring-plan-dump --cursor-style=ring` reads JSON lines and prints one plan per frame
-before creating `NSApplication`. The dump runs without a panel or layer. Tests can inject
-`--reduce-motion`, `--secure-input` and `--clip=X,Y,W,H`. An animation record has its layer,
-key path, from/to values, begin time and duration. The adapter installs the same plans.
-`tests/hand-ring.test.mjs` compiles the host into a temporary directory and tests this mode.
-Visible rendering, capture exclusion and idle CPU still need VC7's live checks.
+## Scheduling
+
+`RingRuntime` holds the rules, and the host and the dump both drive it:
+
+- An act waits out its `delayMs`. Aim, thinking and waiting never cancel a waiting act. Error, done, handback and hide do.
+- Every plan parks when its motion ends: its animations come off and the layers keep their final values.
+- Then the ring fades after 1.2 s of silence (220 ms) and releases its panel. Thinking and waiting fade the same way.
+- Done and handback release when the dissolve ends.
+- A target window that can't be found hides the ring at once.
+- The host keeps one one-shot wake-up for the earliest pending act or timer.
+
+## Layers and budget
+
+The halves are two 2.6 pt strokes on one 3-lap rounded-rect path, each over a 5 pt ink keyline. A circle and a rect have
+the same 28 segments. A wrap interpolates the path. Strokes start and end at the gaps. Other layers are the
+halves container, tint (gradient and mask), spark, cross, corner mark, 4 pixel layers of 6 squares each, 2 reach line
+layers, 2 ribbon layers, and the chip with its tether. The budget is 30 layers per plan, 14 shown at once and 9
+animations during a click. Each dump plan reports these counts in `budget`.
+
+With reduced motion, a wrap or a glide is a crossfade (70 ms out, 70 ms in). Momentum, the dashed line to the target, ribbon,
+breathing, orbit, steps, shake and burst are off. Under secure input the host hides labels and doesn't show type or key
+taps or the caret.
+
+## Frames and labels
+
+`aim` and `status` share the nonce and increasing `seq` with `act`, so the relay must take all three from one counter.
+Each accepts only its declared keys. New optional keys: `rect` and `caretX` (type and key only) on `act`, `ok` (done
+only) on `status`. Glove mode accepts and drops all of them. Labels lose control, format (bidi overrides included) and
+separator characters, then keep 40 characters and at most 80 scalars. The chip fades in only when the label changes.
+A changed label fades the old chip and tether out in 60 ms.
+
+## Dump
+
+`--ring-plan-dump --cursor-style=ring|seam` reads frames and prints one JSON line per effect (draw, drop, hide, park,
+fade, release), then an `end` line with `idle`, `pending` and `timers`. It builds no application, panel or layer.
+A `{"dumpClock": seconds}` line moves the simulated clock. Otherwise each frame lands when the last plan's motion ends.
+Flags: `--reduce-motion`, `--secure-input`, `--clip=X,Y,W,H`, `--seed=N`, `--gone=W1,W2` (windows whose bounds lookup fails).
+`tests/hand-ring.test.mjs` drives every state, fallback and scheduling rule through it.
+Appearance, capture exclusion, idle CPU and WindowServer cost still need VC7's live checks.
