@@ -2958,6 +2958,32 @@ func spriteSheetHeader(_ b: [UInt8]) -> (format: String, width: Int, height: Int
     default: return nil
     }
 }
+// Live decode children, so a host that exits mid-load (EOF, exit(65), SIGTERM, SIGHUP) kills them instead of leaving
+// them to launchd. Writes go under the lock; the exit paths only read the slots, which is safe in a signal handler.
+// Loads run one at a time, plus --check-character, so 8 slots is ample; a ninth child is killed at once.
+let spriteLiveLock = NSLock(), spriteLiveSlots: UnsafeMutablePointer<pid_t> = {
+    let slots = UnsafeMutablePointer<pid_t>.allocate(capacity: 8); slots.initialize(repeating: 0, count: 8); return slots
+}()
+func spriteKillLive() { for i in 0..<8 where spriteLiveSlots[i] > 0 { kill(spriteLiveSlots[i], SIGKILL) } }
+let spriteReaper: Void = {
+    atexit { spriteKillLive() }
+    for signal in [SIGTERM, SIGHUP] {
+        var current = sigaction(); sigaction(signal, nil, &current)
+        // Only where nothing else handles the signal: kill the children, then die of it as before.
+        guard current.__sigaction_u.__sa_handler == nil || unsafeBitCast(current.__sigaction_u.__sa_handler, to: Int.self) == 0 else { continue }
+        Darwin.signal(signal) { received in spriteKillLive(); Darwin.signal(received, SIG_DFL); raise(received) }
+    }
+}()
+func spriteTrack(_ pid: pid_t) -> Bool {
+    _ = spriteReaper
+    spriteLiveLock.lock(); defer { spriteLiveLock.unlock() }
+    guard let i = (0..<8).first(where: { spriteLiveSlots[$0] == 0 }) else { return false }
+    spriteLiveSlots[i] = pid; return true
+}
+func spriteUntrack(_ pid: pid_t) {
+    spriteLiveLock.lock(); defer { spriteLiveLock.unlock() }
+    for i in 0..<8 where spriteLiveSlots[i] == pid { spriteLiveSlots[i] = 0 }
+}
 // Runs `--decode-sheet` on the open file and reads exactly w*h*4 bytes within 2 s. The child gets the file as stdin, a pipe
 // as stdout and /dev/null as stderr; POSIX_SPAWN_CLOEXEC_DEFAULT keeps every other descriptor (the consent channel's fds 3
 // and 4 among them) out of it. The returned buffer is malloc'd; the caller owns it.
@@ -2972,15 +2998,24 @@ func spriteDecodeInChild(fd: Int32, width: Int, height: Int, format: String, can
     posix_spawn_file_actions_adddup2(&actions, fd, 0)
     posix_spawn_file_actions_adddup2(&actions, pipeEnds[1], 1)
     posix_spawn_file_actions_addopen(&actions, 2, "/dev/null", O_WRONLY, 0)
-    posix_spawnattr_setflags(&attributes, Int16(POSIX_SPAWN_CLOEXEC_DEFAULT))
+    // The child starts with no blocked signals and default actions, whatever the loader thread had, so its RLIMIT_CPU
+    // SIGXCPU fires (it inherited a mask that blocked it, measured by the review).
+    var noSignals = sigset_t(), allSignals = sigset_t(); sigemptyset(&noSignals); sigfillset(&allSignals)
+    posix_spawnattr_setsigmask(&attributes, &noSignals); posix_spawnattr_setsigdefault(&attributes, &allSignals)
+    posix_spawnattr_setflags(&attributes, Int16(POSIX_SPAWN_CLOEXEC_DEFAULT | POSIX_SPAWN_SETSIGMASK | POSIX_SPAWN_SETSIGDEF))
     let argv = [executable, "--decode-sheet", String(width), String(height), format].map { strdup($0) } + [nil]
     defer { argv.forEach { free($0) } }
     var pid: pid_t = 0
     let spawned = posix_spawn(&pid, executable, &actions, &attributes, argv, environ)
     close(pipeEnds[1])
     guard spawned == 0 else { throw SpriteLoadError.child }
-    let total = width * height * 4, deadline = Date().addingTimeInterval(2)
-    guard let buffer = malloc(total) else { kill(pid, SIGKILL); var s: Int32 = 0; waitpid(pid, &s, 0); throw SpriteLoadError.child }
+    guard spriteTrack(pid), let buffer = malloc(width * height * 4) else {
+        kill(pid, SIGKILL); var s: Int32 = 0; while waitpid(pid, &s, 0) < 0 && errno == EINTR {}; spriteUntrack(pid); throw SpriteLoadError.child
+    }
+    // The 2 s deadline is the real bound on the child. Tests may lengthen it (to see the CPU limit act on its own).
+    let env = ProcessInfo.processInfo.environment
+    let seconds = env["SLEIGHT_CURSOR_TEST"] == "1" ? env["SLEIGHT_CURSOR_DECODE_DEADLINE"].flatMap(Double.init).map { min(max($0, 0.1), 30) } ?? 2 : 2
+    let total = width * height * 4, deadline = Date().addingTimeInterval(seconds)
     var got = 0, extra = false, timedOut = false, stopped = false
     var poller = pollfd(fd: pipeEnds[0], events: Int16(POLLIN), revents: 0)
     reading: while true {
@@ -3015,6 +3050,8 @@ func spriteDecodeInChild(fd: Int32, width: Int, height: Int, format: String, can
         }
     }
     if !reaped { kill(pid, SIGKILL); while waitpid(pid, &status, 0) < 0 && errno == EINTR {} }
+    // After the reap, never at function end, so a reused pid is never signalled.
+    spriteUntrack(pid)
     let exited = reaped && status & 0x7f == 0, code = (status >> 8) & 0xff
     guard !stopped else { free(buffer); throw SpriteLoadError.cancelled }
     guard !timedOut else { free(buffer); throw SpriteLoadError.timeout }
@@ -3349,9 +3386,10 @@ func spriteDecodeChild(_ args: [String]) -> Never {
     for bytes in spriteWarmImages {
         if let source = CGImageSourceCreateWithData(Data(bytes) as CFData, nil), let image = CGImageSourceCreateImageAtIndex(source, 0, nil) { _ = draw(image, 1, 1) }
     }
-    // Limits before the sandbox: 2 s of CPU (SIGXCPU ends it) and 8 descriptors, both hard so the child can't raise them.
-    // No memory limit: macOS 27 refuses RLIMIT_AS, RLIMIT_DATA and RLIMIT_RSS at any value with EINVAL (measured
-    // 2026-10-26), so memory stays bounded by the parent's 2 s deadline.
+    // Limits before the sandbox, both hard so the child can't raise them: 8 descriptors, and 2 s of CPU. The CPU limit is a
+    // second line for a buggy decoder: macOS only sends SIGXCPU, which compromised code can ignore. The parent's 2 s
+    // deadline and 0.5 s reap are the real bound. No memory limit: macOS 27 refuses RLIMIT_AS, RLIMIT_DATA and RLIMIT_RSS
+    // at any value with EINVAL (measured 2026-10-26).
     for (resource, value) in [(RLIMIT_CPU, rlim_t(2)), (RLIMIT_NOFILE, rlim_t(8))] {
         var limit = rlimit(rlim_cur: value, rlim_max: value)
         guard setrlimit(resource, &limit) == 0 else { exit(69) }
@@ -3364,6 +3402,7 @@ func spriteDecodeChild(_ args: [String]) -> Never {
         _ = text.withCString { write(1, $0, strlen($0)) }; exit(0)
     }
     if fault == "slow" { usleep(1_000_000) }
+    if fault == "spin" { var n = 0; while true { n &+= 1; if n == Int.min { exit(0) } } }
     var data = Data(), chunk = [UInt8](repeating: 0, count: 1 << 16)
     while true {
         let n = read(0, &chunk, chunk.count)
@@ -3382,7 +3421,7 @@ func spriteDecodeChild(_ args: [String]) -> Never {
     guard let context = draw(image, w, h), let pixels = context.data else { exit(68) }
     var sent = 0, total = w * h * 4
     // Test faults (with SLEIGHT_CURSOR_TEST=1): die or hang halfway; closehang writes everything, closehang0 nothing, then both
-    // close stdout and sleep. slow waits 1 s before reading, nosandbox exits 69, limits prints the limits.
+    // close stdout and sleep. slow waits 1 s before reading, spin burns CPU, nosandbox exits 69, limits prints the limits.
     if fault == "die" || fault == "hang" { total /= 2 }
     if fault == "closehang0" { total = 0 }
     while sent < total {

@@ -286,6 +286,13 @@ refuses terminals and OpenAI's own apps. See [approvals and guards](#approvals-a
   and complete cleanup. Invocation/return delay was 0 to 9 ms with action and retry identity intact. Completion
   could arrive after the next action began, so this proves neither current-action pacing nor native dispatch.
 
+- The sprite cursor style's decode child uses the private `sandbox_init` call with an SBPL string, tested on macOS 27
+  only. If it fails, characters show the ring with reason `sandbox`.
+- The sprite decode child is bounded by the host's 2 s deadline and 0.5 s reap, and 8 descriptors. It has no memory
+  limit (macOS 27 refuses memory rlimits), and its 2 s CPU limit only raises SIGXCPU, which compromised code can ignore.
+- The sprite style is checked in the dump mode, an offscreen render and a live host with no window. Its look on screen,
+  capture exclusion and live memory are unmeasured.
+
 - DP1 can skip a close shortcut's final read only when fresh native metadata matches the leased
   bundle ID, PID and process start. Both the window count and modal count must be 0. Missing identity or
   unknown metadata keeps the read. Delayed Save sheets and separate dialogs still need live checks. Before release, sleight-arch must
