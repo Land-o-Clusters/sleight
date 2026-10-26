@@ -77,11 +77,11 @@ This example defines idle and click art. The remaining 17 states use fallbacks.
   Other identifiers or custom terms need `LICENSE.txt`. `proprietary-personal` is also accepted. Attribution is unverified.
 - `sheet` is `sheet.png` or `sheet.webp`. Set `extra` to `extra.webp` when extra rows are present. File extensions must agree
   with image magic bytes. Paths and URLs are refused.
-- `frame` defaults to 192 by 208 pixels. Each side must be an integer from 64 to 512.
+- `frame` defaults to 192 by 208 pixels. The width must be an integer from 64 to 192 and the height from 64 to 208, so
+  every sheet fits the hand host's 1536 by 2288 cap.
 - `grid` has 8 columns and a positive integer row count. The main image must be exactly `cols * frame.w` by
   `rows * frame.h`. Only the rows your states need must be present, within the pixel budget.
-- `scale` defaults to 1 and must be 0.25 to 2. It multiplies the user's size setting. Frame sizes larger than 192 can supply
-  denser art. The artist chooses the frame size.
+- `scale` defaults to 1 and must be 0.25 to 2. It multiplies the user's size setting. The artist chooses the frame size within the caps.
 - `anchor` and `hotspot` are required `{ "x": number, "y": number }` coordinates in cell pixels, measured from the top left.
   Each coordinate may range from minus one cell to twice the cell size. A state can override `hotspot`. The ring keeps
   marking the point even when a character has no pointing hand.
@@ -224,8 +224,9 @@ Import and remove are user commands. Claude's shell guard refuses them through t
 Claude can call list and check. This guard covers ordinary shell spellings, including nested shells. It does not sandbox
 arbitrary scripts a model writes and runs.
 
-Importing leaves the sprite hidden. Turn it on with `sleight-mcp cursor style sprite <id>`. Until sleight has a sprite renderer,
-the sprite style draws as the ring.
+Importing leaves the sprite hidden. Turn it on with `sleight-mcp cursor style sprite <id>`. A Codex import draws at
+scale 0.5, so its 192x208 cells show as 96x104 pt. Cells are at most 192x208 and sheets at most 1536x2288, the hand
+host's caps.
 
 ## Loader interface for renderers
 

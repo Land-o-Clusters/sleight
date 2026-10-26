@@ -218,7 +218,8 @@ function validateManifest(manifest, files, { expectedId, shared = false, sourceF
   if (m.extra && !files.has(m.extra)) fail('sheet file missing', 'extra', m.extra);
   for (const name of files.keys()) if (!allowed.includes(name)) fail('extra character file refused', 'entry', name);
   m.frame ??= { w: 192, h: 208 }; m.scale ??= 1;
-  if (!object(m.frame) || !integer(m.frame.w, 64, 512) || !integer(m.frame.h, 64, 512)) fail('invalid frame dimensions', 'frame');
+  // The hand host draws cells of at most 192x208 on sheets of at most 1536x2288 (8 columns, 11 rows of the largest cell).
+  if (!object(m.frame) || !integer(m.frame.w, 64, 192) || !integer(m.frame.h, 64, 208)) fail('invalid frame dimensions (cells are at most 192x208)', 'frame');
   if (!object(m.grid) || m.grid.cols !== 8 || !integer(m.grid.rows, 1, 64)) fail('invalid grid dimensions', 'grid');
   if (!number(m.scale, 0.25, 2)) fail('invalid scale', 'scale');
   const point = (p, label) => {
@@ -233,6 +234,7 @@ function validateManifest(manifest, files, { expectedId, shared = false, sourceF
     if (name === 'preview.png') { if (dims.width > 256 || dims.height > 256) fail('preview dimensions exceed 256', 'dimensions', name); }
     else {
       if (dims.width !== m.grid.cols * m.frame.w || dims.height % m.frame.h || name === m.sheet && dims.height !== m.grid.rows * m.frame.h) fail('sheet dimensions do not match frame and grid', 'frame/grid', name);
+      if (dims.width > 1536 || dims.height > 2288) fail('sheet too large to draw (at most 1536x2288)', 'frame/grid', name);
       sheets[name === m.sheet ? 'sheet' : 'extra'] = { name, rows: dims.height / m.frame.h, ...dims };
     }
   }
@@ -341,7 +343,8 @@ function codexManifest(pet, sheet) {
   text(pet.displayName, 'displayName', 1, 60, 'pet.json'); text(pet.description ?? '', 'description', 0, 200, 'pet.json');
   const timed = (row, frames, ms, loop = true, start = 0) => ({ row, frames, ms, loop, ...start ? { start } : {} });
   return { format: 'sleight-character', version: 1, id: slug, name: slug === pet.id ? pet.displayName : pet.id, description: pet.description ?? '', author: pet.author ?? 'Local import', license: pet.license ?? 'unknown', sheet,
-    frame: { w: 192, h: 208 }, grid: { cols: 8, rows: 11 }, scale: 1, anchor: { x: 96, y: 196 }, hotspot: { x: 96, y: 104 },
+    // Scale 0.5: a 192x208 Codex cell draws as 96x104 pt beside the ring (sleight-arch, 2026-10-26).
+    frame: { w: 192, h: 208 }, grid: { cols: 8, rows: 11 }, scale: 0.5, anchor: { x: 96, y: 196 }, hotspot: { x: 96, y: 104 },
     states: { idle: timed(0, 6, [280, 110, 110, 140, 140, 320]), move: { dir16: { rowA: 9, rowB: 10 } },
       aim: timed(9, 1, 160, false, 4), click: timed(4, 3, 140, false, 1), type: timed(7, 6, [120, 120, 120, 120, 120, 220]),
       'waiting-approval': timed(6, 6, [150, 150, 150, 150, 150, 260]), error: timed(5, 8, [140, 140, 140, 140, 140, 140, 140, 240], false),

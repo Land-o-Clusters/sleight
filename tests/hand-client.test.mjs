@@ -290,6 +290,25 @@ test('the Ghost Hand toggle reaches the relay on the host\'s stdout, nonce-bound
   assert.equal(h.traces.filter(([d]) => d === 'hand-toggle-refused').length, 5);
 });
 
+test('the sprite style\'s character result reaches the trace, nonce-bound, with the host\'s refusal reason', async t => {
+  t.after(() => setHandPid(0));
+  const h = harness();
+  h.client.send(frame()); await settle();
+  const { nonce } = h.children[0].menus[0], stdout = h.children[0].stdout;
+  const event = more => ({ hand: 'character', nonce, id: 'fixture', loaded: false, reason: 'size', warnings: [], ...more });
+  for (const e of [event(), event({ reason: 'sandbox' }), event({ loaded: true, reason: null, warnings: ['chroma fringe'] })]) stdout.emit('data', Buffer.from(JSON.stringify(e) + '\n'));
+  await settle();
+  assert.deepEqual(h.traces.filter(([d]) => d.startsWith('hand-character')),
+    [['hand-character-refused', { id: 'fixture', reason: 'size' }], ['hand-character-refused', { id: 'fixture', reason: 'sandbox' }],
+      ['hand-character', { id: 'fixture', warnings: ['chroma fringe'] }]]);
+  // A foreign nonce, an unknown reason, a reason on success or an extra key is refused like any other bad event.
+  for (const bad of [event({ nonce: 'f'.repeat(64) }), event({ reason: 'oops' }), event({ loaded: true }), event({ extra: 1 })]) {
+    stdout.emit('data', Buffer.from(JSON.stringify(bad) + '\n')); await settle();
+  }
+  assert.equal(h.traces.filter(([d]) => d.startsWith('hand-character')).length, 3);
+  assert.equal(h.traces.filter(([d]) => d === 'hand-toggle-refused').length, 4);
+});
+
 test('the first host is consent-capable and successive worker forks reuse its pid after exit and reset', async t => {
   t.after(() => setHandPid(0));
   const h = harness();
@@ -462,7 +481,7 @@ test('prepareHandHost builds through the helper pipeline and its handle starts o
   assert.equal(builds, 0);
   const ready = await host.prepareHandHost({ cacheRoot, sourceRoot, compile, tools: async () => true });
   assert.equal(ready.status, 'ready'); assert.equal(builds, 2);
-  assert.deepEqual(Object.keys(ready).sort(), ['spawn', 'status'], 'no receipt leaves the hand handle');
+  assert.deepEqual(Object.keys(ready).sort(), ['checkCharacter', 'spawn', 'status'], 'no receipt leaves the hand handle');
   assert.equal(host.handHostBuilt({ cacheRoot, sourceRoot }), true);
   // A hand-only host has the menu and no consent descriptors; one opened for turbo's fork has fds 3 and 4.
   // The cursor style goes before the terminal --menu or --consent, glove by default.
@@ -470,6 +489,7 @@ test('prepareHandHost builds through the helper pipeline and its handle starts o
     [{ capture: 'visible' }, '--hand --capture=visible --cursor-style=glove --menu', 3],
     [{ consent: true }, '--hand --capture=hidden --cursor-style=glove --consent', 5],
     [{ cursorStyle: 'ring' }, '--hand --capture=hidden --cursor-style=ring --menu', 3],
+    [{ cursorStyle: 'sprite' }, '--hand --capture=hidden --cursor-style=sprite --menu', 3],
     [{ cursorStyle: 'seam', consent: true }, '--hand --capture=hidden --cursor-style=seam --consent', 5],
     [{ cursorStyle: 'glove', capture: 'visible' }, '--hand --capture=visible --cursor-style=glove --menu', 3]]) {
     const child = ready.spawn(options);
@@ -482,7 +502,7 @@ test('prepareHandHost builds through the helper pipeline and its handle starts o
     assert.equal(readFileSync(join(cacheRoot, key, 'consent-host.args'), 'utf8'), args);
   }
   assert.throws(() => ready.spawn({ capture: 'readOnly' }), /HAND_CAPTURE_INVALID/);
-  for (const cursorStyle of ['Ring', 'sprite', '', null, 1]) assert.throws(() => ready.spawn({ cursorStyle }), /HAND_CURSOR_STYLE_INVALID/);
+  for (const cursorStyle of ['Ring', 'Sprite', '', null, 1]) assert.throws(() => ready.spawn({ cursorStyle }), /HAND_CURSOR_STYLE_INVALID/);
   // The cached build is reused without asking for the tools, and a changed source is a different build.
   assert.equal((await host.prepareHandHost({ cacheRoot, sourceRoot, compile, tools: async () => false })).status, 'ready'); assert.equal(builds, 2);
   writeFileSync(join(sourceRoot, 'consent-host.swift'), 'changed', { mode: 0o600 });
@@ -593,11 +613,37 @@ test('with the action log off the menu frame has no usage, and a failing read on
 });
 
 
+test('checkCharacterInHost sends one frame to --check-character and returns only an exact result', async () => {
+  const { EventEmitter } = await import('node:events');
+  const fake = (reply, code = 0, { silent = false } = {}) => (binary, args, opts) => {
+    const child = Object.assign(new EventEmitter(), { stdout: Object.assign(new EventEmitter(), { setEncoding() {} }), kill: () => { child.killed = true; },
+      stdin: Object.assign(new EventEmitter(), { end: text => { child.sent = { binary, args, opts, text }; if (!silent) setImmediate(() => { child.stdout.emit('data', reply); child.emit('close', code); }); } }) });
+    fake.last = child; return child;
+  };
+  const frame = { hand: 'character', id: 'pet' }, result = { id: 'pet', loaded: false, reason: 'size', warnings: [] };
+  assert.deepEqual(await host.checkCharacterInHost('/bin/host', frame, { run: fake(JSON.stringify(result) + '\n') }), result);
+  assert.deepEqual(fake.last.sent.args, ['--check-character']); assert.equal(fake.last.sent.text, JSON.stringify(frame) + '\n');
+  assert.deepEqual(Object.keys(fake.last.sent.opts.env).sort(), ['LANG', 'PATH', 'SLEIGHT_CONSENT_ICON'], 'the test bank switch never reaches it');
+  await assert.rejects(host.checkCharacterInHost('/bin/host', frame, { run: fake(JSON.stringify({ ...result, extra: 1 }) + '\n') }), /CHARACTER_CHECK_FAILED/);
+  await assert.rejects(host.checkCharacterInHost('/bin/host', frame, { run: fake('', 65) }), /CHARACTER_CHECK_FAILED/);
+  await assert.rejects(host.checkCharacterInHost('/bin/host', frame, { run: fake('', 0, { silent: true }), timeoutMs: 20 }), /CHARACTER_CHECK_TIMEOUT/);
+  assert.equal(fake.last.killed, true);
+});
+
+// A VC3-shaped installed character for the relay tests: 19 resolved states on one 512x192 sheet, and a resolver.
+const spriteStates = ['idle', 'move', 'aim', 'click', 'double-click', 'right-click', 'type', 'key', 'scroll-up', 'scroll-down', 'drag-grab', 'drag-carry',
+  'drag-drop', 'waiting-approval', 'error', 'success', 'thinking', 'handoff', 'working'];
+const testSprite = () => {
+  const resolved = spriteStates.map(state => ({ state, sheet: 'sheet.png', row: 0, start: 0, frames: 1, ms: [100], loop: false, flip: false, hotspot: { x: 32, y: 32 }, repeat: 1 }));
+  return { character: { manifest: { id: 'pet', sheet: 'sheet.png', frame: { w: 64, h: 64 }, scale: 0.5, states: {} }, folder: '/chars/pet',
+    sheets: { sheet: { width: 512, height: 192 } }, resolved }, resolve: () => resolved };
+};
+
 test('cursorStyle is an optional spawn option and adds no wait to send', async t => {
   t.after(() => setHandPid(0));
-  for (const cursorStyle of ['ring', 'seam', 'glove']) {
+  for (const cursorStyle of ['ring', 'seam', 'glove', 'sprite']) {
     const spawns = [], child = fakeChild();
-    const client = createHandClient({ cursorStyle, setting: () => ({ enabled: true }), watch: () => undefined,
+    const client = createHandClient({ cursorStyle, character: 'pet', loadSprite: async () => testSprite(), setting: () => ({ enabled: true }), watch: () => undefined,
       permissions: null, usage: null, built: () => true,
       prepare: async () => ({ status: 'ready', spawn: options => { spawns.push(options); return child; } }) });
     t.after(() => client.close());
@@ -609,15 +655,38 @@ test('cursorStyle is an optional spawn option and adds no wait to send', async t
   assert.throws(() => createHandClient({ cursorStyle: 'unknown' }), /HAND_CURSOR_STYLE_INVALID/);
 });
 
-test('sprite draws as the ring on the host, from the option or the settings, and the session client never throws for a style', async t => {
+test('sprite sends the installed character after the menu, and falls back to the ring with one trace line', async t => {
   t.after(() => setHandPid(0));
-  for (const options of [{ cursorStyle: 'sprite' }, { setting: () => ({ enabled: true, style: 'sprite' }) }]) {
-    const spawns = [], child = fakeChild();
-    const client = createHandClient({ setting: () => ({ enabled: true }), ...options, watch: () => undefined, permissions: null, usage: null, built: () => true,
+  // From the option or from the settings' style and character, the host runs sprite and gets one character frame first.
+  for (const options of [{ cursorStyle: 'sprite', character: 'pet' }, { setting: () => ({ enabled: true, style: 'sprite', character: 'pet' }) }]) {
+    const spawns = [], child = fakeChild(), asked = [];
+    const client = createHandClient({ setting: () => ({ enabled: true }), ...options, loadSprite: async id => { asked.push(id); return testSprite(); },
+      watch: () => undefined, permissions: null, usage: null, built: () => true,
       prepare: async () => ({ status: 'ready', spawn: spawnOptions => { spawns.push(spawnOptions); return child; } }) });
     t.after(() => client.close());
     client.send(frame({ label: 'Save' })); await settle();
-    assert.equal(spawns[0].cursorStyle, 'ring'); assert.equal(child.lines[0].label, 'Save', 'ring acts keep their label');
+    assert.equal(spawns[0].cursorStyle, 'sprite'); assert.deepEqual(asked, ['pet']);
+    const [sprite, act] = child.lines;
+    assert.deepEqual([sprite.hand, sprite.id, sprite.seq, sprite.nonce], ['character', 'pet', 1, child.menus[0].nonce]);
+    assert.deepEqual(Object.keys(sprite).sort(), ['cell', 'extra', 'hand', 'id', 'nonce', 'seq', 'sheet', 'table']);
+    assert.equal(sprite.sheet, '/chars/pet/sheet.png'); assert.equal(sprite.table.idle.scale, 0.5);
+    assert.deepEqual([act.hand, act.seq, act.label], ['act', 2, 'Save']);
+    client.close();
+  }
+  // No character, a character VC3 refuses, or one too large to draw: the ring, and one hand-sprite-fallback line.
+  const tooLarge = () => { const s = testSprite(); s.character.sheets.sheet = { width: 2048, height: 192 }; s.character.manifest.frame = { w: 256, h: 64 }; return s; };
+  for (const [character, loadSprite, reason] of [[undefined, async () => testSprite(), 'CHARACTER_NOT_SET'],
+    ['pet', async () => { throw Error('Character: "/chars/pet/character.json" manifest: invalid'); }, 'CHARACTER_INVALID'],
+    ['pet', async () => tooLarge(), 'CHARACTER_INVALID']]) {
+    const spawns = [], child = fakeChild(), traces = [];
+    const client = createHandClient({ cursorStyle: 'sprite', ...character ? { character } : {}, loadSprite, setting: () => ({ enabled: true }), trace: (d, detail) => traces.push([d, detail]),
+      watch: () => undefined, permissions: null, usage: null, built: () => true,
+      prepare: async () => ({ status: 'ready', spawn: spawnOptions => { spawns.push(spawnOptions); return child; } }) });
+    t.after(() => client.close());
+    client.send(frame({ label: 'Save' })); await settle();
+    assert.equal(spawns[0].cursorStyle, 'ring');
+    assert.deepEqual(traces.filter(([d]) => d === 'hand-sprite-fallback'), [['hand-sprite-fallback', { reason }]]);
+    assert.ok(child.lines.every(l => l.hand !== 'character')); assert.equal(child.lines[0].label, 'Save', 'ring acts keep their label');
     client.close();
   }
   createHandClient({ setting: () => ({ enabled: false }), watch: () => undefined }).close();
