@@ -7007,7 +7007,8 @@ if arguments.first == "--decode-sheet" { spriteDecodeChild(Array(arguments.dropF
 // `--check-character`: one character frame on stdin, the same checks and decode child as the live host, one JSON line out
 // (loaded, reason, warnings). `sleight-mcp cursor check` runs it so the user sees why a character shows the ring alone.
 if arguments.first == "--check-character" {
-    guard (1...2).contains(arguments.count) else { exit(64) }
+    // The optional second argument is a character bank folder: an absolute path, or it is a usage error.
+    guard (1...2).contains(arguments.count), arguments.count == 1 || arguments[1].hasPrefix("/") else { exit(64) }
     var input = Data()
     while input.count <= 32768, case let chunk = FileHandle.standardInput.availableData, !chunk.isEmpty { input.append(chunk) }
     let line = input.split(separator: 10).first ?? Data()
