@@ -9,7 +9,7 @@
 import { randomBytes } from 'node:crypto';
 import { readFileSync, watch as fsWatch } from 'node:fs';
 import { dirname } from 'node:path';
-import { handHostBuilt, prepareHandHost } from '../direct-browser/host.mjs';
+import { handCursorStyles, handHostBuilt, prepareHandHost } from '../direct-browser/host.mjs';
 import { CURSOR_STYLES, handConfigPath, handSetting } from './settings.mjs';
 import { setHandPid } from './pid.mjs';
 import { currentApp as noted } from '../permissions.mjs';
@@ -100,6 +100,7 @@ export function createHandClient({ env = process.env, setting = () => handSettin
   permissions = { menu: async () => (await command()).permissionsMenu(), apply: async (event, offered) => (await command()).applyMenuEvent(event, offered) },
   currentApp = noted, usage = logUsage(env), usageMs = 300000,
   watch = (folder, listener) => process.platform === 'darwin' ? fsWatch(folder, { persistent: false }, listener) : undefined } = {}) {
+  if (cursorStyle !== undefined && !handCursorStyles.includes(cursorStyle)) throw Error('HAND_CURSOR_STYLE_INVALID');
   const nonce = randomBytes(32).toString('hex'), queue = [];
   // host: none, starting, running or dead (failed or closed this session; final). hand: the settings allow the hand.
   let seq = 0, child, host = 'none', starting, hand = false, capture = 'hidden', checked = now(), checking = false, events = '', target;
@@ -243,7 +244,7 @@ export function createHandClient({ env = process.env, setting = () => handSettin
       // The first menu frame already carries the Permissions rows. The usage row follows once the log is read.
       await loadPermissions();
       if (host === 'dead') return undefined;
-      const started = result.spawn({ capture, consent, ...style !== 'glove' ? { cursorStyle: style } : {} });
+      const started = result.spawn({ capture, consent, ...cursorStyle !== undefined || style !== 'glove' ? { cursorStyle: style } : {} });
       started.on('error', error => { if (child === started) die('spawn', { code: error?.code }); });
       started.stdin.on('error', error => note('hand-dropped', { reason: error?.code ?? 'pipe' }));
       started.stdout?.on('data', onEvents);
