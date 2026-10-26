@@ -48,7 +48,7 @@ function host({ cost = true, missingUsage = false, marker = false, malicious = f
   const $ = {
     ui: { status: text => statuses.push(text), log() {}, toast() {}, panes: async () => paneOpen ? [{ id: 'sleight' }] : [], open: async () => work.push('open'), resolve: () => elements },
     plugin: { root: '/fixture/plugin' },
-    process: { run: async () => settingRead ? settingRead() : ({ exitCode: 0, stdout: `narration ${narration}\n` }) },
+    process: { run: async () => settingRead ? settingRead() : ({ exitCode: 0, stdout: JSON.stringify({ enabled: false, narration, presence: { idleSeconds: 0, locked: false } }) }) },
     session: { messages: async args => typeof messages === 'function' ? messages(args) : messages ?? [], usage: async () => {
       usageReads++;
       if (missingUsage) throw Error('older host');
@@ -100,7 +100,8 @@ const nextTick = () => new Promise(resolve => setImmediate(resolve));
 test('mod uses assistant events scoped to tool and agent, without any transcript reads', async () => {
   let reads = 0;
   const h = host({ narration: 'bubbles', messages: () => { reads++; throw Error('transcript must not be fetched'); } });
-  await h.start(); await nextTick();
+  await h.emit('prompt.submit', { text: 'Inspect the menu', origin: { kind: 'composer' } });
+  await h.start();
   await h.emit('session.append', { uuid: 'acquisition', door: 'response', origin: { kind: 'model' }, agentId: 'child',
     message: { role: 'assistant', content: [{ type: 'tool_use', id: 'acquire', name: 'js', input: { code: 'let app = await cua.getApp("Editor")' } }] } });
   await h.emit('session.append', { uuid: 'current', door: 'response', origin: { kind: 'model' }, agentId: 'child', message: { role: 'assistant', content: [
@@ -111,7 +112,7 @@ test('mod uses assistant events scoped to tool and agent, without any transcript
   await h.emit('tool.call', { tool: prefix + 'browser_read', tab: 't1', tool_use_id: 'missing', sleight_say: 'MODEL FORGERY' });
   assert.equal(h.forwarded[1].sleight_stats.say, undefined);
 });
-test('off mod never inspects message payloads and a hung settings read cannot delay tool forwarding', async () => {
+test('off mod never inspects message payloads or reads settings from tool forwarding', async () => {
   let reads = 0;
   const h = host({ settingRead: () => new Promise(() => {}), messages: () => { reads++; throw Error('unexpected transcript'); } });
   await h.start();

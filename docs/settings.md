@@ -457,21 +457,34 @@ URLs and file paths. Names can still contain page content. Secure input has no l
 `narration` in `hand.json` is `off` (the default), `bubbles` or `voice`. With the ring or sprite enabled,
 `bubbles` shows Claude's latest sentence before its sleight call, limited to 90 characters and two lines.
 It uses the text Claude already wrote, with no model request or added prompt tokens. A call without suitable
-assistant text doesn't show a bubble. Tool results, code, quoted values, URLs and path-like tokens are excluded.
-Text-entry calls omit narration because their values may be computed. Native calls also need a recognized app acquisition.
-Unknown JavaScript or assignments clear that narration context until Claude acquires the app again. Secure input hides the bubble and stops voice.
+assistant text doesn't show a bubble. The mod caches assistant message events without fetching a transcript
+and gets its mode from the existing prompt settings reply. It ignores message content while off.
+Code, quoted values, URLs, file paths, email addresses, tokens with API-key prefixes, long base64 or hex runs,
+and Luhn-valid card numbers of 13 to 19 digits are stripped. Echo checks suppress whole user-value words of
+at least four characters, excluding enums and labels. Text-entry calls omit narration because their values may
+be computed. Native calls also need a recognized app acquisition. Unknown JavaScript or assignments clear that
+context until Claude acquires the app again. Secure input hides the bubble and stops voice.
+
+These filters cannot identify every secret. Claude's prose can paraphrase screen text, including personal names
+and short secrets that the filters don't recognize. Tool-result blocks are excluded from the source, but
+Claude can repeat their contents in its own sentence. Turn narration off for sensitive work.
 
 `voice` shows the same bubble and speaks it with an installed macOS system voice. An optional `voice` object
-sets `id` (the system voice identifier) and `rate` (0.1 to 0.6, default 0.5). Without that object, sleight picks
-an installed voice matching the system language when available. An unavailable identifier leaves speech silent.
-No voice is downloaded, and Personal Voice is excluded. One utterance can speak at a time; a newer line replaces
-the pending line. Repeated aim, act and status frames do not repeat the same utterance.
+sets `id` (the system voice identifier) and optional `rate` (0.1 to 0.6, default 0.5). An object with only `id` is valid.
+Without that object, sleight prefers an installed voice matching the system language, then quality.
+The compiled host's `--narration-voices` mode lists installed IDs without a window. `sleight-mcp cursor status`
+shows the requested ID and rate. The host uses installed voices other than Personal Voice without downloading
+any, and skips speech when the requested ID is unavailable. It plays one utterance at a time, keeps one replaceable
+queued line and ignores repeats of the same line for 10 seconds. A missing finish callback times out after 15 seconds and clears speech and its watcher.
 
-Voice skips muted output, unreadable audio state and any process using microphone input. Microphone use is a
-conservative call check: it also silences narration during recording and may miss a call that has stopped input.
-While a bubble or utterance exists, the host rechecks secure input and active voice safety every 100 ms. It has no
-narration timer when idle. The bubble uses one text layer and fades with the ring. These settings have the same
-owner, mode and symlink rules as the rest of `hand.json`. Claude's guard protects the entire file.
+Voice skips muted or zero-volume output, unreadable audio state and any process using audio input.
+Microphone use is a conservative call check that also silences narration during recording and may miss a call
+that has stopped input. The host checks audio metadata off the main thread at most once per 500 ms, with
+per-channel mute and volume as a fallback. Unreadable metadata produces one trace explanation and skips speech.
+While a bubble or utterance exists, the host checks secure input every 100 ms and uses cached audio safety.
+It doesn't start a narration timer while idle. One text layer fades with the ring and shares a stack with the
+label chip, separated by 4 pt. The pair moves below the target when it doesn't fit above. These settings have the same owner, mode and symlink rules as the rest of `hand.json`.
+Claude's guard protects the entire file.
 
 Add `"narration":"bubbles"` to an existing ring configuration. Set it to `"voice"` for local speech,
 or `"off"` to stop both. A running host reads changes through the existing settings watcher.

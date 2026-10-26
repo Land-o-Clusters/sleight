@@ -71,7 +71,7 @@ let turboEnvelope: TurboEnvelope | undefined
 let turboSequence = 0
 let turboPending = Promise.resolve()
 
-async function beginTurboTurn($: any, text: string, origin: 'composer' | 'bridge'): Promise<string | undefined> {
+async function beginTurboTurn($: Pick<EngineInterface, 'process' | 'plugin'>, text: string, origin: 'composer' | 'bridge'): Promise<string | undefined> {
   if (turboSequence >= Number.MAX_SAFE_INTEGER) return
   const turn = `turbo-${++turboSequence}`
   let context: string | undefined
@@ -83,12 +83,13 @@ async function beginTurboTurn($: any, text: string, origin: 'composer' | 'bridge
         const state = await $.process.run([`${$.plugin.root}/bin/sleight-mcp`, 'turbo-state'])
         if (state.exitCode === 0 && state.isStdoutTruncated !== true && typeof state.stdout === 'string' && state.stdout.length <= 4096) {
           const data = JSON.parse(state.stdout)
+          narration.configure(data?.narration)
           enabled = data?.enabled === true
           const p = data?.presence
           if (origin !== 'bridge' && typeof p?.locked === 'boolean' && Number.isFinite(p.idleSeconds) && p.idleSeconds >= 0)
             present = !p.locked && p.idleSeconds < 120
-        }
-      } catch { /* User text still reaches the relay when turbo is unavailable. */ }
+        } else { narration.configure('off') }
+      } catch { narration.configure('off') /* User text still reaches the relay when turbo is unavailable. */ }
       if (!enabled && present && !/^[ \t]*allow\b/i.test(text)) return
       for (let attempt = 0; attempt < 2; attempt++) {
         if (!turboEnvelope) {
@@ -337,16 +338,8 @@ function ownCallVerdict(e: { tool: string; input: unknown }, origin: { plugin: s
 }
 
 const narration = createNarrationCache()
-let narrationRefresh = 0
-// Refresh settings outside tool calls. A failed/late read stays off. No transcript is fetched.
-function refreshNarration($: Pick<EngineInterface, 'process' | 'plugin'>) {
-  const generation = ++narrationRefresh
-  void $.process.run([`${$.plugin.root}/bin/sleight-mcp`, 'cursor', 'status'], { timeoutMs: 1000 }).then(result => {
-    if (generation !== narrationRefresh) return
-    if (result.exitCode !== 0 || result.isStdoutTruncated || result.stdout.length > 4096) { narration.configure('off'); return }
-    narration.configure(/^narration +((?:bubbles|voice))$/m.exec(result.stdout)?.[1] ?? 'off')
-  }).catch(() => { if (generation === narrationRefresh) narration.configure('off') })
-}
+// The existing genuine-prompt turbo-state reply includes narration mode. No extra process,
+// file read, transcript request or awaited work is added to a tool call.
 function narrated<T extends { tool_use_id?: string; agentId?: string }>(event: T) {
   return { ...event, sleight_say: narration.take(event) ?? '' }
 }
@@ -374,7 +367,7 @@ export const register: Register = on => {
   on('session.start', async ($, e, next) => {
     turboEnvelope = undefined
     remoteTurnBound = false
-    refreshNarration($)
+    narration.configure('off')
     await $.command.register({
       name: 'sleight',
       description: 'Open the sleight pane; show turn stats, replay, record, or stop computer use',
@@ -410,7 +403,6 @@ export const register: Register = on => {
     turnRunning = true
     // Older host captures omit agentId from turn.start's type, as with prompt.submit above.
     if ((e as { agentId?: string }).agentId !== undefined) return next(e)
-    refreshNarration($)
     const owner: StatsTurn = { id: e.turnId, used: false, forwarded: 0, stoppedStats: null }
     statsTurn = owner
     // Never hold up a turn for the ledger, including turns that never use sleight.

@@ -105,8 +105,8 @@ Statuses describe the current call or turn. `done` followed by `thinking` after 
 
 `narration` in `hand.json` is `off` (default), `bubbles` or `voice`. Action and status records can include `say`.
 The Claude Code mod caches assistant text from its own message events, bound to the tool ID and agent loop.
-It doesn't fetch a transcript or retain media. Settings refresh asynchronously at session and main-turn boundaries;
-unavailable settings or missing message events omit narration. Native receivers need a recognized acquisition since
+It doesn't fetch a transcript or retain media. The existing `turbo-state` reply supplies the narration mode at each user prompt,
+without another subprocess or a settings read from the mod. Unavailable settings or missing message events omit narration. Native receivers need a recognized acquisition since
 narration was enabled or the session was compacted. The cache holds at most 16 loops and 128 calls per loop.
 
 The cutter examines at most 1,024 UTF-8 bytes before regex work, discarding a partial final token. It keeps the first

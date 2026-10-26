@@ -11,10 +11,12 @@ describe('sleight mod', () => {
     const forwarded: Record<string, unknown>[] = []
     let reads = 0
     on('session.messages', async () => { reads++; throw Error('transcript read forbidden') })
-    on('process.run', async () => ({ value: { exitCode: 0, stdout: `narration ${mode}\n`, stderr: '' } }) as never)
+    on('process.run', async () => ({ value: { exitCode: 0, stdout: JSON.stringify({ enabled: false, narration: mode, presence: { idleSeconds: 0, locked: false } }), stderr: '' } }) as never)
     on('turn.start', async (_$, e) => ({ turnId: e.turnId }) as never)
     on('ui.status', async () => ({ value: undefined }))
     on('tool.call', { tool: JS_TOOL }, async (_$, e) => { forwarded.push(e); return { result: { content: [] } } as never })
+    on('prompt.submit', async (_$, e) => ({ text: e.text }))
+    await $.prompt.submit({ text: 'Inspect the menu', origin: { kind: 'composer' } } as never)
     await $.turn.start({ turnId: 'narration-turn' } as never)
     await $.session.append({ uuid: 'acquisition', door: 'response', origin: { kind: 'model', model: 'fixture' },
       message: { type: 'assistant', role: 'assistant', content: [{ type: 'tool_use', id: 'acquire', name: JS_TOOL, input: { code: 'let app = await cua.getApp("Editor")' } }] } })
