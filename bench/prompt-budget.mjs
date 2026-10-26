@@ -129,7 +129,7 @@ export function sharedNoticeInventory(prompt) {
   return entries;
 }
 
-// Text a lib module marks as model-visible: an expression after a /* notice */ comment (or /* lean notice */
+// Text a lib or guard-hook module marks as model-visible: an expression after a /* notice */ comment (or /* lean notice */
 // where sleight passes the text through promptNotice later), and in a template
 // after a /* generated code */ comment (code sleight sends to the engine), each Error, stop or nodeRepl.write
 // text. Notices the inventories above find carry no mark. Identical texts count once.
@@ -139,7 +139,7 @@ const markedBy = (source, node, mark) => node.pos < node.end && source.slice(nod
 const VALUE = '__sleightBudgetValue__';
 export function taggedNoticeInventory(prompt) {
   const entries = [], seen = new Set();
-  for (const file of readdirSync(libDir).filter(name => /\.m?js$/.test(name)).sort()) {
+  for (const file of [...readdirSync(libDir).filter(name => /\.m?js$/.test(name)).sort(), '../hooks/preapproved-write-guard.mjs']) {
     const source = readFileSync(new URL(file, libDir), 'utf8');
     if (!/\/\* (?:lean )?notice \*\/|\/\* generated code \*\//.test(source)) continue;
     const ast = ts.createSourceFile(file, source, ts.ScriptTarget.Latest, true, ts.ScriptKind.JS), render = renderer(ast, prompt);

@@ -12,6 +12,7 @@ import { SCROLL_LOOP_NOTE, TEXTLESS_NOTE } from '../plugins/sleight/lib/compact-
 import { browserTools, closedTabOutcome } from '../plugins/sleight/lib/direct-browser/tools.mjs';
 import { handoffMessages } from '../plugins/sleight/lib/direct-browser/handoff.mjs';
 import { closedSubmitWarning, shortStepOutcomes } from '../plugins/sleight/lib/direct-browser/act.mjs';
+import { guardUnavailableReason, guardPathReason } from '../plugins/sleight/hooks/preapproved-write-guard.mjs';
 // The budget script parses relay.mjs with the typescript dev dependency, which CI doesn't install.
 const budget = await import('../bench/prompt-budget.mjs').catch(error => {
   if (error.code === 'ERR_MODULE_NOT_FOUND') return null;
@@ -27,8 +28,15 @@ const baseline = JSON.parse(readFileSync(new URL('fixtures/prompt-default.json',
 const skillPath = new URL('../plugins/sleight/skills/drive-mac-apps/SKILL.md', import.meta.url);
 // G11B shortens the eager cookie rule and counts conditional guard notices.
 // p143 plus the cookie rule: default 1062 words, lean 517 words.
-const leanRatio = 31742 / 44482;
+// HT1R counts the two conditional hook refusals in both variants (+151 characters).
+const leanRatio = 32412 / 45358;
 const leanSkill = () => skillRules(skillPath, { SLEIGHT_PROMPT: 'lean' });
+
+test('hook guard refusals join the pinned notice inventory', { skip }, () => {
+  const texts = taggedNoticeInventory().map(entry => entry.text);
+  assert.ok(texts.includes(guardUnavailableReason));
+  assert.ok(texts.includes(guardPathReason));
+});
 
 test('make-character description stays below 60 tokens even at one token per UTF-8 byte', t => {
   const source = readFileSync(new URL('../plugins/sleight/skills/make-character/SKILL.md', import.meta.url), 'utf8');
