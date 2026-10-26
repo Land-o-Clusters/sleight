@@ -271,7 +271,7 @@ test('seat: a new aim on the same window moves only past 60 pt', onMac, () => {
   assert.deepEqual([first.seat.x, near.seat.x, near.kind, farther.seat.x, farther.kind], [600, 600, 'stay', 720, 'hop']);
 });
 
-test('reactions: point, bump, peek, wait, wince, high-five at the palm, hand back, and drag drop', onMac, () => {
+test('reactions: point, bump, peek, wait, wince, a nod per call, hand back, and drag drop', onMac, () => {
   const out = dump([world([wide]), aim(500, 400), clock(1), act('click', 500, 400), clock(2), act('type', 500, 400), clock(3), status('waiting'),
     clock(4), status('error'), clock(5), status('done', { ok: true }), clock(6), status('done'), clock(7), status('handback'), clock(8), status('thinking'),
     clock(9), act('drag', 500, 400, 7, { path: [[500, 400], [600, 450]] }), clock(16)]);
@@ -284,11 +284,17 @@ test('reactions: point, bump, peek, wait, wince, high-five at the palm, hand bac
   assert.deepEqual([at(2).states, at(2).masked.at(-1)], [['perch-peek'], [0, true]]);
   assert.deepEqual(at(3).states, ['perch-wait']);
   assert.deepEqual(at(4).states, ['error', 'perch']);
+  // A call's done with ok nods (a 3 pt bump and the hop's settle) and its ring burst stays at the point.
+  assert.deepEqual(at(5).states, ['perch-hop', 'perch']);
+  assert.ok(at(5).positions.some(q => Math.abs(q[2] - (125 - 3)) < 1e-9));
+  assert.deepEqual(out.find(e => e.effect === 'ring' && e.time === 5).at, [500, 400]);
+  // The turn's end after that success high-fives, and the ring's burst plays at the palm (139, 89) at scale 0.5.
   const dissolve = out.find(e => e.effect === 'dissolve');
-  assert.deepEqual([dissolve.time, dissolve.at], [5, [600 - 48 - 100 + 69.5, 125 + 44.5]], 'the ring bursts at the palm (139, 89) at scale 0.5');
-  assert.deepEqual(out.find(e => e.effect === 'ring' && e.time === 5).at, dissolve.at);
-  assert.deepEqual(at(5).states, ['high-five', 'perch']);
-  assert.deepEqual([at(6).states, at(7).states, at(8).states], [['handoff', 'perch'], ['handoff', 'perch'], ['perch']]);
+  assert.deepEqual([dissolve.time, dissolve.at], [6, [600 - 48 - 100 + 69.5, 125 + 44.5]]);
+  assert.deepEqual(out.find(e => e.effect === 'ring' && e.time === 6).at, dissolve.at);
+  assert.deepEqual(at(6).states, ['high-five', 'perch']);
+  assert.equal(out.filter(e => e.effect === 'dissolve').length, 1, 'once a turn');
+  assert.deepEqual([at(7).states, at(8).states], [['handoff', 'perch'], ['perch']]);
   const drag = p.filter(e => e.time >= 9);
   assert.deepEqual(drag[0].states, ['perch-peek']);
   assert.deepEqual(drag[1].states, ['perch'], 'perch at the drop');
@@ -296,6 +302,16 @@ test('reactions: point, bump, peek, wait, wince, high-five at the palm, hand bac
   // Every plan parks: its animations come off at its end.
   const parks = out.filter(e => e.effect === 'perch-park').map(e => e.time);
   assert.ok(parks.some(t => Math.abs(t - (drag[1].time + drag[1].duration)) < 1e-6));
+});
+
+test('the high-five plays once a turn, at its end, only when its last call succeeded', onMac, () => {
+  const out = dump([world([wide]), aim(500, 400), status('done', { ok: true }), clock(1), status('done', { ok: true }), clock(2), status('done'), clock(10),
+    aim(500, 400), status('done', { ok: true }), clock(11), status('error'), clock(12), status('done'), clock(20), aim(500, 400), clock(21), status('done')]);
+  const p = perches(out);
+  assert.deepEqual(p.filter(e => e.states.includes('high-five')).map(e => e.time), [2]);
+  assert.deepEqual(out.filter(e => e.effect === 'dissolve').map(e => e.time), [2]);
+  assert.deepEqual(p.filter(e => e.time === 12 || e.time === 21).map(e => e.states), [['handoff', 'perch'], ['handoff', 'perch']], 'after an error, or with no call');
+  assert.equal(p.filter(e => e.states[0] === 'perch-hop' && e.kind === 'stay').length, 3, 'a nod per successful call');
 });
 
 test('waiting stays up to 120 s, then the perch, then sleep after 20 s', onMac, () => {

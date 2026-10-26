@@ -3373,7 +3373,7 @@ struct RingRuntime {
         return out
     }
     mutating func draw(_ event: RingEvent, _ now: Double, _ env: RingEnvironment) -> [(Double, RingEffect)] {
-        let (event, palm) = perchDissolve(event, .null, dissolveAt)
+        let frameOk = event.ok, (event, palm) = perchDissolve(event, .null, dissolveAt)
         let known = session.pid == event.pid && session.window == event.windowId && session.point != nil
         guard event.at != nil || known else { return [(now, .drop(event.state))] }
         // A repeat of the state the ring already shows at the same point, inside that plan, changes nothing.
@@ -3383,7 +3383,7 @@ struct RingRuntime {
         let clip = palm.isNull ? bounds : bounds.union(palm)
         var plan = session.plan(event, theme: theme, now: now, reduced: env.reduced(), secure: env.secure(), clip: clip, seed: seed)
         guard !plan.dropped else { return [(now, .drop(event.state))] }
-        plan.pid = event.pid; plan.window = event.windowId; plan.ok = event.ok
+        plan.pid = event.pid; plan.window = event.windowId; plan.ok = frameOk
         if let character = character { plan.sprite = SpritePlan.make(plan, character: character, reduced: env.reduced(), secure: env.secure(), clip: clip) }
         let chip = plan.chip.map { [$0.frame.origin, CGPoint(x: $0.frame.maxX, y: $0.frame.maxY)] } ?? []
         var frame = handBox(plan.points + [plan.at] + chip)
@@ -4272,9 +4272,11 @@ struct PerchEvent { let state: String, pid: Int32, window: UInt32, at: CGPoint, 
 func perchEvent(_ plan: RingPlan) -> PerchEvent {
     PerchEvent(state: plan.state, pid: plan.pid, window: plan.window, at: plan.at, ok: plan.ok, drop: plan.phases["drop"]?.first)
 }
-// The ring's done burst moves to the high-five's palm: its point and a clip that holds it (RingRuntime.dissolveAt).
+// The high-five once a turn: at the turn's end (a done without ok) after a successful last call, the ring's done burst
+// plays at the palm, as a done with ok there. Each call's own done keeps its small burst at the point. The point and a
+// clip that holds it (RingRuntime.dissolveAt, which the perch sets only for that frame).
 func perchDissolve(_ event: RingEvent, _ clip: CGRect, _ palm: CGPoint?) -> (RingEvent, CGRect) {
-    guard event.state == "done", event.ok, let palm = palm else { return (event, clip) }
+    guard event.state == "done", !event.ok, let palm = palm else { return (event, clip) }
     let moved = RingEvent(seq: event.seq, state: event.state, pid: event.pid, windowId: event.windowId, at: palm, rect: nil, label: event.label, ok: true)
     return (moved, clip.union(CGRect(x: palm.x - 60, y: palm.y - 60, width: 120, height: 120)))
 }
@@ -4286,13 +4288,14 @@ struct PerchRuntime {
     var timers: [(at: Double, action: String)] = []
     var moving: CGRect?                  // the target window's frame while the person moves it; hidden until it holds still
     var book = PerchLineBook(), line: PerchLine?
+    var turnOk: Bool?            // whether the turn's last call so far succeeded (its done with ok) or failed (an error)
     var metrics: PerchMetrics? { frame.flatMap(perchMetrics) }
     var next: Double? { timers.map { $0.at }.min() }
     // How often the host rereads the target window: while it moves, while awake, and slower asleep. nil: nothing perched.
     var poll: Double? { seat == nil ? nil : moving != nil ? 0.25 : asleep ? 2 : 0.5 }
     mutating func load(_ frame: SpriteFrame?) {
         self.frame = frame; book.set = frame?.lines; book.recent = [:]; seat = nil; shown = false; asleep = false; plan = nil; moving = nil; timers = []
-        line = nil; book.showing = nil
+        line = nil; book.showing = nil; turnOk = nil
     }
     mutating func timer(_ at: Double, _ action: String) { timers.removeAll { $0.action == action }; timers.append((at, action)) }
     func origin(_ seat: PerchSeat) -> CGPoint {
@@ -4300,6 +4303,8 @@ struct PerchRuntime {
     }
     func box(_ seat: PerchSeat) -> CGRect { CGRect(origin: origin(seat), size: metrics?.size ?? .zero) }
     // Where the ring's done burst should play: the high-five's palm, while perched in full view.
+    // The palm for the ring's burst, only for a turn's end after a successful last call.
+    func dissolve(_ event: RingEvent) -> CGPoint? { event.state == "done" && !event.ok && turnOk == true ? palm() : nil }
     func palm() -> CGPoint? {
         guard shown, let seat = seat, !seat.peek, moving == nil, let m = metrics, let e = frame?.perch?.table["high-five"] else { return nil }
         let o = origin(seat), x = e.flip ? Double(m.size.width) - Double(e.hotspot.x) * m.scale : Double(e.hotspot.x) * m.scale
@@ -4397,7 +4402,10 @@ struct PerchRuntime {
         case "type", "key", "scroll", "drag", "perch-peek": current = "perch-peek"; t = b.play(name("perch-peek"), at: t)
         case "waiting", "perch-wait": current = "perch-wait"; t = b.play(name("perch-wait"), at: t)
         case "error": current = "perch"; t = b.play(name("error"), at: t); b.mask(t, forced); t = b.play(name("perch"), at: t)
-        case "done" where ok: current = "perch"; t = b.play(name("high-five"), at: t); t = b.play(name("perch"), at: t)
+        case "done" where ok:
+            // A call's success: a small nod from existing cells (a 3 pt bump and the hop's settle), no palm burst.
+            current = "perch"; b.bump(t, 3, at: to); t = b.play(name("perch-hop"), at: t, indices: [2, 3]); t = b.play(name("perch"), at: t)
+        case "turn-success": current = "perch"; t = b.play(name("high-five"), at: t); t = b.play(name("perch"), at: t)
         case "done", "handback": current = "perch"; t = b.play(name("handoff"), at: t); t = b.play(name("perch"), at: t)
         case "sleep":
             let e = b.entry(name("sleep")), cycle = e.ms.reduce(0, +) / 1000
@@ -4418,6 +4426,9 @@ struct PerchRuntime {
         lastFrame = now; asleep = false
         timers.removeAll { ["sleep", "still", "wait-end", "drop", "long-wait"].contains($0.action) }
         let moment = book.moment(ev.state, ok: ev.ok, woke: woke)
+        // A turn's end (the relay's done without ok) high-fives when the turn's last call succeeded.
+        let state = ev.state == "done" && !ev.ok && turnOk == true ? "turn-success" : ev.state
+        if ev.state == "done" { turnOk = ev.ok ? true : nil } else if ev.state == "error" { turnOk = false } else if ev.state == "handback" { turnOk = nil }
         if moving != nil { current = ["type", "key", "scroll", "drag"].contains(ev.state) ? "perch-peek" : ev.state == "waiting" ? "perch-wait" : "perch"; return out }
         var move: String?
         if ev.state == "aim" || seat == nil || seat?.window != ev.window || seat?.pid != ev.pid || !shown {
@@ -4435,7 +4446,7 @@ struct PerchRuntime {
             }
         }
         let from = shown ? plan?.position(at: now - began) : nil
-        guard let next = draw(ev.state, ok: ev.ok, at: ev.at, move: move, from: from, woke: woke, now: now, env: env) else { return out }
+        guard let next = draw(state, ok: ev.ok, at: ev.at, move: move, from: from, woke: woke, now: now, env: env) else { return out }
         plan = next; began = now; shown = true
         out.append((now, .draw(next)))
         timer(now + next.duration, "park")
@@ -4599,7 +4610,7 @@ final class PerchHost {
         PerchEnvironment(world: { pid, window in perchWorld(pid: pid, window: window) },
             reduced: { NSWorkspace.shared.accessibilityDisplayShouldReduceMotion }, measure: perchMeasure)
     }
-    func palm() -> CGPoint? { active ? runtime.palm() : nil }
+    func dissolve(_ event: RingEvent) -> CGPoint? { active ? runtime.dissolve(event) : nil }
     func ringDrew(_ plan: RingPlan) {
         guard active else { return }
         perform(runtime.receive(perchEvent(plan), now: now, env: environment))
@@ -5033,7 +5044,7 @@ final class HandHost: NSObject, NSApplicationDelegate {
     }
     func ringFrame(_ event: RingEvent, delay: Double) {
         guard !captureHeld else { return }
-        ringRuntime.dissolveAt = perch.palm()
+        ringRuntime.dissolveAt = perch.dissolve(event)
         ringPerform(ringRuntime.receive(event, delay: delay, now: CACurrentMediaTime(), ringEnvironment))
         ringWakeUp()
     }
@@ -5502,8 +5513,8 @@ func perchDump(reduced: Bool, seed: UInt64) {
             }
             guard event.seq > last else { exit(65) }
             last = event.seq
-            ring.dissolveAt = enabled ? perch.palm() : nil
-            if let palm = ring.dissolveAt, event.state == "done", event.ok { write(["effect": "dissolve", "at": [palm.x, palm.y], "time": clock]) }
+            ring.dissolveAt = enabled ? perch.dissolve(event) : nil
+            if let palm = ring.dissolveAt { write(["effect": "dissolve", "at": [palm.x, palm.y], "time": clock]) }
             ringEmit(ring.receive(event, delay: delay, now: clock, ringEnv))
         }
     }
