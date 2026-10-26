@@ -144,7 +144,10 @@ refuses terminals and OpenAI's own apps. See [approvals and guards](#approvals-a
   screen-sharing users need a physical keyboard or pointer for these cards. 1.5.0 adds a typed word plus Return from a physical
   keyboard. Switch Control's on-screen keyboard still cannot answer. Plain session-only app approvals can still use the host's prompts. Decline and Cancel remain available.
   Mac consent arming has headless fixture coverage, including the first activating click. Real AppKit activation order
-  and assistive-input behavior remain unmeasured.
+  and assistive-input behavior remain unmeasured. When an inactive alert has no click event, sleight checks recent
+  hardware mouse-down timing and that the card is the top window under the pointer. A poster at the HID tap could pass that
+  timing check too. That only keeps the 500 ms delay from restarting, and approving still needs a real down and up on the
+  card. When neither check passes, the first click can show "Too soon: try again", and a second click after 500 ms works.
 
 - When a card or menu-bar alert closes, sleight returns activation to the app that was in front just before the card
   was clicked. This also happens when a card times out or is aborted while the card's own app is in front, even if
