@@ -39,6 +39,9 @@ test('capture recorder compiles and refuses bad plans before any capture call', 
     [{ duration: 0 }, 'bad-duration'],
     [{ codec: 'h264' }, 'bad-codec'],
     [{ version: 2 }, 'bad-version'],
+    [{ scale: 3 }, 'bad-scale'],
+    [{ streams: [{ name: 'a', windows: [11], composite: false, followOwners: true }] }, 'bad-stream'],
+    [{ streams: [{ name: 'a', windows: [11, 12], composite: true, followOwners: true }] }, 'bad-stream'],
   ];
   for (const [extra, code] of cases) {
     const path = join(dir, 'plan.json');
@@ -48,6 +51,13 @@ test('capture recorder compiles and refuses bad plans before any capture call', 
     assert.equal(JSON.parse(run.stdout).error, code, JSON.stringify(extra));
     assert.equal(existsSync(join(dir, 'sync.json')), false);
   }
+
+  const valid = join(dir, 'valid.json');
+  writeFileSync(valid, JSON.stringify({ ...base, scale: 2, duration: 16,
+    streams: [{ name: 'take', windows: [11, 12, 13], composite: true, crop: 'first', followOwners: true }] }));
+  const checked = spawnSync(binary, ['validate', valid], { encoding: 'utf8', timeout: 5000 });
+  assert.equal(checked.status, 0, checked.stdout + checked.stderr);
+  assert.deepEqual(JSON.parse(checked.stdout), { ok: true, streams: 1, scale: 2, captureStarted: false });
 
   const codecs = spawnSync(binary, ['codecs'], { encoding: 'utf8', timeout: 20000 });
   assert.equal(codecs.status, 0, codecs.stderr);
