@@ -8,6 +8,24 @@ import { registerTemp } from '../scripts/temp-leftovers.mjs';
 import { rebuildSkipReason } from '../tools/characters/toolchain.mjs';
 import { loadCharacter } from '../plugins/sleight/lib/hand/character.mjs';
 import { builtinCharactersDirectory } from '../plugins/sleight/lib/hand/character.mjs';
+import { sheetEncoding, buildCast as installedBuild } from '../plugins/sleight/skills/make-character/tool/build.mjs';
+import { contactSheet } from '../plugins/sleight/skills/make-character/tool/lib/contact.mjs';
+
+test('repository and installed entry points share one builder, with optional unpinned custom WebP', () => {
+  assert.equal(buildCast, installedBuild);
+  for (const version of ['0.6.1', '1.6.0', '1.7.0', 'future']) {
+    assert.equal(sheetEncoding(true, () => version), 'webp');
+    if (version !== '1.6.0') assert.throws(() => sheetEncoding(false, () => version), /requires cwebp 1.6.0/);
+  }
+  assert.equal(sheetEncoding(true, () => { throw Error('ENOENT'); }), 'png');
+  assert.throws(() => sheetEncoding(false, () => { throw Error('ENOENT'); }), /ENOENT/);
+});
+
+test('contact sheets composite all four source pixels before reducing the cell size', () => {
+  const image = { width: 2, height: 2, data: Buffer.from([200, 100, 50, 255, 1, 2, 3, 0, 200, 100, 50, 255, 4, 5, 6, 0]) };
+  assert.deepEqual(contactSheet(image, 'light'), { width: 1, height: 1, data: Buffer.from([223, 173, 148, 255]) });
+  assert.deepEqual(contactSheet(image, 'dark'), { width: 1, height: 1, data: Buffer.from([114, 64, 41, 255]) });
+});
 test('the six packs rebuild with the approved manifests, states, dimensions and alpha structure', { skip: rebuildSkipReason(), timeout: 1200000 }, async t => {
   const base = registerTemp(t, fs.realpathSync(fs.mkdtempSync(join(tmpdir(), 'sleight-character-rebuild-'))));
   const output = join(base, 'characters'), manifest = await buildCast(output), committed = builtinCharactersDirectory();

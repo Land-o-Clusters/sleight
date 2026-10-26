@@ -62,10 +62,12 @@ test('Cursor never reads the Claude mod\'s hooks or picks up a component nobody 
   for (const dir of ['rules', 'agents', 'commands']) assert.equal(existsSync(join(plugin, dir)), false, `${dir}/ would load into Cursor`);
 });
 
-test('Cursor reads Claude Code skills, while Codex selects only drive-mac-apps', () => {
+test('Cursor reads Claude Code skills, while Codex lists only drive-mac-apps', () => {
   const skills = relative(cursor.skills);
-  assert.equal(relative(codex.skills).replace(/\/$/, ''), join(skills, 'drive-mac-apps'));
+  assert.equal(cursor.skills, './skills/');
+  // The single-skill path was observed on Codex 0.164.0, not documented upstream.
   assert.equal(codex.skills, './skills/drive-mac-apps/');
+  assert.equal(relative(codex.skills), join(skills, 'drive-mac-apps/'));
   for (const name of readdirSync(skills)) {
     const text = readFileSync(join(skills, name, 'SKILL.md'), 'utf8');
     const front = /^---\n([\s\S]*?)\n---/.exec(text)[1];

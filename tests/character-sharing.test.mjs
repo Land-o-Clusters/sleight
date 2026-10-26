@@ -391,3 +391,69 @@ for (const id of BUILTIN_CHARACTER_IDS) {
     assert.equal(checkCharacter(id, { root: w.root }).builtin, true); assert.equal(fs.existsSync(w.root), false);
   });
 }
+
+// C9R2: bound every attacker-controlled label and the whole CLI warning.
+test('a thousand unexpected files produce only eight 40-character labels and a remainder count', async t => {
+  const w = world(t), folder = w.plugin();
+  for (let n = 0; n < 1000; n++) fs.writeFileSync(join(folder, `${String(n).padStart(4, '0')}-${'🐭'.repeat(60)}-tail`), '');
+  w.record({ 'critters@demo': [{ scope: 'user', installPath: folder }] });
+  const groups = discoverCharacterPlugins(w.options), warning = groups[0].warning;
+  const summary = warning.slice('Warning: this plugin includes '.length, warning.indexOf('. sleight'));
+  const items = summary.split(', ');
+  assert.equal(items.length, 9); assert.equal(items.pop(), 'and 992 more');
+  assert.ok(items.every(item => [...item].length <= 40));
+  assert.equal(items.filter(item => item.endsWith('…')).length, 8);
+  assert.doesNotMatch(warning, /tail|0008/); assert.ok([...warning].length < 440);
+  let output = '';
+  assert.equal(await cursorCommand(['list'], { ...w.options, out: s => output += s, pluginCatalog: () => groups }), 0);
+  assert.ok(Buffer.byteLength(output) < 1600); assert.match(output, /and 992 more/); assert.doesNotMatch(output, /tail/);
+  t.diagnostic(`files=1000 labels=8 maxLabel=40 warningChars=${[...warning].length} cliBytes=${Buffer.byteLength(output)}`);
+});
+
+test('long metadata keys are capped and controls in filenames stay escaped', t => {
+  const w = world(t), folder = w.plugin(), key = 'x'.repeat(2000);
+  fs.writeFileSync(join(folder, '.claude-plugin/plugin.json'), JSON.stringify({ name: 'critters', [key]: {} }));
+  fs.writeFileSync(join(folder, 'text\n\u202e.dat'), '');
+  w.record({ 'critters@demo': [{ scope: 'user', installPath: folder }] });
+  const warning = discoverCharacterPlugins(w.options)[0].warning;
+  assert.ok(warning.includes('x'.repeat(39) + '…')); assert.doesNotMatch(warning, /x{40}|\n|\u202e/u);
+  assert.ok(warning.includes('\\u{202e}'));
+});
+
+for (const extension of ['mcpb', 'sh', 'js', 'node', 'rst', 'markdown', 'MD']) test(`documentation extension .${extension} warns`, t => {
+  const w = world(t), folder = w.plugin();
+  for (const stem of ['README', 'LICENSE', 'CHANGELOG']) fs.writeFileSync(join(folder, `${stem}.${extension}`), '');
+  w.record({ 'critters@demo': [{ scope: 'user', installPath: folder }] });
+  const warning = discoverCharacterPlugins(w.options)[0].warning;
+  for (const stem of ['README', 'LICENSE', 'CHANGELOG']) assert.ok(warning.includes(`${stem}.${extension}`));
+});
+
+test('marketplace category, tags and strict are ordinary metadata; manifest components still warn', t => {
+  const w = world(t), folder = w.plugin(); w.record({ 'critters@demo': [{ scope: 'user', installPath: folder }] });
+  const market = join(w.home, 'marketplace'), dir = join(market, '.claude-plugin'); fs.mkdirSync(dir, { recursive: true });
+  fs.writeFileSync(join(w.home, '.claude/plugins/known_marketplaces.json'), JSON.stringify({ demo: { installLocation: market } }));
+  for (const strict of [true, false]) {
+    fs.writeFileSync(join(dir, 'marketplace.json'), JSON.stringify({ plugins: [{ name: 'critters', source: './critters', category: 'art', tags: ['characters'], strict }] }));
+    assert.equal(discoverCharacterPlugins(w.options)[0].warning, undefined);
+  }
+  fs.writeFileSync(join(folder, '.claude-plugin/plugin.json'), JSON.stringify({ name: 'critters', tags: [], strict: true, category: 'art' }));
+  assert.match(discoverCharacterPlugins(w.options)[0].warning, /tags, strict, category/);
+});
+
+test('refused roots and reserved or invalid packs remain in the menu with a reason and no import key', async t => {
+  const w = world(t), folder = w.plugin('collision', 'bit');
+  w.putPack(join(folder, 'sleight-characters/broken'), 'broken'); fs.writeFileSync(join(folder, 'sleight-characters/broken/character.json'), '{}');
+  w.record({ 'collision@demo': [{ scope: 'user', installPath: folder }] });
+  let groups = discoverCharacterPlugins(w.options);
+  const refused = { host: 'claude', pluginId: 'Claude plugins', reason: 'plugins folder resolves outside the user home', packs: [] };
+  groups = [...groups, refused];
+  const controller = createCursorPicker({ ...w.options, pluginCatalog: () => groups });
+  const catalog = await controller.catalog();
+  const rows = catalog.rows.filter(row => row.title.startsWith('collision@demo') || row.title === 'Claude plugins');
+  assert.equal(rows.length, 2);
+  const skipped = rows.flatMap(row => row.children); assert.equal(skipped.length, 3);
+  assert.ok(skipped.every(row => row.op === 'skipped' && row.reason && !row.key));
+  assert.match(skipped.find(row => row.title.startsWith('bit')).reason, /reserved/);
+  assert.match(skipped.find(row => row.title.startsWith('broken')).reason, /format/);
+  assert.match(skipped.find(row => row.title.startsWith('Claude')).reason, /outside/);
+});

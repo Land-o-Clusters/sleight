@@ -16,6 +16,8 @@ const slug = id => id.toLowerCase().replace(/[^a-z0-9-]/g, '-');
 const title = name => typeof name === 'string' && name.length > 0 && name.length <= 60;
 const menuTitle = (name, fallback) => [...name.replace(/[\p{C}\p{Zl}\p{Zp}]/gu, '')].slice(0, 60).join('') || fallback;
 const pluginWarning = ' (warning: check plugin)';
+const skippedRow = (name, reason) => ({ title: [...menuTitle(name, 'Plugin')].slice(0, 50).join('') + ' (skipped)', op: 'skipped',
+  reason: [...reason.replace(/[\p{C}\p{Zl}\p{Zp}]/gu, ' ')].slice(0, 1000).join('') || 'Character unavailable' });
 export function cursorMenuModel({ installed = [], found = [], plugins = [], style = 'glove', character, lines = 'on' } = {}) {
   const ids = new Set(installed.map(c => c.id));
   return [
@@ -24,11 +26,12 @@ export function cursorMenuModel({ installed = [], found = [], plugins = [], styl
     // A2: the character's lines, a toggle shown with a sprite selected.
     ...style === 'sprite' ? [{ title: 'Character lines', op: 'lines', selected: lines !== 'off' }] : [],
     { title: 'Add your Codex pets', children: sort(found.filter(p => !ids.has(p.id))).map(p => ({ title: menuTitle(p.name, p.id), op: 'import', key: p.key })) },
-    ...plugins.filter(p => p.packs.length).map(p => ({ title: p.warning
+    ...plugins.filter(p => p.packs.length || p.reason || p.skipped?.length).map(p => ({ title: p.warning
       ? [...menuTitle(p.pluginId, p.pluginId)].slice(0, 60 - pluginWarning.length).join('') + pluginWarning
-      : menuTitle(p.pluginId, p.pluginId), children: sort(p.packs).map(pack => ids.has(pack.id)
+      : menuTitle(p.pluginId, p.pluginId), children: [...sort(p.packs).map(pack => ids.has(pack.id)
         ? { title: [...menuTitle(pack.name, pack.id)].slice(0, 60 - ' (already installed)'.length).join('') + ' (already installed)', op: 'installed' }
-        : { title: menuTitle(pack.name, pack.id), op: 'import', key: pack.key }) })),
+        : { title: menuTitle(pack.name, pack.id), op: 'import', key: pack.key }),
+      ...p.reason ? [skippedRow(p.pluginId, p.reason)] : [], ...(p.skipped ?? []).map(pack => skippedRow(pack.id, pack.reason))] })),
     { title: 'Open characters folder', op: 'folder' },
   ];
 }

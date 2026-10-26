@@ -225,7 +225,7 @@ function validateManifest(manifest, files, { expectedId, shared = false, sourceF
   const spdx = /^(?:CC0-1\.0|CC-BY(?:-SA|-NC|-NC-SA|-ND|-NC-ND)?-(?:1\.0|2\.0|2\.5|3\.0|4\.0)|MIT|Apache-2\.0|BSD-[23]-Clause|ISC|Unlicense|GPL-[23]\.0-(?:only|or-later)|OFL-1\.1)$/;
   if (!spdx.test(m.license) && !['unknown', 'proprietary-personal'].includes(m.license) && !files.has('LICENSE.txt')) fail('custom license requires LICENSE.txt', 'license');
   filename(m.sheet, 'sheet', sourceFile); if (!/^sheet\.(png|webp)$/.test(m.sheet)) fail('sheet filename must be sheet.png or sheet.webp', 'sheet');
-  if (m.extra !== undefined && m.extra !== 'extra.webp') fail('extra sheet filename must be extra.webp', 'extra');
+  if (m.extra !== undefined && !/^extra\.(png|webp)$/.test(m.extra)) fail('extra sheet filename must be extra.png or extra.webp', 'extra');
   const allowed = ['character.json', m.sheet, m.extra, m.perch?.sheet, 'preview.png', 'LICENSE.txt'];
   if (!files.has(m.sheet)) fail('sheet file missing', 'sheet', m.sheet);
   if (m.extra && !files.has(m.extra)) fail('sheet file missing', 'extra', m.extra);

@@ -38,7 +38,13 @@ test('make-character description stays below 60 tokens even at one token per UTF
   const bytes = Buffer.byteLength(description);
   assert.ok(bytes < 60, `${bytes} bytes is the conservative token upper bound`);
   assert.equal(hash(description), baseline.makeCharacterDescription);
-  t.diagnostic(`make-character description: ${bytes} UTF-8 bytes, at most ${bytes} byte-level tokens; body is on demand`);
+  const bodyBytes = Buffer.byteLength(source), words = source.trim().split(/\s+/).length;
+  assert.match(source, /^disable-model-invocation: true$/m);
+  // Codex 0.164.0 ignores disable-model-invocation. The reviewer observed that this manifest path
+  // omits make-character from its model-visible skills; the path form is not documented upstream.
+  const codex = JSON.parse(readFileSync(new URL('../plugins/sleight/.codex-plugin/plugin.json', import.meta.url), 'utf8'));
+  assert.equal(codex.skills, './skills/drive-mac-apps/');
+  t.diagnostic(`make-character description: ${bytes} UTF-8 bytes, at most ${bytes} byte-level tokens; on-demand body: ${bodyBytes} UTF-8 bytes, ${words} words`);
 });
 
 test('outcome reporting guidance costs no default skill tokens', () => {
