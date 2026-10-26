@@ -92,6 +92,7 @@ import { resultCompleteness, filteredRead } from './read-completeness.mjs';
 import { stripHandBindings } from './hand/bindings.mjs';
 import { narrationLine } from '../hooks/narration.mjs';
 import { cursorRecord } from './hand/events.mjs';
+import { createSessionPause, PAUSED_NOTE, PAUSE_DRAIN_NOTE, PAUSE_CONTROL_LOST_NOTE, NATIVE_PAUSE_CUT_NOTE } from './session-pause.mjs';
 import { stripGuardTiming } from './guard-timing.mjs';
 import { stripDP1Trace } from './dp1-trace.mjs';
 import { createStuckEscapes } from './stuck-escape.mjs';
@@ -914,7 +915,31 @@ export function createRelay({
   // the relay never awaits it or reads its state, and without it nothing changes.
   hand,
   cursor,
+  pause = createSessionPause(),
+  pauseHost,
 }) {
+  const pauseChecks = new Map(), pausedCalls = new Set(), nativePauseCuts = new Set();
+  const applyPause = value => {
+    if (value) for (const id of engineCalls) if (running.has(id) && !localRunning.has(id)) pausedCalls.add(id);
+    cursor?.setPaused?.(value);
+    directBrowser?.setPaused?.(value);
+    if (value) hand?.pause?.();
+  };
+  const releasePause = pause.subscribe(applyPause);
+  function pauseBlocked(msg) {
+    if (msg.method !== 'tools/call' || [TURN_END_TOOL, TURN_START_TOOL].includes(msg.params?.name)) return false;
+    try {
+      if (!pauseChecks.has(msg.id)) pauseChecks.set(msg.id, pause.checkpoint());
+      pauseChecks.get(msg.id)();
+      return false;
+    } catch { return true; }
+  }
+  function pauseReply(msg, text = PAUSED_NOTE) {
+    if (pauseHost?.controlLost) text += ' ' + PAUSE_CONTROL_LOST_NOTE;
+    const response = { jsonrpc: '2.0', id: msg.id, result: { isError: true, content: [{ type: 'text', text }] } };
+    // Internal split calls still need their normal callback and bookkeeping.
+    observeServerMessage(response);
+  }
   const localCursor = new Map();
   const callNarration = new Map();
   const cursorStatus = (state, detail) => { try { cursor?.status(state, detail); } catch {} };
@@ -936,6 +961,18 @@ export function createRelay({
   let installedBootstrapped = false;
   const remoteEnvelope = directHost?.bootstrapEnvelope() ?? { version: 1, session: randomUUID(), nonce: randomBytes(32).toString('hex') };
   const remoteTurns = new Set(), typedApps = new Set(), remoteRefusedCalls = new Set(), remoteUnboundNotices = new Map(), awayCards = new Map();
+  function bindTurboPrompt(frame) {
+    // Both envelope forms are authenticated before this helper. A late bind must not replace a newer prompt's authority.
+    paymentMessages.set(frame.text);
+    const binding = directHost.bind(frame, turboApps(), clientHost).then(available => {
+      if (available) { resumeRequested = true; resumeAfterStop(); }
+      return { available, deferred: false };
+    });
+    // prompt.submit awaits turn_ended. During pause even a slow worker must not hold the person's message.
+    // Binding continues in the background; both the relay and worker still refuse calls until Resume.
+    if (pause.paused) { binding.catch(() => {}); return Promise.resolve({ available: false, deferred: true }); }
+    return binding;
+  }
   let promptOrigin;
   let catalogSettled = false;
   let remoteCatalog = { apps: [], defaults: {} };
@@ -1262,6 +1299,7 @@ export function createRelay({
   function cancelInternalRequests(message) {
     docOrigin.invalidate();
     const requests = [...internalRequests.values()];
+    for (const id of internalRequests.keys()) { pauseChecks.delete(id); pausedCalls.delete(id); nativePauseCuts.delete(id); }
     internalRequests.clear();
     for (const resolve of requests) resolve({ error: { message } });
   }
@@ -1303,7 +1341,7 @@ export function createRelay({
       if (initialization) {
         const id = `sleight-initialize-${nextInternalId++}`;
         const reply = await new Promise((resolve, reject) => {
-          const timer = setTimeout(() => { internalRequests.delete(id); reject(new Error(/* notice */ 'Engine initialization timed out.')); }, restartTimeoutMs);
+          const timer = setTimeout(() => { internalRequests.delete(id); pauseChecks.delete(id); reject(new Error(/* notice */ 'Engine initialization timed out.')); }, restartTimeoutMs);
           internalRequests.set(id, msg => { clearTimeout(timer); resolve(msg); });
           toServer({ ...initialization, id });
         });
@@ -2438,6 +2476,15 @@ export function createRelay({
   let nextElicitId = 0;
 
   const toServer = (msg, continuationChecked = false) => {
+    if (pauseBlocked(msg)) { pauseReply(msg); return; }
+    // Native approval tokens carry no parent call ID. Keep fresh calls out of that ambiguity until the old call drains.
+    if (pausedCalls.size && msg.method === 'tools/call' && msg.params?.name !== TURN_END_TOOL && !pausedCalls.has(msg.id)) {
+      pauseReply(msg, PAUSE_DRAIN_NOTE); return;
+    }
+    if (msg.result?.action === 'accept' && (pause.paused || pausedCalls.size)) {
+      for (const id of pausedCalls) nativePauseCuts.add(id);
+      msg = { ...msg, result: { action: 'decline' } };
+    }
     let closeKeyApp;
     // An accepted app approval is the exact beat of its action.
     if (hand && msg.method === undefined && msg.id !== undefined) hand.answered(msg.id, msg.result?.action);
@@ -2495,6 +2542,7 @@ export function createRelay({
     if (msg.method === 'tools/call' && menuCalls.has(msg.id)) menuCalls.get(msg.id).forwardedAt ??= clock();
     // The action log times a call from here, after sleight's own checks and waits.
     if (msg.method === 'tools/call' && msg.id !== undefined) recordAction('sent', msg.id);
+    if (msg.method === 'tools/call' && msg.params?.name !== TURN_END_TOOL) pauseHost?.activity();
     serverIn.write(JSON.stringify(msg) + '\n');
     replWarmup.sent(msg);
   };
@@ -2514,7 +2562,7 @@ export function createRelay({
       return await new Promise(resolve => {
         const id = `sleight-tab-cleanup-${nextInternalId++}`;
         const timer = setTimeout(() => {
-          internalRequests.delete(id); lateHelperReplies.add(id);
+          internalRequests.delete(id); pauseChecks.delete(id); lateHelperReplies.add(id);
           resolve(cleanupTimeoutNote);
         }, SHUTDOWN_GRACE_MS);
         internalRequests.set(id, reply => {
@@ -2554,7 +2602,7 @@ export function createRelay({
   function openScreenshot(handle) {
     return new Promise(resolve => {
       const id = `sleight-open-shot-${nextInternalId++}`;
-      const timer = setTimeout(() => { internalRequests.delete(id); lateHelperReplies.add(id); resolve(undefined); }, openShotTimeoutMs);
+      const timer = setTimeout(() => { internalRequests.delete(id); pauseChecks.delete(id); lateHelperReplies.add(id); resolve(undefined); }, openShotTimeoutMs);
       internalRequests.set(id, reply => {
         clearTimeout(timer);
         resolve(reply.error || reply.result?.isError ? undefined
@@ -2575,7 +2623,7 @@ export function createRelay({
     const reply = await new Promise(resolve => {
       const id = `sleight-launch-read-${nextInternalId++}`;
       const timer = setTimeout(() => {
-        internalRequests.delete(id); lateHelperReplies.add(id); resolve(undefined);
+        internalRequests.delete(id); pauseChecks.delete(id); lateHelperReplies.add(id); resolve(undefined);
       }, 5500);
       internalRequests.set(id, reply => { clearTimeout(timer); resolve(reply); });
       toServer({ jsonrpc: '2.0', id, method: 'tools/call', params: { name: 'js',
@@ -2588,6 +2636,7 @@ export function createRelay({
     msg.result.content = [...dropAcquisitionTree(msg.result.content, reply.result.content, undefined, compactReacquire), ...reply.result.content];
   }
   const toClient = (msg, afterWrite, remoteNotice = false) => {
+    if (msg.method === undefined) { pauseChecks.delete(msg.id); pausedCalls.delete(msg.id); nativePauseCuts.delete(msg.id); }
     // An approval prompt's time comes off the action log's call times (the engine's prompts and sleight's own).
     if (msg.method === 'elicitation/create' && msg.id !== undefined) recordAction('waitStart', 'c:' + msg.id);
     // Every call's reply ends it, by whatever path: its parent lease pin ends too.
@@ -2978,6 +3027,7 @@ export function createRelay({
 
   function askUser(msg, ignoreMemory = false) {
     const generation = stopGeneration;
+    const pauseCheck = pause.checkpoint();
     const appApproval = plainCard(msg);
     const key = approvalScope === 'session' && (!panelOnly || appApproval) ? approvalKey(msg) : undefined;
     // Only a repeated pending RPC ID in this engine epoch proves a retry. Equal text or metadata can describe
@@ -2988,6 +3038,7 @@ export function createRelay({
     let decision = pendingKey && pendingShellAsks.get(pendingKey);
     if (!decision) {
       decision = asking.then(async () => {
+        try { pauseCheck(); } catch { return { action: 'decline' }; }
         if (generation !== stopGeneration) return { action: 'cancel' };
         if (!ignoreMemory && key !== undefined && approved.has(key)) {
           trace('answered-for-session', msg);
@@ -3005,6 +3056,7 @@ export function createRelay({
           action = 'cancel';
         }
         if (generation !== stopGeneration) return { action: 'cancel' };
+        try { pauseCheck(); } catch { return { action: 'decline' }; }
         if (action === 'always' && always) { rememberAlways(always); action = 'accept'; }
         if (action !== 'accept') return { action };
         if (key === undefined) return { action, content: {} };
@@ -3137,7 +3189,7 @@ export function createRelay({
     if (!handle || compactor.seenLines(target) === undefined) return [];
     const reply = await new Promise(resolve => {
       const id = `sleight-drag-read-${nextInternalId++}`;
-      const timer = setTimeout(() => { internalRequests.delete(id); lateHelperReplies.add(id); resolve(undefined); }, 5000);
+      const timer = setTimeout(() => { internalRequests.delete(id); pauseChecks.delete(id); lateHelperReplies.add(id); resolve(undefined); }, 5000);
       internalRequests.set(id, response => { clearTimeout(timer); resolve(response); });
       toServer({ jsonrpc: '2.0', id, method: 'tools/call', params: { name: 'js',
         arguments: { code: `await ${handle}.getAXState({ disableDiffing: true })` }, _meta: engineMeta() } });
@@ -3153,7 +3205,9 @@ export function createRelay({
 
   async function callLocal(msg, plan) {
     const generation = stopGeneration;
+    const pauseCheck = pauseChecks.get(msg.id) ?? pause.checkpoint();
     const current = () => {
+      pauseCheck();
       if (closing || disposed) throw new Error(/* notice */ 'Input lease: this session is closing.');
       if (generation !== stopGeneration) throw new Error(/* notice */ 'Input lease: this call was stopped.');
     };
@@ -3165,6 +3219,7 @@ export function createRelay({
     if (name === 'select_window') { clearSelection(); openedWindow = undefined; }
     try {
       current();
+      if (pauseHost?.clearForAction && ['drag', 'hover', 'menu_bar'].includes(name)) { await pauseHost.clearForAction(); current(); }
       if (openFast && name === 'open_file' && localTools.prepareOpen) {
         prepared = localTools.prepareOpen(args, async (parts, message, options) => {
           preparedAsk = approve(parts, message, msg.id, options);
@@ -3286,10 +3341,14 @@ export function createRelay({
         callArgs = { ...callArgs, ...endpoints, screenshot: shot ? [shot.latest.width, shot.latest.height] : undefined, screenshots: shot?.byTitle,
           screenshotsByWindow: shot?.byWindow, toElementLines: undefined, toElementWindow: undefined, ...evidence };
       }
+      current();
+      pauseHost?.activity();
       result = await localTools.call(name, callArgs, async (parts, message, options) => {
         const allowed = await (prepared?.approval ?? approve(parts, message, msg.id, options));
         current();
         if (allowed) {
+          // Approval can emit waiting after the admission clear. Remove any control again before pointer input.
+          if (pauseHost?.clearForAction && ['drag', 'hover', 'menu_bar'].includes(name)) { await pauseHost.clearForAction(); current(); }
           const key = leaseCalls.get(msg.id)?.key;
           if (key) inputLease.renew([key]);
         }
@@ -3443,6 +3502,7 @@ export function createRelay({
         callNarration.set(msg.id, say);
       }
     }
+    if (pauseBlocked(msg)) { callNarration.delete(msg.id); pauseReply(msg); return; }
     if (msg.method === 'initialize') codexClient = codexTurnClient(msg.params?.clientInfo);
     if (msg.method === 'tools/call') {
       if (docOrigin.owns(msg.id)) {
@@ -3480,10 +3540,15 @@ export function createRelay({
       if (!Object.hasOwn(frame, 'origin')) {
         // Older mods retain their turbo-only contract, without typed app authority.
         if (!directHost) { refuse(); return; }
-        directHost.bind(frame, turboApps(), clientHost).then(available => {
-          paymentMessages.set(frame.text);
-          if (available) { resumeRequested = true; resumeAfterStop(); }
-          reply({ isError: !available, content: [] });
+        // Validate before a paused turn's immediate reply. The background bridge still validates its own envelope.
+        const keys = ['version', 'session', 'nonce', 'event', 'turn', 'text'];
+        if (Object.keys(frame).length !== keys.length || !keys.every(k => Object.hasOwn(frame, k)) ||
+            frame.version !== remoteEnvelope.version || frame.session !== remoteEnvelope.session || frame.nonce !== remoteEnvelope.nonce ||
+            typeof frame.turn !== 'string' || !/^[A-Za-z0-9_-]{1,128}$/.test(frame.turn) || remoteTurns.has(frame.turn) ||
+            remoteTurns.size >= 10000 || typeof frame.text !== 'string' || Buffer.byteLength(frame.text) > 65536) { refuse(); return; }
+        remoteTurns.add(frame.turn);
+        bindTurboPrompt(frame).then(({ available, deferred }) => {
+          reply({ isError: !available && !deferred, content: [] });
         }).catch(refuse);
         return;
       }
@@ -3511,8 +3576,7 @@ export function createRelay({
         let turboBound = false;
         if (frame.turbo && directHost) {
           const { origin: _origin, turbo: _turbo, ...binding } = frame;
-          try { turboBound = await directHost.bind(binding, turboApps(), clientHost); paymentMessages.set(frame.text); } catch {}
-          if (turboBound) { resumeRequested = true; resumeAfterStop(); }
+          try { turboBound = (await bindTurboPrompt(binding)).available; } catch {}
         }
         reply({ isError: false, content: [{ type: 'text', text: JSON.stringify({ sleightRemote: { turboBound, ...(context ? { context } : {}) } }) }] });
       })().catch(refuse);
@@ -3655,6 +3719,7 @@ export function createRelay({
   const continuedLeads = new Map();
   const skippedSettle = (id, reason) => saveNotes.set(id, promptNotice(`Text-write settle skipped: ${String(reason).replace(/\s+/g, ' ')}.`, prompt));
   function splitSave(msg) {
+    if (pauseBlocked(msg)) { pauseReply(msg); return true; }
     if (!inputLease || msg.method !== 'tools/call' || msg.params?.name !== 'js' ||
         msg.id === undefined || typeof msg.params.arguments?.code !== 'string' || browserPlan(msg.params.arguments.code)) return false;
     const plan = splitTextSave(msg.params.arguments.code);
@@ -3668,18 +3733,20 @@ export function createRelay({
     }
     const expected = handleBundles.get(plan.handle);
     if (!expected?.appId || expected.appId !== leaseWindow?.appId || !sameWindow(expected, leaseWindow)) return false;
-    const generation = stopGeneration, prefixId = `sleight-text-write-${nextInternalId++}`;
-    const current = () => generation === stopGeneration && !closing && !disposed && !stopCollected &&
+    const generation = stopGeneration, prefixId = `sleight-text-write-${nextInternalId++}`, pauseCheck = pauseChecks.get(msg.id);
+    const current = () => !pauseBlocked(msg) && generation === stopGeneration && !closing && !disposed && !stopCollected &&
       expected.appId === leaseWindow?.appId && sameWindow(expected, leaseWindow);
     if (prepareTextWrite && !preparedSaves.delete(msg.id)) {
       running.add(msg.id); callDetails.set(msg.id, 'text-write preflight');
       Promise.resolve().then(() => prepareTextWrite(expected, current)).then(() => {
         finishedCall(msg.id);
+        if (pauseBlocked(msg)) { pauseReply(msg); return; }
         if (!current()) { if (!disposed && !stopCollected) leaseStop(msg, 'Text save was stopped before the write.'); return; }
         preparedSaves.add(msg.id);
         if (!splitSave(msg)) handleClient(msg);
       }, error => {
         finishedCall(msg.id);
+        if (pauseBlocked(msg)) { pauseReply(msg); return; }
         if (!current()) { if (!disposed && !stopCollected) leaseStop(msg, 'Text save was stopped before the write.'); return; }
         if (error.textSaveStop) { leaseStop(msg, error.message); return; }
         skippedSettle(msg.id, error.message);
@@ -3688,12 +3755,15 @@ export function createRelay({
       return true;
     }
     callGenerations.set(prefixId, generation);
+    pauseChecks.set(prefixId, pauseCheck);
     splitCalls.set(prefixId, reply => {
+      pauseChecks.delete(prefixId);
       if (reply.error || reply.result?.isError) { toClient({ ...reply, id: msg.id }); return; }
       splitInputs.add(msg.id);
       const content = reply.result?.content ?? [];
       const stop = error => toClient({ jsonrpc: '2.0', id: msg.id, result: { isError: true, content: [...content,
         { type: 'text', text: promptNotice(`Text save stopped after the write: ${error.message}. The save was not sent. Read the intended window before continuing.`, prompt) }] } });
+      try { pauseCheck(); } catch (error) { stop(error); return; }
       if (!current()) { stop(new Error(/* notice */ 'window changed or call stopped')); return; }
       let key;
       try { key = inputLease.acquire(expected); }
@@ -3701,6 +3771,7 @@ export function createRelay({
       running.add(msg.id); callDetails.set(msg.id, 'text-write settle');
       leaseCalls.set(msg.id, { key }); refreshHeartbeat();
       Promise.resolve().then(() => {
+        pauseCheck();
         if (!current()) throw new Error(/* notice */ 'call stopped');
         inputLease.renew([key]);
         return Promise.resolve().then(() => settleTextWrite(leaseWindow, current, inputLease.grant(key)))
@@ -3710,6 +3781,7 @@ export function createRelay({
             skippedSettle(msg.id, error.message);
           });
       }).then(() => {
+        pauseCheck();
         if (!current()) throw new Error(/* notice */ 'window changed or call stopped');
         inputLease.renew([key]);
         finishedCall(msg.id);
@@ -3810,6 +3882,7 @@ export function createRelay({
     handleClient({ jsonrpc: '2.0', id, method: 'tools/call', params: { name: 'js', arguments: { code: acquisitionCode(handle, open.browser) } } });
   }
   function splitAcquisition(msg, probed) {
+    if (pauseBlocked(msg)) { pauseReply(msg); return true; }
     if (documentMode || msg.method !== 'tools/call' || msg.params?.name !== 'js' ||
         msg.id === undefined || typeof msg.params.arguments?.code !== 'string') return false;
     const code = msg.params.arguments.code;
@@ -4086,6 +4159,15 @@ export function createRelay({
     }
     if (remainder?.tab && splitCalls.has(msg.id)) refuseTab('split-call');
     if (!remainder || !call.baseline || splitCalls.has(msg.id)) return false;
+    const continuationPauseCheck = pauseChecks.get(msg.id) ?? pause.checkpoint();
+    const stoppedByPause = () => {
+      let cut = pausedCalls.has(msg.id);
+      try { continuationPauseCheck(); } catch { cut = true; }
+      if (!cut) return false;
+      msg.result.content.push({ type: 'text', text: NATIVE_PAUSE_CUT_NOTE });
+      return true;
+    };
+    if (stoppedByPause()) return false;
     const current = () => call.generation === stopGeneration && !closing && !disposed && !stopCollected;
     // A tab continuation also asks the helper for the window's sheets and focused element.
     // A palette is a window of its own: the helper must find it focused, under its title and with no URL (paletteRefusal).
@@ -4101,6 +4183,7 @@ export function createRelay({
       : remainder.tab ? error => refuseTab(`identity: ${error}`) : remainder.palette ? error => refusePalette(`identity: ${error}`) : undefined)
       : (refuse('palette-still-open'), undefined)).then(observed => {
       if (!current()) { if (remainder.tab) refuseTab('call-superseded'); observeServerMessage(msg); return; }
+      if (stoppedByPause()) { observeServerMessage(msg); return; }
       if (remainder.dialog) noteProcess(observed);
       const since = Math.min(call.forwardedAt, call.sampledAt ?? call.forwardedAt);
       // HID idle from when the covered window was last seen standard, through the dialog, to now.
@@ -4175,7 +4258,7 @@ export function createRelay({
     const generation = stopGeneration, started = clock(), live = () => generation === stopGeneration && !closing && !disposed && !stopCollected;
     const read = timeoutMs => new Promise(resolve => {
       const id = `sleight-tab-landing-${nextInternalId++}`;
-      const timer = setTimeout(() => { internalRequests.delete(id); lateHelperReplies.add(id); resolve(undefined); }, timeoutMs);
+      const timer = setTimeout(() => { internalRequests.delete(id); pauseChecks.delete(id); lateHelperReplies.add(id); resolve(undefined); }, timeoutMs);
       internalRequests.set(id, reply => { clearTimeout(timer); resolve(reply); });
       toServer({ jsonrpc: '2.0', id, method: 'tools/call', params: { name: 'js',
         arguments: { code: `await ${forward.landing}.getAXState({ disableDiffing: true })` }, _meta: engineMeta() } });
@@ -4203,6 +4286,11 @@ export function createRelay({
     return true;
   }
   function handleClient(msg) {
+    if (pauseBlocked(msg)) { pauseReply(msg); return; }
+    if (msg.result?.action === 'accept' && (pause.paused || pausedCalls.size)) {
+      for (const id of pausedCalls) nativePauseCuts.add(id);
+      msg = { ...msg, result: { action: 'decline' } };
+    }
     if (nativeHandoff && msg.method === 'notifications/cancelled' && msg.params?.requestId === nativeHandoff.id) {
       nativeHandoff.cancel?.(); return;
     }
@@ -4244,6 +4332,7 @@ export function createRelay({
       running.add(msg.id);
       callDetails.set(msg.id, msg.params.name);
       recordAction('sent', msg.id);
+      pauseHost?.activity();
       directBrowser.call({ name: msg.params.name, arguments: msg.params.arguments, ...callNarration.has(msg.id) ? { say: callNarration.get(msg.id) } : {} }).then(result => {
         cursorStatus(result.isError ? 'error' : 'done', { say: callNarration.get(msg.id) });
         if (!result.isError) cursorStatus('thinking', { say: callNarration.get(msg.id) });
@@ -5014,6 +5103,13 @@ export function createRelay({
     observeServerMessage(msg);
   }
   function observeServerMessage(msg) {
+    if (msg.method === 'elicitation/create' && (pause.paused || pausedCalls.size)) {
+      for (const id of pausedCalls) nativePauseCuts.add(id);
+      toServer({ jsonrpc: '2.0', id: msg.id, result: { action: 'decline' } }); return;
+    }
+    if (msg.method === undefined && nativePauseCuts.delete(msg.id) && msg.result) {
+      msg.result = { ...msg.result, content: [...msg.result.content ?? [], { type: 'text', text: NATIVE_PAUSE_CUT_NOTE }] };
+    }
     docOrigin.reply(msg, documentationContext());
     if (msg.method === 'elicitation/create' || msg.error || msg.result?.isError) docOrigin.invalidate();
     // A completed warmup ID remains private, including duplicate engine replies.
@@ -5034,6 +5130,7 @@ export function createRelay({
     replWarmup.reply(msg);
     if (msg.method === undefined) privateWarmRequests.delete(msg.id);
     if (msg.method === undefined && nativeWarmRequests.delete(msg.id)) {
+      pauseChecks.delete(msg.id);
       replWarmup.retainDocs(msg);
       flushHeldWarmPrompts();
       return;
@@ -5304,7 +5401,7 @@ export function createRelay({
       // Warm-up owns its retention. Other private reads may keep only an image, a tree or a diagnostic.
       if (!String(msg.id).startsWith('sleight-warm-')) replWarmup.retainDocs({ result: { content: engineDocs(msg.result?.content) } });
       internalRequests.get(msg.id)(msg);
-      internalRequests.delete(msg.id);
+      internalRequests.delete(msg.id); pauseChecks.delete(msg.id); pausedCalls.delete(msg.id);
       return;
     }
     // Applied after a docs restart below. forgetHandles would otherwise drop the handles this reply just confirmed.
@@ -5361,7 +5458,7 @@ export function createRelay({
         const probeId = `sleight-opened-tabs-${nextInternalId++}`, generation = stopGeneration;
         const original = msg, code = jsCode;
         const finish = reply => {
-          clearTimeout(timer); internalRequests.delete(probeId);
+          clearTimeout(timer); internalRequests.delete(probeId); pauseChecks.delete(probeId);
           if (generation !== stopGeneration) return;
           const text = (reply.result?.content ?? []).filter(c => c.type === 'text').map(c => c.text).join('\n');
           const opened = parseOpenedPayload(text, original.id);
@@ -6118,7 +6215,7 @@ export function createRelay({
         if (tabsMayNeedCleanup || tabCleanupPending) tabNote = await cleanupBrowserTabs();
         const id = `sleight-stop-${nextInternalId++}`;
         const ended = await new Promise(resolve => {
-          const timer = setTimeout(() => { internalRequests.delete(id); resolve(undefined); }, stopGraceMs);
+          const timer = setTimeout(() => { internalRequests.delete(id); pauseChecks.delete(id); resolve(undefined); }, stopGraceMs);
           internalRequests.set(id, reply => { clearTimeout(timer); resolve(reply); });
           toServer({ jsonrpc: '2.0', id, method: 'tools/call', params: { name: TURN_END_TOOL,
             arguments: endTurnArgs({ hook_event_name: 'Interrupt' }) } });
@@ -6296,6 +6393,7 @@ export function createRelay({
   }
   function close() {
     closing = true;
+    releasePause(); pauseChecks.clear(); pausedCalls.clear(); nativePauseCuts.clear();
     for (const pending of clipboardReplies.values()) pending.reject(new Error(/* notice */ 'Clipboard guard: engine connection closed.'));
     clipboardReplies.clear();
     clearTimeout(idleTimer);
@@ -6313,5 +6411,6 @@ export function createRelay({
     await close();
     return true;
   }
+  if (pause.paused) applyPause(true);
   return { endOpenTurn, shutdown, engineEnded, close, dispose: close, get snapshotDirectory() { return changes.directory; }, get sessionId() { return sessionId; }, get turnId() { return turnId; } };
 }

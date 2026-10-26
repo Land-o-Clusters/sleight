@@ -24,6 +24,21 @@ async function fixture(t) {
 async function modules() {
   return { ...await import(new URL('listen.mjs', kit)), ...await import(new URL('replay.mjs', kit)) };
 }
+test('open renderer parser accepts the additive paused status', async () => {
+  const { parseEvent } = await modules();
+  const record = { ...event(), type: 'status', state: 'paused' };
+  const parsed = parseEvent(JSON.stringify(record));
+  assert.equal(parsed.state, 'paused'); assert.equal(parsed.type, 'status');
+});
+test('paused sessions remain hidden across late in-flight action results until resume', async t => {
+  const { createCursorListener } = await modules(), dir = await fixture(t), views = [];
+  const listener = await createCursorListener({ dir, name: 'paused', onEvent: (e, v) => views.push({ seq: e.seq, visible: v.visible }) });
+  t.after(() => listener.close());
+  const action = event(), status = (seq, state) => ({ ...event(seq), type: 'status', state });
+  await send(listener.path, [action, status(2, 'paused'), { ...event(3), phase: 'done' }, status(4, 'idle'), event(5)].map(JSON.stringify).join('\n') + '\n');
+  await until(() => views.length === 5);
+  assert.deepEqual(views.map(v => v.visible), [true, false, false, false, true]);
+});
 async function until(predicate) {
   for (let i = 0; i < 200; i++) {
     if (predicate()) return;

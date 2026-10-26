@@ -19,10 +19,15 @@ const act = (seq, over = {}) => ({ hand: 'act', nonce, seq, kind: 'click', pid: 
   at: [100.5, 200], path: [[40, 60], [100.5, 200]], delayMs: 0, beats: 1, ...over });
 const line = frame => (typeof frame === 'string' ? frame : JSON.stringify(frame)) + '\n';
 
-test('hand source: it never posts input, moves the pointer, activates, takes key or writes stdout', () => {
-  const host = section('HAND HOST'), frame = section('HAND FRAME'), art = section('HAND ART'), motion = section('HAND MOTION');
+test('hand source: it never posts input, moves the pointer, activates or takes key; stdout only acknowledges controls', () => {
+  // The pause panel is its own section inside the host, checked below. The host's one stdout write is the clear acknowledgment.
+  const pausePanel = section('CURSOR PAUSE PANEL');
+  const host = section('HAND HOST')?.replace(/\/\/ BEGIN CURSOR PAUSE PANEL[\s\S]*?\/\/ END CURSOR PAUSE PANEL/, '');
+  const frame = section('HAND FRAME'), art = section('HAND ART'), motion = section('HAND MOTION');
   const ring = section('RING PLAN'), runtime = section('RING RUNTIME'), tail = section('HAND FRAME TAIL'), picker = section('CURSOR PICKER');
-  assert.ok(host && frame && art && motion && ring && runtime && tail && picker, 'hand sections absent');
+  assert.ok(host && frame && art && motion && ring && runtime && tail && picker && pausePanel, 'hand sections absent');
+  const withoutAck = host.replace(/if let bytes = try\? JSONSerialization.data\(withJSONObject: \["hand": "clear-ready", "nonce": nonce, "token": token\]\) \{\s*FileHandle.standardOutput.write\(bytes \+ Data\(\[10\]\)\)\s*\}/, '');
+  assert.notEqual(withoutAck, host, 'clear acknowledgment absent');
   // The picker answers the relay on stdout, nonce-bound, through one writer (plus its dump mode); it posts no input either.
   assert.match(picker, /func writeCursorPickerEvent[\s\S]*?nonceBook\.nonce\("hand"\)/);
   assert.doesNotMatch(picker, /CGEventPost|\.post\(|postToPid|CGWarp|NSCursor|activate\(|makeMain|AXUIElement|NSLog/);
@@ -32,8 +37,10 @@ test('hand source: it never posts input, moves the pointer, activates, takes key
   assert.equal(narration.match(/standardOutput/g)?.length, 1);
   assert.match(narration, /func narrationJSON[^\n]*\n[^\n]*\n\s*FileHandle\.standardOutput\.write/);
   assert.doesNotMatch(narration, /CGEventPost|\.post\(|postToPid|CGWarp|NSCursor|activate\(|makeKey|makeMain|becomeKey\(|orderFront\(|AXUIElement|print\(|NSLog|AVCapture|AVAudioSession|URLSession/);
+  // The pause control builds events only in its dump self-test, to check the person-input rule; it posts none.
+  assert.doesNotMatch(pausePanel, /CGEventPost|\.post\(|postToPid|CGWarp|NSCursor|activate\(|makeKey|makeMain|becomeKey\(|orderFront\(|AXUIElement|print\(|NSLog/);
   // Reading a delivered event's source fields (the person-input check, and its dump self-test) is allowed; posting one is not.
-  for (const text of [host, frame, tail, art, motion, ring, runtime]) {
+  for (const text of [withoutAck, frame, tail, art, motion, ring, runtime]) {
     assert.doesNotMatch(text, /CGEventPost|\.post\(|postToPid|CGWarp|NSCursor|activate\(|makeKey|makeMain|becomeKey\(|orderFront\(|AXUIElement|standardOutput|print\(|NSLog/);
   }
   // No section of the host posts an event, anywhere in the file.
@@ -106,7 +113,7 @@ test('hand mode: what the client writes is what the host accepts, for every kind
   assert.equal(result.status, 0, result.stderr); assert.equal(result.stdout, '');
 });
 
-test('hand mode: each malformed, unbound or replayed frame exits 65 with nothing on stdout', { skip: macCommandSkip('xcrun') }, t => {
+test('hand mode: each malformed, unbound or replayed frame exits 65, with stdout empty or the control-gone notice', { skip: macCommandSkip('xcrun') }, t => {
   const binary = build();
   const cases = {
     'not JSON': 'click 1 2',
@@ -141,6 +148,7 @@ test('hand mode: each malformed, unbound or replayed frame exits 65 with nothing
     assert.equal(result.stdout, '', name);
   }
   // The first frame binds the nonce; a later frame with another nonce, or a seq that doesn't increase, ends the host.
+  // Its only output is the control-gone notice on the bound nonce, so the relay can replace the pause control.
   for (const [name, frames] of Object.entries({
     'second nonce': [act(1), act(2, { nonce: other })],
     'hide with another nonce': [act(1), { hand: 'hide', nonce: other }],
@@ -148,7 +156,8 @@ test('hand mode: each malformed, unbound or replayed frame exits 65 with nothing
     'seq going back': [act(5), act(4)],
   })) {
     const result = run(binary, ['--hand'], frames.map(line).join(''));
-    assert.equal(result.status, 65, name); assert.equal(result.stdout, '', name);
+    assert.equal(result.status, 65, name);
+    assert.deepEqual(result.stdout.split('\n').filter(Boolean).map(text => JSON.parse(text)), [{ hand: 'control-gone', nonce }], name);
   }
   // Valid frames before the bad one were drawn or skipped quietly, and still nothing reached stdout.
   const good = run(binary, ['--hand'], [act(1), act(2), { hand: 'hide', nonce }].map(line).join(''));
@@ -249,7 +258,8 @@ test('hand dump: the panel has exactly the flags of the design, never shown, wit
 
 
 test('explicit hide removes the panel before capture acknowledgement, without its idle fade', () => {
-  const hide = source.match(/func hide\(\) \{([\s\S]*?)\n    \}/)?.[1];
+  const host = source.slice(source.indexOf('final class HandHost:'));
+  const hide = host.match(/func hide\(\) \{([\s\S]*?)\n    \}/)?.[1];
   assert.match(hide, /fading\?\.cancel\(\); release\(\)/);
   assert.doesNotMatch(hide, /fade\(after:/);
   assert.match(source, /DispatchQueue\.global\(qos: \.utility\)/);

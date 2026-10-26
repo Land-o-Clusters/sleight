@@ -64,7 +64,7 @@ func parseEvent(_ data: Data, warn: () -> Void) -> [String: Any]? {
           let type = e["type"] as? String else { return nil }
     switch type {
     case "session": guard ["start", "end"].contains(e["state"] as? String ?? "") else { return nil }
-    case "status": guard ["thinking", "waiting", "error", "done", "handback", "idle"].contains(e["state"] as? String ?? "") else { return nil }
+    case "status": guard ["thinking", "waiting", "error", "done", "handback", "idle", "paused"].contains(e["state"] as? String ?? "") else { return nil }
     case "action":
         guard ["aim", "act", "done", "failed", "declined", "skipped"].contains(e["phase"] as? String ?? ""),
               ["click", "double", "right", "key", "type", "drag", "scroll", "select", "navigate", "move"].contains(e["kind"] as? String ?? "") else { return nil }
@@ -105,6 +105,7 @@ final class SessionView {
     var owners = Set<Int>()
     var drags = Set<String>()
     var overflow = false
+    var paused = false
     var expiry: DispatchSourceTimer?
 }
 final class Connection {
@@ -310,7 +311,7 @@ final class SocketReader {
         let session = event["session"] as! String, type = event["type"] as! String
         let state = event["state"] as? String ?? ""
         if (type == "session" && state == "end") ||
-            (type == "status" && ["done", "handback", "idle", "error"].contains(state)) {
+            (type == "status" && ["done", "handback", "idle", "error"].contains(state) && (state == "idle" || sessions[session]?.paused != true)) {
             remove(session)
             return
         }
@@ -321,6 +322,8 @@ final class SocketReader {
         }
         let view = sessions[session]!
         view.owners.insert(connection)
+        if type == "status", state == "paused" { view.paused = true; view.expiry?.cancel(); view.expiry = nil }
+        if view.paused { view.panel?.orderOut(nil); return }
         if view.expiry == nil {
             let expiry = DispatchSource.makeTimerSource(queue: .main)
             expiry.setEventHandler { [weak self] in self?.remove(session) }

@@ -276,6 +276,12 @@ export function createRelayHand({ client, loadClient = () => import('./client.mj
       }
       dispatch(call);
     }),
+    // Drop the planned remainder without hiding the person's resume control.
+    pause: guarded(() => {
+      for (const call of cursorCalls) { call.cursorHidden = true; cancelActs(call); }
+      for (const call of calls.values()) call.dropped = true;
+      calls.clear(); approvals.clear();
+    }),
     // Before a local pointer tool (drag, hover): its cover checks and the person's view see no hand, so every
     // call still in flight is dropped too, including one whose geometry comes back during the tool.
     hide: guarded(() => {

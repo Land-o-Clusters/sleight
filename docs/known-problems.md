@@ -1398,3 +1398,6 @@ compaction, so it cannot isolate wording alone. That A/B has not run live.
   Accessibility shape (window title, whether Chrome exposes the extension page's URL and button labels) is unmeasured, so the
   matcher declines anything it cannot place and logs a role-and-label skeleton to `approvals.jsonl`. Turning on Chrome's page
   accessibility for the prompt may slow pages in that round, which isn't measured.
+
+- Cursor pause controls refuse screen-reader presses, as consent cards do; the menu accepts a fresh hardware mouse click or
+  Space, Return or Enter on its highlighted row. A paused cursor host is replaced once; if that fails, start a new session.

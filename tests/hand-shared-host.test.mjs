@@ -70,7 +70,10 @@ test('a hand-channel fault drops only the hand: turbo\'s consent channel keeps t
       ['wait', 200], ['alive'], ['end', 3], ['end', 0]]);
     assert.deepEqual(result.alive, [true, true], name);
     assert.equal(result.code, 0, name + ': ' + result.stderr);
-    assert.equal(result.stdout + result.consent, '', name);
+    // A fault after the hand nonce is bound tells the relay its pause control is gone, on that nonce. Nothing else is written.
+    assert.deepEqual(result.stdout.split('\n').filter(Boolean).map(text => JSON.parse(text)),
+      name === 'a second hand nonce' ? [{ hand: 'control-gone', nonce: handNonce }] : [], name);
+    assert.equal(result.consent, '', name);
   }
   // Without a consent channel (--menu) a hand fault still ends the host.
   for (const [name, steps] of Object.entries(handFaults)) {

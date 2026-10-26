@@ -118,6 +118,15 @@ function checkTracks(p) {
 const draws = r => { const out = r.lines.filter(l => l.effect === 'draw'); out.forEach(checkTracks); return out; };
 const loaded = r => r.lines.find(l => l.effect === 'character');
 
+test('the actual sprite placement excludes its target and waits until the action finishes', options, t => {
+  for (const at of [[100, 100], [999, 999], [10, 990]]) {
+    const r = good(t, [character(), act('click', { at, path: [at] })], ['--clip=0,0,1000,1000']);
+    const plan = draws(r)[0], [x, y, w, h] = plan.pauseControl.rect;
+    assert.equal(plan.pauseControl.sprite, true);
+    assert.ok(!(at[0] >= x && at[0] <= x + w && at[1] >= y && at[1] <= y + h));
+    assert.ok(plan.pauseControl.after >= plan.total);
+  }
+});
 test('sprite decodes an installed PNG and falls back to idle art while the ring draws', options, t => {
   const r = good(t, [character(), act()]);
   assert.equal(r.stderr, ''); const { selfMaxRss, ...result } = loaded(r); assert.ok(selfMaxRss > 1 << 20);
@@ -196,6 +205,16 @@ test('status mappings, drag phases, loops parking on their first cell, handoff t
   assert.equal(reduced.sprite.poses.length, 1); assert.equal(reduced.sprite.poses[0].column, 0);
   const secure = draws(good(t, [f, act('type')], ['--secure-input']))[0];
   assert.equal(secure.sprite.poses[0].state, 'idle');
+});
+
+test('sprite pause hit bounds wait for the final scale transition and match the displayed cell', options, t => {
+  const f = character({ image: { cells: [[0, 0], [1, 0]] }, table: {
+    idle: entry(0, [0], { scale: .5 }), click: entry(1, [0], { ms: [100], scale: 1, then: 'idle' }),
+  } });
+  const p = draws(good(t, [f, act()]))[0], last = p.sprite.placements.at(-1);
+  assert.ok(p.pauseControl.after >= .1);
+  assert.deepEqual(p.pauseControl.rect, last);
+  assert.equal(p.pauseControl.sprite, true);
 });
 
 test('a flip change jumps the layer instead of sliding it across the cell', options, t => {

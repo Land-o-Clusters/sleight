@@ -16,7 +16,7 @@ export const CURSOR_VERSION = 'sleight.cursor/1';
 const kinds = new Set(['click', 'double', 'right', 'key', 'type', 'drag', 'scroll', 'select', 'navigate', 'move']);
 const phases = new Set(['aim', 'act', 'done', 'failed', 'declined', 'skipped']);
 const sources = new Set(['native', 'turbo', 'electron', 'local']);
-const states = new Set(['thinking', 'waiting', 'error', 'done', 'handback', 'idle']);
+const states = new Set(['thinking', 'waiting', 'error', 'done', 'handback', 'idle', 'paused']);
 const reasons = new Set(['covered', 'no-geometry', 'not-found', 'unplanned', 'other-space', 'offscreen']);
 const roles = { AXButton: 'button', AXCheckBox: 'checkbox', AXRadioButton: 'radio button', AXTextField: 'text field', AXTextArea: 'text area',
   AXComboBox: 'combo box', AXPopUpButton: 'menu button', AXMenuButton: 'menu button', AXMenuItem: 'menu item', AXSlider: 'slider', AXLink: 'link',
@@ -170,7 +170,7 @@ const version = (() => { try { return JSON.parse(readFileSync(new URL('../../.cl
 export function createCursorEvents({ env = process.env, setting = handSettingReader(env), sink, recorder = createRunRecorder, onEvent = () => {}, now = Date.now, version: release = version,
   host = 'claude-code', repeat = setInterval, cancelRepeat = clearInterval } = {}) {
   setting = createHandSettingReader({ setting, now });
-  const session = opaque(); let seq = 0, closed = false, started = false, output = sink, discoveryTimer, hostClient, recording, recordingClosed, sessionStart;
+  const session = opaque(); let seq = 0, closed = false, started = false, output = sink, discoveryTimer, hostClient, recording, recordingClosed, sessionStart, paused = false;
   const narrationOutput = createNarrationSink({ write: event => { if (!closed && options().stream === true) (output ??= createRendererSink({ dir: env.SLEIGHT_CURSOR_STREAM_DIR })).write(event); },
     check: done => hostClient?.checkNarration ? hostClient.checkNarration(done) : done(false) });
   const options = () => { try { return env.SLEIGHT_HAND === '0' ? {} : setting(); } catch { return {}; } };
@@ -194,7 +194,7 @@ export function createCursorEvents({ env = process.env, setting = handSettingRea
   };
   const start = (initialStatus = true) => {
     if (!started) { started = true; emit({ type: 'session', state: 'start', host: ['claude-code', 'codex', 'other'].includes(host) ? host : 'other', version: release });
-      if (initialStatus) emit({ type: 'status', state: 'idle' });
+      if (initialStatus) emit({ type: 'status', state: paused ? 'paused' : 'idle' });
     }
   };
   const allowed = () => {
@@ -212,6 +212,7 @@ export function createCursorEvents({ env = process.env, setting = handSettingRea
     call: opaque,
     connectHost(client) { hostClient = client; },
     get narration() { return options().narration ?? 'off'; },
+    setPaused(value) { if (typeof value !== 'boolean' || paused === value) return; paused = value; api.status(value ? 'paused' : 'idle'); },
     get labels() { return options().labels ?? 'off'; },
     get enabled() { return allowed(); },
     host(value) { if (!started && ['claude-code', 'codex', 'other'].includes(value)) host = value; },
@@ -232,7 +233,7 @@ export function createCursorEvents({ env = process.env, setting = handSettingRea
     },
     flushRecording: () => recording?.flush(),
     status(state, detail = {}) {
-      if (!allowed() || !states.has(state)) return;
+      if (!allowed() || !states.has(state) || paused && state !== 'paused') return;
       detail ??= {};
       start(false); const record = { type: 'status', state }; if (callId(detail.call)) record.call = detail.call; put(record, 'app', text(detail.app)); if (options().narration && options().narration !== 'off') put(record, 'say', narrationLine(detail.say)); emit(record);
     },
