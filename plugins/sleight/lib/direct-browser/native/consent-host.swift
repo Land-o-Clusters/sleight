@@ -2881,10 +2881,18 @@ func spriteDecodeInChild(fd: Int32, width: Int, height: Int, format: String) thr
             extra = n > 0; break reading
         }
     }
-    if timedOut || extra { kill(pid, SIGKILL) }
-    var status: Int32 = 0
-    while waitpid(pid, &status, 0) < 0 && errno == EINTR {}
-    let exited = status & 0x7f == 0, code = (status >> 8) & 0xff
+    // The reap is bounded too: a child that closes stdout and then doesn't exit gets 0.5 s, then SIGKILL.
+    var status: Int32 = 0, reaped = false
+    if !(timedOut || extra) {
+        for _ in 0..<50 {
+            let r = waitpid(pid, &status, WNOHANG)
+            if r == pid { reaped = true; break }
+            if r < 0 && errno != EINTR { break }
+            usleep(10_000)
+        }
+    }
+    if !reaped { kill(pid, SIGKILL); while waitpid(pid, &status, 0) < 0 && errno == EINTR {} }
+    let exited = reaped && status & 0x7f == 0, code = (status >> 8) & 0xff
     guard !timedOut else { free(buffer); throw SpriteLoadError.timeout }
     guard got == total, !extra, exited, code == 0 else {
         free(buffer)
@@ -3216,7 +3224,9 @@ func spriteDecodeChild(_ args: [String]) -> Never {
     guard [.premultipliedFirst, .premultipliedLast, .first, .last].contains(image.alphaInfo) else { exit(67) }
     guard let context = draw(image, w, h), let pixels = context.data else { exit(68) }
     var sent = 0, total = w * h * 4
+    // Test faults: die or hang halfway; closehang writes everything, closehang0 nothing, then both close stdout and sleep.
     if fault == "die" || fault == "hang" { total /= 2 }
+    if fault == "closehang0" { total = 0 }
     while sent < total {
         let n = write(1, pixels + sent, total - sent)
         if n < 0 && errno == EINTR { continue }
@@ -3224,6 +3234,7 @@ func spriteDecodeChild(_ args: [String]) -> Never {
         sent += n
     }
     if fault == "die" { kill(getpid(), SIGKILL) }
+    if fault == "closehang" || fault == "closehang0" { close(1); while true { pause() } }
     if fault == "hang" { while true { pause() } }
     exit(0)
 }

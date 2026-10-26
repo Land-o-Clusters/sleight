@@ -244,11 +244,17 @@ test('a real lossless WebP loads, and the decode child refuses bad files on its 
 });
 
 test('a child killed mid-write or hung gives the ring alone', options, t => {
-  for (const [fault, reason] of [['die', 'child'], ['hang', 'timeout']]) {
+  for (const [fault, reason, minMs, maxMs] of [['die', 'child', 0, 1500], ['hang', 'timeout', 1900, 6000], ['closehang', 'child', 400, 2500],
+    ['closehang0', 'child', 0, 2500]]) {
+    build(t);
     const started = performance.now(), r = good(t, [character(), act()], [], { SLEIGHT_CURSOR_DECODE_FAULT: fault });
-    assert.deepEqual([loaded(r).loaded, loaded(r).reason], [false, reason]); assert.equal(draws(r)[0].sprite, null);
-    if (fault === 'hang') { const ms = performance.now() - started; assert.ok(ms >= 1900 && ms < 6000, `${ms} ms`); }
+    const ms = performance.now() - started;
+    assert.deepEqual([fault, loaded(r).loaded, loaded(r).reason], [fault, false, reason]); assert.equal(draws(r)[0].sprite, null);
+    assert.ok(ms >= minMs && ms < maxMs, `${fault}: ${ms} ms`);
   }
+  // No decode child outlives its parent.
+  const stray = spawnSync('/bin/ps', ['-axo', 'command'], { encoding: 'utf8' }).stdout.split('\n').filter(l => l.startsWith(build(t) + ' --decode-sheet'));
+  assert.deepEqual(stray, []);
   // The fault switch needs the test switch too.
   assert.equal(loaded(good(t, [character(), act()], [], { SLEIGHT_CURSOR_TEST: '0', SLEIGHT_CURSOR_DECODE_FAULT: 'die' })).reason, 'path');
 });
