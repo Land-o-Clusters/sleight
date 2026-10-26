@@ -18,8 +18,9 @@ test('cards and alerts record who was in front, follow the person to the activat
   assert.match(source, /self\.activeAsk = nil; if card.kind != "handoff" \{ self\.focus\.dismissed\(\) \}; self\.respond\(id, choice\); self\.showNextAsk\(\)/);
   assert.match(source, /func closeAsk\(\) \{ guard let ask = activeAsk else \{ return \}; ask\.panel\.close\(\); activeAsk = nil; if !ask.panel.passive \{ focus\.dismissed\(\) \} \}/);
   assert.match(source, /addObserver\(forName: NSApplication\.willBecomeActiveNotification, object: nil, queue: nil\) \{ \[weak self\] _ in\s*self\?\.focus\.hostActivating\(\)/);
-  // All three menu-bar alerts (turbo off, session opt-in or resume, action confirm) go through personModal, which restores.
-  assert.equal((source.match(/personModal\(alert, choices:/g) ?? []).length, 3);
+  // All four menu-bar alerts (turbo off, session opt-in or resume, action confirm, and VC10's Revoke card for a Mac without
+  // Touch ID or a password) go through personModal, which restores.
+  assert.equal((source.match(/personModal\(alert, choices:/g) ?? []).length, 4);
   assert.match(source, /focus\.presenting\(\[:\]\)\n\s*let result = withExtendedLifetime\(actions\) \{ modal\.run\(abort: \{ NSApp\.abortModal\(\) \}\) \{ alert\.runModal\(\) \} \}\n\s*focus\.dismissed\(\)/);
   // A recorded app is checked by pid, bundle and launch date.
   assert.match(source, /AppIdentity\(pid: pid, bundle: app\.bundleIdentifier, launched: app\.launchDate\?\.timeIntervalSince1970\)/);

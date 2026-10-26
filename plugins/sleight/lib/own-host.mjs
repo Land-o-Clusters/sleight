@@ -9,12 +9,28 @@ const HELPER_CACHE = /\/Library\/Caches\/sleight\/turbo-host\//i;
 // The host's name however it is spelled: case, spaces, `-` or `_`, a path before it or `.app` after it.
 const hostName = value => value.trim().replace(/^.*\//, '').replace(/\.app$/i, '').toLowerCase().replace(/[^a-z0-9]/g, '') === 'consenthost';
 
-// A name, bundle id or path that is the host: its name, or any file in sleight's helper cache.
-export const isOwnHost = (...values) => values.some(value => typeof value === 'string' && (hostName(value) || HELPER_CACHE.test(value)));
-// Text that names the host anywhere, such as an approval card's message.
-export const mentionsOwnHost = text => typeof text === 'string' && (/consent[\s_-]*host(?![a-z])/i.test(text) || HELPER_CACHE.test(text));
+// macOS's own authentication sheets: Touch ID and password for LocalAuthentication (coreautha, which sleight's high-stakes
+// settings changes use, person-confirm.mjs) and authorization prompts (SecurityAgent). Bundle ids and paths found on this Mac
+// (macOS 27, 2026-10-26); the names are the bundles' CFBundleName. No tool acts on them, as on sleight's own host.
+export const AUTH_DIALOG_LINE = "That is macOS's own Touch ID or password dialog; only you can answer it.";
+const AUTH_BUNDLES = ['com.apple.localauthentication.uiagent', 'com.apple.securityagent'];
+const AUTH_NAMES = ['coreautha', 'coreauthd', 'securityagent', 'authorizationhost', 'userauthd'];
+const AUTH_PATH = /\/System\/Library\/Frameworks\/(?:LocalAuthentication\.framework|Security\.framework)\/|\/SecurityAgentPlugins\//i;
+const authName = value => { const key = value.trim().replace(/^.*\//, '').replace(/\.(?:app|bundle)$/i, '').toLowerCase();
+  return AUTH_BUNDLES.includes(key) || AUTH_NAMES.includes(key.replace(/[^a-z0-9]/g, '')); };
+export const isAuthDialog = (...values) => values.some(value => typeof value === 'string' && (authName(value) || AUTH_PATH.test(value)));
 
-// Whether a running pid is the host, from the executable ps names. The host is spawned by its full path.
+const isConsentHost = (...values) => values.some(value => typeof value === 'string' && (hostName(value) || HELPER_CACHE.test(value)));
+// A name, bundle id or path that only the person may answer: the host (its name, or any file in sleight's helper cache) or a
+// system authentication sheet.
+export const isOwnHost = (...values) => isConsentHost(...values) || isAuthDialog(...values);
+/** The line Claude gets for values that name one of them: the system sheet's own line, or the host's. */
+export const ownLine = (...values) => isAuthDialog(...values) ? AUTH_DIALOG_LINE : OWN_HOST_LINE;
+// Text that names the host or a system authentication agent anywhere, such as an approval card's message.
+export const mentionsOwnHost = text => typeof text === 'string' && (/consent[\s_-]*host(?![a-z])/i.test(text) || HELPER_CACHE.test(text) ||
+  /\b(?:coreautha|coreauthd|securityagent|com\.apple\.localauthentication)\b/i.test(text));
+
+// Whether a running pid is the host or an authentication agent, from the executable ps names (both start by full path).
 export function ownHostPid(pid, run = execFileSync) {
   if (!Number.isSafeInteger(pid) || pid <= 0) return false;
   try { return isOwnHost(String(run('/bin/ps', ['-p', String(pid), '-o', 'comm='], { encoding: 'utf8', timeout: 1000 })).trim()); }

@@ -109,13 +109,15 @@ const row = (ppid, args, argv0 = args.split(' ')[0]) => `${ppid} ${argv0.slice(0
 // is for a process nobody started with `exec -a`. tty is the launcher's controlling tty, and session the "pid stat" rows
 // `ps -t <tty> -o pid=,stat=` prints for it.
 const SELF = 400;
-function machine(table, { tty = 'ttys006', session = ['200 Ss', '300 S+', `${SELF} R+`] } = {}) {
+// started is what `ps -o lstart= -p <leader>` prints: by default a session opened long before the test.
+function machine(table, { tty = 'ttys006', session = ['200 Ss', '300 S+', `${SELF} R+`], started = 'Thu Jan  1 09:00:00 2026' } = {}) {
   const calls = [];
   const entry = pid => { if (!(pid in table)) throw Error('no such process'); return table[pid]; };
   const ps = argv => {
     calls.push(argv.join(' '));
     if (argv[0] === '-o' && argv[1] === 'tty=') return `${tty}\n`;
     if (argv[0] === '-t') { if (argv[1] !== tty) throw Error('wrong tty'); return session.join('\n') + '\n'; }
+    if (argv[0] === '-o' && argv[1] === 'lstart=') { if (typeof started !== 'string') throw Error('no such process'); return `${started}\n`; }
     const value = entry(Number(argv.at(-1)));
     return (typeof value === 'string' ? value : row(value[0], value[1], value[2])) + '\n';
   };
@@ -152,7 +154,23 @@ test('a person\'s Terminal chain reaches the terminal app through shells, then l
   const { result, calls } = walk(TERMINAL);
   assert.deepEqual(result, { ok: true });
   assert.deepEqual(calls, [`-o tty= -p ${SELF}`, '-o ppid=,comm=,args= -p 300', '-o ppid=,comm=,args= -p 200', '-o ppid=,comm=,args= -p 100',
-    'lsof 100', '-t ttys006 -o pid=,stat=']);
+    'lsof 100', '-t ttys006 -o pid=,stat=', '-o lstart= -p 200']);
+});
+
+// A speed bump, not a guarantee (automated review, 2026-10-26): an agent that opens a fresh terminal and types at once
+// meets a session leader under 10 s old.
+test('a terminal session opened less than 10 s ago refuses, and an unreadable start time fails closed', () => {
+  const at = text => Date.parse(text);
+  const opened = 'Mon Oct 26 11:56:00 2026';
+  const after = ms => () => at(opened) + ms;
+  assert.deepEqual(walk(TERMINAL, { started: opened }, { now: after(9999) }).result, { ok: false, reason: 'fresh session' });
+  assert.deepEqual(walk(TERMINAL, { started: opened }, { now: after(0) }).result, { ok: false, reason: 'fresh session' });
+  assert.deepEqual(walk(TERMINAL, { started: opened }, { now: after(10000) }).result, { ok: true });
+  assert.deepEqual(walk(TERMINAL, { started: opened }, { now: after(-60000) }).result, { ok: false, reason: 'fresh session' }, 'a start in the future counts as fresh');
+  assert.deepEqual(walk(TERMINAL, { started: opened }, { now: after(3000), freshMs: 2000 }).result, { ok: true });
+  for (const started of ['', 'yesterday-ish', '   ']) assert.deepEqual(walk(TERMINAL, { started }, { now: after(60000) }).result, { ok: false, reason: 'unreadable' }, JSON.stringify(started));
+  assert.deepEqual(walk(TERMINAL, { started: null }, { now: after(60000) }).result, { ok: false, reason: 'ps failed' }, 'a leader that exited fails closed');
+  assert.match(refusalLine('hand on', 'fresh session'), /Reason: the terminal opened less than 10 s ago, so try again\.$/);
 });
 
 test('each listed GUI terminal passes by bundle path, in /Applications or ~/Applications, with its own helpers above it', () => {
@@ -293,7 +311,8 @@ test('a walk that fails, can\'t be read or runs out of time refuses', () => {
   assert.deepEqual(walk({ 300: 'garbage' }).result, { ok: false, reason: 'unreadable' });
   assert.deepEqual(walkAncestors({ pid: 300, self: SELF, ps: () => 42 }), { ok: false, reason: 'no tty' });
   assert.deepEqual(walkAncestors({ pid: 300, self: SELF, ps: () => { throw Error('EPERM'); } }), { ok: false, reason: 'ps failed' });
-  const fake = machine(TERMINAL);
+  // The clock starts at 0 here, so the session leader started before 1970 to stay older than 10 s.
+  const fake = machine(TERMINAL, { started: 'Wed Dec 31 00:00:00 1969' });
   let clock = 0;
   const slow = fn => (value, left) => { clock += 300; return fn(value, left); };
   assert.deepEqual(walkAncestors({ pid: 300, self: SELF, home: HOME, now: () => clock, ps: slow(fake.ps), executable: slow(fake.executable) }),
@@ -302,7 +321,7 @@ test('a walk that fails, can\'t be read or runs out of time refuses', () => {
   const budgets = [];
   const counted = fn => (value, left) => { budgets.push(left); clock += 100; return fn(value, left); };
   assert.deepEqual(walkAncestors({ pid: 300, self: SELF, home: HOME, now: () => clock, ps: counted(fake.ps), executable: counted(fake.executable) }), { ok: true });
-  assert.deepEqual(budgets, [1000, 900, 800, 700, 600, 500], 'each call gets only the budget left');
+  assert.deepEqual(budgets, [1000, 900, 800, 700, 600, 500, 400], 'each call gets only the budget left');
 });
 
 test('an orphaned launcher (parent is launchd) refuses', () => {

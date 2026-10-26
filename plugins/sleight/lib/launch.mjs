@@ -1340,20 +1340,31 @@ export async function run({ leaseDirectory, inspectInput: inspectStoppedInput, h
 
 // `record` and `replay` (replay.mjs): a finished run, run again with no model. Approvals go to the
 // terminal; without one, only apps the user pre-approved can run.
-async function replayCommand(args) {
+export async function replayCommand(args, { home } = {}) {
   const { record, replay, relayServer, replayOptions } = await import('./replay.mjs');
   const [command, source, out] = args;
   if (!source) { process.stderr.write('usage: sleight-mcp record <transcript.jsonl | session id> [out.json]\n       sleight-mcp replay <script.json> [--allow-positions] [--wait-ms 5000]\n'); return 2; }
   if (command === 'record') {
+    // A recording never lands in sleight's settings folder, under any name or link (person-gate.mjs insideSettings).
+    const { insideSettings } = await import('./person-gate.mjs');
+    const settingsOut = path => { if (insideSettings(path, home ? { home } : undefined)) { process.stderr.write(`sleight: record doesn't write into sleight's settings folder; pick another output path.\n`); return true; } return false; };
     if (source === '--watch') {
       const { recordWatch, watchOptions } = await import('./demonstration.mjs');
       const options = watchOptions(args.slice(1));
+      if (settingsOut(options.output)) return 2;
       await recordWatch({ ...options, log: line => process.stderr.write(`sleight: ${line}\n`) });
       return 0;
     }
+    if (out && !out.startsWith('--') && settingsOut(out)) return 2;
     const script = record(source);
     const text = JSON.stringify(script, null, 1) + '\n';
-    if (out && !out.startsWith('--')) { (await import('node:fs')).writeFileSync(out, text); process.stderr.write(`sleight: ${script.steps.length} steps written to ${out}\n`); }
+    if (out && !out.startsWith('--')) {
+      // O_NOFOLLOW: a link put in out's place after the check fails the write instead of being followed.
+      const fs = await import('node:fs'), { O_WRONLY, O_CREAT, O_TRUNC, O_NOFOLLOW } = fs.constants;
+      const fd = fs.openSync(out, O_WRONLY | O_CREAT | O_TRUNC | O_NOFOLLOW, 0o644);
+      try { fs.writeFileSync(fd, text); } finally { fs.closeSync(fd); }
+      process.stderr.write(`sleight: ${script.steps.length} steps written to ${out}\n`);
+    }
     else process.stdout.write(text);
     return 0;
   }
@@ -1396,12 +1407,25 @@ export function allowCommand(args, { list = listPreapproved, remove = removePrea
 // GATED_COMMANDS). The list lives here too so the server's own start never loads the gate.
 const SETTINGS_COMMANDS = ['hand', 'turbo', 'cursor', 'permissions', 'allow', 'routine', 'watch'];
 
-if (isMainModule(import.meta.url)) {
+/** The refusal line for a settings command, or undefined when it may run: the terminal check (person-gate.mjs) first, then
+ *  for high-stakes changes macOS's Touch ID or password sheet (person-confirm.mjs). The launcher dispatches only on undefined,
+ *  so a refused or failed confirmation writes nothing. Tests inject gate and confirmation; production passes neither. */
+export async function settingsChangeRefusal(args, { gate, confirmation = {} } = {}) {
   let refusal;
-  if (SETTINGS_COMMANDS.includes(process.argv[2])) {
-    try { refusal = (await import('./person-gate.mjs')).settingsRefusal(process.argv.slice(2)); }
-    catch { refusal = `sleight: ${process.argv[2]} changes sleight's settings, so run it yourself in a terminal (or use the menu bar). Reason: check failed.`; }
-  }
+  try { refusal = (gate ?? (await import('./person-gate.mjs')).settingsRefusal)(args); }
+  catch { refusal = `sleight: ${args[0]} changes sleight's settings, so run it yourself in a terminal (or use the menu bar). Reason: check failed.`; }
+  if (refusal) return refusal;
+  try {
+    const { confirmationRefusal, helperConfirm } = await import('./person-confirm.mjs');
+    const notice = text => process.stderr.write(text);
+    return await confirmationRefusal(args, { notice, confirm: (found, options) => helperConfirm(found, { ...options, notice }),
+      presence: async () => (await import('./remote-approvals.mjs')).isPresent(await runScript('remote-approvals.js', { operation: 'presence' })),
+      ...confirmation });
+  } catch { return `sleight: ${args[0]} needs Touch ID or your password, so nothing changed. Reason: the check failed.`; }
+}
+
+if (isMainModule(import.meta.url)) {
+  const refusal = SETTINGS_COMMANDS.includes(process.argv[2]) ? await settingsChangeRefusal(process.argv.slice(2)) : undefined;
   if (refusal) { process.stderr.write(refusal + '\n'); process.exitCode = 3; }
   else if (['session', 'js', 'js_reset', 'open_file', 'select_window', 'drag'].includes(process.argv[2])) {
     try { process.exitCode = await (await import('./socket-bridge.mjs')).socketCommand(process.argv.slice(2)); }

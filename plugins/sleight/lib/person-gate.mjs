@@ -2,7 +2,9 @@
 // started it in a terminal. The hook reads command text; this reads the process itself. Read-only forms run anywhere.
 // Tests inject the ancestor walk as a function. Nothing in the environment turns this off.
 import { execFileSync } from 'node:child_process';
+import { lstatSync, realpathSync } from 'node:fs';
 import { userInfo } from 'node:os';
+import { basename, dirname, join, resolve } from 'node:path';
 
 // Each command family the launcher gates, with the forms that only read. Every other form in a family is refused
 // unless a person started it, so a new writer is covered before anyone lists it here.
@@ -28,7 +30,7 @@ export function settingsCommand(args) {
 
 // The refusal's reason, from the walk's reason code.
 const REASONS = { 'no terminal': 'no terminal', claude: 'started under an agent', openai: 'started under an agent', agent: 'started under an agent',
-  multiplexer: 'inside a terminal multiplexer', timeout: 'check timed out' };
+  multiplexer: 'inside a terminal multiplexer', timeout: 'check timed out', 'fresh session': 'the terminal opened less than 10 s ago, so try again' };
 const NOT_FROM_TERMINAL = ['no tty', 'no terminal app', 'unknown ancestor', 'session', 'orphaned', 'too deep'];
 export const reasonText = code => REASONS[code] ?? (NOT_FROM_TERMINAL.includes(code) ? 'not started from a terminal app' : 'check failed');
 export const refusalLine = (command, code = 'check failed') =>
@@ -82,10 +84,10 @@ const homeFolder = () => { try { return userInfo().homedir; } catch { return und
 /** An allow-list walk from `pid` (the launcher's parent) up to launchd, one ps call per level, at most `levels` levels within
  *  `budgetMs` for every call together. Only shells and their starters may sit below a GUI terminal app, the terminal's own
  *  processes above it (each confirmed by its executable), then launchd. The session leader of the launcher's controlling tty
- *  (`self`) must be one of those shells. ps(argv, msLeft) returns ps's output, executable(pid, msLeft) the running file.
+ *  (`self`) must be one of those shells, started `freshMs` or more ago. ps(argv, msLeft) returns ps's output, executable(pid, msLeft) the running file.
  *  Returns { ok: true } or { ok: false, reason }; anything it can't read fails closed. */
 export function walkAncestors({ pid = process.ppid, self = process.pid, ps = systemPs, executable = systemExecutable, home = homeFolder(),
-  levels = 32, budgetMs = 1000, now = Date.now } = {}) {
+  levels = 32, budgetMs = 1000, now = Date.now, freshMs = 10000 } = {}) {
   const deadline = now() + budgetMs, bundles = terminalBundles(home);
   const timed = (fn, value) => {
     const left = deadline - now();
@@ -125,8 +127,31 @@ export function walkAncestors({ pid = process.ppid, self = process.pid, ps = sys
       .filter(m => m && m[2].includes('s')).map(m => Number(m[1]));
     const at = leaders.length === 1 ? chain.indexOf(leaders[0]) : -1;
     if (at < 0 || at >= terminalAt) return { ok: false, reason: 'session' };
+    // A speed bump, not a guarantee: an agent that opens a fresh terminal and types at once meets a session under 10 s old.
+    // ps prints lstart to the second in local time ("Mon Oct 26 11:56:00 2026"); anything else fails closed.
+    const started = Date.parse(call(['-o', 'lstart=', '-p', String(leaders[0])]).trim());
+    if (!Number.isFinite(started)) return { ok: false, reason: 'unreadable' };
+    if (now() - started < freshMs) return { ok: false, reason: 'fresh session' };
     return { ok: true };
   } catch (error) { return { ok: false, reason: error === TIMEOUT ? 'timeout' : 'ps failed' }; }
+}
+
+/** Whether writing `path` would land in sleight's settings folder (~/Library/Application Support/sleight), after links:
+ *  the file's own real path when it exists, else its nearest existing folder's real path with the rest appended. APFS
+ *  ignores case by default, so the comparison does too. A file with another hard link could be a settings file under a
+ *  second name, so it counts as inside. `record <source> <out>` refuses such an out. */
+export function insideSettings(path, { home = homeFolder(), real = realpathSync.native, stat = lstatSync } = {}) {
+  if (typeof path !== 'string' || !path || !home) return true;
+  const folder = join(home, 'Library/Application Support/sleight');
+  const canonical = value => { let at = resolve(value), rest = []; for (;;) {
+    try { return join(real(at), ...rest); } catch (error) { if (error?.code !== 'ENOENT' || dirname(at) === at) throw error; }
+    rest.unshift(basename(at)); at = dirname(at);
+  } };
+  try {
+    try { if (stat(path).nlink > 1) return true; } catch (error) { if (error?.code !== 'ENOENT') return true; }
+    const target = canonical(path).toLowerCase(), roots = [folder, canonical(folder)].map(root => root.toLowerCase().replace(/\/$/, ''));
+    return roots.some(root => target === root || target.startsWith(root + '/'));
+  } catch { return true; }
 }
 
 // Claude Code sets these in every shell it starts, and a daemon started there inherits them. One more signal on top of the walk.

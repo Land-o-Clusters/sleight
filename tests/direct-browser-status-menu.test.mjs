@@ -33,15 +33,17 @@ test('Turn Turbo Off asks first, and Settings & Help opens only the fixed docs a
   assert.equal(confirmOff.match(/respond\(/g)?.length, 1, 'only the confirmed first button responds');
   // This alert must install GB12's guarded actions and retain them throughout the abortable modal.
   assert.match(source, /func personModal\([^\n]+\{\n\s*let actions = consentInputActions\(alert, choices: choices, kind: kind\)\n(?:\s*defer \{ for action in actions \{ action\.typing\?\.invalidate\(\) \} \}\n)?\s*focus\.presenting\(\[:\]\)\n\s*let result = withExtendedLifetime\(actions\) \{ modal\.run\(abort: \{ NSApp\.abortModal\(\) \}\) \{ alert\.runModal\(\) \} \}\n[^}]*DispatchQueue\.main\.async \{ self\.showNextAsk\(\) \}\n\s*return result/);
-  assert.match(source, /return choice == "always" \|\| \[[^\n]*"turbo-off"(?:, "handoff")?\]\.contains\(kind\)/);
+  assert.match(source, /return choice == "always" \|\| \[[^\n]*"turbo-off"(?:, "handoff")?(?:, "settings")?\]\.contains\(kind\)/);
   assert.match(source, /URL\(string: "https:\/\/github\.com\/Land-o-Clusters\/sleight\/blob\/main\/docs\/settings\.md#" \+ \(status == nil \? "ghost-hand" : "turbo"\)\)/);
   assert.equal(source.match(/NSWorkspace\.shared\.open/g)?.length, 1);
 });
 
-test('the Permissions rows only remove access: Revoke and Never Act answer at once on the hand channel, and nothing lifts a block', () => {
-  assert.match(source, /@objc func permissionClick\(_ sender: NSMenuItem\) \{\n {8}guard let event = sender\.representedObject as\? \[String: String\] else \{ return \}\n {8}writePermissionEvent\(event\)\n {4}\}/);
+// VC10 (owner, 2026-10-26): Revoke and Revoke All wait for macOS's Touch ID or password sheet (settings-person-confirm.test.mjs).
+test('the Permissions rows only remove access: Never Act answers at once, Revoke asks first, and nothing lifts a block', () => {
+  assert.match(source, /@objc func permissionClick\(_ sender: NSMenuItem\) \{\n {8}guard let event = sender\.representedObject as\? \[String: String\] else \{ return \}\n {8}guard let confirm = menuConfirmArguments\(event\) else \{ writePermissionEvent\(event\); return \}/);
   assert.match(source, /\["revoke", "revoke-all", "block"\]\.contains\(op\)/);
-  assert.doesNotMatch(source, /[Uu]nblock"/, 'no menu row unblocks');
+  // The confirmation's reason table names the CLI's unblock; no menu row does.
+  assert.doesNotMatch(source.replace(/\/\/ BEGIN PERSON CONFIRM[\s\S]*?\/\/ END PERSON CONFIRM/, ''), /[Uu]nblock"/, 'no menu row unblocks');
   assert.match(source, /func menuNeedsUpdate\(_ menu: NSMenu\) \{ fillPermissions\(menu\) \}/);
 });
 

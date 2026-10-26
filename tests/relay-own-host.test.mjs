@@ -244,3 +244,54 @@ test('fuzzy matching stays on the host: near names of ordinary apps are not refu
   await settle();
   assert.notDeepEqual(h.toServer.find(m => m.id === 'e1')?.result, { action: 'decline' });
 });
+
+// VC10: macOS's own Touch ID and password sheets (coreautha for LocalAuthentication, SecurityAgent for authorization) are
+// refused like the host, with their own line, so sleight can't answer the confirmation its settings changes ask for.
+const AUTH = "That is macOS's own Touch ID or password dialog; only you can answer it.";
+const COREAUTHA = '/System/Library/Frameworks/LocalAuthentication.framework/Support/coreautha.bundle/Contents/MacOS/coreautha';
+const AUTH_PID = 4343;
+
+test('auth dialogs: the identity checks by name, bundle id, path and pid', async () => {
+  const { AUTH_DIALOG_LINE, isAuthDialog, ownLine } = await import('../plugins/sleight/lib/own-host.mjs');
+  assert.equal(AUTH_DIALOG_LINE, AUTH);
+  for (const value of ['coreautha', 'SecurityAgent', 'com.apple.LocalAuthentication.UIAgent', 'com.apple.SecurityAgent', 'coreauthd', 'authorizationhost',
+    COREAUTHA, '/System/Library/Frameworks/Security.framework/Versions/A/MachServices/SecurityAgent.bundle', 'coreautha.bundle']) {
+    assert.equal(isAuthDialog(value), true, value); assert.equal(isOwnHost(value), true, value); assert.equal(ownLine(value), AUTH, value);
+  }
+  for (const value of ['TextEdit', 'com.apple.Safari', 'Security Settings Helper', '/Applications/Keychain Access.app']) assert.equal(isAuthDialog(value), false, value);
+  assert.equal(ownLine('consent-host'), OWN);
+  assert.equal(ownHostPid(AUTH_PID, () => COREAUTHA + '\n'), true);
+});
+
+test('auth dialogs: getApp, local tools and approval cards for them never reach the engine or run', async t => {
+  const sheet = { appId: 'com.apple.LocalAuthentication.UIAgent', app: 'coreautha', pid: AUTH_PID, title: null, url: null };
+  const h = harness(t, { targets: { 'Touch ID': sheet }, relay: { ownHostPid: pid => pid === HOST_PID || pid === AUTH_PID } });
+  for (const [id, code] of [[1, 'let s = await cua.getApp("coreautha")'], [2, 'let s = await cua.getApp("com.apple.LocalAuthentication.UIAgent")'],
+    [3, 'let s = await cua.getApp("SecurityAgent")'], [4, `let s = await cua.getApp(${JSON.stringify(COREAUTHA)})`]]) {
+    h.js(id, code); await settle();
+    assert.equal(h.sent(id), false, `call ${id} reached the engine`);
+    assert.equal(h.reply(id)?.result?.content?.[0]?.text, AUTH, `call ${id}`);
+  }
+  h.js(5, `let s = await cua.getApp(${AUTH_PID})`); await settle();
+  assert.equal(h.sent(5), false, 'a pid whose executable is coreautha stays out');
+  h.call(6, 'drag', { app: 'SecurityAgent', from: [1, 1], to: [2, 2] }); await settle();
+  h.call(7, 'hover', { app: 'Touch ID', at: [1, 1] }); await settle();
+  h.call(8, 'menu_bar', { op: 'press', app: 'coreautha', element: 0 }); await settle();
+  for (const id of [6, 7, 8]) assert.equal(h.reply(id)?.result?.content?.[0]?.text, AUTH, `call ${id}`);
+  assert.deepEqual(h.ran, [], 'no local tool ran');
+  h.fromServer({ jsonrpc: '2.0', id: 'e1', method: 'elicitation/create', params: { message: 'Allow Computer Use to use "SecurityAgent"?',
+    _meta: { connector_id: 'computer-use', persist: ['session'], riskLevel: 'high', tool_params: { app: 'SecurityAgent' } } } });
+  await settle();
+  assert.deepEqual(h.toServer.find(m => m.id === 'e1')?.result, { action: 'decline' });
+});
+
+test('auth dialogs: a read that turns out to be the sheet shows Claude only the line, and the next action on it stops', async t => {
+  const h = harness(t);
+  h.js(1, 'let s = await cua.getApp({ windowId: 9 })'); await settle();
+  h.fromServer(read(1, 'SecurityAgent', undefined, '', '\t1 secure text field Password\n\t2 button OK')); await settle();
+  assert.deepEqual(h.reply(1).result, { isError: true, content: [{ type: 'text', text: AUTH }] });
+  assert.doesNotMatch(JSON.stringify(h.reply(1)), /Password/);
+  h.js(2, 'await s.typeText("hunter2")'); await settle();
+  assert.equal(h.sent(2), false);
+  assert.equal(h.reply(2)?.result?.content?.[0]?.text, AUTH);
+});

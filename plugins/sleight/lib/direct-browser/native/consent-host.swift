@@ -9,6 +9,7 @@ import Carbon.HIToolbox
 import ObjectiveC
 import Darwin
 import os.log
+import LocalAuthentication
 
 // BEGIN PERSON INPUT
 private var consentFeedbackKey: UInt8 = 0
@@ -37,7 +38,7 @@ func personInput(_ event: CGEvent?) -> Bool {
 func personChoice(_ kind: String, _ choice: String) -> Bool {
     if ["cancel", "decline", "session"].contains(choice) { return false }
     // A debugger's Once is also a consent to debugging. Plain session app approvals remain host-answerable.
-    return choice == "always" || ["action", "debugger", "relaunch", "opt-in", "resume", "turbo-off", "handoff"].contains(kind)
+    return choice == "always" || ["action", "debugger", "relaunch", "opt-in", "resume", "turbo-off", "handoff", "settings"].contains(kind)
 }
 // NSAlert owns its NSButtons and their private subclasses. Add only an AX override to a zero-storage runtime
 // subclass of the actual button class, preserving its layout, key equivalents and original modal action.
@@ -363,6 +364,82 @@ func consentInputActions(_ alert: NSAlert, choices: [String], kind: String) -> [
     return actions
 }
 // END PERSON INPUT
+
+// BEGIN PERSON CONFIRM
+// High-stakes settings changes (person-confirm.mjs names them, and the menu's Revoke rows) wait for macOS's own Touch ID or
+// password sheet, which an agent can't answer: it has no finger, and the password sheet is the system's, which sleight's
+// tools refuse to drive (own-host.mjs). The sheet's reason comes only from this table: a key, and at most a bundle id or one
+// of the browser names below. On macOS it reads "consent-host is trying to <reason>."
+let personConfirmReasons: [String: (plain: String, subject: String?)] = [
+    "turbo-on": ("turn on sleight turbo", "turn on sleight turbo for %@"),
+    "turbo-app-on": ("let sleight turbo drive an app", "let sleight turbo drive %@"),
+    "permissions-unblock": ("lift one of sleight's blocks", "let sleight act in %@ again"),
+    "permissions-revoke": ("revoke one of sleight's permissions", "revoke sleight's permission for %@"),
+    "permissions-revoke-all": ("revoke everything sleight may do", nil),
+    "permissions-sites": ("change the sites sleight may act on", nil),
+    "permissions-repair": ("repair sleight's permissions file", nil),
+    "allow-remove": ("take an app off sleight's pre-approved list", "take %@ off sleight's pre-approved list"),
+    "routine-add": ("install a sleight routine", nil),
+    "routine-unlock": ("clear a sleight routine's run lock", nil),
+    "watch-add": ("install a sleight watch", nil),
+    "watch-unlock": ("clear a sleight watch's run lock", nil),
+    "settings": ("change sleight's settings", nil),
+]
+let personConfirmBrowsers: Set<String> = ["Google Chrome", "Helium", "Google Chrome Beta", "Google Chrome Dev", "Google Chrome Canary",
+    "Chromium", "Brave Browser", "Microsoft Edge", "Vivaldi"]
+func personConfirmSubject(_ value: String) -> Bool {
+    personConfirmBrowsers.contains(value) || value.count <= 100 && value.range(of: #"^[A-Za-z0-9-]+(\.[A-Za-z0-9-]+)+$"#, options: .regularExpression) != nil
+}
+/// The sheet's reason for [key] or [key, subject], or nil for anything the table doesn't hold.
+func personConfirmReason(_ arguments: [String]) -> String? {
+    guard (1...2).contains(arguments.count), let entry = personConfirmReasons[arguments[0]] else { return nil }
+    if arguments.count == 1 { return entry.plain }
+    guard let template = entry.subject, personConfirmSubject(arguments[1]) else { return nil }
+    return template.replacingOccurrences(of: "%@", with: arguments[1])
+}
+/// The menu's Revoke rows as [key, subject?]; nil for a row that only removes access without asking (Never Act).
+func menuConfirmArguments(_ event: [String: String]) -> [String]? {
+    if event["permissions"] == "revoke-all" { return ["permissions-revoke-all"] }
+    guard event["permissions"] == "revoke", let target = event["target"], let colon = target.firstIndex(of: ":") else { return nil }
+    let name = String(target[target.index(after: colon)...])
+    return personConfirmSubject(name) && !personConfirmBrowsers.contains(name) ? ["permissions-revoke", name] : ["permissions-revoke"]
+}
+// The helper's exit codes, which person-confirm.mjs reads.
+enum PersonConfirmResult: Int32 { case confirmed = 0, failed = 1, cancelled = 2, timedOut = 3, unavailable = 69 }
+/// The seam around LocalAuthentication: whether the Mac can ask, ask once (done is called once), and withdraw the sheet.
+/// Tests pass a stand-in; nothing else replaces localAuthentication().
+struct PersonEvaluator {
+    let available: () -> Bool
+    let evaluate: (String, @escaping (PersonConfirmResult) -> Void) -> Void
+    let cancel: () -> Void
+}
+func localAuthentication() -> PersonEvaluator {
+    let context = LAContext()
+    return PersonEvaluator(
+        available: { var error: NSError?; return context.canEvaluatePolicy(.deviceOwnerAuthentication, error: &error) },
+        evaluate: { reason, done in
+            context.evaluatePolicy(.deviceOwnerAuthentication, localizedReason: reason) { passed, error in
+                let code = (error as? LAError)?.code
+                done(passed ? .confirmed : code == .userCancel || code == .systemCancel || code == .appCancel ? .cancelled : .failed)
+            }
+        },
+        cancel: { context.invalidate() })
+}
+/// One answer per ask, on `queue`: the person's, unavailable when the Mac can't ask (no Touch ID and no password), or timedOut
+/// after `timeout` seconds, when the sheet is withdrawn. The returned function cancels: it withdraws the sheet and answers
+/// cancelled. Only confirmed lets a change through.
+@discardableResult
+func confirmPerson(_ reason: String, evaluator: PersonEvaluator, timeout: Double = 60, queue: DispatchQueue = .main,
+    done: @escaping (PersonConfirmResult) -> Void) -> () -> Void {
+    guard evaluator.available() else { queue.async { done(.unavailable) }; return {} }
+    var answered = false
+    let finish: (PersonConfirmResult) -> Void = { result in queue.async { if !answered { answered = true; done(result) } } }
+    let timer = DispatchWorkItem { evaluator.cancel(); finish(.timedOut) }
+    queue.asyncAfter(deadline: .now() + timeout, execute: timer)
+    evaluator.evaluate(reason) { result in timer.cancel(); finish(result) }
+    return { timer.cancel(); evaluator.cancel(); finish(.cancelled) }
+}
+// END PERSON CONFIRM
 
 // BEGIN SESSION FRAME
 func sessionFrame(_ data: [String: Any], _ choices: [String]) -> (kind: String, session: String)? {
@@ -1327,10 +1404,25 @@ final class ConsentHost: NSObject, NSApplicationDelegate, NSMenuDelegate {
     }
     // Opening the submenu words the last-use times against the current time. Only Permissions submenus have this delegate.
     func menuNeedsUpdate(_ menu: NSMenu) { fillPermissions(menu) }
-    // Revoke and block only remove access, so they don't ask.
+    // Never Act only removes access, so it answers at once. Revoke and Revoke All are high-stakes (the owner, 2026-10-26): macOS's
+    // Touch ID or password sheet first, and the event only on a pass. A Mac that can't ask gets this host's own card instead,
+    // which only a physical click answers.
+    var personEvaluator: () -> PersonEvaluator = localAuthentication
     @objc func permissionClick(_ sender: NSMenuItem) {
         guard let event = sender.representedObject as? [String: String] else { return }
-        writePermissionEvent(event)
+        guard let confirm = menuConfirmArguments(event) else { writePermissionEvent(event); return }
+        let reason = personConfirmReason(confirm) ?? personConfirmReasons["permissions-revoke"]!.plain
+        confirmPerson(reason, evaluator: personEvaluator()) { [weak self] result in
+            if result == .confirmed || result == .unavailable && self?.confirmOnCard(reason) == true { writePermissionEvent(event) }
+        }
+    }
+    func confirmOnCard(_ reason: String) -> Bool {
+        let alert = NSAlert()
+        alert.messageText = "Revoke sleight's permission?"
+        alert.informativeText = "This Mac can't ask for Touch ID or a password, so this card confirms it instead: " + reason + "."
+        alert.addButton(withTitle: "Revoke")
+        alert.addButton(withTitle: "Cancel")
+        return personModal(alert, choices: ["revoke", "cancel"], kind: "settings") == .alertFirstButtonReturn
     }
     @objc func handToggle(_ sender: NSMenuItem) {
         guard let hand = hand else { return }
@@ -3469,6 +3561,22 @@ if arguments.first == "--ring-plan-dump" {
     ringPlanDump(theme: rawStyle.flatMap { ringThemes[$0] }, reduced: flags.contains("--reduce-motion"), secure: flags.contains("--secure-input"),
         clip: clip, seed: seed, gone: gone, timed: flags.contains("--time-plans"))
     exit(0)
+}
+// --confirm-person <key> [subject]: macOS's own Touch ID or password sheet for one high-stakes settings change, then exit with
+// its PersonConfirmResult (0 only when the person passed it). Cancel, Ctrl-C, SIGTERM or 60 s withdraw the sheet. It opens no
+// window of its own. --confirm-person-check prints the reason the sheet would show and exits, so tests never show a sheet.
+var personSignals: [DispatchSourceSignal] = []
+if arguments.first == "--confirm-person" || arguments.first == "--confirm-person-check" {
+    guard let reason = personConfirmReason(Array(arguments.dropFirst())) else { exit(64) }
+    if arguments.first == "--confirm-person-check" { print(reason); exit(0) }
+    let cancel = confirmPerson(reason, evaluator: localAuthentication()) { result in exit(result.rawValue) }
+    for number in [SIGINT, SIGTERM, SIGHUP] {
+        signal(number, SIG_IGN)
+        let source = DispatchSource.makeSignalSource(signal: number, queue: .main)
+        source.setEventHandler { cancel() }
+        source.resume(); personSignals.append(source)
+    }
+    dispatchMain()
 }
 let app = NSApplication.shared
 if arguments.isEmpty {

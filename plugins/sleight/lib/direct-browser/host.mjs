@@ -392,13 +392,17 @@ export async function appleToolsPresent({ run = promisify(execFile), exists = ex
   } catch { return false; }
 }
 export const handCursorStyles = Object.freeze(['glove', 'ring', 'seam']);
-export async function prepareHandHost({ cacheRoot = defaultHelperCache(), sourceRoot = sources, compile = compileNative,
+async function handBuild({ cacheRoot = defaultHelperCache(), sourceRoot = sources, compile = compileNative,
   tools = appleToolsPresent, onProgress, signal } = {}) {
   let inventory;
   try { inventory = handInventory(sourceRoot); } catch { return Object.freeze({ status: 'unavailable', code: 'HOST_SOURCE_MISMATCH' }); }
   if (!nativeHelpersBuilt({ inventory, cacheRoot }) && !await tools()) return Object.freeze({ status: 'unavailable', code: 'APPLE_TOOLS_MISSING' });
   const built = await prepareNativeHelpers({ inventory, cacheRoot, sourceRoot, compile, onProgress, signal });
-  if (built.status !== 'ready') return Object.freeze({ status: built.status, code: built.code, detail: built.detail });
+  return built.status === 'ready' ? built : Object.freeze({ status: built.status, code: built.code, detail: built.detail });
+}
+export async function prepareHandHost(options = {}) {
+  const built = await handBuild(options);
+  if (built.status !== 'ready') return built;
   const { receipt } = built;
   // capture is 'hidden' (absent from every capture) or 'visible' (screenshots and recordings show the hand). The host is the
   // session's: hand frames on stdin and control events on stdout. Session clients open fds 3 and 4 at first use, then
@@ -409,6 +413,23 @@ export async function prepareHandHost({ cacheRoot = defaultHelperCache(), source
     if (!handCursorStyles.includes(cursorStyle)) throw Error('HAND_CURSOR_STYLE_INVALID');
     return spawn(executable('consent-host', receipt), ['--hand', '--capture=' + capture, '--cursor-style=' + cursorStyle, consent ? '--consent' : '--menu'],
       { env: consentEnvironment(), stdio: ['pipe', 'pipe', 'ignore', ...consent ? ['pipe', 'pipe'] : []] });
+  } });
+}
+
+// The person confirmation for high-stakes settings changes (person-confirm.mjs): the same binary and build as the hand, in its
+// --confirm-person mode, which shows only macOS's own Touch ID or password sheet and opens no window of its own. Its key
+// and subject are checked again against the host's fixed table. notice(text) hears about a first-use build.
+const CONFIRM_KEY = /^[a-z][a-z-]{0,39}$/;
+export async function prepareConfirmHost({ notice = () => {}, ...options } = {}) {
+  if (process.platform !== 'darwin') return Object.freeze({ status: 'unavailable', code: 'PLATFORM' });
+  if (!handHostBuilt(options)) notice('sleight: building the confirmation helper from source (first use, up to a few minutes).\n');
+  const built = await handBuild(options);
+  if (built.status !== 'ready') return built;
+  const { receipt } = built;
+  return Object.freeze({ status: 'ready', spawn: (key, subject) => {
+    if (!CONFIRM_KEY.test(key) || subject !== undefined && (typeof subject !== 'string' || subject.length > 100)) throw Error('CONFIRM_INVALID');
+    return spawn(executable('consent-host', receipt), ['--confirm-person', key, ...subject === undefined ? [] : [subject]],
+      { env: environment(), stdio: ['ignore', 'ignore', 'ignore'] });
   } });
 }
 
