@@ -301,7 +301,7 @@ macOS's own Touch ID sheet, with your account password as the system's fallback,
 - `routine add` and `unlock`, and `watch <url> --find`, `watch record` and `watch unlock`
 
 An agent can open a terminal window and type a command into it, and then the process chain looks like
-yours. It can't put a finger on the sensor, and sleight refuses to act on the password sheet. The sheet gives up after 60 s,
+yours. It can't put a finger on the sensor, and sleight refuses to act on the password sheet. A terminal opened less than 10 s before one of these commands gets "try again". The sheet gives up after 60 s,
 and Cancel or Ctrl-C stops it. When nobody is at the Mac (locked, or no input for 120 s), these changes are refused
 outright: a settings change never goes to [remote approvals](#approval-scope). An account without a login password can't
 ask, and the CLI refuses these changes until you set one. Everything else above only takes access away or changes how

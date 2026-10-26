@@ -121,8 +121,9 @@ refuses terminals and OpenAI's own apps. See [approvals and guards](#approvals-a
 - The launcher's low-stakes settings commands (`hand`, `cursor`, `turbo off`, `permissions block` and the other ones that
   only narrow what sleight does) check only that a person started them from a terminal app, by reading the process's
   ancestors. A terminal window an agent opens through `open`, AppleScript (`do script`) or a `.command` file starts from
-  launchd like any other, and computer use typing into it passes. A session under 10 s old is refused, which slows an agent
-  that types at once but doesn't stop one that waits. High-stakes changes also need Touch ID or the password (1.5.1). No real
+  launchd like any other, and computer use typing into it passes. For high-stakes changes a session under 10 s old is
+  refused, which slows an agent that types at once but doesn't stop one that waits. A script an agent starts in a terminal
+  it opened can write the settings files directly, past every check. High-stakes changes also need Touch ID or the password (1.5.1). No real
   Touch ID or password sheet has been shown from sleight's helper yet, so that path is unit-tested only.
 
 - Remote approvals (1.5.0): a person at the Mac who hasn't touched the keyboard or pointer for 120 s counts as away, so an app

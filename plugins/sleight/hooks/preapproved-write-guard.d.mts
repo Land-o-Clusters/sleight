@@ -7,4 +7,5 @@ export function preapprovedWriteDenied(input: {
 }, options: {
   stat: (path: string) => Promise<{ realPath?: string } | undefined>;
   home?: string;
+  configDir?: string;
 }): Promise<boolean>;

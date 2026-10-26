@@ -71,8 +71,16 @@ const TERMINAL_BUNDLES = ['iTerm.app', 'Ghostty.app', 'WezTerm.app', 'kitty.app'
 export const terminalBundles = home => ['/System/Applications/Utilities/Terminal.app/Contents/', '/Applications/Utilities/Terminal.app/Contents/',
   ...TERMINAL_BUNDLES.flatMap(bundle => [`/Applications/${bundle}/Contents/`, ...home ? [`${home.replace(/\/$/, '')}/Applications/${bundle}/Contents/`] : []])];
 
+// LC_ALL=C keeps ps's output in one format whatever language the person's terminal uses.
 const run = (file, argv, timeout) => execFileSync(file, argv,
-  { encoding: 'utf8', timeout: Math.max(1, Math.ceil(timeout)), stdio: ['ignore', 'pipe', 'ignore'] });
+  { encoding: 'utf8', timeout: Math.max(1, Math.ceil(timeout)), stdio: ['ignore', 'pipe', 'ignore'], env: { ...process.env, LC_ALL: 'C' } });
+/** Milliseconds from ps's etime ([[dd-]hh:]mm:ss), or NaN for anything else. */
+export function elapsedMs(text) {
+  const match = /^\s*(?:(?:(\d+)-)?(\d{1,2}):)?(\d{1,2}):(\d{2})\s*$/.exec(String(text ?? ''));
+  if (!match) return NaN;
+  const [, days = 0, hours = 0, minutes, seconds] = match;
+  return (((Number(days) * 24 + Number(hours)) * 60 + Number(minutes)) * 60 + Number(seconds)) * 1000;
+}
 export const systemPs = (argv, timeout) => run('/bin/ps', argv, timeout);
 /** The file a process actually runs. ps takes comm and args from argv[0], which `exec -a` sets to anything, so a terminal is
  *  confirmed by its mapped executable: lsof lists it first among the txt entries. */
@@ -128,10 +136,12 @@ export function walkAncestors({ pid = process.ppid, self = process.pid, ps = sys
     const at = leaders.length === 1 ? chain.indexOf(leaders[0]) : -1;
     if (at < 0 || at >= terminalAt) return { ok: false, reason: 'session' };
     // A speed bump, not a guarantee: an agent that opens a fresh terminal and types at once meets a session under 10 s old.
-    // ps prints lstart to the second in local time ("Mon Oct 26 11:56:00 2026"); anything else fails closed.
-    const started = Date.parse(call(['-o', 'lstart=', '-p', String(leaders[0])]).trim());
-    if (!Number.isFinite(started)) return { ok: false, reason: 'unreadable' };
-    if (now() - started < freshMs) return { ok: false, reason: 'fresh session' };
+    // etime has no month or day names, so no locale changes it; anything that isn't etime fails closed.
+    if (freshMs > 0) {
+      const age = elapsedMs(call(['-o', 'etime=', '-p', String(leaders[0])]));
+      if (!Number.isFinite(age)) return { ok: false, reason: 'unreadable' };
+      if (age < freshMs) return { ok: false, reason: 'fresh session' };
+    }
     return { ok: true };
   } catch (error) { return { ok: false, reason: error === TIMEOUT ? 'timeout' : 'ps failed' }; }
 }
@@ -177,7 +187,12 @@ export function writeOutsideSettings(path, text, { home = homeFolder(), exclusiv
     const here = realpathSync.native('.'), held = statSync('.'), named = statSync(here);
     if (held.dev !== named.dev || held.ino !== named.ino || underSettings(here, home)) throw outsideRefusal();
     const { O_WRONLY, O_CREAT, O_EXCL, O_NOFOLLOW } = constants;
-    const fd = openSync(name, O_WRONLY | O_CREAT | O_NOFOLLOW | (exclusive ? O_EXCL : 0), mode);
+    let fd;
+    try { fd = openSync(name, O_WRONLY | O_CREAT | O_NOFOLLOW | (exclusive ? O_EXCL : 0), mode); }
+    catch (error) {
+      if (error?.code === 'ELOOP') throw Object.assign(Error("record doesn't write through a link at the output path; pick another output path"), { code: 'SETTINGS_OUT' });
+      throw error;
+    }
     try {
       const file = fstatSync(fd);
       if (!file.isFile() || file.nlink > 1) throw outsideRefusal();
@@ -192,13 +207,15 @@ const AGENT_ENV = ['CLAUDECODE', 'CLAUDE_CODE_ENTRYPOINT'];
 /** undefined when the person may run args, else the refusal line. All must hold: stdin and stdout are terminals, the
  *  environment carries no agent marker, and the walk reaches a GUI terminal app through shells alone (a pseudo-terminal
  *  started from an agent's shell sits under the agent, and a multiplexer server sits under launchd, so both refuse). */
-export function settingsRefusal(args, { stdin = process.stdin, stdout = process.stdout, env = process.env, ancestors = walkAncestors } = {}) {
+// freshMs: the session-age bar, 10 s by default. The launcher passes 0 for forms that only take access away or change looks,
+// so a person stopping sleight from a terminal they just opened isn't held up.
+export function settingsRefusal(args, { stdin = process.stdin, stdout = process.stdout, env = process.env, ancestors = walkAncestors, freshMs = 10000 } = {}) {
   const command = settingsCommand(args);
   if (command === undefined) return undefined;
   try {
     if (stdin?.isTTY !== true || stdout?.isTTY !== true) return refusalLine(command, 'no terminal');
     if (AGENT_ENV.some(name => env?.[name])) return refusalLine(command, 'agent');
-    const walked = ancestors();
+    const walked = ancestors({ freshMs });
     if (walked?.ok !== true) return refusalLine(command, walked?.reason);
   } catch { return refusalLine(command); }
   return undefined;

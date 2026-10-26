@@ -8,11 +8,13 @@ const folded = path => path.normalize('NFC').toLowerCase();
 // Everything under these folders is sleight's own code: the helper cache (the consent host that answers sleight's cards and
 // its Touch ID confirmation, built from source) and installed copies of the plugin in Claude Code's, Codex's and Cursor's
 // plugin caches (<host>/plugins/cache/<marketplace>/sleight). Swapping either would change the checks themselves. A plugin
-// loaded from a working checkout is left alone, so its source stays editable.
+// loaded from a working checkout is left alone, so its source stays editable. So is the benchmark's own copy, installed in
+// its throwaway config under ~/Library/Caches/sleight-bench, which the bench rebuilds.
 const TREES = [/\/library\/caches\/sleight(?:\/|$)/, /\/plugins\/cache\/[^/]+\/sleight(?:\/|$)/];
+const BENCH = /\/library\/caches\/sleight-bench(?:\/|$)/;
 const protectedLiteral = path => {
   const value = folded(normalize(path));
-  return suffixes.some(suffix => value.endsWith(suffix)) || value.endsWith(directorySuffix) || TREES.some(tree => tree.test(value));
+  return suffixes.some(suffix => value.endsWith(suffix)) || value.endsWith(directorySuffix) || !BENCH.test(value) && TREES.some(tree => tree.test(value));
 };
 const normalize = path => {
   const parts = [];
@@ -32,10 +34,32 @@ const above = (path, home) => {
     .some(folder => value === folder || folder.startsWith(value === '/' ? '/' : value + '/'));
 };
 
-// Resolve before normalizing: a symlink followed by .. walks from its target.
-async function protectedPath(path, { stat, home }, ancestor = false) {
+// The folders above the installed plugin copies (TREES): a host folder, its plugins and plugins/cache folders, and a
+// marketplace folder. Removing or moving any of them takes sleight with it. Hosts are ~/.claude, ~/.codex, ~/.cursor and
+// the session's CLAUDE_CONFIG_DIR. The upper levels of the home hosts count always; a CLAUDE_CONFIG_DIR's count when it
+// has a plugin cache, and a marketplace folder counts when it has a sleight child (by stat), or is named sleight.
+const HOSTS = ['.claude', '.codex', '.cursor'];
+async function aboveInstall(path, { stat, home, configDir } = {}) {
   if (typeof path !== 'string' || !path || path.length > 4096) return false;
-  if (protectedLiteral(path) || ancestor && above(path, home)) return true;
+  const expanded = normalize(path.replace(/^(?:~|\$HOME|\$\{HOME\})(?=\/|$)/, () => home ?? '/~')
+    .replace(/^(?:\$CLAUDE_CONFIG_DIR|\$\{CLAUDE_CONFIG_DIR\})(?=\/|$)/, () => configDir ?? '/$CLAUDE_CONFIG_DIR'));
+  const value = folded(expanded);
+  if (!value.startsWith('/') || BENCH.test(value)) return false;
+  const exists = async target => { try { return !!(await stat?.(target))?.realPath; } catch { return false; } };
+  const roots = [...HOSTS.map(host => ({ root: `${home ?? '/~'}/${host}`, always: true })), ...configDir ? [{ root: configDir, always: false }] : []];
+  for (const { root, always } of roots) {
+    const cache = folded(normalize(`${root}/plugins/cache`));
+    if ((value === cache || cache.startsWith(value === '/' ? '/' : value + '/')) && (always || await exists(`${root}/plugins/cache`))) return true;
+    const rest = value.startsWith(cache + '/') ? value.slice(cache.length + 1) : undefined;
+    if (rest && !rest.includes('/') && (rest === 'sleight' || await exists(`${expanded}/sleight`))) return true;
+  }
+  return false;
+}
+
+// Resolve before normalizing: a symlink followed by .. walks from its target.
+async function protectedPath(path, { stat, home, configDir }, ancestor = false) {
+  if (typeof path !== 'string' || !path || path.length > 4096) return false;
+  if (protectedLiteral(path) || ancestor && (above(path, home) || await aboveInstall(path, { stat, home, configDir }))) return true;
   if (home) path = path.replace(/^(?:~|\$HOME|\$\{HOME\})(?=\/|$)/, () => home);
   let resolved = (await stat(path.startsWith('/') ? '/' : '.').catch(() => undefined))?.realPath;
   if (!resolved) return false;
@@ -44,7 +68,7 @@ async function protectedPath(path, { stat, home }, ancestor = false) {
     const info = await stat(next).catch(() => undefined);
     resolved = info?.realPath ?? normalize(next);
   }
-  return protectedLiteral(resolved) || ancestor && above(resolved, home);
+  return protectedLiteral(resolved) || ancestor && (above(resolved, home) || await aboveInstall(resolved, { stat, home }));
 }
 
 // Only literal shell names and operators, never eval or shell expansion. Keep
@@ -382,7 +406,7 @@ function shellWritePaths(command, initialDirectory, depth = 0) {
       const writes = /\bopen\s*\([^)]*,\s*(?:mode\s*=\s*)?['"][wax][+bt]*['"]|\b(?:writeFile(?:Sync)?|appendFile(?:Sync)?|unlink(?:Sync)?|rename(?:Sync)?|copyFile(?:Sync)?|rm(?:Sync)?|remove|truncate|File\.write)\s*\(|\b(?:unlink|rename|chmod|chown|rmtree|move|symlink)\b/;
       if (!writes.test(source)) continue;
       // Inline code is scanned as text only, never passed to the filesystem resolver.
-      for (const match of source.matchAll(/(?:~|\$\{?HOME\}?|\/|\.{1,2}\/)[^'"`;\n()<>|]*?(?:(?:preapproved|turbo|turbo-apps|turbo-owner|electron-grants|hand|permissions)\.json|grant-seal\.key|\/sleight(?=['"`;,)\s]|$)|\/(?:library\/caches|plugins\/cache\/[^/'"`;\n()<>|]+)\/sleight(?:\/[^'"`;\n()<>|]*)?)|\b(?:(?:preapproved|turbo|turbo-apps|turbo-owner|electron-grants|hand|permissions)\.json|grant-seal\.key)\b/gi)) add(match[0], true);
+      for (const match of source.matchAll(/(?:~|\$\{?HOME\}?|\/|\.{1,2}\/)[^'"`;\n()<>|]*?(?:(?:preapproved|turbo|turbo-apps|turbo-owner|electron-grants|hand|permissions)\.json|grant-seal\.key|\/sleight(?=['"`;,)\s]|$)|\/(?:library\/caches|plugins\/cache\/[^/'"`;\n()<>|]+)\/sleight(?![\w.-])(?:\/[^'"`;\n()<>|]*)?)|\b(?:(?:preapproved|turbo|turbo-apps|turbo-owner|electron-grants|hand|permissions)\.json|grant-seal\.key)\b/gi)) add(match[0], true);
     }
   }
   return paths;
@@ -401,9 +425,9 @@ export async function preapprovedWriteDenied(input, options) {
     const { path, literalOnly, ancestor } = tool === 'Bash' ? candidate : { path: candidate };
     if (typeof path !== 'string') continue;
     if (tool === 'Bash') {
-      if (protectedLiteral(path) || ancestor && above(path, options?.home)) return true;
+      if (protectedLiteral(path) || ancestor && (above(path, options?.home) || await aboveInstall(path, options))) return true;
       const folder = globFolder(path);
-      if (folder && (protectedLiteral(folder) || ancestor && above(folder, options?.home))) return true;
+      if (folder && (protectedLiteral(folder) || ancestor && (above(folder, options?.home) || await aboveInstall(folder, options)))) return true;
       if (literalOnly || /\s/.test(path) || path.length >= 512) continue;
     }
     if (await protectedPath(path, options, ancestor)) return true;

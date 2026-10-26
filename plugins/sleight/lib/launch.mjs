@@ -1412,7 +1412,12 @@ const SETTINGS_COMMANDS = ['hand', 'turbo', 'cursor', 'permissions', 'allow', 'r
  *  so a refused or failed confirmation writes nothing. Tests inject gate and confirmation; production passes neither. */
 export async function settingsChangeRefusal(args, { gate, confirmation = {} } = {}) {
   let refusal;
-  try { refusal = (gate ?? (await import('./person-gate.mjs')).settingsRefusal)(args); }
+  // The 10 s session-age bar applies only to high-stakes forms (person-gate.mjs settingsRefusal freshMs).
+  try {
+    const { highStakesChange } = await import('./person-confirm.mjs');
+    const freshMs = highStakesChange(args) ? 10000 : 0;
+    refusal = gate ? gate(args, { freshMs }) : (await import('./person-gate.mjs')).settingsRefusal(args, { freshMs });
+  }
   catch { refusal = `sleight: ${args[0]} changes sleight's settings, so run it yourself in a terminal (or use the menu bar). Reason: check failed.`; }
   if (refusal) return refusal;
   try {

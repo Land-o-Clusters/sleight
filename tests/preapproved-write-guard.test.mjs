@@ -416,6 +416,18 @@ test('the helper cache and installed plugin copies deny every mutation; a source
     `${MAC_USERS}fixture/.claude/plugins/cache/other/other-plugin/x.mjs`, `${MAC_USERS}fixture/Library/Caches/com.example/sleight.txt`]) {
     assert.equal(await guard({ tool: 'Write', file_path: path }, { stat }), false, path);
   }
+  // The benchmark's own caches and lookalike names pass, inline code included (Sonnet review finding 5).
+  const bench = `${MAC_USERS}fixture/Library/Caches/sleight-bench/claude-config/plugins/cache/mkt/sleight/lib/launch.mjs`;
+  for (const path of [bench, `${MAC_USERS}fixture/Library/Caches/sleight-bench/a.json`]) {
+    for (const tool of ['Write', 'Edit']) assert.equal(await guard({ tool, file_path: path }, { stat }), false, `${tool} ${path}`);
+  }
+  for (const command of [`python3 -c "open('${MAC_USERS}x/Library/Caches/sleight-bench/a.json','w').write('x')"`,
+    `node -e "require('fs').writeFileSync('~/Library/Caches/sleight-bench/a.json','x')"`,
+    `node -e "require('fs').writeFileSync('${MAC_USERS}x/.claude/plugins/cache/mk/sleight-other/x','x')"`,
+    `python3 -c "open('${bench}','w').write('x')"`, `cp a ${bench}`, 'rm -rf ~/Library/Caches/sleight-bench/claude-config',
+    `rm -rf ${MAC_USERS}fixture/Library/Caches/sleight-bench/claude-config/plugins/cache`]) {
+    assert.equal(await guard({ tool: 'Bash', command }, { stat, home: `${MAC_USERS}fixture`, configDir: `${MAC_USERS}fixture/Library/Caches/sleight-bench/claude-config` }), false, command);
+  }
   for (const command of [`cat ${helper}`, `ls ~/Library/Caches/sleight/turbo-host`, `shasum -a 256 ${installed[0]}`, 'rm -rf ~/Library/Caches/com.example']) {
     assert.equal(await guard({ tool: 'Bash', command }, { stat, home: `${MAC_USERS}fixture` }), false, command);
   }
@@ -430,4 +442,27 @@ test('a link into the helper cache is followed for Write and Edit', async t => {
   const { lstat, realpath } = await import('node:fs/promises');
   const real = async path => { await lstat(path); return { realPath: await realpath(path) }; };
   assert.equal(await guard({ tool: 'Write', file_path: join(root, 'innocent/consent-host') }, { stat: real }), true);
+});
+
+// VC10 review: the folders above the installed copies, so removing or moving a plugin cache can't take sleight with it.
+test('the folders above installed plugin copies deny removal and moves; other marketplaces and plugins pass', async () => {
+  const home = `${MAC_USERS}fixture`, configDir = '/tmp/lane-claude-abc123';
+  const installs = new Set([`${home}/.claude/plugins/cache/sleight/sleight`, `${home}/.codex/plugins/cache/land-o-clusters/sleight`,
+    `${configDir}/plugins/cache`, `${configDir}/plugins/cache/market/sleight`]);
+  const fsStat = async path => installs.has(path) ? { realPath: path } : undefined;
+  const options = { stat: fsStat, home, configDir };
+  for (const command of ['rm -rf ~/.claude/plugins/cache', 'rm -rf ~/.claude/plugins', 'rm -rf ~/.claude', 'rm -rf ~/.codex/plugins/cache',
+    'rm -rf ~/.cursor/plugins', 'rm -rf ~/.claude/plugins/cache/sleight', 'rm -rf ~/.codex/plugins/cache/land-o-clusters',
+    'mv ~/.claude/plugins/cache /tmp/old', 'rm -rf "$HOME/.claude/plugins/cache"', 'rm -rf ~/.claude/plugins/cache/*',
+    `rm -rf ${configDir}/plugins/cache`, `rm -rf ${configDir}`, 'rm -rf $CLAUDE_CONFIG_DIR/plugins', `rm -rf ${configDir}/plugins/cache/market`,
+    `find ${home}/.claude/plugins -delete`, `chmod -R 000 ${home}/.claude/plugins/cache`]) {
+    assert.equal(await guard({ tool: 'Bash', command }, options), true, command);
+  }
+  for (const command of ['rm -rf ~/.claude/plugins/cache/claude-plugins-official', 'rm -rf ~/.claude/plugins/cache/temp_git_1/x',
+    'rm -rf ~/.claude/projects/old', 'rm -rf /tmp/lane-claude-other', `rm -rf ${configDir}/projects`, `rm -rf ${configDir}/plugins/cache/other`,
+    'rm ~/.claude/plugins/cache/notes.txt']) {
+    assert.equal(await guard({ tool: 'Bash', command }, options), false, command);
+  }
+  // A config folder without a plugin cache is an ordinary folder.
+  assert.equal(await guard({ tool: 'Bash', command: 'rm -rf /tmp/lane-claude-empty' }, { ...options, configDir: '/tmp/lane-claude-empty' }), false);
 });

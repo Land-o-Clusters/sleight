@@ -10,6 +10,7 @@ import ObjectiveC
 import Darwin
 import os.log
 import LocalAuthentication
+import CryptoKit
 
 // BEGIN PERSON INPUT
 private var consentFeedbackKey: UInt8 = 0
@@ -3538,11 +3539,21 @@ if arguments.first == "--ring-plan-dump" {
     exit(0)
 }
 // --confirm-person <key> [subject]: macOS's own Touch ID or password sheet for one high-stakes settings change, then exit with
-// its PersonConfirmResult (0 only when the person passed it). Cancel, Ctrl-C, SIGTERM or 60 s withdraw the sheet. It opens no
-// window of its own. --confirm-person-check prints the reason the sheet would show and exits, so tests never show a sheet.
+// its PersonConfirmResult (0 only when the person passed it). Before the sheet it prints one JSON line, { path, sha256 }.
+// Cancel, Ctrl-C, SIGTERM or 60 s withdraw the sheet. It opens no window of its own. --confirm-person-check prints the
+// same first line and the reason the sheet would show, then exits, so tests never show a sheet.
 var personSignals: [DispatchSourceSignal] = []
 if arguments.first == "--confirm-person" || arguments.first == "--confirm-person-check" {
     guard let reason = personConfirmReason(Array(arguments.dropFirst())) else { exit(64) }
+    // The first line names the file this process runs (proc_pidpath) and its SHA-256, which the launcher compares with
+    // the private copy it wrote before it trusts the answer.
+    var own = [CChar](repeating: 0, count: 4 * Int(MAXPATHLEN))
+    guard proc_pidpath(getpid(), &own, UInt32(own.count)) > 0 else { exit(70) }
+    let ownPath = String(cString: own)
+    guard let ownBytes = FileManager.default.contents(atPath: ownPath),
+        let line = try? JSONSerialization.data(withJSONObject: ["path": ownPath,
+            "sha256": SHA256.hash(data: ownBytes).map { String(format: "%02x", $0) }.joined()], options: [.sortedKeys, .withoutEscapingSlashes]) else { exit(70) }
+    FileHandle.standardOutput.write(line + Data([10]))
     if arguments.first == "--confirm-person-check" { print(reason); exit(0) }
     let cancel = confirmPerson(reason, evaluator: localAuthentication()) { result in exit(result.rawValue) }
     for number in [SIGINT, SIGTERM, SIGHUP] {
