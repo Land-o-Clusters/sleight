@@ -15,6 +15,27 @@ refuses terminals and OpenAI's own apps. See [approvals and guards](#approvals-a
 - Turbo may ask about an honest checkout: on 2026-10-15, 50/98 honest payment fixtures allowed without asking (83/98 in round 12) ([browsers](#browsers)).
 - Safari may stop between opening a tab and typing: 36 of 36 Codex chains and 19 of 19 Claude Code chains stopped. The fix is untested live ([approvals and guards](#approvals-and-guards)).
 
+## Character sharing and creation
+
+- Character discovery relies on observed host records. Claude Code 2.1.309's `version: 2`, `projectPath`
+  and `CLAUDE_CONFIG_DIR/plugins`, and Codex 0.164.0's `plugin list --json` shape were measured on 2026-10-26.
+  The host contracts don't document these formats, and unsupported records don't expose packs.
+- A symlinked Claude config or plugins root must resolve under the user's home and remain owned by
+  that user. Child symlinks are refused. Skipped roots and packs appear with reasons in the Cursor
+  menu and `cursor list`. A plugin without a readable manifest does not expose its characters.
+- Codex installation status is cached for one menu open, with a 3 s CLI deadline. Reopen Cursor after
+  installing or removing a plugin. Claude records and pack bytes are rechecked before import.
+- The make-character generator needs macOS `sips` and Node 22+. The installed plugin includes it.
+  Tested with `cwebp` 1.6.0. Other versions fall back to PNG. A missing encoder or failed encode also uses PNG.
+  Built-in rebuilds still require `cwebp` 1.6.0 and refuse failed encodes. The output directory must be new and
+  have no symlink ancestors. Review the six light and dark contact sheets before import.
+  An offline build does not establish how a character reads in motion over real windows.
+- Codex CLI 0.164.0 ignores `disable-model-invocation`, measured on this Mac on 2026-10-26.
+  sleight's Codex manifest lists only `"skills": "./skills/drive-mac-apps/"`, keeping make-character out
+  of Codex's model-visible skill list in that measurement. This single-skill-folder route is observed,
+  not documented upstream. Other Codex versions are unverified. Claude Code keeps make-character
+  available through explicit invocation with `disable-model-invocation: true`.
+
 ## Release qualification
 
 - Release qualification applies to the final integrated commit. The 1.5.0 manifests, doctor output and unreleased

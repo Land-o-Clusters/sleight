@@ -394,7 +394,7 @@ const manifestErrors = {
   "sheet URL": "sheet: invalid sheet filename",
   "sheet missing": "sheet.webp\" sheet: sheet file missing",
   "sheet basename": "sheet: sheet filename must be sheet.png or sheet.webp",
-  "extra filename": "extra: extra sheet filename must be extra.webp",
+  "extra filename": "extra: extra sheet filename must be extra.png or extra.webp",
   "small cell": "frame: invalid frame dimensions",
   "large cell": "frame: invalid frame dimensions",
   "fractional cell": "frame: invalid frame dimensions",

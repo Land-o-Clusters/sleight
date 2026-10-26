@@ -10,7 +10,7 @@ function fileCap(name) {
   if (name === 'character.json') return CHARACTER_LIMITS.json - 1;
   if (name === 'LICENSE.txt') return CHARACTER_LIMITS.license;
   if (name === 'preview.png') return CHARACTER_LIMITS.preview;
-  if (/^(sheet\.(png|webp)|extra\.webp|perch\.(png|webp))$/.test(name)) return CHARACTER_LIMITS.sheet;
+  if (/^(sheet|extra|perch)\.(png|webp)$/.test(name)) return CHARACTER_LIMITS.sheet;
   refuse('entry name is not a v1 pack file');
 }
 function entriesCheck(files) {

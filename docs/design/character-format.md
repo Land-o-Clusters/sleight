@@ -14,7 +14,7 @@ Character data remains on this Mac. Names and descriptions appear in the user CL
 my-character/
   character.json
   sheet.png          # or sheet.webp
-  extra.webp         # optional extra rows
+  extra.webp         # optional extra rows (or extra.png)
   perch.webp         # optional perch-mode rows (or perch.png)
   preview.png        # optional, at most 256 by 256 pixels
   LICENSE.txt        # terms for a license the validator does not recognize
@@ -62,11 +62,12 @@ Import refuses those IDs regardless of display name. To make a variant, give it 
 Remove refuses built-ins. An old user folder with a reserved ID cannot shadow the bundled pack, but remains removable
 with `sleight-mcp cursor remove <id>`. The picker shows a separate "renamed needed" row that opens the user bank for repair.
 
-The build tool is `tools/characters/build.mjs`, outside the plugin. Its cast data, poses and styles draw all six characters
-in code under MIT. On macOS with `cwebp` 1.6.0 on PATH, build into a new directory:
+The generator is included in the plugin at `skills/make-character/tool/`. The repository entry point is
+`tools/characters/build.mjs`. Its cast data, poses and styles draw all six characters in code under MIT.
+On macOS with `cwebp` 1.6.0 on PATH, build into a new directory with no symlink ancestors:
 
 ```sh
-nice -n 20 node tools/characters/build.mjs --out /tmp/sleight-cast-build
+nice -n 20 node tools/characters/build.mjs --out /private/tmp/sleight-cast-build
 ```
 
 macOS `sips` rasterizes the SVGs without a browser or window. After PNG metadata is stripped, `cwebp` encodes every atlas
@@ -125,7 +126,7 @@ This example defines idle and click art. The remaining 17 states use fallbacks.
   before re-importing it as a pack. The validator recognizes CC0, CC-BY family licenses, MIT, Apache-2.0, BSD-2-Clause,
   BSD-3-Clause, ISC, Unlicense, GPL-2.0-only, GPL-2.0-or-later, GPL-3.0-only, GPL-3.0-or-later and OFL-1.1.
   Other identifiers or custom terms need `LICENSE.txt`. `proprietary-personal` is also accepted. Attribution is unverified.
-- `sheet` is `sheet.png` or `sheet.webp`. Set `extra` to `extra.webp` when extra rows are present. File extensions must agree
+- `sheet` is `sheet.png` or `sheet.webp`. Set `extra` to `extra.png` or `extra.webp` when extra rows are present. File extensions must agree
   with image magic bytes. Paths and URLs are refused.
 - `frame` defaults to 192 by 208 pixels. The width must be an integer from 64 to 192 and the height from 64 to 208, so
   every sheet fits the hand host's 1536 by 2288 cap.
@@ -254,7 +255,7 @@ archive, run its contents, fetch assets or install a player. External conversion
 
 ### Adding extra rows
 
-Keep the original Codex sheet unchanged. Draw an `extra.webp` with 8 columns, the same cell dimensions and as many complete
+Keep the original Codex sheet unchanged. Draw an `extra.png` or `extra.webp` with 8 columns, the same cell dimensions and as many complete
 rows as needed within the size and pixel limits. Its height determines its row count. Add `"extra": "extra.webp"` at the
 top of the manifest, then put `"sheet": "extra"` on each state using it. Rows start at zero within each sheet.
 
@@ -335,7 +336,7 @@ to the ring. These host checks belong to the renderer and are not established by
 1. Ask your agent to draw rows of 192 by 208 transparent cells, 8 columns across. Draw the first idle frame so it also works
    as a still image. Export PNG or WebP.
 2. Save the main atlas as `sheet.png` or `sheet.webp`. Write `character.json` with your ID, attribution, license, grid and
-   timed idle row. Add event states or an `extra.webp` as needed.
+   timed idle row. Add event states or an extra PNG or WebP sheet as needed.
 3. Run `sleight-mcp cursor import ./my-character`. Read its size, license and missing-animation table before confirming.
    The default answer is No. A non-TTY import requires `--yes`.
 4. Run `sleight-mcp cursor check my-character` to validate the installed copy and print that table again.

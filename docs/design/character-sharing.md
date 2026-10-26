@@ -41,7 +41,8 @@ These are [Claude Code's manifest rules](https://code.claude.com/docs/en/plugins
 
 The character plugin's only payload is `sleight-characters/<id>/`. Its contents are art and metadata. sleight reads pack data without executing plugin code. A data-only plugin contains its manifests, character
 folder and known metadata files. Unknown files or manifest keys make the picker group say
-`warning: check plugin`. The import callout and `cursor list` name each unexpected item:
+`warning: check plugin`. The import callout and `cursor list` name at most 8 unexpected items, each capped at 40 characters,
+then give the remaining count:
 "Warning: this plugin includes hooks, MCP servers. sleight cannot control what the host loads from it."
 The host may have loaded them before sleight opens its picker. This warning is a file and manifest check,
 not an audit or a promise about the plugin's behavior.
@@ -87,7 +88,7 @@ Disabled but still installed Claude plugins remain available as art sources. sle
 Discovery follows only those recorded paths, never a general folder scan. Synced or session-only plugins
 without install records are outside this adapter. Missing, unsupported or unsafe records do not expose packs.
 The plugin root is resolved once and must stay under the user home, owned by that user. Refused roots
-are listed with a reason. Children must stay under that resolved root or the recorded local marketplace.
+appear as skipped rows in the Cursor menu and in `cursor list`, with a reason. Children must stay under that resolved root or the recorded local marketplace.
 Child symlinks, hardlinks, shared writable files and mismatched pack IDs are refused. Limits are 1 MiB per host
 record, 256 plugin records, 32 entries in each plugin's character folder and 128 valid packs per catalog.
 
@@ -97,7 +98,7 @@ Before installation and selection, sleight validates a captured copy through the
 Changed manifests or pack bytes invalidate an outstanding offer. Reopen the menu to refresh Codex
 installation status after installing or removing a plugin. Installed local copies remain until
 the person removes them. Plugin updates never silently replace a local character with the same ID.
-A plugin pack with a built-in ID is skipped with a reason. Packs with an installed local ID are labeled `already installed`.
+Refused packs, including built-in ID collisions, get a skipped menu row. Choose it to read the reason. The row cannot import. Packs with an installed local ID are labeled `already installed`.
 
 ### Codex compatibility
 
@@ -201,14 +202,26 @@ the import prompt. A process crash can leave it behind. sleight keeps the source
 
 ## Making a character
 
-Claude Code includes `/sleight:make-character`. The skill uses the generator in the matching sleight
-source checkout at `tools/characters/`. There is one generator copy. Copy a cast design into your
-project and run the checkout's builder with `--design` and a separate `--out` folder. It needs macOS `sips`, Node and `cwebp`.
+Claude Code includes `/sleight:make-character`. Its generator is beside the skill in
+`plugins/sleight/skills/make-character/tool/`. The repository's `tools/characters/` entry points import
+that shared source. You don't need a source checkout after installation. Copy a cast design into your
+project and run the installed builder with `--design` and a separate new `--out` folder with no symlink ancestors.
+Use `/private/tmp` instead of `/tmp` on macOS. It needs macOS `sips` and Node 22+.
+Tested with `cwebp` 1.6.0. Other versions fall back to PNG. A missing encoder or failed encode also uses PNG.
+Both follow format v1. Built-in rebuilds still require `cwebp` 1.6.0 and refuse failed encodes.
 
-OpenAI's [Build skills](https://learn.chatgpt.com/docs/build-skills) documents
-`agents/openai.yaml` with `policy.allow_implicit_invocation: false` for explicit Codex invocation. It
-does not document Claude Code's `disable-model-invocation` field. Support for that field in Codex is
-unverified, so sleight's Codex manifest selects only `drive-mac-apps` and excludes `make-character`.
+Each custom build writes six contact sheets under `output/review/<id>/`, outside the importable pack.
+They show the main, extra and perch atlases at 96 by 104 pixels per cell on light and dark backgrounds.
+Review all six at 100% before import. For style or motion code changes, copy only the installed
+`skills/make-character/tool/` and `lib/hand/character.mjs` into your project, preserving those relative paths.
+Edit that copy.
+
+The Codex manifest lists only `"skills": "./skills/drive-mac-apps/"`, leaving make-character outside
+its skill path. Codex CLI 0.164.0 exposed only drive-mac-apps in its model-visible
+skill list with this path in a 2026-10-26 measurement. This single-skill-folder route is observed, not documented upstream.
+Other Codex versions are unverified. Codex 0.164.0 ignores `disable-model-invocation`: pointing the
+manifest at `./skills/` exposed both skills in that measurement. Claude Code uses
+`disable-model-invocation: true` to keep `/sleight:make-character` available through explicit invocation.
 
 ## Petdex references
 

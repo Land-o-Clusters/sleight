@@ -302,7 +302,10 @@ export function createHandClient({ env = process.env, setting = () => handSettin
     const catalog = await picker.catalog({ style, character, lines: lines ? 'on' : 'off', open });
     if (host !== 'running') return;
     const frame = { op: 'catalog', rows: catalog.rows };
-    if (Buffer.byteLength(JSON.stringify(frame)) > 64000 || catalog.rows.length > 512 || catalog.rows.some(r => r.children?.length > 512)) {
+    const tooLarge = () => Buffer.byteLength(JSON.stringify({ hand: 'picker', nonce, ...frame })) > 64000 || frame.rows.length > 512 || frame.rows.some(r => r.children?.length > 512);
+    if (tooLarge()) frame.rows = frame.rows.filter(r => r.op !== 'skipped').map(r => r.children
+      ? { ...r, children: r.children.filter(c => c.op !== 'skipped') } : r).filter(r => !r.children || r.children.length);
+    if (tooLarge()) {
       pickerNotice('There are too many characters for this menu. Open the characters folder to review them.'); return;
     }
     pickerFrame(frame);

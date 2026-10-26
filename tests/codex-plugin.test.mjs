@@ -30,6 +30,10 @@ test('the Codex manifest has the installed plugins\' shape and matches the Claud
   assert.deepEqual(codex.author, claude.author);
   assert.ok(codex.interface.capabilities.every(c => shape.capabilities.includes(c)));
   assert.ok(statSync(inside(codex.skills)).isDirectory());
+  // Reviewer-observed on Codex 0.164.0, not an upstream-documented single-skill path contract.
+  assert.equal(codex.skills, './skills/drive-mac-apps/');
+  assert.ok(statSync(join(inside(codex.skills), 'SKILL.md')).isFile());
+  assert.equal(existsSync(join(plugin, 'skills/make-character/agents/openai.yaml')), false);
   assert.ok(statSync(inside(codex.interface.logo)).isFile());
   assert.match(codex.interface.brandColor, /^#[0-9A-F]{6}$/);
   assert.doesNotMatch(JSON.stringify(codex), /Claude/, 'the Codex manifest speaks to Codex users');
