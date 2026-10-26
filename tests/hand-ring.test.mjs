@@ -38,6 +38,7 @@ function run(t, frames, flags = ['--cursor-style=ring']) {
 const near = (a, b, e = 1e-6) => assert.ok(Math.abs(a - b) < e, `${a} != ${b}`);
 // Every drawn plan: monotonic keyTimes from 0 to 1, a value per time, every track inside the plan, and D2's budget.
 function check(p) {
+  if (!p.animations) return;
   for (const a of p.animations) {
     assert.equal(a.values.length, a.times.length, `${a.layer}/${a.keyPath}`);
     for (let i = 1; i < a.times.length; i++) assert.ok(a.times[i] >= a.times[i - 1], `${a.layer}/${a.keyPath} keyTimes decrease`);
@@ -451,4 +452,12 @@ test('ring source: Core Animation only, no timer, display link or per-frame Swif
   const ringHost = host.slice(host.indexOf('var ringEnvironment'), host.indexOf('func installRing'));
   assert.equal((ringHost.match(/asyncAfter/g) ?? []).length, 1);
   assert.doesNotMatch(ringHost, /Timer/);
+});
+
+test('ring dump: --time-plans reports each draw with its planning time and no plan', options, t => {
+  const lines = effects(t, [act(), status('thinking', { seq: 2 })], ['--cursor-style=ring', '--time-plans']);
+  const draws = lines.filter(l => l.effect === 'draw');
+  assert.deepEqual(draws.map(d => d.state), ['click', 'thinking']);
+  for (const d of draws) { assert.equal(typeof d.planMs, 'number'); assert.ok(d.planMs >= 0); assert.equal(d.animations, undefined); }
+  t.diagnostic(`planMs ${draws.map(d => d.planMs.toFixed(2)).join(' ')}`);
 });
