@@ -3,7 +3,7 @@
 import * as fs from 'node:fs';
 import { execFileSync } from 'node:child_process';
 import { tmpdir } from 'node:os';
-import { join, resolve } from 'node:path';
+import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { createHash } from 'node:crypto';
 import { CLIPS, PERCH_CLIPS, lastAnchors, usedCells } from './lib/poses.mjs';
@@ -49,7 +49,16 @@ export function sheetEncoding(custom, run = execFileSync) {
     return 'png';
   }
   if (!custom && version !== '1.6.0') throw Error('Reproducible cast build requires cwebp 1.6.0');
-  return 'webp';
+  return version === '1.6.0' ? 'webp' : 'png';
+}
+export function encodeSheet(png, webp, { extension, custom, run = execFileSync }) {
+  if (extension === 'webp') {
+    try {
+      run('cwebp', ['-quiet', '-lossless', '-z', '9', '-exact', '-metadata', 'none', png, '-o', webp]);
+      return { extension, bytes: fs.readFileSync(webp) };
+    } catch (error) { if (!custom) throw error; }
+  }
+  return { extension: 'png', bytes: fs.readFileSync(png) };
 }
 export async function buildCast(output, { design } = {}) {
   let custom;
@@ -58,6 +67,16 @@ export async function buildCast(output, { design } = {}) {
     if (!/^[a-z0-9-]{1,48}$/.test(custom?.id ?? '') || CAST.includes(custom.id)) throw Error('Custom design needs a new non-built-in id');
     if (!Object.hasOwn(styles, custom.style)) throw Error('Unknown custom design style');
     if (fs.existsSync(output)) throw Error('Custom output directory must be new');
+  }
+  output = resolve(output);
+  // Refuse linked ancestors before rasterization or publication, including a linked /tmp spelling.
+  for (let parent = dirname(output);; parent = dirname(parent)) {
+    try {
+      if (fs.realpathSync(parent) !== parent) throw Error('Output directory has a symlink ancestor; use its real path');
+      if (!fs.statSync(parent).isDirectory()) throw Error('Output parent must be a directory');
+      break;
+    } catch (error) { if (error.code !== 'ENOENT') throw error; }
+    if (parent === dirname(parent)) throw Error('Output parent is unavailable');
   }
   const ids = custom ? [custom.id] : CAST;
   if (process.platform !== 'darwin') throw Error('Cast rasterization needs macOS sips');
@@ -71,7 +90,7 @@ export async function buildCast(output, { design } = {}) {
       const render = styles[D.style], ctx = { E: D.E ?? 1 }, folder = join(output, id);
       if (fs.existsSync(folder)) throw Error(`Output already exists: ${id}`);
       fs.mkdirSync(folder, { mode: 0o755 });
-      const states = {}, files = {};
+      const states = {}, files = {}, sheetNames = {};
       let k = 0;
       for (const [sheet, clips, rows] of [['sheet', CLIPS.filter(c => c.sheet === 'sheet'), 11], ['extra', CLIPS.filter(c => c.sheet === 'extra'), 11], ['perch', PERCH_CLIPS, 3]]) {
         let body = '';
@@ -86,8 +105,8 @@ export async function buildCast(output, { design } = {}) {
         // Strip rasterizer metadata and zero hidden RGB. All visible RGBA values are kept exactly.
         for (let p = 0; p < img.data.length; p += 4) if (!img.data[p + 3]) img.data.fill(0, p, p + 3);
         fs.writeFileSync(png, encodePNG(img));
-        if (extension === 'webp') execFileSync('cwebp', ['-quiet', '-lossless', '-z', '9', '-exact', '-metadata', 'none', png, '-o', webp]);
-        files[`${sheet}.${extension}`] = fs.readFileSync(extension === 'webp' ? webp : png);
+        const encoded = encodeSheet(png, webp, { extension, custom: !!custom });
+        sheetNames[sheet] = `${sheet}.${encoded.extension}`; files[sheetNames[sheet]] = encoded.bytes;
         if (custom) {
           const review = join(output, 'review', id); fs.mkdirSync(review, { recursive: true });
           for (const theme of ['light', 'dark']) fs.writeFileSync(join(review, `${sheet}-${theme}.png`), encodePNG(contactSheet(img, theme)));
@@ -102,8 +121,8 @@ export async function buildCast(output, { design } = {}) {
       const hf = PERCH_CLIPS.find(c => c.name === 'high-five'); render(D, hf.pose(hf.frames - 1, ctx));
       states['high-five'].hotspot = { x: Math.round(lastAnchors['hand.r'][0]), y: Math.round(lastAnchors['hand.r'][1]) };
       const m = { format: 'sleight-character', version: 1, id, name: D.name, description: D.description, author: D.author, license: D.license,
-        sheet: `sheet.${extension}`, extra: `extra.${extension}`, frame: { w: 192, h: 208 }, grid: { cols: 8, rows: 11 }, scale: 0.5,
-        anchor: { x: 96, y: 196 }, hotspot: { x: 96, y: 104 }, states, perch: { anchor: { x: 96, y: D.seat }, sheet: `perch.${extension}` }, lines: lines[id] };
+        sheet: sheetNames.sheet, extra: sheetNames.extra, frame: { w: 192, h: 208 }, grid: { cols: 8, rows: 11 }, scale: 0.5,
+        anchor: { x: 96, y: 196 }, hotspot: { x: 96, y: 104 }, states, perch: { anchor: { x: 96, y: D.seat }, sheet: sheetNames.perch }, lines: lines[id] };
       files['character.json'] = Buffer.from(JSON.stringify(m, null, 2) + '\n');
       manifest.packs[id] = {};
       for (const name of Object.keys(files).sort()) {
@@ -113,7 +132,7 @@ export async function buildCast(output, { design } = {}) {
       const loaded = loadCharacter(folder, { shared: true });
       if (loaded.warnings.length) throw Error(`${id}: ${loaded.warnings.join('; ')}`);
       console.log(`${id}: ${loaded.total} bytes, ${loaded.resolved.filter(s => s.own).length}/19 states`);
-      if (custom) console.log(`${extension.toUpperCase()} sheets; 6 contact sheets at 96 by 104 pixels per cell: ${join(output, 'review', id)}`);
+      if (custom) console.log(`${Object.values(sheetNames).join(', ')}; 6 contact sheets at 96 by 104 pixels per cell: ${join(output, 'review', id)}`);
     }
     fs.writeFileSync(join(output, 'manifest.json'), JSON.stringify(manifest, null, 2) + '\n', { mode: 0o644 });
     const bytes = ids.reduce((n, id) => n + fs.readdirSync(join(output, id)).reduce((n, f) => n + fs.statSync(join(output, id, f)).size, 0), 0);
@@ -121,7 +140,7 @@ export async function buildCast(output, { design } = {}) {
     return manifest;
   } finally { fs.rmSync(temp, { recursive: true, force: true }); }
 }
-if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
+if (process.argv[1] && fs.realpathSync(process.argv[1]) === fileURLToPath(import.meta.url)) {
   const args = process.argv.slice(2);
   if (args.length === 4 && args[0] === '--design' && args[2] === '--out') await buildCast(resolve(args[3]), { design: args[1] });
   else throw Error('Usage: node build.mjs --design DESIGN.mjs --out NEW_DIRECTORY');

@@ -17,7 +17,7 @@ clothes, no romance, flirting, pleading, hearts or blown kisses.
 
 1. Use `tool/` beside this installed skill file. Call its absolute path TOOL in the commands below.
    Create `character/` in the person's project for their design and output. The generator needs macOS `sips`
-   and Node 22+. Any installed `cwebp` version produces lossless WebP; without it, the sheets are PNG.
+   and Node 22+. Tested with `cwebp` 1.6.0. Other versions fall back to PNG. A missing encoder or failed encode also uses PNG.
    Both are character format v1. You don't need a source checkout or package install.
 2. Ask what they want in one question: a style (`anime`, `pixel` or `paper`), a name, two or three colors and one
    personality line. Copy the closest design from `TOOL/cast/` to `character/<id>.mjs` (`tsugi` or `yori` for anime
@@ -26,12 +26,14 @@ clothes, no romance, flirting, pleading, hearts or blown kisses.
    art), palettes (`base`, `shade`, `light`, `line`), hair and outfit styles, `build` (proportions), `E` (motion:
    1 bouncy, 0.6 calm) and `expr` (expression swaps such as `{ grin: 'smile2' }`).
 4. Render with `node TOOL/build.mjs --design /path/to/character/<id>.mjs --out /path/to/character/output`.
-   The output directory must be new. Read `output/<id>/preview.png` and all six contact sheets in
+   The output directory must be new and have no symlink ancestors. Use `/private/tmp` instead of `/tmp` on macOS.
+   Read `output/<id>/preview.png` and all six contact sheets in
    `output/review/<id>/`: `sheet-light.png`, `sheet-dark.png`, `extra-light.png`, `extra-dark.png`,
    `perch-light.png` and `perch-dark.png`. Each cell is 96 by 104 pixels, the default display size.
    Review at 100% on both backgrounds. Fix the face, silhouette and any unclear state, then render into a new output directory.
-5. For a part the styles lack (a hat, a tail, a prop), copy the installed plugin folder into
-   `character/generator/`, preserving its layout. Point TOOL to that copy's `skills/make-character/tool/`.
+5. For a part the styles lack (a hat, a tail, a prop), copy only `tool/` and the plugin's
+   `lib/hand/character.mjs` into `character/generator/`, preserving these relative paths:
+   `skills/make-character/tool/` and `lib/hand/character.mjs`. Point TOOL to that copy's `skills/make-character/tool/`.
    Edit `TOOL/styles/<style>.mjs` for parts or `TOOL/lib/poses.mjs` for motions. Leave the installed plugin unchanged.
    Keep cycles at or under 4000 ms and loop frames at 40 ms or more.
 6. The run must print `19/19 states` and exit 0. Then tell the person to run these in their own terminal, because Claude's shell is

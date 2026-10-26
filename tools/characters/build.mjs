@@ -6,7 +6,7 @@ import { fileURLToPath } from 'node:url';
 import { buildCast, swiftPins } from '../../plugins/sleight/skills/make-character/tool/build.mjs';
 export { buildCast, CAST, swiftPins } from '../../plugins/sleight/skills/make-character/tool/build.mjs';
 
-if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
+if (process.argv[1] && fs.realpathSync(process.argv[1]) === fileURLToPath(import.meta.url)) {
   const args = process.argv.slice(2);
   if (args.length === 1 && args[0] === '--sync-native-pins') {
     const pins = JSON.parse(fs.readFileSync(new URL('../../plugins/sleight/characters/manifest.json', import.meta.url)));

@@ -5,7 +5,7 @@ import { userInfo } from 'node:os';
 import { isAbsolute, join } from 'node:path';
 import { charactersDirectory, checkCharacter, prepareCharacterImport, installCharacter, characterCallout } from './character.mjs';
 import { installedCursorCatalog } from './cursor-picker-catalog.mjs';
-import { installedCharacterPlugins, characterPackDigest, codexPluginSnapshot } from './character-plugins.mjs';
+import { installedCharacterPlugins, characterPackDigest, codexPluginSnapshot, characterPluginSkips, skippedCharacterReason } from './character-plugins.mjs';
 import { importPluginCharacter } from './character-sharing.mjs';
 import { loadCharacter } from './character.mjs';
 import { writeHandSetting } from './command.mjs';
@@ -17,7 +17,7 @@ const title = name => typeof name === 'string' && name.length > 0 && name.length
 const menuTitle = (name, fallback) => [...name.replace(/[\p{C}\p{Zl}\p{Zp}]/gu, '')].slice(0, 60).join('') || fallback;
 const pluginWarning = ' (warning: check plugin)';
 const skippedRow = (name, reason) => ({ title: [...menuTitle(name, 'Plugin')].slice(0, 50).join('') + ' (skipped)', op: 'skipped',
-  reason: [...reason.replace(/[\p{C}\p{Zl}\p{Zp}]/gu, ' ')].slice(0, 1000).join('') || 'Character unavailable' });
+  reason: skippedCharacterReason(reason) });
 export function cursorMenuModel({ installed = [], found = [], plugins = [], style = 'glove', character, lines = 'on' } = {}) {
   const ids = new Set(installed.map(c => c.id));
   return [
@@ -31,7 +31,7 @@ export function cursorMenuModel({ installed = [], found = [], plugins = [], styl
       : menuTitle(p.pluginId, p.pluginId), children: [...sort(p.packs).map(pack => ids.has(pack.id)
         ? { title: [...menuTitle(pack.name, pack.id)].slice(0, 60 - ' (already installed)'.length).join('') + ' (already installed)', op: 'installed' }
         : { title: menuTitle(pack.name, pack.id), op: 'import', key: pack.key }),
-      ...p.reason ? [skippedRow(p.pluginId, p.reason)] : [], ...(p.skipped ?? []).map(pack => skippedRow(pack.id, pack.reason))] })),
+      ...characterPluginSkips(p).map(pack => pack.more ? { title: pack.id, op: 'skipped', reason: pack.reason } : skippedRow(pack.id, pack.reason))] })),
     { title: 'Open characters folder', op: 'folder' },
   ];
 }

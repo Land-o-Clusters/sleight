@@ -15,8 +15,22 @@ function harness(t, apply = async () => ({ ok: true, style: 'ring' }), more = {}
   t.after(() => client.close());
   client.send({ kind: 'click', pid: 1, windowId: 1, at: [1, 1] });
   const event = raw => child.stdout.emit('data', JSON.stringify({ hand: 'picker', nonce: lines[0].nonce, ...raw }) + '\n');
-  return { lines, calls, catalogs, event, client };
+  return { lines, calls, catalogs, event, client, picker };
 }
+
+test('oversized catalogs drop skipped rows before refusing selectable characters', async t => {
+  const h = harness(t); await settle(); const start = h.lines.length;
+  const selected = { title: 'Mouse', op: 'import', key: 'b'.repeat(64) };
+  const rows = [{ title: 'Plugin', children: [selected, ...Array.from({ length: 100 }, () =>
+    ({ title: 'Broken (skipped)', op: 'skipped', reason: 'x'.repeat(1000) }))] },
+    { title: 'Broken plugin', children: [{ title: 'Broken', op: 'skipped', reason: 'bad' }] }];
+  h.picker.catalog = async () => ({ rows, thumbnails: [] });
+  h.event({ op: 'refresh' }); await settle();
+  const frame = h.lines.slice(start).find(f => f.op === 'catalog'); assert.ok(frame);
+  assert.deepEqual(frame.rows, [{ title: 'Plugin', children: [selected] }]);
+  assert.ok(Buffer.byteLength(JSON.stringify(frame)) <= 64000);
+  assert.equal(rows[0].children.length, 101); assert.equal(h.lines.some(f => f.op === 'notice'), false);
+});
 test('nonce-bound picker click applies once, switches the running host and refreshes the menu', async t => {
   const h = harness(t); await settle();
   h.event({ op: 'select', style: 'ring', nonce: 'f'.repeat(64) });

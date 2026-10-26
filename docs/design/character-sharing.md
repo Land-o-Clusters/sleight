@@ -159,18 +159,20 @@ the import prompt. A process crash can leave it behind. sleight keeps the source
 Claude Code includes `/sleight:make-character`. Its generator is beside the skill in
 `plugins/sleight/skills/make-character/tool/`. The repository's `tools/characters/` entry points import
 that shared source. You don't need a source checkout after installation. Copy a cast design into your
-project and run the installed builder with `--design` and a separate `--out` folder. It needs macOS
-`sips` and Node 22+. With any installed `cwebp` version it writes lossless WebP; without `cwebp` it
-writes PNG sheets. Both follow format v1. Built-in rebuilds still require `cwebp` 1.6.0.
+project and run the installed builder with `--design` and a separate new `--out` folder with no symlink ancestors.
+Use `/private/tmp` instead of `/tmp` on macOS. It needs macOS `sips` and Node 22+.
+Tested with `cwebp` 1.6.0. Other versions fall back to PNG. A missing encoder or failed encode also uses PNG.
+Both follow format v1. Built-in rebuilds still require `cwebp` 1.6.0 and refuse failed encodes.
 
 Each custom build writes six contact sheets under `output/review/<id>/`, outside the importable pack.
 They show the main, extra and perch atlases at 96 by 104 pixels per cell on light and dark backgrounds.
-Review all six at 100% before import. For style or motion code changes, copy the installed plugin to
-your project and edit that copy, preserving its layout.
+Review all six at 100% before import. For style or motion code changes, copy only the installed
+`skills/make-character/tool/` and `lib/hand/character.mjs` into your project, preserving those relative paths.
+Edit that copy.
 
 The Codex manifest lists only `"skills": "./skills/drive-mac-apps/"`, leaving make-character outside
-its skill path. On 2026-10-26 the reviewer observed only drive-mac-apps in Codex 0.164.0's model-visible
-skill list with this path. This single-skill-folder route is observed, not documented upstream.
+its skill path. Codex CLI 0.164.0 exposed only drive-mac-apps in its model-visible
+skill list with this path in a 2026-10-26 measurement. This single-skill-folder route is observed, not documented upstream.
 Other Codex versions are unverified. Codex 0.164.0 ignores `disable-model-invocation`: pointing the
 manifest at `./skills/` exposed both skills in that measurement. Claude Code uses
 `disable-model-invocation: true` to keep `/sleight:make-character` available through explicit invocation.

@@ -62,11 +62,12 @@ Import refuses those IDs regardless of display name. To make a variant, give it 
 Remove refuses built-ins. An old user folder with a reserved ID cannot shadow the bundled pack, but remains removable
 with `sleight-mcp cursor remove <id>`. The picker shows a separate "renamed needed" row that opens the user bank for repair.
 
-The build tool is `tools/characters/build.mjs`, outside the plugin. Its cast data, poses and styles draw all six characters
-in code under MIT. On macOS with `cwebp` 1.6.0 on PATH, build into a new directory:
+The generator is included in the plugin at `skills/make-character/tool/`. The repository entry point is
+`tools/characters/build.mjs`. Its cast data, poses and styles draw all six characters in code under MIT.
+On macOS with `cwebp` 1.6.0 on PATH, build into a new directory with no symlink ancestors:
 
 ```sh
-nice -n 20 node tools/characters/build.mjs --out /tmp/sleight-cast-build
+nice -n 20 node tools/characters/build.mjs --out /private/tmp/sleight-cast-build
 ```
 
 macOS `sips` rasterizes the SVGs without a browser or window. After PNG metadata is stripped, `cwebp` encodes every atlas
