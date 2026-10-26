@@ -39,17 +39,22 @@ func personInput(_ event: CGEvent?) -> Bool {
 }
 // One activation rule for consent, the cursor picker and the pause control. AX entry points refuse separately,
 // even if AppKit still has a fresh hardware event from an earlier interaction.
+private var personSpentByWindow: [Int: Double] = [:]
 func personActivation(_ event: NSEvent?, windowMatches: Bool, keyboard: Bool = true,
-    highlighted: Bool = true, accessibility: Bool = false, now: Double = ProcessInfo.processInfo.systemUptime) -> Bool {
+    highlighted: Bool = true, accessibility: Bool = false, now: Double = ProcessInfo.processInfo.systemUptime,
+    windowNumber: Int? = nil) -> Bool {
     guard !accessibility, let event = event, windowMatches,
         event.timestamp.isFinite, event.timestamp >= 0, event.timestamp <= now, now - event.timestamp < 5,
         let cg = event.cgEvent, cg.getIntegerValueField(.eventSourceUnixProcessID) == 0, personInput(cg) else { return false }
-    if event.type == .leftMouseUp { return true }
-    return keyboard && highlighted && event.type == .keyDown && !event.isARepeat && [36, 49, 76].contains(event.keyCode)
+    guard event.type == .leftMouseUp || keyboard && highlighted && event.type == .keyDown && !event.isARepeat && [36, 49, 76].contains(event.keyCode) else { return false }
+    let window = windowNumber ?? event.windowNumber
+    guard event.timestamp > (personSpentByWindow[window] ?? -Double.infinity) else { return false }
+    personSpentByWindow[window] = event.timestamp
+    return true
 }
 func personActivation(_ event: NSEvent?, in window: NSWindow?, keyboard: Bool = true, highlighted: Bool = true) -> Bool {
     guard let window = window else { return false }
-    return personActivation(event, windowMatches: event?.window === window, keyboard: keyboard, highlighted: highlighted)
+    return personActivation(event, windowMatches: event?.window === window, keyboard: keyboard, highlighted: highlighted, windowNumber: window.windowNumber)
 }
 func personChoice(_ kind: String, _ choice: String) -> Bool {
     if ["cancel", "decline", "session"].contains(choice) { return false }
@@ -1146,11 +1151,14 @@ func writeHandControlGone() {
     guard let nonce = nonceBook.nonce("hand"), let bytes = try? JSONSerialization.data(withJSONObject: ["hand": "control-gone", "nonce": nonce]) else { return }
     FileHandle.standardOutput.write(bytes + Data([10]))
 }
+func handControlExit(_ frame: [String: Any], nonce: String?) -> Bool {
+    guard let nonce = nonce else { return false }
+    return Set(frame.keys) == ["hand", "nonce"] && frame["hand"] as? String == "control-exit" && frame["nonce"] as? String == nonce
+}
 // Pause requests are prepared, committed, then confirmed on the hand's nonce-bound channel.
 // A missed acknowledgment leaves the displayed state unchanged and exposes a retry mark.
 final class CursorPauseControl {
     private(set) var paused = false, failed = false
-    private(set) var lastSpent = -Double.infinity
     private(set) var pending: (token: String, value: Bool, before: Bool, deadline: Double)?
     private var applied: (token: String, before: Bool)?
     var changed: ((Bool) -> Void)?
@@ -1167,9 +1175,9 @@ final class CursorPauseControl {
         return send(["hand": "pause", "nonce": nonce, "paused": value, "token": token, "phase": phase])
     }
     @discardableResult func click(_ event: NSEvent?, windowMatches: Bool, highlighted: Bool = true, accessibility: Bool = false) -> Bool {
-        guard pending == nil, let event = event, event.timestamp > lastSpent,
+        guard pending == nil,
             personActivation(event, windowMatches: windowMatches, highlighted: highlighted, accessibility: accessibility, now: now()) else { return false }
-        lastSpent = event.timestamp; applied = nil
+        applied = nil
         guard nonce() != nil else { failed = true; changed?(paused); return false }
         let token = UUID().uuidString.lowercased().replacingOccurrences(of: "-", with: "")
         pending = (token, !paused, paused, now() + 0.5); failed = false
@@ -1218,6 +1226,7 @@ func glyphImage(_ svg: String) -> NSImage? {
 final class ConsentHost: NSObject, NSApplicationDelegate, NSMenuDelegate {
     let cursorPause = CursorPauseControl()
     var cursorControlSession = false
+    var controlRetiring = false
     let item = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
     var pending: [String: [String: Any]] = [:]
     var nonce: String?
@@ -1314,6 +1323,11 @@ final class ConsentHost: NSObject, NSApplicationDelegate, NSMenuDelegate {
         }
     }
     func receive(_ frame: [String: Any], resetDeadline: Date? = nil) {
+        if shared, frame["hand"] as? String == "control-exit" {
+            guard handControlExit(frame, nonce: nonceBook.nonce("hand")) else { exit(65) }
+            retireControl(); closeAsk(); modal.close(); pending.removeAll()
+            NSApp.terminate(nil); return
+        }
         // Parent-only reset on the consent pipe, after every byte from the exited worker.
         // It carries the hand channel's secret, which no worker receives.
         if shared, frame["hand"] as? String == "consent-reset" {
@@ -1392,7 +1406,8 @@ final class ConsentHost: NSObject, NSApplicationDelegate, NSMenuDelegate {
                 entry.state = on ? .on : .off
                 entry.target = self; entry.representedObject = ["id": id, "choice": choice]; menu.addItem(entry)
             case .permissions:
-                let entry = NSMenuItem(title: "Permissions", action: nil, keyEquivalent: ""), submenu = NSMenu()
+                let entry = NSMenuItem(title: "Permissions", action: nil, keyEquivalent: ""), submenu = CursorPickerMenu()
+                submenu.permissionsRoot = true
                 submenu.delegate = self
                 fillPermissions(submenu)
                 entry.submenu = submenu; menu.addItem(entry)
@@ -1432,8 +1447,10 @@ final class ConsentHost: NSObject, NSApplicationDelegate, NSMenuDelegate {
         menu.delegate = self
         item.menu = menu
         let requests = pending.values.filter { ($0["data"] as? [String: Any])?["status"] == nil }.count
-        item.isVisible = cursorPause.paused || menuVisible(status, requests: requests, handEnabled: hand?.enabled ?? false)
+        item.isVisible = !controlRetiring && (cursorPause.paused || menuVisible(status, requests: requests, handEnabled: hand?.enabled ?? false))
     }
+    // Hide before reporting the fault, so a replacement never appears beside an obsolete status item.
+    func retireControl() { controlRetiring = true; hookupTimer?.invalidate(); hookupTimer = nil; item.isVisible = false }
     // The shared host's consent channel ended (its worker exited): an open card is aborted, its requests and status go, and the
     // hand stays.
     func channelClosed() { closeAsk(); modal.close(); pending.removeAll(); status = nil; consentOpen = false; rebuildMenu(); if !handOpen { NSApp.terminate(nil) } }
@@ -1445,10 +1462,12 @@ final class ConsentHost: NSObject, NSApplicationDelegate, NSMenuDelegate {
     var permissionMenu: [PermissionRow]? { permissions.map { permissionRows($0, now: Date().timeIntervalSince1970) } }
     func fillPermissions(_ submenu: NSMenu) {
         submenu.removeAllItems()
+        (submenu as? CursorPickerMenu)?.addWindowProbe()
         for row in permissionMenu ?? [] {
             switch row {
             case let .grant(title, target):
-                let entry = NSMenuItem(title: title, action: nil, keyEquivalent: ""), inner = NSMenu()
+                let entry = NSMenuItem(title: title, action: nil, keyEquivalent: ""), inner = CursorPickerMenu()
+                inner.delegate = self; inner.addWindowProbe()
                 let revoke = NSMenuItem(title: "Revoke", action: #selector(permissionClick(_:)), keyEquivalent: "")
                 revoke.target = self; revoke.representedObject = ["permissions": "revoke", "target": target]
                 inner.addItem(revoke); entry.submenu = inner; submenu.addItem(entry)
@@ -1466,14 +1485,16 @@ final class ConsentHost: NSObject, NSApplicationDelegate, NSMenuDelegate {
     // Opening the submenu words the last-use times against the current time. Only Permissions submenus have this delegate.
     func menuNeedsUpdate(_ menu: NSMenu) {
         if menu === item.menu { if hand?.enabled == true { writeCursorPickerEvent(["op": "refresh"]) }; return }
-        fillPermissions(menu)
+        if (menu as? CursorPickerMenu)?.permissionsRoot == true { fillPermissions(menu) }
     }
     // Revoke and block only remove access, so they don't ask.
     @objc func permissionClick(_ sender: NSMenuItem) {
+        guard personMenuActivation(sender) else { return }
         guard let event = sender.representedObject as? [String: String] else { return }
         writePermissionEvent(event)
     }
     @objc func handToggle(_ sender: NSMenuItem) {
+        guard personMenuActivation(sender) else { return }
         guard let hand = hand else { return }
         writeHandToggle(!hand.enabled)
     }
@@ -1496,11 +1517,13 @@ final class ConsentHost: NSObject, NSApplicationDelegate, NSMenuDelegate {
         }
     }
     @objc func control(_ sender: NSMenuItem) {
+        guard personMenuActivation(sender) else { return }
         guard let event = sender.representedObject as? [String: String], let id = event["id"], let choice = event["choice"] else { return }
         respond(id, choice)
     }
     // Turning turbo off lasts past this session and reaches every session, so it asks once.
     @objc func confirmOff(_ sender: NSMenuItem) {
+        guard personMenuActivation(sender) else { return }
         guard let event = sender.representedObject as? [String: String], let id = event["id"], let choice = event["choice"] else { return }
         let alert = NSAlert()
         alert.messageText = "Turn turbo off?"
@@ -1511,6 +1534,7 @@ final class ConsentHost: NSObject, NSApplicationDelegate, NSMenuDelegate {
         if answer == .alertFirstButtonReturn { respond(id, choice) }
     }
     @objc func help(_ sender: NSMenuItem) {
+        guard personMenuActivation(sender) else { return }
         if let url = URL(string: "https://github.com/Land-o-Clusters/sleight/blob/main/docs/settings.md#" + (status == nil ? "ghost-hand" : "turbo")) { NSWorkspace.shared.open(url) }
     }
     // The status block: a coloured dot and the state in bold, then quiet detail lines under it. A view, so it never highlights.
@@ -1536,6 +1560,7 @@ final class ConsentHost: NSObject, NSApplicationDelegate, NSMenuDelegate {
         return stack
     }
     @objc func review(_ sender: NSMenuItem) {
+        guard personMenuActivation(sender) else { return }
         guard let id = sender.representedObject as? String, let frame = pending[id],
             let data = frame["data"] as? [String: Any], let choices = frame["choices"] as? [String],
             pending[id] != nil else { return }
@@ -1878,12 +1903,19 @@ final class CursorPickerWindowProbe: NSView {
 final class CursorPickerMenu: NSMenu {
     weak var trackingWindow: NSWindow?
     weak var lastHighlighted: NSMenuItem?
+    var permissionsRoot = false
     func addWindowProbe() {
         let probe = CursorPickerWindowProbe(frame: NSRect(x: 0, y: 0, width: 1, height: 1))
         probe.owner = self; probe.setAccessibilityElement(false)
         let item = NSMenuItem(title: "", action: nil, keyEquivalent: "")
         item.view = probe; item.isEnabled = false; addItem(item)
     }
+}
+func personMenuActivation(_ sender: NSMenuItem) -> Bool {
+    guard let menu = sender.menu as? CursorPickerMenu, let window = menu.trackingWindow,
+        personActivation(NSApp.currentEvent, in: window, highlighted: sender.isHighlighted || menu.lastHighlighted === sender)
+        else { refuseConsentInput(); return false }
+    return true
 }
 final class CursorPickerHost: NSObject, NSMenuDelegate {
     var rows = CursorPickerRow.defaults("glove"), images: [String: NSImage] = [:]
@@ -1930,10 +1962,7 @@ final class CursorPickerHost: NSObject, NSMenuDelegate {
         if let item = item { (menu as? CursorPickerMenu)?.lastHighlighted = item }
     }
     @objc func click(_ sender: NSMenuItem) {
-        let current = NSApp.currentEvent
-        guard let menu = sender.menu as? CursorPickerMenu, let window = menu.trackingWindow,
-            personActivation(current, in: window, highlighted: sender.isHighlighted || menu.lastHighlighted === sender)
-            else { refuseSelection(); return }
+        guard personMenuActivation(sender) else { refuseSelection(); return }
         guard let row = sender.representedObject as? [String: Any], CursorPickerRow.valid(row, nested: row["op"] as? String == "import") else { return }
         if row["op"] as? String == "folder" {
             // A click opens the existing folder in Finder. No shell or script receives the path.
@@ -4133,6 +4162,16 @@ struct CursorPausePlacement {
     }
 }
 func cursorPauseCurrent(_ expected: CGRect, _ observed: CGRect?) -> Bool { observed == expected }
+// A clear owns input-panel visibility through the action, including any waiting statuses from approval.
+struct CursorPauseVisibility {
+    private(set) var cleared = false
+    mutating func clear() { cleared = true }
+    mutating func status(_ state: String) { if state == "done" || state == "idle" { cleared = false } }
+    func placement(_ plan: RingPlan, clip: CGRect, sprite: Bool) -> CursorPausePlacement {
+        let hit = CursorPausePlacement.make(plan, clip: clip, sprite: sprite)
+        return CursorPausePlacement(rect: cleared ? nil : hit.rect, sprite: hit.sprite, after: hit.after)
+    }
+}
 // The final displayed cell, sampled in its decoded RGBA image. Transparent atlas pixels never become controls.
 struct CursorPauseMask {
     let image: CGImage, cell: CGSize, row: Int, column: Int, scale: Double, flip: Bool, origin: CGPoint
@@ -4256,7 +4295,9 @@ func cursorPauseDump() {
             let data = try? JSONSerialization.jsonObject(with: bytes) as? [String: Any] else { exit(65) }
         var output: [String: Any] = ["canBecomeKey": CursorPausePanel.key, "canBecomeMain": CursorPausePanel.main,
             "acceptsFirstMouse": CursorPausePanel.firstMouse, "nonactivating": CursorPausePanel.mask.contains(.nonactivatingPanel)]
-        if data["alphaCheck"] as? Bool == true {
+        if let frame = data["exitFrame"] as? [String: Any] {
+            output["exitAccepted"] = handControlExit(frame, nonce: String(repeating: "a", count: 64))
+        } else if data["alphaCheck"] as? Bool == true {
             // Synthetic RGBA bytes, no graphics context or drawing.
             var pixels = [UInt8](repeating: 0, count: 16 * 2 * 4)
             pixels[7] = 255; pixels[(16 + 0) * 4 + 3] = 128
@@ -4309,8 +4350,14 @@ func cursorPauseDump() {
                     event = NSEvent(cgEvent: cg); lastEvent = event
                 }
                 control.nonce = { click["noNonce"] as? Bool == true ? nil : String(repeating: "a", count: 64) }
-                output["accepted"] = control.click(event, windowMatches: click["wrongWindow"] as? Bool != true,
-                    highlighted: click["unhighlighted"] as? Bool != true, accessibility: click["ax"] as? Bool == true)
+                if click["consumer"] as? String == "shared" {
+                    output["accepted"] = personActivation(event, windowMatches: click["wrongWindow"] as? Bool != true,
+                        highlighted: click["unhighlighted"] as? Bool != true, accessibility: click["ax"] as? Bool == true,
+                        now: clock, windowNumber: click["windowNumber"] as? Int)
+                } else {
+                    output["accepted"] = control.click(event, windowMatches: click["wrongWindow"] as? Bool != true,
+                        highlighted: click["unhighlighted"] as? Bool != true, accessibility: click["ax"] as? Bool == true)
+                }
             }
             if data["ack"] as? Bool == true, let request = control.pending {
                 control.receive("ready", token: request.token, value: request.value)
@@ -4344,6 +4391,7 @@ func cursorPauseDump() {
 
 final class HandHost: NSObject, NSApplicationDelegate {
     let pauseOverlay = CursorPauseOverlay(), ownPause = CursorPauseControl()
+    var pauseVisibility = CursorPauseVisibility()
     var pauseControl: CursorPauseControl { consent?.cursorPause ?? ownPause }
     var pauseTarget: RingEvent?
     func pauseChanged(_ paused: Bool) {
@@ -4414,12 +4462,13 @@ final class HandHost: NSObject, NSApplicationDelegate {
         var buffer = Data(), last = -1, faulted = false
         func fault() {
             faulted = true; buffer.removeAll()
-            DispatchQueue.main.async { writeHandControlGone(); if self.consent?.consentOpen == true { self.hide(); self.consent?.handGone() } else { exit(65) } }
+            DispatchQueue.main.async { self.consent?.retireControl(); writeHandControlGone(); if self.consent?.consentOpen == true { self.hide(); self.consent?.handGone() } else { exit(65) } }
         }
         while true {
             let chunk = FileHandle.standardInput.availableData
             if chunk.isEmpty {
-                DispatchQueue.main.async { if self.consent?.consentOpen == true { self.hide(); self.consent?.handGone() } else { NSApp.terminate(nil) } }
+                let retired = faulted
+                DispatchQueue.main.async { if !retired && self.consent?.consentOpen == true { self.hide(); self.consent?.handGone() } else { NSApp.terminate(nil) } }
                 return
             }
             if faulted { continue }
@@ -4438,6 +4487,7 @@ final class HandHost: NSObject, NSApplicationDelegate {
                 case let .clear(nonce, token):
                     guard nonceBook.admit("hand", nonce) else { fault(); continue lines }
                     DispatchQueue.main.async {
+                        self.pauseVisibility.clear()
                         self.hide()
                         if let bytes = try? JSONSerialization.data(withJSONObject: ["hand": "clear-ready", "nonce": nonce, "token": token]) {
                             FileHandle.standardOutput.write(bytes + Data([10]))
@@ -4487,6 +4537,7 @@ final class HandHost: NSObject, NSApplicationDelegate {
                     guard nonceBook.admit("hand", nonce), event.seq > last else { fault(); continue lines }
                     last = event.seq
                     DispatchQueue.main.async {
+                        self.pauseVisibility.status(event.state)
                         if event.state == "aim" { self.pauseOverlay.hide() }
                         guard event.state == "paused" ? self.pauseControl.paused : !self.pauseControl.paused else { return }
                         if event.at != nil { self.pauseTarget = event }
@@ -4699,9 +4750,9 @@ final class HandHost: NSObject, NSApplicationDelegate {
         guard let pid = ringRuntime.session.pid, let window = ringRuntime.session.window,
             let clip = ringEnvironment.bounds(pid, window) else { return }
         // Wait until the moving art parks. A static hit box must never sit over a moving target or a drag route.
-        let hit = CursorPausePlacement.make(plan, clip: clip, sprite: cursorStyle == "sprite")
+        let hit = pauseVisibility.placement(plan, clip: clip, sprite: cursorStyle == "sprite")
         pauseOverlay.show(hit.rect, sprite: hit.sprite, after: hit.after, capture: capture, control: pauseControl, mask: CursorPauseMask.make(plan), current: { [weak self] in
-            self?.captureHeld == false && cursorPauseCurrent(clip, handWindowBounds(window, pid: pid))
+            self?.pauseVisibility.cleared == false && self?.captureHeld == false && cursorPauseCurrent(clip, handWindowBounds(window, pid: pid))
         })
     }
 
@@ -4896,6 +4947,7 @@ let cursorStyles = ["--cursor-style=glove"] + ringThemes.keys.sorted().map { "--
 func ringPlanDump(theme: RingTheme?, reduced: Bool, secure: Bool, clip: CGRect, seed: UInt64, gone: Set<UInt32>, timed: Bool = false, sprite: Bool = false) {
     var buffer = Data(), bound: String?, last = -1, clock = 0.0
     var runtime = RingRuntime(theme: theme ?? .seamPlus, seed: seed)
+    var pauseVisibility = CursorPauseVisibility()
     // The live host's loader. A finished load joins before the next line; {"dumpAwait":"character"} and the end of input
     // wait for the one in flight (real time, not the simulated clock).
     let loader = SpriteLoader(), finished = DispatchSemaphore(value: 0), slotLock = NSLock()
@@ -4920,7 +4972,7 @@ func ringPlanDump(theme: RingTheme?, reduced: Bool, secure: Bool, clip: CGRect, 
             switch effect {
             case let .draw(plan, _) where timed: write(["effect": "draw", "state": plan.state, "time": time, "planMs": ms ?? -1])
             case let .draw(plan, frame): write(plan.json.merging(["effect": "draw", "time": time, "frame": [frame.minX, frame.minY, frame.width, frame.height],
-                "pauseControl": CursorPausePlacement.make(plan, clip: clip, sprite: sprite).json]) { $1 })
+                "pauseControl": pauseVisibility.placement(plan, clip: clip, sprite: sprite).json]) { $1 })
             case let .drop(state): write(["effect": "drop", "state": state, "dropped": true, "animations": [], "time": time])
             case .hide: write(["effect": "hide", "state": "hidden", "time": time])
             case .park: write(["effect": "park", "time": time])
@@ -4958,7 +5010,8 @@ func ringPlanDump(theme: RingTheme?, reduced: Bool, secure: Bool, clip: CGRect, 
             bound = nonce
             let event: RingEvent, delay: Double
             switch frame {
-            case .pause, .clear: write(["effect": "drop", "state": "pause-channel", "time": clock]); continue
+            case .pause: write(["effect": "drop", "state": "pause-channel", "time": clock]); continue
+            case .clear: pauseVisibility.clear(); emit(runtime.hide(clock)); continue
             case .activity: write(["effect": "drop", "state": "pause-control", "time": clock]); continue
             case .picker: write(["effect": "drop", "state": "picker", "dropped": true, "animations": [], "time": clock]); continue
             case let .character(_, value):
@@ -4975,7 +5028,7 @@ func ringPlanDump(theme: RingTheme?, reduced: Bool, secure: Bool, clip: CGRect, 
                 // handleMs: what this line cost the dump's thread, the parse included (the live host's main thread does the same).
                 write(["effect": "character-start", "id": value.id, "handleMs": Date().timeIntervalSince(received) * 1000, "time": clock]); continue
             case let .act(_, act): event = ringEvent(act); delay = act.delay
-            case let .aim(_, value), let .status(_, value): event = value; delay = 0
+            case let .aim(_, value), let .status(_, value): pauseVisibility.status(value.state); event = value; delay = 0
             case .hide: emit(runtime.hide(clock)); continue
             case .menu: write(["effect": "drop", "state": "menu", "dropped": true, "animations": [], "time": clock]); continue
             }

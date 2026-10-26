@@ -67,6 +67,19 @@ const options = { skip: macCommandSkip('xcrun') };
 // A second frame after the first one, at the same point, so no entrance or glide runs.
 const after = (frame, seq = 2) => [act(), { ...frame, seq }];
 
+test('a clear suppresses waiting and later action chips until done, including after a repeated clear', options, t => {
+  const rows = effects(t, [act(), { hand: 'clear', nonce, token: '1'.repeat(32) },
+    status('waiting', { seq: 2, at: [100, 100] }), aim({ seq: 3 }), act('click', { seq: 4 }),
+    { hand: 'clear', nonce, token: '2'.repeat(32) }, status('waiting', { seq: 5, at: [100, 100] }),
+    status('done', { seq: 6, at: [100, 100] }), status('waiting', { seq: 7, at: [100, 100] })]);
+  const draws = rows.filter(row => row.effect === 'draw');
+  assert.ok(draws[0].pauseControl.rect);
+  const during = draws.filter(row => row.time > 1 && row.time < 7);
+  assert.ok(during.some(row => row.state === 'waiting'));
+  for (const row of during) assert.equal(row.pauseControl.rect, null, row.state);
+  assert.ok(draws.find(row => row.state === 'waiting' && row.time === 8).pauseControl.rect);
+});
+
 test('paused is additive, drops pending acts and parks without a fade or a release timer', options, t => {
   const rows = effects(t, [clock(0), act(), clock(0.5), act('click', { seq: 2, delayMs: 1000 }), status('paused', { seq: 3 }), clock(1000)]);
   assert.ok(rows.some(row => row.effect === 'draw' && row.state === 'paused'));

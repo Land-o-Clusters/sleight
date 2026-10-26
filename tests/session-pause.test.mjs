@@ -138,6 +138,23 @@ test('foreground drag cannot dispatch until the host clears its panel', async t 
   h.call(1, 'drag', { app: 'Editor', windowId: 77 }); await tick();
   assert.equal(actions, 0); assert.equal(typeof release, 'function'); release(true); await tick(); assert.equal(actions, 1);
 });
+test('a drag clears again after its waiting approval before dispatching pointer input', async t => {
+  const order = [], releases = [], records = [];
+  const cursor = createCursorEvents({ setting: () => ({ stream: true }), sink: { write() {}, close() {} }, onEvent: event => records.push(event) });
+  const h = harness(t, { cursor, ask: async () => { order.push('approved'); return 'accept'; },
+    pauseHost: { activity() {}, clearForAction: () => new Promise(resolve => { order.push('clear'); releases.push(resolve); }) },
+    localTools: { tools: [{ name: 'drag' }], target: async () => ({ app: 'Editor', appId: 'org.test.editor' }),
+      async call(_name, _args, approve) {
+        if (await approve(['drag', 'Editor'], 'Allow drag?')) order.push('pointer-input');
+        return { content: [] };
+      } } });
+  h.call(1, 'drag', { app: 'Editor', windowId: 77 }); await tick();
+  assert.deepEqual(order, ['clear']); releases[0](true); await tick(); await tick();
+  assert.ok(records.some(e => e.type === 'status' && e.state === 'waiting'));
+  assert.deepEqual(order, ['clear', 'approved', 'clear']);
+  releases[1](true); await tick();
+  assert.deepEqual(order, ['clear', 'approved', 'clear', 'pointer-input']);
+});
 
 test('a paused private warmup settles once and a resumed user call uses ordinary setup', async t => {
   const h = harness(t, { warmRepl: true, warmEngine: true });

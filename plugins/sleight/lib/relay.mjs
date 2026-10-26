@@ -956,6 +956,18 @@ export function createRelay({
   let installedBootstrapped = false;
   const remoteEnvelope = directHost?.bootstrapEnvelope() ?? { version: 1, session: randomUUID(), nonce: randomBytes(32).toString('hex') };
   const remoteTurns = new Set(), typedApps = new Set(), remoteRefusedCalls = new Set(), remoteUnboundNotices = new Map(), awayCards = new Map();
+  function bindTurboPrompt(frame) {
+    // Both envelope forms are authenticated before this helper. A late bind must not replace a newer prompt's authority.
+    paymentMessages.set(frame.text);
+    const binding = directHost.bind(frame, turboApps(), clientHost).then(available => {
+      if (available) { resumeRequested = true; resumeAfterStop(); }
+      return { available, deferred: false };
+    });
+    // prompt.submit awaits turn_ended. During pause even a slow worker must not hold the person's message.
+    // Binding continues in the background; both the relay and worker still refuse calls until Resume.
+    if (pause.paused) { binding.catch(() => {}); return Promise.resolve({ available: false, deferred: true }); }
+    return binding;
+  }
   let promptOrigin;
   let catalogSettled = false;
   let remoteCatalog = { apps: [], defaults: {} };
@@ -3322,6 +3334,8 @@ export function createRelay({
         const allowed = await (prepared?.approval ?? approve(parts, message, msg.id, options));
         current();
         if (allowed) {
+          // Approval can emit waiting after the admission clear. Remove any control again before pointer input.
+          if (pauseHost?.clearForAction && ['drag', 'hover', 'menu_bar'].includes(name)) { await pauseHost.clearForAction(); current(); }
           const key = leaseCalls.get(msg.id)?.key;
           if (key) inputLease.renew([key]);
         }
@@ -3501,10 +3515,15 @@ export function createRelay({
       if (!Object.hasOwn(frame, 'origin')) {
         // Older mods retain their turbo-only contract, without typed app authority.
         if (!directHost) { refuse(); return; }
-        directHost.bind(frame, turboApps(), clientHost).then(available => {
-          paymentMessages.set(frame.text);
-          if (available) { resumeRequested = true; resumeAfterStop(); }
-          reply({ isError: !available, content: [] });
+        // Validate before a paused turn's immediate reply. The background bridge still validates its own envelope.
+        const keys = ['version', 'session', 'nonce', 'event', 'turn', 'text'];
+        if (Object.keys(frame).length !== keys.length || !keys.every(k => Object.hasOwn(frame, k)) ||
+            frame.version !== remoteEnvelope.version || frame.session !== remoteEnvelope.session || frame.nonce !== remoteEnvelope.nonce ||
+            typeof frame.turn !== 'string' || !/^[A-Za-z0-9_-]{1,128}$/.test(frame.turn) || remoteTurns.has(frame.turn) ||
+            remoteTurns.size >= 10000 || typeof frame.text !== 'string' || Buffer.byteLength(frame.text) > 65536) { refuse(); return; }
+        remoteTurns.add(frame.turn);
+        bindTurboPrompt(frame).then(({ available, deferred }) => {
+          reply({ isError: !available && !deferred, content: [] });
         }).catch(refuse);
         return;
       }
@@ -3532,8 +3551,7 @@ export function createRelay({
         let turboBound = false;
         if (frame.turbo && directHost) {
           const { origin: _origin, turbo: _turbo, ...binding } = frame;
-          try { turboBound = await directHost.bind(binding, turboApps(), clientHost); paymentMessages.set(frame.text); } catch {}
-          if (turboBound) { resumeRequested = true; resumeAfterStop(); }
+          try { turboBound = (await bindTurboPrompt(binding)).available; } catch {}
         }
         reply({ isError: false, content: [{ type: 'text', text: JSON.stringify({ sleightRemote: { turboBound, ...(context ? { context } : {}) } }) }] });
       })().catch(refuse);

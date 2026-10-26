@@ -434,26 +434,30 @@ substitution.
 When the cursor is on, click the character to pause this sleight session. Ring styles have a small pause chip beside the
 target. The glove uses the menu bar only. Click again to resume, or choose Pause sleight and Resume sleight in the menu bar.
 The ring lets clicks pass through to the app. Only opaque sprite pixels accept clicks. The chip and sprite control stay away
-from the target point, become click-through on action frames and disappear during drags. The menu accepts your mouse click or
+from the target point and disappear before foreground pointer actions. After a clear, waiting statuses keep the controls
+hidden until the action reports done. The menu accepts your mouse click or
 Space, Return or Enter on its highlighted row. Synthetic input and screen-reader presses are refused, as with consent cards.
 Claude has no pause or resume command. Pause is held in memory for this session without a saved setting. Controls start only
 when the hand is enabled, in any style. `SLEIGHT_HAND=0` disables the cursor host and its controls for headless runs and bench arms.
 
 While a control waits for the relay's acknowledgment, sleight keeps running. A successful exchange shows paused. After
 500 ms without confirmation, the chip shows a retry mark and the menu says the pause was not confirmed. An unconfirmed pause leaves admission running. Before a foreground
-drag, sleight waits up to 100 ms for the host to confirm that its panel is click-through. If that wait expires, sleight ends
-its cursor host to remove the panel before pointer input. A shared consent request may close with it.
+drag, hover or menu-bar action, sleight waits up to 100 ms for the host to confirm that its panel is hidden, including pipe
+backpressure. If that wait expires, sleight sends a direct hide frame and proceeds. It keeps the host and shared consent
+channel alive. A stalled host may process that hide after pointer input. This timing still needs a live check under load.
 
 A confirmed pause refuses new engine, turbo and local calls on the next pipe read. An action already sent may finish. Turbo
 and Electron batches stop before their next step or field. A native call stops at its next engine approval or relay
 continuation. An opaque call may finish all its actions. Only a call cut short gets a pause note, with the completed and
 unsent actions when the engine provides a receipt. After you resume, fresh calls run without replaying a dropped batch.
-A turn started during pause waits to bind turbo until resume. An older paused native call must return before new calls run,
+A prompt submitted during pause reaches Claude immediately, with turbo binding in the background. Calls stay refused until
+you resume. An older paused native call must return before new calls run,
 so its approval cannot be mistaken for theirs. The cursor stream reports `paused` until you resume.
 
 If the cursor host exits during pause, sleight starts one replacement in the paused state. It never resumes because the host
 died. If that replacement fails or exits too, the tool result says: "Resume from the sleight menu bar, or start a new session."
-A new session is the recovery path when no menu remains.
+A new session is the recovery path when no menu remains. On a control-channel fault, the old host hides its status item
+before reporting the fault. The relay tells it to exit before starting a replacement.
 
 The same private `hand.json` version 1 file accepts `style` (`glove`, `ring`, `seam` or `sprite`), `character` (an installed
 character id), `stream` (boolean) and `labels` (`off`, `role` or `title`). Without `style`, the current glove behavior stays.

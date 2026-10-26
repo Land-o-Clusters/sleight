@@ -22,6 +22,31 @@ function run(t, frames) {
   return result.stdout.trim().split('\n').map(JSON.parse);
 }
 const options = { skip: macCommandSkip('xcrun') };
+test('retiring a shared control requires an exact parent nonce and cannot be requested by a worker', options, t => {
+  const rows = run(t, [
+    { exitFrame: { hand: 'control-exit', nonce: 'a'.repeat(64) } },
+    { exitFrame: { hand: 'control-exit', nonce: 'b'.repeat(64) } },
+    { exitFrame: { hand: 'control-exit', nonce: 'a'.repeat(64), extra: true } },
+    { exitFrame: { hand: 'control-exit' } },
+  ]);
+  assert.deepEqual(rows.map(row => row.exitAccepted), [true, false, false, false]);
+});
+test('shared person input spends events across controls in one window and tracks other windows separately', options, t => {
+  const rows = run(t, [
+    { click: { pid: 0, consumer: 'shared', windowNumber: 0 } },
+    { click: { reuse: true }, ack: true },
+    { click: { pid: 0 }, ack: true },
+    { click: { reuse: true, consumer: 'shared', windowNumber: 0 } },
+    { click: { pid: 0, consumer: 'shared', windowNumber: 42, age: 1 } },
+    { click: { reuse: true, consumer: 'shared', windowNumber: 42 } },
+    { click: { pid: 0, consumer: 'shared', windowNumber: 0, age: 1 } },
+    { click: { pid: 0, noNonce: true } },
+    { click: { reuse: true, consumer: 'shared', windowNumber: 0 } },
+  ]);
+  assert.deepEqual(rows.map(row => row.accepted), [true, false, true, false, true, false, false, false, false]);
+  assert.equal(rows[0].paused, false);
+  assert.equal(rows[2].paused, true);
+});
 test('real control spends fresh hardware input and refuses stale, reused, nil, AX and wrong-source input', options, t => {
   const rows = run(t, [
     ...[{ pid: 42 }, { pid: 0, age: 5.1 }, { pid: 0, age: -1 }, { pid: 0, wrongSource: true },

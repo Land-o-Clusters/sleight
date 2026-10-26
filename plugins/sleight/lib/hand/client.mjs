@@ -151,10 +151,12 @@ export function createHandClient({ env = process.env, setting = () => handSettin
   };
   hand = read();
   const note = (direction, detail) => { try { trace(direction, detail); } catch {} };
-  const write = line => {
+  const write = (line, { urgent = false, onBackpressure } = {}) => {
     try {
-      if (child.stdin.writableLength > 65536) { note('hand-dropped', { reason: 'backpressure' }); return false; }
-      return child.stdin.write(line) !== false;
+      if (!urgent && child.stdin.writableLength > 65536) { note('hand-dropped', { reason: 'backpressure' }); return false; }
+      // false means queued, with backpressure. It is not a failed write.
+      if (child.stdin.write(line) === false) onBackpressure?.(child.stdin);
+      return true;
     } catch (error) { note('hand-dropped', { reason: error?.code ?? 'write' }); die('pipe', { code: error?.code }); return false; }
   };
   const act = (wire, delayMs = wire.delayMs) => JSON.stringify(wire.hand
@@ -225,6 +227,11 @@ export function createHandClient({ env = process.env, setting = () => handSettin
     if (pauseRequest?.before && !paused) setPaused(true);
     const recover = paused && !closed && !respawned;
     if (pauseRequest) { clearTimeout(pauseRequest.timer); pauseRequest = undefined; }
+    if (reason === 'control-gone' && child?.stdio?.[3]) {
+      // The faulted hand reader drops frames. Its independent consent pipe still accepts this parent-only exit.
+      try { child.stdio[3].write(JSON.stringify({ hand: 'control-exit', nonce }) + '\n'); }
+      catch { note('hand-control-exit-failed', {}); }
+    }
     host = 'dead'; stop(); events = ''; consentClaimed = false;
     for (const resolve of clearWaiters.values()) resolve(false);
     clearWaiters.clear();
@@ -561,17 +568,25 @@ export function createHandClient({ env = process.env, setting = () => handSettin
       if (host !== 'running') { queue.length = 0; return Promise.resolve(false); }
       const token = randomBytes(16).toString('hex');
       return new Promise(resolve => {
-        const finish = value => { clearTimeout(timer); clearWaiters.delete(token); resolve(value); };
+        let done = false, written = false, drained = true, acknowledged = false, pipe;
+        const finish = value => {
+          if (done) return;
+          done = true; clearTimeout(timer); clearWaiters.delete(token); pipe?.removeListener('drain', onDrain); resolve(value);
+        };
+        const ready = () => { if (written && drained && acknowledged) finish(true); };
+        const onDrain = () => { drained = true; ready(); };
         const timer = setTimeout(() => {
-          // An unresponsive host cannot prove its input panel is gone. End this owned child before pointer input;
-          // leaving a queued hide alone would recreate the original lost-click race. A paused host recovers via die().
-          client.hide();
-          const ending = child;
-          if (ending) try { ending.kill('SIGKILL'); } catch {}
-          die('action-clear-timeout'); finish(false);
+          // A slow main queue must not take down the shared consent channel or the session's pause control.
+          // This one small control frame bypasses the artwork backlog cap.
+          write(JSON.stringify({ hand: 'hide', nonce }) + '\n', { urgent: true });
+          finish(false);
         }, 100);
-        clearWaiters.set(token, finish);
-        if (!write(JSON.stringify({ hand: 'clear', nonce, token }) + '\n')) finish(false);
+        clearWaiters.set(token, value => { if (!value) finish(false); else { acknowledged = true; ready(); } });
+        written = write(JSON.stringify({ hand: 'clear', nonce, token }) + '\n', {
+          urgent: true,
+          onBackpressure: stdin => { drained = false; pipe = stdin; pipe.once('drain', onDrain); },
+        });
+        if (!written) finish(false); else ready();
       });
     },
     close() {

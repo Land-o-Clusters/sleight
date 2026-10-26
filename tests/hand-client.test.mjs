@@ -67,6 +67,27 @@ test('a hand-channel fault recovers controls even when the consent process stays
   await settle(); assert.equal(children.length, 2); assert.deepEqual(values, [true]);
   children[1].stdout.emit('end'); assert.equal(client.controlLost, true);
 });
+test('a control-gone fault tells the old shared host to exit before preparing its replacement', async t => {
+  const children = [], order = [];
+  const client = createHandClient({ setting: () => ({ enabled: true }), built: () => true, watch: () => undefined,
+    permissions: null, usage: null, prepare: async () => {
+      order.push('prepare');
+      if (children.length) assert.equal(children[0].lines.at(-1).hand, 'control-exit');
+      return { status: 'ready', spawn() { const child = fakeChild(); children.push(child); return child; } };
+    } });
+  t.after(() => client.close()); client.send(frame()); await settle();
+  const shared = await shareConsent(); shared.release();
+  const old = children[0], write = old.stdio[3].write;
+  old.stdio[3].write = line => { order.push(JSON.parse(line).hand); return write(line); };
+  commitPause(old, true);
+  old.stdout.emit('data', JSON.stringify({ hand: 'control-gone', nonce: old.menus[0].nonce }) + '\n');
+  await settle();
+  assert.deepEqual(order, ['prepare', 'control-exit', 'prepare']);
+  assert.deepEqual(old.lines.at(-1), { hand: 'control-exit', nonce: old.menus[0].nonce });
+  assert.equal(old.ended, true); assert.equal(old.killed, undefined);
+  assert.equal(children.length, 2);
+  assert.equal(children[1].lines.find(f => f.phase === 'restore').paused, true);
+});
 test('a failed paused host respawn preserves pause and exposes the recovery result', async t => {
   const child = fakeChild(), values = []; let prepares = 0;
   const client = createHandClient({ setting: () => ({ enabled: true }), built: () => true, watch: () => undefined,
@@ -103,7 +124,7 @@ test('no ack in 500 ms leaves admission running and an unconfirmed applied pause
   assert.deepEqual(values, [true]); t.mock.timers.tick(500); assert.deepEqual(values, [true, false]);
   t.mock.timers.reset();
 });
-test('foreground actions wait for click-through, then end the owned host at 100 ms if unacknowledged', async t => {
+test('foreground actions wait for clear, then send a direct hide at 100 ms without ending a slow shared host', async t => {
   const h = harness(); t.after(() => h.client.close()); h.client.send(frame()); await settle();
   const child = h.children[0];
   const waiting = h.client.clearForAction(), request = child.lines.at(-1);
@@ -111,8 +132,47 @@ test('foreground actions wait for click-through, then end the owned host at 100 
   child.stdout.emit('data', JSON.stringify({ hand: 'clear-ready', nonce: request.nonce, token: request.token }) + '\n');
   assert.equal(await waiting, true);
   t.mock.timers.enable({ apis: ['setTimeout'] });
-  const timeout = h.client.clearForAction(); t.mock.timers.tick(100); assert.equal(await timeout, false);
-  assert.equal(child.lines.at(-1).hand, 'hide'); assert.equal(child.killed, true); assert.equal(h.client.enabled, false); t.mock.timers.reset();
+  const shared = await shareConsent(); shared.release();
+  const timeout = h.client.clearForAction();
+  child.stdin.writableLength = 70000;
+  t.mock.timers.tick(100); assert.equal(await timeout, false);
+  assert.equal(child.lines.at(-1).hand, 'hide'); assert.equal(child.killed, undefined);
+  assert.equal(child.ended, false); assert.equal(child.stdio[3].destroyed, undefined); assert.equal(h.client.enabled, true);
+  child.stdin.writableLength = 0;
+  const later = h.client.clearForAction(), next = child.lines.at(-1);
+  child.stdout.emit('data', JSON.stringify({ hand: 'clear-ready', nonce: next.nonce, token: next.token }) + '\n');
+  assert.equal(await later, true); assert.equal(h.children.length, 1); t.mock.timers.reset();
+});
+test('a backpressured clear waits for drain and the matching host acknowledgment', async t => {
+  const h = harness(); t.after(() => h.client.close()); h.client.send(frame()); await settle();
+  const child = h.children[0], write = child.stdin.write.bind(child.stdin);
+  child.stdin.write = line => { write(line); return false; };
+  let result;
+  const waiting = h.client.clearForAction().then(value => { result = value; });
+  await tick(); assert.equal(result, undefined);
+  const request = child.lines.at(-1);
+  child.stdout.emit('data', JSON.stringify({ hand: 'clear-ready', nonce: request.nonce, token: request.token }) + '\n');
+  await tick(); assert.equal(result, undefined);
+  child.stdin.emit('drain'); await waiting; assert.equal(result, true);
+  assert.equal(child.stdin.listenerCount('drain'), 0);
+});
+test('backpressure without drain stays bounded and sends hide without killing the host', async t => {
+  const h = harness(); t.after(() => h.client.close()); h.client.send(frame()); await settle();
+  const child = h.children[0], write = child.stdin.write.bind(child.stdin);
+  child.stdin.write = line => { write(line); return false; };
+  t.mock.timers.enable({ apis: ['setTimeout'] });
+  let result;
+  const waiting = h.client.clearForAction().then(value => { result = value; });
+  t.mock.timers.tick(99); await tick(); assert.equal(result, undefined);
+  t.mock.timers.tick(1); await waiting; assert.equal(result, false);
+  assert.equal(child.lines.at(-1).hand, 'hide'); assert.equal(child.killed, undefined);
+  assert.equal(child.stdin.listenerCount('drain'), 0); assert.equal(h.client.enabled, true); t.mock.timers.reset();
+});
+test('a thrown clear write is a real failure and settles without waiting for drain', async t => {
+  const h = harness(); t.after(() => h.client.close()); h.client.send(frame()); await settle();
+  h.children[0].stdin.write = () => { throw Object.assign(Error('closed pipe'), { code: 'EPIPE' }); };
+  assert.equal(await h.client.clearForAction(), false);
+  assert.equal(h.client.enabled, false);
 });
 const settle = async () => { for (let i = 0; i < 5; i++) await tick(); };
 // A fake shared host: act and hide frames land in lines, menu frames in menus, and stdout and fds 3 and 4 are streams.
