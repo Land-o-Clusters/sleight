@@ -1,7 +1,7 @@
 // The relay owns one consent-capable ghost hand host per session. Turbo workers inherit its consent pipes, and browser
 // artwork comes back over worker IPC to this same client. The parent's copies keep the host alive between workers. send and hide
-// are fire-and-forget pipe writes that never throw or wait. A dead host or a failed spawn only traces, and the session goes on
-// without a hand. A cold build runs off the caller's path and starts the hand in this session when ready.
+// are fire-and-forget pipe writes that never throw or wait. A failed host traces; a paused session gets one replacement
+// control with the same pause, and a running session goes on without a hand. A cold build runs off the caller's path and starts the hand in this session when ready.
 //
 // Caller frames: { kind, pid, windowId, at: [x, y], path: [[x, y], ...], delayMs, beats } in global top-left screen points
 // (kCGWindowBounds and AX frames). kind is click, double, right, key, type, drag or scroll. The hand glides along path into at
@@ -74,7 +74,7 @@ export function sessionHandClient(options = {}) {
   try {
     const env = options.env ?? process.env;
     const setting = (options.setting ?? (() => handSetting({ env })))();
-    if (env.SLEIGHT_HAND === '0' || !setting.enabled && !options.controls) return undefined;
+    if (env.SLEIGHT_HAND === '0' || !setting.enabled) return undefined;
     if (current) return current;
     const cursorStyle = options.cursorStyle ?? setting.style, character = options.character ?? setting.character;
     try { return createHandClient({ ...options, cursorStyle, ...character !== undefined ? { character } : {} }); }
@@ -122,7 +122,8 @@ export function createHandClient({ env = process.env, setting = () => handSettin
   // host: none, starting, running or dead (failed or closed this session; final). hand: the settings allow the hand.
   let seq = 0, child, host = 'none', starting, hand = false, capture = 'hidden', checked = now(), checking = false, events = '', target;
   let style = cursorStyle;
-  let paused = false;
+  let paused = false, closed = false, respawned = false, pauseRequest, restoreRequest;
+  const clearWaiters = new Map();
   let activityAt = -Infinity;
   let buildController, buildStarted;
   // Hosts with an attached worker are left to finish their consent channel before exiting.
@@ -152,9 +153,9 @@ export function createHandClient({ env = process.env, setting = () => handSettin
   const note = (direction, detail) => { try { trace(direction, detail); } catch {} };
   const write = line => {
     try {
-      if (child.stdin.writableLength > 65536) { note('hand-dropped', { reason: 'backpressure' }); return; }
-      child.stdin.write(line);
-    } catch (error) { note('hand-dropped', { reason: error?.code ?? 'write' }); }
+      if (child.stdin.writableLength > 65536) { note('hand-dropped', { reason: 'backpressure' }); return false; }
+      return child.stdin.write(line) !== false;
+    } catch (error) { note('hand-dropped', { reason: error?.code ?? 'write' }); die('pipe', { code: error?.code }); return false; }
   };
   const act = (wire, delayMs = wire.delayMs) => JSON.stringify(wire.hand
     ? { ...wire, nonce, seq: ++seq }
@@ -217,7 +218,19 @@ export function createHandClient({ env = process.env, setting = () => handSettin
     const ending = child; child = undefined;
     stopChild(ending);
   };
-  const die = (reason, detail) => { if (host === 'dead') return; host = 'dead'; stop(); note('hand-off', { reason, ...detail }); };
+  const die = (reason, detail) => {
+    if (host === 'dead') return;
+    if (restoreRequest) { clearTimeout(restoreRequest.timer); restoreRequest = undefined; }
+    // A kill is never a resume. Keep a committed pause and make exactly one replacement control.
+    if (pauseRequest?.before && !paused) setPaused(true);
+    const recover = paused && !closed && !respawned;
+    if (pauseRequest) { clearTimeout(pauseRequest.timer); pauseRequest = undefined; }
+    host = 'dead'; stop(); events = ''; consentClaimed = false;
+    for (const resolve of clearWaiters.values()) resolve(false);
+    clearWaiters.clear();
+    note('hand-off', { reason, ...detail });
+    if (recover) { respawned = true; host = 'none'; starting = undefined; ensure(); }
+  };
   // The Permissions rows' clicks: { permissions: 'revoke' | 'block', nonce, target } or { permissions: 'revoke-all', nonce }, with this
   // session's nonce. apply acts only on a target the last menu offered, and only ever removes access.
   function permissionEvent(event) {
@@ -332,11 +345,12 @@ export function createHandClient({ env = process.env, setting = () => handSettin
     return true;
   }
   // The Ghost Hand row's clicks: exact { hand: 'toggle', nonce, enabled } lines with this session's nonce, on the host's stdout.
-  function onEvents(chunk) {
+  function onEvents(chunk, owner) {
     events += chunk;
     if (events.length > 65536) { events = ''; note('hand-toggle-refused', { reason: 'size' }); return; }
     let end;
     while ((end = events.indexOf('\n')) >= 0) {
+      if (child !== owner) return;
       const text = events.slice(0, end); events = events.slice(end + 1);
       let event;
       try { event = JSON.parse(text); } catch {}
@@ -345,12 +359,31 @@ export function createHandClient({ env = process.env, setting = () => handSettin
       }
       if (event && typeof event === 'object' && Object.hasOwn(event, 'permissions') && permissionEvent(event)) continue;
       if (event?.hand === 'character' && characterEvent(event)) continue;
-      if (event?.hand === 'pause' && event.nonce === nonce && Object.keys(event).sort().join() === 'hand,nonce,paused' && typeof event.paused === 'boolean') {
-        if (paused !== event.paused) {
-          paused = event.paused;
-          // No settings write or command handler: only this host's human click controls this relay session.
-          onPause(paused);
-          note('hand-pause', { paused });
+      if (event?.hand === 'control-gone' && event.nonce === nonce && Object.keys(event).sort().join() === 'hand,nonce') {
+        die('control-gone'); return;
+      }
+      if (event?.hand === 'clear-ready' && event.nonce === nonce && Object.keys(event).sort().join() === 'hand,nonce,token') {
+        clearWaiters.get(event.token)?.(true); continue;
+      }
+      if (event?.hand === 'pause' && event.nonce === nonce && Object.keys(event).sort().join() === 'hand,nonce,paused,phase,token' &&
+          typeof event.paused === 'boolean' && /^[0-9a-f]{32}$/.test(event.token) && ['request', 'commit', 'confirm', 'cancel', 'restored'].includes(event.phase)) {
+        if (event.phase === 'restored') {
+          if (restoreRequest?.token === event.token && event.paused === true) { clearTimeout(restoreRequest.timer); restoreRequest = undefined; }
+        } else if (event.phase === 'request') {
+          if (!hand && !paused || pauseRequest || event.paused === paused) continue;
+          const request = { token: event.token, value: event.paused, before: paused, applied: false };
+          pauseRequest = request;
+          request.timer = setTimeout(() => abortPause(request), 500);
+          pauseAck('ready', request);
+        } else {
+          const request = pauseRequest;
+          if (!request || event.token !== request.token || event.paused !== request.value) continue;
+          if (event.phase === 'cancel') abortPause(request);
+          else if (event.phase === 'commit' && !request.applied) {
+            request.applied = true; setPaused(request.value); pauseAck('applied', request);
+          } else if (event.phase === 'confirm' && request.applied) {
+            clearTimeout(request.timer); pauseRequest = undefined;
+          }
         }
         continue;
       }
@@ -360,6 +393,21 @@ export function createHandClient({ env = process.env, setting = () => handSettin
       Promise.resolve().then(() => setHand(event.enabled)).then(() => recheck(true),
         error => note('hand-toggle-failed', { code: /^[A-Z][A-Z0-9_]{0,127}$/.test(error?.message) ? error.message : 'HAND_SETUP_FAILED' }));
     }
+  }
+  function setPaused(value) {
+    if (paused === value) return;
+    paused = value; onPause(value); note('hand-pause', { paused });
+  }
+  function pauseAck(phase, request) {
+    if (host !== 'running') return false;
+    return write(JSON.stringify({ hand: 'pause-ack', nonce, phase, token: request.token, paused: request.value }) + '\n');
+  }
+  function abortPause(request) {
+    if (pauseRequest !== request) return;
+    clearTimeout(request.timer); pauseRequest = undefined;
+    // A missing ready never changed admission. A lost final ack rolls a tentative pause back.
+    if (request.applied) setPaused(request.before);
+    pauseAck('aborted', request);
   }
   // Spawns the session's consent-capable host once. Menu and queued frames go to this host for its lifetime.
   async function launch(consent) {
@@ -394,14 +442,23 @@ export function createHandClient({ env = process.env, setting = () => handSettin
       }
       const started = result.spawn({ capture, consent, ...cursorStyle !== undefined || style !== 'glove' ? { cursorStyle: style } : {} });
       started.on('error', error => { if (child === started) die('spawn', { code: error?.code }); });
-      started.stdin.on('error', error => note('hand-dropped', { reason: error?.code ?? 'pipe' }));
-      started.stdout?.on('data', onEvents);
+      started.stdin.on('error', error => { if (child === started) die('pipe', { code: error?.code }); });
+      started.stdout?.on('data', chunk => { if (child === started) onEvents(chunk, started); });
+      started.stdout?.on('end', () => { if (child === started) die('stdout'); });
       for (const end of [started.stdio?.[3], started.stdio?.[4]]) end?.on('error', () => note('hand-consent-unavailable', {}));
       started.on('exit', (code, signal) => { if (child === started) { setHandPid(0); die('exit', { code, signal }); } else if (!child) setHandPid(0); });
       child = started; host = 'running';
       setHandPid(started.pid);
       note('hand-started', { pid: started.pid, consent });
       write(menu());
+      if (child !== started) return undefined;
+      if (paused) {
+        const token = randomBytes(16).toString('hex');
+        restoreRequest = { token, timer: setTimeout(() => die('pause-restore-timeout'), 500) };
+        pauseAck('restore', { token, value: true });
+        if (child !== started) return undefined;
+        if (target && style !== 'glove') write(act({ hand: 'status', state: 'paused', ...target }));
+      }
       // The character frame goes once, before any queued act, on the acts' sequence counter.
       if (sprite) write(JSON.stringify({ ...sprite, seq: ++seq }) + '\n');
       statsAt = -Infinity;
@@ -466,7 +523,7 @@ export function createHandClient({ env = process.env, setting = () => handSettin
 
   const client = Object.freeze({
     activity() {
-      if (host === 'dead' || now() - activityAt < 60000) return;
+      if (!hand || env.SLEIGHT_HAND === '0' || host === 'dead' || now() - activityAt < 60000) return;
       activityAt = now();
       ensure().then(ok => { if (ok && host === 'running') write(JSON.stringify({ hand: 'activity', nonce }) + '\n'); });
     },
@@ -500,7 +557,29 @@ export function createHandClient({ env = process.env, setting = () => handSettin
       if (host === 'running') write(JSON.stringify({ hand: 'hide', nonce }) + '\n');
       else queue.length = 0;
     },
+    clearForAction() {
+      if (host !== 'running') { queue.length = 0; return Promise.resolve(false); }
+      const token = randomBytes(16).toString('hex');
+      return new Promise(resolve => {
+        const finish = value => { clearTimeout(timer); clearWaiters.delete(token); resolve(value); };
+        const timer = setTimeout(() => {
+          // An unresponsive host cannot prove its input panel is gone. End this owned child before pointer input;
+          // leaving a queued hide alone would recreate the original lost-click race. A paused host recovers via die().
+          client.hide();
+          const ending = child;
+          if (ending) try { ending.kill('SIGKILL'); } catch {}
+          die('action-clear-timeout'); finish(false);
+        }, 100);
+        clearWaiters.set(token, finish);
+        if (!write(JSON.stringify({ hand: 'clear', nonce, token }) + '\n')) finish(false);
+      });
+    },
     close() {
+      closed = true;
+      if (restoreRequest) { clearTimeout(restoreRequest.timer); restoreRequest = undefined; }
+      if (pauseRequest) { clearTimeout(pauseRequest.timer); pauseRequest = undefined; }
+      for (const resolve of clearWaiters.values()) resolve(false);
+      clearWaiters.clear();
       try { watcher?.close(); } catch {}
       watcher = undefined;
       if (current === client) current = undefined;
@@ -511,6 +590,7 @@ export function createHandClient({ env = process.env, setting = () => handSettin
       if (child) for (const end of [child.stdio?.[3], child.stdio?.[4]]) try { end?.destroy(); } catch {}
       if (host !== 'dead') { host = 'dead'; stop(); }
     },
+    get controlLost() { return paused && host === 'dead'; },
     get pid() { return child?.pid; },
     get enabled() { return hand && host !== 'dead'; },
   });

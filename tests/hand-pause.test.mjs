@@ -22,13 +22,44 @@ function run(t, frames) {
   return result.stdout.trim().split('\n').map(JSON.parse);
 }
 const options = { skip: macCommandSkip('xcrun') };
-test('hardware source 0 alone can pause or resume; synthetic and missing event stubs fail closed', options, t => {
-  const rows = run(t, [{ click: { pid: 42, type: 'up' } }, { click: { type: 'up' } }, { click: { pid: 0, type: 'key' } },
-    { click: { pid: 0, type: 'up' } }, { click: { pid: 42, type: 'up' } }, { click: { pid: 0, type: 'up' } }]);
-  assert.deepEqual(rows.map(r => r.paused), [false, false, false, true, true, false]);
-  assert.deepEqual(rows.map(r => r.accepted), [false, false, false, true, false, true]);
+test('real control spends fresh hardware input and refuses stale, reused, nil, AX and wrong-source input', options, t => {
+  const rows = run(t, [
+    ...[{ pid: 42 }, { pid: 0, age: 5.1 }, { pid: 0, age: -1 }, { pid: 0, wrongSource: true },
+      { pid: 0, userData: 1 }, { pid: 0, nil: true }, { pid: 0, wrongWindow: true }, { pid: 0, ax: true }].map(click => ({ click })),
+    { click: { pid: 0 }, ack: true }, { click: { reuse: true }, ack: true },
+    { click: { pid: 0, type: 'key' }, ack: true }, { ax: true }, { click: { pid: 0, age: 1 }, ack: true },
+  ]);
+  assert.deepEqual(rows.slice(0, 8).map(r => r.accepted), Array(8).fill(false));
+  assert.deepEqual(rows.slice(8, 11).map(r => [r.accepted, r.paused]), [[true, true], [false, true], [true, false]]);
+  assert.deepEqual(rows[8].events.map(e => e.phase), ['request', 'commit', 'confirm']);
+  assert.ok(rows[8].events.every(e => e.hand === 'pause' && e.nonce === 'a'.repeat(64) && e.paused && /^[0-9a-f]{32}$/.test(e.token)));
+  assert.equal(rows[12].accepted, false);
+  assert.equal(rows[11].axPress, false); assert.equal(rows[11].axRefusals, 2); assert.equal(rows[11].paused, false);
   assert.equal(rows[0].canBecomeKey, false); assert.equal(rows[0].canBecomeMain, false);
   assert.equal(rows[0].nonactivating, true); assert.equal(rows[0].acceptsFirstMouse, true);
+});
+test('pause waits for acknowledgment, times out with a retry mark, and refuses a missing nonce', options, t => {
+  const rows = run(t, [{ click: { pid: 0 } }, { expire: true }, { ack: true },
+    { click: { pid: 0, noNonce: true } }, { click: { pid: 0 }, ack: true }]);
+  assert.deepEqual(rows.map(r => r.paused), [false, false, false, false, true]);
+  assert.equal(rows[0].pending, true); assert.equal(rows[1].failed, true); assert.equal(rows[1].pending, false);
+  assert.deepEqual(rows[1].events.map(e => e.phase), ['cancel']);
+  assert.equal(rows[3].accepted, false); assert.equal(rows[3].failed, true);
+});
+test('an old timeout cannot expire a new click, and a late relay rollback restores the displayed state', options, t => {
+  const rows = run(t, [{ click: { pid: 0 }, ack: true }, { click: { pid: 0 } }, { oldTimer: true }, { ack: true }, { aborted: true }]);
+  assert.equal(rows[2].pending, true); assert.equal(rows[2].failed, false);
+  assert.equal(rows[3].paused, false); assert.equal(rows[4].paused, true); assert.equal(rows[4].failed, true);
+});
+test('sprite controls hit only opaque pixels, including scaled and flipped cells', options, t => {
+  const [row] = run(t, [{ alphaCheck: true }]);
+  assert.equal(row.opaque, true); assert.equal(row.flipped, true);
+  for (const key of ['transparent', 'translucent', 'outside']) assert.equal(row[key], false, key);
+});
+test('idle control footprint in dump mode has no windows', options, t => {
+  const [row] = run(t, [{ idleMs: 2000 }]);
+  assert.ok(row.idleSeconds >= 1.9); assert.equal(row.windows, 0); assert.equal(row.controls, 1); assert.ok(row.rssBytes > 0);
+  t.diagnostic(JSON.stringify(row));
 });
 test('chip and sprite bounds never overlap the target, flip at edges, and hide during drag', options, t => {
   const frames = [];

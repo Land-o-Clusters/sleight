@@ -14,7 +14,7 @@ test('the menu bar item starts hidden, carries the glove template glyph and has 
   assert.match(source, /item\.isVisible = false/);
   assert.match(source, /image\.isTemplate = true/);
   assert.doesNotMatch(source, /"sleight disconnected"/);
-  assert.match(source, /item\.isVisible = menuVisible\(status, requests: requests, handEnabled: hand\?\.enabled \?\? false\)/);
+  assert.match(source, /item\.isVisible = cursorPause\.paused \|\| menuVisible\(status, requests: requests, handEnabled: hand\?\.enabled \?\? false\)/);
   // The hookup runs on the bar button only, starts on a connect transition and leaves no timer behind.
   assert.match(source, /if hookupConnects\(from: previous, to: status\)/);
   assert.match(source, /if index == hookupFrameCount \{ timer\.invalidate\(\); self\.hookupTimer = nil \}/);

@@ -9,6 +9,7 @@ import { createRelay } from '../plugins/sleight/lib/relay.mjs';
 import { InputLease } from '../plugins/sleight/lib/input-lease.mjs';
 import { FlowRules } from '../plugins/sleight/lib/flow-rules.mjs';
 import { registerTemp, trackTemp } from '../scripts/temp-leftovers.mjs';
+import { createSessionPause, NATIVE_PAUSE_CUT_NOTE } from '../plugins/sleight/lib/session-pause.mjs';
 import { SELECT_WINDOW_TOOL } from '../plugins/sleight/lib/select-window.mjs';
 
 const document = 'Window: "report.txt", App: Fixture Editor.\n0 standard window report.txt, URL: file:///tmp/report.txt\n\t1 menu bar\n\t\t2 File, ID: file-menu\n\t3 button Other';
@@ -93,6 +94,19 @@ async function fixture(t, { initial, base = document, after = menu, nativeChange
 
 const navigation = 'Window: "Parent", App: Fixture Editor.\n0 standard window Parent, URL: file:///tmp/Parent\n\t2 row Child, ID: child\n\t3 button Other';
 const child = navigation.replaceAll('Parent', 'Child');
+for (const timing of ['action', 'identity']) test(`pause cuts native continuation during ${timing} and names ran and unsent actions`, async t => {
+  const pause = createSessionPause();
+  const h = await fixture(t, { pause, base: navigation, after: child,
+    onAction() { if (timing === 'action') pause.set(true); return child; },
+    identity(expected, native, count) {
+      if (timing === 'identity' && count === 2) pause.set(true);
+      return { ...expected, ...native, matches: 1, epoch: 'helper', window: 1, pid: 123, processStart: 1 };
+    } });
+  const result = await h.call('await app.pressKey("Return"); await app.click("Other");');
+  assert.deepEqual(h.keys, ['Return']); assert.deepEqual(h.clicks, []); assert.equal(h.sent.length, 1);
+  assert.ok(result.content.some(c => c.text === NATIVE_PAUSE_CUT_NOTE));
+  assert.match(JSON.stringify(result), /ran 1 action/); assert.match(JSON.stringify(result), /not sent: click/);
+});
 for (const action of ['pressKey("Super+Down")', 'pressKey("Super+Up")', 'pressKey("Return")',
   'click("Child")', 'click({ id: "child" })', 'click(2)', 'click([20, 40])']) {
   test(`TW2: own ${action} retitles the same window and continues once`, async t => {

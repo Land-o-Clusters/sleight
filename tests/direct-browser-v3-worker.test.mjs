@@ -50,6 +50,58 @@ test('human pause crosses worker IPC immediately and invalidates the in-flight r
     assert.equal((await first).text, PAUSED_NOTE); assert.equal(steps, 1);
   } finally { await f.bridge.detach(); }
 });
+test('a turn starting during pause binds after resume and keeps turbo', async () => {
+  const f = await fixture();
+  try {
+    f.bridge.setPaused(true);
+    const bound = f.bridge.bind({ ...f.bridge.bootstrapEnvelope(), event: 'begin', turn: 'paused-start', text: 'Work.' });
+    await new Promise(resolve => setImmediate(resolve)); assert.equal(f.events.some(e => e[0] === 'begin'), false);
+    f.bridge.setPaused(false); assert.equal(await bound, true);
+    assert.equal((await f.bridge.call({ name: 'browser_read', arguments: { tab: 't1' } })).text, 'plain result');
+  } finally { await f.bridge.detach(); }
+});
+test('ending a paused turn cancels its deferred bind', async () => {
+  const f = await fixture();
+  try {
+    f.bridge.setPaused(true);
+    const bound = f.bridge.bind({ ...f.bridge.bootstrapEnvelope(), event: 'begin', turn: 'paused-end', text: 'Work.' });
+    await f.bridge.endTurn(); assert.equal(await bound, false);
+    assert.equal(f.events.some(e => e[0] === 'begin'), false);
+  } finally { await f.bridge.detach(); }
+});
+for (const failures of [1, 2]) test(`pause IPC retries once after ${failures} send failure(s)`, async () => {
+  const f = await fixture(), send = f.child.send; let attempts = 0;
+  f.child.send = (frame, callback) => {
+    if (frame.method === 'pause' && ++attempts <= failures) { callback?.(Error('transient IPC')); return; }
+    send(frame);
+  };
+  try {
+    f.bridge.setPaused(true);
+    for (let i = 0; i < 6; i++) await new Promise(resolve => setImmediate(resolve));
+    assert.equal(attempts, 2); assert.equal(f.child.connected, failures === 1);
+    if (failures === 1) {
+      f.bridge.setPaused(false);
+      assert.equal(await f.bridge.bind({ ...f.bridge.bootstrapEnvelope(), event: 'begin', turn: 'retry-turn', text: 'Work.' }), true);
+    }
+  } finally { await f.bridge.detach(); }
+});
+test('a timed-out pause retries once and its late first reply does not drop the worker', async t => {
+  const f = await fixture(), send = f.child.send; let held, attempts = 0;
+  try {
+    f.child.send = frame => {
+      if (frame.method === 'pause' && ++attempts === 1) { held = frame; return; }
+      send(frame);
+    };
+    t.mock.timers.enable({ apis: ['setTimeout'] });
+    f.bridge.setPaused(true); for (let i = 0; i < 5; i++) await Promise.resolve();
+    assert.ok(held); t.mock.timers.tick(500);
+    for (let i = 0; i < 8; i++) await Promise.resolve();
+    assert.equal(attempts, 2); assert.equal(f.child.connected, true);
+    f.child.emit('message', { version: 3, id: held.id, result: true });
+    assert.equal(f.child.connected, true);
+    t.mock.timers.reset();
+  } finally { t.mock.timers.reset(); await f.bridge.detach(); }
+});
 test('waiting handoff can exceed the normal RPC timeout without losing the worker', async () => {
   const f = await fixture({}, undefined, { timeoutMs: 10 }, async request => {
     if (request.name === 'browser_tabs') await new Promise(resolve => setTimeout(resolve, 30));

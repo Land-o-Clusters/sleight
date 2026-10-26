@@ -91,7 +91,7 @@ import { TurnOutcomes, unconfirmedInput } from './turn-outcomes.mjs';
 import { resultCompleteness, filteredRead } from './read-completeness.mjs';
 import { stripHandBindings } from './hand/bindings.mjs';
 import { cursorRecord } from './hand/events.mjs';
-import { createSessionPause, PAUSED_NOTE, PAUSE_DRAIN_NOTE } from './session-pause.mjs';
+import { createSessionPause, PAUSED_NOTE, PAUSE_DRAIN_NOTE, PAUSE_CONTROL_LOST_NOTE, NATIVE_PAUSE_CUT_NOTE } from './session-pause.mjs';
 import { stripGuardTiming } from './guard-timing.mjs';
 import { stripDP1Trace } from './dp1-trace.mjs';
 import { createStuckEscapes } from './stuck-escape.mjs';
@@ -917,7 +917,7 @@ export function createRelay({
   pause = createSessionPause(),
   pauseHost,
 }) {
-  const pauseChecks = new Map(), pausedCalls = new Set();
+  const pauseChecks = new Map(), pausedCalls = new Set(), nativePauseCuts = new Set();
   const applyPause = value => {
     if (value) for (const id of engineCalls) if (running.has(id) && !localRunning.has(id)) pausedCalls.add(id);
     cursor?.setPaused?.(value);
@@ -934,6 +934,7 @@ export function createRelay({
     } catch { return true; }
   }
   function pauseReply(msg, text = PAUSED_NOTE) {
+    if (pauseHost?.controlLost) text += ' ' + PAUSE_CONTROL_LOST_NOTE;
     const response = { jsonrpc: '2.0', id: msg.id, result: { isError: true, content: [{ type: 'text', text }] } };
     // Internal split calls still need their normal callback and bookkeeping.
     observeServerMessage(response);
@@ -1281,6 +1282,7 @@ export function createRelay({
   function cancelInternalRequests(message) {
     docOrigin.invalidate();
     const requests = [...internalRequests.values()];
+    for (const id of internalRequests.keys()) { pauseChecks.delete(id); pausedCalls.delete(id); nativePauseCuts.delete(id); }
     internalRequests.clear();
     for (const resolve of requests) resolve({ error: { message } });
   }
@@ -1322,7 +1324,7 @@ export function createRelay({
       if (initialization) {
         const id = `sleight-initialize-${nextInternalId++}`;
         const reply = await new Promise((resolve, reject) => {
-          const timer = setTimeout(() => { internalRequests.delete(id); reject(new Error(/* notice */ 'Engine initialization timed out.')); }, restartTimeoutMs);
+          const timer = setTimeout(() => { internalRequests.delete(id); pauseChecks.delete(id); reject(new Error(/* notice */ 'Engine initialization timed out.')); }, restartTimeoutMs);
           internalRequests.set(id, msg => { clearTimeout(timer); resolve(msg); });
           toServer({ ...initialization, id });
         });
@@ -2461,7 +2463,10 @@ export function createRelay({
     if (pausedCalls.size && msg.method === 'tools/call' && msg.params?.name !== TURN_END_TOOL && !pausedCalls.has(msg.id)) {
       pauseReply(msg, PAUSE_DRAIN_NOTE); return;
     }
-    if (msg.result?.action === 'accept' && (pause.paused || pausedCalls.size)) msg = { ...msg, result: { action: 'decline' } };
+    if (msg.result?.action === 'accept' && (pause.paused || pausedCalls.size)) {
+      for (const id of pausedCalls) nativePauseCuts.add(id);
+      msg = { ...msg, result: { action: 'decline' } };
+    }
     let closeKeyApp;
     // An accepted app approval is the exact beat of its action.
     if (hand && msg.method === undefined && msg.id !== undefined) hand.answered(msg.id, msg.result?.action);
@@ -2539,7 +2544,7 @@ export function createRelay({
       return await new Promise(resolve => {
         const id = `sleight-tab-cleanup-${nextInternalId++}`;
         const timer = setTimeout(() => {
-          internalRequests.delete(id); lateHelperReplies.add(id);
+          internalRequests.delete(id); pauseChecks.delete(id); lateHelperReplies.add(id);
           resolve(cleanupTimeoutNote);
         }, SHUTDOWN_GRACE_MS);
         internalRequests.set(id, reply => {
@@ -2579,7 +2584,7 @@ export function createRelay({
   function openScreenshot(handle) {
     return new Promise(resolve => {
       const id = `sleight-open-shot-${nextInternalId++}`;
-      const timer = setTimeout(() => { internalRequests.delete(id); lateHelperReplies.add(id); resolve(undefined); }, openShotTimeoutMs);
+      const timer = setTimeout(() => { internalRequests.delete(id); pauseChecks.delete(id); lateHelperReplies.add(id); resolve(undefined); }, openShotTimeoutMs);
       internalRequests.set(id, reply => {
         clearTimeout(timer);
         resolve(reply.error || reply.result?.isError ? undefined
@@ -2600,7 +2605,7 @@ export function createRelay({
     const reply = await new Promise(resolve => {
       const id = `sleight-launch-read-${nextInternalId++}`;
       const timer = setTimeout(() => {
-        internalRequests.delete(id); lateHelperReplies.add(id); resolve(undefined);
+        internalRequests.delete(id); pauseChecks.delete(id); lateHelperReplies.add(id); resolve(undefined);
       }, 5500);
       internalRequests.set(id, reply => { clearTimeout(timer); resolve(reply); });
       toServer({ jsonrpc: '2.0', id, method: 'tools/call', params: { name: 'js',
@@ -2613,7 +2618,7 @@ export function createRelay({
     msg.result.content = [...dropAcquisitionTree(msg.result.content, reply.result.content, undefined, compactReacquire), ...reply.result.content];
   }
   const toClient = (msg, afterWrite, remoteNotice = false) => {
-    if (msg.method === undefined) { pauseChecks.delete(msg.id); pausedCalls.delete(msg.id); }
+    if (msg.method === undefined) { pauseChecks.delete(msg.id); pausedCalls.delete(msg.id); nativePauseCuts.delete(msg.id); }
     // An approval prompt's time comes off the action log's call times (the engine's prompts and sleight's own).
     if (msg.method === 'elicitation/create' && msg.id !== undefined) recordAction('waitStart', 'c:' + msg.id);
     // Every call's reply ends it, by whatever path: its parent lease pin ends too.
@@ -3159,7 +3164,7 @@ export function createRelay({
     if (!handle || compactor.seenLines(target) === undefined) return [];
     const reply = await new Promise(resolve => {
       const id = `sleight-drag-read-${nextInternalId++}`;
-      const timer = setTimeout(() => { internalRequests.delete(id); lateHelperReplies.add(id); resolve(undefined); }, 5000);
+      const timer = setTimeout(() => { internalRequests.delete(id); pauseChecks.delete(id); lateHelperReplies.add(id); resolve(undefined); }, 5000);
       internalRequests.set(id, response => { clearTimeout(timer); resolve(response); });
       toServer({ jsonrpc: '2.0', id, method: 'tools/call', params: { name: 'js',
         arguments: { code: `await ${handle}.getAXState({ disableDiffing: true })` }, _meta: engineMeta() } });
@@ -3189,6 +3194,7 @@ export function createRelay({
     if (name === 'select_window') { clearSelection(); openedWindow = undefined; }
     try {
       current();
+      if (pauseHost?.clearForAction && ['drag', 'hover', 'menu_bar'].includes(name)) { await pauseHost.clearForAction(); current(); }
       if (openFast && name === 'open_file' && localTools.prepareOpen) {
         prepared = localTools.prepareOpen(args, async (parts, message, options) => {
           preparedAsk = approve(parts, message, msg.id, options);
@@ -3708,6 +3714,7 @@ export function createRelay({
     callGenerations.set(prefixId, generation);
     pauseChecks.set(prefixId, pauseCheck);
     splitCalls.set(prefixId, reply => {
+      pauseChecks.delete(prefixId);
       if (reply.error || reply.result?.isError) { toClient({ ...reply, id: msg.id }); return; }
       splitInputs.add(msg.id);
       const content = reply.result?.content ?? [];
@@ -4109,6 +4116,15 @@ export function createRelay({
     }
     if (remainder?.tab && splitCalls.has(msg.id)) refuseTab('split-call');
     if (!remainder || !call.baseline || splitCalls.has(msg.id)) return false;
+    const continuationPauseCheck = pauseChecks.get(msg.id) ?? pause.checkpoint();
+    const stoppedByPause = () => {
+      let cut = pausedCalls.has(msg.id);
+      try { continuationPauseCheck(); } catch { cut = true; }
+      if (!cut) return false;
+      msg.result.content.push({ type: 'text', text: NATIVE_PAUSE_CUT_NOTE });
+      return true;
+    };
+    if (stoppedByPause()) return false;
     const current = () => call.generation === stopGeneration && !closing && !disposed && !stopCollected;
     // A tab continuation also asks the helper for the window's sheets and focused element.
     // A palette is a window of its own: the helper must find it focused, under its title and with no URL (paletteRefusal).
@@ -4124,6 +4140,7 @@ export function createRelay({
       : remainder.tab ? error => refuseTab(`identity: ${error}`) : remainder.palette ? error => refusePalette(`identity: ${error}`) : undefined)
       : (refuse('palette-still-open'), undefined)).then(observed => {
       if (!current()) { if (remainder.tab) refuseTab('call-superseded'); observeServerMessage(msg); return; }
+      if (stoppedByPause()) { observeServerMessage(msg); return; }
       if (remainder.dialog) noteProcess(observed);
       const since = Math.min(call.forwardedAt, call.sampledAt ?? call.forwardedAt);
       // HID idle from when the covered window was last seen standard, through the dialog, to now.
@@ -4198,7 +4215,7 @@ export function createRelay({
     const generation = stopGeneration, started = clock(), live = () => generation === stopGeneration && !closing && !disposed && !stopCollected;
     const read = timeoutMs => new Promise(resolve => {
       const id = `sleight-tab-landing-${nextInternalId++}`;
-      const timer = setTimeout(() => { internalRequests.delete(id); lateHelperReplies.add(id); resolve(undefined); }, timeoutMs);
+      const timer = setTimeout(() => { internalRequests.delete(id); pauseChecks.delete(id); lateHelperReplies.add(id); resolve(undefined); }, timeoutMs);
       internalRequests.set(id, reply => { clearTimeout(timer); resolve(reply); });
       toServer({ jsonrpc: '2.0', id, method: 'tools/call', params: { name: 'js',
         arguments: { code: `await ${forward.landing}.getAXState({ disableDiffing: true })` }, _meta: engineMeta() } });
@@ -4227,7 +4244,10 @@ export function createRelay({
   }
   function handleClient(msg) {
     if (pauseBlocked(msg)) { pauseReply(msg); return; }
-    if (msg.result?.action === 'accept' && (pause.paused || pausedCalls.size)) msg = { ...msg, result: { action: 'decline' } };
+    if (msg.result?.action === 'accept' && (pause.paused || pausedCalls.size)) {
+      for (const id of pausedCalls) nativePauseCuts.add(id);
+      msg = { ...msg, result: { action: 'decline' } };
+    }
     if (nativeHandoff && msg.method === 'notifications/cancelled' && msg.params?.requestId === nativeHandoff.id) {
       nativeHandoff.cancel?.(); return;
     }
@@ -5040,11 +5060,11 @@ export function createRelay({
   }
   function observeServerMessage(msg) {
     if (msg.method === 'elicitation/create' && (pause.paused || pausedCalls.size)) {
+      for (const id of pausedCalls) nativePauseCuts.add(id);
       toServer({ jsonrpc: '2.0', id: msg.id, result: { action: 'decline' } }); return;
     }
-    if (msg.method === undefined && pausedCalls.delete(msg.id) && msg.result) {
-      const content = msg.result.content ?? [];
-      msg.result = { ...msg.result, content: content.some(c => c.text === PAUSED_NOTE) ? content : [...content, { type: 'text', text: PAUSED_NOTE }] };
+    if (msg.method === undefined && nativePauseCuts.delete(msg.id) && msg.result) {
+      msg.result = { ...msg.result, content: [...msg.result.content ?? [], { type: 'text', text: NATIVE_PAUSE_CUT_NOTE }] };
     }
     docOrigin.reply(msg, documentationContext());
     if (msg.method === 'elicitation/create' || msg.error || msg.result?.isError) docOrigin.invalidate();
@@ -5066,6 +5086,7 @@ export function createRelay({
     replWarmup.reply(msg);
     if (msg.method === undefined) privateWarmRequests.delete(msg.id);
     if (msg.method === undefined && nativeWarmRequests.delete(msg.id)) {
+      pauseChecks.delete(msg.id);
       replWarmup.retainDocs(msg);
       flushHeldWarmPrompts();
       return;
@@ -5336,7 +5357,7 @@ export function createRelay({
       // Warm-up owns its retention. Other private reads may keep only an image, a tree or a diagnostic.
       if (!String(msg.id).startsWith('sleight-warm-')) replWarmup.retainDocs({ result: { content: engineDocs(msg.result?.content) } });
       internalRequests.get(msg.id)(msg);
-      internalRequests.delete(msg.id);
+      internalRequests.delete(msg.id); pauseChecks.delete(msg.id); pausedCalls.delete(msg.id);
       return;
     }
     // Applied after a docs restart below. forgetHandles would otherwise drop the handles this reply just confirmed.
@@ -5393,7 +5414,7 @@ export function createRelay({
         const probeId = `sleight-opened-tabs-${nextInternalId++}`, generation = stopGeneration;
         const original = msg, code = jsCode;
         const finish = reply => {
-          clearTimeout(timer); internalRequests.delete(probeId);
+          clearTimeout(timer); internalRequests.delete(probeId); pauseChecks.delete(probeId);
           if (generation !== stopGeneration) return;
           const text = (reply.result?.content ?? []).filter(c => c.type === 'text').map(c => c.text).join('\n');
           const opened = parseOpenedPayload(text, original.id);
@@ -6147,7 +6168,7 @@ export function createRelay({
         if (tabsMayNeedCleanup || tabCleanupPending) tabNote = await cleanupBrowserTabs();
         const id = `sleight-stop-${nextInternalId++}`;
         const ended = await new Promise(resolve => {
-          const timer = setTimeout(() => { internalRequests.delete(id); resolve(undefined); }, stopGraceMs);
+          const timer = setTimeout(() => { internalRequests.delete(id); pauseChecks.delete(id); resolve(undefined); }, stopGraceMs);
           internalRequests.set(id, reply => { clearTimeout(timer); resolve(reply); });
           toServer({ jsonrpc: '2.0', id, method: 'tools/call', params: { name: TURN_END_TOOL,
             arguments: endTurnArgs({ hook_event_name: 'Interrupt' }) } });
@@ -6325,7 +6346,7 @@ export function createRelay({
   }
   function close() {
     closing = true;
-    releasePause(); pauseChecks.clear(); pausedCalls.clear();
+    releasePause(); pauseChecks.clear(); pausedCalls.clear(); nativePauseCuts.clear();
     for (const pending of clipboardReplies.values()) pending.reject(new Error(/* notice */ 'Clipboard guard: engine connection closed.'));
     clipboardReplies.clear();
     clearTimeout(idleTimer);

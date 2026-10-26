@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { PassThrough } from 'node:stream';
 import { createRelay } from '../plugins/sleight/lib/relay.mjs';
-import { createSessionPause, PAUSED_NOTE } from '../plugins/sleight/lib/session-pause.mjs';
+import { createSessionPause, PAUSED_NOTE, NATIVE_PAUSE_CUT_NOTE } from '../plugins/sleight/lib/session-pause.mjs';
 import { createCursorEvents } from '../plugins/sleight/lib/hand/events.mjs';
 
 const tick = () => new Promise(resolve => setImmediate(resolve));
@@ -13,7 +13,7 @@ function harness(t, extra = {}) {
   clientOut.on('data', data => replies.push(...String(data).trim().split('\n').map(JSON.parse)));
   const relay = createRelay({ clientIn, clientOut, serverIn, serverOut, changeReview: false, pause, ...extra });
   t.after(() => { relay.dispose(); for (const stream of [clientIn, clientOut, serverIn, serverOut]) stream.destroy(); });
-  return { pause, sent, replies, call(id, name = 'js', args = { code: 'await cua.getState()' }) {
+  return { pause, sent, replies, send(msg) { clientIn.write(JSON.stringify(msg) + '\n'); }, call(id, name = 'js', args = { code: 'await cua.getState()' }) {
     clientIn.write(JSON.stringify({ id, method: 'tools/call', params: { name, arguments: args } }) + '\n');
   }, engine(msg) { serverOut.write(JSON.stringify(msg) + '\n'); } };
 }
@@ -86,7 +86,7 @@ test('an in-flight native action may finish but its next approval is declined, e
   await tick();
   assert.equal(h.sent.at(-1).result.action, 'decline');
   h.engine({ id: 1, result: { isError: true, content: [{ type: 'text', text: 'Declined' }] } });
-  assert.match(JSON.stringify(h.replies.at(-1)), /Paused by the user/);
+  assert.ok(h.replies.at(-1).result.content.some(c => c.text === NATIVE_PAUSE_CUT_NOTE));
 });
 
 test('a local action waiting for its target stops before input when paused', async t => {
@@ -115,7 +115,38 @@ test('resumed native calls wait at admission while an old paused native call dra
   const h = harness(t); h.call(1);
   h.pause.set(true); h.pause.set(false); h.call(2);
   assert.equal(h.sent.length, 1);
-  assert.match(h.replies.find(m => m.id === 2).result.content[0].text, /still finishing/);
+  assert.match(h.replies.find(m => m.id === 2).result.content[0].text, /finishing/);
   h.engine({ id: 1, result: { content: [] } }); h.call(3);
   assert.equal(h.sent.at(-1).id, 3);
+});
+
+
+test('a completed native call during pause has no cut-short note', t => {
+  const h = harness(t); h.call(1); h.pause.set(true);
+  h.engine({ id: 1, result: { content: [{ type: 'text', text: 'All actions finished' }] } });
+  assert.equal(h.replies.at(-1).result.content.some(c => /Paused by the user/.test(c.text)), false);
+});
+test('a lost pause control names both recovery paths', t => {
+  const h = harness(t, { pauseHost: { controlLost: true } }); h.pause.set(true); h.call(1);
+  assert.match(h.replies.at(-1).result.content[0].text, /Resume from the sleight menu bar, or start a new session/);
+});
+test('foreground drag cannot dispatch until the host clears its panel', async t => {
+  let release, actions = 0;
+  const h = harness(t, { pauseHost: { activity() {}, clearForAction: () => new Promise(resolve => { release = resolve; }) },
+    localTools: { tools: [{ name: 'drag' }], target: async () => ({ app: 'Editor', appId: 'org.test.editor' }),
+      async call() { actions++; return { content: [] }; } } });
+  h.call(1, 'drag', { app: 'Editor', windowId: 77 }); await tick();
+  assert.equal(actions, 0); assert.equal(typeof release, 'function'); release(true); await tick(); assert.equal(actions, 1);
+});
+
+test('a paused private warmup settles once and a resumed user call uses ordinary setup', async t => {
+  const h = harness(t, { warmRepl: true, warmEngine: true });
+  h.pause.set(true);
+  h.send({ id: 'init', method: 'initialize', params: {} }); h.engine({ id: 'init', result: {} });
+  h.send({ method: 'notifications/initialized' }); await tick(); await tick();
+  assert.equal(h.sent.some(m => String(m.id).startsWith('sleight-warm-')), false);
+  assert.equal(h.sent.some(m => String(m.id).startsWith('sleight-native-warm-')), false);
+  assert.equal(h.replies.some(m => String(m.id).startsWith('sleight-warm-')), false);
+  h.pause.set(false); h.call(2); await tick();
+  assert.equal(h.sent.at(-1).id, 2);
 });

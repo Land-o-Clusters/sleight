@@ -11,31 +11,108 @@ import { handPid, setHandPid } from '../plugins/sleight/lib/hand/pid.mjs';
 import * as host from '../plugins/sleight/lib/direct-browser/host.mjs';
 
 const tick = () => new Promise(resolve => setImmediate(resolve));
-test('pause clicks require an exact nonce-bound host event and emit once per state change', async t => {
+const pauseEvent = (child, phase, paused, token = '1'.repeat(32), extra = {}) => child.stdout.emit('data',
+  JSON.stringify({ hand: 'pause', nonce: child.menus[0].nonce, token, phase, paused, ...extra }) + '\n');
+const commitPause = (child, value, token = '1'.repeat(32)) => {
+  for (const phase of ['request', 'commit', 'confirm']) pauseEvent(child, phase, value, token);
+};
+test('pause uses an exact nonce-bound prepare and commit, and duplicate commits do not toggle state', async t => {
   const child = fakeChild(), values = [];
   const client = createHandClient({ setting: () => ({ enabled: true, style: 'ring' }), built: () => true,
     watch: () => undefined, permissions: null, usage: null, onPause: value => values.push(value),
     prepare: async () => ({ status: 'ready', spawn: () => child }) });
-  t.after(() => client.close());
-  client.send(frame()); await settle();
-  const nonce = child.menus[0].nonce;
-  const send = event => child.stdout.emit('data', JSON.stringify(event) + '\n');
-  for (const event of [{ hand: 'pause', nonce: 'b'.repeat(64), paused: true }, { hand: 'pause', nonce, paused: 'yes' },
-    { hand: 'pause', nonce, paused: true, extra: true }]) send(event);
+  t.after(() => client.close()); client.send(frame()); await settle();
+  pauseEvent(child, 'request', true, undefined, { nonce: 'b'.repeat(64) });
+  pauseEvent(child, 'request', 'yes'); pauseEvent(child, 'request', true, undefined, { extra: true });
   assert.deepEqual(values, []);
-  send({ hand: 'pause', nonce, paused: true }); send({ hand: 'pause', nonce, paused: true });
-  assert.deepEqual(values, [true]);
-  send({ hand: 'pause', nonce, paused: false }); assert.deepEqual(values, [true, false]);
-  assert.deepEqual(child.lines.filter(f => f.hand === 'pause'), [], 'echoing old values could replay stale state over a newer human click');
+  pauseEvent(child, 'request', true); assert.deepEqual(values, [], 'ready alone never blocks admission');
+  assert.equal(child.lines.at(-1).phase, 'ready');
+  pauseEvent(child, 'commit', true); pauseEvent(child, 'commit', true);
+  assert.deepEqual(values, [true]); assert.equal(child.lines.at(-1).phase, 'applied');
+  pauseEvent(child, 'confirm', true); commitPause(child, false, '2'.repeat(32));
+  assert.deepEqual(values, [true, false]);
 });
-test('a session with drawing off can expose its pause menu without sending artwork', async t => {
-  const child = fakeChild();
-  const client = createHandClient({ setting: () => ({ enabled: false }), built: () => true, watch: () => undefined,
-    permissions: null, usage: null, prepare: async () => ({ status: 'ready', spawn: () => child }) });
-  t.after(() => client.close());
-  client.activity(); await settle();
-  assert.equal(child.menus[0].enabled, false);
-  assert.deepEqual(child.lines.map(line => line.hand), ['activity']);
+test('drawing off and SLEIGHT_HAND=0 never start pause controls', async t => {
+  for (const env of [{}, { SLEIGHT_HAND: '0' }]) {
+    let starts = 0;
+    const client = createHandClient({ env, setting: () => ({ enabled: false }), built: () => true, watch: () => undefined,
+      permissions: null, usage: null, prepare: async () => { starts++; throw Error(); } });
+    t.after(() => client.close()); client.activity(); await settle(); assert.equal(starts, 0);
+    assert.equal(sessionHandClient({ env, controls: true, setting: () => ({ enabled: false }) }), undefined);
+  }
+});
+test('one paused host replacement restores the pause and its target, then reports control loss on another exit', async t => {
+  const children = [], values = [];
+  const client = createHandClient({ setting: () => ({ enabled: true, style: 'ring' }), built: () => true,
+    watch: () => undefined, permissions: null, usage: null, onPause: value => values.push(value),
+    prepare: async () => ({ status: 'ready', spawn() { const child = fakeChild(); children.push(child); return child; } }) });
+  t.after(() => client.close()); client.send(frame()); await settle();
+  commitPause(children[0], true); children[0].exitCode = 1; children[0].emit('exit', 1); await settle();
+  assert.equal(children.length, 2); assert.deepEqual(values, [true]);
+  assert.equal(children[1].lines.find(f => f.phase === 'restore').paused, true);
+  assert.equal(children[1].lines.find(f => f.hand === 'status').state, 'paused');
+  // The dead child's stdout no longer has authority.
+  commitPause(children[0], false, '2'.repeat(32)); assert.deepEqual(values, [true]);
+  children[1].exitCode = 1; children[1].emit('exit', 1); await settle();
+  assert.equal(children.length, 2); assert.equal(client.controlLost, true); assert.deepEqual(values, [true]);
+});
+test('a hand-channel fault recovers controls even when the consent process stays alive', async t => {
+  const children = [], values = [];
+  const client = createHandClient({ setting: () => ({ enabled: true }), built: () => true, watch: () => undefined,
+    permissions: null, usage: null, onPause: value => values.push(value), prepare: async () => ({ status: 'ready', spawn() {
+      const child = fakeChild(); children.push(child); return child;
+    } }) });
+  t.after(() => client.close()); client.send(frame()); await settle(); commitPause(children[0], true);
+  children[0].stdout.emit('data', JSON.stringify({ hand: 'control-gone', nonce: children[0].menus[0].nonce }) + '\n');
+  await settle(); assert.equal(children.length, 2); assert.deepEqual(values, [true]);
+  children[1].stdout.emit('end'); assert.equal(client.controlLost, true);
+});
+test('a failed paused host respawn preserves pause and exposes the recovery result', async t => {
+  const child = fakeChild(), values = []; let prepares = 0;
+  const client = createHandClient({ setting: () => ({ enabled: true }), built: () => true, watch: () => undefined,
+    permissions: null, usage: null, onPause: value => values.push(value), prepare: async () => ++prepares === 1
+      ? { status: 'ready', spawn: () => child } : { status: 'unavailable' } });
+  t.after(() => client.close()); client.send(frame()); await settle(); commitPause(child, true);
+  child.exitCode = 1; child.emit('exit', 1); await settle();
+  assert.equal(prepares, 2); assert.equal(client.controlLost, true); assert.deepEqual(values, [true]);
+});
+for (const acknowledge of [true, false]) test(`paused replacement must acknowledge restored state: ${acknowledge}`, async t => {
+  const children = [], values = [];
+  const client = createHandClient({ setting: () => ({ enabled: true }), built: () => true, watch: () => undefined,
+    permissions: null, usage: null, onPause: value => values.push(value), prepare: async () => ({ status: 'ready', spawn() {
+      const child = fakeChild(); children.push(child); return child;
+    } }) });
+  t.after(() => client.close()); client.send(frame()); await settle(); commitPause(children[0], true);
+  t.mock.timers.enable({ apis: ['setTimeout'] });
+  children[0].exitCode = 1; children[0].emit('exit', 1); await settle();
+  const replacement = children[1], restore = replacement.lines.find(f => f.phase === 'restore');
+  if (acknowledge) pauseEvent(replacement, 'restored', true, restore.token);
+  t.mock.timers.tick(500); assert.equal(client.controlLost, !acknowledge); assert.deepEqual(values, [true]);
+  t.mock.timers.reset();
+});
+test('no ack in 500 ms leaves admission running and an unconfirmed applied pause rolls back', async t => {
+  const child = fakeChild(), values = [];
+  const client = createHandClient({ setting: () => ({ enabled: true }), built: () => true, watch: () => undefined,
+    permissions: null, usage: null, onPause: value => values.push(value), prepare: async () => ({ status: 'ready', spawn: () => child }) });
+  t.after(() => client.close()); client.send(frame()); await settle();
+  t.mock.timers.enable({ apis: ['setTimeout'] });
+  pauseEvent(child, 'request', true); t.mock.timers.tick(500);
+  assert.deepEqual(values, []); assert.equal(child.lines.at(-1).phase, 'aborted');
+  pauseEvent(child, 'commit', true); assert.deepEqual(values, [], 'late commit is discarded');
+  pauseEvent(child, 'request', true, '2'.repeat(32)); pauseEvent(child, 'commit', true, '2'.repeat(32));
+  assert.deepEqual(values, [true]); t.mock.timers.tick(500); assert.deepEqual(values, [true, false]);
+  t.mock.timers.reset();
+});
+test('foreground actions wait for click-through, then end the owned host at 100 ms if unacknowledged', async t => {
+  const h = harness(); t.after(() => h.client.close()); h.client.send(frame()); await settle();
+  const child = h.children[0];
+  const waiting = h.client.clearForAction(), request = child.lines.at(-1);
+  child.stdout.emit('data', JSON.stringify({ hand: 'clear-ready', nonce: 'b'.repeat(64), token: request.token }) + '\n');
+  child.stdout.emit('data', JSON.stringify({ hand: 'clear-ready', nonce: request.nonce, token: request.token }) + '\n');
+  assert.equal(await waiting, true);
+  t.mock.timers.enable({ apis: ['setTimeout'] });
+  const timeout = h.client.clearForAction(); t.mock.timers.tick(100); assert.equal(await timeout, false);
+  assert.equal(child.lines.at(-1).hand, 'hide'); assert.equal(child.killed, true); assert.equal(h.client.enabled, false); t.mock.timers.reset();
 });
 const settle = async () => { for (let i = 0; i < 5; i++) await tick(); };
 // A fake shared host: act and hide frames land in lines, menu frames in menus, and stdout and fds 3 and 4 are streams.
@@ -195,12 +272,15 @@ test('an unavailable build, a throwing spawn, a broken pipe and backpressure onl
   const throwing = harness({ result: { status: 'ready', spawn: () => { throw Error('HOST_PACKAGE_MISMATCH'); } } });
   throwing.client.send(frame()); await settle();
   assert.deepEqual(throwing.traces.at(-1), ['hand-off', { reason: 'spawn', code: 'HOST_PACKAGE_MISMATCH' }]);
-  const h = harness();
+  const broken = harness(); t.after(() => broken.client.close());
+  broken.client.send(frame()); await settle();
+  broken.children[0].stdin.emit('error', Object.assign(Error('pipe'), { code: 'EPIPE' }));
+  assert.deepEqual(broken.traces.at(-1), ['hand-off', { reason: 'pipe', code: 'EPIPE' }]);
+  assert.equal(broken.client.enabled, false);
+  const h = harness(); t.after(() => h.client.close());
   h.client.send(frame()); await settle();
-  h.children[0].stdin.emit('error', Object.assign(Error('pipe'), { code: 'EPIPE' }));
-  h.children[0].stdin.writableLength = 70000;
-  h.client.send(frame());
-  assert.deepEqual(h.traces.slice(-2), [['hand-dropped', { reason: 'EPIPE' }], ['hand-dropped', { reason: 'backpressure' }]]);
+  h.children[0].stdin.writableLength = 70000; h.client.send(frame());
+  assert.deepEqual(h.traces.at(-1), ['hand-dropped', { reason: 'backpressure' }]);
   h.children[0].stdin.write = () => { throw Object.assign(Error('closed'), { code: 'ERR_STREAM_DESTROYED' }); };
   h.children[0].stdin.writableLength = 0;
   assert.doesNotThrow(() => h.client.send(frame()));

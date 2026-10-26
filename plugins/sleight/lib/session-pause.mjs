@@ -1,6 +1,8 @@
 // In-memory, per relay session. Only the native host's person controls set this state.
-export const PAUSED_NOTE = /* notice */ "Paused by the user. Wait for them to resume; don't retry.";
-export const PAUSE_DRAIN_NOTE = /* notice */ 'A paused native call is still finishing. Wait for its result before another native call.';
+export const PAUSED_NOTE = /* notice */ "Paused by the user. Wait for resume; don't retry.";
+export const PAUSE_DRAIN_NOTE = /* notice */ 'Native call finishing. Wait for its result.';
+export const PAUSE_CONTROL_LOST_NOTE = /* notice */ 'Resume from the sleight menu bar, or start a new session.';
+export const NATIVE_PAUSE_CUT_NOTE = /* notice */ 'Paused. Ran: see result. Unsent: approval or tail. Read window.';
 export function createSessionPause() {
   let paused = false, epoch = 0;
   const listeners = new Set();

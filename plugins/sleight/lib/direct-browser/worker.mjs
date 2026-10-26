@@ -186,13 +186,14 @@ export async function createV3Bridge({ startupTimeoutMs = 120000, timeoutMs = 31
   child.once('exit', () => shared?.detached?.());
   trace('worker-spawned');
   let hello, active = false, lost = false, generation = 0, sequence = 0, ending, callTimeoutMs = timeoutMs;
-  let paused = false;
+  let paused = false, pauseSync = Promise.resolve();
+  const resumeWaiters = new Set(), latePauseIds = new Set();
   let traceTurn = 0, traceCall = 0, toolsRegistered = false;
   const pending = new Map(), turns = new Set(); let deliveries = new WeakMap(), resolveReady, rejectReady;
   const ready = new Promise((resolve, reject) => { resolveReady = resolve; rejectReady = reject; });
   const timer = setTimeout(() => lose(undefined, 'worker-timeout'), startupTimeoutMs);
   const current = () => { try { return accepted.current() === true; } catch { return false; } };
-  function fence() { active = false; generation++; deliveries = new WeakMap(); }
+  function fence() { active = false; generation++; deliveries = new WeakMap(); for (const resolve of resumeWaiters) resolve(false); resumeWaiters.clear(); }
   // stage and reason say why a worker never became ready (unavailableFrame); after hello they are unused.
   function lose(code = 'V3_WORKER_UNAVAILABLE', stage = 'worker-disconnect', reason) {
     if (lost) return;
@@ -250,6 +251,7 @@ export async function createV3Bridge({ startupTimeoutMs = 120000, timeoutMs = 31
       entry.pdfBuild = true; clearTimeout(entry.timer);
       entry.timer = setTimeout(() => lose(), PDF_BUILD_WAIT_MS); return;
     }
+    if (hello && exact(frame, ['version', 'id', 'result']) && frame.version === 3 && latePauseIds.delete(frame.id)) return;
     if (!hello || !exact(frame, ['version', 'id', 'result']) || frame.version !== 3 || !pending.has(frame.id)) { lose(undefined, 'worker-protocol'); return; }
     const entry = pending.get(frame.id); pending.delete(frame.id); clearTimeout(entry.timer); entry.resolve(frame.result);
   });
@@ -262,11 +264,20 @@ export async function createV3Bridge({ startupTimeoutMs = 120000, timeoutMs = 31
   function rpc(method, params, deadlineMs = timeoutMs) {
     if (lost || !current() || pending.size >= 32) return Promise.reject(Error('V3_WORKER_UNAVAILABLE'));
     const frame = { version: 3, id: 'q' + (++sequence), method, params };
+    const retirePause = () => {
+      pending.delete(frame.id); latePauseIds.add(frame.id);
+      if (latePauseIds.size > 32) latePauseIds.delete(latePauseIds.values().next().value);
+    };
     if (Buffer.byteLength(JSON.stringify(frame)) > 131072) return Promise.reject(Error('INVALID_ARGUMENT'));
     return new Promise((resolve, reject) => {
-      const timer = setTimeout(() => { lose(); reject(Error('V3_WORKER_UNAVAILABLE')); }, deadlineMs);
+      const timer = setTimeout(() => { if (method === 'pause') retirePause(); else lose(); reject(Error('V3_WORKER_UNAVAILABLE')); }, deadlineMs);
       pending.set(frame.id, { resolve, reject, timer, handoff: method === 'call' && params.name === 'browser_tabs' && params.arguments?.do === 'handoff' && params.arguments.wait === true, ...(method === 'call' ? { tool: params.name } : {}) });
-      try { child.send(frame, error => { if (error) lose(); }); } catch { lose(); }
+      const failed = () => {
+        if (method !== 'pause') { lose(); return; }
+        const entry = pending.get(frame.id); if (!entry) return;
+        retirePause(); clearTimeout(entry.timer); entry.reject(Error('V3_WORKER_UNAVAILABLE'));
+      };
+      try { child.send(frame, error => { if (error) failed(); }); } catch { failed(); }
     });
   }
   await ready;
@@ -284,7 +295,10 @@ export async function createV3Bridge({ startupTimeoutMs = 120000, timeoutMs = 31
       if (typeof value !== 'boolean' || paused === value) return;
       paused = value;
       // Out of band with respect to work: the worker changes its fence before the call in flight drains.
-      rpc('pause', { paused }).catch(() => lose());
+      const valueForMessage = paused;
+      const sync = async () => { if (await rpc('pause', { paused: valueForMessage }, 500) !== true) throw Error('PAUSE_IPC_FAILED'); };
+      pauseSync = pauseSync.then(() => sync().catch(sync)).catch(() => lose());
+      if (!paused) { for (const resolve of resumeWaiters) resolve(true); resumeWaiters.clear(); }
     },
     bootstrapEnvelope: () => ({ version: 1, session: hello.session, nonce: hello.nonce }),
     tools: () => {
@@ -295,11 +309,14 @@ export async function createV3Bridge({ startupTimeoutMs = 120000, timeoutMs = 31
     // apps: the relay's own list of engine-approved bundle ids, never a field of the hook's frame.
     // host: the relay's label for the MCP client (host-label.mjs), for the menu bar. Never a field of the hook's frame.
     async bind(frame, apps = [], host) {
-      if (paused) return false;
       if (!exact(frame, ['version', 'session', 'nonce', 'event', 'turn', 'text']) || frame.version !== 1 ||
           frame.session !== hello.session || frame.nonce !== hello.nonce || frame.event !== 'begin' || !id(frame.turn) ||
           typeof frame.text !== 'string' || Buffer.byteLength(frame.text) > 65536 || !approvedApps(apps) || turns.has(frame.turn) || lost || !current()) throw Error('TRUSTED_TURN_REQUIRED');
-      turns.add(frame.turn); fence(); const epoch = generation;
+      turns.add(frame.turn);
+      while (paused) { if (!await new Promise(resolve => resumeWaiters.add(resolve))) return false; }
+      await pauseSync;
+      if (lost || !current()) return false;
+      fence(); const epoch = generation;
       callTimeoutMs = timeoutMs;
       trace('turn-begin', ++traceTurn); traceCall = 0;
       const result = await rpc('begin', { turn: frame.turn, text: frame.text, apps: [...apps], appSecret: serverAppSecret(),

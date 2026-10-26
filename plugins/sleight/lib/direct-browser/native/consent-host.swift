@@ -48,7 +48,8 @@ func personActivation(_ event: NSEvent?, windowMatches: Bool, keyboard: Bool = t
     return keyboard && highlighted && event.type == .keyDown && !event.isARepeat && [36, 49, 76].contains(event.keyCode)
 }
 func personActivation(_ event: NSEvent?, in window: NSWindow?, keyboard: Bool = true, highlighted: Bool = true) -> Bool {
-    personActivation(event, windowMatches: event?.window === window, keyboard: keyboard, highlighted: highlighted)
+    guard let window = window else { return false }
+    return personActivation(event, windowMatches: event?.window === window, keyboard: keyboard, highlighted: highlighted)
 }
 func personChoice(_ kind: String, _ choice: String) -> Bool {
     if ["cancel", "decline", "session"].contains(choice) { return false }
@@ -1140,31 +1141,66 @@ func writeHandToggle(_ enabled: Bool) {
         let bytes = try? JSONSerialization.data(withJSONObject: ["hand": "toggle", "nonce": nonce, "enabled": enabled], options: [.sortedKeys]) else { return }
     FileHandle.standardOutput.write(bytes + Data([10]))
 }
-// The cursor control is narrower than consent input: only hardware source pid 0, never a tool or AX press.
-func cursorPauseHardware(_ pid: Int64?, _ type: CGEventType?) -> Bool { pid == 0 && type == .leftMouseUp }
-func cursorPauseHardware(_ event: NSEvent?) -> Bool {
-    guard let event = event, let cg = event.cgEvent,
-        event.timestamp <= ProcessInfo.processInfo.systemUptime,
-        ProcessInfo.processInfo.systemUptime - event.timestamp < 1 else { return false }
-    return cursorPauseHardware(cg.getIntegerValueField(.eventSourceUnixProcessID), cg.type)
+// A hand fault may leave the shared consent process alive, so process exit alone cannot detect control loss.
+func writeHandControlGone() {
+    guard let nonce = nonceBook.nonce("hand"), let bytes = try? JSONSerialization.data(withJSONObject: ["hand": "control-gone", "nonce": nonce]) else { return }
+    FileHandle.standardOutput.write(bytes + Data([10]))
 }
+// Pause requests are prepared, committed, then confirmed on the hand's nonce-bound channel.
+// A missed acknowledgment leaves the displayed state unchanged and exposes a retry mark.
 final class CursorPauseControl {
-    private(set) var paused = false
+    private(set) var paused = false, failed = false
+    private(set) var lastSpent = -Double.infinity
+    private(set) var pending: (token: String, value: Bool, before: Bool, deadline: Double)?
+    private var applied: (token: String, before: Bool)?
     var changed: ((Bool) -> Void)?
-    func set(_ value: Bool) { guard value != paused else { return }; paused = value; changed?(value) }
-    @discardableResult func click(_ event: NSEvent?) -> Bool {
-        guard cursorPauseHardware(event) else { return false }
-        set(!paused)
-        if let nonce = nonceBook.nonce("hand"), let data = try? JSONSerialization.data(withJSONObject:
-            ["hand": "pause", "nonce": nonce, "paused": paused], options: [.sortedKeys]) {
-            FileHandle.standardOutput.write(data + Data([10]))
-        }
+    var nonce: () -> String? = { nonceBook.nonce("hand") }
+    var now: () -> Double = { ProcessInfo.processInfo.systemUptime }
+    var send: ([String: Any]) -> Bool = { frame in
+        guard let data = try? JSONSerialization.data(withJSONObject: frame, options: [.sortedKeys]) else { return false }
+        do { try FileHandle.standardOutput.write(contentsOf: data + Data([10])); return true } catch { return false }
+    }
+    var schedule: (Double, @escaping () -> Void) -> Void = { delay, task in DispatchQueue.main.asyncAfter(deadline: .now() + delay, execute: task) }
+    func set(_ value: Bool) { paused = value; changed?(value) }
+    func emit(_ phase: String, _ token: String, _ value: Bool) -> Bool {
+        guard let nonce = nonce() else { return false }
+        return send(["hand": "pause", "nonce": nonce, "paused": value, "token": token, "phase": phase])
+    }
+    @discardableResult func click(_ event: NSEvent?, windowMatches: Bool, highlighted: Bool = true, accessibility: Bool = false) -> Bool {
+        guard pending == nil, let event = event, event.timestamp > lastSpent,
+            personActivation(event, windowMatches: windowMatches, highlighted: highlighted, accessibility: accessibility, now: now()) else { return false }
+        lastSpent = event.timestamp; applied = nil
+        guard nonce() != nil else { failed = true; changed?(paused); return false }
+        let token = UUID().uuidString.lowercased().replacingOccurrences(of: "-", with: "")
+        pending = (token, !paused, paused, now() + 0.5); failed = false
+        guard emit("request", token, !paused) else { pending = nil; failed = true; changed?(paused); return false }
+        schedule(0.5) { [weak self] in if self?.pending?.token == token { self?.expire() } }
         return true
+    }
+    func expire() {
+        guard let request = pending else { return }
+        pending = nil; failed = true
+        _ = emit("cancel", request.token, request.value)
+        set(request.before)
+    }
+    func receive(_ phase: String, token: String, value: Bool) {
+        if phase == "restore" { pending = nil; applied = nil; failed = false; set(value); _ = emit("restored", token, value); return }
+        if phase == "aborted", let previous = applied, previous.token == token {
+            applied = nil; pending = nil; failed = true; set(previous.before); return
+        }
+        guard let request = pending, request.token == token, request.value == value else { return }
+        guard now() < request.deadline else { expire(); return }
+        if phase == "ready" { _ = emit("commit", token, value) }
+        else if phase == "applied" {
+            guard emit("confirm", token, value) else { expire(); return }
+            applied = (token, request.before); pending = nil; failed = false; set(value)
+        } else if phase == "aborted" { pending = nil; failed = true; set(request.before) }
     }
 }
 final class CursorPauseMenuItem: NSMenuItem {
-    override func accessibilityPerformPress() -> Bool { false }
-    override func accessibilityPerformAction(_ action: NSAccessibility.Action) {}
+    var refused: (() -> Void)?
+    override func accessibilityPerformPress() -> Bool { refused?(); return false }
+    override func accessibilityPerformAction(_ action: NSAccessibility.Action) { if action == .press { refused?() } else { super.accessibilityPerformAction(action) } }
 }
 // A Permissions row's click, on the hand channel's stdout beside the toggle: revoke or block with its target, or revoke-all.
 func writePermissionEvent(_ event: [String: String]) {
@@ -1370,9 +1406,9 @@ final class ConsentHost: NSObject, NSApplicationDelegate, NSMenuDelegate {
         }
     }
     func rebuildMenu() {
-        let menu = NSMenu()
-        if hand != nil {
-            let entry = CursorPauseMenuItem(title: cursorPause.paused ? "Resume sleight" : "Pause sleight", action: #selector(cursorPauseClick(_:)), keyEquivalent: "")
+        let menu = CursorPickerMenu(); menu.addWindowProbe()
+        if hand?.enabled == true || cursorPause.paused {
+            let entry = CursorPauseMenuItem(title: cursorPause.failed ? "Pause not confirmed. Try again" : cursorPause.paused ? "Resume sleight" : "Pause sleight", action: #selector(cursorPauseClick(_:)), keyEquivalent: "")
             entry.target = self; menu.addItem(entry); menu.addItem(NSMenuItem.separator())
         }
         var statusShown = false
@@ -1396,7 +1432,7 @@ final class ConsentHost: NSObject, NSApplicationDelegate, NSMenuDelegate {
         menu.delegate = self
         item.menu = menu
         let requests = pending.values.filter { ($0["data"] as? [String: Any])?["status"] == nil }.count
-        item.isVisible = menuVisible(status, requests: requests, handEnabled: hand?.enabled ?? false)
+        item.isVisible = cursorPause.paused || menuVisible(status, requests: requests, handEnabled: hand?.enabled ?? false)
     }
     // The shared host's consent channel ended (its worker exited): an open card is aborted, its requests and status go, and the
     // hand stays.
@@ -1441,7 +1477,13 @@ final class ConsentHost: NSObject, NSApplicationDelegate, NSMenuDelegate {
         guard let hand = hand else { return }
         writeHandToggle(!hand.enabled)
     }
-    @objc func cursorPauseClick(_ sender: NSMenuItem) { _ = cursorPause.click(NSApp.currentEvent) }
+    func menuWillOpen(_ menu: NSMenu) { (menu as? CursorPickerMenu)?.lastHighlighted = nil }
+    func menu(_ menu: NSMenu, willHighlight entry: NSMenuItem?) { if let entry = entry { (menu as? CursorPickerMenu)?.lastHighlighted = entry } }
+    @objc func cursorPauseClick(_ sender: NSMenuItem) {
+        guard let menu = sender.menu as? CursorPickerMenu, let window = menu.trackingWindow else { return }
+        _ = cursorPause.click(NSApp.currentEvent, windowMatches: NSApp.currentEvent?.window === window,
+            highlighted: sender.isHighlighted || menu.lastHighlighted === sender)
+    }
     // Turbo's connect hookup on the menu bar button: a template image per frame, then the glyph, and the timer is gone.
     func hookup() {
         hookupTimer?.invalidate()
@@ -2015,7 +2057,7 @@ func cursorMenuDump() {
         FileHandle.standardOutput.write(bytesOut + Data([10]))
     }
 }
-enum HandFrame { case activity(String), picker(String, CursorPickerMessage), character(String, SpriteFrame), act(String, HandAct), aim(String, RingEvent), status(String, RingEvent), hide(String), menu(String, enabled: Bool, capture: String, version: String, permissions: PermissionsData?, usage: UsageStats?) }
+enum HandFrame { case pause(String, String, String, Bool), clear(String, String), activity(String), picker(String, CursorPickerMessage), character(String, SpriteFrame), act(String, HandAct), aim(String, RingEvent), status(String, RingEvent), hide(String), menu(String, enabled: Bool, capture: String, version: String, permissions: PermissionsData?, usage: UsageStats?) }
 let handKinds: Set<String> = ["click", "double", "right", "key", "type", "drag", "scroll"]
 func handFrame(_ data: [String: Any]) -> HandFrame? {
     func number(_ value: Any?) -> Double? {
@@ -2040,6 +2082,18 @@ func handFrame(_ data: [String: Any]) -> HandFrame? {
         return .some(CGRect(origin: origin, size: CGSize(width: w, height: h)))
     }
     guard let nonce = data["nonce"] as? String, nonce.range(of: "^[0-9a-f]{64}$", options: .regularExpression) != nil else { return nil }
+    if data["hand"] as? String == "pause-ack" {
+        guard Set(data.keys) == ["hand", "nonce", "phase", "token", "paused"],
+            let phase = data["phase"] as? String, ["ready", "applied", "restore", "aborted"].contains(phase),
+            let token = data["token"] as? String, token.range(of: "^[0-9a-f]{32}$", options: .regularExpression) != nil,
+            let value = data["paused"] as? Bool else { return nil }
+        return .pause(nonce, phase, token, value)
+    }
+    if data["hand"] as? String == "clear" {
+        guard Set(data.keys) == ["hand", "nonce", "token"], let token = data["token"] as? String,
+            token.range(of: "^[0-9a-f]{32}$", options: .regularExpression) != nil else { return nil }
+        return .clear(nonce, token)
+    }
     if data["hand"] as? String == "activity" { return Set(data.keys) == ["hand", "nonce"] ? .activity(nonce) : nil }
     if data["hand"] as? String == "picker" { return CursorPickerMessage.parse(data).map { .picker(nonce, $0) } }
     if data["hand"] as? String == "character" { return spriteFrame(data).map { .character(nonce, $0) } }
@@ -4073,12 +4127,29 @@ struct CursorPausePlacement {
             // Use the artwork's actual origin, including clipping, rather than moving its hit box into empty space.
             let cell = art.character.frame.cell
             let box = CGRect(origin: art.origin(plan.at, pose.entry), size: CGSize(width: cell.width * pose.entry.scale, height: cell.height * pose.entry.scale)).intersection(clip)
-            return CursorPausePlacement(rect: plan.state == "drag" || box.isNull || box.isEmpty ? nil : box, sprite: true, after: settled)
+            return CursorPausePlacement(rect: plan.state == "drag" || box.isNull || box.isEmpty ? nil : box, sprite: true, after: max(settled, plan.total))
         }
-        return CursorPausePlacement(rect: cursorPauseRect(at: plan.at, size: CGSize(width: 24, height: 24), clip: clip, drag: plan.state == "drag"), sprite: false, after: settled)
+        return CursorPausePlacement(rect: cursorPauseRect(at: plan.at, size: CGSize(width: 24, height: 24), clip: clip, drag: plan.state == "drag"), sprite: false, after: max(settled, plan.total))
     }
 }
 func cursorPauseCurrent(_ expected: CGRect, _ observed: CGRect?) -> Bool { observed == expected }
+// The final displayed cell, sampled in its decoded RGBA image. Transparent atlas pixels never become controls.
+struct CursorPauseMask {
+    let image: CGImage, cell: CGSize, row: Int, column: Int, scale: Double, flip: Bool, origin: CGPoint
+    func contains(_ point: CGPoint) -> Bool {
+        var x = Int(floor((point.x - origin.x) / scale)), y = Int(floor((point.y - origin.y) / scale))
+        guard x >= 0, y >= 0, x < Int(cell.width), y < Int(cell.height) else { return false }
+        if flip { x = Int(cell.width) - 1 - x }
+        x += column * Int(cell.width); y += row * Int(cell.height)
+        guard x < image.width, y < image.height, let data = image.dataProvider?.data, let bytes = CFDataGetBytePtr(data) else { return false }
+        return bytes[y * image.bytesPerRow + x * 4 + 3] == 255
+    }
+    static func make(_ plan: RingPlan) -> CursorPauseMask? {
+        guard let art = plan.sprite, let pose = art.poses.last, let image = art.character.images[pose.entry.sheet] else { return nil }
+        return CursorPauseMask(image: image, cell: art.character.frame.cell, row: pose.entry.row, column: pose.column,
+            scale: pose.entry.scale, flip: pose.entry.flip, origin: art.origin(plan.at, pose.entry))
+    }
+}
 final class CursorPausePanel: NSPanel {
     static let mask: NSWindow.StyleMask = [.borderless, .nonactivatingPanel]
     static let key = false, main = false, firstMouse = true
@@ -4089,6 +4160,8 @@ final class CursorPauseView: NSView {
     let control: CursorPauseControl
     let current: () -> Bool
     var sprite = false, pressed = false
+    var hitOpaque: (NSPoint) -> Bool = { _ in true }
+    override func hitTest(_ point: NSPoint) -> NSView? { hitOpaque(point) ? super.hitTest(point) : nil }
     init(_ control: CursorPauseControl, current: @escaping () -> Bool) { self.control = control; self.current = current; super.init(frame: .zero); setAccessibilityElement(false) }
     required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
     override var acceptsFirstResponder: Bool { false }
@@ -4096,20 +4169,22 @@ final class CursorPauseView: NSView {
     override func shouldDelayWindowOrdering(for event: NSEvent) -> Bool { true }
     override func accessibilityPerformPress() -> Bool { false }
     override func mouseDown(with event: NSEvent) {
-        guard current() else { pressed = false; window?.orderOut(nil); return }
+        guard current(), hitOpaque(convert(event.locationInWindow, from: nil)) else { pressed = false; window?.orderOut(nil); return }
         pressed = event.cgEvent.map { $0.type == .leftMouseDown && $0.getIntegerValueField(.eventSourceUnixProcessID) == 0 } ?? false
     }
     override func mouseUp(with event: NSEvent) {
         defer { pressed = false }
-        guard current(), pressed, bounds.contains(convert(event.locationInWindow, from: nil)) else { return }
-        _ = control.click(event)
+        guard let window = window, current(), pressed, hitOpaque(convert(event.locationInWindow, from: nil)), bounds.contains(convert(event.locationInWindow, from: nil)) else { return }
+        _ = control.click(event, windowMatches: event.window === window)
     }
     override func draw(_ dirtyRect: NSRect) {
         guard !sprite else { return }
         NSColor(calibratedWhite: 0.08, alpha: 0.92).setFill()
         NSBezierPath(roundedRect: bounds.insetBy(dx: 1, dy: 1), xRadius: 8, yRadius: 8).fill()
-        NSColor.white.setFill()
-        if control.paused {
+        (control.failed ? NSColor.systemOrange : NSColor.white).setFill()
+        if control.failed {
+            NSRect(x: 11, y: 10, width: 3, height: 8).fill(); NSRect(x: 11, y: 6, width: 3, height: 2).fill()
+        } else if control.paused {
             let path = NSBezierPath(); path.move(to: NSPoint(x: 9, y: 6)); path.line(to: NSPoint(x: 17, y: 12)); path.line(to: NSPoint(x: 9, y: 18)); path.close(); path.fill()
         } else {
             NSRect(x: 8, y: 6, width: 3, height: 12).fill(); NSRect(x: 14, y: 6, width: 3, height: 12).fill()
@@ -4119,8 +4194,12 @@ final class CursorPauseView: NSView {
 final class CursorPauseOverlay {
     var panel: CursorPausePanel?, pending: DispatchWorkItem?
     var generation = 0
-    func hide() { generation += 1; pending?.cancel(); pending = nil; panel?.orderOut(nil); panel?.close(); panel = nil }
-    func show(_ rect: CGRect?, sprite: Bool, after delay: Double, capture: String, control: CursorPauseControl, current: @escaping () -> Bool) {
+    var globalMonitor: Any?, localMonitor: Any?
+    func hide() {
+        if let monitor = globalMonitor { NSEvent.removeMonitor(monitor) }; globalMonitor = nil
+        if let monitor = localMonitor { NSEvent.removeMonitor(monitor) }; localMonitor = nil
+        generation += 1; pending?.cancel(); pending = nil; panel?.ignoresMouseEvents = true; panel?.orderOut(nil); panel?.close(); panel = nil }
+    func show(_ rect: CGRect?, sprite: Bool, after delay: Double, capture: String, control: CursorPauseControl, mask: CursorPauseMask? = nil, current: @escaping () -> Bool) {
         hide()
         guard let rect = rect else { return }
         let expected = generation
@@ -4139,6 +4218,19 @@ final class CursorPauseOverlay {
             view.toolTip = control.paused ? "Resume sleight" : "Pause sleight"
             panel.contentView = view
             self.panel = panel
+            if sprite, let mask = mask {
+                view.hitOpaque = { point in mask.contains(CGPoint(x: rect.minX + point.x, y: rect.maxY - point.y)) }
+                let update = { [weak panel] in
+                    guard let panel = panel else { return }
+                    let mouse = NSEvent.mouseLocation
+                    let point = CGPoint(x: mouse.x, y: (NSScreen.screens.first?.frame.maxY ?? 0) - mouse.y)
+                    panel.ignoresMouseEvents = !mask.contains(point)
+                }
+                update()
+                self.globalMonitor = NSEvent.addGlobalMonitorForEvents(matching: [.mouseMoved, .leftMouseDragged]) { _ in update() }
+                self.localMonitor = NSEvent.addLocalMonitorForEvents(matching: [.mouseMoved, .leftMouseDragged]) { event in update(); return event }
+                panel.acceptsMouseMovedEvents = true
+            } else if sprite { panel.ignoresMouseEvents = true }
             panel.orderFrontRegardless()
         }
         if delay <= 0 { show() }
@@ -4150,7 +4242,11 @@ final class CursorPauseOverlay {
 }
 // Validation and geometry only. This mode never creates NSApplication, NSPanel, NSView or CALayer.
 func cursorPauseDump() {
-    var paused = false
+    let control = CursorPauseControl()
+    var clock = 1000.0, emitted: [[String: Any]] = [], lastEvent: NSEvent?
+    var scheduled: [() -> Void] = [], appliedToken: String?, appliedValue = false
+    control.now = { clock }; control.nonce = { String(repeating: "a", count: 64) }
+    control.send = { emitted.append($0); return true }; control.schedule = { _, task in scheduled.append(task) }
     func rect(_ raw: Any?) -> CGRect? {
         guard let values = raw as? [Double], values.count == 4, values.allSatisfy({ $0.isFinite && abs($0) <= 100000 }) else { return nil }
         return CGRect(x: values[0], y: values[1], width: values[2], height: values[3])
@@ -4160,13 +4256,78 @@ func cursorPauseDump() {
             let data = try? JSONSerialization.jsonObject(with: bytes) as? [String: Any] else { exit(65) }
         var output: [String: Any] = ["canBecomeKey": CursorPausePanel.key, "canBecomeMain": CursorPausePanel.main,
             "acceptsFirstMouse": CursorPausePanel.firstMouse, "nonactivating": CursorPausePanel.mask.contains(.nonactivatingPanel)]
-        if let validity = data["validity"] as? [String: Any] {
+        if data["alphaCheck"] as? Bool == true {
+            // Synthetic RGBA bytes, no graphics context or drawing.
+            var pixels = [UInt8](repeating: 0, count: 16 * 2 * 4)
+            pixels[7] = 255; pixels[(16 + 0) * 4 + 3] = 128
+            let provider = CGDataProvider(data: Data(pixels) as CFData)!
+            let image = CGImage(width: 16, height: 2, bitsPerComponent: 8, bitsPerPixel: 32, bytesPerRow: 64,
+                space: CGColorSpaceCreateDeviceRGB(), bitmapInfo: CGBitmapInfo(rawValue: CGImageAlphaInfo.premultipliedLast.rawValue),
+                provider: provider, decode: nil, shouldInterpolate: false, intent: .defaultIntent)!
+            func mask(_ flip: Bool) -> CursorPauseMask { CursorPauseMask(image: image, cell: CGSize(width: 2, height: 2), row: 0, column: 0,
+                scale: 2, flip: flip, origin: CGPoint(x: 10, y: 20)) }
+            output["opaque"] = mask(false).contains(CGPoint(x: 12, y: 20))
+            output["transparent"] = mask(false).contains(CGPoint(x: 10, y: 20))
+            output["translucent"] = mask(false).contains(CGPoint(x: 10, y: 22))
+            output["outside"] = mask(false).contains(CGPoint(x: 14, y: 20))
+            output["flipped"] = mask(true).contains(CGPoint(x: 10, y: 20))
+        } else if let validity = data["validity"] as? [String: Any] {
             guard let expected = rect(validity["expected"]) else { exit(65) }
             output["current"] = cursorPauseCurrent(expected, rect(validity["observed"]))
-        } else if let click = data["click"] as? [String: Any] {
-            let accepted = cursorPauseHardware((click["pid"] as? NSNumber)?.int64Value, click["type"] as? String == "up" ? .leftMouseUp : nil)
-            if accepted { paused.toggle() }
-            output["accepted"] = accepted; output["paused"] = paused
+        } else if let idle = data["idleMs"] as? Double, idle >= 100, idle <= 5000 {
+            var before = rusage(), after = rusage(); getrusage(RUSAGE_SELF, &before)
+            let start = ProcessInfo.processInfo.systemUptime
+            // Dispatch and Foundation only, with the control instantiated. No application or windows.
+            let deadline = Date(timeIntervalSinceNow: idle / 1000)
+            let timer = Timer(fire: deadline, interval: 0, repeats: false) { _ in }
+            RunLoop.current.add(timer, forMode: .default)
+            RunLoop.current.run(until: deadline); timer.invalidate()
+            getrusage(RUSAGE_SELF, &after)
+            func cpu(_ value: rusage) -> Double { Double(value.ru_utime.tv_sec + value.ru_stime.tv_sec) + Double(value.ru_utime.tv_usec + value.ru_stime.tv_usec) / 1e6 }
+            let elapsed = ProcessInfo.processInfo.systemUptime - start
+            output["idleSeconds"] = elapsed; output["cpuSeconds"] = cpu(after) - cpu(before)
+            output["cpuPercent"] = (cpu(after) - cpu(before)) / elapsed * 100; output["maxRssBytes"] = after.ru_maxrss
+            var info = mach_task_basic_info(), count = mach_msg_type_number_t(MemoryLayout<mach_task_basic_info>.size / MemoryLayout<natural_t>.size)
+            let status = withUnsafeMutablePointer(to: &info) { pointer in
+                pointer.withMemoryRebound(to: integer_t.self, capacity: Int(count)) { task_info(mach_task_self_, task_flavor_t(MACH_TASK_BASIC_INFO), $0, &count) }
+            }
+            if status == KERN_SUCCESS { output["rssBytes"] = info.resident_size }
+            output["controls"] = 1; output["windows"] = 0
+        } else if data["click"] != nil || data["ack"] != nil || data["expire"] != nil || data["ax"] != nil || data["oldTimer"] != nil || data["aborted"] != nil {
+            emitted = []
+            if let click = data["click"] as? [String: Any] {
+                clock += 0.01
+                var event: NSEvent?
+                if click["reuse"] as? Bool == true { event = lastEvent }
+                else if click["nil"] as? Bool != true {
+                    let source = CGEventSource(stateID: click["wrongSource"] as? Bool == true ? .privateState : .hidSystemState)!
+                    let cg = CGEvent(keyboardEventSource: source, virtualKey: CGKeyCode(click["key"] as? Int ?? 49), keyDown: true)!
+                    cg.type = click["type"] as? String == "key" ? .keyDown : .leftMouseUp
+                    cg.setIntegerValueField(.eventSourceUnixProcessID, value: (click["pid"] as? NSNumber)?.int64Value ?? 1234)
+                    cg.setIntegerValueField(.eventSourceUserData, value: (click["userData"] as? NSNumber)?.int64Value ?? 0)
+                    cg.timestamp = UInt64(max(0, clock - (click["age"] as? Double ?? 0)) * 1e9)
+                    event = NSEvent(cgEvent: cg); lastEvent = event
+                }
+                control.nonce = { click["noNonce"] as? Bool == true ? nil : String(repeating: "a", count: 64) }
+                output["accepted"] = control.click(event, windowMatches: click["wrongWindow"] as? Bool != true,
+                    highlighted: click["unhighlighted"] as? Bool != true, accessibility: click["ax"] as? Bool == true)
+            }
+            if data["ack"] as? Bool == true, let request = control.pending {
+                control.receive("ready", token: request.token, value: request.value)
+                control.receive("applied", token: request.token, value: request.value)
+                appliedToken = request.token; appliedValue = request.value
+            }
+            if data["oldTimer"] as? Bool == true, !scheduled.isEmpty { scheduled.removeFirst()() }
+            if data["aborted"] as? Bool == true, let token = appliedToken { control.receive("aborted", token: token, value: appliedValue) }
+            if data["expire"] as? Bool == true { clock += 0.501; control.expire() }
+            if data["ax"] as? Bool == true {
+                let item = CursorPauseMenuItem(title: "Resume sleight", action: nil, keyEquivalent: "")
+                var refused = 0; item.refused = { refused += 1 }
+                output["axPress"] = item.accessibilityPerformPress(); item.accessibilityPerformAction(.press)
+                output["axRefusals"] = refused
+            }
+            output["paused"] = control.paused; output["failed"] = control.failed; output["pending"] = control.pending != nil
+            output["events"] = emitted
         } else {
             guard let at = data["at"] as? [Double], at.count == 2, let size = data["size"] as? [Double], size.count == 2,
                 let clip = data["clip"] as? [Double], clip.count == 4,
@@ -4188,8 +4349,8 @@ final class HandHost: NSObject, NSApplicationDelegate {
     func pauseChanged(_ paused: Bool) {
         let target = pauseTarget
         hide()
-        if paused, let target = target {
-            let event = RingEvent(seq: target.seq, state: "paused", pid: target.pid, windowId: target.windowId, at: target.at, rect: nil, label: nil)
+        if cursorStyle != "glove", paused || pauseControl.failed, let target = target {
+            let event = RingEvent(seq: target.seq, state: paused ? "paused" : "error", pid: target.pid, windowId: target.windowId, at: target.at, rect: nil, label: nil)
             ringFrame(event, delay: 0)
         }
         consent?.rebuildMenu()
@@ -4253,7 +4414,7 @@ final class HandHost: NSObject, NSApplicationDelegate {
         var buffer = Data(), last = -1, faulted = false
         func fault() {
             faulted = true; buffer.removeAll()
-            DispatchQueue.main.async { if self.consent?.consentOpen == true { self.hide(); self.consent?.handGone() } else { exit(65) } }
+            DispatchQueue.main.async { writeHandControlGone(); if self.consent?.consentOpen == true { self.hide(); self.consent?.handGone() } else { exit(65) } }
         }
         while true {
             let chunk = FileHandle.standardInput.availableData
@@ -4271,6 +4432,17 @@ final class HandHost: NSObject, NSApplicationDelegate {
                     line.count <= 8192 || data["hand"] as? String == "character" && line.count <= 32768 || data["hand"] as? String == "picker",
                     let frame = handFrame(data) else { fault(); continue lines }
                 switch frame {
+                case let .pause(nonce, phase, token, value):
+                    guard nonceBook.admit("hand", nonce) else { fault(); continue lines }
+                    DispatchQueue.main.async { self.pauseControl.receive(phase, token: token, value: value) }
+                case let .clear(nonce, token):
+                    guard nonceBook.admit("hand", nonce) else { fault(); continue lines }
+                    DispatchQueue.main.async {
+                        self.hide()
+                        if let bytes = try? JSONSerialization.data(withJSONObject: ["hand": "clear-ready", "nonce": nonce, "token": token]) {
+                            FileHandle.standardOutput.write(bytes + Data([10]))
+                        }
+                    }
                 case let .activity(nonce):
                     guard nonceBook.admit("hand", nonce) else { fault(); continue lines }
                     DispatchQueue.main.async { self.consent?.cursorControlSession = true; self.consent?.rebuildMenu() }
@@ -4306,14 +4478,16 @@ final class HandHost: NSObject, NSApplicationDelegate {
                     guard nonceBook.admit("hand", nonce), act.seq > last else { fault(); continue lines }
                     last = act.seq
                     DispatchQueue.main.async {
+                        self.pauseOverlay.hide()
                         guard !self.pauseControl.paused else { return }
-                        self.pauseOverlay.hide(); self.pauseTarget = ringEvent(act)
+                         self.pauseTarget = ringEvent(act)
                         if self.cursorStyle == "glove" { self.schedule(act) } else { self.ringFrame(ringEvent(act), delay: act.delay) }
                     }
                 case let .aim(nonce, event), let .status(nonce, event):
                     guard nonceBook.admit("hand", nonce), event.seq > last else { fault(); continue lines }
                     last = event.seq
                     DispatchQueue.main.async {
+                        if event.state == "aim" { self.pauseOverlay.hide() }
                         guard event.state == "paused" ? self.pauseControl.paused : !self.pauseControl.paused else { return }
                         if event.at != nil { self.pauseTarget = event }
                         if self.cursorStyle != "glove" { self.ringFrame(event, delay: 0) }
@@ -4358,10 +4532,7 @@ final class HandHost: NSObject, NSApplicationDelegate {
         shown = .rest; fadeTo = plan.fadeTo; windowId = act.windowId
         if !panel.isVisible { panel.orderFrontRegardless() }
         fade(after: plan.total + HandTiming.silence)
-        pauseOverlay.show(cursorPauseRect(at: act.at, size: CGSize(width: 24, height: 24), clip: clip, drag: act.kind == "drag"),
-            sprite: false, after: plan.total, capture: capture, control: pauseControl, current: { [weak self] in
-                self?.captureHeld == false && cursorPauseCurrent(clip, handWindowBounds(act.windowId, pid: act.pid))
-            })
+
     }
     // The ring: the runtime decides, this adapter installs plans on one clipped panel with a flipped root, so all geometry
     // keeps the wire's top-left coordinates. One one-shot wake-up serves the runtime's earliest pending act or timer.
@@ -4529,7 +4700,7 @@ final class HandHost: NSObject, NSApplicationDelegate {
             let clip = ringEnvironment.bounds(pid, window) else { return }
         // Wait until the moving art parks. A static hit box must never sit over a moving target or a drag route.
         let hit = CursorPausePlacement.make(plan, clip: clip, sprite: cursorStyle == "sprite")
-        pauseOverlay.show(hit.rect, sprite: hit.sprite, after: hit.after, capture: capture, control: pauseControl, current: { [weak self] in
+        pauseOverlay.show(hit.rect, sprite: hit.sprite, after: hit.after, capture: capture, control: pauseControl, mask: CursorPauseMask.make(plan), current: { [weak self] in
             self?.captureHeld == false && cursorPauseCurrent(clip, handWindowBounds(window, pid: pid))
         })
     }
@@ -4787,6 +4958,7 @@ func ringPlanDump(theme: RingTheme?, reduced: Bool, secure: Bool, clip: CGRect, 
             bound = nonce
             let event: RingEvent, delay: Double
             switch frame {
+            case .pause, .clear: write(["effect": "drop", "state": "pause-channel", "time": clock]); continue
             case .activity: write(["effect": "drop", "state": "pause-control", "time": clock]); continue
             case .picker: write(["effect": "drop", "state": "picker", "dropped": true, "animations": [], "time": clock]); continue
             case let .character(_, value):

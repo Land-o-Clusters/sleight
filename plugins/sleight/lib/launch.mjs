@@ -1065,7 +1065,7 @@ export async function run({ leaseDirectory, inspectInput: inspectStoppedInput, h
   // The relay always starts: a hand that can't be created leaves the session without one.
   let hand;
   try {
-    hand = (await import('./hand/client.mjs')).sessionHandClient({ controls: true, onPause: value => pause.set(value), trace: (direction, msg) => { if (handTrace) handTrace(direction, msg); else if (earlyHandTrace.length < 64) earlyHandTrace.push([direction, msg]); } });
+    hand = (await import('./hand/client.mjs')).sessionHandClient({ onPause: value => pause.set(value), trace: (direction, msg) => { if (handTrace) handTrace(direction, msg); else if (earlyHandTrace.length < 64) earlyHandTrace.push([direction, msg]); } });
   } catch { if (earlyHandTrace.length < 64) earlyHandTrace.push(['hand-off', { reason: 'client', code: 'HAND_CLIENT_FAILED' }]); }
   process.once('exit', () => hand?.close());
   const prepared = shellRoute ? { turboUnavailable: shellRelayOptions().turboUnavailable }

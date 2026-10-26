@@ -19,11 +19,12 @@ const act = (seq, over = {}) => ({ hand: 'act', nonce, seq, kind: 'click', pid: 
   at: [100.5, 200], path: [[40, 60], [100.5, 200]], delayMs: 0, beats: 1, ...over });
 const line = frame => (typeof frame === 'string' ? frame : JSON.stringify(frame)) + '\n';
 
-test('hand source: it never posts input, moves the pointer, activates, takes key or writes stdout', () => {
-  const host = section('HAND HOST'), frame = section('HAND FRAME'), art = section('HAND ART'), motion = section('HAND MOTION');
+test('hand source: it never posts input, moves the pointer, activates, takes key; stdout only acknowledges controls', () => {
+  const host = section('HAND HOST').replace(/\/\/ BEGIN CURSOR PAUSE PANEL[\s\S]*?\/\/ END CURSOR PAUSE PANEL/, ''), frame = section('HAND FRAME').replace(/\/\/ C3 keeps picker messages[\s\S]*?(?=enum HandFrame)/, ''), art = section('HAND ART'), motion = section('HAND MOTION');
   const ring = section('RING PLAN'), runtime = section('RING RUNTIME');
   assert.ok(host && frame && art && motion && ring && runtime, 'hand sections absent');
-  for (const text of [host, frame, art, motion, ring, runtime]) {
+  const withoutAck = host.replace(/if let bytes = try\? JSONSerialization.data\(withJSONObject: \["hand": "clear-ready", "nonce": nonce, "token": token\]\) \{\s*FileHandle.standardOutput.write\(bytes \+ Data\(\[10\]\)\)\s*\}/, '');
+  for (const text of [withoutAck, frame, art, motion, ring, runtime]) {
     assert.doesNotMatch(text, /CGEvent|CGWarp|NSCursor|activate\(|makeKey|makeMain|becomeKey\(|orderFront\(|AXUIElement|standardOutput|print\(|NSLog/);
   }
   assert.match(host, /orderFrontRegardless\(\)/);
@@ -237,7 +238,8 @@ test('hand dump: the panel has exactly the flags of the design, never shown, wit
 
 
 test('explicit hide removes the panel before capture acknowledgement, without its idle fade', () => {
-  const hide = source.match(/func hide\(\) \{([\s\S]*?)\n    \}/)?.[1];
+  const host = source.slice(source.indexOf('final class HandHost:'));
+  const hide = host.match(/func hide\(\) \{([\s\S]*?)\n    \}/)?.[1];
   assert.match(hide, /fading\?\.cancel\(\); release\(\)/);
   assert.doesNotMatch(hide, /fade\(after:/);
   assert.match(source, /DispatchQueue\.global\(qos: \.utility\)/);
