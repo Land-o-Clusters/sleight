@@ -19,6 +19,10 @@ import UniformTypeIdentifiers
 //   capture-helper sck-window <id> <out.rgba>         ScreenCaptureKit, desktop-independent window filter
 //   capture-helper sck-composite <id> <pid> <out.rgba> ScreenCaptureKit, the window plus pid's on-screen windows, cropped to it
 //   capture-helper hit <x> <y>                        the pid of the accessibility element at a global top-left point
+//   capture-helper watch-engine <ms> <seconds>        VC7: one JSON line every ms for seconds, listing only windows whose
+//                                                     owner's name ends in "Computer Use" (the engine's own; any layer,
+//                                                     on screen or not), with owner, name, layer, alpha, sharing state and
+//                                                     bounds. No other app's window is named.
 // Refusals print {"ok":false,"error":CODE} and exit 2.
 
 func emit(_ value: [String: Any]) {
@@ -59,6 +63,21 @@ func windowList() -> [[String: Any]] {
               let bounds = CGRect(dictionaryRepresentation: raw) else { return nil }
         // No titles or owner names: the pixel test needs ids, pids, layers and frames only.
         return ["id": id, "pid": pid, "layer": layer, "alpha": info[kCGWindowAlpha as String] as? Double ?? 1,
+                "bounds": ["x": bounds.minX, "y": bounds.minY, "width": bounds.width, "height": bounds.height]]
+    }
+}
+
+// The engine's windows only (owner name ending in "Computer Use", as drag.js's overlay rule), so no other app's names leave.
+func engineWindows() -> [[String: Any]] {
+    let list = CGWindowListCopyWindowInfo([.optionAll], kCGNullWindowID) as? [[String: Any]] ?? []
+    return list.compactMap { info in
+        guard let owner = info[kCGWindowOwnerName as String] as? String, owner.hasSuffix("Computer Use"),
+              let id = info[kCGWindowNumber as String] as? Int, let pid = info[kCGWindowOwnerPID as String] as? Int,
+              let layer = info[kCGWindowLayer as String] as? Int, let raw = info[kCGWindowBounds as String] as? NSDictionary,
+              let bounds = CGRect(dictionaryRepresentation: raw) else { return nil }
+        return ["id": id, "pid": pid, "owner": owner, "name": info[kCGWindowName as String] as? String ?? "", "layer": layer,
+                "alpha": info[kCGWindowAlpha as String] as? Double ?? 1, "onScreen": info[kCGWindowIsOnscreen as String] as? Bool ?? false,
+                "sharing": info[kCGWindowSharingState as String] as? Int ?? -1,
                 "bounds": ["x": bounds.minX, "y": bounds.minY, "width": bounds.width, "height": bounds.height]]
     }
 }
@@ -145,6 +164,14 @@ case (4, "hit"):
     var pid: pid_t = 0
     if status == .success, let element = element { AXUIElementGetPid(element, &pid) }
     emit(["ok": status == .success, "pid": Int(pid), "status": Int(status.rawValue)])
+case (4, "watch-engine"):
+    guard let ms = Int(args[2]), (10...1000).contains(ms), let seconds = Double(args[3]), seconds > 0, seconds <= 600 else { fail("usage") }
+    let start = Date()
+    while Date().timeIntervalSince(start) < seconds {
+        emit(["t": Int((Date().timeIntervalSince1970 * 1000).rounded()), "windows": engineWindows()])
+        usleep(useconds_t(ms * 1000))
+    }
+    emit(["ok": true, "done": true])
 default:
     fail("usage")
 }

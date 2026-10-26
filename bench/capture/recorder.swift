@@ -18,6 +18,8 @@ import VideoToolbox
 //
 // Plan: {"version":1,"out":ABS_DIR,"fps":60,"duration":SECONDS?,"codec":"prores422hq"|"hevc",
 //        "streams":[{"name":"editor","windows":[ID],"composite":false},{"name":"both","windows":[ID,ID],"composite":true}]}
+// A composite with "crop":"first" is cropped to its first window's frame instead of the union (VC7's cursor recording: the
+// cursor's panel over a fixture window, never anything outside that window).
 // Refusals print {"ok":false,"error":CODE,...} and exit 2. A plan is checked whole before ScreenCaptureKit is touched.
 
 func emit(_ value: [String: Any]) {
@@ -30,7 +32,7 @@ func fail(_ code: String, _ detail: String? = nil) -> Never {
     exit(2)
 }
 
-struct StreamPlan { let name: String; let windows: [CGWindowID]; let composite: Bool }
+struct StreamPlan { let name: String; let windows: [CGWindowID]; let composite: Bool; var cropFirst = false }
 struct Plan { let out: URL; let fps: Int; let duration: Double?; let codec: String; let streams: [StreamPlan] }
 
 let codecs = ["prores422hq": AVVideoCodecType.proRes422HQ, "hevc": AVVideoCodecType.hevc]
@@ -45,8 +47,9 @@ func readPlan(_ path: String) -> Plan {
     let streams: [StreamPlan] = rawStreams.map { item in
         guard let name = item["name"] as? String, name.range(of: "^[A-Za-z0-9][A-Za-z0-9_-]{0,63}$", options: .regularExpression) != nil,
               names.insert(name).inserted, let ids = item["windows"] as? [Int], ids.allSatisfy({ $0 > 0 && $0 <= Int(UInt32.max) }),
-              Set(ids).count == ids.count, let composite = item["composite"] as? Bool, composite == (ids.count > 1) else { fail("bad-stream") }
-        return StreamPlan(name: name, windows: ids.map { CGWindowID($0) }, composite: composite)
+              Set(ids).count == ids.count, let composite = item["composite"] as? Bool, composite == (ids.count > 1),
+              item["crop"] == nil || (composite && item["crop"] as? String == "first") else { fail("bad-stream") }
+        return StreamPlan(name: name, windows: ids.map { CGWindowID($0) }, composite: composite, cropFirst: item["crop"] != nil)
     }
     var isDirectory: ObjCBool = false
     guard let out = raw["out"] as? String, out.hasPrefix("/"), FileManager.default.fileExists(atPath: out, isDirectory: &isDirectory),
@@ -211,7 +214,7 @@ func makeRecorder(_ stream: StreamPlan, _ content: SCShareableContent, _ plan: P
     config.ignoreShadowsDisplay = true
     let filter: SCContentFilter, sizePt: CGSize
     if stream.composite {
-        let union = windows.dropFirst().reduce(windows[0].frame) { $0.union($1.frame) }
+        let union = stream.cropFirst ? windows[0].frame : windows.dropFirst().reduce(windows[0].frame) { $0.union($1.frame) }
         guard let display = content.displays.first(where: { $0.frame.contains(union) }) else {
             throw NSError(domain: "capture", code: 3, userInfo: [NSLocalizedDescriptionKey: "composite-spans-displays \(stream.name)"])
         }
