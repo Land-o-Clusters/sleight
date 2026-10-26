@@ -72,7 +72,7 @@ export function inspectTarget(el, unused, read = (node, key) => { const value = 
     return nativeURL(form, override == null ? read(form, 'getAttribute')('action') : override);
   };
   const appLink = nativeActivation(false), nativeFormEnter = nativeActivation(true);
-  return { name, accName, tag, role, appLink, nativeFormEnter, kind: ['file', 'color'].includes(forwarded) ? forwarded : button ? 'button' : ['file', 'color'].includes(read(el, 'type')) ? read(el, 'type') : tag === 'select' ? 'select' : 'text', button, form: !!form, link, submit: submit || scriptButton, scriptButton, payment: payment(name) || submit && formPayment,
+  return { name, accName, tag, role, inputType: read(el, 'type') ?? '', cursorTitle: read(el, 'getAttribute')('title') ?? '', cursorDescription: read(el, 'getAttribute')('aria-description') ?? '', appLink, nativeFormEnter, kind: ['file', 'color'].includes(forwarded) ? forwarded : button ? 'button' : ['file', 'color'].includes(read(el, 'type')) ? read(el, 'type') : tag === 'select' ? 'select' : 'text', button, form: !!form, link, submit: submit || scriptButton, scriptButton, payment: payment(name) || submit && formPayment,
     // An anchor whose only payment word is "checkout": the trusted context may drop this as the prior of a released navigation link (v3-context).
     checkoutLink: tag === 'a' && payment(name) && (name.match(/\b(?:pay|payment|purchase|buy|checkout|donate|subscribe|place order|complete order|order now|book now|upgrade|send money|charge)\b/gi) ?? []).every(word => word.toLowerCase() === 'checkout'),
     formPayment, formSignature: form ? hash : null };

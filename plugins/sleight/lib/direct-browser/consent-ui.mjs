@@ -1,3 +1,4 @@
+import { workerCursorStatus } from '../hand/events.mjs';
 import { randomUUID } from 'node:crypto';
 import { isAbsolute, normalize } from 'node:path';
 import { validateOperationPrincipal, describeOperationDocument, validateCardOperation, cardChoices } from './electron-identity.mjs';
@@ -83,7 +84,7 @@ export function selectedBrowser(browser) {
   return { application: browser.application, name: browser.name, userDataRoot: browser.userDataRoot, incarnation: browser.incarnation };
 }
 
-export function createConsentUi({ authenticate, present, checkCurrent = () => false, now = Date.now, ttlMs = 30000 } = {}) {
+export function createConsentUi({ authenticate, present, checkCurrent = () => false, now = Date.now, ttlMs = 30000, cursorStatus = workerCursorStatus } = {}) {
   if (!Number.isFinite(ttlMs) || ttlMs <= 0 || ttlMs > 300000) fail('INVALID_EXPIRY');
   const pending = new Map();
   let tickets = new WeakMap();
@@ -98,6 +99,7 @@ export function createConsentUi({ authenticate, present, checkCurrent = () => fa
       const key = card ? cardKey(kind, operation) : operationKey(operation), id = randomUUID();
       const snapshot = JSON.parse(key), choices = card ? cardChoices(kind, snapshot) : ['once', 'cancel'];
       pending.set(id, { key, snapshot, kind, choices, epoch, expires: now() + ttlMs });
+      try { cursorStatus('waiting'); } catch {}
       try {
         // The host renders escaped observations as text outside page DOM. It
         // renders exact data/payment details from the second, private argument

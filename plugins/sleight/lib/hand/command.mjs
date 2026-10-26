@@ -14,6 +14,7 @@ export function writeHandSetting({ enabled, capture }, { path = handConfigPath(u
   const before = readHandConfig(path, uid);
   if (enabled === undefined && before.state === 'unsafe') throw Error('HAND_CONFIG_UNSAFE');
   const data = { version: 1, enabled: enabled ?? before.state === 'on' };
+  if (before.state !== 'unsafe') for (const key of ['stream', 'labels']) if (before[key] !== undefined) data[key] = before[key];
   const kept = capture ?? (before.state !== 'unsafe' ? before.capture : undefined);
   if (kept) data.capture = kept;
   try { writeConfigFile(path, data, uid); }

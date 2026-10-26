@@ -36,7 +36,7 @@ function element(tag = 'INPUT', attrs = {}, value = '') {
     closest: () => null,
     matches: selector => selector === ':disabled' && false };
 }
-function harness(nodes, { check = () => 'allow', mutate, submit, event, sleep, now, backgroundClick } = {}) {
+function harness(nodes, { check = () => 'allow', mutate, submit, event, sleep, now, backgroundClick, hand } = {}) {
   const listeners = new Map(), input = [], resolve = [];
   const emit = name => { for (const fn of listeners.get(name) ?? []) fn(event ?? page); };
   const locator = node => utilityLocator({
@@ -61,10 +61,19 @@ function harness(nodes, { check = () => 'allow', mutate, submit, event, sleep, n
     url() { return 'http://fixture.invalid/form'; },
   };
   const tab = { page, state: { snapshotNo: 1, submitUnconfirmed: false } };
-  const fill = createFillFields({ check, sleep, now, backgroundClick, runSteps: submit ?? (async () => { throw Error('unexpected submit'); }) });
+  const fill = createFillFields({ check, sleep, now, backgroundClick, hand, runSteps: submit ?? (async () => { throw Error('unexpected submit'); }) });
   return { fill: (fields, options = {}) => fill(tab, fields, options, { userMessage: 'fill this form', consent: null, files: [] }),
     input, resolve, listeners, tab, locator, emit };
 }
+
+test('direct field strategies report started and failed input to the browser cursor without sharing field values', async () => {
+  const events = [], token = {}, hand = { step(input) { events.push(['step', input.op, input.text]); return token; },
+    finish(value, failed) { assert.equal(value, token); events.push(['finish', failed]); } };
+  const h = harness({ e1: element(), e2: element() }, { hand, mutate: node => { if (node.value === 'fail-secret') throw Error('fixture input failed'); } });
+  const result = await h.fill([{ ref: 'e1', value: 'first-secret' }, { ref: 'e2', value: 'fail-secret' }]);
+  assert.deepEqual(result.rows.map(row => row.status), ['set', 'failed']);
+  assert.deepEqual(events, [['step', 'type', undefined], ['finish', false], ['step', 'type', undefined], ['finish', true]]);
+});
 
 test('whole-form fill sets text, numbers, dates, checkbox and multi-select with one row per field', async () => {
   const nodes = { e1: element(), e2: element('INPUT', { type: 'number' }), e3: element('INPUT', { type: 'date' }),

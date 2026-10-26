@@ -145,7 +145,7 @@ function focusedElement(app, win) {
     node = attr(node, 'AXParent');
   }
   const frame = frameOf(el);
-  return { window: false, inWindow, ...(frame ? { frame } : {}) };
+  return { window: false, inWindow, ...(frame ? { frame } : {}), ...(attr(el, 'AXRole') === 'AXSecureTextField' ? { role: 'AXSecureTextField', secure: true } : {}) };
 }
 
 // Turbo's browser window, named by the frame its page reports (window.screenX, screenY, outerWidth, outerHeight):

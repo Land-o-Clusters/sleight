@@ -21,7 +21,7 @@ const REPEATS = /\b(?:for|while|do)\b|\.(?:forEach|map|reduce|some|every|pickFro
 
 // Tree role names to AX roles, as drag.js's elementIdentity, with the menu and pop-up controls a click names.
 const ROLES = { button: 'AXButton', checkbox: 'AXCheckBox', 'radio button': 'AXRadioButton', image: 'AXImage',
-  row: 'AXRow', cell: 'AXCell', group: 'AXGroup', 'text entry area': 'AXTextArea', 'text field': 'AXTextField',
+  row: 'AXRow', cell: 'AXCell', group: 'AXGroup', 'text entry area': 'AXTextArea', 'text field': 'AXTextField', 'secure text field': 'AXSecureTextField',
   text: 'AXStaticText', link: 'AXLink', table: 'AXTable', outline: 'AXOutline', 'scroll area': 'AXScrollArea',
   'pop up button': 'AXPopUpButton', 'menu button': 'AXMenuButton', 'combo box': 'AXComboBox', slider: 'AXSlider' };
 const ROLE_NAMES = Object.keys(ROLES).sort((a, b) => b.length - a.length);
