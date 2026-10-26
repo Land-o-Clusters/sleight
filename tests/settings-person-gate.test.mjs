@@ -182,7 +182,7 @@ test('a terminal session opened less than 10 s ago refuses, and an unreadable ag
 
 // Re-review A: a terminal in ~/Applications under a non-ASCII home (a user named José) passes, as lsof reports it.
 test('a terminal under a non-ASCII home folder passes by its bundle path', () => {
-  const home = '/Users/Jos\u00e9', app = `${home}/Applications/iTerm.app/Contents/MacOS/iTerm2`;
+  const home = `${USERS}/Jos\u00e9`, app = `${home}/Applications/iTerm.app/Contents/MacOS/iTerm2`;
   const table = { 300: '200 -zsh -zsh', 200: '100 login login -pf jose', 100: `    1 ${app.slice(0, 16)} ${app}` };
   const fake = machine(table);
   assert.deepEqual(walkAncestors({ pid: 300, self: SELF, home, ps: fake.ps, executable: fake.executable }), { ok: true });
