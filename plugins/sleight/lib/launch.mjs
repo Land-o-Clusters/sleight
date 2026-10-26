@@ -29,6 +29,7 @@ import { createSurfaceCache, firstClientCallRefresh } from './surface-cache.mjs'
 import { createStartupCache, startupIdentity } from './startup-cache.mjs';
 import { createRelay, firstCallBatchSetting } from './relay.mjs';
 import { createRelayHand } from './hand/relay-hand.mjs';
+import { sessionCursorEvents } from './hand/events.mjs';
 import { isV3Frontend, createV3Frontend, transientStartup, traceStartupFailure } from './direct-browser/worker.mjs';
 import { prepareTextWrite, settleTextWrite } from './text-save.mjs';
 import { stuckEscapeOption } from './stuck-escape.mjs';
@@ -1057,6 +1058,8 @@ export async function run({ leaseDirectory, inspectInput: inspectStoppedInput, h
   // Startup can fork turbo before approval logging exists. Retain its numeric host events.
   let handTrace;
   const earlyHandTrace = [];
+  const cursor = sessionCursorEvents();
+  process.once('exit', () => cursor.close());
   const hand = (await import('./hand/client.mjs')).sessionHandClient({ trace: (direction, msg) => { if (handTrace) handTrace(direction, msg); else if (earlyHandTrace.length < 64) earlyHandTrace.push([direction, msg]); } });
   process.once('exit', () => hand?.close());
   const prepared = shellRoute ? { turboUnavailable: shellRelayOptions().turboUnavailable }
@@ -1253,7 +1256,8 @@ export async function run({ leaseDirectory, inspectInput: inspectStoppedInput, h
     },
     trace,
     // The ghost hand, only when the settings enable it, on the session's one client (made above, before turbo forks).
-    hand: hand && createRelayHand({ client: hand, locate: request => appHealth.handLocate(request), trace: (direction, msg) => trace?.(direction, msg),
+    cursor,
+    hand: createRelayHand({ client: hand, events: cursor, locate: request => appHealth.handLocate(request), trace: (direction, msg) => trace?.(direction, msg),
       clientOptions: { trace: (direction, msg) => trace?.(direction, msg) } }),
     guardTiming: !!process.env.SLEIGHT_TRACE,
     traceCode: process.env.SLEIGHT_TRACE_CODE === '1',

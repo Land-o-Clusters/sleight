@@ -15,8 +15,10 @@ import { homedir } from 'node:os';
 import { join } from 'node:path';
 import { exposure } from './planner.mjs';
 import { trustedLocatorRead } from '../direct-browser/trusted-dom.mjs';
+import { cursorRecord, cursorReason, cursorStep } from './events.mjs';
 
 const KINDS = { click: 'click', check: 'click', uncheck: 'click', select: 'click', navigate: 'click', type: 'type', press: 'key', drag: 'drag', scroll: 'scroll' };
+const EVENT_KINDS = { ...KINDS, select: 'select', navigate: 'navigate', paste: 'type', hover: 'move', move: 'move', back: 'navigate', forward: 'navigate', reload: 'navigate', upload: 'select', download: 'click' };
 const MAX_TYPE_BEATS = 8, BOX_TIMEOUT_MS = 300, LOCATE_TIMEOUT_MS = 2000, GEOMETRY_MS = 1500;
 
 // Runs in the page's trusted utility world through trustedLocatorRead (closure-free, like act.mjs's readers).
@@ -84,12 +86,17 @@ const withTimeout = (promise, ms) => {
 
 export function createBrowserHand({ client, loadClient = () => import('./client.mjs'), clientOptions = {}, locate,
   readMetrics = page => trustedLocatorRead(page.locator('html'), pageMetrics), trace = () => {}, now = () => performance.now(),
-  defer = fn => setImmediate(fn), env = process.env, setting = () => handSetting({ env }) } = {}) {
-  if (env.SLEIGHT_HAND === '0' || !setting().enabled || typeof locate !== 'function') return undefined;
+  defer = fn => setImmediate(fn), env = process.env, setting = () => handSetting({ env }), events } = {}) {
+  if (env.SLEIGHT_HAND === '0' || !(setting().enabled || setting().stream) || typeof locate !== 'function') return undefined;
   let closed = false, resolved = client ?? undefined, loading;
   const load = () => loading ??= (client ? Promise.resolve(client) : Promise.resolve().then(loadClient).then(m => m.createHandClient(clientOptions)))
     .then(c => (resolved = c && typeof c.send === 'function' ? c : null), () => (resolved = null));
-  const live = () => !closed && resolved && resolved.enabled !== false;
+  const live = () => !closed && (resolved && resolved.enabled !== false || events?.enabled);
+  const publish = (token, phase, reason) => {
+    if (!token?.cursor || closed) return;
+    const record = { ...token.record, ...token.cursor, phase, ...(reason ? { reason: cursorReason(reason) } : {}) };
+    try { if (events) events.action(record); else resolved?.event?.(record); } catch {}
+  };
   // The window's geometry for a burst of steps: one helper run per window position every 1.5 s, shared while it runs.
   let cached;
   function geometryFor(bounds) {
@@ -99,10 +106,11 @@ export function createBrowserHand({ client, loadClient = () => import('./client.
     cached = { key, at: now(), promise };
     return promise;
   }
-  async function show({ op, page, locator, to, text }) {
-    if (resolved === undefined) await load();
-    if (!live() || !KINDS[op]) return;
-    const skip = reason => trace('hand-skipped', { op, reason });
+  async function show({ op, page, locator, to, text, role, inputType, title, description }, token) {
+    if (resolved === undefined && setting().enabled) await load();
+    if (!live()) return;
+    const skip = reason => { publish(token, 'skipped', reason); token.skipped = true; trace('hand-skipped', { op, reason }); };
+    if (!KINDS[op]) return skip('unplanned');
     let metrics;
     try { metrics = await readMetrics(page); } catch { return skip('no-geometry'); }
     if (!live()) return;
@@ -111,17 +119,38 @@ export function createBrowserHand({ client, loadClient = () => import('./client.
     const bounds = { X: metrics.screenX, Y: metrics.screenY, Width: metrics.outerWidth, Height: metrics.outerHeight };
     const [box, toBox, geometry] = await Promise.all([op === 'scroll' && !locator ? undefined : boxOf(locator), op === 'drag' ? boxOf(to) : undefined, geometryFor(bounds)]);
     if (!live()) return;
-    const planned = planBrowserFrame({ op, text, box, toBox, metrics, geometry, ignorePids: [resolved.pid].filter(Number.isSafeInteger) });
+    const planned = planBrowserFrame({ op, text, box, toBox, metrics, geometry, ignorePids: [resolved?.pid].filter(Number.isSafeInteger) });
     if (planned?.skip) return skip(planned.skip);
-    if (planned?.frame) try { resolved.send(planned.frame); trace('hand-shown', { op, kind: planned.frame.kind }); } catch {}
+    if (planned?.frame) {
+      const scale = zoomOf(metrics) * (metrics.vv?.scale > 0 ? metrics.vv.scale : 1);
+      const rect = box && [planned.frame.at[0] - box.width * scale / 2, planned.frame.at[1] - box.height * scale / 2, box.width * scale, box.height * scale];
+      token.record = cursorRecord({ frame: planned.frame, action: { kind: EVENT_KINDS[op], role, inputType, title, description,
+        rect, secure: EVENT_KINDS[op] === 'type' && !inputType }, geometry, labels: events?.labels ?? setting().labels ?? 'off' });
+      publish(token, 'aim'); publish(token, 'act'); token.shown = true;
+      if (token.ended) publish(token, token.failed ? 'failed' : 'done');
+      try { resolved?.send(planned.frame); trace('hand-shown', { op, kind: planned.frame.kind }); } catch {}
+    }
   }
   return {
     // input: { op, page, locator, to, ref, text }, as act.mjs has them when the step's input starts.
     step(input) {
       try {
-        if (closed || !input || !KINDS[input.op]) return;
-        defer(() => show(input).catch(() => {}));
+        if (closed || !input || !EVENT_KINDS[input.op]) return;
+        const token = { cursor: (events?.enabled || setting().stream) ? cursorStep() : undefined,
+          record: cursorRecord({ action: { kind: EVENT_KINDS[input.op], role: input.role, inputType: input.inputType, secure: EVENT_KINDS[input.op] === 'type' && !input.inputType } }) };
+        defer(() => show(input, token).catch(() => { publish(token, 'skipped', 'no-geometry'); }));
+        return token;
       } catch { /* The hand never reaches the act path. */ }
+    },
+    finish(token, failed = false) {
+      if (!token || token.ended) return;
+      token.ended = true; token.failed = failed;
+      if (token.shown && !token.skipped) publish(token, failed ? 'failed' : 'done');
+    },
+    skipped(input, reason = 'unplanned') {
+      if (closed || !(events?.enabled || setting().stream)) return;
+      const token = { cursor: cursorStep(), record: cursorRecord({ action: { kind: EVENT_KINDS[input?.op] ?? 'move', secure: true } }) };
+      publish(token, 'skipped', reason);
     },
     close() { closed = true; try { resolved?.close(); } catch {} },
   };
@@ -153,12 +182,13 @@ export function workerHandClient(channel, pid, { env = process.env, setting = ()
     const at = now();
     if (at < checked || at - checked >= 250) {
       checked = at;
-      try { enabled = env.SLEIGHT_HAND !== '0' && setting()?.enabled === true; } catch { enabled = false; }
+      try { const s = setting(); enabled = env.SLEIGHT_HAND !== '0' && (s?.enabled === true || s?.stream === true); } catch { enabled = false; }
     }
     return enabled && channel.connected !== false;
   };
   return { get enabled() { return live(); }, pid,
-    send(frame) { if (live()) try { channel.send({ version: 3, hand: frame }); } catch {} },
+    send(frame) { if (live() && setting().enabled) try { channel.send({ version: 3, hand: frame }); } catch {} },
+    event(record) { if (live() && setting().stream) try { channel.send({ version: 3, cursor: record }); } catch {} },
     close() {} };
 }
 
@@ -169,7 +199,7 @@ export function sharedBrowserHand(env = process.env) {
   const helper = createAppHealthHelper();
   const sharedUi = process.argv.includes('--shared-ui') && typeof process.send === 'function';
   const pid = Number(process.argv.find(arg => arg.startsWith('--shared-hand-pid='))?.split('=')[1]);
-  const client = sharedUi ? workerHandClient(process, Number.isSafeInteger(pid) && pid > 0 ? pid : undefined, { env }) : undefined;
+  const client = typeof process.send === 'function' ? workerHandClient(process, Number.isSafeInteger(pid) && pid > 0 ? pid : undefined, { env }) : undefined;
   shared = createBrowserHand({ env, client, locate: request => helper.handLocate(request), trace: workerHandTrace({ setting: env.SLEIGHT_TRACE }) }) ?? null;
   if (shared) process.once('exit', () => helper.close());
   return shared ?? undefined;

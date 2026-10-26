@@ -224,7 +224,7 @@ export function createActionRunner({ check, snapshot, backgroundClick = (tab, lo
       let label = `${index + 1} ${named.do}${step.ref ? ' ' + step.ref : ''}`;
       const pointCache = {};
       let pointHandle, endpoint, endHandle;
-      let locator, target, started = false, armed, activity, deferred = false, staging, submit, inputPending = false, stepFinished = false, settleCapped = false, settleNote, clickRetry = '', recoverClick = false, controlRecipe, consentDecline = false, consentNote, controlObserved = false;
+      let locator, target, started = false, armed, activity, deferred = false, staging, submit, inputPending = false, stepFinished = false, settleCapped = false, settleNote, clickRetry = '', recoverClick = false, controlRecipe, consentDecline = false, consentNote, controlObserved = false, cursorToken, cursorFailed = false;
       let pointsReleased = false;
       const releasePoints = async () => {
         if (!point || pointsReleased) return;
@@ -318,7 +318,9 @@ export function createActionRunner({ check, snapshot, backgroundClick = (tab, lo
         const begin = () => {
           assertPageResponsive(tab);
           started = true;
-          if (hand && !point) try { hand.step({ op: named.do, page, locator, ref: step.ref, text: step.text, to: step.do === 'drag' ? page.getByRef(step.to) : undefined }); } catch {}
+          if (hand && !cursorToken) try { cursorToken = hand.step({ op: named.do, page, locator, ref: step.ref, text: step.text,
+            role: info.role || ({ button: 'button', input: 'textbox', textarea: 'textbox', select: 'combobox', a: 'link' })[info.tag], inputType: info.inputType, title: info.cursorTitle, description: info.cursorDescription,
+            to: step.do === 'drag' ? page.getByRef(step.to) : undefined }); } catch {}
         };
         const perform = async () => {
           if (step.do === 'click') {
@@ -562,6 +564,7 @@ export function createActionRunner({ check, snapshot, backgroundClick = (tab, lo
         }
         if (boundary || settleCapped) { stoppedAt = index + 1; break; }
       } catch (error) {
+        cursorFailed = true;
         if (error.stuckPage) throw error;
         if (!state.dialog && /timeout|timed out|deadline|Snapshot (unavailable|acquisition)/i.test(error.message)) await probePage(tab);
         if (lossFixes && started && armed?.boundary?.kind === 'close' && !consentDecline) {
@@ -595,6 +598,8 @@ export function createActionRunner({ check, snapshot, backgroundClick = (tab, lo
           : started && !unsent ? 'effect unconfirmed; read before retrying. ' : 'not run: ') + detail + clickRetry);
         stoppedAt = index + 1; break;
       } finally {
+        try { hand?.finish?.(cursorToken, cursorFailed); } catch {}
+        if (!cursorToken) try { hand?.skipped?.({ op: named.do }); } catch {}
         stepFinished = true;
         try { onStep?.({ control: controlObserved, boundary: armed?.boundary?.kind }); } catch {}
         try { await controlRecipe?.dispose(); } catch {}
