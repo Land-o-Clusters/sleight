@@ -266,6 +266,7 @@ refuses terminals and OpenAI's own apps. See [approvals and guards](#approvals-a
   leave the wrong parent (a probe gave `button Next` for days under `group October`). Those batches stop instead of remapping.
   If one of those settings becomes the default, the parents should come from the untrimmed tree.
 - With VoiceOver or Switch Control on, any Accessibility client, the engine included, can focus the handoff word field and take key focus from the page. The check reads a system-wide flag that a privileged process can toggle.
+- Screen readers cannot pick a cursor style from the menu, the same limit the consent cards have. Use a hardware mouse or Return or Space on a highlighted row.
 - Typed confirmation needs a physical keyboard, so cards can't be answered from Switch Control's on-screen keyboard. The mask length is readable over AX. VoiceOver reading and key-window behavior are unverified live.
 - Waiting handoff covers owned turbo browser tabs and native apps with a lease. Document-scoped native mode and Electron turbo still stop.
 - The card lasts 4 minutes, and a shorter host tool timeout ends the wait earlier. Closed shadow-root login forms and custom auth controls are not checked. A populated text field beside a login form refuses resume.

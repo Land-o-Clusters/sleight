@@ -115,7 +115,7 @@ export function createHandClient({ env = process.env, setting = () => handSettin
   trace = () => {}, now = Date.now, defer = setImmediate, recheckMs = 60000, killAfterMs = 2000,
   setHand = async enabled => (await import('./command.mjs')).writeHandSetting({ enabled }),
   permissions = { menu: async () => (await command()).permissionsMenu(), apply: async (event, offered) => (await command()).applyMenuEvent(event, offered) },
-  currentApp = noted, usage = logUsage(env), usageMs = 300000, cursorStyle, character, loadSprite = installedSprite,
+  currentApp = noted, usage = logUsage(env), usageMs = 300000, cursorStyle, character, loadSprite = installedSprite, cursorPicker,
   watch = (folder, listener) => process.platform === 'darwin' ? fsWatch(folder, { persistent: false }, listener) : undefined } = {}) {
   if (cursorStyle !== undefined && !handCursorStyles.includes(cursorStyle)) throw Error('HAND_CURSOR_STYLE_INVALID');
   const nonce = randomBytes(32).toString('hex'), queue = [];
@@ -235,6 +235,98 @@ export function createHandClient({ env = process.env, setting = () => handSettin
       !Array.isArray(event.warnings) || !event.warnings.every(w => ['chroma fringe', 'ink in an unused cell'].includes(w))) return false;
     note(event.loaded ? 'hand-character' : 'hand-character-refused', { id: event.id, ...event.reason ? { reason: event.reason } : {},
       ...event.warnings.length ? { warnings: event.warnings } : {} });
+    if (pickerLoad === event.id) {
+      pickerLoad = undefined;
+      if (!event.loaded) {
+        const words = { path: 'its image path is unsafe', permissions: 'its files need private permissions', size: 'its image size does not match',
+          type: 'its image format is unsupported', decode: 'its image could not be decoded', alpha: 'its image needs transparency',
+          pixels: 'its frames have too little visible artwork or are almost fully opaque', changed: 'its files changed during loading',
+          timeout: 'its image took too long to decode', child: 'its image decoder stopped', sandbox: 'its decoder could not run safely' };
+        pickerNotice(`Character ${event.id} could not draw: ${words[event.reason]} (${event.reason}). Showing the ring.`);
+        pickerEvent({ hand: 'picker', nonce, op: 'fallback', character: event.id }, true);
+      }
+    }
+    return true;
+  }
+  // Catalogs are lazy: opening the menu asks for one, never an action or a timer. Import clicks use VC3's importer,
+  // not a CLI process, and the existing hand.json writer. The native host alone verifies the hardware input.
+  let pickerReady, pickerLoad, pickerBusy = false;
+  const pickerQueue = [];
+  const pickerFrame = data => write(JSON.stringify({ hand: 'picker', nonce, ...data }) + '\n');
+  const pickerNotice = text => pickerFrame({ op: 'notice', text: String(text).replace(/[\p{C}\p{Zl}\p{Zp}]/gu, ch => ch === '\n' ? '\n' : '').slice(0, 3000) });
+  async function pickerCatalog(picker) {
+    const catalog = await picker.catalog({ style, character });
+    if (host !== 'running') return;
+    const frame = { op: 'catalog', rows: catalog.rows };
+    if (Buffer.byteLength(JSON.stringify(frame)) > 64000 || catalog.rows.length > 512 || catalog.rows.some(r => r.children?.length > 512)) {
+      pickerNotice('There are too many characters for this menu. Open the characters folder to review them.'); return;
+    }
+    pickerFrame(frame);
+    for (const thumbnail of catalog.thumbnails) {
+      if (host !== 'running') return;
+      pickerFrame({ op: 'thumbnail', key: thumbnail.key, frame: { ...thumbnail.frame, nonce } });
+    }
+  }
+  async function pickerFallback(picker, id) {
+    // Serialize recovery with choices. A late refusal must never replace a newer choice.
+    if (host !== 'running' || style !== 'sprite' || character !== id) return;
+    style = 'ring'; pickerLoad = undefined;
+    pickerFrame({ op: 'style', style });
+    const result = await picker.apply({ op: 'select', style: 'ring' });
+    if (!result.ok) pickerNotice(`Showing the ring, but the saved cursor choice could not update. ${result.text ?? ''}`);
+  }
+  async function pickerStyle(next, picker) {
+    style = next.style; if (next.character) character = next.character;
+    pickerLoad = undefined;
+    let sprite;
+    if (style === 'sprite') {
+      try {
+        const loaded = await loadSprite(character);
+        sprite = characterFrame(loaded.character, { nonce, seq: 0, resolve: loaded.resolve });
+      } catch (error) {
+        pickerNotice(`This character could not load. Showing the ring. ${error.message}`);
+        await pickerFallback(picker, character);
+        return;
+      }
+    }
+    if (host !== 'running') return;
+    pickerFrame({ op: 'style', style });
+    if (sprite) { pickerLoad = sprite.id; write(JSON.stringify({ ...sprite, seq: ++seq }) + '\n'); }
+  }
+  function pickerEvent(event, internal = false) {
+    if (event.hand !== 'picker') return false;
+    const keys = Object.keys(event).sort().join();
+    if (cursorPicker === null || event.nonce !== nonce || !(internal && keys === 'character,hand,nonce,op' && event.op === 'fallback' && characterIdValid(event.character) ||
+        keys === 'hand,nonce,op' && event.op === 'refresh' ||
+        keys === 'hand,key,nonce,op' && event.op === 'import' && /^[0-9a-f]{64}$/.test(event.key) ||
+        keys === 'hand,nonce,op,style' && event.op === 'select' && ['ring', 'seam', 'glove'].includes(event.style) ||
+        keys === 'character,hand,nonce,op,style' && event.op === 'select' && event.style === 'sprite' && characterIdValid(event.character))) {
+      note('hand-picker-refused', {}); return true;
+    }
+    if (pickerBusy) {
+      // Refreshes coalesce; a person's action must survive a refresh already in flight.
+      if (event.op !== 'refresh') {
+        if (pickerQueue.length < 32) pickerQueue.push({ event, internal });
+        else pickerNotice('Several cursor choices are pending. Try again when they finish.');
+      }
+      return true;
+    }
+    pickerBusy = true;
+    pickerReady ??= cursorPicker ? Promise.resolve(cursorPicker) : import('./cursor-picker.mjs').then(m => m.createCursorPicker({ env, trace: note }));
+    pickerReady.then(async picker => {
+      if (host !== 'running') return;
+      if (event.op === 'fallback') {
+        await pickerFallback(picker, event.character);
+      } else if (event.op !== 'refresh') {
+        const { hand: _, nonce: __, ...choice } = event;
+        const result = await picker.apply(choice);
+        if (host !== 'running') return;
+        if (result.ok) await pickerStyle(result, picker);
+        if (result.text) pickerNotice(result.text);
+      }
+      await pickerCatalog(picker);
+    }).catch(error => { if (host === 'running') pickerNotice(`The Cursor menu could not update: ${error.message}`); })
+      .finally(() => { pickerBusy = false; const next = pickerQueue.shift(); if (next) pickerEvent(next.event, next.internal); });
     return true;
   }
   // The Ghost Hand row's clicks: exact { hand: 'toggle', nonce, enabled } lines with this session's nonce, on the host's stdout.
@@ -251,6 +343,7 @@ export function createHandClient({ env = process.env, setting = () => handSettin
       }
       if (event && typeof event === 'object' && Object.hasOwn(event, 'permissions') && permissionEvent(event)) continue;
       if (event?.hand === 'character' && characterEvent(event)) continue;
+      if (event && typeof event === 'object' && pickerEvent(event)) continue;
       if (!event || typeof event !== 'object' || Object.keys(event).sort().join() !== 'enabled,hand,nonce' || event.hand !== 'toggle' ||
           event.nonce !== nonce || typeof event.enabled !== 'boolean') { note('hand-toggle-refused', {}); continue; }
       Promise.resolve().then(() => setHand(event.enabled)).then(() => recheck(true),

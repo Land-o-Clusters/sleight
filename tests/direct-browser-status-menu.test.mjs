@@ -14,7 +14,7 @@ test('the menu bar item starts hidden, carries the glove template glyph and has 
   assert.match(source, /item\.isVisible = false/);
   assert.match(source, /image\.isTemplate = true/);
   assert.doesNotMatch(source, /"sleight disconnected"/);
-  assert.match(source, /item\.isVisible = menuVisible\(status, requests: requests, handEnabled: hand\?\.enabled \?\? false, sinceAct: since\)/);
+  assert.match(source, /item\.isVisible = menuVisible\(status, requests: requests, handEnabled: hand\?\.enabled \?\? false\)/);
   // The hookup runs on the bar button only, starts on a connect transition and leaves no timer behind.
   assert.match(source, /if hookupConnects\(from: previous, to: status\)/);
   assert.match(source, /if index == hookupFrameCount \{ timer\.invalidate\(\); self\.hookupTimer = nil \}/);
@@ -35,7 +35,7 @@ test('Turn Turbo Off asks first, and Settings & Help opens only the fixed docs a
   assert.match(source, /func personModal\([^\n]+\{\n\s*let actions = consentInputActions\(alert, choices: choices, kind: kind\)\n(?:\s*defer \{ for action in actions \{ action\.typing\?\.invalidate\(\) \} \}\n)?\s*focus\.presenting\(\[:\]\)\n\s*let result = withExtendedLifetime\(actions\) \{ modal\.run\(abort: \{ NSApp\.abortModal\(\) \}\) \{ alert\.runModal\(\) \} \}\n[^}]*DispatchQueue\.main\.async \{ self\.showNextAsk\(\) \}\n\s*return result/);
   assert.match(source, /return choice == "always" \|\| \[[^\n]*"turbo-off"(?:, "handoff")?\]\.contains\(kind\)/);
   assert.match(source, /URL\(string: "https:\/\/github\.com\/Land-o-Clusters\/sleight\/blob\/main\/docs\/settings\.md#" \+ \(status == nil \? "ghost-hand" : "turbo"\)\)/);
-  assert.equal(source.match(/NSWorkspace\.shared\.open/g)?.length, 1);
+  assert.equal(source.match(/NSWorkspace\.shared\.open/g)?.length, 2, 'help plus the hardware-clicked characters folder');
 });
 
 test('the Permissions rows only remove access: Revoke and Never Act answer at once on the hand channel, and nothing lifts a block', () => {
@@ -43,7 +43,7 @@ test('the Permissions rows only remove access: Revoke and Never Act answer at on
   assert.match(source, /\["revoke", "revoke-all", "block"\]\.contains\(op\)/);
   // The CLI confirmation's reason table names unblock (VC10); no menu row does.
   assert.doesNotMatch(source.replace(/\/\/ BEGIN PERSON CONFIRM[\s\S]*?\/\/ END PERSON CONFIRM/, ''), /[Uu]nblock"/, 'no menu row unblocks');
-  assert.match(source, /func menuNeedsUpdate\(_ menu: NSMenu\) \{ fillPermissions\(menu\) \}/);
+  assert.match(source, /func menuNeedsUpdate\(_ menu: NSMenu\)[\s\S]*?writeCursorPickerEvent\(\["op": "refresh"\]\)[\s\S]*?fillPermissions\(menu\)/);
 });
 
 test('the usage row is a plain disabled line that answers nothing', () => {
@@ -90,16 +90,12 @@ check(statusRows(["status": "connected", "hand": "on"], ["disconnect", "hand-off
 check(statusRows(["status": "connected", "hand": "maybe"], ["disconnect"]) == nil, "unknown hand state refused")
 check(statusRows(["status": "connected", "hand": "on"], ["disconnect"])! == [.status(title: "Connected", dot: "green", details: []),
   .separator, .action("Disconnect", choice: "disconnect"), .separator, .help], "no row without its choice")
-// The shared host: the glove shows for turbo, a waiting request, or an enabled hand that acted in the last five minutes.
-check(handIdleWindow == 300, "five minutes")
-check(!menuVisible(nil, requests: 0, handEnabled: true, sinceAct: nil), "hand on, no action yet")
-check(menuVisible(nil, requests: 0, handEnabled: true, sinceAct: 0), "hand just acted")
-check(menuVisible(nil, requests: 0, handEnabled: true, sinceAct: 299.9), "inside the window")
-check(!menuVisible(nil, requests: 0, handEnabled: true, sinceAct: 300), "past the window")
-check(!menuVisible(nil, requests: 0, handEnabled: false, sinceAct: 1), "hand off")
-check(!menuVisible("disconnected", requests: 0, handEnabled: true, sinceAct: nil), "turbo disconnected, hand idle")
-check(menuVisible("paused", requests: 0, handEnabled: false, sinceAct: nil), "turbo paused")
-check(menuVisible(nil, requests: 1, handEnabled: false, sinceAct: nil), "a waiting request")
+// The shared host: the glove shows for turbo, a waiting request, or an enabled hand with its Cursor picker.
+check(menuVisible(nil, requests: 0, handEnabled: true), "hand on, picker available before an action")
+check(!menuVisible(nil, requests: 0, handEnabled: false), "hand off")
+check(menuVisible("disconnected", requests: 0, handEnabled: true), "turbo disconnected, hand picker available")
+check(menuVisible("paused", requests: 0, handEnabled: false), "turbo paused")
+check(menuVisible(nil, requests: 1, handEnabled: false), "a waiting request")
 // Without turbo, the hand's own block: its toggle, Settings & Help, the version.
 check(handRows(enabled: true, version: "1.3.1") == [.toggle("Ghost Hand", choice: "hand-toggle", on: true), .separator, .help, .separator, .footer("sleight 1.3.1")], "hand-only menu")
 check(handRows(enabled: false, version: "1.3; x") == [.toggle("Ghost Hand", choice: "hand-toggle", on: false), .separator, .help], "hand-only menu, odd version dropped")
