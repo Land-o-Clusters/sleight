@@ -123,9 +123,10 @@ test('hand wire frames have exactly the host\'s keys, one nonce and rising seq',
   assert.deepEqual(Object.keys(a).sort(), ['at', 'beats', 'delayMs', 'hand', 'kind', 'nonce', 'path', 'pid', 'seq', 'windowId']);
   assert.deepEqual([a.seq, b.seq, a.path, b.path, a.kind, a.nonce === b.nonce], [0, 1, [[250, 280], [300, 300]], [[250, 280]], 'click', true]);
   assert.deepEqual(JSON.parse(wire.hide()), { hand: 'hide', nonce: wire.nonce });
-  // The host's own parser (consent-host.swift) asks for exactly these keys.
+  // The host's own parser (consent-host.swift) asks for exactly these keys, plus the ring's optional label, rect and caretX.
   const swift = readFileSync(join(root, 'plugins/sleight/lib/direct-browser/native/consent-host.swift'), 'utf8');
-  assert.match(swift, /Set\(data\.keys\) == \["hand", "nonce", "seq", "kind", "pid", "windowId", "at", "path", "delayMs", "beats"\]/);
+  assert.match(swift, /let actKeys: Set<String> = \["hand", "nonce", "seq", "kind", "pid", "windowId", "at", "path", "delayMs", "beats"\]/);
+  assert.match(swift, /Set\(data\.keys\)\.subtracting\(actKeys\)\.isSubset\(of: \["label", "rect", "caretX"\]\)/);
 });
 
 test('capture commands: hover\'s region call, a one-window -l without shadow, and the helper\'s ScreenCaptureKit paths', () => {
