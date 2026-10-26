@@ -158,18 +158,26 @@ test('a person\'s Terminal chain reaches the terminal app through shells, then l
 test('each listed GUI terminal passes by bundle path, in /Applications or ~/Applications, with its own helpers above it', () => {
   for (const app of ['/Applications/iTerm.app/Contents/MacOS/iTerm2', '/Applications/Ghostty.app/Contents/MacOS/ghostty',
     '/Applications/WezTerm.app/Contents/MacOS/wezterm-gui', '/Applications/kitty.app/Contents/MacOS/kitty',
-    '/Applications/Alacritty.app/Contents/MacOS/alacritty', '/Applications/Warp.app/Contents/MacOS/stable',
+    '/Applications/Alacritty.app/Contents/MacOS/alacritty',
     `${HOME}/Applications/Ghostty.app/Contents/MacOS/ghostty`, '/Applications/Utilities/Terminal.app/Contents/MacOS/Terminal']) {
     assert.deepEqual(walk({ ...TERMINAL, 100: [1, app] }).result, { ok: true }, app);
   }
-  // VS Code's integrated terminal: the shell leads its session under the pty host, under the Code main process.
-  const helper = '/Applications/Visual Studio Code.app/Contents/Frameworks/Code Helper (Plugin).app/Contents/MacOS/Code Helper (Plugin)';
-  const vscode = { 300: [150, '/bin/zsh -il'], 150: [120, `${helper} --type=utility`, helper], 120: [1, '/Applications/Visual Studio Code.app/Contents/MacOS/Electron', '/Applications/Visual Studio Code.app/Contents/MacOS/Electron'] };
-  const code = walk(vscode, { session: ['300 Ss', `${SELF} R+`] });
-  assert.deepEqual(code.result, { ok: true });
-  assert.deepEqual(code.calls.filter(call => call.startsWith('lsof')), ['lsof 150', 'lsof 120'], 'every terminal process is confirmed by its file');
+  // iTerm2 starts login from its own server process, under the iTerm2 app.
+  const server = '/Applications/iTerm.app/Contents/MacOS/iTermServer-3.5.0';
+  const iterm = { ...TERMINAL, 100: [90, `${server} /Users/someone/Library/Application Support/iTerm2/iterm2-daemon-1.socket`, server],
+    90: [1, '/Applications/iTerm.app/Contents/MacOS/iTerm2'] };
+  const both = walk(iterm);
+  assert.deepEqual(both.result, { ok: true });
+  assert.deepEqual(both.calls.filter(call => call.startsWith('lsof')), ['lsof 100', 'lsof 90'], 'every terminal process is confirmed by its file');
+});
+
+test('editors and terminals that host their own agents refuse: VS Code, Cursor and Warp', () => {
+  const vscodeHelper = '/Applications/Visual Studio Code.app/Contents/Frameworks/Code Helper (Plugin).app/Contents/MacOS/Code Helper (Plugin)';
   const cursorHelper = '/Applications/Cursor.app/Contents/Frameworks/Cursor Helper (Plugin).app/Contents/MacOS/Cursor Helper (Plugin)';
-  assert.deepEqual(walk({ 300: [150, '/bin/zsh -il'], 150: [1, `${cursorHelper} --type=utility`, cursorHelper] }, { session: ['300 Ss'] }).result, { ok: true });
+  for (const [args, argv0] of [[`${vscodeHelper} --type=utility`, vscodeHelper], [`${cursorHelper} --type=utility`, cursorHelper],
+    ['/Applications/Warp.app/Contents/MacOS/stable'], [`${HOME}/Applications/Warp.app/Contents/MacOS/stable`]]) {
+    assert.deepEqual(walk({ 300: [150, '/bin/zsh -il'], 150: [1, args, argv0] }, { session: ['300 Ss'] }).result, { ok: false, reason: 'unknown ancestor' }, args);
+  }
 });
 
 test('a process that only claims a terminal\'s path with exec -a refuses: lsof shows the file it runs', () => {

@@ -119,9 +119,9 @@ refuses terminals and OpenAI's own apps. See [approvals and guards](#approvals-a
 <a id="protected-consent-input"></a>
 
 - The launcher's settings commands (`hand on`, `turbo off`, `permissions unblock` and the rest) check that a person started
-  them from a terminal app, but an agent that can type into a terminal it opened passes that check, such as computer use
-  typing into a fresh Terminal window or an editor's agent running commands in the VS Code or Cursor terminal. The process
-  chain then looks like a person's.
+  them from a terminal app by reading the process's ancestors. A terminal window an agent opens through `open`, AppleScript
+  (`do script`) or a `.command` file starts from launchd like any other. Its process chain matches one you opened. Computer use
+  typing into a Terminal window passes for the same reason.
 
 - Remote approvals (1.5.0): a person at the Mac who hasn't touched the keyboard or pointer for 120 s counts as away, so an app
   card ends the call instead of waiting. A typed `allow <app>` covers only that app's low-risk cards. Medium and high-risk

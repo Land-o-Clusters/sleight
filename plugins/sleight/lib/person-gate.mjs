@@ -63,8 +63,9 @@ const MULTIPLEXERS = new Set(['tmux', 'screen', 'zellij', 'abduco', 'dtach']);
 // What may sit between the launcher and the terminal app: shells and the commands that start them.
 const PASS_THROUGH = new Set(['sh', 'bash', 'zsh', 'fish', 'dash', 'ksh', 'tcsh', 'csh', 'login', 'sudo', 'su', 'env', 'nice']);
 const command = args => base(args.trim().split(/\s+/)[0] ?? '').replace(/^-/, '');
-// GUI terminals by bundle path, never by name alone. VS Code and Cursor count for their integrated terminals.
-const TERMINAL_BUNDLES = ['iTerm.app', 'Ghostty.app', 'WezTerm.app', 'kitty.app', 'Alacritty.app', 'Warp.app', 'Visual Studio Code.app', 'Cursor.app'];
+// GUI terminals by bundle path, never by name alone. Editors and terminals that host their own agents (VS Code, Cursor, Warp)
+// aren't listed: their agents run commands in those terminals.
+const TERMINAL_BUNDLES = ['iTerm.app', 'Ghostty.app', 'WezTerm.app', 'kitty.app', 'Alacritty.app'];
 export const terminalBundles = home => ['/System/Applications/Utilities/Terminal.app/Contents/', '/Applications/Utilities/Terminal.app/Contents/',
   ...TERMINAL_BUNDLES.flatMap(bundle => [`/Applications/${bundle}/Contents/`, ...home ? [`${home.replace(/\/$/, '')}/Applications/${bundle}/Contents/`] : []])];
 

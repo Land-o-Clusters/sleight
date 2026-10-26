@@ -278,12 +278,9 @@ the engine's approval prompt refuse its process and its windows. Only your click
 
 ## Commands you run yourself
 
-The launcher runs a command that changes sleight's settings only when you start it in your own terminal. Its stdin and
-stdout must be a terminal. Above it there may be only shells, then Terminal, iTerm2, Ghostty, WezTerm, kitty, Alacritty,
-Warp, or the terminal in VS Code or Cursor, installed in `/Applications` or `~/Applications`. tmux, screen, zellij, abduco
-and dtach sessions are refused, as is anything under Claude Code, the Claude app (the Code tab's terminal panel
-included), the Codex CLI, ChatGPT or Codex. Otherwise it prints one line with the reason and exits with code 3. The menu
-bar toggles write through sleight's own window and keep working.
+Run settings commands from Terminal, iTerm2, Ghostty, WezTerm, kitty or Alacritty, or use the menu bar.
+Anywhere else, including tmux or screen, an editor's terminal (VS Code, Cursor), Warp and the Code tab's terminal panel,
+the launcher prints one line with the reason and exits with code 3.
 
 - Run `hand on`, `off` and `capture` in your own terminal. `hand status` runs anywhere.
 - Run `turbo on`, `off` and `turbo app on|off` in your own terminal. `turbo status` runs anywhere.
