@@ -115,11 +115,14 @@ each state's first cell. Under secure input, type and key show idle art. Core An
 installed animations, without sprite timers or frame callbacks. Downscaled cells filter linearly, and each
 `contentsRect` is inset by half a texel so a neighbor cell never bleeds in.
 
-The relay calls `loadCharacter(folder, { installed: true })` from VC3's `hand/character.mjs`, then
-`characterFrame(character, { nonce, seq, resolve: resolveCharacterStates })` from `hand/character-frame.mjs`, and sends
-the result once after spawn on the act sequence counter. `characterFrame` throws for cells over 192 by 208 or sheets
-over 1536 by 2288, which the host would refuse. A later character frame replaces the earlier one, even when the new one
-fails to load. VC4 adds the adapter and the host side. Integration adds the relay call.
+When the style is sprite, the relay's hand client (`hand/client.mjs`) loads the setting's character with
+`loadCharacter(folder, { installed: true })` from `hand/character.mjs` and builds
+`characterFrame(character, { nonce, seq, resolve: resolveCharacterStates })` from `hand/character-frame.mjs` before it
+spawns the host. It sends the frame once, after the menu and before any queued act, on the act sequence counter.
+`characterFrame` throws for cells over 192 by 208 or sheets over 1536 by 2288, which the host would refuse. With no
+character set, one VC3 refuses, or one too large, the client spawns the ring instead and traces one
+`hand-sprite-fallback` line (`CHARACTER_NOT_SET` or `CHARACTER_INVALID`). A later character frame replaces the earlier
+one, even when the new one fails to load.
 
 The frame's keys are exactly `hand`, `nonce`, `seq`, `id`, `sheet`, `extra` (a path or null), `cell` and `table`. Table
 entries have exactly `sheet`, `row`, `frames`, `ms`, `loop`, `flip` and `hotspot`, and may add `size`, `scale` and `then`.

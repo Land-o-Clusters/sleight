@@ -8,9 +8,10 @@
 // and flourishes there beats times; a drag grabs at at and carries along path. path defaults to [at], delayMs to 0 and beats to 1.
 import { randomBytes } from 'node:crypto';
 import { readFileSync, watch as fsWatch } from 'node:fs';
-import { dirname } from 'node:path';
+import { dirname, join } from 'node:path';
 import { handCursorStyles, handHostBuilt, prepareHandHost } from '../direct-browser/host.mjs';
-import { handConfigPath, handSetting } from './settings.mjs';
+import { characterIdValid, handConfigPath, handSetting } from './settings.mjs';
+import { characterFrame } from './character-frame.mjs';
 import { setHandPid } from './pid.mjs';
 import { currentApp as noted } from '../permissions.mjs';
 import { actionLogPath } from '../action-outcomes.mjs';
@@ -75,8 +76,8 @@ export function sessionHandClient(options = {}) {
     const setting = (options.setting ?? (() => handSetting({ env })))();
     if (env.SLEIGHT_HAND === '0' || !setting.enabled) return undefined;
     if (current) return current;
-    const cursorStyle = options.cursorStyle ?? setting.style;
-    try { return createHandClient({ ...options, cursorStyle }); }
+    const cursorStyle = options.cursorStyle ?? setting.style, character = options.character ?? setting.character;
+    try { return createHandClient({ ...options, cursorStyle, ...character !== undefined ? { character } : {} }); }
     catch (error) {
       // A style the host can't draw never stops the session: it traces and shows the glove.
       try { options.trace?.('hand-style-invalid', { code: error?.message === 'HAND_CURSOR_STYLE_INVALID' ? error.message : 'HAND_CLIENT_FAILED' }); } catch {}
@@ -84,9 +85,11 @@ export function sessionHandClient(options = {}) {
     }
   } catch { return undefined; }
 }
-// The host's style for a settings style. The host draws no character sprite yet, so sprite draws as the ring; the sprite
-// renderer (VC4) replaces this mapping with its own host style.
-export const hostCursorStyle = style => style === 'sprite' ? 'ring' : style;
+// The sprite style's installed character, as VC3 validates it, and VC3's resolver for characterFrame. Loaded on launch only.
+const installedSprite = async id => {
+  const { loadCharacter, charactersDirectory, resolveCharacterStates } = await import('./character.mjs');
+  return { character: loadCharacter(join(charactersDirectory(), id), { installed: true }), resolve: resolveCharacterStates };
+};
 
 // The files behind the menu's Permissions rows. A change to any of them sends the host a fresh menu frame.
 const permissionFiles = new Set(['preapproved.json', 'permissions.json', 'electron-grants.json', 'turbo.json']);
@@ -112,9 +115,8 @@ export function createHandClient({ env = process.env, setting = () => handSettin
   trace = () => {}, now = Date.now, defer = setImmediate, recheckMs = 60000, killAfterMs = 2000,
   setHand = async enabled => (await import('./command.mjs')).writeHandSetting({ enabled }),
   permissions = { menu: async () => (await command()).permissionsMenu(), apply: async (event, offered) => (await command()).applyMenuEvent(event, offered) },
-  currentApp = noted, usage = logUsage(env), usageMs = 300000, cursorStyle,
+  currentApp = noted, usage = logUsage(env), usageMs = 300000, cursorStyle, character, loadSprite = installedSprite,
   watch = (folder, listener) => process.platform === 'darwin' ? fsWatch(folder, { persistent: false }, listener) : undefined } = {}) {
-  cursorStyle = hostCursorStyle(cursorStyle);
   if (cursorStyle !== undefined && !handCursorStyles.includes(cursorStyle)) throw Error('HAND_CURSOR_STYLE_INVALID');
   const nonce = randomBytes(32).toString('hex'), queue = [];
   // host: none, starting, running or dead (failed or closed this session; final). hand: the settings allow the hand.
@@ -138,7 +140,8 @@ export function createHandClient({ env = process.env, setting = () => handSettin
   const read = () => {
     try {
       const value = setting();
-      style ??= handCursorStyles.includes(hostCursorStyle(value?.style)) ? hostCursorStyle(value.style) : 'glove';
+      style ??= handCursorStyles.includes(value?.style) ? value.style : 'glove';
+      character ??= value?.character;
       capture = value?.capture === 'visible' ? 'visible' : 'hidden';
       return value?.enabled === true;
     } catch { return false; }
@@ -271,6 +274,20 @@ export function createHandClient({ env = process.env, setting = () => handSettin
       // The first menu frame already carries the Permissions rows. The usage row follows once the log is read.
       await loadPermissions();
       if (host === 'dead') return undefined;
+      // Sprite style needs a valid installed character. Without one the host draws the ring, with one trace line.
+      let sprite;
+      if (style === 'sprite') {
+        try {
+          if (!characterIdValid(character)) throw Error('CHARACTER_NOT_SET');
+          const { character: loaded, resolve } = await loadSprite(character);
+          // Built now, so a character the host would refuse for size falls back before the spawn; its seq is set on send.
+          sprite = characterFrame(loaded, { nonce, seq: 0, resolve });
+        } catch (error) {
+          note('hand-sprite-fallback', { reason: /^[A-Z][A-Z0-9_]{0,63}$/.test(error?.message) ? error.message : 'CHARACTER_INVALID' });
+          style = 'ring';
+        }
+        if (host === 'dead') return undefined;
+      }
       const started = result.spawn({ capture, consent, ...cursorStyle !== undefined || style !== 'glove' ? { cursorStyle: style } : {} });
       started.on('error', error => { if (child === started) die('spawn', { code: error?.code }); });
       started.stdin.on('error', error => note('hand-dropped', { reason: error?.code ?? 'pipe' }));
@@ -281,6 +298,8 @@ export function createHandClient({ env = process.env, setting = () => handSettin
       setHandPid(started.pid);
       note('hand-started', { pid: started.pid, consent });
       write(menu());
+      // The character frame goes once, before any queued act, on the acts' sequence counter.
+      if (sprite) write(JSON.stringify({ ...sprite, seq: ++seq }) + '\n');
       statsAt = -Infinity;
       refreshUsage();
       for (const { wire, at } of queue.splice(0)) {

@@ -630,11 +630,20 @@ test('checkCharacterInHost sends one frame to --check-character and returns only
   assert.equal(fake.last.killed, true);
 });
 
+// A VC3-shaped installed character for the relay tests: 19 resolved states on one 512x192 sheet, and a resolver.
+const spriteStates = ['idle', 'move', 'aim', 'click', 'double-click', 'right-click', 'type', 'key', 'scroll-up', 'scroll-down', 'drag-grab', 'drag-carry',
+  'drag-drop', 'waiting-approval', 'error', 'success', 'thinking', 'handoff', 'working'];
+const testSprite = () => {
+  const resolved = spriteStates.map(state => ({ state, sheet: 'sheet.png', row: 0, start: 0, frames: 1, ms: [100], loop: false, flip: false, hotspot: { x: 32, y: 32 }, repeat: 1 }));
+  return { character: { manifest: { id: 'pet', sheet: 'sheet.png', frame: { w: 64, h: 64 }, scale: 0.5, states: {} }, folder: '/chars/pet',
+    sheets: { sheet: { width: 512, height: 192 } }, resolved }, resolve: () => resolved };
+};
+
 test('cursorStyle is an optional spawn option and adds no wait to send', async t => {
   t.after(() => setHandPid(0));
   for (const cursorStyle of ['ring', 'seam', 'glove', 'sprite']) {
     const spawns = [], child = fakeChild();
-    const client = createHandClient({ cursorStyle, setting: () => ({ enabled: true }), watch: () => undefined,
+    const client = createHandClient({ cursorStyle, character: 'pet', loadSprite: async () => testSprite(), setting: () => ({ enabled: true }), watch: () => undefined,
       permissions: null, usage: null, built: () => true,
       prepare: async () => ({ status: 'ready', spawn: options => { spawns.push(options); return child; } }) });
     t.after(() => client.close());
@@ -646,15 +655,38 @@ test('cursorStyle is an optional spawn option and adds no wait to send', async t
   assert.throws(() => createHandClient({ cursorStyle: 'unknown' }), /HAND_CURSOR_STYLE_INVALID/);
 });
 
-test('sprite draws as the ring on the host, from the option or the settings, and the session client never throws for a style', async t => {
+test('sprite sends the installed character after the menu, and falls back to the ring with one trace line', async t => {
   t.after(() => setHandPid(0));
-  for (const options of [{ cursorStyle: 'sprite' }, { setting: () => ({ enabled: true, style: 'sprite' }) }]) {
-    const spawns = [], child = fakeChild();
-    const client = createHandClient({ setting: () => ({ enabled: true }), ...options, watch: () => undefined, permissions: null, usage: null, built: () => true,
+  // From the option or from the settings' style and character, the host runs sprite and gets one character frame first.
+  for (const options of [{ cursorStyle: 'sprite', character: 'pet' }, { setting: () => ({ enabled: true, style: 'sprite', character: 'pet' }) }]) {
+    const spawns = [], child = fakeChild(), asked = [];
+    const client = createHandClient({ setting: () => ({ enabled: true }), ...options, loadSprite: async id => { asked.push(id); return testSprite(); },
+      watch: () => undefined, permissions: null, usage: null, built: () => true,
       prepare: async () => ({ status: 'ready', spawn: spawnOptions => { spawns.push(spawnOptions); return child; } }) });
     t.after(() => client.close());
     client.send(frame({ label: 'Save' })); await settle();
-    assert.equal(spawns[0].cursorStyle, 'ring'); assert.equal(child.lines[0].label, 'Save', 'ring acts keep their label');
+    assert.equal(spawns[0].cursorStyle, 'sprite'); assert.deepEqual(asked, ['pet']);
+    const [sprite, act] = child.lines;
+    assert.deepEqual([sprite.hand, sprite.id, sprite.seq, sprite.nonce], ['character', 'pet', 1, child.menus[0].nonce]);
+    assert.deepEqual(Object.keys(sprite).sort(), ['cell', 'extra', 'hand', 'id', 'nonce', 'seq', 'sheet', 'table']);
+    assert.equal(sprite.sheet, '/chars/pet/sheet.png'); assert.equal(sprite.table.idle.scale, 0.5);
+    assert.deepEqual([act.hand, act.seq, act.label], ['act', 2, 'Save']);
+    client.close();
+  }
+  // No character, a character VC3 refuses, or one too large to draw: the ring, and one hand-sprite-fallback line.
+  const tooLarge = () => { const s = testSprite(); s.character.sheets.sheet = { width: 2048, height: 192 }; s.character.manifest.frame = { w: 256, h: 64 }; return s; };
+  for (const [character, loadSprite, reason] of [[undefined, async () => testSprite(), 'CHARACTER_NOT_SET'],
+    ['pet', async () => { throw Error('Character: "/chars/pet/character.json" manifest: invalid'); }, 'CHARACTER_INVALID'],
+    ['pet', async () => tooLarge(), 'CHARACTER_INVALID']]) {
+    const spawns = [], child = fakeChild(), traces = [];
+    const client = createHandClient({ cursorStyle: 'sprite', ...character ? { character } : {}, loadSprite, setting: () => ({ enabled: true }), trace: (d, detail) => traces.push([d, detail]),
+      watch: () => undefined, permissions: null, usage: null, built: () => true,
+      prepare: async () => ({ status: 'ready', spawn: spawnOptions => { spawns.push(spawnOptions); return child; } }) });
+    t.after(() => client.close());
+    client.send(frame({ label: 'Save' })); await settle();
+    assert.equal(spawns[0].cursorStyle, 'ring');
+    assert.deepEqual(traces.filter(([d]) => d === 'hand-sprite-fallback'), [['hand-sprite-fallback', { reason }]]);
+    assert.ok(child.lines.every(l => l.hand !== 'character')); assert.equal(child.lines[0].label, 'Save', 'ring acts keep their label');
     client.close();
   }
   createHandClient({ setting: () => ({ enabled: false }), watch: () => undefined }).close();
