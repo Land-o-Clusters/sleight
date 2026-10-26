@@ -20,8 +20,23 @@ export function handColoured(r, g, b) {
   return (b - r >= 6 && b >= g) || (r - b >= 8 && r >= 150);
 }
 
+// The agent cursor's styles (VC7). The ring's paint is saturated: warm #FF7A3D and cool #5B8DFF (consent-host.swift RingTheme),
+// and the synthetic sprite (synthetic-character.mjs) is magenta and orange. At 0.3 opacity over white the cool seam is
+// (206, 221, 255) and the warm one (255, 215, 197): 49 and 58 apart between their highest and lowest channel. TextEdit's
+// text and its grey antialiasing are within 4, and the ring's ink (#0B0D14 at 0.55) within 9, so a spread of 24 counts only
+// cursor paint.
+export function cursorColoured(r, g, b) {
+  return Math.max(r, g, b) - Math.min(r, g, b) >= 24;
+}
+export const CURSOR_STYLES = Object.freeze(['glove', 'ring', 'seam', 'sprite']);
+/** The pixel rule for a cursor style: the glove's paint, or saturated cursor paint for the ring, seam and sprite. */
+export function colourRule(style = 'glove') {
+  if (!CURSOR_STYLES.includes(style)) throw new Error(`unknown cursor style ${style}`);
+  return style === 'glove' ? handColoured : cursorColoured;
+}
+
 /** { differing, handLike, box } or { sizeMismatch } for two frames of one capture path. box is the differing pixels' bounds. */
-export function compareFrames(base, sample, { tol = TOLERANCE } = {}) {
+export function compareFrames(base, sample, { tol = TOLERANCE, coloured = handColoured } = {}) {
   if (!base || !sample || base.width !== sample.width || base.height !== sample.height || base.data.length !== sample.data.length) {
     return { sizeMismatch: true, base: base && [base.width, base.height], sample: sample && [sample.width, sample.height] };
   }
@@ -30,7 +45,7 @@ export function compareFrames(base, sample, { tol = TOLERANCE } = {}) {
   for (let i = 0; i < a.length; i += 4) {
     if (Math.abs(a[i] - b[i]) <= tol && Math.abs(a[i + 1] - b[i + 1]) <= tol && Math.abs(a[i + 2] - b[i + 2]) <= tol) continue;
     differing++;
-    if (handColoured(b[i], b[i + 1], b[i + 2])) handLike++;
+    if (coloured(b[i], b[i + 1], b[i + 2])) handLike++;
     const p = i / 4, x = p % width, y = (p - x) / width;
     if (x < left) left = x; if (x > right) right = x; if (y < top) top = y; if (y > bottom) bottom = y;
   }

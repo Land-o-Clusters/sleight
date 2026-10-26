@@ -154,7 +154,10 @@ test('engineImage takes the last image block; readFrame checks the raw size; arg
     assert.deepEqual(readFrame(join(dir, 'f.rgba'), { width: 2, height: 3 }).data.length, 24);
     assert.throws(() => readFrame(join(dir, 'f.rgba'), { width: 3, height: 3 }), /has 24 bytes/);
   } finally { rmSync(dir, { recursive: true, force: true }); }
-  assert.deepEqual(parseArgs(['--owner-away']), { ownerAway: true, samples: 5, keepImages: false, out: undefined, host: undefined });
+  assert.deepEqual(parseArgs(['--owner-away']), { ownerAway: true, samples: 5, keepImages: false, out: undefined, host: undefined,
+    helper: undefined, receipt: undefined, style: 'glove', dryRun: false });
+  assert.equal(parseArgs(['--cursor-style', 'sprite', '--dry-run']).style, 'sprite');
+  assert.throws(() => parseArgs(['--cursor-style', 'pet']), /--cursor-style must be one of glove, ring, seam, sprite/);
   assert.throws(() => parseArgs(['--samples', '2']), /from 3 to 20/);
 });
 

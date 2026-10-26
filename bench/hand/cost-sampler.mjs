@@ -10,6 +10,8 @@ const defaultPs = () => new Promise(resolve => execFile('/bin/ps', ['-A', '-o', 
 
 export const isHandHost = command => /\/consent-host(\s|$)/.test(command) && /\s--hand(\s|$)/.test(command);
 export const isWindowServer = command => /\/WindowServer(\s|$)/.test(command);
+/** The cursor style a hand host was started with (VC2B's --cursor-style=), glove without the flag. */
+export const hostStyle = command => /\s--cursor-style=([a-z]+)(\s|$)/.exec(command)?.[1] ?? 'glove';
 
 /** ps rows: { pid, ppid, cpu (seconds), rssKb, command }. */
 export function parsePs(text) {
@@ -38,7 +40,7 @@ export function createCostSampler({ rootPid, ps = defaultPs, now = Date.now, int
       if (isWindowServer(row.command)) entry.ws = row.cpu;
       if (isHandHost(row.command) && (members.has(row.pid) || hosts.has(row.pid))) {
         hosts.add(row.pid);
-        entry.hosts[row.pid] = { cpu: row.cpu, rssKb: row.rssKb };
+        entry.hosts[row.pid] = { cpu: row.cpu, rssKb: row.rssKb, style: hostStyle(row.command) };
       }
     }
     samples.push(entry);
@@ -74,6 +76,7 @@ export function summarize(samples, { from = -Infinity, to = Infinity } = {}) {
     peakPct: round(Math.max(...intervals)), p95Pct: round(percentile(intervals, 95)) } : null;
   const pids = [...new Set(inside.flatMap(s => Object.keys(s.hosts)))];
   let cpuS = 0, peakKb = 0, busy = 0, live = 0;
+  const styles = [...new Set(inside.flatMap(s => Object.values(s.hosts).map(h => h.style).filter(Boolean)))].sort();
   for (const pid of pids) {
     const seen = inside.filter(s => s.hosts[pid]);
     const start = seen[0] === first ? seen[0].hosts[pid].cpu : 0;
@@ -89,5 +92,5 @@ export function summarize(samples, { from = -Infinity, to = Infinity } = {}) {
   }
   return { wallS: round(wallS), samples: inside.length, windowServer,
     hand: { hosts: pids.length, cpuS: round(cpuS), avgPct: wallS > 0 ? round(cpuS / wallS * 100, 3) : null, peakRssMB: round(peakKb / 1024, 1),
-      liveIntervals: live, idleIntervals: live - busy } };
+      liveIntervals: live, idleIntervals: live - busy, styles } };
 }

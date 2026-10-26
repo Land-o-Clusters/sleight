@@ -8,7 +8,13 @@
 // window that no other app covers (LAWS: never the whole screen); the report holds counts, pids and frames, never pixels,
 // titles or names, and images stay local (--keep-images keeps one PNG per capture path and mode, never a region capture).
 //
-//   node bench/hand/h5-capture.mjs --owner-away [--samples 5] [--out DIR] [--keep-images] [--host PATH]
+//   node bench/hand/h5-capture.mjs --owner-away [--cursor-style glove|ring|seam|sprite] [--samples 5] [--out DIR] [--keep-images]
+//        [--host PATH] [--helper PATH] [--receipt PATH] [--dry-run]
+//
+// --cursor-style (VC7, the agent cursor) runs the same test on a ring style. sprite installs a synthetic character
+// (synthetic-character.mjs) into a temporary characters root under the host's test override and needs a host with the
+// sprite renderer (VC4); without one it stops with exit 2. Ring pixels are judged by pixels.mjs's cursorColoured rule.
+// --dry-run prints the steps and commands and opens nothing.
 //
 // Run from sleight-arch's own Terminal shell (it holds Screen Recording), never double-forked. It waits for nothing: with
 // /tmp/sleight-hold present, the live lock held or TextEdit already running (it may be the owner's) it stops at once.
@@ -20,14 +26,15 @@ import { homedir, tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { promisify } from 'node:util';
-import { compareFrames, classify, modeVerdict, decision, SOURCES, TOLERANCE, MIN_HAND } from './pixels.mjs';
+import { compareFrames, classify, modeVerdict, decision, colourRule, SOURCES, TOLERANCE, MIN_HAND, CURSOR_STYLES } from './pixels.mjs';
+import { characterWire } from './synthetic-character.mjs';
+import { DOCUMENT_LAUNCH as LAUNCH_ARGS, hostArgs } from './vc7-live.mjs';
 
 const execute = promisify(execFile);
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '../..');
 export const TEXTEDIT = 'com.apple.TextEdit';
 // As bench/real-fixture.mjs: without these TextEdit restores the owner's windows and iCloud "Untitled" documents.
-export const DOCUMENT_LAUNCH = ['--args', '-ApplePersistenceIgnoreState', 'YES', '-NSShowAppCentricOpenPanelInsteadOfUntitledFile', 'NO',
-  '-NSDocumentSaveNewDocumentsToCloud', 'NO'];
+export const DOCUMENT_LAUNCH = LAUNCH_ARGS;
 const CAPTURE_ORDER = ['engine', 'region', 'window-l', 'sck-window', 'composite'];
 const HOVER_WAIT_MS = 100; // hover.js's shortest waitMs: the relay hides the hand, then hover captures this much later
 const KEEPALIVE_MS = 700;  // a frame this often keeps the panel up: each holds the hand 1.5 s after its lift (HandTiming.silence)
@@ -69,6 +76,8 @@ export function handWire(nonce = randomBytes(32).toString('hex')) {
     act: ({ pid, windowId, at, from }) => JSON.stringify({ hand: 'act', nonce, seq: seq++, kind: 'click', pid, windowId, at,
       path: from ? [from, at] : [at], delayMs: 0, beats: 1 }) + '\n',
     hide: () => JSON.stringify({ hand: 'hide', nonce }) + '\n',
+    // VC4's sprite frame: it shares the acts' seq, as the relay's client numbers them.
+    character: character => JSON.stringify(characterWire(character, { nonce, seq: seq++ })) + '\n',
   };
 }
 
@@ -82,9 +91,11 @@ export function spots(rect) {
 
 /** The whole test against its boundary. deps: windows() → { front, windows }, capture(source, { hostPid, label }) → frame,
  *  hit(x, y) → pid or undefined, startHost(mode) → { pid, write(line), close() }, sleep(ms), log(line). */
-export async function runCaptureTest(deps, { target, samples = 5, tol = TOLERANCE, minHand = MIN_HAND } = {}) {
+export async function runCaptureTest(deps, { target, samples = 5, tol = TOLERANCE, minHand = MIN_HAND, style = 'glove', character } = {}) {
   const { log = () => {} } = deps;
-  const report = { target: { pid: target.pid, id: target.id, bounds: target.bounds }, samples, tol, minHand, modes: {}, notes: [] };
+  const coloured = colourRule(style);
+  if (style === 'sprite' && !character) throw new Error('the sprite style needs a character');
+  const report = { style, target: { pid: target.pid, id: target.id, bounds: target.bounds }, samples, tol, minHand, modes: {}, notes: [] };
   const listed = await deps.windows();
   const region = pickRegion(target, listed.windows);
   const skipRegion = region.covered;
@@ -103,7 +114,7 @@ export async function runCaptureTest(deps, { target, samples = 5, tol = TOLERANC
     const first = await shot(source, { hostPid: 0, label: `${source}-base-1` });
     const second = await shot(source, { hostPid: 0, label: `${source}-base-2` });
     baseline[source] = first;
-    const c = compareFrames(first, second, { tol });
+    const c = compareFrames(first, second, { tol, coloured });
     noise[source] = c.sizeMismatch ? Infinity : c.differing;
   }
   report.noise = Object.fromEntries(Object.entries(noise).map(([k, v]) => [k, Number.isFinite(v) ? v : 'size-changed']));
@@ -111,8 +122,9 @@ export async function runCaptureTest(deps, { target, samples = 5, tol = TOLERANC
 
   for (const mode of ['hidden', 'visible']) {
     log(`mode ${mode}`);
-    const host = await deps.startHost(mode);
+    const host = await deps.startHost(mode, style);
     const wire = handWire();
+    if (character) host.write(wire.character(character));
     let k = 0, last = points[0], timer;
     const ping = () => {
       const at = points[k++ % 2];
@@ -135,7 +147,7 @@ export async function runCaptureTest(deps, { target, samples = 5, tol = TOLERANC
       if (!hide) up = up && panelUp(after.windows, host.pid, target);
       const point = body(last);
       const hitPid = hide ? undefined : await deps.hit(...point);
-      const c = frame ? compareFrames(baseline[source], frame, { tol }) : { sizeMismatch: true, error };
+      const c = frame ? compareFrames(baseline[source], frame, { tol, coloured }) : { sizeMismatch: true, error };
       result.push({ source, sample: label, handUp: up, result: frame ? classify(c, { noise: noise[source], minHand }) : 'error',
         differing: c.differing, handLike: c.handLike, ...(c.box ? { box: c.box } : {}), ...(error ? { error } : {}),
         // The composite's count of hand windows ScreenCaptureKit listed: 0 means the panel was not shareable at all.
@@ -171,7 +183,7 @@ export async function runCaptureTest(deps, { target, samples = 5, tol = TOLERANC
   // The window must not have changed under the test: a third baseline against the first.
   report.drift = {};
   for (const source of sources) {
-    const c = compareFrames(baseline[source], await shot(source, { hostPid: 0, label: `${source}-base-3` }), { tol });
+    const c = compareFrames(baseline[source], await shot(source, { hostPid: 0, label: `${source}-base-3` }), { tol, coloured });
     report.drift[source] = c.sizeMismatch ? 'size-changed' : c.differing;
     if (c.sizeMismatch || c.differing > (Number.isFinite(noise[source]) ? noise[source] : 0)) report.notes.push(`${source}: the window changed during the test (${report.drift[source]} pixels); rerun`);
   }
@@ -219,11 +231,15 @@ export function parseArgs(argv) {
   const value = name => { const i = argv.indexOf(name); return i >= 0 ? argv[i + 1] : undefined; };
   const samples = Number(value('--samples') ?? 5);
   if (!Number.isInteger(samples) || samples < 3 || samples > 20) throw new Error('--samples must be a whole number from 3 to 20');
-  return { ownerAway: argv.includes('--owner-away'), samples, keepImages: argv.includes('--keep-images'), out: value('--out'), host: value('--host') };
+  const style = value('--cursor-style') ?? 'glove';
+  if (!CURSOR_STYLES.includes(style)) throw new Error(`--cursor-style must be one of ${CURSOR_STYLES.join(', ')}`);
+  return { ownerAway: argv.includes('--owner-away'), samples, keepImages: argv.includes('--keep-images'), out: value('--out'), host: value('--host'),
+    helper: value('--helper'), receipt: value('--receipt'), style, dryRun: argv.includes('--dry-run') };
 }
 
 export function summary(report) {
-  const lines = [`H5 ghost hand capture test: ${report.ok ? 'PASS' : 'NOT PASSED'} (${report.decision.capture})`, `  ${report.decision.words}`];
+  const what = !report.style || report.style === 'glove' ? 'H5 ghost hand capture test' : `VC7 capture test, cursor style ${report.style}`;
+  const lines = [`${what}: ${report.ok ? 'PASS' : 'NOT PASSED'} (${report.decision.capture})`, `  ${report.decision.words}`];
   for (const mode of ['hidden', 'visible']) {
     const m = report.modes[mode];
     lines.push(`  ${mode}: ${m.verdict} (ScreenCaptureKit listed the panel in ${m.panelShareable} composite captures)`);
@@ -241,8 +257,9 @@ const home = homedir();
 const tilde = text => String(text).split(home).join('~');
 
 /** Runs work(state) holding the live lock. Everything after the lock is inside the try: setup that throws, a normal end, a
- *  SIGINT or a SIGTERM all run state.cleanups (last added first) and then release the lock. On a signal the process exits
- *  with 130 or 143 after cleanup; a second signal exits at once. Returns work's exit code, 1 when it threw, 3 when busy. */
+ *  SIGINT, a SIGTERM or a SIGHUP (a closed Terminal) all run state.cleanups (last added first) and then release the lock.
+ *  On a signal the process exits with 130, 143 or 129 after cleanup; a second signal exits at once. Returns work's exit
+ *  code, 1 when it threw (2 for a thrown setup refusal), 3 when busy. */
 export async function underLiveLock({ acquire, signals = process, exit = code => process.exit(code), log = message => console.error(message) }, work) {
   let unlock;
   try { unlock = await acquire(); } catch (error) { log(error.message); return 3; }
@@ -252,7 +269,7 @@ export async function underLiveLock({ acquire, signals = process, exit = code =>
     for (const fn of [...state.cleanups].reverse()) { try { await fn(); } catch (error) { log(`cleanup: ${tilde(error.message)}`); } }
     try { await unlock(); } catch (error) { log(`live lock: ${error.message}`); }
   })();
-  const handlers = Object.fromEntries([['SIGINT', 130], ['SIGTERM', 143]].map(([name, code]) => [name, () => {
+  const handlers = Object.fromEntries([['SIGINT', 130], ['SIGTERM', 143], ['SIGHUP', 129]].map(([name, code]) => [name, () => {
     if (signalled) return exit(code);
     signalled = true;
     log(`${name}: cleaning up and releasing the live lock`);
@@ -260,39 +277,57 @@ export async function underLiveLock({ acquire, signals = process, exit = code =>
   }]));
   for (const [name, handler] of Object.entries(handlers)) signals.on(name, handler);
   try { return await work(state); }
-  catch (error) { log(`H5 stopped: ${tilde(error.message)}`); return 1; }
+  // A setup refusal thrown from inside (vc7-live.mjs: TextEdit already running) carries exitCode 2, so a runner retries it.
+  catch (error) { log(`H5 stopped: ${tilde(error.message)}`); return error?.exitCode === 2 ? 2 : 1; }
   finally {
     await cleanup();
     for (const [name, handler] of Object.entries(handlers)) signals.removeListener(name, handler);
   }
 }
 
+/** The plan --dry-run prints: every step and the exact commands, with nothing opened. */
+export function dryRunPlan(opts, { root = ROOT, out = '<out>' } = {}) {
+  const host = tilde(opts.host ?? '<work>/consent-host'), helper = tilde(opts.helper ?? '<work>/capture-helper');
+  const sprite = opts.style === 'sprite';
+  return [
+    `VC7/H5 capture test, cursor style ${opts.style}, ${opts.samples} samples per source and mode (dry run: nothing opened)`,
+    '1. refuse with /tmp/sleight-hold present, take /tmp/sleight-live.lock (no wait)',
+    ...(opts.helper ? [] : [`2. build: xcrun swiftc -module-cache-path <cache> ${tilde(join(root, 'bench/hand/capture.swift'))} -o ${helper}`]),
+    ...(opts.host ? [] : [`   build: xcrun swiftc -module-cache-path <cache> ${tilde(join(root, 'plugins/sleight/lib/direct-browser/native/consent-host.swift'))} -o ${host}`]),
+    `3. ${helper} preflight (Screen Recording and Accessibility, no prompt); refuse when TextEdit runs`,
+    ...(sprite ? ['4. install the synthetic character into /private/tmp/sleight-vc7-characters-XXXXXX (0700, sheet.png 0600)',
+      `   ${host} --check-character < <character frame>   (exit 64: no sprite renderer, stop with exit 2)`] : []),
+    `5. /usr/bin/open -g -a TextEdit <work>/sleight-h5.txt ${DOCUMENT_LAUNCH.join(' ')}${opts.receipt ? `   (receipt ${tilde(opts.receipt)})` : ''}`,
+    `6. sleight-mcp session (SLEIGHT_HAND=0, SLEIGHT_SURFACES=computer): ${ENGINE_ACQUIRE}`,
+    `7. two baselines per source: engine (${ENGINE_SHOT}), screencapture -x -R<region>, screencapture -x -o -l<window>, ${helper} sck-window, ${helper} sck-composite`,
+    ...['hidden', 'visible'].map((mode, i) => `${8 + i}. ${sprite ? `${Object.entries({ SLEIGHT_CURSOR_TEST: '1', SLEIGHT_CURSOR_CHARACTERS_ROOT: '<root>' }).map(([k, v]) => `${k}=${v}`).join(' ')} ` : ''}${host} ${hostArgs({ capture: mode, style: opts.style }).join(' ')}; ` +
+      `act frames every ${KEEPALIVE_MS} ms; ${opts.samples} samples of every source, hover after a hide and ${HOVER_WAIT_MS} ms`),
+    '10. a third baseline per source (drift); quit the TextEdit this run started; kill any host left; release the lock',
+    `11. report: ${tilde(join(out, 'h5-report.json'))}`,
+  ];
+}
+
 async function main(argv) {
   let opts;
   try { opts = parseArgs(argv); } catch (error) { console.error(error.message); return 2; }
+  const out = resolve(opts.out ?? join(home, 'Library/Logs/sleight', `h5-${opts.style === 'glove' ? '' : `${opts.style}-`}${new Date().toISOString().replace(/[:.]/g, '-')}`));
+  if (opts.dryRun) { console.log(dryRunPlan(opts, { out }).join('\n')); return 0; }
   if (!opts.ownerAway) { console.error('H5 opens a TextEdit window and shows the hand over it: pass --owner-away'); return 2; }
   if (process.platform !== 'darwin') { console.error('macOS only'); return 2; }
   if (existsSync('/tmp/sleight-hold')) { console.error('/tmp/sleight-hold exists (another project\'s timed window): run later'); return 3; }
   const { acquireLiveLock } = await import('../live-lock.mjs');
   return underLiveLock({ acquire: () => acquireLiveLock('/tmp/sleight-live.lock', { wait: false }) }, async ({ cleanups }) => {
-    const out = resolve(opts.out ?? join(home, 'Library/Logs/sleight', `h5-${new Date().toISOString().replace(/[:.]/g, '-')}`));
     mkdirSync(out, { recursive: true });
     const work = mkdtempSync(join(tmpdir(), 'sleight-h5-'));
     cleanups.push(() => rmSync(work, { recursive: true, force: true }));
     const live = await import('../compat/live.mjs');
-    const { swiftModuleCache } = await import('../swift-cache.mjs');
-    const compile = async (source, binary) => execute('/usr/bin/xcrun', ['swiftc', '-module-cache-path', swiftModuleCache(), source, '-o', binary], { timeout: 300000 });
+    const { compileSwift, helperClient, openTextEditFixture, startHandHost, killHosts, spriteSupport } = await import('./vc7-live.mjs');
     console.log('Building the capture helper and the hand host (first time: a few minutes)');
-    const helperBin = join(work, 'capture-helper');
+    const helperBin = opts.helper ?? join(work, 'capture-helper');
     const hostBin = opts.host ?? join(work, 'consent-host');
-    await Promise.all([compile(join(ROOT, 'bench/hand/capture.swift'), helperBin),
-      opts.host ? undefined : compile(join(ROOT, 'plugins/sleight/lib/direct-browser/native/consent-host.swift'), hostBin)]);
-    const helper = async args => {
-      const { stdout } = await execute(helperBin, args, { timeout: 20000, maxBuffer: 8 << 20 }).catch(error => ({ stdout: error.stdout ?? '' }));
-      const answer = JSON.parse(String(stdout).trim().split('\n').at(-1) || '{}');
-      if (!answer.ok && args[0] !== 'hit') throw new Error(`capture helper ${args[0]}: ${answer.error ?? 'no answer'}`);
-      return answer;
-    };
+    await Promise.all([opts.helper ? undefined : compileSwift(join(ROOT, 'bench/hand/capture.swift'), helperBin),
+      opts.host ? undefined : compileSwift(join(ROOT, 'plugins/sleight/lib/direct-browser/native/consent-host.swift'), hostBin)]);
+    const helper = helperClient(helperBin);
     const grants = await helper(['preflight']);
     if (!grants.screenRecording) {
       console.error('Screen Recording is not granted to the app that started this shell. Run it from the Terminal window that runs the Peekaboo arm.');
@@ -300,32 +335,23 @@ async function main(argv) {
     }
     if ((await live.appState(TEXTEDIT)).running) { console.error('TextEdit is running and may be the owner\'s: quit it or run later'); return 2; }
 
-    const doc = join(work, 'sleight-h5.txt');
-    writeFileSync(doc, Array.from({ length: 40 }, (_, i) => `sleight ghost hand capture test, line ${i + 1}. The quick brown fox jumps over the lazy dog.`).join('\n') + '\n');
-    // Registered before the launch: a stop between the launch and the pid lookup still quits the TextEdit this run started.
-    let launched;
-    cleanups.push(async () => {
-      if (!launched) { const state = await live.appState(TEXTEDIT); if (state.pids?.length === 1) launched = { pid: state.pids[0] }; }
-      if (launched) await live.quitApp(TEXTEDIT, launched);
-    });
-    await execute('/usr/bin/open', ['-g', '-a', 'TextEdit', doc, ...DOCUMENT_LAUNCH], { timeout: 15000 });
-    for (let i = 0; i < 100 && !launched; i++) {
-      const state = await live.appState(TEXTEDIT);
-      if (state.pids?.length === 1) launched = { pid: state.pids[0] };
-      else await new Promise(r => setTimeout(r, 100));
+    // The sprite style: a synthetic character in a temporary root, checked by the host before any window opens.
+    let character, hostEnv = {};
+    if (opts.style === 'sprite') {
+      const { installSyntheticCharacter, characterEnv } = await import('./synthetic-character.mjs');
+      character = installSyntheticCharacter();
+      cleanups.push(() => rmSync(character.root, { recursive: true, force: true }));
+      hostEnv = characterEnv(character.root);
+      const probe = await spriteSupport(hostBin, JSON.stringify(characterWire(character, { nonce: randomBytes(32).toString('hex'), seq: 0 })) + '\n', hostEnv);
+      if (!probe.sprite) { console.error(`The sprite style can't run on this host: ${probe.detail}`); return 2; }
     }
-    if (!launched) throw new Error('TextEdit did not start');
-    let target;
-    for (let i = 0; i < 50 && !target; i++) {
-      const own = (await helper(['windows'])).windows.filter(w => w.pid === launched.pid && w.layer === 0 && w.bounds.width > 200);
-      if (own.length === 1) target = { pid: launched.pid, id: own[0].id, bounds: own[0].bounds };
-      else await new Promise(r => setTimeout(r, 200));
-    }
-    if (!target) throw new Error('TextEdit\'s window did not appear on this Space');
+
+    const { target } = await openTextEditFixture({ helper, live, work, cleanups, receipt: opts.receipt, name: 'sleight-h5.txt',
+      text: Array.from({ length: 40 }, (_, i) => `sleight ghost hand capture test, line ${i + 1}. The quick brown fox jumps over the lazy dog.`).join('\n') + '\n' });
 
     // Hand hosts this run started: killed on any stop, so no panel outlives the test.
     const hosts = new Set();
-    cleanups.push(() => { for (const child of hosts) if (child.exitCode === null && child.signalCode === null) child.kill('SIGKILL'); });
+    cleanups.push(() => killHosts(hosts));
     const { openClient } = await import('../compat/client.mjs');
     const client = await openClient({ command: join(ROOT, 'plugins/sleight/bin/sleight-mcp'), approve: textEditApproval, timeoutMs: 60000, name: 'sleight-h5',
       env: { ...process.env, SLEIGHT_APPROVAL_PROMPT: 'client', SLEIGHT_SURFACES: 'computer', SLEIGHT_HAND: '0' } });
@@ -357,22 +383,16 @@ async function main(argv) {
       rmSync(raw, { force: true });
       return frame;
     };
-    const startHost = async mode => {
-      const child = spawn(hostBin, ['--hand', `--capture=${mode}`], { stdio: ['pipe', 'ignore', 'ignore'] });
-      hosts.add(child);
-      await new Promise((ok, no) => { child.once('spawn', ok); child.once('error', no); });
-      const exited = new Promise(r => child.once('exit', r));
-      return { pid: child.pid, write: line => child.stdin.write(line),
-        close: async () => { child.stdin.end(); const t = setTimeout(() => child.kill('SIGKILL'), 3000); await exited; clearTimeout(t); } };
-    };
+    const startHost = (mode, style) => startHandHost({ hostBin, capture: mode, style, env: hostEnv, hosts });
     const report = await runCaptureTest({
       windows: () => helper(['windows']), capture, startHost, sleep: ms => new Promise(r => setTimeout(r, ms)),
       hit: async (x, y) => grants.accessibility ? (await helper(['hit', String(x), String(y)])).pid || undefined : undefined,
       log: line => console.log(`  ${line}`),
-    }, { target, samples: opts.samples });
+    }, { target, samples: opts.samples, style: opts.style, character });
     report.grants = grants;
     writeFileSync(join(out, 'h5-report.json'), JSON.stringify(report, null, 2) + '\n');
     console.log(summary(report));
+    console.log(`VC7 RESULT: capture ${opts.style} ${report.ok ? 'PASS' : 'NOT PASSED'}; hidden ${report.modes.hidden.verdict}, visible ${report.modes.visible.verdict} (${report.decision.capture})`);
     console.log(`Report: ${tilde(join(out, 'h5-report.json'))}`);
     return report.ok ? 0 : 1;
   });

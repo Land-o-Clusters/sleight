@@ -47,7 +47,7 @@ test('the sampler counts only hand hosts below the pass, keeps one after its par
   assert.equal(s.wallS, 3);
   assert.deepEqual(s.windowServer, { cpuS: 1.8, avgPct: 60, peakPct: 120, p95Pct: 120 });
   // 103 started inside the window: it counts from 0. 0.3 s of CPU over 3 s.
-  assert.deepEqual(s.hand, { hosts: 1, cpuS: 0.3, avgPct: 10, peakRssMB: 33.2, liveIntervals: 2, idleIntervals: 1 });
+  assert.deepEqual(s.hand, { hosts: 1, cpuS: 0.3, avgPct: 10, peakRssMB: 33.2, liveIntervals: 2, idleIntervals: 1, styles: ['glove'] });
   // A window that starts once the host is running counts from its first value there.
   assert.equal(summarize(samples, { from: 3000 }).hand.cpuS, 0);
   assert.equal(summarize(samples, { from: 9000 }).windowServer, null);
