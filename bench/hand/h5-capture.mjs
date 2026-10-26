@@ -257,8 +257,9 @@ const home = homedir();
 const tilde = text => String(text).split(home).join('~');
 
 /** Runs work(state) holding the live lock. Everything after the lock is inside the try: setup that throws, a normal end, a
- *  SIGINT or a SIGTERM all run state.cleanups (last added first) and then release the lock. On a signal the process exits
- *  with 130 or 143 after cleanup; a second signal exits at once. Returns work's exit code, 1 when it threw, 3 when busy. */
+ *  SIGINT, a SIGTERM or a SIGHUP (a closed Terminal) all run state.cleanups (last added first) and then release the lock.
+ *  On a signal the process exits with 130, 143 or 129 after cleanup; a second signal exits at once. Returns work's exit
+ *  code, 1 when it threw (2 for a thrown setup refusal), 3 when busy. */
 export async function underLiveLock({ acquire, signals = process, exit = code => process.exit(code), log = message => console.error(message) }, work) {
   let unlock;
   try { unlock = await acquire(); } catch (error) { log(error.message); return 3; }
@@ -268,7 +269,7 @@ export async function underLiveLock({ acquire, signals = process, exit = code =>
     for (const fn of [...state.cleanups].reverse()) { try { await fn(); } catch (error) { log(`cleanup: ${tilde(error.message)}`); } }
     try { await unlock(); } catch (error) { log(`live lock: ${error.message}`); }
   })();
-  const handlers = Object.fromEntries([['SIGINT', 130], ['SIGTERM', 143]].map(([name, code]) => [name, () => {
+  const handlers = Object.fromEntries([['SIGINT', 130], ['SIGTERM', 143], ['SIGHUP', 129]].map(([name, code]) => [name, () => {
     if (signalled) return exit(code);
     signalled = true;
     log(`${name}: cleaning up and releasing the live lock`);

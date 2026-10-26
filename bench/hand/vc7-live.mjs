@@ -94,7 +94,7 @@ export async function openTextEditFixture({ helper, live, work, cleanups, receip
   let launched;
   cleanups.push(async () => {
     if (!launched) { const state = await live.appState(TEXTEDIT); if (state.pids?.length === 1) launched = { pid: state.pids[0] }; }
-    if (launched) await live.quitApp(TEXTEDIT, launched);
+    if (launched) await quitFixture({ bundle: TEXTEDIT, pid: launched.pid }, { live });
   });
   const startedAt = new Date().toISOString();
   await execute('/usr/bin/open', ['-g', '-a', 'TextEdit', doc, ...DOCUMENT_LAUNCH], { timeout: 15000 });
@@ -113,6 +113,41 @@ export async function openTextEditFixture({ helper, live, work, cleanups, receip
   }
   if (!target) throw new Error('TextEdit\'s window did not appear on this Space');
   return { target, doc, launched };
+}
+
+// The fixture's own save sheet, answered through System Events by the launched pid only, as bench/tasks.mjs quitChess does.
+export const dontSaveScript = pid => {
+  if (!Number.isSafeInteger(pid) || pid < 2) throw new Error('a launched pid');
+  return `tell application "System Events"
+  set p to first process whose unix id is ${pid}
+  repeat with w in windows of p
+    try
+      repeat with b in buttons of sheet 1 of w
+        if name of b is in {"Don’t Save", "Don't Save"} then click b
+      end repeat
+    end try
+  end repeat
+end tell`;
+};
+const isAlive = pid => { try { process.kill(pid, 0); return true; } catch (error) { return error.code === 'EPERM'; } };
+
+/** Quits the fixture app this run launched, escalating: quit; the fixture's Don't Save, then quit; SIGTERM; SIGKILL. Every
+ *  signal goes to the launched pid only, and only while the app's one running process is that pid. Returns how it ended. */
+export async function quitFixture({ bundle, pid }, { live, run = execute, kill = (p, s) => process.kill(p, s), alive = isAlive,
+  sleep = ms => new Promise(r => setTimeout(r, ms)), log = () => {} } = {}) {
+  const ours = async () => { const state = await live.appState(bundle); return state.running && state.pids?.length === 1 && state.pids[0] === pid; };
+  if (!(await ours())) return 'gone';
+  try { await live.quitApp(bundle, { pid }); return 'quit'; } catch (error) { log(`quit: ${error.message}`); }
+  if (!(await ours())) return 'gone';
+  try { await run('/usr/bin/osascript', ['-e', dontSaveScript(pid)], { timeout: 15000 }); } catch (error) { log(`Don't Save: ${String(error.message).split('\n')[0]}`); }
+  try { await live.quitApp(bundle, { pid }); return "quit after Don't Save"; } catch (error) { log(`quit: ${error.message}`); }
+  for (const [signal, waitMs] of [['SIGTERM', 3000], ['SIGKILL', 2000]]) {
+    if (!(await ours())) return 'gone';
+    try { kill(pid, signal); } catch {}
+    for (let i = 0; i < waitMs / 100 && alive(pid); i++) await sleep(100);
+    if (!alive(pid)) return signal === 'SIGTERM' ? 'terminated' : 'killed';
+  }
+  throw new Error(`${bundle} ${pid} survived SIGKILL`);
 }
 
 /** The region inside a window the cursor plays in: below the title bar, inset. */

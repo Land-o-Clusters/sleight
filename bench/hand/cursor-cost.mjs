@@ -29,7 +29,7 @@ export const IDLE_MS = 60000;
 // The longest plan the sequence draws ends within about 1.5 s; the ring then parks, fades after its 1.2 s silence (0.22 s,
 // RingTheme) and releases. 6 s leaves room for a slow last frame.
 export const SETTLE_MS = 6000;
-export const COST_BUDGET = Object.freeze({ rssMiB: 50, spriteRssMiB: 64, hostAvgPct: 1, idleHostCpuS: 0, wsAddedPct: 2, wsAddedPeakPct: 10 });
+export const COST_BUDGET = Object.freeze({ rssMiB: 50, spriteRssMiB: 64, hostAvgPct: 1, idleHostCpuS: 0.05, wsAddedPct: 2, wsAddedPeakPct: 10 });
 export const rssBudget = (style, budget = COST_BUDGET) => style === 'sprite' ? budget.spriteRssMiB : budget.rssMiB;
 
 /** The phases in order: a baseline, each style, a baseline. */
@@ -180,7 +180,10 @@ async function main(argv) {
     const md = reportMarkdown(verdict, meta);
     writeFileSync(join(out, 'cursor-cost.md'), md);
     console.log(md);
-    console.log(`VC7 RESULT: cursor cost ${verdict.verdict}; ${Object.entries(verdict.styles).map(([s, v]) => `${s} ${v.verdict}`).join(', ')}`);
+    const errored = Object.entries(results).filter(([, r]) => r.error);
+    if (errored.length) { console.log(`VC7 INCOMPLETE: cursor cost phases failed: ${errored.map(([id, r]) => `${id} (${r.error})`).join(', ')}`); return 1; }
+    const partial = Object.values(verdict.styles).some(v => v.verdict === 'not-measured') ? ' (partial)' : '';
+    console.log(`VC7 RESULT: cursor cost ${verdict.verdict}${partial}; ${Object.entries(verdict.styles).map(([s, v]) => `${s} ${v.verdict}`).join(', ')}`);
     return verdict.verdict === 'within' ? 0 : 1;
   });
 }

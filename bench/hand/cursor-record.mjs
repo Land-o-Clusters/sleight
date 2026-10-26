@@ -10,7 +10,7 @@
 //
 // Exit 0: every style recorded. 1: a recording failed. 2: setup refused. 3: busy.
 import { randomBytes } from 'node:crypto';
-import { existsSync, mkdirSync, mkdtempSync, rmSync, statSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, renameSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -26,6 +26,12 @@ export function recordPlan({ out, seconds, style, targetId, panelId }) {
   if (!out?.startsWith('/')) throw new Error('out must be absolute');
   if (!Number.isSafeInteger(targetId) || !Number.isSafeInteger(panelId) || targetId < 1 || panelId < 1 || targetId === panelId) throw new Error('two different window ids');
   return { version: 1, out, fps: FPS, duration: seconds, codec: 'hevc', streams: [{ name: `cursor-${style}`, windows: [targetId, panelId], composite: true, crop: 'first' }] };
+}
+
+/** Where a leftover take goes: dir.partial-1, .partial-2, ... the first free name. */
+export function asideName(dir, exists) {
+  for (let n = 1; n < 1000; n++) if (!exists(`${dir}.partial-${n}`)) return `${dir}.partial-${n}`;
+  throw new Error('too many partial takes');
 }
 
 /** The host's panel over the target: its one on-screen window, or undefined while it has none or more than one. */
@@ -108,7 +114,8 @@ async function main(argv) {
         for (let i = 0; i < 40 && !panel; i++) { await sleep(100); panel = panelWindow((await helper(['windows'])).windows, host.pid); }
         if (!panel) throw new Error('the cursor panel did not appear');
         const dir = join(out, `record-${style}`);
-        if (existsSync(dir)) throw new Error(`${tilde(dir)} exists; the recorder never overwrites a take`);
+        // A take left by a crash is kept aside, never overwritten, and the style is recorded again.
+        if (existsSync(dir)) { const aside = asideName(dir, existsSync); renameSync(dir, aside); console.log(`  kept an earlier take as ${tilde(aside)}`); }
         mkdirSync(dir);
         const planPath = join(work, `plan-${style}.json`);
         writeFileSync(planPath, JSON.stringify(recordPlan({ out: dir, seconds: opts.seconds, style, targetId: target.id, panelId: panel.id })));
@@ -120,7 +127,10 @@ async function main(argv) {
     }
     writeFileSync(join(out, 'record.json'), JSON.stringify({ seconds: opts.seconds, fps: FPS, results }, null, 2) + '\n');
     for (const [style, r] of Object.entries(results)) console.log(`  ${style}: ${r.file ? `${r.file} (${r.bytes} bytes)` : r.skipped ? `skipped: ${r.skipped}` : `failed: ${r.error}`}`);
-    console.log(`VC7 RESULT: recording ${Object.entries(results).map(([s, r]) => `${s} ${r.file ? 'saved' : r.skipped ? 'skipped' : 'failed'}`).join(', ')}`);
+    const words = Object.entries(results).map(([s, r]) => `${s} ${r.file ? 'saved' : r.skipped ? 'skipped' : 'failed'}`).join(', ');
+    // A failed take has no film: no result line, so the runner records it again (a leftover folder is kept aside).
+    if (Object.values(results).some(r => r.error)) { console.log(`VC7 INCOMPLETE: recording ${words}`); return 1; }
+    console.log(`VC7 RESULT: recording ${words}${Object.values(results).some(r => r.skipped) ? ' (partial)' : ''}`);
     return Object.values(results).every(r => r.file) ? 0 : 1;
   });
 }

@@ -14,15 +14,16 @@ import { macCommandSkip } from './requirements.mjs';
 import { cursorColoured, colourRule, handColoured, compareFrames, classify } from '../bench/hand/pixels.mjs';
 import { crc32, encodePng, syntheticSheet, cellInk, characterWire, installSyntheticCharacter, characterEnv, CELL, SYNTHETIC_ID } from '../bench/hand/synthetic-character.mjs';
 import { cursorWire, autoSequence, playSequence, KINDS } from '../bench/hand/cursor-sequence.mjs';
-import { ownerBack, createOwnerWatch, ownerWords } from '../bench/hand/owner-watch.mjs';
-import { parseWatch, callSightings, timingStats, engineDecision, pickElements, sequenceCalls, COORDINATE } from '../bench/hand/engine-cursor.mjs';
+import { ownerBack, createOwnerWatch, ownerWords, createInputDetector, parseInputLine, QUIET_GAP_MS } from '../bench/hand/owner-watch.mjs';
+import { parseWatch, callSightings, baselineWindows, timingStats, engineDecision, pickElements, sequenceCalls, COORDINATE } from '../bench/hand/engine-cursor.mjs';
 import { phases, phaseFigures, costVerdict, rssBudget, parseArgs as costArgs, SETTLE_MS } from '../bench/hand/cursor-cost.mjs';
-import { recordPlan, panelWindow, parseArgs as recordArgs } from '../bench/hand/cursor-record.mjs';
-import { perTask, speedVerdict, noiseLimitMs, runSide, runCostPass, compareSides, parseArgs as passArgs, resumeKey, dryRunPlan as passPlan } from '../bench/hand/cost-pass.mjs';
+import { recordPlan, panelWindow, asideName, parseArgs as recordArgs } from '../bench/hand/cursor-record.mjs';
+import { perTask, speedVerdict, speedRule, t975, perTaskMarkdown, runSide, runCostPass, compareSides, parseArgs as passArgs, resumeKey, dryRunPlan as passPlan } from '../bench/hand/cost-pass.mjs';
 import { hostStyle } from '../bench/hand/cost-sampler.mjs';
-import { nightSteps, estimate, outcome, childEnv, strays, resultLine, summaryMarkdown, parseArgs as nightArgs, TARGET_MIN } from '../bench/hand/vc7-night.mjs';
-import { hostArgs, commonArgs, liveRefusal, compileArgs, playRect } from '../bench/hand/vc7-live.mjs';
-import { handWire, runCaptureTest } from '../bench/hand/h5-capture.mjs';
+import { nightSteps, estimate, overheadMin, timeoutMs, outcome, childEnv, strays, descendants, tempLeftovers, resultLine, summaryMarkdown, parseArgs as nightArgs, TARGET_MIN } from '../bench/hand/vc7-night.mjs';
+import { hostArgs, commonArgs, liveRefusal, compileArgs, playRect, quitFixture, dontSaveScript } from '../bench/hand/vc7-live.mjs';
+import { handWire, runCaptureTest, underLiveLock } from '../bench/hand/h5-capture.mjs';
+import { EventEmitter } from 'node:events';
 
 const root = fileURLToPath(new URL('..', import.meta.url));
 const over = (rgb, alpha, page = [255, 255, 255]) => rgb.map((c, i) => Math.round(c * alpha + page[i] * (1 - alpha)));
@@ -158,18 +159,58 @@ test('the owner is back only when input came after the run went quiet', async ()
   assert.match(ownerWords(back), /input 3 s ago, 57 s after/);
   assert.equal(ownerBack({ idleS: 56, quietSinceMs: 0, nowMs: 60000 }).back, false, 'within the slack');
   assert.deepEqual(ownerBack({ idleS: undefined, quietSinceMs: 0, nowMs: 60000 }).unknown, true);
-  let now = 1000, idle = 0;
-  const watch = createOwnerWatch({ idle: async () => idle, now: () => now });
-  now = 61000; idle = 1;
-  assert.equal((await watch.check()).back, true);
-  watch.quiet(); now = 62000;
-  assert.equal((await watch.check()).back, false, 'our own step just ended');
-  const broken = createOwnerWatch({ idle: async () => { throw new Error('ioreg'); }, now: () => now });
-  now += 100000;
-  assert.equal((await broken.check()).back, false);
+  const broken = createOwnerWatch({ idle: async () => { throw new Error('ioreg'); }, now: () => 100000, sleep: async () => {} });
+  assert.equal((await broken.gapCheck()).back, false);
 });
 
-test('engine cursor: sightings ignore windows already up, report delay and duration, and the decision follows R4', () => {
+test('the gap check fires on owner input 1 to 6 s before it, as the runner calls it, and never on a quiet Mac', async () => {
+  // The runner's real sequence: a step ends, the sweep takes a few seconds, then gapCheck() marks quiet, sleeps 15 s, reads.
+  for (const sweepS of [1, 3, 6]) {
+    for (const inputAgoS of [1, 2, 3, 4, 5, 6]) {
+      let clock = 0, lastInput = -1000;
+      const watch = createOwnerWatch({ now: () => clock, idle: async () => (clock - lastInput) / 1000, sleep: async ms => { clock += ms; } });
+      clock = 50000; watch.quiet(); // the step ended
+      clock += sweepS * 1000;       // the sweep
+      lastInput = clock + 15000 - inputAgoS * 1000; // the owner touches the Mac inside the gap that starts now
+      const result = await watch.gapCheck();
+      assert.equal(result.back, true, `sweep ${sweepS} s, input ${inputAgoS} s before the read`);
+    }
+    let clock = 0;
+    const quietMac = createOwnerWatch({ now: () => clock, idle: async () => clock / 1000, sleep: async ms => { clock += ms; } });
+    clock = 50000; quietMac.quiet(); clock += sweepS * 1000;
+    assert.equal((await quietMac.gapCheck()).back, false, `no input, sweep ${sweepS} s`);
+  }
+  // Input from before the gap (the step's own engine input, 2 s before the gap starts) never counts.
+  let clock = 50000;
+  const own = createOwnerWatch({ now: () => clock, idle: async () => (clock - 48000) / 1000, sleep: async ms => { clock += ms; } });
+  assert.equal((await own.gapCheck()).back, false);
+});
+
+test('during a step: a pointer that moves and stays away is the owner; a short excursion and harness input are not', () => {
+  const s = (t, x, y, idle) => ({ t, x, y, idle });
+  let detect = createInputDetector({ harnessInput: true, quietSinceMs: 0 });
+  assert.equal(detect(s(1000, 100, 100, 0.1)), undefined);
+  assert.equal(detect(s(2000, 400, 300, 0.1)), undefined, 'one sample away');
+  assert.equal(detect(s(3000, 100, 100, 0.1)), undefined, 'a drag fallback restores the pointer');
+  assert.equal(detect(s(4000, 400, 300, 0)), undefined);
+  assert.equal(detect(s(5000, 410, 300, 0)), undefined);
+  const hit = detect(s(6000, 410, 300, 0));
+  assert.equal(hit.back, true);
+  assert.match(hit.reason, /pointer moved from 100,100 to 410,300 and stayed 3 s/);
+  assert.equal(detect(s(7000, 100, 100, 0)), hit, 'fires once');
+  detect = createInputDetector({ harnessInput: true, quietSinceMs: 0 });
+  for (let t = 1000; t < 20000; t += 1000) assert.equal(detect(s(t, 50, 50, 0.2)), undefined, 'engine input in an input step is ignored');
+  detect = createInputDetector({ harnessInput: false, quietSinceMs: 0 });
+  assert.equal(detect(s(4000, 50, 50, 0.5)), undefined, 'inside the slack');
+  assert.equal(detect(s(20000, 50, 50, 20)), undefined, 'no input since the quiet mark');
+  assert.match(detect(s(21000, 50, 50, 1)).reason, /HID input 1 s ago during a check that makes no input/);
+  assert.deepEqual(parseInputLine('{"t":5,"x":1.5,"y":2,"idle":0.25}'), { t: 5, x: 1.5, y: 2, idle: 0.25 });
+  assert.equal(parseInputLine('{"ok":true,"done":true}'), undefined);
+  assert.equal(parseInputLine('garbage'), undefined);
+  assert.equal(QUIET_GAP_MS, 15000);
+});
+
+test('engine cursor: sightings ignore windows already up, "no cursor" needs 100 samples and coverage, a baseline window is evidence', () => {
   const w = (id, extra = {}) => ({ id, pid: 9, owner: 'Codex Computer Use', name: 'ComputerUseCursor', layer: 3, alpha: 1, onScreen: true, sharing: 0, bounds: { x: 1, y: 2, width: 30, height: 30 }, ...extra });
   const text = [
     JSON.stringify({ t: 900, windows: [w(1, { name: 'AXDialog' })] }),
@@ -186,9 +227,21 @@ test('engine cursor: sightings ignore windows already up, report delay and durat
   assert.equal(hit.appeared, true);
   assert.deepEqual(hit.windows.map(x => [x.id, x.delayMs, x.visibleMs, x.name]), [[2, 100, 100, 'ComputerUseCursor']]);
   assert.equal(miss.appeared, false);
+  assert.equal(miss.coverage, 0);
   assert.equal(engineDecision([hit, miss]).row, 'cursor-window');
-  assert.match(engineDecision([hit, miss]).words, /1 of 2 calls \(Codex Computer Use\/ComputerUseCursor\)/);
-  assert.equal(engineDecision([miss]).row, 'no-cursor');
+  assert.match(engineDecision([hit, miss]).words, /1 of 2 calls \(Codex Computer Use\/ComputerUseCursor\); whether the engine's own screenshots include it is still open/);
+  assert.deepEqual(baselineWindows(samples, 1000).map(x => x.name), ['AXDialog']);
+  // A cursor window the engine made before the first call and kept: in the baseline, so it is evidence, not absence.
+  assert.match(engineDecision([miss], { baseline: baselineWindows(samples, 1000), samples: 500 }).words, /up before the first engine call \(Codex Computer Use\/AXDialog\)/);
+  // A quiet sampler that ran: every 50 ms over two 2 s calls.
+  const quiet = Array.from({ length: 200 }, (_, i) => ({ t: i * 50, windows: [] }));
+  const calls = [{ label: 'read', placement: 'background', start: 1000, end: 3000 }, { label: 'type', placement: 'front', start: 5000, end: 7000 }];
+  const full = callSightings(quiet, calls, { baselineMs: 500 });
+  assert.ok(full.every(s => s.coverage >= 0.9));
+  assert.equal(engineDecision(full, { samples: quiet.length }).row, 'no-cursor');
+  assert.equal(engineDecision(full, { samples: 99 }).row, 'no-data', 'fewer than 100 samples');
+  assert.equal(engineDecision(callSightings(quiet.filter(s => s.t < 4000), calls), { samples: 100 }).row, 'no-data', 'a call the sampler missed');
+  assert.equal(engineDecision(callSightings([], calls)).row, 'no-data', 'a sampler that never ran');
   assert.equal(engineDecision([]).row, 'no-data');
   assert.deepEqual(timingStats([10, 30, 20], [5, 15]), { withSampler: { calls: 3, medianMs: 20, minMs: 10, maxMs: 30 },
     withoutSampler: { calls: 2, medianMs: 10, minMs: 5, maxMs: 15 }, deltaMs: 10 });
@@ -197,12 +250,14 @@ test('engine cursor: sightings ignore windows already up, report delay and durat
     '\t\t4 button Minimize', '\t\t5 scroll area', '\t\t\t6 text area Value: ...', '\t\t7 checkbox Bold'].join('\n');
   assert.deepEqual(pickElements(tree), { button: 7, text: 6 });
   assert.deepEqual(pickElements('\t1 button Close\n\t2 text area'), { button: undefined, text: 2 });
-  const calls = sequenceCalls({ button: 7, text: 6 });
-  assert.deepEqual(calls.map(c => c.label), ['read', 'ax-click', 'coordinate-click', 'type', 'scroll']);
-  assert.equal(calls[1].code, 'await app.click(7)');
-  assert.equal(calls[2].code, `await app.click(${JSON.stringify(COORDINATE)})`);
-  assert.equal(calls[4].code, 'await app.scroll(6, "down", 2)');
+  const sequence = sequenceCalls({ button: 7, text: 6 });
+  assert.deepEqual(sequence.map(c => c.label), ['read', 'ax-click', 'coordinate-click', 'type', 'scroll']);
+  assert.equal(sequence[1].code, 'await app.click(7)');
+  assert.equal(sequence[2].code, `await app.click(${JSON.stringify(COORDINATE)})`);
+  assert.equal(sequence[4].code, 'await app.scroll(6, "down", 2)');
   assert.deepEqual(sequenceCalls({}).map(c => c.label), ['read', 'coordinate-click', 'type', 'scroll']);
+  const source = readFileSync(join(root, 'bench/hand/engine-cursor.mjs'), 'utf8');
+  assert.ok(source.indexOf('const main = watch(600)') < source.indexOf('const first = await call('), 'the sampler starts before the first engine call');
 });
 
 test('cursor cost: phase figures, the idle minute after the settle, and each style against its budget', () => {
@@ -225,8 +280,9 @@ test('cursor cost: phase figures, the idle minute after the settle, and each sty
   assert.equal(verdict.styles.sprite.verdict, 'within', 'sprite has 64 MiB');
   assert.equal(verdict.verdict, 'over');
   assert.equal(verdict.styles.ring.checks.find(c => /average/.test(c.name)).value, 1);
-  const idle = costVerdict({ 'baseline-1': base, ring: { ...ring, idleHostCpuS: 0.01 } });
-  assert.equal(idle.styles.ring.verdict, 'over', 'any CPU after the park and fade fails');
+  const idle = costVerdict({ 'baseline-1': base, ring: { ...ring, idleHostCpuS: 0.06 } });
+  assert.equal(idle.styles.ring.verdict, 'over', 'more than 5 ps ticks (0.05 CPU s) after the park and fade fails');
+  assert.equal(costVerdict({ 'baseline-1': base, ring: { ...ring, idleHostCpuS: 0.03 } }).styles.ring.verdict, 'within', 'a few scheduler ticks are idle');
   const skipped = costVerdict({ 'baseline-1': base, ring, sprite: { skipped: 'no sprite renderer' } });
   assert.equal(skipped.styles.sprite.verdict, 'not-measured');
   assert.equal(skipped.verdict, 'not-measured');
@@ -255,84 +311,147 @@ test('cursor recording: one composite of the fixture and the panel, cropped to t
 
 const entry = (task, side, { tool = [100, 100], wall = 10, round = 1, ...rest } = {}) => ({ round, task, side, passed: true, elapsedS: wall,
   trace: { toolMs: tool, hand: { drift: [] } }, whole: { hand: { hosts: side === 'on' ? 1 : 0, styles: side === 'on' ? ['ring'] : [] } }, ...rest });
+const runsOf = (task, side, walls, extra = {}) => walls.map((wall, i) => entry(task, side, { wall, round: i + 1, ...extra }));
 
-test('speed A/B: per-task figures, the noise rule, and "no slowdown" only when every task is within it', () => {
-  assert.equal(noiseLimitMs(100), 20); assert.equal(noiseLimitMs(1000), 100); assert.equal(noiseLimitMs(null), null);
-  const even = [entry('a', 'on', { wall: 10 }), entry('a', 'off', { wall: 10.5 }), entry('a', 'on', { wall: 11, round: 2 }), entry('a', 'off', { wall: 10.5, round: 2 }),
-    entry('b', 'on', { tool: [210] }), entry('b', 'off', { tool: [200] })];
-  const rows = perTask(even);
-  assert.deepEqual(rows.map(r => r.task), ['a', 'b']);
-  assert.deepEqual([rows[0].on.wallMeanS, rows[0].on.wallSeS, rows[0].off.wallSeS, rows[0].wallDeltaS, rows[0].wallLimitS], [10.5, 0.5, 0, 0, 1.05]);
-  assert.equal(rows[1].toolDeltaMs, 10);
-  const fine = speedVerdict(rows, { cursorStyle: 'ring' });
-  assert.equal(fine.slowdown, false);
-  assert.match(fine.line, /^Speed verdict: no slowdown with ring on \(2 tasks/);
-  const slow = speedVerdict(perTask([...even, entry('c', 'on', { wall: 12 }), entry('c', 'off', { wall: 10 })]), { cursorStyle: 'ring' });
-  assert.equal(slow.slowdown, true);
-  assert.match(slow.line, /c \(tool \+0 ms per call, wall \+2 s\)/);
-  assert.equal(speedVerdict(perTask([entry('a', 'on')]), {}).slowdown, null);
-  assert.equal(speedVerdict([], {}).slowdown, null);
+test('speed rule: passed runs only, 4 a side, within 5% or a 95% interval holding 0 inside 10%; else inconclusive or slower', () => {
+  assert.deepEqual([1, 4, 30, 31, 61, 200].map(t975), [12.706, 2.776, 2.042, 2.0, 1.98, 1.96]);
+  assert.equal(speedRule([10, 10, 10], [10, 10, 10, 10]).state, 'not-measured');
+  // Within 5%: no slowdown whatever the spread.
+  assert.equal(speedRule([10.4, 10.4, 10.4, 10.4], [10, 10, 10, 10]).state, 'no-slowdown');
+  // 8% slower and tight: the interval lies above 0.
+  const slower = speedRule([10.8, 10.9, 10.7, 10.8, 10.8], [10, 10.1, 9.9, 10, 10]);
+  assert.equal(slower.state, 'slower');
+  assert.ok(slower.ci[0] > 0);
+  // 8% slower, noisy enough that the interval holds 0, but wider than 10%: inconclusive (H6's textedit-drag spread).
+  const wide = speedRule([23, 37, 25, 36, 29], [24, 31, 26, 25, 30]);
+  assert.equal(wide.state, 'inconclusive');
+  assert.ok(wide.ci[0] < 0 && wide.ci[1] > 0 && wide.halfPct > 10);
+  // 6% slower, interval holds 0 and is narrow: no slowdown.
+  const narrow = speedRule([10.6, 10.9, 10.3, 10.6, 10.6], [9.5, 10.8, 9.2, 10.6, 9.9]);
+  assert.equal(narrow.state, 'no-slowdown');
+  assert.ok(narrow.diffPct > 5 && narrow.ci[0] < 0 && narrow.halfPct <= 10);
+  // Faster is never a slowdown.
+  assert.equal(speedRule([8, 8, 8, 8], [10, 10, 10, 10]).state, 'no-slowdown');
+});
+
+test('speed A/B verdict: failed runs are dropped, a task needs 4 passed a side, and only a measured "no slowdown" passes', () => {
+  const fine = [...runsOf('a', 'on', [10, 10.2, 9.9, 10.1, 10]), ...runsOf('a', 'off', [10, 10.1, 9.8, 10, 10.1]),
+    ...runsOf('b', 'on', [5, 5, 5.1, 5, 4.9], { tool: [210] }), ...runsOf('b', 'off', [5, 5.1, 4.9, 5, 5], { tool: [200] })];
+  const rows = perTask(fine);
+  assert.deepEqual(rows.map(r => [r.task, r.state, r.on.passed, r.off.passed]), [['a', 'no-slowdown', 5, 5], ['b', 'no-slowdown', 5, 5]]);
+  assert.equal(rows[1].tool.diff, 10);
+  const ok = speedVerdict(rows, { cursorStyle: 'ring' });
+  assert.deepEqual([ok.state, ok.slowdown], ['no-slowdown', false]);
+  assert.match(ok.line, /^Speed verdict: no slowdown with ring on \(2 tasks/);
+  assert.match(perTaskMarkdown(rows, ok), /\| a \| 5\/5 \/ 5\/5 \| \+0\.04 s \(0\.4%\), 95% \[/);
+  // A failed run (passed false) is not timed: two failures on a side leave 3 passed, so the task is not measured.
+  const failing = [...fine.filter(e => !(e.task === 'a' && e.side === 'on')), ...runsOf('a', 'on', [10, 10, 30, 31, 10]).map((e, i) => i >= 2 && i <= 3 ? { ...e, passed: false } : e)];
+  const failRows = perTask(failing);
+  assert.deepEqual([failRows.find(r => r.task === 'a').state, failRows.find(r => r.task === 'a').on.passed], ['not-measured', 3]);
+  const notMeasured = speedVerdict(failRows, { cursorStyle: 'ring' });
+  assert.deepEqual([notMeasured.state, notMeasured.slowdown], ['inconclusive', null]);
+  assert.match(notMeasured.line, /not measured: a/);
+  // A task whose runs all errored is not measured either, and the verdict is not a pass.
+  const errored = [...fine, ...runsOf('c', 'on', [9, 9, 9, 9], { error: 'login expired' }), ...runsOf('c', 'off', [9, 9, 9, 9])];
+  assert.equal(speedVerdict(perTask(errored)).state, 'inconclusive');
+  assert.equal(speedVerdict(perTask([...fine, ...runsOf('d', 'on', [12, 12.1, 11.9, 12]), ...runsOf('d', 'off', [10, 10.1, 9.9, 10])])).state, 'slower');
+  assert.equal(speedVerdict([]).state, 'not-measured');
   const cmp = compareSides([entry('a', 'on', { whole: { hand: { hosts: 1, styles: ['glove'] } } }), entry('a', 'off')], undefined, { cursorStyle: 'ring' });
   assert.ok(cmp.invalid.some(r => /ran as glove, not ring/.test(r)));
   assert.equal(hostStyle('/x/consent-host --hand --capture=hidden --cursor-style=ring --menu'), 'ring');
   assert.equal(hostStyle('/x/consent-host --hand --capture=hidden --menu'), 'glove');
+  // main exits 0 only for a measured "no slowdown" (and 5 when a run errored).
+  const source = readFileSync(join(root, 'bench/hand/cost-pass.mjs'), 'utf8');
+  assert.equal(source.match(/speed\.state === 'no-slowdown' \? 0 : 1/g)?.length, 2);
+  assert.doesNotMatch(source, /slowdown !== true/);
+  assert.match(source, /if \(errored\.length\) \{ console\.log\(`VC7 INCOMPLETE[^\n]*return 5; \}/);
 });
 
-test('speed A/B pass: the on side gets the style, a resumed pass skips finished runs, and the owner\'s return stops it', async () => {
+test('speed A/B pass: the on side gets the style and the capture mode, a resume skips finished runs, owner checks at round starts', async () => {
   const envs = [];
   const deps = {
-    env: { SLEIGHT_CURSOR_STYLE: 'seam', KEEP: '1' },
+    env: { SLEIGHT_CURSOR_STYLE: 'seam', SLEIGHT_HAND_CAPTURE: 'visible', KEEP: '1' },
     run: async (args, env) => { envs.push(env); return { pid: 1, done: Promise.resolve({ code: 0, stdout: 'results: /r.json\n' }) }; },
     sampler: () => ({ start: async () => {}, stop: async () => [] }),
     readJson: () => ({ ghostHand: envs.at(-1).SLEIGHT_BENCH_HAND === '1' ? 'on' : 'off', stamp: 's', results: [{ arm: 'sleight', task: 'calculator-click', passed: true, seconds: 5, finishedAt: new Date().toISOString() }] }),
     traceLines: () => [],
   };
-  await runSide(deps, { round: 1, task: 'calculator-click', side: 'on', model: 'm', effort: 'e', cursorStyle: 'ring' });
-  await runSide(deps, { round: 1, task: 'calculator-click', side: 'off', model: 'm', effort: 'e', cursorStyle: 'ring' });
-  assert.deepEqual(envs.map(e => [e.SLEIGHT_BENCH_HAND, e.SLEIGHT_CURSOR_STYLE, e.KEEP]), [['1', 'ring', '1'], ['0', undefined, '1']]);
+  await runSide(deps, { round: 1, task: 'calculator-click', side: 'on', model: 'm', effort: 'e', cursorStyle: 'ring', capture: 'hidden' });
+  await runSide(deps, { round: 1, task: 'calculator-click', side: 'off', model: 'm', effort: 'e', cursorStyle: 'ring', capture: 'hidden' });
+  assert.deepEqual(envs.map(e => [e.SLEIGHT_BENCH_HAND, e.SLEIGHT_CURSOR_STYLE, e.SLEIGHT_HAND_CAPTURE, e.KEEP]), [['1', 'ring', 'hidden', '1'], ['0', undefined, undefined, '1']]);
   envs.length = 0;
   const done = [{ round: 1, task: 'calculator-click', side: 'off' }, { round: 1, task: 'calculator-click', side: 'on', error: 'x' }];
   const all = await runCostPass(deps, { tasks: ['calculator-click'], rounds: 2, cursorStyle: 'ring', done });
   assert.equal(envs.length, 3, 'the failed step and round 2 run; the finished one is kept');
   assert.equal(all.length, 4);
   assert.equal(all.filter(e => e.error).length, 0);
-  let asked = 0;
-  const stopped = await runCostPass({ ...deps, ownerBack: async () => (++asked === 2 ? 'the owner is back' : undefined) }, { tasks: ['calculator-click'], rounds: 1 });
+  const asked = [];
+  const stopped = await runCostPass({ ...deps, ownerBack: async ({ boundary }) => { asked.push(boundary); return asked.length === 3 ? 'the owner is back' : undefined; } },
+    { tasks: ['calculator-click', 'textedit-save'], rounds: 2 });
+  assert.deepEqual(asked, [true, false, false], 'a boundary at each round\'s first run');
   assert.equal(stopped.stopped, 'the owner is back');
-  assert.equal(stopped.length, 1);
-  assert.deepEqual(passArgs(['--cursor-style', 'ring', '--stop-on-owner', '--dry-run']).cursorStyle, 'ring');
+  assert.equal(stopped.length, 2);
+  const cancelled = { ...deps, readJson: () => ({ ghostHand: 'on', stamp: 's', results: [{ arm: 'sleight', task: 'calculator-click', cancelled: true }] }) };
+  assert.match((await runSide(cancelled, { round: 1, task: 'calculator-click', side: 'on' })).error, /cancelled/);
+  assert.equal(passArgs(['--cursor-style', 'ring', '--stop-on-owner', '--dry-run']).cursorStyle, 'ring');
+  assert.equal(passArgs([]).capture, 'hidden');
+  assert.throws(() => passArgs(['--capture', 'shown']), /--capture must be hidden or visible/);
   assert.equal(passArgs(['--cursor-style', 'glove']).cursorStyle, 'glove');
   assert.throws(() => passArgs(['--cursor-style', 'Sprite']), /--cursor-style must be one of glove, ring, seam, sprite/);
   assert.equal(passArgs([]).cursorStyle, undefined);
   assert.notEqual(resumeKey({ tasks: ['a'], rounds: 5, model: 'm', effort: 'e', cursorStyle: 'ring' }), resumeKey({ tasks: ['a'], rounds: 5, model: 'm', effort: 'e' }));
+  assert.notEqual(resumeKey({ tasks: ['a'], capture: 'visible' }), resumeKey({ tasks: ['a'] }));
   const plan = passPlan({ ...passArgs(['--cursor-style', 'ring', '--rounds', '5']), stopOnOwner: true }, { out: '/o', root: '/r', home: '/h' });
   assert.equal(plan.length, 2 + 30);
-  assert.match(plan[3], /SLEIGHT_BENCH_HAND=1 SLEIGHT_CURSOR_STYLE=ring node bench\/run\.mjs --suite world --arm sleight --tasks calculator-click/);
+  assert.match(plan[3], /SLEIGHT_BENCH_HAND=1 SLEIGHT_HAND_CAPTURE=hidden SLEIGHT_CURSOR_STYLE=ring node bench\/run\.mjs --suite world --arm sleight --tasks calculator-click/);
 });
 
-test('night runner: steps in order under the 90 minute target, exit codes, the child environment, strays and the summary', () => {
+test('night runner: steps, timeouts, outcomes (measured only with a result line), the child environment, strays and temp sweep', () => {
   const steps = nightSteps({ out: '/o', bin: '/o/bin' });
   assert.deepEqual(steps.map(s => s.id), ['build', 'capture-ring', 'capture-seam', 'capture-sprite', 'engine-cursor', 'cursor-cost', 'speed-ab', 'record']);
   assert.deepEqual(steps.map(s => s.check), [0, 1, 1, 1, 2, 3, 4, 5]);
-  assert.ok(estimate(steps) < TARGET_MIN);
+  assert.deepEqual(steps.filter(s => s.input).map(s => s.id), ['engine-cursor', 'speed-ab']);
+  assert.ok(estimate(steps) + overheadMin(steps) < TARGET_MIN);
+  assert.deepEqual(steps.map(timeoutMs), steps.map(s => s.est * 120000));
   for (const step of steps.filter(s => !s.internal)) {
     assert.ok(step.args.includes('--owner-away'), step.id);
     assert.ok(existsSync(join(root, step.script)), step.script);
   }
   const ab = steps.find(s => s.id === 'speed-ab').args.join(' ');
-  assert.match(ab, /--cursor-style ring --rounds 5 --tasks calculator-click,textedit-save,textedit-drag --model claude-haiku-5-5 --effort high --stop-on-owner/);
+  assert.match(ab, /--cursor-style ring --capture hidden --rounds 5 --tasks calculator-click,textedit-save,textedit-drag --model claude-haiku-5-5 --effort high --stop-on-owner/);
   assert.ok(steps.find(s => s.id === 'capture-sprite').args.includes('sprite'));
-  assert.deepEqual(['passed', 'measured, not passed', 'refused', 'busy', 'stopped for the owner'].map((s, rc) => outcome(rc).status), ['passed', 'measured, not passed', 'refused', 'busy', 'stopped for the owner']);
-  assert.equal(outcome(0).done, true); assert.equal(outcome(1).done, true); assert.equal(outcome(2).done, false);
-  assert.equal(outcome(3).retry, true); assert.equal(outcome(4).stop, true); assert.equal(outcome(null, 'SIGINT').stop, true);
-  assert.match(outcome(9).status, /crashed \(exit 9\)/);
+  assert.deepEqual([outcome(0, { measured: true }).done, outcome(1, { measured: true }).done], [true, true]);
+  for (const [rc, extra] of [[0, {}], [1, {}], [5, {}], [9, {}], [129, {}], [null, { signal: 'SIGKILL' }], [0, { reason: 'timeout', measured: true }], [5, { reason: 'build' }]]) {
+    const o = outcome(rc, extra);
+    assert.deepEqual([o.done, o.failed], [false, true], `rc ${rc} ${JSON.stringify(extra)}`);
+  }
+  assert.match(outcome(1).status, /failed \(exit 1 without a result\)/);
+  assert.equal(outcome(5, { reason: 'build' }).status, 'failed (build)');
+  assert.equal(outcome(0, { reason: 'timeout' }).status, 'failed (timeout)');
+  assert.equal(outcome(2).status, 'refused'); assert.equal(outcome(2).done, false);
+  assert.equal(outcome(3).retry, true); assert.equal(outcome(4).stop, true);
+  assert.equal(outcome(130, { reason: 'interrupted' }).stop, true);
+  assert.equal(outcome(130, { reason: 'owner' }).status, 'stopped for the owner');
+  assert.equal(outcome(130, { reason: 'hold' }).hold, true);
   const env = childEnv({ PATH: '/bin', CLAUDECODE: '1', CLAUDE_CODE_OAUTH_TOKEN: 'secret', CLAUDE_CONFIG_DIR: '/mine' }, '/tmp/lane-claude-1');
   assert.deepEqual(env, { PATH: '/bin', CLAUDE_CONFIG_DIR: '/tmp/lane-claude-1', DISABLE_AUTOUPDATER: '1', SLEIGHT_NO_HUB: '1', SLEIGHT_REMOTE_APPROVALS: '0' });
   const ps = ['  10 /o/bin/consent-host --hand --capture=hidden --cursor-style=ring', '11 /o/bin/capture-recorder record /x', '12 /other/bin/consent-host --hand',
     '13 /o/binary/consent-host', ' 14 /o/bin/capture-helper watch-engine 50 30'].join('\n');
   assert.deepEqual(strays(ps, '/o/bin'), [{ pid: 10, command: 'consent-host' }, { pid: 11, command: 'capture-recorder' }, { pid: 14, command: 'capture-helper' }]);
+  assert.deepEqual(descendants(['  1 0', '100 1', '101 100', '102 101', '103 100', '200 1'].join('\n'), 100), [101, 103, 102]);
+  const dirs = [
+    { dir: '/t', name: 'sleight-h5-abc', uid: 501, mtimeMs: 2000, isDir: true },
+    { dir: '/t', name: 'sleight-h5-old', uid: 501, mtimeMs: 500, isDir: true },
+    { dir: '/t', name: 'sleight-h5-root', uid: 0, mtimeMs: 2000, isDir: true },
+    { dir: '/t', name: 'sleight-h5x', uid: 501, mtimeMs: 2000, isDir: true },
+    { dir: '/t', name: 'sleight-vc7-characters-1', uid: 501, mtimeMs: 2000, isDir: true },
+    { dir: '/p', name: 'sleight-vc7-characters-1', uid: 501, mtimeMs: 2000, isDir: true },
+    { dir: '/p', name: 'sleight-vc7-characters-f', uid: 501, mtimeMs: 2000, isDir: false },
+  ];
+  assert.deepEqual(tempLeftovers(dirs, { prefixes: [['/t', ['sleight-h5-']], ['/p', ['sleight-vc7-characters-']]], uid: 501, sinceMs: 1000 }).map(e => `${e.dir}/${e.name}`),
+    ['/t/sleight-h5-abc', '/p/sleight-vc7-characters-1']);
   assert.equal(resultLine('x\nVC7 RESULT: one\nVC7 RESULT: two\n'), 'two');
-  assert.equal(resultLine('nothing'), undefined);
+  assert.equal(resultLine('VC7 INCOMPLETE: nope'), undefined);
   const md = summaryMarkdown({ root: '/r', head: 'abcdef1234567890', out: '/o', startedAt: 'T' }, { build: { status: 'passed', rc: 0, minutes: 1.5 } }, steps, { stoppedFor: 'the owner is back' });
   assert.match(md, /\| - \| build \| passed \| 0 \| 1.5 \|/);
   assert.match(md, /\| 4 \| speed-ab \| not run \|/);
@@ -340,6 +459,52 @@ test('night runner: steps in order under the 90 minute target, exit codes, the c
   assert.deepEqual(nightArgs(['--dry-run', '--night', '/n']), { dryRun: true, fresh: false, night: '/n' });
   assert.throws(() => nightArgs(['--go']), /unknown option/);
   assert.throws(() => nightArgs(['x']), /unexpected argument/);
+  const source = readFileSync(join(root, 'bench/hand/vc7-night.mjs'), 'utf8');
+  assert.match(source, /spawn\('\/usr\/bin\/caffeinate', \['-dims', '-w', String\(process\.pid\)\]/);
+  assert.match(source, /\['SIGINT', 130\], \['SIGTERM', 143\], \['SIGHUP', 129\]/);
+  assert.doesNotMatch(source, /detached: true|pkill/);
+});
+
+test('fixture quit escalates: quit, the fixture\'s Don\'t Save, SIGTERM, SIGKILL, by the launched pid only', async () => {
+  const calls = [];
+  const make = ({ quits = [], dies = 'never', running = () => true } = {}) => {
+    let quit = 0, alive = true;
+    return {
+      live: { appState: async () => ({ running: alive && running(), pids: alive ? [42] : [] }),
+        quitApp: async (bundle, { pid }) => { calls.push(`quit ${pid}`); if (quits[quit++]) { alive = false; return; } throw new Error('quit unconfirmed'); } },
+      run: async (cmd, args) => { calls.push(`osascript ${/unix id is 42/.test(args[1]) && /Don’t Save/.test(args[1]) ? 'dont-save 42' : '?'}`); },
+      kill: (pid, signal) => { calls.push(`${signal} ${pid}`); if (signal === dies || dies === 'SIGTERM' && signal === 'SIGKILL') alive = false; },
+      alive: () => alive, sleep: async () => {},
+    };
+  };
+  assert.equal(await quitFixture({ bundle: 'b', pid: 42 }, make({ quits: [true] })), 'quit');
+  calls.length = 0;
+  assert.equal(await quitFixture({ bundle: 'b', pid: 42 }, make({ quits: [false, true] })), "quit after Don't Save");
+  assert.deepEqual(calls, ['quit 42', 'osascript dont-save 42', 'quit 42']);
+  calls.length = 0;
+  assert.equal(await quitFixture({ bundle: 'b', pid: 42 }, make({ dies: 'SIGTERM' })), 'terminated');
+  assert.deepEqual(calls, ['quit 42', 'osascript dont-save 42', 'quit 42', 'SIGTERM 42']);
+  calls.length = 0;
+  assert.equal(await quitFixture({ bundle: 'b', pid: 42 }, make({ dies: 'SIGKILL' })), 'killed');
+  assert.deepEqual(calls.slice(-2), ['SIGTERM 42', 'SIGKILL 42']);
+  calls.length = 0;
+  const other = make();
+  other.live.appState = async () => ({ running: true, pids: [77] });
+  assert.equal(await quitFixture({ bundle: 'b', pid: 42 }, other), 'gone', 'another process is never signalled');
+  assert.deepEqual(calls, []);
+  assert.throws(() => dontSaveScript(1), /launched pid/);
+  assert.equal(asideName('/r/record-ring', p => p === '/r/record-ring.partial-1'), '/r/record-ring.partial-2');
+});
+
+test('a hangup in a check runs its cleanup and releases the lock, then exits 129', async () => {
+  const signals = new EventEmitter(), order = [];
+  let exited;
+  const done = underLiveLock({ acquire: async () => async () => order.push('unlock'), signals, exit: code => { exited = code; }, log: () => {} },
+    async ({ cleanups }) => { cleanups.push(() => order.push('cleanup')); signals.emit('SIGHUP'); await new Promise(r => setTimeout(r, 20)); return 0; });
+  await done;
+  await new Promise(r => setTimeout(r, 20));
+  assert.deepEqual(order, ['cleanup', 'unlock']);
+  assert.equal(exited, 129);
 });
 
 test('shared live pieces: host flags as the relay passes them, the product\'s compiler flags, and the refusals', () => {
@@ -367,7 +532,7 @@ test('every VC7 script\'s --dry-run exits 0, prints its plan and opens nothing',
     ['bench/hand/cursor-cost.mjs', [], /cursor cost check/],
     ['bench/hand/cursor-record.mjs', [], /cursor recording/],
     ['bench/hand/cost-pass.mjs', ['--cursor-style', 'ring', '--rounds', '5'], /30 runs/],
-    ['bench/hand/vc7-night.mjs', ['--night', night], /estimate \d+ min of steps \(target under 90\)/],
+    ['bench/hand/vc7-night.mjs', ['--night', night], /estimate \d+ min of steps plus about \d+ min of quiet gaps \(target under 90\)/],
   ]) {
     const run = spawnSync(process.execPath, [join(root, script), ...args, '--dry-run'], { cwd: root, encoding: 'utf8', timeout: 120000 });
     assert.equal(run.status, 0, `${script}: ${run.stderr}`);

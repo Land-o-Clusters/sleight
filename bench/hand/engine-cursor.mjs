@@ -36,11 +36,19 @@ export function parseWatch(text) {
 
 const drawn = w => w.onScreen === true && w.alpha > 0 && w.bounds?.width > 0 && w.bounds?.height > 0;
 
-/** Per call ({ label, start, end } in ms): whether a drawn engine window that the baseline (samples before the first call)
- *  didn't have appeared between the call's start and 500 ms after its end, how long after the start it first showed, how long
- *  it stayed, and what it was (owner, name, layer, sharing, bounds). */
-export function callSightings(samples, calls, { afterMs = 500 } = {}) {
-  const first = calls.length ? Math.min(...calls.map(c => c.start)) : Infinity;
+/** The drawn engine windows in the samples before baselineMs (before any engine call): evidence on their own. */
+export function baselineWindows(samples, baselineMs) {
+  const seen = new Map();
+  for (const s of samples.filter(s => s.t < baselineMs)) for (const w of s.windows.filter(drawn)) seen.set(w.id, { id: w.id, owner: w.owner, name: w.name, layer: w.layer, sharing: w.sharing, bounds: w.bounds });
+  return [...seen.values()];
+}
+
+/** Per call ({ label, start, end } in ms): whether a drawn engine window that wasn't up before baselineMs (taken before any
+ *  engine call; default the first call's start) appeared between the call's start and 500 ms after its end, how long after
+ *  the start it first showed, how long it stayed, and what it was. coverage: the samples seen over the samples a 50 ms
+ *  sampler should have taken in that span. */
+export function callSightings(samples, calls, { afterMs = 500, baselineMs } = {}) {
+  const first = baselineMs ?? (calls.length ? Math.min(...calls.map(c => c.start)) : Infinity);
   const baseline = new Set(samples.filter(s => s.t < first).flatMap(s => s.windows.filter(drawn).map(w => w.id)));
   return calls.map(call => {
     const inside = samples.filter(s => s.t >= call.start && s.t <= call.end + afterMs);
@@ -52,8 +60,9 @@ export function callSightings(samples, calls, { afterMs = 500 } = {}) {
       seen.set(w.id, entry);
     }
     const windows = [...seen.values()].map(({ firstT, lastT, ...w }) => ({ ...w, delayMs: firstT - call.start, visibleMs: lastT - firstT + SAMPLE_MS }));
-    return { label: call.label, placement: call.placement, ms: call.end - call.start, samples: inside.length, appeared: windows.length > 0, windows,
-      ...(call.error ? { error: call.error } : {}) };
+    const expected = Math.max(1, Math.floor((call.end - call.start + afterMs) / SAMPLE_MS));
+    return { label: call.label, placement: call.placement, ms: call.end - call.start, samples: inside.length,
+      coverage: Math.round(inside.length / expected * 100) / 100, appeared: windows.length > 0, windows, ...(call.error ? { error: call.error } : {}) };
   });
 }
 
@@ -70,13 +79,20 @@ export function timingStats(withMs, withoutMs) {
     deltaMs: a === null || b === null ? null : Math.round(a - b) };
 }
 
-/** R4's decision table, as far as this run can tell. Whether a window shows in the engine's own screenshots is not tested here. */
-export function engineDecision(sightings) {
-  const seen = sightings.filter(s => s.appeared);
+export const MIN_SAMPLES = 100, MIN_COVERAGE = 0.5;
+const OPEN = "whether the engine's own screenshots include it is still open (not tested here)";
+/** R4's decision table, as far as this run can tell. no-cursor needs at least MIN_SAMPLES samples and every call sampled for
+ *  at least half its span; a window up before the first engine call counts as evidence, never as absence. */
+export function engineDecision(sightings, { baseline = [], samples = sightings.reduce((n, s) => n + s.samples, 0) } = {}) {
   if (!sightings.length) return { row: 'no-data', words: 'no calls ran' };
-  if (!seen.length) return { row: 'no-cursor', words: `no engine window appeared during ${sightings.length} calls: the agent cursor is the only cursor on this Mac (the flag may differ on other Macs)` };
-  const names = [...new Set(seen.flatMap(s => s.windows.map(w => `${w.owner}/${w.name || 'unnamed'}`)))];
-  return { row: 'cursor-window', words: `an engine window appeared during ${seen.length} of ${sightings.length} calls (${names.join(', ')}): check whether the engine's screenshots include it before choosing the ring's look` };
+  const named = list => [...new Set(list.map(w => `${w.owner}/${w.name || 'unnamed'}`))].join(', ');
+  const seen = sightings.filter(s => s.appeared);
+  if (seen.length) return { row: 'cursor-window', words: `an engine window appeared during ${seen.length} of ${sightings.length} calls (${named(seen.flatMap(s => s.windows))}); ${OPEN}` };
+  if (baseline.length) return { row: 'cursor-window', words: `engine windows were up before the first engine call (${named(baseline)}) and stayed; ${OPEN}` };
+  if (samples < MIN_SAMPLES) return { row: 'no-data', words: `only ${samples} window-list samples (needs ${MIN_SAMPLES}): the sampler did not run long enough to say` };
+  const thin = sightings.filter(s => s.coverage < MIN_COVERAGE);
+  if (thin.length) return { row: 'no-data', words: `the sampler missed most of ${thin.map(s => `${s.placement} ${s.label}`).join(', ')}` };
+  return { row: 'no-cursor', words: `no engine window appeared during ${sightings.length} calls (${samples} samples): the agent cursor is the only cursor on this Mac (the flag may differ on other Macs)` };
 }
 
 /** The element numbers the sequence uses, from getApp's tree text: a button that can't close or quit anything, and the text
@@ -122,9 +138,10 @@ export function dryRunPlan(opts, { out }) {
     ...(opts.helper ? [] : [`2. build: xcrun swiftc -module-cache-path <cache> ${tilde(join(ROOT, 'bench/hand/capture.swift'))} -o ${helper}`]),
     `3. /usr/bin/open -g -a TextEdit <work>/sleight-vc7-engine.txt --args -ApplePersistenceIgnoreState YES ...${opts.receipt ? `   (receipt ${tilde(opts.receipt)})` : ''}`,
     '4. sleight-mcp session: SLEIGHT_HAND=0 SLEIGHT_SURFACES=computer SLEIGHT_APPROVAL_PROMPT=client (TextEdit approvals only)',
-    `5. background pass (TextEdit not activated): ${helper} watch-engine ${SAMPLE_MS} <s> while these run ${GAP_MS} ms apart:`,
+    `5. ${helper} watch-engine ${SAMPLE_MS} 600 starts 1.5 s before the first engine call (the baseline) and stops 1.5 s after the last action`,
+    `   acquire, then the background pass (TextEdit not activated), calls ${GAP_MS} ms apart:`,
     ...sequenceCalls({ button: '<button>', text: '<text area>' }).map(c => `     ${c.label}: ${c.code}`),
-    `6. /usr/bin/open -b ${TEXTEDIT} (front), then the same calls with the sampler`,
+    `6. /usr/bin/open -b ${TEXTEDIT} (front), then the same calls; "no cursor" needs ${MIN_SAMPLES} samples and half of every call's span sampled`,
     `7. ${TIMED_CALLS} x await app.click(${JSON.stringify(COORDINATE)}) with the sampler and ${TIMED_CALLS} without, blocks of 5`,
     '8. quit the TextEdit this run started; release the lock',
     `9. report: ${tilde(join(out, 'engine-cursor.json'))}`,
@@ -172,28 +189,32 @@ async function main(argv) {
       return { stop: () => { child.kill('SIGTERM'); return done; }, done };
     };
 
+    // One sampler from before the first engine call until after the last action: its first samples are the baseline, and a
+    // window already up then is evidence. watch(600) runs until stop(), however slow a call is.
+    const main = watch(600);
+    await sleep(1500);
+    const baselineMs = Date.now();
+    const calls = [];
     const first = await call(`var app = await cua.getApp(${JSON.stringify(TEXTEDIT)})`);
-    if (first.error) throw new Error(`the engine could not acquire TextEdit: ${first.error}`);
+    calls.push({ label: 'acquire', placement: 'background', start: first.start, end: first.end, ...(first.error ? { error: first.error } : {}) });
+    if (first.error) { await main.stop(); throw new Error(`the engine could not acquire TextEdit: ${first.error}`); }
     const elements = pickElements(first.text);
-    const calls = [], samples = [];
     for (const placement of ['background', 'front']) {
       if (placement === 'front') { await execute('/usr/bin/open', ['-b', TEXTEDIT], { timeout: 15000 }); await sleep(1000); }
-      const sequence = sequenceCalls(elements);
-      const sampler = watch(Math.ceil((sequence.length * (GAP_MS + 4000) + 4000) / 1000));
-      await sleep(1000); // baseline samples before the first call
-      for (const step of sequence) {
+      for (const step of sequenceCalls(elements)) {
+        await sleep(GAP_MS);
         const timed = await call(step.code);
         calls.push({ label: step.label, placement, start: timed.start, end: timed.end, ...(timed.error ? { error: timed.error } : {}) });
-        await sleep(GAP_MS);
       }
-      samples.push(...await sampler.stop());
     }
+    await sleep(1500);
+    const samples = await main.stop();
     const front = (await helper(['windows'])).front;
     // The timing pass: blocks of 5 with the sampler, then 5 without, twice.
     const withMs = [], withoutMs = [], timingSightings = [];
     for (let block = 0; block < 4; block++) {
       const sampled = block % 2 === 0;
-      const sampler = sampled ? watch(60) : undefined;
+      const sampler = sampled ? watch(600) : undefined;
       if (sampled) await sleep(500);
       const blockCalls = [];
       for (let i = 0; i < 5; i++) {
@@ -202,17 +223,22 @@ async function main(argv) {
         blockCalls.push({ label: `timed-${block * 5 + i + 1}`, placement: 'timing', start: timed.start, end: timed.end, ...(timed.error ? { error: timed.error } : {}) });
         await sleep(300);
       }
-      if (sampler) timingSightings.push(...callSightings(await sampler.stop(), blockCalls));
+      if (sampler) timingSightings.push(...callSightings(await sampler.stop(), blockCalls)); // each block's own 500 ms baseline
     }
-    const sightings = callSightings(samples, calls);
+    const sightings = callSightings(samples, calls, { baselineMs });
+    const baseline = baselineWindows(samples, baselineMs);
     const report = { target: { pid: target.pid, id: target.id }, elements, frontPidAfter: front, sampleMs: SAMPLE_MS,
-      samples: samples.length, sightings, timing: timingStats(withMs, withoutMs), timingSightings: timingSightings.filter(s => s.appeared),
-      decision: engineDecision([...sightings, ...timingSightings]) };
+      samples: samples.length, baselineSamples: samples.filter(s => s.t < baselineMs).length, baselineWindows: baseline, sightings,
+      timing: timingStats(withMs, withoutMs), timingSightings: timingSightings.filter(s => s.appeared),
+      decision: engineDecision([...sightings, ...timingSightings.filter(s => s.appeared)], { baseline, samples: samples.length }) };
     writeFileSync(join(out, 'engine-cursor.json'), JSON.stringify(report, null, 2) + '\n');
     console.log(summary(report));
-    console.log(`VC7 RESULT: engine cursor ${report.decision.row}; timed clicks ${report.timing.withSampler.medianMs} vs ${report.timing.withoutSampler.medianMs} ms`);
     console.log(`Report: ${tilde(join(out, 'engine-cursor.json'))}`);
-    return [...sightings, ...timingSightings].some(s => s.error) ? 1 : 0;
+    const failed = [...sightings, ...timingSightings].filter(s => s.error);
+    // A failed call leaves the check unmeasured: no result line, so the runner reruns it.
+    if (failed.length) { console.log(`VC7 INCOMPLETE: ${failed.length} engine call(s) failed`); return 1; }
+    console.log(`VC7 RESULT: engine cursor ${report.decision.row}; timed clicks ${report.timing.withSampler.medianMs} vs ${report.timing.withoutSampler.medianMs} ms`);
+    return 0;
   });
 }
 

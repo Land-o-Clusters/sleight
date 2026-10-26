@@ -10,13 +10,14 @@
 //   node bench/hand/cost-pass.mjs --cursor-style ring --rounds 5 --stop-on-owner --owner-away --out DIR   (VC7 check 4)
 //   node bench/hand/cost-pass.mjs ... --dry-run      the schedule and every run's exact command; runs nothing
 //
-// VC7 (the agent cursor): --cursor-style ring|seam|sprite runs the on side with SLEIGHT_CURSOR_STYLE set, and the sampler
-// checks every on-side host was started with that style. The report adds per-task figures: per-call tool-time medians and
-// wall time per task (mean and standard error), and a speed verdict that says "no slowdown" only when every task's on minus
-// off difference, for both figures, is within the pass's own noise rule below (10% of the off side or 20 ms, whichever is
-// more). --out DIR with a saved cost-pass.json of the same settings resumes: finished steps are kept, the rest run.
-// --stop-on-owner stops before the next run when someone used the keyboard or pointer after the last run ended
-// (owner-watch.mjs), and exits 4.
+// VC7 (the agent cursor): --cursor-style ring|seam|sprite runs the on side with SLEIGHT_CURSOR_STYLE set and the capture mode
+// fixed (SLEIGHT_HAND_CAPTURE=hidden, or --capture visible), and the sampler checks every on-side host was started with that
+// style. The speed verdict (speedRule) uses passed runs only, at least 4 a side per task, for wall time per run and each
+// run's median tool time per call. A task is "no slowdown" when the mean difference is at most 5% of the off side, or when
+// the 95% interval of the difference holds 0 and its half-width is at most 10%; anything else is inconclusive or slower.
+// Exit 0 only for a budget within and a measured "no slowdown"; 1 for any other finished verdict; 5 when a run errored
+// (resume reruns it); 4 when the owner came back; 130 on a signal. --out DIR with a saved cost-pass.json of the same
+// settings resumes. --stop-on-owner checks at each round's first run, after a 15 s gap with no runs (owner-watch.mjs).
 //
 // Budget (section 2): hand host under 1% CPU averaged over each task; WindowServer under 2% added on average and under 10%
 // added at its busiest second; host RSS under 50 MB; tool-time medians unchanged, which this pass reads as the per-call
@@ -163,10 +164,12 @@ export function reportMarkdown(cmp, { tasks, rounds, model, effort, started, fin
 
 /** One side of one task. deps: run(args, env) → { pid, done: Promise<{ code, stdout }> }, sampler(rootPid) → sampler,
  *  readJson(path), traceLines(dirs) → lines. */
-export async function runSide(deps, { round, task, side, model, effort, cursorStyle }) {
+export async function runSide(deps, { round, task, side, model, effort, cursorStyle, capture }) {
   const env = { ...deps.env, SLEIGHT_BENCH_HAND: side === 'on' ? '1' : '0' };
-  delete env.SLEIGHT_CURSOR_STYLE;
+  delete env.SLEIGHT_CURSOR_STYLE; delete env.SLEIGHT_HAND_CAPTURE;
   if (cursorStyle && side === 'on') env.SLEIGHT_CURSOR_STYLE = cursorStyle;
+  // The capture mode is set, so the pass never measures whatever mode the owner saved in hand.json.
+  if (capture && side === 'on') env.SLEIGHT_HAND_CAPTURE = capture;
   const child = await deps.run(runArgs({ task, model, effort }), env);
   const sampler = deps.sampler(child.pid);
   await sampler.start();
@@ -192,72 +195,96 @@ export async function runSide(deps, { round, task, side, model, effort, cursorSt
   return entry;
 }
 
-/** Runs the schedule. done: entries kept from a resumed pass (finished steps are skipped). deps.ownerBack(), when given, is
- *  asked before each run; a reason stops the pass with entries.stopped set to it. */
-export async function runCostPass(deps, { tasks = CLAIM_TASKS, rounds = 3, model = 'claude-haiku-5-5', effort = 'high', cursorStyle, done = [], save = () => {}, log = () => {} } = {}) {
+/** Runs the schedule. done: entries kept from a resumed pass (finished steps are skipped). deps.ownerBack({ step, boundary }),
+ *  when given, is asked before each run (boundary: the first run of a round); a reason stops the pass with entries.stopped. */
+export async function runCostPass(deps, { tasks = CLAIM_TASKS, rounds = 3, model = 'claude-haiku-5-5', effort = 'high', cursorStyle, capture = 'hidden', done = [], save = () => {}, log = () => {} } = {}) {
   const entries = [...done];
   const finished = new Set(done.filter(e => !e.error).map(e => `${e.round}/${e.task}/${e.side}`));
-  for (const step of schedule(tasks, rounds)) {
+  const steps = schedule(tasks, rounds);
+  for (const [i, step] of steps.entries()) {
     if (finished.has(`${step.round}/${step.task}/${step.side}`)) continue;
     await deps.waitForHold?.();
-    const back = await deps.ownerBack?.();
+    const back = await deps.ownerBack?.({ step, boundary: i % (tasks.length * 2) === 0 });
     if (back) { log(`stopped: ${back}`); entries.stopped = back; return entries; }
     log(`round ${step.round} ${step.task} hand ${step.side}${cursorStyle && step.side === 'on' ? ` (${cursorStyle})` : ''}`);
     // A retried step replaces its failed entry.
     const at = entries.findIndex(e => e.round === step.round && e.task === step.task && e.side === step.side);
     if (at >= 0) entries.splice(at, 1);
-    entries.push(await runSide(deps, { ...step, model, effort, cursorStyle }));
+    entries.push(await runSide(deps, { ...step, model, effort, cursorStyle, capture }));
     save(entries);
   }
   return entries;
 }
 
 const mean = values => values.length ? values.reduce((a, b) => a + b, 0) / values.length : null;
-const standardError = values => {
+const variance = values => {
   if (values.length < 2) return null;
   const m = mean(values);
-  return Math.sqrt(values.reduce((a, v) => a + (v - m) ** 2, 0) / (values.length - 1) / values.length);
+  return values.reduce((a, v) => a + (v - m) ** 2, 0) / (values.length - 1);
 };
-/** The pass's noise rule: a difference is noise when it is under 10% of the off side or 20 ms, whichever is more. */
-export const noiseLimitMs = (offMs, budget = BUDGET) => offMs === null ? null : Math.max(budget.toolMedianMs, offMs * budget.toolMedianPct / 100);
+// Two-sided 95% points of Student's t for 1 to 30 degrees of freedom; above that the next whole-table value.
+const T975 = [12.706, 4.303, 3.182, 2.776, 2.571, 2.447, 2.365, 2.306, 2.262, 2.228, 2.201, 2.179, 2.160, 2.145, 2.131, 2.120,
+  2.110, 2.101, 2.093, 2.086, 2.080, 2.074, 2.069, 2.064, 2.060, 2.056, 2.052, 2.048, 2.045, 2.042];
+export const t975 = df => !(df >= 1) ? T975[0] : df <= 30 ? T975[Math.floor(df) - 1] : df <= 60 ? 2.0 : df <= 120 ? 1.98 : 1.96;
+export const MIN_PASSED = 4;
+export const SPEED_RULE = Object.freeze({ meanPct: 5, halfWidthPct: 10, minPassed: MIN_PASSED });
 
-/** Per task and side: per-call tool-time median, wall time per task (mean and standard error, seconds), and whether each
- *  on minus off difference is within the noise rule. */
-export function perTask(entries, budget = BUDGET) {
+/** The speed rule (sleight-arch, VC7HR) for one figure of one task. on and off: per-run values of passed runs only. At least
+ *  minPassed a side, else not-measured. The difference is on minus off with a Welch 95% interval. no-slowdown: the mean
+ *  difference is at most 5% of the off side, or the interval holds 0 and its half-width is at most 10% of the off side.
+ *  slower: the interval lies above 0 and the difference is over 5%. Anything else is inconclusive. */
+export function speedRule(on, off, rule = SPEED_RULE) {
+  const n = [on.length, off.length];
+  if (on.length < rule.minPassed || off.length < rule.minPassed) return { state: 'not-measured', n, reason: `needs ${rule.minPassed} passed runs a side, has ${on.length} on and ${off.length} off` };
+  const mOn = mean(on), mOff = mean(off), vOn = variance(on) / on.length, vOff = variance(off) / off.length;
+  const diff = mOn - mOff, se = Math.sqrt(vOn + vOff);
+  const df = se > 0 ? (vOn + vOff) ** 2 / (vOn ** 2 / (on.length - 1) + vOff ** 2 / (off.length - 1)) : on.length + off.length - 2;
+  const half = t975(df) * se, ci = [diff - half, diff + half];
+  const pct = value => mOff > 0 ? value / mOff * 100 : Infinity;
+  const state = pct(diff) <= rule.meanPct || (ci[0] <= 0 && ci[1] >= 0 && pct(half) <= rule.halfWidthPct) ? 'no-slowdown'
+    : ci[0] > 0 ? 'slower' : 'inconclusive';
+  return { state, n, onMean: mOn, offMean: mOff, diff, ci, half, diffPct: pct(diff), halfPct: pct(half), df };
+}
+
+const median2 = values => { const m = median(values); return m === null ? null : m; };
+/** Per task: wall time per run and the run's median tool time per call, passed runs only, each judged by speedRule; the task
+ *  is no-slowdown only when both are. */
+export function perTask(entries, rule = SPEED_RULE) {
   const tasks = [...new Set(entries.map(e => e.task))];
   return tasks.map(task => {
+    const runs = name => entries.filter(e => e.task === task && e.side === name && !e.error);
     const side = name => {
-      const runs = entries.filter(e => e.task === task && e.side === name && !e.error);
-      const walls = runs.map(e => e.elapsedS).filter(Number.isFinite);
-      return { runs: runs.length, passed: runs.filter(e => e.passed).length, medianToolMs: median(runs.flatMap(e => e.trace?.toolMs ?? [])),
-        calls: runs.reduce((n, e) => n + (e.trace?.toolMs?.length ?? 0), 0), wallMeanS: round(mean(walls)), wallSeS: round(standardError(walls)) };
+      const all = runs(name), passed = all.filter(e => e.passed === true);
+      return { runs: all.length, passed: passed.length, failed: all.length - passed.length,
+        wallS: passed.map(e => e.elapsedS).filter(Number.isFinite), toolMs: passed.map(e => median2(e.trace?.toolMs ?? [])).filter(Number.isFinite) };
     };
     const on = side('on'), off = side('off');
-    const toolDelta = on.medianToolMs === null || off.medianToolMs === null ? null : on.medianToolMs - off.medianToolMs;
-    const wallDeltaMs = on.wallMeanS === null || off.wallMeanS === null ? null : (on.wallMeanS - off.wallMeanS) * 1000;
-    const toolLimit = noiseLimitMs(off.medianToolMs, budget), wallLimit = noiseLimitMs(off.wallMeanS === null ? null : off.wallMeanS * 1000, budget);
-    return { task, on, off, toolDeltaMs: round(toolDelta, 0), toolLimitMs: round(toolLimit, 0), toolWithin: toolDelta !== null && toolDelta < toolLimit,
-      wallDeltaS: round(wallDeltaMs === null ? null : wallDeltaMs / 1000), wallLimitS: round(wallLimit === null ? null : wallLimit / 1000),
-      wallWithin: wallDeltaMs !== null && wallDeltaMs < wallLimit };
+    const wall = speedRule(on.wallS, off.wallS, rule), tool = speedRule(on.toolMs, off.toolMs, rule);
+    const states = [wall.state, tool.state];
+    const state = states.every(s => s === 'no-slowdown') ? 'no-slowdown' : states.includes('slower') ? 'slower'
+      : states.includes('not-measured') ? 'not-measured' : 'inconclusive';
+    return { task, state, on: { runs: on.runs, passed: on.passed, failed: on.failed }, off: { runs: off.runs, passed: off.passed, failed: off.failed }, wall, tool };
   });
 }
 
-/** The speed verdict that decides the default: "no slowdown" only when every task's tool and wall differences are noise. */
+/** The verdict that decides the default: no slowdown only when every task measured no slowdown. Anything else fails. */
 export function speedVerdict(rows, { cursorStyle = 'the hand' } = {}) {
-  if (!rows.length) return { slowdown: null, line: 'Speed verdict: no tasks measured' };
-  const missing = rows.filter(r => r.toolDeltaMs === null || r.wallDeltaS === null);
-  if (missing.length) return { slowdown: null, line: `Speed verdict: not measured for ${missing.map(r => r.task).join(', ')}` };
-  const slow = rows.filter(r => !r.toolWithin || !r.wallWithin);
-  if (!slow.length) return { slowdown: false, line: `Speed verdict: no slowdown with ${cursorStyle} on (${rows.length} tasks, every difference within 10% or 20 ms)` };
-  const signed = n => `${n >= 0 ? '+' : ''}${n}`;
-  return { slowdown: true, line: `Speed verdict: slower with ${cursorStyle} on in ${slow.map(r => `${r.task} (tool ${signed(r.toolDeltaMs)} ms per call, wall ${signed(r.wallDeltaS)} s)`).join(', ')}` };
+  if (!rows.length) return { state: 'not-measured', slowdown: null, line: 'Speed verdict: not measured (no tasks)' };
+  const by = state => rows.filter(r => r.state === state).map(r => r.task);
+  if (by('no-slowdown').length === rows.length) {
+    return { state: 'no-slowdown', slowdown: false, line: `Speed verdict: no slowdown with ${cursorStyle} on (${rows.length} tasks, each within 5% or a 95% interval holding 0 inside 10%)` };
+  }
+  if (by('slower').length) return { state: 'slower', slowdown: true, line: `Speed verdict: slower with ${cursorStyle} on in ${by('slower').join(', ')}` };
+  const parts = [['inconclusive', by('inconclusive')], ['not measured', by('not-measured')]].filter(([, t]) => t.length).map(([w, t]) => `${w}: ${t.join(', ')}`);
+  return { state: 'inconclusive', slowdown: null, line: `Speed verdict: inconclusive with ${cursorStyle} on (${parts.join('; ')})` };
 }
 
+const fmt = (value, digits) => value === null || value === undefined || !Number.isFinite(value) ? 'none' : String(Math.round(value * 10 ** digits) / 10 ** digits);
+const interval = (r, digits, unit) => r.state === 'not-measured' ? r.reason
+  : `${r.diff >= 0 ? '+' : ''}${fmt(r.diff, digits)} ${unit} (${fmt(r.diffPct, 1)}%), 95% [${fmt(r.ci[0], digits)}, ${fmt(r.ci[1], digits)}], half-width ${fmt(r.halfPct, 1)}%: ${r.state}`;
 export function perTaskMarkdown(rows, verdict) {
-  const cell = (s, field) => s[field] ?? 'none';
-  return ['| Task | Tool median on / off, ms | Limit | Within | Wall on / off, s (SE) | Limit | Within |', '|---|---|---|---|---|---|---|',
-    ...rows.map(r => `| ${r.task} | ${cell(r.on, 'medianToolMs')} / ${cell(r.off, 'medianToolMs')} | ${r.toolLimitMs ?? 'none'} | ${r.toolWithin ? 'yes' : 'no'} | ` +
-      `${cell(r.on, 'wallMeanS')} (${cell(r.on, 'wallSeS')}) / ${cell(r.off, 'wallMeanS')} (${cell(r.off, 'wallSeS')}) | ${r.wallLimitS ?? 'none'} | ${r.wallWithin ? 'yes' : 'no'} |`),
+  return ['| Task | Passed on / off | Wall on minus off | Tool per call on minus off | Task |', '|---|---|---|---|---|',
+    ...rows.map(r => `| ${r.task} | ${r.on.passed}/${r.on.runs} / ${r.off.passed}/${r.off.runs} | ${interval(r.wall, 2, 's')} | ${interval(r.tool, 0, 'ms')} | ${r.state} |`),
     '', verdict.line, ''].join('\n');
 }
 
@@ -278,23 +305,25 @@ export function parseArgs(argv) {
   const rounds = Number(value('--rounds') ?? 3);
   if (!Number.isInteger(rounds) || rounds < 1 || rounds > 10) throw new Error('--rounds must be a whole number from 1 to 10');
   if (!tasks.length || tasks.some(t => !/^[a-z0-9-]{1,60}$/.test(t))) throw new Error('--tasks must be task ids');
+  const capture = value('--capture');
+  if (capture !== undefined && !['hidden', 'visible'].includes(capture)) throw new Error('--capture must be hidden or visible');
   const cursorStyle = value('--cursor-style');
   if (cursorStyle !== undefined && !CURSOR_STYLES.includes(cursorStyle)) throw new Error(`--cursor-style must be one of ${CURSOR_STYLES.join(', ')}`);
   return { tasks, rounds, model: value('--model') ?? 'claude-haiku-5-5', effort: value('--effort') ?? 'high', out: value('--out'),
     report: value('--report'), ownerAway: argv.includes('--owner-away'), cursorStyle, stopOnOwner: argv.includes('--stop-on-owner'),
-    dryRun: argv.includes('--dry-run') };
+    dryRun: argv.includes('--dry-run'), capture: capture ?? 'hidden' };
 }
 
 /** The settings a saved pass must match to be resumed. */
-export const resumeKey = meta => JSON.stringify([meta.tasks, meta.rounds, meta.model, meta.effort, meta.cursorStyle ?? null]);
+export const resumeKey = meta => JSON.stringify([meta.tasks, meta.rounds, meta.model, meta.effort, meta.cursorStyle ?? null, meta.capture ?? 'hidden']);
 
 export function dryRunPlan(opts, { out, root = ROOT, home = homedir() }) {
   const steps = schedule(opts.tasks, opts.rounds), short = path => path.split(home).join('~');
   return [
     `Ghost hand cost pass${opts.cursorStyle ? ` (VC7 speed A/B, cursor style ${opts.cursorStyle})` : ''}: ${steps.length} runs (dry run: nothing runs)`,
-    `  out ${short(out)}; ${opts.stopOnOwner ? 'stops before a run when the owner is back (exit 4); ' : ''}waits while /tmp/sleight-hold exists`,
+    `  out ${short(out)}; ${opts.stopOnOwner ? 'checks for the owner at each round\'s first run after a 15 s quiet gap (exit 4 when back); ' : ''}waits while /tmp/sleight-hold exists`,
     ...steps.map((step, i) => `  ${String(i + 1).padStart(2)}. round ${step.round} ${step.task} ${step.side}: cd ${short(root)} && ` +
-      `SLEIGHT_BENCH_HAND=${step.side === 'on' ? 1 : 0}${opts.cursorStyle && step.side === 'on' ? ` SLEIGHT_CURSOR_STYLE=${opts.cursorStyle}` : ''} node ${runArgs({ ...step, ...opts }).join(' ')}`),
+      `SLEIGHT_BENCH_HAND=${step.side === 'on' ? 1 : 0}${step.side === 'on' ? ` SLEIGHT_HAND_CAPTURE=${opts.capture ?? 'hidden'}` : ''}${opts.cursorStyle && step.side === 'on' ? ` SLEIGHT_CURSOR_STYLE=${opts.cursorStyle}` : ''} node ${runArgs({ ...step, ...opts }).join(' ')}`),
   ];
 }
 
@@ -307,7 +336,7 @@ async function main(argv) {
     const cmp = compareSides(saved.entries, budgetFor(style), { cursorStyle: style });
     const rows = perTask(saved.entries), speed = speedVerdict(rows, { cursorStyle: style });
     console.log(reportMarkdown(cmp, saved.meta) + '\n' + perTaskMarkdown(rows, speed));
-    return cmp.verdict === 'within' && speed.slowdown === false ? 0 : 1;
+    return cmp.verdict === 'within' && speed.state === 'no-slowdown' ? 0 : 1;
   }
   const out = resolve(opts.out ?? join(homedir(), 'Library/Logs/sleight', `h6-${new Date().toISOString().replace(/[:.]/g, '-')}`));
   if (opts.dryRun) { console.log(dryRunPlan(opts, { out }).join('\n')); return 0; }
@@ -323,7 +352,7 @@ async function main(argv) {
     if (built.status !== 'ready') { console.error(`Hand host build: ${built.code ?? built.status}`); return 2; }
   }
   mkdirSync(out, { recursive: true });
-  const meta = { tasks: opts.tasks, rounds: opts.rounds, model: opts.model, effort: opts.effort, ...(opts.cursorStyle ? { cursorStyle: opts.cursorStyle } : {}),
+  const meta = { tasks: opts.tasks, rounds: opts.rounds, model: opts.model, effort: opts.effort, ...(opts.cursorStyle ? { cursorStyle: opts.cursorStyle } : {}), capture: opts.capture,
     started: new Date().toISOString(), finished: null };
   let done = [];
   if (existsSync(join(out, 'cost-pass.json'))) {
@@ -337,8 +366,8 @@ async function main(argv) {
   const { createOwnerWatch, ownerWords } = await import('./owner-watch.mjs');
   const watch = createOwnerWatch();
   // A signal stops the pass before its next run and reaches the current run.mjs, whose abort is idempotent.
-  let current, interrupted = false;
-  for (const signal of ['SIGINT', 'SIGTERM']) process.on(signal, () => { interrupted = true; try { current?.kill('SIGINT'); } catch {} });
+  let current, interrupted = false, ran = false;
+  for (const signal of ['SIGINT', 'SIGTERM', 'SIGHUP']) process.on(signal, () => { interrupted = true; try { current?.kill('SIGINT'); } catch {} });
   const entries = await runCostPass({
     env: process.env,
     waitForHold: async () => {
@@ -346,15 +375,17 @@ async function main(argv) {
       while (existsSync('/tmp/sleight-hold')) { held = true; await new Promise(r => setTimeout(r, 30000)); }
       if (held) watch.quiet(); // another project's window may have made input of its own
     },
-    ownerBack: async () => {
+    // At each round's first run (after the first), 15 s with no run of this pass, then the HID idle time: 4 gaps in 5 rounds.
+    ownerBack: async ({ boundary } = {}) => {
       if (interrupted) return 'interrupted by a signal';
-      if (!opts.stopOnOwner) return undefined;
-      const r = await watch.check();
+      if (!opts.stopOnOwner || !boundary || !ran) return undefined;
+      const r = await watch.gapCheck();
+      if (interrupted) return 'interrupted by a signal';
       return r.back ? ownerWords(r) : undefined;
     },
     run: async (args, env) => {
       const child = spawn(process.execPath, args, { cwd: ROOT, env, stdio: ['ignore', 'pipe', 'pipe'] });
-      current = child;
+      current = child; ran = true;
       const log = join(out, `run-${String(++n).padStart(2, '0')}.log`);
       let stdout = '', all = '';
       child.stdout.on('data', c => { stdout += c; all += c; });
@@ -367,7 +398,7 @@ async function main(argv) {
   }, { ...opts, done, save, log: line => console.log(line) });
   if (entries.stopped) {
     meta.stopped = entries.stopped; save(entries);
-    console.log(`VC7 RESULT: speed A/B stopped (${entries.stopped}); rerun the same command to resume`);
+    console.log(`VC7 STOPPED: speed A/B (${entries.stopped}); rerun the same command to resume`);
     return interrupted ? 130 : 4;
   }
   meta.finished = new Date().toISOString();
@@ -377,9 +408,12 @@ async function main(argv) {
   const md = reportMarkdown(cmp, meta) + '\n' + perTaskMarkdown(rows, speed);
   writeFileSync(join(out, 'cost-pass.md'), md);
   console.log(md);
-  console.log(`VC7 RESULT: ${speed.line}; budget ${cmp.verdict}`);
   console.log(`Saved: ${join(out, 'cost-pass.json').split(homedir()).join('~')}`);
-  return cmp.verdict === 'within' && speed.slowdown !== true ? 0 : 1;
+  // A run that errored (login, a stuck app) is no measurement: exit 5 so the runner resumes the pass, which reruns it.
+  const errored = entries.filter(e => e.error);
+  if (errored.length) { console.log(`VC7 INCOMPLETE: ${errored.length} run(s) errored; rerun the same command to resume`); return 5; }
+  console.log(`VC7 RESULT: ${speed.line}; budget ${cmp.verdict}`);
+  return cmp.verdict === 'within' && speed.state === 'no-slowdown' ? 0 : 1;
 }
 
 if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) process.exitCode = await main(process.argv.slice(2));

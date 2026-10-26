@@ -21,7 +21,7 @@ export function handColoured(r, g, b) {
 }
 
 // The agent cursor's styles (VC7). The ring's paint is saturated: warm #FF7A3D and cool #5B8DFF (consent-host.swift RingTheme),
-// and the synthetic sprite (synthetic-character.mjs) is magenta and green. At 0.3 opacity over white the cool seam is
+// and the synthetic sprite (synthetic-character.mjs) is magenta and orange. At 0.3 opacity over white the cool seam is
 // (206, 221, 255) and the warm one (255, 215, 197): 49 and 58 apart between their highest and lowest channel. TextEdit's
 // text and its grey antialiasing are within 4, and the ring's ink (#0B0D14 at 0.55) within 9, so a spread of 24 counts only
 // cursor paint.
