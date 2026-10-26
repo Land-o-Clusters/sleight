@@ -918,3 +918,26 @@ test('host wire frames carry rect and caretX on acts, ok on done, and a move aim
   assert.deepEqual([lines[1].rect, lines[1].caretX], [[5, 6, 70, 20], 33]);
   assert.equal(lines[2].ok, true, 'a call\'s done is its success'); assert.equal(lines[3].ok, undefined);
 });
+
+test('perch (A2): the character frame carries the perch keys only with perch on, and a flip resends it before the options', async t => {
+  t.after(() => setHandPid(0));
+  const sprite = () => {
+    const s = testSprite(), state = { sheet: 'sheet.png', row: 0, columns: [0], ms: [100], loop: false, flip: false, hotspot: { x: 32, y: 32 } };
+    s.character.perch = { anchor: { x: 32, y: 40 }, states: { perch: state } };
+    return s;
+  };
+  let perch = false;
+  const child = fakeChild();
+  const client = createHandClient({ setting: () => ({ enabled: true, style: 'sprite', character: 'pet', perch }), loadSprite: async () => sprite(),
+    watch: () => undefined, permissions: null, usage: null, built: () => true, recheckMs: 0,
+    prepare: async () => ({ status: 'ready', spawn: () => child }) });
+  t.after(() => client.close());
+  client.send(frame({ label: 'Save' })); await settle();
+  const first = child.lines.find(l => l.hand === 'character');
+  assert.equal(first.perch, undefined); assert.equal(first.perchSheet, undefined);
+  perch = true; child.lines.length = 0;
+  client.send(frame({ label: 'Save' })); await settle();
+  const [again, options] = child.lines.filter(l => l.hand === 'character' || l.op === 'options');
+  assert.deepEqual([again.hand, Object.keys(again.perch.table), options.perch], ['character', ['perch'], true]);
+  assert.ok(again.seq > first.seq);
+});

@@ -130,6 +130,9 @@ export function createHandClient({ env = process.env, setting = () => handSettin
   let activityAt = -Infinity;
   // Sprite options (A2): perch mode and the character's lines. The host gets them in one picker frame after a character.
   let perch = false, lines = true, optionsSent;
+  // The last sprite built (its character and resolver) and whether its frame carried the perch keys: with perch off the
+  // frame has no perch sheet or table, so a perch-only fault never refuses the character in trail mode.
+  let spriteSource, spritePerch;
   let buildController, buildStarted;
   // Hosts with an attached worker are left to finish their consent channel before exiting.
   const attached = new WeakSet();
@@ -282,8 +285,14 @@ export function createHandClient({ env = process.env, setting = () => handSettin
   let pickerReady, pickerLoad, pickerBusy = false;
   const pickerQueue = [];
   const pickerFrame = data => write(JSON.stringify({ hand: 'picker', nonce, ...data }) + '\n');
+  const spriteFrame = () => { spritePerch = perch; return characterFrame(spriteSource.character, { nonce, seq: 0, resolve: spriteSource.resolve, perch }); };
   const sendOptions = (force = false) => {
     if (host !== 'running' || style !== 'sprite') return;
+    // Perch flipped: send the character again, with or without its perch keys, before the options.
+    if (spriteSource && spritePerch !== perch) {
+      try { const sprite = spriteFrame(); pickerLoad = sprite.id; write(JSON.stringify({ ...sprite, seq: ++seq }) + '\n'); force = true; }
+      catch (error) { note('hand-sprite-fallback', { reason: 'CHARACTER_INVALID' }); }
+    }
     const text = JSON.stringify({ perch, lines });
     if (!force && text === optionsSent) return;
     optionsSent = text; pickerFrame({ op: 'options', perch, lines });
@@ -317,7 +326,7 @@ export function createHandClient({ env = process.env, setting = () => handSettin
     if (style === 'sprite') {
       try {
         const loaded = await loadSprite(character);
-        sprite = characterFrame(loaded.character, { nonce, seq: 0, resolve: loaded.resolve });
+        spriteSource = loaded; sprite = spriteFrame();
       } catch (error) {
         pickerNotice(`This character could not load. Showing the ring. ${error.message}`);
         await pickerFallback(picker, character);
@@ -458,7 +467,7 @@ export function createHandClient({ env = process.env, setting = () => handSettin
           if (!characterIdValid(character)) throw Error('CHARACTER_NOT_SET');
           const { character: loaded, resolve } = await loadSprite(character);
           // Built now, so a character the host would refuse for size falls back before the spawn; its seq is set on send.
-          sprite = characterFrame(loaded, { nonce, seq: 0, resolve });
+          spriteSource = { character: loaded, resolve }; sprite = spriteFrame();
         } catch (error) {
           note('hand-sprite-fallback', { reason: /^[A-Z][A-Z0-9_]{0,63}$/.test(error?.message) ? error.message : 'CHARACTER_INVALID' });
           style = 'ring';

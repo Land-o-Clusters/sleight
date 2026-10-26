@@ -22,7 +22,7 @@ export const CHARACTER_STATES = Object.freeze([
 const helpers = ['running-right', 'running-left', 'look', 'poke', 'wave'];
 // Perch mode (A2): optional states with fallbacks to art every pack has. jumping is Codex's row 4, used by the leap.
 export const PERCH_STATES = Object.freeze(['perch', 'perch-peek', 'perch-hop', 'perch-point-left', 'perch-point-right', 'sleep', 'high-five',
-  'perch-wait', 'startle', 'jumping']);
+  'perch-wait', 'startle', 'jumping', 'paused']);
 const names = [...CHARACTER_STATES.map(s => s.state), ...helpers, ...PERCH_STATES];
 const required = ['move', 'aim', 'click', 'type', 'waiting-approval', 'error'];
 const characterFailure = (message, field = 'manifest', file = 'character.json') => { throw Error(`Character: ${JSON.stringify(file)} ${field}: ${message}`); };
@@ -423,6 +423,8 @@ export function resolvePerchStates(m) {
     out[state] = run ? { ...pick(state, state, run), own: true } : from(state, move);
   }
   out.error = from('error', base.error, { loop: false }); out.handoff = from('handoff', base.handoff, { loop: false });
+  // A1's paused pose (C1). Without its own art: waiting-approval once, without a pulse, holding its last cell.
+  out.paused = own('paused') || (base['waiting-approval'].source !== 'idle' ? from('paused', base['waiting-approval'], { loop: false }) : still('paused', 1200));
   return { anchor: m.perch?.anchor ?? m.anchor, states: out };
 }
 

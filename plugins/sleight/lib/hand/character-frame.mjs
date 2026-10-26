@@ -10,7 +10,7 @@ const FAR = 100;
 
 /** Build once after host spawn, using the host's nonce and shared increasing sequence counter. Throws when the host would
  * refuse the character's size, so the wizard and the doctor can say so. */
-export function characterFrame(character, { nonce, seq, resolve }) {
+export function characterFrame(character, { nonce, seq, resolve, perch = true }) {
   const { manifest: m, folder, sheets } = character;
   if (!/^[0-9a-f]{64}$/.test(nonce) || !Number.isSafeInteger(seq) || seq < 0 || !isAbsolute(folder)) throw Error('Invalid character frame identity');
   if (typeof resolve !== 'function') throw Error('characterFrame needs VC3 resolveCharacterStates as resolve');
@@ -52,7 +52,8 @@ export function characterFrame(character, { nonce, seq, resolve }) {
     cell: [m.frame.w, m.frame.h], table };
   // Perch mode (A2): the seat point and the complete perch table, the third sheet, and the lines block. The host uses them
   // only with perch and lines on; it draws lines and does nothing else with them.
-  if (character.perch) {
+  // perch: false (the setting is off) leaves the perch sheet and table out, so the host never decodes or checks them.
+  if (character.perch && perch) {
     const p = character.perch, wire = s => ({ sheet: key(s), row: s.row, frames: s.columns, ms: s.ms, loop: s.loop, flip: s.flip === 'h',
       hotspot: [s.hotspot.x, s.hotspot.y], size: [sheets[key(s)].width, sheets[key(s)].height], scale: m.scale });
     frame.perch = { anchor: [p.anchor.x, p.anchor.y], table: Object.fromEntries(Object.entries(p.states).map(([k, s]) => [k, wire(s)])) };
