@@ -21,7 +21,10 @@ import { evidenceRoots, tempRoots } from '../evidence.mjs';
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '../..');
 export const CLAIM_TASKS = ['calculator-click', 'textedit-save', 'textedit-drag'];
-export const BUDGET = Object.freeze({ hostAvgPct: 1, wsAddedPct: 2, wsAddedPeakPct: 10, rssMB: 50, toolMedianPct: 10, toolMedianMs: 20 });
+export const BUDGET = Object.freeze({ hostAvgPct: 1, wsAddedPct: 2, wsAddedPeakPct: 10, rssMB: 50, spriteRssMB: 64, toolMedianPct: 10, toolMedianMs: 20 });
+// Peak RSS is in MiB. The sprite style keeps each decoded sheet resident (13.4 MiB at full size), so its host gets 64 MiB;
+// the ring and the glove keep 50.
+export const budgetFor = cursorStyle => cursorStyle === 'sprite' ? Object.freeze({ ...BUDGET, rssMB: BUDGET.spriteRssMB }) : BUDGET;
 
 /** The pass's order: per round and task, which side runs first. Every task gets each side once per round. */
 export function schedule(tasks, rounds) {

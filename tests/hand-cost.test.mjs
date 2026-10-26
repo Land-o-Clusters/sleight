@@ -8,7 +8,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { registerTemp } from '../scripts/temp-leftovers.mjs';
 import { parsePs, isHandHost, isWindowServer, createCostSampler, summarize } from '../bench/hand/cost-sampler.mjs';
-import { schedule, runArgs, resultsPath, traceStats, traceDirs, compareSides, reportMarkdown, runSide, runCostPass, parseArgs, BUDGET, CLAIM_TASKS } from '../bench/hand/cost-pass.mjs';
+import { schedule, runArgs, resultsPath, traceStats, traceDirs, compareSides, reportMarkdown, runSide, runCostPass, parseArgs, BUDGET, budgetFor, CLAIM_TASKS } from '../bench/hand/cost-pass.mjs';
 import * as costPass from '../bench/hand/cost-pass.mjs';
 
 const WS = '/System/Library/PrivateFrameworks/SkyLight.framework/Resources/WindowServer -daemon';
@@ -138,6 +138,8 @@ test('compareSides: inside the budget, over it, and invalid when a side measured
   assert.equal(oneSided.verdict, 'invalid');
   assert.equal(oneSided.checks[1].value, null);
   assert.equal(BUDGET.hostAvgPct, 1);
+  assert.deepEqual(['glove', 'ring', 'seam', 'sprite', undefined].map(style => budgetFor(style).rssMB), [50, 50, 50, 64, 50]);
+  assert.equal(budgetFor('sprite').hostAvgPct, BUDGET.hostAvgPct);
 });
 
 test('runSide runs one task with the switch, samples the run\'s own tree and reads its row and trace', async () => {

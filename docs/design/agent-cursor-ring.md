@@ -96,57 +96,79 @@ where it is. Moving the box never mirrors the artwork. Only a resolved entry's `
 Without a loaded character the host draws the ring alone.
 
 One `CALayer` draws the character. Its `contents` is the decoded sheet, and a discrete keyframe animation of
-`contentsRect` steps through cells. A state on the extra sheet switches `contents` at its boundary. Position follows
-the ring's planned positions without its stretch or rotation, and opacity copies the ring cursor's entrance, crossfades and dissolve. The
-ring's fade, park and release cover the character too. Looping art stops stepping at 4.8 s and shows its last cell until
-the ring fades. Reduced motion shows each state's first cell. Under secure input, type and key show idle art. Core
-Animation does all of this from the installed animations, without sprite timers or frame callbacks.
+`contentsRect` steps through cells. A state on the extra sheet switches `contents` at its boundary. Every track's key
+times run from 0 to 1. Before a late first stage (a drag's grab starts after the entrance) the first pose shows.
+Position follows the ring's planned positions without its stretch or rotation. Its track also samples just before
+each pose, so a flip or scale change jumps instead of sliding. Opacity copies the ring cursor's entrance, crossfades and
+dissolve, and the ring's fade, park and release cover the character too. Loops stop stepping at 4.8 s and rest on their
+first cell until the ring fades. A one-shot with a follow-up (handoff, then idle) plays it once. Reduced motion shows
+each state's first cell. Under secure input, type and key show idle art. Core Animation does all of this from the
+installed animations, without sprite timers or frame callbacks. Downscaled cells filter linearly, and each
+`contentsRect` is inset by half a texel so a neighbor cell never bleeds in.
 
 The relay calls `loadCharacter(folder, { installed: true })` from VC3's `hand/character.mjs`, then
-`characterFrame(character, { nonce, seq })` from `hand/character-frame.mjs`, and sends the result once after spawn on
-the act sequence counter. A later character frame replaces the earlier one, even when the new one fails to load. VC4
-adds the adapter and the host side. Integration adds the relay call.
+`characterFrame(character, { nonce, seq, resolve: resolveCharacterStates })` from `hand/character-frame.mjs`, and sends
+the result once after spawn on the act sequence counter. `characterFrame` throws for cells over 192 by 208 or sheets
+over 1536 by 2288, which the host would refuse. A later character frame replaces the earlier one, even when the new one
+fails to load. VC4 adds the adapter and the host side. Integration adds the relay call.
 
 The frame's keys are exactly `hand`, `nonce`, `seq`, `id`, `sheet`, `extra` (a path or null), `cell` and `table`. Table
-entries have exactly `sheet`, `row`, `frames`, `ms`, `loop`, `flip` and `hotspot`, and may add `size` and `scale`.
+entries have exactly `sheet`, `row`, `frames`, `ms`, `loop`, `flip` and `hotspot`, and may add `size`, `scale` and `then`.
 `frames` is a count from column 0 or an array of columns 0 to 7. The adapter sends arrays, which keep a state's start
 column and the doubled double-click fallback. `ms` is one number or one per column. `size` is the expected sheet's
 `[width,height]` and `scale` is the manifest's. The adapter always sends both. Without `size`, the host checks cell
-alignment and the image header only.
+alignment and the image header only. `then` names the state that follows a one-shot.
 
 The table holds VC3's 19 resolved states. `move@N`, `aim@N` and `drag-carry@N` (N 0 to 15, clockwise from up) override
-them where a direction changes the art. A glide picks the nearest direction, and a stage without movement uses the
-base entry. The host picks entries from the table and never resolves states itself. A state missing from the table
-uses idle. Scroll frames have no direction field, and the host shows scroll-down for both. Drag shows grab, carry and drop at
-the ring's phase boundaries.
+them where a direction changes the art, and `move-far@N` and `drag-carry-far@N` where a glide over 60 pt changes it
+(R3 1.4: a Codex pet's horizontal glides play its running rows). A glide picks the nearest direction, and a stage
+without movement uses the base entry. The host picks entries from the table and never resolves states itself. A state
+missing from the table uses idle. A scroll state without its own art shows the look pose up or down. Scroll frames have
+no direction field, and the host shows scroll-down for both. Drag shows grab, carry and drop at the ring's phase
+boundaries.
 
 A character frame may be 32 KiB, and other frames keep the 8 KiB limit. Unknown keys, malformed values, a wrong nonce
 or a sequence that doesn't increase take the existing exit-65 fault path. The consent channel keeps its isolation rule.
-An image that fails a check leaves the ring alone on screen and writes one stderr line.
 
-The host loads images only from below `~/Library/Application Support/sleight/characters/<id>/`. Each path must equal
+The host opens images only from below `~/Library/Application Support/sleight/characters/<id>/`. Each path must equal
 its realpath. Files must be regular, single-link, owned by the user, mode 0600 and at most 8 MiB. The bank and the
-character folder must be owned by the user, with no group or world write. ImageIO opens the checked descriptor through
-`CGImageSourceCreateWithURL` with caching off and decodes one PNG or WebP image per sheet, matched by UTI and extension.
-Each sheet is capped at 1536 by 2288 pixels, the extra sheet included. Before decoding, the host compares the header's
-size with the cap, the cell grid and the adapter's `size`. After decoding it checks alpha, then at least 50 visible
-pixels and under 95 percent fully opaque pixels in every used cell. Chroma fringe in a used cell and ink in an unused
-cell of a referenced row are warnings. The host knows resolved columns, not each row's declared frame count, so it
-can't refuse unused ink safely. Row 0, column 6 is Codex's neutral pose and never warns. The host skips rows with no
-resolved reference. It converts to premultiplied RGBA, which loses hidden RGB under zero alpha, so it can't see that.
+character folder must be owned by the user, with no group or world write. The open uses `O_NOFOLLOW_ANY`, which refuses
+a symlink in any component, and `F_GETPATH` must give back the checked path. The host reads the PNG or WebP header
+itself (an animated WebP is refused there) and compares the size with the cap of 1536 by 2288 pixels, the cell grid and
+the adapter's `size`. The extra sheet loads only when an entry uses it.
 
-The checks read one bitmap the host draws from the decoded image, and the layer shows that same bitmap. Core Animation
-never decodes the file again. A full-size sheet's bitmap is 13.4 MiB. The host keeps the images between actions and
-frees them on a replacement, a style other than sprite, or exit. The test bank override,
-`SLEIGHT_CURSOR_CHARACTERS_ROOT`, works only with `SLEIGHT_CURSOR_TEST=1` and a path below `/private/tmp/`. Tests draw
-synthetic PNGs. sleight includes no character artwork.
+The host itself never passes character art to ImageIO. It starts a child of its own binary, `consent-host --decode-sheet
+W H png|webp`, with the checked file as stdin, a pipe as stdout, `/dev/null` as stderr and no other descriptor
+(`POSIX_SPAWN_CLOEXEC_DEFAULT` keeps the consent channel out). The child decodes built-in 1x1 PNG and WebP images,
+enters a deny-default sandbox, and only then reads the file. It decodes one image (an APNG's two refuse) at the
+validated size into sRGB premultiplied RGBA and writes the bytes. On macOS 27 `sandbox_init` kills the
+process when given `kSBXProfilePureComputation` by name. The child passes the same rule as SBPL, `(version 1)(deny default)`. Without the warm-up, ImageIO crashed inside that sandbox. The parent reads exactly W*H*4 bytes within 2 s. A
+timeout, a crash, a short read or a refusal exit means no character. The parent wraps the bytes in a `CGImage` without a
+copy and checks at least 50 visible pixels and under 95 percent fully opaque pixels in every used cell. Chroma fringe
+in a used cell and ink in an unused cell of a referenced row are warnings. The host knows resolved columns, not each
+row's declared frame count, so it can't refuse unused ink safely. Row 0, column 6 is Codex's neutral pose and never
+warns. Premultiplied bytes have zero RGB wherever alpha is zero, which leaves hidden RGB unchecked.
 
-Measured in the dump mode (2026-10-26, three runs each, all equal to 0.1 MB): maximum RSS 16.9 MB with the ring alone,
-39.7 MB with a full-size sheet, 53.3 MB with a full-size extra sheet as well. Loading a full-size sheet took about
-0.25 s once, on the main thread, in the unoptimized build that users get.
+A load writes one stderr line on refusal or warning, and in hand mode one nonce-bound line on the hand channel's stdout,
+`{"hand":"character","nonce","id","loaded","reason","warnings"}`. The hand client traces it as `hand-character` or
+`hand-character-refused`. `consent-host --check-character` reads one character frame on stdin, runs the same checks and
+decode child, and prints `{"id","loaded","reason","warnings"}`. `prepareHandHost()` returns `checkCharacter(frame)` for
+it, so `sleight-mcp cursor check <id>` can show the user why the ring shows alone.
+
+Each full-size sheet costs the host its 13.4 MiB of decoded bytes, freed on a replacement, a style other than sprite, or
+exit. The live host's peak RSS budget is 64 MiB in sprite style (`budgetFor('sprite')` in `bench/hand/cost-pass.mjs`).
+The ring and the glove keep 50 MiB. In the dump mode on 2026-10-26 (three runs each, spread under 0.1 MiB) the host's own
+peak after loading was 8.3 MiB with no character, 23.2 MiB with a full-size sheet and 36.6 MiB with a full-size extra
+sheet as well. The decode child peaked at 41.7 MiB and ran 0.02 s for a full-size PNG. Loading a full-size sheet took
+about 0.25 s on the host's main thread, mostly the unoptimized ink check. The live figures are VC7's.
+
+The test bank override, `SLEIGHT_CURSOR_CHARACTERS_ROOT`, and the decode child's fault switch,
+`SLEIGHT_CURSOR_DECODE_FAULT`, work only with `SLEIGHT_CURSOR_TEST=1`, and the bank only below `/private/tmp/`. The
+relay starts the host with `PATH`, `LANG` and the icon path only. Tests draw synthetic PNG and WebP sheets. sleight
+includes no character artwork.
 
 `--ring-plan-dump --cursor-style=sprite` decodes real images and runs the same sprite planner, with no application,
-panel or window. Each draw record gains a `sprite` object with the cell poses, the normalized `contentsRect`
-keyframes and the box positions. An offscreen `CALayer.render(in:)` check of the host's layer tree (unflipped panel layer, flipped ring root,
+panel or window. Each draw record gains a `sprite` object with the cell poses, every track's key times and the box
+positions. An offscreen `CALayer.render(in:)` check of the host's layer tree (unflipped panel layer, flipped ring root,
 sprite layer) drew the sheet upright, with `contentsRect` y 0 at row 0. The window server's rendering, appearance,
 capture exclusion and live cost need VC7.

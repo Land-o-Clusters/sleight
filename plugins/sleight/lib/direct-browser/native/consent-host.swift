@@ -2740,12 +2740,18 @@ struct RingRuntime {
 // END RING RUNTIME
 
 // BEGIN SPRITE
-// Data-only sprite seam. The ring planners stay independent of image IO and character state resolution.
+// The character sprite (style "sprite"). The ring planners stay independent of image IO and character state resolution. Nothing
+// in this block parses image data beyond a header or calls ImageIO: a sandboxed child of this binary decodes each sheet
+// (BEGIN SPRITE DECODE CHILD) and hands back raw sRGB RGBA.
 let spriteStates: Set<String> = ["idle", "move", "aim", "click", "double-click", "right-click", "type", "key", "scroll-up", "scroll-down",
     "drag-grab", "drag-carry", "drag-drop", "waiting-approval", "error", "success", "thinking", "handoff", "working"]
+// Direction variants: NAME@N, N 0 to 15 clockwise from up. The -far variants are for glides over 60 pt (R3 1.4's running rows).
+let spriteDirectional: Set<String> = ["move", "aim", "drag-carry", "move-far", "drag-carry-far"]
+// One sheet is at most 1536 by 2288 pixels (8 columns of 192, 11 rows of 208): 13.4 MiB decoded.
+let spriteSheetCap = (width: 1536, height: 2288), spriteCellCap = (width: 192.0, height: 208.0)
 struct SpriteEntry {
     let sheet: String, row: Int, columns: [Int], ms: [Double], loop: Bool, flip: Bool, hotspot: CGPoint
-    let size: CGSize?, scale: Double
+    let size: CGSize?, scale: Double, then: String?
 }
 struct SpriteFrame {
     let seq: Int, id: String, sheet: String, extra: String?, cell: CGSize, table: [String: SpriteEntry]
@@ -2772,20 +2778,22 @@ func spriteFrame(_ data: [String: Any]) -> SpriteFrame? {
         id.range(of: "^[a-z0-9-]{1,48}$", options: .regularExpression) != nil,
         let sheet = path(data["sheet"]), data["extra"] is NSNull || path(data["extra"]) != nil,
         let cell = pair(data["cell"], 64...512), cell.allSatisfy({ $0.rounded() == $0 }),
-        let raw = data["table"] as? [String: Any], raw["idle"] != nil, raw.count <= 67 else { return nil }
+        cell[0] <= spriteCellCap.width, cell[1] <= spriteCellCap.height,
+        let raw = data["table"] as? [String: Any], raw["idle"] != nil, raw.count <= 19 + 16 * spriteDirectional.count else { return nil }
     var table: [String: SpriteEntry] = [:]
     for (key, value) in raw {
         let parts = key.split(separator: "@", omittingEmptySubsequences: false)
-        guard parts.count == 1 && spriteStates.contains(key) || parts.count == 2 && ["move", "aim", "drag-carry"].contains(String(parts[0]))
+        guard parts.count == 1 && spriteStates.contains(key) || parts.count == 2 && spriteDirectional.contains(String(parts[0]))
             && Int(parts[1]).map({ (0...15).contains($0) && String($0) == parts[1] }) == true,
             let v = value as? [String: Any] else { return nil }
         let required: Set<String> = ["sheet", "row", "frames", "ms", "loop", "flip", "hotspot"]
-        guard required.isSubset(of: Set(v.keys)), Set(v.keys).subtracting(required).isSubset(of: ["size", "scale"]),
+        guard required.isSubset(of: Set(v.keys)), Set(v.keys).subtracting(required).isSubset(of: ["size", "scale", "then"]),
             let s = v["sheet"] as? String, ["sheet", "extra"].contains(s), s != "extra" || path(data["extra"]) != nil,
             let row = int(v["row"], 0...63), let loop = bool(v["loop"]), let flip = bool(v["flip"]),
             let hotspot = pair(v["hotspot"], -1024...1024),
             (-cell[0]...2 * cell[0]).contains(hotspot[0]), (-cell[1]...2 * cell[1]).contains(hotspot[1]),
-            v["scale"] == nil || n(v["scale"], 0.25...2) != nil else { return nil }
+            v["scale"] == nil || n(v["scale"], 0.25...2) != nil,
+            v["then"] == nil || (v["then"] as? String).map(spriteStates.contains) == true else { return nil }
         let columns: [Int]
         if let count = int(v["frames"], 1...8) { columns = Array(0..<count) }
         else if let a = v["frames"] as? [Any], (1...16).contains(a.count) {
@@ -2796,36 +2804,122 @@ func spriteFrame(_ data: [String: Any]) -> SpriteFrame? {
         guard ms.count == columns.count, durations.count == columns.count, ms.reduce(0, +) <= 8000 else { return nil }
         var size: CGSize?
         if v["size"] != nil {
-            guard let xy = pair(v["size"], 1...2288), xy.allSatisfy({ $0.rounded() == $0 }),
-                xy[0] == cell[0] * 8, xy[0] <= 1536, xy[1].truncatingRemainder(dividingBy: cell[1]) == 0,
+            guard let xy = pair(v["size"], 1...Double(spriteSheetCap.height)), xy.allSatisfy({ $0.rounded() == $0 }),
+                xy[0] == cell[0] * 8, xy[0] <= Double(spriteSheetCap.width), xy[1].truncatingRemainder(dividingBy: cell[1]) == 0,
                 Double(row + 1) * cell[1] <= xy[1] else { return nil }
             size = CGSize(width: xy[0], height: xy[1])
         }
         table[key] = SpriteEntry(sheet: s, row: row, columns: columns, ms: ms, loop: loop, flip: flip,
-            hotspot: CGPoint(x: hotspot[0], y: hotspot[1]), size: size, scale: n(v["scale"], 0.25...2) ?? 1)
+            hotspot: CGPoint(x: hotspot[0], y: hotspot[1]), size: size, scale: n(v["scale"], 0.25...2) ?? 1, then: v["then"] as? String)
     }
     return SpriteFrame(seq: seq, id: id, sheet: sheet, extra: path(data["extra"]), cell: CGSize(width: cell[0], height: cell[1]), table: table)
 }
-enum SpriteLoadError: String, Error { case path, permissions, size, type, decode, alpha, pixels, changed }
+enum SpriteLoadError: String, Error { case path, permissions, size, type, decode, alpha, pixels, changed, timeout, child }
 func spriteWarning(_ message: String) { FileHandle.standardError.write(Data(("sleight sprite: " + message + "\n").utf8)) }
+// A sheet's format and size from its first bytes, without decoding: PNG's IHDR, or WebP's VP8X, VP8L or VP8 header. An
+// animated WebP is refused here; the child refuses an APNG (two images).
+func spriteSheetHeader(_ b: [UInt8]) -> (format: String, width: Int, height: Int)? {
+    func be32(_ i: Int) -> Int { Int(b[i]) << 24 | Int(b[i + 1]) << 16 | Int(b[i + 2]) << 8 | Int(b[i + 3]) }
+    func le(_ i: Int, _ count: Int) -> Int { (0..<count).reduce(0) { $0 | Int(b[i + $1]) << (8 * $1) } }
+    func ascii(_ range: Range<Int>) -> String { String(decoding: b[range], as: UTF8.self) }
+    if b.count >= 24, b.prefix(8) == [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a], be32(8) == 13, ascii(12..<16) == "IHDR" {
+        return ("png", be32(16), be32(20))
+    }
+    guard b.count >= 30, ascii(0..<4) == "RIFF", ascii(8..<12) == "WEBP" else { return nil }
+    switch ascii(12..<16) {
+    case "VP8X": return b[20] & 0x02 != 0 ? nil : ("webp", le(24, 3) + 1, le(27, 3) + 1)
+    case "VP8L":
+        guard b[20] == 0x2f else { return nil }
+        let bits = le(21, 4); return ("webp", (bits & 0x3fff) + 1, ((bits >> 14) & 0x3fff) + 1)
+    case "VP8 ":
+        guard b[23] == 0x9d, b[24] == 0x01, b[25] == 0x2a else { return nil }
+        return ("webp", le(26, 2) & 0x3fff, le(28, 2) & 0x3fff)
+    default: return nil
+    }
+}
+// Runs `--decode-sheet` on the open file and reads exactly w*h*4 bytes within 2 s. The child gets the file as stdin, a pipe
+// as stdout and /dev/null as stderr; POSIX_SPAWN_CLOEXEC_DEFAULT keeps every other descriptor (the consent channel's fds 3
+// and 4 among them) out of it. The returned buffer is malloc'd; the caller owns it.
+func spriteDecodeInChild(fd: Int32, width: Int, height: Int, format: String) throws -> UnsafeMutableRawPointer {
+    guard let executable = Bundle.main.executablePath else { throw SpriteLoadError.child }
+    var pipeEnds: [Int32] = [0, 0]
+    guard pipe(&pipeEnds) == 0 else { throw SpriteLoadError.child }
+    defer { close(pipeEnds[0]) }
+    var actions: posix_spawn_file_actions_t? = nil, attributes: posix_spawnattr_t? = nil
+    posix_spawn_file_actions_init(&actions); posix_spawnattr_init(&attributes)
+    defer { posix_spawn_file_actions_destroy(&actions); posix_spawnattr_destroy(&attributes) }
+    posix_spawn_file_actions_adddup2(&actions, fd, 0)
+    posix_spawn_file_actions_adddup2(&actions, pipeEnds[1], 1)
+    posix_spawn_file_actions_addopen(&actions, 2, "/dev/null", O_WRONLY, 0)
+    posix_spawnattr_setflags(&attributes, Int16(POSIX_SPAWN_CLOEXEC_DEFAULT))
+    let argv = [executable, "--decode-sheet", String(width), String(height), format].map { strdup($0) } + [nil]
+    defer { argv.forEach { free($0) } }
+    var pid: pid_t = 0
+    let spawned = posix_spawn(&pid, executable, &actions, &attributes, argv, environ)
+    close(pipeEnds[1])
+    guard spawned == 0 else { throw SpriteLoadError.child }
+    let total = width * height * 4, deadline = Date().addingTimeInterval(2)
+    guard let buffer = malloc(total) else { kill(pid, SIGKILL); var s: Int32 = 0; waitpid(pid, &s, 0); throw SpriteLoadError.child }
+    var got = 0, extra = false, timedOut = false
+    var poller = pollfd(fd: pipeEnds[0], events: Int16(POLLIN), revents: 0)
+    reading: while true {
+        let left = Int32(max(0, deadline.timeIntervalSinceNow * 1000))
+        guard left > 0 else { timedOut = true; break }
+        poller.revents = 0
+        let ready = poll(&poller, 1, left)
+        if ready < 0 { if errno == EINTR { continue }; break }
+        if ready == 0 { timedOut = true; break }
+        if got < total {
+            let n = read(pipeEnds[0], buffer + got, min(total - got, 1 << 20))
+            if n <= 0 { if n < 0 && errno == EINTR { continue }; break }
+            got += n
+        } else {
+            // Exactly w*h*4: anything past it is a fault, and EOF ends the read.
+            var byte: UInt8 = 0
+            let n = read(pipeEnds[0], &byte, 1)
+            if n < 0 && errno == EINTR { continue }
+            extra = n > 0; break reading
+        }
+    }
+    if timedOut || extra { kill(pid, SIGKILL) }
+    var status: Int32 = 0
+    while waitpid(pid, &status, 0) < 0 && errno == EINTR {}
+    let exited = status & 0x7f == 0, code = (status >> 8) & 0xff
+    guard !timedOut else { free(buffer); throw SpriteLoadError.timeout }
+    guard got == total, !extra, exited, code == 0 else {
+        free(buffer)
+        if exited, let reason = [65: SpriteLoadError.type, 66: .size, 67: .alpha, 68: .decode][Int(code)] { throw reason }
+        throw SpriteLoadError.child
+    }
+    return buffer
+}
 struct SpriteCharacter {
     let frame: SpriteFrame, images: [String: CGImage]
+    struct Result { let character: SpriteCharacter?, reason: String?, warnings: [String] }
     static func root() -> String {
         let env = ProcessInfo.processInfo.environment
         if env["SLEIGHT_CURSOR_TEST"] == "1", let p = env["SLEIGHT_CURSOR_CHARACTERS_ROOT"], p.hasPrefix("/private/tmp/") { return p }
         return FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent("Library/Application Support/sleight/characters").path
     }
-    static func load(_ frame: SpriteFrame) -> SpriteCharacter? {
+    // Every check, with no output. The extra sheet loads only when a table entry uses it.
+    static func check(_ frame: SpriteFrame) -> Result {
         do {
             var images: [String: CGImage] = [:], warnings = Set<String>()
+            let used = Set(frame.table.values.map { $0.sheet })
             for (key, path) in [("sheet", Optional(frame.sheet)), ("extra", frame.extra)] {
-                guard let path = path else { continue }
+                guard let path = path, used.contains(key) else { continue }
                 let loaded = try decode(path, key: key, frame: frame)
                 images[key] = loaded.0; warnings.formUnion(loaded.1)
             }
-            if !warnings.isEmpty { spriteWarning(warnings.sorted().joined(separator: ", ") + " (warning)") }
-            return SpriteCharacter(frame: frame, images: images)
-        } catch { spriteWarning("character refused (\((error as? SpriteLoadError)?.rawValue ?? "decode")); using ring"); return nil }
+            return Result(character: SpriteCharacter(frame: frame, images: images), reason: nil, warnings: warnings.sorted())
+        } catch { return Result(character: nil, reason: (error as? SpriteLoadError)?.rawValue ?? "decode", warnings: []) }
+    }
+    // check plus one stderr line (a trace for the dump and direct runs; the relay reads the stdout event instead).
+    static func load(_ frame: SpriteFrame) -> Result {
+        let result = check(frame)
+        if let reason = result.reason { spriteWarning("character refused (\(reason)); using ring") }
+        else if !result.warnings.isEmpty { spriteWarning(result.warnings.joined(separator: ", ") + " (warning)") }
+        return result
     }
     static func decode(_ path: String, key: String, frame: SpriteFrame) throws -> (CGImage, Set<String>) {
         let root = root(), expectedParent = root + "/" + frame.id
@@ -2844,33 +2938,29 @@ struct SpriteCharacter {
         guard lstat(path, &before) == 0, before.st_mode & S_IFMT == S_IFREG, before.st_uid == getuid(),
             before.st_mode & 0o7777 == 0o600, before.st_nlink == 1 else { throw SpriteLoadError.permissions }
         guard before.st_size > 0, before.st_size <= 8 * 1024 * 1024 else { throw SpriteLoadError.size }
-        let fd = open(path, O_RDONLY | O_NOFOLLOW | O_NONBLOCK)
+        // O_NOFOLLOW_ANY (which can't be combined with O_NOFOLLOW: EINVAL) refuses a symlink in any component, so a directory swapped after the realpath check can't redirect
+        // the open; F_GETPATH confirms the descriptor is the checked path.
+        let fd = open(path, O_RDONLY | O_NOFOLLOW_ANY | O_NONBLOCK | O_CLOEXEC)
         guard fd >= 0 else { throw SpriteLoadError.path }; defer { close(fd) }
-        var opened = stat()
+        var opened = stat(), name = [CChar](repeating: 0, count: Int(MAXPATHLEN))
+        guard fcntl(fd, F_GETPATH, &name) == 0, String(cString: name) == path else { throw SpriteLoadError.path }
         guard fstat(fd, &opened) == 0, opened.st_dev == before.st_dev, opened.st_ino == before.st_ino,
             opened.st_mode == before.st_mode, opened.st_uid == before.st_uid, opened.st_size == before.st_size else { throw SpriteLoadError.changed }
-        // ImageIO reads the already opened inode. Renaming the path cannot redirect its decode.
-        let url = URL(fileURLWithPath: "/dev/fd/\(fd)") as CFURL
-        let options = [kCGImageSourceShouldCache: false] as CFDictionary
-        guard let source = CGImageSourceCreateWithURL(url, options), let uti = CGImageSourceGetType(source) as String?,
-            ["public.png", "org.webmproject.webp"].contains(uti), CGImageSourceGetCount(source) == 1 else { throw SpriteLoadError.type }
-        let ext = (path as NSString).pathExtension.lowercased()
-        guard (uti == "public.png" && ext == "png") || (uti == "org.webmproject.webp" && ext == "webp") else { throw SpriteLoadError.type }
-        guard let props = CGImageSourceCopyPropertiesAtIndex(source, 0, options) as? [CFString: Any],
-            let w = props[kCGImagePropertyPixelWidth] as? Int, let h = props[kCGImagePropertyPixelHeight] as? Int,
-            w > 0, h > 0, w <= 1536, h <= 2288, w == Int(frame.cell.width) * 8, h % Int(frame.cell.height) == 0 else { throw SpriteLoadError.size }
+        var head = [UInt8](repeating: 0, count: 64)
+        let headCount = pread(fd, &head, 64, 0)
+        guard headCount > 0, let header = spriteSheetHeader(Array(head.prefix(headCount))) else { throw SpriteLoadError.type }
+        guard (path as NSString).pathExtension.lowercased() == header.format else { throw SpriteLoadError.type }
+        let w = header.width, h = header.height
+        guard w > 0, h > 0, w <= spriteSheetCap.width, h <= spriteSheetCap.height, w == Int(frame.cell.width) * 8,
+            h % Int(frame.cell.height) == 0 else { throw SpriteLoadError.size }
         let entries = frame.table.values.filter { $0.sheet == key }
         guard entries.allSatisfy({ ($0.row + 1) * Int(frame.cell.height) <= h && ($0.size == nil || $0.size == CGSize(width: w, height: h)) }) else { throw SpriteLoadError.size }
-        guard let image = CGImageSourceCreateImageAtIndex(source, 0, options), image.width == w, image.height == h else { throw SpriteLoadError.decode }
-        guard [.premultipliedFirst, .premultipliedLast, .first, .last].contains(image.alphaInfo) else { throw SpriteLoadError.alpha }
-        // Rasterize once into a bitmap the context owns. The layer shows this checked bitmap, so Core Animation never
-        // decodes the file again (the source is uncached and its descriptor closes on return).
-        guard let context = CGContext(data: nil, width: w, height: h, bitsPerComponent: 8, bytesPerRow: w * 4,
-            space: CGColorSpaceCreateDeviceRGB(), bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue | CGBitmapInfo.byteOrder32Big.rawValue),
-            context.bytesPerRow == w * 4 else { throw SpriteLoadError.decode }
-        context.draw(image, in: CGRect(x: 0, y: 0, width: w, height: h))
-        guard let raw = context.data else { throw SpriteLoadError.decode }
-        let pixels = raw.bindMemory(to: UInt8.self, capacity: w * h * 4)
+        let buffer = try spriteDecodeInChild(fd: fd, width: w, height: h, format: header.format)
+        // The image wraps the child's bytes without a copy and frees them when it goes (replacement, style change or exit).
+        guard let provider = CGDataProvider(dataInfo: nil, data: buffer, size: w * h * 4, releaseData: { _, data, _ in free(UnsafeMutableRawPointer(mutating: data)) }) else {
+            free(buffer); throw SpriteLoadError.decode
+        }
+        let pixels = buffer.assumingMemoryBound(to: UInt8.self)
         var used = Set<Int>(), rows = Set<Int>(), warnings = Set<String>()
         for entry in entries { rows.insert(entry.row); for col in entry.columns { used.insert(entry.row * 8 + col) } }
         let cw = Int(frame.cell.width), ch = Int(frame.cell.height)
@@ -2894,23 +2984,29 @@ struct SpriteCharacter {
                 }
             }
         }
-        guard let checked = context.makeImage() else { throw SpriteLoadError.decode }
         var after = stat()
         guard fstat(fd, &after) == 0, after.st_size == opened.st_size,
             after.st_mtimespec.tv_sec == opened.st_mtimespec.tv_sec, after.st_mtimespec.tv_nsec == opened.st_mtimespec.tv_nsec,
             after.st_ctimespec.tv_sec == opened.st_ctimespec.tv_sec, after.st_ctimespec.tv_nsec == opened.st_ctimespec.tv_nsec else { throw SpriteLoadError.changed }
-        return (checked, warnings)
+        guard let space = CGColorSpace(name: CGColorSpace.sRGB),
+            let image = CGImage(width: w, height: h, bitsPerComponent: 8, bitsPerPixel: 32, bytesPerRow: w * 4, space: space,
+                bitmapInfo: CGBitmapInfo(rawValue: CGImageAlphaInfo.premultipliedLast.rawValue | CGBitmapInfo.byteOrder32Big.rawValue),
+                provider: provider, decode: nil, shouldInterpolate: false, intent: .defaultIntent) else { throw SpriteLoadError.decode }
+        return (image, warnings)
     }
 }
 struct SpritePose {
     var time: Double, state: String, entry: SpriteEntry, column: Int, direction: Int
 }
+struct SpriteTrack { let keyPath: String, values: [Any], keyTimes: [Double], discrete: Bool }
 struct SpritePlan {
     let poses: [SpritePose], character: SpriteCharacter, duration: Double, reduced: Bool, clip: CGRect
+    // The cell, inset by half a texel so linear filtering never samples a neighbor cell.
     func rect(_ pose: SpritePose) -> CGRect {
         let image = character.images[pose.entry.sheet]!, cell = character.frame.cell
-        return CGRect(x: Double(pose.column) * cell.width / Double(image.width), y: Double(pose.entry.row) * cell.height / Double(image.height),
-            width: cell.width / Double(image.width), height: cell.height / Double(image.height))
+        let w = Double(image.width), h = Double(image.height)
+        return CGRect(x: (Double(pose.column) * cell.width + 0.5) / w, y: (Double(pose.entry.row) * cell.height + 0.5) / h,
+            width: (cell.width - 1) / w, height: (cell.height - 1) / h)
     }
     func origin(_ at: CGPoint, _ entry: SpriteEntry) -> CGPoint {
         // The cell's box trails the ring's point by 18 pt and never covers it, so the hotspot does not move it (PLAN call 1).
@@ -2931,22 +3027,37 @@ struct SpritePlan {
         guard let last = poses.last else { return [] }
         return poses + [SpritePose(time: duration, state: last.state, entry: last.entry, column: last.column, direction: last.direction)]
     }
-    func positions(_ ring: RingPlan, frame: CGRect) -> (times: [Double], values: [CGPoint]) {
-        let times = Set(ring.positions.map { $0.0 } + samples.map { $0.time } + [0, duration]).sorted()
-        let values = times.map { t -> CGPoint in
-            let entry = samples.last(where: { $0.time <= t })?.entry ?? poses[0].entry
+    // Exactly what installSprite hands Core Animation: key times from 0 to 1, never decreasing. The position track also samples
+    // just before each pose, with the entry before it, so a flip or scale change jumps instead of sliding.
+    func tracks(_ ring: RingPlan, frame: CGRect) -> [SpriteTrack] {
+        let length = max(duration, 0.001), s = samples
+        func unit(_ t: Double) -> Double { min(max(t / length, 0), 1) }
+        let times = s.map { unit($0.time) }
+        var tracks = [
+            SpriteTrack(keyPath: "contents", values: s.map { character.images[$0.entry.sheet]! }, keyTimes: times, discrete: true),
+            SpriteTrack(keyPath: "contentsRect", values: s.map { NSValue(rect: rect($0)) }, keyTimes: times, discrete: true),
+            SpriteTrack(keyPath: "transform", values: s.map { p in
+                NSValue(caTransform3D: CATransform3DMakeScale(p.entry.scale * (p.entry.flip ? -1 : 1), p.entry.scale, 1))
+            }, keyTimes: times, discrete: true),
+        ]
+        let before = poses.dropFirst().map { $0.time - 1e-4 }.filter { $0 > 0 }
+        let moments = Set(ring.positions.map { $0.0 } + s.map { $0.time } + before + [0, duration]).filter { $0 >= 0 && $0 <= duration }.sorted()
+        let points = moments.map { t -> CGPoint in
+            let entry = s.last(where: { $0.time <= t })?.entry ?? poses[0].entry
             var p = origin(ring.position(at: t), entry)
             if entry.flip { p.x += character.frame.cell.width * entry.scale }
             return CGPoint(x: p.x - frame.minX, y: p.y - frame.minY)
         }
-        return (times, values)
+        tracks.append(SpriteTrack(keyPath: "position", values: points.map { NSValue(point: $0) }, keyTimes: moments.map(unit), discrete: reduced))
+        return tracks
     }
     func json(_ ring: RingPlan) -> [String: Any] {
-        let movement = positions(ring, frame: .zero)
+        let tracks = tracks(ring, frame: .zero)
         return ["duration": duration, "reduced": reduced, "layers": 1, "calculationMode": "discrete", "keyPath": "contentsRect",
             "values": samples.map { p -> [Double] in let r = rect(p); return [r.minX, r.minY, r.width, r.height] },
-            "times": samples.map { $0.time / max(duration, 0.001) },
-            "positionTimes": movement.times, "positions": movement.values.map { [$0.x, $0.y] },
+            "times": tracks[1].keyTimes,
+            "tracks": tracks.map { ["keyPath": $0.keyPath, "keyTimes": $0.keyTimes, "values": $0.values.count, "discrete": $0.discrete] as [String: Any] },
+            "positions": (tracks[3].values as! [NSValue]).map { [$0.pointValue.x, $0.pointValue.y] },
             "placements": poses.map { p -> [Double] in
                 let origin = origin(ring.position(at: p.time), p.entry)
                 return [origin.x, origin.y, character.frame.cell.width * p.entry.scale, character.frame.cell.height * p.entry.scale]
@@ -2965,35 +3076,59 @@ struct SpritePlan {
             let heading = atan2(to.x - from.x, from.y - to.y) * 180 / .pi
             return (Int((heading / 22.5).rounded()) + 16) % 16
         }
+        func far(_ from: CGPoint, _ to: CGPoint) -> Bool { hypot(to.x - from.x, to.y - from.y) > 60 }
         let first = ring.positions.first?.1 ?? ring.at
-        let d = direction(first, ring.at)
+        let d = direction(first, ring.at), glideFar = far(first, ring.at)
         let names = ["double": "double-click", "right": "right-click", "waiting": "waiting-approval", "done": "success", "handback": "handoff", "scroll": "scroll-down"]
         let state = secure && ["type", "key"].contains(ring.state) ? "idle" : names[ring.state] ?? ring.state
-        var stages: [(Double, String, Int)] = [(0, state, d)]
-        if ring.glideEnd > 0, !reduced { stages = [(0, "move", d), (ring.glideEnd, state, d)] }
+        var stages: [(Double, String, Int, Bool)] = [(0, state, d, false)]
+        if ring.glideEnd > 0, !reduced { stages = [(0, "move", d, glideFar), (ring.glideEnd, state, d, false)] }
         if ring.state == "drag" {
             stages = stages.filter { $0.1 == "move" }
             for (phase, s) in [("grab", "drag-grab"), ("carry", "drag-carry"), ("drop", "drag-drop")] {
                 if let span = ring.phases[phase] {
                     let from = ring.position(at: span[0]), to = ring.position(at: span[0] + span[1])
-                    stages.append((span[0], s, direction(from, to)))
+                    stages.append((span[0], s, direction(from, to), far(from, to)))
                 }
             }
-            if stages.isEmpty { stages = [(0, "drag-drop", d)] }
+            if stages.isEmpty { stages = [(0, "drag-drop", d, false)] }
         }
         stages.sort { $0.0 < $1.0 }
+        func entry(_ name: String, _ dir: Int, _ far: Bool) -> SpriteEntry {
+            (far ? f.table["\(name)-far@\(dir)"] : nil) ?? f.table["\(name)@\(dir)"] ?? f.table[name] ?? f.table["idle"]!
+        }
         var poses: [SpritePose] = []
         for (i, stage) in stages.enumerated() {
-            let (start, name, dir) = stage, entry = f.table["\(name)@\(dir)"] ?? f.table[name] ?? f.table["idle"]!
+            let (start, base, dir, isFar) = stage
+            var name = base, current = entry(base, dir, isFar), hopped = false
             let end = i + 1 < stages.count ? stages[i + 1].0 : ring.total
             var time = start, index = 0
-            repeat {
-                poses.append(SpritePose(time: time, state: name, entry: entry, column: entry.columns[index], direction: dir))
+            while true {
+                poses.append(SpritePose(time: time, state: name, entry: current, column: current.columns[index], direction: dir))
                 if reduced { break }
-                time += entry.ms[index] / 1000; index += 1
-                if index == entry.columns.count { if !entry.loop { break }; index = 0 }
-            } while time < end - 1e-9 && time < start + 4.8 - 1e-9
+                time += current.ms[index] / 1000; index += 1
+                if index == current.columns.count {
+                    index = 0
+                    if !current.loop {
+                        // A one-shot with a follow-up (handoff, then idle) continues once; otherwise it holds its last cell.
+                        guard let next = current.then, !hopped else { break }
+                        hopped = true; name = next; current = entry(next, -1, false)
+                    }
+                }
+                if time >= end - 1e-9 { break }
+                if time >= start + 4.8 - 1e-9 {
+                    // Loops park on their first cell at 4.8 s, as the ring parks, not on whichever cell the cut reaches.
+                    if current.loop, let last = poses.last, last.column != current.columns[0] || last.entry.row != current.row {
+                        poses.append(SpritePose(time: start + 4.8, state: name, entry: current, column: current.columns[0], direction: dir))
+                    }
+                    break
+                }
+            }
         }
+        // Every discrete track starts at key time 0: before the first stage (a drag's grab starts after the entrance), the
+        // first pose shows.
+        if let head = poses.first, head.time > 0 { poses.insert(SpritePose(time: 0, state: head.state, entry: head.entry, column: head.column, direction: head.direction), at: 0) }
+        poses = poses.filter { $0.time <= ring.total + 1e-9 }
         return SpritePlan(poses: poses, character: character, duration: ring.total, reduced: reduced, clip: clip)
     }
 }
@@ -3003,26 +3138,18 @@ func installSprite(_ sprite: SpritePlan, ring: RingPlan, root: CALayer, frame: C
     let layer = CALayer(), cell = sprite.character.frame.cell
     layer.name = "sprite"
     layer.anchorPoint = .zero; layer.bounds = CGRect(origin: .zero, size: cell)
-    layer.contentsGravity = .resize; layer.minificationFilter = .nearest; layer.magnificationFilter = .nearest
+    // Downscaled art (scale under 1, or 1x art on a 1x display) filters linearly; the half-texel inset keeps neighbors out.
+    layer.contentsGravity = .resize; layer.minificationFilter = .linear; layer.magnificationFilter = .nearest
     root.addSublayer(layer)
-    func track(_ key: String, values: [Any], times: [Double], discrete: Bool) {
-        layer.setValue(values.last, forKeyPath: key)
-        guard values.count > 1 else { return }
-        let animation = CAKeyframeAnimation(keyPath: key)
-        animation.values = values; animation.keyTimes = times.map { NSNumber(value: $0 / max(sprite.duration, 0.001)) }
-        animation.calculationMode = discrete ? .discrete : .linear; animation.duration = max(sprite.duration, 0.001)
+    for track in sprite.tracks(ring, frame: frame) {
+        layer.setValue(track.values.last, forKeyPath: track.keyPath)
+        guard track.values.count > 1 else { continue }
+        let animation = CAKeyframeAnimation(keyPath: track.keyPath)
+        animation.values = track.values; animation.keyTimes = track.keyTimes.map { NSNumber(value: $0) }
+        animation.calculationMode = track.discrete ? .discrete : .linear; animation.duration = max(sprite.duration, 0.001)
         animation.beginTime = begin; animation.fillMode = .both; animation.isRemovedOnCompletion = false
-        layer.add(animation, forKey: key)
+        layer.add(animation, forKey: track.keyPath)
     }
-    let poses = sprite.samples
-    track("contents", values: poses.map { sprite.character.images[$0.entry.sheet]! }, times: poses.map { $0.time }, discrete: true)
-    track("contentsRect", values: poses.map { NSValue(rect: sprite.rect($0)) }, times: poses.map { $0.time }, discrete: true)
-    track("transform", values: poses.map { p in
-        NSValue(caTransform3D: CATransform3DMakeScale(p.entry.scale * (p.entry.flip ? -1 : 1), p.entry.scale, 1))
-    }, times: poses.map { $0.time }, discrete: true)
-    // Sample only when planning the frame. Core Animation drives both movement and cell stepping after installation.
-    let movement = sprite.positions(ring, frame: frame)
-    track("position", values: movement.values.map { NSValue(point: $0) }, times: movement.times, discrete: sprite.reduced)
     // Opacity shares the ring's entrance, reduced-motion crossfade and terminal dissolve.
     if let spec = ring.layers.first(where: { $0.name == "cursor" }) { layer.opacity = Float(spec.props["opacity"]?.number ?? 1) }
     if let opacity = ring.tracks.first(where: { $0.layer == "cursor" && $0.keyPath == "opacity" }) {
@@ -3033,6 +3160,74 @@ func installSprite(_ sprite: SpritePlan, ring: RingPlan, root: CALayer, frame: C
     }
 }
 // END SPRITE
+// The character's result on the hand channel's stdout, so the relay can say why the ring shows alone.
+func writeCharacterResult(_ id: String, _ result: SpriteCharacter.Result) {
+    guard let nonce = nonceBook.nonce("hand"), let bytes = try? JSONSerialization.data(withJSONObject: ["hand": "character", "nonce": nonce,
+        "id": id, "loaded": result.character != nil, "reason": result.reason as Any? ?? NSNull(), "warnings": result.warnings],
+        options: [.sortedKeys]) else { return }
+    FileHandle.standardOutput.write(bytes + Data([10]))
+}
+
+// BEGIN SPRITE DECODE CHILD
+// `consent-host --decode-sheet W H png|webp`: the only code that hands character art to ImageIO. stdin is the checked file and
+// stdout a pipe to the parent. It warms ImageIO's readers on built-in 1x1 images, enters a deny-default sandbox, then reads
+// the untrusted bytes, decodes one image at the parent's validated size into sRGB premultiplied RGBA and writes those bytes.
+// The named profile kSBXProfilePureComputation is killed by SIGKILL at sandbox_init on macOS 27 (measured 2026-10-26), so
+// the child passes the same rule as SBPL. Without the warm-up ImageIO crashes inside the sandbox (SIGSEGV, measured).
+// Exit codes: 64 usage, 65 type or count, 66 size, 67 no alpha, 68 decode, 69 sandbox.
+@_silgen_name("sandbox_init") func spriteSandboxInit(_ profile: UnsafePointer<CChar>, _ flags: UInt64, _ error: UnsafeMutablePointer<UnsafeMutablePointer<CChar>?>) -> Int32
+let spriteWarmImages: [[UInt8]] = [
+    [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0x00, 0x00, 0x00, 0x0d, 0x49, 0x48, 0x44, 0x52, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x01,
+     0x08, 0x06, 0x00, 0x00, 0x00, 0x1f, 0x15, 0xc4, 0x89, 0x00, 0x00, 0x00, 0x0b, 0x49, 0x44, 0x41, 0x54, 0x78, 0x9c, 0x63, 0x60, 0x00, 0x02, 0x00,
+     0x00, 0x05, 0x00, 0x01, 0x7a, 0x5e, 0xab, 0x3f, 0x00, 0x00, 0x00, 0x00, 0x49, 0x45, 0x4e, 0x44, 0xae, 0x42, 0x60, 0x82],
+    [0x52, 0x49, 0x46, 0x46, 0x1a, 0x00, 0x00, 0x00, 0x57, 0x45, 0x42, 0x50, 0x56, 0x50, 0x38, 0x4c, 0x0d, 0x00, 0x00, 0x00, 0x2f, 0x00, 0x00, 0x00,
+     0x10, 0x07, 0x10, 0x11, 0x11, 0x88, 0x88, 0xfe, 0x07, 0x00],
+]
+func spriteDecodeChild(_ args: [String]) -> Never {
+    guard args.count == 3, let w = Int(args[0]), let h = Int(args[1]), (1...spriteSheetCap.width).contains(w), (1...spriteSheetCap.height).contains(h),
+        let uti = ["png": "public.png", "webp": "org.webmproject.webp"][args[2]] else { exit(64) }
+    let env = ProcessInfo.processInfo.environment
+    let fault = env["SLEIGHT_CURSOR_TEST"] == "1" ? env["SLEIGHT_CURSOR_DECODE_FAULT"] : nil
+    guard let space = CGColorSpace(name: CGColorSpace.sRGB) else { exit(68) }
+    func draw(_ image: CGImage, _ w: Int, _ h: Int) -> CGContext? {
+        guard let context = CGContext(data: nil, width: w, height: h, bitsPerComponent: 8, bytesPerRow: w * 4, space: space,
+            bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue | CGBitmapInfo.byteOrder32Big.rawValue), context.bytesPerRow == w * 4 else { return nil }
+        context.draw(image, in: CGRect(x: 0, y: 0, width: w, height: h)); return context
+    }
+    for bytes in spriteWarmImages {
+        if let source = CGImageSourceCreateWithData(Data(bytes) as CFData, nil), let image = CGImageSourceCreateImageAtIndex(source, 0, nil) { _ = draw(image, 1, 1) }
+    }
+    var error: UnsafeMutablePointer<CChar>? = nil
+    guard spriteSandboxInit("(version 1)(deny default)", 0, &error) == 0 else { exit(69) }
+    var data = Data(), chunk = [UInt8](repeating: 0, count: 1 << 16)
+    while true {
+        let n = read(0, &chunk, chunk.count)
+        if n < 0 && errno == EINTR { continue }
+        if n <= 0 { break }
+        data.append(contentsOf: chunk[0..<n])
+        if data.count > 8 * 1024 * 1024 { exit(66) }
+    }
+    let options = [kCGImageSourceShouldCache: false] as CFDictionary
+    guard let source = CGImageSourceCreateWithData(data as CFData, options), CGImageSourceGetType(source) as String? == uti,
+        CGImageSourceGetCount(source) == 1 else { exit(65) }
+    guard let props = CGImageSourceCopyPropertiesAtIndex(source, 0, options) as? [CFString: Any],
+        props[kCGImagePropertyPixelWidth] as? Int == w, props[kCGImagePropertyPixelHeight] as? Int == h else { exit(66) }
+    guard let image = CGImageSourceCreateImageAtIndex(source, 0, options), image.width == w, image.height == h else { exit(68) }
+    guard [.premultipliedFirst, .premultipliedLast, .first, .last].contains(image.alphaInfo) else { exit(67) }
+    guard let context = draw(image, w, h), let pixels = context.data else { exit(68) }
+    var sent = 0, total = w * h * 4
+    if fault == "die" || fault == "hang" { total /= 2 }
+    while sent < total {
+        let n = write(1, pixels + sent, total - sent)
+        if n < 0 && errno == EINTR { continue }
+        if n <= 0 { exit(68) }
+        sent += n
+    }
+    if fault == "die" { kill(getpid(), SIGKILL) }
+    if fault == "hang" { while true { pause() } }
+    exit(0)
+}
+// END SPRITE DECODE CHILD
 
 // BEGIN HAND HOST
 // The ghost hand (ROADMAP 2.7): a glove that glides to where sleight acts in a background window, flourishes and fades. It only
@@ -3173,7 +3368,9 @@ final class HandHost: NSObject, NSApplicationDelegate {
                     DispatchQueue.main.async {
                         self.ringRoot?.sublayers?.filter { $0.name == "sprite" }.forEach { $0.removeFromSuperlayer() }
                         self.ringRuntime.character = nil
-                        if self.cursorStyle == "sprite" { self.ringRuntime.character = SpriteCharacter.load(value) }
+                        guard self.cursorStyle == "sprite" else { return }
+                        let result = SpriteCharacter.load(value)
+                        self.ringRuntime.character = result.character; writeCharacterResult(value.id, result)
                     }
                 case let .hide(nonce):
                     guard nonceBook.admit("hand", nonce) else { fault(); continue lines }
@@ -3620,8 +3817,12 @@ func ringPlanDump(theme: RingTheme?, reduced: Bool, secure: Bool, clip: CGRect, 
             case let .character(_, value):
                 guard value.seq > last else { exit(65) }; last = value.seq
                 runtime.character = nil
-                if sprite { runtime.character = SpriteCharacter.load(value) }
-                write(["effect": "character", "loaded": runtime.character != nil, "time": clock]); continue
+                let result = sprite ? SpriteCharacter.load(value) : nil
+                runtime.character = result?.character
+                // selfMaxRss: this process's peak resident bytes so far (macOS reports bytes), without the decode child's.
+                var usage = rusage(); getrusage(RUSAGE_SELF, &usage)
+                write(["effect": "character", "loaded": runtime.character != nil, "reason": result?.reason as Any? ?? NSNull(),
+                    "warnings": result?.warnings ?? [], "time": clock, "selfMaxRss": usage.ru_maxrss]); continue
             case let .act(_, act): event = ringEvent(act); delay = act.delay
             case let .aim(_, value), let .status(_, value): event = value; delay = 0
             case .hide: emit(runtime.hide(clock)); continue
@@ -3642,6 +3843,22 @@ func ringPlanDump(theme: RingTheme?, reduced: Bool, secure: Bool, clip: CGRect, 
 // consent channel runs on fds 3 (in) and 4 (out) beside the hand's stdin, and the menu bar glove serves both. --menu is the
 // hand-only host: the glove and its hand-only menu, with no consent channel.
 let arguments = Array(CommandLine.arguments.dropFirst())
+if arguments.first == "--decode-sheet" { spriteDecodeChild(Array(arguments.dropFirst())) }
+// `--check-character`: one character frame on stdin, the same checks and decode child as the live host, one JSON line out
+// (loaded, reason, warnings). `sleight-mcp cursor check` runs it so the user sees why a character shows the ring alone.
+if arguments.first == "--check-character" {
+    guard arguments.count == 1 else { exit(64) }
+    var input = Data()
+    while input.count <= 32768, case let chunk = FileHandle.standardInput.availableData, !chunk.isEmpty { input.append(chunk) }
+    let line = input.split(separator: 10).first ?? Data()
+    guard input.count <= 32769, let data = try? JSONSerialization.jsonObject(with: line) as? [String: Any],
+        data["nonce"] as? String != nil, case let .character(_, frame)? = handFrame(data) else { exit(65) }
+    let result = SpriteCharacter.check(frame)
+    let out = try! JSONSerialization.data(withJSONObject: ["id": frame.id, "loaded": result.character != nil,
+        "reason": result.reason as Any? ?? NSNull(), "warnings": result.warnings], options: [.sortedKeys])
+    FileHandle.standardOutput.write(out + Data([10]))
+    exit(0)
+}
 if arguments.first == "--ring-plan-dump" {
     var flags = Array(arguments.dropFirst())
     func take(_ prefix: String) -> String?? {

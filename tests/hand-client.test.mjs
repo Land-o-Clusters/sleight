@@ -270,6 +270,24 @@ test('the Ghost Hand toggle reaches the relay on the host\'s stdout, nonce-bound
   assert.equal(h.traces.filter(([d]) => d === 'hand-toggle-refused').length, 5);
 });
 
+test('the sprite style\'s character result reaches the trace, nonce-bound, with the host\'s refusal reason', async t => {
+  t.after(() => setHandPid(0));
+  const h = harness();
+  h.client.send(frame()); await settle();
+  const { nonce } = h.children[0].menus[0], stdout = h.children[0].stdout;
+  const event = more => ({ hand: 'character', nonce, id: 'fixture', loaded: false, reason: 'size', warnings: [], ...more });
+  for (const e of [event(), event({ loaded: true, reason: null, warnings: ['chroma fringe'] })]) stdout.emit('data', Buffer.from(JSON.stringify(e) + '\n'));
+  await settle();
+  assert.deepEqual(h.traces.filter(([d]) => d.startsWith('hand-character')),
+    [['hand-character-refused', { id: 'fixture', reason: 'size' }], ['hand-character', { id: 'fixture', warnings: ['chroma fringe'] }]]);
+  // A foreign nonce, an unknown reason, a reason on success or an extra key is refused like any other bad event.
+  for (const bad of [event({ nonce: 'f'.repeat(64) }), event({ reason: 'oops' }), event({ loaded: true }), event({ extra: 1 })]) {
+    stdout.emit('data', Buffer.from(JSON.stringify(bad) + '\n')); await settle();
+  }
+  assert.equal(h.traces.filter(([d]) => d.startsWith('hand-character')).length, 2);
+  assert.equal(h.traces.filter(([d]) => d === 'hand-toggle-refused').length, 4);
+});
+
 test('the first host is consent-capable and successive worker forks reuse its pid after exit and reset', async t => {
   t.after(() => setHandPid(0));
   const h = harness();
@@ -442,7 +460,7 @@ test('prepareHandHost builds through the helper pipeline and its handle starts o
   assert.equal(builds, 0);
   const ready = await host.prepareHandHost({ cacheRoot, sourceRoot, compile, tools: async () => true });
   assert.equal(ready.status, 'ready'); assert.equal(builds, 2);
-  assert.deepEqual(Object.keys(ready).sort(), ['spawn', 'status'], 'no receipt leaves the hand handle');
+  assert.deepEqual(Object.keys(ready).sort(), ['checkCharacter', 'spawn', 'status'], 'no receipt leaves the hand handle');
   assert.equal(host.handHostBuilt({ cacheRoot, sourceRoot }), true);
   // A hand-only host has the menu and no consent descriptors; one opened for turbo's fork has fds 3 and 4.
   // The cursor style goes before the terminal --menu or --consent, glove by default.
@@ -573,6 +591,23 @@ test('with the action log off the menu frame has no usage, and a failing read on
   }
 });
 
+
+test('checkCharacterInHost sends one frame to --check-character and returns only an exact result', async () => {
+  const { EventEmitter } = await import('node:events');
+  const fake = (reply, code = 0, { silent = false } = {}) => (binary, args, opts) => {
+    const child = Object.assign(new EventEmitter(), { stdout: Object.assign(new EventEmitter(), { setEncoding() {} }), kill: () => { child.killed = true; },
+      stdin: Object.assign(new EventEmitter(), { end: text => { child.sent = { binary, args, opts, text }; if (!silent) setImmediate(() => { child.stdout.emit('data', reply); child.emit('close', code); }); } }) });
+    fake.last = child; return child;
+  };
+  const frame = { hand: 'character', id: 'pet' }, result = { id: 'pet', loaded: false, reason: 'size', warnings: [] };
+  assert.deepEqual(await host.checkCharacterInHost('/bin/host', frame, { run: fake(JSON.stringify(result) + '\n') }), result);
+  assert.deepEqual(fake.last.sent.args, ['--check-character']); assert.equal(fake.last.sent.text, JSON.stringify(frame) + '\n');
+  assert.deepEqual(Object.keys(fake.last.sent.opts.env).sort(), ['LANG', 'PATH', 'SLEIGHT_CONSENT_ICON'], 'the test bank switch never reaches it');
+  await assert.rejects(host.checkCharacterInHost('/bin/host', frame, { run: fake(JSON.stringify({ ...result, extra: 1 }) + '\n') }), /CHARACTER_CHECK_FAILED/);
+  await assert.rejects(host.checkCharacterInHost('/bin/host', frame, { run: fake('', 65) }), /CHARACTER_CHECK_FAILED/);
+  await assert.rejects(host.checkCharacterInHost('/bin/host', frame, { run: fake('', 0, { silent: true }), timeoutMs: 20 }), /CHARACTER_CHECK_TIMEOUT/);
+  assert.equal(fake.last.killed, true);
+});
 
 test('cursorStyle is an optional spawn option and adds no wait to send', async t => {
   t.after(() => setHandPid(0));

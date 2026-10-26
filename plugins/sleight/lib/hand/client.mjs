@@ -191,6 +191,16 @@ export function createHandClient({ env = process.env, setting = () => handSettin
       error => note('permissions-failed', { code: /^[A-Z][A-Z0-9_]{0,127}$/.test(error?.message) ? error.message : 'PERMISSIONS_FAILED' }));
     return true;
   }
+  // The sprite style's load result, so a character shown as the ring alone has its reason in the trace.
+  function characterEvent(event) {
+    const reasons = ['path', 'permissions', 'size', 'type', 'decode', 'alpha', 'pixels', 'changed', 'timeout', 'child'];
+    if (event.nonce !== nonce || Object.keys(event).sort().join() !== 'hand,id,loaded,nonce,reason,warnings' || typeof event.loaded !== 'boolean' ||
+      typeof event.id !== 'string' || !/^[a-z0-9-]{1,48}$/.test(event.id) || !(event.loaded ? event.reason === null : reasons.includes(event.reason)) ||
+      !Array.isArray(event.warnings) || !event.warnings.every(w => ['chroma fringe', 'ink in an unused cell'].includes(w))) return false;
+    note(event.loaded ? 'hand-character' : 'hand-character-refused', { id: event.id, ...event.reason ? { reason: event.reason } : {},
+      ...event.warnings.length ? { warnings: event.warnings } : {} });
+    return true;
+  }
   // The Ghost Hand row's clicks: exact { hand: 'toggle', nonce, enabled } lines with this session's nonce, on the host's stdout.
   function onEvents(chunk) {
     events += chunk;
@@ -204,6 +214,7 @@ export function createHandClient({ env = process.env, setting = () => handSettin
         resetWaiters.get(event.token)?.(); continue;
       }
       if (event && typeof event === 'object' && Object.hasOwn(event, 'permissions') && permissionEvent(event)) continue;
+      if (event?.hand === 'character' && characterEvent(event)) continue;
       if (!event || typeof event !== 'object' || Object.keys(event).sort().join() !== 'enabled,hand,nonce' || event.hand !== 'toggle' ||
           event.nonce !== nonce || typeof event.enabled !== 'boolean') { note('hand-toggle-refused', {}); continue; }
       Promise.resolve().then(() => setHand(event.enabled)).then(() => recheck(true),
