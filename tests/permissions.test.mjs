@@ -450,13 +450,20 @@ test('a write the reader would refuse never happens, and the menu leaves out a r
   noteCurrentApp(undefined);
 });
 
-test('the launcher runs the permissions command: an unknown op prints the usage, exit 2, and reads nothing', async () => {
+test('without a terminal the launcher refuses an unknown permissions op (VC5S), exit 3, and reads nothing', async () => {
   const { spawnSync } = await import('node:child_process');
   const launch = new URL('../plugins/sleight/lib/launch.mjs', import.meta.url).pathname;
   const run = spawnSync(process.execPath, [launch, 'permissions', 'frobnicate'], { encoding: 'utf8', timeout: 30000 });
-  assert.equal(run.status, 2, run.stderr);
-  assert.match(run.stdout, /^usage: sleight-mcp permissions \[list\]\n/);
-  assert.match(run.stdout, /permissions block\|unblock <app bundle id\|origin>/);
+  assert.equal(run.status, 3, run.stderr);
+  assert.match(run.stderr, /^sleight: permissions frobnicate changes sleight's settings, so run it yourself in a terminal/);
+  assert.equal(run.stdout, '');
+});
+
+test('an unknown permissions op prints the usage, exit 2', () => {
+  const lines = [];
+  assert.equal(permissionsCommand(['frobnicate'], { out: text => lines.push(text) }), 2);
+  assert.match(lines.join(''), /^usage: sleight-mcp permissions \[list\]\n/);
+  assert.match(lines.join(''), /permissions block\|unblock <app bundle id\|origin>/);
 });
 
 test('repair replaces an unsafe file with a private one that keeps every valid block, and leaves a safe file alone', t => {
