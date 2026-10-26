@@ -391,6 +391,7 @@ export async function appleToolsPresent({ run = promisify(execFile), exists = ex
     return ['swiftc', 'clang'].every(tool => ['usr/bin', 'Toolchains/XcodeDefault.xctoolchain/usr/bin'].some(folder => exists(join(dir, folder, tool))));
   } catch { return false; }
 }
+export const handCursorStyles = Object.freeze(['glove', 'ring', 'seam']);
 export async function prepareHandHost({ cacheRoot = defaultHelperCache(), sourceRoot = sources, compile = compileNative,
   tools = appleToolsPresent, onProgress, signal } = {}) {
   let inventory;
@@ -401,10 +402,12 @@ export async function prepareHandHost({ cacheRoot = defaultHelperCache(), source
   const { receipt } = built;
   // capture is 'hidden' (absent from every capture) or 'visible' (screenshots and recordings show the hand). The host is the
   // session's: hand frames on stdin and control events on stdout. Session clients open fds 3 and 4 at first use, then
-  // pass those consent pipes to each turbo worker. --menu remains available to standalone hand clients.
-  return Object.freeze({ status: 'ready', spawn: ({ capture = 'hidden', consent = false } = {}) => {
+  // pass those consent pipes to each turbo worker. --menu remains available to standalone hand clients. cursorStyle is the
+  // glove, the Split Seam+ ring or plain Split Seam ('seam', for comparison).
+  return Object.freeze({ status: 'ready', spawn: ({ capture = 'hidden', consent = false, cursorStyle = 'glove' } = {}) => {
     if (!['hidden', 'visible'].includes(capture) || typeof consent !== 'boolean') throw Error('HAND_CAPTURE_INVALID');
-    return spawn(executable('consent-host', receipt), ['--hand', '--capture=' + capture, consent ? '--consent' : '--menu'],
+    if (!handCursorStyles.includes(cursorStyle)) throw Error('HAND_CURSOR_STYLE_INVALID');
+    return spawn(executable('consent-host', receipt), ['--hand', '--capture=' + capture, '--cursor-style=' + cursorStyle, consent ? '--consent' : '--menu'],
       { env: consentEnvironment(), stdio: ['pipe', 'pipe', 'ignore', ...consent ? ['pipe', 'pipe'] : []] });
   } });
 }

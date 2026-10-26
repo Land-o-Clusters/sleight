@@ -21,8 +21,9 @@ const line = frame => (typeof frame === 'string' ? frame : JSON.stringify(frame)
 
 test('hand source: it never posts input, moves the pointer, activates, takes key or writes stdout', () => {
   const host = section('HAND HOST'), frame = section('HAND FRAME'), art = section('HAND ART'), motion = section('HAND MOTION');
-  assert.ok(host && frame && art && motion, 'hand sections absent');
-  for (const text of [host, frame, art, motion]) {
+  const ring = section('RING PLAN'), runtime = section('RING RUNTIME');
+  assert.ok(host && frame && art && motion && ring && runtime, 'hand sections absent');
+  for (const text of [host, frame, art, motion, ring, runtime]) {
     assert.doesNotMatch(text, /CGEvent|CGWarp|NSCursor|activate\(|makeKey|makeMain|becomeKey\(|orderFront\(|AXUIElement|standardOutput|print\(|NSLog/);
   }
   assert.match(host, /orderFrontRegardless\(\)/);
