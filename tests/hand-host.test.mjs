@@ -21,11 +21,17 @@ const line = frame => (typeof frame === 'string' ? frame : JSON.stringify(frame)
 
 test('hand source: it never posts input, moves the pointer, activates, takes key or writes stdout', () => {
   const host = section('HAND HOST'), frame = section('HAND FRAME'), art = section('HAND ART'), motion = section('HAND MOTION');
-  const ring = section('RING PLAN'), runtime = section('RING RUNTIME');
-  assert.ok(host && frame && art && motion && ring && runtime, 'hand sections absent');
-  for (const text of [host, frame, art, motion, ring, runtime]) {
-    assert.doesNotMatch(text, /CGEvent|CGWarp|NSCursor|activate\(|makeKey|makeMain|becomeKey\(|orderFront\(|AXUIElement|standardOutput|print\(|NSLog/);
+  const ring = section('RING PLAN'), runtime = section('RING RUNTIME'), tail = section('HAND FRAME TAIL'), picker = section('CURSOR PICKER');
+  assert.ok(host && frame && art && motion && ring && runtime && tail && picker, 'hand sections absent');
+  // The picker answers the relay on stdout, nonce-bound, through one writer (plus its dump mode); it posts no input either.
+  assert.match(picker, /func writeCursorPickerEvent[\s\S]*?nonceBook\.nonce\("hand"\)/);
+  assert.doesNotMatch(picker, /CGEventPost|\.post\(|postToPid|CGWarp|NSCursor|activate\(|makeMain|AXUIElement|NSLog/);
+  // Reading a delivered event's source fields (the person-input check, and its dump self-test) is allowed; posting one is not.
+  for (const text of [host, frame, tail, art, motion, ring, runtime]) {
+    assert.doesNotMatch(text, /CGEventPost|\.post\(|postToPid|CGWarp|NSCursor|activate\(|makeKey|makeMain|becomeKey\(|orderFront\(|AXUIElement|standardOutput|print\(|NSLog/);
   }
+  // No section of the host posts an event, anywhere in the file.
+  assert.doesNotMatch(source, /CGEventPost|\.post\(tap|postToPid/);
   assert.match(host, /orderFrontRegardless\(\)/);
   assert.match(host, /IsSecureEventInputEnabled\(\)/);
   assert.match(motion, /CAKeyframeAnimation\(keyPath: keyPath\)/);

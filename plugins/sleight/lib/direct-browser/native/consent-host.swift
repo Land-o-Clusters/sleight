@@ -1535,6 +1535,8 @@ func handLabel(_ raw: Any?) -> String? {
     }
     return result
 }
+// END HAND FRAME
+// BEGIN CURSOR PICKER
 // C3 keeps picker messages and rendering separate from the action planners and consent cards.
 struct CursorPickerMessage {
     let op: String, data: [String: Any]
@@ -1982,6 +1984,8 @@ func cursorMenuDump() {
         FileHandle.standardOutput.write(bytesOut + Data([10]))
     }
 }
+// END CURSOR PICKER
+// BEGIN HAND FRAME TAIL
 enum HandFrame { case picker(String, CursorPickerMessage), character(String, SpriteFrame), act(String, HandAct), aim(String, RingEvent), status(String, RingEvent), hide(String), menu(String, enabled: Bool, capture: String, version: String, permissions: PermissionsData?, usage: UsageStats?) }
 let handKinds: Set<String> = ["click", "double", "right", "key", "type", "drag", "scroll"]
 func handFrame(_ data: [String: Any]) -> HandFrame? {
@@ -2068,7 +2072,7 @@ func handBox(_ points: [CGPoint]) -> CGRect {
     guard let left = xs.min(), let right = xs.max(), let top = ys.min(), let bottom = ys.max() else { return .null }
     return CGRect(x: left - 48, y: top - 48, width: right - left + 96, height: bottom - top + 96)
 }
-// END HAND FRAME
+// END HAND FRAME TAIL
 
 // BEGIN HAND ART
 // The one place for the ghost hand's look and motion: the art director's H7 deliverables (2026-10-18, approved by the owner at
