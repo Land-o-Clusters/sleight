@@ -7,7 +7,7 @@ import { readFileSync } from 'node:fs';
 import { userInfo } from 'node:os';
 import { isAbsolute, join, normalize } from 'node:path';
 import { createConnection } from 'node:net';
-import { handSetting } from './settings.mjs';
+import { cachedHandSetting, createHandSettingReader, handSettingReader } from './settings.mjs';
 
 export const CURSOR_VERSION = 'sleight.cursor/1';
 const kinds = new Set(['click', 'double', 'right', 'key', 'type', 'drag', 'scroll', 'select', 'navigate', 'move']);
@@ -78,9 +78,9 @@ function actionRecord(input, labels) {
 /** No I/O is awaited by write(). Discovery and connection run beside the action, at most once per 2 seconds. */
 export function createRendererSink({ dir = process.env.SLEIGHT_CURSOR_STREAM_DIR ?? join(userInfo().homedir, 'Library/Application Support/sleight/cursor/renderers'),
   uid = process.getuid(), now = Date.now, connect = path => createConnection(path), defer = setImmediate, inspect = lstat } = {}) {
-  const peers = new Map(); let closed = false, scanning = false, checked = -Infinity, dropped = 0, sessionStart;
+  const peers = new Map(); let closed = false, scanning = false, checked = -Infinity, dropped = 0, sessionStart, currentStatus;
   const directoryOK = async () => {
-    try { const s = await inspect(dir); return isAbsolute(dir) && normalize(dir) === dir && s.isDirectory() && !s.isSymbolicLink() && s.uid === uid && (s.mode & 0o777) === 0o700 && await realpath(dir) === dir; } catch { return false; }
+    try { const s = await inspect(dir); return isAbsolute(dir) && normalize(dir) === dir && s.isDirectory() && !s.isSymbolicLink() && s.uid === uid && (s.mode & 0o7777) === 0o700 && await realpath(dir) === dir; } catch { return false; }
   };
   const remove = peer => { if (peers.get(peer.path) === peer) peers.delete(peer.path); dropped += peer.queue.length + peer.inFlight; peer.queue.length = 0; peer.inFlight = 0; peer.socket.destroy(); };
   const pump = peer => {
@@ -104,7 +104,7 @@ export function createRendererSink({ dir = process.env.SLEIGHT_CURSOR_STREAM_DIR
         if (closed) return;
         if (!name.endsWith('.sock')) continue;
         const path = join(dir, name); let stat;
-        try { stat = await inspect(path); if (!stat.isSocket() || stat.isSymbolicLink() || stat.uid !== uid || await realpath(path) !== path) continue; } catch { continue; }
+        try { stat = await inspect(path); if (!stat.isSocket() || stat.isSymbolicLink() || stat.uid !== uid || (stat.mode & 0o7777) !== 0o600 || await realpath(path) !== path) continue; } catch { continue; }
         valid.add(path);
         const previous = peers.get(path);
         if (previous && previous.ino === stat.ino && previous.dev === stat.dev) continue;
@@ -119,11 +119,11 @@ export function createRendererSink({ dir = process.env.SLEIGHT_CURSOR_STREAM_DIR
         socket.on('connect', async () => {
           try {
             const current = await inspect(path);
-            if (closed || peers.get(path) !== peer || current.ino !== peer.ino || current.dev !== peer.dev || current.uid !== uid || !current.isSocket() || !await directoryOK()) return remove(peer);
-            if (sessionStart && !peer.queue.includes(sessionStart)) {
-              if (peer.queue.length >= 256) { peer.queue.pop(); dropped++; }
-              peer.queue.unshift(sessionStart);
-            }
+            if (closed || peers.get(path) !== peer || current.ino !== peer.ino || current.dev !== peer.dev || current.uid !== uid || !current.isSocket() || current.isSymbolicLink() || (current.mode & 0o7777) !== 0o600 || await realpath(path) !== path || !await directoryOK()) return remove(peer);
+            const replay = [...new Set([sessionStart, currentStatus, ...peer.queue].filter(Boolean))];
+            replay.sort((a, b) => (JSON.parse(a).seq ?? 0) - (JSON.parse(b).seq ?? 0));
+            if (replay.length > 256) { dropped += replay.length - 256; replay.splice(2, replay.length - 256); }
+            peer.queue = replay;
             peer.ready = true; pump(peer);
           } catch { remove(peer); }
         });
@@ -141,6 +141,7 @@ export function createRendererSink({ dir = process.env.SLEIGHT_CURSOR_STREAM_DIR
       refresh(false);
       let line; try { line = JSON.stringify(event) + '\n'; } catch { return; }
       if (event?.type === 'session' && event.state === 'start') sessionStart = line;
+      if (event?.type === 'status') currentStatus = line;
       for (const p of peers.values()) {
         if (p.queue.length + p.inFlight >= 256) { dropped++; continue; }
         p.queue.push(line); pump(p);
@@ -161,19 +162,32 @@ export function createRendererSink({ dir = process.env.SLEIGHT_CURSOR_STREAM_DIR
 }
 
 const version = (() => { try { return JSON.parse(readFileSync(new URL('../../.claude-plugin/plugin.json', import.meta.url))).version; } catch { return '0.0.0'; } })();
-export function createCursorEvents({ setting = () => handSetting(), env = process.env, sink, onEvent = () => {}, now = Date.now, version: release = version,
-  host = 'claude-code' } = {}) {
-  const session = opaque(); let seq = 0, closed = false, started = false, output = sink;
+export function createCursorEvents({ env = process.env, setting = handSettingReader(env), sink, onEvent = () => {}, now = Date.now, version: release = version,
+  host = 'claude-code', repeat = setInterval, cancelRepeat = clearInterval } = {}) {
+  setting = createHandSettingReader({ setting, now });
+  const session = opaque(); let seq = 0, closed = false, started = false, output = sink, discoveryTimer;
   const options = () => { try { return env.SLEIGHT_HAND === '0' ? {} : setting(); } catch { return {}; } };
   const emit = fields => {
     const event = { v: CURSOR_VERSION, seq: ++seq, ts: now(), session, ...fields };
     try { onEvent(event); } catch {}
     try { (output ??= createRendererSink({ dir: env.SLEIGHT_CURSOR_STREAM_DIR })).write(event); } catch {}
   };
-  const start = () => {
-    if (!started) { started = true; emit({ type: 'session', state: 'start', host: ['claude-code', 'codex', 'other'].includes(host) ? host : 'other', version: release }); }
+  const start = (initialStatus = true) => {
+    if (!started) { started = true; emit({ type: 'session', state: 'start', host: ['claude-code', 'codex', 'other'].includes(host) ? host : 'other', version: release });
+      if (initialStatus) emit({ type: 'status', state: 'thinking' });
+    }
   };
-  const allowed = () => !closed && options().stream === true;
+  const allowed = () => {
+    const enabled = !closed && options().stream === true;
+    if (enabled && !discoveryTimer) {
+      discoveryTimer = repeat(() => {
+        if (!allowed()) return;
+        start(); output?.refresh?.(false);
+      }, 2000);
+      discoveryTimer.unref?.();
+    } else if (!enabled && discoveryTimer) { cancelRepeat(discoveryTimer); discoveryTimer = undefined; }
+    return enabled;
+  };
   const api = {
     call: opaque,
     get labels() { return options().labels ?? 'off'; },
@@ -183,10 +197,11 @@ export function createCursorEvents({ setting = () => handSetting(), env = proces
     status(state, detail = {}) {
       if (!allowed() || !states.has(state)) return;
       detail ??= {};
-      start(); const record = { type: 'status', state }; if (callId(detail.call)) record.call = detail.call; put(record, 'app', text(detail.app)); emit(record);
+      start(false); const record = { type: 'status', state }; if (callId(detail.call)) record.call = detail.call; put(record, 'app', text(detail.app)); emit(record);
     },
-    close() { if (closed) return; if (started && allowed()) emit({ type: 'session', state: 'end', host, version: release }); closed = true; output?.close(); },
+    close() { if (closed) return; if (started && allowed()) emit({ type: 'session', state: 'end', host, version: release }); closed = true; cancelRepeat(discoveryTimer); discoveryTimer = undefined; output?.close(); },
   };
+  allowed();
   return api;
 }
 
@@ -194,14 +209,16 @@ let sharedEvents;
 export const sessionCursorEvents = () => sharedEvents ??= createCursorEvents();
 // One asynchronous call context in a worker, shared by browser and Electron action runners.
 const context = new AsyncLocalStorage();
-export const withCursorCall = (source, fn) => context.run({ call: opaque(), index: 0, source }, fn);
+export const cursorStreamEnabled = () => process.env.SLEIGHT_HAND !== '0' && cachedHandSetting().stream === true;
+export const withCursorCall = (source, fn, enabled = cursorStreamEnabled()) =>
+  enabled ? context.run({ call: opaque(), index: 0, source }, fn) : fn();
 export function cursorStep() {
   const call = context.getStore();
   return call ? { call: call.call, index: call.index++, source: call.source } : { call: opaque(), index: 0, source: 'turbo' };
 }
 export function workerCursorStatus(state, detail = {}) {
   try {
-    if (process.connected && handSetting().stream && process.env.SLEIGHT_HAND !== '0' && states.has(state)) {
+    if (process.connected && cachedHandSetting().stream && process.env.SLEIGHT_HAND !== '0' && states.has(state)) {
       const record = { state }, call = context.getStore()?.call;
       if (callId(call)) record.call = call;
       put(record, 'app', text(detail.app));
@@ -211,7 +228,7 @@ export function workerCursorStatus(state, detail = {}) {
 }
 export function workerCursorAction(record) {
   try {
-    const setting = handSetting();
+    const setting = cachedHandSetting();
     if (process.connected && setting.stream && process.env.SLEIGHT_HAND !== '0') {
       const event = actionRecord(record, setting.labels ?? 'off');
       if (event) process.send({ version: 3, cursor: event });

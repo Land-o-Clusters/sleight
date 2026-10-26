@@ -9,7 +9,7 @@
 // the window's width to the viewport's CSS width, refined by devicePixelRatio (display scale times zoom). Pinch zoom
 // goes through the visual viewport. Turbo moves no real pointer, so it has nothing to hide the hand before.
 import { createAppHealthHelper } from '../read-failure.mjs';
-import { handSetting } from './settings.mjs';
+import { createHandSettingReader, handSettingReader } from './settings.mjs';
 import { appendFileSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { join } from 'node:path';
@@ -18,7 +18,7 @@ import { trustedLocatorRead } from '../direct-browser/trusted-dom.mjs';
 import { cursorRecord, cursorReason, cursorStep } from './events.mjs';
 
 const KINDS = { click: 'click', check: 'click', uncheck: 'click', select: 'click', navigate: 'click', type: 'type', press: 'key', drag: 'drag', scroll: 'scroll' };
-const EVENT_KINDS = { ...KINDS, select: 'select', navigate: 'navigate', paste: 'type', hover: 'move', move: 'move', back: 'navigate', forward: 'navigate', reload: 'navigate', upload: 'select', download: 'click' };
+const EVENT_KINDS = { ...KINDS, select: 'select', navigate: 'navigate', paste: 'type', hover: 'move', move: 'move', back: 'navigate', forward: 'navigate', reload: 'navigate', upload: 'select' };
 const MAX_TYPE_BEATS = 8, BOX_TIMEOUT_MS = 300, LOCATE_TIMEOUT_MS = 2000, GEOMETRY_MS = 1500;
 
 // Runs in the page's trusted utility world through trustedLocatorRead (closure-free, like act.mjs's readers).
@@ -86,12 +86,14 @@ const withTimeout = (promise, ms) => {
 
 export function createBrowserHand({ client, loadClient = () => import('./client.mjs'), clientOptions = {}, locate,
   readMetrics = page => trustedLocatorRead(page.locator('html'), pageMetrics), trace = () => {}, now = () => performance.now(),
-  defer = fn => setImmediate(fn), env = process.env, setting = () => handSetting({ env }), events } = {}) {
+  defer = fn => setImmediate(fn), env = process.env, setting = handSettingReader(env), events, record = cursorRecord } = {}) {
+  setting = createHandSettingReader({ setting });
   if (env.SLEIGHT_HAND === '0' || !(setting().enabled || setting().stream) || typeof locate !== 'function') return undefined;
   let closed = false, resolved = client ?? undefined, loading;
   const load = () => loading ??= (client ? Promise.resolve(client) : Promise.resolve().then(loadClient).then(m => m.createHandClient(clientOptions)))
     .then(c => (resolved = c && typeof c.send === 'function' ? c : null), () => (resolved = null));
-  const live = () => !closed && (resolved && resolved.enabled !== false || events?.enabled);
+  const stream = () => { try { return events ? events.enabled : setting().stream === true; } catch { return false; } };
+  const live = () => !closed && (resolved && resolved.enabled !== false || stream());
   const publish = (token, phase, reason) => {
     if (!token?.cursor || closed) return;
     const record = { ...token.record, ...token.cursor, phase, ...(reason ? { reason: cursorReason(reason) } : {}) };
@@ -122,13 +124,16 @@ export function createBrowserHand({ client, loadClient = () => import('./client.
     const planned = planBrowserFrame({ op, text, box, toBox, metrics, geometry, ignorePids: [resolved?.pid].filter(Number.isSafeInteger) });
     if (planned?.skip) return skip(planned.skip);
     if (planned?.frame) {
-      const scale = zoomOf(metrics) * (metrics.vv?.scale > 0 ? metrics.vv.scale : 1);
-      const rect = box && [planned.frame.at[0] - box.width * scale / 2, planned.frame.at[1] - box.height * scale / 2, box.width * scale, box.height * scale];
-      token.record = cursorRecord({ frame: planned.frame, action: { kind: EVENT_KINDS[op], role, inputType, title, description,
-        rect, secure: EVENT_KINDS[op] === 'type' && !inputType }, geometry, labels: events?.labels ?? setting().labels ?? 'off' });
-      publish(token, 'aim'); publish(token, 'act'); token.shown = true;
-      if (token.ended) publish(token, token.failed ? 'failed' : 'done');
       try { resolved?.send(planned.frame); trace('hand-shown', { op, kind: planned.frame.kind }); } catch {}
+      if (token.cursor) try {
+        const scale = zoomOf(metrics) * (metrics.vv?.scale > 0 ? metrics.vv.scale : 1);
+        const rect = box && [planned.frame.at[0] - box.width * scale / 2, planned.frame.at[1] - box.height * scale / 2, box.width * scale, box.height * scale];
+        token.record = record({ frame: planned.frame, action: { kind: EVENT_KINDS[op], role, inputType, title, description,
+          rect, secure: EVENT_KINDS[op] === 'type' && !inputType }, geometry, labels: events?.labels ?? setting().labels ?? 'off' });
+        publish(token, 'aim'); publish(token, 'act'); token.shown = true;
+        if (token.ended) publish(token, token.failed ? 'failed' : 'done');
+      } catch {}
+
     }
   }
   return {
@@ -136,8 +141,12 @@ export function createBrowserHand({ client, loadClient = () => import('./client.
     step(input) {
       try {
         if (closed || !input || !EVENT_KINDS[input.op]) return;
-        const token = { cursor: (events?.enabled || setting().stream) ? cursorStep() : undefined,
-          record: cursorRecord({ action: { kind: EVENT_KINDS[input.op], role: input.role, inputType: input.inputType, secure: EVENT_KINDS[input.op] === 'type' && !input.inputType } }) };
+        const token = {};
+        if (stream()) try {
+          token.cursor = cursorStep();
+          token.record = record({ action: { kind: EVENT_KINDS[input.op], role: input.role, inputType: input.inputType, secure: EVENT_KINDS[input.op] === 'type' && !input.inputType } });
+        } catch {}
+
         defer(() => show(input, token).catch(() => { publish(token, 'skipped', 'no-geometry'); }));
         return token;
       } catch { /* The hand never reaches the act path. */ }
@@ -148,8 +157,8 @@ export function createBrowserHand({ client, loadClient = () => import('./client.
       if (token.shown && !token.skipped) publish(token, failed ? 'failed' : 'done');
     },
     skipped(input, reason = 'unplanned') {
-      if (closed || !(events?.enabled || setting().stream)) return;
-      const token = { cursor: cursorStep(), record: cursorRecord({ action: { kind: EVENT_KINDS[input?.op] ?? 'move', secure: true } }) };
+      if (closed || !EVENT_KINDS[input?.op] || !stream()) return;
+      const token = { cursor: cursorStep(), record: cursorRecord({ action: { kind: EVENT_KINDS[input.op], secure: true } }) };
       publish(token, 'skipped', reason);
     },
     close() { closed = true; try { resolved?.close(); } catch {} },
@@ -175,32 +184,33 @@ export function workerHandTrace({ setting = process.env.SLEIGHT_TRACE, parentPid
 }
 
 // Inherited IPC sends frames to the relay's one client. The worker never starts another host.
-export function workerHandClient(channel, pid, { env = process.env, setting = () => handSetting({ env }), now = Date.now } = {}) {
+export function workerHandClient(channel, pid, { env = process.env, setting = handSettingReader(env), now = Date.now, sharedUi = true } = {}) {
+  setting = createHandSettingReader({ setting, now });
   let checked = -Infinity, enabled = false;
   // Recheck at the next use after 250 ms, including before page reads. No idle timer or extra host is needed.
   const live = () => {
     const at = now();
     if (at < checked || at - checked >= 250) {
       checked = at;
-      try { const s = setting(); enabled = env.SLEIGHT_HAND !== '0' && (s?.enabled === true || s?.stream === true); } catch { enabled = false; }
+      try { const s = setting(); enabled = env.SLEIGHT_HAND !== '0' && (sharedUi && s?.enabled === true || s?.stream === true); } catch { enabled = false; }
     }
     return enabled && channel.connected !== false;
   };
-  return { get enabled() { return live(); }, pid,
-    send(frame) { if (live() && setting().enabled) try { channel.send({ version: 3, hand: frame }); } catch {} },
+  return { get enabled() { return live() && sharedUi && setting().enabled === true; }, pid,
+    send(frame) { if (sharedUi && live() && setting().enabled) try { channel.send({ version: 3, hand: frame }); } catch {} },
     event(record) { if (live() && setting().stream) try { channel.send({ version: 3, cursor: record }); } catch {} },
     close() {} };
 }
 
 // One hand planner per worker, with a lazy persistent utility helper for Window Server geometry.
 let shared;
-export function sharedBrowserHand(env = process.env) {
+export function sharedBrowserHand(env = process.env, { setting = handSettingReader(env) } = {}) {
   if (shared !== undefined) return shared ?? undefined;
   const helper = createAppHealthHelper();
   const sharedUi = process.argv.includes('--shared-ui') && typeof process.send === 'function';
   const pid = Number(process.argv.find(arg => arg.startsWith('--shared-hand-pid='))?.split('=')[1]);
-  const client = typeof process.send === 'function' ? workerHandClient(process, Number.isSafeInteger(pid) && pid > 0 ? pid : undefined, { env }) : undefined;
-  shared = createBrowserHand({ env, client, locate: request => helper.handLocate(request), trace: workerHandTrace({ setting: env.SLEIGHT_TRACE }) }) ?? null;
+  const client = typeof process.send === 'function' ? workerHandClient(process, Number.isSafeInteger(pid) && pid > 0 ? pid : undefined, { env, setting, sharedUi }) : undefined;
+  shared = createBrowserHand({ env, setting, client, locate: request => helper.handLocate(request), trace: workerHandTrace({ setting: env.SLEIGHT_TRACE }) }) ?? null;
   if (shared) process.once('exit', () => helper.close());
   return shared ?? undefined;
 }

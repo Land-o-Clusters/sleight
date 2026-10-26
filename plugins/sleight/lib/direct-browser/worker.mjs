@@ -1,4 +1,4 @@
-import { sessionCursorEvents, withCursorCall, workerCursorStatus, workerCursorAction, cursorStep } from '../hand/events.mjs';
+import { sessionCursorEvents, withCursorCall, workerCursorStatus, workerCursorAction, cursorStep, cursorStreamEnabled } from '../hand/events.mjs';
 import { fork } from 'node:child_process';
 import { appendFileSync, closeSync, constants, mkdirSync, openSync, readFileSync, realpathSync, writeSync } from 'node:fs';
 import { homedir } from 'node:os';
@@ -207,7 +207,7 @@ export async function createV3Bridge({ startupTimeoutMs = 120000, timeoutMs = 31
     if (lost) return;
     if (exact(frame, ['version', 'cursorStatus']) && frame.version === 3) { (dependencies.cursorEvents ?? sessionCursorEvents()).status(frame.cursorStatus?.state, frame.cursorStatus); return; }
     if (exact(frame, ['version', 'cursor']) && frame.version === 3) { (dependencies.cursorEvents ?? sessionCursorEvents()).action(frame.cursor); return; }
-    if (shared && exact(frame, ['version', 'hand']) && frame.version === 3) { shared.send?.(frame.hand); return; }
+    if (exact(frame, ['version', 'hand']) && frame.version === 3) { shared?.send?.(frame.hand); return; }
     if (!hello && (exact(frame, ['version', 'status', 'code']) || exact(frame, ['version', 'status', 'code', 'stage', 'reason'])) &&
         frame.version === 3 && frame.status === 'unavailable') {
       const code = unsafeStartup.has(frame.code) ? frame.code : 'V3_RUNTIME_UNAVAILABLE';
@@ -799,7 +799,7 @@ export async function startInstalledV3Worker({ channel }, dependencies = {}) {
               return await withCursorCall(resource.apps ? 'electron' : 'turbo', async () => {
                 if (request.name === 'browser_tabs' && request.arguments.do === 'handoff') workerCursorStatus('handback');
                 // Opening a document has no element point and doesn't pass through the action runner.
-                const navigation = request.name === 'browser_open' ? { ...cursorStep(), kind: 'navigate' } : undefined;
+                const navigation = request.name === 'browser_open' && cursorStreamEnabled() ? { ...cursorStep(), kind: 'navigate' } : undefined;
                 if (navigation) workerCursorAction({ ...navigation, phase: 'act' });
                 try {
                   const result = await runtime.call(request, options);

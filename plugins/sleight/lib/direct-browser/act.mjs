@@ -318,7 +318,7 @@ export function createActionRunner({ check, snapshot, backgroundClick = (tab, lo
         const begin = () => {
           assertPageResponsive(tab);
           started = true;
-          if (hand && !cursorToken) try { cursorToken = hand.step({ op: named.do, page, locator, ref: step.ref, text: step.text,
+          if (hand && !point && !cursorToken) try { cursorToken = hand.step({ op: named.do, page, locator, ref: step.ref, text: step.text,
             role: info.role || ({ button: 'button', input: 'textbox', textarea: 'textbox', select: 'combobox', a: 'link' })[info.tag], inputType: info.inputType, title: info.cursorTitle, description: info.cursorDescription,
             to: step.do === 'drag' ? page.getByRef(step.to) : undefined }); } catch {}
         };
@@ -599,7 +599,7 @@ export function createActionRunner({ check, snapshot, backgroundClick = (tab, lo
         stoppedAt = index + 1; break;
       } finally {
         try { hand?.finish?.(cursorToken, cursorFailed); } catch {}
-        if (!cursorToken) try { hand?.skipped?.({ op: named.do }); } catch {}
+        if (!cursorToken && ['click', 'check', 'uncheck', 'select', 'navigate', 'type', 'paste', 'press', 'drag', 'scroll', 'hover', 'move', 'back', 'forward', 'reload', 'upload'].includes(named.do)) try { hand?.skipped?.({ op: named.do }); } catch {}
         stepFinished = true;
         try { onStep?.({ control: controlObserved, boundary: armed?.boundary?.kind }); } catch {}
         try { await controlRecipe?.dispose(); } catch {}

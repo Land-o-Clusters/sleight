@@ -5,11 +5,13 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import net from 'node:net';
 import { EventEmitter } from 'node:events';
+import { fork } from 'node:child_process';
+import { once } from 'node:events';
 import { createCursorEvents, cursorRecord, createRendererSink } from '../plugins/sleight/lib/hand/events.mjs';
-import { readHandConfig, handSetting } from '../plugins/sleight/lib/hand/settings.mjs';
+import { readHandConfig, handSetting, createHandSettingReader } from '../plugins/sleight/lib/hand/settings.mjs';
 import { writeHandSetting } from '../plugins/sleight/lib/hand/command.mjs';
 import { createRelayHand } from '../plugins/sleight/lib/hand/relay-hand.mjs';
-import { createBrowserHand } from '../plugins/sleight/lib/hand/browser-hand.mjs';
+import { createBrowserHand, workerHandClient } from '../plugins/sleight/lib/hand/browser-hand.mjs';
 import { withCursorCall } from '../plugins/sleight/lib/hand/events.mjs';
 import { createRelay } from '../plugins/sleight/lib/relay.mjs';
 import { PassThrough } from 'node:stream';
@@ -23,14 +25,182 @@ const until = async fn => { const end = Date.now() + 2000; while (!fn()) { asser
 const world = t => { const dir = realpathSync(mkdtempSync(join(tmpdir(), 'vc1-'))); chmodSync(dir, 0o700); t.after(() => rmSync(dir, { recursive: true, force: true })); return dir; };
 const frame = { kind: 'type', pid: 42, windowId: 7, at: [10, 20], path: [[10, 20]], beats: 8, delayMs: 0 };
 
+test('real settings cache refreshes at 250 ms for absent, changed, replaced and unsafe files', t => {
+  const path = join(world(t), 'hand.json'); let now = 0;
+  const setting = createHandSettingReader({ path, env: {}, platform: 'darwin', now: () => now });
+  assert.equal(setting().enabled, false);
+  writeFileSync(path, JSON.stringify({ version: 1, enabled: true, stream: true }), { mode: 0o600 });
+  now = 249; assert.equal(setting().enabled, false);
+  now = 250; assert.equal(setting().stream, true);
+  writeFileSync(path, JSON.stringify({ version: 1, enabled: false, stream: false }));
+  now = 500; assert.equal(setting().stream, false);
+  chmodSync(path, 0o644); now = 750; assert.equal(setting().reason, 'unsafe');
+  rmSync(path); writeFileSync(path, JSON.stringify({ version: 1, enabled: true }), { mode: 0o600 });
+  now = 1000; assert.equal(setting().enabled, true);
+  now = 0; assert.equal(setting().enabled, true, 'clock reversal refreshes safely');
+});
+
+test('cursor settings are read at most once per 250 ms and off builds no action record', () => {
+  let clock = 0, reads = 0, touched = 0;
+  const events = createCursorEvents({ now: () => clock, setting: () => { reads++; return { stream: false }; } });
+  const input = { get call() { touched++; throw Error('record built while off'); } };
+  for (let i = 0; i < 1000; i++) { events.action(input); events.status('thinking'); void events.enabled; void events.labels; }
+  assert.equal(reads, 1); assert.equal(touched, 0);
+  clock = 250; events.status('thinking'); assert.equal(reads, 2); events.close();
+});
+
+test('throwing cursor projection preserves native and browser ghost hand frames', async () => {
+  const { events } = capture(), nativeFrames = [], browserFrames = [];
+  const record = () => { throw Error('cursor projection bug'); };
+  const native = createRelayHand({ events, record, client: { enabled: true, send: f => nativeFrames.push(f), close() {} },
+    setting: () => ({ enabled: true, stream: true }), locate: async () => geometry });
+  native.admit(1, { code: 'await app.click([20,20])', screenshotSize: [500, 400] }); await settle();
+  assert.equal(nativeFrames.length, 1); native.result(1, false); native.close();
+  const browser = createBrowserHand({ events, record, client: { enabled: true, send: f => browserFrames.push(f), close() {} },
+    setting: () => ({ enabled: true, stream: true }), locate: async () => geometry,
+    readMetrics: async () => ({ screenX: 0, screenY: 0, outerWidth: 500, outerHeight: 400, innerWidth: 500, innerHeight: 400, dpr: 1, visible: true }) });
+  browser.step({ op: 'click', locator: { boundingBox: async () => ({ x: 10, y: 10, width: 20, height: 20 }) } }); await settle();
+  assert.equal(browserFrames.length, 1); browser.close(); events.close();
+});
+
+test('stream off constructs no browser cursor token or record', async () => {
+  let records = 0, frames = 0;
+  const hand = createBrowserHand({ record: () => { records++; throw Error('must stay off'); },
+    setting: () => ({ enabled: true, stream: false }), client: { enabled: true, send() { frames++; }, close() {} },
+    locate: async () => geometry, readMetrics: async () => ({ screenX: 0, screenY: 0, outerWidth: 500, outerHeight: 400, innerWidth: 500, innerHeight: 400, dpr: 1, visible: true }) });
+  const token = hand.step({ op: 'click', locator: { boundingBox: async () => ({ x: 10, y: 10, width: 20, height: 20 }) } });
+  assert.equal(token.cursor, undefined); hand.finish(token); await settle();
+  assert.equal(records, 0); assert.equal(frames, 1); hand.close();
+});
+
+test('a throwing cursor enabled getter cannot stop native or browser hand dispatch', async () => {
+  let frames = 0;
+  const events = { get enabled() { throw Error('cursor state bug'); } };
+  const client = { enabled: true, send() { frames++; }, close() {} };
+  const setting = () => ({ enabled: true, stream: true });
+  const native = createRelayHand({ events, client, setting, locate: async () => geometry });
+  native.admit(1, { code: 'await app.click([20,20])', screenshotSize: [500, 400] }); await settle();
+  native.result(1, false); assert.equal(frames, 1); native.close();
+  const browser = createBrowserHand({ events, client, setting, locate: async () => geometry,
+    readMetrics: async () => ({ screenX: 0, screenY: 0, outerWidth: 500, outerHeight: 400, innerWidth: 500, innerHeight: 400, dpr: 1, visible: true }) });
+  browser.step({ op: 'click', locator: { boundingBox: async () => ({ x: 10, y: 10, width: 20, height: 20 }) } });
+  await settle(); assert.equal(frames, 2); browser.close();
+});
+
+test('browser skipped ignores operations outside the input vocabulary', () => {
+  const { out, events } = capture();
+  const hand = createBrowserHand({ events, setting: () => ({ stream: true }), locate() {} });
+  for (const op of ['wait', 'dialog', 'download', 'read', 'viewport']) hand.skipped({ op });
+  assert.equal(out.length, 0); hand.skipped({ op: 'click' });
+  assert.equal(out.at(-1).kind, 'click'); assert.equal(out.at(-1).phase, 'skipped'); hand.close(); events.close();
+});
+
+test('hide keeps a running native call until its real result and close invents no outcome', async () => {
+  for (const early of [false, true]) {
+    const { out, events } = capture(); let resolve;
+    const hand = createRelayHand({ events, setting: () => ({ enabled: true, stream: true }),
+      client: { enabled: true, send() {}, hide() {}, close() {} }, locate: () => new Promise(r => { resolve = r; }) });
+    hand.admit(1, { code: 'await app.click([20,20])', screenshotSize: [500, 400] }); await settle();
+    if (!early) { resolve(geometry); await settle(); }
+    hand.hide(); const before = out.length;
+    if (early) { resolve(geometry); await settle(); }
+    assert.equal(out.length, before, 'hide and late geometry cannot invent skipped/failed');
+    hand.result(1, false); assert.equal(out.at(-1).phase, 'done');
+    hand.admit(2, { code: 'await app.click([20,20])', screenshotSize: [500, 400] });
+    const closing = out.length; hand.close(); await settle(); assert.equal(out.length, closing); events.close();
+  }
+});
+
+test('idle discovery finds a renderer without another action and replays session plus current status', async t => {
+  const dir = world(t), received = [], clients = [];
+  const sink = createRendererSink({ dir });
+  const events = createCursorEvents({ sink, setting: () => ({ stream: true }) }); t.after(() => events.close());
+  events.status('waiting', { app: 'Editor' }); await settle();
+  const path = join(dir, 'late.sock');
+  const server = net.createServer(c => { clients.push(c); c.on('data', d => received.push(d.toString())); });
+  await new Promise(r => server.listen(path, r)); chmodSync(path, 0o600);
+  t.after(() => { clients.forEach(c => c.destroy()); server.close(); });
+  const deadline = Date.now() + 4000;
+  while (!received.join('').includes('waiting')) { assert.ok(Date.now() < deadline); await new Promise(r => setTimeout(r, 10)); }
+  const lines = received.join('').trim().split('\n').map(JSON.parse);
+  assert.deepEqual(lines.map(e => [e.type, e.state]), [['session', 'start'], ['status', 'waiting']]);
+  assert.ok(lines[0].seq < lines[1].seq);
+});
+
+test('discovery timer is unreferenced, exists only while enabled, and closes once', () => {
+  let clock = 0, stream = false, timers = 0, cancelled = 0, unrefs = 0, tick;
+  const timer = { unref() { unrefs++; } };
+  const events = createCursorEvents({ now: () => clock, setting: () => ({ stream }), sink: { write() {}, refresh() {}, close() {} },
+    repeat(fn, ms) { assert.equal(ms, 2000); tick = fn; timers++; return timer; },
+    cancelRepeat(handle) { if (handle) { assert.equal(handle, timer); cancelled++; } } });
+  assert.equal(timers, 0);
+  clock = 250; stream = true; assert.equal(events.enabled, true); assert.equal(timers, 1); assert.equal(unrefs, 1);
+  tick(); assert.equal(timers, 1);
+  clock = 500; stream = false; tick(); assert.equal(cancelled, 1);
+  clock = 750; stream = true; assert.equal(events.enabled, true); assert.equal(timers, 2);
+  events.close(); events.close(); assert.equal(cancelled, 2);
+});
+
+test('local approval refusal is declined and never followed by failed or done', async t => {
+  const { out, events } = capture();
+  const h = relayFixture(t, { cursor: events, ask: async () => 'decline',
+    localTools: { tools: [{ name: 'drag', inputSchema: { type: 'object' } }], call: async (_name, _args, approve) => {
+      const allowed = await approve(['drag', 'Editor'], 'Fixture approval');
+      assert.equal(allowed, false); return { content: [], isError: true };
+    } } });
+  h.request({ jsonrpc: '2.0', id: 1, method: 'tools/call', params: { name: 'drag', arguments: { app: 'Editor' } } }); await settle();
+  assert.deepEqual(out.filter(e => e.type === 'action').map(e => e.phase), ['act', 'declined']);
+  h.relay.close();
+});
+
+test('discovery requires socket mode 0600 before and after connecting', async t => {
+  const dir = world(t), path = join(dir, 'mode.sock');
+  const server = net.createServer(); await new Promise(r => server.listen(path, r));
+  t.after(() => server.close());
+  for (const mode of [0o000, 0o400, 0o644, 0o660, 0o700, 0o1600, 0o2600, 0o4600]) {
+    chmodSync(path, mode); let connections = 0;
+    const sink = createRendererSink({ dir, connect() { connections++; throw Error('unsafe socket'); } });
+    sink.write({}); await settle(); assert.equal(connections, 0, mode.toString(8)); sink.close();
+  }
+  chmodSync(path, 0o600);
+  const socket = new EventEmitter(); let writes = 0, destroyed = false;
+  Object.assign(socket, { write() { writes++; return true; }, destroy() { destroyed = true; }, resume() {}, unref() {} });
+  const sink = createRendererSink({ dir, connect() { chmodSync(path, 0o644); queueMicrotask(() => socket.emit('connect')); return socket; } });
+  t.after(() => sink.close()); sink.write({}); await until(() => destroyed); assert.equal(writes, 0);
+});
+
+test('a forked worker with hand on and no shared host keeps turbo alive and draws nothing', async t => {
+  const path = join(world(t), 'hand.json');
+  writeFileSync(path, JSON.stringify({ version: 1, enabled: true, stream: false }), { mode: 0o600 });
+  let child; const frames = [];
+  const bridge = await createV3Bridge({}, { readConfig: () => ({}), acceptPackage: () => ({ current: () => true }), shareConsent: () => undefined,
+    forkWorker(_path, args) {
+      assert.ok(!args.includes('--shared-ui'));
+      child = fork(new URL('./fixtures/cursor-no-shared-worker.mjs', import.meta.url), args,
+        { env: { ...process.env, CURSOR_FIXTURE_SETTING: path }, stdio: ['ignore', 'ignore', 'pipe', 'ipc'] });
+      child.on('message', f => { if (f.hand) frames.push(f); }); return child;
+    } });
+  const exited = once(child, 'exit');
+  try {
+    await bridge.bind({ ...bridge.bootstrapEnvelope(), event: 'begin', turn: 'fixture-turn', text: 'Fixture action' });
+    for (let i = 0; i < 2; i++) {
+      const result = await bridge.call({ name: 'browser_read', arguments: { tab: 't1' } });
+      assert.equal(result.isError, false, result.text);
+      assert.deepEqual(JSON.parse(result.text), { reads: 0, boxes: 0, sharedUi: false });
+      assert.equal(child.connected, true);
+    }
+    assert.equal(frames.length, 2, 'only the two deliberately stray frames, no generated host frames');
+  } finally { await bridge.detach(); await exited; }
+});
+
 test('one session has a private random identity, monotonic sequence, flat allowlisted records and lifecycle', () => {
   const out = [], events = createCursorEvents({ onEvent: e => out.push(e), setting: () => ({ stream: true }), sink: { write() {}, close() {} }, now: () => 123, version: '1.5.1' });
   const call = events.call();
   events.action({ ...cursorRecord({ frame }), call, index: 0, phase: 'act', source: 'native', timing: 'scheduled', text: 'PRIVATE', url: 'PRIVATE' });
   events.status('done', { call, title: 'PRIVATE' }); events.close();
   assert.match(out[0].session, /^[a-f0-9]{32}$/); assert.match(call, /^[a-f0-9]{32}$/);
-  assert.deepEqual(out.map(e => e.seq), [1, 2, 3, 4]); assert.ok(out.every(e => e.v === 'sleight.cursor/1' && e.ts === 123 && e.session === out[0].session));
-  assert.deepEqual(out.map(e => e.type), ['session', 'action', 'status', 'session']);
+  assert.deepEqual(out.map(e => e.seq), [1, 2, 3, 4, 5]); assert.ok(out.every(e => e.v === 'sleight.cursor/1' && e.ts === 123 && e.session === out[0].session));
+  assert.deepEqual(out.map(e => e.type), ['session', 'status', 'action', 'status', 'session']);
   assert.equal(out[0].state, 'start'); assert.equal(out.at(-1).state, 'end'); assert.ok(!JSON.stringify(out).includes('PRIVATE'));
 });
 
@@ -84,13 +254,13 @@ test('discovery accepts only own sockets in an own 0700 real directory and disca
   const dir = world(t), received = [], clients = [];
   const server = net.createServer(c => { clients.push(c); c.on('data', d => received.push(d.toString())); c.write('untrusted'); });
   t.after(() => { clients.forEach(c => c.destroy()); server.close(); });
-  const path = join(dir, 'renderer.sock'); await new Promise(r => server.listen(path, r));
+  const path = join(dir, 'renderer.sock'); await new Promise(r => server.listen(path, r)); chmodSync(path, 0o600);
   symlinkSync(path, join(dir, 'link.sock')); writeFileSync(join(dir, 'file.sock'), ''); mkdirSync(join(dir, 'dir.sock'));
   const sink = createRendererSink({ dir }); t.after(() => sink.close());
   sink.write({ type: 'status', state: 'idle' }); await until(() => sink.stats().connected === 1);
   sink.write({ type: 'status', state: 'done' }); await until(() => received.join('').includes('done'));
   assert.equal(clients.length, 1); assert.ok(received.join('').includes('done')); assert.equal(sink.stats().connected, 1);
-  for (const bad of [0o755, 0o770]) { chmodSync(dir, bad); sink.refresh(); await until(() => sink.stats().connected === 0); }
+  for (const bad of [0o755, 0o770, 0o1700]) { chmodSync(dir, bad); sink.refresh(); await until(() => sink.stats().connected === 0); }
 });
 
 test('sink rejects symlink directories and foreign directory/socket ownership', async t => {
@@ -102,7 +272,7 @@ test('sink rejects symlink directories and foreign directory/socket ownership', 
 
 test('backpressure never queues over 256 events, counts drops and does not await drain', async t => {
   const dir = world(t), path = join(dir, 'slow.sock');
-  const server = net.createServer(); await new Promise(r => server.listen(path, r)); t.after(() => server.close());
+  const server = net.createServer(); await new Promise(r => server.listen(path, r)); chmodSync(path, 0o600); t.after(() => server.close());
   const sockets = [];
   const sink = createRendererSink({ dir, connect: () => { const s = new EventEmitter(); Object.assign(s, { write: () => false, destroy() {}, unref() {}, resume() {} }); sockets.push(s); queueMicrotask(() => s.emit('connect')); return s; } });
   t.after(() => sink.close()); sink.write({}); await until(() => sink.stats().connected === 1);
@@ -131,15 +301,18 @@ test('native records share the host point, aim immediately after planning, act o
 });
 
 test('native failures, declined approvals, cover and unknown plans emit explicit terminal events', async () => {
-  for (const mode of ['failed', 'declined', 'covered', 'unplanned']) {
+  for (const mode of ['failed', 'declined', 'covered', 'no-geometry', 'not-found', 'unplanned']) {
     const { out, events } = capture();
     const hand = createRelayHand({ events, client: { enabled: true, send() {}, hide() {}, close() {} }, setting: () => ({ enabled: true, stream: true }),
-      locate: async () => mode === 'covered' ? { ...geometry, state: 'covered' } : geometry });
-    hand.admit(9, { code: mode === 'unplanned' ? 'await app.performAction("secret")' : 'await app.click([20,20])', screenshotSize: [500, 400] }); await settle();
+      locate: async () => mode === 'covered' ? { ...geometry, state: 'covered' } : mode === 'no-geometry' ? undefined : mode === 'not-found' ? { ...geometry, elements: {} } : geometry });
+    hand.admit(9, { code: mode === 'unplanned' ? 'for (let i = 0; i < 2; i++) await app.click(1)' : mode === 'not-found' ? 'await app.click(1)' : 'await app.click([20,20])', lines: { 1: 'button Description: Save' }, screenshotSize: [500, 400] }); await settle();
     if (mode === 'declined') { hand.approval(10, { tool_name: 'click' }); hand.answered(10, 'decline'); }
     else hand.result(9, mode === 'failed');
     const actions = out.filter(e => e.type === 'action'); assert.ok(actions.length);
-    if (['covered', 'unplanned'].includes(mode)) assert.equal(actions.find(e => e.phase === 'skipped').reason, mode);
+    if (['covered', 'no-geometry', 'not-found', 'unplanned'].includes(mode)) {
+      assert.equal(actions.at(-1).phase, 'skipped'); assert.equal(actions.at(-1).reason, mode);
+      const skip = actions.findIndex(e => e.phase === 'skipped'); assert.equal(skip, actions.length - 1, 'nothing follows a skipped action');
+    }
     else assert.equal(actions.at(-1).phase, mode);
     if (mode === 'declined') assert.ok(out.some(e => e.state === 'waiting'));
     hand.close(); events.close();
@@ -155,7 +328,7 @@ test('turbo and Electron publish shared per-call indices, confirmed outcomes, pa
     hand.finish(a, false);
     const b = hand.step({ op: 'select', page: 'hidden', locator: {} }); hand.finish(b, true);
     await settle();
-  });
+  }, true);
   const actions = out.filter(e => e.type === 'action');
   for (const source of ['turbo', 'electron']) {
     const a = actions.filter(e => e.source === source); assert.deepEqual(a.map(e => e.phase), ['aim', 'act', 'done', 'skipped']);
@@ -204,7 +377,7 @@ test('admission remains synchronous with two renderer sockets connected, measure
   const dir = world(t), clients = [], servers = [];
   for (let i = 0; i < 2; i++) {
     const server = net.createServer(c => { clients.push(c); c.resume(); }); servers.push(server);
-    await new Promise(r => server.listen(join(dir, i + '.sock'), r));
+    await new Promise(r => server.listen(join(dir, i + '.sock'), r)); chmodSync(join(dir, i + '.sock'), 0o600);
   }
   t.after(() => { clients.forEach(c => c.destroy()); servers.forEach(s => s.close()); });
   const median = xs => [...xs].sort((a, b) => a - b)[Math.floor(xs.length / 2)];
@@ -213,9 +386,12 @@ test('admission remains synchronous with two renderer sockets connected, measure
   async function measure(mode) {
     let frames = 0, count = 0;
     const sink = mode === 'stream' ? createRendererSink({ dir }) : { write() {}, close() {} };
-    const events = createCursorEvents({ setting: () => ({ stream: mode === 'stream' }), sink, onEvent: () => count++ });
+    const path = join(world(t), 'hand.json');
+    if (mode !== 'off') writeFileSync(path, JSON.stringify({ version: 1, enabled: true, stream: mode === 'stream' }), { mode: 0o600 });
+    const setting = createHandSettingReader({ path, env: {}, platform: 'darwin' });
+    const events = createCursorEvents({ setting, sink, onEvent: () => count++ });
     if (mode === 'stream') { events.status('idle'); await until(() => sink.stats().connected === 2); }
-    const hand = mode === 'off' ? undefined : createRelayHand({ events, now: () => 0, setting: () => ({ enabled: true, stream: mode === 'stream' }),
+    const hand = mode === 'off' ? undefined : createRelayHand({ events, now: () => 0, setting,
       client: { enabled: true, send() { frames++; }, close() {} }, locate: async () => geometry });
     const h = relayFixture(t, { hand, cursor: events });
     const request = (id, code) => h.request({ jsonrpc: '2.0', id, method: 'tools/call', params: { name: 'js', arguments: { code } } });
@@ -237,7 +413,7 @@ test('admission remains synchronous with two renderer sockets connected, measure
   const off = await measure('off'), hand = await measure('hand'), stream = await measure('stream');
   t.diagnostic(JSON.stringify({ admission: { off, hand, stream } }));
   assert.equal(stream.connected, 2); assert.ok(stream.frames >= 300 && stream.events >= 600);
-  assert.ok(stream.medianMs - off.medianMs < 1, 'stream admission adds less than 1 ms');
+  assert.ok(stream.medianMs - hand.medianMs < 0.25, 'stream admission adds less than 0.25 ms');
 });
 
 test('writers reject invalid enum values and omit unknown nested and top-level fields', () => {
@@ -249,12 +425,12 @@ test('writers reject invalid enum values and omit unknown nested and top-level f
   const record = out.find(e => e.type === 'action'); assert.equal(record.timing, 'confirmed'); assert.ok(!JSON.stringify(out).includes('SECRET'));
   assert.deepEqual(record.display, { id: 1, scale: 2 }); assert.equal(record.window.exposure, 'covered'); assert.ok(!Object.hasOwn(record, 'reason'));
   for (const bad of [{ kind: 'read' }, { source: 'remote' }, { phase: 'approved' }, { call: 'MCP-1' }, { index: -1 }]) events.action({ ...valid, ...bad });
-  events.status('unknown'); assert.equal(out.length, 2); events.close();
+  events.status('unknown'); assert.equal(out.length, 3); events.close();
 });
 
 test('discovery refuses a foreign socket within an otherwise safe user-owned directory', async t => {
   const dir = world(t), path = join(dir, 'foreign.sock');
-  const server = net.createServer(); await new Promise(r => server.listen(path, r)); t.after(() => server.close());
+  const server = net.createServer(); await new Promise(r => server.listen(path, r)); chmodSync(path, 0o600); t.after(() => server.close());
   let inspected = false, connections = 0;
   const sink = createRendererSink({ dir, inspect: async file => {
     const stat = await lstat(file); if (file !== path) return stat;
@@ -265,7 +441,7 @@ test('discovery refuses a foreign socket within an otherwise safe user-owned dir
 
 test('a dead renderer reconnects only after 2 seconds and receives the original session start first', async t => {
   const dir = world(t), path = join(dir, 'again.sock');
-  const server = net.createServer(); await new Promise(r => server.listen(path, r)); t.after(() => server.close());
+  const server = net.createServer(); await new Promise(r => server.listen(path, r)); chmodSync(path, 0o600); t.after(() => server.close());
   let clock = 0; const sockets = [], lines = [];
   const sink = createRendererSink({ dir, now: () => clock, connect: () => {
     const socket = new EventEmitter(); Object.assign(socket, { write: line => { lines.push(JSON.parse(line)); return true; }, destroy() {}, resume() {}, unref() {} });
@@ -280,7 +456,7 @@ test('a dead renderer reconnects only after 2 seconds and receives the original 
 
 test('the 256-event bound includes socket writes whose callbacks have not completed', async t => {
   const dir = world(t), path = join(dir, 'buffer.sock');
-  const server = net.createServer(); await new Promise(r => server.listen(path, r)); t.after(() => server.close());
+  const server = net.createServer(); await new Promise(r => server.listen(path, r)); chmodSync(path, 0o600); t.after(() => server.close());
   let writes = 0;
   const sink = createRendererSink({ dir, connect: () => {
     const socket = new EventEmitter(); Object.assign(socket, { write: () => { writes++; return true; }, destroy() {}, resume() {}, unref() {} });
@@ -339,7 +515,7 @@ test('a browser stream can publish with drawing disabled without loading the hos
 test('the stream directory environment override routes only to an owned temporary fixture', async t => {
   const dir = world(t), received = [], clients = [];
   const server = net.createServer(c => { clients.push(c); c.on('data', data => received.push(data.toString())); });
-  await new Promise(r => server.listen(join(dir, 'fixture.sock'), r)); t.after(() => { clients.forEach(c => c.destroy()); server.close(); });
+  await new Promise(r => server.listen(join(dir, 'fixture.sock'), r)); chmodSync(join(dir, 'fixture.sock'), 0o600); t.after(() => { clients.forEach(c => c.destroy()); server.close(); });
   const events = createCursorEvents({ env: { SLEIGHT_CURSOR_STREAM_DIR: dir }, setting: () => ({ stream: true }) }); t.after(() => events.close());
   events.status('idle'); await until(() => received.join('').includes('"state":"start"'));
   events.status('thinking'); await until(() => received.join('').includes('"state":"thinking"'));

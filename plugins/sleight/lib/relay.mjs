@@ -90,7 +90,7 @@ import { checkedStop, stopText } from './checked-stop.mjs';
 import { TurnOutcomes, unconfirmedInput } from './turn-outcomes.mjs';
 import { resultCompleteness, filteredRead } from './read-completeness.mjs';
 import { stripHandBindings } from './hand/bindings.mjs';
-import { cursorRecord, sessionCursorEvents } from './hand/events.mjs';
+import { cursorRecord } from './hand/events.mjs';
 import { stripGuardTiming } from './guard-timing.mjs';
 import { stripDP1Trace } from './dp1-trace.mjs';
 import { createStuckEscapes } from './stuck-escape.mjs';
@@ -912,14 +912,14 @@ export function createRelay({
   // The ghost hand (hand/relay-hand.mjs), told about admitted calls, approvals and results. Fire-and-forget:
   // the relay never awaits it or reads its state, and without it nothing changes.
   hand,
-  cursor = sessionCursorEvents(),
+  cursor,
 }) {
   const localCursor = new Map();
   const cursorStatus = (state, detail) => { try { cursor?.status(state, detail); } catch {} };
-  const localCursorResult = (id, failed) => {
+  const localCursorResult = (id, failed, phase) => {
     const record = localCursor.get(id); if (!record) return;
     localCursor.delete(id);
-    try { cursor.action({ ...record, phase: failed ? 'failed' : 'done' }); } catch {}
+    try { cursor.action({ ...record, phase: phase ?? (failed ? 'failed' : 'done') }); } catch {}
     cursorStatus(failed ? 'error' : 'done', record);
     if (!failed) cursorStatus('thinking', record);
   };
@@ -3075,7 +3075,7 @@ export function createRelay({
       }
       trace('local-approval', { key, action, ...(options.once ? { once: true } : {}), ...(withdrawn ? { withdrawn } : {}) });
       if (withdrawn || generation !== stopGeneration || closing || disposed) return false;
-      if (action !== 'accept') return false;
+      if (action !== 'accept') { localCursorResult(callId, true, 'declined'); return false; }
       if (scoped) approved.add(key);
       return true;
     })();
@@ -6263,7 +6263,7 @@ export function createRelay({
     clipboardReplies.clear();
     clearTimeout(idleTimer);
     hand?.close();
-    for (const id of localCursor.keys()) localCursorResult(id, true);
+    localCursor.clear();
     cursor?.close();
     try { dispose(); } finally { releaseLeases(); }
     return Promise.all([clipboard?.close(), directBrowser?.end()]);

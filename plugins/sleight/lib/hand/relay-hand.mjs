@@ -9,9 +9,9 @@
 // approvals this session, its frames wait for them. Otherwise each frame goes out with the time left on the
 // planner's schedule. The result re-anchors frames still unsent at its own time, a warm write apart.
 import { createHash } from 'node:crypto';
-import { handSetting } from './settings.mjs';
+import { createHandSettingReader, handSettingReader } from './settings.mjs';
 import { planHandFrames, handTargets, WRITE_MS, GUARD_READ_MS } from './planner.mjs';
-import { cursorRecord, cursorReason, sessionCursorEvents } from './events.mjs';
+import { cursorRecord, cursorReason, createCursorEvents } from './events.mjs';
 
 // The kinds an approval's tool_name stands for. Unknown names beat the next action of any kind.
 const APPROVAL_KINDS = { click: ['click', 'double', 'right'], press_key: ['key'], set_value: ['type'], type_text: ['type'], drag: ['drag'], scroll: ['scroll'] };
@@ -19,8 +19,11 @@ const STALE_MS = 60000;
 
 export function createRelayHand({ client, loadClient = () => import('./client.mjs'), clientOptions = {}, locate,
   trace = () => {}, now = () => performance.now(), defer = fn => setImmediate(fn), locateTimeoutMs = 2000, lateMs = 1500,
-  env = process.env, setting = () => handSetting({ env }), events = sessionCursorEvents(), schedule = setTimeout, cancel = clearTimeout } = {}) {
+  env = process.env, setting = handSettingReader(env), events, record = cursorRecord, schedule = setTimeout, cancel = clearTimeout } = {}) {
+  setting = createHandSettingReader({ setting });
   if (env.SLEIGHT_HAND === '0' || !(setting().enabled || setting().stream) || typeof locate !== 'function') return undefined;
+  const ownsEvents = !events;
+  events ??= createCursorEvents({ setting, env });
   let closed = false, locating = false, resolved = client ?? undefined, loading, pendingHide = false;
   const load = () => loading ??= (client ? Promise.resolve(client) : Promise.resolve().then(loadClient).then(m => m.createHandClient(clientOptions)))
     .then(c => (resolved = c && typeof c.send === 'function' ? c : null), () => (resolved = null))
@@ -43,7 +46,7 @@ export function createRelayHand({ client, loadClient = () => import('./client.mj
   const cursorById = new Map();
   const publish = (call, entry, phase, reason) => {
     if (!call.cursor) return;
-    events.action({ ...entry.record, call: call.cursor, index: entry.index, source: 'native', phase, ...(reason ? { reason: cursorReason(reason) } : {}) });
+    try { events.action({ ...entry.record, call: call.cursor, index: entry.index, source: 'native', phase, ...(reason ? { reason: cursorReason(reason) } : {}) }); } catch {}
   };
   const cancelActs = call => { for (const timer of call.timers ?? []) cancel(timer); call.timers = []; };
   function finishCursor(call, phase) {
@@ -53,24 +56,24 @@ export function createRelayHand({ client, loadClient = () => import('./client.mj
     for (const entry of call.cursorEntries ?? call.cursorPreviewEntries ?? []) if (!entry.ended) { entry.ended = true; publish(call, entry, phase); }
     cursorCalls.delete(call);
   }
-  function cursorPlan(call, geometry, planned, reason) {
-    if (!call.cursor || call.cursorEntries || call.cursorTerminated) return;
+  const cursorPlan = guarded((call, geometry, planned, reason) => {
+    if (!call.cursor || call.cursorEntries || call.cursorTerminated || call.cursorHidden) return;
     const actions = call.targets?.actions?.length ? call.targets.actions : [{ kind: 'move' }];
     let previous;
     call.cursorEntries = actions.map((action, index) => {
       const n = planned?.actions.indexOf(index) ?? -1, frame = n >= 0 ? planned.frames[n] : undefined;
       const identity = call.targets?.identities[action.target?.number] ?? (action.target?.focus ? geometry?.focused : action.target?.previous ? previous : undefined);
       if (!['type', 'key'].includes(action.kind)) previous = identity;
-      const record = cursorRecord({ frame, action: { ...identity, kind: action.kind, rect: geometry?.elements?.[action.target?.number],
+      const projected = record({ frame, action: { ...identity, kind: action.kind, rect: geometry?.elements?.[action.target?.number],
         secure: identity?.role === 'AXSecureTextField' || (['type', 'key'].includes(action.kind) && !identity?.role) }, geometry,
         target: call.target, labels: events.labels });
-      const entry = { index, record };
+      const entry = { index, record: projected };
       const skip = reason ?? planned?.skipped.find(s => s.action === index)?.reason;
-      if (!frame || skip) { entry.skipped = true; publish(call, entry, 'skipped', skip ?? 'unplanned'); }
+      if (!frame || skip) { entry.skipped = true; entry.ended = true; publish(call, entry, 'skipped', skip ?? 'unplanned'); }
       else {
         publish(call, entry, 'aim');
         if (!call.done && !call.dropped) {
-          const act = () => { if (!call.done && !call.dropped && !closed) publish(call, entry, 'act'); };
+          const act = () => { if (!call.done && !call.dropped && !call.cursorHidden && !closed) publish(call, entry, 'act'); };
           const delay = Math.max(0, call.startedAt + frame.delayMs - now());
           if (!delay) act(); else { const timer = schedule(act, delay); timer?.unref?.(); call.timers.push(timer); }
         }
@@ -78,26 +81,31 @@ export function createRelayHand({ client, loadClient = () => import('./client.mj
       return entry;
     });
     if (call.done || call.dropped) finishCursor(call, call.declined ? 'declined' : call.failed || call.dropped ? 'failed' : 'done');
-  }
+  });
   function previewCursor(call) {
     if (!call.cursor) return;
     const lines = typeof call.input.lines === 'function' ? call.input.lines() : call.input.lines;
     const targets = call.input.unplanned ? { skip: 'unplanned' } : handTargets({ code: call.input.code, target: call.target, lines });
     if (targets.skip || !targets.actions.length) {
-      const entry = { index: 0, record: cursorRecord(), skipped: true };
+      const entry = { index: 0, record: record(), skipped: true, ended: true };
       call.cursorEntries = [entry]; publish(call, entry, 'skipped', 'unplanned'); return;
     }
     let previous;
     call.cursorPreviewEntries = targets.actions.map((action, index) => {
       const identity = targets.identities[action.target?.number] ?? (action.target?.previous ? previous : undefined);
       if (['click', 'double', 'right'].includes(action.kind) || action.method === 'setValue') previous = identity;
-      const record = cursorRecord({ action: { ...identity, kind: action.kind, count: action.beats,
+      const projected = record({ action: { ...identity, kind: action.kind, count: action.beats,
         secure: ['type', 'key'].includes(action.kind) && !identity?.role }, labels: events.labels });
-      const entry = { index, record }; publish(call, entry, 'aim'); return entry;
+      const entry = { index, record: projected }; publish(call, entry, 'aim'); return entry;
     });
   }
   // Only this call: a resent call with the same id may have replaced it.
-  const forget = call => { if (calls.get(call.id) === call) calls.delete(call.id); };
+  const forget = call => {
+    if (calls.get(call.id) === call) calls.delete(call.id);
+    if ((call.cursorTerminated || call.cursorEntries?.every(e => e.ended)) && cursorById.get(call.id) === call) {
+      cursorById.delete(call.id); cursorCalls.delete(call);
+    }
+  };
 
   function send(entry, delayMs) {
     entry.sent = true; entry.due = now() + delayMs;
@@ -162,13 +170,13 @@ export function createRelayHand({ client, loadClient = () => import('./client.mj
     const { window, elements, focused, windows, displays, state } = geometry;
     const planned = planHandFrames({ code, lines, screenshotSize, target, window, elements, focused, windows, displays, state,
       ignorePids: [resolved?.pid].filter(Number.isSafeInteger), targets, bindings: call.bindings });
-    cursorPlan(call, geometry, planned);
     for (const skip of planned.skipped) note(skip.reason, call, skip.action === undefined ? {} : { action: skip.action, method: skip.method });
     call.kinds = targets.actions.map(a => a.kind);
     call.entries = planned.frames.map((frame, i) => ({ frame, action: planned.actions[i], plannedAt: call.startedAt + frame.delayMs }));
     const early = call.beats; call.beats = undefined;
     for (const { tool, at } of early) beat(call, tool, at);
     dispatch(call);
+    cursorPlan(call, geometry, planned);
     if (call.done) traceBeats(call);
   }
 
@@ -184,12 +192,14 @@ export function createRelayHand({ client, loadClient = () => import('./client.mj
     admit: guarded((id, input) => {
       if (closed || id === undefined || typeof input?.code !== 'string') return;
       const call = { id, input, target: input.target, startedAt: now(), beatIndex: 0, beats: [], beatTimes: [] };
-      if (events.enabled) {
-        call.cursor = events.call(); call.timers = []; cursorCalls.add(call); cursorById.set(id, call);
-        previewCursor(call);
-      }
+      try {
+        if (events.enabled) {
+          call.cursor = events.call(); call.timers = []; cursorCalls.add(call); cursorById.set(id, call);
+          previewCursor(call);
+        }
+      } catch {}
       // A resent call replaces its first try, and a call whose result never came stops counting after a minute.
-      for (const [other, old] of calls) if (other === id || call.startedAt - old.startedAt > STALE_MS) { old.dropped = true; finishCursor(old, 'failed'); calls.delete(other); }
+      for (const [other, old] of calls) if (other === id || call.startedAt - old.startedAt > STALE_MS) { old.dropped = true; finishCursor(old, 'failed'); if (cursorById.get(other) === old) cursorById.delete(other); calls.delete(other); }
       calls.set(id, call);
       defer(() => plan(call).catch(() => forget(call)));
     }),
@@ -244,17 +254,17 @@ export function createRelayHand({ client, loadClient = () => import('./client.mj
     // Before a local pointer tool (drag, hover): its cover checks and the person's view see no hand, so every
     // call still in flight is dropped too, including one whose geometry comes back during the tool.
     hide: guarded(() => {
-      for (const call of cursorCalls) { call.dropped = true; finishCursor(call, 'skipped'); }
+      for (const call of cursorCalls) { call.cursorHidden = true; cancelActs(call); }
       for (const call of calls.values()) call.dropped = true;
       calls.clear(); approvals.clear();
-      cursorById.clear();
       hideClient();
     }),
     close: guarded(() => {
-      for (const call of cursorCalls) { call.dropped = true; finishCursor(call, 'failed'); }
+      for (const call of cursorCalls) { call.cursorHidden = true; cancelActs(call); }
       cursorCalls.clear();
       cursorById.clear();
       closed = true; calls.clear(); approvals.clear();
+      if (ownsEvents) events.close();
       if (resolved) try { resolved.close(); } catch {}
     }),
   };

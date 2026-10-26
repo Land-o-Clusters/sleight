@@ -43,6 +43,40 @@ export function handSetting({ env = process.env, platform = process.platform, pa
   return result(file.state === 'on', 'user');
 }
 
+// Hot-path readers share a 250 ms snapshot. The CLI keeps the uncached reader above.
+// Include file identity and permissions with mtime/size so a replacement cannot reuse an old parse.
+export function createHandSettingReader({ now = Date.now, setting, ...options } = {}) {
+  if (setting?.cachedHandSetting === true) return setting;
+  let checked = -Infinity, value, signature, parsed, parsedAt = -Infinity;
+  const read = path => {
+    let key;
+    try { const s = lstatSync(path); key = [s.dev, s.ino, s.uid, s.mode, s.mtimeMs, s.ctimeMs, s.size].join(':'); } catch { key = 'absent'; }
+    const at = now();
+    if (key !== signature || at < parsedAt || at - parsedAt >= 250) {
+      signature = key; parsedAt = at; parsed = readHandConfig(path);
+    }
+    return parsed;
+  };
+  const reader = () => {
+    const at = now();
+    if (at < checked || at - checked >= 250) {
+      checked = at;
+      try { value = setting ? setting() : handSetting({ ...options, read }); } catch { value = {}; }
+    }
+    return value;
+  };
+  Object.defineProperty(reader, 'cachedHandSetting', { value: true });
+  return reader;
+}
+
+const hotReaders = new WeakMap();
+export function handSettingReader(env = process.env) {
+  let read = hotReaders.get(env);
+  if (!read) { read = createHandSettingReader({ env }); hotReaders.set(env, read); }
+  return read;
+}
+export const cachedHandSetting = (env = process.env) => handSettingReader(env)();
+
 const words = setting => setting.reason === 'platform' ? 'off (macOS only)' : setting.reason === 'env' ? `${setting.enabled ? 'on' : 'off'} (SLEIGHT_HAND=${setting.enabled ? '1' : '0'})`
   : setting.reason === 'unsafe' ? 'off (hand.json is a link or has another owner, mode or format)'
   : setting.reason === 'default' ? 'off (the default; sleight-mcp hand on turns it on)' : setting.enabled ? 'on' : 'off (you turned it off)';
