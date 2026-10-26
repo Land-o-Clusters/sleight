@@ -248,7 +248,7 @@ over the perched box, or over the trailing sprite. Its moments are `start` (a tu
 first done with `ok`), `typing`, `long-wait` (12 s of thinking or waiting), `approval`, `error`, `done` (a turn that ends
 after a success), `handback` and `wake` (waking, when the frame has no moment of its own). A turn ends at the relay's
 done without `ok`, a hand back or sleep. Error, approval, hand back and done lines have a 3 s floor from the last line.
-other moments wait 8 s. Lines never show on two consecutive acts. Picks avoid that moment's last `min(6, count - 1)` lines,
+Other moments wait 8 s. Lines never show on two consecutive acts. Picks avoid that moment's last `min(6, count - 1)` lines,
 seeded from the session seed, and a moment with one line says it once a turn. C2's narration bubble goes first: a line due while it is
 up waits for it to fade (and is dropped if that takes over 5 s), and a line already up fades in 60 ms. From C1's clear
 before an action that needs the pointer until that action's done or error, no line shows, approval's waiting included.

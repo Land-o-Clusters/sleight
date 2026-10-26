@@ -4860,7 +4860,7 @@ struct PerchLineBook {
     var showing: (moment: String, until: Double)?, lastAt = -Double.infinity
     var acts = 0, lastAct = Int.min / 2
     var narrationUntil = -Double.infinity, held: (moment: String, act: Bool, at: Double)?
-    // C1's clear: from the relay's clear before an action that needs the pointer until its done, error or idle, no line shows, so
+    // C1's clear: from the relay's clear before an action that needs the pointer until its done or error, no line shows, so
     // no click panel can appear under that action (approval's waiting status included).
     var cleared = false
     static let priority: Set<String> = ["error", "approval", "handback", "done"]
@@ -5677,7 +5677,7 @@ func cursorPauseCurrent(_ expected: CGRect, _ observed: CGRect?) -> Bool { obser
 struct CursorPauseVisibility {
     private(set) var cleared = false
     mutating func clear() { cleared = true }
-    mutating func status(_ state: String) { if ["done", "error", "idle"].contains(state) { cleared = false } }
+    mutating func status(_ state: String) { if ["done", "error"].contains(state) { cleared = false } }
     func placement(_ plan: RingPlan, clip: CGRect, sprite: Bool) -> CursorPausePlacement {
         let hit = CursorPausePlacement.make(plan, clip: clip, sprite: sprite)
         return CursorPausePlacement(rect: cleared ? nil : hit.rect, sprite: hit.sprite, after: hit.after)
