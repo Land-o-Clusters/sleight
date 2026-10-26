@@ -15,7 +15,7 @@
     "automation",
     "mcp"
   ],
-  "skills": "./skills/",
+  "skills": "./skills/drive-mac-apps/",
   "mcpServers": "./.codex-plugin/mcp.json",
   "hooks": {
     "hooks": {
