@@ -4197,6 +4197,40 @@ func spriteDecodeInChild(fd: Int32, width: Int, height: Int, format: String, can
     }
     return buffer
 }
+// BEGIN BUILTIN CHARACTER HASHES
+let spriteBuiltinHashes: [String: [String: String]] = [
+    "tsugi": [
+        "extra.webp": "8cbd02e5b7ba43840c953487bee123beb6c782127aa1c9a83f3c0877f2c7ec45",
+        "perch.webp": "899858bb50f63101b920ce4c2ea0551b925b65a1494f369f6f2388f39d3b4725",
+        "sheet.webp": "df9508e0234694e58e0e71809fe9c69a61142ed6a8cd9af76b3d07f935eb91f0"
+    ],
+    "shizu": [
+        "extra.webp": "a9a7103632f412337c0d2b5f909031e7a7e72764c0a24fd7325fd9f0860db9d9",
+        "perch.webp": "0749acbed03fa2bb3699fc59e77d6571afc69a20348f41f1454808d71b67a659",
+        "sheet.webp": "cdaecc9190b8f35c57d44f7d440c12b1133ba4bced793e7d17781db95be4dd76"
+    ],
+    "bit": [
+        "extra.webp": "e0d78aa8ed60f975e156a923cec7ae940aed5edb05ca416dcf4fdfad4bb26f64",
+        "perch.webp": "cf5ac17a50422168677a4f12d8f74eb6e32f434605dfb6feb1ee739344581af6",
+        "sheet.webp": "9081335333b74a305654c66e0d6bace4ff4afd9f94b809fac9ca78092bf882ac"
+    ],
+    "kit": [
+        "extra.webp": "500208b1a601e1242b5edf3b26823a6d3227d628ca81849268202c3aa74e9df7",
+        "perch.webp": "783259fedf99d678cd904e8f28a44818ca5f1bc8e11d333162c4e96fd00d4dcc",
+        "sheet.webp": "c013babaa5d20bad4d4c0178f824d7482a38d81578dbb33cec69d9b38e00485c"
+    ],
+    "yori": [
+        "extra.webp": "d62bbd4969d44c847db6d493f1da314b36e87d4de747f87db65c48f2f3790f08",
+        "perch.webp": "6d5b2cacd1611ba8ef134b038b5d3874a8c25e977ad45fbfdf0999061b753a44",
+        "sheet.webp": "c55f8c1952ac8f2cd4f31a134a3e0758181337491e4c01663feb9fbf7ecf9900"
+    ],
+    "tab": [
+        "extra.webp": "1d6c76ce49bc69d2b71fdac1f4b5d1d8d8d9a363c0c7c9b0334ad27cd7982cbc",
+        "perch.webp": "8dcdfcdc0acfcebd512c14649c023ff5c6936253634f5142a1b973e0ea0f3260",
+        "sheet.webp": "e0f8566b8a0f640ccdcc8bcf1f165a7f9ea2cf258ae3d1c1e091ea53c1248566"
+    ]
+]
+// END BUILTIN CHARACTER HASHES
 struct SpriteCharacter {
     let frame: SpriteFrame, images: [String: CGImage]
     struct Result { let character: SpriteCharacter?, reason: String?, warnings: [String] }
@@ -4228,7 +4262,11 @@ struct SpriteCharacter {
         return result
     }
     static func decode(_ path: String, key: String, frame: SpriteFrame, cancelled: @escaping () -> Bool = { false }) throws -> (CGImage, Set<String>) {
-        let root = root(), expectedParent = root + "/" + frame.id
+        // The launcher supplies this fixed package path in its sanitized environment. Frames cannot add roots.
+        let builtin = spriteBuiltinHashes[frame.id] != nil
+        let packageRoot = ProcessInfo.processInfo.environment["SLEIGHT_BUILTIN_CHARACTERS"] ?? ""
+        let root = builtin ? packageRoot : root(), expectedParent = root + "/" + frame.id
+        guard root.hasPrefix("/") else { throw SpriteLoadError.path }
         func canonical(_ path: String) -> Bool {
             var bytes = [CChar](repeating: 0, count: Int(PATH_MAX))
             return realpath(path, &bytes) != nil && String(cString: bytes) == path
@@ -4242,7 +4280,7 @@ struct SpriteCharacter {
         }
         var before = stat()
         guard lstat(path, &before) == 0, before.st_mode & S_IFMT == S_IFREG, before.st_uid == getuid(),
-            before.st_mode & 0o7777 == 0o600, before.st_nlink == 1 else { throw SpriteLoadError.permissions }
+            ((before.st_mode & 0o7777) == 0o600 || builtin && (before.st_mode & 0o7777) == 0o644), before.st_nlink == 1 else { throw SpriteLoadError.permissions }
         guard before.st_size > 0, before.st_size <= 8 * 1024 * 1024 else { throw SpriteLoadError.size }
         // O_NOFOLLOW_ANY (which can't be combined with O_NOFOLLOW: EINVAL) refuses a symlink in any component, so a directory swapped after the realpath check can't redirect
         // the open; F_GETPATH confirms the descriptor is the checked path.
@@ -4252,6 +4290,12 @@ struct SpriteCharacter {
         guard fcntl(fd, F_GETPATH, &name) == 0, String(cString: name) == path else { throw SpriteLoadError.path }
         guard fstat(fd, &opened) == 0, opened.st_dev == before.st_dev, opened.st_ino == before.st_ino,
             opened.st_mode == before.st_mode, opened.st_uid == before.st_uid, opened.st_size == before.st_size else { throw SpriteLoadError.changed }
+        if builtin {
+            var bytes = [UInt8](repeating: 0, count: Int(opened.st_size))
+            guard let pin = spriteBuiltinHashes[frame.id]?[(path as NSString).lastPathComponent],
+                pread(fd, &bytes, bytes.count, 0) == bytes.count,
+                SHA256.hash(data: Data(bytes)).map({ String(format: "%02x", $0) }).joined() == pin else { throw SpriteLoadError.changed }
+        }
         var head = [UInt8](repeating: 0, count: 64)
         let headCount = pread(fd, &head, 64, 0)
         guard headCount > 0, let header = spriteSheetHeader(Array(head.prefix(headCount))) else { throw SpriteLoadError.type }

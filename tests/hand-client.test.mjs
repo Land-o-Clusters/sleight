@@ -834,7 +834,8 @@ test('checkCharacterInHost sends one frame to --check-character and returns only
   const frame = { hand: 'character', id: 'pet' }, result = { id: 'pet', loaded: false, reason: 'size', warnings: [] };
   assert.deepEqual(await host.checkCharacterInHost('/bin/host', frame, { run: fake(JSON.stringify(result) + '\n') }), result);
   assert.deepEqual(fake.last.sent.args, ['--check-character']); assert.equal(fake.last.sent.text, JSON.stringify(frame) + '\n');
-  assert.deepEqual(Object.keys(fake.last.sent.opts.env).sort(), ['LANG', 'PATH', 'SLEIGHT_CONSENT_ICON'], 'the test bank switch never reaches it');
+  assert.deepEqual(Object.keys(fake.last.sent.opts.env).sort(), ['LANG', 'PATH', 'SLEIGHT_BUILTIN_CHARACTERS', 'SLEIGHT_CONSENT_ICON'], 'the test bank switch never reaches it');
+  assert.equal(fake.last.sent.opts.env.SLEIGHT_BUILTIN_CHARACTERS, new URL('../plugins/sleight/characters/', import.meta.url).pathname.replace(/\/$/, ''));
   await assert.rejects(host.checkCharacterInHost('/bin/host', frame, { run: fake(JSON.stringify({ ...result, extra: 1 }) + '\n') }), /CHARACTER_CHECK_FAILED/);
   await assert.rejects(host.checkCharacterInHost('/bin/host', frame, { run: fake('', 65) }), /CHARACTER_CHECK_FAILED/);
   await assert.rejects(host.checkCharacterInHost('/bin/host', frame, { run: fake('', 0, { silent: true }), timeoutMs: 20 }), /CHARACTER_CHECK_TIMEOUT/);

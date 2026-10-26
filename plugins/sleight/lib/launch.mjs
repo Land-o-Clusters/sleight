@@ -195,7 +195,8 @@ async function turboDoctorLines() {
 async function handDoctorSection() {
   try {
     const [{ handDoctorLines, handSetting }, { handHostBuilt }] = await Promise.all([import('./hand/settings.mjs'), import('./direct-browser/host.mjs')]);
-    return handDoctorLines(handSetting(), handHostBuilt());
+    const { builtinCharacterDoctorLines } = await import('./hand/character.mjs');
+    return [...handDoctorLines(handSetting(), handHostBuilt()), ...builtinCharacterDoctorLines()];
   } catch (err) { return ['ghost hand', `PROBLEM   could not read the hand's state (${err.message})`]; }
 }
 async function permissionsDoctorSection() {

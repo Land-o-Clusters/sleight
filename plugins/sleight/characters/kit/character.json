@@ -1,0 +1,460 @@
+{
+  "format": "sleight-character",
+  "version": 1,
+  "id": "kit",
+  "name": "Kit",
+  "description": "Mascot fox with warm fur and cool-tipped ears and tail. Drawn in code for sleight.",
+  "author": "sleight",
+  "license": "MIT",
+  "sheet": "sheet.webp",
+  "extra": "extra.webp",
+  "frame": {
+    "w": 192,
+    "h": 208
+  },
+  "grid": {
+    "cols": 8,
+    "rows": 11
+  },
+  "scale": 0.5,
+  "anchor": {
+    "x": 96,
+    "y": 196
+  },
+  "hotspot": {
+    "x": 96,
+    "y": 104
+  },
+  "states": {
+    "idle": {
+      "row": 0,
+      "frames": 6,
+      "ms": [
+        280,
+        110,
+        110,
+        140,
+        140,
+        320
+      ],
+      "loop": true
+    },
+    "running-right": {
+      "row": 1,
+      "frames": 8,
+      "ms": [
+        120,
+        120,
+        120,
+        120,
+        120,
+        120,
+        120,
+        220
+      ],
+      "loop": true
+    },
+    "running-left": {
+      "row": 2,
+      "frames": 8,
+      "ms": [
+        120,
+        120,
+        120,
+        120,
+        120,
+        120,
+        120,
+        220
+      ],
+      "loop": true
+    },
+    "wave": {
+      "row": 3,
+      "frames": 4,
+      "ms": [
+        140,
+        140,
+        140,
+        280
+      ],
+      "loop": false
+    },
+    "aim": {
+      "row": 3,
+      "start": 4,
+      "frames": 4,
+      "ms": [
+        70,
+        70,
+        90,
+        320
+      ],
+      "loop": false
+    },
+    "working": {
+      "row": 7,
+      "frames": 6,
+      "ms": [
+        120,
+        120,
+        120,
+        120,
+        120,
+        220
+      ],
+      "loop": true
+    },
+    "click": {
+      "sheet": "extra",
+      "row": 0,
+      "frames": 4,
+      "ms": [
+        60,
+        70,
+        90,
+        160
+      ],
+      "loop": false
+    },
+    "right-click": {
+      "sheet": "extra",
+      "row": 0,
+      "start": 4,
+      "frames": 4,
+      "ms": [
+        70,
+        80,
+        90,
+        160
+      ],
+      "loop": false
+    },
+    "double-click": {
+      "sheet": "extra",
+      "row": 1,
+      "frames": 5,
+      "ms": [
+        50,
+        60,
+        50,
+        70,
+        160
+      ],
+      "loop": false
+    },
+    "key": {
+      "sheet": "extra",
+      "row": 1,
+      "start": 5,
+      "frames": 3,
+      "ms": [
+        50,
+        60,
+        110
+      ],
+      "loop": false
+    },
+    "type": {
+      "sheet": "extra",
+      "row": 2,
+      "frames": 8,
+      "ms": 80,
+      "loop": true
+    },
+    "scroll-up": {
+      "sheet": "extra",
+      "row": 3,
+      "frames": 4,
+      "ms": 120,
+      "loop": true
+    },
+    "scroll-down": {
+      "sheet": "extra",
+      "row": 3,
+      "start": 4,
+      "frames": 4,
+      "ms": 120,
+      "loop": true
+    },
+    "drag-grab": {
+      "sheet": "extra",
+      "row": 4,
+      "frames": 3,
+      "ms": [
+        60,
+        60,
+        120
+      ],
+      "loop": false
+    },
+    "drag-drop": {
+      "sheet": "extra",
+      "row": 4,
+      "start": 3,
+      "frames": 5,
+      "ms": [
+        60,
+        60,
+        80,
+        100,
+        220
+      ],
+      "loop": false
+    },
+    "drag-carry": {
+      "sheet": "extra",
+      "row": 5,
+      "frames": 6,
+      "ms": 110,
+      "loop": true
+    },
+    "waiting-approval": {
+      "sheet": "extra",
+      "row": 6,
+      "frames": 6,
+      "ms": [
+        300,
+        150,
+        150,
+        300,
+        150,
+        150
+      ],
+      "loop": true
+    },
+    "error": {
+      "sheet": "extra",
+      "row": 7,
+      "frames": 8,
+      "ms": [
+        60,
+        80,
+        80,
+        80,
+        80,
+        120,
+        160,
+        300
+      ],
+      "loop": false
+    },
+    "success": {
+      "sheet": "extra",
+      "row": 8,
+      "frames": 8,
+      "ms": [
+        70,
+        70,
+        80,
+        90,
+        100,
+        120,
+        160,
+        340
+      ],
+      "loop": false
+    },
+    "handoff": {
+      "sheet": "extra",
+      "row": 9,
+      "frames": 8,
+      "ms": [
+        120,
+        120,
+        140,
+        140,
+        160,
+        160,
+        200,
+        400
+      ],
+      "loop": false
+    },
+    "thinking": {
+      "sheet": "extra",
+      "row": 10,
+      "frames": 8,
+      "ms": 200,
+      "loop": true
+    },
+    "perch": {
+      "sheet": "perch",
+      "row": 0,
+      "frames": 6,
+      "ms": [
+        320,
+        120,
+        120,
+        260,
+        260,
+        400
+      ],
+      "loop": true
+    },
+    "perch-peek": {
+      "sheet": "perch",
+      "row": 0,
+      "start": 6,
+      "frames": 2,
+      "ms": [
+        1400,
+        400
+      ],
+      "loop": true
+    },
+    "perch-hop": {
+      "sheet": "perch",
+      "row": 1,
+      "frames": 4,
+      "ms": [
+        70,
+        120,
+        70,
+        160
+      ],
+      "loop": false
+    },
+    "perch-point-left": {
+      "sheet": "perch",
+      "row": 1,
+      "start": 4,
+      "frames": 1,
+      "ms": 320,
+      "loop": false
+    },
+    "perch-point-right": {
+      "sheet": "perch",
+      "row": 1,
+      "start": 5,
+      "frames": 1,
+      "ms": 320,
+      "loop": false
+    },
+    "sleep": {
+      "sheet": "perch",
+      "row": 1,
+      "start": 6,
+      "frames": 2,
+      "ms": [
+        1500,
+        1500
+      ],
+      "loop": true
+    },
+    "high-five": {
+      "sheet": "perch",
+      "row": 2,
+      "frames": 3,
+      "ms": [
+        90,
+        120,
+        420
+      ],
+      "loop": false,
+      "hotspot": {
+        "x": 140,
+        "y": 90
+      }
+    },
+    "perch-wait": {
+      "sheet": "perch",
+      "row": 2,
+      "start": 3,
+      "frames": 2,
+      "ms": [
+        900,
+        500
+      ],
+      "loop": true
+    },
+    "startle": {
+      "sheet": "perch",
+      "row": 2,
+      "start": 5,
+      "frames": 2,
+      "ms": [
+        70,
+        110
+      ],
+      "loop": false
+    },
+    "move": {
+      "dir16": {
+        "rowA": 9,
+        "rowB": 10
+      }
+    },
+    "look": {
+      "dir16": {
+        "rowA": 9,
+        "rowB": 10
+      }
+    }
+  },
+  "perch": {
+    "anchor": {
+      "x": 96,
+      "y": 164
+    },
+    "sheet": "perch.webp"
+  },
+  "lines": {
+    "lang": "en",
+    "start": [
+      "Ears up. Let's go!",
+      "Tail's wagging. Ready!",
+      "Okay, let's chase this one down!",
+      "Ooh, a new one!",
+      "Paws on the desk. Ready."
+    ],
+    "first-click": [
+      "Got it on the first pounce!",
+      "Click! Nice.",
+      "That one's ours!",
+      "Pounce landed!"
+    ],
+    "typing": [
+      "Typing at full tail speed!",
+      "Tap tap tap!",
+      "Words incoming!",
+      "Little paws, fast keys."
+    ],
+    "long-wait": [
+      "Still here, tail and all.",
+      "No hurry. I'll sit right here.",
+      "Waiting patiently. Mostly.",
+      "Curled up, ears still on."
+    ],
+    "approval": [
+      "Your call! I'll wait.",
+      "This one's up to you.",
+      "You decide. I'll hold still.",
+      "Your OK, your choice."
+    ],
+    "error": [
+      "Oops! Missed that pounce.",
+      "Hmm, that didn't land.",
+      "Whoa. Let's look again.",
+      "Tail fluffed. That one slipped."
+    ],
+    "done": [
+      "Done! That's a prize!",
+      "We did it! Tail wag!",
+      "Finished! Gold star for us.",
+      "All done. Happy fox!"
+    ],
+    "handback": [
+      "Your turn! Paws off.",
+      "Back to you!",
+      "Handing it over. Have fun!",
+      "All yours now."
+    ],
+    "wake": [
+      "Huh? I'm up! I'm up!",
+      "Oh! Ears up again.",
+      "Was I asleep? Nope.",
+      "Back on the job!"
+    ]
+  }
+}

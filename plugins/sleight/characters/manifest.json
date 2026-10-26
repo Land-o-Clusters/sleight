@@ -1,0 +1,47 @@
+{
+  "version": 1,
+  "packs": {
+    "tsugi": {
+      "character.json": "9a98f456249fc4f226062e7f71c7225f3d487d245bb5f5e37df263b643136803",
+      "extra.webp": "8cbd02e5b7ba43840c953487bee123beb6c782127aa1c9a83f3c0877f2c7ec45",
+      "perch.webp": "899858bb50f63101b920ce4c2ea0551b925b65a1494f369f6f2388f39d3b4725",
+      "preview.png": "5a32161ea9d17b8d14a33d39b99e1d327e160de49a60507290189fbd39b91bd5",
+      "sheet.webp": "df9508e0234694e58e0e71809fe9c69a61142ed6a8cd9af76b3d07f935eb91f0"
+    },
+    "shizu": {
+      "character.json": "1590f390b520fe1b368ab3fb1fc73f7aaaac5fb2378b4e2bfdeba41c320c1259",
+      "extra.webp": "a9a7103632f412337c0d2b5f909031e7a7e72764c0a24fd7325fd9f0860db9d9",
+      "perch.webp": "0749acbed03fa2bb3699fc59e77d6571afc69a20348f41f1454808d71b67a659",
+      "preview.png": "0a201a64031c519af9ea8d6e4eca081aa4c84d8ed67d47e9aa8a6dbc35070b4c",
+      "sheet.webp": "cdaecc9190b8f35c57d44f7d440c12b1133ba4bced793e7d17781db95be4dd76"
+    },
+    "bit": {
+      "character.json": "a6b077b3255a5673bf6004d3408b59e0d5616e8cb8d247157d4b484c6cb7617a",
+      "extra.webp": "e0d78aa8ed60f975e156a923cec7ae940aed5edb05ca416dcf4fdfad4bb26f64",
+      "perch.webp": "cf5ac17a50422168677a4f12d8f74eb6e32f434605dfb6feb1ee739344581af6",
+      "preview.png": "d31d2cd0f7467c512d8a7c6279569e80325e8898c54c05c8e2c13a48c14832ff",
+      "sheet.webp": "9081335333b74a305654c66e0d6bace4ff4afd9f94b809fac9ca78092bf882ac"
+    },
+    "kit": {
+      "character.json": "4d5ed718239c757233189c73b9713c0f1532432654b94aea46b665f047871b52",
+      "extra.webp": "500208b1a601e1242b5edf3b26823a6d3227d628ca81849268202c3aa74e9df7",
+      "perch.webp": "783259fedf99d678cd904e8f28a44818ca5f1bc8e11d333162c4e96fd00d4dcc",
+      "preview.png": "865b72994a4011124945af937f7ae29eba75d1c8bcd55dfb0b084d337f36eb15",
+      "sheet.webp": "c013babaa5d20bad4d4c0178f824d7482a38d81578dbb33cec69d9b38e00485c"
+    },
+    "yori": {
+      "character.json": "46894b1bbf2e99a1c8b75b19fff739be671f57c43b97a9396067134cc6dd332f",
+      "extra.webp": "d62bbd4969d44c847db6d493f1da314b36e87d4de747f87db65c48f2f3790f08",
+      "perch.webp": "6d5b2cacd1611ba8ef134b038b5d3874a8c25e977ad45fbfdf0999061b753a44",
+      "preview.png": "91ea7b24c9500e5d494e8094d3ef515a8b110868453630cad00e8936fe445ee3",
+      "sheet.webp": "c55f8c1952ac8f2cd4f31a134a3e0758181337491e4c01663feb9fbf7ecf9900"
+    },
+    "tab": {
+      "character.json": "7158fc4dff09a9297829d0fdf6f4bdf97729fb2f0a5655f935b0bf89f2067147",
+      "extra.webp": "1d6c76ce49bc69d2b71fdac1f4b5d1d8d8d9a363c0c7c9b0334ad27cd7982cbc",
+      "perch.webp": "8dcdfcdc0acfcebd512c14649c023ff5c6936253634f5142a1b973e0ea0f3260",
+      "preview.png": "05930f4cf17901395b0a5b8a71c2345d77cb2dfcd9405b84344239b9a1774d08",
+      "sheet.webp": "e0f8566b8a0f640ccdcc8bcf1f165a7f9ea2cf258ae3d1c1e091ea53c1248566"
+    }
+  }
+}

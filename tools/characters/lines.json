@@ -1,0 +1,433 @@
+{
+  "_about": "Personality lines (art/A2-spec.md part 2). tsugi, shizu and bit are copied from art/A2-lines.json; kit, yori and tab are new.",
+  "tsugi": {
+    "lang": "en",
+    "start": [
+      "Okay! Let's get this one done.",
+      "New task! Stretching my clicking finger.",
+      "On it. Watch the ring, I'll keep up.",
+      "Let's go, let's go, let's go!",
+      "Fresh task, fresh energy.",
+      "Right, where are we working today?",
+      "Boots on. Let's build something.",
+      "Alright, team of two. Ready."
+    ],
+    "first-click": [
+      "First click of the day! Well, of the task.",
+      "And we're off!",
+      "Click! Felt good.",
+      "One down, some to go.",
+      "That's the first one. Nice and clean.",
+      "Starting strong!",
+      "Here we go. Click number one."
+    ],
+    "typing": [
+      "Typing mode. Don't mind the clacking.",
+      "Tap tap tap tap.",
+      "Keyboard time! My favorite.",
+      "Letters go in, words come out.",
+      "I'll be over here typing.",
+      "Filling that in now.",
+      "Clack clack. Looking good."
+    ],
+    "long-wait": [
+      "Still here. Just a longer step.",
+      "This bit takes a moment. I'll wait with you.",
+      "Humming to myself. Doo doo doo.",
+      "Stretch break while this loads.",
+      "Waiting is part of the job too.",
+      "Counting pixels to pass the time. 42 so far.",
+      "No rush. It'll get there.",
+      "I'd make tea, but I'm a drawing."
+    ],
+    "approval": [
+      "Your call on this one.",
+      "Holding here until you say so.",
+      "Need a yes or a no from you.",
+      "This one's yours to okay.",
+      "Paused for your OK. No hurry.",
+      "Checking with you first.",
+      "I'll wait. Take a look when you can."
+    ],
+    "error": [
+      "Oof. That one didn't take.",
+      "Well, that didn't work.",
+      "Hm. Something got in the way.",
+      "Bonk. Okay, regrouping.",
+      "That's a miss. Happens.",
+      "Nope. Trying a different angle next.",
+      "Ouch. Not broken, just bruised.",
+      "Didn't go through. Noted."
+    ],
+    "done": [
+      "Done! High five!",
+      "That's the one. Nailed it.",
+      "All wrapped up!",
+      "Boom. Finished.",
+      "Done and dusted. Nice work, us.",
+      "Task complete! Little victory dance.",
+      "Ta-da!",
+      "Finished. That felt great."
+    ],
+    "handback": [
+      "All yours! Pointer's back with you.",
+      "Handing it back. Go ahead.",
+      "Your turn at the wheel.",
+      "Back to you! I'll be up here.",
+      "Here, take the pointer. Gently.",
+      "Over to you.",
+      "That's me done. You're up."
+    ],
+    "wake": [
+      "Wha! I'm up, I'm up!",
+      "Oh! Hi! Didn't see you there.",
+      "Awake! Totally was the whole time.",
+      "Huh? Oh, we're back on.",
+      "Snort. Yes. Ready.",
+      "Was I asleep? I was asleep.",
+      "Okay okay, back to work!"
+    ]
+  },
+  "shizu": {
+    "lang": "en",
+    "start": [
+      "Beginning.",
+      "Starting the task. I'll keep notes.",
+      "Measured twice. Starting now.",
+      "A new task. Let's be precise.",
+      "Ready when the ring is.",
+      "Starting. One step at a time.",
+      "Clear desk, clear plan."
+    ],
+    "first-click": [
+      "First click. Clean.",
+      "One. Good.",
+      "That landed where it should.",
+      "First step taken.",
+      "Noted. Click one.",
+      "A good start.",
+      "Precisely there."
+    ],
+    "typing": [
+      "Typing. Quietly.",
+      "Entering text now.",
+      "Letters, in order.",
+      "Keys. One at a time.",
+      "Writing this in.",
+      "Text going in now.",
+      "Careful with the spelling."
+    ],
+    "long-wait": [
+      "This step is slow. That's fine.",
+      "Waiting. Patience is cheap.",
+      "A longer pause. I'll keep watch.",
+      "Nothing to fix. Just time passing.",
+      "Still here. Still watching.",
+      "Breathing in, breathing out.",
+      "Slow steps are still steps."
+    ],
+    "approval": [
+      "Your decision.",
+      "This needs your approval first.",
+      "Waiting for your answer.",
+      "I'll hold here until you decide.",
+      "A yes or no from you, please.",
+      "Not mine to decide. Yours.",
+      "Paused for you. No hurry."
+    ],
+    "error": [
+      "That didn't go through.",
+      "A miss. We'll adjust.",
+      "Hm. Not what was expected.",
+      "An error. Noting it.",
+      "That step failed. Steady.",
+      "Something blocked that.",
+      "Didn't work. On to the next try."
+    ],
+    "done": [
+      "Done. Exactly as planned.",
+      "Complete.",
+      "Finished, and tidy.",
+      "That's the task. Good.",
+      "All steps taken.",
+      "Done. I'm pleased with that.",
+      "Complete, with no loose ends."
+    ],
+    "handback": [
+      "Returning the pointer to you.",
+      "Yours again.",
+      "I'm stepping back. Go ahead.",
+      "Handing back now.",
+      "Your turn.",
+      "Back with you.",
+      "I'll wait up here. It's yours."
+    ],
+    "wake": [
+      "Oh. I'm awake.",
+      "Mm. Back to it.",
+      "I rested my eyes. Ready.",
+      "Yes? I'm here.",
+      "Awake. Where were we.",
+      "A short rest. Continuing.",
+      "Up. Let's continue."
+    ]
+  },
+  "bit": {
+    "lang": "en",
+    "start": [
+      "Squeak!",
+      "Go go!",
+      "Task!",
+      "Ready. Squeak.",
+      "Wheel's warm!",
+      "Let's roll.",
+      "Eep! Start!"
+    ],
+    "first-click": [
+      "Click!",
+      "Boop.",
+      "First one!",
+      "Squeak. Got it.",
+      "Tap!",
+      "One!",
+      "Click-click."
+    ],
+    "typing": [
+      "Tappy tappy.",
+      "Keys!",
+      "Tap tap squeak.",
+      "Typing!",
+      "Clickety.",
+      "Words!",
+      "Tip tap."
+    ],
+    "long-wait": [
+      "Waiting...",
+      "Hmm hmm hmm.",
+      "Still here.",
+      "Squeak? Squeak.",
+      "Wheel's idle.",
+      "Zzz. No, awake.",
+      "Patience. Squeak.",
+      "Long one."
+    ],
+    "approval": [
+      "You pick!",
+      "Yes? No?",
+      "Your call.",
+      "Waiting on you.",
+      "Squeak? Okay?",
+      "Need a nod.",
+      "Up to you."
+    ],
+    "error": [
+      "Eep!",
+      "Bonk.",
+      "Oof. Miss.",
+      "Squeak! Nope.",
+      "That hurt.",
+      "Ow. Okay.",
+      "Didn't work."
+    ],
+    "done": [
+      "Done! Squeak!",
+      "Yay!",
+      "All done!",
+      "Woo! Finished!",
+      "Squeak squeak!",
+      "Did it!",
+      "Wheel spin!"
+    ],
+    "handback": [
+      "Yours!",
+      "Back to you.",
+      "Here. Pointer.",
+      "Your turn!",
+      "Squeak. Go.",
+      "All yours.",
+      "Passing it!"
+    ],
+    "wake": [
+      "Eep! Awake!",
+      "Huh? Oh!",
+      "Squeak! Up!",
+      "Wha!",
+      "I'm up!",
+      "Oh! Hi!",
+      "Napped. Ready."
+    ]
+  },
+  "kit": {
+    "lang": "en",
+    "start": [
+      "Ears up. Let's go!",
+      "Tail's wagging. Ready!",
+      "Okay, let's chase this one down!",
+      "Ooh, a new one!",
+      "Paws on the desk. Ready."
+    ],
+    "first-click": [
+      "Got it on the first pounce!",
+      "Click! Nice.",
+      "That one's ours!",
+      "Pounce landed!"
+    ],
+    "typing": [
+      "Typing at full tail speed!",
+      "Tap tap tap!",
+      "Words incoming!",
+      "Little paws, fast keys."
+    ],
+    "long-wait": [
+      "Still here, tail and all.",
+      "No hurry. I'll sit right here.",
+      "Waiting patiently. Mostly.",
+      "Curled up, ears still on."
+    ],
+    "approval": [
+      "Your call! I'll wait.",
+      "This one's up to you.",
+      "You decide. I'll hold still.",
+      "Your OK, your choice."
+    ],
+    "error": [
+      "Oops! Missed that pounce.",
+      "Hmm, that didn't land.",
+      "Whoa. Let's look again.",
+      "Tail fluffed. That one slipped."
+    ],
+    "done": [
+      "Done! That's a prize!",
+      "We did it! Tail wag!",
+      "Finished! Gold star for us.",
+      "All done. Happy fox!"
+    ],
+    "handback": [
+      "Your turn! Paws off.",
+      "Back to you!",
+      "Handing it over. Have fun!",
+      "All yours now."
+    ],
+    "wake": [
+      "Huh? I'm up! I'm up!",
+      "Oh! Ears up again.",
+      "Was I asleep? Nope.",
+      "Back on the job!"
+    ]
+  },
+  "yori": {
+    "lang": "en",
+    "start": [
+      "Right. Let's begin.",
+      "I see it. Starting.",
+      "Okay. One step at a time.",
+      "On it.",
+      "Let's keep this tidy."
+    ],
+    "first-click": [
+      "Clean click.",
+      "Good. That landed.",
+      "First one in.",
+      "Exactly where it should be."
+    ],
+    "typing": [
+      "Typing it out.",
+      "Keeping the wording tight.",
+      "Short and clear.",
+      "Nearly there with the text."
+    ],
+    "long-wait": [
+      "Take your time.",
+      "No hurry. I'll be right here.",
+      "Waiting is part of the job.",
+      "Still ready when you are."
+    ],
+    "approval": [
+      "Your decision. I'll wait.",
+      "This needs your OK, not mine.",
+      "Your call to make.",
+      "I'll hold here until you say."
+    ],
+    "error": [
+      "That didn't take. Rechecking.",
+      "Not quite. Let's look again.",
+      "Small miss. Back to it.",
+      "Hm. Worth a second look."
+    ],
+    "done": [
+      "Done. Clean finish.",
+      "That's handled.",
+      "Finished. Nice work.",
+      "All done. Good session."
+    ],
+    "handback": [
+      "It's yours from here.",
+      "Handing back. Good working with you.",
+      "Your turn.",
+      "Over to you."
+    ],
+    "wake": [
+      "I'm here.",
+      "Back. Where were we?",
+      "Awake. Ready.",
+      "Right, I'm up."
+    ]
+  },
+  "tab": {
+    "lang": "en",
+    "start": [
+      "Unfolding. Ready!",
+      "Beep. New task, crisp and flat.",
+      "Tab stop found. Starting!",
+      "Fresh sheet. Let's go."
+    ],
+    "first-click": [
+      "Click! Neatly creased.",
+      "Beep boop. Landed.",
+      "That one's filed!",
+      "Perfect fold on the first try."
+    ],
+    "typing": [
+      "Typing in my best font.",
+      "Tab, tab, type!",
+      "Beep beep, words!",
+      "Keeping the margins straight."
+    ],
+    "long-wait": [
+      "Holding very still. Paper does that.",
+      "No hurry. I'll stay flat.",
+      "Waiting in the in-tray.",
+      "Still here, uncrumpled."
+    ],
+    "approval": [
+      "Your stamp, your choice.",
+      "Waiting for your OK.",
+      "You decide. I'll stay folded.",
+      "This one's on your desk."
+    ],
+    "error": [
+      "Oops. Fetching the tape.",
+      "Paper jam! One moment.",
+      "Hm, that crumpled a bit.",
+      "A small tear. Taping it up."
+    ],
+    "done": [
+      "Done! Filed and stapled.",
+      "All tidy. Beep!",
+      "Finished. Not a single crease.",
+      "Stamped: complete!"
+    ],
+    "handback": [
+      "Handing the folder back.",
+      "Your turn! I'll fold away.",
+      "All yours. Neatly stacked.",
+      "Back to you, flat and tidy."
+    ],
+    "wake": [
+      "Beep? Oh, I'm on!",
+      "Unfolding again!",
+      "Rebooting. Done!",
+      "Hello again. Crisp as ever."
+    ]
+  }
+}

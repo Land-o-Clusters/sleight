@@ -1,0 +1,486 @@
+{
+  "format": "sleight-character",
+  "version": 1,
+  "id": "shizu",
+  "name": "Shizu",
+  "description": "Calm, precise assistant with a long straight bob, round glasses and a slate coat. Drawn in code for sleight.",
+  "author": "sleight",
+  "license": "MIT",
+  "sheet": "sheet.webp",
+  "extra": "extra.webp",
+  "frame": {
+    "w": 192,
+    "h": 208
+  },
+  "grid": {
+    "cols": 8,
+    "rows": 11
+  },
+  "scale": 0.5,
+  "anchor": {
+    "x": 96,
+    "y": 196
+  },
+  "hotspot": {
+    "x": 96,
+    "y": 104
+  },
+  "states": {
+    "idle": {
+      "row": 0,
+      "frames": 6,
+      "ms": [
+        280,
+        110,
+        110,
+        140,
+        140,
+        320
+      ],
+      "loop": true
+    },
+    "running-right": {
+      "row": 1,
+      "frames": 8,
+      "ms": [
+        120,
+        120,
+        120,
+        120,
+        120,
+        120,
+        120,
+        220
+      ],
+      "loop": true
+    },
+    "running-left": {
+      "row": 2,
+      "frames": 8,
+      "ms": [
+        120,
+        120,
+        120,
+        120,
+        120,
+        120,
+        120,
+        220
+      ],
+      "loop": true
+    },
+    "wave": {
+      "row": 3,
+      "frames": 4,
+      "ms": [
+        140,
+        140,
+        140,
+        280
+      ],
+      "loop": false
+    },
+    "aim": {
+      "row": 3,
+      "start": 4,
+      "frames": 4,
+      "ms": [
+        70,
+        70,
+        90,
+        320
+      ],
+      "loop": false
+    },
+    "working": {
+      "row": 7,
+      "frames": 6,
+      "ms": [
+        120,
+        120,
+        120,
+        120,
+        120,
+        220
+      ],
+      "loop": true
+    },
+    "click": {
+      "sheet": "extra",
+      "row": 0,
+      "frames": 4,
+      "ms": [
+        60,
+        70,
+        90,
+        160
+      ],
+      "loop": false
+    },
+    "right-click": {
+      "sheet": "extra",
+      "row": 0,
+      "start": 4,
+      "frames": 4,
+      "ms": [
+        70,
+        80,
+        90,
+        160
+      ],
+      "loop": false
+    },
+    "double-click": {
+      "sheet": "extra",
+      "row": 1,
+      "frames": 5,
+      "ms": [
+        50,
+        60,
+        50,
+        70,
+        160
+      ],
+      "loop": false
+    },
+    "key": {
+      "sheet": "extra",
+      "row": 1,
+      "start": 5,
+      "frames": 3,
+      "ms": [
+        50,
+        60,
+        110
+      ],
+      "loop": false
+    },
+    "type": {
+      "sheet": "extra",
+      "row": 2,
+      "frames": 8,
+      "ms": 80,
+      "loop": true
+    },
+    "scroll-up": {
+      "sheet": "extra",
+      "row": 3,
+      "frames": 4,
+      "ms": 120,
+      "loop": true
+    },
+    "scroll-down": {
+      "sheet": "extra",
+      "row": 3,
+      "start": 4,
+      "frames": 4,
+      "ms": 120,
+      "loop": true
+    },
+    "drag-grab": {
+      "sheet": "extra",
+      "row": 4,
+      "frames": 3,
+      "ms": [
+        60,
+        60,
+        120
+      ],
+      "loop": false
+    },
+    "drag-drop": {
+      "sheet": "extra",
+      "row": 4,
+      "start": 3,
+      "frames": 5,
+      "ms": [
+        60,
+        60,
+        80,
+        100,
+        220
+      ],
+      "loop": false
+    },
+    "drag-carry": {
+      "sheet": "extra",
+      "row": 5,
+      "frames": 6,
+      "ms": 110,
+      "loop": true
+    },
+    "waiting-approval": {
+      "sheet": "extra",
+      "row": 6,
+      "frames": 6,
+      "ms": [
+        300,
+        150,
+        150,
+        300,
+        150,
+        150
+      ],
+      "loop": true
+    },
+    "error": {
+      "sheet": "extra",
+      "row": 7,
+      "frames": 8,
+      "ms": [
+        60,
+        80,
+        80,
+        80,
+        80,
+        120,
+        160,
+        300
+      ],
+      "loop": false
+    },
+    "success": {
+      "sheet": "extra",
+      "row": 8,
+      "frames": 8,
+      "ms": [
+        70,
+        70,
+        80,
+        90,
+        100,
+        120,
+        160,
+        340
+      ],
+      "loop": false
+    },
+    "handoff": {
+      "sheet": "extra",
+      "row": 9,
+      "frames": 8,
+      "ms": [
+        120,
+        120,
+        140,
+        140,
+        160,
+        160,
+        200,
+        400
+      ],
+      "loop": false
+    },
+    "thinking": {
+      "sheet": "extra",
+      "row": 10,
+      "frames": 8,
+      "ms": 200,
+      "loop": true
+    },
+    "perch": {
+      "sheet": "perch",
+      "row": 0,
+      "frames": 6,
+      "ms": [
+        320,
+        120,
+        120,
+        260,
+        260,
+        400
+      ],
+      "loop": true
+    },
+    "perch-peek": {
+      "sheet": "perch",
+      "row": 0,
+      "start": 6,
+      "frames": 2,
+      "ms": [
+        1400,
+        400
+      ],
+      "loop": true
+    },
+    "perch-hop": {
+      "sheet": "perch",
+      "row": 1,
+      "frames": 4,
+      "ms": [
+        70,
+        120,
+        70,
+        160
+      ],
+      "loop": false
+    },
+    "perch-point-left": {
+      "sheet": "perch",
+      "row": 1,
+      "start": 4,
+      "frames": 1,
+      "ms": 320,
+      "loop": false
+    },
+    "perch-point-right": {
+      "sheet": "perch",
+      "row": 1,
+      "start": 5,
+      "frames": 1,
+      "ms": 320,
+      "loop": false
+    },
+    "sleep": {
+      "sheet": "perch",
+      "row": 1,
+      "start": 6,
+      "frames": 2,
+      "ms": [
+        1500,
+        1500
+      ],
+      "loop": true
+    },
+    "high-five": {
+      "sheet": "perch",
+      "row": 2,
+      "frames": 3,
+      "ms": [
+        90,
+        120,
+        420
+      ],
+      "loop": false,
+      "hotspot": {
+        "x": 137,
+        "y": 88
+      }
+    },
+    "perch-wait": {
+      "sheet": "perch",
+      "row": 2,
+      "start": 3,
+      "frames": 2,
+      "ms": [
+        900,
+        500
+      ],
+      "loop": true
+    },
+    "startle": {
+      "sheet": "perch",
+      "row": 2,
+      "start": 5,
+      "frames": 2,
+      "ms": [
+        70,
+        110
+      ],
+      "loop": false
+    },
+    "move": {
+      "dir16": {
+        "rowA": 9,
+        "rowB": 10
+      }
+    },
+    "look": {
+      "dir16": {
+        "rowA": 9,
+        "rowB": 10
+      }
+    }
+  },
+  "perch": {
+    "anchor": {
+      "x": 96,
+      "y": 150
+    },
+    "sheet": "perch.webp"
+  },
+  "lines": {
+    "lang": "en",
+    "start": [
+      "Beginning.",
+      "Starting the task. I'll keep notes.",
+      "Measured twice. Starting now.",
+      "A new task. Let's be precise.",
+      "Ready when the ring is.",
+      "Starting. One step at a time.",
+      "Clear desk, clear plan."
+    ],
+    "first-click": [
+      "First click. Clean.",
+      "One. Good.",
+      "That landed where it should.",
+      "First step taken.",
+      "Noted. Click one.",
+      "A good start.",
+      "Precisely there."
+    ],
+    "typing": [
+      "Typing. Quietly.",
+      "Entering text now.",
+      "Letters, in order.",
+      "Keys. One at a time.",
+      "Writing this in.",
+      "Text going in now.",
+      "Careful with the spelling."
+    ],
+    "long-wait": [
+      "This step is slow. That's fine.",
+      "Waiting. Patience is cheap.",
+      "A longer pause. I'll keep watch.",
+      "Nothing to fix. Just time passing.",
+      "Still here. Still watching.",
+      "Breathing in, breathing out.",
+      "Slow steps are still steps."
+    ],
+    "approval": [
+      "Your decision.",
+      "This needs your approval first.",
+      "Waiting for your answer.",
+      "I'll hold here until you decide.",
+      "A yes or no from you, please.",
+      "Not mine to decide. Yours.",
+      "Paused for you. No hurry."
+    ],
+    "error": [
+      "That didn't go through.",
+      "A miss. We'll adjust.",
+      "Hm. Not what was expected.",
+      "An error. Noting it.",
+      "That step failed. Steady.",
+      "Something blocked that.",
+      "Didn't work. On to the next try."
+    ],
+    "done": [
+      "Done. Exactly as planned.",
+      "Complete.",
+      "Finished, and tidy.",
+      "That's the task. Good.",
+      "All steps taken.",
+      "Done. I'm pleased with that.",
+      "Complete, with no loose ends."
+    ],
+    "handback": [
+      "Returning the pointer to you.",
+      "Yours again.",
+      "I'm stepping back. Go ahead.",
+      "Handing back now.",
+      "Your turn.",
+      "Back with you.",
+      "I'll wait up here. It's yours."
+    ],
+    "wake": [
+      "Oh. I'm awake.",
+      "Mm. Back to it.",
+      "I rested my eyes. Ready.",
+      "Yes? I'm here.",
+      "Awake. Where were we.",
+      "A short rest. Continuing.",
+      "Up. Let's continue."
+    ]
+  }
+}

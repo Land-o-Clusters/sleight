@@ -464,6 +464,13 @@ character id), `stream` (boolean) and `labels` (`off`, `role` or `title`). Witho
 The hand stays off until you turn it on. `stream` defaults to false. `labels` defaults to `off`. Only your user can own
 the file. Its mode must be `600`, and symlinks are refused. Invalid fields make it unsafe.
 
+The plugin includes Tsugi, Shizu, Bit, Kit, Yori and Tab, six original MIT characters. `sleight-mcp cursor list` and the
+Cursor picker show them first, marked as built-in. Pick one to select its sprite, or run
+`sleight-mcp cursor style sprite tsugi`. The plugin leaves your cursor settings unchanged until you pick a style.
+Built-ins stay inside the plugin, never in your characters folder, and cannot be removed. Imports must use a different
+ID. A built-in whose hash fails is skipped by the picker, with a `PROBLEM` line in doctor. Both built-ins and imports
+pass the same validator and sandboxed image decoder. The ring remains the default look. Sprites are hidden until selected.
+
 Use `sleight-mcp cursor style ring` for the branded ring, `style seam` for plain Split Seam, or `style glove` for the hand.
 `sleight-mcp cursor style sprite <character-id>` selects a character only after its installed files pass validation.
 The sprite style draws the character beside the ring. Without a valid installed character the ring draws alone, and the

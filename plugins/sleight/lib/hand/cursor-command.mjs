@@ -28,9 +28,9 @@ function ask(input, out, prompt) {
 /** Exit 0: done or declined, 1: validation/IO/non-TTY refusal, 2: usage. */
 export async function cursorCommand(args, { out = text => process.stdout.write(text), input = process.stdin, env = process.env,
   root = env.SLEIGHT_CURSOR_TEST === '1' ? env.SLEIGHT_CHARACTERS_DIR ?? charactersDirectory() : charactersDirectory(),
-  uid = process.getuid(), path = handConfigPath(), platform = process.platform, built = handHostBuilt, hostCheck = hostCheckCharacter,
+  uid = process.getuid(), builtins = true, path = handConfigPath(), platform = process.platform, built = handHostBuilt, hostCheck = hostCheckCharacter,
   confirm = prompt => ask(input, out, prompt) } = {}) {
-  const [op, ...all] = args, options = { root, uid };
+  const [op, ...all] = args, options = { root, uid, builtins };
   // --perch goes with style sprite only: the character sits on the target window instead of trailing the ring.
   const perch = op === 'style' && all[0] === 'sprite' && all.at(-1) === '--perch', rest = perch ? all.slice(0, -1) : all;
   if (!(op === 'lines' && rest.length === 1 && LINES_MODES.includes(rest[0]) || op === 'import' && (rest.length === 1 || rest.length === 2 && rest[1] === '--yes') && !rest[0].startsWith('--') ||
@@ -83,7 +83,7 @@ export async function cursorCommand(args, { out = text => process.stdout.write(t
       const characters = listCharacters(options);
       out(characters.length ? characters.map(c => c.skipped ? `Skipped ${JSON.stringify(c.id)}: ${c.reason}.`
         : c.error ? `${JSON.stringify(c.id).slice(1, -1)}: needs repair: ${c.error}`
-        : `${c.manifest.id}: ${c.manifest.name} (${c.resolved.filter(s => s.own).length} of ${c.resolved.length} states)`).join('\n') + '\n' : 'No characters installed.\n');
+        : `${c.manifest.id}: ${c.manifest.name}${c.builtin ? ' [built-in]' : ''} (${c.resolved.filter(s => s.own).length} of ${c.resolved.length} states)`).join('\n') + '\n' : 'No characters installed.\n');
       if (characters.some(c => c.error)) return 1;
     }
     return 0;

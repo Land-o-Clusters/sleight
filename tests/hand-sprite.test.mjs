@@ -584,3 +584,28 @@ test('a Codex v2 pet imports as it is, as WebP, and renders through character-fr
   assert.deepEqual(first.sprite.placements[0].slice(2), [192 * scale, 208 * scale]);
   t.diagnostic(`codexWireBytes=${Buffer.byteLength(JSON.stringify(wire))} entries=${Object.keys(wire.table).length} scale=${scale}`);
 });
+
+test('six bundled packs use the same sandboxed decode and pixel checks with pinned public assets', options, async t => {
+  const api = await import('../plugins/sleight/lib/hand/character.mjs');
+  for (const id of api.BUILTIN_CHARACTER_IDS) {
+    const pack = api.checkCharacter(id), frame = characterFrame(pack, { nonce, seq: 0, resolve: api.resolveCharacterStates });
+    const result = spawnSync(build(t), ['--check-character'], { input: JSON.stringify(frame) + '\n', encoding: 'utf8',
+      env: testEnv({ SLEIGHT_BUILTIN_CHARACTERS: api.builtinCharactersDirectory() }) });
+    assert.equal(result.status, 0, result.stderr);
+    assert.equal(JSON.parse(result.stdout).loaded, true, `${id}: ${result.stdout}`);
+  }
+});
+test('native loader refuses a bundled image with a changed hash or an unbound package root', options, async t => {
+  const api = await import('../plugins/sleight/lib/hand/character.mjs');
+  const pack = api.checkCharacter('bit'), frame = characterFrame(pack, { nonce, seq: 0, resolve: api.resolveCharacterStates });
+  const bank = join(root(), 'bundled'); mkdirSync(bank, { mode: 0o755 });
+  const folder = join(bank, 'bit'); mkdirSync(folder, { mode: 0o755 });
+  for (const [name, bytes] of pack.files) writeFileSync(join(folder, name), bytes, { mode: 0o644 });
+  for (const key of ['sheet', 'extra', 'perchSheet']) frame[key] = join(folder, frame[key].split('/').at(-1));
+  const check = env => JSON.parse(spawnSync(build(t), ['--check-character'], { input: JSON.stringify(frame) + '\n', encoding: 'utf8', env: testEnv(env) }).stdout);
+  assert.equal(check({ SLEIGHT_BUILTIN_CHARACTERS: bank }).loaded, true);
+  assert.equal(check({}).loaded, false);
+  const path = frame.sheet, bytes = readFileSync(path); bytes[bytes.length - 1] ^= 1; writeFileSync(path, bytes);
+  const changed = check({ SLEIGHT_BUILTIN_CHARACTERS: bank });
+  assert.equal(changed.loaded, false); assert.equal(changed.reason, 'changed');
+});
