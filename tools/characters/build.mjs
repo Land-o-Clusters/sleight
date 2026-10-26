@@ -39,7 +39,15 @@ export function swiftPins(manifest) {
     + CAST.map(id => `    "${id}": [\n` + Object.entries(manifest.packs[id]).filter(([name]) => name.endsWith('.webp')).map(([name, hash]) => `        "${name}": "${hash}"`).join(',\n') + '\n    ]').join(',\n')
     + '\n]\n// END BUILTIN CHARACTER HASHES';
 }
-export async function buildCast(output) {
+export async function buildCast(output, { design } = {}) {
+  let custom;
+  if (design) {
+    custom = (await import(pathToFileURL(resolve(design)))).default;
+    if (!/^[a-z0-9-]{1,48}$/.test(custom?.id ?? '') || CAST.includes(custom.id)) throw Error('Custom design needs a new non-built-in id');
+    if (!Object.hasOwn(styles, custom.style)) throw Error('Unknown custom design style');
+    if (fs.existsSync(output)) throw Error('Custom output directory must be new');
+  }
+  const ids = custom ? [custom.id] : CAST;
   if (process.platform !== 'darwin') throw Error('Cast rasterization needs macOS sips');
   const version = execFileSync('cwebp', ['-version'], { encoding: 'utf8' }).trim().split('\n')[0];
   if (version !== '1.6.0') throw Error('Reproducible cast build requires cwebp 1.6.0');
@@ -47,8 +55,8 @@ export async function buildCast(output) {
   fs.mkdirSync(output, { recursive: true });
   const manifest = { version: 1, packs: {} };
   try {
-    for (const id of CAST) {
-      const D = (await import(pathToFileURL(join(here, 'cast', `${id}.mjs`)))).default;
+    for (const id of ids) {
+      const D = custom ?? (await import(pathToFileURL(join(here, 'cast', `${id}.mjs`)))).default;
       const render = styles[D.style], ctx = { E: D.E ?? 1 }, folder = join(output, id);
       if (fs.existsSync(folder)) throw Error(`Output already exists: ${id}`);
       fs.mkdirSync(folder, { mode: 0o755 });
@@ -92,7 +100,7 @@ export async function buildCast(output) {
       console.log(`${id}: ${loaded.total} bytes, ${loaded.resolved.filter(s => s.own).length}/19 states`);
     }
     fs.writeFileSync(join(output, 'manifest.json'), JSON.stringify(manifest, null, 2) + '\n', { mode: 0o644 });
-    const bytes = CAST.reduce((n, id) => n + fs.readdirSync(join(output, id)).reduce((n, f) => n + fs.statSync(join(output, id, f)).size, 0), 0);
+    const bytes = ids.reduce((n, id) => n + fs.readdirSync(join(output, id)).reduce((n, f) => n + fs.statSync(join(output, id, f)).size, 0), 0);
     if (bytes >= 8_000_000) throw Error(`Bundled packs exceed 8 MB: ${bytes}`);
     return manifest;
   } finally { fs.rmSync(temp, { recursive: true, force: true }); }
@@ -106,7 +114,8 @@ if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.ur
     if (!text.includes('// BEGIN BUILTIN CHARACTER HASHES')) throw Error('Native pin marker missing');
     fs.writeFileSync(source, text.replace(/\/\/ BEGIN BUILTIN CHARACTER HASHES[\s\S]*?\/\/ END BUILTIN CHARACTER HASHES/, () => swiftPins(pins)));
   } else {
-    if (args.length !== 2 || args[0] !== '--out') throw Error('Usage: node tools/characters/build.mjs --out NEW_DIRECTORY | --sync-native-pins');
-    await buildCast(resolve(args[1]));
+    if (args.length === 4 && args[0] === '--design' && args[2] === '--out') await buildCast(resolve(args[3]), { design: args[1] });
+    else if (args.length === 2 && args[0] === '--out') await buildCast(resolve(args[1]));
+    else throw Error('Usage: node tools/characters/build.mjs [--design DESIGN.mjs] --out NEW_DIRECTORY | --sync-native-pins');
   }
 }

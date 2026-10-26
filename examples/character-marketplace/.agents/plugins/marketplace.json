@@ -1,0 +1,12 @@
+{
+  "name": "sleight-character-example",
+  "interface": { "displayName": "sleight character example" },
+  "plugins": [
+    {
+      "name": "example-bit",
+      "source": { "source": "local", "path": "./plugins/example-bit" },
+      "policy": { "installation": "AVAILABLE", "authentication": "ON_INSTALL" },
+      "category": "Productivity"
+    }
+  ]
+}
