@@ -3,7 +3,7 @@ import { createInterface } from 'node:readline';
 import { randomBytes } from 'node:crypto';
 import { charactersDirectory, prepareCharacterImport, installCharacter, listCharacters, checkCharacter, removeCharacter, characterCallout, resolveCharacterStates } from './character.mjs';
 import { characterFrame } from './character-frame.mjs';
-import { CURSOR_STYLES, handConfigPath, handSetting } from './settings.mjs';
+import { CURSOR_STYLES, LINES_MODES, handConfigPath, handSetting } from './settings.mjs';
 import { writeHandSetting } from './command.mjs';
 import { handHostBuilt, prepareHandHost } from '../direct-browser/host.mjs';
 
@@ -15,7 +15,7 @@ const hostCheckCharacter = async frame => {
 };
 const handLine = s => s.reason === 'unsafe' ? 'off (hand.json is unsafe to read; run sleight-mcp hand on or off to replace it)'
   : s.enabled ? 'on' : s.reason === 'env' ? 'off (SLEIGHT_HAND=0)' : s.reason === 'platform' ? 'off (macOS only)' : 'off';
-const usage = 'usage: sleight-mcp cursor import <folder> [--yes]\n       sleight-mcp cursor list\n       sleight-mcp cursor check <id>\n       sleight-mcp cursor remove <id>\n       sleight-mcp cursor style <glove|ring|seam|sprite> [<character-id>]\n       sleight-mcp cursor status\n';
+const usage = 'usage: sleight-mcp cursor import <folder> [--yes]\n       sleight-mcp cursor list\n       sleight-mcp cursor check <id>\n       sleight-mcp cursor remove <id>\n       sleight-mcp cursor style <glove|ring|seam|sprite> [<character-id>] [--perch]\n       sleight-mcp cursor lines on|off\n       sleight-mcp cursor status\n';
 function ask(input, out, prompt) {
   out(prompt);
   return new Promise(resolve => {
@@ -30,16 +30,19 @@ export async function cursorCommand(args, { out = text => process.stdout.write(t
   root = env.SLEIGHT_CURSOR_TEST === '1' ? env.SLEIGHT_CHARACTERS_DIR ?? charactersDirectory() : charactersDirectory(),
   uid = process.getuid(), path = handConfigPath(), platform = process.platform, built = handHostBuilt, hostCheck = hostCheckCharacter,
   confirm = prompt => ask(input, out, prompt) } = {}) {
-  const [op, ...rest] = args, options = { root, uid };
-  if (!(op === 'import' && (rest.length === 1 || rest.length === 2 && rest[1] === '--yes') && !rest[0].startsWith('--') ||
+  const [op, ...all] = args, options = { root, uid };
+  // --perch goes with style sprite only: the character sits on the target window instead of trailing the ring.
+  const perch = op === 'style' && all[0] === 'sprite' && all.at(-1) === '--perch', rest = perch ? all.slice(0, -1) : all;
+  if (!(op === 'lines' && rest.length === 1 && LINES_MODES.includes(rest[0]) || op === 'import' && (rest.length === 1 || rest.length === 2 && rest[1] === '--yes') && !rest[0].startsWith('--') ||
       ['list', 'status'].includes(op) && rest.length === 0 || ['check', 'remove'].includes(op) && rest.length === 1 ||
-      op === 'style' && CURSOR_STYLES.includes(rest[0]) && (rest.length === 1 || rest.length === 2 && rest[0] === 'sprite'))) { out(usage); return 2; }
+      op === 'style' && CURSOR_STYLES.includes(rest[0]) && (rest.length === 1 || rest.length === 2 && rest[0] === 'sprite' && !rest[1].startsWith('--')))) { out(usage); return 2; }
   try {
     if (op === 'status') {
       const s = handSetting({ env, path, platform });
       out([`hand      ${handLine(s)}`,
         `style     ${s.style ?? 'glove'}${s.styleReason === 'env' ? ' (SLEIGHT_CURSOR_STYLE)' : s.styleReason === 'env-invalid' ? ' (invalid SLEIGHT_CURSOR_STYLE)' : ''}`,
-        `character ${s.character ?? 'none'}`, `stream    ${s.stream ? 'on' : 'off'}`, `labels    ${s.labels ?? 'off'}`,
+        `character ${s.character ?? 'none'}`, `perch     ${s.perch ? 'on' : 'off'}`, `lines     ${s.lines ?? 'on'}`,
+        `stream    ${s.stream ? 'on' : 'off'}`, `labels    ${s.labels ?? 'off'}`,
         `host      ${built() ? 'compiled' : 'not compiled'}`].join('\n') + '\n');
       if (!s.enabled && (s.style ?? 'glove') !== 'glove') out('The hand is off, so no style draws. Turn it on with sleight-mcp hand on.\n');
     } else if (op === 'style') {
@@ -48,10 +51,15 @@ export async function cursorCommand(args, { out = text => process.stdout.write(t
         if (!character) { out('cursor style sprite needs an installed character id. Run sleight-mcp cursor list.\n'); return 1; }
         checkCharacter(character, options);
       }
-      writeHandSetting({ style, ...style === 'sprite' ? { character } : {} }, { path, uid });
+      // perch: on with --perch; a sprite style without it turns a saved perch off and otherwise writes nothing new.
+      const before = handSetting({ env: {}, path, platform }).perch === true;
+      writeHandSetting({ style, ...style === 'sprite' ? { character, ...perch || before ? { perch } : {} } : {} }, { path, uid });
       const after = handSetting({ env: {}, path, platform });
-      out(`Cursor style: ${style}. ${after.enabled ? 'Start a new sleight session to use it.' : 'The hand is off, so it draws nothing yet. Turn it on with sleight-mcp hand on, then start a new sleight session.'}\n`);
+      out(`Cursor style: ${style}${style === 'sprite' ? perch ? ' (perched on the window)' : ' (trailing the ring)' : ''}. ${after.enabled ? 'Start a new sleight session to use it.' : 'The hand is off, so it draws nothing yet. Turn it on with sleight-mcp hand on, then start a new sleight session.'}\n`);
       if (env.SLEIGHT_CURSOR_STYLE) out('SLEIGHT_CURSOR_STYLE in this environment still wins for servers started from here.\n');
+    } else if (op === 'lines') {
+      writeHandSetting({ lines: rest[0] }, { path, uid });
+      out(`Character lines: ${rest[0]}. ${rest[0] === 'on' ? 'A sprite character with lines says them at a few moments of a task.' : 'The character stays quiet.'}\n`);
     } else if (op === 'import') {
       const character = prepareCharacterImport(rest[0], { uid }); out(characterCallout(character));
       if (rest[1] !== '--yes') {

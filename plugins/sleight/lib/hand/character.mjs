@@ -20,7 +20,10 @@ export const CHARACTER_STATES = Object.freeze([
   ['working', 'Working', ['thinking', 'idle']],
 ].map(([state, label, fallback]) => Object.freeze({ state, label, fallback: Object.freeze(fallback) })));
 const helpers = ['running-right', 'running-left', 'look', 'poke', 'wave'];
-const names = [...CHARACTER_STATES.map(s => s.state), ...helpers];
+// Perch mode (A2): optional states with fallbacks to art every pack has. jumping is Codex's row 4, used by the leap.
+export const PERCH_STATES = Object.freeze(['perch', 'perch-peek', 'perch-hop', 'perch-point-left', 'perch-point-right', 'sleep', 'high-five',
+  'perch-wait', 'startle', 'jumping']);
+const names = [...CHARACTER_STATES.map(s => s.state), ...helpers, ...PERCH_STATES];
 const required = ['move', 'aim', 'click', 'type', 'waiting-approval', 'error'];
 const characterFailure = (message, field = 'manifest', file = 'character.json') => { throw Error(`Character: ${JSON.stringify(file)} ${field}: ${message}`); };
 const fail = characterFailure;
@@ -203,8 +206,16 @@ function validateManifest(manifest, files, { expectedId, shared = false, sourceF
   const fail = (message, field = 'manifest', file = sourceFile) => characterFailure(message, field, file);
   const m = structuredClone(manifest), warnings = [];
   if (!object(m) || m.format !== 'sleight-character' || m.version !== 1) fail('unsupported character format or version', 'format/version');
+  // A bad lines block never refuses the pack (A2): it is checked by its own rules and dropped with one warning.
+  const rawLines = m.lines; delete m.lines;
   plainData(m, '', sourceFile);
-  unknownKeys(m, ['format', 'version', 'id', 'name', 'description', 'author', 'license', 'sheet', 'extra', 'frame', 'grid', 'scale', 'anchor', 'hotspot', 'states', 'codex'], 'manifest', warnings);
+  unknownKeys(m, ['format', 'version', 'id', 'name', 'description', 'author', 'license', 'sheet', 'extra', 'frame', 'grid', 'scale', 'anchor', 'hotspot', 'states', 'codex', 'perch'], 'manifest', warnings);
+  const lines = characterLines(rawLines, warnings); if (lines) m.lines = lines;
+  if (m.perch !== undefined) {
+    if (!object(m.perch)) fail('invalid perch block', 'perch');
+    unknownKeys(m.perch, ['anchor', 'sheet'], 'perch', warnings);
+    if (m.perch.sheet !== undefined && !/^perch\.(png|webp)$/.test(m.perch.sheet)) fail('perch sheet filename must be perch.png or perch.webp', 'perch.sheet');
+  }
   idCheck(m.id, sourceFile); if (expectedId !== undefined && m.id !== expectedId) fail('character id must equal folder name', 'id');
   text(m.name, 'name', 1, 60, sourceFile); text(m.description, 'description', 0, 200, sourceFile); text(m.author, 'author', 1, 80, sourceFile); text(m.license, 'license', 1, 120, sourceFile);
   if (shared && m.license === 'unknown') fail('shared character license must be stated', 'license');
@@ -213,9 +224,10 @@ function validateManifest(manifest, files, { expectedId, shared = false, sourceF
   if (!spdx.test(m.license) && !['unknown', 'proprietary-personal'].includes(m.license) && !files.has('LICENSE.txt')) fail('custom license requires LICENSE.txt', 'license');
   filename(m.sheet, 'sheet', sourceFile); if (!/^sheet\.(png|webp)$/.test(m.sheet)) fail('sheet filename must be sheet.png or sheet.webp', 'sheet');
   if (m.extra !== undefined && m.extra !== 'extra.webp') fail('extra sheet filename must be extra.webp', 'extra');
-  const allowed = ['character.json', m.sheet, m.extra, 'preview.png', 'LICENSE.txt'];
+  const allowed = ['character.json', m.sheet, m.extra, m.perch?.sheet, 'preview.png', 'LICENSE.txt'];
   if (!files.has(m.sheet)) fail('sheet file missing', 'sheet', m.sheet);
   if (m.extra && !files.has(m.extra)) fail('sheet file missing', 'extra', m.extra);
+  if (m.perch?.sheet && !files.has(m.perch.sheet)) fail('sheet file missing', 'perch.sheet', m.perch.sheet);
   for (const name of files.keys()) if (!allowed.includes(name)) fail('extra character file refused', 'entry', name);
   m.frame ??= { w: 192, h: 208 }; m.scale ??= 1;
   // The hand host draws cells of at most 192x208 on sheets of at most 1536x2288 (8 columns, 11 rows of the largest cell).
@@ -228,14 +240,15 @@ function validateManifest(manifest, files, { expectedId, shared = false, sourceF
     if (p.x < 0 || p.y < 0 || p.x > m.frame.w || p.y > m.frame.h) warnings.push(`${label} is outside the cell.`);
   };
   point(m.anchor, 'anchor'); point(m.hotspot, 'hotspot');
+  if (m.perch?.anchor !== undefined) point(m.perch.anchor, 'perch.anchor');
   const sheets = Object.create(null); let pixels = 0;
-  for (const name of [m.sheet, m.extra, ...files.has('preview.png') ? ['preview.png'] : []].filter(Boolean)) {
+  for (const name of [m.sheet, m.extra, m.perch?.sheet, ...files.has('preview.png') ? ['preview.png'] : []].filter(Boolean)) {
     const dims = imageDimensions(files.get(name), extname(name), name); pixels += dims.width * dims.height;
     if (name === 'preview.png') { if (dims.width > 256 || dims.height > 256) fail('preview dimensions exceed 256', 'dimensions', name); }
     else {
       if (dims.width !== m.grid.cols * m.frame.w || dims.height % m.frame.h || name === m.sheet && dims.height !== m.grid.rows * m.frame.h) fail('sheet dimensions do not match frame and grid', 'frame/grid', name);
       if (dims.width > 1536 || dims.height > 2288) fail('sheet too large to draw (at most 1536x2288)', 'frame/grid', name);
-      sheets[name === m.sheet ? 'sheet' : 'extra'] = { name, rows: dims.height / m.frame.h, ...dims };
+      sheets[name === m.sheet ? 'sheet' : name === m.extra ? 'extra' : 'perch'] = { name, rows: dims.height / m.frame.h, ...dims };
     }
   }
   if (pixels > CHARACTER_LIMITS.pixels) fail('total character pixel budget exceeded', 'sheet/extra/preview');
@@ -252,7 +265,7 @@ function validateManifest(manifest, files, { expectedId, shared = false, sourceF
     if (s.fallback !== undefined && !names.includes(s.fallback)) fail('unknown fallback state', `states.${name}.fallback`);
     if (s.flip !== undefined && s.flip !== 'h') fail('state flip must be h', `states.${name}.flip`);
     if (s.hotspot !== undefined) point(s.hotspot, `states.${name}.hotspot`);
-    if (s.sheet !== undefined && s.sheet !== 'sheet' && s.sheet !== 'extra') fail('must be sheet or extra', `states.${name}.sheet`);
+    if (s.sheet !== undefined && s.sheet !== 'sheet' && s.sheet !== 'extra' && s.sheet !== 'perch') fail('must be sheet or extra', `states.${name}.sheet`);
     const sheet = sheets[s.sheet ?? 'sheet']; if (!sheet) fail('state sheet missing', `states.${name}.sheet`);
     if (s.dir16 !== undefined) {
       if (!['move', 'drag-carry', 'look'].includes(name) || !object(s.dir16) || s.row !== undefined || s.frames !== undefined || s.ms !== undefined || s.loop !== undefined || s.start !== undefined) fail('invalid dir16 state', `states.${name}.dir16`);
@@ -275,7 +288,7 @@ function validateManifest(manifest, files, { expectedId, shared = false, sourceF
   for (const key of ['frame', 'grid']) unknownKeys(m[key], key === 'frame' ? ['w', 'h'] : ['cols', 'rows'], key, warnings);
   const resolved = resolveCharacterStates(m);
   if (required.some(name => !resolved.find(s => s.state === name).own)) warnings.push('Partial character: some required states use fallback art.');
-  return { manifest: m, resolved, warnings, sheets };
+  return { manifest: m, resolved, warnings, sheets, perch: resolvePerchStates(m) };
 }
 
 /** Resolves to concrete cells for a heading (degrees clockwise from up). Built-in cycles skip visited nodes. */
@@ -295,7 +308,7 @@ export function resolveCharacterStates(m, { heading = 90, distance = 0 } = {}) {
         ...state?.flip !== undefined ? { flip: state.flip } : {}, ...state?.hotspot !== undefined ? { hotspot: state.hotspot } : {} } };
     }
   };
-  const sheetNames = Object.assign(Object.create(null), { sheet: m.sheet, extra: m.extra });
+  const sheetNames = Object.assign(Object.create(null), { sheet: m.sheet, extra: m.extra, perch: m.perch?.sheet });
   return CHARACTER_STATES.map(({ state, label }) => {
     let found = find(state); if (!found) fail('unresolved character state', `states.${state}`);
     const own = ownArt(m.states[state]); let a = found.animation;
@@ -327,6 +340,90 @@ export function resolveCharacterStates(m, { heading = 90, distance = 0 } = {}) {
       look: !own && ['scroll-up', 'scroll-down'].includes(state) && m.states.look?.dir16 ? { row: m.states.look.dir16[state === 'scroll-up' ? 'rowA' : 'rowB'], start: 0 } : undefined,
       effect: !own && ['click', 'waiting-approval', 'error'].includes(state) && found.source === 'idle' ? state === 'error' ? 'red-pulse' : 'pulse' : undefined };
   });
+}
+
+// Personality lines (A2 part 2). Data only: the host draws them and nothing else reads them. Lines never reach the model,
+// a tool result or the cursor stream.
+export const LINE_MOMENTS = Object.freeze(['start', 'first-click', 'typing', 'long-wait', 'approval', 'error', 'done', 'handback', 'wake']);
+/** One line: 1 to 60 characters after trimming, one plain-text line, no markup, URL, path or model-facing word. Emoji (with
+ *  ZWJ joins) are allowed. The host applies the same rule to the trimmed text. */
+export function characterLineValid(line) {
+  if (typeof line !== 'string') return false;
+  const t = line.trim(), count = [...t].length;
+  if (count < 1 || count > 60) return false;
+  if (/[\p{Cc}\p{Cs}\p{Co}\p{Cn}\p{Zl}\p{Zp}]/u.test(t) || /(?!\u200d)\p{Cf}/u.test(t) || /[<>{}`*_[\]|]/.test(t)) return false;
+  if (/:\/\/|www\.|~\//i.test(t) || /\/\p{L}/u.test(t)) return false;
+  return !/\b(?:system|assistant|ignore|tool)\b/i.test(t);
+}
+/** The normalized lines block, or undefined (absent, or dropped with one warning). Unknown keys warn and are ignored. */
+export function characterLines(raw, warnings = []) {
+  if (raw === undefined) return undefined;
+  const drop = () => { warnings.push('Character lines dropped: they break the lines rules.'); return undefined; };
+  if (!object(raw)) return drop();
+  let size; try { size = Buffer.byteLength(JSON.stringify(raw)); } catch { return drop(); }
+  if (size > 4096) return drop();
+  const out = {};
+  for (const [key, value] of Object.entries(raw)) {
+    if (key === 'lang') {
+      if (typeof value !== 'string' || value.length > 16 || !/^[A-Za-z]{2,8}(?:-[A-Za-z0-9]{1,8})*$/.test(value)) return drop();
+      out.lang = value; continue;
+    }
+    if (!LINE_MOMENTS.includes(key)) { warnings.push('Unknown lines key ignored.'); continue; }
+    if (!Array.isArray(value) || value.length < 1 || value.length > 16 || !value.every(characterLineValid)) return drop();
+    out[key] = value.map(line => line.trim());
+  }
+  return out;
+}
+
+/** Perch mode's cells (A2): each perch state with A2's fallbacks to art every pack has, plus the leap's jumping, the runs,
+ *  and the error and hand-back states it shows, so the host's perch table is complete for every pack. */
+export function resolvePerchStates(m) {
+  const base = Object.fromEntries(resolveCharacterStates(m).map(s => [s.state, s]));
+  const names = Object.assign(Object.create(null), { sheet: m.sheet, extra: m.extra, perch: m.perch?.sheet });
+  const pick = (state, source, a, more = {}) => {
+    const columns = more.columns ?? Array.from({ length: a.frames }, (_, i) => (a.start ?? 0) + i);
+    const ms = more.ms ?? (Array.isArray(a.ms) ? [...a.ms] : Array(a.frames).fill(a.ms));
+    return { state, own: source === state, source, sheet: names[a.sheet ?? 'sheet'], row: more.row ?? a.row, columns, ms: ms.slice(0, columns.length),
+      loop: more.loop ?? a.loop, flip: a.flip ?? m.states[state]?.flip ?? false, hotspot: m.states[state]?.hotspot ?? a.hotspot ?? m.hotspot };
+  };
+  // A resolved 19-state entry as a perch entry.
+  const from = (state, s, more = {}) => ({ state, own: false, source: s.source, sheet: s.sheet, row: more.row ?? s.row,
+    columns: more.columns ?? Array.from({ length: s.frames }, (_, i) => s.start + i), ms: more.ms ?? [...s.ms], loop: more.loop ?? s.loop,
+    flip: s.flip, hotspot: m.states[state]?.hotspot ?? s.hotspot });
+  const timed = name => m.states[name]?.row !== undefined ? m.states[name] : undefined;
+  const still = (state, ms) => from(state, base.idle, { columns: [base.idle.start], ms: [ms], loop: false });
+  // The look pose at one heading (degrees clockwise from up): a dir16 look picks the pose, a timed look plays as it is.
+  const look = (state, heading, ms) => {
+    const a = m.states.look;
+    if (a?.dir16) { const i = Math.round(heading / 22.5) % 16; return { ...pick(state, 'look', { ...a, row: a.dir16[i < 8 ? 'rowA' : 'rowB'], frames: 1 }, { columns: [i % 8], ms: [ms], loop: false }) }; }
+    return a?.row !== undefined ? { ...pick(state, 'look', a), own: false } : undefined;
+  };
+  const codexJump = m.codex ? { row: 4, frames: 5, ms: [140, 140, 140, 140, 280], loop: false } : undefined;
+  const out = {};
+  const own = name => timed(name) && pick(name, name, timed(name));
+  out.jumping = own('jumping') || (codexJump && { ...pick('jumping', 'jumping', codexJump), own: false })
+    || (timed('perch-hop') && { ...pick('jumping', 'perch-hop', timed('perch-hop')), own: false }) || still('jumping', 140);
+  out.perch = own('perch') || from('perch', base.idle);
+  out['perch-peek'] = own('perch-peek') || look('perch-peek', 180, 400) || still('perch-peek', 400);
+  const jump = own('jumping') ? timed('jumping') : codexJump;
+  out['perch-hop'] = own('perch-hop') || (jump && jump.frames >= 5 && { ...pick('perch-hop', 'jumping', jump,
+    { columns: [0, 1, 3, 4].map(c => (jump.start ?? 0) + c), ms: [70, 120, 70, 160], loop: false }), own: false }) || still('perch-hop', 160);
+  // A pack's aim points up-left, which is wrong from the edge, so look wins when both exist.
+  const aim = base.aim.own ? from('aim', base.aim, { loop: false }) : undefined;
+  out['perch-point-left'] = own('perch-point-left') || look('perch-point-left', 225, 320) || (aim && { ...aim, state: 'perch-point-left' }) || still('perch-point-left', 320);
+  out['perch-point-right'] = own('perch-point-right') || look('perch-point-right', 135, 320) || (aim && { ...aim, state: 'perch-point-right' }) || still('perch-point-right', 320);
+  out.sleep = own('sleep') || still('sleep', 1500);
+  const wave = timed('wave');
+  out['high-five'] = own('high-five') || (wave && { ...pick('high-five', 'wave', wave, { loop: false }), own: false }) || from('high-five', base.success, { loop: false });
+  out['perch-wait'] = own('perch-wait') || from('perch-wait', base['waiting-approval']);
+  out.startle = own('startle') || (base.error.source === 'error' ? from('startle', base.error, { columns: Array.from({ length: Math.min(2, base.error.frames) }, (_, i) => base.error.start + i),
+    ms: [70, 110].slice(0, Math.min(2, base.error.frames)), loop: false }) : still('startle', 180));
+  for (const [state, heading] of [['running-right', 90], ['running-left', 270]]) {
+    const run = timed(state), move = resolveCharacterStates(m, { heading, distance: 100 }).find(s => s.state === 'move');
+    out[state] = run ? { ...pick(state, state, run), own: true } : from(state, move);
+  }
+  out.error = from('error', base.error, { loop: false }); out.handoff = from('handoff', base.handoff, { loop: false });
+  return { anchor: m.perch?.anchor ?? m.anchor, states: out };
 }
 
 export function loadCharacter(folder, { uid = process.getuid(), shared = false, expectedId = basename(resolve(folder)), installed = false, io = fs } = {}) {

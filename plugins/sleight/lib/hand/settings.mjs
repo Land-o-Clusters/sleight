@@ -9,11 +9,13 @@ import { isAbsolute, join, normalize } from 'node:path';
 export const handConfigPath = (home = userInfo().homedir) => join(home, 'Library/Application Support/sleight/hand.json');
 export const CAPTURE_MODES = Object.freeze(['hidden', 'visible']);
 export const CURSOR_STYLES = Object.freeze(['glove', 'ring', 'seam', 'sprite']);
+// Sprite options (A2): perch (the character sits on the target window) and the character's lines, on unless turned off.
+export const LINES_MODES = Object.freeze(['on', 'off']);
 export const characterIdValid = value => typeof value === 'string' && /^[a-z0-9-]{1,48}$/.test(value);
 export const cursorDrawing = setting => setting?.enabled === true && ['ring', 'seam', 'sprite'].includes(setting.style);
 
 /** { state: 'absent' | 'on' | 'off' | 'unsafe', capture? }. Unsafe is a link, another owner, a mode other than 0600, or anything
- *  but { version: 1, enabled, capture?, stream?, labels?, style?, character?, record_runs? }. */
+ *  but { version: 1, enabled, capture?, stream?, labels?, style?, character?, record_runs?, perch?, lines? }. */
 export function readHandConfig(path = handConfigPath(), uid = process.getuid()) {
   let stat;
   try { stat = lstatSync(path); } catch (error) { return { state: error.code === 'ENOENT' ? 'absent' : 'unsafe' }; }
@@ -21,13 +23,15 @@ export function readHandConfig(path = handConfigPath(), uid = process.getuid()) 
     if (!isAbsolute(path) || normalize(path) !== path || !stat.isFile() || stat.isSymbolicLink() || realpathSync(path) !== path ||
         stat.uid !== uid || (stat.mode & 0o777) !== 0o600 || stat.size > 4096) return { state: 'unsafe' };
     const data = JSON.parse(readFileSync(path, 'utf8'));
-    if (!data || typeof data !== 'object' || Array.isArray(data) || Object.keys(data).some(key => !['version', 'enabled', 'capture', 'stream', 'labels', 'style', 'character', 'record_runs'].includes(key)) ||
+    if (!data || typeof data !== 'object' || Array.isArray(data) || Object.keys(data).some(key => !['version', 'enabled', 'capture', 'stream', 'labels', 'style', 'character', 'record_runs', 'perch', 'lines'].includes(key)) ||
         data.version !== 1 || typeof data.enabled !== 'boolean' || data.capture !== undefined && !CAPTURE_MODES.includes(data.capture) ||
         data.stream !== undefined && typeof data.stream !== 'boolean' || data.record_runs !== undefined && typeof data.record_runs !== 'boolean' || data.labels !== undefined && !['off', 'role', 'title'].includes(data.labels) ||
-        data.style !== undefined && !CURSOR_STYLES.includes(data.style) || data.character !== undefined && !characterIdValid(data.character)) return { state: 'unsafe' };
+        data.style !== undefined && !CURSOR_STYLES.includes(data.style) || data.character !== undefined && !characterIdValid(data.character) ||
+        data.perch !== undefined && typeof data.perch !== 'boolean' || data.lines !== undefined && !LINES_MODES.includes(data.lines)) return { state: 'unsafe' };
     return { state: data.enabled ? 'on' : 'off', ...data.capture ? { capture: data.capture } : {},
       ...data.record_runs !== undefined ? { record_runs: data.record_runs } : {}, ...data.stream !== undefined ? { stream: data.stream } : {}, ...data.labels !== undefined ? { labels: data.labels } : {},
-      ...data.style !== undefined ? { style: data.style } : {}, ...data.character !== undefined ? { character: data.character } : {} };
+      ...data.style !== undefined ? { style: data.style } : {}, ...data.character !== undefined ? { character: data.character } : {},
+      ...data.perch !== undefined ? { perch: data.perch } : {}, ...data.lines !== undefined ? { lines: data.lines } : {} };
   } catch { return { state: 'unsafe' }; }
 }
 
@@ -44,6 +48,7 @@ export function handSetting({ env = process.env, platform = process.platform, pa
       : file.style ? { style: file.style, styleReason: 'user' } : {}),
     ...file.record_runs !== undefined ? { record_runs: env.SLEIGHT_HAND !== '0' && file.state !== 'unsafe' && file.record_runs } : {},
     ...file.character !== undefined ? { character: file.character } : {},
+    ...file.perch !== undefined ? { perch: file.perch } : {}, ...file.lines !== undefined ? { lines: file.lines } : {},
     ...file.stream !== undefined ? { stream: env.SLEIGHT_HAND !== '0' && file.state !== 'unsafe' && file.stream } : {},
     ...file.labels !== undefined ? { labels: file.labels } : {} });
   if (platform !== 'darwin') return result(false, 'platform');

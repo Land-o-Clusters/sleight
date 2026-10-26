@@ -350,6 +350,25 @@ test('--check-character runs the same checks and reports the reason', options, t
   assert.equal(spawnSync(build(t), ['--check-character', 'extra'], { input: '' }).status, 64);
 });
 
+test('perch mode (A2): the third sheet goes through the same decode child and pixel checks', options, t => {
+  const check = frame => spawnSync(build(t), ['--check-character'], { input: JSON.stringify(frame) + '\n', encoding: 'utf8', env: testEnv() });
+  const f = character(), perchSheet = join(f.sheet, '..', 'perch.png');
+  writeFileSync(perchSheet, png({ w: 512, h: 64, cells: [[0, 0], [0, 1]] }), { mode: 0o600 });
+  const keys = ['perch', 'perch-peek', 'perch-hop', 'perch-point-left', 'perch-point-right', 'sleep', 'high-five', 'perch-wait', 'startle', 'jumping',
+    'running-right', 'running-left', 'error', 'handoff'];
+  const table = Object.fromEntries(keys.map(k => [k, entry(0, [0, 1], { sheet: k === 'jumping' ? 'sheet' : 'perch', size: k === 'jumping' ? [512, 192] : [512, 64], scale: 0.5 })]));
+  table.jumping.frames = [0]; table.jumping.ms = [100];
+  const frame = { ...f, perch: { anchor: [32, 48], table }, perchSheet };
+  assert.deepEqual(JSON.parse(check(frame).stdout), { id: f.id, loaded: true, reason: null, warnings: [] });
+  // A used perch cell with too little ink refuses the character, as on the other sheets.
+  writeFileSync(perchSheet, png({ w: 512, h: 64, cells: [[0, 0]] }), { mode: 0o600 });
+  assert.deepEqual(JSON.parse(check(frame).stdout), { id: f.id, loaded: false, reason: 'pixels', warnings: [] });
+  writeFileSync(perchSheet, png({ w: 448, h: 64, cells: [[0, 0], [0, 1]] }), { mode: 0o600 });
+  assert.equal(JSON.parse(check(frame).stdout).reason, 'size');
+  // Perch entries must name a sheet the frame has.
+  assert.equal(check({ ...frame, perchSheet: null }).status, 65);
+});
+
 test('sprite stays lower right and reverses its offset at edges without mirroring the art', options, t => {
   const f = character();
   for (const [at, origin] of [[[100, 100], [118, 118]], [[970, 100], [888, 118]], [[100, 970], [118, 888]], [[970, 970], [888, 888]]]) {

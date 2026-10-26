@@ -1559,6 +1559,10 @@ struct CursorPickerMessage {
             guard Set(data.keys) == base.union(["text"]), let text = data["text"] as? String, !text.isEmpty,
                 text.utf8.count <= 12000, text.unicodeScalars.allSatisfy({ $0.value == 10 || !CharacterSet.controlCharacters.contains($0) && !CharacterSet.illegalCharacters.contains($0) }) else { return nil }
         case "input-check", "menu-check": guard Set(data.keys) == base else { return nil }
+        case "options":
+            // Perch mode (A2): the sprite's perch and lines settings, from the relay after a character frame.
+            guard Set(data.keys) == base.union(["perch", "lines"]), let perch = data["perch"] as? NSNumber, let lines = data["lines"] as? NSNumber,
+                CFGetTypeID(perch) == CFBooleanGetTypeID(), CFGetTypeID(lines) == CFBooleanGetTypeID() else { return nil }
         default: return nil
         }
         return CursorPickerMessage(op: op, data: data)
@@ -1585,6 +1589,9 @@ enum CursorPickerRow {
             return nested && Set(row.keys) == ["title", "op", "key"] &&
                 (row["key"] as? String)?.range(of: "^[0-9a-f]{64}$", options: .regularExpression) != nil
         case "folder": return !nested && Set(row.keys) == ["title", "op"]
+        case "lines":
+            guard let on = row["selected"] as? NSNumber, CFGetTypeID(on) == CFBooleanGetTypeID() else { return false }
+            return !nested && Set(row.keys) == ["title", "op", "selected"]
         default: return false
         }
     }
@@ -1872,6 +1879,7 @@ final class CursorPickerHost: NSObject, NSMenuDelegate {
         }
         var event: [String: String] = [:]
         for key in ["op", "style", "character", "key"] { if let value = row[key] as? String { event[key] = value } }
+        if row["op"] as? String == "lines" { event["lines"] = row["selected"] as? Bool == true ? "off" : "on" } // the toggle's new value
         writeCursorPickerEvent(event)
     }
     func refuseSelection() { refuseConsentInput(); showNotice("Choose with the mouse or keyboard") }
@@ -2493,6 +2501,7 @@ struct RingPlan {
     var points: [CGPoint] = [], positions: [(Double, CGPoint)] = [], shape: [String: Double] = [:]
     var phases: [String: [Double]] = [:], timers: [RingTimer] = [], budget: [String: Double] = [:]
     var entrance: String?, variation: Double?
+    var pid: Int32 = 0, window: UInt32 = 0, ok = false   // the drawn frame's window and done result, for perch mode
     func position(at time: Double) -> CGPoint {
         guard let first = positions.first else { return at }
         if time <= first.0 { return first.1 }
@@ -3321,6 +3330,7 @@ enum RingEffect { case draw(RingPlan, CGRect), hide, drop(String), park, fade(Do
 struct RingRuntime {
     var theme: RingTheme, seed: UInt64
     var character: SpriteCharacter? = nil
+    var dissolveAt: CGPoint? = nil   // perch mode: a done with ok bursts at the high-five's palm
     var session = RingSession()
     var pending: [(due: Double, event: RingEvent)] = []
     var timers: [(at: Double, action: String)] = []
@@ -3363,14 +3373,17 @@ struct RingRuntime {
         return out
     }
     mutating func draw(_ event: RingEvent, _ now: Double, _ env: RingEnvironment) -> [(Double, RingEffect)] {
+        let (event, palm) = perchDissolve(event, .null, dissolveAt)
         let known = session.pid == event.pid && session.window == event.windowId && session.point != nil
         guard event.at != nil || known else { return [(now, .drop(event.state))] }
         // A repeat of the state the ring already shows at the same point, inside that plan, changes nothing.
         if known, ["thinking", "waiting", "error", "done", "handback"].contains(event.state), let last = session.previous, last.state == event.state, event.at == nil || event.at == last.at,
             event.label == last.label, now - session.began < last.total { return [] }
-        guard let clip = env.bounds(event.pid, event.windowId) else { return hide(now) }
+        guard let bounds = env.bounds(event.pid, event.windowId) else { return hide(now) }
+        let clip = palm.isNull ? bounds : bounds.union(palm)
         var plan = session.plan(event, theme: theme, now: now, reduced: env.reduced(), secure: env.secure(), clip: clip, seed: seed)
         guard !plan.dropped else { return [(now, .drop(event.state))] }
+        plan.pid = event.pid; plan.window = event.windowId; plan.ok = event.ok
         if let character = character { plan.sprite = SpritePlan.make(plan, character: character, reduced: env.reduced(), secure: env.secure(), clip: clip) }
         let chip = plan.chip.map { [$0.frame.origin, CGPoint(x: $0.frame.maxX, y: $0.frame.maxY)] } ?? []
         var frame = handBox(plan.points + [plan.at] + chip)
@@ -3400,6 +3413,7 @@ struct SpriteEntry {
 }
 struct SpriteFrame {
     let seq: Int, id: String, sheet: String, extra: String?, cell: CGSize, table: [String: SpriteEntry]
+    var perch: PerchTable? = nil, perchSheet: String? = nil, lines: PerchLineSet? = nil
 }
 func spriteFrame(_ data: [String: Any]) -> SpriteFrame? {
     func n(_ raw: Any?, _ range: ClosedRange<Double>) -> Double? {
@@ -3418,7 +3432,7 @@ func spriteFrame(_ data: [String: Any]) -> SpriteFrame? {
     func path(_ raw: Any?) -> String? {
         guard let p = raw as? String, p.utf8.count <= 4096, p.hasPrefix("/"), !p.contains("\0") else { return nil }; return p
     }
-    guard Set(data.keys) == ["hand", "nonce", "seq", "id", "sheet", "extra", "cell", "table"],
+    guard Set(data.keys).subtracting(["perch", "perchSheet", "lines"]) == ["hand", "nonce", "seq", "id", "sheet", "extra", "cell", "table"],
         let seq = int(data["seq"], 0...9007199254740991), let id = data["id"] as? String,
         id.range(of: "^[a-z0-9-]{1,48}$", options: .regularExpression) != nil,
         let sheet = path(data["sheet"]), data["extra"] is NSNull || path(data["extra"]) != nil,
@@ -3457,7 +3471,9 @@ func spriteFrame(_ data: [String: Any]) -> SpriteFrame? {
         table[key] = SpriteEntry(sheet: s, row: row, columns: columns, ms: ms, loop: loop, flip: flip,
             hotspot: CGPoint(x: hotspot[0], y: hotspot[1]), size: size, scale: n(v["scale"], 0.25...2) ?? 1, then: v["then"] as? String)
     }
-    return SpriteFrame(seq: seq, id: id, sheet: sheet, extra: path(data["extra"]), cell: CGSize(width: cell[0], height: cell[1]), table: table)
+    guard let extras = perchFrameExtras(data, cell: CGSize(width: cell[0], height: cell[1]), extra: path(data["extra"]) != nil) else { return nil }
+    return SpriteFrame(seq: seq, id: id, sheet: sheet, extra: path(data["extra"]), cell: CGSize(width: cell[0], height: cell[1]), table: table,
+        perch: extras.table, perchSheet: extras.sheet, lines: extras.lines)
 }
 enum SpriteLoadError: String, Error { case path, permissions, size, type, decode, alpha, pixels, changed, timeout, child, sandbox, cancelled }
 func spriteWarning(_ message: String) { FileHandle.standardError.write(Data(("sleight sprite: " + message + "\n").utf8)) }
@@ -3598,8 +3614,8 @@ struct SpriteCharacter {
     static func check(_ frame: SpriteFrame, cancelled: @escaping () -> Bool = { false }) -> Result {
         do {
             var images: [String: CGImage] = [:], warnings = Set<String>()
-            let used = Set(frame.table.values.map { $0.sheet })
-            for (key, path) in [("sheet", Optional(frame.sheet)), ("extra", frame.extra)] {
+            let used = Set(frame.allEntries.map { $0.sheet })
+            for (key, path) in [("sheet", Optional(frame.sheet)), ("extra", frame.extra), ("perch", frame.perchSheet)] {
                 guard let path = path, used.contains(key) else { continue }
                 guard !cancelled() else { throw SpriteLoadError.cancelled }
                 let loaded = try decode(path, key: key, frame: frame, cancelled: cancelled)
@@ -3648,7 +3664,7 @@ struct SpriteCharacter {
         let w = header.width, h = header.height
         guard w > 0, h > 0, w <= spriteSheetCap.width, h <= spriteSheetCap.height, w == Int(frame.cell.width) * 8,
             h % Int(frame.cell.height) == 0 else { throw SpriteLoadError.size }
-        let entries = frame.table.values.filter { $0.sheet == key }
+        let entries = frame.allEntries.filter { $0.sheet == key }
         guard entries.allSatisfy({ ($0.row + 1) * Int(frame.cell.height) <= h && ($0.size == nil || $0.size == CGSize(width: w, height: h)) }) else { throw SpriteLoadError.size }
         let buffer = try spriteDecodeInChild(fd: fd, width: w, height: h, format: header.format, cancelled: cancelled)
         // The image wraps the child's bytes without a copy and frees them when it goes (replacement, style change or exit).
@@ -3961,6 +3977,842 @@ func spriteDecodeChild(_ args: [String]) -> Never {
 }
 // END SPRITE DECODE CHILD
 
+// BEGIN PERCH
+// Perch mode (art direction A2): in sprite style with perch on, the character sits on the target window's top edge instead
+// of trailing the ring, and says a short line of its own at a few moments. PerchRuntime is a pure state machine (seats,
+// moves, reactions, sleep, the hide rules and the lines' caps), driven by the ring's draws, the host's window-list checks
+// and its own timers; the host (PerchHost) and --perch-dump both drive it. A draw installs Core Animation keyframes once and
+// a park removes them, so a parked perch runs no animation. Nothing here posts input, activates, takes key or writes stdout.
+
+// The perch table the relay sends: every perch state resolved to art the pack has (character.mjs resolvePerchStates).
+let perchTableKeys: Set<String> = ["perch", "perch-peek", "perch-hop", "perch-point-left", "perch-point-right", "sleep", "high-five",
+    "perch-wait", "startle", "jumping", "running-right", "running-left", "error", "handoff"]
+let perchMoments = ["start", "first-click", "typing", "long-wait", "approval", "error", "done", "handback", "wake"]
+struct PerchTable { let anchor: CGPoint, table: [String: SpriteEntry] }
+struct PerchLineSet { let lang: String?, lines: [String: [String]] }
+extension SpriteFrame {
+    // Every entry the decode checks: the trail table and, with perch, the perch table (the third sheet's cells among them).
+    var allEntries: [SpriteEntry] { Array(table.values) + (perch.map { Array($0.table.values) } ?? []) }
+}
+// A perch entry: the trail table's rules, with explicit columns, durations, size and scale, and the perch sheet allowed.
+func perchEntry(_ raw: Any?, cell: CGSize, sheets: Set<String>) -> SpriteEntry? {
+    func n(_ raw: Any?, _ range: ClosedRange<Double>) -> Double? {
+        guard let n = raw as? NSNumber, CFGetTypeID(n) != CFBooleanGetTypeID(), n.doubleValue.isFinite, range.contains(n.doubleValue) else { return nil }
+        return n.doubleValue
+    }
+    func int(_ raw: Any?, _ range: ClosedRange<Double>) -> Int? { guard let v = n(raw, range), v.rounded() == v else { return nil }; return Int(v) }
+    func bool(_ raw: Any?) -> Bool? { guard let v = raw as? NSNumber, CFGetTypeID(v) == CFBooleanGetTypeID() else { return nil }; return v.boolValue }
+    func pair(_ raw: Any?, _ range: ClosedRange<Double>) -> [Double]? {
+        guard let a = raw as? [Any], a.count == 2, let x = n(a[0], range), let y = n(a[1], range) else { return nil }; return [x, y]
+    }
+    guard let v = raw as? [String: Any], Set(v.keys) == ["sheet", "row", "frames", "ms", "loop", "flip", "hotspot", "size", "scale"],
+        let sheet = v["sheet"] as? String, sheets.contains(sheet), let row = int(v["row"], 0...63), let loop = bool(v["loop"]), let flip = bool(v["flip"]),
+        let hotspot = pair(v["hotspot"], -1024...1024), (-cell.width...2 * cell.width).contains(hotspot[0]), (-cell.height...2 * cell.height).contains(hotspot[1]),
+        let scale = n(v["scale"], 0.25...2), let raw = v["frames"] as? [Any], (1...16).contains(raw.count), let durations = v["ms"] as? [Any],
+        let size = pair(v["size"], 1...Double(spriteSheetCap.height)), size.allSatisfy({ $0.rounded() == $0 }), size[0] == Double(cell.width) * 8,
+        size[0] <= Double(spriteSheetCap.width), size[1].truncatingRemainder(dividingBy: Double(cell.height)) == 0, Double(row + 1) * Double(cell.height) <= size[1] else { return nil }
+    let columns = raw.compactMap { int($0, 0...7) }, ms = durations.compactMap { n($0, (loop ? 40.0 : 20.0)...2000) }
+    guard columns.count == raw.count, ms.count == columns.count, durations.count == columns.count, ms.reduce(0, +) <= 8000 else { return nil }
+    return SpriteEntry(sheet: sheet, row: row, columns: columns, ms: ms, loop: loop, flip: flip, hotspot: CGPoint(x: hotspot[0], y: hotspot[1]),
+        size: CGSize(width: size[0], height: size[1]), scale: scale, then: nil)
+}
+// A2's line rule, the same as character.mjs characterLineValid on trimmed text. The host draws lines and nothing else.
+func perchLineValid(_ s: String) -> Bool {
+    guard (1...60).contains(s.count), s.unicodeScalars.count <= 240, s.trimmingCharacters(in: .whitespaces) == s else { return false }
+    for scalar in s.unicodeScalars {
+        let c = scalar.properties.generalCategory
+        if [.control, .lineSeparator, .paragraphSeparator, .surrogate, .privateUse, .unassigned].contains(c) { return false }
+        if c == .format && scalar.value != 0x200D { return false }
+        if "<>{}`*_[]|".unicodeScalars.contains(scalar) { return false }
+    }
+    let lower = s.lowercased()
+    if lower.contains("://") || lower.contains("www.") || lower.contains("~/") || s.range(of: "/\\p{L}", options: .regularExpression) != nil { return false }
+    return lower.range(of: "\\b(system|assistant|ignore|tool)\\b", options: .regularExpression) == nil
+}
+func perchLineSet(_ raw: Any?) -> PerchLineSet? {
+    guard let v = raw as? [String: Any], Set(v.keys).isSubset(of: Set(perchMoments + ["lang"])),
+        let bytes = try? JSONSerialization.data(withJSONObject: v), bytes.count <= 4096 else { return nil }
+    var lang: String?
+    if let raw = v["lang"] {
+        guard let s = raw as? String, s.count <= 16, s.range(of: "^[A-Za-z]{2,8}(-[A-Za-z0-9]{1,8})*$", options: .regularExpression) != nil else { return nil }
+        lang = s
+    }
+    var lines: [String: [String]] = [:]
+    for moment in perchMoments {
+        guard let raw = v[moment] else { continue }
+        guard let list = raw as? [Any], (1...16).contains(list.count) else { return nil }
+        let texts = list.compactMap { $0 as? String }.filter(perchLineValid)
+        guard texts.count == list.count else { return nil }
+        lines[moment] = texts
+    }
+    return PerchLineSet(lang: lang, lines: lines)
+}
+// The character frame's optional perch keys. nil for a malformed value (the frame fails as a whole).
+func perchFrameExtras(_ data: [String: Any], cell: CGSize, extra: Bool) -> (table: PerchTable?, sheet: String?, lines: PerchLineSet?)? {
+    var sheet: String?
+    if let raw = data["perchSheet"], !(raw is NSNull) {
+        guard let p = raw as? String, p.utf8.count <= 4096, p.hasPrefix("/"), !p.contains("\0") else { return nil }
+        sheet = p
+    }
+    var table: PerchTable?
+    if let raw = data["perch"] {
+        guard let v = raw as? [String: Any], Set(v.keys) == ["anchor", "table"], let a = v["anchor"] as? [Any], a.count == 2,
+            let x = a[0] as? NSNumber, let y = a[1] as? NSNumber, CFGetTypeID(x) != CFBooleanGetTypeID(), CFGetTypeID(y) != CFBooleanGetTypeID(),
+            (-Double(cell.width)...2 * Double(cell.width)).contains(x.doubleValue), (-Double(cell.height)...2 * Double(cell.height)).contains(y.doubleValue),
+            let t = v["table"] as? [String: Any], Set(t.keys) == perchTableKeys else { return nil }
+        let sheets: Set<String> = Set(["sheet"] + (extra ? ["extra"] : []) + (sheet != nil ? ["perch"] : []))
+        var entries: [String: SpriteEntry] = [:]
+        for (key, value) in t { guard let e = perchEntry(value, cell: cell, sheets: sheets) else { return nil }; entries[key] = e }
+        table = PerchTable(anchor: CGPoint(x: x.doubleValue, y: y.doubleValue), table: entries)
+    } else if sheet != nil { return nil }
+    var lines: PerchLineSet?
+    if let raw = data["lines"] { guard let set = perchLineSet(raw) else { return nil }; lines = set }
+    return (table, sheet, lines)
+}
+
+// Geometry. All in global top-left points. The box is the cell at the pack's scale; the anchor is the seat point inside it.
+struct PerchMetrics { let size: CGSize, anchor: CGPoint, scale: Double }
+func perchMetrics(_ frame: SpriteFrame) -> PerchMetrics? {
+    guard let perch = frame.perch, let e = perch.table["perch"] else { return nil }
+    return PerchMetrics(size: CGSize(width: frame.cell.width * e.scale, height: frame.cell.height * e.scale),
+        anchor: CGPoint(x: perch.anchor.x * e.scale, y: perch.anchor.y * e.scale), scale: e.scale)
+}
+// The target window, the windows in front of it (the window list's order), its display and the display's usable top.
+struct PerchWorld { var window: CGRect, above: [CGRect], display: CGRect, top: Double, fullScreen: Bool }
+struct PerchSeat: Equatable {
+    var pid: Int32, window: UInt32, x: Double, edge: Double, peek: Bool, rise: Double, frame: CGRect, display: CGRect, top: Double
+}
+enum PerchPlace: Equatable { case seat(PerchSeat), hide(String) }
+// The edge's uncovered spans: every higher window that crosses the edge line cuts it.
+func perchSpans(_ window: CGRect, above: [CGRect]) -> [(Double, Double)] {
+    var spans: [(Double, Double)] = [(Double(window.minX), Double(window.maxX))]
+    let edge = Double(window.minY)
+    for r in above where Double(r.minY) <= edge && Double(r.maxY) > edge {
+        spans = spans.flatMap { s -> [(Double, Double)] in
+            guard Double(r.maxX) > s.0, Double(r.minX) < s.1 else { return [s] }
+            return [(s.0, min(s.1, Double(r.minX))), (max(s.0, Double(r.maxX)), s.1)].filter { $0.1 - $0.0 > 0 }
+        }
+    }
+    return spans
+}
+// A2's seat: on the edge nearest the target's x, clear of the traffic lights and toolbar controls, away from a target just
+// under the edge, on the uncovered span nearest the target, and kept within 60 pt on the same window. Hidden when the
+// window is gone, full screen, under 48 pt wide, under 40 pt of headroom or covered along every 96 pt.
+func perchPlace(_ world: PerchWorld?, pid: Int32, window: UInt32, target: CGPoint, metrics m: PerchMetrics, previous: PerchSeat?) -> PerchPlace {
+    guard let world = world else { return .hide("gone") }
+    if world.fullScreen { return .hide("full-screen") }
+    let win = world.window, width = Double(win.width), edge = Double(win.minY), tx = Double(target.x), ty = Double(target.y)
+    guard width >= 48 else { return .hide("narrow") }
+    let headroom = edge - world.top
+    guard headroom >= 40 else { return .hide("headroom") }
+    let ay = Double(m.anchor.y), peek = width < 96 || headroom < ay
+    let rise = peek ? min(48, ay, headroom) : ay
+    let need = min(96, width)
+    let spans = perchSpans(win, above: world.above).filter { $0.1 - $0.0 >= need - 0.001 }
+    guard !spans.isEmpty else { return .hide("covered") }
+    func distance(_ s: (Double, Double)) -> Double { tx >= s.0 && tx <= s.1 ? 0 : min(abs(s.0 - tx), abs(s.1 - tx)) }
+    let span = spans.min { a, b in distance(a) != distance(b) ? distance(a) < distance(b) : a.1 - a.0 > b.1 - b.0 }!
+    let left = Double(m.anchor.x), right = Double(m.size.width) - left, margin = width >= 256 ? 80.0 : 40.0
+    var lo = width < 176 ? Double(win.midX) : Double(win.minX) + margin, hi = width < 176 ? Double(win.midX) : Double(win.maxX) - margin
+    lo = max(lo, span.0 + left); hi = min(hi, span.1 - right)
+    if lo > hi { lo = span.0 + left; hi = span.1 - right }
+    if lo > hi { lo = (span.0 + span.1) / 2; hi = lo }
+    func clamp(_ v: Double) -> Double { min(max(v, lo), hi) }
+    // The dangling legs stay off a target within 56 pt under the edge and 72 pt of the seat.
+    func clear(_ x: Double) -> Bool { !(ty >= edge && ty - edge <= 56 && abs(tx - x) < 72 - 0.001) }
+    var x = clamp(tx)
+    if !clear(x) {
+        let toward = tx <= Double(win.midX) ? 1.0 : -1.0
+        x = [clamp(tx + toward * 72), clamp(tx - toward * 72)].first(where: clear) ?? x
+    }
+    if let p = previous, p.window == window, p.pid == pid, abs(p.x - x) <= 60, p.x >= lo - 0.001, p.x <= hi + 0.001, clear(p.x) { x = p.x }
+    return .seat(PerchSeat(pid: pid, window: window, x: x, edge: edge, peek: peek, rise: rise, frame: win, display: world.display, top: world.top))
+}
+
+// One plan: the box's cells, its top-left positions, opacity and peek mask over time, installed as keyframes.
+struct PerchCell { let time: Double, state: String, entry: SpriteEntry, column: Int }
+struct PerchPlan {
+    var kind: String, seat: PerchSeat, cells: [PerchCell] = [], positions: [(Double, CGPoint)] = [], opacity: [(Double, Double)] = []
+    var masked: [(Double, Bool)] = [], duration = 0.0, zs = false, zsStill = false, reduced = false, states: [String] = []
+    func position(at t: Double) -> CGPoint {
+        guard let first = positions.first else { return .zero }
+        if t <= first.0 { return first.1 }
+        for (a, b) in zip(positions, positions.dropFirst()) where t <= b.0 {
+            let f = b.0 > a.0 ? (t - a.0) / (b.0 - a.0) : 1
+            return CGPoint(x: Double(a.1.x) + Double(b.1.x - a.1.x) * f, y: Double(a.1.y) + Double(b.1.y - a.1.y) * f)
+        }
+        return positions.last!.1
+    }
+    func cell(at t: Double) -> PerchCell? { cells.last(where: { $0.time <= t + 1e-9 }) ?? cells.first }
+    func mask(at t: Double) -> Bool { masked.last(where: { $0.0 <= t + 1e-9 })?.1 ?? masked.first?.1 ?? false }
+    // The cell, inset by half a texel, as a contentsRect of its sheet.
+    static func rect(_ e: SpriteEntry, _ column: Int, cell: CGSize) -> CGRect {
+        let w = Double(e.size?.width ?? cell.width * 8), h = Double(e.size?.height ?? cell.height * Double(e.row + 1))
+        return CGRect(x: (Double(column) * Double(cell.width) + 0.5) / w, y: (Double(e.row) * Double(cell.height) + 0.5) / h,
+            width: (Double(cell.width) - 1) / w, height: (Double(cell.height) - 1) / h)
+    }
+    // The animated key paths, each an animation on the box (zs adds one group on the replicated glyph).
+    func keyPaths(_ cell: CGSize) -> [String] {
+        var out: [String] = []
+        if Set(positions.map { "\($0.1.x),\($0.1.y)" }).count > 1 { out.append("position") }
+        if Set(cells.map { $0.entry.sheet }).count > 1 { out.append("contents") }
+        if Set(cells.map { PerchPlan.rect($0.entry, $0.column, cell: cell) }.map { "\($0)" }).count > 1 { out.append("contentsRect") }
+        if Set(cells.map { $0.entry.flip }).count > 1 { out.append("transform") }
+        if Set(opacity.map { $0.1 }).count > 1 { out.append("opacity") }
+        if Set(masked.map { $0.1 }).count > 1 { out.append("mask.bounds") }
+        if zs && !zsStill && !reduced { out.append("zs") }
+        return out
+    }
+}
+struct PerchBuilder {
+    let table: [String: SpriteEntry], reduced: Bool
+    var plan: PerchPlan
+    func entry(_ state: String) -> SpriteEntry { table[state] ?? table["perch"]! }
+    mutating func add(_ t: Double, _ state: String, _ e: SpriteEntry, _ column: Int) {
+        plan.cells.append(PerchCell(time: t, state: state, entry: e, column: column))
+        if plan.states.last != state { plan.states.append(state) }
+    }
+    // One state's cells from `start`. One-shots play once and hold their last cell; loops run to `until`, or park on their first
+    // cell at 4.8 s, as the ring parks. `indices` plays a slice of the entry and `stretch` fits it into that many seconds.
+    // Reduced motion shows the first cell.
+    @discardableResult mutating func play(_ state: String, at start: Double, until: Double? = nil, indices: [Int]? = nil, stretch: Double? = nil) -> Double {
+        let e = entry(state), picks = (indices ?? Array(e.columns.indices)).filter { e.columns.indices.contains($0) }
+        guard !picks.isEmpty else { return start }
+        if reduced { add(start, state, e, e.columns[picks[0]]); return start + (stretch ?? 0) }
+        let natural = picks.map { e.ms[$0] }.reduce(0, +) / 1000, factor = stretch.map { natural > 0 ? $0 / natural : 1 } ?? 1
+        let loops = e.loop && indices == nil
+        var t = start, i = 0
+        while true {
+            add(t, state, e, e.columns[picks[i]])
+            t += e.ms[picks[i]] / 1000 * factor; i += 1
+            if i == picks.count { guard loops else { return t }; i = 0 }
+            if let until = until { if t >= until - 1e-9 { return until } }
+            else if t >= start + 4.8 - 1e-9 {
+                if plan.cells.last?.column != e.columns[picks[0]] { add(start + 4.8, state, e, e.columns[picks[0]]) }
+                return start + 4.8
+            }
+        }
+    }
+    mutating func at(_ t: Double, _ p: CGPoint) { plan.positions.append((t, p)) }
+    mutating func mask(_ t: Double, _ on: Bool) { plan.masked.append((t, on)) }
+    // A bump: the box rises `height` and settles over 120 ms, folded into the position track.
+    mutating func bump(_ t: Double, _ height: Double, at p: CGPoint) {
+        guard !reduced else { return }
+        at(t, p); at(t + 0.06, CGPoint(x: p.x, y: p.y - height)); at(t + 0.12, p)
+    }
+}
+
+// Personality lines: the caps, the no-repeat ring, narration first and the click to dismiss, as a pure book.
+struct PerchBubble { let text: String, frame: CGRect, tail: CGPoint, side: String }
+struct PerchLine { let moment: String, text: String, index: Int, until: Double, bubble: PerchBubble }
+struct PerchLineBook {
+    var set: PerchLineSet?, enabled = true, seed: UInt64 = 1
+    var recent: [String: [Int]] = [:], picks = 0
+    var turnOpen = false, said: Set<String> = [], lastOk = false
+    var showing: (moment: String, until: Double)?, lastAt = -Double.infinity
+    var acts = 0, lastAct = Int.min / 2
+    var narrationUntil = -Double.infinity, held: (moment: String, act: Bool)?
+    static let priority: Set<String> = ["error", "approval", "done"]
+    // The moment a frame is, if any. Turns end at a done without ok (the relay's turn end), a hand back or sleep.
+    mutating func moment(_ state: String, ok: Bool, woke: Bool) -> String? {
+        if !turnOpen { turnOpen = true; said = []; lastOk = false }
+        if handKinds.contains(state) { acts += 1 }
+        var moment: String?
+        switch state {
+        case "aim": moment = said.contains("start") ? nil : "start"
+        case "type": moment = said.contains("typing") ? nil : "typing"
+        case "waiting": moment = "approval"
+        case "error": moment = "error"; lastOk = false
+        case "handback": moment = "handback"; turnOpen = false
+        case "done" where ok: moment = said.contains("first-click") ? nil : "first-click"; lastOk = true
+        case "done": moment = lastOk && !said.contains("done") ? "done" : nil; turnOpen = false
+        default: break
+        }
+        if woke, moment.map({ !PerchLineBook.priority.contains($0) }) ?? true { moment = "wake" }
+        if let m = moment, ["start", "typing", "first-click", "done"].contains(m) { said.insert(m) }
+        return moment
+    }
+    // A uniform pick outside the last min(6, count - 1) shown, seeded from the session seed; a single line once per turn.
+    mutating func pick(_ moment: String) -> (Int, String)? {
+        guard let list = set?.lines[moment], !list.isEmpty else { return nil }
+        if list.count < 2 {
+            guard !said.contains("single:" + moment) else { return nil }
+            said.insert("single:" + moment); return (0, list[0])
+        }
+        let ring = Array((recent[moment] ?? []).suffix(min(6, list.count - 1)))
+        let open = list.indices.filter { !ring.contains($0) }
+        let salt = perchMoments.firstIndex(of: moment) ?? 0
+        let index = open[min(open.count - 1, Int(seamRandom(seed, picks, 900 + salt) * Double(open.count)))]
+        picks += 1; recent[moment] = Array((ring + [index]).suffix(min(6, list.count - 1)))
+        return (index, list[index])
+    }
+    enum Decision { case show, hold, drop }
+    // At most one line per 8 s (error, approval and done may replace a line that shows), never lines on two consecutive acts,
+    // and never with narration up: then the line waits for it.
+    mutating func decide(_ moment: String, now: Double, act: Bool) -> Decision {
+        guard enabled, set?.lines[moment] != nil else { return .drop }
+        let important = PerchLineBook.priority.contains(moment)
+        if let s = showing, now < s.until, !important { return .drop }
+        if !important, now - lastAt < 8 - 1e-9 { return .drop }
+        if act, acts == lastAct + 1 { return .drop }
+        if now < narrationUntil { held = (moment, act); return .hold }
+        return .show
+    }
+}
+
+// Inputs from outside the runtime: the window list, motion, and text measurement (headless in the dump).
+struct PerchEnvironment {
+    var world: (Int32, UInt32) -> PerchWorld?
+    var reduced: () -> Bool
+    var measure: (String) -> CGSize
+}
+enum PerchEffect { case draw(PerchPlan), hide(String, Double), park, still, line(PerchLine), lineOut(Double) }
+struct PerchEvent { let state: String, pid: Int32, window: UInt32, at: CGPoint, ok: Bool, drop: Double? }
+// The ring's draw as a perch frame: the character reacts when the ring draws, after any act delay.
+func perchEvent(_ plan: RingPlan) -> PerchEvent {
+    PerchEvent(state: plan.state, pid: plan.pid, window: plan.window, at: plan.at, ok: plan.ok, drop: plan.phases["drop"]?.first)
+}
+// The ring's done burst moves to the high-five's palm: its point and a clip that holds it (RingRuntime.dissolveAt).
+func perchDissolve(_ event: RingEvent, _ clip: CGRect, _ palm: CGPoint?) -> (RingEvent, CGRect) {
+    guard event.state == "done", event.ok, let palm = palm else { return (event, clip) }
+    let moved = RingEvent(seq: event.seq, state: event.state, pid: event.pid, windowId: event.windowId, at: palm, rect: nil, label: event.label, ok: true)
+    return (moved, clip.union(CGRect(x: palm.x - 60, y: palm.y - 60, width: 120, height: 120)))
+}
+
+struct PerchRuntime {
+    var frame: SpriteFrame?, seed: UInt64 = 1
+    var seat: PerchSeat?, shown = false, asleep = false, paused = false, current = "perch"
+    var plan: PerchPlan?, began = 0.0, lastFrame = -Double.infinity
+    var timers: [(at: Double, action: String)] = []
+    var moving: CGRect?                  // the target window's frame while the person moves it; hidden until it holds still
+    var book = PerchLineBook(), line: PerchLine?
+    var metrics: PerchMetrics? { frame.flatMap(perchMetrics) }
+    var next: Double? { timers.map { $0.at }.min() }
+    // How often the host rereads the target window: while it moves, while awake, and slower asleep. nil: nothing perched.
+    var poll: Double? { seat == nil ? nil : moving != nil ? 0.25 : asleep ? 2 : 0.5 }
+    mutating func load(_ frame: SpriteFrame?) {
+        self.frame = frame; book.set = frame?.lines; book.recent = [:]; seat = nil; shown = false; asleep = false; plan = nil; moving = nil; timers = []
+        line = nil; book.showing = nil
+    }
+    mutating func timer(_ at: Double, _ action: String) { timers.removeAll { $0.action == action }; timers.append((at, action)) }
+    func origin(_ seat: PerchSeat) -> CGPoint {
+        CGPoint(x: seat.x - Double(metrics?.anchor.x ?? 0), y: seat.edge - seat.rise)
+    }
+    func box(_ seat: PerchSeat) -> CGRect { CGRect(origin: origin(seat), size: metrics?.size ?? .zero) }
+    // Where the ring's done burst should play: the high-five's palm, while perched in full view.
+    func palm() -> CGPoint? {
+        guard shown, let seat = seat, !seat.peek, moving == nil, let m = metrics, let e = frame?.perch?.table["high-five"] else { return nil }
+        let o = origin(seat), x = e.flip ? Double(m.size.width) - Double(e.hotspot.x) * m.scale : Double(e.hotspot.x) * m.scale
+        return CGPoint(x: Double(o.x) + x, y: Double(o.y) + Double(e.hotspot.y) * m.scale)
+    }
+    mutating func hide(_ now: Double, _ reason: String, keepSeat: Bool = false) -> [(Double, PerchEffect)] {
+        let was = shown
+        shown = false; asleep = false; plan = nil
+        if !keepSeat { seat = nil; moving = nil }
+        timers.removeAll { !(keepSeat && $0.action == "return") }
+        // Reported even when nothing showed, so a seat refused on the first frame says why (the host has nothing to fade).
+        var out: [(Double, PerchEffect)] = [(now, .hide(reason, was ? 0.12 : 0))]
+        if line != nil { line = nil; book.showing = nil; out.append((now, .lineOut(0.12))) }
+        return out
+    }
+    // A plan from the current pose: a move (if the seat changed), the startle after sleep, then the frame's states.
+    mutating func draw(_ state: String, ok: Bool, at target: CGPoint?, move: String?, from: CGPoint?, woke: Bool, now: Double, env: PerchEnvironment) -> PerchPlan? {
+        guard let seat = seat, let table = frame?.perch?.table else { return nil }
+        let reduced = env.reduced(), to = origin(seat)
+        var b = PerchBuilder(table: table, reduced: reduced, plan: PerchPlan(kind: move ?? "stay", seat: seat, reduced: reduced))
+        let forced = seat.peek
+        func name(_ s: String) -> String { forced ? "perch-peek" : s }
+        var t = 0.0
+        let a = from ?? to, d = hypot(Double(to.x - a.x), Double(to.y - a.y))
+        let previous = plan?.cell(at: now - began)?.state ?? name(current)
+        b.mask(0, forced || previous == "perch-peek")
+        switch move {
+        case "arrive"?:
+            if reduced { b.plan.opacity = [(0, 0), (0.15, 1)]; b.at(0, to) }
+            else {
+                b.plan.opacity = [(0, 0), (0.08, 1)]
+                for i in 0...14 { let f = Double(i) / 14; b.at(0.28 * f, CGPoint(x: to.x, y: Double(to.y) - 80 * (1 - f * f))) }
+                b.add(0, name("perch-hop"), b.entry(name("perch-hop")), b.entry(name("perch-hop")).columns[min(1, b.entry(name("perch-hop")).columns.count - 1)])
+                t = b.play(name("perch-hop"), at: 0.28, indices: [2, 3])
+            }
+        case let kind? where reduced:
+            // Reduced motion: a 150 ms crossfade, no arc, hop or drop.
+            _ = kind; b.plan.kind = "fade"
+            b.plan.opacity = [(0, 1), (0.075, 0), (0.15, 1)]; b.at(0, a); b.at(0.075, a); b.at(0.0751, to)
+            b.add(0, previous, b.entry(previous), b.entry(previous).columns[0]); t = 0.075
+        case "hop"?:
+            let hops = max(1, Int((d / 120).rounded(.up)))
+            for k in 0..<hops {
+                for i in 0...8 {
+                    let u = Double(i) / 8, f = (Double(k) + u) / Double(hops)
+                    b.at(0.24 * (Double(k) + u), CGPoint(x: Double(a.x) + Double(to.x - a.x) * f, y: Double(a.y) + Double(to.y - a.y) * f - 14 * 4 * u * (1 - u)))
+                }
+                b.play(name("perch-hop"), at: 0.24 * Double(k), stretch: 0.24)
+            }
+            t = 0.24 * Double(hops)
+        case "run"?:
+            let span = min(0.6, d / 600), runner = to.x >= a.x ? "running-right" : "running-left"
+            b.at(0, a); b.at(span, to)
+            b.play(name(runner), at: 0, until: span)
+            t = b.play(name("perch-hop"), at: span, indices: [2, 3])
+        case "leap"?:
+            // A parabola with its top 60 pt above the higher edge, over 320 + 0.5 per point ms, at most 520.
+            let span = min(0.52, 0.32 + 0.0005 * d), top = min(Double(a.y), Double(to.y)) - 60
+            var lift = 0.0, high = 400.0
+            for _ in 0..<40 {
+                let h = (lift + high) / 2
+                let lowest = (0...40).map { i -> Double in let u = Double(i) / 40; return Double(a.y) + Double(to.y - a.y) * u - 4 * h * u * (1 - u) }.min()!
+                if lowest > top { lift = h } else { high = h }
+            }
+            for i in 0...26 {
+                let u = Double(i) / 26
+                b.at(span * u, CGPoint(x: Double(a.x) + Double(to.x - a.x) * u, y: Double(a.y) + Double(to.y - a.y) * u - 4 * lift * u * (1 - u)))
+            }
+            let jump = b.entry(name("jumping")), marks = [0, 0.2, 0.45, 0.75, 1.0]
+            for (i, column) in jump.columns.enumerated() {
+                let f = jump.columns.count == 5 ? marks[i] : jump.columns.count > 1 ? Double(i) / Double(jump.columns.count - 1) : 0
+                b.add(span * f, name("jumping"), jump, column)
+            }
+            t = b.play(name("perch-hop"), at: span + 0.07, indices: [2, 3])
+        case "far"?:
+            // Over 400 pt or onto another display: fade out at the old seat, pop in at the new one. No arc crosses the screen.
+            b.plan.opacity = [(0, 1), (0.12, 0), (0.1201, 1)]; b.at(0, a); b.at(0.12, a); b.at(0.1201, to)
+            b.add(0, previous, b.entry(previous), b.entry(previous).columns[0])
+            t = b.play(name("perch-hop"), at: 0.12, indices: [2, 3])
+        case "return"?:
+            b.plan.opacity = [(0, 0), (0.06, 1)]; b.at(0, to)
+            t = b.play(name("perch-hop"), at: 0, indices: [2, 3])
+        default: b.at(0, to)
+        }
+        if woke {
+            b.bump(t, 6, at: to); t = b.play(name("startle"), at: t)
+        }
+        let peekStates: Set<String> = ["type", "key", "scroll", "drag", "perch-peek"]
+        b.mask(t, forced || peekStates.contains(state))
+        switch state {
+        case "aim":
+            let side = Double(target?.x ?? CGFloat(seat.x)) < seat.x ? "perch-point-left" : "perch-point-right"
+            current = "perch"; t = b.play(name(side), at: t)
+        case "click", "double", "right": current = "perch"; b.bump(t, 3, at: to); t = b.play(name("perch"), at: t)
+        case "type", "key", "scroll", "drag", "perch-peek": current = "perch-peek"; t = b.play(name("perch-peek"), at: t)
+        case "waiting", "perch-wait": current = "perch-wait"; t = b.play(name("perch-wait"), at: t)
+        case "error": current = "perch"; t = b.play(name("error"), at: t); b.mask(t, forced); t = b.play(name("perch"), at: t)
+        case "done" where ok: current = "perch"; t = b.play(name("high-five"), at: t); t = b.play(name("perch"), at: t)
+        case "done", "handback": current = "perch"; t = b.play(name("handoff"), at: t); t = b.play(name("perch"), at: t)
+        case "sleep":
+            let e = b.entry(name("sleep")), cycle = e.ms.reduce(0, +) / 1000
+            if e.loop && !reduced { b.play(name("sleep"), at: t, until: t + 3 * cycle); b.add(t + 3 * cycle, name("sleep"), e, e.columns[0]); t += 3 * cycle }
+            else { t = b.play(name("sleep"), at: t) }
+            b.plan.zs = true; b.plan.zsStill = reduced
+        default: current = "perch"; t = b.play(name("perch"), at: t)
+        }
+        if b.plan.positions.isEmpty { b.at(0, to) }
+        b.plan.duration = max(t, b.plan.positions.last?.0 ?? 0, b.plan.opacity.last?.0 ?? 0)
+        return b.plan
+    }
+    // The ring drew a frame: seat (on an aim, a new window, or when nothing is perched), move, react, and the frame's line.
+    mutating func receive(_ ev: PerchEvent, now: Double, env: PerchEnvironment) -> [(Double, PerchEffect)] {
+        var out = advance(to: now, env: env)
+        guard let m = metrics else { return out }
+        let woke = asleep
+        lastFrame = now; asleep = false
+        timers.removeAll { ["sleep", "still", "wait-end", "drop", "long-wait"].contains($0.action) }
+        let moment = book.moment(ev.state, ok: ev.ok, woke: woke)
+        if moving != nil { current = ["type", "key", "scroll", "drag"].contains(ev.state) ? "perch-peek" : ev.state == "waiting" ? "perch-wait" : "perch"; return out }
+        var move: String?
+        if ev.state == "aim" || seat == nil || seat?.window != ev.window || seat?.pid != ev.pid || !shown {
+            switch perchPlace(env.world(ev.pid, ev.window), pid: ev.pid, window: ev.window, target: ev.at, metrics: m, previous: seat) {
+            case let .hide(reason): return out + hide(now, reason)
+            case let .seat(s):
+                if !shown || seat == nil { move = "arrive" }
+                else if let old = seat, old.window != s.window || old.pid != s.pid {
+                    let d = hypot(Double(origin(s).x - origin(old).x), Double(origin(s).y - origin(old).y))
+                    move = old.display == s.display && d <= 400 ? "leap" : "far"
+                } else if let old = seat, abs(old.x - s.x) > 0.5 || abs(old.edge - s.edge) > 0.5 {
+                    move = abs(old.x - s.x) > 360 ? "run" : "hop"
+                }
+                seat = s
+            }
+        }
+        let from = shown ? plan?.position(at: now - began) : nil
+        guard let next = draw(ev.state, ok: ev.ok, at: ev.at, move: move, from: from, woke: woke, now: now, env: env) else { return out }
+        plan = next; began = now; shown = true
+        out.append((now, .draw(next)))
+        timer(now + next.duration, "park")
+        if ev.state == "waiting" { timer(now + 120, "wait-end") } else if !paused { timer(now + 20, "sleep") }
+        if ev.state == "drag", let drop = ev.drop { timer(now + drop, "drop") }
+        if ["thinking", "waiting"].contains(ev.state) { timer(now + 12, "long-wait") }
+        if let moment = moment { out += say(moment, now: now, act: handKinds.contains(ev.state), target: ev.at, env: env) }
+        return out
+    }
+    mutating func say(_ moment: String, now: Double, act: Bool, target: CGPoint?, env: PerchEnvironment) -> [(Double, PerchEffect)] {
+        guard shown, let seat = seat else { return [] }
+        switch book.decide(moment, now: now, act: act) {
+        case .drop, .hold: return []
+        case .show:
+            guard let (index, text) = book.pick(moment) else { return [] }
+            let until = now + min(4, 1.8 + 0.04 * Double(text.count))
+            let shown = PerchLine(moment: moment, text: text, index: index, until: until,
+                bubble: perchBubble(text, box: box(seat), display: seat.display, top: seat.top, avoid: target, size: env.measure(text)))
+            line = shown; book.showing = (moment, until); book.lastAt = now
+            if act { book.lastAct = book.acts }
+            timer(until, "line-out")
+            return [(now, .line(shown))]
+        }
+    }
+    // The bubble was clicked by a person (the host checked the input): that line goes.
+    mutating func dismiss(_ now: Double) -> [(Double, PerchEffect)] {
+        guard line != nil else { return [] }
+        line = nil; book.showing = nil; timers.removeAll { $0.action == "line-out" }
+        return [(now, .lineOut(0.12))]
+    }
+    // A narration bubble (C2) shows until `until`: a line that shows fades in 60 ms, and a line due meanwhile waits for it.
+    mutating func narration(until: Double, now: Double) -> [(Double, PerchEffect)] {
+        book.narrationUntil = until
+        timer(until, "narration-end")
+        guard line != nil else { return [] }
+        line = nil; book.showing = nil; timers.removeAll { $0.action == "line-out" }
+        return [(now, .lineOut(0.06))]
+    }
+    // The poll: the target window gone, full screen, or moved by the person hides the character, which comes back 500 ms after
+    // the frame stops changing.
+    mutating func observe(_ now: Double, env: PerchEnvironment) -> [(Double, PerchEffect)] {
+        var out = advance(to: now, env: env)
+        guard let seat = seat else { return out }
+        guard let world = env.world(seat.pid, seat.window) else { return out + hide(now, "gone") }
+        if world.fullScreen { return out + hide(now, "full-screen") }
+        let still = moving ?? seat.frame
+        if world.window != still {
+            if shown { out += hide(now, "moved", keepSeat: true) }
+            moving = world.window; timer(now + 0.5, "return")
+        }
+        return out
+    }
+    mutating func advance(to now: Double, env: PerchEnvironment) -> [(Double, PerchEffect)] {
+        var out: [(Double, PerchEffect)] = []
+        while let i = timers.indices.min(by: { timers[$0].at < timers[$1].at }), timers[i].at <= now {
+            let (at, action) = timers.remove(at: i)
+            switch action {
+            case "park": out.append((at, .park))
+            case "still": out.append((at, .still))
+            case "line-out": if line != nil { line = nil; book.showing = nil; out.append((at, .lineOut(0.12))) }
+            case "narration-end":
+                if let held = book.held { book.held = nil; out += say(held.moment, now: at, act: held.act, target: nil, env: env) }
+            case "long-wait": out += say("long-wait", now: at, act: false, target: nil, env: env)
+            case "sleep":
+                guard shown, !paused, seat != nil else { continue }
+                if let p = draw("sleep", ok: false, at: nil, move: nil, from: nil, woke: false, now: at, env: env) {
+                    plan = p; began = at; asleep = true; book.turnOpen = false
+                    out.append((at, .draw(p)))
+                    timer(at + p.duration, "park")
+                    if !p.reduced { timer(at + max(p.duration, 6.6), "still") }
+                }
+            case "wait-end", "drop":
+                guard shown, let p = draw("perch", ok: false, at: nil, move: nil, from: nil, woke: false, now: at, env: env) else { continue }
+                plan = p; began = at; out.append((at, .draw(p))); timer(at + p.duration, "park")
+                if !paused { timer(at + 20, "sleep") }
+            case "return":
+                guard let seat = seat, let m = metrics else { continue }
+                guard let world = env.world(seat.pid, seat.window) else { out += hide(at, "gone"); continue }
+                if world.window != moving { moving = world.window; timer(at + 0.5, "return"); continue }
+                moving = nil
+                // The same spot on the moved window; the point is below the window so nothing dodges it.
+                let target = CGPoint(x: seat.x + Double(world.window.minX - seat.frame.minX), y: Double(world.window.maxY) + 100)
+                switch perchPlace(world, pid: seat.pid, window: seat.window, target: target, metrics: m, previous: nil) {
+                case let .hide(reason): out += hide(at, reason)
+                case let .seat(s):
+                    self.seat = s
+                    if let p = draw(current, ok: false, at: nil, move: "return", from: nil, woke: false, now: at, env: env) {
+                        plan = p; began = at; shown = true; out.append((at, .draw(p))); timer(at + p.duration, "park")
+                        if !paused { timer(at + 20, "sleep") }
+                    }
+                }
+            default: break
+            }
+        }
+        return out
+    }
+}
+// A2's bubble: centered over the box with its bottom 6 pt above the head (the box top), or beside the box when there is
+// under 40 pt above it, kept on the display and off the target. Text is at most 220 pt wide and 2 lines.
+func perchBubble(_ text: String, box: CGRect, display: CGRect, top: Double, avoid: CGPoint?, size: CGSize) -> PerchBubble {
+    let w = min(220, Double(size.width) + 16), h = min(2, max(1, (Double(size.height) / 13).rounded(.up))) * 13 + 10
+    func clampX(_ x: Double) -> Double { min(max(x, Double(display.minX) + 4), Double(display.maxX) - w - 4) }
+    var frame = CGRect(x: clampX(Double(box.midX) - w / 2), y: Double(box.minY) - 6 - h, width: w, height: h)
+    var tail = CGPoint(x: box.midX, y: box.minY), side = "above"
+    let right = CGRect(x: Double(box.maxX) + 6, y: Double(box.minY) + 8, width: w, height: h)
+    let left = CGRect(x: Double(box.minX) - 6 - w, y: Double(box.minY) + 8, width: w, height: h)
+    func covers(_ r: CGRect) -> Bool { avoid.map { r.insetBy(dx: -8, dy: -8).contains($0) } ?? false }
+    if Double(box.minY) - top < 40 || Double(box.minY) - 6 - h < top || covers(frame) {
+        let useRight = right.maxX <= display.maxX && !covers(right)
+        frame = useRight ? right : left; side = useRight ? "right" : "left"
+        tail = CGPoint(x: useRight ? box.maxX - 8 : box.minX + 8, y: box.minY + 8 + CGFloat(h) / 2)
+    }
+    return PerchBubble(text: text, frame: frame, tail: tail, side: side)
+}
+func perchMeasure(_ text: String) -> CGSize {
+    let r = NSAttributedString(string: text, attributes: [.font: NSFont.systemFont(ofSize: 10.5)])
+        .boundingRect(with: CGSize(width: 204, height: 400), options: [.usesLineFragmentOrigin, .usesFontLeading])
+    return CGSize(width: ceil(r.width), height: ceil(r.height))
+}
+// Only a fresh hardware click inside the bubble dismisses it: the shared person-input rule, mouse only.
+func perchBubbleClick(_ event: NSEvent?, windowMatches: Bool, now: Double = ProcessInfo.processInfo.systemUptime) -> Bool {
+    personActivation(event, windowMatches: windowMatches, keyboard: false, now: now)
+}
+
+// The host's side: one drawing panel for the character and its Zs, and the bubble's own small click panel.
+final class PerchBubblePanel: NSPanel {
+    override var canBecomeKey: Bool { false }
+    override var canBecomeMain: Bool { false }
+}
+final class PerchBubbleView: NSView {
+    var dismiss: (() -> Void)?
+    override var isFlipped: Bool { true }
+    override func acceptsFirstMouse(for event: NSEvent?) -> Bool { true }
+    override func mouseDown(with event: NSEvent) {}
+    override func mouseUp(with event: NSEvent) {
+        guard perchBubbleClick(event, windowMatches: event.window === window && window != nil) else { refuseConsentInput(); return }
+        dismiss?()
+    }
+    override func accessibilityPerformPress() -> Bool { refuseConsentInput(); return false }
+}
+final class PerchHost {
+    weak var host: HandHost?
+    var runtime = PerchRuntime()
+    var enabled = false, lines = true
+    var loaded: SpriteCharacter?
+    var panel: HandPanel?, root: CALayer?, boxLayer: CALayer?, maskLayer: CALayer?, zs: CAReplicatorLayer?, frame = CGRect.null
+    var bubble: PerchBubblePanel?
+    var wake: DispatchWorkItem?
+    init(host: HandHost) { self.host = host; runtime.seed = UInt64.random(in: 1...UInt64.max); runtime.book.seed = runtime.seed }
+    var active: Bool { enabled && host?.cursorStyle == "sprite" && loaded != nil }
+    // A character load, a style change or the options frame: which runtime gets the character (ring trail or perch).
+    func configure(character: SpriteCharacter? = nil, replace: Bool = false, perch: Bool? = nil, lines: Bool? = nil) {
+        let was = active, seq = loaded?.frame.seq
+        if replace { loaded = character }
+        if let perch = perch { enabled = perch }
+        if let lines = lines { self.lines = lines; runtime.book.enabled = lines; if !lines { perform(runtime.dismiss(now)) } }
+        if active != was || loaded?.frame.seq != seq { takeDown(); runtime.load(active ? loaded?.frame : nil); runtime.book.enabled = self.lines }
+        if host?.cursorStyle == "sprite" { host?.ringRuntime.character = active ? nil : loaded }
+    }
+    var now: Double { CACurrentMediaTime() }
+    var environment: PerchEnvironment {
+        PerchEnvironment(world: { pid, window in perchWorld(pid: pid, window: window) },
+            reduced: { NSWorkspace.shared.accessibilityDisplayShouldReduceMotion }, measure: perchMeasure)
+    }
+    func palm() -> CGPoint? { active ? runtime.palm() : nil }
+    func ringDrew(_ plan: RingPlan) {
+        guard active else { return }
+        perform(runtime.receive(perchEvent(plan), now: now, env: environment))
+    }
+    func takeDown() {
+        wake?.cancel(); wake = nil
+        _ = runtime.hide(now, "hide")
+        release(); closeBubble()
+    }
+    func perform(_ effects: [(Double, PerchEffect)]) {
+        for (_, effect) in effects {
+            switch effect {
+            case let .draw(plan): if host?.captureHeld == true { takeDown(); return }; install(plan)
+            case let .hide(_, duration): fadeOut(duration)
+            case .park:
+                // The Zs finish on their own clock (the still effect); everything else stops here.
+                func strip(_ layer: CALayer) { guard layer !== zs else { return }; layer.removeAllAnimations(); layer.sublayers?.forEach(strip) }
+                root.map(strip)
+            case .still:
+                func strip(_ layer: CALayer) { layer.removeAllAnimations(); layer.sublayers?.forEach(strip) }
+                root.map(strip); zs?.instanceCount = 1
+            case let .line(line): showBubble(line)
+            case let .lineOut(duration): closeBubble(fade: duration)
+            }
+        }
+        schedule()
+    }
+    // One one-shot wake for the earliest timer or the next window check. Nothing is scheduled with nothing perched.
+    func schedule() {
+        wake?.cancel(); wake = nil
+        let due = [runtime.next, runtime.poll.map { now + $0 }].compactMap { $0 }.min()
+        guard let at = due else { return }
+        let item = DispatchWorkItem { [weak self] in
+            guard let self = self else { return }
+            self.wake = nil
+            self.perform(self.runtime.observe(self.now, env: self.environment))
+        }
+        wake = item
+        DispatchQueue.main.asyncAfter(deadline: .now() + max(0, at - now), execute: item)
+    }
+    func install(_ plan: PerchPlan) {
+        guard let character = loaded, let metrics = runtime.metrics, !plan.cells.isEmpty else { return }
+        let cell = character.frame.cell
+        var box = CGRect.null
+        for (_, p) in plan.positions { box = box.union(CGRect(origin: p, size: metrics.size)) }
+        let target = box.insetBy(dx: -24, dy: -44)
+        let panel = self.panel ?? makeHandPanel(capture: host?.capture ?? "hidden")
+        self.panel = panel; frame = target
+        panel.sharingType = handCaptureModes[host?.capture ?? "hidden"] ?? NSWindow.SharingType.none
+        panel.setFrame(appKitRect(target), display: false)
+        CATransaction.begin(); CATransaction.setDisableActions(true)
+        root?.removeFromSuperlayer()
+        let root = CALayer(); root.frame = CGRect(origin: .zero, size: target.size); root.isGeometryFlipped = true
+        panel.contentView?.layer?.addSublayer(root); self.root = root
+        let layer = CALayer(); layer.name = "perch"; layer.anchorPoint = .zero; layer.bounds = CGRect(origin: .zero, size: cell)
+        layer.contentsGravity = .resize; layer.minificationFilter = .linear; layer.magnificationFilter = .nearest
+        root.addSublayer(layer); boxLayer = layer
+        let mask = CALayer(); mask.backgroundColor = CGColor(gray: 0, alpha: 1); mask.anchorPoint = .zero
+        let cut = CGRect(x: 0, y: 0, width: Double(cell.width), height: plan.seat.rise / metrics.scale), whole = CGRect(origin: .zero, size: cell)
+        mask.bounds = plan.mask(at: plan.duration) ? cut : whole; layer.mask = mask; maskLayer = mask
+        let begin = CACurrentMediaTime(), length = max(plan.duration, 0.001)
+        func unit(_ t: Double) -> NSNumber { NSNumber(value: min(max(t / length, 0), 1)) }
+        func local(_ p: CGPoint, _ e: SpriteEntry) -> NSValue {
+            NSValue(point: CGPoint(x: p.x - target.minX + (e.flip ? metrics.size.width : 0), y: p.y - target.minY))
+        }
+        func add(_ to: CALayer, _ key: String, _ values: [Any], _ times: [Double], discrete: Bool) {
+            to.setValue(values.last, forKeyPath: key)
+            guard values.count > 1 else { return }
+            let a = CAKeyframeAnimation(keyPath: key)
+            a.values = values; a.keyTimes = times.map(unit); a.calculationMode = discrete ? .discrete : .linear
+            a.duration = length; a.beginTime = begin; a.fillMode = .both; a.isRemovedOnCompletion = false
+            to.add(a, forKey: key)
+        }
+        let cells = plan.cells.isEmpty ? [] : plan.cells + [plan.cells.last!]
+        let cellTimes = plan.cells.map { $0.time } + [plan.duration]
+        add(layer, "contents", cells.compactMap { character.images[$0.entry.sheet] }, cellTimes, discrete: true)
+        add(layer, "contentsRect", cells.map { NSValue(rect: PerchPlan.rect($0.entry, $0.column, cell: cell)) }, cellTimes, discrete: true)
+        add(layer, "transform", cells.map { NSValue(caTransform3D: CATransform3DMakeScale($0.entry.scale * ($0.entry.flip ? -1 : 1), $0.entry.scale, 1)) }, cellTimes, discrete: true)
+        let flipAt = { (t: Double) in plan.cell(at: t)?.entry ?? cells[0].entry }
+        add(layer, "position", plan.positions.map { local($0.1, flipAt($0.0)) }, plan.positions.map { $0.0 }, discrete: plan.reduced)
+        if !plan.opacity.isEmpty { add(layer, "opacity", plan.opacity.map { NSNumber(value: $0.1) }, plan.opacity.map { $0.0 }, discrete: false) }
+        if Set(plan.masked.map { $0.1 }).count > 1 {
+            add(mask, "bounds", plan.masked.map { NSValue(rect: $0.1 ? cut : whole) }, plan.masked.map { $0.0 }, discrete: true)
+        }
+        zs = nil
+        if plan.zs, let last = plan.positions.last?.1 {
+            root.addSublayer(perchZs(at: CGPoint(x: last.x - target.minX + metrics.size.width / 2 + 8, y: last.y - target.minY + 10), begin: begin, still: plan.zsStill))
+        }
+        CATransaction.commit()
+        if !panel.isVisible { panel.orderFrontRegardless() }
+    }
+    // Three z glyphs (7, 9 and 11 pt, white over a 2 pt ink outline) as one replicated layer: one animation group rises 16 pt and
+    // drifts 10 pt over 1.8 s, three times, staggered 600 ms. Still: one static z.
+    func perchZs(at point: CGPoint, begin: Double, still: Bool) -> CALayer {
+        let replicator = CAReplicatorLayer(); replicator.position = point; replicator.instanceCount = still ? 1 : 3
+        replicator.instanceDelay = 0.6; replicator.instanceTransform = CATransform3DMakeScale(1.28, 1.28, 1)
+        let glyph = CALayer()
+        let font = CTFontCreateWithName("Helvetica-Bold" as CFString, 7, nil)
+        var g = CGGlyph(0), u: UniChar = 122
+        CTFontGetGlyphsForCharacters(font, &u, &g, 1)
+        var flip = CGAffineTransform(scaleX: 1, y: -1)
+        if let path = CTFontCreatePathForGlyph(font, g, &flip) {
+            let outline = CAShapeLayer(); outline.path = path.copy(strokingWithWidth: 2, lineCap: .round, lineJoin: .round, miterLimit: 2)
+            outline.fillColor = CGColor(red: 0x2a / 255, green: 0x22 / 255, blue: 0x38 / 255, alpha: 0.85)
+            let fill = CAShapeLayer(); fill.path = path; fill.fillColor = CGColor(gray: 1, alpha: 1)
+            glyph.addSublayer(outline); glyph.addSublayer(fill)
+        }
+        replicator.addSublayer(glyph)
+        if still { glyph.position = CGPoint(x: 10, y: -16) }
+        else {
+            let move = CAKeyframeAnimation(keyPath: "position")
+            move.values = [CGPoint.zero, CGPoint(x: 10, y: -16)].map { NSValue(point: $0) }
+            let fade = CAKeyframeAnimation(keyPath: "opacity"); fade.values = [0, 1, 1, 0]; fade.keyTimes = [0, 0.15, 0.7, 1]
+            let group = CAAnimationGroup(); group.animations = [move, fade]; group.duration = 1.8; group.repeatCount = 3
+            group.beginTime = begin; group.fillMode = .both; group.isRemovedOnCompletion = false
+            glyph.position = CGPoint(x: 10, y: -16); glyph.add(group, forKey: "zs")
+        }
+        zs = replicator
+        return replicator
+    }
+    func fadeOut(_ duration: Double) {
+        guard let root = root else { release(); return }
+        CATransaction.begin(); CATransaction.setDisableActions(true)
+        let a = CABasicAnimation(keyPath: "opacity"); a.fromValue = root.opacity; a.toValue = 0; a.duration = duration
+        root.opacity = 0; root.add(a, forKey: "fade")
+        CATransaction.commit()
+        let mine = root
+        DispatchQueue.main.asyncAfter(deadline: .now() + duration) { [weak self] in if self?.root === mine { self?.release() } }
+    }
+    func release() {
+        root?.removeAllAnimations(); root?.removeFromSuperlayer(); root = nil; boxLayer = nil; maskLayer = nil; zs = nil
+        panel?.orderOut(nil); panel?.close(); panel = nil; frame = .null
+    }
+    // The white comic bubble in its own click panel, the only part of the overlay that takes a click.
+    func showBubble(_ line: PerchLine) {
+        closeBubble()
+        let b = line.bubble, panel = PerchBubblePanel(contentRect: appKitRect(b.frame.insetBy(dx: -7, dy: -7)), styleMask: [.borderless, .nonactivatingPanel], backing: .buffered, defer: true)
+        panel.level = .floating; panel.hasShadow = false; panel.isOpaque = false; panel.backgroundColor = .clear
+        panel.sharingType = handCaptureModes[host?.capture ?? "hidden"] ?? NSWindow.SharingType.none
+        panel.collectionBehavior = [.transient, .ignoresCycle, .fullScreenAuxiliary, .stationary]; panel.hidesOnDeactivate = false
+        panel.isReleasedWhenClosed = false; panel.animationBehavior = .none
+        let view = PerchBubbleView(); view.wantsLayer = true; view.setAccessibilityElement(false)
+        view.dismiss = { [weak self] in guard let self = self else { return }; self.perform(self.runtime.dismiss(self.now)) }
+        panel.contentView = view
+        let local = b.frame.offsetBy(dx: 7 - b.frame.minX, dy: 7 - b.frame.minY)
+        let tail = CGPoint(x: b.tail.x - b.frame.minX + 7, y: b.tail.y - b.frame.minY + 7)
+        let root = CALayer(); root.frame = CGRect(origin: .zero, size: panel.frame.size); root.isGeometryFlipped = true
+        let body = CAShapeLayer(); body.path = perchBubblePath(local, tail: tail, side: b.side)
+        body.fillColor = CGColor(gray: 1, alpha: 1); body.strokeColor = CGColor(red: 0x2a / 255, green: 0x22 / 255, blue: 0x38 / 255, alpha: 0.85); body.lineWidth = 1.3
+        let text = CATextLayer(); text.frame = local.insetBy(dx: 8, dy: 5); text.isWrapped = true; text.truncationMode = .end
+        text.string = NSAttributedString(string: line.text, attributes: [.font: NSFont.systemFont(ofSize: 10.5),
+            .foregroundColor: NSColor(red: 0x15 / 255, green: 0x16 / 255, blue: 0x1c / 255, alpha: 1)])
+        text.contentsScale = panel.screen?.backingScaleFactor ?? 2
+        root.addSublayer(body); root.addSublayer(text); view.layer?.addSublayer(root)
+        let fade = CABasicAnimation(keyPath: "opacity"); fade.fromValue = 0; fade.toValue = 1; fade.duration = 0.09
+        root.add(fade, forKey: "in")
+        if !NSWorkspace.shared.accessibilityDisplayShouldReduceMotion {
+            let rise = CABasicAnimation(keyPath: "transform.translation.y"); rise.fromValue = 4; rise.toValue = 0; rise.duration = 0.09
+            root.add(rise, forKey: "rise")
+        }
+        bubble = panel
+        panel.orderFrontRegardless()
+    }
+    func closeBubble(fade: Double = 0) {
+        guard let panel = bubble else { return }
+        bubble = nil; panel.ignoresMouseEvents = true
+        guard fade > 0, let root = panel.contentView?.layer?.sublayers?.first else { panel.orderOut(nil); panel.close(); return }
+        let a = CABasicAnimation(keyPath: "opacity"); a.fromValue = 1; a.toValue = 0; a.duration = fade
+        root.opacity = 0; root.add(a, forKey: "out")
+        DispatchQueue.main.asyncAfter(deadline: .now() + fade) { panel.orderOut(nil); panel.close() }
+    }
+}
+// The bubble's outline: a rounded rect (radius 10) and a tail 8 pt wide and 6 pt tall toward the mouth.
+func perchBubblePath(_ r: CGRect, tail: CGPoint, side: String) -> CGPath {
+    let path = CGMutablePath()
+    path.addRoundedRect(in: r, cornerWidth: 10, cornerHeight: 10)
+    if side == "above" {
+        let x = min(max(tail.x, r.minX + 14), r.maxX - 14)
+        path.move(to: CGPoint(x: x - 4, y: r.maxY)); path.addLine(to: CGPoint(x: x, y: r.maxY + 6)); path.addLine(to: CGPoint(x: x + 4, y: r.maxY))
+    } else {
+        let edge = side == "right" ? r.minX : r.maxX, dir: CGFloat = side == "right" ? -1 : 1
+        path.move(to: CGPoint(x: edge, y: r.midY - 4)); path.addLine(to: CGPoint(x: edge + dir * 6, y: r.midY)); path.addLine(to: CGPoint(x: edge, y: r.midY + 4))
+    }
+    return path
+}
+// The window list, front to back: the target window's frame, the frames in front of it that cross nothing of ours, its
+// display (the one holding its top edge's center) and that display's top below the menu bar. Bounds and owners need no grant.
+func perchWorld(pid: Int32, window: UInt32) -> PerchWorld? {
+    guard let list = CGWindowListCopyWindowInfo([.optionOnScreenOnly, .excludeDesktopElements], kCGNullWindowID) as? [[String: Any]] else { return nil }
+    let own = ProcessInfo.processInfo.processIdentifier
+    var above: [CGRect] = []
+    for info in list {
+        guard let bounds = info[kCGWindowBounds as String] as? NSDictionary, let rect = CGRect(dictionaryRepresentation: bounds as CFDictionary) else { continue }
+        let number = (info[kCGWindowNumber as String] as? NSNumber)?.uint32Value, owner = (info[kCGWindowOwnerPID as String] as? NSNumber)?.int32Value
+        if number == window {
+            guard owner == pid else { return nil }
+            let primary = NSScreen.screens.first?.frame.maxY ?? 0, edge = CGPoint(x: rect.midX, y: rect.minY)
+            let screens = NSScreen.screens.map { s -> (CGRect, Double) in
+                let f = CGRect(x: s.frame.minX, y: primary - s.frame.maxY, width: s.frame.width, height: s.frame.height)
+                return (f, Double(f.minY) + Double(s.frame.maxY - s.visibleFrame.maxY))
+            }
+            guard let screen = screens.first(where: { $0.0.contains(edge) }) ?? screens.first else { return nil }
+            return PerchWorld(window: rect, above: above, display: screen.0, top: screen.1,
+                fullScreen: abs(rect.width - screen.0.width) < 1 && abs(rect.height - screen.0.height) < 1)
+        }
+        let layer = (info[kCGWindowLayer as String] as? NSNumber)?.intValue ?? 0, alpha = (info[kCGWindowAlpha as String] as? NSNumber)?.doubleValue ?? 1
+        if owner != own, layer >= 0, layer < 1000, alpha > 0 { above.append(rect) }
+    }
+    return nil
+}
+// END PERCH
+
 // BEGIN HAND HOST
 // The ghost hand (ROADMAP 2.7): a glove that glides to where sleight acts in a background window, flourishes and fades. It only
 // draws: the panel never activates, takes key, catches a click or shows in another process's capture unless the user chose
@@ -4019,8 +4871,9 @@ func handDemoRect(_ text: String) -> CGRect? {
 }
 
 final class HandHost: NSObject, NSApplicationDelegate {
-    var cursorStyle = "glove" { didSet { if cursorStyle != "sprite" { spriteLoader.cancel(); ringRuntime.character = nil } } }
+    var cursorStyle = "glove" { didSet { if cursorStyle != "sprite" { spriteLoader.cancel(); ringRuntime.character = nil; perch.configure(replace: true) } } }
     let spriteLoader = SpriteLoader()
+    lazy var perch = PerchHost(host: self)   // perch mode and lines (BEGIN PERCH)
     var ringRuntime = RingRuntime(theme: .seamPlus, seed: 1)
     var ringWake: DispatchWorkItem?
     var ringRoot: CALayer?
@@ -4102,6 +4955,8 @@ final class HandHost: NSObject, NSApplicationDelegate {
                             self.hide(); self.cursorStyle = style
                             self.ringRuntime = RingRuntime(theme: ringThemes[style] ?? .seamPlus, seed: UInt64.random(in: 1...UInt64.max))
                             self.consent?.cursorPicker.rows = CursorPickerRow.defaults(style)
+                        } else if message.op == "options" {
+                            self.perch.configure(perch: message.data["perch"] as? Bool, lines: message.data["lines"] as? Bool)
                         } else { self.consent?.cursorPicker.receive(message) }
                     }
                 case let .character(nonce, value):
@@ -4109,14 +4964,14 @@ final class HandHost: NSObject, NSApplicationDelegate {
                     last = value.seq
                     DispatchQueue.main.async {
                         self.ringRoot?.sublayers?.filter { $0.name == "sprite" }.forEach { $0.removeFromSuperlayer() }
-                        self.ringRuntime.character = nil
+                        self.ringRuntime.character = nil; self.perch.configure(replace: true)
                         guard self.cursorStyle == "sprite" else { self.spriteLoader.cancel(); return }
                         // The decode runs off the main thread. Until it's done the ring draws alone; the sprite joins at
                         // the next frame after it.
                         self.spriteLoader.start(value) { generation, result in
                             DispatchQueue.main.async {
                                 guard self.spriteLoader.isCurrent(generation), self.cursorStyle == "sprite" else { return }
-                                self.ringRuntime.character = result.character; writeCharacterResult(value.id, result)
+                                self.perch.configure(character: result.character, replace: true); writeCharacterResult(value.id, result)
                             }
                         }
                     }
@@ -4157,7 +5012,7 @@ final class HandHost: NSObject, NSApplicationDelegate {
     func hide() {
         pending.values.forEach { $0.cancel() }; pending.removeAll()
         ringWake?.cancel(); ringWake = nil; _ = ringRuntime.hide(0)
-        fading?.cancel(); release()
+        fading?.cancel(); release(); perch.takeDown()
     }
     // A frame during the hold cancels the fade and glides on from where the hand is.
     func draw(_ act: HandAct, clip: CGRect) {
@@ -4179,6 +5034,7 @@ final class HandHost: NSObject, NSApplicationDelegate {
     }
     func ringFrame(_ event: RingEvent, delay: Double) {
         guard !captureHeld else { return }
+        ringRuntime.dissolveAt = perch.palm()
         ringPerform(ringRuntime.receive(event, delay: delay, now: CACurrentMediaTime(), ringEnvironment))
         ringWakeUp()
     }
@@ -4199,7 +5055,7 @@ final class HandHost: NSObject, NSApplicationDelegate {
             switch effect {
             case let .draw(plan, frame):
                 if captureHeld { hide(); return }
-                installRing(plan, frame: frame)
+                installRing(plan, frame: frame); perch.ringDrew(plan)
             case .hide, .release: release()
             case .drop: break
             case .park:
@@ -4512,6 +5368,149 @@ func handDump(capture: String) -> [String: Any] {
 }
 // END HAND DUMP
 
+// BEGIN PERCH DUMP
+// --perch-dump [--reduce-motion] [--seed=N]: PerchRuntime and the ring's RingRuntime on a simulated clock, as the host drives
+// them, with window lists the input injects. It builds no application, panel, window or layer and decodes nothing: plans
+// come from the character frame's data. Lines: hand frames; {"dumpClock": s}; {"dumpWorld": {"windows": [{"id", "pid",
+// "frame": [x, y, w, h], "fullScreen"?}] front to back, "displays"?: [{"frame", "top"}]}} (also a window check at that
+// moment); {"dumpNarration": s} (a narration bubble for s seconds); {"dumpPaused": bool}; {"dumpClick": "hardware" |
+// "synthetic" | "keyboard" | "old"} (a click on the bubble through the person-input rule).
+extension PerchPlan {
+    func json(_ cell: CGSize) -> [String: Any] {
+        ["kind": kind, "duration": duration, "states": states, "zs": zs, "zsStill": zsStill, "reduced": reduced, "keyPaths": keyPaths(cell),
+         "seat": ["x": seat.x, "edge": seat.edge, "peek": seat.peek, "rise": seat.rise, "window": seat.window],
+         "cells": cells.map { [$0.time, $0.state, $0.entry.sheet, $0.entry.row, $0.column] as [Any] },
+         "rects": cells.map { c -> [Double] in let r = PerchPlan.rect(c.entry, c.column, cell: cell); return [Double(r.minX), Double(r.minY), Double(r.width), Double(r.height)] },
+         "positions": positions.map { [$0.0, Double($0.1.x), Double($0.1.y)] }, "opacity": opacity.map { [$0.0, $0.1] },
+         "masked": masked.map { [$0.0, $0.1] as [Any] }]
+    }
+}
+func perchDump(reduced: Bool, seed: UInt64) {
+    var buffer = Data(), bound: String?, last = -1, clock = 0.0, enabled = true
+    var ring = RingRuntime(theme: .seamPlus, seed: seed), perch = PerchRuntime()
+    perch.seed = seed; perch.book.seed = seed
+    var windows: [(id: UInt32, pid: Int32, frame: CGRect, fullScreen: Bool)] = []
+    var displays: [(frame: CGRect, top: Double)] = [(CGRect(x: 0, y: 0, width: 1440, height: 900), 25)]
+    func world(_ pid: Int32, _ window: UInt32) -> PerchWorld? {
+        guard let i = windows.firstIndex(where: { $0.id == window }), windows[i].pid == pid else { return nil }
+        let w = windows[i], edge = CGPoint(x: w.frame.midX, y: w.frame.minY)
+        let d = displays.first(where: { $0.frame.contains(edge) }) ?? displays[0]
+        return PerchWorld(window: w.frame, above: windows[..<i].map { $0.frame }, display: d.frame, top: d.top, fullScreen: w.fullScreen)
+    }
+    let env = PerchEnvironment(world: { world($0, $1) }, reduced: { reduced }, measure: perchMeasure)
+    let ringEnv = RingEnvironment(bounds: { world($0, $1)?.window }, reduced: { reduced }, secure: { false })
+    func write(_ object: [String: Any]) {
+        guard let data = try? JSONSerialization.data(withJSONObject: object, options: [.sortedKeys]) else { exit(70) }
+        FileHandle.standardOutput.write(data + Data([10]))
+    }
+    func emit(_ effects: [(Double, PerchEffect)]) {
+        let cell = perch.frame?.cell ?? .zero
+        for (time, effect) in effects {
+            switch effect {
+            case let .draw(plan): write(plan.json(cell).merging(["effect": "perch", "time": time]) { $1 })
+            case let .hide(reason, duration): write(["effect": "perch-hide", "reason": reason, "duration": duration, "time": time])
+            case .park: write(["effect": "perch-park", "time": time])
+            case .still: write(["effect": "perch-still", "time": time])
+            case let .line(line):
+                let f = line.bubble.frame
+                write(["effect": "line", "moment": line.moment, "text": line.text, "index": line.index, "until": line.until, "time": time,
+                    "bubble": ["frame": [f.minX, f.minY, f.width, f.height], "side": line.bubble.side, "tail": [line.bubble.tail.x, line.bubble.tail.y]]])
+            case let .lineOut(duration): write(["effect": "line-out", "duration": duration, "time": time])
+            }
+        }
+    }
+    func ringEmit(_ effects: [(Double, RingEffect)]) {
+        for (time, effect) in effects {
+            guard case let .draw(plan, _) = effect else { if case .hide = effect { write(["effect": "ring-hide", "time": time]) }; continue }
+            write(["effect": "ring", "state": plan.state, "at": [plan.at.x, plan.at.y], "time": time])
+            if enabled { emit(perch.receive(perchEvent(plan), now: time, env: env)) }
+        }
+    }
+    func number(_ raw: Any?) -> Double? {
+        guard let n = raw as? NSNumber, CFGetTypeID(n) != CFBooleanGetTypeID(), n.doubleValue.isFinite else { return nil }; return n.doubleValue
+    }
+    func rect(_ raw: Any?) -> CGRect? {
+        guard let a = raw as? [Any], a.count == 4, let x = number(a[0]), let y = number(a[1]), let w = number(a[2]), let h = number(a[3]), w > 0, h > 0 else { return nil }
+        return CGRect(x: x, y: y, width: w, height: h)
+    }
+    while true {
+        let chunk = FileHandle.standardInput.availableData
+        if chunk.isEmpty {
+            if !buffer.isEmpty { exit(65) }
+            ringEmit(ring.advance(to: Double.greatestFiniteMagnitude, ringEnv))
+            write(["effect": "end", "timers": perch.timers.map { $0.action }.sorted(), "shown": perch.shown, "asleep": perch.asleep,
+                "poll": perch.poll as Any? ?? NSNull(), "moving": perch.moving != nil])
+            return
+        }
+        buffer.append(chunk)
+        guard buffer.count <= 131072 else { exit(65) }
+        while let end = buffer.firstIndex(of: 10) {
+            let line = buffer.prefix(upTo: end); buffer.removeSubrange(...end)
+            guard line.count <= 32768, let data = try? JSONSerialization.jsonObject(with: line) as? [String: Any] else { exit(65) }
+            if Set(data.keys) == ["dumpClock"] {
+                guard let value = number(data["dumpClock"]), value >= clock else { exit(65) }
+                clock = value
+                ringEmit(ring.advance(to: clock, ringEnv)); emit(perch.advance(to: clock, env: env))
+                continue
+            }
+            if Set(data.keys) == ["dumpWorld"] {
+                guard let w = data["dumpWorld"] as? [String: Any], let list = w["windows"] as? [[String: Any]] else { exit(65) }
+                windows = []
+                for item in list {
+                    guard let id = number(item["id"]), let pid = number(item["pid"]), let frame = rect(item["frame"]) else { exit(65) }
+                    windows.append((UInt32(id), Int32(pid), frame, item["fullScreen"] as? Bool ?? false))
+                }
+                if let list = w["displays"] as? [[String: Any]] {
+                    displays = list.compactMap { d in rect(d["frame"]).flatMap { f in number(d["top"]).map { (f, $0) } } }
+                    guard displays.count == list.count, !displays.isEmpty else { exit(65) }
+                }
+                emit(perch.observe(clock, env: env)); continue
+            }
+            if Set(data.keys) == ["dumpNarration"] { guard let s = number(data["dumpNarration"]) else { exit(65) }; emit(perch.narration(until: clock + s, now: clock)); continue }
+            if Set(data.keys) == ["dumpPaused"] { guard let p = data["dumpPaused"] as? Bool else { exit(65) }; perch.paused = p; continue }
+            if Set(data.keys) == ["dumpClick"] {
+                guard let kind = data["dumpClick"] as? String, let source = CGEventSource(stateID: .hidSystemState),
+                    let cg = CGEvent(keyboardEventSource: source, virtualKey: 49, keyDown: true) else { exit(65) }
+                cg.type = kind == "keyboard" ? .keyDown : .leftMouseUp
+                cg.setIntegerValueField(.eventSourceUnixProcessID, value: kind == "synthetic" ? 1234 : 0)
+                cg.setIntegerValueField(.eventSourceUserData, value: 0)
+                cg.timestamp = DispatchTime.now().uptimeNanoseconds - (kind == "old" ? 6_000_000_000 : 0)
+                let person = perchBubbleClick(NSEvent(cgEvent: cg), windowMatches: true), had = perch.line != nil
+                write(["effect": "click", "kind": kind, "person": person, "dismissed": person && had, "time": clock])
+                if person { emit(perch.dismiss(clock)) }
+                continue
+            }
+            guard let frame = handFrame(data), let nonce = data["nonce"] as? String, bound == nil || bound == nonce else { exit(65) }
+            bound = nonce
+            let event: RingEvent, delay: Double
+            switch frame {
+            case let .picker(_, message):
+                guard message.op == "options" else { continue }
+                enabled = message.data["perch"] as? Bool ?? false
+                perch.book.enabled = message.data["lines"] as? Bool ?? true
+                if !enabled { emit(perch.hide(clock, "off")) }
+                write(["effect": "options", "perch": enabled, "lines": perch.book.enabled, "time": clock]); continue
+            case let .character(_, value):
+                guard value.seq > last else { exit(65) }; last = value.seq
+                perch.load(value)
+                write(["effect": "character", "id": value.id, "perch": value.perch != nil, "lines": value.lines?.lines.values.map { $0.count }.reduce(0, +) ?? 0,
+                    "metrics": perchMetrics(value).map { [Double($0.size.width), Double($0.size.height), Double($0.anchor.x), Double($0.anchor.y)] } as Any? ?? NSNull(), "time": clock])
+                continue
+            case let .act(_, act): event = ringEvent(act); delay = act.delay
+            case let .aim(_, value), let .status(_, value): event = value; delay = 0
+            case .hide: ringEmit(ring.hide(clock)); emit(perch.hide(clock, "hide")); continue
+            case .menu: continue
+            }
+            guard event.seq > last else { exit(65) }
+            last = event.seq
+            ring.dissolveAt = enabled ? perch.palm() : nil
+            if let palm = ring.dissolveAt, event.state == "done", event.ok { write(["effect": "dissolve", "at": [palm.x, palm.y], "time": clock]) }
+            ringEmit(ring.receive(event, delay: delay, now: clock, ringEnv))
+        }
+    }
+}
+// END PERCH DUMP
+
 // The launch styles in one place: glove, or a ring theme.
 let ringThemes: [String: RingTheme] = ["ring": .seamPlus, "seam": .seam, "sprite": .seamPlus]
 let cursorStyles = ["--cursor-style=glove"] + ringThemes.keys.sorted().map { "--cursor-style=" + $0 }
@@ -4634,6 +5633,12 @@ if arguments.first == "--check-character" {
         "reason": result.reason as Any? ?? NSNull(), "warnings": result.warnings], options: [.sortedKeys])
     FileHandle.standardOutput.write(out + Data([10]))
     exit(0)
+}
+if arguments.first == "--perch-dump" {
+    let flags = Array(arguments.dropFirst()), seeds = flags.filter { $0.hasPrefix("--seed=") }
+    guard seeds.count <= 1, flags.allSatisfy({ $0 == "--reduce-motion" || $0.hasPrefix("--seed=") }), Set(flags).count == flags.count else { exit(64) }
+    guard let seed = seeds.first.map({ UInt64($0.dropFirst(7)) }) ?? 1 else { exit(64) }
+    perchDump(reduced: flags.contains("--reduce-motion"), seed: seed); exit(0)
 }
 if arguments.first == "--ring-plan-dump" {
     var flags = Array(arguments.dropFirst())

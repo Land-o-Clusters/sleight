@@ -122,6 +122,8 @@ export function createHandClient({ env = process.env, setting = () => handSettin
   // host: none, starting, running or dead (failed or closed this session; final). hand: the settings allow the hand.
   let seq = 0, child, host = 'none', starting, hand = false, capture = 'hidden', checked = now(), checking = false, events = '', target;
   let style = cursorStyle;
+  // Sprite options (A2): perch mode and the character's lines. The host gets them in one picker frame after a character.
+  let perch = false, lines = true, optionsSent;
   let buildController, buildStarted;
   // Hosts with an attached worker are left to finish their consent channel before exiting.
   const attached = new WeakSet();
@@ -142,6 +144,7 @@ export function createHandClient({ env = process.env, setting = () => handSettin
       const value = setting();
       style ??= handCursorStyles.includes(value?.style) ? value.style : 'glove';
       character ??= value?.character;
+      perch = value?.perch === true; lines = value?.lines !== 'off';
       capture = value?.capture === 'visible' ? 'visible' : 'hidden';
       return value?.enabled === true;
     } catch { return false; }
@@ -253,9 +256,15 @@ export function createHandClient({ env = process.env, setting = () => handSettin
   let pickerReady, pickerLoad, pickerBusy = false;
   const pickerQueue = [];
   const pickerFrame = data => write(JSON.stringify({ hand: 'picker', nonce, ...data }) + '\n');
+  const sendOptions = (force = false) => {
+    if (host !== 'running' || style !== 'sprite') return;
+    const text = JSON.stringify({ perch, lines });
+    if (!force && text === optionsSent) return;
+    optionsSent = text; pickerFrame({ op: 'options', perch, lines });
+  };
   const pickerNotice = text => pickerFrame({ op: 'notice', text: String(text).replace(/[\p{C}\p{Zl}\p{Zp}]/gu, ch => ch === '\n' ? '\n' : '').slice(0, 3000) });
   async function pickerCatalog(picker) {
-    const catalog = await picker.catalog({ style, character });
+    const catalog = await picker.catalog({ style, character, lines: lines ? 'on' : 'off' });
     if (host !== 'running') return;
     const frame = { op: 'catalog', rows: catalog.rows };
     if (Buffer.byteLength(JSON.stringify(frame)) > 64000 || catalog.rows.length > 512 || catalog.rows.some(r => r.children?.length > 512)) {
@@ -291,7 +300,7 @@ export function createHandClient({ env = process.env, setting = () => handSettin
     }
     if (host !== 'running') return;
     pickerFrame({ op: 'style', style });
-    if (sprite) { pickerLoad = sprite.id; write(JSON.stringify({ ...sprite, seq: ++seq }) + '\n'); }
+    if (sprite) { pickerLoad = sprite.id; write(JSON.stringify({ ...sprite, seq: ++seq }) + '\n'); sendOptions(true); }
   }
   function pickerEvent(event, internal = false) {
     if (event.hand !== 'picker') return false;
@@ -299,6 +308,7 @@ export function createHandClient({ env = process.env, setting = () => handSettin
     if (cursorPicker === null || event.nonce !== nonce || !(internal && keys === 'character,hand,nonce,op' && event.op === 'fallback' && characterIdValid(event.character) ||
         keys === 'hand,nonce,op' && event.op === 'refresh' ||
         keys === 'hand,key,nonce,op' && event.op === 'import' && /^[0-9a-f]{64}$/.test(event.key) ||
+        keys === 'hand,lines,nonce,op' && event.op === 'lines' && ['on', 'off'].includes(event.lines) ||
         keys === 'hand,nonce,op,style' && event.op === 'select' && ['ring', 'seam', 'glove'].includes(event.style) ||
         keys === 'character,hand,nonce,op,style' && event.op === 'select' && event.style === 'sprite' && characterIdValid(event.character))) {
       note('hand-picker-refused', {}); return true;
@@ -321,7 +331,8 @@ export function createHandClient({ env = process.env, setting = () => handSettin
         const { hand: _, nonce: __, ...choice } = event;
         const result = await picker.apply(choice);
         if (host !== 'running') return;
-        if (result.ok) await pickerStyle(result, picker);
+        if (result.ok && result.lines) { lines = result.lines === 'on'; sendOptions(); }
+        else if (result.ok) await pickerStyle(result, picker);
         if (result.text) pickerNotice(result.text);
       }
       await pickerCatalog(picker);
@@ -392,7 +403,7 @@ export function createHandClient({ env = process.env, setting = () => handSettin
       note('hand-started', { pid: started.pid, consent });
       write(menu());
       // The character frame goes once, before any queued act, on the acts' sequence counter.
-      if (sprite) write(JSON.stringify({ ...sprite, seq: ++seq }) + '\n');
+      if (sprite) { write(JSON.stringify({ ...sprite, seq: ++seq }) + '\n'); sendOptions(true); }
       statsAt = -Infinity;
       refreshUsage();
       for (const { wire, at } of queue.splice(0)) {
@@ -439,6 +450,8 @@ export function createHandClient({ env = process.env, setting = () => handSettin
         if (!hand) { write(JSON.stringify({ hand: 'hide', nonce }) + '\n'); note('hand-off', { reason: 'setting' }); }
         write(menu());
       }
+      // The CLI or another session changed perch or lines.
+      sendOptions();
       // Last-use times come from other sessions' records too, so the rows are read again with the minute's recheck.
       refreshPermissions();
       refreshUsage();

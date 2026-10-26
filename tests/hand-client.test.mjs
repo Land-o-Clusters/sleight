@@ -666,8 +666,10 @@ test('sprite sends the installed character after the menu, and falls back to the
     t.after(() => client.close());
     client.send(frame({ label: 'Save' })); await settle();
     assert.equal(spawns[0].cursorStyle, 'sprite'); assert.deepEqual(asked, ['pet']);
-    const [sprite, act] = child.lines;
+    const [sprite, sent, act] = child.lines;
     assert.deepEqual([sprite.hand, sprite.id, sprite.seq, sprite.nonce], ['character', 'pet', 1, child.menus[0].nonce]);
+    // A2: the sprite's perch and lines settings follow the character, off and on by default.
+    assert.deepEqual(sent, { hand: "picker", nonce: sprite.nonce, op: "options", perch: false, lines: true });
     assert.deepEqual(Object.keys(sprite).sort(), ['cell', 'extra', 'hand', 'id', 'nonce', 'seq', 'sheet', 'table']);
     assert.equal(sprite.sheet, '/chars/pet/sheet.png'); assert.equal(sprite.table.idle.scale, 0.5);
     assert.deepEqual([act.hand, act.seq, act.label], ['act', 2, 'Save']);

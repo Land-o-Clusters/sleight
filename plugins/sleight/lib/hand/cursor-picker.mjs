@@ -12,11 +12,13 @@ const sort = entries => [...entries].sort((a, b) => a.name.localeCompare(b.name)
 const slug = id => id.toLowerCase().replace(/[^a-z0-9-]/g, '-');
 const title = name => typeof name === 'string' && name.length > 0 && name.length <= 60;
 const menuTitle = (name, fallback) => name.replace(/[\p{C}\p{Zl}\p{Zp}]/gu, '').slice(0, 60) || fallback;
-export function cursorMenuModel({ installed = [], found = [], style = 'glove', character } = {}) {
+export function cursorMenuModel({ installed = [], found = [], style = 'glove', character, lines = 'on' } = {}) {
   const ids = new Set(installed.map(c => c.id));
   return [
     ...[['ring', 'Ring (Split Seam+)'], ['seam', 'Plain ring'], ['glove', 'Glove']].map(([value, name]) => ({ title: name, op: 'select', style: value, selected: style === value })),
     ...sort(installed).map(c => ({ title: menuTitle(c.name, c.id), op: 'select', style: 'sprite', character: c.id, selected: style === 'sprite' && character === c.id })),
+    // A2: the character's lines, a toggle shown with a sprite selected.
+    ...style === 'sprite' ? [{ title: 'Character lines', op: 'lines', selected: lines !== 'off' }] : [],
     { title: 'Add your Codex pets', children: sort(found.filter(p => !ids.has(p.id))).map(p => ({ title: menuTitle(p.name, p.id), op: 'import', key: p.key })) },
     { title: 'Open characters folder', op: 'folder' },
   ];
@@ -61,13 +63,13 @@ export function createCursorPicker({ home = userInfo().homedir, env = process.en
   let tracedSymlink = false;
   const discoveryTrace = (...args) => { if (!tracedSymlink) { tracedSymlink = true; try { trace(...args); } catch {} } };
   return {
-    async catalog({ style = 'glove', character } = {}) {
+    async catalog({ style = 'glove', character, lines } = {}) {
       // Every installed folder gets a row, including refused packs, so a click can explain the refusal.
       const { characters, thumbnails } = await installedCursorCatalog({ root, uid });
       const found = findCodexPets({ home, env, uid, trace: discoveryTrace }).filter(p => !characters.some(c => c.id === p.id));
       offered = new Map(found.map(p => [p.key, p])); installed = new Set(characters.map(c => c.id));
       return { installed: characters, pets: found.map(({ folder, ...p }) => p), thumbnails,
-        rows: cursorMenuModel({ installed: characters, found, style, character }) };
+        rows: cursorMenuModel({ installed: characters, found, style, character, lines }) };
     },
     async apply(event) {
       if (busy) return { ok: false, text: 'A character import is already running. Try again when it finishes.' };
@@ -81,6 +83,9 @@ export function createCursorPicker({ home = userInfo().homedir, env = process.en
           try { await writeSetting({ style: 'sprite', character: pack.manifest.id }); }
           catch (error) { return { ok: false, text: `Imported, but could not select it: ${error.message}\n${characterCallout(pack, { installed: true })}` }; }
           return { ok: true, text: characterCallout(pack, { installed: true }), style: 'sprite', character: pack.manifest.id };
+        }
+        if (event.op === 'lines' && Object.keys(event).sort().join() === 'lines,op' && ['on', 'off'].includes(event.lines)) {
+          await writeSetting({ lines: event.lines }); return { ok: true, lines: event.lines };
         }
         if (event.op === 'select' && (Object.keys(event).sort().join() === 'op,style' && ['ring', 'seam', 'glove'].includes(event.style) ||
             Object.keys(event).sort().join() === 'character,op,style' && event.style === 'sprite' && installed.has(event.character))) {

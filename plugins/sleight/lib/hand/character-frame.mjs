@@ -19,7 +19,7 @@ export function characterFrame(character, { nonce, seq, resolve }) {
   for (const s of Object.values(sheets)) {
     if (s.width > capSheet.width || s.height > capSheet.height) throw Error(`Character sheets over ${capSheet.width}x${capSheet.height} are too large to draw`);
   }
-  const key = s => s.sheet === m.extra ? 'extra' : 'sheet';
+  const key = s => s.sheet === m.extra ? 'extra' : m.perch?.sheet && s.sheet === m.perch.sheet ? 'perch' : 'sheet';
   const lookSheet = m.states.look?.sheet === 'extra' ? 'extra' : 'sheet';
   const entry = s => {
     const size = [sheets[key(s)].width, sheets[key(s)].height];
@@ -50,6 +50,15 @@ export function characterFrame(character, { nonce, seq, resolve }) {
   }
   const frame = { hand: 'character', nonce, seq, id: m.id, sheet: join(folder, m.sheet), extra: m.extra ? join(folder, m.extra) : null,
     cell: [m.frame.w, m.frame.h], table };
+  // Perch mode (A2): the seat point and the complete perch table, the third sheet, and the lines block. The host uses them
+  // only with perch and lines on; it draws lines and does nothing else with them.
+  if (character.perch) {
+    const p = character.perch, wire = s => ({ sheet: key(s), row: s.row, frames: s.columns, ms: s.ms, loop: s.loop, flip: s.flip === 'h',
+      hotspot: [s.hotspot.x, s.hotspot.y], size: [sheets[key(s)].width, sheets[key(s)].height], scale: m.scale });
+    frame.perch = { anchor: [p.anchor.x, p.anchor.y], table: Object.fromEntries(Object.entries(p.states).map(([k, s]) => [k, wire(s)])) };
+    frame.perchSheet = m.perch?.sheet ? join(folder, m.perch.sheet) : null;
+  }
+  if (m.lines) frame.lines = m.lines;
   if (Buffer.byteLength(JSON.stringify(frame)) > 32768) throw Error('Character frame exceeds 32 KiB');
   return frame;
 }

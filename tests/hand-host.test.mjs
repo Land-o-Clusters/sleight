@@ -37,6 +37,19 @@ test('hand source: it never posts input, moves the pointer, activates, takes key
   assert.match(motion, /CAKeyframeAnimation\(keyPath: keyPath\)/);
 });
 
+test('perch source: the perch section posts no input, activates nothing, takes no key and writes no stdout; its dump builds no window', () => {
+  const perch = section('PERCH'), dump = section('PERCH DUMP');
+  assert.ok(perch && dump, 'perch sections absent');
+  assert.doesNotMatch(perch, /CGEventPost|\.post\(|postToPid|CGWarp|NSCursor|activate\(|makeKey|makeMain|becomeKey\(|orderFront\(|AXUIElement|standardOutput|print\(|NSLog|NSApp\.|FileHandle/);
+  // Panels never become key or main, and the bubble's click goes through the shared person-input rule, mouse only.
+  assert.equal((perch.match(/override var canBecomeKey: Bool \{ false \}/g) ?? []).length, 1);
+  assert.match(perch, /func perchBubbleClick[\s\S]*?personActivation\(event, windowMatches: windowMatches, keyboard: false/);
+  assert.match(perch, /override func mouseUp\(with event: NSEvent\) \{\n\s+guard perchBubbleClick\(event,/);
+  // The dump writes through its one writer and never makes a panel, window, layer or application.
+  assert.equal((dump.match(/standardOutput/g) ?? []).length, 1);
+  assert.doesNotMatch(dump, /makeHandPanel|NSPanel|NSWindow|PerchHost|CALayer\(|NSApplication|orderFront|\.install\(/);
+});
+
 test('hand art: the six delivered states are embedded as vector SVG on one 48 pt canvas, with no files at runtime', () => {
   const art = section('HAND ART');
   for (const state of ['rest', 'point', 'press', 'grab', 'scroll', 'dabs']) {

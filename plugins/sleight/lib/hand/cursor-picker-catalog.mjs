@@ -44,6 +44,7 @@ function buildCatalog({ root, uid }) {
         const frame = characterFrame(pack, { nonce: '0'.repeat(64), seq: 0, resolve: resolveCharacterStates });
         const idle = frame.table.idle;
         frame.table = { idle: { ...idle, frames: [idle.frames[0]], ms: [100], loop: false } };
+        delete frame.perch; delete frame.perchSheet; delete frame.lines; // a thumbnail is the idle cell alone
         const digest = createHash('sha256').update(JSON.stringify(frame)).update(pack.files.get(pack.manifest.sheet));
         if (pack.manifest.extra) digest.update(pack.files.get(pack.manifest.extra));
         entry.thumbnail = { id, key: digest.digest('hex'), frame }; hashes++;

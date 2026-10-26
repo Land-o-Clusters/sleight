@@ -25,9 +25,13 @@ function world(t) {
 test('pure menu model has built-ins, sorted characters, only unimported pets and folder action', () => {
   const rows = picker.cursorMenuModel({ installed: [{ id: 'zed', name: 'Zed' }, { id: 'a', name: 'Ada' }],
     found: [{ id: 'zed', key: '1', name: 'Zed' }, { id: 'b', key: '2', name: 'Bee' }], style: 'sprite', character: 'a' });
-  assert.deepEqual(rows.map(r => r.title), ['Ring (Split Seam+)', 'Plain ring', 'Glove', 'Ada', 'Zed', 'Add your Codex pets', 'Open characters folder']);
-  assert.equal(rows[3].selected, true); assert.equal(rows.filter(r => r.selected).length, 1);
-  assert.deepEqual(rows[5].children.map(r => [r.title, r.key]), [['Bee', '2']]);
+  assert.deepEqual(rows.map(r => r.title), ['Ring (Split Seam+)', 'Plain ring', 'Glove', 'Ada', 'Zed', 'Character lines', 'Add your Codex pets', 'Open characters folder']);
+  assert.equal(rows[3].selected, true); assert.equal(rows.filter(r => r.op === 'select' && r.selected).length, 1);
+  assert.deepEqual(rows[6].children.map(r => [r.title, r.key]), [['Bee', '2']]);
+  // A2: the lines toggle shows with a sprite selected, and says the saved setting.
+  assert.deepEqual(rows[5], { title: 'Character lines', op: 'lines', selected: true });
+  assert.equal(picker.cursorMenuModel({ installed: [{ id: 'a', name: 'Ada' }], style: 'sprite', character: 'a', lines: 'off' })[4].selected, false);
+  assert.ok(!picker.cursorMenuModel({ installed: [{ id: 'a', name: 'Ada' }], style: 'ring' }).some(r => r.op === 'lines'));
   assert.deepEqual(picker.cursorMenuModel({}).slice(0, 3).map(r => r.style), ['ring', 'seam', 'glove']);
 });
 test('discovery finds both Codex roots, deduplicates and refuses linked pet folders', t => {
