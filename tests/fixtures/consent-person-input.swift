@@ -22,6 +22,7 @@ func button(_ title: String) -> NSButton {
     let button = AXFixtureButton(title: title, target: receipt, action: #selector(Receipt.accept(_:)))
     let window = NSWindow(contentRect: NSRect(x: -20000, y: -20000, width: 200, height: 40), styleMask: .borderless, backing: .buffered, defer: false)
     window.contentView!.addSubview(button); windows.append(window)
+    consentArming(window).presented(at: ProcessInfo.processInfo.systemUptime - 10)
     return button
 }
 var eventWindow = 0
@@ -68,7 +69,9 @@ let looseGuard = ConsentInputAction(loose, currentEvent: { current })
 current = event(.hidSystemState); looseGuard.press(loose)
 check(receipt.choices == ["Always allow"], "a button without a window refuses a fresh HID click")
 current = event(.hidSystemState, 0, key: true); guarded.press(always)
-check(receipt.choices.count == 2, "HID key reaches original action")
+check(receipt.choices.count == 1, "HID key without a typed word refuses")
+current = event(.hidSystemState); guarded.press(always)
+check(receipt.choices.count == 2, "a second deliberate HID click reaches original action")
 let session = button("Allow this session"), decline = button("Decline")
 session.accessibilityPerformAction(.press)
 decline.accessibilityPerformAction(.press)

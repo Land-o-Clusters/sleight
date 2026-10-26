@@ -24,15 +24,26 @@ test('real modal and handoff events route typed choices only after field focus w
   const blocks = ['PERSON INPUT', 'APP FRAME', 'ASK CARD'].map(name => {
     const block = source.split(`// BEGIN ${name}\n`)[1]?.split(`// END ${name}`)[0];
     assert.ok(block, name);
-    // Headless seams supply hardware provenance and key-window/current-event state only.
+    // Headless seams supply CGEvent provenance and key-window/current-event state only.
     // Real NSEvents, window association, key equivalents and responder dispatch stay intact.
     return block.replaceAll('window.isKeyWindow', '(window === fixtureKeyWindow)')
       .replaceAll('NSWorkspace.shared.isVoiceOverEnabled', 'fixtureVoiceOver')
       .replaceAll('NSWorkspace.shared.isSwitchControlEnabled', 'fixtureSwitchControl')
       .replaceAll('wordFocusAllowed = isKeyWindow', 'wordFocusAllowed = fixtureKeyWindow === self')
       .replaceAll('makeKey()', 'fixtureMakeKey(self)')
-      .replaceAll('personInput(event.cgEvent)', 'fixturePersonInput(event)');
+      .replaceAll('window?.isVisible == true', 'window.map { fixtureVisibleWindows.contains(ObjectIdentifier($0)) } == true')
+      .replaceAll('event.cgEvent', 'fixtureCGEvent(event)')
+      .replaceAll('proc_pidpath(Int32(pid), &path, UInt32(path.count))', 'fixturePidPath(Int32(pid), &path, UInt32(path.count))');
   });
+  // Exercise the actual callers as well as the shared classifier. Their source has no consent override.
+  for (const [start, end] of [['final class CursorPauseControl {', 'final class CursorPauseMenuItem:'],
+    ['final class CursorPickerWindowProbe:', 'final class CursorPickerHost:']]) {
+    const from = source.indexOf(start), to = source.indexOf(end, from);
+    assert.ok(from >= 0 && to > from, start);
+    const block = source.slice(from, to);
+    assert.doesNotMatch(block, /consent: true/);
+    blocks.push(block.replaceAll('nonceBook.nonce("hand")', '"a"'));
+  }
   const dir = registerTemp(t, trackTemp(mkdtempSync(join(tmpdir(), 'sleight-typed-input-'))));
   const swift = join(dir, 'main.swift'), binary = join(dir, 'fixture');
   writeFileSync(swift, 'import AppKit\nimport Foundation\nimport CoreFoundation\nimport QuartzCore\nimport Carbon.HIToolbox\nimport ObjectiveC\nimport Darwin\nimport os.log\n' + blocks.join('\n') + readFileSync(new URL('./fixtures/consent-typed-input.swift', import.meta.url), 'utf8'));

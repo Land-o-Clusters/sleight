@@ -118,6 +118,11 @@ refuses terminals and OpenAI's own apps. See [approvals and guards](#approvals-a
 
 <a id="protected-consent-input"></a>
 
+- Through 1.4.2, the Mac operation-review, session opt-in and resume alerts put Allow first. One physical Return could
+  approve without a typed word, and a held Return could repeat into the alert. The 1.5.0 candidate clears protected defaults
+  and requires the typed word for keyboard approval. It also refuses repeated key-downs. Protected choices wait 500 ms.
+  This fix has headless fixture coverage only. 1.5.0 has not been released.
+
 - The launcher's low-stakes settings commands (`hand`, `cursor`, `turbo off`, `permissions block` and the other ones that
   only narrow what sleight does) check only that a person started them from a terminal app, by reading the process's
   ancestors. A terminal window an agent opens through `open`, AppleScript (`do script`) or a `.command` file starts from
