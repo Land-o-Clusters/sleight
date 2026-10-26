@@ -1,12 +1,14 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import * as fs from 'node:fs';
+import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { Readable } from 'node:stream';
 import { spawnSync } from 'node:child_process';
 
 import * as api from '../plugins/sleight/lib/hand/character.mjs';
 import * as cli from '../plugins/sleight/lib/hand/cursor-command.mjs';
+import { registerTemp } from '../scripts/temp-leftovers.mjs';
 const png = (w = 1536, h = 2288) => {
   const b = Buffer.alloc(57); Buffer.from('89504e470d0a1a0a', 'hex').copy(b);
   b.writeUInt32BE(13, 8); b.write('IHDR', 12); b.writeUInt32BE(w, 16); b.writeUInt32BE(h, 20); b[24] = 8; b[25] = 6;
@@ -25,8 +27,7 @@ const riff = (...chunks) => {
 };
 const manifest = () => ({ format: 'sleight-character', version: 1, id: 'test-cat', name: 'Test Cat', description: '', author: 'Test artist', license: 'CC0-1.0', sheet: 'sheet.png', frame: { w: 192, h: 208 }, grid: { cols: 8, rows: 11 }, scale: 1, anchor: { x: 96, y: 196 }, hotspot: { x: 96, y: 104 }, states: { idle: { row: 0, frames: 6, ms: 100, loop: true } } });
 function world(t) {
-  const base = fs.realpathSync(fs.mkdtempSync('/tmp/sleight-character-'));
-  t.after(() => fs.rmSync(base, { recursive: true, force: true }));
+  const base = registerTemp(t, fs.realpathSync(fs.mkdtempSync(join(tmpdir(), 'sleight-character-'))));
   const folder = join(base, 'test-cat'), root = join(base, 'characters'); fs.mkdirSync(folder, { mode: 0o700 });
   const put = (name, value) => fs.writeFileSync(join(folder, name), Buffer.isBuffer(value) ? value : typeof value === 'string' ? value : JSON.stringify(value), { mode: 0o600 });
   const data = manifest(); put('character.json', data); put('sheet.png', png());

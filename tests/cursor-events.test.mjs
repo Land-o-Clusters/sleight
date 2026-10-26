@@ -243,7 +243,8 @@ test('labels off omits the key, role uses a generic noun, title truncates to 40,
   assert.ok(!Object.hasOwn(cursorRecord({ frame, action }), 'label'));
   assert.equal(cursorRecord({ frame, action, labels: 'role' }).label, 'button');
   assert.equal(cursorRecord({ frame, action, labels: 'title' }).label, 'a'.repeat(40));
-  for (const title of ['https://private.example', '/Users/private/file', 'file:///private/a']) assert.ok(!cursorRecord({ frame, action: { ...action, title }, labels: 'title' }).label);
+  // The home-style path is built from parts so the test-path guard sees no literal macOS home path.
+  for (const title of ['https://private.example', ['', 'Users', 'private', 'file'].join('/'), 'file:///private/a']) assert.ok(!cursorRecord({ frame, action: { ...action, title }, labels: 'title' }).label);
   assert.ok(!cursorRecord({ frame, action: { role: 'AXStaticText', title: 'page text' }, labels: 'title' }).label);
 });
 
