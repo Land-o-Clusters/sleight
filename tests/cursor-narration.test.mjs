@@ -217,7 +217,27 @@ test('key-shaped tokens, long base64 or hex, mixed identifiers and Luhn card can
   }
   assert.equal(narrationLine('Checking 1234 now.'), 'Checking 1234 now.');
 });
+test('cards are stripped beside other digit groups, including longer combined runs', () => {
+  assert.equal(narrationLine('Order 12 4111 1111 1111 1111 ok.'), 'Order ok.');
+  for (const card of ['4222222222222', '4111 1111 1111 1111', '4111-1111-1111-1111', '4000 0000 0000 0000 006']) {
+    for (const run of [`12 ${card}`, `${card} 12`, `1234 ${card} 5678`]) {
+      assert.equal(narrationLine(`Order ${run} ok.`), 'Order ok.', run);
+    }
+  }
+  assert.equal(narrationLine('Checking 12 3456 now.'), 'Checking 12 3456 now.');
+});
 const append = (id, content, extra = {}) => ({ uuid: id, door: 'response', origin: { kind: 'model' }, message: { role: 'assistant', content }, ...extra });
+test('parallel calls share preceding prose only within their row, including text after a tool use', () => {
+  const cache = createNarrationCache(); cache.configure('bubbles');
+  cache.observe(append('text', [{ type: 'text', text: 'Reading the page.' }]));
+  cache.observe(append('parallel', ['a', 'b'].map(id => ({ type: 'tool_use', id, name: 'browser_read', input: {} }))));
+  for (const id of ['a', 'b']) assert.equal(cache.take({ tool_use_id: id }), 'Reading the page.');
+  cache.observe(append('later', [{ type: 'tool_use', id: 'c', name: 'browser_read', input: {} }]));
+  assert.equal(cache.take({ tool_use_id: 'c' }), undefined);
+  cache.observe(append('trailing', [{ type: 'tool_use', id: 'd', name: 'browser_read', input: {} }, { type: 'text', text: 'Stale trailing prose.' }]));
+  cache.observe(append('last', [{ type: 'tool_use', id: 'e', name: 'browser_read', input: {} }]));
+  assert.equal(cache.take({ tool_use_id: 'e' }), undefined);
+});
 test('off cache touches no message fields, enabled cache binds tool ids and agent loops without reading media', () => {
   const cache = createNarrationCache();
   cache.observe({ get message() { throw Error('off read'); } });

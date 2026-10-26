@@ -278,6 +278,17 @@ refuses terminals and OpenAI's own apps. See [approvals and guards](#approvals-a
 
 ## The pointer, drags and hover
 
+- Cursor narration is off by default and takes its sentence only from Claude's assistant prose. Tool results and
+  thinking blocks are excluded as sources, but Claude can paraphrase screen text in its prose. Names and short secrets
+  such as `hunter2` can pass the filter. It strips recognized key shapes, long tokens and Luhn-valid cards, including a
+  card beside other digit groups. A matching numeric run is removed whole. This is a partial privacy filter.
+- Narration assumes the assistant row's `session.append` fires before its `tool.call`. The first live narration call
+  must check that order. A reversed order silently omits the sentence. The response-only matcher excludes tool-result
+  rows from the mod hook. Live RPC cost per row and tool call, and the share of real calls with a usable sentence,
+  remain unmeasured. Voice skips speech when the output device doesn't expose readable mute or volume metadata. The first
+  live voice run must check that no permission prompt appears. Sprite bubble placement, capture exclusion and voice
+  on real audio devices remain unverified live.
+
 - The ghost hand is off by default. When an app doesn't send per-action approvals, the hand can run ahead of the field
   being filled. Its frames follow a planned schedule, about 470 ms, then 72 ms per action, instead of the engine's
   writes. GH8 remains blocked: engine-persisted Always allow can consume action requests without exposing supported

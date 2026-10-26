@@ -15,7 +15,7 @@ const metrics = { calls: 3, reads: 1, characters: 55, text: { docs: 10, tree: 40
 const usage = { input_tokens: 12, output_tokens: 34, cache_read_input_tokens: 56, cache_creation_input_tokens: 78, model: 'host-model' };
 
 function host({ cost = true, missingUsage = false, marker = false, malicious = false, paneOpen = false, usageRead, messages, narration = 'off', settingRead } = {}) {
-  const hooks = [], state = new Map(), work = [], statuses = [], replies = [], forwarded = [];
+  const hooks = [], state = new Map(), work = [], statuses = [], replies = [], forwarded = [], hookRuns = [];
   let usageReads = 0;
   const elements = Object.fromEntries(['Box', 'Text', 'Button'].map(name => [name, name]));
   const api = {
@@ -71,6 +71,7 @@ function host({ cost = true, missingUsage = false, marker = false, malicious = f
     const run = async index => {
       if (index === list.length) { if (name === 'tool.call') forwarded.push(event); return typeof answer === 'function' ? answer(event) : answer; }
       const next = async rewritten => { if (rewritten) event = rewritten; return run(index + 1); };
+      hookRuns.push(name);
       return list[index].handler($, event, next);
     };
     const result = await run(0); replies.push(result); return result;
@@ -88,7 +89,7 @@ function host({ cost = true, missingUsage = false, marker = false, malicious = f
     const text = value => typeof value === 'string' ? value : Array.isArray(value) ? value.map(text).join('\n') : value?.children ? text(value.children) : '';
     return text(tree);
   }
-  return { start, complete, tool, command, pane, work, state, emit, forwarded, get usageReads() { return usageReads; } };
+  return { start, complete, tool, command, pane, work, state, emit, forwarded, hookRuns, get usageReads() { return usageReads; } };
 }
 
 const deferred = () => {
@@ -116,8 +117,37 @@ test('off mod never inspects message payloads or reads settings from tool forwar
   let reads = 0;
   const h = host({ settingRead: () => new Promise(() => {}), messages: () => { reads++; throw Error('unexpected transcript'); } });
   await h.start();
-  await h.emit('session.append', { get message() { throw Error('off message read'); } });
+  await h.emit('session.append', { door: 'response', get message() { throw Error('off message read'); } });
   await h.tool(); assert.equal(reads, 0); assert.equal(h.forwarded[0].sleight_stats.say, undefined);
+});
+test('unused sleight matches only response rows and measures per-row harness cost', async t => {
+  for (const mode of ['off', 'bubbles']) {
+    const h = host({ narration: mode });
+    await h.emit('prompt.submit', { text: 'Use another tool', origin: { kind: 'composer' } });
+    for (const door of ['tool-result', 'prompt', 'command', 'tool-message', 'delivery', 'attachment', 'hook-context', 'note', 'compaction', 'notice', 'response']) {
+      const before = h.hookRuns.length, rows = 300;
+      const start = performance.now();
+      for (let i = 0; i < rows; i++) await h.emit('session.append', { uuid: `${door}-${i}`, door,
+        origin: { kind: 'model' }, message: { role: door === 'response' ? 'assistant' : 'user', content: [
+          { type: 'text', text: 'Reading the page.' }, { type: 'image', get source() { throw Error('media read'); } },
+        ] } });
+      const elapsedMs = performance.now() - start, hookCalls = h.hookRuns.length - before;
+      assert.equal(hookCalls, door === 'response' ? rows : 0, `${mode} ${door}`);
+      t.diagnostic(JSON.stringify({ mode, door, rows, hookCalls, harnessMeanMs: elapsedMs / rows, liveRPCMeasured: false }));
+    }
+    assert.equal(h.forwarded.length, 0); assert.equal(h.work.length, 0);
+  }
+});
+test('matched response rows clear prose after parallel tools without needing a tool-result row', async () => {
+  const h = host({ narration: 'bubbles' });
+  await h.emit('prompt.submit', { text: 'Read pages', origin: { kind: 'composer' } });
+  const row = (uuid, content) => h.emit('session.append', { uuid, door: 'response', origin: { kind: 'model' }, message: { role: 'assistant', content } });
+  const tool = id => ({ type: 'tool_use', id, name: prefix + 'browser_read', input: { tab: 't1' } });
+  await row('parallel', [{ type: 'text', text: 'Reading the page.' }, tool('a'), tool('b')]);
+  // The tool-result row is deliberately absent: the host matcher must exclude it.
+  await row('later', [tool('c')]);
+  for (const id of ['a', 'b', 'c']) await h.emit('tool.call', { tool: prefix + 'browser_read', tab: 't1', tool_use_id: id });
+  assert.deepEqual(h.forwarded.map(e => e.sleight_stats.say), ['Reading the page.', 'Reading the page.', undefined]);
 });
 async function paneLabels(h) {
   const tree = await h.emit('ui.render', { component: 'Pane', requestId: 'sleight', surface: 'terminal', props: {} });

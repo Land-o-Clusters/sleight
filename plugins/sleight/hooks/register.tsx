@@ -345,7 +345,7 @@ function narrated<T extends { tool_use_id?: string; agentId?: string }>(event: T
 }
 
 export const register: Register = on => {
-  on('session.append', ($, e, next) => { narration.observe(e); return next(e) })
+  on('session.append', { door: 'response' }, ($, e, next) => { narration.observe(e); return next(e) })
   on('session.compact', ($, e, next) => { narration.reset(); return next(e) })
 
   on('classic.PreToolUse', async ($, e, next) => {

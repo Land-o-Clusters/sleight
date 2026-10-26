@@ -147,6 +147,14 @@ test('host independently strips key shapes, long tokens and Luhn-valid cards', o
     assert.equal(p.bubble.text,'Checking now.',token);
   }
 });
+test('host strips a valid card beside other digit groups', options, t => {
+  for (const card of ['4222222222222', '4111 1111 1111 1111', '4111-1111-1111-1111', '4000 0000 0000 0000 006']) {
+    for (const run of [`12 ${card}`, `${card} 12`, `1234 ${card} 5678`]) {
+      const p = dump(t, [menu(), act({ say: `Order ${run} ok.` })]).find(r => r.effect === 'draw');
+      assert.equal(p.bubble.text, 'Order ok.', run);
+    }
+  }
+});
 
 test('Core Audio process reads run off the main thread at most every 500 ms and explain unknown metadata once', options, t => {
   for (const gate of ['safe','unknown-process']) {

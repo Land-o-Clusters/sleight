@@ -1513,14 +1513,24 @@ func narrationText(_ raw: Any?) -> String? {
         #"\"[^\"\n]*(?:\"|$)|“[^”\n]*(?:”|$)|(?<![\p{L}])'[^'\n]+'(?=\s|[.,!?]|$)"#] {
         text = text.replacingOccurrences(of: pattern, with: " ", options: .regularExpression)
     }
-    // Validate card candidates before replacing, including spaces and hyphens.
-    if let re = try? NSRegularExpression(pattern: #"(?:[0-9][ -]?){12,18}[0-9]"#) {
+    // Check every card-sized window in a numeric run, including adjacent digit groups.
+    if let re = try? NSRegularExpression(pattern: #"[0-9](?:[ -]?[0-9])*"#) {
         for match in re.matches(in: text, range: NSRange(text.startIndex..., in: text)).reversed() {
             guard let range = Range(match.range, in: text) else { continue }
             let digits = text[range].compactMap { $0.wholeNumberValue }
-            var sum = 0
-            for (i, d) in digits.reversed().enumerated() { let n = i % 2 == 1 ? d * 2 : d; sum += n > 9 ? n - 9 : n }
-            if (13...19).contains(digits.count), sum % 10 == 0 { text.replaceSubrange(range, with: " ") }
+            guard digits.count >= 13 else { continue }
+            var card = false
+            for start in 0...(digits.count - 13) {
+                var plainFirst = 0, doubledFirst = 0
+                for length in 1...min(19, digits.count - start) {
+                    let n = digits[start + length - 1], doubled = n * 2 > 9 ? n * 2 - 9 : n * 2
+                    plainFirst += length % 2 == 1 ? n : doubled
+                    doubledFirst += length % 2 == 1 ? doubled : n
+                    if length >= 13, (length % 2 == 1 ? plainFirst : doubledFirst) % 10 == 0 { card = true; break }
+                }
+                if card { break }
+            }
+            if card { text.replaceSubrange(range, with: " ") }
         }
     }
     text = text.components(separatedBy: .whitespacesAndNewlines).filter { token in

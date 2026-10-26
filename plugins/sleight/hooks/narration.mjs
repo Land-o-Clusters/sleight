@@ -22,7 +22,7 @@ export function narrationLine(raw, input = {}) {
     .replace(/`[^`]*(?:`|$)/g, ' ')
     .replace(/!?\[([^\]]*)\]\([^)]*\)/g, '$1')
     .replace(/"[^"\n]*(?:"|$)|“[^”\n]*(?:”|$)|(?<![\p{L}])'[^'\n]+'(?=\s|[.,!?]|$)/gu, ' ')
-    .replace(/(?:[0-9][ -]?){12,18}[0-9]/g, token => luhn(token) ? ' ' : token)
+    .replace(/[0-9](?:[ -]?[0-9])*/g, token => containsCard(token) ? ' ' : token)
     .split(/\s+/u).filter(token => !privateToken(token)).join(' ')
     .replace(/[\p{Cc}\p{Cf}\p{Zl}\p{Zp}\p{Co}\p{Cn}]/gu, ' ')
     .replace(/[*_#>|\[\]{}]/g, '')
@@ -44,15 +44,20 @@ export function boundedNarration(raw) {
   }
   return raw;
 }
-function luhn(token) {
+function containsCard(token) {
   const digits = token.replace(/[^0-9]/g, '');
-  if (digits.length < 13 || digits.length > 19) return false;
-  let sum = 0, double = false;
-  for (let i = digits.length - 1; i >= 0; i--) {
-    let n = Number(digits[i]); if (double && (n *= 2) > 9) n -= 9;
-    sum += n; double = !double;
+  // Check every 13 to 19 digit window so an adjacent order number cannot mask a card.
+  // A match drops the whole numeric run, including any adjacent digit groups.
+  for (let start = 0; start + 13 <= digits.length; start++) {
+    let plainFirst = 0, doubledFirst = 0;
+    for (let length = 1; length <= 19 && start + length <= digits.length; length++) {
+      const n = Number(digits[start + length - 1]), doubled = n * 2 > 9 ? n * 2 - 9 : n * 2;
+      plainFirst += length % 2 ? n : doubled;
+      doubledFirst += length % 2 ? doubled : n;
+      if (length >= 13 && (length % 2 ? plainFirst : doubledFirst) % 10 === 0) return true;
+    }
   }
-  return sum % 10 === 0;
+  return false;
 }
 function privateToken(token) {
   return /[/:\\@]|\.[a-zA-Z]{2,8}(?:\b|$)/u.test(token) ||
@@ -136,9 +141,11 @@ export function createNarrationCache() {
       if (message?.role !== 'assistant' || event.origin?.kind !== 'model') { state.text = undefined; return; }
       if (state.seen.has(event.uuid)) return;
       state.seen.add(event.uuid); if (state.seen.size > 64) state.seen.delete(state.seen.values().next().value);
+      let usedTool = false;
       for (const block of message.content ?? []) {
         if (block?.type === 'text') state.text = typeof block.text === 'string' ? boundedNarration(block.text) : undefined;
         if (block?.type !== 'tool_use') continue;
+        usedTool = true;
         const input = block.input ?? {}, native = /(?:^|__)js$/.test(block.name ?? '');
         let safe = true;
         if (/(?:^|__)js_reset$/.test(block.name ?? '')) state.tracker.clear();
@@ -147,6 +154,9 @@ export function createNarrationCache() {
         state.calls.set(block.id, { line: safe ? narrationLine(state.text, { ...input, tool: block.name }) : undefined,
           code: native && safe ? input.code : undefined });
       }
+      // Parallel calls share this row's prose. A later row needs a fresh sentence,
+      // since tool-result rows never reach the response-only append hook.
+      if (usedTool) state.text = undefined;
     },
     take(event) {
       if (!enabled) return undefined;
