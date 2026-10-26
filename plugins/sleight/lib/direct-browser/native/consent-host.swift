@@ -17,6 +17,33 @@ import CoreAudio
 
 // BEGIN PERSON INPUT
 private var consentFeedbackKey: UInt8 = 0
+private var consentArmingKey: UInt8 = 0
+// Match the Windows card interval. Compare the input's timestamp, including queued input.
+let consentArmingDelay: TimeInterval = 0.5
+final class ConsentArming {
+    private(set) var presentedAt = Double.infinity
+    private var observers: [NSObjectProtocol] = []
+    init(_ window: NSWindow) {
+        let center = NotificationCenter.default
+        observers.append(center.addObserver(forName: NSWindow.didBecomeKeyNotification, object: window, queue: nil) { [weak self] _ in
+            self?.presented()
+        })
+        for name in [NSApplication.willBecomeActiveNotification, NSApplication.didBecomeActiveNotification] {
+            observers.append(center.addObserver(forName: name, object: nil, queue: nil) { [weak self, weak window] _ in
+                if window?.isVisible == true { self?.presented() }
+            })
+        }
+    }
+    deinit { for observer in observers { NotificationCenter.default.removeObserver(observer) } }
+    func presented(at timestamp: Double = ProcessInfo.processInfo.systemUptime) { presentedAt = timestamp }
+    func accepts(_ event: NSEvent) -> Bool { event.timestamp >= presentedAt + consentArmingDelay }
+}
+func consentArming(_ window: NSWindow) -> ConsentArming {
+    if let arming = objc_getAssociatedObject(window, &consentArmingKey) as? ConsentArming { return arming }
+    let arming = ConsentArming(window)
+    objc_setAssociatedObject(window, &consentArmingKey, arming, .OBJC_ASSOCIATION_RETAIN_NONATOMIC)
+    return arming
+}
 let consentInputMessage = "This button needs your own click or key press."
 func refuseConsentInput(_ button: NSButton? = nil) {
     if let button = button, let label = objc_getAssociatedObject(button, &consentFeedbackKey) as? NSTextField {
@@ -48,10 +75,10 @@ func personActivation(_ event: NSEvent?, windowMatches: Bool, keyboard: Bool = t
     guard !accessibility, let event = event, windowMatches,
         event.timestamp.isFinite, event.timestamp >= 0, event.timestamp <= now, now - event.timestamp < 5,
         let cg = event.cgEvent, (consent || cg.getIntegerValueField(.eventSourceUnixProcessID) == 0), personInput(cg) else { return false }
-    // Consent retains 1.5.1's WindowServer provenance and native button dispatch. The word field checks
-    // its own Return, repeat and focus rules before dispatch; passive cards still require a mouse event.
+    // Consent retains WindowServer provenance. A repeated key-down can never confirm.
     if consent {
-        guard keyboard || [.leftMouseDown, .leftMouseUp].contains(event.type) else { return false }
+        guard !(event.type == .keyDown && event.isARepeat),
+            keyboard || [.leftMouseDown, .leftMouseUp].contains(event.type) else { return false }
     } else {
         guard event.type == .leftMouseUp || keyboard && highlighted && event.type == .keyDown && !event.isARepeat && [36, 49, 76].contains(event.keyCode) else { return false }
     }
@@ -113,6 +140,7 @@ final class ConsentInputAction: NSObject {
         self.button = button
         originalTarget = button.target; originalAction = button.action; self.currentEvent = currentEvent; self.mouseOnly = mouseOnly
         super.init()
+        if let window = button.window { _ = consentArming(window) }
         // Failure leaves the protected button disabled. It must never fall back to the unguarded action.
         guard refuseAccessibilityPress(button) else { button.isEnabled = false; refuseConsentInput(button); return }
         button.target = self; button.action = #selector(press(_:))
@@ -129,7 +157,8 @@ final class ConsentInputAction: NSObject {
         let event = currentEvent()
         guard let event = event,
             !typed || event.type == .keyDown,
-            personActivation(event, in: sender.window, keyboard: !mouseOnly || typed, consent: true)
+            let window = sender.window, consentArming(window).accepts(event),
+            personActivation(event, in: window, keyboard: typed, consent: true)
             else { refuseConsentInput(sender); return false }
         return sender.sendAction(originalAction, to: originalTarget)
     }
@@ -171,6 +200,7 @@ final class ConsentWordField: NSTextField {
     private var maskedText: String { String(repeating: "•", count: typed.count) }
     private var dispatching = false
     private var lastTimestamp: TimeInterval = -.infinity
+    private var lastPresentation = Double.infinity
     private var focusObserver: NSObjectProtocol?
     let accessibilityState: () -> (voiceOver: Bool, switchControl: Bool)
     init(_ entries: [String: ConsentInputAction], instructions: String,
@@ -292,6 +322,10 @@ final class ConsentWordField: NSTextField {
     }
     override func keyDown(with event: NSEvent) {
         guard !dispatching else { return }
+        if let window = window {
+            let presentation = consentArming(window).presentedAt
+            if presentation != lastPresentation { clear(); lastPresentation = presentation }
+        }
         if typed.isEmpty && (event.keyCode == 36 || event.keyCode == 76) { return }
         let letter = Self.letter(event)
         // Navigation, digits, punctuation and dead keys do not change or refuse a pending word.
@@ -300,6 +334,7 @@ final class ConsentWordField: NSTextField {
         let now = ProcessInfo.processInfo.systemUptime
         guard isEnabled, !entries.isEmpty, let window = window, window.isKeyWindow,
             window.firstResponder === self, event.window === window, event.type == .keyDown,
+            consentArming(window).accepts(event),
             event.timestamp <= now, now - event.timestamp < 5, event.timestamp > lastTimestamp,
             !event.isARepeat, personInput(event.cgEvent),
             event.modifierFlags.intersection([.command, .control, .option, .function]).isEmpty else { refuse(); return }
@@ -388,6 +423,14 @@ func consentInputActions(_ alert: NSAlert, choices: [String], kind: String) -> [
         stack.frame = NSRect(x: 0, y: 0, width: 360, height: typing.frame.height + alert.accessoryView!.frame.height + 8)
         alert.accessoryView = stack
         alert.layout()
+    }
+    // NSAlert assigns Return to its first button. Clear protected equivalents after the final layout,
+    // preserving button order and therefore the modal response indexes every caller already uses.
+    for (button, choice) in zip(alert.buttons, choices) {
+        if personChoice(kind, choice) {
+            button.keyEquivalent = ""
+            if alert.window.defaultButtonCell === button.cell { alert.window.defaultButtonCell = nil }
+        } else if choice == "cancel" && button.keyEquivalent.isEmpty { button.keyEquivalent = "\u{1b}" }
     }
     return actions
 }
@@ -1109,9 +1152,13 @@ final class AskCardPanel: NSObject {
     @objc func toggleDetails(_ sender: NSButton) { expanded.toggle(); layout() }
     func show() {
         if passive { panel.orderFrontRegardless() } else { panel.makeKeyAndOrderFront(nil) }
+        consentArming(panel).presented()
         NSSound(named: "Glass")?.play()
     }
-    func review() { if passive { panel.orderFrontRegardless() } else { panel.makeKeyAndOrderFront(nil) } }
+    func review() {
+        if passive { panel.orderFrontRegardless() } else { panel.makeKeyAndOrderFront(nil) }
+        consentArming(panel).presented()
+    }
     @objc func press(_ sender: NSButton) {
         guard choices.indices.contains(sender.tag) else { return }
         finish(choices[sender.tag])
@@ -1289,6 +1336,7 @@ final class ConsentHost: NSObject, NSApplicationDelegate, NSMenuDelegate {
         let actions = consentInputActions(alert, choices: choices, kind: kind)
         defer { for action in actions { action.typing?.invalidate() } }
         focus.presenting([:])
+        consentArming(alert.window).presented()
         let result = withExtendedLifetime(actions) { modal.run(abort: { NSApp.abortModal() }) { alert.runModal() } }
         focus.dismissed()
         // A shell card received during the modal waits until its run loop has ended.

@@ -5,6 +5,7 @@ var fixtureVoiceOver = false
 var fixtureSwitchControl = false
 var fixtureKeyAllowed = true
 var trustedEvents = Set<ObjectIdentifier>()
+var fixtureVisibleWindows = Set<ObjectIdentifier>()
 let fixtureWindowServerPID: Int64 = 424242
 var fixtureSourcePID: Int64 = 0
 var fixtureSourceState = CGEventSourceStateID.hidSystemState
@@ -67,6 +68,8 @@ func prepare(_ window: NSWindow, _ field: ConsentWordField) {
     check(window.windowNumber > 0, "real window number allocated")
     check(!window.isVisible && NSScreen.screens.allSatisfy { !window.frame.intersects($0.frame) }, "window unordered and offscreen")
     fixtureKeyWindow = window
+    // Simulate a card that has already been visible, without ordering it or waiting in real time.
+    consentArming(window).presented(at: ProcessInfo.processInfo.systemUptime - 10)
     check(window.makeFirstResponder(field), "field can receive focus without an editor")
     check(window.firstResponder === field, "field owns first responder")
 }
@@ -162,7 +165,8 @@ func modal(_ protectedDefault: Bool = false) -> (NSAlert, ConsentTyping, [Consen
     let actions = consentInputActions(alert, choices: choices, kind: "debugger")
     let view = actions[0].typing!
     prepare(alert.window, view.field)
-    check(alert.buttons[0].keyEquivalent == "\r", "NSAlert has its real Return default")
+    check(alert.buttons[0].keyEquivalent == (protectedDefault ? "" : "\r"), "only Cancel can retain the NSAlert Return default")
+    check(!protectedDefault || alert.window.defaultButtonCell == nil, "protected first button is not the default cell")
     return (alert, view, actions, receipt)
 }
 
@@ -185,30 +189,30 @@ for protectedDefault in [false, true] {
     }
 }
 for (protectedDefault, code) in [(false, UInt16(36)), (false, 76), (true, 36), (true, 76)] {
-    // Before G14 an empty buffer leaves Return to the existing default. It must still do so.
+    // Empty Return may cancel, but cannot activate a protected first button.
     let (alert, view, actions, receipt) = modal(protectedDefault)
     enter(view, code: code)
-    check(receipt.choices == [protectedDefault ? "Always allow" : "Don't allow"], "empty Return retains NSAlert default")
+    check(receipt.choices == (protectedDefault ? [] : ["Don't allow"]), "empty Return never approves")
     check(view.field.isEnabled, "default Return did not consume typed control")
     _ = alert; _ = actions
     let (unfocusedAlert, unfocused, held, otherReceipt) = modal(protectedDefault)
     type(word(unfocused, "Always allow"), unfocused)
     check(unfocusedAlert.window.makeFirstResponder(unfocusedAlert.buttons[0]), "button can take responder")
     enter(unfocused, code: code)
-    check(otherReceipt.choices == [protectedDefault ? "Always allow" : "Don't allow"], "field does not intercept another responder's Return")
+    check(otherReceipt.choices == (protectedDefault ? [] : ["Don't allow"]), "unfocused Return never approves")
     _ = held
 }
 
 // C3R2: WindowServer-origin Return must work at both the field and the final action, including
-// passive handoff cards. Empty Return still belongs to NSAlert's protected default button.
+// passive handoff cards. Empty Return never approves a protected button.
 for pid in [Int64(0), fixtureWindowServerPID] {
     fixtureSourcePID = pid
     for code: UInt16 in [36, 76] {
         let (alert, view, actions, receipt) = modal(true)
         enter(view, code: code)
-        check(receipt.choices == ["Always allow"], "protected default accepts physical Return from pid \(pid), key \(code)")
+        check(receipt.choices.isEmpty, "protected first button refuses physical Return from pid \(pid), key \(code)")
         type(word(view, "Always allow"), view); enter(view, code: code)
-        check(receipt.choices == ["Always allow", "Always allow"], "typed confirmation accepts physical Return from pid \(pid), key \(code)")
+        check(receipt.choices == ["Always allow"], "typed confirmation accepts physical Return from pid \(pid), key \(code)")
         check(!view.field.isEnabled, "typed success invalidates after WindowServer/default dispatch")
         _ = alert; _ = actions
         var answers: [String] = []
@@ -221,8 +225,125 @@ for pid in [Int64(0), fixtureWindowServerPID] {
 }
 fixtureSourcePID = 0
 
-// A native button owns its key equivalents and dispatch phase. Consent accepts the same four HID
-// types as 1.5.1; only mouse down/up may directly answer a mouseOnly card. Every event is spent once.
+// C7: picker, pause and status-menu callers use the strict default, unlike consent.
+for caller in ["picker", "pause", "status menu"] {
+    let (alert, view, actions, receipt) = modal(true)
+    fixtureSourcePID = fixtureWindowServerPID
+    let event = key("\r", in: alert.window, code: 36)
+    for bad in [(CGEventSourceStateID.combinedSessionState, Int64(0)), (.privateState, 0), (.hidSystemState, 9)] {
+        fixtureSourceState = bad.0; fixtureSourceData = bad.1
+        check(!personActivation(event, windowMatches: true, consent: true), "WindowServer plus bad provenance refuses \(caller)")
+    }
+    fixtureSourceState = .hidSystemState; fixtureSourceData = 0
+    check(!personActivation(event, windowMatches: true), "\(caller) refuses WindowServer pid")
+    if caller == "pause" {
+        let control = CursorPauseControl()
+        control.send = { _ in failures.append("refused pause must send nothing"); return false }
+        check(!control.click(event, windowMatches: true) && control.pending == nil, "actual pause refuses WindowServer pid")
+    } else {
+        // Picker selection and status-menu actions both enter this production function.
+        let menu = CursorPickerMenu(), item = NSMenuItem(title: caller, action: nil, keyEquivalent: "")
+        menu.addItem(item); menu.trackingWindow = alert.window; menu.lastHighlighted = item
+        fixtureCurrentEvent = event
+        check(!personMenuActivation(item), "actual \(caller) menu refuses WindowServer pid")
+        fixtureCurrentEvent = nil
+    }
+    check(personActivation(event, windowMatches: true, consent: true), "consent alone accepts WindowServer pid")
+    let repeatEvent = key("\r", in: alert.window, code: 36, repeated: true)
+    check(!personActivation(repeatEvent, windowMatches: true, consent: true), "consent independently refuses repeated key-down")
+    trustedEvents.remove(ObjectIdentifier(event)); trustedEvents.remove(ObjectIdentifier(repeatEvent))
+    fixtureSourcePID = 0
+    check(receipt.choices.isEmpty, "provenance classifier emits no choice")
+    _ = view; _ = actions
+}
+
+// All three NSAlert sites retain their original button indexes, with no protected Return default.
+for (kind, choice, title) in [("action", "once", "Allow once"), ("opt-in", "enable", "Allow this session"),
+    ("resume", "resume", "Allow this session"), ("turbo-off", "turbo-off", "Turn Off")] {
+    for route in Route.allCases {
+        for code: UInt16 in [36, 76] {
+            let alert = NSAlert(), receipt = TypedReceipt()
+            let protected = alert.addButton(withTitle: title), cancel = alert.addButton(withTitle: "Cancel")
+            for button in alert.buttons { button.target = receipt; button.action = #selector(TypedReceipt.accept(_:)) }
+            let actions = consentInputActions(alert, choices: [choice, "cancel"], kind: kind), view = actions[0].typing!
+            prepare(alert.window, view.field)
+            alert.layout()
+            check(alert.buttons[0] === protected && alert.buttons[1] === cancel, "\(kind) response indexes unchanged")
+            check(protected.keyEquivalent.isEmpty && alert.window.defaultButtonCell == nil, "\(kind) has no protected default after relayout")
+            enter(view, route, code: code)
+            check(receipt.choices.isEmpty, "\(kind) bare Return refuses through \(route), key \(code)")
+            let early = mouse(view, age: 0.2), arming = consentArming(alert.window)
+            arming.presented(at: early.timestamp - consentArmingDelay + 0.001)
+            fixtureCurrentEvent = early
+            check(!actions[0].press(protected) && receipt.choices.isEmpty, "\(kind) queued alert click inside 500 ms refuses")
+            fixtureCurrentEvent = nil; trustedEvents.remove(ObjectIdentifier(early))
+            arming.presented()
+            send(key("o", in: alert.window), route)
+            check(view.field.stringValue.isEmpty, "\(kind) early alert letter cannot build a word")
+            arming.presented(at: ProcessInfo.processInfo.systemUptime - 10)
+            type(word(view, title), view, route); enter(view, route, code: code)
+            check(receipt.choices == [title], "\(kind) typed word approves exact choice")
+            receipt.choices = []
+            let boundary = mouse(view)
+            arming.presented(at: boundary.timestamp - consentArmingDelay)
+            fixtureCurrentEvent = boundary
+            check(actions[0].press(protected) && receipt.choices == [title], "\(kind) alert click exactly at 500 ms approves")
+            fixtureCurrentEvent = nil; trustedEvents.remove(ObjectIdentifier(boundary))
+            receipt.choices = []
+            arming.presented()
+            _ = cancel.sendAction(cancel.action, to: cancel.target)
+            check(receipt.choices == ["Cancel"], "\(kind) alert Cancel stays immediate")
+            _ = actions
+        }
+    }
+}
+
+// Arming uses event timestamps, so queued early input still refuses. No sleeps or visible UI.
+for kind in ["action", "debugger", "relaunch", "handoff", "app"] {
+    let choice = kind == "relaunch" ? "relaunch" : kind == "handoff" ? "continue" : "always"
+    var answers: [String] = []
+    let card = AskCardPanel(AskCard(question: "Fixture?", detail: "", host: "sleight", icon: "", kind: kind,
+        choices: ["cancel", choice]), deadline: Date().timeIntervalSince1970 * 1000 + 60000) { answers.append($0) }
+    let view = card.typing!, action = card.actions[0], button = action.button!, arming = consentArming(card.panel)
+    prepare(card.panel, view.field)
+    let early = mouse(view, age: 0.2)
+    arming.presented(at: early.timestamp - consentArmingDelay + 0.001)
+    fixtureCurrentEvent = early
+    check(!action.press(button) && answers.isEmpty, "\(kind) queued input at 499 ms refuses after dispatch at 699 ms")
+    fixtureCurrentEvent = nil; trustedEvents.remove(ObjectIdentifier(early))
+    let letter = key("o", in: card.panel)
+    arming.presented(at: letter.timestamp - consentArmingDelay + 0.001)
+    send(letter)
+    check(view.field.stringValue.isEmpty && answers.isEmpty, "\(kind) early word input does nothing")
+    arming.presented(at: ProcessInfo.processInfo.systemUptime - 10)
+    type(word(view, button.title), view)
+    NotificationCenter.default.post(name: NSWindow.didBecomeKeyNotification, object: card.panel)
+    enter(view)
+    check(answers.isEmpty && view.field.stringValue.isEmpty, "\(kind) key activation rearms and clears pending word")
+    for notification in [NSApplication.willBecomeActiveNotification, NSApplication.didBecomeActiveNotification] {
+        arming.presented(at: ProcessInfo.processInfo.systemUptime - 10)
+        fixtureVisibleWindows.insert(ObjectIdentifier(card.panel))
+        NotificationCenter.default.post(name: notification, object: NSApp)
+        fixtureVisibleWindows.remove(ObjectIdentifier(card.panel))
+        let fresh = mouse(view)
+        check(!arming.accepts(fresh), "\(kind) app activation rearms visible card")
+        trustedEvents.remove(ObjectIdentifier(fresh))
+    }
+    let boundary = mouse(view)
+    arming.presented(at: boundary.timestamp - consentArmingDelay)
+    check(arming.accepts(boundary), "\(kind) exactly 500 ms arms")
+    arming.presented(at: boundary.timestamp - consentArmingDelay - 0.001)
+    check(arming.accepts(boundary), "\(kind) 501 ms arms")
+    arming.presented() // The hook used after show() and review().
+    check(!arming.accepts(boundary), "\(kind) re-show refuses pre-show event")
+    trustedEvents.remove(ObjectIdentifier(boundary))
+    _ = card.buttons[0].sendAction(card.buttons[0].action, to: card.buttons[0].target)
+    check(answers == ["cancel"], "\(kind) Cancel stays immediate")
+    card.close()
+}
+
+// A protected native button requires the word for keyboard dispatch. Direct mouse events still work.
+// Every accepted event is spent once.
 for pid in [Int64(0), fixtureWindowServerPID] {
     fixtureSourcePID = pid
     for mouseOnly in [false, true] {
@@ -231,15 +352,16 @@ for pid in [Int64(0), fixtureWindowServerPID] {
         let button = NSButton(title: "Confirm", target: receipt, action: #selector(TypedReceipt.accept(_:)))
         window.contentView!.addSubview(button); _ = window.windowRef
         let action = ConsentInputAction(button, mouseOnly: mouseOnly)
+        consentArming(window).presented(at: ProcessInfo.processInfo.systemUptime - 10)
         for type in [NSEvent.EventType.leftMouseDown, .leftMouseUp, .keyDown, .keyUp] {
             let event: NSEvent
             if type == .leftMouseDown || type == .leftMouseUp {
                 event = NSEvent.mouseEvent(with: type, location: .zero, modifierFlags: [], timestamp: ProcessInfo.processInfo.systemUptime, windowNumber: window.windowNumber, context: nil, eventNumber: 0, clickCount: 1, pressure: 1)!
             } else {
-                event = NSEvent.keyEvent(with: type, location: .zero, modifierFlags: [], timestamp: ProcessInfo.processInfo.systemUptime, windowNumber: window.windowNumber, context: nil, characters: "a", charactersIgnoringModifiers: "a", isARepeat: true, keyCode: 0)!
+                event = NSEvent.keyEvent(with: type, location: .zero, modifierFlags: [], timestamp: ProcessInfo.processInfo.systemUptime, windowNumber: window.windowNumber, context: nil, characters: "a", charactersIgnoringModifiers: "a", isARepeat: false, keyCode: 0)!
             }
             trustedEvents.insert(ObjectIdentifier(event)); fixtureCurrentEvent = event
-            let before = receipt.choices.count, allowed = !mouseOnly || type == .leftMouseDown || type == .leftMouseUp
+            let before = receipt.choices.count, allowed = type == .leftMouseDown || type == .leftMouseUp
             check(action.press(button) == allowed, "native consent dispatch preserves pid \(pid), type \(type), mouseOnly \(mouseOnly)")
             check(receipt.choices.count == before + (allowed ? 1 : 0), "button emits only the expected receipt")
             check(!action.press(button), "same consent event cannot dispatch twice")
@@ -254,7 +376,9 @@ fixtureSourcePID = 0
 // admits a posted process, invalid pid, non-HID source or user-data marker.
 for source in [(Int64(7), CGEventSourceStateID.hidSystemState, Int64(0)),
     (-1, .hidSystemState, 0), (Int64(Int32.max) + 1, .hidSystemState, 0),
-    (0, .combinedSessionState, 0), (0, .privateState, 0), (0, .hidSystemState, 9)] {
+    (0, .combinedSessionState, 0), (0, .privateState, 0), (0, .hidSystemState, 9),
+    (fixtureWindowServerPID, .combinedSessionState, 0), (fixtureWindowServerPID, .privateState, 0),
+    (fixtureWindowServerPID, .hidSystemState, 9)] {
     let (alert, view, actions, receipt) = modal(true)
     type(word(view, "Always allow"), view)
     fixtureSourcePID = source.0; fixtureSourceState = source.1; fixtureSourceData = source.2
@@ -440,6 +564,7 @@ for route in Route.allCases {
         let card = AskCardPanel(automaticCard(target, ["continue", "cancel"])!, deadline: deadline) { answers.append($0) }
         let view = card.typing!, window = card.panel
         card.layout(in: NSRect(x: -20000, y: -20000, width: 480, height: 480)); _ = window.windowRef
+        consentArming(window).presented(at: ProcessInfo.processInfo.systemUptime - 10)
         check(view.frame.minY >= card.buttons[0].frame.maxY + 8 && view.frame.maxY <= card.scroll.frame.minY, "handoff word field fits below its explanation")
         check(window.frame.height <= 480 && window.frame.width <= 480, "handoff fits a small display")
         let page = NSWindow(contentRect: NSRect(x: -20000, y: -20000, width: 400, height: 200), styleMask: [.titled], backing: .buffered, defer: false)
@@ -501,6 +626,7 @@ for attempt in ["press", "focused", "posted", "stale", "future", "failed-key"] {
     let card = AskCardPanel(AskCard(question: "Finish signing in", detail: "", host: "sleight", icon: "", kind: "handoff", choices: ["cancel", "continue"]), deadline: deadline) { answers.append($0) }
     let view = card.typing!, window = card.panel
     window.setFrameOrigin(NSPoint(x: -20000, y: -20000)); _ = window.windowRef
+    consentArming(window).presented(at: ProcessInfo.processInfo.systemUptime - 10)
     let page = NSWindow(contentRect: NSRect(x: -20000, y: -20000, width: 400, height: 200), styleMask: [.titled], backing: .buffered, defer: false)
     fixtureKeyWindow = page
     if attempt == "press" { check(!view.field.accessibilityPerformPress(), "ordinary AX press is refused") }

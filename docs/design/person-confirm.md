@@ -67,6 +67,24 @@ Remote approvals (LAWS, 2026-10-25) let the user's typed `allow <app>` approve a
 change isn't an app approval, so it has no path there: the confirmation is always the local sheet, and with nobody present
 the change is refused before any sheet shows.
 
+## Mac consent cards
+
+Protected choices on sleight's own cards and review alerts wait 500 ms after presentation, each re-show, and window or
+application activation. `consentArmingDelay` names this interval once in the host, matching Windows. The guard compares
+the event's timestamp with the presentation time, so input from inside the interval still refuses if dispatch is late.
+Early letters cannot build a confirmation word. Re-showing or activating the card clears a pending word before further
+typing. Cancel and Decline stay immediate.
+
+Protected alert buttons have no Return default. Their keyboard path requires the displayed word in the focused confirmation
+field, then Return or keypad Enter. Space on a button cannot approve. A protected mouse click still works after the delay.
+Repeated key-downs refuse at both the field and the final consent action. The guard retains the HID source, user-data,
+source-pid, window, freshness and event-spending checks. Picker, pause and status-menu actions retain their stricter pid-zero
+rule. Only consent permits verified WindowServer provenance. Button order and modal response indexes stay the same.
+
+The host applies these rules to operation review, session opt-in, resume, Turn Turbo Off, debugger, relaunch, handoff and
+Always allow choices. Ordinary session app approval remains host-answerable. The macOS Touch ID or password sheet uses
+LocalAuthentication and follows the system's input rules.
+
 ## Threat model
 
 These checks keep Claude's shell, file tools and computer use from changing sleight's settings through sleight. They don't
