@@ -1,0 +1,12 @@
+{
+  "name": "sleight-character-example",
+  "owner": { "name": "Your name" },
+  "metadata": { "description": "An example marketplace for original sleight characters." },
+  "plugins": [
+    {
+      "name": "example-bit",
+      "source": "./plugins/example-bit",
+      "description": "An original sleight character, derived from Bit."
+    }
+  ]
+}
