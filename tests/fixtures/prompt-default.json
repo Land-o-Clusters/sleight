@@ -57,5 +57,6 @@
   "browserClosedOutcome": "9e5f2ae21e3b53f89a2f31705de162fed1496da007e66246fdf84beb669a8698",
   "browserToolsLegacy": "9a9fd74f723977fd642128c4a16e8eba265fe98dfdf071d8ab57690ac529c6f0",
   "browserToolsMT": "bc144801d94745e8dad227560d2d9faf2aa48b79f80bcfd3ed75168996a72cdf",
-  "browserHandoffOutcomes": "d99b28cc1fb0fa080bae67acd03d6001b190fd21819848c48897a1ac9bb5c6d2"
+  "browserHandoffOutcomes": "d99b28cc1fb0fa080bae67acd03d6001b190fd21819848c48897a1ac9bb5c6d2",
+  "makeCharacterDescription": "d63280d56154cbc8c75afefd1a4a73a57fb4e1c9ac2afdc8aa486ac5e47fa114"
 }

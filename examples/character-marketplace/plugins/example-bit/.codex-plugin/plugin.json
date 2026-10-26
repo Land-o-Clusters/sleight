@@ -1,0 +1,9 @@
+{
+  "name": "example-bit",
+  "version": "1.0.0",
+  "description": "An original sleight character, derived from Bit.",
+  "author": {
+    "name": "sleight"
+  },
+  "license": "MIT"
+}

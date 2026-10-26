@@ -72,7 +72,7 @@ test('Cursor reads the same skill folder as Claude Code and Codex, and the skill
     for (const key of keys) assert.ok(shape.skillFrontmatterKeys.includes(key), `${name}: Cursor doesn't know ${key}`);
     assert.equal(/^name: (.*)$/m.exec(front)[1], name, 'Cursor needs the name to match the folder');
     assert.match(/^description: (.*)$/m.exec(front)[1], /\S/);
-    // As in Claude Code, only /drive-mac-apps loads it; the relay adds it to the first engine docs reply.
+    // Both skills load on explicit invocation. The relay adds drive-mac-apps to the first engine docs reply.
     assert.match(front, /^disable-model-invocation: true$/m);
   }
   // One copy: nothing generated that could drift from the skill.
@@ -83,7 +83,7 @@ test('Cursor reads the same skill folder as Claude Code and Codex, and the skill
     if (entry.isDirectory()) walk(full); else if (entry.name === 'SKILL.md' || entry.name.endsWith('.mdc')) copies.push(full.slice(plugin.length + 1));
   } };
   walk(plugin);
-  assert.deepEqual(copies, ['skills/drive-mac-apps/SKILL.md']);
+  assert.deepEqual(copies, ['skills/drive-mac-apps/SKILL.md', 'skills/make-character/SKILL.md']);
 });
 
 test('the repo is a Cursor marketplace named like the Claude one, so cursor-agent\'s loader keeps its plugin over the Claude import', () => {

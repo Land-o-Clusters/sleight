@@ -413,13 +413,13 @@ export async function prepareHandHost(options = {}) {
     if (!handCursorStyles.includes(cursorStyle)) throw Error('HAND_CURSOR_STYLE_INVALID');
     return spawn(executable('consent-host', receipt), ['--hand', '--capture=' + capture, '--cursor-style=' + cursorStyle, consent ? '--consent' : '--menu'],
       { env: consentEnvironment(), stdio: ['pipe', 'pipe', 'ignore', ...consent ? ['pipe', 'pipe'] : []] });
-  }, checkCharacter: frame => checkCharacterInHost(executable('consent-host', receipt), frame) });
+  }, checkCharacter: (frame, options) => checkCharacterInHost(executable('consent-host', receipt), frame, options) });
 }
 // The live host's own checks for a character frame (hand/character-frame.mjs), through the same sandboxed decode child:
 // { id, loaded, reason, warnings }. `sleight-mcp cursor check` shows the reason the host would draw the ring alone.
-export function checkCharacterInHost(binary, frame, { run = spawn, timeoutMs = 10000 } = {}) {
+export function checkCharacterInHost(binary, frame, { run = spawn, timeoutMs = 10000, root } = {}) {
   return new Promise((resolve, reject) => {
-    const child = run(binary, ['--check-character'], { env: consentEnvironment(), stdio: ['pipe', 'pipe', 'ignore'] });
+    const child = run(binary, ['--check-character', ...root ? [root] : []], { env: consentEnvironment(), stdio: ['pipe', 'pipe', 'ignore'] });
     let out = '';
     const timer = setTimeout(() => { child.kill('SIGKILL'); reject(Error('CHARACTER_CHECK_TIMEOUT')); }, timeoutMs);
     child.stdout.setEncoding('utf8');

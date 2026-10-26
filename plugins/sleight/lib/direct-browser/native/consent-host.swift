@@ -4201,6 +4201,19 @@ struct SpriteCharacter {
     let frame: SpriteFrame, images: [String: CGImage]
     struct Result { let character: SpriteCharacter?, reason: String?, warnings: [String] }
     static func root() -> String {
+        // The no-window sharing check can read only an owned private temporary bank. Live rendering never takes this path.
+        let args = CommandLine.arguments
+        if args.count == 3, args[1] == "--check-character" {
+            let path = args[2], parent = (path as NSString).deletingLastPathComponent
+            let leaf = (path as NSString).lastPathComponent
+            var st = stat(), bytes = [CChar](repeating: 0, count: Int(PATH_MAX))
+            if parent == "/private/tmp", leaf.range(of: "^sleight-character-check-[A-Za-z0-9]{6}$", options: .regularExpression) != nil,
+               realpath(path, &bytes) != nil, String(cString: bytes) == path,
+               lstat(path, &st) == 0, st.st_mode & S_IFMT == S_IFDIR, st.st_uid == getuid(), st.st_mode & 0o7777 == 0o700 {
+                return path
+            }
+            return "/invalid-character-check-root"
+        }
         let env = ProcessInfo.processInfo.environment
         if env["SLEIGHT_CURSOR_TEST"] == "1", let p = env["SLEIGHT_CURSOR_CHARACTERS_ROOT"], p.hasPrefix("/private/tmp/") { return p }
         return FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent("Library/Application Support/sleight/characters").path
@@ -6820,7 +6833,7 @@ if arguments.first == "--decode-sheet" { spriteDecodeChild(Array(arguments.dropF
 // `--check-character`: one character frame on stdin, the same checks and decode child as the live host, one JSON line out
 // (loaded, reason, warnings). `sleight-mcp cursor check` runs it so the user sees why a character shows the ring alone.
 if arguments.first == "--check-character" {
-    guard arguments.count == 1 else { exit(64) }
+    guard (1...2).contains(arguments.count) else { exit(64) }
     var input = Data()
     while input.count <= 32768, case let chunk = FileHandle.standardInput.availableData, !chunk.isEmpty { input.append(chunk) }
     let line = input.split(separator: 10).first ?? Data()

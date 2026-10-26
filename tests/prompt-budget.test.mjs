@@ -30,6 +30,16 @@ const skillPath = new URL('../plugins/sleight/skills/drive-mac-apps/SKILL.md', i
 const leanRatio = 31742 / 44482;
 const leanSkill = () => skillRules(skillPath, { SLEIGHT_PROMPT: 'lean' });
 
+test('make-character description stays below 60 tokens even at one token per UTF-8 byte', t => {
+  const source = readFileSync(new URL('../plugins/sleight/skills/make-character/SKILL.md', import.meta.url), 'utf8');
+  const description = source.match(/^description: (.+)$/m)?.[1];
+  assert.ok(description);
+  const bytes = Buffer.byteLength(description);
+  assert.ok(bytes < 60, `${bytes} bytes is the conservative token upper bound`);
+  assert.equal(hash(description), baseline.makeCharacterDescription);
+  t.diagnostic(`make-character description: ${bytes} UTF-8 bytes, at most ${bytes} byte-level tokens; body is on demand`);
+});
+
 test('outcome reporting guidance costs no default skill tokens', () => {
   for (const env of [{}, { SLEIGHT_PROMPT: 'lean' }, { SLEIGHT_LEAN_CALLS: '1' }])
     assert.doesNotMatch(skillRules(skillPath, env), /Report read completeness and unverified actions/);
