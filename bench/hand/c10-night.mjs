@@ -15,6 +15,12 @@ export const ROOT = fileURLToPath(new URL('../../', import.meta.url)).replace(/\
 const NIGHT = join(homedir(), 'Projects/sleight-wt/ledger/vc/night');
 const HOLD = '/tmp/sleight-hold', LOCK = '/tmp/sleight-live.lock';
 const reason = code => Object.assign(Error(code), { code });
+export const waitWithReason = (ms, signal) => sleep(ms, undefined, { signal }).catch(error => { throw error.cause ?? error; });
+// Called only after the interrupted phase has collected its fixture and host.
+export async function releaseForHold(lock, { wait, quiet, acquire }) {
+  if (lock.unlock) { await lock.unlock(); lock.unlock = undefined; }
+  await wait(); await quiet(); lock.unlock = await acquire();
+}
 export function exitStatus(stopped) {
   return stopped ? ({ OWNER: 4, HOLD: 5, TELEMETRY: 6, SIGNAL: 130, SIGINT: 130, SIGTERM: 143, SIGHUP: 129 })[stopped] ?? 1 : 0;
 }
@@ -25,7 +31,7 @@ export async function withAwake(children, run, stop = () => {}) {
   try { await awake.started; return await run(); } finally { ending = true; await awake.close(); }
 }
 export async function waitClear({ paths = [HOLD, LOCK], capMs = 3 * 3600000, signal,
-  exists = existsSync, now = Date.now, wait = ms => sleep(ms, undefined, { signal }), log = console.log } = {}) {
+  exists = existsSync, now = Date.now, wait = ms => waitWithReason(ms, signal), log = console.log } = {}) {
   const began = now();
   for (;;) {
     signal?.throwIfAborted();
@@ -33,7 +39,7 @@ export async function waitClear({ paths = [HOLD, LOCK], capMs = 3 * 3600000, sig
     const elapsed = now() - began;
     log(`waiting: ${busy} exists (${Math.round(elapsed / 1000)} s, cap ${capMs / 1000} s)`);
     if (elapsed >= capMs) throw reason('HOLD');
-    await wait(Math.min(30000, capMs - elapsed));
+    try { await wait(Math.min(30000, capMs - elapsed)); } catch (error) { throw error.cause ?? error; }
   }
 }
 // A phase owns its abort scope. Hold and deadline cancellation collect its children before returning.
@@ -97,6 +103,7 @@ export function dryRunPlan({ root = ROOT, night = NIGHT } = {}) {
     'No model calls, Apple events, posted input, owner apps, personal characters, settings or microphone recording.',
     'Wait for a hold or live lock, poll and log every 30 s; C10_WAIT_CAP_MS or --wait-cap-ms sets the cap (default 3 h).',
     'caffeinate -dims spans launch waits, compilation and checks. A mid-run hold closes owned windows and reruns the step after the hold.',
+    'Release the live lock after hold cleanup; wait for the hold and quiet gap, then acquire it again. Wake before each capture step with caffeinate -u -t 5; preflight refuses asleep or locked screens.',
     'The hold is polled every 500 ms during compilation and steps. Owner input, unknown input telemetry or signals stop the run.',
     'A step deadline records TELEMETRY for that step and continues. An interrupted step retries once; each failed capture retries once (15 s per request).',
     'Start at normal priority: a private spawn service keeps fixture and host at priority 0, then only the controller sets priority 20.',
@@ -196,7 +203,7 @@ export function attemptDirectory(bank, id, attempt) {
   }
   mkdirSync(path, { mode: 0o700 }); return path;
 }
-export async function executeSteps(plan, state, { run, save, canReuse = reusable, waitForHold }) {
+export async function executeSteps(plan, state, { run, save, canReuse = reusable, waitForHold, signal }) {
   for (const step of plan) {
     if (canReuse(state.markers[step.id])) {
       if (state.markers[step.id].status === 'incomplete') { state.markers[step.id].status = 'attended'; save(); }
@@ -218,6 +225,7 @@ export async function executeSteps(plan, state, { run, save, canReuse = reusable
           m.checks = [...m.checks ?? [], { name: 'step deadline or input telemetry', status: 'fail', numbers: { attempts }, screenshot: null, reason: 'TELEMETRY' }];
         }
         save();
+        if (signal?.aborted) return { stopped: signal.reason.code ?? signal.reason.message };
         if (['OWNER', 'SIGNAL', 'SIGINT', 'SIGTERM', 'SIGHUP', 'CLEANUP'].includes(code)) return { stopped: code };
         if (code === 'HOLD') {
           if (!waitForHold) return { stopped: code };
@@ -331,7 +339,8 @@ export async function main(argv = process.argv.slice(2)) {
   const spawner = new PrioritySpawner(env);
   spawner.onSignal = stop;
   const children = new Children(env, controller.signal, spawner.spawn.bind(spawner));
-  let unlock, interval, state, stopped, save;
+  const lock = {};
+  let interval, state, stopped, save;
   const waitFor = paths => waitClear({ paths, capMs: opts.waitCapMs, signal: controller.signal });
   try {
     await spawner.niceRunner();
@@ -365,33 +374,40 @@ export async function main(argv = process.argv.slice(2)) {
       } finally { children.signal = controller.signal; }
     }, { signal: controller.signal }), { signal: controller.signal, wait: () => waitFor([HOLD, LOCK]) });
     const preflight = async () => JSON.parse(await children.run(join(bin, 'c10-fixture'), ['--preflight']));
+    const wake = () => children.run('/usr/bin/caffeinate', ['-u', '-t', '5']);
+    await wake();
     const pre = await preflight();
     if (!pre.screenRecording) throw Error('Screen Recording permission missing; C10 never prompts');
     const quiet = async () => {
-      await sleep(15000, undefined, { signal: controller.signal });
+      await wake();
+      await waitWithReason(15000, controller.signal);
       const idle = (await preflight()).idle;
       if (!Number.isFinite(idle)) throw reason('TELEMETRY');
       if (idle < 10) throw reason('OWNER');
     };
-    await quiet();
-    await waitFor([HOLD, LOCK]);
-    // A new lock between the wait and mkdir is waited out with the same cap.
-    const lockBegan = Date.now();
-    for (;;) {
-      controller.signal.throwIfAborted();
-      try { unlock = await acquireLiveLock(); break; }
-      catch (error) {
-        if (!existsSync(LOCK)) throw error;
-        const remaining = opts.waitCapMs - (Date.now() - lockBegan);
-        if (remaining <= 0) throw reason('HOLD');
-        await waitClear({ paths: [HOLD, LOCK], capMs: remaining, signal: controller.signal });
+    const acquire = async () => {
+      await waitFor([HOLD, LOCK]);
+      // A new lock between the wait and mkdir is waited out with the same cap.
+      const lockBegan = Date.now();
+      for (;;) {
+        controller.signal.throwIfAborted();
+        try { return await acquireLiveLock(); }
+        catch (error) {
+          if (!existsSync(LOCK)) throw error;
+          const remaining = opts.waitCapMs - (Date.now() - lockBegan);
+          if (remaining <= 0) throw reason('HOLD');
+          await waitClear({ paths: [HOLD, LOCK], capMs: remaining, signal: controller.signal });
+        }
       }
-    }
+    };
+    await quiet(); lock.unlock = await acquire();
     const { runCheck } = await import('./c10-checks.mjs');
-    const outcome = await executeSteps(steps, state, { save,
-      waitForHold: async () => { await waitFor([HOLD]); await quiet(); },
+    const outcome = await executeSteps(steps, state, { save, signal: controller.signal,
+      waitForHold: () => releaseForHold(lock, { wait: () => waitFor([HOLD]), quiet, acquire }),
       run: async (step, attempts) => {
-        controller.signal.throwIfAborted(); await waitFor([HOLD]); await quiet();
+        controller.signal.throwIfAborted();
+        if (existsSync(HOLD)) throw reason('HOLD');
+        await quiet();
         if (existsSync(HOLD)) throw reason('HOLD');
         return runPhase(async signal => {
           children.signal = signal;
@@ -441,7 +457,7 @@ export async function main(argv = process.argv.slice(2)) {
     let cleaned = false;
     try { await children.close(); await spawner.close(); cleaned = true; } catch (e) { console.error(e.message); }
     if (cleaned) {
-      try { if (unlock) await unlock(); rmSync(work, { recursive: true, force: true }); }
+      try { if (lock.unlock) await lock.unlock(); rmSync(work, { recursive: true, force: true }); }
       catch (e) { cleaned = false; console.error(e.message); }
     }
     for (const [signal, fn] of signalHandlers) process.removeListener(signal, fn);

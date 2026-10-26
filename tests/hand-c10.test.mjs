@@ -144,6 +144,15 @@ test('voice-bar pixel counter distinguishes three bars, merged blue ink and abse
   }
 });
 
+test('display preflight reasons cover sleep, lock and missing session without reading the display', native, async () => {
+  const { fixture } = await binaries();
+  for (const [state, expected] of [[{ asleep: false, locked: false }, null], [{ asleep: true, locked: false }, 'display-asleep'],
+    [{ asleep: false, locked: true }, 'screen-locked'], [{ asleep: true, locked: true }, 'screen-locked'], [{ asleep: false }, 'screen-lock-state-unknown']]) {
+    const p = spawnSync(fixture, ['--display-selftest'], { input: JSON.stringify(state), encoding: 'utf8', timeout: 5000 });
+    assert.equal(p.status, 0, p.stderr); assert.deepEqual(JSON.parse(p.stdout), { reason: expected, windowsCreated: 0 });
+  }
+});
+
 test('native dump recipes verify narration geometry, perch cover and sleep, and 3/8 second line boundaries', native, async t => {
   const { buildCharacter, dumpScenarios, evaluateDump, runDump } = await checksApi(); const { host } = await binaries();
   const { Children } = await api(); const children = new Children(process.env, new AbortController().signal);
@@ -247,6 +256,64 @@ test('stop reasons always map to numeric exit codes, including individual POSIX 
     assert.equal(exitStatus(reason), code);
 });
 
+test('an abort inside hold waits or quiet sleeps retains its reason, summary and exit status', async () => {
+  const { waitWithReason, waitClear, exitStatus, summaryMarkdown, executeSteps } = await api();
+  for (const [code, status] of [['OWNER', 4], ['TELEMETRY', 6], ['SIGTERM', 143]]) {
+    for (const wait of [signal => waitWithReason(10000, signal), signal => waitClear({ paths: ['fixture-hold'], exists: () => true, signal, log() {} })]) {
+      const controller = new AbortController(), reason = Object.assign(Error(code), { code });
+      const pending = wait(controller.signal); controller.abort(reason);
+      await assert.rejects(pending, error => {
+        assert.equal(error, reason); assert.equal(exitStatus(error.code), status);
+        const summary = summaryMarkdown({ root, head: 'a'.repeat(40), markers: {} }, error.code);
+        assert.match(summary, new RegExp(`Stopped: ${code}`)); assert.doesNotMatch(summary, /ABORT_ERR/); return true;
+      });
+    }
+    const signal = new AbortController();
+    const state = { markers: {} };
+    const result = await executeSteps([{ id: 'quiet' }, { id: 'later' }], state, { signal: signal.signal, save() {}, canReuse: () => false,
+      run: async step => {
+        assert.equal(step.id, 'quiet'); const waiting = waitWithReason(10000, signal.signal);
+        signal.abort(Object.assign(Error(code), { code })); return waiting;
+      } });
+    assert.equal(result.stopped, code); assert.equal(exitStatus(result.stopped), status);
+    assert.equal(state.markers.later, undefined);
+  }
+});
+
+test('a hold releases the owned fixture lock before waiting and reacquires after the quiet gap', async () => {
+  const { releaseForHold } = await api(), { acquireLiveLock } = await import('../bench/live-lock.mjs');
+  const path = join(temp(), 'fixture-lock'), order = [], lock = { unlock: await acquireLiveLock(path) };
+  await releaseForHold(lock, {
+    wait: async () => { assert.equal(lock.unlock, undefined); assert.equal(existsSync(path), false); order.push('wait');
+      const filmUnlock = await acquireLiveLock(path); await filmUnlock(); },
+    quiet: async () => { assert.equal(existsSync(path), false); order.push('quiet'); },
+    acquire: async () => { order.push('acquire'); return acquireLiveLock(path); },
+  });
+  assert.deepEqual(order, ['wait', 'quiet', 'acquire']); assert.equal(existsSync(path), true); await lock.unlock();
+  const stopped = { unlock: await acquireLiveLock(path) };
+  await assert.rejects(releaseForHold(stopped, { wait: async () => { throw Object.assign(Error('OWNER'), { code: 'OWNER' }); },
+    quiet: () => assert.fail('quiet after stop'), acquire: () => assert.fail('acquire after stop') }), { code: 'OWNER' });
+  assert.equal(stopped.unlock, undefined); assert.equal(existsSync(path), false);
+});
+
+test('voice polling samples at 100 ms, catches a delayed start and stops at 3 seconds', async () => {
+  const { waitForVoice } = await checksApi();
+  for (const start of [0, 1700, 3000, 3100]) {
+    let now = 0; const times = [];
+    const result = await waitForVoice({ now: () => now, sleep: async ms => { now += ms; },
+      sample: async () => { times.push(now); return { voiceBars: now >= start ? 3 : 0, screenshot: 'fixture.png' }; } });
+    assert.deepEqual(times, Array.from({ length: Math.min(start, 3000) / 100 + 1 }, (_, i) => i * 100));
+    assert.equal(result.firstSeenMs, start <= 3000 ? start : -1); assert.equal(result.samples, times.length);
+  }
+  const controller = new AbortController();
+  const pending = waitForVoice({ signal: controller.signal, sleep: async () => {}, sample: () => new Promise(() => {}) });
+  controller.abort(Object.assign(Error('OWNER'), { code: 'OWNER' })); await assert.rejects(pending, { code: 'OWNER' });
+  let now = 0;
+  const late = await waitForVoice({ now: () => now, sleep: async ms => { now += ms; },
+    sample: async () => { now += 3001; return { voiceBars: 3 }; } });
+  assert.equal(late.firstSeenMs, -1, 'bars observed after 3 seconds cannot pass');
+});
+
 test('captures retry only the failed shot once, preserving the reason when both attempts fail', async () => {
   const { captureWithRetry } = await checksApi(); const calls = [];
   const shot = async name => { calls.push(name); if (calls.length === 1) throw Error('capture-failed'); return { screenshot: name }; };
@@ -268,9 +335,14 @@ test('failed capture evidence is valid only with an explicit failure reason', as
   assert.throws(() => validateResult({ id: 'lines', checks: [{ ...row, status: 'pass' }] }, dir));
 });
 
-test('sprite disappearance cannot pass without a visible baseline and permits four ink pixels of noise', async () => {
+test('sprite checks require 20 pixels or 2 percent of baseline, and clearing permits four pixels of noise', async () => {
   const { spriteDrew, spriteCleared, waitForSprite } = await checksApi();
   assert.equal(spriteDrew({ spritePixels: 0 }, { spritePixels: 0 }), false);
+  for (const [baseline, margin] of [[0, 20], [100, 20], [2000, 40]]) {
+    assert.equal(spriteDrew({ spritePixels: baseline }, { spritePixels: baseline + 1 }), false);
+    assert.equal(spriteDrew({ spritePixels: baseline }, { spritePixels: baseline + margin - 1 }), false);
+    assert.equal(spriteDrew({ spritePixels: baseline }, { spritePixels: baseline + margin }), true);
+  }
   assert.equal(spriteCleared({ spritePixels: 0 }, { spritePixels: 0 }, { spritePixels: 0 }), false);
   assert.equal(spriteCleared({ spritePixels: 1 }, { spritePixels: 100 }, { spritePixels: 4 }), true);
   assert.equal(spriteCleared({ spritePixels: 1 }, { spritePixels: 100 }, { spritePixels: 8 }), false);
@@ -420,13 +492,13 @@ test('all seven check drivers emit frames accepted by the native validator throu
   const real = new Children(process.env, new AbortController().signal);
   let traces = 0;
   try {
-    for (const scenario of ['normal', 'capture-errors', 'no-sprite', 'muted-voice', 'silent-voice', 'interrupted-lines']) {
-    const plan = scenario === 'normal' ? steps : steps.filter(s => scenario.endsWith('voice') ? s.id === 'voice' : scenario === 'no-sprite' ? ['perch', 'narration'].includes(s.id) : s.id === 'lines');
+    for (const scenario of ['normal', 'capture-errors', 'no-sprite', 'weak-seat', 'muted-voice', 'silent-voice', 'delayed-voice', 'interrupted-lines']) {
+    const plan = scenario === 'normal' ? steps : steps.filter(s => scenario.endsWith('voice') ? s.id === 'voice' : scenario === 'weak-seat' ? s.id === 'perch' : scenario === 'no-sprite' ? ['perch', 'narration'].includes(s.id) : s.id === 'lines');
     for (const step of plan) {
       const directory = join(work, `${step.id}-${scenario}`); (await import('node:fs')).mkdirSync(directory, { mode: 0o700 });
       const sessions = [];
-      let shown = false, style = 'sprite', covered = false, active;
-      const ready = { pid: 42, id: 7, frame: [200, 200, 800, 500], displays: [{ frame: [0, 0, 1440, 900], top: 25 }], clusterRightPt: 68 };
+      let shown = false, style = 'sprite', covered = false, active, now = 0, voiceRequestedAt, pausedAt, clearedAt;
+      const ready = { pid: 42, id: 7, frame: [200, 200, 800, 500], displays: [{ frame: [0, 0, 1440, 900], top: 25 }, { frame: [1440, 0, 1440, 900], top: 25 }], clusterRightPt: 68 };
       const children = { env: process.env,
         run: (command, args, options) => {
           if (scenario === 'interrupted-lines' && args[0] === '--perch-dump') throw Error('dump process disconnected');
@@ -434,14 +506,18 @@ test('all seven check drivers emit frames accepted by the native validator throu
         },
         start: (_command, _args, options) => {
           const input = [], rows = []; sessions.push({ input, env: options.env });
+          let cleared = false;
           const channel = { child: { pid: 100 + sessions.length }, rows,
             send(frame) {
               input.push(frame);
+              if (frame.hand === 'act' && frame.say && step.id === 'voice') voiceRequestedAt = now;
               if (frame.hand === 'character') { rows.push({ hand: 'character', id: frame.id, loaded: true }); input.push({ dumpAwait: 'character' }); }
               if (frame.hand === 'pause-ack') rows.push({ hand: 'pause', token: frame.token, phase: 'restored', paused: frame.paused });
-              if (frame.hand === 'clear') { shown = false; rows.push({ hand: 'clear-ready', token: frame.token }); }
+              if (frame.hand === 'clear') { cleared = true; clearedAt = now; shown = false; rows.push({ hand: 'clear-ready', token: frame.token }); }
               if (frame.hand === 'picker' && frame.op === 'style') style = frame.style;
-              if (['aim', 'act', 'status'].includes(frame.hand)) shown = true;
+              if (frame.hand === 'status' && ['done', 'error'].includes(frame.state)) cleared = false;
+              if (frame.hand === 'status' && frame.state === 'paused') pausedAt = now;
+              if (!cleared && ['aim', 'act', 'status'].includes(frame.hand)) shown = true;
             },
             wait(predicate, _ms, after = 0) { const row = rows.slice(after).find(predicate); assert.ok(row, 'ack emitted'); return Promise.resolve(row); },
             close: async () => ({ code: 0 }),
@@ -454,13 +530,16 @@ test('all seven check drivers emit frames accepted by the native validator throu
           this.reply = { ...ready, token: row.token };
           if (row.op === 'audio') this.reply = { ...this.reply, muted: scenario === 'muted-voice', zeroVolume: false };
           if (row.op === 'shot') {
+            if (row.name === 'second-display-baseline.png') assert.ok(now - clearedAt >= 250, 'clear settles before the baseline');
+            if (row.name === 'voice-paused.png') assert.ok(now - pausedAt >= 150, 'pause settles before capture');
             if (scenario === 'capture-errors' && ['error.png', 'error-retry.png', 'done.png', 'done-retry.png'].includes(row.name)) {
               this.reply.error = 'capture-failed'; return;
             }
-            if (row.name.startsWith('voice-')) assert.equal(row.bubble?.length, 4, 'voice glyph region comes from the native bubble plan');
+            if (row.name.startsWith('voice-')) { assert.equal(row.bubble?.length, 4, 'voice glyph region comes from the native bubble plan'); assert.equal(row.ocr, false); }
             writeFileSync(join(directory, row.name), encodePng(2, 2, new Uint8Array(16).fill(255)));
-            this.reply = { ...this.reply, screenshot: row.name, captureFrame: [0,0,2,2], spritePixels: scenario !== 'no-sprite' && shown && style === 'sprite' && !covered ? 100 : 0,
-              voiceBars: scenario === 'normal' && row.name.startsWith('voice-requested') ? 3 : 0, voicePixels: scenario === 'normal' && row.name.startsWith('voice-requested') ? 80 : 0,
+            const speaking = row.name.startsWith('voice-requested') && (scenario === 'normal' || scenario === 'delayed-voice' && now - voiceRequestedAt >= 1700);
+            this.reply = { ...this.reply, screenshot: row.name, captureFrame: [0,0,2,2], spritePixels: scenario !== 'no-sprite' && shown && style === 'sprite' && !covered ? scenario === 'weak-seat' ? 1 : 100 : 0,
+              voiceBars: speaking ? 3 : 0, voicePixels: speaking ? 80 : 0,
               hostWindows: shown ? 1 : 0, texts: ['I will inspect the menu first.', 'Checking now.', 'Ready to begin.', 'First step done.', 'That needs a look.', 'All done.'] };
           }
           if (row.op === 'replay') {
@@ -471,7 +550,7 @@ test('all seven check drivers emit frames accepted by the native validator throu
         },
         wait(predicate) { assert.ok(predicate(this.reply)); return Promise.resolve(this.reply); },
       };
-      const promise = runCheck(step.id, { children, fixture, ready, directory, bin: work, work, sleep: async () => {}, signal: new AbortController().signal });
+      const promise = runCheck(step.id, { children, fixture, ready, directory, bin: work, work, now: () => now, sleep: async ms => { now += ms; }, signal: new AbortController().signal });
       let result;
       if (scenario === 'interrupted-lines') {
         await assert.rejects(promise, /dump process disconnected/);
@@ -496,6 +575,8 @@ test('all seven check drivers emit frames accepted by the native validator throu
         assert.equal(JSON.parse(readFileSync(join(directory, 'result.json'))).checks.length, result.checks.length);
       } else if (scenario === 'no-sprite') {
         assert.ok(failed.some(c => c.name === (step.id === 'perch' ? 'cover by another fixture window' : 'nothing shown during clear')));
+      } else if (scenario === 'weak-seat') {
+        for (const name of ['seat and traffic-light margin', 'uncover restores seat', 'second display seat']) assert.ok(failed.some(c => c.name === name), name);
       } else if (scenario === 'silent-voice') {
         assert.equal(failed.length, 2); assert.equal(JSON.parse(readFileSync(join(directory, 'audio-output.json'))).muted, false);
       } else {
@@ -504,6 +585,10 @@ test('all seven check drivers emit frames accepted by the native validator throu
           assert.equal(result.checks.find(c => c.name === 'built-in character list').numbers.bundled, 6);
         }
         if (scenario === 'muted-voice') assert.ok(result.checks.some(c => c.required && c.status === 'skip' && c.numbers.muted === 1));
+        if (scenario === 'delayed-voice') {
+          const voice = result.checks.find(c => c.name === 'voice line started (three blue bars)');
+          assert.equal(voice.numbers.firstSeenMs, 1700); assert.equal(voice.numbers.samples, 18);
+        }
       }
       assert.ok(active);
     } }
