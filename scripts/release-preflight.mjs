@@ -137,7 +137,7 @@ export async function preflight({ root = process.cwd(), mode = 'release', tag, v
   if (!shaPattern.test(base)) { fail('base', 'invalid-commit'); return result; }
   if (await run('ancestor', { base, head }) === null || await run('sources') === null) return result;
   // The benchmark hub's pages, charts, explore.html and the README's generated blocks must match the data files they come from.
-  // The check renders from docs/results/data in memory and compares with the files in the tree (bench/results-hub.mjs --check).
+  // Collect available raw results, then render in memory and compare with the committed tree. Missing external banks keep saved data.
   let hub;
   try { hub = await runner({ step: 'hub' }); }
   catch { fail('hub', 'runner-error'); return result; }
@@ -185,7 +185,7 @@ export function createReviewedRunner(root, { execute = runOwnedCommand, signal, 
       case 'ancestor':
         if (!shaPattern.test(request.base ?? '') || !shaPattern.test(request.head ?? '')) throw Error('Invalid commits');
         args = ['merge-base', '--is-ancestor', request.base, request.head]; break;
-      case 'hub': command = process.execPath; args = ['bench/results-hub.mjs', '--render-only', '--check']; timeout = 60_000; break;
+      case 'hub': command = process.execPath; args = ['bench/results-hub.mjs', '--check']; timeout = 120_000; break;
       case 'sources': args = ['ls-files', '--error-unmatch', '--', 'scripts/release-history-scan.mjs', 'scripts/linux-preflight.mjs', 'bench/results-hub.mjs',
         ...(linuxRuntime === 'colima' ? ['scripts/linux-preflight-colima.mjs'] : [])]; break;
       case 'history':

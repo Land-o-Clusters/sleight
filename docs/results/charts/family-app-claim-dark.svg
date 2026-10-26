@@ -1,0 +1,97 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 580" width="900" height="580" role="img" aria-labelledby="title desc">
+<title id="title">App claim: expected seconds per task</title>
+<desc id="desc">App claim, 2026-10-18, 02:39 to 03:16 UTC. Expected seconds per task for sleight, LCU, Codex, Cua, Peekaboo and Claude computer use. sleight has the lowest expected time on 3 of 3 tasks. The scorer's wording is &quot;fastest&quot;.</desc>
+<style>
+.bg{fill:#141A26}
+text{font-family:-apple-system,"Segoe UI",Helvetica,Arial,sans-serif;font-size:13px;fill:#EFE9DC}
+.t{font-size:15px;font-weight:600}
+.b{font-weight:600}
+.m{fill:#A7B0BF}
+.g{stroke:#2C3442;stroke-width:1;fill:none}
+.me{fill:#E8622C}
+.ot{fill:#4E79D9}
+.sl{fill:#9AA6B8}
+.hme{stroke:#E8622C}
+.hot{stroke:#4E79D9}
+.hsl{stroke:#9AA6B8}
+</style>
+<defs><pattern id="h-me" width="6" height="6" patternUnits="userSpaceOnUse" patternTransform="rotate(45)"><line class="hme" x1="1" y1="0" x2="1" y2="6" stroke-width="2"/></pattern><pattern id="h-ot" width="6" height="6" patternUnits="userSpaceOnUse" patternTransform="rotate(45)"><line class="hot" x1="1" y1="0" x2="1" y2="6" stroke-width="2"/></pattern><pattern id="h-sl" width="6" height="6" patternUnits="userSpaceOnUse" patternTransform="rotate(45)"><line class="hsl" x1="1" y1="0" x2="1" y2="6" stroke-width="2"/></pattern></defs>
+<rect class="bg" width="900" height="580" rx="12"/>
+<text x="24" y="34" class="t">App claim: expected seconds per task</text>
+<text x="24" y="54" class="m">2026-10-18, 02:39 to 03:16 UTC. Each label is expected seconds, then passes/runs. Each task has its own</text>
+<text x="24" y="72" class="m">scale, and shorter bars are faster.</text>
+<g transform="translate(840 8) scale(0.8)"><g transform="translate(0.6 0.6)"><g transform="translate(10 10) rotate(-35)"><g fill="#141A26" stroke="#141A26" fill-opacity="0.08" stroke-opacity="0.08" stroke-width="3" stroke-linejoin="round"><path d="M-2 12.39 Q-2.2 10.8 -0.6 10.8 L12.4 10.8 Q14 10.8 13.82 12.39 L13.48 15.41 Q13.3 17 12.56 18.42 L11.94 19.58 Q11.2 21 9.6 21 L5.2 21 Q3.6 21 2.35 20 L-0.15 18 Q-1.4 17 -1.6 15.41 Z"/><path d="M-3.8 14.6 A2.5 3.3 0 1 0 1.2 14.6 A2.5 3.3 0 1 0 -3.8 14.6 Z"/><path d="M0.83 13.52 L-5.04 7.13 A1.25 1.25 0 0 0 -6.93 8.76 L-1.43 15.48 Z"/><path d="M2.44 11.48 L1.3 1.09 A1.2 1.2 0 0 0 -1.09 1.3 L-0.44 11.72 Z"/><path d="M6.15 11.51 L5.17 -0.67 A1.2 1.2 0 0 0 2.77 -0.53 L3.25 11.69 Z"/><path d="M9.85 11.59 L9.51 0.29 A1.2 1.2 0 0 0 7.11 0.31 L6.95 11.61 Z"/><path d="M13.5 11.68 L13.68 3.81 A1.15 1.15 0 0 0 11.39 3.68 L10.7 11.52 Z"/></g><g fill="#141A26" stroke="#141A26" fill-opacity="0.12" stroke-opacity="0.12" stroke-width="1.8" stroke-linejoin="round"><path d="M-2 12.39 Q-2.2 10.8 -0.6 10.8 L12.4 10.8 Q14 10.8 13.82 12.39 L13.48 15.41 Q13.3 17 12.56 18.42 L11.94 19.58 Q11.2 21 9.6 21 L5.2 21 Q3.6 21 2.35 20 L-0.15 18 Q-1.4 17 -1.6 15.41 Z"/><path d="M-3.8 14.6 A2.5 3.3 0 1 0 1.2 14.6 A2.5 3.3 0 1 0 -3.8 14.6 Z"/><path d="M0.83 13.52 L-5.04 7.13 A1.25 1.25 0 0 0 -6.93 8.76 L-1.43 15.48 Z"/><path d="M2.44 11.48 L1.3 1.09 A1.2 1.2 0 0 0 -1.09 1.3 L-0.44 11.72 Z"/><path d="M6.15 11.51 L5.17 -0.67 A1.2 1.2 0 0 0 2.77 -0.53 L3.25 11.69 Z"/><path d="M9.85 11.59 L9.51 0.29 A1.2 1.2 0 0 0 7.11 0.31 L6.95 11.61 Z"/><path d="M13.5 11.68 L13.68 3.81 A1.15 1.15 0 0 0 11.39 3.68 L10.7 11.52 Z"/></g><g fill="#141A26" stroke="#141A26" fill-opacity="0.2" stroke-opacity="0.2" stroke-width="0.8" stroke-linejoin="round"><path d="M-2 12.39 Q-2.2 10.8 -0.6 10.8 L12.4 10.8 Q14 10.8 13.82 12.39 L13.48 15.41 Q13.3 17 12.56 18.42 L11.94 19.58 Q11.2 21 9.6 21 L5.2 21 Q3.6 21 2.35 20 L-0.15 18 Q-1.4 17 -1.6 15.41 Z"/><path d="M-3.8 14.6 A2.5 3.3 0 1 0 1.2 14.6 A2.5 3.3 0 1 0 -3.8 14.6 Z"/><path d="M0.83 13.52 L-5.04 7.13 A1.25 1.25 0 0 0 -6.93 8.76 L-1.43 15.48 Z"/><path d="M2.44 11.48 L1.3 1.09 A1.2 1.2 0 0 0 -1.09 1.3 L-0.44 11.72 Z"/><path d="M6.15 11.51 L5.17 -0.67 A1.2 1.2 0 0 0 2.77 -0.53 L3.25 11.69 Z"/><path d="M9.85 11.59 L9.51 0.29 A1.2 1.2 0 0 0 7.11 0.31 L6.95 11.61 Z"/><path d="M13.5 11.68 L13.68 3.81 A1.15 1.15 0 0 0 11.39 3.68 L10.7 11.52 Z"/></g></g></g><g transform="translate(10 10) rotate(-35)"><rect x="-1.95" y="-1.95" width="3.9" height="3.9" rx="0.62" fill="#4E79D9" fill-opacity="0.2" transform="translate(4.2 23) rotate(8)"/><rect x="-1.6" y="-1.6" width="3.2" height="3.2" rx="0.51" fill="#4E79D9" fill-opacity="0.92" transform="translate(4.2 23) rotate(8)"/><rect x="-1.83" y="-1.83" width="3.66" height="3.66" rx="0.59" fill="#7299EA" fill-opacity="0.2" transform="translate(8.8 23.5) rotate(-6)"/><rect x="-1.5" y="-1.5" width="3" height="3" rx="0.48" fill="#7299EA" fill-opacity="0.92" transform="translate(8.8 23.5) rotate(-6)"/><rect x="-1.71" y="-1.71" width="3.42" height="3.42" rx="0.55" fill="#7299EA" fill-opacity="0.2" transform="translate(6.5 26.5) rotate(4)"/><rect x="-1.4" y="-1.4" width="2.8" height="2.8" rx="0.45" fill="#7299EA" fill-opacity="0.92" transform="translate(6.5 26.5) rotate(4)"/><rect x="-1.59" y="-1.59" width="3.17" height="3.17" rx="0.51" fill="#A9C4F5" fill-opacity="0.2" transform="translate(11.5 26.2) rotate(-11)"/><rect x="-1.3" y="-1.3" width="2.6" height="2.6" rx="0.42" fill="#A9C4F5" fill-opacity="0.92" transform="translate(11.5 26.2) rotate(-11)"/><rect x="-1.34" y="-1.34" width="2.68" height="2.68" rx="0.43" fill="#A9C4F5" fill-opacity="0.2" transform="translate(2.6 27.5) rotate(-4)"/><rect x="-1.1" y="-1.1" width="2.2" height="2.2" rx="0.35" fill="#A9C4F5" fill-opacity="0.92" transform="translate(2.6 27.5) rotate(-4)"/><rect x="-1.34" y="-1.34" width="2.68" height="2.68" rx="0.43" fill="#7299EA" fill-opacity="0.2" transform="translate(9.2 29.6) rotate(7)"/><rect x="-1.1" y="-1.1" width="2.2" height="2.2" rx="0.35" fill="#7299EA" fill-opacity="0.92" transform="translate(9.2 29.6) rotate(7)"/><rect x="-1.1" y="-1.1" width="2.2" height="2.2" rx="0.35" fill="#A9C4F5" fill-opacity="0.2" transform="translate(13.9 29.2) rotate(3)"/><rect x="-0.9" y="-0.9" width="1.8" height="1.8" rx="0.29" fill="#A9C4F5" fill-opacity="0.92" transform="translate(13.9 29.2) rotate(3)"/><rect x="-0.98" y="-0.98" width="1.95" height="1.95" rx="0.31" fill="#A9C4F5" fill-opacity="0.2" transform="translate(5.6 30.6) rotate(-8)"/><rect x="-0.8" y="-0.8" width="1.6" height="1.6" rx="0.26" fill="#A9C4F5" fill-opacity="0.92" transform="translate(5.6 30.6) rotate(-8)"/></g><g transform="translate(10 10) rotate(-35)"><path d="M-2 12.39 Q-2.2 10.8 -0.6 10.8 L12.4 10.8 Q14 10.8 13.82 12.39 L13.48 15.41 Q13.3 17 12.56 18.42 L11.94 19.58 Q11.2 21 9.6 21 L5.2 21 Q3.6 21 2.35 20 L-0.15 18 Q-1.4 17 -1.6 15.41 Z" fill="#B9BFC9"/><path d="M-2.02 12.19 Q-2.2 10.8 -0.8 10.8 L10 10.8 Q11.4 10.8 11.24 12.19 L10.86 15.61 Q10.7 17 9.89 18.14 L9.81 18.26 Q9 19.4 7.6 19.4 L5 19.4 Q3.6 19.4 2.34 18.79 L-0.14 17.61 Q-1.4 17 -1.58 15.61 Z" fill="#EFE9DC"/><path d="M-3.8 14.6 A2.5 3.3 0 1 0 1.2 14.6 A2.5 3.3 0 1 0 -3.8 14.6 Z" fill="#B9BFC9"/><path d="M-4 14 A2 2.8 0 1 0 0 14 A2 2.8 0 1 0 -4 14 Z" fill="#EFE9DC"/><path d="M0.83 13.52 L-5.04 7.13 A1.25 1.25 0 0 0 -6.93 8.76 L-1.43 15.48 Z" fill="#B9BFC9"/><path d="M0.83 13.51 L-5.21 6.91 A0.78 0.78 0 0 0 -6.38 7.93 L-0.57 14.74 Z" fill="#EFE9DC"/><path d="M2.44 11.48 L1.3 1.09 A1.2 1.2 0 0 0 -1.09 1.3 L-0.44 11.72 Z" fill="#B9BFC9"/><path d="M1.35 11.58 L0.36 0.91 A0.74 0.74 0 0 0 -1.12 1.03 L-0.45 11.72 Z" fill="#EFE9DC"/><path d="M6.15 11.51 L5.17 -0.67 A1.2 1.2 0 0 0 2.77 -0.53 L3.25 11.69 Z" fill="#B9BFC9"/><path d="M5.05 11.59 L4.24 -0.88 A0.74 0.74 0 0 0 2.75 -0.8 L3.25 11.68 Z" fill="#EFE9DC"/><path d="M9.85 11.59 L9.51 0.29 A1.2 1.2 0 0 0 7.11 0.31 L6.95 11.61 Z" fill="#B9BFC9"/><path d="M8.75 11.6 L8.59 0.04 A0.74 0.74 0 0 0 7.1 0.04 L6.95 11.6 Z" fill="#EFE9DC"/><path d="M13.5 11.68 L13.68 3.81 A1.15 1.15 0 0 0 11.39 3.68 L10.7 11.52 Z" fill="#B9BFC9"/><path d="M12.43 11.63 L12.82 3.52 A0.71 0.71 0 0 0 11.39 3.42 L10.7 11.51 Z" fill="#EFE9DC"/></g></g>
+<rect class="me" x="24" y="86" width="12" height="12" rx="2"/>
+<text x="42" y="96">sleight</text>
+<rect class="sl" x="116.8" y="86" width="12" height="12" rx="2"/>
+<text x="134.8" y="96">other arms, named on each row</text>
+<rect class="sl" fill-opacity="0.16" x="375.4" y="86" width="12" height="12"/><rect fill="url(#h-sl)" x="375.4" y="86" width="12" height="12"/>
+<text x="393.4" y="96">never passed</text>
+<line class="g" x1="24" y1="115" x2="876" y2="115"/>
+<text x="24" y="135" class="b">vscode-edit</text>
+<line class="g" x1="287.7" y1="122" x2="287.7" y2="226"/>
+<text x="130.5" y="135" class="b">sleight</text>
+<path class="me" d="M288.7 125h172.2a4 4 0 0 1 4 4v4a4 4 0 0 1 -4 4h-172.2z"/>
+<text x="471" y="135" data-task="vscode-edit" data-arm="sleight" data-kind="cell" data-section="main">16.5 (3/3)</text>
+<text x="130.5" y="153" class="m">LCU</text>
+<path class="sl" d="M288.7 143h336a4 4 0 0 1 4 4v4a4 4 0 0 1 -4 4h-336z"/>
+<text x="634.8" y="153" data-task="vscode-edit" data-arm="lcu" data-kind="cell" data-section="main">31.9 (3/3)</text>
+<text x="130.5" y="171" class="m">Codex</text>
+<path class="sl" d="M288.7 161h438.7a4 4 0 0 1 4 4v4a4 4 0 0 1 -4 4h-438.7z"/>
+<text x="737.4" y="171" data-task="vscode-edit" data-arm="codex" data-kind="cell" data-section="main">41.5 (3/3)</text>
+<text x="130.5" y="189" class="m">Cua</text>
+<path class="sl" d="M288.7 179h474.2a4 4 0 0 1 4 4v4a4 4 0 0 1 -4 4h-474.2z"/>
+<text x="773" y="189" data-task="vscode-edit" data-arm="cua" data-kind="cell" data-section="main">44.9 (3/3)</text>
+<text x="130.5" y="207" class="m">Peekaboo</text>
+<rect class="sl" fill-opacity="0.16" x="288.7" y="197" width="22" height="12"/><rect fill="url(#h-sl)" x="288.7" y="197" width="22" height="12"/>
+<text x="316.7" y="207" class="m" data-task="vscode-edit" data-arm="peekaboo" data-kind="cell" data-section="main">no pass (0/3)</text>
+<text x="130.5" y="225" class="m">Claude computer use</text>
+<rect class="sl" fill-opacity="0.16" x="288.7" y="215" width="22" height="12"/><rect fill="url(#h-sl)" x="288.7" y="215" width="22" height="12"/>
+<text x="316.7" y="225" class="m" data-task="vscode-edit" data-arm="claude-cu" data-kind="cell" data-section="main">no pass (0/3)</text>
+<line class="g" x1="24" y1="237" x2="876" y2="237"/>
+<text x="24" y="257" class="b">slack-post</text>
+<line class="g" x1="287.7" y1="244" x2="287.7" y2="348"/>
+<text x="130.5" y="257" class="b">sleight</text>
+<path class="me" d="M288.7 247h95.8a4 4 0 0 1 4 4v4a4 4 0 0 1 -4 4h-95.8z"/>
+<text x="394.5" y="257" data-task="slack-post" data-arm="sleight" data-kind="cell" data-section="main">13.5 (5/5)</text>
+<text x="130.5" y="275" class="m">LCU</text>
+<path class="sl" d="M288.7 265h100.8a4 4 0 0 1 4 4v4a4 4 0 0 1 -4 4h-100.8z"/>
+<text x="399.5" y="275" data-task="slack-post" data-arm="lcu" data-kind="cell" data-section="main">14.2 (5/5)</text>
+<text x="130.5" y="293" class="m">Codex</text>
+<path class="sl" d="M288.7 283h474.2a4 4 0 0 1 4 4v4a4 4 0 0 1 -4 4h-474.2z"/>
+<text x="773" y="293" data-task="slack-post" data-arm="codex" data-kind="cell" data-section="main">64.9 (1/3)</text>
+<text x="130.5" y="311" class="m">Cua</text>
+<path class="sl" d="M288.7 301h188.8a4 4 0 0 1 4 4v4a4 4 0 0 1 -4 4h-188.8z"/>
+<text x="487.6" y="311" data-task="slack-post" data-arm="cua" data-kind="cell" data-section="main">26.2 (3/3)</text>
+<text x="130.5" y="329" class="m">Peekaboo</text>
+<path class="sl" d="M288.7 319h342.8a4 4 0 0 1 4 4v4a4 4 0 0 1 -4 4h-342.8z"/>
+<text x="641.6" y="329" data-task="slack-post" data-arm="peekaboo" data-kind="cell" data-section="main">47.1 (3/3)</text>
+<text x="130.5" y="347" class="m">Claude computer use</text>
+<path class="sl" d="M288.7 337h114a4 4 0 0 1 4 4v4a4 4 0 0 1 -4 4h-114z"/>
+<text x="412.8" y="347" data-task="slack-post" data-arm="claude-cu" data-kind="cell" data-section="main">16.0 (5/5)</text>
+<line class="g" x1="24" y1="359" x2="876" y2="359"/>
+<text x="24" y="379" class="b">spotify-play</text>
+<line class="g" x1="287.7" y1="366" x2="287.7" y2="470"/>
+<text x="130.5" y="379" class="b">sleight</text>
+<path class="me" d="M288.7 369h110.2a4 4 0 0 1 4 4v4a4 4 0 0 1 -4 4h-110.2z"/>
+<text x="408.9" y="379" data-task="spotify-play" data-arm="sleight" data-kind="cell" data-section="main">26.7 (3/3)</text>
+<text x="130.5" y="397" class="m">LCU</text>
+<path class="sl" d="M288.7 387h231.9a4 4 0 0 1 4 4v4a4 4 0 0 1 -4 4h-231.9z"/>
+<text x="530.7" y="397" data-task="spotify-play" data-arm="lcu" data-kind="cell" data-section="main">55.2 (3/3)</text>
+<text x="130.5" y="415" class="m">Codex</text>
+<path class="sl" d="M288.7 405h170a4 4 0 0 1 4 4v4a4 4 0 0 1 -4 4h-170z"/>
+<text x="468.8" y="415" data-task="spotify-play" data-arm="codex" data-kind="cell" data-section="main">40.7 (3/3)</text>
+<text x="130.5" y="433" class="m">Cua</text>
+<path class="sl" d="M288.7 423h474.2a4 4 0 0 1 4 4v4a4 4 0 0 1 -4 4h-474.2z"/>
+<text x="773" y="433" data-task="spotify-play" data-arm="cua" data-kind="cell" data-section="main">111.8 (3/3)</text>
+<text x="130.5" y="451" class="m">Peekaboo</text>
+<rect class="sl" fill-opacity="0.16" x="288.7" y="441" width="22" height="12"/><rect fill="url(#h-sl)" x="288.7" y="441" width="22" height="12"/>
+<text x="316.7" y="451" class="m" data-task="spotify-play" data-arm="peekaboo" data-kind="cell" data-section="main">no pass (0/3)</text>
+<text x="130.5" y="469" class="m">Claude computer use</text>
+<rect class="sl" fill-opacity="0.16" x="288.7" y="459" width="22" height="12"/><rect fill="url(#h-sl)" x="288.7" y="459" width="22" height="12"/>
+<text x="316.7" y="469" class="m" data-task="spotify-play" data-arm="claude-cu" data-kind="cell" data-section="main">no pass (0/3)</text>
+<text x="24" y="502" class="m">The scorer's wording is &quot;fastest&quot;. sleight has the lowest expected time on 3 of 3 tasks.</text>
+<text x="24" y="520" class="m">ChatGPT engine for sleight and Codex: 26.1007.71326 (2026-10-18, inferred). Dates are UTC.</text>
+<text x="24" y="538" class="m">Models: claude-haiku-5-5 (sleight, LCU, Cua, Peekaboo and Claude computer use), gpt-6-luna (Codex). Effort:</text>
+<text x="24" y="556" class="m">high.</text>
+</svg>

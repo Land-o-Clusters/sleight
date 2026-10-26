@@ -2,6 +2,13 @@
 
 # Experiments
 
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="charts/family-ab-tests-dark.svg">
+  <img src="charts/family-ab-tests-light.svg" width="900" alt="Experiments: 959 of 990 recorded attempts passed across 38 study and arm rows. Task sets differ between studies.">
+</picture>
+
+<sub>Experiments: 959 of 990 recorded attempts passed across 38 study and arm rows. Task sets differ between studies.</sub>
+
 Each study compares sleight variants on the same tasks using the claims' expected-time scoring, with the first variant as the baseline.
 
 <details><summary>Method</summary>
@@ -480,6 +487,7 @@ These write-ups in [docs/benchmarks](../benchmarks/) have no tables on this hub,
 | 2026-10-12 | [REPL warm-up before the first call (2026-10-12)](../benchmarks/2026-10-12-repl-warmup.md) |
 | 2026-10-14 | [Guard reads A/B, 2026-10-14](../benchmarks/2026-10-14-guard-ab.md) |
 | 2026-10-14 | [Lean calls A/B, 2026-10-14](../benchmarks/2026-10-14-lean-calls-ab.md) |
+| 2026-10-19 | [App-class speed map, 2026-10-19](../benchmarks/2026-10-19-speed-map.md) |
 | n/a | [Battery report template](../benchmarks/battery-report-template.md) |
 | n/a | [Release audit, 2026-10-11](../benchmarks/release-audit-2026-10-11.md) |
 
