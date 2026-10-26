@@ -8,7 +8,7 @@ const tracked = new WeakSet();
 const fingerprint = view => JSON.stringify([view.rows[0]?.key??view.rows[0]?.text,view.rows.at(-1)?.key??view.rows.at(-1)?.text]);
 const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
 export function validateWholeOptions(options) {
-  for(const [key,min,max,integer] of [['max_items',1,5000,true],['max_seconds',.1,120,false]]) {
+  for(const [key,min,max,integer] of [['max_items',1,5000,true],['max_seconds',.1,120,false],['max_steps',1,500,true]]) {
     const value=options[key];
     if(value!==undefined&&(!Number.isFinite(value)||value<min||value>max||integer&&!Number.isInteger(value)))
       throw Error(`whole.${key} is out of range`);
@@ -152,7 +152,7 @@ export function renderWhole(bank, options = {}) {
   for (const [key, label] of [['start','above'],['end','below']]) if (bank.ends[key].state !== 'reached') reasons.push(`more may exist ${label}`);
   if (bank.refused.length) reasons.push('unopened controls');
   const complete = !reasons.length;
-  const header = [`Items read: ${n} (top first). Seconds: ${bank.seconds.toFixed(2)}. Clicks: ${bank.clicks}.`,
+  const header = [`Items read: ${n} (top first). Seconds: ${bank.seconds.toFixed(2)}. Clicks: ${bank.clicks}. Steps: ${bank.steps??0}.`,
     ...['start','end'].map(key=>`${key === 'start'?'Start':'End'}: ${bank.ends[key].state}.`),
     `Complete: ${complete?'yes.':'NO. partial: '+[...new Set(reasons)].join('; ')+'.'}`,
     ...(!complete?['Read missing regions separately or raise the whole budgets. whole.from pages held items only.']:[]),
@@ -218,9 +218,9 @@ export async function readWhole(entry, options, { ref, siteCheck = () => {} } = 
     } else if (options.from !== undefined) throw Error('whole transcript expired; read whole:{} again');
   }
   const start = Date.now(), deadline = start + (options.max_seconds ?? 45)*1000;
-  const limit = options.max_items ?? 1000, clickLimit = options.max_clicks ?? 30;
+  const limit = options.max_items ?? 1000, clickLimit = options.max_clicks ?? 30, stepLimit = options.max_steps ?? 200;
   const bank = { url,ref,items:[],gaps:0,ends:{start:{state:'not reached',reason:'not searched'},end:{state:'not reached',reason:'not searched'}},
-    reasons:[],refused:[],blocked:[],clicked:[],clicks:0,seconds:0 };
+    reasons:[],refused:[],blocked:[],clicked:[],clicks:0,steps:0,seconds:0 };
   let dom, guard;
   const budget = () => { siteCheck(); if(Date.now()>=deadline)throw Error('time cap');if(page.url()!==url)throw Error('page changed');if(page.isClosed())throw Error('page closed'); };
   const bounded = promise => boundWhole(promise,Math.min(20000,Math.max(1,deadline-Date.now())),deadline-Date.now()<20000?'time cap':'page unresponsive at 20 s');
@@ -253,7 +253,12 @@ export async function readWhole(entry, options, { ref, siteCheck = () => {} } = 
     try { rawDOM=await bounded(acquiringDOM); }
     catch(error){acquiringDOM.then(late=>late.dispose(),()=>{}).catch(()=>{});throw error;}
     dom = Object.fromEntries(['view','wheel','script','click'].map(method=>[method,(...args)=>{
-      budget();const pending=Promise.resolve().then(()=>rawDOM[method](...args));
+      budget();
+      if(method==='wheel'||method==='script'){
+        if(bank.steps>=stepLimit)throw Error('step cap');
+        bank.steps++;
+      }
+      const pending=Promise.resolve().then(()=>rawDOM[method](...args));
       if(method!=='view'){
         entry.state.wholeReadInput=pending;entry.state.actionPending=true;
         const clear=()=>{if(entry.state.wholeReadInput===pending){delete entry.state.wholeReadInput;entry.state.actionPending=false;}};
@@ -336,7 +341,7 @@ export async function readWhole(entry, options, { ref, siteCheck = () => {} } = 
   } catch(error) {
     if(error.siteBlocked||error.message===endpointBlock)throw error;
     const message=error.message.includes('whole DOM exceeds 50,000 elements')?'whole DOM exceeds 50,000 elements':error.message;
-    bank.reasons.push(/^(time cap|item cap|click cap|gap:|stuck |page scrolled|page unresponsive|loading indicator|request stalled|DOM never quiet|no list|page changed|page closed|blocked expander|whole guard|whole DOM|held text cap)/.test(message)?message:'whole read unavailable');
+    bank.reasons.push(/^(time cap|item cap|click cap|step cap|gap:|stuck |page scrolled|page unresponsive|loading indicator|request stalled|DOM never quiet|no list|page changed|page closed|blocked expander|whole guard|whole DOM|held text cap)/.test(message)?message:'whole read unavailable');
   } finally {
     if(entry.state.wholeReadInput)await boundWhole(entry.state.wholeReadInput,1200,'input release pending').catch(()=>{bank.reasons.push('input cleanup unconfirmed');});
     if(dom)await boundWhole(dom.dispose(),1000,'DOM release pending').catch(()=>{});

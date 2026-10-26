@@ -168,7 +168,7 @@ test('whole leaves a persistent expander unopened after a click adds no items',{
  const h=await harness(t),f=fixtures.createWholeFixture('c',{nonce:'no-progress'});h.bank.set(f.nonce,f);
  const context=await h.browser.newContext({viewport:{width:900,height:700}}),hook=newHook();await context.addInitScript({content:hookSource(hook)});t.after(()=>context.close());
  const page=await context.newPage();await page.goto(h.base+'/whole/'+f.nonce+'/');
- await page.evaluate(()=>{document.body.innerHTML='<p>2 messages</p><p>Beginning of chat</p><div role="list"><article>one</article><article>two</article></div><button type="button">Load more</button><p>You\'re all caught up</p>';});
+ await page.evaluate(()=>{document.body.innerHTML='<main role="log"><p>2 messages</p><p>Beginning of chat</p><div role="list"><article>one</article><article>two</article></div><button type="button">Load more</button><p>You\'re all caught up</p></main>';});
  const result=await readWhole({page,hook,state:{},popups:[]},{max_seconds:20});
  assert.match(result.text,/Complete: NO\./);assert.deepEqual(items(result.text),['one','two']);assert.match(result.text,/Load more.*last click added no items/);assert.match(result.text,/Clicks: 1\./);assert.match(result.text,/End: not reached\./);
 });

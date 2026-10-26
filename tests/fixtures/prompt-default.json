@@ -55,8 +55,8 @@
   "js": "9ec4a1d4a94be18503d350cf9cd3433d1adb9b6479ff5aa870df59e06574b491",
   "browserReviewOutcomes": "5c573cbc59689bbf2ba45e41b65b742c79050aa11cf002ec7d4f43a1acd80438",
   "browserClosedOutcome": "9e5f2ae21e3b53f89a2f31705de162fed1496da007e66246fdf84beb669a8698",
-  "browserToolsLegacy": "9a9fd74f723977fd642128c4a16e8eba265fe98dfdf071d8ab57690ac529c6f0",
-  "browserToolsMT": "bc144801d94745e8dad227560d2d9faf2aa48b79f80bcfd3ed75168996a72cdf",
+  "browserToolsLegacy": "edfcf4e93bab46652c571cb4270631aef8e28a5f3ed86e11ee5e637cc2b0f920",
+  "browserToolsMT": "4952cf11b2551872cee1a571cf5fd8d2aaa2ff136f67dc70e9858e8951ffef5f",
   "browserHandoffOutcomes": "d99b28cc1fb0fa080bae67acd03d6001b190fd21819848c48897a1ac9bb5c6d2",
   "makeCharacterDescription": "d63280d56154cbc8c75afefd1a4a73a57fb4e1c9ac2afdc8aa486ac5e47fa114",
   "makeCharacterBody": "435439cb3177bc3f25f6a92711de23e0a17e72021a584f7488e69f2f0e89a485"
