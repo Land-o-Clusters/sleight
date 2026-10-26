@@ -1340,29 +1340,29 @@ export async function run({ leaseDirectory, inspectInput: inspectStoppedInput, h
 
 // `record` and `replay` (replay.mjs): a finished run, run again with no model. Approvals go to the
 // terminal; without one, only apps the user pre-approved can run.
-export async function replayCommand(args, { home } = {}) {
+export async function replayCommand(args, { home, between } = {}) {
   const { record, replay, relayServer, replayOptions } = await import('./replay.mjs');
   const [command, source, out] = args;
   if (!source) { process.stderr.write('usage: sleight-mcp record <transcript.jsonl | session id> [out.json]\n       sleight-mcp replay <script.json> [--allow-positions] [--wait-ms 5000]\n'); return 2; }
   if (command === 'record') {
-    // A recording never lands in sleight's settings folder, under any name or link (person-gate.mjs insideSettings).
-    const { insideSettings } = await import('./person-gate.mjs');
-    const settingsOut = path => { if (insideSettings(path, home ? { home } : undefined)) { process.stderr.write(`sleight: record doesn't write into sleight's settings folder; pick another output path.\n`); return true; } return false; };
+    // A recording never lands in sleight's settings folder, under any name or link: the write itself checks the folder it
+    // opens (person-gate.mjs writeOutsideSettings). write is a test seam for the swap between check and open.
+    const { insideSettings, writeOutsideSettings } = await import('./person-gate.mjs');
+    const write = (path, text, options = {}) => writeOutsideSettings(path, text, { ...home ? { home } : {}, ...between ? { between } : {}, ...options });
+    const refused = error => { if (error?.code !== 'SETTINGS_OUT') throw error; process.stderr.write(`sleight: ${error.message}.\n`); return 2; };
     if (source === '--watch') {
       const { recordWatch, watchOptions } = await import('./demonstration.mjs');
       const options = watchOptions(args.slice(1));
-      if (settingsOut(options.output)) return 2;
-      await recordWatch({ ...options, log: line => process.stderr.write(`sleight: ${line}\n`) });
+      // A courtesy before a recording of up to an hour; the write still checks for itself.
+      if (insideSettings(options.output, home ? { home } : undefined)) return refused(Object.assign(Error("record doesn't write into sleight's settings folder; pick another output path"), { code: 'SETTINGS_OUT' }));
+      try { await recordWatch({ ...options, write: (path, text) => write(path, text, { exclusive: true, mode: 0o600 }), log: line => process.stderr.write(`sleight: ${line}\n`) }); }
+      catch (error) { return refused(error); }
       return 0;
     }
-    if (out && !out.startsWith('--') && settingsOut(out)) return 2;
     const script = record(source);
     const text = JSON.stringify(script, null, 1) + '\n';
     if (out && !out.startsWith('--')) {
-      // O_NOFOLLOW: a link put in out's place after the check fails the write instead of being followed.
-      const fs = await import('node:fs'), { O_WRONLY, O_CREAT, O_TRUNC, O_NOFOLLOW } = fs.constants;
-      const fd = fs.openSync(out, O_WRONLY | O_CREAT | O_TRUNC | O_NOFOLLOW, 0o644);
-      try { fs.writeFileSync(fd, text); } finally { fs.closeSync(fd); }
+      try { write(out, text); } catch (error) { return refused(error); }
       process.stderr.write(`sleight: ${script.steps.length} steps written to ${out}\n`);
     }
     else process.stdout.write(text);

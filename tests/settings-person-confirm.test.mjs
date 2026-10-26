@@ -5,11 +5,13 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { EventEmitter } from 'node:events';
 import { spawnSync } from 'node:child_process';
-import { linkSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, symlinkSync, writeFileSync, existsSync } from 'node:fs';
+import { linkSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, realpathSync, renameSync, rmSync, symlinkSync, writeFileSync, existsSync } from 'node:fs';
 import { tmpdir } from 'node:os';
+import { statSync } from 'node:fs';
+import { prepareConfirmHost } from '../plugins/sleight/lib/direct-browser/host.mjs';
 import { join } from 'node:path';
 import { confirmationLine, confirmationRefusal, helperConfirm, highStakesChange } from '../plugins/sleight/lib/person-confirm.mjs';
-import { insideSettings, settingsCommand } from '../plugins/sleight/lib/person-gate.mjs';
+import { insideSettings, settingsCommand, writeOutsideSettings } from '../plugins/sleight/lib/person-gate.mjs';
 import { replayCommand, settingsChangeRefusal } from '../plugins/sleight/lib/launch.mjs';
 import { permissionsCommand } from '../plugins/sleight/lib/permissions-command.mjs';
 import { permissionsPath } from '../plugins/sleight/lib/permissions.mjs';
@@ -213,6 +215,71 @@ test('record refuses an output in sleight\'s settings folder, through links, cas
   assert.equal(existsSync(join(settings, 'watch.json')), false);
   assert.equal(await replayCommand(['record', transcript, join(elsewhere, 'out.json')], { home }), 0);
   assert.equal(JSON.parse(readFileSync(join(elsewhere, 'out.json'), 'utf8')).sleightReplay, 1);
+});
+
+// Security review (2026-10-26): the write checks the folder it actually opens, so a parent swapped for a link between the
+// check and the open can't send it into the settings folder.
+test('record\'s write holds the folder it checked: a parent swapped for a link afterwards still gets the file, never settings', async t => {
+  const home = tempHome(t), settings = join(home, 'Library/Application Support/sleight'), work = join(home, 'work');
+  mkdirSync(settings, { recursive: true }); mkdirSync(work);
+  const transcript = join(home, 'empty.jsonl');
+  writeFileSync(transcript, '');
+  const swap = () => { renameSync(work, work + '.moved'); symlinkSync(settings, work); };
+  assert.equal(await replayCommand(['record', transcript, join(work, 'out.json')], { home, between: swap }), 0);
+  assert.deepEqual(readdirSync(settings), [], 'nothing landed in the settings folder');
+  assert.equal(JSON.parse(readFileSync(join(work + '.moved', 'out.json'), 'utf8')).sleightReplay, 1, 'the file went to the folder that was checked');
+  // With the link already in place when the write starts, the folder it opens is the settings folder, so it refuses.
+  assert.equal(await replayCommand(['record', transcript, join(work, 'again.json')], { home }), 2);
+  assert.deepEqual(readdirSync(settings), []);
+  const cwd = process.cwd();
+  assert.throws(() => writeOutsideSettings(join(work, 'x.json'), 'x', { home }), { code: 'SETTINGS_OUT' });
+  assert.equal(process.cwd(), cwd, 'the working folder is restored after a refusal');
+  // A file planted as a link at the name is never followed, and exclusive refuses an existing file.
+  symlinkSync(join(settings, 'turbo.json'), join(work + '.moved', 'planted.json'));
+  assert.throws(() => writeOutsideSettings(join(work + '.moved', 'planted.json'), 'x', { home }), { code: 'ELOOP' });
+  assert.equal(existsSync(join(settings, 'turbo.json')), false);
+  assert.throws(() => writeOutsideSettings(join(work + '.moved', 'out.json'), 'x', { home, exclusive: true }), { code: 'EEXIST' });
+  assert.equal(process.cwd(), cwd);
+});
+
+// Security review (2026-10-26): the helper that answers is a private copy of bytes hashed through one open file, never the
+// cached path itself, so a binary swapped in the cache after its check doesn't run. A shell script stands in for the build.
+test('the confirmation helper runs from a private copy hashed through one open file', { skip: process.platform !== 'darwin' && 'macOS only' }, async t => {
+  const root = tempHome(t), sourceRoot = join(root, 'sources'), cacheRoot = join(root, 'cache'), temporary = join(root, 'tmp');
+  mkdirSync(sourceRoot, { mode: 0o700 }); mkdirSync(temporary, { mode: 0o700 });
+  for (const name of ['peer-host.c', 'consent-host.swift']) writeFileSync(join(sourceRoot, name), 'source ' + name, { mode: 0o600 });
+  const script = code => `#!/bin/sh\nexit ${code}\n`;
+  const compile = async ({ name, binary }) => writeFileSync(binary, name === 'consent-host' ? script(0) : 'peer', { mode: 0o700 });
+  const runs = [];
+  const run = (file, args, options) => {
+    runs.push({ file, args, bytes: readFileSync(file, 'utf8'), mode: statSync(file).mode & 0o777, folder: statSync(join(file, '..')).mode & 0o777 });
+    // Swap the cached binary once the copy exists: what runs is still the copy.
+    const cached = readdirSync(cacheRoot).filter(name => /^[a-f0-9]{64}$/.test(name)).map(name => join(cacheRoot, name, 'consent-host'))[0];
+    writeFileSync(cached, script(0) + '# swapped\n');
+    const child = new EventEmitter();
+    setImmediate(() => child.emit('exit', 0, null));
+    return child;
+  };
+  const prepared = await prepareConfirmHost({ sourceRoot, cacheRoot, compile, tools: async () => true, run, temporary });
+  assert.equal(prepared.status, 'ready', JSON.stringify(prepared));
+  const child = prepared.spawn('turbo-on', 'Google Chrome');
+  await new Promise(resolve => child.once('exit', resolve));
+  assert.equal(runs.length, 1);
+  assert.deepEqual(runs[0].args, ['--confirm-person', 'turbo-on', 'Google Chrome']);
+  assert.equal(runs[0].bytes, script(0), 'the copy holds the bytes that were hashed');
+  assert.ok(runs[0].file.startsWith(temporary + '/sleight-confirm-') && !runs[0].file.startsWith(cacheRoot));
+  assert.deepEqual([runs[0].mode, runs[0].folder], [0o700, 0o700]);
+  await new Promise(resolve => setImmediate(resolve));
+  assert.deepEqual(readdirSync(temporary), [], 'the private copy is removed when the helper exits');
+  // The swapped cache file now fails its hash, so the next confirmation never runs it.
+  assert.throws(() => prepared.spawn('turbo-on'), /HOST_PACKAGE_MISMATCH/);
+  assert.equal(runs.length, 1);
+  assert.throws(() => prepared.spawn('Turbo On'), /CONFIRM_INVALID/);
+  // End to end through helperConfirm with a real spawn of a fresh build's copy: the stand-in exits 0, so the answer is ok.
+  rmSync(cacheRoot, { recursive: true, force: true });
+  const real = await prepareConfirmHost({ sourceRoot, cacheRoot, compile, tools: async () => true, temporary });
+  assert.equal(await helperConfirm({ key: 'turbo-on' }, { prepare: async () => real }), 'ok');
+  assert.deepEqual(readdirSync(temporary), []);
 });
 
 test('the host source: the CLI mode runs before any window code, and the menu\'s Revoke rows answer at once', () => {

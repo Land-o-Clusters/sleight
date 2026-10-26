@@ -59,12 +59,27 @@ Remote approvals (LAWS, 2026-10-25) let the user's typed `allow <app>` approve a
 change isn't an app approval, so it has no path there: the confirmation is always the local sheet, and with nobody present
 the change is refused before any sheet shows.
 
+## Threat model
+
+These checks keep Claude's shell, file tools and computer use from changing sleight's settings. They don't stop code that rewrites sleight itself. The plugin's JavaScript, the launcher and the helper cache are
+all files the same user can write, so a program running as that user can replace the check along with what it checks.
+Within that model, two cheap paths are closed:
+
+- The guard hook refuses Claude's Write, Edit and shell writes to `~/Library/Caches/sleight/` and to installed copies of the
+  plugin (`<host>/plugins/cache/<marketplace>/sleight/`, for Claude Code, Codex and Cursor). A plugin loaded from a
+  working checkout isn't covered, and its source can be edited as before.
+- The helper that answers is never the cached file itself. The launcher picks the build keyed by the source as hashed at
+  that moment. It reads the binary through one open file and checks its owner, mode and hash against the build record.
+  Then it runs a private copy of those bytes from a fresh 0700 folder. The build record is in the same cache, so this
+  closes a swap between the check and the run. Rewriting the whole cache, record included, still gets through. A fresh compile per confirmation
+  would drop the cache from the chain, at the cost of a compile each time (over 120 s cold at load 31 to 38, host.mjs).
+
 ## Outside sleight's control
 
 - Another computer-use tool can act on the password sheet. It still needs the password, and Touch ID still needs a finger.
 - A person can approve a sheet they didn't expect. The terminal line printed before the sheet gives the full command.
-- An agent that can write sleight's plugin files or the helper cache can change the check itself. The guard hook covers
-  those paths, and the helper cache is checked against a build receipt, but neither is proof against a local admin.
+- Code that runs as the user outside Claude's tools, such as a script an agent wrote earlier and the user ran, can rewrite
+  sleight and its checks (see the threat model).
 
 ## Not verified
 

@@ -190,7 +190,9 @@ export async function createDemoHelper({
   };
 }
 
+// write(output, text) saves the script; the launcher passes one that refuses sleight's settings folder (person-gate.mjs).
 export async function recordWatch({ app, output, seconds = 60, helper, log = () => {}, input = process.stdin,
+  write = (path, text) => writeFileSync(path, text, { flag: 'wx', mode: 0o600 }),
   notify = state => notification(`sleight recording ${state}`, `${app} demonstration recording ${state}`) }) {
   if (!input.isTTY) throw new Error('recording must start in an interactive terminal');
   if (!output) throw new Error('recording requires an output file');
@@ -210,7 +212,7 @@ export async function recordWatch({ app, output, seconds = 60, helper, log = () 
     try { await helper.close?.(); }
     finally { if (started) await notify('stopped'); }
   }
-  writeFileSync(output, JSON.stringify(script, null, 1) + '\n', { flag: 'wx', mode: 0o600 });
+  write(output, JSON.stringify(script, null, 1) + '\n');
   log(`Recorded ${script.steps.length - 1} observed actions to ${output}. Review the script before replay.`);
   return script;
 }

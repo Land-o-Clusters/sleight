@@ -1,8 +1,8 @@
 import { createHash, randomBytes } from 'node:crypto';
-import { existsSync, lstatSync, realpathSync, readFileSync, mkdirSync, mkdtempSync, writeFileSync, chmodSync, renameSync, rmSync } from 'node:fs';
+import { closeSync, constants, existsSync, fstatSync, lstatSync, openSync, realpathSync, readFileSync, mkdirSync, mkdtempSync, writeFileSync, chmodSync, renameSync, rmSync } from 'node:fs';
 import { spawn, execFile, execFileSync } from 'node:child_process';
 import { Socket } from 'node:net';
-import { userInfo } from 'node:os';
+import { tmpdir, userInfo } from 'node:os';
 import { dirname, isAbsolute, join, normalize } from 'node:path';
 import { promisify } from 'node:util';
 import { fileURLToPath } from 'node:url';
@@ -419,8 +419,12 @@ export async function prepareHandHost(options = {}) {
 // The person confirmation for high-stakes settings changes (person-confirm.mjs): the same binary and build as the hand, in its
 // --confirm-person mode, which shows only macOS's own Touch ID or password sheet and opens no window of its own. Its key
 // and subject are checked again against the host's fixed table. notice(text) hears about a first-use build.
+// The build is the one keyed by the source hashed now (handInventory), and the binary that runs is a private copy of bytes read
+// through one open file and hashed there, so a file swapped in the cache after its check never runs. The build record the
+// hash is checked against sits in the same user-writable cache, which the guard hook keeps Claude's tools out of
+// (docs/design/person-confirm.md says what that does and doesn't cover). run is a test seam for spawn.
 const CONFIRM_KEY = /^[a-z][a-z-]{0,39}$/;
-export async function prepareConfirmHost({ notice = () => {}, ...options } = {}) {
+export async function prepareConfirmHost({ notice = () => {}, run = spawn, temporary = tmpdir(), ...options } = {}) {
   if (process.platform !== 'darwin') return Object.freeze({ status: 'unavailable', code: 'PLATFORM' });
   if (!handHostBuilt(options)) notice('sleight: building the confirmation helper from source (first use, up to a few minutes).\n');
   const built = await handBuild(options);
@@ -428,8 +432,23 @@ export async function prepareConfirmHost({ notice = () => {}, ...options } = {})
   const { receipt } = built;
   return Object.freeze({ status: 'ready', spawn: (key, subject) => {
     if (!CONFIRM_KEY.test(key) || subject !== undefined && (typeof subject !== 'string' || subject.length > 100)) throw Error('CONFIRM_INVALID');
-    return spawn(executable('consent-host', receipt), ['--confirm-person', key, ...subject === undefined ? [] : [subject]],
+    const path = executable('consent-host', receipt), expected = nativeBuilds.get(receipt).binaries['consent-host'];
+    const fd = openSync(path, constants.O_RDONLY | constants.O_NOFOLLOW);
+    let bytes;
+    try {
+      const stat = fstatSync(fd);
+      if (!stat.isFile() || stat.uid !== process.getuid() || stat.mode & 0o022) throw Error('HOST_PACKAGE_MISMATCH');
+      bytes = readFileSync(fd);
+    } finally { closeSync(fd); }
+    if (digest(bytes) !== expected) throw Error('HOST_PACKAGE_MISMATCH');
+    const folder = mkdtempSync(join(temporary, 'sleight-confirm-')), copy = join(folder, 'consent-host');
+    chmodSync(folder, 0o700);
+    writeFileSync(copy, bytes, { mode: 0o700, flag: 'wx' });
+    const child = run(copy, ['--confirm-person', key, ...subject === undefined ? [] : [subject]],
       { env: environment(), stdio: ['ignore', 'ignore', 'ignore'] });
+    const remove = () => rmSync(folder, { recursive: true, force: true });
+    child.once('exit', remove); child.once('error', remove);
+    return child;
   } });
 }
 

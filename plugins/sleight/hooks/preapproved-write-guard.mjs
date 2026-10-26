@@ -5,9 +5,14 @@ const directorySuffix = '/library/application support/sleight';
 const suffixes = ['preapproved.json', 'turbo.json', 'turbo-apps.json', 'turbo-owner.json', 'electron-grants.json', 'grant-seal.key', 'hand.json', 'permissions.json'].map(filename => `${directorySuffix}/${filename}`);
 const mutations = new Set(['Write', 'Edit', 'MultiEdit', 'NotebookEdit']);
 const folded = path => path.normalize('NFC').toLowerCase();
+// Everything under these folders is sleight's own code: the helper cache (the consent host that answers sleight's cards and
+// its Touch ID confirmation, built from source) and installed copies of the plugin in Claude Code's, Codex's and Cursor's
+// plugin caches (<host>/plugins/cache/<marketplace>/sleight). Swapping either would change the checks themselves. A plugin
+// loaded from a working checkout is left alone, so its source stays editable.
+const TREES = [/\/library\/caches\/sleight(?:\/|$)/, /\/plugins\/cache\/[^/]+\/sleight(?:\/|$)/];
 const protectedLiteral = path => {
   const value = folded(normalize(path));
-  return suffixes.some(suffix => value.endsWith(suffix)) || value.endsWith(directorySuffix);
+  return suffixes.some(suffix => value.endsWith(suffix)) || value.endsWith(directorySuffix) || TREES.some(tree => tree.test(value));
 };
 const normalize = path => {
   const parts = [];
@@ -18,12 +23,13 @@ const normalize = path => {
   return (path.startsWith('/') ? '/' : '') + parts.join('/');
 };
 
-// True when the path is sleight's folder or a folder above it, so deleting, moving or changing it reaches the protected files.
+// True when the path is sleight's settings folder or helper cache, or a folder above one, so deleting, moving or changing it
+// reaches the protected files.
 // Without the home folder, only ~ spellings can be judged.
 const above = (path, home) => {
   const root = home ?? '/~', value = folded(normalize(path.replace(/^(?:~|\$HOME|\$\{HOME\})(?=\/|$)/, () => root)));
-  const folder = folded(normalize(`${root}/Library/Application Support/sleight`));
-  return value.startsWith('/') && (value === folder || folder.startsWith(value === '/' ? '/' : value + '/'));
+  return value.startsWith('/') && [`${root}/Library/Application Support/sleight`, `${root}/Library/Caches/sleight`].map(path => folded(normalize(path)))
+    .some(folder => value === folder || folder.startsWith(value === '/' ? '/' : value + '/'));
 };
 
 // Resolve before normalizing: a symlink followed by .. walks from its target.
@@ -376,7 +382,7 @@ function shellWritePaths(command, initialDirectory, depth = 0) {
       const writes = /\bopen\s*\([^)]*,\s*(?:mode\s*=\s*)?['"][wax][+bt]*['"]|\b(?:writeFile(?:Sync)?|appendFile(?:Sync)?|unlink(?:Sync)?|rename(?:Sync)?|copyFile(?:Sync)?|rm(?:Sync)?|remove|truncate|File\.write)\s*\(|\b(?:unlink|rename|chmod|chown|rmtree|move|symlink)\b/;
       if (!writes.test(source)) continue;
       // Inline code is scanned as text only, never passed to the filesystem resolver.
-      for (const match of source.matchAll(/(?:~|\$\{?HOME\}?|\/|\.{1,2}\/)[^'"`;\n()<>|]*?(?:(?:preapproved|turbo|turbo-apps|turbo-owner|electron-grants|hand|permissions)\.json|grant-seal\.key|\/sleight(?=['"`;,)\s]|$))|\b(?:(?:preapproved|turbo|turbo-apps|turbo-owner|electron-grants|hand|permissions)\.json|grant-seal\.key)\b/gi)) add(match[0], true);
+      for (const match of source.matchAll(/(?:~|\$\{?HOME\}?|\/|\.{1,2}\/)[^'"`;\n()<>|]*?(?:(?:preapproved|turbo|turbo-apps|turbo-owner|electron-grants|hand|permissions)\.json|grant-seal\.key|\/sleight(?=['"`;,)\s]|$)|\/(?:library\/caches|plugins\/cache\/[^/'"`;\n()<>|]+)\/sleight(?:\/[^'"`;\n()<>|]*)?)|\b(?:(?:preapproved|turbo|turbo-apps|turbo-owner|electron-grants|hand|permissions)\.json|grant-seal\.key)\b/gi)) add(match[0], true);
     }
   }
   return paths;

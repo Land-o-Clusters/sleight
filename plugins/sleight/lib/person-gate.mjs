@@ -2,7 +2,7 @@
 // started it in a terminal. The hook reads command text; this reads the process itself. Read-only forms run anywhere.
 // Tests inject the ancestor walk as a function. Nothing in the environment turns this off.
 import { execFileSync } from 'node:child_process';
-import { lstatSync, realpathSync } from 'node:fs';
+import { closeSync, constants, fstatSync, ftruncateSync, lstatSync, openSync, realpathSync, statSync, writeFileSync } from 'node:fs';
 import { userInfo } from 'node:os';
 import { basename, dirname, join, resolve } from 'node:path';
 
@@ -136,22 +136,54 @@ export function walkAncestors({ pid = process.ppid, self = process.pid, ps = sys
   } catch (error) { return { ok: false, reason: error === TIMEOUT ? 'timeout' : 'ps failed' }; }
 }
 
+// The real path of `value`, or of its nearest existing folder with the rest appended.
+const canonicalPath = (value, real = realpathSync.native) => { let at = resolve(value), rest = []; for (;;) {
+  try { return join(real(at), ...rest); } catch (error) { if (error?.code !== 'ENOENT' || dirname(at) === at) throw error; }
+  rest.unshift(basename(at)); at = dirname(at);
+} };
+// Whether a real path is sleight's settings folder or inside it. APFS ignores case by default, so the comparison does too.
+function underSettings(realPath, home, real = realpathSync.native) {
+  const folder = join(home, 'Library/Application Support/sleight');
+  const target = realPath.toLowerCase(), roots = [folder, canonicalPath(folder, real)].map(root => root.toLowerCase().replace(/\/$/, ''));
+  return roots.some(root => target === root || target.startsWith(root + '/'));
+}
+
 /** Whether writing `path` would land in sleight's settings folder (~/Library/Application Support/sleight), after links:
- *  the file's own real path when it exists, else its nearest existing folder's real path with the rest appended. APFS
- *  ignores case by default, so the comparison does too. A file with another hard link could be a settings file under a
- *  second name, so it counts as inside. `record <source> <out>` refuses such an out. */
+ *  the file's own real path when it exists, else its nearest existing folder's real path with the rest appended. A file
+ *  with another hard link could be a settings file under a second name, so it counts as inside. This is a courtesy check
+ *  before a long recording; writeOutsideSettings is the one that holds. */
 export function insideSettings(path, { home = homeFolder(), real = realpathSync.native, stat = lstatSync } = {}) {
   if (typeof path !== 'string' || !path || !home) return true;
-  const folder = join(home, 'Library/Application Support/sleight');
-  const canonical = value => { let at = resolve(value), rest = []; for (;;) {
-    try { return join(real(at), ...rest); } catch (error) { if (error?.code !== 'ENOENT' || dirname(at) === at) throw error; }
-    rest.unshift(basename(at)); at = dirname(at);
-  } };
   try {
     try { if (stat(path).nlink > 1) return true; } catch (error) { if (error?.code !== 'ENOENT') return true; }
-    const target = canonical(path).toLowerCase(), roots = [folder, canonical(folder)].map(root => root.toLowerCase().replace(/\/$/, ''));
-    return roots.some(root => target === root || target.startsWith(root + '/'));
+    return underSettings(canonicalPath(path, real), home, real);
   } catch { return true; }
+}
+
+const outsideRefusal = () => Object.assign(Error("record doesn't write into sleight's settings folder; pick another output path"), { code: 'SETTINGS_OUT' });
+/** Write `text` to `path` unless it lands in sleight's settings folder, with nothing checked ahead of the write. The process
+ *  changes into path's folder first: its working folder then holds that folder's inode, so a parent swapped for a link
+ *  afterwards (`between`, a test seam) can't redirect the write. The folder's real location is read from that inode and
+ *  checked, the file is opened relative to it without following a link, and a file with another hard link is refused
+ *  before anything is truncated. exclusive adds O_EXCL. Throws an Error with code SETTINGS_OUT on a refusal. */
+export function writeOutsideSettings(path, text, { home = homeFolder(), exclusive = false, mode = 0o644, between = () => {} } = {}) {
+  if (typeof path !== 'string' || !path || !home) throw outsideRefusal();
+  const name = basename(path);
+  if (!name || name === '.' || name === '..' || path.endsWith('/')) throw outsideRefusal();
+  const previous = process.cwd();
+  process.chdir(dirname(resolve(path)));
+  try {
+    between();
+    const here = realpathSync.native('.'), held = statSync('.'), named = statSync(here);
+    if (held.dev !== named.dev || held.ino !== named.ino || underSettings(here, home)) throw outsideRefusal();
+    const { O_WRONLY, O_CREAT, O_EXCL, O_NOFOLLOW } = constants;
+    const fd = openSync(name, O_WRONLY | O_CREAT | O_NOFOLLOW | (exclusive ? O_EXCL : 0), mode);
+    try {
+      const file = fstatSync(fd);
+      if (!file.isFile() || file.nlink > 1) throw outsideRefusal();
+      ftruncateSync(fd, 0); writeFileSync(fd, text);
+    } finally { closeSync(fd); }
+  } finally { process.chdir(previous); }
 }
 
 // Claude Code sets these in every shell it starts, and a daemon started there inherits them. One more signal on top of the walk.

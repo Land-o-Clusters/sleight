@@ -395,3 +395,39 @@ test('the logging switch hook catches Python and Ruby adjacent literals beside s
   ]) assert.equal(denied({ tool: 'Bash', command }), true, command);
   assert.equal(denied({ tool: 'Bash', command: `env 'A=1' 'grep' SLEIGHT_OUTCOMES '${MAC_USERS}u/.zs' 'hrc'` }), false);
 });
+
+// VC10 security review (2026-10-26): sleight's helper cache (the consent host that answers its cards and Touch ID
+// confirmation) and installed copies of the plugin are sleight's own code, so Claude's tools can't swap them. A working
+// checkout of the source stays editable.
+test('the helper cache and installed plugin copies deny every mutation; a source checkout and lookalikes pass', async () => {
+  const helper = `${MAC_USERS}fixture/Library/Caches/sleight/turbo-host/0123abcd/consent-host`;
+  const installed = [`${MAC_USERS}fixture/.claude/plugins/cache/sleight/sleight/1.5.0/lib/launch.mjs`,
+    `${MAC_USERS}fixture/.codex/plugins/cache/land-o-clusters/sleight/abc123/lib/person-confirm.mjs`,
+    `${MAC_USERS}fixture/.cursor/plugins/cache/market/sleight/hooks/preapproved-write-guard.mjs`];
+  for (const path of [helper, helper.toUpperCase(), '~/Library/Caches/sleight/turbo-host/k/consent-host', ...installed]) {
+    for (const tool of ['Write', 'Edit', 'MultiEdit', 'NotebookEdit']) assert.equal(await guard({ tool, file_path: path, notebook_path: path }, { stat }), true, `${tool} ${path}`);
+  }
+  for (const command of [`cp /tmp/evil ${helper}`, `printf x > ${installed[0]}`, 'rm -rf ~/Library/Caches/sleight', 'rm -rf ~/Library/Caches',
+    `ln -sf /tmp/evil ${helper}`, `python3 -c "open('${helper}', 'wb').write(b'x')"`, `node -e "require('fs').writeFileSync('${installed[1]}', 'x')"`,
+    `sed -i '' 's/a/b/' ${installed[2]}`, `mv ${MAC_USERS}fixture/Library/Caches/sleight /tmp/old`]) {
+    assert.equal(await guard({ tool: 'Bash', command }, { stat, home: `${MAC_USERS}fixture` }), true, command);
+  }
+  for (const path of [`${MAC_USERS}fixture/Projects/sleight/plugins/sleight/lib/launch.mjs`, `${MAC_USERS}fixture/Library/Caches/sleight-other/x`,
+    `${MAC_USERS}fixture/.claude/plugins/cache/other/other-plugin/x.mjs`, `${MAC_USERS}fixture/Library/Caches/com.example/sleight.txt`]) {
+    assert.equal(await guard({ tool: 'Write', file_path: path }, { stat }), false, path);
+  }
+  for (const command of [`cat ${helper}`, `ls ~/Library/Caches/sleight/turbo-host`, `shasum -a 256 ${installed[0]}`, 'rm -rf ~/Library/Caches/com.example']) {
+    assert.equal(await guard({ tool: 'Bash', command }, { stat, home: `${MAC_USERS}fixture` }), false, command);
+  }
+});
+
+test('a link into the helper cache is followed for Write and Edit', async t => {
+  const root = realpathSync(mkdtempSync(join(tmpdir(), 'sleight-guard-cache-')));
+  t.after(() => rmSync(root, { recursive: true, force: true }));
+  const cache = join(root, 'Library/Caches/sleight/turbo-host');
+  mkdirSync(cache, { recursive: true }); writeFileSync(join(cache, 'consent-host'), 'x');
+  symlinkSync(cache, join(root, 'innocent'));
+  const { lstat, realpath } = await import('node:fs/promises');
+  const real = async path => { await lstat(path); return { realPath: await realpath(path) }; };
+  assert.equal(await guard({ tool: 'Write', file_path: join(root, 'innocent/consent-host') }, { stat: real }), true);
+});
