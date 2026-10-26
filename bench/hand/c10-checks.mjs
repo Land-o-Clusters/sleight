@@ -37,8 +37,30 @@ export async function captureWithRetry(name, capture, signal) {
   return { screenshot: null, error: errors.join('; '), captureAttempts: 2, captureRetries: 1, captureErrors: errors,
     texts: [], spritePixels: -1, hostWindows: -1, voiceBars: -1, voicePixels: -1 };
 }
-export const spriteDrew = (baseline, visible) => !baseline.error && !visible.error && visible.spritePixels > baseline.spritePixels + 4;
+export const spriteMargin = baseline => Math.max(20, Math.ceil(baseline.spritePixels * 0.02));
+export const spriteDrew = (baseline, visible) => !baseline.error && !visible.error && visible.spritePixels >= baseline.spritePixels + spriteMargin(baseline);
 export const spriteCleared = (baseline, visible, after) => spriteDrew(baseline, visible) && !after.error && Math.abs(after.spritePixels - baseline.spritePixels) <= 4;
+export async function waitForVoice({ sample, sleep, now = Date.now, requestedAt = now(), signal, deadlineMs = 3000 }) {
+  signal?.throwIfAborted();
+  const deadline = new AbortController(), abort = () => deadline.abort(signal.reason);
+  const timer = setTimeout(() => deadline.abort(Object.assign(Error('Voice observation deadline'), { code: 'VOICE_DEADLINE' })), deadlineMs);
+  signal?.addEventListener('abort', abort, { once: true });
+  let image, samples = 0, firstSeenMs = -1;
+  try {
+    for (let at = 0; at <= deadlineMs; at += 100) {
+      await abortable(sleep(Math.max(0, requestedAt + at - now())), deadline.signal);
+      if (now() - requestedAt > deadlineMs) break;
+      image = await abortable(sample(samples++, deadline.signal), deadline.signal);
+      if (!image.error && image.voiceBars === 3 && now() - requestedAt <= deadlineMs) { firstSeenMs = now() - requestedAt; break; }
+      if (now() - requestedAt >= deadlineMs) break;
+      // A slow capture skips elapsed slots instead of issuing a burst of late samples.
+      at = Math.max(at, Math.floor((now() - requestedAt) / 100) * 100);
+    }
+  } catch (error) {
+    signal?.throwIfAborted(); if (error.code !== 'VOICE_DEADLINE') throw error;
+  } finally { clearTimeout(timer); signal?.removeEventListener('abort', abort); }
+  return { image: image ?? { error: 'No voice capture before the deadline', screenshot: null, voiceBars: -1, voicePixels: -1 }, samples, firstSeenMs };
+}
 export async function waitForSprite({ baseline, shot, sleep, now = Date.now, deadlineMs = 5000, signal }) {
   signal?.throwIfAborted();
   const began = now(), deadline = new AbortController(), abort = () => deadline.abort(signal.reason);
@@ -286,30 +308,32 @@ export async function runCheck(id, ctx) {
         });
         const bubble = plans.find(r => r.effect === 'draw' && r.bubble)?.bubble.frame;
         host.send(menu('voice', { id: voices[0].id, rate: 0.5 }));
-        const requestedAt = Date.now(); host.send(f.act({ say: line })); await sleep(800);
-        const speaking = await shot('voice-requested', { bubble });
-        const pauseAtMs = Date.now() - requestedAt;
+        const now = ctx.now ?? Date.now, requestedAt = now(); host.send(f.act({ say: line }));
+        const observed = await waitForVoice({ sample: (i, signal) => shot(`voice-requested-${i}`, { bubble, ocr: false }, signal),
+          sleep, now, requestedAt, signal: ctx.signal });
+        const speaking = observed.image, detected = observed.firstSeenMs >= 0, pauseAtMs = now() - requestedAt;
         const key = token(); host.send({ hand: 'pause-ack', nonce, phase: 'restore', token: key, paused: true }); await host.wait(r => r.token === key && r.phase === 'restored');
-        host.send(f.status('paused')); await sleep(200); const paused = await shot('voice-paused', { bubble });
+        host.send(f.status('paused')); await sleep(150); const paused = await shot('voice-paused', { bubble, ocr: false });
         const cancellation = JSON.parse(await children.run(join(bin, 'consent-host'), ['--narration-selftest'], { input: jsonl([{ installed: ['fixture'], voice: { id: 'fixture', rate: 0.5 }, lines: ['One line.', { cancel: true }] }]) }));
         writeFileSync(join(directory, 'voice-cancellation.json'), JSON.stringify(cancellation), { mode: 0o600 });
         check('unit: narrator cancellation model', cancellation.started.length === 1 && cancellation.active === null, { requestedLines: 1, installedVoices: voices.length, modelStarts: cancellation.started.length, modelStops: cancellation.stops }, baseline, 'Selftest cancellation; baseline screenshot is context. Physical pause and audible playback were not exercised.');
         let audio;
-        if (speaking.voiceBars !== 3) {
+        if (!detected) {
           audio = await request({ op: 'audio' });
           writeFileSync(join(directory, 'audio-output.json'), JSON.stringify(audio), { mode: 0o600 });
         }
         const numbers = { speakingBars: speaking.voiceBars ?? -1, speakingPixels: speaking.voicePixels ?? -1,
           pausedBars: paused.voiceBars ?? -1, pausedPixels: paused.voicePixels ?? -1, pauseAtMs,
+          firstSeenMs: observed.firstSeenMs, samples: observed.samples, sampleIntervalMs: 100, deadlineMs: 3000, lineCharacters: line.length,
           muted: audio?.muted === true ? 1 : audio?.muted === false ? 0 : -1,
           zeroVolume: audio?.zeroVolume === true ? 1 : audio?.zeroVolume === false ? 0 : -1, audioRecordings: 0 };
-        if (!speaking.error && speaking.voiceBars !== 3 && (audio?.muted === true || audio?.zeroVolume === true)) {
+        if (!speaking.error && !detected && (audio?.muted === true || audio?.zeroVolume === true)) {
           skip('voice line start and pause cut', 'No voice bars; output is muted or at zero volume. Output settings were read and left unchanged.', numbers, true, speaking);
         } else {
-          check('voice line started (three blue bars)', speaking.voiceBars === 3, numbers, speaking,
+          check('voice line started (three blue bars)', detected, numbers, speaking,
             'Blue bars appear after the speech delegate starts. Pixels do not prove audible output. Missing bars include read-only audio metadata.');
-          check('pause cut a speaking line (bars removed)', speaking.voiceBars === 3 && paused.voiceBars === 0, numbers, paused,
-            'A speaking capture precedes pause; the following capture must contain zero blue bars.');
+          check('pause cut a speaking line (bars removed)', detected && paused.voiceBars === 0, numbers, paused,
+            `Pause sent at ${pauseAtMs} ms for a ${line.length} character line; bars first seen at ${observed.firstSeenMs} ms. The capture immediately after the acknowledgment must contain zero blue bars.`);
         }
       }
     } else if (id === 'picker') {
@@ -355,19 +379,24 @@ export async function runCheck(id, ctx) {
         frames: [character.frame, options(true), { dumpWorld: { windows: [{ id: target.id, pid: target.pid, frame: target.frame }], displays: target.displays } }, { dumpDecode: true }, f.aim()] });
       const seat = rows.find(r => r.effect === 'perch')?.seat, legs = rows.find(r => r.effect === 'legs')?.legs;
       const legLeft = seat && legs ? seat.x - legs[0] - target.frame[0] : -1;
-      check('seat and traffic-light margin', seated.spritePixels > baseline.spritePixels && geometry.clusterRightPt <= 80 && legLeft >= geometry.clusterRightPt + 8,
-        { spritePixels: seated.spritePixels, measuredClusterRightPt: geometry.clusterRightPt, constantPt: 80, spriteLegLeftPt: legLeft, gapPt: legLeft - geometry.clusterRightPt }, seated,
+      check('seat and traffic-light margin', spriteDrew(baseline, seated) && geometry.clusterRightPt <= 80 && legLeft >= geometry.clusterRightPt + 8,
+        { spritePixels: seated.spritePixels, baselinePixels: baseline.spritePixels, marginPixels: spriteMargin(baseline), measuredClusterRightPt: geometry.clusterRightPt, constantPt: 80, spriteLegLeftPt: legLeft, gapPt: legLeft - geometry.clusterRightPt }, seated,
         'Cluster measured from all three real fixture title-bar buttons. Seat and leg footprint measured by the shipped dump.');
       await request({ op: 'cover', covered: true }); await sleep(1500); const covered = await shot('covered');
       check('cover by another fixture window', spriteCleared(baseline, seated, covered),
         { seatedPixels: seated.spritePixels, coveredPixels: covered.spritePixels, baselinePixels: baseline.spritePixels, tolerancePixels: 4 }, covered);
       await request({ op: 'cover', covered: false }); await sleep(1500); const uncovered = await shot('uncovered');
-      check('uncover restores seat', uncovered.spritePixels > baseline.spritePixels, { uncoveredPixels: uncovered.spritePixels }, uncovered);
+      check('uncover restores seat', spriteDrew(baseline, uncovered), { uncoveredPixels: uncovered.spritePixels, baselinePixels: baseline.spritePixels, marginPixels: spriteMargin(baseline) }, uncovered);
       if (ready.displays.length < 2) skip('second display', 'Only one display is present.', { displays: ready.displays.length }, false, uncovered);
       else {
         const second = await request({ op: 'display', index: 1 });
+        const clear = f.clear(); host.send(clear); await host.wait(r => r.hand === 'clear-ready' && r.token === clear.token);
+        await sleep(250);
+        const secondBaseline = await shot('second-display-baseline');
+        host.send(f.status('done'));
         host.send(f.aim({ at: [second.frame[0] + second.frame[2] / 2, second.frame[1] + second.frame[3] / 2] })); await sleep(1200);
-        const image = await shot('second-display'); check('second display seat', image.spritePixels > 0, { displays: ready.displays.length, displayIndex: 1, spritePixels: image.spritePixels }, image);
+        const image = await shot('second-display'); check('second display seat', spriteDrew(secondBaseline, image),
+          { displays: ready.displays.length, displayIndex: 1, spritePixels: image.spritePixels, baselinePixels: secondBaseline.spritePixels, marginPixels: spriteMargin(secondBaseline) }, image);
       }
       const deep = await dump(dumpScenarios(target, character.frame).find(s => s.id === 'covered-sleep-plan'));
       check('unit: 600 second stop in runtime dump', deep.pass, deep.numbers, baseline, 'Simulated clock only; baseline screenshot is context.');

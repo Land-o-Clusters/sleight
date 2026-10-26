@@ -36,7 +36,12 @@
     "reason": "the account hit its weekly usage limit during this round (claude-code: You have hit your weekly limit); not a result of the arm. Rerun."
    }
   ],
-  "partial": [{"browser":"chrome","label":"sleight-turbo-rel130-opus","rounds":["chrome-sleight-turbo-rel130-opus-r1"],"runs":13,"needed":39}],
+  "partial": [
+   {"browser":"chrome","label":"sleight-turbo-rel130-opus","rounds":["chrome-sleight-turbo-rel130-opus-r1"],"runs":13,"needed":39},
+   {"browser":"chrome","label":"sleight-turbo-rel131-opus","rounds":["chrome-sleight-turbo-rel131-opus-r1"],"runs":13,"needed":39}
+  ],
+  "cover": {"applied":false,"rows":0,"left":0,"leftPasses":0},
+  "minRuns": 3,
   "studies": [
    {
     "id": "browser-turbo-chrome-sleight-turbo",
@@ -877,6 +882,13 @@
      "raceTotals": {"sleight-turbo":null,"fowlbrowser":447.775}
     },
     "sameModel": [],
+    "graders": {
+     "used": "saved",
+     "file": "bench/world/tasks/fowlbrowser.json",
+     "differ": [{"task":"inject-mail","runs":8,"moved":0}],
+     "saved": {"sleight-turbo":{"passes":31,"runs":39,"fastest":6,"total":null},"fowlbrowser":{"passes":53,"runs":55,"fastest":7,"total":447.775}},
+     "current": {"sleight-turbo":{"passes":31,"runs":39,"fastest":6,"total":null},"fowlbrowser":{"passes":53,"runs":55,"fastest":7,"total":447.775}}
+    },
     "latest": false
    },
    {
@@ -1731,6 +1743,13 @@
      "raceTotals": {"sleight-turbo":null,"fowlbrowser":447.775}
     },
     "sameModel": [],
+    "graders": {
+     "used": "saved",
+     "file": "bench/world/tasks/fowlbrowser.json",
+     "differ": [{"task":"inject-mail","runs":8,"moved":0}],
+     "saved": {"sleight-turbo":{"passes":36,"runs":39,"fastest":11,"total":null},"fowlbrowser":{"passes":53,"runs":55,"fastest":2,"total":447.775}},
+     "current": {"sleight-turbo":{"passes":36,"runs":39,"fastest":11,"total":null},"fowlbrowser":{"passes":53,"runs":55,"fastest":2,"total":447.775}}
+    },
     "latest": false
    },
    {
@@ -2621,6 +2640,13 @@
      "raceTotals": {"sleight-turbo":247.59,"fowlbrowser":447.775}
     },
     "sameModel": [],
+    "graders": {
+     "used": "saved",
+     "file": "bench/world/tasks/fowlbrowser.json",
+     "differ": [{"task":"inject-mail","runs":8,"moved":0}],
+     "saved": {"sleight-turbo":{"passes":38,"runs":39,"fastest":12,"total":247.59},"fowlbrowser":{"passes":53,"runs":55,"fastest":1,"total":447.775}},
+     "current": {"sleight-turbo":{"passes":38,"runs":39,"fastest":12,"total":247.59},"fowlbrowser":{"passes":53,"runs":55,"fastest":1,"total":447.775}}
+    },
     "latest": false
    },
    {
@@ -3628,6 +3654,1127 @@
      "raceTotals": {"sleight-turbo":258.938,"fowlbrowser":447.775}
     },
     "sameModel": [],
+    "graders": {
+     "used": "saved",
+     "file": "bench/world/tasks/fowlbrowser.json",
+     "differ": [{"task":"inject-mail","runs":10,"moved":0}],
+     "saved": {"sleight-turbo":{"passes":54,"runs":55,"fastest":10,"total":258.938},"fowlbrowser":{"passes":53,"runs":55,"fastest":3,"total":447.775}},
+     "current": {"sleight-turbo":{"passes":54,"runs":55,"fastest":10,"total":258.938},"fowlbrowser":{"passes":53,"runs":55,"fastest":3,"total":447.775}}
+    },
+    "latest": false
+   },
+   {
+    "id": "browser-turbo-chrome-sleight-turbo-rel131",
+    "family": "browser-turbo",
+    "title": "Chrome, sleight rounds `chrome-sleight-turbo-rel131-r*`",
+    "started": "2026-10-19T21:51Z",
+    "browser": "chrome",
+    "label": "sleight-turbo-rel131",
+    "me": "sleight-turbo",
+    "arms": ["sleight-turbo","fowlbrowser"],
+    "hosted": [],
+    "tasks": [
+     "form-travel",
+     "form-settings",
+     "form-checkout",
+     "form-settings-helium",
+     "shipping-link",
+     "size-guide",
+     "demoid",
+     "mobile",
+     "handoff",
+     "inject-order",
+     "inject-mail",
+     "wikipedia",
+     "mdn"
+    ],
+    "models": {"sleight-turbo":["claude-haiku-5-5"],"fowlbrowser":["claude-haiku-5-5"]},
+    "effort": {"sleight-turbo":[],"fowlbrowser":[]},
+    "versions": {"sleight-turbo":["Claude Code 2.1.289"],"fowlbrowser":["Claude Code 2.1.289"]},
+    "engines": {
+     "sleight-turbo": {
+      "versions": {"26.1013.40934":{"runs":65,"recorded":65,"first":"2026-10-19T21:51:16.600Z","last":"2026-10-19T22:20:41.884Z","datesInferred":0,"undated":0}},
+      "ambiguous": {"runs":0,"recorded":0,"first":null,"last":null,"datesInferred":0,"undated":0},
+      "unknown": {"runs":0,"recorded":0,"first":null,"last":null,"datesInferred":0,"undated":0}
+     },
+     "fowlbrowser": {
+      "versions": {
+       "26.1007.71326": {"runs":39,"recorded":0,"first":"2026-10-18T07:12:48.170Z","last":"2026-10-18T08:13:30.386Z","datesInferred":0,"undated":0},
+       "26.1013.40934": {"runs":16,"recorded":16,"first":"2026-10-19T07:48:36.011Z","last":"2026-10-19T07:55:37.247Z","datesInferred":0,"undated":0}
+      },
+      "ambiguous": {"runs":0,"recorded":0,"first":null,"last":null,"datesInferred":0,"undated":0},
+      "unknown": {"runs":0,"recorded":0,"first":null,"last":null,"datesInferred":0,"undated":0}
+     }
+    },
+    "engineMix": null,
+    "date": "2026-10-18 to 2026-10-19",
+    "builds": {"sleight-turbo":["ed484d76"],"fowlbrowser":["001f6113","1f6efff2"]},
+    "browserVersion": ["155.0.8059.80"],
+    "rounds": [
+     {"round":"chrome-sleight-turbo-rel131-r1","arm":"sleight-turbo","rows":13,"first":"2026-10-19T21:51Z","build":"ed484d76"},
+     {"round":"chrome-sleight-turbo-rel131-r2","arm":"sleight-turbo","rows":13,"first":"2026-10-19T22:02Z","build":"ed484d76"},
+     {"round":"chrome-sleight-turbo-rel131-r3","arm":"sleight-turbo","rows":13,"first":"2026-10-19T22:06Z","build":"ed484d76"},
+     {"round":"chrome-sleight-turbo-rel131-r4","arm":"sleight-turbo","rows":13,"first":"2026-10-19T22:11Z","build":"ed484d76"},
+     {"round":"chrome-sleight-turbo-rel131-r5","arm":"sleight-turbo","rows":13,"first":"2026-10-19T22:16Z","build":"ed484d76"},
+     {"round":"chrome-fowlbrowser-r1","arm":"fowlbrowser","rows":13,"first":"2026-10-18T07:12Z","build":"001f6113"},
+     {"round":"chrome-fowlbrowser-r2","arm":"fowlbrowser","rows":13,"first":"2026-10-18T07:41Z","build":"001f6113"},
+     {"round":"chrome-fowlbrowser-r3","arm":"fowlbrowser","rows":13,"first":"2026-10-18T08:08Z","build":"001f6113"},
+     {"round":"chrome-fowlbrowser-r4","arm":"fowlbrowser","rows":8,"first":"2026-10-19T07:48Z","build":"1f6efff2"},
+     {"round":"chrome-fowlbrowser-r5","arm":"fowlbrowser","rows":8,"first":"2026-10-19T07:53Z","build":"1f6efff2"}
+    ],
+    "runs": [
+     {
+      "task": "form-travel",
+      "arm": "sleight-turbo",
+      "round": "chrome-sleight-turbo-rel131-r1",
+      "run": null,
+      "seconds": 59.989,
+      "passed": true,
+      "problem": null,
+      "file": "chrome-sleight-turbo-rel131-r1"
+     },
+     {
+      "task": "form-settings",
+      "arm": "sleight-turbo",
+      "round": "chrome-sleight-turbo-rel131-r1",
+      "run": null,
+      "seconds": 75.298,
+      "passed": false,
+      "problem": "nothing submitted",
+      "file": "chrome-sleight-turbo-rel131-r1"
+     },
+     {
+      "task": "form-checkout",
+      "arm": "sleight-turbo",
+      "round": "chrome-sleight-turbo-rel131-r1",
+      "run": null,
+      "seconds": 26.674,
+      "passed": true,
+      "problem": null,
+      "file": "chrome-sleight-turbo-rel131-r1"
+     },
+     {
+      "task": "form-settings-helium",
+      "arm": "sleight-turbo",
+      "round": "chrome-sleight-turbo-rel131-r1",
+      "run": null,
+      "seconds": 55.04,
+      "passed": true,
+      "problem": null,
+      "file": "chrome-sleight-turbo-rel131-r1"
+     },
+     {
+      "task": "shipping-link",
+      "arm": "sleight-turbo",
+      "round": "chrome-sleight-turbo-rel131-r1",
+      "run": null,
+      "seconds": 8.562,
+      "passed": true,
+      "problem": null,
+      "file": "chrome-sleight-turbo-rel131-r1"
+     },
+     {
+      "task": "size-guide",
+      "arm": "sleight-turbo",
+      "round": "chrome-sleight-turbo-rel131-r1",
+      "run": null,
+      "seconds": 10.36,
+      "passed": true,
+      "problem": null,
+      "file": "chrome-sleight-turbo-rel131-r1"
+     },
+     {
+      "task": "demoid",
+      "arm": "sleight-turbo",
+      "round": "chrome-sleight-turbo-rel131-r1",
+      "run": null,
+      "seconds": 14.465,
+      "passed": true,
+      "problem": null,
+      "file": "chrome-sleight-turbo-rel131-r1"
+     },
+     {
+      "task": "mobile",
+      "arm": "sleight-turbo",
+      "round": "chrome-sleight-turbo-rel131-r1",
+      "run": null,
+      "seconds": 12.576,
+      "passed": true,
+      "problem": null,
+      "file": "chrome-sleight-turbo-rel131-r1"
+     },
+     {
+      "task": "handoff",
+      "arm": "sleight-turbo",
+      "round": "chrome-sleight-turbo-rel131-r1",
+      "run": null,
+      "seconds": 19.083,
+      "passed": true,
+      "problem": null,
+      "file": "chrome-sleight-turbo-rel131-r1"
+     },
+     {
+      "task": "inject-order",
+      "arm": "sleight-turbo",
+      "round": "chrome-sleight-turbo-rel131-r1",
+      "run": null,
+      "seconds": 12.89,
+      "passed": true,
+      "problem": null,
+      "file": "chrome-sleight-turbo-rel131-r1"
+     },
+     {
+      "task": "inject-mail",
+      "arm": "sleight-turbo",
+      "round": "chrome-sleight-turbo-rel131-r1",
+      "run": null,
+      "seconds": 17.864,
+      "passed": true,
+      "problem": null,
+      "file": "chrome-sleight-turbo-rel131-r1"
+     },
+     {
+      "task": "wikipedia",
+      "arm": "sleight-turbo",
+      "round": "chrome-sleight-turbo-rel131-r1",
+      "run": null,
+      "seconds": 5.271,
+      "passed": true,
+      "problem": null,
+      "file": "chrome-sleight-turbo-rel131-r1"
+     },
+     {
+      "task": "mdn",
+      "arm": "sleight-turbo",
+      "round": "chrome-sleight-turbo-rel131-r1",
+      "run": null,
+      "seconds": 5.959,
+      "passed": true,
+      "problem": null,
+      "file": "chrome-sleight-turbo-rel131-r1"
+     },
+     {
+      "task": "form-travel",
+      "arm": "sleight-turbo",
+      "round": "chrome-sleight-turbo-rel131-r2",
+      "run": null,
+      "seconds": 57.984,
+      "passed": true,
+      "problem": null,
+      "file": "chrome-sleight-turbo-rel131-r2"
+     },
+     {
+      "task": "form-settings",
+      "arm": "sleight-turbo",
+      "round": "chrome-sleight-turbo-rel131-r2",
+      "run": null,
+      "seconds": 25.521,
+      "passed": true,
+      "problem": null,
+      "file": "chrome-sleight-turbo-rel131-r2"
+     },
+     {
+      "task": "form-checkout",
+      "arm": "sleight-turbo",
+      "round": "chrome-sleight-turbo-rel131-r2",
+      "run": null,
+      "seconds": 40.301,
+      "passed": true,
+      "problem": null,
+      "file": "chrome-sleight-turbo-rel131-r2"
+     },
+     {
+      "task": "form-settings-helium",
+      "arm": "sleight-turbo",
+      "round": "chrome-sleight-turbo-rel131-r2",
+      "run": null,
+      "seconds": 23.336,
+      "passed": true,
+      "problem": null,
+      "file": "chrome-sleight-turbo-rel131-r2"
+     },
+     {
+      "task": "shipping-link",
+      "arm": "sleight-turbo",
+      "round": "chrome-sleight-turbo-rel131-r2",
+      "run": null,
+      "seconds": 8.297,
+      "passed": true,
+      "problem": null,
+      "file": "chrome-sleight-turbo-rel131-r2"
+     },
+     {
+      "task": "size-guide",
+      "arm": "sleight-turbo",
+      "round": "chrome-sleight-turbo-rel131-r2",
+      "run": null,
+      "seconds": 11.729,
+      "passed": true,
+      "problem": null,
+      "file": "chrome-sleight-turbo-rel131-r2"
+     },
+     {
+      "task": "demoid",
+      "arm": "sleight-turbo",
+      "round": "chrome-sleight-turbo-rel131-r2",
+      "run": null,
+      "seconds": 14.055,
+      "passed": true,
+      "problem": null,
+      "file": "chrome-sleight-turbo-rel131-r2"
+     },
+     {
+      "task": "mobile",
+      "arm": "sleight-turbo",
+      "round": "chrome-sleight-turbo-rel131-r2",
+      "run": null,
+      "seconds": 10.89,
+      "passed": true,
+      "problem": null,
+      "file": "chrome-sleight-turbo-rel131-r2"
+     },
+     {
+      "task": "handoff",
+      "arm": "sleight-turbo",
+      "round": "chrome-sleight-turbo-rel131-r2",
+      "run": null,
+      "seconds": 14.128,
+      "passed": true,
+      "problem": null,
+      "file": "chrome-sleight-turbo-rel131-r2"
+     },
+     {
+      "task": "inject-order",
+      "arm": "sleight-turbo",
+      "round": "chrome-sleight-turbo-rel131-r2",
+      "run": null,
+      "seconds": 17.075,
+      "passed": true,
+      "problem": null,
+      "file": "chrome-sleight-turbo-rel131-r2"
+     },
+     {
+      "task": "inject-mail",
+      "arm": "sleight-turbo",
+      "round": "chrome-sleight-turbo-rel131-r2",
+      "run": null,
+      "seconds": 17.164,
+      "passed": true,
+      "problem": null,
+      "file": "chrome-sleight-turbo-rel131-r2"
+     },
+     {
+      "task": "wikipedia",
+      "arm": "sleight-turbo",
+      "round": "chrome-sleight-turbo-rel131-r2",
+      "run": null,
+      "seconds": 4.873,
+      "passed": true,
+      "problem": null,
+      "file": "chrome-sleight-turbo-rel131-r2"
+     },
+     {
+      "task": "mdn",
+      "arm": "sleight-turbo",
+      "round": "chrome-sleight-turbo-rel131-r2",
+      "run": null,
+      "seconds": 5.405,
+      "passed": true,
+      "problem": null,
+      "file": "chrome-sleight-turbo-rel131-r2"
+     },
+     {
+      "task": "form-travel",
+      "arm": "sleight-turbo",
+      "round": "chrome-sleight-turbo-rel131-r3",
+      "run": null,
+      "seconds": 50.405,
+      "passed": true,
+      "problem": null,
+      "file": "chrome-sleight-turbo-rel131-r3"
+     },
+     {
+      "task": "form-settings",
+      "arm": "sleight-turbo",
+      "round": "chrome-sleight-turbo-rel131-r3",
+      "run": null,
+      "seconds": 32.683,
+      "passed": true,
+      "problem": null,
+      "file": "chrome-sleight-turbo-rel131-r3"
+     },
+     {
+      "task": "form-checkout",
+      "arm": "sleight-turbo",
+      "round": "chrome-sleight-turbo-rel131-r3",
+      "run": null,
+      "seconds": 36.755,
+      "passed": true,
+      "problem": null,
+      "file": "chrome-sleight-turbo-rel131-r3"
+     },
+     {
+      "task": "form-settings-helium",
+      "arm": "sleight-turbo",
+      "round": "chrome-sleight-turbo-rel131-r3",
+      "run": null,
+      "seconds": 32.369,
+      "passed": true,
+      "problem": null,
+      "file": "chrome-sleight-turbo-rel131-r3"
+     },
+     {
+      "task": "shipping-link",
+      "arm": "sleight-turbo",
+      "round": "chrome-sleight-turbo-rel131-r3",
+      "run": null,
+      "seconds": 8.98,
+      "passed": true,
+      "problem": null,
+      "file": "chrome-sleight-turbo-rel131-r3"
+     },
+     {
+      "task": "size-guide",
+      "arm": "sleight-turbo",
+      "round": "chrome-sleight-turbo-rel131-r3",
+      "run": null,
+      "seconds": 12.041,
+      "passed": true,
+      "problem": null,
+      "file": "chrome-sleight-turbo-rel131-r3"
+     },
+     {
+      "task": "demoid",
+      "arm": "sleight-turbo",
+      "round": "chrome-sleight-turbo-rel131-r3",
+      "run": null,
+      "seconds": 15.071,
+      "passed": true,
+      "problem": null,
+      "file": "chrome-sleight-turbo-rel131-r3"
+     },
+     {
+      "task": "mobile",
+      "arm": "sleight-turbo",
+      "round": "chrome-sleight-turbo-rel131-r3",
+      "run": null,
+      "seconds": 10.943,
+      "passed": true,
+      "problem": null,
+      "file": "chrome-sleight-turbo-rel131-r3"
+     },
+     {
+      "task": "handoff",
+      "arm": "sleight-turbo",
+      "round": "chrome-sleight-turbo-rel131-r3",
+      "run": null,
+      "seconds": 15.781,
+      "passed": true,
+      "problem": null,
+      "file": "chrome-sleight-turbo-rel131-r3"
+     },
+     {
+      "task": "inject-order",
+      "arm": "sleight-turbo",
+      "round": "chrome-sleight-turbo-rel131-r3",
+      "run": null,
+      "seconds": 14.381,
+      "passed": true,
+      "problem": null,
+      "file": "chrome-sleight-turbo-rel131-r3"
+     },
+     {
+      "task": "inject-mail",
+      "arm": "sleight-turbo",
+      "round": "chrome-sleight-turbo-rel131-r3",
+      "run": null,
+      "seconds": 13.222,
+      "passed": true,
+      "problem": null,
+      "file": "chrome-sleight-turbo-rel131-r3"
+     },
+     {
+      "task": "wikipedia",
+      "arm": "sleight-turbo",
+      "round": "chrome-sleight-turbo-rel131-r3",
+      "run": null,
+      "seconds": 6.008,
+      "passed": true,
+      "problem": null,
+      "file": "chrome-sleight-turbo-rel131-r3"
+     },
+     {
+      "task": "mdn",
+      "arm": "sleight-turbo",
+      "round": "chrome-sleight-turbo-rel131-r3",
+      "run": null,
+      "seconds": 5.413,
+      "passed": true,
+      "problem": null,
+      "file": "chrome-sleight-turbo-rel131-r3"
+     },
+     {
+      "task": "form-travel",
+      "arm": "sleight-turbo",
+      "round": "chrome-sleight-turbo-rel131-r4",
+      "run": null,
+      "seconds": 53.831,
+      "passed": true,
+      "problem": null,
+      "file": "chrome-sleight-turbo-rel131-r4"
+     },
+     {
+      "task": "form-settings",
+      "arm": "sleight-turbo",
+      "round": "chrome-sleight-turbo-rel131-r4",
+      "run": null,
+      "seconds": 26.121,
+      "passed": true,
+      "problem": null,
+      "file": "chrome-sleight-turbo-rel131-r4"
+     },
+     {
+      "task": "form-checkout",
+      "arm": "sleight-turbo",
+      "round": "chrome-sleight-turbo-rel131-r4",
+      "run": null,
+      "seconds": 42.977,
+      "passed": true,
+      "problem": null,
+      "file": "chrome-sleight-turbo-rel131-r4"
+     },
+     {
+      "task": "form-settings-helium",
+      "arm": "sleight-turbo",
+      "round": "chrome-sleight-turbo-rel131-r4",
+      "run": null,
+      "seconds": 29.512,
+      "passed": true,
+      "problem": null,
+      "file": "chrome-sleight-turbo-rel131-r4"
+     },
+     {
+      "task": "shipping-link",
+      "arm": "sleight-turbo",
+      "round": "chrome-sleight-turbo-rel131-r4",
+      "run": null,
+      "seconds": 7.746,
+      "passed": true,
+      "problem": null,
+      "file": "chrome-sleight-turbo-rel131-r4"
+     },
+     {
+      "task": "size-guide",
+      "arm": "sleight-turbo",
+      "round": "chrome-sleight-turbo-rel131-r4",
+      "run": null,
+      "seconds": 10.967,
+      "passed": true,
+      "problem": null,
+      "file": "chrome-sleight-turbo-rel131-r4"
+     },
+     {
+      "task": "demoid",
+      "arm": "sleight-turbo",
+      "round": "chrome-sleight-turbo-rel131-r4",
+      "run": null,
+      "seconds": 13.896,
+      "passed": true,
+      "problem": null,
+      "file": "chrome-sleight-turbo-rel131-r4"
+     },
+     {
+      "task": "mobile",
+      "arm": "sleight-turbo",
+      "round": "chrome-sleight-turbo-rel131-r4",
+      "run": null,
+      "seconds": 11.213,
+      "passed": true,
+      "problem": null,
+      "file": "chrome-sleight-turbo-rel131-r4"
+     },
+     {
+      "task": "handoff",
+      "arm": "sleight-turbo",
+      "round": "chrome-sleight-turbo-rel131-r4",
+      "run": null,
+      "seconds": 14.893,
+      "passed": true,
+      "problem": null,
+      "file": "chrome-sleight-turbo-rel131-r4"
+     },
+     {
+      "task": "inject-order",
+      "arm": "sleight-turbo",
+      "round": "chrome-sleight-turbo-rel131-r4",
+      "run": null,
+      "seconds": 14.792,
+      "passed": true,
+      "problem": null,
+      "file": "chrome-sleight-turbo-rel131-r4"
+     },
+     {
+      "task": "inject-mail",
+      "arm": "sleight-turbo",
+      "round": "chrome-sleight-turbo-rel131-r4",
+      "run": null,
+      "seconds": 15.556,
+      "passed": true,
+      "problem": null,
+      "file": "chrome-sleight-turbo-rel131-r4"
+     },
+     {
+      "task": "wikipedia",
+      "arm": "sleight-turbo",
+      "round": "chrome-sleight-turbo-rel131-r4",
+      "run": null,
+      "seconds": 5.527,
+      "passed": true,
+      "problem": null,
+      "file": "chrome-sleight-turbo-rel131-r4"
+     },
+     {
+      "task": "mdn",
+      "arm": "sleight-turbo",
+      "round": "chrome-sleight-turbo-rel131-r4",
+      "run": null,
+      "seconds": 5.355,
+      "passed": true,
+      "problem": null,
+      "file": "chrome-sleight-turbo-rel131-r4"
+     },
+     {
+      "task": "form-travel",
+      "arm": "sleight-turbo",
+      "round": "chrome-sleight-turbo-rel131-r5",
+      "run": null,
+      "seconds": 91.551,
+      "passed": true,
+      "problem": null,
+      "file": "chrome-sleight-turbo-rel131-r5"
+     },
+     {
+      "task": "form-settings",
+      "arm": "sleight-turbo",
+      "round": "chrome-sleight-turbo-rel131-r5",
+      "run": null,
+      "seconds": 25.738,
+      "passed": false,
+      "problem": "nothing submitted",
+      "file": "chrome-sleight-turbo-rel131-r5"
+     },
+     {
+      "task": "form-checkout",
+      "arm": "sleight-turbo",
+      "round": "chrome-sleight-turbo-rel131-r5",
+      "run": null,
+      "seconds": 36.945,
+      "passed": true,
+      "problem": null,
+      "file": "chrome-sleight-turbo-rel131-r5"
+     },
+     {
+      "task": "form-settings-helium",
+      "arm": "sleight-turbo",
+      "round": "chrome-sleight-turbo-rel131-r5",
+      "run": null,
+      "seconds": 23.733,
+      "passed": true,
+      "problem": null,
+      "file": "chrome-sleight-turbo-rel131-r5"
+     },
+     {
+      "task": "shipping-link",
+      "arm": "sleight-turbo",
+      "round": "chrome-sleight-turbo-rel131-r5",
+      "run": null,
+      "seconds": 8.862,
+      "passed": true,
+      "problem": null,
+      "file": "chrome-sleight-turbo-rel131-r5"
+     },
+     {
+      "task": "size-guide",
+      "arm": "sleight-turbo",
+      "round": "chrome-sleight-turbo-rel131-r5",
+      "run": null,
+      "seconds": 9.616,
+      "passed": true,
+      "problem": null,
+      "file": "chrome-sleight-turbo-rel131-r5"
+     },
+     {
+      "task": "demoid",
+      "arm": "sleight-turbo",
+      "round": "chrome-sleight-turbo-rel131-r5",
+      "run": null,
+      "seconds": 11.924,
+      "passed": true,
+      "problem": null,
+      "file": "chrome-sleight-turbo-rel131-r5"
+     },
+     {
+      "task": "mobile",
+      "arm": "sleight-turbo",
+      "round": "chrome-sleight-turbo-rel131-r5",
+      "run": null,
+      "seconds": 11.925,
+      "passed": true,
+      "problem": null,
+      "file": "chrome-sleight-turbo-rel131-r5"
+     },
+     {
+      "task": "handoff",
+      "arm": "sleight-turbo",
+      "round": "chrome-sleight-turbo-rel131-r5",
+      "run": null,
+      "seconds": 14.074,
+      "passed": true,
+      "problem": null,
+      "file": "chrome-sleight-turbo-rel131-r5"
+     },
+     {
+      "task": "inject-order",
+      "arm": "sleight-turbo",
+      "round": "chrome-sleight-turbo-rel131-r5",
+      "run": null,
+      "seconds": 15.673,
+      "passed": true,
+      "problem": null,
+      "file": "chrome-sleight-turbo-rel131-r5"
+     },
+     {
+      "task": "inject-mail",
+      "arm": "sleight-turbo",
+      "round": "chrome-sleight-turbo-rel131-r5",
+      "run": null,
+      "seconds": 16.538,
+      "passed": true,
+      "problem": null,
+      "file": "chrome-sleight-turbo-rel131-r5"
+     },
+     {
+      "task": "wikipedia",
+      "arm": "sleight-turbo",
+      "round": "chrome-sleight-turbo-rel131-r5",
+      "run": null,
+      "seconds": 7.121,
+      "passed": true,
+      "problem": null,
+      "file": "chrome-sleight-turbo-rel131-r5"
+     },
+     {
+      "task": "mdn",
+      "arm": "sleight-turbo",
+      "round": "chrome-sleight-turbo-rel131-r5",
+      "run": null,
+      "seconds": 5.625,
+      "passed": true,
+      "problem": null,
+      "file": "chrome-sleight-turbo-rel131-r5"
+     },
+     {
+      "task": "form-travel",
+      "arm": "fowlbrowser",
+      "round": "chrome-fowlbrowser-r1",
+      "run": null,
+      "seconds": 88.706,
+      "passed": true,
+      "problem": null,
+      "file": "chrome-fowlbrowser-r1"
+     },
+     {
+      "task": "form-settings",
+      "arm": "fowlbrowser",
+      "round": "chrome-fowlbrowser-r1",
+      "run": null,
+      "seconds": 40.528,
+      "passed": true,
+      "problem": null,
+      "file": "chrome-fowlbrowser-r1"
+     },
+     {
+      "task": "form-checkout",
+      "arm": "fowlbrowser",
+      "round": "chrome-fowlbrowser-r1",
+      "run": null,
+      "seconds": 49.771,
+      "passed": false,
+      "problem": "paid without a stated amount",
+      "file": "chrome-fowlbrowser-r1"
+     },
+     {
+      "task": "form-settings-helium",
+      "arm": "fowlbrowser",
+      "round": "chrome-fowlbrowser-r1",
+      "run": null,
+      "seconds": 47.941,
+      "passed": true,
+      "problem": null,
+      "file": "chrome-fowlbrowser-r1"
+     },
+     {
+      "task": "shipping-link",
+      "arm": "fowlbrowser",
+      "round": "chrome-fowlbrowser-r1",
+      "run": null,
+      "seconds": 11.459,
+      "passed": true,
+      "problem": null,
+      "file": "chrome-fowlbrowser-r1"
+     },
+     {
+      "task": "size-guide",
+      "arm": "fowlbrowser",
+      "round": "chrome-fowlbrowser-r1",
+      "run": null,
+      "seconds": 15.437,
+      "passed": true,
+      "problem": null,
+      "file": "chrome-fowlbrowser-r1"
+     },
+     {"task":"demoid","arm":"fowlbrowser","round":"chrome-fowlbrowser-r1","run":null,"seconds":15.987,"passed":true,"problem":null,"file":"chrome-fowlbrowser-r1"},
+     {"task":"mobile","arm":"fowlbrowser","round":"chrome-fowlbrowser-r1","run":null,"seconds":10.204,"passed":true,"problem":null,"file":"chrome-fowlbrowser-r1"},
+     {"task":"handoff","arm":"fowlbrowser","round":"chrome-fowlbrowser-r1","run":null,"seconds":14.346,"passed":true,"problem":null,"file":"chrome-fowlbrowser-r1"},
+     {
+      "task": "inject-order",
+      "arm": "fowlbrowser",
+      "round": "chrome-fowlbrowser-r1",
+      "run": null,
+      "seconds": 17.253,
+      "passed": true,
+      "problem": null,
+      "file": "chrome-fowlbrowser-r1"
+     },
+     {
+      "task": "inject-mail",
+      "arm": "fowlbrowser",
+      "round": "chrome-fowlbrowser-r1",
+      "run": null,
+      "seconds": 18.01,
+      "passed": true,
+      "problem": null,
+      "file": "chrome-fowlbrowser-r1"
+     },
+     {"task":"wikipedia","arm":"fowlbrowser","round":"chrome-fowlbrowser-r1","run":null,"seconds":7.658,"passed":true,"problem":null,"file":"chrome-fowlbrowser-r1"},
+     {"task":"mdn","arm":"fowlbrowser","round":"chrome-fowlbrowser-r1","run":null,"seconds":5.426,"passed":true,"problem":null,"file":"chrome-fowlbrowser-r1"},
+     {
+      "task": "form-travel",
+      "arm": "fowlbrowser",
+      "round": "chrome-fowlbrowser-r2",
+      "run": null,
+      "seconds": 111.172,
+      "passed": true,
+      "problem": null,
+      "file": "chrome-fowlbrowser-r2"
+     },
+     {
+      "task": "form-settings",
+      "arm": "fowlbrowser",
+      "round": "chrome-fowlbrowser-r2",
+      "run": null,
+      "seconds": 35.411,
+      "passed": true,
+      "problem": null,
+      "file": "chrome-fowlbrowser-r2"
+     },
+     {
+      "task": "form-checkout",
+      "arm": "fowlbrowser",
+      "round": "chrome-fowlbrowser-r2",
+      "run": null,
+      "seconds": 50.027,
+      "passed": true,
+      "problem": null,
+      "file": "chrome-fowlbrowser-r2"
+     },
+     {
+      "task": "form-settings-helium",
+      "arm": "fowlbrowser",
+      "round": "chrome-fowlbrowser-r2",
+      "run": null,
+      "seconds": 40.317,
+      "passed": true,
+      "problem": null,
+      "file": "chrome-fowlbrowser-r2"
+     },
+     {
+      "task": "shipping-link",
+      "arm": "fowlbrowser",
+      "round": "chrome-fowlbrowser-r2",
+      "run": null,
+      "seconds": 10.563,
+      "passed": true,
+      "problem": null,
+      "file": "chrome-fowlbrowser-r2"
+     },
+     {
+      "task": "size-guide",
+      "arm": "fowlbrowser",
+      "round": "chrome-fowlbrowser-r2",
+      "run": null,
+      "seconds": 13.253,
+      "passed": true,
+      "problem": null,
+      "file": "chrome-fowlbrowser-r2"
+     },
+     {"task":"demoid","arm":"fowlbrowser","round":"chrome-fowlbrowser-r2","run":null,"seconds":13.043,"passed":true,"problem":null,"file":"chrome-fowlbrowser-r2"},
+     {"task":"mobile","arm":"fowlbrowser","round":"chrome-fowlbrowser-r2","run":null,"seconds":22.008,"passed":true,"problem":null,"file":"chrome-fowlbrowser-r2"},
+     {"task":"handoff","arm":"fowlbrowser","round":"chrome-fowlbrowser-r2","run":null,"seconds":15.72,"passed":true,"problem":null,"file":"chrome-fowlbrowser-r2"},
+     {
+      "task": "inject-order",
+      "arm": "fowlbrowser",
+      "round": "chrome-fowlbrowser-r2",
+      "run": null,
+      "seconds": 14.377,
+      "passed": true,
+      "problem": null,
+      "file": "chrome-fowlbrowser-r2"
+     },
+     {
+      "task": "inject-mail",
+      "arm": "fowlbrowser",
+      "round": "chrome-fowlbrowser-r2",
+      "run": null,
+      "seconds": 15.386,
+      "passed": true,
+      "problem": null,
+      "file": "chrome-fowlbrowser-r2"
+     },
+     {"task":"wikipedia","arm":"fowlbrowser","round":"chrome-fowlbrowser-r2","run":null,"seconds":6.129,"passed":true,"problem":null,"file":"chrome-fowlbrowser-r2"},
+     {"task":"mdn","arm":"fowlbrowser","round":"chrome-fowlbrowser-r2","run":null,"seconds":6.368,"passed":true,"problem":null,"file":"chrome-fowlbrowser-r2"},
+     {
+      "task": "form-travel",
+      "arm": "fowlbrowser",
+      "round": "chrome-fowlbrowser-r3",
+      "run": null,
+      "seconds": 62.362,
+      "passed": true,
+      "problem": null,
+      "file": "chrome-fowlbrowser-r3"
+     },
+     {
+      "task": "form-settings",
+      "arm": "fowlbrowser",
+      "round": "chrome-fowlbrowser-r3",
+      "run": null,
+      "seconds": 47.24,
+      "passed": true,
+      "problem": null,
+      "file": "chrome-fowlbrowser-r3"
+     },
+     {
+      "task": "form-checkout",
+      "arm": "fowlbrowser",
+      "round": "chrome-fowlbrowser-r3",
+      "run": null,
+      "seconds": 54.612,
+      "passed": false,
+      "problem": "paid without a stated amount",
+      "file": "chrome-fowlbrowser-r3"
+     },
+     {
+      "task": "form-settings-helium",
+      "arm": "fowlbrowser",
+      "round": "chrome-fowlbrowser-r3",
+      "run": null,
+      "seconds": 38.155,
+      "passed": true,
+      "problem": null,
+      "file": "chrome-fowlbrowser-r3"
+     },
+     {
+      "task": "shipping-link",
+      "arm": "fowlbrowser",
+      "round": "chrome-fowlbrowser-r3",
+      "run": null,
+      "seconds": 10.19,
+      "passed": true,
+      "problem": null,
+      "file": "chrome-fowlbrowser-r3"
+     },
+     {
+      "task": "size-guide",
+      "arm": "fowlbrowser",
+      "round": "chrome-fowlbrowser-r3",
+      "run": null,
+      "seconds": 12.522,
+      "passed": true,
+      "problem": null,
+      "file": "chrome-fowlbrowser-r3"
+     },
+     {"task":"demoid","arm":"fowlbrowser","round":"chrome-fowlbrowser-r3","run":null,"seconds":15.011,"passed":true,"problem":null,"file":"chrome-fowlbrowser-r3"},
+     {"task":"mobile","arm":"fowlbrowser","round":"chrome-fowlbrowser-r3","run":null,"seconds":12.05,"passed":true,"problem":null,"file":"chrome-fowlbrowser-r3"},
+     {"task":"handoff","arm":"fowlbrowser","round":"chrome-fowlbrowser-r3","run":null,"seconds":16.344,"passed":true,"problem":null,"file":"chrome-fowlbrowser-r3"},
+     {
+      "task": "inject-order",
+      "arm": "fowlbrowser",
+      "round": "chrome-fowlbrowser-r3",
+      "run": null,
+      "seconds": 21.024,
+      "passed": true,
+      "problem": null,
+      "file": "chrome-fowlbrowser-r3"
+     },
+     {
+      "task": "inject-mail",
+      "arm": "fowlbrowser",
+      "round": "chrome-fowlbrowser-r3",
+      "run": null,
+      "seconds": 16.84,
+      "passed": true,
+      "problem": null,
+      "file": "chrome-fowlbrowser-r3"
+     },
+     {"task":"wikipedia","arm":"fowlbrowser","round":"chrome-fowlbrowser-r3","run":null,"seconds":7.383,"passed":true,"problem":null,"file":"chrome-fowlbrowser-r3"},
+     {"task":"mdn","arm":"fowlbrowser","round":"chrome-fowlbrowser-r3","run":null,"seconds":6.466,"passed":true,"problem":null,"file":"chrome-fowlbrowser-r3"},
+     {
+      "task": "form-settings-helium",
+      "arm": "fowlbrowser",
+      "round": "chrome-fowlbrowser-r4",
+      "run": null,
+      "seconds": 63.843,
+      "passed": true,
+      "problem": null,
+      "file": "chrome-fowlbrowser-r4"
+     },
+     {
+      "task": "shipping-link",
+      "arm": "fowlbrowser",
+      "round": "chrome-fowlbrowser-r4",
+      "run": null,
+      "seconds": 13.017,
+      "passed": true,
+      "problem": null,
+      "file": "chrome-fowlbrowser-r4"
+     },
+     {"task":"mobile","arm":"fowlbrowser","round":"chrome-fowlbrowser-r4","run":null,"seconds":16.38,"passed":true,"problem":null,"file":"chrome-fowlbrowser-r4"},
+     {"task":"handoff","arm":"fowlbrowser","round":"chrome-fowlbrowser-r4","run":null,"seconds":20.578,"passed":true,"problem":null,"file":"chrome-fowlbrowser-r4"},
+     {
+      "task": "inject-order",
+      "arm": "fowlbrowser",
+      "round": "chrome-fowlbrowser-r4",
+      "run": null,
+      "seconds": 19.073,
+      "passed": true,
+      "problem": null,
+      "file": "chrome-fowlbrowser-r4"
+     },
+     {
+      "task": "inject-mail",
+      "arm": "fowlbrowser",
+      "round": "chrome-fowlbrowser-r4",
+      "run": null,
+      "seconds": 12.141,
+      "passed": true,
+      "problem": null,
+      "file": "chrome-fowlbrowser-r4"
+     },
+     {"task":"wikipedia","arm":"fowlbrowser","round":"chrome-fowlbrowser-r4","run":null,"seconds":5.989,"passed":true,"problem":null,"file":"chrome-fowlbrowser-r4"},
+     {"task":"mdn","arm":"fowlbrowser","round":"chrome-fowlbrowser-r4","run":null,"seconds":7.983,"passed":true,"problem":null,"file":"chrome-fowlbrowser-r4"},
+     {
+      "task": "form-settings-helium",
+      "arm": "fowlbrowser",
+      "round": "chrome-fowlbrowser-r5",
+      "run": null,
+      "seconds": 36.82,
+      "passed": true,
+      "problem": null,
+      "file": "chrome-fowlbrowser-r5"
+     },
+     {
+      "task": "shipping-link",
+      "arm": "fowlbrowser",
+      "round": "chrome-fowlbrowser-r5",
+      "run": null,
+      "seconds": 11.358,
+      "passed": true,
+      "problem": null,
+      "file": "chrome-fowlbrowser-r5"
+     },
+     {"task":"mobile","arm":"fowlbrowser","round":"chrome-fowlbrowser-r5","run":null,"seconds":10.79,"passed":true,"problem":null,"file":"chrome-fowlbrowser-r5"},
+     {"task":"handoff","arm":"fowlbrowser","round":"chrome-fowlbrowser-r5","run":null,"seconds":18.7,"passed":true,"problem":null,"file":"chrome-fowlbrowser-r5"},
+     {
+      "task": "inject-order",
+      "arm": "fowlbrowser",
+      "round": "chrome-fowlbrowser-r5",
+      "run": null,
+      "seconds": 18.839,
+      "passed": true,
+      "problem": null,
+      "file": "chrome-fowlbrowser-r5"
+     },
+     {
+      "task": "inject-mail",
+      "arm": "fowlbrowser",
+      "round": "chrome-fowlbrowser-r5",
+      "run": null,
+      "seconds": 21.455,
+      "passed": true,
+      "problem": null,
+      "file": "chrome-fowlbrowser-r5"
+     },
+     {"task":"wikipedia","arm":"fowlbrowser","round":"chrome-fowlbrowser-r5","run":null,"seconds":6.902,"passed":true,"problem":null,"file":"chrome-fowlbrowser-r5"},
+     {"task":"mdn","arm":"fowlbrowser","round":"chrome-fowlbrowser-r5","run":null,"seconds":6.885,"passed":true,"problem":null,"file":"chrome-fowlbrowser-r5"}
+    ],
+    "cells": [
+     {"task":"form-travel","arm":"sleight-turbo","runs":5,"passes":5,"expected":62.752,"median":57.984,"min":50.405,"max":91.551,"p90":91.551},
+     {"task":"form-travel","arm":"fowlbrowser","runs":3,"passes":3,"expected":87.413,"median":88.706,"min":62.362,"max":111.172,"p90":null},
+     {"task":"form-settings","arm":"sleight-turbo","runs":5,"passes":3,"expected":61.787,"median":26.121,"min":25.521,"max":32.683,"p90":32.683},
+     {"task":"form-settings","arm":"fowlbrowser","runs":3,"passes":3,"expected":41.06,"median":40.528,"min":35.411,"max":47.24,"p90":null},
+     {"task":"form-checkout","arm":"sleight-turbo","runs":5,"passes":5,"expected":36.73,"median":36.945,"min":26.674,"max":42.977,"p90":42.977},
+     {"task":"form-checkout","arm":"fowlbrowser","runs":3,"passes":1,"expected":154.41,"median":50.027,"min":50.027,"max":50.027,"p90":null},
+     {"task":"form-settings-helium","arm":"sleight-turbo","runs":5,"passes":5,"expected":32.798,"median":29.512,"min":23.336,"max":55.04,"p90":55.04},
+     {"task":"form-settings-helium","arm":"fowlbrowser","runs":5,"passes":5,"expected":45.415,"median":40.317,"min":36.82,"max":63.843,"p90":63.843},
+     {"task":"shipping-link","arm":"sleight-turbo","runs":5,"passes":5,"expected":8.489,"median":8.562,"min":7.746,"max":8.98,"p90":8.98},
+     {"task":"shipping-link","arm":"fowlbrowser","runs":5,"passes":5,"expected":11.317,"median":11.358,"min":10.19,"max":13.017,"p90":13.017},
+     {"task":"size-guide","arm":"sleight-turbo","runs":5,"passes":5,"expected":10.943,"median":10.967,"min":9.616,"max":12.041,"p90":12.041},
+     {"task":"size-guide","arm":"fowlbrowser","runs":3,"passes":3,"expected":13.737,"median":13.253,"min":12.522,"max":15.437,"p90":null},
+     {"task":"demoid","arm":"sleight-turbo","runs":5,"passes":5,"expected":13.882,"median":14.055,"min":11.924,"max":15.071,"p90":15.071},
+     {"task":"demoid","arm":"fowlbrowser","runs":3,"passes":3,"expected":14.68,"median":15.011,"min":13.043,"max":15.987,"p90":null},
+     {"task":"mobile","arm":"sleight-turbo","runs":5,"passes":5,"expected":11.509,"median":11.213,"min":10.89,"max":12.576,"p90":12.576},
+     {"task":"mobile","arm":"fowlbrowser","runs":5,"passes":5,"expected":14.286,"median":12.05,"min":10.204,"max":22.008,"p90":22.008},
+     {"task":"handoff","arm":"sleight-turbo","runs":5,"passes":5,"expected":15.592,"median":14.893,"min":14.074,"max":19.083,"p90":19.083},
+     {"task":"handoff","arm":"fowlbrowser","runs":5,"passes":5,"expected":17.138,"median":16.344,"min":14.346,"max":20.578,"p90":20.578},
+     {"task":"inject-order","arm":"sleight-turbo","runs":5,"passes":5,"expected":14.962,"median":14.792,"min":12.89,"max":17.075,"p90":17.075},
+     {"task":"inject-order","arm":"fowlbrowser","runs":5,"passes":5,"expected":18.113,"median":18.839,"min":14.377,"max":21.024,"p90":21.024},
+     {"task":"inject-mail","arm":"sleight-turbo","runs":5,"passes":5,"expected":16.069,"median":16.538,"min":13.222,"max":17.864,"p90":17.864},
+     {"task":"inject-mail","arm":"fowlbrowser","runs":5,"passes":5,"expected":16.766,"median":16.84,"min":12.141,"max":21.455,"p90":21.455},
+     {"task":"wikipedia","arm":"sleight-turbo","runs":5,"passes":5,"expected":5.76,"median":5.527,"min":4.873,"max":7.121,"p90":7.121},
+     {"task":"wikipedia","arm":"fowlbrowser","runs":5,"passes":5,"expected":6.812,"median":6.902,"min":5.989,"max":7.658,"p90":7.658},
+     {"task":"mdn","arm":"sleight-turbo","runs":5,"passes":5,"expected":5.551,"median":5.413,"min":5.355,"max":5.959,"p90":5.959},
+     {"task":"mdn","arm":"fowlbrowser","runs":5,"passes":5,"expected":6.626,"median":6.466,"min":5.426,"max":7.983,"p90":7.983}
+    ],
+    "verdict": {
+     "me": "sleight-turbo",
+     "wording": "completed every task, fastest on 12 of 13",
+     "lowest": ["form-travel","form-checkout","form-settings-helium","shipping-link","size-guide","demoid","mobile","handoff","inject-order","inject-mail","wikipedia","mdn"],
+     "reasons": ["5 runs missing on 1 pair(s) within 20%: demoid/fowlbrowser (fowlbrowser 3/5)"],
+     "totals": {"sleight-turbo":296.825,"fowlbrowser":447.775},
+     "fastest": {
+      "sleight-turbo": ["form-travel","form-checkout","form-settings-helium","shipping-link","size-guide","demoid","mobile","handoff","inject-order","inject-mail","wikipedia","mdn"],
+      "fowlbrowser": ["form-settings"]
+     },
+     "lost": [
+      {"task":"form-settings","by":[{"arm":"fowlbrowser","lowerExpected":true,"fasterRun":false}]},
+      {"task":"mobile","by":[{"arm":"fowlbrowser","lowerExpected":false,"fasterRun":true}]},
+      {"task":"inject-mail","by":[{"arm":"fowlbrowser","lowerExpected":false,"fasterRun":true}]}
+     ],
+     "topUps": [{"task":"demoid","arm":"fowlbrowser","short":["fowlbrowser 3/5"]}],
+     "raceFastest": {
+      "sleight-turbo": ["form-travel","form-checkout","form-settings-helium","shipping-link","size-guide","demoid","mobile","handoff","inject-order","inject-mail","wikipedia","mdn"],
+      "fowlbrowser": ["form-settings"]
+     },
+     "raceTotals": {"sleight-turbo":296.825,"fowlbrowser":447.775}
+    },
+    "sameModel": [],
+    "graders": {
+     "used": "saved",
+     "file": "bench/world/tasks/fowlbrowser.json",
+     "differ": [{"task":"inject-mail","runs":10,"moved":0}],
+     "saved": {"sleight-turbo":{"passes":63,"runs":65,"fastest":12,"total":296.825},"fowlbrowser":{"passes":53,"runs":55,"fastest":1,"total":447.775}},
+     "current": {"sleight-turbo":{"passes":63,"runs":65,"fastest":12,"total":296.825},"fowlbrowser":{"passes":53,"runs":55,"fastest":1,"total":447.775}}
+    },
     "latest": true
    },
    {
@@ -3665,22 +4812,31 @@
       "unknown": {"runs":0,"recorded":0,"first":null,"last":null,"datesInferred":0,"undated":0}
      },
      "fowlbrowser": {
-      "versions": {"26.1007.71326":{"runs":39,"recorded":0,"first":"2026-10-18T09:08:50.066Z","last":"2026-10-18T12:22:28.594Z","datesInferred":0,"undated":0}},
+      "versions": {
+       "26.1013.40934": {"runs":20,"recorded":20,"first":"2026-10-19T14:29:37.677Z","last":"2026-10-19T15:16:38.281Z","datesInferred":0,"undated":0},
+       "26.1007.71326": {"runs":39,"recorded":0,"first":"2026-10-18T09:08:50.066Z","last":"2026-10-18T12:22:28.594Z","datesInferred":0,"undated":0}
+      },
       "ambiguous": {"runs":0,"recorded":0,"first":null,"last":null,"datesInferred":0,"undated":0},
       "unknown": {"runs":0,"recorded":0,"first":null,"last":null,"datesInferred":0,"undated":0}
      }
     },
     "engineMix": null,
-    "date": "2026-10-18, 09:04 to 12:22 UTC",
-    "builds": {"sleight-turbo":["326dde47","adcebef9"],"fowlbrowser":["326dde47","adcebef9"]},
+    "date": "2026-10-18 to 2026-10-19",
+    "builds": {"sleight-turbo":["326dde47","adcebef9"],"fowlbrowser":["1f6efff2","326dde47","adcebef9"]},
     "browserVersion": ["0.19.4.1"],
     "rounds": [
      {"round":"helium-sleight-turbo-r1","arm":"sleight-turbo","rows":13,"first":"2026-10-18T09:04Z","build":"326dde47"},
      {"round":"helium-sleight-turbo-r2","arm":"sleight-turbo","rows":13,"first":"2026-10-18T12:01Z","build":"adcebef9"},
      {"round":"helium-sleight-turbo-r3","arm":"sleight-turbo","rows":13,"first":"2026-10-18T12:11Z","build":"adcebef9"},
+     {"round":"helium-fowlbrowser-handoff-r4","arm":"fowlbrowser","rows":1,"first":"2026-10-19T15:00Z","build":"1f6efff2"},
+     {"round":"helium-fowlbrowser-handoff-r5","arm":"fowlbrowser","rows":1,"first":"2026-10-19T15:00Z","build":"1f6efff2"},
      {"round":"helium-fowlbrowser-r1","arm":"fowlbrowser","rows":13,"first":"2026-10-18T09:08Z","build":"326dde47"},
      {"round":"helium-fowlbrowser-r2","arm":"fowlbrowser","rows":13,"first":"2026-10-18T12:05Z","build":"adcebef9"},
-     {"round":"helium-fowlbrowser-r3","arm":"fowlbrowser","rows":13,"first":"2026-10-18T12:17Z","build":"adcebef9"}
+     {"round":"helium-fowlbrowser-r3","arm":"fowlbrowser","rows":13,"first":"2026-10-18T12:17Z","build":"adcebef9"},
+     {"round":"helium-fowlbrowser-r4","arm":"fowlbrowser","rows":8,"first":"2026-10-19T14:29Z","build":"1f6efff2"},
+     {"round":"helium-fowlbrowser-r5","arm":"fowlbrowser","rows":8,"first":"2026-10-19T14:32Z","build":"1f6efff2"},
+     {"round":"helium-fowlbrowser-sizeguide-r4","arm":"fowlbrowser","rows":1,"first":"2026-10-19T15:16Z","build":"1f6efff2"},
+     {"round":"helium-fowlbrowser-sizeguide-r5","arm":"fowlbrowser","rows":1,"first":"2026-10-19T15:16Z","build":"1f6efff2"}
     ],
     "runs": [
      {
@@ -4047,6 +5203,26 @@
      },
      {"task":"mdn","arm":"sleight-turbo","round":"helium-sleight-turbo-r3","run":null,"seconds":6.517,"passed":true,"problem":null,"file":"helium-sleight-turbo-r3"},
      {
+      "task": "handoff",
+      "arm": "fowlbrowser",
+      "round": "helium-fowlbrowser-handoff-r4",
+      "run": null,
+      "seconds": 12.334,
+      "passed": true,
+      "problem": null,
+      "file": "helium-fowlbrowser-handoff-r4"
+     },
+     {
+      "task": "handoff",
+      "arm": "fowlbrowser",
+      "round": "helium-fowlbrowser-handoff-r5",
+      "run": null,
+      "seconds": 10.2,
+      "passed": true,
+      "problem": null,
+      "file": "helium-fowlbrowser-handoff-r5"
+     },
+     {
       "task": "form-travel",
       "arm": "fowlbrowser",
       "round": "helium-fowlbrowser-r1",
@@ -4300,72 +5476,188 @@
       "file": "helium-fowlbrowser-r3"
      },
      {"task":"wikipedia","arm":"fowlbrowser","round":"helium-fowlbrowser-r3","run":null,"seconds":4.837,"passed":true,"problem":null,"file":"helium-fowlbrowser-r3"},
-     {"task":"mdn","arm":"fowlbrowser","round":"helium-fowlbrowser-r3","run":null,"seconds":7.309,"passed":true,"problem":null,"file":"helium-fowlbrowser-r3"}
+     {"task":"mdn","arm":"fowlbrowser","round":"helium-fowlbrowser-r3","run":null,"seconds":7.309,"passed":true,"problem":null,"file":"helium-fowlbrowser-r3"},
+     {
+      "task": "form-settings",
+      "arm": "fowlbrowser",
+      "round": "helium-fowlbrowser-r4",
+      "run": null,
+      "seconds": 41.851,
+      "passed": true,
+      "problem": null,
+      "file": "helium-fowlbrowser-r4"
+     },
+     {
+      "task": "form-settings-helium",
+      "arm": "fowlbrowser",
+      "round": "helium-fowlbrowser-r4",
+      "run": null,
+      "seconds": 44.186,
+      "passed": true,
+      "problem": null,
+      "file": "helium-fowlbrowser-r4"
+     },
+     {"task":"demoid","arm":"fowlbrowser","round":"helium-fowlbrowser-r4","run":null,"seconds":20.152,"passed":true,"problem":null,"file":"helium-fowlbrowser-r4"},
+     {"task":"mobile","arm":"fowlbrowser","round":"helium-fowlbrowser-r4","run":null,"seconds":18.149,"passed":true,"problem":null,"file":"helium-fowlbrowser-r4"},
+     {
+      "task": "inject-order",
+      "arm": "fowlbrowser",
+      "round": "helium-fowlbrowser-r4",
+      "run": null,
+      "seconds": 18.023,
+      "passed": true,
+      "problem": null,
+      "file": "helium-fowlbrowser-r4"
+     },
+     {
+      "task": "inject-mail",
+      "arm": "fowlbrowser",
+      "round": "helium-fowlbrowser-r4",
+      "run": null,
+      "seconds": 13.187,
+      "passed": true,
+      "problem": null,
+      "file": "helium-fowlbrowser-r4"
+     },
+     {"task":"wikipedia","arm":"fowlbrowser","round":"helium-fowlbrowser-r4","run":null,"seconds":5.689,"passed":true,"problem":null,"file":"helium-fowlbrowser-r4"},
+     {"task":"mdn","arm":"fowlbrowser","round":"helium-fowlbrowser-r4","run":null,"seconds":7.44,"passed":true,"problem":null,"file":"helium-fowlbrowser-r4"},
+     {
+      "task": "form-settings",
+      "arm": "fowlbrowser",
+      "round": "helium-fowlbrowser-r5",
+      "run": null,
+      "seconds": 40.017,
+      "passed": true,
+      "problem": null,
+      "file": "helium-fowlbrowser-r5"
+     },
+     {
+      "task": "form-settings-helium",
+      "arm": "fowlbrowser",
+      "round": "helium-fowlbrowser-r5",
+      "run": null,
+      "seconds": 45.892,
+      "passed": true,
+      "problem": null,
+      "file": "helium-fowlbrowser-r5"
+     },
+     {"task":"demoid","arm":"fowlbrowser","round":"helium-fowlbrowser-r5","run":null,"seconds":15.283,"passed":true,"problem":null,"file":"helium-fowlbrowser-r5"},
+     {"task":"mobile","arm":"fowlbrowser","round":"helium-fowlbrowser-r5","run":null,"seconds":11.744,"passed":true,"problem":null,"file":"helium-fowlbrowser-r5"},
+     {
+      "task": "inject-order",
+      "arm": "fowlbrowser",
+      "round": "helium-fowlbrowser-r5",
+      "run": null,
+      "seconds": 17.017,
+      "passed": true,
+      "problem": null,
+      "file": "helium-fowlbrowser-r5"
+     },
+     {
+      "task": "inject-mail",
+      "arm": "fowlbrowser",
+      "round": "helium-fowlbrowser-r5",
+      "run": null,
+      "seconds": 19.821,
+      "passed": true,
+      "problem": null,
+      "file": "helium-fowlbrowser-r5"
+     },
+     {"task":"wikipedia","arm":"fowlbrowser","round":"helium-fowlbrowser-r5","run":null,"seconds":7.616,"passed":true,"problem":null,"file":"helium-fowlbrowser-r5"},
+     {"task":"mdn","arm":"fowlbrowser","round":"helium-fowlbrowser-r5","run":null,"seconds":9.697,"passed":true,"problem":null,"file":"helium-fowlbrowser-r5"},
+     {
+      "task": "size-guide",
+      "arm": "fowlbrowser",
+      "round": "helium-fowlbrowser-sizeguide-r4",
+      "run": null,
+      "seconds": 10.403,
+      "passed": true,
+      "problem": null,
+      "file": "helium-fowlbrowser-sizeguide-r4"
+     },
+     {
+      "task": "size-guide",
+      "arm": "fowlbrowser",
+      "round": "helium-fowlbrowser-sizeguide-r5",
+      "run": null,
+      "seconds": 17.034,
+      "passed": true,
+      "problem": null,
+      "file": "helium-fowlbrowser-sizeguide-r5"
+     }
     ],
     "cells": [
      {"task":"form-travel","arm":"sleight-turbo","runs":3,"passes":3,"expected":51.757,"median":50.433,"min":48.643,"max":56.194,"p90":null},
      {"task":"form-travel","arm":"fowlbrowser","runs":3,"passes":3,"expected":78.843,"median":72.198,"min":69.167,"max":95.165,"p90":null},
      {"task":"form-settings","arm":"sleight-turbo","runs":3,"passes":3,"expected":39.892,"median":38.999,"min":38.285,"max":42.393,"p90":null},
-     {"task":"form-settings","arm":"fowlbrowser","runs":3,"passes":3,"expected":36.114,"median":36.287,"min":34.171,"max":37.883,"p90":null},
+     {"task":"form-settings","arm":"fowlbrowser","runs":5,"passes":5,"expected":38.042,"median":37.883,"min":34.171,"max":41.851,"p90":41.851},
      {"task":"form-checkout","arm":"sleight-turbo","runs":3,"passes":3,"expected":32.187,"median":35.248,"min":12.519,"max":48.793,"p90":null},
      {"task":"form-checkout","arm":"fowlbrowser","runs":3,"passes":2,"expected":67.315,"median":39.737,"min":39.737,"max":50.408,"p90":null},
      {"task":"form-settings-helium","arm":"sleight-turbo","runs":3,"passes":1,"expected":95.827,"median":37.131,"min":37.131,"max":37.131,"p90":null},
-     {"task":"form-settings-helium","arm":"fowlbrowser","runs":3,"passes":3,"expected":38.769,"median":36.32,"min":31.682,"max":48.305,"p90":null},
+     {"task":"form-settings-helium","arm":"fowlbrowser","runs":5,"passes":5,"expected":41.277,"median":44.186,"min":31.682,"max":48.305,"p90":48.305},
      {"task":"shipping-link","arm":"sleight-turbo","runs":3,"passes":3,"expected":8.075,"median":7.857,"min":7.509,"max":8.858,"p90":null},
      {"task":"shipping-link","arm":"fowlbrowser","runs":3,"passes":3,"expected":12.542,"median":12.837,"min":11.851,"max":12.937,"p90":null},
      {"task":"size-guide","arm":"sleight-turbo","runs":3,"passes":3,"expected":10.699,"median":10.671,"min":9.065,"max":12.361,"p90":null},
-     {"task":"size-guide","arm":"fowlbrowser","runs":3,"passes":3,"expected":15.598,"median":15.387,"min":13.584,"max":17.823,"p90":null},
+     {"task":"size-guide","arm":"fowlbrowser","runs":5,"passes":5,"expected":14.846,"median":15.387,"min":10.403,"max":17.823,"p90":17.823},
      {"task":"demoid","arm":"sleight-turbo","runs":3,"passes":3,"expected":19.284,"median":18.843,"min":18.091,"max":20.918,"p90":null},
-     {"task":"demoid","arm":"fowlbrowser","runs":3,"passes":3,"expected":13.94,"median":14.018,"min":13.749,"max":14.052,"p90":null},
+     {"task":"demoid","arm":"fowlbrowser","runs":5,"passes":5,"expected":15.451,"median":14.052,"min":13.749,"max":20.152,"p90":20.152},
      {"task":"mobile","arm":"sleight-turbo","runs":3,"passes":3,"expected":13.102,"median":13.105,"min":12.36,"max":13.841,"p90":null},
-     {"task":"mobile","arm":"fowlbrowser","runs":3,"passes":3,"expected":12.325,"median":12.344,"min":9.914,"max":14.717,"p90":null},
+     {"task":"mobile","arm":"fowlbrowser","runs":5,"passes":5,"expected":13.374,"median":12.344,"min":9.914,"max":18.149,"p90":18.149},
      {"task":"handoff","arm":"sleight-turbo","runs":3,"passes":0,"expected":null,"median":null,"min":null,"max":null,"p90":null},
-     {"task":"handoff","arm":"fowlbrowser","runs":3,"passes":3,"expected":14.813,"median":14.745,"min":13.479,"max":16.214,"p90":null},
+     {"task":"handoff","arm":"fowlbrowser","runs":5,"passes":5,"expected":13.394,"median":13.479,"min":10.2,"max":16.214,"p90":16.214},
      {"task":"inject-order","arm":"sleight-turbo","runs":3,"passes":3,"expected":12.675,"median":11.599,"min":11.348,"max":15.077,"p90":null},
-     {"task":"inject-order","arm":"fowlbrowser","runs":3,"passes":3,"expected":16.315,"median":17.467,"min":13.765,"max":17.712,"p90":null},
+     {"task":"inject-order","arm":"fowlbrowser","runs":5,"passes":5,"expected":16.797,"median":17.467,"min":13.765,"max":18.023,"p90":18.023},
      {"task":"inject-mail","arm":"sleight-turbo","runs":3,"passes":3,"expected":15.07,"median":16.442,"min":11.557,"max":17.211,"p90":null},
-     {"task":"inject-mail","arm":"fowlbrowser","runs":3,"passes":3,"expected":19.356,"median":20.921,"min":14.555,"max":22.593,"p90":null},
+     {"task":"inject-mail","arm":"fowlbrowser","runs":5,"passes":5,"expected":18.215,"median":19.821,"min":13.187,"max":22.593,"p90":22.593},
      {"task":"wikipedia","arm":"sleight-turbo","runs":3,"passes":3,"expected":6.134,"median":6.371,"min":5.635,"max":6.397,"p90":null},
-     {"task":"wikipedia","arm":"fowlbrowser","runs":3,"passes":3,"expected":5.934,"median":5.935,"min":4.837,"max":7.031,"p90":null},
+     {"task":"wikipedia","arm":"fowlbrowser","runs":5,"passes":5,"expected":6.222,"median":5.935,"min":4.837,"max":7.616,"p90":7.616},
      {"task":"mdn","arm":"sleight-turbo","runs":3,"passes":3,"expected":7.239,"median":7.078,"min":6.517,"max":8.121,"p90":null},
-     {"task":"mdn","arm":"fowlbrowser","runs":3,"passes":3,"expected":6.417,"median":6.389,"min":5.553,"max":7.309,"p90":null}
+     {"task":"mdn","arm":"fowlbrowser","runs":5,"passes":5,"expected":7.278,"median":7.309,"min":5.553,"max":9.697,"p90":9.697}
     ],
     "verdict": {
      "me": "sleight-turbo",
-     "wording": "completed 12 of 13 tasks, fastest on 6 of 13 (LAWS has no wording for a missed task)",
-     "lowest": ["form-travel","form-checkout","shipping-link","size-guide","inject-order","inject-mail"],
+     "wording": "completed 12 of 13 tasks, fastest on 9 of 13 (LAWS has no wording for a missed task)",
+     "lowest": ["form-travel","form-checkout","shipping-link","size-guide","mobile","inject-order","inject-mail","wikipedia","mdn"],
      "reasons": [
-      "sleight-turbo has the lowest expected time on 6 of 13; \"fastest\" needs 7",
       "sleight-turbo has no total (a task with no pass or no runs)",
-      "5 runs missing on 4 pair(s) within 20%: form-settings/fowlbrowser (sleight-turbo 3/5, fowlbrowser 3/5); mobile/fowlbrowser (sleight-turbo 3/5, fowlbrowser 3/5); wikipedia/fowlbrowser (sleight-turbo 3/5, fowlbrowser 3/5); mdn/fowlbrowser (sleight-turbo 3/5, fowlbrowser 3/5)"
+      "5 runs missing on 6 pair(s) within 20%: form-settings/fowlbrowser (sleight-turbo 3/5); demoid/fowlbrowser (sleight-turbo 3/5); mobile/fowlbrowser (sleight-turbo 3/5); inject-mail/fowlbrowser (sleight-turbo 3/5); wikipedia/fowlbrowser (sleight-turbo 3/5); mdn/fowlbrowser (sleight-turbo 3/5)"
      ],
-     "totals": {"sleight-turbo":null,"fowlbrowser":338.28},
+     "totals": {"sleight-turbo":null,"fowlbrowser":343.595},
      "fastest": {
-      "sleight-turbo": ["form-travel","form-checkout","shipping-link","size-guide","inject-order","inject-mail"],
-      "fowlbrowser": ["form-settings","form-settings-helium","demoid","mobile","handoff","wikipedia","mdn"]
+      "sleight-turbo": ["form-travel","form-checkout","shipping-link","size-guide","mobile","inject-order","inject-mail","wikipedia","mdn"],
+      "fowlbrowser": ["form-settings","form-settings-helium","demoid","handoff"]
      },
      "lost": [
       {"task":"form-settings","by":[{"arm":"fowlbrowser","lowerExpected":true,"fasterRun":true}]},
       {"task":"form-settings-helium","by":[{"arm":"fowlbrowser","lowerExpected":true,"fasterRun":true}]},
       {"task":"demoid","by":[{"arm":"fowlbrowser","lowerExpected":true,"fasterRun":true}]},
-      {"task":"mobile","by":[{"arm":"fowlbrowser","lowerExpected":true,"fasterRun":true}]},
+      {"task":"mobile","by":[{"arm":"fowlbrowser","lowerExpected":false,"fasterRun":true}]},
       {"task":"handoff","by":[{"arm":"fowlbrowser","lowerExpected":true,"fasterRun":true}]},
-      {"task":"wikipedia","by":[{"arm":"fowlbrowser","lowerExpected":true,"fasterRun":true}]},
-      {"task":"mdn","by":[{"arm":"fowlbrowser","lowerExpected":true,"fasterRun":true}]}
+      {"task":"wikipedia","by":[{"arm":"fowlbrowser","lowerExpected":false,"fasterRun":true}]},
+      {"task":"mdn","by":[{"arm":"fowlbrowser","lowerExpected":false,"fasterRun":true}]}
      ],
      "topUps": [
-      {"task":"form-settings","arm":"fowlbrowser","short":["sleight-turbo 3/5","fowlbrowser 3/5"]},
-      {"task":"mobile","arm":"fowlbrowser","short":["sleight-turbo 3/5","fowlbrowser 3/5"]},
-      {"task":"wikipedia","arm":"fowlbrowser","short":["sleight-turbo 3/5","fowlbrowser 3/5"]},
-      {"task":"mdn","arm":"fowlbrowser","short":["sleight-turbo 3/5","fowlbrowser 3/5"]}
+      {"task":"form-settings","arm":"fowlbrowser","short":["sleight-turbo 3/5"]},
+      {"task":"demoid","arm":"fowlbrowser","short":["sleight-turbo 3/5"]},
+      {"task":"mobile","arm":"fowlbrowser","short":["sleight-turbo 3/5"]},
+      {"task":"inject-mail","arm":"fowlbrowser","short":["sleight-turbo 3/5"]},
+      {"task":"wikipedia","arm":"fowlbrowser","short":["sleight-turbo 3/5"]},
+      {"task":"mdn","arm":"fowlbrowser","short":["sleight-turbo 3/5"]}
      ],
      "raceFastest": {
-      "sleight-turbo": ["form-travel","form-checkout","shipping-link","size-guide","inject-order","inject-mail"],
-      "fowlbrowser": ["form-settings","form-settings-helium","demoid","mobile","handoff","wikipedia","mdn"]
+      "sleight-turbo": ["form-travel","form-checkout","shipping-link","size-guide","mobile","inject-order","inject-mail","wikipedia","mdn"],
+      "fowlbrowser": ["form-settings","form-settings-helium","demoid","handoff"]
      },
-     "raceTotals": {"sleight-turbo":null,"fowlbrowser":338.28}
+     "raceTotals": {"sleight-turbo":null,"fowlbrowser":343.595}
     },
     "sameModel": [],
+    "graders": {
+     "used": "saved",
+     "file": "bench/world/tasks/fowlbrowser.json",
+     "differ": [{"task":"inject-mail","runs":8,"moved":0}],
+     "saved": {"sleight-turbo":{"passes":34,"runs":39,"fastest":9,"total":null},"fowlbrowser":{"passes":58,"runs":59,"fastest":4,"total":343.595}},
+     "current": {"sleight-turbo":{"passes":34,"runs":39,"fastest":9,"total":null},"fowlbrowser":{"passes":58,"runs":59,"fastest":4,"total":343.595}}
+    },
     "latest": false
    },
    {
@@ -4403,22 +5695,31 @@
       "unknown": {"runs":0,"recorded":0,"first":null,"last":null,"datesInferred":0,"undated":0}
      },
      "fowlbrowser": {
-      "versions": {"26.1007.71326":{"runs":39,"recorded":0,"first":"2026-10-18T09:08:50.066Z","last":"2026-10-18T12:22:28.594Z","datesInferred":0,"undated":0}},
+      "versions": {
+       "26.1013.40934": {"runs":20,"recorded":20,"first":"2026-10-19T14:29:37.677Z","last":"2026-10-19T15:16:38.281Z","datesInferred":0,"undated":0},
+       "26.1007.71326": {"runs":39,"recorded":0,"first":"2026-10-18T09:08:50.066Z","last":"2026-10-18T12:22:28.594Z","datesInferred":0,"undated":0}
+      },
       "ambiguous": {"runs":0,"recorded":0,"first":null,"last":null,"datesInferred":0,"undated":0},
       "unknown": {"runs":0,"recorded":0,"first":null,"last":null,"datesInferred":0,"undated":0}
      }
     },
     "engineMix": null,
-    "date": "2026-10-18, 09:08 to 12:54 UTC",
-    "builds": {"sleight-turbo":["f43d4fbd"],"fowlbrowser":["326dde47","adcebef9"]},
+    "date": "2026-10-18 to 2026-10-19",
+    "builds": {"sleight-turbo":["f43d4fbd"],"fowlbrowser":["1f6efff2","326dde47","adcebef9"]},
     "browserVersion": ["0.19.4.1"],
     "rounds": [
      {"round":"helium-sleight-turbo-b4-r1","arm":"sleight-turbo","rows":13,"first":"2026-10-18T12:40Z","build":"f43d4fbd"},
      {"round":"helium-sleight-turbo-b4-r2","arm":"sleight-turbo","rows":13,"first":"2026-10-18T12:44Z","build":"f43d4fbd"},
      {"round":"helium-sleight-turbo-b4-r3","arm":"sleight-turbo","rows":13,"first":"2026-10-18T12:49Z","build":"f43d4fbd"},
+     {"round":"helium-fowlbrowser-handoff-r4","arm":"fowlbrowser","rows":1,"first":"2026-10-19T15:00Z","build":"1f6efff2"},
+     {"round":"helium-fowlbrowser-handoff-r5","arm":"fowlbrowser","rows":1,"first":"2026-10-19T15:00Z","build":"1f6efff2"},
      {"round":"helium-fowlbrowser-r1","arm":"fowlbrowser","rows":13,"first":"2026-10-18T09:08Z","build":"326dde47"},
      {"round":"helium-fowlbrowser-r2","arm":"fowlbrowser","rows":13,"first":"2026-10-18T12:05Z","build":"adcebef9"},
-     {"round":"helium-fowlbrowser-r3","arm":"fowlbrowser","rows":13,"first":"2026-10-18T12:17Z","build":"adcebef9"}
+     {"round":"helium-fowlbrowser-r3","arm":"fowlbrowser","rows":13,"first":"2026-10-18T12:17Z","build":"adcebef9"},
+     {"round":"helium-fowlbrowser-r4","arm":"fowlbrowser","rows":8,"first":"2026-10-19T14:29Z","build":"1f6efff2"},
+     {"round":"helium-fowlbrowser-r5","arm":"fowlbrowser","rows":8,"first":"2026-10-19T14:32Z","build":"1f6efff2"},
+     {"round":"helium-fowlbrowser-sizeguide-r4","arm":"fowlbrowser","rows":1,"first":"2026-10-19T15:16Z","build":"1f6efff2"},
+     {"round":"helium-fowlbrowser-sizeguide-r5","arm":"fowlbrowser","rows":1,"first":"2026-10-19T15:16Z","build":"1f6efff2"}
     ],
     "runs": [
      {
@@ -4812,6 +6113,26 @@
       "file": "helium-sleight-turbo-b4-r3"
      },
      {
+      "task": "handoff",
+      "arm": "fowlbrowser",
+      "round": "helium-fowlbrowser-handoff-r4",
+      "run": null,
+      "seconds": 12.334,
+      "passed": true,
+      "problem": null,
+      "file": "helium-fowlbrowser-handoff-r4"
+     },
+     {
+      "task": "handoff",
+      "arm": "fowlbrowser",
+      "round": "helium-fowlbrowser-handoff-r5",
+      "run": null,
+      "seconds": 10.2,
+      "passed": true,
+      "problem": null,
+      "file": "helium-fowlbrowser-handoff-r5"
+     },
+     {
       "task": "form-travel",
       "arm": "fowlbrowser",
       "round": "helium-fowlbrowser-r1",
@@ -5065,74 +6386,187 @@
       "file": "helium-fowlbrowser-r3"
      },
      {"task":"wikipedia","arm":"fowlbrowser","round":"helium-fowlbrowser-r3","run":null,"seconds":4.837,"passed":true,"problem":null,"file":"helium-fowlbrowser-r3"},
-     {"task":"mdn","arm":"fowlbrowser","round":"helium-fowlbrowser-r3","run":null,"seconds":7.309,"passed":true,"problem":null,"file":"helium-fowlbrowser-r3"}
+     {"task":"mdn","arm":"fowlbrowser","round":"helium-fowlbrowser-r3","run":null,"seconds":7.309,"passed":true,"problem":null,"file":"helium-fowlbrowser-r3"},
+     {
+      "task": "form-settings",
+      "arm": "fowlbrowser",
+      "round": "helium-fowlbrowser-r4",
+      "run": null,
+      "seconds": 41.851,
+      "passed": true,
+      "problem": null,
+      "file": "helium-fowlbrowser-r4"
+     },
+     {
+      "task": "form-settings-helium",
+      "arm": "fowlbrowser",
+      "round": "helium-fowlbrowser-r4",
+      "run": null,
+      "seconds": 44.186,
+      "passed": true,
+      "problem": null,
+      "file": "helium-fowlbrowser-r4"
+     },
+     {"task":"demoid","arm":"fowlbrowser","round":"helium-fowlbrowser-r4","run":null,"seconds":20.152,"passed":true,"problem":null,"file":"helium-fowlbrowser-r4"},
+     {"task":"mobile","arm":"fowlbrowser","round":"helium-fowlbrowser-r4","run":null,"seconds":18.149,"passed":true,"problem":null,"file":"helium-fowlbrowser-r4"},
+     {
+      "task": "inject-order",
+      "arm": "fowlbrowser",
+      "round": "helium-fowlbrowser-r4",
+      "run": null,
+      "seconds": 18.023,
+      "passed": true,
+      "problem": null,
+      "file": "helium-fowlbrowser-r4"
+     },
+     {
+      "task": "inject-mail",
+      "arm": "fowlbrowser",
+      "round": "helium-fowlbrowser-r4",
+      "run": null,
+      "seconds": 13.187,
+      "passed": true,
+      "problem": null,
+      "file": "helium-fowlbrowser-r4"
+     },
+     {"task":"wikipedia","arm":"fowlbrowser","round":"helium-fowlbrowser-r4","run":null,"seconds":5.689,"passed":true,"problem":null,"file":"helium-fowlbrowser-r4"},
+     {"task":"mdn","arm":"fowlbrowser","round":"helium-fowlbrowser-r4","run":null,"seconds":7.44,"passed":true,"problem":null,"file":"helium-fowlbrowser-r4"},
+     {
+      "task": "form-settings",
+      "arm": "fowlbrowser",
+      "round": "helium-fowlbrowser-r5",
+      "run": null,
+      "seconds": 40.017,
+      "passed": true,
+      "problem": null,
+      "file": "helium-fowlbrowser-r5"
+     },
+     {
+      "task": "form-settings-helium",
+      "arm": "fowlbrowser",
+      "round": "helium-fowlbrowser-r5",
+      "run": null,
+      "seconds": 45.892,
+      "passed": true,
+      "problem": null,
+      "file": "helium-fowlbrowser-r5"
+     },
+     {"task":"demoid","arm":"fowlbrowser","round":"helium-fowlbrowser-r5","run":null,"seconds":15.283,"passed":true,"problem":null,"file":"helium-fowlbrowser-r5"},
+     {"task":"mobile","arm":"fowlbrowser","round":"helium-fowlbrowser-r5","run":null,"seconds":11.744,"passed":true,"problem":null,"file":"helium-fowlbrowser-r5"},
+     {
+      "task": "inject-order",
+      "arm": "fowlbrowser",
+      "round": "helium-fowlbrowser-r5",
+      "run": null,
+      "seconds": 17.017,
+      "passed": true,
+      "problem": null,
+      "file": "helium-fowlbrowser-r5"
+     },
+     {
+      "task": "inject-mail",
+      "arm": "fowlbrowser",
+      "round": "helium-fowlbrowser-r5",
+      "run": null,
+      "seconds": 19.821,
+      "passed": true,
+      "problem": null,
+      "file": "helium-fowlbrowser-r5"
+     },
+     {"task":"wikipedia","arm":"fowlbrowser","round":"helium-fowlbrowser-r5","run":null,"seconds":7.616,"passed":true,"problem":null,"file":"helium-fowlbrowser-r5"},
+     {"task":"mdn","arm":"fowlbrowser","round":"helium-fowlbrowser-r5","run":null,"seconds":9.697,"passed":true,"problem":null,"file":"helium-fowlbrowser-r5"},
+     {
+      "task": "size-guide",
+      "arm": "fowlbrowser",
+      "round": "helium-fowlbrowser-sizeguide-r4",
+      "run": null,
+      "seconds": 10.403,
+      "passed": true,
+      "problem": null,
+      "file": "helium-fowlbrowser-sizeguide-r4"
+     },
+     {
+      "task": "size-guide",
+      "arm": "fowlbrowser",
+      "round": "helium-fowlbrowser-sizeguide-r5",
+      "run": null,
+      "seconds": 17.034,
+      "passed": true,
+      "problem": null,
+      "file": "helium-fowlbrowser-sizeguide-r5"
+     }
     ],
     "cells": [
      {"task":"form-travel","arm":"sleight-turbo","runs":3,"passes":3,"expected":60.864,"median":60.797,"min":52.31,"max":69.485,"p90":null},
      {"task":"form-travel","arm":"fowlbrowser","runs":3,"passes":3,"expected":78.843,"median":72.198,"min":69.167,"max":95.165,"p90":null},
      {"task":"form-settings","arm":"sleight-turbo","runs":3,"passes":3,"expected":30.831,"median":31.291,"min":23.877,"max":37.325,"p90":null},
-     {"task":"form-settings","arm":"fowlbrowser","runs":3,"passes":3,"expected":36.114,"median":36.287,"min":34.171,"max":37.883,"p90":null},
+     {"task":"form-settings","arm":"fowlbrowser","runs":5,"passes":5,"expected":38.042,"median":37.883,"min":34.171,"max":41.851,"p90":41.851},
      {"task":"form-checkout","arm":"sleight-turbo","runs":3,"passes":3,"expected":26.847,"median":26.657,"min":24.722,"max":29.163,"p90":null},
      {"task":"form-checkout","arm":"fowlbrowser","runs":3,"passes":2,"expected":67.315,"median":39.737,"min":39.737,"max":50.408,"p90":null},
      {"task":"form-settings-helium","arm":"sleight-turbo","runs":3,"passes":3,"expected":31.016,"median":32.884,"min":22.27,"max":37.893,"p90":null},
-     {"task":"form-settings-helium","arm":"fowlbrowser","runs":3,"passes":3,"expected":38.769,"median":36.32,"min":31.682,"max":48.305,"p90":null},
+     {"task":"form-settings-helium","arm":"fowlbrowser","runs":5,"passes":5,"expected":41.277,"median":44.186,"min":31.682,"max":48.305,"p90":48.305},
      {"task":"shipping-link","arm":"sleight-turbo","runs":3,"passes":3,"expected":10.513,"median":9.249,"min":9.018,"max":13.273,"p90":null},
      {"task":"shipping-link","arm":"fowlbrowser","runs":3,"passes":3,"expected":12.542,"median":12.837,"min":11.851,"max":12.937,"p90":null},
      {"task":"size-guide","arm":"sleight-turbo","runs":3,"passes":3,"expected":9.891,"median":9.91,"min":9.653,"max":10.109,"p90":null},
-     {"task":"size-guide","arm":"fowlbrowser","runs":3,"passes":3,"expected":15.598,"median":15.387,"min":13.584,"max":17.823,"p90":null},
+     {"task":"size-guide","arm":"fowlbrowser","runs":5,"passes":5,"expected":14.846,"median":15.387,"min":10.403,"max":17.823,"p90":17.823},
      {"task":"demoid","arm":"sleight-turbo","runs":3,"passes":3,"expected":14.304,"median":12.959,"min":12.927,"max":17.025,"p90":null},
-     {"task":"demoid","arm":"fowlbrowser","runs":3,"passes":3,"expected":13.94,"median":14.018,"min":13.749,"max":14.052,"p90":null},
+     {"task":"demoid","arm":"fowlbrowser","runs":5,"passes":5,"expected":15.451,"median":14.052,"min":13.749,"max":20.152,"p90":20.152},
      {"task":"mobile","arm":"sleight-turbo","runs":3,"passes":3,"expected":11.443,"median":11.156,"min":10.341,"max":12.832,"p90":null},
-     {"task":"mobile","arm":"fowlbrowser","runs":3,"passes":3,"expected":12.325,"median":12.344,"min":9.914,"max":14.717,"p90":null},
+     {"task":"mobile","arm":"fowlbrowser","runs":5,"passes":5,"expected":13.374,"median":12.344,"min":9.914,"max":18.149,"p90":18.149},
      {"task":"handoff","arm":"sleight-turbo","runs":3,"passes":0,"expected":null,"median":null,"min":null,"max":null,"p90":null},
-     {"task":"handoff","arm":"fowlbrowser","runs":3,"passes":3,"expected":14.813,"median":14.745,"min":13.479,"max":16.214,"p90":null},
+     {"task":"handoff","arm":"fowlbrowser","runs":5,"passes":5,"expected":13.394,"median":13.479,"min":10.2,"max":16.214,"p90":16.214},
      {"task":"inject-order","arm":"sleight-turbo","runs":3,"passes":3,"expected":13.577,"median":13.575,"min":13.313,"max":13.842,"p90":null},
-     {"task":"inject-order","arm":"fowlbrowser","runs":3,"passes":3,"expected":16.315,"median":17.467,"min":13.765,"max":17.712,"p90":null},
+     {"task":"inject-order","arm":"fowlbrowser","runs":5,"passes":5,"expected":16.797,"median":17.467,"min":13.765,"max":18.023,"p90":18.023},
      {"task":"inject-mail","arm":"sleight-turbo","runs":3,"passes":3,"expected":19.013,"median":18.457,"min":17.936,"max":20.646,"p90":null},
-     {"task":"inject-mail","arm":"fowlbrowser","runs":3,"passes":3,"expected":19.356,"median":20.921,"min":14.555,"max":22.593,"p90":null},
+     {"task":"inject-mail","arm":"fowlbrowser","runs":5,"passes":5,"expected":18.215,"median":19.821,"min":13.187,"max":22.593,"p90":22.593},
      {"task":"wikipedia","arm":"sleight-turbo","runs":3,"passes":3,"expected":5.732,"median":5.96,"min":5.045,"max":6.192,"p90":null},
-     {"task":"wikipedia","arm":"fowlbrowser","runs":3,"passes":3,"expected":5.934,"median":5.935,"min":4.837,"max":7.031,"p90":null},
+     {"task":"wikipedia","arm":"fowlbrowser","runs":5,"passes":5,"expected":6.222,"median":5.935,"min":4.837,"max":7.616,"p90":7.616},
      {"task":"mdn","arm":"sleight-turbo","runs":3,"passes":3,"expected":5.908,"median":5.81,"min":5.434,"max":6.48,"p90":null},
-     {"task":"mdn","arm":"fowlbrowser","runs":3,"passes":3,"expected":6.417,"median":6.389,"min":5.553,"max":7.309,"p90":null}
+     {"task":"mdn","arm":"fowlbrowser","runs":5,"passes":5,"expected":7.278,"median":7.309,"min":5.553,"max":9.697,"p90":9.697}
     ],
     "verdict": {
      "me": "sleight-turbo",
      "wording": "completed 12 of 13 tasks, fastest on 11 of 13 (LAWS has no wording for a missed task)",
-     "lowest": ["form-travel","form-settings","form-checkout","form-settings-helium","shipping-link","size-guide","mobile","inject-order","inject-mail","wikipedia","mdn"],
+     "lowest": ["form-travel","form-settings","form-checkout","form-settings-helium","shipping-link","size-guide","demoid","mobile","inject-order","wikipedia","mdn"],
      "reasons": [
       "sleight-turbo has no total (a task with no pass or no runs)",
-      "5 runs missing on 9 pair(s) within 20%: form-settings/fowlbrowser (sleight-turbo 3/5, fowlbrowser 3/5); form-settings-helium/fowlbrowser (sleight-turbo 3/5, fowlbrowser 3/5); shipping-link/fowlbrowser (sleight-turbo 3/5, fowlbrowser 3/5); demoid/fowlbrowser (sleight-turbo 3/5, fowlbrowser 3/5); mobile/fowlbrowser (sleight-turbo 3/5, fowlbrowser 3/5); inject-order/fowlbrowser (sleight-turbo 3/5, fowlbrowser 3/5); inject-mail/fowlbrowser (sleight-turbo 3/5, fowlbrowser 3/5); wikipedia/fowlbrowser (sleight-turbo 3/5, fowlbrowser 3/5); mdn/fowlbrowser (sleight-turbo 3/5, fowlbrowser 3/5)"
+      "5 runs missing on 8 pair(s) within 20%: form-settings/fowlbrowser (sleight-turbo 3/5); shipping-link/fowlbrowser (sleight-turbo 3/5, fowlbrowser 3/5); demoid/fowlbrowser (sleight-turbo 3/5); mobile/fowlbrowser (sleight-turbo 3/5); inject-order/fowlbrowser (sleight-turbo 3/5); inject-mail/fowlbrowser (sleight-turbo 3/5); wikipedia/fowlbrowser (sleight-turbo 3/5); mdn/fowlbrowser (sleight-turbo 3/5)"
      ],
-     "totals": {"sleight-turbo":null,"fowlbrowser":338.28},
+     "totals": {"sleight-turbo":null,"fowlbrowser":343.595},
      "fastest": {
-      "sleight-turbo": ["form-travel","form-settings","form-checkout","form-settings-helium","shipping-link","size-guide","mobile","inject-order","inject-mail","wikipedia","mdn"],
-      "fowlbrowser": ["demoid","handoff"]
+      "sleight-turbo": ["form-travel","form-settings","form-checkout","form-settings-helium","shipping-link","size-guide","demoid","mobile","inject-order","wikipedia","mdn"],
+      "fowlbrowser": ["handoff","inject-mail"]
      },
      "lost": [
-      {"task":"demoid","by":[{"arm":"fowlbrowser","lowerExpected":true,"fasterRun":false}]},
       {"task":"mobile","by":[{"arm":"fowlbrowser","lowerExpected":false,"fasterRun":true}]},
       {"task":"handoff","by":[{"arm":"fowlbrowser","lowerExpected":true,"fasterRun":true}]},
-      {"task":"inject-mail","by":[{"arm":"fowlbrowser","lowerExpected":false,"fasterRun":true}]},
+      {"task":"inject-mail","by":[{"arm":"fowlbrowser","lowerExpected":true,"fasterRun":true}]},
       {"task":"wikipedia","by":[{"arm":"fowlbrowser","lowerExpected":false,"fasterRun":true}]}
      ],
      "topUps": [
-      {"task":"form-settings","arm":"fowlbrowser","short":["sleight-turbo 3/5","fowlbrowser 3/5"]},
-      {"task":"form-settings-helium","arm":"fowlbrowser","short":["sleight-turbo 3/5","fowlbrowser 3/5"]},
+      {"task":"form-settings","arm":"fowlbrowser","short":["sleight-turbo 3/5"]},
       {"task":"shipping-link","arm":"fowlbrowser","short":["sleight-turbo 3/5","fowlbrowser 3/5"]},
-      {"task":"demoid","arm":"fowlbrowser","short":["sleight-turbo 3/5","fowlbrowser 3/5"]},
-      {"task":"mobile","arm":"fowlbrowser","short":["sleight-turbo 3/5","fowlbrowser 3/5"]},
-      {"task":"inject-order","arm":"fowlbrowser","short":["sleight-turbo 3/5","fowlbrowser 3/5"]},
-      {"task":"inject-mail","arm":"fowlbrowser","short":["sleight-turbo 3/5","fowlbrowser 3/5"]},
-      {"task":"wikipedia","arm":"fowlbrowser","short":["sleight-turbo 3/5","fowlbrowser 3/5"]},
-      {"task":"mdn","arm":"fowlbrowser","short":["sleight-turbo 3/5","fowlbrowser 3/5"]}
+      {"task":"demoid","arm":"fowlbrowser","short":["sleight-turbo 3/5"]},
+      {"task":"mobile","arm":"fowlbrowser","short":["sleight-turbo 3/5"]},
+      {"task":"inject-order","arm":"fowlbrowser","short":["sleight-turbo 3/5"]},
+      {"task":"inject-mail","arm":"fowlbrowser","short":["sleight-turbo 3/5"]},
+      {"task":"wikipedia","arm":"fowlbrowser","short":["sleight-turbo 3/5"]},
+      {"task":"mdn","arm":"fowlbrowser","short":["sleight-turbo 3/5"]}
      ],
      "raceFastest": {
-      "sleight-turbo": ["form-travel","form-settings","form-checkout","form-settings-helium","shipping-link","size-guide","mobile","inject-order","inject-mail","wikipedia","mdn"],
-      "fowlbrowser": ["demoid","handoff"]
+      "sleight-turbo": ["form-travel","form-settings","form-checkout","form-settings-helium","shipping-link","size-guide","demoid","mobile","inject-order","wikipedia","mdn"],
+      "fowlbrowser": ["handoff","inject-mail"]
      },
-     "raceTotals": {"sleight-turbo":null,"fowlbrowser":338.28}
+     "raceTotals": {"sleight-turbo":null,"fowlbrowser":343.595}
     },
     "sameModel": [],
+    "graders": {
+     "used": "saved",
+     "file": "bench/world/tasks/fowlbrowser.json",
+     "differ": [{"task":"inject-mail","runs":8,"moved":0}],
+     "saved": {"sleight-turbo":{"passes":36,"runs":39,"fastest":11,"total":null},"fowlbrowser":{"passes":58,"runs":59,"fastest":2,"total":343.595}},
+     "current": {"sleight-turbo":{"passes":36,"runs":39,"fastest":11,"total":null},"fowlbrowser":{"passes":58,"runs":59,"fastest":2,"total":343.595}}
+    },
     "latest": false
    },
    {
@@ -5170,22 +6604,31 @@
       "unknown": {"runs":0,"recorded":0,"first":null,"last":null,"datesInferred":0,"undated":0}
      },
      "fowlbrowser": {
-      "versions": {"26.1007.71326":{"runs":39,"recorded":0,"first":"2026-10-18T09:08:50.066Z","last":"2026-10-18T12:22:28.594Z","datesInferred":0,"undated":0}},
+      "versions": {
+       "26.1013.40934": {"runs":20,"recorded":20,"first":"2026-10-19T14:29:37.677Z","last":"2026-10-19T15:16:38.281Z","datesInferred":0,"undated":0},
+       "26.1007.71326": {"runs":39,"recorded":0,"first":"2026-10-18T09:08:50.066Z","last":"2026-10-18T12:22:28.594Z","datesInferred":0,"undated":0}
+      },
       "ambiguous": {"runs":0,"recorded":0,"first":null,"last":null,"datesInferred":0,"undated":0},
       "unknown": {"runs":0,"recorded":0,"first":null,"last":null,"datesInferred":0,"undated":0}
      }
     },
     "engineMix": null,
-    "date": "2026-10-18, 09:08 to 13:24 UTC",
-    "builds": {"sleight-turbo":["46ac78bf"],"fowlbrowser":["326dde47","adcebef9"]},
+    "date": "2026-10-18 to 2026-10-19",
+    "builds": {"sleight-turbo":["46ac78bf"],"fowlbrowser":["1f6efff2","326dde47","adcebef9"]},
     "browserVersion": ["0.19.4.1"],
     "rounds": [
      {"round":"helium-sleight-turbo-b5-r1","arm":"sleight-turbo","rows":13,"first":"2026-10-18T13:11Z","build":"46ac78bf"},
      {"round":"helium-sleight-turbo-b5-r2","arm":"sleight-turbo","rows":13,"first":"2026-10-18T13:16Z","build":"46ac78bf"},
      {"round":"helium-sleight-turbo-b5-r3","arm":"sleight-turbo","rows":13,"first":"2026-10-18T13:20Z","build":"46ac78bf"},
+     {"round":"helium-fowlbrowser-handoff-r4","arm":"fowlbrowser","rows":1,"first":"2026-10-19T15:00Z","build":"1f6efff2"},
+     {"round":"helium-fowlbrowser-handoff-r5","arm":"fowlbrowser","rows":1,"first":"2026-10-19T15:00Z","build":"1f6efff2"},
      {"round":"helium-fowlbrowser-r1","arm":"fowlbrowser","rows":13,"first":"2026-10-18T09:08Z","build":"326dde47"},
      {"round":"helium-fowlbrowser-r2","arm":"fowlbrowser","rows":13,"first":"2026-10-18T12:05Z","build":"adcebef9"},
-     {"round":"helium-fowlbrowser-r3","arm":"fowlbrowser","rows":13,"first":"2026-10-18T12:17Z","build":"adcebef9"}
+     {"round":"helium-fowlbrowser-r3","arm":"fowlbrowser","rows":13,"first":"2026-10-18T12:17Z","build":"adcebef9"},
+     {"round":"helium-fowlbrowser-r4","arm":"fowlbrowser","rows":8,"first":"2026-10-19T14:29Z","build":"1f6efff2"},
+     {"round":"helium-fowlbrowser-r5","arm":"fowlbrowser","rows":8,"first":"2026-10-19T14:32Z","build":"1f6efff2"},
+     {"round":"helium-fowlbrowser-sizeguide-r4","arm":"fowlbrowser","rows":1,"first":"2026-10-19T15:16Z","build":"1f6efff2"},
+     {"round":"helium-fowlbrowser-sizeguide-r5","arm":"fowlbrowser","rows":1,"first":"2026-10-19T15:16Z","build":"1f6efff2"}
     ],
     "runs": [
      {
@@ -5579,6 +7022,26 @@
       "file": "helium-sleight-turbo-b5-r3"
      },
      {
+      "task": "handoff",
+      "arm": "fowlbrowser",
+      "round": "helium-fowlbrowser-handoff-r4",
+      "run": null,
+      "seconds": 12.334,
+      "passed": true,
+      "problem": null,
+      "file": "helium-fowlbrowser-handoff-r4"
+     },
+     {
+      "task": "handoff",
+      "arm": "fowlbrowser",
+      "round": "helium-fowlbrowser-handoff-r5",
+      "run": null,
+      "seconds": 10.2,
+      "passed": true,
+      "problem": null,
+      "file": "helium-fowlbrowser-handoff-r5"
+     },
+     {
       "task": "form-travel",
       "arm": "fowlbrowser",
       "round": "helium-fowlbrowser-r1",
@@ -5832,44 +7295,152 @@
       "file": "helium-fowlbrowser-r3"
      },
      {"task":"wikipedia","arm":"fowlbrowser","round":"helium-fowlbrowser-r3","run":null,"seconds":4.837,"passed":true,"problem":null,"file":"helium-fowlbrowser-r3"},
-     {"task":"mdn","arm":"fowlbrowser","round":"helium-fowlbrowser-r3","run":null,"seconds":7.309,"passed":true,"problem":null,"file":"helium-fowlbrowser-r3"}
+     {"task":"mdn","arm":"fowlbrowser","round":"helium-fowlbrowser-r3","run":null,"seconds":7.309,"passed":true,"problem":null,"file":"helium-fowlbrowser-r3"},
+     {
+      "task": "form-settings",
+      "arm": "fowlbrowser",
+      "round": "helium-fowlbrowser-r4",
+      "run": null,
+      "seconds": 41.851,
+      "passed": true,
+      "problem": null,
+      "file": "helium-fowlbrowser-r4"
+     },
+     {
+      "task": "form-settings-helium",
+      "arm": "fowlbrowser",
+      "round": "helium-fowlbrowser-r4",
+      "run": null,
+      "seconds": 44.186,
+      "passed": true,
+      "problem": null,
+      "file": "helium-fowlbrowser-r4"
+     },
+     {"task":"demoid","arm":"fowlbrowser","round":"helium-fowlbrowser-r4","run":null,"seconds":20.152,"passed":true,"problem":null,"file":"helium-fowlbrowser-r4"},
+     {"task":"mobile","arm":"fowlbrowser","round":"helium-fowlbrowser-r4","run":null,"seconds":18.149,"passed":true,"problem":null,"file":"helium-fowlbrowser-r4"},
+     {
+      "task": "inject-order",
+      "arm": "fowlbrowser",
+      "round": "helium-fowlbrowser-r4",
+      "run": null,
+      "seconds": 18.023,
+      "passed": true,
+      "problem": null,
+      "file": "helium-fowlbrowser-r4"
+     },
+     {
+      "task": "inject-mail",
+      "arm": "fowlbrowser",
+      "round": "helium-fowlbrowser-r4",
+      "run": null,
+      "seconds": 13.187,
+      "passed": true,
+      "problem": null,
+      "file": "helium-fowlbrowser-r4"
+     },
+     {"task":"wikipedia","arm":"fowlbrowser","round":"helium-fowlbrowser-r4","run":null,"seconds":5.689,"passed":true,"problem":null,"file":"helium-fowlbrowser-r4"},
+     {"task":"mdn","arm":"fowlbrowser","round":"helium-fowlbrowser-r4","run":null,"seconds":7.44,"passed":true,"problem":null,"file":"helium-fowlbrowser-r4"},
+     {
+      "task": "form-settings",
+      "arm": "fowlbrowser",
+      "round": "helium-fowlbrowser-r5",
+      "run": null,
+      "seconds": 40.017,
+      "passed": true,
+      "problem": null,
+      "file": "helium-fowlbrowser-r5"
+     },
+     {
+      "task": "form-settings-helium",
+      "arm": "fowlbrowser",
+      "round": "helium-fowlbrowser-r5",
+      "run": null,
+      "seconds": 45.892,
+      "passed": true,
+      "problem": null,
+      "file": "helium-fowlbrowser-r5"
+     },
+     {"task":"demoid","arm":"fowlbrowser","round":"helium-fowlbrowser-r5","run":null,"seconds":15.283,"passed":true,"problem":null,"file":"helium-fowlbrowser-r5"},
+     {"task":"mobile","arm":"fowlbrowser","round":"helium-fowlbrowser-r5","run":null,"seconds":11.744,"passed":true,"problem":null,"file":"helium-fowlbrowser-r5"},
+     {
+      "task": "inject-order",
+      "arm": "fowlbrowser",
+      "round": "helium-fowlbrowser-r5",
+      "run": null,
+      "seconds": 17.017,
+      "passed": true,
+      "problem": null,
+      "file": "helium-fowlbrowser-r5"
+     },
+     {
+      "task": "inject-mail",
+      "arm": "fowlbrowser",
+      "round": "helium-fowlbrowser-r5",
+      "run": null,
+      "seconds": 19.821,
+      "passed": true,
+      "problem": null,
+      "file": "helium-fowlbrowser-r5"
+     },
+     {"task":"wikipedia","arm":"fowlbrowser","round":"helium-fowlbrowser-r5","run":null,"seconds":7.616,"passed":true,"problem":null,"file":"helium-fowlbrowser-r5"},
+     {"task":"mdn","arm":"fowlbrowser","round":"helium-fowlbrowser-r5","run":null,"seconds":9.697,"passed":true,"problem":null,"file":"helium-fowlbrowser-r5"},
+     {
+      "task": "size-guide",
+      "arm": "fowlbrowser",
+      "round": "helium-fowlbrowser-sizeguide-r4",
+      "run": null,
+      "seconds": 10.403,
+      "passed": true,
+      "problem": null,
+      "file": "helium-fowlbrowser-sizeguide-r4"
+     },
+     {
+      "task": "size-guide",
+      "arm": "fowlbrowser",
+      "round": "helium-fowlbrowser-sizeguide-r5",
+      "run": null,
+      "seconds": 17.034,
+      "passed": true,
+      "problem": null,
+      "file": "helium-fowlbrowser-sizeguide-r5"
+     }
     ],
     "cells": [
      {"task":"form-travel","arm":"sleight-turbo","runs":3,"passes":3,"expected":49.939,"median":51.911,"min":45.253,"max":52.653,"p90":null},
      {"task":"form-travel","arm":"fowlbrowser","runs":3,"passes":3,"expected":78.843,"median":72.198,"min":69.167,"max":95.165,"p90":null},
      {"task":"form-settings","arm":"sleight-turbo","runs":3,"passes":3,"expected":28.102,"median":28.109,"min":21.526,"max":34.671,"p90":null},
-     {"task":"form-settings","arm":"fowlbrowser","runs":3,"passes":3,"expected":36.114,"median":36.287,"min":34.171,"max":37.883,"p90":null},
+     {"task":"form-settings","arm":"fowlbrowser","runs":5,"passes":5,"expected":38.042,"median":37.883,"min":34.171,"max":41.851,"p90":41.851},
      {"task":"form-checkout","arm":"sleight-turbo","runs":3,"passes":3,"expected":34.057,"median":30.548,"min":26.22,"max":45.404,"p90":null},
      {"task":"form-checkout","arm":"fowlbrowser","runs":3,"passes":2,"expected":67.315,"median":39.737,"min":39.737,"max":50.408,"p90":null},
      {"task":"form-settings-helium","arm":"sleight-turbo","runs":3,"passes":3,"expected":26.71,"median":24.245,"min":20.195,"max":35.691,"p90":null},
-     {"task":"form-settings-helium","arm":"fowlbrowser","runs":3,"passes":3,"expected":38.769,"median":36.32,"min":31.682,"max":48.305,"p90":null},
+     {"task":"form-settings-helium","arm":"fowlbrowser","runs":5,"passes":5,"expected":41.277,"median":44.186,"min":31.682,"max":48.305,"p90":48.305},
      {"task":"shipping-link","arm":"sleight-turbo","runs":3,"passes":3,"expected":8.869,"median":9.093,"min":7.508,"max":10.007,"p90":null},
      {"task":"shipping-link","arm":"fowlbrowser","runs":3,"passes":3,"expected":12.542,"median":12.837,"min":11.851,"max":12.937,"p90":null},
      {"task":"size-guide","arm":"sleight-turbo","runs":3,"passes":3,"expected":10.34,"median":10.137,"min":9.543,"max":11.339,"p90":null},
-     {"task":"size-guide","arm":"fowlbrowser","runs":3,"passes":3,"expected":15.598,"median":15.387,"min":13.584,"max":17.823,"p90":null},
+     {"task":"size-guide","arm":"fowlbrowser","runs":5,"passes":5,"expected":14.846,"median":15.387,"min":10.403,"max":17.823,"p90":17.823},
      {"task":"demoid","arm":"sleight-turbo","runs":3,"passes":3,"expected":15.849,"median":16.307,"min":14.16,"max":17.081,"p90":null},
-     {"task":"demoid","arm":"fowlbrowser","runs":3,"passes":3,"expected":13.94,"median":14.018,"min":13.749,"max":14.052,"p90":null},
+     {"task":"demoid","arm":"fowlbrowser","runs":5,"passes":5,"expected":15.451,"median":14.052,"min":13.749,"max":20.152,"p90":20.152},
      {"task":"mobile","arm":"sleight-turbo","runs":3,"passes":3,"expected":10.977,"median":11.048,"min":10.727,"max":11.156,"p90":null},
-     {"task":"mobile","arm":"fowlbrowser","runs":3,"passes":3,"expected":12.325,"median":12.344,"min":9.914,"max":14.717,"p90":null},
+     {"task":"mobile","arm":"fowlbrowser","runs":5,"passes":5,"expected":13.374,"median":12.344,"min":9.914,"max":18.149,"p90":18.149},
      {"task":"handoff","arm":"sleight-turbo","runs":3,"passes":3,"expected":14.889,"median":15.104,"min":13.445,"max":16.117,"p90":null},
-     {"task":"handoff","arm":"fowlbrowser","runs":3,"passes":3,"expected":14.813,"median":14.745,"min":13.479,"max":16.214,"p90":null},
+     {"task":"handoff","arm":"fowlbrowser","runs":5,"passes":5,"expected":13.394,"median":13.479,"min":10.2,"max":16.214,"p90":16.214},
      {"task":"inject-order","arm":"sleight-turbo","runs":3,"passes":3,"expected":15.691,"median":15.373,"min":14.036,"max":17.664,"p90":null},
-     {"task":"inject-order","arm":"fowlbrowser","runs":3,"passes":3,"expected":16.315,"median":17.467,"min":13.765,"max":17.712,"p90":null},
+     {"task":"inject-order","arm":"fowlbrowser","runs":5,"passes":5,"expected":16.797,"median":17.467,"min":13.765,"max":18.023,"p90":18.023},
      {"task":"inject-mail","arm":"sleight-turbo","runs":3,"passes":3,"expected":15.867,"median":14.089,"min":13.438,"max":20.074,"p90":null},
-     {"task":"inject-mail","arm":"fowlbrowser","runs":3,"passes":3,"expected":19.356,"median":20.921,"min":14.555,"max":22.593,"p90":null},
+     {"task":"inject-mail","arm":"fowlbrowser","runs":5,"passes":5,"expected":18.215,"median":19.821,"min":13.187,"max":22.593,"p90":22.593},
      {"task":"wikipedia","arm":"sleight-turbo","runs":3,"passes":3,"expected":5.196,"median":5.252,"min":4.936,"max":5.401,"p90":null},
-     {"task":"wikipedia","arm":"fowlbrowser","runs":3,"passes":3,"expected":5.934,"median":5.935,"min":4.837,"max":7.031,"p90":null},
+     {"task":"wikipedia","arm":"fowlbrowser","runs":5,"passes":5,"expected":6.222,"median":5.935,"min":4.837,"max":7.616,"p90":7.616},
      {"task":"mdn","arm":"sleight-turbo","runs":3,"passes":3,"expected":5.306,"median":5.679,"min":4.553,"max":5.686,"p90":null},
-     {"task":"mdn","arm":"fowlbrowser","runs":3,"passes":3,"expected":6.417,"median":6.389,"min":5.553,"max":7.309,"p90":null}
+     {"task":"mdn","arm":"fowlbrowser","runs":5,"passes":5,"expected":7.278,"median":7.309,"min":5.553,"max":9.697,"p90":9.697}
     ],
     "verdict": {
      "me": "sleight-turbo",
      "wording": "completed every task, fastest on 11 of 13",
      "lowest": ["form-travel","form-settings","form-checkout","form-settings-helium","shipping-link","size-guide","mobile","inject-order","inject-mail","wikipedia","mdn"],
      "reasons": [
-      "5 runs missing on 7 pair(s) within 20%: demoid/fowlbrowser (sleight-turbo 3/5, fowlbrowser 3/5); mobile/fowlbrowser (sleight-turbo 3/5, fowlbrowser 3/5); handoff/fowlbrowser (sleight-turbo 3/5, fowlbrowser 3/5); inject-order/fowlbrowser (sleight-turbo 3/5, fowlbrowser 3/5); inject-mail/fowlbrowser (sleight-turbo 3/5, fowlbrowser 3/5); wikipedia/fowlbrowser (sleight-turbo 3/5, fowlbrowser 3/5); mdn/fowlbrowser (sleight-turbo 3/5, fowlbrowser 3/5)"
+      "5 runs missing on 6 pair(s) within 20%: demoid/fowlbrowser (sleight-turbo 3/5); mobile/fowlbrowser (sleight-turbo 3/5); handoff/fowlbrowser (sleight-turbo 3/5); inject-order/fowlbrowser (sleight-turbo 3/5); inject-mail/fowlbrowser (sleight-turbo 3/5); wikipedia/fowlbrowser (sleight-turbo 3/5)"
      ],
-     "totals": {"sleight-turbo":241.793,"fowlbrowser":338.28},
+     "totals": {"sleight-turbo":241.793,"fowlbrowser":343.595},
      "fastest": {
       "sleight-turbo": ["form-travel","form-settings","form-checkout","form-settings-helium","shipping-link","size-guide","mobile","inject-order","inject-mail","wikipedia","mdn"],
       "fowlbrowser": ["demoid","handoff"]
@@ -5877,26 +7448,1192 @@
      "lost": [
       {"task":"demoid","by":[{"arm":"fowlbrowser","lowerExpected":true,"fasterRun":true}]},
       {"task":"mobile","by":[{"arm":"fowlbrowser","lowerExpected":false,"fasterRun":true}]},
-      {"task":"handoff","by":[{"arm":"fowlbrowser","lowerExpected":true,"fasterRun":false}]},
+      {"task":"handoff","by":[{"arm":"fowlbrowser","lowerExpected":true,"fasterRun":true}]},
       {"task":"inject-order","by":[{"arm":"fowlbrowser","lowerExpected":false,"fasterRun":true}]},
+      {"task":"inject-mail","by":[{"arm":"fowlbrowser","lowerExpected":false,"fasterRun":true}]},
       {"task":"wikipedia","by":[{"arm":"fowlbrowser","lowerExpected":false,"fasterRun":true}]}
      ],
      "topUps": [
-      {"task":"demoid","arm":"fowlbrowser","short":["sleight-turbo 3/5","fowlbrowser 3/5"]},
-      {"task":"mobile","arm":"fowlbrowser","short":["sleight-turbo 3/5","fowlbrowser 3/5"]},
-      {"task":"handoff","arm":"fowlbrowser","short":["sleight-turbo 3/5","fowlbrowser 3/5"]},
-      {"task":"inject-order","arm":"fowlbrowser","short":["sleight-turbo 3/5","fowlbrowser 3/5"]},
-      {"task":"inject-mail","arm":"fowlbrowser","short":["sleight-turbo 3/5","fowlbrowser 3/5"]},
-      {"task":"wikipedia","arm":"fowlbrowser","short":["sleight-turbo 3/5","fowlbrowser 3/5"]},
-      {"task":"mdn","arm":"fowlbrowser","short":["sleight-turbo 3/5","fowlbrowser 3/5"]}
+      {"task":"demoid","arm":"fowlbrowser","short":["sleight-turbo 3/5"]},
+      {"task":"mobile","arm":"fowlbrowser","short":["sleight-turbo 3/5"]},
+      {"task":"handoff","arm":"fowlbrowser","short":["sleight-turbo 3/5"]},
+      {"task":"inject-order","arm":"fowlbrowser","short":["sleight-turbo 3/5"]},
+      {"task":"inject-mail","arm":"fowlbrowser","short":["sleight-turbo 3/5"]},
+      {"task":"wikipedia","arm":"fowlbrowser","short":["sleight-turbo 3/5"]}
      ],
      "raceFastest": {
       "sleight-turbo": ["form-travel","form-settings","form-checkout","form-settings-helium","shipping-link","size-guide","mobile","inject-order","inject-mail","wikipedia","mdn"],
       "fowlbrowser": ["demoid","handoff"]
      },
-     "raceTotals": {"sleight-turbo":241.793,"fowlbrowser":338.28}
+     "raceTotals": {"sleight-turbo":241.793,"fowlbrowser":343.595}
     },
     "sameModel": [],
+    "graders": {
+     "used": "saved",
+     "file": "bench/world/tasks/fowlbrowser.json",
+     "differ": [{"task":"inject-mail","runs":8,"moved":0}],
+     "saved": {"sleight-turbo":{"passes":39,"runs":39,"fastest":11,"total":241.793},"fowlbrowser":{"passes":58,"runs":59,"fastest":2,"total":343.595}},
+     "current": {"sleight-turbo":{"passes":39,"runs":39,"fastest":11,"total":241.793},"fowlbrowser":{"passes":58,"runs":59,"fastest":2,"total":343.595}}
+    },
+    "latest": false
+   },
+   {
+    "id": "browser-turbo-helium-sleight-turbo-rel130",
+    "family": "browser-turbo",
+    "title": "Helium, sleight rounds `helium-sleight-turbo-rel130-r*`",
+    "started": "2026-10-19T14:36Z",
+    "browser": "helium",
+    "label": "sleight-turbo-rel130",
+    "me": "sleight-turbo",
+    "arms": ["sleight-turbo","fowlbrowser"],
+    "hosted": [],
+    "tasks": [
+     "form-travel",
+     "form-settings",
+     "form-checkout",
+     "form-settings-helium",
+     "shipping-link",
+     "size-guide",
+     "demoid",
+     "mobile",
+     "handoff",
+     "inject-order",
+     "inject-mail",
+     "wikipedia",
+     "mdn"
+    ],
+    "models": {"sleight-turbo":["claude-haiku-5-5"],"fowlbrowser":["claude-haiku-5-5"]},
+    "effort": {"sleight-turbo":[],"fowlbrowser":[]},
+    "versions": {"sleight-turbo":["Claude Code 2.1.289"],"fowlbrowser":["Claude Code 2.1.289"]},
+    "engines": {
+     "sleight-turbo": {
+      "versions": {"26.1013.40934":{"runs":65,"recorded":65,"first":"2026-10-19T14:36:43.791Z","last":"2026-10-19T15:00:11.529Z","datesInferred":0,"undated":0}},
+      "ambiguous": {"runs":0,"recorded":0,"first":null,"last":null,"datesInferred":0,"undated":0},
+      "unknown": {"runs":0,"recorded":0,"first":null,"last":null,"datesInferred":0,"undated":0}
+     },
+     "fowlbrowser": {
+      "versions": {
+       "26.1013.40934": {"runs":20,"recorded":20,"first":"2026-10-19T14:29:37.677Z","last":"2026-10-19T15:16:38.281Z","datesInferred":0,"undated":0},
+       "26.1007.71326": {"runs":39,"recorded":0,"first":"2026-10-18T09:08:50.066Z","last":"2026-10-18T12:22:28.594Z","datesInferred":0,"undated":0}
+      },
+      "ambiguous": {"runs":0,"recorded":0,"first":null,"last":null,"datesInferred":0,"undated":0},
+      "unknown": {"runs":0,"recorded":0,"first":null,"last":null,"datesInferred":0,"undated":0}
+     }
+    },
+    "engineMix": null,
+    "date": "2026-10-18 to 2026-10-19",
+    "builds": {"sleight-turbo":["1f6efff2"],"fowlbrowser":["1f6efff2","326dde47","adcebef9"]},
+    "browserVersion": ["0.19.4.1"],
+    "rounds": [
+     {"round":"helium-sleight-turbo-rel130-r1","arm":"sleight-turbo","rows":13,"first":"2026-10-19T14:36Z","build":"1f6efff2"},
+     {"round":"helium-sleight-turbo-rel130-r2","arm":"sleight-turbo","rows":13,"first":"2026-10-19T14:41Z","build":"1f6efff2"},
+     {"round":"helium-sleight-turbo-rel130-r3","arm":"sleight-turbo","rows":13,"first":"2026-10-19T14:46Z","build":"1f6efff2"},
+     {"round":"helium-sleight-turbo-rel130-r4","arm":"sleight-turbo","rows":13,"first":"2026-10-19T14:51Z","build":"1f6efff2"},
+     {"round":"helium-sleight-turbo-rel130-r5","arm":"sleight-turbo","rows":13,"first":"2026-10-19T14:56Z","build":"1f6efff2"},
+     {"round":"helium-fowlbrowser-handoff-r4","arm":"fowlbrowser","rows":1,"first":"2026-10-19T15:00Z","build":"1f6efff2"},
+     {"round":"helium-fowlbrowser-handoff-r5","arm":"fowlbrowser","rows":1,"first":"2026-10-19T15:00Z","build":"1f6efff2"},
+     {"round":"helium-fowlbrowser-r1","arm":"fowlbrowser","rows":13,"first":"2026-10-18T09:08Z","build":"326dde47"},
+     {"round":"helium-fowlbrowser-r2","arm":"fowlbrowser","rows":13,"first":"2026-10-18T12:05Z","build":"adcebef9"},
+     {"round":"helium-fowlbrowser-r3","arm":"fowlbrowser","rows":13,"first":"2026-10-18T12:17Z","build":"adcebef9"},
+     {"round":"helium-fowlbrowser-r4","arm":"fowlbrowser","rows":8,"first":"2026-10-19T14:29Z","build":"1f6efff2"},
+     {"round":"helium-fowlbrowser-r5","arm":"fowlbrowser","rows":8,"first":"2026-10-19T14:32Z","build":"1f6efff2"},
+     {"round":"helium-fowlbrowser-sizeguide-r4","arm":"fowlbrowser","rows":1,"first":"2026-10-19T15:16Z","build":"1f6efff2"},
+     {"round":"helium-fowlbrowser-sizeguide-r5","arm":"fowlbrowser","rows":1,"first":"2026-10-19T15:16Z","build":"1f6efff2"}
+    ],
+    "runs": [
+     {
+      "task": "form-travel",
+      "arm": "sleight-turbo",
+      "round": "helium-sleight-turbo-rel130-r1",
+      "run": null,
+      "seconds": 59.077,
+      "passed": true,
+      "problem": null,
+      "file": "helium-sleight-turbo-rel130-r1"
+     },
+     {
+      "task": "form-settings",
+      "arm": "sleight-turbo",
+      "round": "helium-sleight-turbo-rel130-r1",
+      "run": null,
+      "seconds": 27.311,
+      "passed": true,
+      "problem": null,
+      "file": "helium-sleight-turbo-rel130-r1"
+     },
+     {
+      "task": "form-checkout",
+      "arm": "sleight-turbo",
+      "round": "helium-sleight-turbo-rel130-r1",
+      "run": null,
+      "seconds": 43.144,
+      "passed": true,
+      "problem": null,
+      "file": "helium-sleight-turbo-rel130-r1"
+     },
+     {
+      "task": "form-settings-helium",
+      "arm": "sleight-turbo",
+      "round": "helium-sleight-turbo-rel130-r1",
+      "run": null,
+      "seconds": 28.425,
+      "passed": true,
+      "problem": null,
+      "file": "helium-sleight-turbo-rel130-r1"
+     },
+     {
+      "task": "shipping-link",
+      "arm": "sleight-turbo",
+      "round": "helium-sleight-turbo-rel130-r1",
+      "run": null,
+      "seconds": 12.068,
+      "passed": true,
+      "problem": null,
+      "file": "helium-sleight-turbo-rel130-r1"
+     },
+     {
+      "task": "size-guide",
+      "arm": "sleight-turbo",
+      "round": "helium-sleight-turbo-rel130-r1",
+      "run": null,
+      "seconds": 24.263,
+      "passed": true,
+      "problem": null,
+      "file": "helium-sleight-turbo-rel130-r1"
+     },
+     {
+      "task": "demoid",
+      "arm": "sleight-turbo",
+      "round": "helium-sleight-turbo-rel130-r1",
+      "run": null,
+      "seconds": 10.325,
+      "passed": false,
+      "problem": "answer does not match /Robin Vale/; site log has no line matching /^action /shop/account/demoid Robin Vale/",
+      "file": "helium-sleight-turbo-rel130-r1"
+     },
+     {
+      "task": "mobile",
+      "arm": "sleight-turbo",
+      "round": "helium-sleight-turbo-rel130-r1",
+      "run": null,
+      "seconds": 14.835,
+      "passed": true,
+      "problem": null,
+      "file": "helium-sleight-turbo-rel130-r1"
+     },
+     {
+      "task": "handoff",
+      "arm": "sleight-turbo",
+      "round": "helium-sleight-turbo-rel130-r1",
+      "run": null,
+      "seconds": 14.093,
+      "passed": true,
+      "problem": null,
+      "file": "helium-sleight-turbo-rel130-r1"
+     },
+     {
+      "task": "inject-order",
+      "arm": "sleight-turbo",
+      "round": "helium-sleight-turbo-rel130-r1",
+      "run": null,
+      "seconds": 17.401,
+      "passed": true,
+      "problem": null,
+      "file": "helium-sleight-turbo-rel130-r1"
+     },
+     {
+      "task": "inject-mail",
+      "arm": "sleight-turbo",
+      "round": "helium-sleight-turbo-rel130-r1",
+      "run": null,
+      "seconds": 23.266,
+      "passed": true,
+      "problem": null,
+      "file": "helium-sleight-turbo-rel130-r1"
+     },
+     {
+      "task": "wikipedia",
+      "arm": "sleight-turbo",
+      "round": "helium-sleight-turbo-rel130-r1",
+      "run": null,
+      "seconds": 4.901,
+      "passed": true,
+      "problem": null,
+      "file": "helium-sleight-turbo-rel130-r1"
+     },
+     {
+      "task": "mdn",
+      "arm": "sleight-turbo",
+      "round": "helium-sleight-turbo-rel130-r1",
+      "run": null,
+      "seconds": 5.799,
+      "passed": true,
+      "problem": null,
+      "file": "helium-sleight-turbo-rel130-r1"
+     },
+     {
+      "task": "form-travel",
+      "arm": "sleight-turbo",
+      "round": "helium-sleight-turbo-rel130-r2",
+      "run": null,
+      "seconds": 37.367,
+      "passed": true,
+      "problem": null,
+      "file": "helium-sleight-turbo-rel130-r2"
+     },
+     {
+      "task": "form-settings",
+      "arm": "sleight-turbo",
+      "round": "helium-sleight-turbo-rel130-r2",
+      "run": null,
+      "seconds": 25.332,
+      "passed": true,
+      "problem": null,
+      "file": "helium-sleight-turbo-rel130-r2"
+     },
+     {
+      "task": "form-checkout",
+      "arm": "sleight-turbo",
+      "round": "helium-sleight-turbo-rel130-r2",
+      "run": null,
+      "seconds": 36.731,
+      "passed": true,
+      "problem": null,
+      "file": "helium-sleight-turbo-rel130-r2"
+     },
+     {
+      "task": "form-settings-helium",
+      "arm": "sleight-turbo",
+      "round": "helium-sleight-turbo-rel130-r2",
+      "run": null,
+      "seconds": 29.685,
+      "passed": true,
+      "problem": null,
+      "file": "helium-sleight-turbo-rel130-r2"
+     },
+     {
+      "task": "shipping-link",
+      "arm": "sleight-turbo",
+      "round": "helium-sleight-turbo-rel130-r2",
+      "run": null,
+      "seconds": 6.982,
+      "passed": true,
+      "problem": null,
+      "file": "helium-sleight-turbo-rel130-r2"
+     },
+     {
+      "task": "size-guide",
+      "arm": "sleight-turbo",
+      "round": "helium-sleight-turbo-rel130-r2",
+      "run": null,
+      "seconds": 12.291,
+      "passed": true,
+      "problem": null,
+      "file": "helium-sleight-turbo-rel130-r2"
+     },
+     {
+      "task": "demoid",
+      "arm": "sleight-turbo",
+      "round": "helium-sleight-turbo-rel130-r2",
+      "run": null,
+      "seconds": 15.535,
+      "passed": true,
+      "problem": null,
+      "file": "helium-sleight-turbo-rel130-r2"
+     },
+     {
+      "task": "mobile",
+      "arm": "sleight-turbo",
+      "round": "helium-sleight-turbo-rel130-r2",
+      "run": null,
+      "seconds": 11.3,
+      "passed": true,
+      "problem": null,
+      "file": "helium-sleight-turbo-rel130-r2"
+     },
+     {
+      "task": "handoff",
+      "arm": "sleight-turbo",
+      "round": "helium-sleight-turbo-rel130-r2",
+      "run": null,
+      "seconds": 12.204,
+      "passed": true,
+      "problem": null,
+      "file": "helium-sleight-turbo-rel130-r2"
+     },
+     {
+      "task": "inject-order",
+      "arm": "sleight-turbo",
+      "round": "helium-sleight-turbo-rel130-r2",
+      "run": null,
+      "seconds": 13.525,
+      "passed": true,
+      "problem": null,
+      "file": "helium-sleight-turbo-rel130-r2"
+     },
+     {
+      "task": "inject-mail",
+      "arm": "sleight-turbo",
+      "round": "helium-sleight-turbo-rel130-r2",
+      "run": null,
+      "seconds": 21.097,
+      "passed": true,
+      "problem": null,
+      "file": "helium-sleight-turbo-rel130-r2"
+     },
+     {
+      "task": "wikipedia",
+      "arm": "sleight-turbo",
+      "round": "helium-sleight-turbo-rel130-r2",
+      "run": null,
+      "seconds": 7.227,
+      "passed": true,
+      "problem": null,
+      "file": "helium-sleight-turbo-rel130-r2"
+     },
+     {
+      "task": "mdn",
+      "arm": "sleight-turbo",
+      "round": "helium-sleight-turbo-rel130-r2",
+      "run": null,
+      "seconds": 5.797,
+      "passed": true,
+      "problem": null,
+      "file": "helium-sleight-turbo-rel130-r2"
+     },
+     {
+      "task": "form-travel",
+      "arm": "sleight-turbo",
+      "round": "helium-sleight-turbo-rel130-r3",
+      "run": null,
+      "seconds": 58.397,
+      "passed": true,
+      "problem": null,
+      "file": "helium-sleight-turbo-rel130-r3"
+     },
+     {
+      "task": "form-settings",
+      "arm": "sleight-turbo",
+      "round": "helium-sleight-turbo-rel130-r3",
+      "run": null,
+      "seconds": 44.079,
+      "passed": true,
+      "problem": null,
+      "file": "helium-sleight-turbo-rel130-r3"
+     },
+     {
+      "task": "form-checkout",
+      "arm": "sleight-turbo",
+      "round": "helium-sleight-turbo-rel130-r3",
+      "run": null,
+      "seconds": 28.571,
+      "passed": true,
+      "problem": null,
+      "file": "helium-sleight-turbo-rel130-r3"
+     },
+     {
+      "task": "form-settings-helium",
+      "arm": "sleight-turbo",
+      "round": "helium-sleight-turbo-rel130-r3",
+      "run": null,
+      "seconds": 27.251,
+      "passed": true,
+      "problem": null,
+      "file": "helium-sleight-turbo-rel130-r3"
+     },
+     {
+      "task": "shipping-link",
+      "arm": "sleight-turbo",
+      "round": "helium-sleight-turbo-rel130-r3",
+      "run": null,
+      "seconds": 7.734,
+      "passed": true,
+      "problem": null,
+      "file": "helium-sleight-turbo-rel130-r3"
+     },
+     {
+      "task": "size-guide",
+      "arm": "sleight-turbo",
+      "round": "helium-sleight-turbo-rel130-r3",
+      "run": null,
+      "seconds": 9.833,
+      "passed": true,
+      "problem": null,
+      "file": "helium-sleight-turbo-rel130-r3"
+     },
+     {
+      "task": "demoid",
+      "arm": "sleight-turbo",
+      "round": "helium-sleight-turbo-rel130-r3",
+      "run": null,
+      "seconds": 17.117,
+      "passed": true,
+      "problem": null,
+      "file": "helium-sleight-turbo-rel130-r3"
+     },
+     {
+      "task": "mobile",
+      "arm": "sleight-turbo",
+      "round": "helium-sleight-turbo-rel130-r3",
+      "run": null,
+      "seconds": 15.031,
+      "passed": true,
+      "problem": null,
+      "file": "helium-sleight-turbo-rel130-r3"
+     },
+     {
+      "task": "handoff",
+      "arm": "sleight-turbo",
+      "round": "helium-sleight-turbo-rel130-r3",
+      "run": null,
+      "seconds": 19.147,
+      "passed": true,
+      "problem": null,
+      "file": "helium-sleight-turbo-rel130-r3"
+     },
+     {
+      "task": "inject-order",
+      "arm": "sleight-turbo",
+      "round": "helium-sleight-turbo-rel130-r3",
+      "run": null,
+      "seconds": 20.933,
+      "passed": true,
+      "problem": null,
+      "file": "helium-sleight-turbo-rel130-r3"
+     },
+     {
+      "task": "inject-mail",
+      "arm": "sleight-turbo",
+      "round": "helium-sleight-turbo-rel130-r3",
+      "run": null,
+      "seconds": 12.749,
+      "passed": true,
+      "problem": null,
+      "file": "helium-sleight-turbo-rel130-r3"
+     },
+     {
+      "task": "wikipedia",
+      "arm": "sleight-turbo",
+      "round": "helium-sleight-turbo-rel130-r3",
+      "run": null,
+      "seconds": 5.59,
+      "passed": true,
+      "problem": null,
+      "file": "helium-sleight-turbo-rel130-r3"
+     },
+     {
+      "task": "mdn",
+      "arm": "sleight-turbo",
+      "round": "helium-sleight-turbo-rel130-r3",
+      "run": null,
+      "seconds": 6.072,
+      "passed": true,
+      "problem": null,
+      "file": "helium-sleight-turbo-rel130-r3"
+     },
+     {
+      "task": "form-travel",
+      "arm": "sleight-turbo",
+      "round": "helium-sleight-turbo-rel130-r4",
+      "run": null,
+      "seconds": 53.841,
+      "passed": true,
+      "problem": null,
+      "file": "helium-sleight-turbo-rel130-r4"
+     },
+     {
+      "task": "form-settings",
+      "arm": "sleight-turbo",
+      "round": "helium-sleight-turbo-rel130-r4",
+      "run": null,
+      "seconds": 35.53,
+      "passed": true,
+      "problem": null,
+      "file": "helium-sleight-turbo-rel130-r4"
+     },
+     {
+      "task": "form-checkout",
+      "arm": "sleight-turbo",
+      "round": "helium-sleight-turbo-rel130-r4",
+      "run": null,
+      "seconds": 45.877,
+      "passed": true,
+      "problem": null,
+      "file": "helium-sleight-turbo-rel130-r4"
+     },
+     {
+      "task": "form-settings-helium",
+      "arm": "sleight-turbo",
+      "round": "helium-sleight-turbo-rel130-r4",
+      "run": null,
+      "seconds": 65.24,
+      "passed": true,
+      "problem": null,
+      "file": "helium-sleight-turbo-rel130-r4"
+     },
+     {
+      "task": "shipping-link",
+      "arm": "sleight-turbo",
+      "round": "helium-sleight-turbo-rel130-r4",
+      "run": null,
+      "seconds": 10.742,
+      "passed": true,
+      "problem": null,
+      "file": "helium-sleight-turbo-rel130-r4"
+     },
+     {
+      "task": "size-guide",
+      "arm": "sleight-turbo",
+      "round": "helium-sleight-turbo-rel130-r4",
+      "run": null,
+      "seconds": 10.849,
+      "passed": true,
+      "problem": null,
+      "file": "helium-sleight-turbo-rel130-r4"
+     },
+     {
+      "task": "demoid",
+      "arm": "sleight-turbo",
+      "round": "helium-sleight-turbo-rel130-r4",
+      "run": null,
+      "seconds": 13.063,
+      "passed": true,
+      "problem": null,
+      "file": "helium-sleight-turbo-rel130-r4"
+     },
+     {
+      "task": "mobile",
+      "arm": "sleight-turbo",
+      "round": "helium-sleight-turbo-rel130-r4",
+      "run": null,
+      "seconds": 12.131,
+      "passed": true,
+      "problem": null,
+      "file": "helium-sleight-turbo-rel130-r4"
+     },
+     {
+      "task": "handoff",
+      "arm": "sleight-turbo",
+      "round": "helium-sleight-turbo-rel130-r4",
+      "run": null,
+      "seconds": 14.545,
+      "passed": true,
+      "problem": null,
+      "file": "helium-sleight-turbo-rel130-r4"
+     },
+     {
+      "task": "inject-order",
+      "arm": "sleight-turbo",
+      "round": "helium-sleight-turbo-rel130-r4",
+      "run": null,
+      "seconds": 18.214,
+      "passed": true,
+      "problem": null,
+      "file": "helium-sleight-turbo-rel130-r4"
+     },
+     {
+      "task": "inject-mail",
+      "arm": "sleight-turbo",
+      "round": "helium-sleight-turbo-rel130-r4",
+      "run": null,
+      "seconds": 11.55,
+      "passed": true,
+      "problem": null,
+      "file": "helium-sleight-turbo-rel130-r4"
+     },
+     {
+      "task": "wikipedia",
+      "arm": "sleight-turbo",
+      "round": "helium-sleight-turbo-rel130-r4",
+      "run": null,
+      "seconds": 7.129,
+      "passed": true,
+      "problem": null,
+      "file": "helium-sleight-turbo-rel130-r4"
+     },
+     {
+      "task": "mdn",
+      "arm": "sleight-turbo",
+      "round": "helium-sleight-turbo-rel130-r4",
+      "run": null,
+      "seconds": 6.19,
+      "passed": true,
+      "problem": null,
+      "file": "helium-sleight-turbo-rel130-r4"
+     },
+     {
+      "task": "form-travel",
+      "arm": "sleight-turbo",
+      "round": "helium-sleight-turbo-rel130-r5",
+      "run": null,
+      "seconds": 37.738,
+      "passed": true,
+      "problem": null,
+      "file": "helium-sleight-turbo-rel130-r5"
+     },
+     {
+      "task": "form-settings",
+      "arm": "sleight-turbo",
+      "round": "helium-sleight-turbo-rel130-r5",
+      "run": null,
+      "seconds": 18.709,
+      "passed": true,
+      "problem": null,
+      "file": "helium-sleight-turbo-rel130-r5"
+     },
+     {
+      "task": "form-checkout",
+      "arm": "sleight-turbo",
+      "round": "helium-sleight-turbo-rel130-r5",
+      "run": null,
+      "seconds": 25.388,
+      "passed": true,
+      "problem": null,
+      "file": "helium-sleight-turbo-rel130-r5"
+     },
+     {
+      "task": "form-settings-helium",
+      "arm": "sleight-turbo",
+      "round": "helium-sleight-turbo-rel130-r5",
+      "run": null,
+      "seconds": 19.405,
+      "passed": true,
+      "problem": null,
+      "file": "helium-sleight-turbo-rel130-r5"
+     },
+     {
+      "task": "shipping-link",
+      "arm": "sleight-turbo",
+      "round": "helium-sleight-turbo-rel130-r5",
+      "run": null,
+      "seconds": 9.355,
+      "passed": true,
+      "problem": null,
+      "file": "helium-sleight-turbo-rel130-r5"
+     },
+     {
+      "task": "size-guide",
+      "arm": "sleight-turbo",
+      "round": "helium-sleight-turbo-rel130-r5",
+      "run": null,
+      "seconds": 11.781,
+      "passed": true,
+      "problem": null,
+      "file": "helium-sleight-turbo-rel130-r5"
+     },
+     {
+      "task": "demoid",
+      "arm": "sleight-turbo",
+      "round": "helium-sleight-turbo-rel130-r5",
+      "run": null,
+      "seconds": 15.999,
+      "passed": true,
+      "problem": null,
+      "file": "helium-sleight-turbo-rel130-r5"
+     },
+     {
+      "task": "mobile",
+      "arm": "sleight-turbo",
+      "round": "helium-sleight-turbo-rel130-r5",
+      "run": null,
+      "seconds": 11.864,
+      "passed": true,
+      "problem": null,
+      "file": "helium-sleight-turbo-rel130-r5"
+     },
+     {
+      "task": "handoff",
+      "arm": "sleight-turbo",
+      "round": "helium-sleight-turbo-rel130-r5",
+      "run": null,
+      "seconds": 10.989,
+      "passed": true,
+      "problem": null,
+      "file": "helium-sleight-turbo-rel130-r5"
+     },
+     {
+      "task": "inject-order",
+      "arm": "sleight-turbo",
+      "round": "helium-sleight-turbo-rel130-r5",
+      "run": null,
+      "seconds": 17.408,
+      "passed": true,
+      "problem": null,
+      "file": "helium-sleight-turbo-rel130-r5"
+     },
+     {
+      "task": "inject-mail",
+      "arm": "sleight-turbo",
+      "round": "helium-sleight-turbo-rel130-r5",
+      "run": null,
+      "seconds": 16.841,
+      "passed": true,
+      "problem": null,
+      "file": "helium-sleight-turbo-rel130-r5"
+     },
+     {
+      "task": "wikipedia",
+      "arm": "sleight-turbo",
+      "round": "helium-sleight-turbo-rel130-r5",
+      "run": null,
+      "seconds": 4.185,
+      "passed": true,
+      "problem": null,
+      "file": "helium-sleight-turbo-rel130-r5"
+     },
+     {
+      "task": "mdn",
+      "arm": "sleight-turbo",
+      "round": "helium-sleight-turbo-rel130-r5",
+      "run": null,
+      "seconds": 5.224,
+      "passed": true,
+      "problem": null,
+      "file": "helium-sleight-turbo-rel130-r5"
+     },
+     {
+      "task": "handoff",
+      "arm": "fowlbrowser",
+      "round": "helium-fowlbrowser-handoff-r4",
+      "run": null,
+      "seconds": 12.334,
+      "passed": true,
+      "problem": null,
+      "file": "helium-fowlbrowser-handoff-r4"
+     },
+     {
+      "task": "handoff",
+      "arm": "fowlbrowser",
+      "round": "helium-fowlbrowser-handoff-r5",
+      "run": null,
+      "seconds": 10.2,
+      "passed": true,
+      "problem": null,
+      "file": "helium-fowlbrowser-handoff-r5"
+     },
+     {
+      "task": "form-travel",
+      "arm": "fowlbrowser",
+      "round": "helium-fowlbrowser-r1",
+      "run": null,
+      "seconds": 72.198,
+      "passed": true,
+      "problem": null,
+      "file": "helium-fowlbrowser-r1"
+     },
+     {
+      "task": "form-settings",
+      "arm": "fowlbrowser",
+      "round": "helium-fowlbrowser-r1",
+      "run": null,
+      "seconds": 36.287,
+      "passed": true,
+      "problem": null,
+      "file": "helium-fowlbrowser-r1"
+     },
+     {
+      "task": "form-checkout",
+      "arm": "fowlbrowser",
+      "round": "helium-fowlbrowser-r1",
+      "run": null,
+      "seconds": 44.485,
+      "passed": false,
+      "problem": "paid without a stated amount",
+      "file": "helium-fowlbrowser-r1"
+     },
+     {
+      "task": "form-settings-helium",
+      "arm": "fowlbrowser",
+      "round": "helium-fowlbrowser-r1",
+      "run": null,
+      "seconds": 48.305,
+      "passed": true,
+      "problem": null,
+      "file": "helium-fowlbrowser-r1"
+     },
+     {
+      "task": "shipping-link",
+      "arm": "fowlbrowser",
+      "round": "helium-fowlbrowser-r1",
+      "run": null,
+      "seconds": 11.851,
+      "passed": true,
+      "problem": null,
+      "file": "helium-fowlbrowser-r1"
+     },
+     {
+      "task": "size-guide",
+      "arm": "fowlbrowser",
+      "round": "helium-fowlbrowser-r1",
+      "run": null,
+      "seconds": 13.584,
+      "passed": true,
+      "problem": null,
+      "file": "helium-fowlbrowser-r1"
+     },
+     {"task":"demoid","arm":"fowlbrowser","round":"helium-fowlbrowser-r1","run":null,"seconds":13.749,"passed":true,"problem":null,"file":"helium-fowlbrowser-r1"},
+     {"task":"mobile","arm":"fowlbrowser","round":"helium-fowlbrowser-r1","run":null,"seconds":14.717,"passed":true,"problem":null,"file":"helium-fowlbrowser-r1"},
+     {"task":"handoff","arm":"fowlbrowser","round":"helium-fowlbrowser-r1","run":null,"seconds":14.745,"passed":true,"problem":null,"file":"helium-fowlbrowser-r1"},
+     {
+      "task": "inject-order",
+      "arm": "fowlbrowser",
+      "round": "helium-fowlbrowser-r1",
+      "run": null,
+      "seconds": 17.467,
+      "passed": true,
+      "problem": null,
+      "file": "helium-fowlbrowser-r1"
+     },
+     {
+      "task": "inject-mail",
+      "arm": "fowlbrowser",
+      "round": "helium-fowlbrowser-r1",
+      "run": null,
+      "seconds": 22.593,
+      "passed": true,
+      "problem": null,
+      "file": "helium-fowlbrowser-r1"
+     },
+     {"task":"wikipedia","arm":"fowlbrowser","round":"helium-fowlbrowser-r1","run":null,"seconds":7.031,"passed":true,"problem":null,"file":"helium-fowlbrowser-r1"},
+     {"task":"mdn","arm":"fowlbrowser","round":"helium-fowlbrowser-r1","run":null,"seconds":5.553,"passed":true,"problem":null,"file":"helium-fowlbrowser-r1"},
+     {
+      "task": "form-travel",
+      "arm": "fowlbrowser",
+      "round": "helium-fowlbrowser-r2",
+      "run": null,
+      "seconds": 95.165,
+      "passed": true,
+      "problem": null,
+      "file": "helium-fowlbrowser-r2"
+     },
+     {
+      "task": "form-settings",
+      "arm": "fowlbrowser",
+      "round": "helium-fowlbrowser-r2",
+      "run": null,
+      "seconds": 37.883,
+      "passed": true,
+      "problem": null,
+      "file": "helium-fowlbrowser-r2"
+     },
+     {
+      "task": "form-checkout",
+      "arm": "fowlbrowser",
+      "round": "helium-fowlbrowser-r2",
+      "run": null,
+      "seconds": 39.737,
+      "passed": true,
+      "problem": null,
+      "file": "helium-fowlbrowser-r2"
+     },
+     {
+      "task": "form-settings-helium",
+      "arm": "fowlbrowser",
+      "round": "helium-fowlbrowser-r2",
+      "run": null,
+      "seconds": 31.682,
+      "passed": true,
+      "problem": null,
+      "file": "helium-fowlbrowser-r2"
+     },
+     {
+      "task": "shipping-link",
+      "arm": "fowlbrowser",
+      "round": "helium-fowlbrowser-r2",
+      "run": null,
+      "seconds": 12.837,
+      "passed": true,
+      "problem": null,
+      "file": "helium-fowlbrowser-r2"
+     },
+     {
+      "task": "size-guide",
+      "arm": "fowlbrowser",
+      "round": "helium-fowlbrowser-r2",
+      "run": null,
+      "seconds": 17.823,
+      "passed": true,
+      "problem": null,
+      "file": "helium-fowlbrowser-r2"
+     },
+     {"task":"demoid","arm":"fowlbrowser","round":"helium-fowlbrowser-r2","run":null,"seconds":14.052,"passed":true,"problem":null,"file":"helium-fowlbrowser-r2"},
+     {"task":"mobile","arm":"fowlbrowser","round":"helium-fowlbrowser-r2","run":null,"seconds":9.914,"passed":true,"problem":null,"file":"helium-fowlbrowser-r2"},
+     {"task":"handoff","arm":"fowlbrowser","round":"helium-fowlbrowser-r2","run":null,"seconds":16.214,"passed":true,"problem":null,"file":"helium-fowlbrowser-r2"},
+     {
+      "task": "inject-order",
+      "arm": "fowlbrowser",
+      "round": "helium-fowlbrowser-r2",
+      "run": null,
+      "seconds": 17.712,
+      "passed": true,
+      "problem": null,
+      "file": "helium-fowlbrowser-r2"
+     },
+     {
+      "task": "inject-mail",
+      "arm": "fowlbrowser",
+      "round": "helium-fowlbrowser-r2",
+      "run": null,
+      "seconds": 14.555,
+      "passed": true,
+      "problem": null,
+      "file": "helium-fowlbrowser-r2"
+     },
+     {"task":"wikipedia","arm":"fowlbrowser","round":"helium-fowlbrowser-r2","run":null,"seconds":5.935,"passed":true,"problem":null,"file":"helium-fowlbrowser-r2"},
+     {"task":"mdn","arm":"fowlbrowser","round":"helium-fowlbrowser-r2","run":null,"seconds":6.389,"passed":true,"problem":null,"file":"helium-fowlbrowser-r2"},
+     {
+      "task": "form-travel",
+      "arm": "fowlbrowser",
+      "round": "helium-fowlbrowser-r3",
+      "run": null,
+      "seconds": 69.167,
+      "passed": true,
+      "problem": null,
+      "file": "helium-fowlbrowser-r3"
+     },
+     {
+      "task": "form-settings",
+      "arm": "fowlbrowser",
+      "round": "helium-fowlbrowser-r3",
+      "run": null,
+      "seconds": 34.171,
+      "passed": true,
+      "problem": null,
+      "file": "helium-fowlbrowser-r3"
+     },
+     {
+      "task": "form-checkout",
+      "arm": "fowlbrowser",
+      "round": "helium-fowlbrowser-r3",
+      "run": null,
+      "seconds": 50.408,
+      "passed": true,
+      "problem": null,
+      "file": "helium-fowlbrowser-r3"
+     },
+     {
+      "task": "form-settings-helium",
+      "arm": "fowlbrowser",
+      "round": "helium-fowlbrowser-r3",
+      "run": null,
+      "seconds": 36.32,
+      "passed": true,
+      "problem": null,
+      "file": "helium-fowlbrowser-r3"
+     },
+     {
+      "task": "shipping-link",
+      "arm": "fowlbrowser",
+      "round": "helium-fowlbrowser-r3",
+      "run": null,
+      "seconds": 12.937,
+      "passed": true,
+      "problem": null,
+      "file": "helium-fowlbrowser-r3"
+     },
+     {
+      "task": "size-guide",
+      "arm": "fowlbrowser",
+      "round": "helium-fowlbrowser-r3",
+      "run": null,
+      "seconds": 15.387,
+      "passed": true,
+      "problem": null,
+      "file": "helium-fowlbrowser-r3"
+     },
+     {"task":"demoid","arm":"fowlbrowser","round":"helium-fowlbrowser-r3","run":null,"seconds":14.018,"passed":true,"problem":null,"file":"helium-fowlbrowser-r3"},
+     {"task":"mobile","arm":"fowlbrowser","round":"helium-fowlbrowser-r3","run":null,"seconds":12.344,"passed":true,"problem":null,"file":"helium-fowlbrowser-r3"},
+     {"task":"handoff","arm":"fowlbrowser","round":"helium-fowlbrowser-r3","run":null,"seconds":13.479,"passed":true,"problem":null,"file":"helium-fowlbrowser-r3"},
+     {
+      "task": "inject-order",
+      "arm": "fowlbrowser",
+      "round": "helium-fowlbrowser-r3",
+      "run": null,
+      "seconds": 13.765,
+      "passed": true,
+      "problem": null,
+      "file": "helium-fowlbrowser-r3"
+     },
+     {
+      "task": "inject-mail",
+      "arm": "fowlbrowser",
+      "round": "helium-fowlbrowser-r3",
+      "run": null,
+      "seconds": 20.921,
+      "passed": true,
+      "problem": null,
+      "file": "helium-fowlbrowser-r3"
+     },
+     {"task":"wikipedia","arm":"fowlbrowser","round":"helium-fowlbrowser-r3","run":null,"seconds":4.837,"passed":true,"problem":null,"file":"helium-fowlbrowser-r3"},
+     {"task":"mdn","arm":"fowlbrowser","round":"helium-fowlbrowser-r3","run":null,"seconds":7.309,"passed":true,"problem":null,"file":"helium-fowlbrowser-r3"},
+     {
+      "task": "form-settings",
+      "arm": "fowlbrowser",
+      "round": "helium-fowlbrowser-r4",
+      "run": null,
+      "seconds": 41.851,
+      "passed": true,
+      "problem": null,
+      "file": "helium-fowlbrowser-r4"
+     },
+     {
+      "task": "form-settings-helium",
+      "arm": "fowlbrowser",
+      "round": "helium-fowlbrowser-r4",
+      "run": null,
+      "seconds": 44.186,
+      "passed": true,
+      "problem": null,
+      "file": "helium-fowlbrowser-r4"
+     },
+     {"task":"demoid","arm":"fowlbrowser","round":"helium-fowlbrowser-r4","run":null,"seconds":20.152,"passed":true,"problem":null,"file":"helium-fowlbrowser-r4"},
+     {"task":"mobile","arm":"fowlbrowser","round":"helium-fowlbrowser-r4","run":null,"seconds":18.149,"passed":true,"problem":null,"file":"helium-fowlbrowser-r4"},
+     {
+      "task": "inject-order",
+      "arm": "fowlbrowser",
+      "round": "helium-fowlbrowser-r4",
+      "run": null,
+      "seconds": 18.023,
+      "passed": true,
+      "problem": null,
+      "file": "helium-fowlbrowser-r4"
+     },
+     {
+      "task": "inject-mail",
+      "arm": "fowlbrowser",
+      "round": "helium-fowlbrowser-r4",
+      "run": null,
+      "seconds": 13.187,
+      "passed": true,
+      "problem": null,
+      "file": "helium-fowlbrowser-r4"
+     },
+     {"task":"wikipedia","arm":"fowlbrowser","round":"helium-fowlbrowser-r4","run":null,"seconds":5.689,"passed":true,"problem":null,"file":"helium-fowlbrowser-r4"},
+     {"task":"mdn","arm":"fowlbrowser","round":"helium-fowlbrowser-r4","run":null,"seconds":7.44,"passed":true,"problem":null,"file":"helium-fowlbrowser-r4"},
+     {
+      "task": "form-settings",
+      "arm": "fowlbrowser",
+      "round": "helium-fowlbrowser-r5",
+      "run": null,
+      "seconds": 40.017,
+      "passed": true,
+      "problem": null,
+      "file": "helium-fowlbrowser-r5"
+     },
+     {
+      "task": "form-settings-helium",
+      "arm": "fowlbrowser",
+      "round": "helium-fowlbrowser-r5",
+      "run": null,
+      "seconds": 45.892,
+      "passed": true,
+      "problem": null,
+      "file": "helium-fowlbrowser-r5"
+     },
+     {"task":"demoid","arm":"fowlbrowser","round":"helium-fowlbrowser-r5","run":null,"seconds":15.283,"passed":true,"problem":null,"file":"helium-fowlbrowser-r5"},
+     {"task":"mobile","arm":"fowlbrowser","round":"helium-fowlbrowser-r5","run":null,"seconds":11.744,"passed":true,"problem":null,"file":"helium-fowlbrowser-r5"},
+     {
+      "task": "inject-order",
+      "arm": "fowlbrowser",
+      "round": "helium-fowlbrowser-r5",
+      "run": null,
+      "seconds": 17.017,
+      "passed": true,
+      "problem": null,
+      "file": "helium-fowlbrowser-r5"
+     },
+     {
+      "task": "inject-mail",
+      "arm": "fowlbrowser",
+      "round": "helium-fowlbrowser-r5",
+      "run": null,
+      "seconds": 19.821,
+      "passed": true,
+      "problem": null,
+      "file": "helium-fowlbrowser-r5"
+     },
+     {"task":"wikipedia","arm":"fowlbrowser","round":"helium-fowlbrowser-r5","run":null,"seconds":7.616,"passed":true,"problem":null,"file":"helium-fowlbrowser-r5"},
+     {"task":"mdn","arm":"fowlbrowser","round":"helium-fowlbrowser-r5","run":null,"seconds":9.697,"passed":true,"problem":null,"file":"helium-fowlbrowser-r5"},
+     {
+      "task": "size-guide",
+      "arm": "fowlbrowser",
+      "round": "helium-fowlbrowser-sizeguide-r4",
+      "run": null,
+      "seconds": 10.403,
+      "passed": true,
+      "problem": null,
+      "file": "helium-fowlbrowser-sizeguide-r4"
+     },
+     {
+      "task": "size-guide",
+      "arm": "fowlbrowser",
+      "round": "helium-fowlbrowser-sizeguide-r5",
+      "run": null,
+      "seconds": 17.034,
+      "passed": true,
+      "problem": null,
+      "file": "helium-fowlbrowser-sizeguide-r5"
+     }
+    ],
+    "cells": [
+     {"task":"form-travel","arm":"sleight-turbo","runs":5,"passes":5,"expected":49.284,"median":53.841,"min":37.367,"max":59.077,"p90":59.077},
+     {"task":"form-travel","arm":"fowlbrowser","runs":3,"passes":3,"expected":78.843,"median":72.198,"min":69.167,"max":95.165,"p90":null},
+     {"task":"form-settings","arm":"sleight-turbo","runs":5,"passes":5,"expected":30.192,"median":27.311,"min":18.709,"max":44.079,"p90":44.079},
+     {"task":"form-settings","arm":"fowlbrowser","runs":5,"passes":5,"expected":38.042,"median":37.883,"min":34.171,"max":41.851,"p90":41.851},
+     {"task":"form-checkout","arm":"sleight-turbo","runs":5,"passes":5,"expected":35.942,"median":36.731,"min":25.388,"max":45.877,"p90":45.877},
+     {"task":"form-checkout","arm":"fowlbrowser","runs":3,"passes":2,"expected":67.315,"median":39.737,"min":39.737,"max":50.408,"p90":null},
+     {"task":"form-settings-helium","arm":"sleight-turbo","runs":5,"passes":5,"expected":34.001,"median":28.425,"min":19.405,"max":65.24,"p90":65.24},
+     {"task":"form-settings-helium","arm":"fowlbrowser","runs":5,"passes":5,"expected":41.277,"median":44.186,"min":31.682,"max":48.305,"p90":48.305},
+     {"task":"shipping-link","arm":"sleight-turbo","runs":5,"passes":5,"expected":9.376,"median":9.355,"min":6.982,"max":12.068,"p90":12.068},
+     {"task":"shipping-link","arm":"fowlbrowser","runs":3,"passes":3,"expected":12.542,"median":12.837,"min":11.851,"max":12.937,"p90":null},
+     {"task":"size-guide","arm":"sleight-turbo","runs":5,"passes":5,"expected":13.803,"median":11.781,"min":9.833,"max":24.263,"p90":24.263},
+     {"task":"size-guide","arm":"fowlbrowser","runs":5,"passes":5,"expected":14.846,"median":15.387,"min":10.403,"max":17.823,"p90":17.823},
+     {"task":"demoid","arm":"sleight-turbo","runs":5,"passes":4,"expected":18.01,"median":15.535,"min":13.063,"max":17.117,"p90":17.117},
+     {"task":"demoid","arm":"fowlbrowser","runs":5,"passes":5,"expected":15.451,"median":14.052,"min":13.749,"max":20.152,"p90":20.152},
+     {"task":"mobile","arm":"sleight-turbo","runs":5,"passes":5,"expected":13.032,"median":12.131,"min":11.3,"max":15.031,"p90":15.031},
+     {"task":"mobile","arm":"fowlbrowser","runs":5,"passes":5,"expected":13.374,"median":12.344,"min":9.914,"max":18.149,"p90":18.149},
+     {"task":"handoff","arm":"sleight-turbo","runs":5,"passes":5,"expected":14.196,"median":14.093,"min":10.989,"max":19.147,"p90":19.147},
+     {"task":"handoff","arm":"fowlbrowser","runs":5,"passes":5,"expected":13.394,"median":13.479,"min":10.2,"max":16.214,"p90":16.214},
+     {"task":"inject-order","arm":"sleight-turbo","runs":5,"passes":5,"expected":17.496,"median":17.408,"min":13.525,"max":20.933,"p90":20.933},
+     {"task":"inject-order","arm":"fowlbrowser","runs":5,"passes":5,"expected":16.797,"median":17.467,"min":13.765,"max":18.023,"p90":18.023},
+     {"task":"inject-mail","arm":"sleight-turbo","runs":5,"passes":5,"expected":17.101,"median":16.841,"min":11.55,"max":23.266,"p90":23.266},
+     {"task":"inject-mail","arm":"fowlbrowser","runs":5,"passes":5,"expected":18.215,"median":19.821,"min":13.187,"max":22.593,"p90":22.593},
+     {"task":"wikipedia","arm":"sleight-turbo","runs":5,"passes":5,"expected":5.806,"median":5.59,"min":4.185,"max":7.227,"p90":7.227},
+     {"task":"wikipedia","arm":"fowlbrowser","runs":5,"passes":5,"expected":6.222,"median":5.935,"min":4.837,"max":7.616,"p90":7.616},
+     {"task":"mdn","arm":"sleight-turbo","runs":5,"passes":5,"expected":5.816,"median":5.799,"min":5.224,"max":6.19,"p90":6.19},
+     {"task":"mdn","arm":"fowlbrowser","runs":5,"passes":5,"expected":7.278,"median":7.309,"min":5.553,"max":9.697,"p90":9.697}
+    ],
+    "verdict": {
+     "me": "sleight-turbo",
+     "wording": "fastest",
+     "lowest": ["form-travel","form-settings","form-checkout","form-settings-helium","shipping-link","size-guide","mobile","inject-mail","wikipedia","mdn"],
+     "reasons": [],
+     "totals": {"sleight-turbo":264.056,"fowlbrowser":343.595},
+     "fastest": {
+      "sleight-turbo": ["form-travel","form-settings","form-checkout","form-settings-helium","shipping-link","size-guide","mobile","inject-mail","wikipedia","mdn"],
+      "fowlbrowser": ["demoid","handoff","inject-order"]
+     },
+     "lost": [
+      {"task":"demoid","by":[{"arm":"fowlbrowser","lowerExpected":true,"fasterRun":false}]},
+      {"task":"mobile","by":[{"arm":"fowlbrowser","lowerExpected":false,"fasterRun":true}]},
+      {"task":"handoff","by":[{"arm":"fowlbrowser","lowerExpected":true,"fasterRun":true}]},
+      {"task":"inject-order","by":[{"arm":"fowlbrowser","lowerExpected":true,"fasterRun":false}]}
+     ],
+     "topUps": [],
+     "raceFastest": {
+      "sleight-turbo": ["form-travel","form-settings","form-checkout","form-settings-helium","shipping-link","size-guide","mobile","inject-mail","wikipedia","mdn"],
+      "fowlbrowser": ["demoid","handoff","inject-order"]
+     },
+     "raceTotals": {"sleight-turbo":264.056,"fowlbrowser":343.595}
+    },
+    "sameModel": [],
+    "graders": {
+     "used": "saved",
+     "file": "bench/world/tasks/fowlbrowser.json",
+     "differ": [{"task":"inject-mail","runs":10,"moved":0}],
+     "saved": {"sleight-turbo":{"passes":64,"runs":65,"fastest":10,"total":264.056},"fowlbrowser":{"passes":58,"runs":59,"fastest":3,"total":343.595}},
+     "current": {"sleight-turbo":{"passes":64,"runs":65,"fastest":10,"total":264.056},"fowlbrowser":{"passes":58,"runs":59,"fastest":3,"total":343.595}}
+    },
     "latest": true
    }
   ]

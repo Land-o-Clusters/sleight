@@ -7,6 +7,33 @@ const PANE = { plugin: 'sleight', component: 'Pane', requestId: 'sleight' } as c
 const SURFACES = ['terminal', 'desktop'] as const
 
 describe('sleight mod', () => {
+  test('a promptless teammate turn keeps its shell fence and ends through the mod dispatcher', async ($, on) => {
+    const ended: Record<string, unknown>[] = []
+    mock.env(on, { HOME: '/fixture/home' })
+    on('tool.call', async () => ({ result: { content: [] } }) as never)
+    on('turn.start', async (_$, e) => ({ turnId: e.turnId }) as never)
+    on('turn.complete', async () => ({ text: '' }) as never)
+    on('ui.status', async () => ({ value: undefined }))
+    on('mcp.connect', async (_$, e) => ({ value: { isConnected: true, server: e.server } }) as never)
+    on('mcp.call', async (_$, e) => { ended.push(e.args); return { value: { content: [] } } as never })
+    await $.turn.start({ turnId: 'inbox-turn' } as never)
+    await $.tool.call({ tool: 'mcp__plugin_sleight_computer__browser_read', tab: 'fixture' } as never)
+    const shell = await $.tool.call({ tool: 'Bash', command: 'open fixture.pdf' } as never)
+    expect(shell.deny).toMatch(/shell guard/)
+    await $.turn.complete({ turnId: 'inbox-turn', answer: '', durationMs: 1, isAborted: false, reason: 'answer' } as never)
+    expect(ended.length).toBe(1)
+    expect(ended[0]!.hook_event_name).toBe('Stop')
+  })
+
+  test('a failed guard environment read refuses through its host catch handler', async ($, on) => {
+    let ran = 0
+    on('env.get', async () => { throw Error('fixture environment unavailable') })
+    on('tool.call', async () => { ran++; return { result: {} } as never })
+    const result = await $.tool.call({ tool: 'Write', file_path: '/fixture/file', content: '{}' } as never)
+    expect(String(result.deny ?? result.text)).toMatch(/guard unavailable/)
+    expect(ran).toBe(0)
+  })
+
   for (const mode of ['off', 'bubbles']) for (const door of ['tool-result', 'response'] as const)
     test(`unused sleight ${mode}, ${door}: 300 appends through the host dispatcher`, async ($, on) => {
       on('process.run', async () => ({ value: { exitCode: 0, stdout: JSON.stringify({ enabled: false, narration: mode,

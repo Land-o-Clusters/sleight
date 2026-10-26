@@ -61,9 +61,9 @@ test('offered identities bind selection and imports; failed import preserves val
   assert.equal((await controller.apply({ op: 'select', style: 'sprite', character: 'cat' })).ok, false);
   assert.equal((await controller.apply({ op: 'import', key: folder })).ok, false);
   const catalog = await controller.catalog();
-  fs.writeFileSync(join(folder, 'pet.json'), '{"spritesheetPath":"atlas.png"}', { mode: 0o600 });
+  fs.writeFileSync(join(folder, 'pet.json'), '{"spritesheetPath":"atlas.png","spriteVersionNumber":3}', { mode: 0o600 });
   const failure = await controller.apply({ op: 'import', key: catalog.pets[0].key });
-  assert.equal(failure.ok, false); assert.match(failure.text, /Codex pet must have spriteVersionNumber 2/); assert.equal(writes.length, 0);
+  assert.equal(failure.ok, false); assert.match(failure.text, /Codex pet spriteVersionNumber must be omitted, 1 or 2/); assert.equal(writes.length, 0);
 });
 test('installed idle thumbnail descriptors contain only idle and have content keys that change with art', async t => {
   const w = world(t), folder = w.put('cat'); installCharacter(prepareCharacterImport(folder), { root: w.root });

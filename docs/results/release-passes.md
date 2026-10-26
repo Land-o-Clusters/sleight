@@ -2,6 +2,13 @@
 
 # Release passes and the earlier head-to-heads
 
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="charts/family-release-passes-dark.svg">
+  <img src="charts/family-release-passes-light.svg" width="900" alt="Release passes: 105 of 111 recorded attempts passed across 7 study and arm rows. Task sets differ between studies.">
+</picture>
+
+<sub>Release passes: 105 of 111 recorded attempts passed across 7 study and arm rows. Task sets differ between studies.</sub>
+
 The [benchmarks](../benchmarks/) results files supply every release-pass number. Every run the benchmark made is published, failures included ([LAWS](../status/LAWS.md), Method). See [known-problems](../known-problems.md) for quoted limits. The [interactive page](https://land-o-clusters.github.io/sleight/results/explore.html) charts every run.
 
 <details><summary>Method</summary>

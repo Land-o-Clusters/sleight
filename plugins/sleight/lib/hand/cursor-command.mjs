@@ -1,7 +1,7 @@
 // User CLI only. Character names and descriptions never enter an MCP prompt or tool result.
 import { createInterface } from 'node:readline';
 import { randomBytes } from 'node:crypto';
-import { charactersDirectory, prepareCharacterImport, installCharacter, listCharacters, checkCharacter, removeCharacter, characterCallout, resolveCharacterStates } from './character.mjs';
+import { charactersDirectory, refuseUrlSource, prepareCharacterImport, installCharacter, listCharacters, checkCharacter, removeCharacter, characterCallout, resolveCharacterStates } from './character.mjs';
 import { characterFrame } from './character-frame.mjs';
 import { CURSOR_STYLES, LINES_MODES, handConfigPath, handSetting } from './settings.mjs';
 import { writeHandSetting } from './command.mjs';
@@ -77,6 +77,7 @@ export async function cursorCommand(args, { out = text => process.stdout.write(t
         installCharacter(character, options);
         out(`Imported ${character.manifest.id}. The sprite stays hidden.\nTurn it on with sleight-mcp cursor style sprite ${character.manifest.id}\n`); return 0;
       };
+      refuseUrlSource(rest[0]);
       let source;
       try { source = statSync(rest[0]); }
       catch (error) { throw Error(`Character: ${JSON.stringify(rest[0])} source: ${error.code ?? error.message}`); }

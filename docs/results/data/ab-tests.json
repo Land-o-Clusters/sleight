@@ -636,7 +636,7 @@
   {
    "id": "2026-10-11-sheet-ab",
    "family": "ab-tests",
-   "title": "Save-sheet A/B: default against SLEIGHT_FIRST_CALL_BATCH=sheet (no Cmd+S stop, menu clicks in one call), calculator-click, textedit-edit and textedit-save x3 pe",
+   "title": "Save-sheet A/B: default against SLEIGHT_FIRST_CALL_BATCH=sheet (no Cmd+S stop, menu clicks in one call), calculator-click…",
    "date": "2026-10-11",
    "browser": null,
    "me": "sheet",
@@ -708,7 +708,7 @@
   {
    "id": "2026-10-11-sheet-edit-ab",
    "family": "ab-tests",
-   "title": "SLEIGHT_FIRST_CALL_BATCH=sheet against the default on calculator-click and textedit-edit (no Save sheet), 3 runs a task per arm per round, 2 rounds, owner at th",
+   "title": "SLEIGHT_FIRST_CALL_BATCH=sheet against the default on calculator-click and textedit-edit (no Save sheet), 3 runs a task per arm per round, 2 rounds…",
    "date": "2026-10-11",
    "browser": null,
    "me": "sheet",
@@ -824,7 +824,7 @@
   {
    "id": "2026-10-11-skill-ab",
    "family": "ab-tests",
-   "title": "skill A/B: current SKILL.md, SLEIGHT_SKILL=slim (SKILL-slim.md) and SLEIGHT_SKILL=none, calculator-click and textedit-edit x3 per arm per round, 2 rounds, owner",
+   "title": "skill A/B: current SKILL.md, SLEIGHT_SKILL=slim (SKILL-slim.md) and SLEIGHT_SKILL=none, calculator-click and textedit-edit x3 per arm per round, 2 rounds…",
    "date": "2026-10-11",
    "browser": null,
    "me": "slim",
@@ -896,7 +896,7 @@
   {
    "id": "2026-10-11-skill-ab-2",
    "family": "ab-tests",
-   "title": "skill A/B rerun: current SKILL.md, SLEIGHT_SKILL=slim (SKILL-slim.md with placeholder ID and label examples) and SLEIGHT_SKILL=none, calculator-click and texted",
+   "title": "skill A/B rerun: current SKILL.md, SLEIGHT_SKILL=slim (SKILL-slim.md with placeholder ID and label examples) and SLEIGHT_SKILL=none…",
    "date": "2026-10-11",
    "browser": null,
    "me": "slim",
@@ -12034,6 +12034,7 @@
   {"file":"2026-10-16-opus.md","date":"2026-10-16","title":"Opus head-to-head, turbo v3 against FowlBrowser, 2026-10-16"},
   {"file":"2026-10-16-turbo-ab.md","date":"2026-10-16","title":"Turbo A/B, gate candidate against v3-gate, 2026-10-16"},
   {"file":"2026-10-19-flag-ab.md","date":"2026-10-19","title":"Flag A/Bs, 2026-10-19"},
+  {"file":"2026-10-19-speed-map.md","date":"2026-10-19","title":"App-class speed map, 2026-10-19"},
   {"file":"battery-report-template.md","date":null,"title":"Battery report template"},
   {"file":"release-audit-2026-10-11.md","date":null,"title":"Release audit, 2026-10-11"}
  ],

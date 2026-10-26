@@ -6,6 +6,18 @@ with a number, a version, a pass result or a behavior, checked against the repo 
 unless another file is named. README itself is unchanged. Verdicts: true, stale (current figure and
 its source), unsupported (no source in the repo).
 
+## Every release
+
+After saving the release pass and A/B results, run `nice -n 20 node bench/results-hub.mjs` to collect and render the hub.
+Review the changed numbers and commit `docs/results/` and the root README's generated blocks before tagging.
+Then run `nice -n 20 node bench/results-hub.mjs --check`. A difference fails the release preflight with `hub: stale-output`.
+Prefix each command with `CLAUDE_CONFIG_DIR=$(mktemp -d /tmp/lane-claude-XXXXXX)` on the benchmark Mac.
+The check reads results and draws files only. It does not launch apps or run benchmarks.
+
+Confirm that every family page links a static SVG in `docs/results/charts/`, and that the interactive page offers all seven
+families. Record which families have no new raw results. Missing external folders keep their saved data; they do not prove
+that a new release was measured. See [release preflight](../docs/release-preflight.md) for the automated check.
+
 ## Claims
 
 | README claim | Evidence today | Verdict |

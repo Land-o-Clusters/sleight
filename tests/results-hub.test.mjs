@@ -13,7 +13,7 @@ import { chartCaption } from '../bench/results-charts.mjs';
 import {
   BUILD_A, BUILD_B, FAMILIES, NAV, README_BLOCKS, cellText, cellsFor, collectBank, collectJsonAbs, collectRace, collectReleases, collectRunnerStudies, collectValidation,
   compareTasks, dateRange, exploreData, findBanks, listRaceRounds, lossRule, parseRunnerReport, ownerPass, publicVoice, raceDirs, readBank, readmeBlocks, render, renderNav,
-  renderNavHtml, renderReadme, rowsFromCell, scoreClaimDir, scrub, scrubPaths, spliceReadme, taskMatrix, variantOf,
+  releaseFreshness, renderNavHtml, renderReadme, rowsFromCell, scoreClaimDir, scrub, scrubPaths, spliceReadme, taskMatrix, variantOf,
 } from '../bench/results-hub.mjs';
 
 const ROOT = new URL('..', import.meta.url).pathname;
@@ -47,6 +47,31 @@ test('collecting from docs/benchmarks twice gives the same studies', () => {
   assert.deepEqual(collectRunnerStudies(), collectRunnerStudies());
   assert.deepEqual(collectJsonAbs(), collectJsonAbs());
   assert.deepEqual(collectReleases(), collectReleases());
+});
+
+test('committed release data includes the newest release pass the collector can see', t => {
+  const result = releaseFreshness(committed()['release-passes']);
+  if (result.skipped) return t.skip(result.skipped);
+  assert.equal(result.stale, null, `${result.stale} is newer than the hub data: run node bench/results-hub.mjs (newest: ${result.newest})`);
+});
+
+test('release freshness catches a missing newest pass and a correction under the same filename, without using mtimes', t => {
+  const bench = mkdtempSync(join(tmpdir(), 'hub-release-'));
+  t.after(() => rmSync(bench, { recursive: true, force: true }));
+  const options = { bench };
+  assert.match(releaseFreshness({ files: [], releaseInputs: [], runs: [] }, options).skipped, /no raw release-pass/);
+  const name = '2026-10-26-release-1.5.0.json';
+  const raw = { stamp: '2026-10-26T12:00:00Z', arms: ['sleight'], results: [{ arm: 'sleight', task: 'one', seconds: 10, passed: true }] };
+  writeFileSync(join(bench, name), JSON.stringify(raw));
+  assert.deepEqual(releaseFreshness({ files: [], releaseInputs: [], runs: [] }, options), { newest: name, stale: name });
+  const data = collectReleases(options);
+  // A checkout's mtimes say when it was copied, not which results it contains.
+  utimesSync(join(bench, name), new Date(0), new Date(0));
+  assert.deepEqual(releaseFreshness(data, options), { newest: name, stale: null });
+  raw.results[0].passed = false;
+  writeFileSync(join(bench, name), JSON.stringify(raw));
+  assert.deepEqual(releaseFreshness(data, options), { newest: name, stale: name });
+  assert.match(releaseFreshness(data, { bench: join(bench, 'absent') }).skipped, /no raw release-pass/);
 });
 
 test('every committed cell equals claim-score\'s score() and claim() over the committed runs, and the pages print them', () => {
@@ -335,13 +360,14 @@ test('Safari and Firefox keep their task counts and totals across every summary'
       assert.ok(text.includes(total), `${browser}: total`);
     }
   }
-  assert.match(benchmarks, /in Safari sleight is fastest on 11 of 12 tasks, the only arm with a total \(592\.1 s\)/);
   const safari = all['browser-race'].studies.find(s => s.latest && s.browser === 'safari');
+  assert.ok(benchmarks.includes(`the only arm with a total (${safari.verdict.totals.sleight.toFixed(1)} s)`));
   safari.verdict.lowest.pop();
   safari.verdict.totals[safari.me] = 601;
   safari.verdict.totals.cua = 900;
   for (const text of [readmeBlocks(all).benchmarks, render(all)['index.html'], render(all)['README.md'], render(all)['browser-race.md']]) {
-    assert.ok(text.includes('fastest on 10 of 12 tasks, with a total of 601.0 s'));
+    assert.ok(text.includes(`fastest on ${safari.verdict.lowest.length} of ${safari.tasks.length} tasks`));
+    assert.ok(text.includes('Its total is 601.0 s'));
   }
 });
 
@@ -378,6 +404,13 @@ test('explore.html runs, fills its filters, draws charts per task and switches f
   nodes['f-result'].listeners.change[0]({ target: { value: '' } });
   nodes.theme.listeners.click[0]();
   assert.equal(document.documentElement.attrs['data-theme'], 'light');
+  for (const family of FAMILIES) {
+    nodes['f-family'].listeners.change[0]({ target: { value: family.id } });
+    const study = nodes['f-study'].children.find(child => child.attrs.value !== '');
+    assert.ok(study, `${family.id} has a study`);
+    nodes['f-study'].listeners.change[0]({ target: { value: study.attrs.value } });
+    assert.ok(nodes.charts.count('svg') > 0, `${family.id} draws a chart without opening a browser`);
+  }
 });
 
 test('explore.html keeps the sleight-against-itself family out of All families and labels it where it is picked', () => {
@@ -534,11 +567,22 @@ test('the method bullets appear on the pages only inside <details>', () => {
   assert.ok(seen >= 10, `the method is still on the pages, folded (${seen} bullets found)`);
 });
 
-test('release-passes.html is gone, and no generated page links it', () => {
+test('release-passes.html is regenerated with its inline history chart and release data', () => {
   const files = render(committed());
-  assert.ok(!('release-passes.html' in files));
-  assert.ok(!existsSync(join(OUT, 'release-passes.html')), 'docs/results/release-passes.html is deleted');
-  for (const [name, text] of Object.entries(files)) assert.ok(!text.includes('release-passes.html'), `${name} links release-passes.html`);
+  assert.match(files['release-passes.html'], /<svg .*aria-label="Pass rate of each release pass"/);
+  for (const file of committed()['release-passes'].files.filter(file => file.kind === 'release')) {
+    assert.ok(files['release-passes.html'].includes(file.name), file.name);
+  }
+  assert.doesNotMatch(files['release-passes.html'], /<script|<link|<img/i);
+});
+
+test('every family Markdown page links a generated static chart in charts', () => {
+  const files = render(committed());
+  for (const family of FAMILIES) {
+    const links = [...files[family.page].matchAll(/<img src="(charts\/[^" ]+\.svg)"/g)];
+    assert.ok(links.length > 0, `${family.id} has a static chart`);
+    for (const [, link] of links) assert.match(files[link], /^<svg /, `${family.page}: ${link}`);
+  }
 });
 
 test('spliceReadme fills only the marked blocks and refuses broken markers', () => {
