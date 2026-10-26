@@ -307,6 +307,11 @@ refuses terminals and OpenAI's own apps. See [approvals and guards](#approvals-a
   limit (macOS 27 refuses memory rlimits), and its 2 s CPU limit only raises SIGXCPU, which compromised code can ignore.
 - The sprite style is checked in the dump mode, an offscreen render and a live host with no window. Its look on screen,
   capture exclusion and live memory are unmeasured.
+- Perch mode hides the character on windows with under 40 pt above their top edge, which covers maximized and near-top
+  windows. Cast characters peek until the edge is about 100 pt down, and Codex pets until about 123 pt.
+- Perch mode notices a minimized, moved or covered window after up to 0.5 s awake and 2 s asleep, not A2's 120 ms.
+- Perch mode reserves 80 pt for the traffic-light buttons, plus an 8 pt gap before the legs. Companion window metadata
+  on this Mac puts their right ends 72 to 79 pt from the left edge. The first live run must confirm the margin visually.
 
 - DP1 can skip a close shortcut's final read only when fresh native metadata matches the leased
   bundle ID, PID and process start. Both the window count and modal count must be 0. Missing identity or

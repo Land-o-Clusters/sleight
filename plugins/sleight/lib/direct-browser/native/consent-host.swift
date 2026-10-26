@@ -2632,7 +2632,7 @@ func handFrame(_ data: [String: Any]) -> HandFrame? {
                 data["holdMs"] == nil || integer(data["holdMs"], 0...600) != nil else { return nil }
             state = "aim"
         } else {
-            guard let value = data["state"] as? String, ["waiting", "error", "done", "handback", "thinking", "paused"].contains(value) else { return nil }
+            guard let value = data["state"] as? String, ["waiting", "error", "done", "handback", "thinking", "paused", "idle"].contains(value) else { return nil }
             state = value
         }
         let event = RingEvent(seq: seq, state: state, pid: Int32(pid), windowId: UInt32(window), at: point(data["at"]), rect: rect,
@@ -3254,6 +3254,7 @@ final class RingPlanner {
         case "thinking": thinking()
         case "waiting": waiting()
         case "paused": tl.to([.o: 1, .hol: 1, .sp: 0, .px: 0, .fray: 0], t, 0.12)
+        case "idle": t = tl.to([.o: 1, .hol: 0, .sp: 0, .px: 0, .fray: 0], t, 0.12)
         case "error": error()
         default: done()
         }
@@ -4679,8 +4680,8 @@ func perchMetrics(_ frame: SpriteFrame, legs: (Double, Double)? = nil) -> PerchM
     return PerchMetrics(size: size, anchor: CGPoint(x: ax, y: Double(perch.anchor.y) * e.scale), scale: e.scale,
         legs: legs ?? (ax, Double(size.width) - ax))
 }
-// A classic traffic-light cluster ends 52 pt from the window's left edge. The legs keep 8 pt clear of it.
-let perchCluster = 52.0, perchClusterGap = 8.0
+// Companion windows end 72 to 79 pt from the left edge on this Mac. Confirm the 80 pt bound in the first live run.
+let perchCluster = 80.0, perchClusterGap = 8.0
 // The leg spread: the ink at and below the seat line in every cell the perch table draws on the edge, in points left and
 // right of the seat. Drawn cell by cell into a small bitmap, so no sheet's bytes are copied.
 // The default set is every state drawn unmasked on the edge, standing ones (error, hand back) included; seated is the
@@ -4726,6 +4727,16 @@ func perchSpans(_ window: CGRect, above: [CGRect]) -> [(Double, Double)] {
     }
     return spans
 }
+func perchUsableSpans(_ world: PerchWorld) -> [(Double, Double)] {
+    let need = min(96, Double(world.window.width))
+    return perchSpans(world.window, above: world.above).filter { $0.1 - $0.0 >= need - 0.001 }
+}
+// A box wider than the span peeks at its center. Placement and cover checks use the same seat limits.
+func perchSpanLimits(_ span: (Double, Double), _ m: PerchMetrics) -> (Double, Double) {
+    let lo = span.0 + Double(m.anchor.x), hi = span.1 - (Double(m.size.width) - Double(m.anchor.x))
+    let center = (span.0 + span.1) / 2
+    return lo <= hi ? (lo, hi) : (center, center)
+}
 // A2's seat: on the edge nearest the target's x, legs clear of the traffic lights and the toolbar's controls, away from a
 // target (and a drag's drop point) just under the edge, on the uncovered span nearest the target, and kept within 60 pt
 // on the same window. Where the legs can't clear the buttons the character peeks (the edge masks them). Hidden when the
@@ -4739,8 +4750,7 @@ func perchPlace(_ world: PerchWorld?, pid: Int32, window: UInt32, target: CGPoin
     guard headroom >= 40 else { return .hide("headroom") }
     let ay = Double(m.anchor.y)
     var peek = width < 96 || headroom < ay
-    let need = min(96, width)
-    let spans = perchSpans(win, above: world.above).filter { $0.1 - $0.0 >= need - 0.001 }
+    let spans = perchUsableSpans(world)
     guard !spans.isEmpty else { return .hide("covered") }
     func distance(_ s: (Double, Double)) -> Double { tx >= s.0 && tx <= s.1 ? 0 : min(abs(s.0 - tx), abs(s.1 - tx)) }
     let span = spans.min { a, b in distance(a) != distance(b) ? distance(a) < distance(b) : a.1 - a.0 > b.1 - b.0 }!
@@ -4752,8 +4762,7 @@ func perchPlace(_ world: PerchWorld?, pid: Int32, window: UInt32, target: CGPoin
     var hi = min(Double(win.maxX) - rightMargin, span.1 - right)
     if !peek && lo > hi { peek = true }
     if peek {
-        lo = span.0 + left; hi = span.1 - right
-        if lo > hi { lo = (span.0 + span.1) / 2; hi = lo }
+        (lo, hi) = perchSpanLimits(span, m)
     }
     let rise = peek ? min(48, ay, headroom) : ay
     func clamp(_ v: Double) -> Double { min(max(v, lo), hi) }
@@ -4848,32 +4857,31 @@ struct PerchLine { let moment: String, text: String, index: Int, until: Double, 
 struct PerchLineBook {
     var set: PerchLineSet?, enabled = true, seed: UInt64 = 1
     var recent: [String: [Int]] = [:], picks = 0
-    var turnOpen = false, said: Set<String> = [], lastOk = false
+    var turnOpen = false, said: Set<String> = [], lastOk = false, startPending = false
     var showing: (moment: String, until: Double)?, lastAt = -Double.infinity
     var acts = 0, lastAct = Int.min / 2
     var narrationUntil = -Double.infinity, held: (moment: String, act: Bool, at: Double)?
-    // C1's clear: from the relay's clear before an action that needs the pointer until its done or idle, no line shows, so
+    // C1's clear: from the relay's clear before an action that needs the pointer until its done, error or idle, no line shows, so
     // no click panel can appear under that action (approval's waiting status included).
     var cleared = false
-    static let priority: Set<String> = ["error", "approval", "done"]
+    static let priority: Set<String> = ["error", "approval", "handback", "done"]
     // The moment a frame is, if any. Turns end at a done without ok (the relay's turn end), a hand back or sleep. Waking
     // says wake only when the frame has no moment of its own, so a new turn still starts with its start line.
     mutating func moment(_ state: String, ok: Bool, woke: Bool) -> String? {
-        if !turnOpen { turnOpen = true; said = []; lastOk = false }
+        if !turnOpen { turnOpen = true; said = []; lastOk = false; startPending = false }
         if handKinds.contains(state) { acts += 1 }
         var moment: String?
         switch state {
-        case "aim": moment = said.contains("start") ? nil : "start"
+        case "aim": startPending = !said.contains("start") && set?.lines["start"] != nil; moment = startPending ? "start" : nil
         case "type": moment = said.contains("typing") ? nil : "typing"
         case "waiting": moment = "approval"
         case "error": moment = "error"; lastOk = false
         case "handback": moment = "handback"; turnOpen = false
-        case "done" where ok: moment = said.contains("first-click") ? nil : "first-click"; lastOk = true
+        case "done" where ok: moment = startPending ? "start" : said.contains("first-click") ? nil : "first-click"; lastOk = true
         case "done": moment = lastOk && !said.contains("done") ? "done" : nil; turnOpen = false
         default: break
         }
         if woke, moment == nil { moment = "wake" }
-        if let m = moment, ["start", "typing", "first-click", "done"].contains(m) { said.insert(m) }
         return moment
     }
     // A uniform pick outside the last min(6, count - 1) shown, seeded from the session seed; a single line once per turn.
@@ -4891,11 +4899,12 @@ struct PerchLineBook {
         return (index, list[index])
     }
     enum Decision { case show, hold, drop }
-    // At most one line per 8 s, every moment included, so an error burst says one line. Never lines on two consecutive acts,
+    // Important moments have a 3 s floor; other lines keep 8 s. Never lines on two consecutive acts,
     // never while C1's clear holds, and never with narration up: then the line waits for it.
     mutating func decide(_ moment: String, now: Double, act: Bool) -> Decision {
         guard enabled, !cleared, set?.lines[moment] != nil else { return .drop }
-        if now - lastAt < 8 - 1e-9 { return .drop }
+        let gap = PerchLineBook.priority.contains(moment) ? 3.0 : 8.0
+        if now - lastAt < gap - 1e-9 { return .drop }
         if let s = showing, now < s.until, !PerchLineBook.priority.contains(moment) { return .drop }
         if act, acts == lastAct + 1 { return .drop }
         if now < narrationUntil { held = (moment, act, now); return .hold }
@@ -4938,13 +4947,12 @@ func perchDissolve(_ event: RingEvent, _ clip: CGRect, _ palm: CGPoint?) -> (Rin
     let moved = RingEvent(seq: event.seq, state: event.state, pid: event.pid, windowId: event.windowId, at: palm, rect: nil, label: event.label, say: event.say, ok: true)
     return (moved, clip.union(CGRect(x: palm.x - 60, y: palm.y - 60, width: 120, height: 120)))
 }
-// The seat's box still has its 96 pt (or narrower window's) span of edge uncovered by the windows in front.
+// The seat still fits one of the same uncovered spans placement accepts, including a wider box's centered peek.
 func perchUncovered(_ seat: PerchSeat, _ world: PerchWorld, _ m: PerchMetrics) -> Bool {
-    let lo = seat.x - Double(m.anchor.x), hi = lo + Double(m.size.width)
-    let need = min(96, Double(world.window.width))
-    // A box wider than a narrow window (the peek) needs only the window's own part of the edge.
-    let left = max(lo, Double(world.window.minX)), right = min(hi, Double(world.window.maxX))
-    return perchSpans(world.window, above: world.above).contains { s in s.1 - s.0 >= need - 0.001 && s.0 <= left + 0.5 && s.1 >= right - 0.5 }
+    return perchUsableSpans(world).contains { span in
+        let (lo, hi) = perchSpanLimits(span, m)
+        return seat.x >= lo - 0.5 && seat.x <= hi + 0.5
+    }
 }
 
 struct PerchRuntime {
@@ -4961,7 +4969,7 @@ struct PerchRuntime {
     var metrics: PerchMetrics? { frame.flatMap { perchMetrics($0, legs: legs) } }
     var next: Double? { timers.map { $0.at }.min() }
     // How often the host rereads the target window: while it moves, while awake or covered, slower asleep. nil: nothing
-    // perched (also after 10 minutes asleep, when the character goes until the next frame).
+    // perched (also after 10 minutes asleep, covered or paused, until the next frame).
     var poll: Double? { seat == nil ? nil : moving != nil ? 0.25 : asleep ? 2 : 0.5 }
     mutating func load(_ frame: SpriteFrame?) {
         self.frame = frame; book.set = frame?.lines; book.recent = [:]; seat = nil; shown = false; asleep = false; plan = nil; moving = nil; timers = []
@@ -4983,7 +4991,8 @@ struct PerchRuntime {
         let was = shown
         shown = false; asleep = false; plan = nil
         if !keepSeat { seat = nil; moving = nil; covered = false }
-        timers.removeAll { !(keepSeat && $0.action == "return") }
+        timers.removeAll { !(keepSeat && ["return", "deep"].contains($0.action)) }
+        if keepSeat && !timers.contains(where: { $0.action == "deep" }) { timer(now + 600, "deep") }
         // Reported even when nothing showed, so a seat refused on the first frame says why (the host has nothing to fade).
         var out: [(Double, PerchEffect)] = [(now, .hide(reason, was ? 0.12 : 0))]
         if line != nil { line = nil; book.showing = nil; out.append((now, .lineOut(0.12))) }
@@ -5095,9 +5104,10 @@ struct PerchRuntime {
         guard let m = metrics else { return out }
         let woke = asleep
         lastFrame = now; asleep = false; trail = nil
-        // C1's pause: the ring's paused frame shows the paused pose and no sleep follows; any other frame resumes.
+        // C1's pause: the paused pose stops after 10 minutes; any other frame resumes.
         paused = ev.state == "paused"
         timers.removeAll { ["sleep", "still", "wait-end", "drop", "long-wait", "deep"].contains($0.action) }
+        if paused { timer(now + 600, "deep") }
         let moment = book.moment(ev.state, ok: ev.ok, woke: woke)
         // A turn's end (the relay's done without ok) high-fives when the turn's last call succeeded.
         let state = ev.state == "done" && !ev.ok && turnOk == true ? "turn-success" : ev.state
@@ -5156,6 +5166,8 @@ struct PerchRuntime {
         case .drop, .hold: return []
         case .show:
             guard let (index, text) = book.pick(moment) else { return [] }
+            if ["start", "typing", "first-click", "done"].contains(moment) { book.said.insert(moment) }
+            if moment == "start" { book.startPending = false }
             let until = now + min(4, 1.8 + 0.04 * Double(text.count))
             let shown = PerchLine(moment: moment, text: text, index: index, until: until,
                 bubble: perchBubble(text, box: place.box, display: place.display, top: place.top, avoid: target, size: env.measure(text)))
@@ -5208,6 +5220,7 @@ struct PerchRuntime {
             let move = !shown ? "return" : abs(s.x - seat.x) > 360 ? "run" : "hop"
             let from = shown ? plan?.position(at: now - began) : nil
             self.seat = s; covered = false
+            if !paused { timers.removeAll { $0.action == "deep" } }
             if let p = draw(current, ok: false, at: nil, move: move, from: from, woke: false, now: now, env: env) {
                 plan = p; began = now; shown = true; out.append((now, .draw(p))); timer(now + p.duration, "park")
                 if !paused { timer(now + 20, "sleep") }
@@ -5237,8 +5250,8 @@ struct PerchRuntime {
                     timer(at + 600, "deep")
                 }
             case "deep":
-                // 10 minutes asleep: the character goes and the window checks stop until the next frame brings it back.
-                if asleep { out += hide(at, "asleep") }
+                // 10 quiet minutes asleep, covered or paused: hide and stop checks until the next frame or unpause.
+                if asleep || covered || paused { out += hide(at, paused ? "paused" : covered ? "covered" : "asleep") }
             case "wait-end", "drop":
                 guard shown, let p = draw("perch", ok: false, at: nil, move: nil, from: nil, woke: false, now: at, env: env) else { continue }
                 plan = p; began = at; out.append((at, .draw(p))); timer(at + p.duration, "park")
@@ -5252,9 +5265,14 @@ struct PerchRuntime {
                 let target = CGPoint(x: seat.x + Double(world.window.minX - seat.frame.minX), y: Double(world.window.maxY) + 100)
                 switch perchPlace(world, pid: seat.pid, window: seat.window, target: target, metrics: m, previous: nil) {
                 case let .hide(reason):
-                    if reason == "covered" { self.seat?.frame = world.window; covered = true } else { out += hide(at, reason) }
+                    if reason == "covered" {
+                        self.seat?.x = Double(target.x); self.seat?.edge = Double(world.window.minY)
+                        self.seat?.frame = world.window; self.seat?.display = world.display; self.seat?.top = world.top
+                        covered = true
+                    } else { out += hide(at, reason) }
                 case let .seat(s):
-                    self.seat = s
+                    self.seat = s; covered = false
+                    if !paused { timers.removeAll { $0.action == "deep" } }
                     if let p = draw(current, ok: false, at: nil, move: "return", from: nil, woke: false, now: at, env: env) {
                         plan = p; began = at; shown = true; out.append((at, .draw(p))); timer(at + p.duration, "park")
                         if !paused { timer(at + 20, "sleep") }
@@ -5570,7 +5588,7 @@ func perchWorld(pid: Int32, window: UInt32) -> PerchWorld? {
 // The ghost hand (ROADMAP 2.7): a glove that glides to where sleight acts in a background window, flourishes and fades. It only
 // draws: the panel never activates, takes key, catches a click or shows in another process's capture unless the user chose
 // visible, and it is released after the fade, so an idle host has no window and no scheduled work. Perch mode (BEGIN PERCH) is the
-// exception: a perched character keeps its panel and a window-list check every 0.5 s (2 s asleep) until 10 minutes asleep.
+// exception: a perched character keeps a window-list check every 0.5 s (2 s asleep), capped at 10 minutes asleep, covered or paused.
 final class HandPanel: NSPanel {
     override var canBecomeKey: Bool { false }
     override var canBecomeMain: Bool { false }
@@ -5657,7 +5675,7 @@ func cursorPauseCurrent(_ expected: CGRect, _ observed: CGRect?) -> Bool { obser
 struct CursorPauseVisibility {
     private(set) var cleared = false
     mutating func clear() { cleared = true }
-    mutating func status(_ state: String) { if state == "done" || state == "idle" { cleared = false } }
+    mutating func status(_ state: String) { if ["done", "error", "idle"].contains(state) { cleared = false } }
     func placement(_ plan: RingPlan, clip: CGRect, sprite: Bool) -> CursorPausePlacement {
         let hit = CursorPausePlacement.make(plan, clip: clip, sprite: sprite)
         return CursorPausePlacement(rect: cleared ? nil : hit.rect, sprite: hit.sprite, after: hit.after)
@@ -6665,7 +6683,7 @@ func perchDump(reduced: Bool, seed: UInt64) {
             }
             guard event.seq > last else { exit(65) }
             last = event.seq
-            if ["aim", "waiting", "error", "done", "handback", "thinking", "paused"].contains(event.state) { pauseVisibility.status(event.state) }
+            pauseVisibility.status(event.state)
             ring.dissolveAt = enabled ? perch.dissolve(event) : nil
             if let palm = ring.dissolveAt { write(["effect": "dissolve", "at": [palm.x, palm.y], "time": clock]) }
             ringEmit(ring.receive(event, delay: delay, now: clock, ringEnv))

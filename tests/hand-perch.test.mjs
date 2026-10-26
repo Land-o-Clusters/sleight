@@ -204,12 +204,12 @@ const seatOf = (windows, at, displays) => {
   return perches(out)[0]?.seat ?? out.find(e => e.effect === 'perch-hide')?.reason ?? 'none';
 };
 
-test('seat: nearest the target on the edge, 80 pt clear of the controls, the legs clear of the buttons, centered under 176', onMac, () => {
+test('seat: nearest the target on the edge, the legs clear of the 80 pt cluster, peeking when the legs cannot fit', onMac, () => {
   assert.deepEqual(seatOf([wide], [600, 400]), { x: 600, edge: 200, peek: false, rise: 75, window: 7 });
-  assert.equal(seatOf([wide], [205, 400]).x, 280);
+  assert.equal(seatOf([wide], [205, 400]).x, 303);
   assert.equal(seatOf([wide], [995, 400]).x, 920);
-  assert.equal(seatOf([W(7, [100, 200, 220, 300])], [101, 400]).x, 175, 'legs 15 pt left of the seat stay 8 pt clear of a 52 pt cluster');
-  assert.equal(seatOf([W(7, [100, 200, 150, 300])], [101, 400]).x, 175, 'under 176 pt: centered');
+  assert.equal(seatOf([W(7, [100, 200, 220, 300])], [101, 400]).x, 203, 'legs 15 pt left of the seat stay 8 pt clear of an 80 pt cluster');
+  assert.deepEqual(seatOf([W(7, [100, 200, 150, 300])], [101, 400]), { x: 148, edge: 200, peek: true, rise: 48, window: 7 }, 'legs cannot clear the cluster: peek');
   assert.deepEqual(seatOf([W(7, [100, 200, 90, 300])], [101, 400]), { x: 145, edge: 200, peek: true, rise: 48, window: 7 }, 'under 96 pt: the peek');
   assert.equal(seatOf([W(7, [100, 200, 47, 300])], [110, 400]), 'narrow');
 });
@@ -255,7 +255,7 @@ test('moves: drop in, hop per 120 pt, run past 360, leap between windows, far mo
   assert.equal(hop.cells.filter(c => c[1] === 'perch-hop').length, 8);
   assert.equal(run.kind, 'run'); assert.ok(run.states.includes('running-left')); assert.ok(Math.abs(run.positions.at(-1)[0] - 0.6) < 1e-9, '500 pt: capped at 600 ms');
   assert.equal(leap.kind, 'leap');
-  const d = Math.hypot(452 - 252, 225 - 125), apex = Math.min(...leap.positions.map(p => p[2]));
+  const d = Math.hypot(452 - 255, 225 - 125), apex = Math.min(...leap.positions.map(p => p[2]));
   assert.ok(Math.abs(leap.positions.at(-1)[0] - Math.min(0.52, 0.32 + 0.0005 * d)) < 1e-9);
   assert.ok(Math.abs(apex - (125 - 60)) < 1, `apex ${apex}`);
   assert.deepEqual(leap.cells.filter(c => c[1] === 'jumping').map(c => c[4]), [0, 1, 2, 3, 4]);
@@ -357,16 +357,15 @@ test('hide rules: the person moving the window hides it until the frame holds st
   assert.deepEqual([end.shown, end.poll], [false, null], 'nothing perched, nothing polled');
 });
 
-test('lines: one per 8 s for every moment, never on consecutive acts, narration first, a no-repeat ring and a click to dismiss', onMac, () => {
+test('lines: 8 s for ordinary moments and 3 s for important ones, never on consecutive acts, narration first, a no-repeat ring and a click to dismiss', onMac, () => {
   const lines = out => out.filter(e => e.effect === 'line').map(e => [e.time, e.moment]);
-  // start; typing 3 s later and an error at 3.5 s are dropped (8 s, important moments included); first-click at 20 s and
-  // the turn's done at 29 s.
+  // Typing at 3 s is dropped, but the error at 3.5 s clears the important-moment floor.
   const a = dump([world([wide]), aim(500, 400), clock(3), act('type', 500, 400), clock(3.5), status('error'), clock(20),
     status('done', { ok: true }), clock(21), status('done'), clock(29), aim(500, 400), status('done', { ok: true }), clock(30), status('done'), clock(40)]);
-  assert.deepEqual(lines(a), [[0, 'start'], [20, 'first-click'], [29, 'start']]);
-  // An error burst, one a second for 6 s, says one line.
+  assert.deepEqual(lines(a), [[0, 'start'], [3.5, 'error'], [20, 'first-click'], [29, 'start']]);
+  // An error burst, one a second for 6 s, says at most one line per 3 s.
   const burst = dump([world([wide]), aim(500, 400), clock(10), ...[10, 11, 12, 13, 14, 15].flatMap(t => [clock(t), status('error', { at: [500 + t, 400] })]), clock(30)]);
-  assert.deepEqual(lines(burst), [[0, 'start'], [10, 'error']]);
+  assert.deepEqual(lines(burst), [[0, 'start'], [10, 'error'], [13, 'error']]);
   const start = a.find(e => e.effect === 'line');
   assert.equal(start.until, Math.min(4, 1.8 + 0.04 * start.text.length));
   assert.equal(start.bubble.side, 'above');
@@ -458,6 +457,27 @@ test('cover: a window raised over the seat moves the character along the edge or
   assert.deepEqual(frame.filter(e => e.effect === 'perch-hide').map(e => e.reason), ['covered']);
 });
 
+test('cover: a scale 1 box settles on a 150 pt sliver, then sleeps without another hop', onMac, () => {
+  const sliver = [W(8, [350, 150, 800, 600]), wide];
+  const out = dump([world([wide]), aim(600, 400), clock(1), world(sliver),
+    ...[2, 2.5, 3, 4, 8, 20, 22, 40].flatMap(t => [clock(t), world(sliver)]), clock(700)],
+  { character: pack({ more: { scale: 1 } }) });
+  const hops = perches(out).filter(p => ['hop', 'run'].includes(p.kind));
+  assert.deepEqual(hops.map(p => [p.time, p.seat.x, p.seat.peek]), [[1, 275, true]]);
+  assert.deepEqual(perches(out).filter(p => p.zs).map(p => p.time), [21], 'cover checks never restart sleep');
+  assert.deepEqual(out.filter(e => e.effect === 'perch-hide').map(e => [e.time, e.reason]), [[621, 'asleep']]);
+  assert.equal(out.at(-1).poll, null);
+});
+
+test('cover: returning covered after a window move preserves the seat relative to the window', onMac, () => {
+  const moved = W(7, [400, 250, 800, 500]), cover = W(8, [350, 200, 1000, 600]);
+  const out = dump([world([wide]), aim(600, 400), clock(1), world([cover, moved]), clock(1.5), world([cover, moved]),
+    clock(2), world([moved]), clock(3)]);
+  const back = perches(out).find(p => p.kind === 'return');
+  assert.deepEqual([back.time, back.seat.x, back.seat.edge], [2, 800, 250]);
+  assert.equal(back.seat.x - moved.frame[0], 600 - wide.frame[0], '400 pt from the window left before and after');
+});
+
 test('C1 clear: no line and no click panel from the clear until the action is done, approval waiting included', onMac, () => {
   const lines = out => out.filter(e => e.effect === 'line').map(e => [e.time, e.moment]);
   const clear = { hand: 'clear', nonce, token: 'c'.repeat(32) };
@@ -465,6 +485,45 @@ test('C1 clear: no line and no click panel from the clear until the action is do
   assert.ok(out.some(e => e.effect === 'perch-hide' && e.reason === 'hide'), 'the clear hides the character as the host does');
   assert.deepEqual(lines(out), [[20, 'first-click'], [30, 'approval']], 'approval after the clear says nothing; after the done they may');
   assert.equal(perches(out).find(e => e.time === 10).states.at(-1), 'perch-wait', 'the character still shows the wait');
+});
+
+test('C1 clear: a turn starting with drag, hover or menu_bar says start when its first call finishes', onMac, () => {
+  for (const kind of ['drag', 'hover', 'menu_bar']) {
+    const clear = { hand: 'clear', nonce, token: 'c'.repeat(32) };
+    const out = dump([world([wide]), clear, aim(500, 400),
+      ...kind === 'drag' ? [act('drag', 600, 400, 7, { path: [[500, 400], [600, 400]] })] : [],
+      clock(1), status('done', { ok: true }), clock(10), aim(500, 400), clock(11)]);
+    assert.deepEqual(out.filter(e => e.effect === 'line').map(e => [e.time, e.moment]), [[1, 'start']], kind);
+  }
+  const partial = dump([world([wide]), aim(500, 400), clock(1), status('done', { ok: true })],
+    { character: pack({ lines: { 'first-click': ['Click!'] } }) });
+  assert.deepEqual(partial.filter(e => e.effect === 'line').map(e => [e.time, e.moment]), [[1, 'first-click']], 'a pack without start keeps first-click');
+});
+
+test('C1 clear: a failed call releases error and approval lines without idle or done', onMac, () => {
+  const clear = { hand: 'clear', nonce, token: 'c'.repeat(32) };
+  const out = dump([world([wide]), clear, aim(500, 400), act('drag', 600, 400, 7, { path: [[500, 400], [600, 400]] }),
+    clock(1), status('error'), clock(4), status('waiting'), clock(5)]);
+  assert.deepEqual(out.filter(e => e.effect === 'line').map(e => [e.time, e.moment]), [[1, 'error'], [4, 'approval']]);
+});
+
+test('lines: a short successful turn says done at 3 s after start with a click at 1.5 s', onMac, () => {
+  const out = dump([world([wide]), aim(500, 400), clock(1.5), act('click', 500, 400), status('done', { ok: true }),
+    clock(3), status('done'), clock(4)]);
+  assert.deepEqual(out.filter(e => e.effect === 'line').map(e => [e.time, e.moment]), [[0, 'start'], [3, 'done']]);
+});
+
+test('lines: important moments wait 3 s, ordinary moments wait 8 s, and error bursts keep the 3 s floor', onMac, () => {
+  for (const state of ['error', 'waiting', 'handback']) {
+    const out = dump([world([wide]), aim(500, 400), clock(2.99), status(state), clock(3), status(state, { at: [501, 400] }), clock(4)]);
+    assert.deepEqual(out.filter(e => e.effect === 'line').map(e => [e.time, e.moment]),
+      [[0, 'start'], [3, state === 'waiting' ? 'approval' : state]], state);
+  }
+  const ordinary = dump([world([wide]), aim(500, 400), clock(3), act('type', 500, 400), clock(8), act('click', 500, 400),
+    status('done', { ok: true }), clock(9)]);
+  assert.deepEqual(ordinary.filter(e => e.effect === 'line').map(e => [e.time, e.moment]), [[0, 'start'], [8, 'first-click']]);
+  const burst = dump([world([wide]), ...Array.from({ length: 13 }, (_, t) => [clock(t), status('error', { at: [500 + t, 400] })]).flat(), clock(13)]);
+  assert.deepEqual(burst.filter(e => e.effect === 'line').map(e => [e.time, e.moment]), [0, 3, 6, 9, 12].map(t => [t, 'error']));
 });
 
 test('lines in trail mode: the same book, the bubble by the sprite', onMac, () => {
@@ -478,7 +537,7 @@ test('lines in trail mode: the same book, the bubble by the sprite', onMac, () =
   assert.equal(said[0].bubble.side, 'above'); assert.equal(y + h, 418 - 6); assert.ok(Math.abs(x + w / 2 - 566) < 1);
 });
 
-test('narrow windows: with Tsugi\'s 15 pt legs nothing overlaps a 52 pt traffic-light cluster at any width', onMac, () => {
+test('narrow windows: with Tsugi\'s 15 pt legs nothing overlaps an 80 pt traffic-light cluster at any width', onMac, () => {
   const lines = [];
   // One window per width (a new window each time), the target at its left edge.
   for (let width = 40; width <= 420; width += 4) lines.push(world([W(1000 + width, [100, 200, width, 300])]), { ...aim(101, 400, 1000 + width) }, clock(width));
@@ -487,13 +546,13 @@ test('narrow windows: with Tsugi\'s 15 pt legs nothing overlaps a 52 pt traffic-
   for (const p of seats) {
     if (p.seat.peek) { peeks++; continue; }
     seated++;
-    assert.ok(p.seat.x - 15 >= 100 + 52 + 8 - 1e-9, `legs at ${p.seat.x - 15} on a window from 100`);
+    assert.ok(p.seat.x - 15 >= 100 + 80 + 8 - 1e-9, `legs at ${p.seat.x - 15} on a window from 100`);
   }
   assert.ok(peeks > 0 && seated > 0, `${peeks} peeks, ${seated} seated`);
   assert.ok(out.filter(e => e.effect === 'perch-hide').some(e => e.reason === 'narrow'));
   // Unmeasured art keeps the whole box clear (half the box, 48 pt, as the legs).
-  assert.equal(seatOf([W(7, [100, 200, 300, 300])], [101, 400]).x, 180, 'the 80 pt margin wins on a wide window');
-  assert.equal(perches(dump([world([W(7, [100, 200, 300, 300])]), aim(101, 400)], { legs: null }))[0].seat.x, 100 + 52 + 8 + 48);
+  assert.equal(seatOf([W(7, [100, 200, 300, 300])], [101, 400]).x, 203, 'the legs keep clear of the cluster on a wide window');
+  assert.equal(perches(dump([world([W(7, [100, 200, 300, 300])]), aim(101, 400)], { legs: null }))[0].seat.x, 100 + 80 + 8 + 48);
 });
 
 test('sleep: after 10 minutes asleep the character goes and the checks stop; the next frame brings it back; a new turn starts with start', onMac, () => {
@@ -504,6 +563,25 @@ test('sleep: after 10 minutes asleep the character goes and the checks stop; the
   assert.equal(perches(again).at(-1).kind, 'arrive');
   const turn = dump([world([wide]), aim(500, 400), clock(40), aim(500, 400), clock(41)]);
   assert.deepEqual(turn.filter(e => e.effect === 'line').map(e => e.moment), ['start', 'start'], 'sleep ends the turn; the new one starts with start, not wake');
+});
+
+test('covered and paused seats stop checks after 10 minutes, then a frame or idle brings them back', onMac, () => {
+  const cover = [W(8, [150, 150, 1000, 600]), wide];
+  const covered = dump([world([wide]), aim(600, 400), clock(1), world(cover),
+    ...[2, 300, 600].flatMap(t => [clock(t), world(cover)]), clock(700)]);
+  assert.deepEqual(covered.filter(e => e.effect === 'perch-hide').map(e => [e.time, e.reason]), [[1, 'covered'], [601, 'covered']]);
+  assert.deepEqual([covered.at(-1).shown, covered.at(-1).poll, covered.at(-1).timers], [false, null, []]);
+  const frame = dump([world([wide]), aim(600, 400), clock(1), world(cover), clock(700), world([wide]), aim(600, 400)]);
+  assert.deepEqual([perches(frame).at(-1).time, perches(frame).at(-1).kind], [700, 'arrive']);
+  const paused = dump([world([wide]), aim(500, 400), clock(1), status('paused'), clock(700)]);
+  assert.deepEqual(paused.filter(e => e.effect === 'perch-hide').map(e => [e.time, e.reason]), [[601, 'paused']]);
+  assert.deepEqual([paused.at(-1).shown, paused.at(-1).poll, paused.at(-1).timers], [false, null, []]);
+  for (const resume of [2, 700]) {
+    const unpaused = dump([world([wide]), aim(500, 400), clock(1), status('paused'), clock(resume), status('idle'), clock(resume + 21)]);
+    const idle = perches(unpaused).find(p => p.time === resume);
+    assert.deepEqual(idle.states.at(-1), 'perch', `idle at ${resume} clears the paused pose`);
+    assert.deepEqual(perches(unpaused).filter(p => p.states.includes('sleep')).map(p => p.time), [resume + 20]);
+  }
 });
 
 test('budget: the dump\'s key paths are what install animates; a leap animates 3, the sleep loop 2, a parked plan none', onMac, () => {

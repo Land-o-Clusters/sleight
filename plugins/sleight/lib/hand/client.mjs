@@ -42,7 +42,7 @@ export function handWireFrame(frame) {
   const say = narrationLine(frame.say);
   const spoken = say ? { say } : {};
   const label = typeof frame.label === 'string' && !/[\x00-\x1f\x7f]/.test(frame.label) ? [...frame.label].slice(0, 40).join('') : undefined;
-  if (frame.hand === 'status') return ['waiting', 'error', 'done', 'handback', 'thinking', 'paused'].includes(frame.state)
+  if (frame.hand === 'status') return ['waiting', 'error', 'done', 'handback', 'thinking', 'paused', 'idle'].includes(frame.state)
     ? { hand: 'status', state: frame.state, pid, windowId, ...spoken, ...at ? { at } : {}, ...frame.state === 'done' && typeof frame.ok === 'boolean' ? { ok: frame.ok } : {} } : 'state';
   const rect = Array.isArray(frame.rect) && frame.rect.length === 4 && frame.rect.every(v => Number.isFinite(v) && Math.abs(v) <= 100000) && frame.rect[2] > 0 && frame.rect[3] > 0 ? frame.rect.map(round) : undefined;
   if (frame.hand === 'aim') {
@@ -590,7 +590,7 @@ export function createHandClient({ env = process.env, setting = () => handSettin
         if (!event.point || !event.window?.pid || !event.window?.id) return;
         client.send({ hand: 'aim', kind: ['select', 'navigate'].includes(event.kind) ? 'click' : event.kind, pid: event.window.pid, windowId: event.window.id,
           at: event.point, rect: event.rect, label: event.label, say: event.say });
-      } else if (event?.type === 'status' && target && event.state !== 'idle') {
+      } else if (event?.type === 'status' && target) {
         // A call's done is its success; the ring bursts for it.
         client.send({ hand: 'status', state: event.state, ...target, say: event.say, ...event.state === 'done' && event.call ? { ok: true } : {} });
       }
