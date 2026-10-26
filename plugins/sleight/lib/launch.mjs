@@ -1400,7 +1400,7 @@ if (isMainModule(import.meta.url)) {
   let refusal;
   if (SETTINGS_COMMANDS.includes(process.argv[2])) {
     try { refusal = (await import('./person-gate.mjs')).settingsRefusal(process.argv.slice(2)); }
-    catch { refusal = `sleight: ${process.argv[2]} changes sleight's settings, so run it yourself in a terminal (or use the menu bar).`; }
+    catch { refusal = `sleight: ${process.argv[2]} changes sleight's settings, so run it yourself in a terminal (or use the menu bar). Reason: check failed.`; }
   }
   if (refusal) { process.stderr.write(refusal + '\n'); process.exitCode = 3; }
   else if (['session', 'js', 'js_reset', 'open_file', 'select_window', 'drag'].includes(process.argv[2])) {

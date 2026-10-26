@@ -118,6 +118,11 @@ refuses terminals and OpenAI's own apps. See [approvals and guards](#approvals-a
 
 <a id="protected-consent-input"></a>
 
+- The launcher's settings commands (`hand on`, `turbo off`, `permissions unblock` and the rest) check that a person started
+  them from a terminal app, but an agent that can type into a terminal it opened passes that check, such as computer use
+  typing into a fresh Terminal window or an editor's agent running commands in the VS Code or Cursor terminal. The process
+  chain then looks like a person's.
+
 - Remote approvals (1.5.0): a person at the Mac who hasn't touched the keyboard or pointer for 120 s counts as away, so an app
   card ends the call instead of waiting. A typed `allow <app>` covers only that app's low-risk cards. Medium and high-risk
   cards, Terminal, iTerm2 and OpenAI's apps still need the Mac. Typed grants and the up-front ask work only in the session
