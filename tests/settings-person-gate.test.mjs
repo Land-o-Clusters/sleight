@@ -180,9 +180,22 @@ test('a terminal session opened less than 10 s ago refuses, and an unreadable ag
   assert.match(refusalLine('hand on', 'fresh session'), /Reason: the terminal opened less than 10 s ago, so try again\.$/);
 });
 
+// Re-review A: a terminal in ~/Applications under a non-ASCII home (a user named José) passes, as lsof reports it.
+test('a terminal under a non-ASCII home folder passes by its bundle path', () => {
+  const home = `${USERS}/Jos\u00e9`, app = `${home}/Applications/iTerm.app/Contents/MacOS/iTerm2`;
+  const table = { 300: '200 -zsh -zsh', 200: '100 login login -pf jose', 100: `    1 ${app.slice(0, 16)} ${app}` };
+  const fake = machine(table);
+  assert.deepEqual(walkAncestors({ pid: 300, self: SELF, home, ps: fake.ps, executable: fake.executable }), { ok: true });
+  // The same terminal reported with lsof's C-locale escapes doesn't match, which is why lsof keeps the person's locale.
+  const escaped = machine(table);
+  assert.deepEqual(walkAncestors({ pid: 300, self: SELF, home, ps: escaped.ps, executable: () => app.replace('\u00e9', '\\xc3\\xa9') }),
+    { ok: false, reason: 'unknown ancestor' });
+});
+
 test('ps runs with LC_ALL=C, and the gate passes its session-age bar to the walk', () => {
   const source = readFileSync(new URL('../plugins/sleight/lib/person-gate.mjs', import.meta.url), 'utf8');
-  assert.match(source, /env: \{ \.\.\.process\.env, LC_ALL: 'C' \}/);
+  assert.match(source, /export const systemPs = \(argv, timeout\) => run\('\/bin\/ps', argv, timeout, \{ \.\.\.process\.env, LC_ALL: 'C' \}\);/);
+  assert.match(source, /run\('\/usr\/sbin\/lsof', \['-a', '-p', String\(pid\), '-d', 'txt', '-Fn'\], timeout\)\)/, 'lsof keeps the person\'s locale');
   const seen = [];
   const ancestors = options => { seen.push(options); return { ok: true }; };
   assert.equal(settingsRefusal(['turbo', 'on'], { stdin: tty, stdout: tty, env: {}, ancestors }), undefined);

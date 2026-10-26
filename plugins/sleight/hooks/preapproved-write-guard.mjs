@@ -8,13 +8,27 @@ const folded = path => path.normalize('NFC').toLowerCase();
 // Everything under these folders is sleight's own code: the helper cache (the consent host that answers sleight's cards and
 // its Touch ID confirmation, built from source) and installed copies of the plugin in Claude Code's, Codex's and Cursor's
 // plugin caches (<host>/plugins/cache/<marketplace>/sleight). Swapping either would change the checks themselves. A plugin
-// loaded from a working checkout is left alone, so its source stays editable. So is the benchmark's own copy, installed in
-// its throwaway config under ~/Library/Caches/sleight-bench, which the bench rebuilds.
+// loaded from a working checkout is left alone, so its source stays editable. So is a real folder under
+// ~/Library/Caches/sleight-bench (the benchmark's throwaway configs); the arm links its plugins folder to the real cache,
+// which resolves back into the protected tree, and it loads sleight with --plugin-dir, so nothing there needs writing.
 const TREES = [/\/library\/caches\/sleight(?:\/|$)/, /\/plugins\/cache\/[^/]+\/sleight(?:\/|$)/];
-const BENCH = /\/library\/caches\/sleight-bench(?:\/|$)/;
-const protectedLiteral = path => {
+// What each refusal names, so the person knows which protected folder the command reached.
+export const PROTECTED = Object.freeze({
+  settings: "sleight's settings files (~/Library/Application Support/sleight)",
+  cache: "sleight's helper cache (~/Library/Caches/sleight)",
+  install: 'an installed copy of the sleight plugin',
+  aboveSleight: "a folder that holds sleight's settings or helper cache",
+  aboveInstall: 'a folder that holds an installed copy of sleight',
+  launcher: "sleight's settings through its launcher",
+});
+// The bench folder, anchored to the home folder (or a ~ spelling when the home folder isn't known).
+const benchPath = (value, home) => [home && folded(normalize(home)), '~'].filter(Boolean)
+  .some(root => value === `${root}/library/caches/sleight-bench` || value.startsWith(`${root}/library/caches/sleight-bench/`));
+const protectedLiteral = (path, home) => {
   const value = folded(normalize(path));
-  return suffixes.some(suffix => value.endsWith(suffix)) || value.endsWith(directorySuffix) || !BENCH.test(value) && TREES.some(tree => tree.test(value));
+  if (suffixes.some(suffix => value.endsWith(suffix)) || value.endsWith(directorySuffix)) return PROTECTED.settings;
+  if (benchPath(value.replace(/^(?:\$home|\$\{home\})(?=\/|$)/, '~'), home)) return undefined;
+  return TREES[0].test(value) ? PROTECTED.cache : TREES[1].test(value) ? PROTECTED.install : undefined;
 };
 const normalize = path => {
   const parts = [];
@@ -31,7 +45,7 @@ const normalize = path => {
 const above = (path, home) => {
   const root = home ?? '/~', value = folded(normalize(path.replace(/^(?:~|\$HOME|\$\{HOME\})(?=\/|$)/, () => root)));
   return value.startsWith('/') && [`${root}/Library/Application Support/sleight`, `${root}/Library/Caches/sleight`].map(path => folded(normalize(path)))
-    .some(folder => value === folder || folder.startsWith(value === '/' ? '/' : value + '/'));
+    .some(folder => value === folder || folder.startsWith(value === '/' ? '/' : value + '/')) ? PROTECTED.aboveSleight : undefined;
 };
 
 // The folders above the installed plugin copies (TREES): a host folder, its plugins and plugins/cache folders, and a
@@ -44,31 +58,37 @@ async function aboveInstall(path, { stat, home, configDir } = {}) {
   const expanded = normalize(path.replace(/^(?:~|\$HOME|\$\{HOME\})(?=\/|$)/, () => home ?? '/~')
     .replace(/^(?:\$CLAUDE_CONFIG_DIR|\$\{CLAUDE_CONFIG_DIR\})(?=\/|$)/, () => configDir ?? '/$CLAUDE_CONFIG_DIR'));
   const value = folded(expanded);
-  if (!value.startsWith('/') || BENCH.test(value)) return false;
+  if (!value.startsWith('/') || benchPath(value, home)) return undefined;
   const exists = async target => { try { return !!(await stat?.(target))?.realPath; } catch { return false; } };
   const roots = [...HOSTS.map(host => ({ root: `${home ?? '/~'}/${host}`, always: true })), ...configDir ? [{ root: configDir, always: false }] : []];
   for (const { root, always } of roots) {
     const cache = folded(normalize(`${root}/plugins/cache`));
-    if ((value === cache || cache.startsWith(value === '/' ? '/' : value + '/')) && (always || await exists(`${root}/plugins/cache`))) return true;
+    if ((value === cache || cache.startsWith(value === '/' ? '/' : value + '/')) && (always || await exists(`${root}/plugins/cache`))) return PROTECTED.aboveInstall;
     const rest = value.startsWith(cache + '/') ? value.slice(cache.length + 1) : undefined;
-    if (rest && !rest.includes('/') && (rest === 'sleight' || await exists(`${expanded}/sleight`))) return true;
+    if (rest && !rest.includes('/') && (rest === 'sleight' || await exists(`${expanded}/sleight`))) return PROTECTED.aboveInstall;
   }
-  return false;
+  return undefined;
 }
+// The label for a path, ancestors included when the command reaches what is under it.
+const literalLabel = async (path, options, ancestor) => protectedLiteral(path, options?.home) ??
+  (ancestor ? above(path, options?.home) ?? await aboveInstall(path, options) : undefined);
 
 // Resolve before normalizing: a symlink followed by .. walks from its target.
-async function protectedPath(path, { stat, home, configDir }, ancestor = false) {
-  if (typeof path !== 'string' || !path || path.length > 4096) return false;
-  if (protectedLiteral(path) || ancestor && (above(path, home) || await aboveInstall(path, { stat, home, configDir }))) return true;
+async function protectedPath(path, options, ancestor = false) {
+  const { stat, home } = options ?? {};
+  if (typeof path !== 'string' || !path || path.length > 4096) return undefined;
+  const literal = await literalLabel(path, options, ancestor);
+  if (literal) return literal;
   if (home) path = path.replace(/^(?:~|\$HOME|\$\{HOME\})(?=\/|$)/, () => home);
   let resolved = (await stat(path.startsWith('/') ? '/' : '.').catch(() => undefined))?.realPath;
-  if (!resolved) return false;
+  if (!resolved) return undefined;
   for (const part of path.split('/').filter(Boolean)) {
     const next = `${resolved.replace(/\/$/, '')}/${part}`;
     const info = await stat(next).catch(() => undefined);
     resolved = info?.realPath ?? normalize(next);
   }
-  return protectedLiteral(resolved) || ancestor && (above(resolved, home) || await aboveInstall(resolved, { stat, home }));
+  // configDir too: a link to a custom CLAUDE_CONFIG_DIR resolves to it, and its folders above an install still count.
+  return literalLabel(resolved, options, ancestor);
 }
 
 // Only literal shell names and operators, never eval or shell expansion. Keep
@@ -412,28 +432,34 @@ function shellWritePaths(command, initialDirectory, depth = 0) {
   return paths;
 }
 
-export async function preapprovedWriteDenied(input, options) {
+/** The protected folder (a PROTECTED label) a file or shell tool call would change, or undefined. */
+export async function preapprovedWriteTarget(input, options) {
   const { tool } = input;
   let paths;
   if (mutations.has(tool)) {
     paths = [input.file_path, input.notebook_path, ...(Array.isArray(input.edits) ? input.edits.map(edit => edit?.file_path) : [])];
   } else if (tool === 'Bash' && typeof input.command === 'string') {
-    if (launcherRefused(input.command)) return true;
+    if (launcherRefused(input.command)) return PROTECTED.launcher;
     paths = shellWritePaths(input.command);
-  } else return false;
+  } else return undefined;
   for (const candidate of paths) {
     const { path, literalOnly, ancestor } = tool === 'Bash' ? candidate : { path: candidate };
     if (typeof path !== 'string') continue;
     if (tool === 'Bash') {
-      if (protectedLiteral(path) || ancestor && (above(path, options?.home) || await aboveInstall(path, options))) return true;
-      const folder = globFolder(path);
-      if (folder && (protectedLiteral(folder) || ancestor && (above(folder, options?.home) || await aboveInstall(folder, options)))) return true;
+      const literal = await literalLabel(path, options, ancestor);
+      if (literal) return literal;
+      const folder = globFolder(path), inFolder = folder && await literalLabel(folder, options, ancestor);
+      if (inFolder) return inFolder;
       if (literalOnly || /\s/.test(path) || path.length >= 512) continue;
     }
-    if (await protectedPath(path, options, ancestor)) return true;
+    const label = await protectedPath(path, options, ancestor);
+    if (label) return label;
   }
-  return false;
+  return undefined;
 }
+export const preapprovedWriteDenied = async (input, options) => !!await preapprovedWriteTarget(input, options);
+/** The refusal Claude gets, naming what the call reached. */
+export const preapprovedWriteReason = label => `Only the user changes ${label}. Ask them to make this change.`;
 
 // SLEIGHT_ACTION_LOG and SLEIGHT_OUTCOMES are the user's switches. Claude's file and shell tools may not set them where
 // sleight's MCP server reads its environment: Claude Code settings, MCP configs, the plugin's own manifest and launcher,

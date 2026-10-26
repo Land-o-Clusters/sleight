@@ -75,7 +75,7 @@ helper cache are all files the same user can write, so a program running as that
 what it checks.
 Within that model, two cheap paths are closed:
 
-- The guard hook refuses Claude's Write, Edit and shell writes to `~/Library/Caches/sleight/` and to installed copies of the
+- The guard hook's refusal names the protected folder the call would change. It refuses Claude's Write, Edit and shell writes to `~/Library/Caches/sleight/` and to installed copies of the
   plugin (`<host>/plugins/cache/<marketplace>/sleight/`, for Claude Code, Codex and Cursor). A plugin loaded from a
   working checkout isn't covered, and its source can be edited as before.
 - The helper that answers is never the cached file itself. The launcher picks the build keyed by the source as hashed at
@@ -88,8 +88,10 @@ Within that model, two cheap paths are closed:
   the launcher exits or gets SIGINT, SIGTERM or SIGHUP. Folders older than 10 minutes are swept at the next confirmation.
 - The guard also refuses removing or moving the folders above an installed copy: `~/.claude`, `~/.codex`, `~/.cursor` and
   their `plugins` and `plugins/cache` folders, the same under the session's `CLAUDE_CONFIG_DIR` when it has a plugin cache,
-  and a marketplace folder with a `sleight` child. The benchmark's copy under `~/Library/Caches/sleight-bench/` stays
-  writable, since the bench rebuilds it. The marketplace clone (`<host>/plugins/marketplaces/`) is outside the guard.
+  and a marketplace folder with a `sleight` child. Real folders under `~/Library/Caches/sleight-bench/` (the
+  benchmark's throwaway configs) aren't protected. The bench arm links its `plugins` folder to the real one, so its plugin
+  copy resolves to the protected `~/.claude/plugins/cache/<marketplace>/sleight`. The arm still works, since it loads
+  sleight with `--plugin-dir`. The marketplace clone (`<host>/plugins/marketplaces/`) is outside the guard.
 
 ## Outside sleight's control
 

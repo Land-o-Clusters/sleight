@@ -18,12 +18,13 @@ import { replayCommand, settingsChangeRefusal } from '../plugins/sleight/lib/lau
 import { permissionsCommand } from '../plugins/sleight/lib/permissions-command.mjs';
 import { permissionsPath } from '../plugins/sleight/lib/permissions.mjs';
 import { macCommandSkip } from './requirements.mjs';
+import { registerTemp } from '../scripts/temp-leftovers.mjs';
 import { swiftModuleCache } from '../bench/swift-cache.mjs';
 
 const hostSource = readFileSync(new URL('../plugins/sleight/lib/direct-browser/native/consent-host.swift', import.meta.url), 'utf8');
 const confirmSource = readFileSync(new URL('../plugins/sleight/lib/person-confirm.mjs', import.meta.url), 'utf8');
 const launchSource = readFileSync(new URL('../plugins/sleight/lib/launch.mjs', import.meta.url), 'utf8');
-const tempHome = t => { const home = realpathSync(mkdtempSync(join(tmpdir(), 'sleight-person-confirm-'))); t.after(() => rmSync(home, { recursive: true, force: true })); return home; };
+const tempHome = t => registerTemp(t, realpathSync(mkdtempSync(join(tmpdir(), 'sleight-person-confirm-'))));
 
 // Every high-stakes path the CLI has, with the key and the only argument text that reaches the sheet.
 const HIGH = [
@@ -215,6 +216,7 @@ test('the helper: its exit code is the answer once its first line matches the co
     ['no expectation', { expected: null }]]) {
     assert.equal(await helperConfirm({ key: 'turbo-on' }, { prepare: host(0, options) }), 'unverified', name);
   }
+  assert.equal(await helperConfirm({ key: 'turbo-on' }, { prepare: host(64, { report: null }) }), 'invalid', 'exit 64 with no line is a refused request');
   assert.equal(confirmationLine('turbo on', 'unverified'), "sleight: turbo on needs Touch ID or your password, so nothing changed. Reason: the confirmation helper isn't the file sleight checked.");
   assert.equal(await helperConfirm({ key: 'turbo-on' }, { prepare: async () => ({ status: 'unavailable', code: 'APPLE_TOOLS_MISSING' }) }), 'no helper');
   assert.equal(await helperConfirm({ key: 'turbo-on' }, { prepare: async () => { throw Error('build failed'); } }), 'no helper');
@@ -364,8 +366,7 @@ test('the host source: the CLI mode runs before any window code, and the menu\'s
 test('Swift: the confirmation answers once per ask, times out, cancels, and builds reasons only from its table', { skip: macCommandSkip('xcrun') }, async t => {
   const block = /\/\/ BEGIN PERSON CONFIRM\n([\s\S]*?)\/\/ END PERSON CONFIRM/.exec(hostSource)?.[1];
   assert.ok(block);
-  const dir = realpathSync(mkdtempSync(join(tmpdir(), 'sleight-person-confirm-swift-')));
-  t.after(() => rmSync(dir, { recursive: true, force: true }));
+  const dir = registerTemp(t, realpathSync(mkdtempSync(join(tmpdir(), 'sleight-person-confirm-swift-'))));
   const swift = join(dir, 'main.swift'), binary = join(dir, 'fixture');
   writeFileSync(swift, 'import Foundation\nimport LocalAuthentication\n' + block + readFileSync(new URL('./fixtures/person-confirm.swift', import.meta.url), 'utf8'));
   const built = spawnSync('/usr/bin/nice', ['-n', '20', '/usr/bin/xcrun', 'swiftc', '-module-cache-path', swiftModuleCache(), swift, '-o', binary], { encoding: 'utf8', timeout: 600000 });
@@ -383,8 +384,7 @@ test('Swift: the confirmation answers once per ask, times out, cancels, and buil
 });
 
 test('Swift: the whole host compiles, and --confirm-person-check parses its arguments without showing anything', { skip: macCommandSkip('xcrun') }, async t => {
-  const dir = realpathSync(mkdtempSync(join(tmpdir(), 'sleight-person-confirm-host-')));
-  t.after(() => rmSync(dir, { recursive: true, force: true }));
+  const dir = registerTemp(t, realpathSync(mkdtempSync(join(tmpdir(), 'sleight-person-confirm-host-'))));
   const binary = join(dir, 'consent-host');
   const built = spawnSync('/usr/bin/nice', ['-n', '20', '/usr/bin/xcrun', 'swiftc', '-module-cache-path', swiftModuleCache(),
     new URL('../plugins/sleight/lib/direct-browser/native/consent-host.swift', import.meta.url).pathname, '-o', binary], { encoding: 'utf8', timeout: 600000 });

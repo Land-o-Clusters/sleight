@@ -71,9 +71,8 @@ const TERMINAL_BUNDLES = ['iTerm.app', 'Ghostty.app', 'WezTerm.app', 'kitty.app'
 export const terminalBundles = home => ['/System/Applications/Utilities/Terminal.app/Contents/', '/Applications/Utilities/Terminal.app/Contents/',
   ...TERMINAL_BUNDLES.flatMap(bundle => [`/Applications/${bundle}/Contents/`, ...home ? [`${home.replace(/\/$/, '')}/Applications/${bundle}/Contents/`] : []])];
 
-// LC_ALL=C keeps ps's output in one format whatever language the person's terminal uses.
-const run = (file, argv, timeout) => execFileSync(file, argv,
-  { encoding: 'utf8', timeout: Math.max(1, Math.ceil(timeout)), stdio: ['ignore', 'pipe', 'ignore'], env: { ...process.env, LC_ALL: 'C' } });
+const run = (file, argv, timeout, env = process.env) => execFileSync(file, argv,
+  { encoding: 'utf8', timeout: Math.max(1, Math.ceil(timeout)), stdio: ['ignore', 'pipe', 'ignore'], env });
 /** Milliseconds from ps's etime ([[dd-]hh:]mm:ss), or NaN for anything else. */
 export function elapsedMs(text) {
   const match = /^\s*(?:(?:(\d+)-)?(\d{1,2}):)?(\d{1,2}):(\d{2})\s*$/.exec(String(text ?? ''));
@@ -81,7 +80,9 @@ export function elapsedMs(text) {
   const [, days = 0, hours = 0, minutes, seconds] = match;
   return (((Number(days) * 24 + Number(hours)) * 60 + Number(minutes)) * 60 + Number(seconds)) * 1000;
 }
-export const systemPs = (argv, timeout) => run('/bin/ps', argv, timeout);
+// LC_ALL=C keeps ps's output in one format whatever language the person's terminal uses. lsof keeps the person's own
+// locale: under C it escapes non-ASCII bytes (`Jos\xc3\xa9`), and a terminal under such a home would stop matching its path.
+export const systemPs = (argv, timeout) => run('/bin/ps', argv, timeout, { ...process.env, LC_ALL: 'C' });
 /** The file a process actually runs. ps takes comm and args from argv[0], which `exec -a` sets to anything, so a terminal is
  *  confirmed by its mapped executable: lsof lists it first among the txt entries. */
 export const systemExecutable = (pid, timeout) =>
