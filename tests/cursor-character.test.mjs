@@ -57,7 +57,24 @@ test('cursor style saves only valid installed sprites and status is read-only', 
   assert.equal(await cli.cursorCommand(['style', 'sprite', 'test-cat'], opts), 1);
   output = ''; assert.equal(await cli.cursorCommand(['check', 'test-cat'], opts), 1);
 });
-test('cursor status and style say when the hand is off or the file is unsafe, and that sprite draws as the ring', async t => {
+test('cursor check runs the host\'s own checks on the character frame when the host is compiled', async t => {
+  const w = world(t); api.installCharacter(api.prepareCharacterImport(w.folder), { root: w.root });
+  let output = '', frames = [];
+  const opts = { root: w.root, path: join(w.base, 'hand.json'), out: s => output += s };
+  const host = result => async frame => { frames.push(frame); return result; };
+  assert.equal(await cli.cursorCommand(['check', 'test-cat'], { ...opts, built: () => false, hostCheck: host() }), 0);
+  assert.match(output, /Host check skipped: the hand host is not compiled yet/); assert.equal(frames.length, 0);
+  output = ''; assert.equal(await cli.cursorCommand(['check', 'test-cat'], { ...opts, built: () => true, hostCheck: host({ id: 'test-cat', loaded: true, reason: null, warnings: [] }) }), 0);
+  assert.match(output, /Host check: draws\.\n$/);
+  assert.equal(frames[0].hand, 'character'); assert.equal(frames[0].id, 'test-cat'); assert.match(frames[0].nonce, /^[0-9a-f]{64}$/);
+  assert.equal(Object.keys(frames[0].table).filter(k => !k.includes('@')).length, 19);
+  output = ''; assert.equal(await cli.cursorCommand(['check', 'test-cat'], { ...opts, built: () => true, hostCheck: host({ id: 'test-cat', loaded: false, reason: 'pixels', warnings: [] }) }), 1);
+  assert.match(output, /Host check: refused \(pixels\)\. sleight shows the ring instead of this character\./);
+  output = ''; assert.equal(await cli.cursorCommand(['check', 'test-cat'], { ...opts, built: () => true, hostCheck: async () => { throw Error('the hand host is unavailable (APPLE_TOOLS_MISSING)'); } }), 1);
+  assert.match(output, /cursor check failed: the hand host is unavailable/);
+});
+
+test('cursor status and style say when the hand is off or the file is unsafe, and sprite no longer says it draws as the ring', async t => {
   const w = world(t); api.installCharacter(api.prepareCharacterImport(w.folder), { root: w.root });
   const path = join(w.base, 'hand.json'); let output = '';
   const opts = { path, root: w.root, platform: 'darwin', env: {}, built: () => false, out: s => output += s };
@@ -68,9 +85,9 @@ test('cursor status and style say when the hand is off or the file is unsafe, an
   assert.match(output, /^hand {6}off\n/); assert.match(output, /The hand is off, so no style draws/);
   fs.writeFileSync(path, JSON.stringify({ version: 1, enabled: true }), { mode: 0o600 });
   output = ''; assert.equal(await cli.cursorCommand(['style', 'sprite', 'test-cat'], opts), 0);
-  assert.match(output, /Start a new sleight session to use it\.\nNote: sprite draws as the ring until sleight has a sprite renderer\./);
+  assert.match(output, /Start a new sleight session to use it\.\n$/); assert.doesNotMatch(output, /draws as the ring/);
   output = ''; assert.equal(await cli.cursorCommand(['status'], opts), 0);
-  assert.match(output, /^hand {6}on\n/); assert.match(output, /Note: sprite draws as the ring/); assert.doesNotMatch(output, /hand is off/);
+  assert.match(output, /^hand {6}on\n/); assert.doesNotMatch(output, /draws as the ring|hand is off/);
   fs.chmodSync(path, 0o644);
   output = ''; assert.equal(await cli.cursorCommand(['status'], opts), 0);
   assert.match(output, /^hand {6}off \(hand\.json is unsafe to read; run sleight-mcp hand on or off to replace it\)\n/);
@@ -79,7 +96,7 @@ test('cursor status and style say when the hand is off or the file is unsafe, an
 });
 test('installed checks omit source-copy text, symlinks offer removal, and malformed folder names can be removed', async t => {
   const w = world(t); api.installCharacter(api.prepareCharacterImport(w.folder), { root: w.root });
-  let output = ''; const opts = { root: w.root, out: s => output += s };
+  let output = ''; const opts = { root: w.root, out: s => output += s, built: () => false };
   assert.equal(await cli.cursorCommand(['check', 'test-cat'], opts), 0); assert.doesNotMatch(output, /Your source files/);
   fs.symlinkSync(w.folder, join(w.root, 'linked')); output = '';
   assert.equal(await cli.cursorCommand(['list'], opts), 1); assert.match(output, /remove the link by hand/);
@@ -491,7 +508,7 @@ test('total byte and pixel caps cover both sheets and preview', t => {
 });
 
 test('CLI refuses non-TTY without --yes after printing details, accepts --yes, checks, lists and removes', async t => {
-  const w = world(t); let output = ''; const opts = { root: w.root, path: join(w.base, 'hand.json'), out: text => output += text, input: { isTTY: false } };
+  const w = world(t); let output = ''; const opts = { root: w.root, path: join(w.base, 'hand.json'), out: text => output += text, input: { isTTY: false }, built: () => false };
   assert.equal(await cli.cursorCommand(['import', w.folder], opts), 1); assert.match(output, /1 of sleight's 19 moves/); assert.match(output, /--yes/); assert.equal(fs.existsSync(w.root), false);
   assert.equal(await cli.cursorCommand(['import', w.folder, '--yes'], opts), 0); assert.match(output, /Turn it on with sleight-mcp cursor style sprite/);
   assert.equal(await cli.cursorCommand(['check', 'test-cat'], opts), 0); assert.equal(await cli.cursorCommand(['list'], opts), 0);
