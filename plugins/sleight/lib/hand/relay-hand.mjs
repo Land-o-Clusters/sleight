@@ -21,7 +21,7 @@ export function createRelayHand({ client, loadClient = () => import('./client.mj
   trace = () => {}, now = () => performance.now(), defer = fn => setImmediate(fn), locateTimeoutMs = 2000, lateMs = 1500,
   env = process.env, setting = handSettingReader(env), events, record = cursorRecord, schedule = setTimeout, cancel = clearTimeout } = {}) {
   setting = createHandSettingReader({ setting });
-  if (env.SLEIGHT_HAND === '0' || !(setting().enabled || setting().stream) || typeof locate !== 'function') return undefined;
+  if (env.SLEIGHT_HAND === '0' || !(setting().enabled || setting().stream || setting().record_runs) || typeof locate !== 'function') return undefined;
   const ownsEvents = !events;
   events ??= createCursorEvents({ setting, env });
   try { events.connectHost?.(client); } catch {}

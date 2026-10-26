@@ -421,7 +421,7 @@ The host compiles in the background on its first use after you enable it. That s
 Claude's own file edits and shell commands can't write `hand.json` or run `hand on`, `hand off` or `hand capture`.
 A shell command that names `sleight-mcp` or `launch.mjs` next to `hand`, `turbo`, `permissions` or `cursor` passes only as
 a direct read-only form with literal arguments: `hand status`, `turbo status`, `permissions`, `permissions list`,
-`cursor list`, `cursor check <id>` or `cursor status`. A variable, substitution, glob, brace, redirection, heredoc,
+`cursor list`, `cursor check <id>`, `cursor status`, `runs list` or `runs open <id>`. A variable, substitution, glob, brace, redirection, heredoc,
 subshell, `xargs`, `parallel` or `eval` anywhere in that command refuses it. A variable or substitution as the command word
 refuses a command with one of those four words too, even without the launcher's name. An interpreter or shell next to one
 of those words passes only when it runs a read-only form. A pipe into a shell always refuses. Read-only tools (`grep`, `rg`,
@@ -451,6 +451,34 @@ the glove. `SLEIGHT_HAND=0` disables both the built-in cursor and its public str
 [cursor protocol](design/cursor-protocol.md) to local renderers. Ring aim and status frames work without that stream.
 `labels: role` uses generic nouns. `labels: title` opts into element names, truncated to 40 characters and filtered for
 URLs and file paths. Names can still contain page content. Secure input has no label or character count.
+
+### Run recording and replay
+
+Recording is off by default. To opt in, add `"record_runs": true` to your private `hand.json` and start a new sleight
+session. Recording works with the hand and public stream off. `SLEIGHT_HAND=0` disables recording too. Keep the file's
+other fields and its mode `600`. Claude cannot change this setting.
+
+Recordings contain the privacy-filtered cursor events and small JPEG copies of screenshots sleight already took.
+Recording never takes another screenshot. Screenshots can contain private content, including document text and account
+details. Label settings still apply to events. Recorded narration appears as text when an event includes `say`.
+
+Each session writes `~/Library/Application Support/sleight/runs/<date>-<session>.jsonl`, mode `600`, up to 5 MiB including
+images. Each JPEG is at most 960 pixels on its longest side and 192 KiB. At most two images can wait for conversion;
+excess images are skipped. The event queue holds at most 256 records. A full file stops recording that session.
+Starting a recording removes files older than 30 days, oldest first.
+
+`sleight-mcp runs list` opens a local recording index. `sleight-mcp runs open <id>` opens a replay with a timeline scrubber,
+screenshots, labels and cursor points. Both commands write a private HTML file in a temporary folder and open it in your
+default browser. The HTML contains only the selected recording's data, or the index's IDs and byte counts. It has no network
+access or external scripts. Treat exported HTML as private too.
+
+Cursor points draw over a native window screenshot only when the recording has matching screen geometry. Other images
+remain visible with a geometry notice. Scheduled points are predictions. The viewer replaces each screenshot when the next
+one arrives. It does not infer what changed between captures.
+
+`sleight-mcp runs clear` deletes all recordings. Run it yourself in a terminal. It doesn't ask for Touch ID confirmation.
+Existing sessions stop writing if their recording file was removed. Temporary HTML copies remain until you remove them
+or the system clears its temporary folder. Claude may run list and open, but cannot run clear.
 
 ## Preapproved apps
 

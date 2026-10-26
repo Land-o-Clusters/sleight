@@ -184,13 +184,13 @@ const listingOnly = rest => rest.length === 0 || rest.length === 1 && rest[0] ==
 // The launcher's commands that change what sleight may do, each with the forms Claude's shell may run.
 const cursorReads = rest => ['list', 'check', 'status'].includes(rest[0]);
 const LAUNCHER_COMMANDS = [['turbo', statusOnly, 'turbo.json'], ['hand', statusOnly, 'hand.json'], ['cursor', cursorReads, 'hand.json'],
-  ['permissions', listingOnly, 'permissions.json']];
+  ['runs', rest => rest[0] === 'list' || rest[0] === 'open', 'runs'], ['permissions', listingOnly, 'permissions.json']];
 // Fail closed. A Bash command that names the launcher (sleight-mcp or launch.mjs) beside one of these subcommand words passes
 // only as a plain direct invocation of a read-only form: literal arguments, and no expansion, substitution, glob, brace,
 // redirection, heredoc, subshell, xargs, parallel or eval anywhere in it. Any other spelling is refused, except read-only
 // tools (grep, cat, git log) that can't run anything. The guard doesn't try to read what the shell would make of it.
 const LAUNCHER_NAME = /sleight-mcp|launch\.mjs/;
-const SUBCOMMAND = /(?<![\w-])(?:hand|turbo|permissions|cursor)(?![\w.-])/; // not turbo.json or hand.json
+const SUBCOMMAND = /(?<![\w-])(?:hand|turbo|permissions|cursor|runs)(?![\w.-])/; // not turbo.json or hand.json
 const INPUT_RUNNERS = String.raw`(?<![\w-])(?:\w*args|parallel|eval|source)(?![\w-])`;
 const EXPANDS = String.raw`[$` + '`' + String.raw`*?[\]{}]`;
 // With the launcher named but no subcommand word: text that could still make one.
@@ -248,8 +248,8 @@ function commandWord(segment, prefixes = PREFIXES) {
   }
   return { assigned };
 }
-const READ_FORMS = ['hand status', 'turbo status', 'permissions', 'permissions list', 'cursor list', 'cursor status'];
-const readForm = args => READ_FORMS.includes(args.join(' ')) || args.length === 3 && args[0] === 'cursor' && args[1] === 'check' && /^[\w-]{1,64}$/.test(args[2]);
+const READ_FORMS = ['hand status', 'turbo status', 'permissions', 'permissions list', 'cursor list', 'cursor status', 'runs list'];
+const readForm = args => args.length === 3 && args[0] === 'runs' && args[1] === 'open' && /^\d{4}-\d{2}-\d{2}-[a-f0-9]{32}$/.test(args[2]) || READ_FORMS.includes(args.join(' ')) || args.length === 3 && args[0] === 'cursor' && args[1] === 'check' && /^[\w-]{1,64}$/.test(args[2]);
 // The launcher run directly, or by node with -- options, with literal arguments in a read form. at is its first word.
 function launcherReadForm(plain, at) {
   if (plain[at]?.split('/').at(-1) === 'node') { at++; while (plain[at]?.startsWith('--')) at++; }

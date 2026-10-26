@@ -88,11 +88,11 @@ export function createBrowserHand({ client, loadClient = () => import('./client.
   readMetrics = page => trustedLocatorRead(page.locator('html'), pageMetrics), trace = () => {}, now = () => performance.now(),
   defer = fn => setImmediate(fn), env = process.env, setting = handSettingReader(env), events, record = cursorRecord } = {}) {
   setting = createHandSettingReader({ setting });
-  if (env.SLEIGHT_HAND === '0' || !(setting().enabled || setting().stream) || typeof locate !== 'function') return undefined;
+  if (env.SLEIGHT_HAND === '0' || !(setting().enabled || setting().stream || setting().record_runs) || typeof locate !== 'function') return undefined;
   let closed = false, resolved = client ?? undefined, loading;
   const load = () => loading ??= (client ? Promise.resolve(client) : Promise.resolve().then(loadClient).then(m => m.createHandClient(clientOptions)))
     .then(c => (resolved = c && typeof c.send === 'function' ? c : null), () => (resolved = null));
-  const stream = () => { try { return events ? events.enabled : setting().stream === true || cursorDrawing(setting()); } catch { return false; } };
+  const stream = () => { try { return events ? events.enabled : setting().stream === true || setting().record_runs === true || cursorDrawing(setting()); } catch { return false; } };
   const live = () => !closed && (resolved && resolved.enabled !== false || stream());
   const publish = (token, phase, reason) => {
     if (!token?.cursor || closed) return;
@@ -193,13 +193,13 @@ export function workerHandClient(channel, pid, { env = process.env, setting = ha
     const at = now();
     if (at < checked || at - checked >= 250) {
       checked = at;
-      try { const s = setting(); enabled = env.SLEIGHT_HAND !== '0' && (sharedUi && s?.enabled === true || s?.stream === true || cursorDrawing(s)); } catch { enabled = false; }
+      try { const s = setting(); enabled = env.SLEIGHT_HAND !== '0' && (sharedUi && s?.enabled === true || s?.stream === true || s?.record_runs === true || cursorDrawing(s)); } catch { enabled = false; }
     }
     return enabled && channel.connected !== false;
   };
   return { get enabled() { return live() && sharedUi && setting().enabled === true; }, pid,
     send(frame) { if (sharedUi && live() && setting().enabled) try { channel.send({ version: 3, hand: frame }); } catch {} },
-    event(record) { if (live() && (setting().stream || cursorDrawing(setting()))) try { channel.send({ version: 3, cursor: record }); } catch {} },
+    event(record) { if (live() && (setting().stream || setting().record_runs || cursorDrawing(setting()))) try { channel.send({ version: 3, cursor: record }); } catch {} },
     close() {} };
 }
 

@@ -916,6 +916,7 @@ export function createRelay({
 }) {
   const localCursor = new Map();
   const cursorStatus = (state, detail) => { try { cursor?.status(state, detail); } catch {} };
+  const recordRunScreenshot = (content, detail) => { try { cursor?.screenshot?.(content, detail); } catch {} };
   const localCursorResult = (id, failed, phase) => {
     const record = localCursor.get(id); if (!record) return;
     localCursor.delete(id);
@@ -2533,6 +2534,7 @@ export function createRelay({
   }
   // The last screenshot's size per app and window title, for drag to convert Claude's pixels.
   function recordScreenshot(content, certifiedRead, target) {
+    recordRunScreenshot(content, { source: 'native', windowId: certifiedRead?.number ?? target?.windowNumber ?? target?.nativeIdentity?.windowNumber });
     const shot = screenshotOf(content, target);
     if (!shot) return;
     const entry = screenshots.get(shot[0].toLowerCase()) ?? { byTitle: {}, byWindow: {} };
@@ -3306,6 +3308,7 @@ export function createRelay({
       result = { content: [{ type: 'text', text: String(err?.message ?? err) }], isError: true };
     }
     localRunning.delete(msg.id);
+    recordRunScreenshot(result?.content, { source: 'local' });
     localCursorResult(msg.id, !!result?.isError);
     if (!running.has(msg.id)) return; // Stop already settled this request after collection.
     if (plan) flowRules.observe(result, plan);
@@ -4225,6 +4228,7 @@ export function createRelay({
         finishedCall(msg.id);
         const rendered = result.text;
         const content = [{ type: 'text', text: rendered }, ...(result.images ?? [])];
+        recordRunScreenshot(result.images, { source: 'turbo' });
         const rules = rulesFor(true);
         if (rules) content.push(ruleItem(rules));
         toClient({ jsonrpc: '2.0', id: msg.id, result: { isError: result.isError,
@@ -6272,9 +6276,9 @@ export function createRelay({
     clearTimeout(idleTimer);
     hand?.close();
     localCursor.clear();
-    cursor?.close();
+    const recordingClosed = cursor?.close();
     try { dispose(); } finally { releaseLeases(); }
-    return Promise.all([clipboard?.close(), directBrowser?.end()]);
+    return Promise.all([clipboard?.close(), directBrowser?.end(), recordingClosed]);
   }
   async function shutdown() {
     closing = true;

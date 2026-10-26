@@ -47,6 +47,28 @@ const read = async h => {
   await settle();
 };
 
+test('run recording receives existing native and local screenshot pixels without another engine request', async () => {
+  const captures = [], cursor = { status() {}, close() {}, screenshot: (content, detail) => { if (content?.some(i => i.type === 'image')) captures.push({ content, detail }); } };
+  const localImage = { type: 'image', mimeType: 'image/png', data: png(100, 50) };
+  const h = harness({ cursor, localTools: { tools: [{ name: 'hover', inputSchema: { type: 'object' } }],
+    call: async () => ({ content: [localImage] }) } });
+  await read(h);
+  assert.equal(captures.length, 1); assert.equal(captures[0].detail.source, 'native');
+  assert.equal(captures[0].content.find(i => i.type === 'image').data, png(464, 640));
+  const before = h.toServer.length;
+  h.fromClient({ jsonrpc: '2.0', id: 9, method: 'tools/call', params: { name: 'hover', arguments: { app: 'Calculator' } } });
+  await settle();
+  assert.equal(captures.length, 2); assert.equal(captures[1].detail.source, 'local'); assert.deepEqual(captures[1].content, [localImage]);
+  assert.equal(h.toServer.length, before); h.relay.close();
+});
+
+test('a broken optional screenshot recorder cannot lose the native reply', async () => {
+  const h = harness({ cursor: { status() {}, close() {}, screenshot() { throw Error('fixture disk fault'); } } });
+  await read(h);
+  assert.equal(h.toClient.at(-1).id, 1); assert.equal(h.toClient.at(-1).result.content.some(i => i.type === 'image'), true);
+  h.relay.close();
+});
+
 function recorder() {
   const events = [];
   return { events, admit: (id, input) => events.push(['admit', id, input]), approval: (id, meta) => events.push(['approval', id, meta?.tool_name]),

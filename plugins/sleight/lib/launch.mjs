@@ -1405,7 +1405,7 @@ export function allowCommand(args, { list = listPreapproved, remove = removePrea
 
 // The command families whose settings-changing forms run only when a person starts them in a terminal (person-gate.mjs,
 // GATED_COMMANDS). The list lives here too so the server's own start never loads the gate.
-const SETTINGS_COMMANDS = ['hand', 'turbo', 'cursor', 'permissions', 'allow', 'routine', 'watch'];
+const SETTINGS_COMMANDS = ['hand', 'turbo', 'cursor', 'permissions', 'allow', 'routine', 'watch', 'runs'];
 
 /** The refusal line for a settings command, or undefined when it may run: the terminal check (person-gate.mjs) first, then
  *  for high-stakes changes macOS's Touch ID or password sheet (person-confirm.mjs). The launcher dispatches only on undefined,
@@ -1444,6 +1444,9 @@ if (isMainModule(import.meta.url)) {
     catch (err) { process.stderr.write(`sleight: ${err.message}\n`); process.exitCode = 1; }
   } else if (process.argv[2] === 'cursor') {
     try { process.exitCode = await (await import('./hand/cursor-command.mjs')).cursorCommand(process.argv.slice(3)); }
+    catch (err) { process.stderr.write(`sleight: ${err.message}\n`); process.exitCode = 1; }
+  } else if (process.argv[2] === 'runs') {
+    try { process.exitCode = await (await import('./runs/command.mjs')).runsCommand(process.argv.slice(3)); }
     catch (err) { process.stderr.write(`sleight: ${err.message}\n`); process.exitCode = 1; }
   } else if (process.argv[2] === 'turbo-state') {
     const { readInstalledConfig } = await import('./direct-browser/installed-config.mjs');
