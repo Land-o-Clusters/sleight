@@ -110,6 +110,7 @@ test('idle-only resolves all 19 events and the callout is generated from that ta
 for (const kind of ['png', 'webp']) test(`Codex v2 ${kind} copies bytes unchanged, with 9 own states and private atomic installation`, t => {
   const w = world(t), bytes = pet(w, kind), source = api.prepareCharacterImport(w.folder);
   assert.equal(source.resolved.filter(s => s.own).length, 9); assert.equal(source.manifest.license, 'unknown');
+  assert.equal(source.manifest.scale, 0.5, 'a Codex cell draws as 96x104 pt');
   assert.match(api.characterCallout(source), /License: not stated/);
   const installed = api.installCharacter(source, { root: w.root });
   assert.deepEqual(fs.readFileSync(join(installed, `sheet.${kind}`)), bytes);
@@ -138,8 +139,8 @@ for (const [name, bytes, error] of [
   ['duplicate IHDR', Buffer.concat([png().subarray(0, 33), png().subarray(8)]), /duplicate PNG IHDR/],
 ]) test(`refuses PNG ${name}`, () => assert.throws(() => api.imageDimensions(bytes, '.png'), error));
 for (const selector of [['extra'], {}, 1, null, 'constructor', '__proto__']) test(`refuses non-string or unknown state sheet ${JSON.stringify(selector)}`, t => {
-  const w = world(t); w.data.extra = 'extra.webp'; w.put('extra.webp', webp(1536, 3120));
-  w.data.states.click = { sheet: selector, row: 14, frames: 1, ms: 100, loop: false }; w.save();
+  const w = world(t); w.data.extra = 'extra.webp'; w.put('extra.webp', webp(1536, 2288));
+  w.data.states.click = { sheet: selector, row: 10, frames: 1, ms: 100, loop: false }; w.save();
   assert.throws(() => w.load(), /states\.click\.sheet.*sheet or extra/);
 });
 test('CLI refuses unknown license in a source character.json pack', async t => {
@@ -481,8 +482,12 @@ test('total byte and pixel caps cover both sheets and preview', t => {
   const w = world(t); w.data.extra = 'extra.webp'; w.put('extra.webp', webp()); w.save();
   fs.truncateSync(join(w.folder, 'sheet.png'), 8 * 1024 ** 2); fs.truncateSync(join(w.folder, 'extra.webp'), 8 * 1024 ** 2);
   assert.throws(() => w.load(), /entries: total character size exceeds 16 MiB/);
+  // The hand host's caps (cells at most 192x208, sheets at most 1536x2288) keep two sheets and a preview under the 16 MP
+  // budget, so a larger cell or sheet fails first, with the reason the host would give.
   w.put('sheet.png', png(4096, 2080)); w.put('extra.webp', webp(4096, 2080)); w.data.frame.w = 512; w.data.grid.rows = 10; w.save();
-  assert.throws(() => w.load(), /sheet\/extra\/preview: total character pixel budget exceeded/);
+  assert.throws(() => w.load(), /frame: invalid frame dimensions \(cells are at most 192x208\)/);
+  w.put('sheet.png', png(1536, 2288)); w.put('extra.webp', webp(1536, 2496)); w.data.frame = { w: 192, h: 208 }; w.data.grid.rows = 11; w.save();
+  assert.throws(() => w.load(), /"extra\.webp" frame\/grid: sheet too large to draw \(at most 1536x2288\)/);
 });
 
 test('CLI refuses non-TTY without --yes after printing details, accepts --yes, checks, lists and removes', async t => {
