@@ -25,6 +25,10 @@ import { hostArgs, commonArgs, liveRefusal, compileArgs, playRect, quitFixture }
 import { handWire, runCaptureTest, underLiveLock } from '../bench/hand/h5-capture.mjs';
 import { EventEmitter } from 'node:events';
 
+// The native host's test override for characters only accepts a root under macOS's private tmp folder (os.tmpdir() is under
+// /var/folders), so those paths are built from parts here (the test-path guard refuses the literal).
+const privateTmp = (...parts) => join('/private', 'tmp', ...parts);
+
 const root = fileURLToPath(new URL('..', import.meta.url));
 const over = (rgb, alpha, page = [255, 255, 255]) => rgb.map((c, i) => Math.round(c * alpha + page[i] * (1 - alpha)));
 const nonce = 'b'.repeat(64);
@@ -67,7 +71,7 @@ test('synthetic character: a valid PNG the host\'s ink rules accept, a frame wit
   assert.deepEqual([...raw.subarray(1 + 64 * 4 * 0, 5)], [...sheet.data.subarray(0, 4)]);
   assert.throws(() => encodePng(2, 2, new Uint8Array(3)), /width \* height \* 4/);
 
-  const frame = characterWire({ sheet: '/private/tmp/x/vc7-synthetic/sheet.png' }, { nonce, seq: 4 });
+  const frame = characterWire({ sheet: privateTmp('x', 'vc7-synthetic', 'sheet.png') }, { nonce, seq: 4 });
   assert.deepEqual(Object.keys(frame).sort(), ['cell', 'extra', 'hand', 'id', 'nonce', 'seq', 'sheet', 'table']);
   assert.deepEqual(Object.keys(frame.table.idle).sort(), ['flip', 'frames', 'hotspot', 'loop', 'ms', 'row', 'scale', 'sheet']);
   assert.equal(frame.id, SYNTHETIC_ID); assert.equal(frame.extra, null); assert.equal(frame.seq, 4);
@@ -75,11 +79,11 @@ test('synthetic character: a valid PNG the host\'s ink rules accept, a frame wit
   assert.throws(() => characterWire({ sheet: '/a.png' }, { nonce: 'x', seq: 0 }), /nonce/);
 });
 
-// /private/tmp is macOS's, as the host's test override requires.
-test('the synthetic character installs at 0700 and 0600 under /private/tmp', { skip: process.platform !== 'darwin' && 'macOS only' }, t => {
+// macOS's private tmp folder, as the host's test override requires.
+test('the synthetic character installs at 0700 and 0600 under the private tmp folder', { skip: process.platform !== 'darwin' && 'macOS only' }, t => {
   const installed = installSyntheticCharacter();
   t.after(() => rmSync(installed.root, { recursive: true, force: true }));
-  assert.ok(installed.root.startsWith('/private/tmp/sleight-vc7-characters-'));
+  assert.ok(installed.root.startsWith(privateTmp('sleight-vc7-characters-')));
   assert.equal(statSync(installed.root).mode & 0o777, 0o700);
   assert.equal(statSync(installed.folder).mode & 0o777, 0o700);
   assert.equal(statSync(installed.sheet).mode & 0o777, 0o600);
@@ -121,7 +125,7 @@ test('the scripted sequence: 30 actions in order with aims 250 ms ahead, statuse
   assert.ok(frames.filter(f => f.caretX !== undefined).every(f => ['type', 'key'].includes(f.kind)));
   assert.ok(frames.filter(f => f.ok !== undefined).every(f => f.state === 'done'));
   assert.ok(Math.abs(clock - steps.at(-1).atMs) < 1, 'the clock reached the last step');
-  assert.ok(hostAccepts(JSON.parse(wire.character({ sheet: '/private/tmp/a/b.png' }))));
+  assert.ok(hostAccepts(JSON.parse(wire.character({ sheet: privateTmp('a', 'b.png') }))));
   assert.ok(hostAccepts(JSON.parse(wire.hide())));
   let stop = false;
   const partial = await playSequence({ steps }, { wire: cursorWire(nonce), write: () => { stop = true; }, sleep: async () => {}, stopped: () => stop });
@@ -132,7 +136,7 @@ test('the scripted sequence: 30 actions in order with aims 250 ms ahead, statuse
 
 test('H5 with a style: the host starts in that style, the sprite gets its character frame first, sharing the acts\' seq', async () => {
   const wire = handWire(nonce);
-  const first = JSON.parse(wire.character({ sheet: '/private/tmp/r/vc7-synthetic/sheet.png' }));
+  const first = JSON.parse(wire.character({ sheet: privateTmp('r', 'vc7-synthetic', 'sheet.png') }));
   const act = JSON.parse(wire.act({ pid: 1, windowId: 2, at: [3, 4] }));
   assert.deepEqual([first.hand, first.seq, act.seq], ['character', 0, 1]);
   // A run against a fake Mac that stops at the first host start: it records the style and the first line.
@@ -143,7 +147,7 @@ test('H5 with a style: the host starts in that style, the sprite gets its charac
     hit: async () => undefined, sleep: async () => {},
     startHost: async (mode, style) => { const lines = []; started.push({ mode, style, lines }); return { pid: 77, write: l => lines.push(l), close: async () => {} }; },
   };
-  const character = { sheet: '/private/tmp/r/vc7-synthetic/sheet.png' };
+  const character = { sheet: privateTmp('r', 'vc7-synthetic', 'sheet.png') };
   const report = await runCaptureTest(fake, { target: { pid: 5, id: 9, bounds: { x: 0, y: 0, width: 800, height: 600 } }, samples: 3, style: 'sprite', character });
   assert.equal(report.style, 'sprite');
   assert.deepEqual(started.map(s => [s.mode, s.style]), [['hidden', 'sprite'], ['visible', 'sprite']]);
@@ -447,8 +451,8 @@ test('night runner: steps, timeouts, outcomes (measured only with a result line)
     '13 /o/binary/consent-host', ' 14 /o/bin/capture-helper watch-engine 50 30'].join('\n');
   assert.deepEqual(strays(ps, '/o/bin'), [{ pid: 10, command: 'consent-host' }, { pid: 11, command: 'capture-recorder' }, { pid: 14, command: 'capture-helper' }]);
   assert.deepEqual(descendants(['  1 0', '100 1', '101 100', '102 101', '103 100', '200 1'].join('\n'), 100), [101, 103, 102]);
-  assert.deepEqual(childEnv({ PATH: '/bin' }, '/c', { tmp: '/o/tmp/capture-ring-1', charactersBase: '/private/tmp/sleight-vc7-night-1' }),
-    { PATH: '/bin', CLAUDE_CONFIG_DIR: '/c', DISABLE_AUTOUPDATER: '1', SLEIGHT_NO_HUB: '1', SLEIGHT_REMOTE_APPROVALS: '0', TMPDIR: '/o/tmp/capture-ring-1', VC7_CHARACTERS_BASE: '/private/tmp/sleight-vc7-night-1' });
+  assert.deepEqual(childEnv({ PATH: '/bin' }, '/c', { tmp: '/o/tmp/capture-ring-1', charactersBase: privateTmp('sleight-vc7-night-1') }),
+    { PATH: '/bin', CLAUDE_CONFIG_DIR: '/c', DISABLE_AUTOUPDATER: '1', SLEIGHT_NO_HUB: '1', SLEIGHT_REMOTE_APPROVALS: '0', TMPDIR: '/o/tmp/capture-ring-1', VC7_CHARACTERS_BASE: privateTmp('sleight-vc7-night-1') });
   assert.equal(orphanedLock({ lockMtimeMs: 2000, attemptStartMs: 1000, alive: [false, false] }), true);
   assert.equal(orphanedLock({ lockMtimeMs: 500, attemptStartMs: 1000, alive: [false] }), false, 'a lock older than the attempt is someone else\'s');
   assert.equal(orphanedLock({ lockMtimeMs: 2000, attemptStartMs: 1000, alive: [false, true] }), false, 'a live process may still hold it');

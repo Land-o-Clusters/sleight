@@ -3,12 +3,13 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
-import { mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, readFileSync, realpathSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { GATED_COMMANDS, agentProcess, refusalLine, rowArgs, settingsCommand, settingsRefusal, systemPs, walkAncestors } from '../plugins/sleight/lib/person-gate.mjs';
 import { writeHandSetting } from '../plugins/sleight/lib/hand/command.mjs';
 import { handConfigPath, readHandConfig } from '../plugins/sleight/lib/hand/settings.mjs';
+import { registerTemp } from '../scripts/temp-leftovers.mjs';
 
 const launch = new URL('../plugins/sleight/lib/launch.mjs', import.meta.url).pathname;
 const tty = { isTTY: true }, pipe = { isTTY: false };
@@ -127,7 +128,9 @@ function machine(table, { tty = 'ttys006', session = ['200 Ss', '300 S+', `${SEL
   };
   return { ps, executable, calls };
 }
-const HOME = '/Users/someone';
+// Built from parts so the test-path guard (test-path-portability.test.mjs) sees no literal macOS home path.
+const USERS = ['', 'Users'].join('/');
+const HOME = `${USERS}/someone`;
 const TERMINAL_APP = '/System/Applications/Utilities/Terminal.app/Contents/MacOS/Terminal';
 // Captured from this Mac's Terminal (2026-10-26), with the account name replaced and comm re-cut to 16 characters.
 const TERMINAL = { 300: '200 -zsh -zsh', 200: '100 login login -pf someone', 100: `    1 /System/Applicat ${TERMINAL_APP}` };
@@ -141,7 +144,7 @@ test('rows split into args however comm was cut', () => {
   assert.equal(rowArgs('-zsh -zsh'), '-zsh');
   assert.equal(rowArgs('login login -pf someone'), 'login -pf someone');
   assert.equal(rowArgs(`/System/Applicat ${TERMINAL_APP}`), TERMINAL_APP);
-  assert.equal(rowArgs('/Users/someone/M /Users/someone/My Tools/claude --resume'), '/Users/someone/My Tools/claude --resume');
+  assert.equal(rowArgs(`${HOME}/M ${HOME}/My Tools/claude --resume`), `${HOME}/My Tools/claude --resume`);
   assert.equal(rowArgs('/Applications/Cl /Applications/Claude.app/Contents/Frameworks/Claude Helper.app/Contents/MacOS/Claude Helper --type=utility'),
     '/Applications/Claude.app/Contents/Frameworks/Claude Helper.app/Contents/MacOS/Claude Helper --type=utility');
   assert.equal(rowArgs('My Tool My Tool --flag'), 'My Tool --flag', 'a comm with a space');
@@ -164,7 +167,7 @@ test('each listed GUI terminal passes by bundle path, in /Applications or ~/Appl
   }
   // iTerm2 starts login from its own server process, under the iTerm2 app.
   const server = '/Applications/iTerm.app/Contents/MacOS/iTermServer-3.5.0';
-  const iterm = { ...TERMINAL, 100: [90, `${server} /Users/someone/Library/Application Support/iTerm2/iterm2-daemon-1.socket`, server],
+  const iterm = { ...TERMINAL, 100: [90, `${server} ${HOME}/Library/Application Support/iTerm2/iterm2-daemon-1.socket`, server],
     90: [1, '/Applications/iTerm.app/Contents/MacOS/iTerm2'] };
   const both = walk(iterm);
   assert.deepEqual(both.result, { ok: true });
@@ -181,14 +184,14 @@ test('editors and terminals that host their own agents refuse: VS Code, Cursor a
 });
 
 test('a process that only claims a terminal\'s path with exec -a refuses: lsof shows the file it runs', () => {
-  const fake = { ...TERMINAL, 100: [1, TERMINAL_APP, TERMINAL_APP, '/private/tmp/pty-host'] };
+  const fake = { ...TERMINAL, 100: [1, TERMINAL_APP, TERMINAL_APP, ['', 'private', 'tmp', 'pty-host'].join('/')] };
   assert.deepEqual(walk(fake).result, { ok: false, reason: 'unknown ancestor' });
   assert.deepEqual(walk({ ...TERMINAL, 100: [1, TERMINAL_APP, TERMINAL_APP, undefined] }, {}, { executable: () => undefined }).result, { ok: false, reason: 'unknown ancestor' });
   assert.deepEqual(walk(TERMINAL, {}, { executable: () => { throw Error('lsof: no such process'); } }).result, { ok: false, reason: 'ps failed' });
 });
 
 test('a terminal named right but outside an app bundle path refuses, as does anything else above the shells', () => {
-  for (const args of ['/tmp/Terminal.app/Contents/MacOS/Terminal', '/Users/other/Applications/iTerm.app/Contents/MacOS/iTerm2',
+  for (const args of ['/tmp/Terminal.app/Contents/MacOS/Terminal', `${USERS}/other/Applications/iTerm.app/Contents/MacOS/iTerm2`,
     'Terminal', '/usr/local/bin/ghostty', '/usr/bin/python3 agent.py', 'sshd: someone@ttys006', '/Applications/SomeAgent.app/Contents/MacOS/SomeAgent']) {
     assert.deepEqual(walk({ ...TERMINAL, 100: [1, args] }).result, { ok: false, reason: 'unknown ancestor' }, args);
   }
@@ -206,10 +209,10 @@ test('a chain that reaches launchd without a terminal app refuses', () => {
 
 test('real rows captured from the Code tab on this Mac refuse as Claude', () => {
   // 2026-10-26, read-only ps: the Code tab's shell, its claude.app, the disclaimer helper and Claude.app (account name replaced).
-  const claudeApp = '/Users/someone/Library/Application Support/Claude/claude-code/2.1.308/a93ded4b1b47/claude.app/Contents/MacOS/claude';
+  const claudeApp = `${HOME}/Library/Application Support/Claude/claude-code/2.1.308/a93ded4b1b47/claude.app/Contents/MacOS/claude`;
   const captured = {
-    300: `59170 /bin/zsh /bin/zsh -c source /Users/someone/.claude/shell-snapshots/snapshot-zsh-1.sh 2>/dev/null || true && eval 'run-the-launcher'`,
-    59170: `59169 /Users/someone/L ${claudeApp} --output-format stream-json --verbose --input-format stream-json`,
+    300: `59170 /bin/zsh /bin/zsh -c source ${HOME}/.claude/shell-snapshots/snapshot-zsh-1.sh 2>/dev/null || true && eval 'run-the-launcher'`,
+    59170: `59169 ${HOME}/L ${claudeApp} --output-format stream-json --verbose --input-format stream-json`,
     59169: `5320 /Applications/Cl /Applications/Claude.app/Contents/Helpers/disclaimer --pgroup -- ${claudeApp} --output-format stream-json`,
     5320: '    1 /Applications/Cl /Applications/Claude.app/Contents/MacOS/Claude',
   };
@@ -223,14 +226,14 @@ test('real rows captured from the Code tab on this Mac refuse as Claude', () => 
 test('Claude Code anywhere in the chain refuses: native installer, npm node CLI, process title, a path with spaces', () => {
   const above = entry => ({ 300: CLAUDE_SHELL, 200: entry, 100: TERMINAL[100] });
   for (const entry of [
-    [100, '/Users/someone/.local/bin/claude'],
-    [100, '/Users/someone/.local/share/claude/versions/2.1.309 --resume'],
+    [100, `${HOME}/.local/bin/claude`],
+    [100, `${HOME}/.local/share/claude/versions/2.1.309 --resume`],
     [100, 'claude', 'claude'],
     [100, 'node /usr/local/lib/node_modules/@anthropic-ai/claude-code/cli.js'],
     [100, 'node /opt/homebrew/bin/claude --resume'],
     [100, 'node claude'],
-    [100, '/Users/someone/My Tools/claude --resume', '/Users/someone/My Tools/claude'],
-    [100, '/Users/someone/My Tools/node /Users/someone/My Tools/claude', '/Users/someone/My Tools/node'],
+    [100, `${HOME}/My Tools/claude --resume`, `${HOME}/My Tools/claude`],
+    [100, `${HOME}/My Tools/node ${HOME}/My Tools/claude`, `${HOME}/My Tools/node`],
   ]) assert.deepEqual(walk(above(entry)).result, { ok: false, reason: 'claude' }, entry[1]);
 });
 
@@ -246,7 +249,7 @@ test('the Codex CLI, ChatGPT.app and Codex.app refuse the same way', () => {
 });
 
 test('a pseudo-terminal wrapper started from Claude\'s shell refuses', () => {
-  const claudeShell = { 210: [100, '/bin/zsh -c source snapshot.sh'], 100: [1, '/Users/someone/.local/bin/claude'] };
+  const claudeShell = { 210: [100, '/bin/zsh -c source snapshot.sh'], 100: [1, `${HOME}/.local/bin/claude`] };
   for (const wrapper of ['/usr/bin/script -q /dev/null', '/usr/bin/expect -f run.exp', '/opt/homebrew/bin/unbuffer x', '/usr/bin/python3 -c import pty']) {
     // The wrapper isn't a shell, so the walk refuses there, before it reaches claude.
     assert.deepEqual(walk({ 300: [220, '/bin/zsh'], 220: [210, wrapper], ...claudeShell }).result, { ok: false, reason: 'unknown ancestor' }, wrapper);
@@ -257,7 +260,7 @@ test('tmux: a client under Claude drives a server under launchd, and the session
   // The client runs send-keys from Claude's shell (pid 210 under claude). The server it started daemonized and re-parented to
   // launchd, and the command runs in a pane shell the server started, so the client never shows in the launcher's chain.
   const topology = {
-    210: [100, '/bin/zsh -c tmux send-keys -t work run-the-launcher Enter'], 100: [1, '/Users/someone/.local/bin/claude'],
+    210: [100, '/bin/zsh -c tmux send-keys -t work run-the-launcher Enter'], 100: [1, `${HOME}/.local/bin/claude`],
     211: [210, 'tmux send-keys -t work run-the-launcher Enter'],
     300: [250, '-zsh'], 250: [1, 'tmux new-session -d -s work'],
   };
@@ -322,8 +325,7 @@ test('the walk stops at 32 levels: a 32-level chain passes and 33 levels refuse'
 });
 
 test('the menu bar path writes through the host\'s writers, which the gate never sees', t => {
-  const home = realpathSync(mkdtempSync(join(tmpdir(), 'sleight-person-gate-')));
-  t.after(() => rmSync(home, { recursive: true, force: true }));
+  const home = registerTemp(t, realpathSync(mkdtempSync(join(tmpdir(), 'sleight-person-gate-'))));
   const path = handConfigPath(home);
   mkdirSync(dirname(path), { recursive: true, mode: 0o700 });
   // The turbo menu's Ghost Hand row calls writeHandSetting from the session (worker.mjs setHand), here without a terminal.

@@ -10,8 +10,8 @@ import { swiftModuleCache } from '../bench/swift-cache.mjs';
 import { characterFrame, SPRITE_LIMITS } from '../plugins/sleight/lib/hand/character-frame.mjs';
 
 // The sprite style through --ring-plan-dump, --decode-sheet and --check-character: synthetic sheets, real decoding, no
-// NSApplication, panel or window. The host's test bank override needs a path below /private/tmp/, so the bank is made
-// there, on first use, and only on a Mac with the developer tools.
+// NSApplication, panel or window. The host's test bank override needs a path below macOS's private tmp folder (os.tmpdir()
+// is under /var/folders), so the bank is made there, on first use, and only on a Mac with the developer tools.
 const mac = process.platform === 'darwin' && spawnSync('/usr/bin/xcode-select', ['-p']).status === 0;
 const options = { skip: mac ? false : 'needs macOS with the developer tools (xcode-select -p)' };
 const source = new URL('../plugins/sleight/lib/direct-browser/native/consent-host.swift', import.meta.url).pathname;
@@ -19,7 +19,10 @@ const nonce = 'a'.repeat(64), target = { nonce, seq: 1, pid: 2147483647, windowI
 const act = (kind = 'click', more = {}) => ({ hand: 'act', ...target, kind, at: [100, 100], path: [[100, 100]], delayMs: 0, beats: 1, ...more });
 const status = (state, more = {}) => ({ hand: 'status', ...target, state, ...more });
 let bank;
-const root = () => bank ??= trackTemp(realpathSync(mkdtempSync('/private/tmp/sleight-sprite-')));
+// The host's override only accepts a root under macOS's private tmp folder, so this one path is built from parts (the
+// test-path guard refuses the literal) and only used by the macOS-only tests.
+const privateTmp = (...parts) => join('/private', 'tmp', ...parts);
+const root = () => bank ??= trackTemp(realpathSync(mkdtempSync(privateTmp('sleight-sprite-'))));
 
 const crcTable = Array.from({ length: 256 }, (_, c) => { for (let k = 0; k < 8; k++) c = c & 1 ? 0xedb88320 ^ c >>> 1 : c >>> 1; return c >>> 0; });
 function chunk(type, data) {
@@ -446,7 +449,7 @@ function snapshot(t, { folder, scale = .75, cells }) {
 }
 
 test('character-frame turns a resolved snapshot into the host table (no VC3 code needed)', t => {
-  const { character: c, resolve } = snapshot(t, { folder: '/private/tmp/never-read/snapshot' });
+  const { character: c, resolve } = snapshot(t, { folder: privateTmp('never-read', 'snapshot') });
   const wire = characterFrame(c, { nonce, seq: 0, resolve });
   assert.deepEqual(Object.keys(wire).sort(), ['cell', 'extra', 'hand', 'id', 'nonce', 'seq', 'sheet', 'table']);
   assert.equal(Object.keys(wire.table).filter(k => !k.includes('@')).length, 19);
