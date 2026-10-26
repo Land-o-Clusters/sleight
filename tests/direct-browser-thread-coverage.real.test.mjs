@@ -8,7 +8,7 @@ import { join } from 'node:path';
 import { performance } from 'node:perf_hooks';
 import { chromium } from '../plugins/sleight/vendor/playwright-core/index.mjs';
 import { newHook, hookSource } from '../plugins/sleight/lib/direct-browser/page.mjs';
-import { snapshot } from '../plugins/sleight/lib/direct-browser/snapshot.mjs';
+import { snapshot, acknowledgeSnapshot } from '../plugins/sleight/lib/direct-browser/snapshot.mjs';
 import { readWhole } from '../plugins/sleight/lib/direct-browser/whole.mjs';
 
 const pin = JSON.parse(readFileSync(new URL('../plugins/sleight/vendor/playwright-core/browsers.json', import.meta.url)))
@@ -109,6 +109,47 @@ test('TL1 loader scope and scroll-step cap', { skip, timeout: 15000 }, async t =
   assert.match(result.text, /Show more \(link\)/);
   assert.match(result.text, /Show more \(form or submit\)/);
   assert.deepEqual(await h.page.evaluate(() => pressed), ['older']);
+  assert.equal(h.steps(), 1);
+  const rows = itemLines(result.text);
+  assert.ok(rows.length > 0, 'the step cap keeps the rows already read');
+  const held = await readWhole(h.entry, { from: 1 });
+  assert.deepEqual(itemLines(held.text), rows, 'whole.from returns the capped transcript');
+  assert.match(held.text, /step cap/);
+  assert.equal(h.steps(), 1, 'paging the capped transcript never scrolls');
+  assert.equal(h.page.url(), h.url);
+  assert.equal(h.context.pages().length, 1);
+  assert.equal(h.requests.filter(request => !fixtureFiles.has(request.path) || request.method !== 'GET').length, 0);
+});
+
+for (const bound of [false, true]) test('TL1 bare-div scroller inside main never clicks a sidebar loader ' + (bound ? 'with a ref' : 'without a ref'), { skip, timeout: 15000 }, async t => {
+  const h = await fixture(t, 'feed');
+  await h.page.evaluate(() => {
+    window.pressed = [];
+    document.body.innerHTML = '<main style="display:flex"><div id="bare" style="width:780px;height:560px;overflow:auto"></div><aside><button type="button">Load more</button></aside></main>';
+    const box = document.querySelector('#bare');
+    for (let n = 1; n <= 80; n++) {
+      const row = document.createElement('div');
+      row.style.height = '24px';
+      row.dataset.messageId = String(n);
+      row.textContent = `plain row ${n}`;
+      if (n === 1) row.innerHTML += '<button type="button">Thread anchor</button>';
+      box.append(row);
+    }
+    document.querySelector('aside button').onclick = () => pressed.push('sidebar');
+  });
+  // Bind the bare scroller through a delivered child ref, without adding list roles.
+  let ref;
+  if (bound) {
+    const plain = await snapshot(h.page);
+    ref = /button "Thread anchor" \[ref=(e\d+)\]/.exec(plain.text)?.[1];
+    assert.ok(ref, plain.text);
+    acknowledgeSnapshot(h.page, plain.number);
+  }
+  const result = await readWhole(h.entry, { direction: 'down', max_steps: 1, max_seconds: 10 }, { ref });
+  assert.match(result.text, /step cap/);
+  assert.deepEqual(await h.page.evaluate(() => pressed), []);
+  assert.ok(itemLines(result.text).some(row => row.text.startsWith('plain row ')), result.text);
+  assert.match(result.text, /Clicks: 0\./);
   assert.equal(h.steps(), 1);
   assert.equal(h.page.url(), h.url);
   assert.equal(h.context.pages().length, 1);

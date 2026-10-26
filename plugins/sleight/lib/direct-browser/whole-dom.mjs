@@ -16,7 +16,7 @@ function wholeDOM(ref) {
   const scrollable=node=>node===document.scrollingElement||/(auto|scroll)/.test(getComputedStyle(node).overflowY)&&node.scrollHeight>node.clientHeight;
   const nodes=all(document);
   if(ref){for(let n=ref;n;n=parent(n))if(scrollable(n)){box=n;break;}}
-  if(!box){const candidates=nodes.filter(n=>{const r=n.getBoundingClientRect();return visible(n)&&r.width>=200&&r.height>=150&&scrollable(n);});
+  if(!box){const candidates=nodes.filter(n=>{const r=n.getBoundingClientRect();return n!==document.scrollingElement&&visible(n)&&r.width>=200&&r.height>=150&&scrollable(n);});
     candidates.sort((a,b)=>(/^(log|feed|list|grid|main)$/.test(role(b))-/^(log|feed|list|grid|main)$/.test(role(a)))||text(b).length-text(a).length);
     box=candidates[0];
     if(box){const r=box.getBoundingClientRect();if(r.width*r.height<innerWidth*innerHeight/2)box=null;}}
@@ -67,8 +67,9 @@ function wholeDOM(ref) {
     // Sibling loaders belong to the closest semantic thread or its scroller.
     // Document-wide scrolling must not activate another feed's buttons.
     region=root;
-    for(let n=parent(root);n&&n!==document.scrollingElement;n=parent(n)){
-      if(n===box||/^(log|feed|list|grid|main)$/.test(role(n))||n.localName==='main'){region=n;break;}
+    if(root!==box)for(let n=parent(root);n&&n!==document.scrollingElement;n=parent(n)){
+      if(n===box){region=box;break;}
+      if(/^(log|feed|list|grid|main)$/.test(role(n))||n.localName==='main'){region=n;break;}
     }
     observeItems();
   };

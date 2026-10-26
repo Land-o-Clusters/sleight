@@ -137,6 +137,11 @@
           "max_seconds": {
            "type": "number"
           },
+          "max_steps": {
+           "type": "integer",
+           "minimum": 1,
+           "maximum": 500
+          },
           "max_clicks": {
            "type": "integer",
            "minimum": 0,
