@@ -2840,7 +2840,7 @@ func spriteSheetHeader(_ b: [UInt8]) -> (format: String, width: Int, height: Int
 // Runs `--decode-sheet` on the open file and reads exactly w*h*4 bytes within 2 s. The child gets the file as stdin, a pipe
 // as stdout and /dev/null as stderr; POSIX_SPAWN_CLOEXEC_DEFAULT keeps every other descriptor (the consent channel's fds 3
 // and 4 among them) out of it. The returned buffer is malloc'd; the caller owns it.
-func spriteDecodeInChild(fd: Int32, width: Int, height: Int, format: String) throws -> UnsafeMutableRawPointer {
+func spriteDecodeInChild(fd: Int32, width: Int, height: Int, format: String, cancelled: () -> Bool = { false }) throws -> UnsafeMutableRawPointer {
     guard let executable = Bundle.main.executablePath else { throw SpriteLoadError.child }
     var pipeEnds: [Int32] = [0, 0]
     guard pipe(&pipeEnds) == 0 else { throw SpriteLoadError.child }
@@ -2860,15 +2860,17 @@ func spriteDecodeInChild(fd: Int32, width: Int, height: Int, format: String) thr
     guard spawned == 0 else { throw SpriteLoadError.child }
     let total = width * height * 4, deadline = Date().addingTimeInterval(2)
     guard let buffer = malloc(total) else { kill(pid, SIGKILL); var s: Int32 = 0; waitpid(pid, &s, 0); throw SpriteLoadError.child }
-    var got = 0, extra = false, timedOut = false
+    var got = 0, extra = false, timedOut = false, stopped = false
     var poller = pollfd(fd: pipeEnds[0], events: Int16(POLLIN), revents: 0)
     reading: while true {
+        // A newer character frame cancels this load; polls of at most 50 ms notice it.
+        if cancelled() { stopped = true; break }
         let left = Int32(max(0, deadline.timeIntervalSinceNow * 1000))
         guard left > 0 else { timedOut = true; break }
         poller.revents = 0
-        let ready = poll(&poller, 1, left)
+        let ready = poll(&poller, 1, min(left, 50))
         if ready < 0 { if errno == EINTR { continue }; break }
-        if ready == 0 { timedOut = true; break }
+        if ready == 0 { continue }
         if got < total {
             let n = read(pipeEnds[0], buffer + got, min(total - got, 1 << 20))
             if n <= 0 { if n < 0 && errno == EINTR { continue }; break }
@@ -2883,7 +2885,7 @@ func spriteDecodeInChild(fd: Int32, width: Int, height: Int, format: String) thr
     }
     // The reap is bounded too: a child that closes stdout and then doesn't exit gets 0.5 s, then SIGKILL.
     var status: Int32 = 0, reaped = false
-    if !(timedOut || extra) {
+    if !(timedOut || extra || stopped) {
         for _ in 0..<50 {
             let r = waitpid(pid, &status, WNOHANG)
             if r == pid { reaped = true; break }
@@ -2893,6 +2895,7 @@ func spriteDecodeInChild(fd: Int32, width: Int, height: Int, format: String) thr
     }
     if !reaped { kill(pid, SIGKILL); while waitpid(pid, &status, 0) < 0 && errno == EINTR {} }
     let exited = reaped && status & 0x7f == 0, code = (status >> 8) & 0xff
+    guard !stopped else { free(buffer); throw SpriteLoadError.cancelled }
     guard !timedOut else { free(buffer); throw SpriteLoadError.timeout }
     guard got == total, !extra, exited, code == 0 else {
         free(buffer)
@@ -2910,26 +2913,28 @@ struct SpriteCharacter {
         return FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent("Library/Application Support/sleight/characters").path
     }
     // Every check, with no output. The extra sheet loads only when a table entry uses it.
-    static func check(_ frame: SpriteFrame) -> Result {
+    static func check(_ frame: SpriteFrame, cancelled: @escaping () -> Bool = { false }) -> Result {
         do {
             var images: [String: CGImage] = [:], warnings = Set<String>()
             let used = Set(frame.table.values.map { $0.sheet })
             for (key, path) in [("sheet", Optional(frame.sheet)), ("extra", frame.extra)] {
                 guard let path = path, used.contains(key) else { continue }
-                let loaded = try decode(path, key: key, frame: frame)
+                guard !cancelled() else { throw SpriteLoadError.cancelled }
+                let loaded = try decode(path, key: key, frame: frame, cancelled: cancelled)
                 images[key] = loaded.0; warnings.formUnion(loaded.1)
             }
             return Result(character: SpriteCharacter(frame: frame, images: images), reason: nil, warnings: warnings.sorted())
         } catch { return Result(character: nil, reason: (error as? SpriteLoadError)?.rawValue ?? "decode", warnings: []) }
     }
     // check plus one stderr line (a trace for the dump and direct runs; the relay reads the stdout event instead).
-    static func load(_ frame: SpriteFrame) -> Result {
-        let result = check(frame)
+    static func load(_ frame: SpriteFrame, cancelled: @escaping () -> Bool = { false }) -> Result {
+        let result = check(frame, cancelled: cancelled)
+        if result.reason == SpriteLoadError.cancelled.rawValue { return result }
         if let reason = result.reason { spriteWarning("character refused (\(reason)); using ring") }
         else if !result.warnings.isEmpty { spriteWarning(result.warnings.joined(separator: ", ") + " (warning)") }
         return result
     }
-    static func decode(_ path: String, key: String, frame: SpriteFrame) throws -> (CGImage, Set<String>) {
+    static func decode(_ path: String, key: String, frame: SpriteFrame, cancelled: @escaping () -> Bool = { false }) throws -> (CGImage, Set<String>) {
         let root = root(), expectedParent = root + "/" + frame.id
         func canonical(_ path: String) -> Bool {
             var bytes = [CChar](repeating: 0, count: Int(PATH_MAX))
@@ -2963,7 +2968,7 @@ struct SpriteCharacter {
             h % Int(frame.cell.height) == 0 else { throw SpriteLoadError.size }
         let entries = frame.table.values.filter { $0.sheet == key }
         guard entries.allSatisfy({ ($0.row + 1) * Int(frame.cell.height) <= h && ($0.size == nil || $0.size == CGSize(width: w, height: h)) }) else { throw SpriteLoadError.size }
-        let buffer = try spriteDecodeInChild(fd: fd, width: w, height: h, format: header.format)
+        let buffer = try spriteDecodeInChild(fd: fd, width: w, height: h, format: header.format, cancelled: cancelled)
         // The image wraps the child's bytes without a copy and frees them when it goes (replacement, style change or exit).
         guard let provider = CGDataProvider(dataInfo: nil, data: buffer, size: w * h * 4, releaseData: { _, data, _ in free(UnsafeMutableRawPointer(mutating: data)) }) else {
             free(buffer); throw SpriteLoadError.decode
@@ -3002,6 +3007,24 @@ struct SpriteCharacter {
                 provider: provider, decode: nil, shouldInterpolate: false, intent: .defaultIntent) else { throw SpriteLoadError.decode }
         return (image, warnings)
     }
+}
+// Loads characters off the caller's thread, one at a time. Each start supersedes the load before it (its child is killed
+// within 50 ms and its result dropped), and cancel() supersedes without a new load. done runs on the loader's queue, only
+// for the current load; callers recheck isCurrent on their own thread before using the result.
+final class SpriteLoader {
+    private let lock = NSLock(), queue = DispatchQueue(label: "sleight.sprite.load", qos: .userInitiated)
+    private var generation = 0
+    @discardableResult func start(_ frame: SpriteFrame, done: @escaping (Int, SpriteCharacter.Result) -> Void) -> Int {
+        lock.lock(); generation += 1; let mine = generation; lock.unlock()
+        queue.async {
+            guard self.isCurrent(mine) else { return }
+            let result = SpriteCharacter.load(frame, cancelled: { !self.isCurrent(mine) })
+            if self.isCurrent(mine) { done(mine, result) }
+        }
+        return mine
+    }
+    func cancel() { lock.lock(); generation += 1; lock.unlock() }
+    func isCurrent(_ generation: Int) -> Bool { lock.lock(); defer { lock.unlock() }; return generation == self.generation }
 }
 struct SpritePose {
     var time: Double, state: String, entry: SpriteEntry, column: Int, direction: Int
@@ -3219,6 +3242,7 @@ func spriteDecodeChild(_ args: [String]) -> Never {
         let text = "cpu=\(cpu.rlim_cur)/\(cpu.rlim_max) nofile=\(files.rlim_cur)/\(files.rlim_max)\n"
         _ = text.withCString { write(1, $0, strlen($0)) }; exit(0)
     }
+    if fault == "slow" { usleep(1_000_000) }
     var data = Data(), chunk = [UInt8](repeating: 0, count: 1 << 16)
     while true {
         let n = read(0, &chunk, chunk.count)
@@ -3236,7 +3260,8 @@ func spriteDecodeChild(_ args: [String]) -> Never {
     guard [.premultipliedFirst, .premultipliedLast, .first, .last].contains(image.alphaInfo) else { exit(67) }
     guard let context = draw(image, w, h), let pixels = context.data else { exit(68) }
     var sent = 0, total = w * h * 4
-    // Test faults: die or hang halfway; closehang writes everything, closehang0 nothing, then both close stdout and sleep.
+    // Test faults (with SLEIGHT_CURSOR_TEST=1): die or hang halfway; closehang writes everything, closehang0 nothing, then both
+    // close stdout and sleep. slow waits 1 s before reading, nosandbox exits 69, limits prints the limits.
     if fault == "die" || fault == "hang" { total /= 2 }
     if fault == "closehang0" { total = 0 }
     while sent < total {
@@ -3310,7 +3335,8 @@ func handDemoRect(_ text: String) -> CGRect? {
 }
 
 final class HandHost: NSObject, NSApplicationDelegate {
-    var cursorStyle = "glove" { didSet { if cursorStyle != "sprite" { ringRuntime.character = nil } } }
+    var cursorStyle = "glove" { didSet { if cursorStyle != "sprite" { spriteLoader.cancel(); ringRuntime.character = nil } } }
+    let spriteLoader = SpriteLoader()
     var ringRuntime = RingRuntime(theme: .seamPlus, seed: 1)
     var ringWake: DispatchWorkItem?
     var ringRoot: CALayer?
@@ -3391,9 +3417,15 @@ final class HandHost: NSObject, NSApplicationDelegate {
                     DispatchQueue.main.async {
                         self.ringRoot?.sublayers?.filter { $0.name == "sprite" }.forEach { $0.removeFromSuperlayer() }
                         self.ringRuntime.character = nil
-                        guard self.cursorStyle == "sprite" else { return }
-                        let result = SpriteCharacter.load(value)
-                        self.ringRuntime.character = result.character; writeCharacterResult(value.id, result)
+                        guard self.cursorStyle == "sprite" else { self.spriteLoader.cancel(); return }
+                        // The decode runs off the main thread. Until it's done the ring draws alone; the sprite joins at
+                        // the next frame after it.
+                        self.spriteLoader.start(value) { generation, result in
+                            DispatchQueue.main.async {
+                                guard self.spriteLoader.isCurrent(generation), self.cursorStyle == "sprite" else { return }
+                                self.ringRuntime.character = result.character; writeCharacterResult(value.id, result)
+                            }
+                        }
                     }
                 case let .hide(nonce):
                     guard nonceBook.admit("hand", nonce) else { fault(); continue lines }
@@ -3795,11 +3827,25 @@ let cursorStyles = ["--cursor-style=glove"] + ringThemes.keys.sorted().map { "--
 func ringPlanDump(theme: RingTheme?, reduced: Bool, secure: Bool, clip: CGRect, seed: UInt64, gone: Set<UInt32>, sprite: Bool = false) {
     var buffer = Data(), bound: String?, last = -1, clock = 0.0, explicit = false
     var runtime = RingRuntime(theme: theme ?? .seamPlus, seed: seed)
+    // The live host's loader. A finished load joins before the next line; {"dumpAwait":"character"} and the end of input
+    // wait for the one in flight (real time, not the simulated clock).
+    let loader = SpriteLoader(), finished = DispatchSemaphore(value: 0), slotLock = NSLock()
+    var slot: (generation: Int, id: String, result: SpriteCharacter.Result)?, loading = false
     let env = RingEnvironment(bounds: { _, window in gone.contains(window) ? nil : clip }, reduced: { reduced }, secure: { secure })
     func write(_ object: [String: Any]) {
         guard let data = try? JSONSerialization.data(withJSONObject: object, options: [.sortedKeys]) else { exit(70) }
         FileHandle.standardOutput.write(data + Data([10]))
     }
+    func joinFinished() {
+        slotLock.lock(); let ready = slot; slot = nil; slotLock.unlock()
+        guard let ready = ready, loader.isCurrent(ready.generation) else { return }
+        loading = false; runtime.character = ready.result.character
+        // selfMaxRss: this process's peak resident bytes so far (macOS reports bytes), without the decode child's.
+        var usage = rusage(); getrusage(RUSAGE_SELF, &usage)
+        write(["effect": "character", "id": ready.id, "loaded": ready.result.character != nil, "reason": ready.result.reason as Any? ?? NSNull(),
+            "warnings": ready.result.warnings, "time": clock, "selfMaxRss": usage.ru_maxrss])
+    }
+    func awaitLoad() { while loading { finished.wait(); joinFinished() } }
     func emit(_ effects: [(Double, RingEffect)]) {
         for (time, effect) in effects {
             switch effect {
@@ -3816,6 +3862,7 @@ func ringPlanDump(theme: RingTheme?, reduced: Bool, secure: Bool, clip: CGRect, 
         let chunk = FileHandle.standardInput.availableData
         if chunk.isEmpty {
             if !buffer.isEmpty { exit(65) }
+            awaitLoad()
             if theme != nil { emit(runtime.advance(to: Double.greatestFiniteMagnitude, env)) }
             write(["effect": "end", "idle": runtime.idle, "pending": runtime.pending.count, "timers": runtime.timers.count])
             return
@@ -3824,8 +3871,11 @@ func ringPlanDump(theme: RingTheme?, reduced: Bool, secure: Bool, clip: CGRect, 
         guard buffer.count <= 131072 else { exit(65) }
         while let end = buffer.firstIndex(of: 10) {
             let line = buffer.prefix(upTo: end); buffer.removeSubrange(...end)
+            let received = Date()
+            joinFinished()
             guard line.count <= 32768, let data = try? JSONSerialization.jsonObject(with: line) as? [String: Any],
                 line.count <= 8192 || data["hand"] as? String == "character" else { exit(65) }
+            if Set(data.keys) == ["dumpAwait"] { guard data["dumpAwait"] as? String == "character" else { exit(65) }; awaitLoad(); continue }
             if Set(data.keys) == ["dumpClock"] {
                 guard let value = data["dumpClock"] as? NSNumber, CFGetTypeID(value) != CFBooleanGetTypeID(), value.doubleValue.isFinite,
                     value.doubleValue >= clock else { exit(65) }
@@ -3840,12 +3890,16 @@ func ringPlanDump(theme: RingTheme?, reduced: Bool, secure: Bool, clip: CGRect, 
             case let .character(_, value):
                 guard value.seq > last else { exit(65) }; last = value.seq
                 runtime.character = nil
-                let result = sprite ? SpriteCharacter.load(value) : nil
-                runtime.character = result?.character
-                // selfMaxRss: this process's peak resident bytes so far (macOS reports bytes), without the decode child's.
-                var usage = rusage(); getrusage(RUSAGE_SELF, &usage)
-                write(["effect": "character", "loaded": runtime.character != nil, "reason": result?.reason as Any? ?? NSNull(),
-                    "warnings": result?.warnings ?? [], "time": clock, "selfMaxRss": usage.ru_maxrss]); continue
+                guard sprite else {
+                    loader.cancel(); loading = false
+                    write(["effect": "character", "id": value.id, "loaded": false, "reason": NSNull(), "warnings": [], "time": clock]); continue
+                }
+                loading = true
+                loader.start(value) { generation, result in
+                    slotLock.lock(); slot = (generation, value.id, result); slotLock.unlock(); finished.signal()
+                }
+                // handleMs: what this line cost the dump's thread, the parse included (the live host's main thread does the same).
+                write(["effect": "character-start", "id": value.id, "handleMs": Date().timeIntervalSince(received) * 1000, "time": clock]); continue
             case let .act(_, act): event = ringEvent(act); delay = act.delay
             case let .aim(_, value), let .status(_, value): event = value; delay = 0
             case .hide: emit(runtime.hide(clock)); continue

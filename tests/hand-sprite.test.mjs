@@ -87,14 +87,18 @@ function build(t) {
   return binary;
 }
 const testEnv = more => ({ PATH: '/usr/bin:/bin', LANG: 'en_US.UTF-8', SLEIGHT_CURSOR_TEST: '1', SLEIGHT_CURSOR_CHARACTERS_ROOT: root(), ...more });
-function run(t, frames, flags = [], env = {}) {
+// Loads run off the dump's thread as in the live host. Unless told otherwise, run() waits for each character's load
+// before the next frame ({"dumpAwait":"character"}), so the frames after it see the sprite.
+const awaitLoad = { dumpAwait: 'character' };
+function run(t, frames, flags = [], env = {}, { wait = true } = {}) {
+  const lines = frames.flatMap(f => wait && f?.hand === 'character' ? [f, awaitLoad] : [f]);
   const result = spawnSync(build(t), ['--ring-plan-dump', '--cursor-style=sprite', ...flags], {
-    input: frames.map(f => JSON.stringify(f) + '\n').join(''), encoding: 'utf8', timeout: 30000, maxBuffer: 1 << 26, env: testEnv(env),
+    input: lines.map(f => JSON.stringify(f) + '\n').join(''), encoding: 'utf8', timeout: 30000, maxBuffer: 1 << 26, env: testEnv(env),
   });
   return { ...result, lines: result.stdout.trim().split('\n').filter(Boolean).map(JSON.parse) };
 }
-function good(t, frames, flags, env) {
-  const r = run(t, frames, flags, env); assert.equal(r.status, 0, r.stderr); return r;
+function good(t, frames, flags, env, how) {
+  const r = run(t, frames, flags, env, how); assert.equal(r.status, 0, r.stderr); return r;
 }
 // Every sprite track Core Animation gets: key times from 0 to 1, never decreasing, one per value.
 function checkTracks(p) {
@@ -112,7 +116,8 @@ const loaded = r => r.lines.find(l => l.effect === 'character');
 test('sprite decodes an installed PNG and falls back to idle art while the ring draws', options, t => {
   const r = good(t, [character(), act()]);
   assert.equal(r.stderr, ''); const { selfMaxRss, ...result } = loaded(r); assert.ok(selfMaxRss > 1 << 20);
-  assert.deepEqual(result, { effect: 'character', loaded: true, reason: null, warnings: [], time: 0 });
+  assert.deepEqual(result, { effect: 'character', id: r.lines[0].id, loaded: true, reason: null, warnings: [], time: 0 });
+  assert.equal(r.lines[0].effect, 'character-start');
   const [p] = draws(r); assert.equal(p.state, 'click'); assert.equal(p.sprite.layers, 1);
   assert.equal(p.sprite.poses[0].state, 'click'); assert.equal(p.sprite.poses[0].row, 0);
   assert.deepEqual(p.sprite.poses[0].rect, cellRect(0, 0));
@@ -263,6 +268,25 @@ test('a child killed mid-write or hung gives the ring alone', options, t => {
   assert.equal(loaded(good(t, [character(), act()], [], { SLEIGHT_CURSOR_TEST: '0', SLEIGHT_CURSOR_DECODE_FAULT: 'die' })).reason, 'path');
 });
 
+test('the load runs off the dump\'s thread: acts during a slow decode draw the ring, the sprite joins after', options, t => {
+  build(t);
+  const f = character(), started = performance.now();
+  const r = good(t, [f, act(), act('click', { seq: 2, at: [300, 300], path: [[300, 300]] }), awaitLoad, act('click', { seq: 3 })], [],
+    { SLEIGHT_CURSOR_DECODE_FAULT: 'slow' }, { wait: false });
+  const ms = performance.now() - started, [first, second, third] = draws(r), start = r.lines.find(l => l.effect === 'character-start');
+  // The character line cost its thread only the parse; the decode (1 s in the child) ran elsewhere.
+  assert.ok(start.handleMs < 50, `${start.handleMs} ms`); assert.ok(ms >= 1000, `${ms} ms`);
+  assert.deepEqual([first.sprite, second.sprite], [null, null]); assert.ok(third.sprite);
+  assert.deepEqual(r.lines.filter(l => l.effect !== 'draw' && l.effect !== 'park' && l.effect !== 'fade' && l.effect !== 'release').map(l => l.effect),
+    ['character-start', 'character', 'end']);
+  // A second character frame cancels the load in flight: only the second one reports, about one slow decode later.
+  const a = character(), b = character(); b.seq = 1;
+  const before = performance.now(), both = good(t, [a, b, awaitLoad, act('click', { seq: 2 })], [], { SLEIGHT_CURSOR_DECODE_FAULT: 'slow' }, { wait: false });
+  const took = performance.now() - before;
+  assert.deepEqual(both.lines.filter(l => l.effect === 'character').map(l => [l.id, l.loaded]), [[b.id, true]]);
+  assert.ok(took < 1900, `${took} ms`); assert.ok(draws(both)[0].sprite);
+});
+
 test('--check-character runs the same checks and reports the reason', options, t => {
   const check = frame => spawnSync(build(t), ['--check-character'], { input: JSON.stringify(frame) + '\n', encoding: 'utf8', env: testEnv() });
   const f = character(), ok = check(f);
@@ -343,10 +367,11 @@ test('full-size real decode reports memory in MiB and leaves no scheduled work',
   const result = spawnSync('/usr/bin/time', ['-l', build(t), '--ring-plan-dump', '--cursor-style=sprite'], {
     input: JSON.stringify(f) + '\n' + JSON.stringify(act()) + '\n', encoding: 'utf8', timeout: 30000, env: testEnv(),
   });
-  assert.equal(result.status, 0, result.stderr); assert.equal(JSON.parse(result.stdout.split('\n')[0]).loaded, true);
+  const line = result.stdout.split('\n').filter(Boolean).map(JSON.parse).find(l => l.effect === 'character');
+  assert.equal(result.status, 0, result.stderr); assert.equal(line.loaded, true);
   const rss = result.stderr.match(/(\d+)\s+maximum resident set size/); assert.ok(rss, result.stderr);
   // time -l's figure is the larger of the host and its decode child; selfMaxRss is the host alone.
-  const self = JSON.parse(result.stdout.split('\n')[0]).selfMaxRss;
+  const self = line.selfMaxRss;
   t.diagnostic(`fullSheet=1536x2288 decodedMiB=${(1536 * 2288 * 4 / 1048576).toFixed(1)} hostOrChildMaxRssMiB=${(rss[1] / 1048576).toFixed(1)} hostMaxRssMiB=${(self / 1048576).toFixed(1)}`);
 });
 
