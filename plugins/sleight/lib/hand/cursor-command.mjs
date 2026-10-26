@@ -14,7 +14,8 @@ function ask(input, out, prompt) {
 }
 /** Exit 0: done or declined, 1: validation/IO/non-TTY refusal, 2: usage. */
 export async function cursorCommand(args, { out = text => process.stdout.write(text), input = process.stdin, env = process.env,
-  root = charactersDirectory(env), uid = process.getuid(), confirm = prompt => ask(input, out, prompt) } = {}) {
+  root = env.SLEIGHT_CURSOR_TEST === '1' ? env.SLEIGHT_CHARACTERS_DIR ?? charactersDirectory() : charactersDirectory(),
+  uid = process.getuid(), confirm = prompt => ask(input, out, prompt) } = {}) {
   const [op, ...rest] = args, options = { root, uid };
   if (op === 'style' && rest.length === 1 && ['sprite', 'ring', 'overlay'].includes(rest[0])) { out('coming in 1.5.1\n'); return 0; }
   if (!(op === 'import' && (rest.length === 1 || rest.length === 2 && rest[1] === '--yes') && !rest[0].startsWith('--') ||
@@ -29,10 +30,13 @@ export async function cursorCommand(args, { out = text => process.stdout.write(t
       installCharacter(character, options);
       out(`Imported ${character.manifest.id}. The sprite stays hidden.\nTurn it on with sleight-mcp cursor style sprite\n`);
     } else if (op === 'check') out(characterCallout(checkCharacter(rest[0], options)));
-    else if (op === 'remove') { removeCharacter(rest[0], options); out(`Removed ${rest[0]}.\n`); }
+    else if (op === 'remove') { out(removeCharacter(rest[0], options) ? `Removed ${rest[0]}.\n` : `Skipped ${JSON.stringify(rest[0])}: not a character folder.\n`); }
     else {
       const characters = listCharacters(options);
-      out(characters.length ? characters.map(c => `${c.manifest.id}: ${c.manifest.name} (${c.resolved.filter(s => s.own).length} of ${c.resolved.length} states)`).join('\n') + '\n' : 'No characters installed.\n');
+      out(characters.length ? characters.map(c => c.skipped ? `Skipped ${JSON.stringify(c.id)}: ${c.reason}.`
+        : c.error ? `${JSON.stringify(c.id).slice(1, -1)}: needs repair: ${c.error}`
+        : `${c.manifest.id}: ${c.manifest.name} (${c.resolved.filter(s => s.own).length} of ${c.resolved.length} states)`).join('\n') + '\n' : 'No characters installed.\n');
+      if (characters.some(c => c.error)) return 1;
     }
     return 0;
   } catch (error) { out(`cursor ${op} failed: ${error.message}\n`); return 1; }

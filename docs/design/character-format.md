@@ -19,17 +19,24 @@ my-character/
   LICENSE.txt        # terms for a license the validator does not recognize
 ```
 
-The folder name must equal the manifest's `id`. No other files or subfolders are allowed. This CLI accepts folders.
+Installed folder names must equal the manifest's `id`. A source folder can have any name. `.DS_Store` is ignored and never
+copied. Other files or subfolders are refused. This CLI accepts folders.
 Archive extraction is outside this version of the importer. Do not put a `pet.json` beside `character.json`.
 
 Characters install under `~/Library/Application Support/sleight/characters/<id>/`. Directories have mode 0700 and files
 have mode 0600, owned by the current user. Sources must be user-owned, have no executable files and have no group or world
-write permission. Symlinks, including a symlink in the path, and hardlinked files are refused. Tests can set
-`SLEIGHT_CHARACTERS_DIR` to an absolute, normalized private directory with no symlink in its path.
+write permission. The importer resolves the source path first, so `/tmp` and download-folder aliases work. Symlinks inside
+the source folder and hardlinked files are refused. Installed paths cannot contain symlinks. A wrong directory mode prints
+a `chmod 700` command to fix it.
+
+Renderers use the current user's fixed characters directory and ignore environment overrides. CLI tests can set
+`SLEIGHT_CURSOR_TEST=1` and `SLEIGHT_CHARACTERS_DIR` to an absolute, normalized private directory with no symlink in its path.
+Renderer tests pass an explicit `root` to the loader functions.
 
 The importer copies a validated snapshot into a private staging directory, validates it again, then publishes it with one
 rename. An existing character is never replaced. Remove it before importing a revised version. Import never writes
-`hand.json` or selects a character.
+`hand.json` or selects a character. The next import removes private, user-owned `.import-*` staging folders older than
+60 seconds. Fresh staging folders and symlinks are left alone.
 
 ## Manifest
 
@@ -60,9 +67,12 @@ This example defines idle and click art. The remaining 17 states use fallbacks.
 
 - `format` is `sleight-character`, and `version` is 1. Other versions are refused.
 - `id` is 1 to 48 characters matching `[a-z0-9-]`. `name` is 1 to 60 characters, `description` is 0 to 200, and `author`
-  is 1 to 80. These fields are required. Text is plain, with no markup, path separators, terminal controls or bidi controls.
-- `license` is a required string, 1 to 120 characters. Local imports may use `unknown`, displayed as `License: not stated`.
-  A shared pack must state a license. The validator recognizes CC0, CC-BY family licenses, MIT, Apache-2.0, BSD-2-Clause,
+  is 1 to 80. These fields are required. Text is displayed as plain text. Ordinary punctuation, including `/`, is allowed.
+  Terminal controls, bidi controls and invisible direction marks are refused.
+- `license` is a required string, 1 to 120 characters. Every source folder with its own `character.json` is a shared pack
+  and must state a license. Only a manifest generated from a Codex `pet.json` may use `unknown`, displayed as
+  `License: not stated`. A previously imported Codex character with `unknown` still loads locally, but needs a stated license
+  before re-importing it as a pack. The validator recognizes CC0, CC-BY family licenses, MIT, Apache-2.0, BSD-2-Clause,
   BSD-3-Clause, ISC, Unlicense, GPL-2.0-only, GPL-2.0-or-later, GPL-3.0-only, GPL-3.0-or-later and OFL-1.1.
   Other identifiers or custom terms need `LICENSE.txt`. `proprietary-personal` is also accepted. Attribution is unverified.
 - `sheet` is `sheet.png` or `sheet.webp`. Set `extra` to `extra.webp` when extra rows are present. File extensions must agree
@@ -116,7 +126,7 @@ such as type/key and thinking/working skip a visited state and eventually reach 
 | aim | Look, idle | Row 9/10 pose toward target, held 160 ms |
 | click | Poke, wave, idle pulse | Row 4, columns 1 to 3 |
 | double-click | Click twice, idle | Click twice |
-| right-click | Click with ring tint, idle | Row 3, first 3 wave frames |
+| right-click | Click, idle | Row 3, first 3 wave frames |
 | type | Key, working, idle | Row 7, 6 running frames |
 | key | First 3 type frames, click, idle | Row 7, first 3 frames |
 | scroll-up | Working with look up, idle | Row 7 and row 9 column 0 pose |
@@ -148,10 +158,18 @@ look A 9 and look B 10. Generated anchors are (96,196), and hotspots are (96,104
 Idle durations are 280, 110, 110, 140, 140, 320 ms. Running rows use 120 ms per frame and 220 on the last frame. Waving uses
 140 ms and 280 on the last frame. Failed uses 140 ms and 240 on the last frame. Waiting uses 150 ms and 260 on the last.
 Review uses 150 ms and 280 on the last. Jump slices use 140 ms, with 280 ms on the landing frame. The copied atlas's unused
-cells and optional neutral look cell remain untouched.
+cells and optional neutral look cell remain untouched. The optional neutral cell at row 0, column 6 is not mapped or used.
 
 A Codex import supplies art directly for 9 sleight states. The other 10 use fallbacks. This count comes from the resolved table,
-not from a fixed wizard message. The wizard and `check` show one line per missing state describing its replacement.
+not from a fixed wizard message. The wizard and `check` show one line per missing move, naming the fallback animation and
+any added pulse, look pose, repeated frames, hold or return to rest. For a Codex-only pet the callout starts:
+
+```text
+This pet has its own animation for 9 of sleight's 19 moves. To animate all of them it needs 10 more:
+Double-click: uses its jumping animation, played twice
+Right-click: uses its waving animation
+Key press: uses its running animation, first 3 frames
+```
 
 ### Adding extra rows
 
@@ -167,14 +185,17 @@ it count as having its own animation. Reusing an existing row directly also coun
 The Node loader checks these on import, installation and every load:
 
 - Valid UTF-8 JSON, fewer than 16,384 bytes, no duplicate keys, nesting at most 32 levels, correct format/version and field
-  types. The folder and manifest IDs must match.
+  types. Folder and manifest IDs must match only for installed characters.
 - Only the listed files, at most 8 entries, no subdirectories, executable files, links or shared writable files. Installed
   modes must be exactly 0700 for the directory and 0600 for files. File descriptors are checked after opening with no-follow.
-- PNG and WebP magic and header dimensions, with APNG and animated WebP refused. A header check does not prove decoding succeeds.
+- PNG requires IHDR first, at least one IDAT before IEND, bounded chunk lengths and no data after IEND. WebP requires VP8,
+  VP8L or VP8X first and exactly one image chunk. A VP8X canvas must equal the image bitstream's dimensions and appear only
+  once, first. APNG and animated WebP are refused. A header check does not prove decoding succeeds.
 - Main and extra images at most 8 MiB each, preview at most 1 MiB and `LICENSE.txt` at most 64 KiB. Total bytes, including
   JSON and license, at most 16 MiB. Each image side is at most 4096 pixels; all images together are at most 16,000,000 pixels.
 - Exact cell grids, valid row and frame ranges, duration limits, scale, coordinates and acyclic explicit fallback names.
-- Required license field. `unknown` is allowed locally, and is refused when validating a pack for sharing.
+- Required license field. A source with `character.json` must state a license. Only the generated Codex-import manifest may
+  have `unknown`.
 
 Warnings from the Node loader cover ignored fields or states, missing required event art, coordinates outside the cell
 and nonlooping durations below 40 ms.
@@ -195,6 +216,14 @@ to the ring. These host checks belong to the renderer and are not established by
 4. Run `sleight-mcp cursor check my-character` to validate the installed copy and print that table again.
    `sleight-mcp cursor list` lists installed characters. `sleight-mcp cursor remove my-character` removes one.
 
+List reports stray entries as skipped and keeps listing healthy characters when one needs repair. A broken character
+appears as `needs repair: <reason>` and makes list exit 1. Remove checks the root and directory owner before deleting
+a character. Broken manifests can be removed, but symlinks are refused. A named stray file is skipped.
+
+Import and remove are user commands. Claude's shell guard refuses them through the same hook that protects `hand on|off`.
+Claude can call list and check. This guard covers ordinary shell spellings, including nested shells. It does not sandbox
+arbitrary scripts a model writes and runs.
+
 Importing leaves the sprite hidden. Turn it on with `sleight-mcp cursor style sprite` when style selection is available.
 The style command currently prints `coming in 1.5.1`.
 
@@ -203,6 +232,7 @@ The style command currently prints `coming in 1.5.1`.
 `plugins/sleight/lib/hand/character.mjs` exports `loadCharacter(folder)` and `checkCharacter(id)` for validated loads.
 Results contain the normalized `manifest`, header-only `sheets`, `files` as a map of snapshot buffers, total byte count,
 `warnings` and a 19-entry `resolved` table. Installed loads use `installed: true` to enforce private file modes.
+`listCharacters()` also returns `{ id, skipped, reason }` for stray entries and `{ id, error }` for broken characters.
 
 `resolveCharacterStates(manifest, { heading, distance })` resolves a validated manifest for one heading in degrees and a
 travel distance in pixels. Each entry has `state`, `label`, `own`, `source`, `shows`, concrete `sheet` filename, `row`,
@@ -211,3 +241,5 @@ travel distance in pixels. Each entry has `state`, `label`, `own`, `source`, `sh
 
 Call `loadCharacter` again before a later load from disk. A previous result proves only that captured snapshot. A renderer
 must perform the native pixel checks before drawing it. No character file is evaluated or imported as code.
+The Node path checks and descriptor rechecks do not exclude every directory-swap race by a process with the same user ID.
+Node has no directory-relative `openat` API. Snapshot buffers remain fixed once read and are revalidated before installation.

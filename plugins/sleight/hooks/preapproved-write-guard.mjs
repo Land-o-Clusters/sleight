@@ -139,6 +139,8 @@ function shellWritePaths(command, initialDirectory, depth = 0) {
     // `hand on|off|capture` writes hand.json the same way, and only `hand status` passes.
     if (launcherToggle(allWords, 'turbo')) add('~/Library/Application Support/sleight/turbo.json', true);
     if (launcherToggle(allWords, 'hand')) add('~/Library/Application Support/sleight/hand.json', true);
+    // Character writes are user commands too. Reuse the hand guard; list and check only read data.
+    if (launcherToggle(allWords, 'cursor', rest => !['import', 'remove'].includes(rest[0]))) add('~/Library/Application Support/sleight/hand.json', true);
     // `permissions block|unblock|revoke|sites` change what sleight may do, and only the listing passes.
     if (launcherToggle(allWords, 'permissions', listingOnly)) add('~/Library/Application Support/sleight/permissions.json', true);
     if (xargs && piped) operands.push(...piped.filter(word => !word.operator).map(word => word.text));
