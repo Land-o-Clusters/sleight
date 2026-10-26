@@ -6,7 +6,7 @@ import { spawnSync } from 'node:child_process';
 import { mkdirSync, mkdtempSync, readFileSync, realpathSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
-import { GATED_COMMANDS, agentProcess, refusalLine, rowArgs, settingsCommand, settingsRefusal, systemPs, walkAncestors } from '../plugins/sleight/lib/person-gate.mjs';
+import { GATED_COMMANDS, agentProcess, elapsedMs, refusalLine, rowArgs, settingsCommand, settingsRefusal, systemPs, walkAncestors } from '../plugins/sleight/lib/person-gate.mjs';
 import { writeHandSetting } from '../plugins/sleight/lib/hand/command.mjs';
 import { handConfigPath, readHandConfig } from '../plugins/sleight/lib/hand/settings.mjs';
 import { registerTemp } from '../scripts/temp-leftovers.mjs';
@@ -110,13 +110,15 @@ const row = (ppid, args, argv0 = args.split(' ')[0]) => `${ppid} ${argv0.slice(0
 // is for a process nobody started with `exec -a`. tty is the launcher's controlling tty, and session the "pid stat" rows
 // `ps -t <tty> -o pid=,stat=` prints for it.
 const SELF = 400;
-function machine(table, { tty = 'ttys006', session = ['200 Ss', '300 S+', `${SELF} R+`] } = {}) {
+// elapsed is what `ps -o etime= -p <leader>` prints: by default a session opened long before the test.
+function machine(table, { tty = 'ttys006', session = ['200 Ss', '300 S+', `${SELF} R+`], elapsed = '01-12:51:35' } = {}) {
   const calls = [];
   const entry = pid => { if (!(pid in table)) throw Error('no such process'); return table[pid]; };
   const ps = argv => {
     calls.push(argv.join(' '));
     if (argv[0] === '-o' && argv[1] === 'tty=') return `${tty}\n`;
     if (argv[0] === '-t') { if (argv[1] !== tty) throw Error('wrong tty'); return session.join('\n') + '\n'; }
+    if (argv[0] === '-o' && argv[1] === 'etime=') { if (typeof elapsed !== 'string') throw Error('no such process'); return `${elapsed}\n`; }
     const value = entry(Number(argv.at(-1)));
     return (typeof value === 'string' ? value : row(value[0], value[1], value[2])) + '\n';
   };
@@ -155,7 +157,37 @@ test('a person\'s Terminal chain reaches the terminal app through shells, then l
   const { result, calls } = walk(TERMINAL);
   assert.deepEqual(result, { ok: true });
   assert.deepEqual(calls, [`-o tty= -p ${SELF}`, '-o ppid=,comm=,args= -p 300', '-o ppid=,comm=,args= -p 200', '-o ppid=,comm=,args= -p 100',
-    'lsof 100', '-t ttys006 -o pid=,stat=']);
+    'lsof 100', '-t ttys006 -o pid=,stat=', '-o etime= -p 200']);
+});
+
+// A speed bump, not a guarantee (automated review, 2026-10-26): an agent that opens a fresh terminal and types at once
+// meets a session leader under 10 s old.
+test('a terminal session opened less than 10 s ago refuses, and an unreadable age fails closed', () => {
+  assert.deepEqual(walk(TERMINAL, { elapsed: '00:09' }).result, { ok: false, reason: 'fresh session' });
+  assert.deepEqual(walk(TERMINAL, { elapsed: '   00:00' }).result, { ok: false, reason: 'fresh session' });
+  for (const elapsed of ['00:10', '01:00', '1:02:03', '3-04:05:06']) assert.deepEqual(walk(TERMINAL, { elapsed }).result, { ok: true }, elapsed);
+  assert.deepEqual(walk(TERMINAL, { elapsed: '00:03' }, { freshMs: 2000 }).result, { ok: true });
+  // freshMs 0 skips the bar and its ps call: forms that only take access away don't wait.
+  const off = walk(TERMINAL, { elapsed: '00:00' }, { freshMs: 0 });
+  assert.deepEqual(off.result, { ok: true });
+  assert.equal(off.calls.some(call => call.startsWith('-o etime=')), false);
+  // A localized date (de_DE lstart, from the review) or anything else that isn't etime refuses as unreadable.
+  for (const elapsed of ['', 'Mo. 26 Okt. 12:28:20 2026', 'Mon Oct 26 12:28:20 2026', '12:5', '   ']) {
+    assert.deepEqual(walk(TERMINAL, { elapsed }).result, { ok: false, reason: 'unreadable' }, JSON.stringify(elapsed));
+  }
+  assert.deepEqual(walk(TERMINAL, { elapsed: null }).result, { ok: false, reason: 'ps failed' }, 'a leader that exited fails closed');
+  assert.deepEqual(['00:00', '00:59', '10:00', '1:00:00', '2-00:00:00'].map(elapsedMs), [0, 59000, 600000, 3600000, 172800000]);
+  assert.match(refusalLine('hand on', 'fresh session'), /Reason: the terminal opened less than 10 s ago, so try again\.$/);
+});
+
+test('ps runs with LC_ALL=C, and the gate passes its session-age bar to the walk', () => {
+  const source = readFileSync(new URL('../plugins/sleight/lib/person-gate.mjs', import.meta.url), 'utf8');
+  assert.match(source, /env: \{ \.\.\.process\.env, LC_ALL: 'C' \}/);
+  const seen = [];
+  const ancestors = options => { seen.push(options); return { ok: true }; };
+  assert.equal(settingsRefusal(['turbo', 'on'], { stdin: tty, stdout: tty, env: {}, ancestors }), undefined);
+  assert.equal(settingsRefusal(['turbo', 'off'], { stdin: tty, stdout: tty, env: {}, ancestors, freshMs: 0 }), undefined);
+  assert.deepEqual(seen, [{ freshMs: 10000 }, { freshMs: 0 }]);
 });
 
 test('each listed GUI terminal passes by bundle path, in /Applications or ~/Applications, with its own helpers above it', () => {
@@ -305,7 +337,7 @@ test('a walk that fails, can\'t be read or runs out of time refuses', () => {
   const budgets = [];
   const counted = fn => (value, left) => { budgets.push(left); clock += 100; return fn(value, left); };
   assert.deepEqual(walkAncestors({ pid: 300, self: SELF, home: HOME, now: () => clock, ps: counted(fake.ps), executable: counted(fake.executable) }), { ok: true });
-  assert.deepEqual(budgets, [1000, 900, 800, 700, 600, 500], 'each call gets only the budget left');
+  assert.deepEqual(budgets, [1000, 900, 800, 700, 600, 500, 400], 'each call gets only the budget left');
 });
 
 test('an orphaned launcher (parent is launchd) refuses', () => {

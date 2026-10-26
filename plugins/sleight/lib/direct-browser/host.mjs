@@ -1,5 +1,5 @@
 import { createHash, randomBytes } from 'node:crypto';
-import { existsSync, lstatSync, realpathSync, readFileSync, mkdirSync, mkdtempSync, writeFileSync, chmodSync, renameSync, rmSync } from 'node:fs';
+import { closeSync, constants, existsSync, fstatSync, lstatSync, openSync, readdirSync, realpathSync, readFileSync, mkdirSync, mkdtempSync, writeFileSync, chmodSync, renameSync, rmSync } from 'node:fs';
 import { spawn, execFile, execFileSync } from 'node:child_process';
 import { Socket } from 'node:net';
 import { userInfo } from 'node:os';
@@ -392,13 +392,17 @@ export async function appleToolsPresent({ run = promisify(execFile), exists = ex
   } catch { return false; }
 }
 export const handCursorStyles = Object.freeze(['glove', 'ring', 'seam', 'sprite']);
-export async function prepareHandHost({ cacheRoot = defaultHelperCache(), sourceRoot = sources, compile = compileNative,
+async function handBuild({ cacheRoot = defaultHelperCache(), sourceRoot = sources, compile = compileNative,
   tools = appleToolsPresent, onProgress, signal } = {}) {
   let inventory;
   try { inventory = handInventory(sourceRoot); } catch { return Object.freeze({ status: 'unavailable', code: 'HOST_SOURCE_MISMATCH' }); }
   if (!nativeHelpersBuilt({ inventory, cacheRoot }) && !await tools()) return Object.freeze({ status: 'unavailable', code: 'APPLE_TOOLS_MISSING' });
   const built = await prepareNativeHelpers({ inventory, cacheRoot, sourceRoot, compile, onProgress, signal });
-  if (built.status !== 'ready') return Object.freeze({ status: built.status, code: built.code, detail: built.detail });
+  return built.status === 'ready' ? built : Object.freeze({ status: built.status, code: built.code, detail: built.detail });
+}
+export async function prepareHandHost(options = {}) {
+  const built = await handBuild(options);
+  if (built.status !== 'ready') return built;
   const { receipt } = built;
   // capture is 'hidden' (absent from every capture) or 'visible' (screenshots and recordings show the hand). The host is the
   // session's: hand frames on stdin and control events on stdout. Session clients open fds 3 and 4 at first use, then
@@ -432,6 +436,72 @@ export function checkCharacterInHost(binary, frame, { run = spawn, timeoutMs = 1
     child.stdin.on('error', () => {});
     child.stdin.end(JSON.stringify(frame) + '\n');
   });
+}
+
+// The person confirmation for high-stakes settings changes (person-confirm.mjs): the same binary and build as the hand, in its
+// --confirm-person mode, which shows only macOS's own Touch ID or password sheet and opens no window of its own. Its key
+// and subject are checked again against the host's fixed table. notice(text) hears about a first-use build.
+// The build is the one keyed by the source hashed now (handInventory). The binary that runs is a private copy of bytes read
+// through one open file and hashed there, which closes a swap between the path check and the hash. The copy goes in a fresh
+// 0700 run-<random> folder beside the build cache (~/Library/Caches/sleight, which the guard hook keeps Claude's tools out
+// of). It's removed when the helper exits or fails to start, and when this process exits or gets SIGINT, SIGTERM or SIGHUP.
+// The child carries what it must report on its first line, which person-confirm.mjs compares; that narrows the window
+// between writing the copy and running it, though code running as the same user still owns it. The build record the hash
+// is checked against is in the same cache (docs/design/person-confirm.md). run is a test seam for spawn.
+const CONFIRM_KEY = /^[a-z][a-z-]{0,39}$/;
+function privateParent(path) {
+  const stat = lstatSync(path);
+  if (!stat.isDirectory() || stat.isSymbolicLink() || realpathSync(path) !== path || stat.uid !== process.getuid() || stat.mode & 0o022) throw Error('HOST_CACHE_UNSAFE');
+}
+// Run folders a killed launcher left behind, older than 10 minutes (a confirmation lasts at most about 62 s).
+function sweepRuns(runRoot, now = Date.now()) {
+  let names;
+  try { names = readdirSync(runRoot); } catch { return; }
+  for (const name of names.filter(name => /^run-[A-Za-z0-9]{6}$/.test(name))) {
+    try {
+      const path = join(runRoot, name), stat = lstatSync(path);
+      if (stat.isDirectory() && !stat.isSymbolicLink() && stat.uid === process.getuid() && now - stat.mtimeMs > 600000) rmSync(path, { recursive: true, force: true });
+    } catch {}
+  }
+}
+export async function prepareConfirmHost({ notice = () => {}, run = spawn, ...options } = {}) {
+  if (process.platform !== 'darwin') return Object.freeze({ status: 'unavailable', code: 'PLATFORM' });
+  if (!handHostBuilt(options)) notice('sleight: building the confirmation helper from source (first use, up to a few minutes).\n');
+  const built = await handBuild(options);
+  if (built.status !== 'ready') return built;
+  const { receipt } = built, runRoot = dirname(options.cacheRoot ?? defaultHelperCache());
+  return Object.freeze({ status: 'ready', spawn: (key, subject) => {
+    if (!CONFIRM_KEY.test(key) || subject !== undefined && (typeof subject !== 'string' || subject.length > 100)) throw Error('CONFIRM_INVALID');
+    const path = executable('consent-host', receipt), expected = nativeBuilds.get(receipt).binaries['consent-host'];
+    const fd = openSync(path, constants.O_RDONLY | constants.O_NOFOLLOW);
+    let bytes;
+    try {
+      const stat = fstatSync(fd);
+      if (!stat.isFile() || stat.uid !== process.getuid() || stat.mode & 0o022) throw Error('HOST_PACKAGE_MISMATCH');
+      bytes = readFileSync(fd);
+    } finally { closeSync(fd); }
+    if (digest(bytes) !== expected) throw Error('HOST_PACKAGE_MISMATCH');
+    privateParent(runRoot);
+    sweepRuns(runRoot);
+    const folder = mkdtempSync(join(runRoot, 'run-')), copy = join(folder, 'consent-host');
+    let child;
+    // Ctrl-C reaches the helper too, which withdraws its sheet and exits; SIGTERM or SIGHUP to the launcher alone stops the
+    // helper here. Either way the folder goes at once, and so it does on a throw or this process's exit.
+    const stop = () => { try { child?.kill('SIGTERM'); } catch {} remove(); };
+    const remove = () => {
+      try { rmSync(folder, { recursive: true, force: true }); } catch {}
+      process.off('exit', remove); for (const signal of ['SIGINT', 'SIGTERM', 'SIGHUP']) process.off(signal, stop);
+    };
+    process.on('exit', remove); for (const signal of ['SIGINT', 'SIGTERM', 'SIGHUP']) process.on(signal, stop);
+    try {
+      chmodSync(folder, 0o700); privateDirectory(folder);
+      writeFileSync(copy, bytes, { mode: 0o700, flag: 'wx' });
+      child = run(copy, ['--confirm-person', key, ...subject === undefined ? [] : [subject]], { env: environment(), stdio: ['ignore', 'pipe', 'ignore'] });
+      child.once('exit', remove); child.once('error', remove);
+    } catch (error) { remove(); throw error; }
+    child.sleightExpected = Object.freeze({ path: copy, sha256: expected });
+    return child;
+  } });
 }
 
 // The worker's end of the session's shared host: the same consent channel over the fds the relay passed at fork (4 writes to

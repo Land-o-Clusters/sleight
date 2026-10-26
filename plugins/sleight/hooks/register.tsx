@@ -343,6 +343,7 @@ export const register: Register = on => {
     const denied = await preapprovedWriteDenied(e, {
       stat: (path: string) => $.fs.stat(path, { resolve: true }),
       home: await $.env.get('HOME'),
+      configDir: await $.env.get('CLAUDE_CONFIG_DIR'),
     })
     return denied ? { deny: "Only the user edits sleight's approval files. Ask them to make this change." } : next(e)
   })

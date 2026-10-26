@@ -510,8 +510,9 @@ for (const [name, options, reason] of [
 });
 
 // LW3 review 1: the bundle ID comes from the handle's metadata, so another app's dialog looked like the document's own.
+// SecurityAgent itself is now refused outright (VC10, relay-own-host.test.mjs), so another system app's dialog stands in here.
 test('LW3: another app\'s dialog over the document never continues onto it', async t => {
-  const security = 'Window: "", App: SecurityAgent.\n0 dialog Description: authenticate\n\t1 text Word wants to make changes.\n\t2 button OK, ID: ok';
+  const security = 'Window: "", App: UserNotificationCenter.\n0 dialog Description: alert\n\t1 text Word wants to make changes.\n\t2 button OK, ID: ok';
   const events = [];
   const h = await dialogFixture(t, { after: security, trace: (direction, msg) => { if (direction === 'dialog-continuation-refused') events.push(msg.reason); } });
   const result = await h.call(dismiss);

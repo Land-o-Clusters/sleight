@@ -291,6 +291,23 @@ the launcher prints one line with the reason and exits with code 3.
 - Run `watch <url> --find`, `watch record`, `remove` and `unlock` in your own terminal. `watch list`, `notes` and
   `run-now` run anywhere.
 
+### Changes that ask for Touch ID or your password
+
+Some changes widen what sleight may do, or run something on a schedule. After the terminal check passes, these show
+macOS's own Touch ID sheet, with your account password as the system's fallback, and change nothing unless it passes:
+
+- `turbo on` and `turbo app on`
+- `permissions unblock`, `sites` and `repair`
+- `routine add` and `unlock`, and `watch <url> --find`, `watch record` and `watch unlock`
+
+An agent can open a terminal window and type a command into it, and then the process chain looks like
+yours. It can't put a finger on the sensor, and sleight refuses to act on the password sheet. A terminal opened less than 10 s before one of these commands gets "try again". The sheet gives up after 60 s,
+and Cancel or Ctrl-C stops it. When nobody is at the Mac (locked, or no input for 120 s), these changes are refused
+outright: a settings change never goes to [remote approvals](#approval-scope). An account without a login password can't
+ask, and the CLI refuses these changes until you set one. Everything else above only takes access away or changes how
+sleight looks (hand, cursor, turning turbo or an app off, blocking, revoking, `allow remove`, clearing site memory, removing a
+routine or watch), so it needs only the terminal check, and the menu bar's rows answer at once.
+
 ## Turns without a hook
 
 The Claude Code mod ends the engine's turn when Claude finishes. Other clients can omit the mod

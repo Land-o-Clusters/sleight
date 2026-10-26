@@ -105,7 +105,7 @@ import { createBrowserStaleGuard } from './browser-stale.mjs';
 import { literalElements } from './literal-elements.mjs';
 import { createResultBudget, requestsFullDocumentation, grokResult } from './result-budget.mjs';
 import { forbiddenTargetWarning, isForbiddenSettingsWindow, refusalNotice, refusedApp } from './blocked-apps.mjs';
-import { OWN_HOST_LINE, isOwnHost, mentionsOwnHost, namesOwnHost as appNamesOwnHost, getAppTargets, ownHostPid as isOwnHostPid } from './own-host.mjs';
+import { OWN_HOST_LINE, AUTH_DIALOG_LINE, isOwnHost, ownLine, mentionsOwnHost, namesOwnHost as appNamesOwnHost, getAppTargets, ownHostPid as isOwnHostPid } from './own-host.mjs';
 import { clipboardCode, clipboardPlan, clipboardActions, createClipboardSession, createNativeClipboardIO } from './clipboard.mjs';
 import { fillFormCode } from './fill-form.mjs';
 import { dragToCode } from './drag-to.mjs';
@@ -2131,20 +2131,26 @@ export function createRelay({
   // reply id -> the line Claude gets instead of the reply: OWN_HOST_LINE, or the user's line for an app or site they blocked.
   const withheld = new Map();
   const ownWindow = window => !!window && isOwnHost(window.appId, window.app);
-  function ownStop(msg) {
-    toClient({ jsonrpc: '2.0', id: msg.id, result: { isError: true, content: [{ type: 'text', text: OWN_HOST_LINE }] } });
+  // macOS's Touch ID and password sheets (coreautha, SecurityAgent) are refused the same way, with their own line.
+  function ownStop(msg, line = OWN_HOST_LINE) {
+    toClient({ jsonrpc: '2.0', id: msg.id, result: { isError: true, content: [{ type: 'text', text: line }] } });
   }
   // A local tool's app, a js call's getApp literals (a name, a path or a pid, however spelled), and the windows its
   // handles hold from reads. A computed getApp reaches the engine, whose approval card for the host is declined.
+  // Returns the line for the first one named, or undefined.
   function namesOwnHost(name, args) {
-    if (name !== 'js') return isOwnHost(args.app);
+    if (name !== 'js') return isOwnHost(args.app) ? ownLine(args.app) : undefined;
     const code = String(args.code ?? '');
-    return getAppTargets(code).some(target => appNamesOwnHost(target, ownHostPid)) ||
-      [...codeOnly(code).matchAll(HANDLE_CALL)].some(match => ownWindow(handleBundles.get(match[1])));
+    const target = getAppTargets(code).find(target => appNamesOwnHost(target, ownHostPid));
+    if (target !== undefined) return ownLine(target);
+    const held = [...codeOnly(code).matchAll(HANDLE_CALL)].map(match => handleBundles.get(match[1])).find(ownWindow);
+    return held ? ownLine(held.appId, held.app) : undefined;
   }
   // The engine's approval card names the host by its app (a name, alias, path or pid) or in its message.
   const ownApproval = msg => isAppApproval(msg) &&
     (appNamesOwnHost(msg.params?._meta?.tool_params?.app, ownHostPid) || mentionsOwnHost(msg.params?.message));
+  const approvalLine = msg => ownLine(msg.params?._meta?.tool_params?.app) === AUTH_DIALOG_LINE ||
+    /\b(?:coreautha|coreauthd|securityagent|com\.apple\.localauthentication)\b/i.test(String(msg.params?.message ?? '')) ? AUTH_DIALOG_LINE : OWN_HOST_LINE;
 
   function failLease(error) {
     nativeHandoff?.cancel?.();
@@ -2172,7 +2178,7 @@ export function createRelay({
   }
   // Every app a call names: a local tool's app, a js call's getApp strings, and the apps its handles hold from earlier reads.
   // sleight's own consent host (its glove, approval and payment cards) is refused with or without the user's blocks.
-  const appLine = (bundleId, name) => appNamesOwnHost(bundleId, ownHostPid) || isOwnHost(bundleId, name) ? OWN_HOST_LINE : permissions?.app({ bundleId, name });
+  const appLine = (bundleId, name) => appNamesOwnHost(bundleId, ownHostPid) || isOwnHost(bundleId, name) ? ownLine(bundleId, name) : permissions?.app({ bundleId, name });
   function callBlock(name, args) {
     if (name !== 'js') return typeof args.app === 'string' ? appLine(args.app, args.app) : undefined;
     const code = String(args.code ?? '');
@@ -2269,7 +2275,8 @@ export function createRelay({
   function prepareLease(msg, browser) {
     if (msg.method !== 'tools/call') return true;
     const name = msg.params?.name;
-    if ((name === 'js' || localNames.has(name)) && namesOwnHost(name, msg.params.arguments ?? {})) { ownStop(msg); return false; }
+    const own = (name === 'js' || localNames.has(name)) && namesOwnHost(name, msg.params.arguments ?? {});
+    if (own) { ownStop(msg, own); return false; }
     const blocked = (name === 'js' || localNames.has(name)) && callBlock(name, msg.params.arguments ?? {});
     if (blocked) { blockStop(msg, blocked); return false; }
     if (!inputLease) return true;
@@ -2306,7 +2313,7 @@ export function createRelay({
     if (!read) {
       if (running.size) { leaseStop(msg, 'another call in this session is pending.'); return false; }
       if (leaseFault) { leaseStop(msg, leaseFault); return false; }
-      if (ownWindow(leaseWindow)) { ownStop(msg); return false; }
+      if (ownWindow(leaseWindow)) { ownStop(msg, ownLine(leaseWindow.appId, leaseWindow.app)); return false; }
       if (name !== 'js') {
         leaseCalls.set(msg.id, { localAction: true }); return true;
       }
@@ -3174,7 +3181,7 @@ export function createRelay({
           if (name !== 'open_file' || !/launch it first/.test(String(err?.message))) throw err;
         }
         // The app the name resolved to may be sleight's own consent host (lease-target.js also checks its pid's executable).
-        if (ownWindow(resolved)) throw new Error(OWN_HOST_LINE);
+        if (ownWindow(resolved)) throw new Error(ownLine(resolved.appId, resolved.app));
         // The app the name resolved to, which a block by bundle id names.
         const blocked = resolved?.appId && appLine(resolved.appId, resolved.app);
         if (blocked) throw new Error(blocked);
@@ -3565,8 +3572,9 @@ export function createRelay({
       return;
     }
     // sleight's own consent host stops here, before an acquisition is split off and sent ahead of the call.
-    if (msg.method === 'tools/call' && (msg.params?.name === 'js' || localNames.has(msg.params?.name)) &&
-        namesOwnHost(msg.params.name, msg.params.arguments ?? {})) { finishedCall(msg.id); ownStop(msg); return; }
+    const own = msg.method === 'tools/call' && (msg.params?.name === 'js' || localNames.has(msg.params?.name)) &&
+      namesOwnHost(msg.params.name, msg.params.arguments ?? {});
+    if (own) { finishedCall(msg.id); ownStop(msg, own); return; }
     // A blocked app stops here, before an acquisition is split off and sent ahead of the call.
     const blocked = msg.method === 'tools/call' && (msg.params?.name === 'js' || localNames.has(msg.params?.name)) && callBlock(msg.params.name, msg.params.arguments ?? {});
     if (blocked) { finishedCall(msg.id); blockStop(msg, blocked); return; }
@@ -5009,7 +5017,7 @@ export function createRelay({
       // sleight's own consent host is declined without asking, before any other approval path (document scope, warm-up
       // prompts, the pre-approved list); the call that asked reaches Claude as the line.
       trace('own-host-approval', { id: msg.id });
-      for (const id of running) if (!localRunning.has(id)) withheld.set(id, OWN_HOST_LINE);
+      for (const id of running) if (!localRunning.has(id)) withheld.set(id, approvalLine(msg));
       toServer({ jsonrpc: '2.0', id: msg.id, result: { action: 'decline' } });
       return;
     }
@@ -5586,7 +5594,7 @@ export function createRelay({
       leaseWindow = window ? { ...window, ...(known ? { appId: known } : {}), ...(shownId ? { rootId: shownId } : {}) } : undefined;
       if ((call.read || call.acquisition) && leaseWindow?.appId === openedWindow?.appId &&
           !sameWindow(leaseWindow, openedWindow)) openedWindow = undefined;
-      if (ownWindow(leaseWindow)) withheld.set(msg.id, OWN_HOST_LINE);
+      if (ownWindow(leaseWindow)) withheld.set(msg.id, ownLine(leaseWindow.appId, leaseWindow.app));
       else if (leaseWindow) {
         // The site this read shows. A read without web-area lines (a diff) keeps what the same window showed before.
         const page = pageSite(text, window);
@@ -5950,7 +5958,7 @@ export function createRelay({
       const shown = (msg.result?.content ?? []).filter(c => c.type === 'text').map(c => c.text).join('\n');
       const appId = msg.result?._meta?.['codex/toolSurface']?.app?.appId;
       const line = withheld.get(msg.id) ?? (typeof appId === 'string' ? appLine(appId) : undefined) ??
-        (ownWindow(lastWindowFromText(shown) || undefined) ? OWN_HOST_LINE : undefined);
+        ((window => ownWindow(window) ? ownLine(window.appId, window.app) : undefined)(lastWindowFromText(shown) || undefined));
       withheld.delete(msg.id);
       if (line) { delete msg.error; msg.result = { isError: true, content: [{ type: 'text', text: line }] }; listClicks = []; stuckPlan = undefined; }
     }

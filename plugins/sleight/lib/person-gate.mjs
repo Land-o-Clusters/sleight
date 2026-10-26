@@ -2,7 +2,9 @@
 // started it in a terminal. The hook reads command text; this reads the process itself. Read-only forms run anywhere.
 // Tests inject the ancestor walk as a function. Nothing in the environment turns this off.
 import { execFileSync } from 'node:child_process';
+import { closeSync, constants, fstatSync, ftruncateSync, lstatSync, openSync, realpathSync, statSync, writeFileSync } from 'node:fs';
 import { userInfo } from 'node:os';
+import { basename, dirname, join, resolve } from 'node:path';
 
 // Each command family the launcher gates, with the forms that only read. Every other form in a family is refused
 // unless a person started it, so a new writer is covered before anyone lists it here.
@@ -28,7 +30,7 @@ export function settingsCommand(args) {
 
 // The refusal's reason, from the walk's reason code.
 const REASONS = { 'no terminal': 'no terminal', claude: 'started under an agent', openai: 'started under an agent', agent: 'started under an agent',
-  multiplexer: 'inside a terminal multiplexer', timeout: 'check timed out' };
+  multiplexer: 'inside a terminal multiplexer', timeout: 'check timed out', 'fresh session': 'the terminal opened less than 10 s ago, so try again' };
 const NOT_FROM_TERMINAL = ['no tty', 'no terminal app', 'unknown ancestor', 'session', 'orphaned', 'too deep'];
 export const reasonText = code => REASONS[code] ?? (NOT_FROM_TERMINAL.includes(code) ? 'not started from a terminal app' : 'check failed');
 export const refusalLine = (command, code = 'check failed') =>
@@ -69,8 +71,16 @@ const TERMINAL_BUNDLES = ['iTerm.app', 'Ghostty.app', 'WezTerm.app', 'kitty.app'
 export const terminalBundles = home => ['/System/Applications/Utilities/Terminal.app/Contents/', '/Applications/Utilities/Terminal.app/Contents/',
   ...TERMINAL_BUNDLES.flatMap(bundle => [`/Applications/${bundle}/Contents/`, ...home ? [`${home.replace(/\/$/, '')}/Applications/${bundle}/Contents/`] : []])];
 
+// LC_ALL=C keeps ps's output in one format whatever language the person's terminal uses.
 const run = (file, argv, timeout) => execFileSync(file, argv,
-  { encoding: 'utf8', timeout: Math.max(1, Math.ceil(timeout)), stdio: ['ignore', 'pipe', 'ignore'] });
+  { encoding: 'utf8', timeout: Math.max(1, Math.ceil(timeout)), stdio: ['ignore', 'pipe', 'ignore'], env: { ...process.env, LC_ALL: 'C' } });
+/** Milliseconds from ps's etime ([[dd-]hh:]mm:ss), or NaN for anything else. */
+export function elapsedMs(text) {
+  const match = /^\s*(?:(?:(\d+)-)?(\d{1,2}):)?(\d{1,2}):(\d{2})\s*$/.exec(String(text ?? ''));
+  if (!match) return NaN;
+  const [, days = 0, hours = 0, minutes, seconds] = match;
+  return (((Number(days) * 24 + Number(hours)) * 60 + Number(minutes)) * 60 + Number(seconds)) * 1000;
+}
 export const systemPs = (argv, timeout) => run('/bin/ps', argv, timeout);
 /** The file a process actually runs. ps takes comm and args from argv[0], which `exec -a` sets to anything, so a terminal is
  *  confirmed by its mapped executable: lsof lists it first among the txt entries. */
@@ -82,10 +92,10 @@ const homeFolder = () => { try { return userInfo().homedir; } catch { return und
 /** An allow-list walk from `pid` (the launcher's parent) up to launchd, one ps call per level, at most `levels` levels within
  *  `budgetMs` for every call together. Only shells and their starters may sit below a GUI terminal app, the terminal's own
  *  processes above it (each confirmed by its executable), then launchd. The session leader of the launcher's controlling tty
- *  (`self`) must be one of those shells. ps(argv, msLeft) returns ps's output, executable(pid, msLeft) the running file.
+ *  (`self`) must be one of those shells, started `freshMs` or more ago. ps(argv, msLeft) returns ps's output, executable(pid, msLeft) the running file.
  *  Returns { ok: true } or { ok: false, reason }; anything it can't read fails closed. */
 export function walkAncestors({ pid = process.ppid, self = process.pid, ps = systemPs, executable = systemExecutable, home = homeFolder(),
-  levels = 32, budgetMs = 1000, now = Date.now } = {}) {
+  levels = 32, budgetMs = 1000, now = Date.now, freshMs = 10000 } = {}) {
   const deadline = now() + budgetMs, bundles = terminalBundles(home);
   const timed = (fn, value) => {
     const left = deadline - now();
@@ -125,8 +135,70 @@ export function walkAncestors({ pid = process.ppid, self = process.pid, ps = sys
       .filter(m => m && m[2].includes('s')).map(m => Number(m[1]));
     const at = leaders.length === 1 ? chain.indexOf(leaders[0]) : -1;
     if (at < 0 || at >= terminalAt) return { ok: false, reason: 'session' };
+    // A speed bump, not a guarantee: an agent that opens a fresh terminal and types at once meets a session under 10 s old.
+    // etime has no month or day names, so no locale changes it; anything that isn't etime fails closed.
+    if (freshMs > 0) {
+      const age = elapsedMs(call(['-o', 'etime=', '-p', String(leaders[0])]));
+      if (!Number.isFinite(age)) return { ok: false, reason: 'unreadable' };
+      if (age < freshMs) return { ok: false, reason: 'fresh session' };
+    }
     return { ok: true };
   } catch (error) { return { ok: false, reason: error === TIMEOUT ? 'timeout' : 'ps failed' }; }
+}
+
+// The real path of `value`, or of its nearest existing folder with the rest appended.
+const canonicalPath = (value, real = realpathSync.native) => { let at = resolve(value), rest = []; for (;;) {
+  try { return join(real(at), ...rest); } catch (error) { if (error?.code !== 'ENOENT' || dirname(at) === at) throw error; }
+  rest.unshift(basename(at)); at = dirname(at);
+} };
+// Whether a real path is sleight's settings folder or inside it. APFS ignores case by default, so the comparison does too.
+function underSettings(realPath, home, real = realpathSync.native) {
+  const folder = join(home, 'Library/Application Support/sleight');
+  const target = realPath.toLowerCase(), roots = [folder, canonicalPath(folder, real)].map(root => root.toLowerCase().replace(/\/$/, ''));
+  return roots.some(root => target === root || target.startsWith(root + '/'));
+}
+
+/** Whether writing `path` would land in sleight's settings folder (~/Library/Application Support/sleight), after links:
+ *  the file's own real path when it exists, else its nearest existing folder's real path with the rest appended. A file
+ *  with another hard link could be a settings file under a second name, so it counts as inside. This is a courtesy check
+ *  before a long recording; writeOutsideSettings is the one that holds. */
+export function insideSettings(path, { home = homeFolder(), real = realpathSync.native, stat = lstatSync } = {}) {
+  if (typeof path !== 'string' || !path || !home) return true;
+  try {
+    try { if (stat(path).nlink > 1) return true; } catch (error) { if (error?.code !== 'ENOENT') return true; }
+    return underSettings(canonicalPath(path, real), home, real);
+  } catch { return true; }
+}
+
+const outsideRefusal = () => Object.assign(Error("record doesn't write into sleight's settings folder; pick another output path"), { code: 'SETTINGS_OUT' });
+/** Write `text` to `path` unless it lands in sleight's settings folder, with nothing checked ahead of the write. The process
+ *  changes into path's folder first: its working folder then holds that folder's inode, so a parent swapped for a link
+ *  afterwards (`between`, a test seam) can't redirect the write. The folder's real location is read from that inode and
+ *  checked, the file is opened relative to it without following a link, and a file with another hard link is refused
+ *  before anything is truncated. exclusive adds O_EXCL. Throws an Error with code SETTINGS_OUT on a refusal. */
+export function writeOutsideSettings(path, text, { home = homeFolder(), exclusive = false, mode = 0o644, between = () => {} } = {}) {
+  if (typeof path !== 'string' || !path || !home) throw outsideRefusal();
+  const name = basename(path);
+  if (!name || name === '.' || name === '..' || path.endsWith('/')) throw outsideRefusal();
+  const previous = process.cwd();
+  process.chdir(dirname(resolve(path)));
+  try {
+    between();
+    const here = realpathSync.native('.'), held = statSync('.'), named = statSync(here);
+    if (held.dev !== named.dev || held.ino !== named.ino || underSettings(here, home)) throw outsideRefusal();
+    const { O_WRONLY, O_CREAT, O_EXCL, O_NOFOLLOW } = constants;
+    let fd;
+    try { fd = openSync(name, O_WRONLY | O_CREAT | O_NOFOLLOW | (exclusive ? O_EXCL : 0), mode); }
+    catch (error) {
+      if (error?.code === 'ELOOP') throw Object.assign(Error("record doesn't write through a link at the output path; pick another output path"), { code: 'SETTINGS_OUT' });
+      throw error;
+    }
+    try {
+      const file = fstatSync(fd);
+      if (!file.isFile() || file.nlink > 1) throw outsideRefusal();
+      ftruncateSync(fd, 0); writeFileSync(fd, text);
+    } finally { closeSync(fd); }
+  } finally { process.chdir(previous); }
 }
 
 // Claude Code sets these in every shell it starts, and a daemon started there inherits them. One more signal on top of the walk.
@@ -135,13 +207,15 @@ const AGENT_ENV = ['CLAUDECODE', 'CLAUDE_CODE_ENTRYPOINT'];
 /** undefined when the person may run args, else the refusal line. All must hold: stdin and stdout are terminals, the
  *  environment carries no agent marker, and the walk reaches a GUI terminal app through shells alone (a pseudo-terminal
  *  started from an agent's shell sits under the agent, and a multiplexer server sits under launchd, so both refuse). */
-export function settingsRefusal(args, { stdin = process.stdin, stdout = process.stdout, env = process.env, ancestors = walkAncestors } = {}) {
+// freshMs: the session-age bar, 10 s by default. The launcher passes 0 for forms that only take access away or change looks,
+// so a person stopping sleight from a terminal they just opened isn't held up.
+export function settingsRefusal(args, { stdin = process.stdin, stdout = process.stdout, env = process.env, ancestors = walkAncestors, freshMs = 10000 } = {}) {
   const command = settingsCommand(args);
   if (command === undefined) return undefined;
   try {
     if (stdin?.isTTY !== true || stdout?.isTTY !== true) return refusalLine(command, 'no terminal');
     if (AGENT_ENV.some(name => env?.[name])) return refusalLine(command, 'agent');
-    const walked = ancestors();
+    const walked = ancestors({ freshMs });
     if (walked?.ok !== true) return refusalLine(command, walked?.reason);
   } catch { return refusalLine(command); }
   return undefined;

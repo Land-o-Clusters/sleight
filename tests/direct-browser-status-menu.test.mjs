@@ -41,7 +41,8 @@ test('Turn Turbo Off asks first, and Settings & Help opens only the fixed docs a
 test('the Permissions rows only remove access: Revoke and Never Act answer at once on the hand channel, and nothing lifts a block', () => {
   assert.match(source, /@objc func permissionClick\(_ sender: NSMenuItem\) \{\n {8}guard let event = sender\.representedObject as\? \[String: String\] else \{ return \}\n {8}writePermissionEvent\(event\)\n {4}\}/);
   assert.match(source, /\["revoke", "revoke-all", "block"\]\.contains\(op\)/);
-  assert.doesNotMatch(source, /[Uu]nblock"/, 'no menu row unblocks');
+  // The CLI confirmation's reason table names unblock (VC10); no menu row does.
+  assert.doesNotMatch(source.replace(/\/\/ BEGIN PERSON CONFIRM[\s\S]*?\/\/ END PERSON CONFIRM/, ''), /[Uu]nblock"/, 'no menu row unblocks');
   assert.match(source, /func menuNeedsUpdate\(_ menu: NSMenu\) \{ fillPermissions\(menu\) \}/);
 });
 
