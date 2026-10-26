@@ -32,7 +32,7 @@ test('Turn Turbo Off asks first, and Settings & Help opens only the fixed docs a
   assert.match(confirmOff, /alert\.addButton\(withTitle: "Turn Off"\)\n\s*alert\.addButton\(withTitle: "Cancel"\)\n\s*let answer = personModal\(alert, choices: \["turbo-off", "cancel"\], kind: "turbo-off"\)\n\s*if answer == \.alertFirstButtonReturn \{ respond\(id, choice\) \}/);
   assert.equal(confirmOff.match(/respond\(/g)?.length, 1, 'only the confirmed first button responds');
   // This alert must install GB12's guarded actions and retain them throughout the abortable modal.
-  assert.match(source, /func personModal\([^\n]+\{\n\s*let actions = consentInputActions\(alert, choices: choices, kind: kind\)\n(?:\s*defer \{ for action in actions \{ action\.typing\?\.invalidate\(\) \} \}\n)?\s*focus\.presenting\(\[:\]\)\n\s*let result = withExtendedLifetime\(actions\) \{ modal\.run\(abort: \{ NSApp\.abortModal\(\) \}\) \{ alert\.runModal\(\) \} \}\n[^}]*DispatchQueue\.main\.async \{ self\.showNextAsk\(\) \}\n\s*return result/);
+  assert.match(source, /func personModal\([^\n]+\{\n\s*let actions = consentInputActions\(alert, choices: choices, kind: kind\)\n(?:\s*defer \{ for action in actions \{ action\.typing\?\.invalidate\(\) \} \}\n)?\s*focus\.presenting\(\[:\]\)\n(?:\s*consentArming\(alert\.window\)\.presented\(\)\n)?\s*let result = withExtendedLifetime\(actions\) \{ modal\.run\(abort: \{ NSApp\.abortModal\(\) \}\) \{ alert\.runModal\(\) \} \}\n[^}]*DispatchQueue\.main\.async \{ self\.showNextAsk\(\) \}\n\s*return result/);
   assert.match(source, /return choice == "always" \|\| \[[^\n]*"turbo-off"(?:, "handoff")?\]\.contains\(kind\)/);
   assert.match(source, /URL\(string: "https:\/\/github\.com\/Land-o-Clusters\/sleight\/blob\/main\/docs\/settings\.md#" \+ \(status == nil \? "ghost-hand" : "turbo"\)\)/);
   assert.equal(source.match(/NSWorkspace\.shared\.open/g)?.length, 2, 'help plus the hardware-clicked characters folder');
@@ -43,7 +43,9 @@ test('the Permissions rows only remove access: Revoke and Never Act answer at on
   assert.match(source, /\["revoke", "revoke-all", "block"\]\.contains\(op\)/);
   // The CLI confirmation's reason table names unblock (VC10); no menu row does.
   assert.doesNotMatch(source.replace(/\/\/ BEGIN PERSON CONFIRM[\s\S]*?\/\/ END PERSON CONFIRM/, ''), /[Uu]nblock"/, 'no menu row unblocks');
-  assert.match(source, /func menuNeedsUpdate\(_ menu: NSMenu\)[\s\S]*?writeCursorPickerEvent\(\["op": "refresh"\]\)[\s\S]*?fillPermissions\(menu\)/);
+  // The picker refreshes once per open of the main menu (menuWillOpen); the Permissions submenu refills on each update.
+  assert.match(source, /func menuWillOpen\(_ menu: NSMenu\) \{\n(?:[^\n]*\n)?\s*if menu === item\.menu, hand\?\.enabled == true \{ writeCursorPickerEvent\(\["op": "refresh"\]\) \}/);
+  assert.match(source, /func menuNeedsUpdate\(_ menu: NSMenu\)[\s\S]*?fillPermissions\(menu\)/);
 });
 
 test('the usage row is a plain disabled line that answers nothing', () => {
