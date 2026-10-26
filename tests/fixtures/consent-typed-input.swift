@@ -6,6 +6,7 @@ var fixtureSwitchControl = false
 var fixtureKeyAllowed = true
 var trustedEvents = Set<ObjectIdentifier>()
 var fixtureVisibleWindows = Set<ObjectIdentifier>()
+let fixtureWorkspaceCenter = NotificationCenter(), fixtureUnlockCenter = NotificationCenter()
 let fixtureWindowServerPID: Int64 = 424242
 var fixtureSourcePID: Int64 = 0
 var fixtureSourceState = CGEventSourceStateID.hidSystemState
@@ -146,10 +147,20 @@ func checkMaskedText(_ field: ConsentWordField, count: Int) {
         check(field.accessibilityAttributeValue(.attributedStringForRange, forParameter: parameter) == nil, "malformed legacy AX attributed parameter returns no text")
     }
 }
-func mouse(_ view: ConsentTyping, trusted: Bool = true, age: Double = 0) -> NSEvent {
-    let event = NSEvent.mouseEvent(with: .leftMouseDown, location: view.field.convert(.zero, to: nil), modifierFlags: [], timestamp: ProcessInfo.processInfo.systemUptime - age, windowNumber: view.window!.windowNumber, context: nil, eventNumber: 0, clickCount: 1, pressure: 1)!
+func mouse(_ view: ConsentTyping, trusted: Bool = true, age: Double = 0, type: NSEvent.EventType = .leftMouseDown) -> NSEvent {
+    let event = NSEvent.mouseEvent(with: type, location: view.field.convert(.zero, to: nil), modifierFlags: [], timestamp: ProcessInfo.processInfo.systemUptime - age, windowNumber: view.window!.windowNumber, context: nil, eventNumber: 0, clickCount: 1, pressure: 1)!
     if trusted { trustedEvents.insert(ObjectIdentifier(event)) }
     return event
+}
+func click(_ action: ConsentInputAction, _ button: NSButton, _ up: NSEvent, downAt: Double? = nil) -> Bool {
+    let down = NSEvent.mouseEvent(with: .leftMouseDown, location: up.locationInWindow, modifierFlags: [],
+        timestamp: downAt ?? up.timestamp, windowNumber: up.windowNumber, context: nil, eventNumber: 0, clickCount: 1, pressure: 1)!
+    if trustedEvents.contains(ObjectIdentifier(up)) { trustedEvents.insert(ObjectIdentifier(down)) }
+    fixtureCurrentEvent = up
+    defer { fixtureCurrentEvent = nil; trustedEvents.remove(ObjectIdentifier(down)) }
+    var accepted = false
+    action.trackMouseDown(down) { accepted = action.press(button) }
+    return accepted
 }
 func enter(_ view: ConsentTyping, _ route: Route = .equivalent, code: UInt16 = 36, trusted: Bool = true, current: Bool = true) {
     send(key(code == 76 ? "\u{3}" : "\r", in: view.window!, code: code, trusted: trusted, flags: code == 76 ? .numericPad : []), route, current: current)
@@ -253,6 +264,20 @@ for caller in ["picker", "pause", "status menu"] {
     check(!personActivation(repeatEvent, windowMatches: true, consent: true), "consent independently refuses repeated key-down")
     trustedEvents.remove(ObjectIdentifier(event)); trustedEvents.remove(ObjectIdentifier(repeatEvent))
     fixtureSourcePID = 0
+    let accepted = key("\r", in: alert.window, code: 36)
+    if caller == "pause" {
+        let control = CursorPauseControl()
+        var sent = 0
+        control.send = { _ in sent += 1; return true }
+        check(control.click(accepted, windowMatches: true) && control.pending != nil && sent > 0, "actual pause accepts pid zero")
+    } else {
+        let menu = CursorPickerMenu(), item = NSMenuItem(title: caller, action: nil, keyEquivalent: "")
+        menu.addItem(item); menu.trackingWindow = alert.window; menu.lastHighlighted = item
+        fixtureCurrentEvent = accepted
+        check(personMenuActivation(item), "actual \(caller) menu accepts pid zero")
+        fixtureCurrentEvent = nil
+    }
+    trustedEvents.remove(ObjectIdentifier(accepted))
     check(receipt.choices.isEmpty, "provenance classifier emits no choice")
     _ = view; _ = actions
 }
@@ -272,10 +297,10 @@ for (kind, choice, title) in [("action", "once", "Allow once"), ("opt-in", "enab
             check(protected.keyEquivalent.isEmpty && alert.window.defaultButtonCell == nil, "\(kind) has no protected default after relayout")
             enter(view, route, code: code)
             check(receipt.choices.isEmpty, "\(kind) bare Return refuses through \(route), key \(code)")
-            let early = mouse(view, age: 0.2), arming = consentArming(alert.window)
+            let early = mouse(view, age: 0.2, type: .leftMouseUp), arming = consentArming(alert.window)
             arming.presented(at: early.timestamp - consentArmingDelay + 0.001)
             fixtureCurrentEvent = early
-            check(!actions[0].press(protected) && receipt.choices.isEmpty, "\(kind) queued alert click inside 500 ms refuses")
+            check(!click(actions[0], protected, early) && receipt.choices.isEmpty, "\(kind) queued alert click inside 500 ms refuses")
             fixtureCurrentEvent = nil; trustedEvents.remove(ObjectIdentifier(early))
             arming.presented()
             send(key("o", in: alert.window), route)
@@ -284,10 +309,10 @@ for (kind, choice, title) in [("action", "once", "Allow once"), ("opt-in", "enab
             type(word(view, title), view, route); enter(view, route, code: code)
             check(receipt.choices == [title], "\(kind) typed word approves exact choice")
             receipt.choices = []
-            let boundary = mouse(view)
+            let boundary = mouse(view, type: .leftMouseUp)
             arming.presented(at: boundary.timestamp - consentArmingDelay)
             fixtureCurrentEvent = boundary
-            check(actions[0].press(protected) && receipt.choices == [title], "\(kind) alert click exactly at 500 ms approves")
+            check(click(actions[0], protected, boundary) && receipt.choices == [title], "\(kind) alert click exactly at 500 ms approves")
             fixtureCurrentEvent = nil; trustedEvents.remove(ObjectIdentifier(boundary))
             receipt.choices = []
             arming.presented()
@@ -306,10 +331,11 @@ for kind in ["action", "debugger", "relaunch", "handoff", "app"] {
         choices: ["cancel", choice]), deadline: Date().timeIntervalSince1970 * 1000 + 60000) { answers.append($0) }
     let view = card.typing!, action = card.actions[0], button = action.button!, arming = consentArming(card.panel)
     prepare(card.panel, view.field)
-    let early = mouse(view, age: 0.2)
+    let early = mouse(view, age: 0.2, type: .leftMouseUp)
     arming.presented(at: early.timestamp - consentArmingDelay + 0.001)
     fixtureCurrentEvent = early
-    check(!action.press(button) && answers.isEmpty, "\(kind) queued input at 499 ms refuses after dispatch at 699 ms")
+    check(!click(action, button, early) && answers.isEmpty, "\(kind) queued input at 499 ms refuses after dispatch at 699 ms")
+    check(card.feedback.stringValue == consentTimingMessage, "\(kind) timing refusal has its own message")
     fixtureCurrentEvent = nil; trustedEvents.remove(ObjectIdentifier(early))
     let letter = key("o", in: card.panel)
     arming.presented(at: letter.timestamp - consentArmingDelay + 0.001)
@@ -317,7 +343,9 @@ for kind in ["action", "debugger", "relaunch", "handoff", "app"] {
     check(view.field.stringValue.isEmpty && answers.isEmpty, "\(kind) early word input does nothing")
     arming.presented(at: ProcessInfo.processInfo.systemUptime - 10)
     type(word(view, button.title), view)
+    fixtureVisibleWindows.insert(ObjectIdentifier(card.panel))
     NotificationCenter.default.post(name: NSWindow.didBecomeKeyNotification, object: card.panel)
+    fixtureVisibleWindows.remove(ObjectIdentifier(card.panel))
     enter(view)
     check(answers.isEmpty && view.field.stringValue.isEmpty, "\(kind) key activation rearms and clears pending word")
     for notification in [NSApplication.willBecomeActiveNotification, NSApplication.didBecomeActiveNotification] {
@@ -342,7 +370,82 @@ for kind in ["action", "debugger", "relaunch", "handoff", "app"] {
     card.close()
 }
 
-// A protected native button requires the word for keyboard dispatch. Direct mouse events still work.
+// A fully armed inactive card accepts its first activating click, but an early press cannot be held through the delay.
+for downDelay in [0.7, 0.2] {
+    let (alert, view, actions, receipt) = modal(true)
+    let action = actions[0], button = alert.buttons[0], arming = consentArming(alert.window)
+    let up = mouse(view, type: .leftMouseUp), shown = up.timestamp - 0.75
+    let down = NSEvent.mouseEvent(with: .leftMouseDown, location: up.locationInWindow, modifierFlags: [],
+        timestamp: shown + downDelay, windowNumber: up.windowNumber, context: nil, eventNumber: 0, clickCount: 1, pressure: 1)!
+    trustedEvents.insert(ObjectIdentifier(down))
+    arming.presented(at: shown)
+    fixtureVisibleWindows.insert(ObjectIdentifier(alert.window)); fixtureKeyWindow = nil
+    fixtureCurrentEvent = down
+    NotificationCenter.default.post(name: NSApplication.willBecomeActiveNotification, object: NSApp)
+    fixtureKeyWindow = alert.window
+    NotificationCenter.default.post(name: NSWindow.didBecomeKeyNotification, object: alert.window)
+    var accepted = false
+    action.trackMouseDown(down) {
+        fixtureCurrentEvent = up
+        NotificationCenter.default.post(name: NSApplication.didBecomeActiveNotification, object: NSApp)
+        accepted = action.press(button)
+    }
+    check(accepted == (downDelay == 0.7), "inactive card click at \(downDelay * 1000) ms, up at 750 ms")
+    check(receipt.choices == (downDelay == 0.7 ? ["Always allow"] : []), "activating click emits exact expected choice")
+    check(button.acceptsFirstMouse(for: down), "protected button accepts the first inactive click")
+    fixtureCurrentEvent = nil; fixtureVisibleWindows.remove(ObjectIdentifier(alert.window))
+    trustedEvents.remove(ObjectIdentifier(down)); trustedEvents.remove(ObjectIdentifier(up))
+}
+do {
+    let (alert, view, actions, receipt) = modal(true)
+    let arming = consentArming(alert.window), up = mouse(view, type: .leftMouseUp), shown = up.timestamp - 0.75
+    arming.presented(at: shown)
+    check(!click(actions[0], alert.buttons[0], up, downAt: shown + 0.2), "press at 200 ms held until 750 ms refuses")
+    check(receipt.choices.isEmpty, "held early press emits nothing")
+    arming.presented(at: shown)
+    fixtureCurrentEvent = up
+    check(!actions[0].press(alert.buttons[0]), "mouse-up without tracked mouse-down refuses")
+    fixtureCurrentEvent = nil; trustedEvents.remove(ObjectIdentifier(up))
+}
+for foreign in [false, true] {
+    let (alert, view, actions, receipt) = modal(true)
+    let (other, otherView, otherActions, _) = modal(true)
+    let arming = consentArming(alert.window), shown = ProcessInfo.processInfo.systemUptime - 10
+    arming.presented(at: shown)
+    fixtureVisibleWindows.insert(ObjectIdentifier(alert.window))
+    let event = foreign ? mouse(otherView) : key("o", in: alert.window)
+    fixtureCurrentEvent = event
+    NotificationCenter.default.post(name: NSApplication.willBecomeActiveNotification, object: NSApp)
+    check(arming.presentedAt > shown, "keyboard or another window's mouse activation rearms the card")
+    fixtureCurrentEvent = nil; fixtureVisibleWindows.remove(ObjectIdentifier(alert.window))
+    trustedEvents.remove(ObjectIdentifier(event)); _ = actions; _ = otherActions; _ = other; _ = view; _ = receipt
+}
+
+// All re-exposure signals rearm visible cards, while hidden cards keep their presentation timestamp.
+for (center, notification, object) in [
+    (NotificationCenter.default, NSWindow.didBecomeKeyNotification, true),
+    (.default, NSApplication.willBecomeActiveNotification, false),
+    (.default, NSApplication.didBecomeActiveNotification, false),
+    (.default, NSWindow.didChangeOcclusionStateNotification, true),
+    (fixtureWorkspaceCenter, NSWorkspace.activeSpaceDidChangeNotification, false),
+    (fixtureWorkspaceCenter, NSWorkspace.sessionDidBecomeActiveNotification, false),
+    (fixtureUnlockCenter, Notification.Name("com.apple.screenIsUnlocked"), false)
+] {
+    for visible in [false, true] {
+        let (alert, view, actions, receipt) = modal(true)
+        let arming = consentArming(alert.window), shown = ProcessInfo.processInfo.systemUptime - 10
+        arming.presented(at: shown)
+        if visible { fixtureVisibleWindows.insert(ObjectIdentifier(alert.window)) }
+        center.post(name: notification, object: object ? alert.window : nil)
+        check((arming.presentedAt > shown) == visible, "\(notification.rawValue) rearms only a visible card")
+        let fresh = mouse(view)
+        check(arming.accepts(fresh) == !visible, "\(notification.rawValue) enforces a new delay")
+        fixtureVisibleWindows.remove(ObjectIdentifier(alert.window)); trustedEvents.remove(ObjectIdentifier(fresh))
+        _ = actions; _ = receipt
+    }
+}
+
+// A protected native button requires the word for keyboard dispatch. Complete mouse clicks still work.
 // Every accepted event is spent once.
 for pid in [Int64(0), fixtureWindowServerPID] {
     fixtureSourcePID = pid
@@ -361,10 +464,12 @@ for pid in [Int64(0), fixtureWindowServerPID] {
                 event = NSEvent.keyEvent(with: type, location: .zero, modifierFlags: [], timestamp: ProcessInfo.processInfo.systemUptime, windowNumber: window.windowNumber, context: nil, characters: "a", charactersIgnoringModifiers: "a", isARepeat: false, keyCode: 0)!
             }
             trustedEvents.insert(ObjectIdentifier(event)); fixtureCurrentEvent = event
-            let before = receipt.choices.count, allowed = type == .leftMouseDown || type == .leftMouseUp
-            check(action.press(button) == allowed, "native consent dispatch preserves pid \(pid), type \(type), mouseOnly \(mouseOnly)")
+            let before = receipt.choices.count, allowed = type == .leftMouseUp
+            let accepted = allowed ? click(action, button, event) : action.press(button)
+            check(accepted == allowed, "native consent dispatch preserves pid \(pid), type \(type), mouseOnly \(mouseOnly)")
             check(receipt.choices.count == before + (allowed ? 1 : 0), "button emits only the expected receipt")
-            check(!action.press(button), "same consent event cannot dispatch twice")
+            if allowed { check(!click(action, button, event), "same consent mouse-up cannot dispatch twice") }
+            else { check(!action.press(button), "refused key or mouse-down still cannot dispatch") }
             trustedEvents.remove(ObjectIdentifier(event)); fixtureCurrentEvent = nil
         }
         check(!window.isVisible, "native button regression window never ordered")

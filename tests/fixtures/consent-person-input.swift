@@ -10,6 +10,8 @@ let receipt = Receipt()
 // Detached AppKit controls defer AX activation until they are visible. This helper dispatches the AX action
 // synchronously so the real runtime subclass and target guard can be tested without displaying a window.
 final class AXFixtureButton: NSButton {
+    var duringMouseDown: (() -> Void)?
+    override func mouseDown(with event: NSEvent) { duringMouseDown?() }
     override func accessibilityPerformPress() -> Bool { sendAction(action, to: target) }
     override func accessibilityPerformAction(_ action: NSAccessibility.Action) {
         if action == .press { _ = accessibilityPerformPress() }
@@ -37,6 +39,17 @@ func event(_ state: CGEventSourceStateID, _ pid: Int64 = 0, _ data: Int64 = 0, k
     cg.timestamp = DispatchTime.now().uptimeNanoseconds
     return NSEvent(cgEvent: cg)!
 }
+// Supply the mouse-down AppKit's real tracking loop would deliver, without posting input.
+func press(_ action: ConsentInputAction, _ button: NSButton, _ event: NSEvent?) {
+    guard let event = event, event.type == .leftMouseUp, let cg = event.cgEvent?.copy() else { action.press(button); return }
+    cg.type = .leftMouseDown
+    let down = NSEvent(cgEvent: cg)!
+    // The runtime subclass calls this fixture superclass instead of AppKit's blocking tracking loop.
+    let tracking = button as! AXFixtureButton
+    tracking.duringMouseDown = { action.press(button) }
+    button.mouseDown(with: down)
+    tracking.duringMouseDown = nil
+}
 // No NSApplication run loop, windows, global AX calls or posted input. These are the actual button/action objects.
 let always = button("Always allow")
 var current: NSEvent?
@@ -44,12 +57,12 @@ let guarded = ConsentInputAction(always, currentEvent: { current })
 eventWindow = always.window!.windowNumber
 check(!always.accessibilityPerformPress(), "AXPress refused")
 check(receipt.choices.isEmpty, "AX writes no pre-approval receipt")
-guarded.press(always)
+press(guarded, always, current)
 check(receipt.choices.isEmpty, "no current event writes nothing")
 for sample in [event(.combinedSessionState, Int64(getpid())), event(.privateState, Int64(getpid())),
     event(.hidSystemState, Int64(getpid())), event(.hidSystemState, 0, 9), event(.combinedSessionState, 0, key: true),
     event(.hidSystemState, Int64(getpid()), key: true)] {
-    current = sample; guarded.press(always)
+    current = sample; press(guarded, always, current)
     check(receipt.choices.isEmpty, "posted input writes no pre-approval receipt")
 }
 // Even a leftover genuine event cannot turn AXPress into a person's click.
@@ -60,17 +73,17 @@ check(!always.accessibilityPerformPress(), "AX refused with a current HID event"
 always.accessibilityPerformAction(.press)
 check(receipt.choices.isEmpty, "legacy AX refused even with current HID event")
 let refused = receipt.choices
-guarded.press(always)
+press(guarded, always, current)
 check(receipt.choices == ["Always allow"], "HID click reaches original action exactly once")
-guarded.press(always)
+press(guarded, always, current)
 check(receipt.choices == ["Always allow"], "the same HID event is spent after one action")
 let loose = AXFixtureButton(title: "Always allow", target: receipt, action: #selector(Receipt.accept(_:)))
 let looseGuard = ConsentInputAction(loose, currentEvent: { current })
 current = event(.hidSystemState); looseGuard.press(loose)
 check(receipt.choices == ["Always allow"], "a button without a window refuses a fresh HID click")
-current = event(.hidSystemState, 0, key: true); guarded.press(always)
+current = event(.hidSystemState, 0, key: true); press(guarded, always, current)
 check(receipt.choices.count == 1, "HID key without a typed word refuses")
-current = event(.hidSystemState); guarded.press(always)
+current = event(.hidSystemState); press(guarded, always, current)
 check(receipt.choices.count == 2, "a second deliberate HID click reaches original action")
 let session = button("Allow this session"), decline = button("Decline")
 session.accessibilityPerformAction(.press)
@@ -84,7 +97,7 @@ check(personChoice("app", "always") && !personChoice("app", "once"), "ordinary a
 check(!personInput(nil), "missing CGEvent")
 let old = event(.hidSystemState).cgEvent!
 old.timestamp = 1
-current = NSEvent(cgEvent: old); guarded.press(always)
+current = NSEvent(cgEvent: old); press(guarded, always, current)
 check(receipt.choices.count == 4, "old hardware event is refused")
 // A busy main thread may dispatch a genuine event after more than one second. A fresh window has spent nothing yet.
 let late = button("Always allow")
@@ -95,15 +108,15 @@ func aged(_ seconds: Double) -> NSEvent {
     cg.timestamp = DispatchTime.now().uptimeNanoseconds - UInt64(seconds * 1_000_000_000)
     return NSEvent(cgEvent: cg)!
 }
-current = aged(5.1); lateGuard.press(late)
+current = aged(5.1); press(lateGuard, late, current)
 check(receipt.choices.count == 4, "HID click beyond five seconds is refused")
-current = aged(4); lateGuard.press(late)
+current = aged(4); press(lateGuard, late, current)
 check(receipt.choices.count == 5, "four-second HID click is accepted")
-current = aged(4.5); lateGuard.press(late)
+current = aged(4.5); press(lateGuard, late, current)
 check(receipt.choices.count == 5, "an event older than one this window spent is refused")
 let future = event(.hidSystemState).cgEvent!
 future.timestamp = DispatchTime.now().uptimeNanoseconds + 1_000_000_000
-current = NSEvent(cgEvent: future); guarded.press(always)
+current = NSEvent(cgEvent: future); press(guarded, always, current)
 check(receipt.choices.count == 5, "future event is refused")
 // Exercise installation on NSAlert's actual buttons too, without running or displaying the alert.
 let alert = NSAlert()
@@ -156,10 +169,10 @@ check(!continuation.accessibilityPerformPress(), "Continue refuses AXPress")
 continuation.accessibilityPerformAction(.press)
 for sample in [event(.combinedSessionState, Int64(getpid())), event(.hidSystemState, Int64(getpid())),
     event(.hidSystemState, 0, key: true)] {
-    continueEvent = sample; continueGuard.press(continuation)
+    continueEvent = sample; press(continueGuard, continuation, continueEvent)
 }
 check(receipt.choices == beforeContinue, "Continue refuses posted events and Space")
-continueEvent = event(.hidSystemState); continueGuard.press(continuation)
+continueEvent = event(.hidSystemState); press(continueGuard, continuation, continueEvent)
 check(receipt.choices == beforeContinue + ["Continue"], "deliberate HID Continue click reaches original action")
 receipt.choices = beforeContinue
 check(windows.allSatisfy { !$0.isVisible }, "button windows stay unordered")

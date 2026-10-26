@@ -70,10 +70,12 @@ the change is refused before any sheet shows.
 ## Mac consent cards
 
 Protected choices on sleight's own cards and review alerts wait 500 ms after presentation, each re-show, and window or
-application activation. `consentArmingDelay` names this interval once in the host, matching Windows. The guard compares
-the event's timestamp with the presentation time, so input from inside the interval still refuses if dispatch is late.
-Early letters cannot build a confirmation word. Re-showing or activating the card clears a pending word before further
-typing. Cancel and Decline stay immediate.
+application activation. A click that activates an inactive card keeps the existing delay when the card was already visible
+for 500 ms before mouse-down. Space changes, screen unlock and window occlusion changes rearm visible cards.
+`consentArmingDelay` names this interval once in the host, matching Windows. Both mouse-down and mouse-up must fall after
+the arming point, so holding an early press through the delay cannot approve. Input from inside the interval still refuses
+if dispatch is late, with "Too soon: try again." Early letters cannot build a confirmation word. A rearm clears a pending
+word before further typing. Cancel and Decline stay immediate.
 
 Protected alert buttons have no Return default. Their keyboard path requires the displayed word in the focused confirmation
 field, then Return or keypad Enter. Space on a button cannot approve. A protected mouse click still works after the delay.
@@ -84,6 +86,12 @@ rule. Only consent permits verified WindowServer provenance. Button order and mo
 The host applies these rules to operation review, session opt-in, resume, Turn Turbo Off, debugger, relaunch, handoff and
 Always allow choices. Ordinary session app approval remains host-answerable. The macOS Touch ID or password sheet uses
 LocalAuthentication and follows the system's input rules.
+
+People using assistive input can still Cancel or Decline, and can type `allow <app>` in their own prompt for low-risk app
+cards. That prompt route cannot approve payments, operations, debugger access or Always allow. VoiceOver users with a
+physical keyboard can focus the confirmation field and type the displayed word, then Return. AX presses on protected
+buttons and automated key events remain refused. These assistive-input paths, including VoiceOver interaction with the
+custom field, have not been measured with VoiceOver, Switch Control, Voice Control or the Accessibility Keyboard.
 
 ## Threat model
 

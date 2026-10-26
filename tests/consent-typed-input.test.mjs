@@ -27,12 +27,16 @@ test('real modal and handoff events route typed choices only after field focus w
     // Headless seams supply CGEvent provenance and key-window/current-event state only.
     // Real NSEvents, window association, key equivalents and responder dispatch stay intact.
     return block.replaceAll('window.isKeyWindow', '(window === fixtureKeyWindow)')
+      .replaceAll('window.isVisible', 'fixtureVisibleWindows.contains(ObjectIdentifier(window))')
+      .replaceAll('NSWorkspace.shared.notificationCenter', 'fixtureWorkspaceCenter')
+      .replaceAll('DistributedNotificationCenter.default()', 'fixtureUnlockCenter')
       .replaceAll('NSWorkspace.shared.isVoiceOverEnabled', 'fixtureVoiceOver')
       .replaceAll('NSWorkspace.shared.isSwitchControlEnabled', 'fixtureSwitchControl')
       .replaceAll('wordFocusAllowed = isKeyWindow', 'wordFocusAllowed = fixtureKeyWindow === self')
       .replaceAll('makeKey()', 'fixtureMakeKey(self)')
       .replaceAll('window?.isVisible == true', 'window.map { fixtureVisibleWindows.contains(ObjectIdentifier($0)) } == true')
       .replaceAll('event.cgEvent', 'fixtureCGEvent(event)')
+      .replaceAll('down.cgEvent', 'fixtureCGEvent(down)')
       .replaceAll('proc_pidpath(Int32(pid), &path, UInt32(path.count))', 'fixturePidPath(Int32(pid), &path, UInt32(path.count))');
   });
   // Exercise the actual callers as well as the shared classifier. Their source has no consent override.
@@ -51,6 +55,8 @@ test('real modal and handoff events route typed choices only after field focus w
   assert.equal(built.status, 0, built.stderr);
   const run = spawnSync(binary, [], { encoding: 'utf8', timeout: 15000 });
   assert.equal(run.status, 0, `${run.error ?? run.signal ?? ''}\n${run.stderr}${run.stdout}`);
+  assert.match(run.stderr, /sleight consent refused: CONSENT_TOO_SOON/);
+  assert.match(run.stderr, /sleight consent refused: PERSON_INPUT_REQUIRED/);
   const result = JSON.parse(run.stdout);
   assert.deepEqual(result.failures, []);
   for (const route of ['window', 'application', 'equivalent']) assert.ok(result.dispatches[route] > 0, route);

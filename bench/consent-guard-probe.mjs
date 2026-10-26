@@ -12,11 +12,11 @@ import { createInterface } from 'node:readline';
 const hostUrl = new URL('../plugins/sleight/lib/direct-browser/native/consent-host.swift', import.meta.url);
 export function probeHostSource(source = readFileSync(hostUrl, 'utf8')) {
   const entry = '// No arguments: the consent host.';
-  const refusal = 'func refuseConsentInput(_ button: NSButton? = nil) {';
+  const refusal = 'func refuseConsentInput(_ button: NSButton? = nil, tooSoon: Bool = false) {';
   if (source.split(entry).length !== 2 || source.split(refusal).length !== 2) throw new Error('CONSENT_PROBE_SOURCE_DRIFT');
   // Only add a refusal receipt and replace the entry point in the private build. The production guard, action
   // dispatch, feedback and modal implementation remain intact. No production test switch is installed.
-  return source.slice(0, source.indexOf(entry)).replace(refusal, refusal + '\n    probeReceipt("refused")') +
+  return source.slice(0, source.indexOf(entry)).replace(refusal, refusal + '\n    probeReceipt("refused", ["reason": tooSoon ? "timing" : "provenance"])') +
     readFileSync(new URL('./consent-guard-card.swift', import.meta.url), 'utf8');
 }
 export function compileProbe(directory) {
@@ -31,7 +31,8 @@ export function compileProbe(directory) {
 }
 export function stepVerdict(receipts) {
   if (receipts.some(record => record.outcome === 'accepted')) return 'accepted';
-  if (receipts.some(record => record.outcome === 'refused')) return 'refused';
+  if (receipts.some(record => record.outcome === 'refused' && record.reason !== 'timing')) return 'refused';
+  if (receipts.some(record => record.outcome === 'refused' && record.reason === 'timing')) return 'too-soon';
   return 'no-receipt';
 }
 
@@ -82,6 +83,8 @@ export async function runProbe({ directory, binaries, say = record => console.lo
     await waitReady(0);
     for (const mode of ['ax', 'pid', 'hid']) {
       const start = await arm(mode);
+      // Each poster gets a fully armed card, including a newly shown replacement card.
+      await new Promise(resolve => setTimeout(resolve, 600));
       const posted = spawnSync(binaries.poster, [mode, String(ready.pid), String(ready.x), String(ready.y)],
         { cwd: directory, encoding: 'utf8', timeout: 15000 });
       say({ poster: mode, exit: posted.status, attempted: posted.stdout?.trim(), error: posted.stderr?.trim() });
@@ -93,8 +96,10 @@ export async function runProbe({ directory, binaries, say = record => console.lo
       steps.push({ step: mode, verdict, ok }); say(steps.at(-1));
       if (verdict === 'accepted' || records.slice(start).some(r => r.outcome === 'cancelled')) await waitReady(start);
     }
-    for (const [step, prompt] of [['person-click', 'click Always allow now'], ['person-return', 'press Return']]) {
+    for (const [step, prompt] of [['person-click', 'click Always allow now'],
+      ['person-return', 'focus the confirmation field, type the displayed Always allow word, then press Return']]) {
       const start = await arm(step);
+      await new Promise(resolve => setTimeout(resolve, 600));
       console.error(prompt);
       const received = await until(() => records.slice(start).some(r => ['accepted', 'refused', 'cancelled'].includes(r.outcome)), 120000);
       const verdict = stepVerdict(records.slice(start));

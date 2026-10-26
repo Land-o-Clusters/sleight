@@ -22,20 +22,36 @@ private var consentArmingKey: UInt8 = 0
 let consentArmingDelay: TimeInterval = 0.5
 final class ConsentArming {
     private(set) var presentedAt = Double.infinity
-    private var observers: [NSObjectProtocol] = []
+    private var mouseDownAt: Double?
+    private var observers: [(NotificationCenter, NSObjectProtocol)] = []
     init(_ window: NSWindow) {
-        let center = NotificationCenter.default
-        observers.append(center.addObserver(forName: NSWindow.didBecomeKeyNotification, object: window, queue: nil) { [weak self] _ in
-            self?.presented()
-        })
-        for name in [NSApplication.willBecomeActiveNotification, NSApplication.didBecomeActiveNotification] {
-            observers.append(center.addObserver(forName: name, object: nil, queue: nil) { [weak self, weak window] _ in
-                if window?.isVisible == true { self?.presented() }
-            })
+        func observe(_ center: NotificationCenter, _ name: Notification.Name, object: AnyObject? = nil, activation: Bool = false) {
+            let token = center.addObserver(forName: name, object: object, queue: nil) { [weak self, weak window] _ in
+                guard let self = self, let window = window, window.isVisible else { return }
+                if activation { self.activated(window) } else { self.presented() }
+            }
+            observers.append((center, token))
         }
+        observe(.default, NSWindow.didBecomeKeyNotification, object: window, activation: true)
+        observe(.default, NSApplication.willBecomeActiveNotification, activation: true)
+        observe(.default, NSApplication.didBecomeActiveNotification, activation: true)
+        observe(.default, NSWindow.didChangeOcclusionStateNotification, object: window)
+        observe(NSWorkspace.shared.notificationCenter, NSWorkspace.activeSpaceDidChangeNotification)
+        observe(NSWorkspace.shared.notificationCenter, NSWorkspace.sessionDidBecomeActiveNotification)
+        observe(DistributedNotificationCenter.default(), Notification.Name("com.apple.screenIsUnlocked"))
     }
-    deinit { for observer in observers { NotificationCenter.default.removeObserver(observer) } }
-    func presented(at timestamp: Double = ProcessInfo.processInfo.systemUptime) { presentedAt = timestamp }
+    deinit { for (center, observer) in observers { center.removeObserver(observer) } }
+    func presented(at timestamp: Double = ProcessInfo.processInfo.systemUptime) { presentedAt = timestamp; mouseDownAt = nil }
+    func mouseBegan(_ event: NSEvent) { mouseDownAt = event.timestamp }
+    private func activated(_ window: NSWindow) {
+        if let event = NSApp.currentEvent, event.window === window,
+            [.leftMouseDown, .leftMouseUp].contains(event.type) {
+            if event.type == .leftMouseDown { mouseBegan(event) }
+            // The card was already armed before this deliberate activating click began.
+            if let down = mouseDownAt, down >= presentedAt + consentArmingDelay { return }
+        }
+        presented()
+    }
     func accepts(_ event: NSEvent) -> Bool { event.timestamp >= presentedAt + consentArmingDelay }
 }
 func consentArming(_ window: NSWindow) -> ConsentArming {
@@ -45,12 +61,14 @@ func consentArming(_ window: NSWindow) -> ConsentArming {
     return arming
 }
 let consentInputMessage = "This button needs your own click or key press."
-func refuseConsentInput(_ button: NSButton? = nil) {
+let consentTimingMessage = "Too soon: try again."
+func refuseConsentInput(_ button: NSButton? = nil, tooSoon: Bool = false) {
     if let button = button, let label = objc_getAssociatedObject(button, &consentFeedbackKey) as? NSTextField {
-        label.stringValue = consentInputMessage
+        label.stringValue = tooSoon ? consentTimingMessage : consentInputMessage
     }
-    os_log("PERSON_INPUT_REQUIRED", log: OSLog(subsystem: "com.sleight.consent", category: "input"), type: .error)
-    FileHandle.standardError.write(Data("sleight consent refused: PERSON_INPUT_REQUIRED\n".utf8))
+    let reason = tooSoon ? "CONSENT_TOO_SOON" : "PERSON_INPUT_REQUIRED"
+    os_log("%{public}@", log: OSLog(subsystem: "com.sleight.consent", category: "input"), type: .error, reason)
+    FileHandle.standardError.write(Data("sleight consent refused: \(reason)\n".utf8))
 }
 // Source state alone is insufficient: a poster can select the HID state table too.
 func personInput(_ event: CGEvent?) -> Bool {
@@ -96,7 +114,7 @@ func personChoice(_ kind: String, _ choice: String) -> Bool {
     // A debugger's Once is also a consent to debugging. Plain session app approvals remain host-answerable.
     return choice == "always" || ["action", "debugger", "relaunch", "opt-in", "resume", "turbo-off", "handoff"].contains(kind)
 }
-// NSAlert owns its NSButtons and their private subclasses. Add only an AX override to a zero-storage runtime
+// NSAlert owns its NSButtons and their private subclasses. Add guarded input overrides to a zero-storage runtime
 // subclass of the actual button class, preserving its layout, key equivalents and original modal action.
 func refuseAccessibilityPress(_ button: NSButton) -> Bool {
     guard let base = object_getClass(button) else { return false }
@@ -122,9 +140,27 @@ func refuseAccessibilityPress(_ button: NSButton) -> Bool {
         else { previous(sender, legacySelector, action) }
     }
     let legacyImplementation = imp_implementationWithBlock(rejectLegacy)
-    guard class_addMethod(guarded, selector, implementation, types),
-        class_addMethod(guarded, legacySelector, legacyImplementation, legacyTypes) else {
+    let mouseSelector = #selector(NSButton.mouseDown(with:))
+    let firstSelector = #selector(NSButton.acceptsFirstMouse(for:))
+    guard let mouseMethod = class_getInstanceMethod(base, mouseSelector), let mouseTypes = method_getTypeEncoding(mouseMethod),
+        let firstMethod = class_getInstanceMethod(base, firstSelector), let firstTypes = method_getTypeEncoding(firstMethod) else {
         imp_removeBlock(implementation); imp_removeBlock(legacyImplementation); objc_disposeClassPair(guarded); return false
+    }
+    typealias MouseDown = @convention(c) (AnyObject, Selector, NSEvent) -> Void
+    let previousMouse = unsafeBitCast(method_getImplementation(mouseMethod), to: MouseDown.self)
+    let mouse: @convention(block) (NSButton, NSEvent) -> Void = { sender, event in
+        if let action = sender.target as? ConsentInputAction {
+            action.trackMouseDown(event) { previousMouse(sender, mouseSelector, event) }
+        } else { previousMouse(sender, mouseSelector, event) }
+    }
+    let first: @convention(block) (NSButton, NSEvent?) -> Bool = { _, _ in true }
+    let mouseImplementation = imp_implementationWithBlock(mouse), firstImplementation = imp_implementationWithBlock(first)
+    guard class_addMethod(guarded, selector, implementation, types),
+        class_addMethod(guarded, legacySelector, legacyImplementation, legacyTypes),
+        class_addMethod(guarded, mouseSelector, mouseImplementation, mouseTypes),
+        class_addMethod(guarded, firstSelector, firstImplementation, firstTypes) else {
+        for imp in [implementation, legacyImplementation, mouseImplementation, firstImplementation] { imp_removeBlock(imp) }
+        objc_disposeClassPair(guarded); return false
     }
     objc_registerClassPair(guarded)
     object_setClass(button, guarded)
@@ -136,6 +172,7 @@ final class ConsentInputAction: NSObject {
     let originalTarget: AnyObject?, originalAction: Selector?
     let currentEvent: () -> NSEvent?
     let mouseOnly: Bool
+    private var mouseDown: NSEvent?
     init(_ button: NSButton, mouseOnly: Bool = false, currentEvent: @escaping () -> NSEvent? = { NSApp.currentEvent }) {
         self.button = button
         originalTarget = button.target; originalAction = button.action; self.currentEvent = currentEvent; self.mouseOnly = mouseOnly
@@ -144,6 +181,13 @@ final class ConsentInputAction: NSObject {
         // Failure leaves the protected button disabled. It must never fall back to the unguarded action.
         guard refuseAccessibilityPress(button) else { button.isEnabled = false; refuseConsentInput(button); return }
         button.target = self; button.action = #selector(press(_:))
+        button.sendAction(on: .leftMouseUp)
+    }
+    func trackMouseDown(_ event: NSEvent, perform: () -> Void) {
+        mouseDown = event
+        if let window = button?.window { consentArming(window).mouseBegan(event) }
+        defer { mouseDown = nil }
+        perform()
     }
     @objc @discardableResult func press(_ sender: NSButton) -> Bool {
         return dispatch(sender)
@@ -155,10 +199,19 @@ final class ConsentInputAction: NSObject {
     }
     private func dispatch(_ sender: NSButton, typed: Bool = false) -> Bool {
         let event = currentEvent()
-        guard let event = event,
-            !typed || event.type == .keyDown,
-            let window = sender.window, consentArming(window).accepts(event),
-            personActivation(event, in: window, keyboard: typed, consent: true)
+        guard let event = event, let window = sender.window,
+            typed ? event.type == .keyDown : event.type == .leftMouseUp
+            else { refuseConsentInput(sender); return false }
+        let arming = consentArming(window)
+        if !typed {
+            guard let down = mouseDown, down.type == .leftMouseDown, down.window === window,
+                down.timestamp.isFinite, down.timestamp >= 0, down.timestamp <= event.timestamp,
+                ProcessInfo.processInfo.systemUptime - down.timestamp < 5,
+                personInput(down.cgEvent) else { refuseConsentInput(sender); return false }
+            guard arming.accepts(down) else { refuseConsentInput(sender, tooSoon: true); return false }
+        }
+        guard arming.accepts(event) else { refuseConsentInput(sender, tooSoon: true); return false }
+        guard personActivation(event, in: window, keyboard: typed, consent: true)
             else { refuseConsentInput(sender); return false }
         return sender.sendAction(originalAction, to: originalTarget)
     }
@@ -308,7 +361,7 @@ final class ConsentWordField: NSTextField {
         }
     }
     private func clear() { typed = ""; stringValue = "" }
-    private func refuse() { clear(); refuseConsentInput(entries.values.first?.button) }
+    private func refuse(tooSoon: Bool = false) { clear(); refuseConsentInput(entries.values.first?.button, tooSoon: tooSoon) }
     func invalidate() { clear(); entries.removeAll(); isEnabled = false }
     override func performKeyEquivalent(with event: NSEvent) -> Bool {
         // Let an empty field retain the card's existing default. A pending word owns both Return keys,
@@ -331,10 +384,10 @@ final class ConsentWordField: NSTextField {
         // Navigation, digits, punctuation and dead keys do not change or refuse a pending word.
         let multipleCharacters = (event.charactersIgnoringModifiers?.count ?? 0) > 1
         guard [36, 76, 48, 51].contains(event.keyCode) || letter != nil || multipleCharacters else { return }
+        if let window = window, !consentArming(window).accepts(event) { refuse(tooSoon: true); return }
         let now = ProcessInfo.processInfo.systemUptime
         guard isEnabled, !entries.isEmpty, let window = window, window.isKeyWindow,
             window.firstResponder === self, event.window === window, event.type == .keyDown,
-            consentArming(window).accepts(event),
             event.timestamp <= now, now - event.timestamp < 5, event.timestamp > lastTimestamp,
             !event.isARepeat, personInput(event.cgEvent),
             event.modifierFlags.intersection([.command, .control, .option, .function]).isEmpty else { refuse(); return }
