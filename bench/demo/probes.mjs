@@ -1,6 +1,13 @@
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 
+export function importSpriteProbe(at, rect, bounds, manifest) {
+  const w = manifest.frame.w * manifest.scale, h = manifest.frame.h * manifest.scale;
+  return { region: [at[0] + 18 + w <= bounds[0] + bounds[2] ? at[0] + 18 : at[0] - 18 - w,
+    at[1] + 18 + h <= bounds[1] + bounds[3] ? at[1] + 18 : at[1] - 18 - h, w, h],
+  exclude: [rect[0] - 30, rect[1] - 30, rect[2] + 60, rect[3] + 60] };
+}
+
 // Probes use the owned recorder's crop at one pixel per fixture point. Regions exclude the moving tile and counters.
 export function pixelDelta(base, sample, width, height, region, kind, exclude) {
   if (base.length !== width * height * 3 || sample.length !== base.length || !region?.every(Number.isFinite)) throw Error('Invalid drawing probe');
@@ -16,7 +23,7 @@ export function pixelDelta(base, sample, width, height, region, kind, exclude) {
       if (kind === 'bubble' ? Math.max(r, g, b) - Math.min(r, g, b) < 24 : Math.max(r, g, b) - Math.min(r, g, b) >= 32) painted++;
     }
   }
-  return { kind, changed, painted, region, passed: painted >= (kind === 'bubble' ? 80 : 24) };
+  return { kind, changed, painted, region, ...(exclude ? { exclude } : {}), passed: painted >= (kind === 'bubble' ? 80 : 24) };
 }
 
 export function requiredProbes(id) {
@@ -44,6 +51,7 @@ export async function verifyDrawing(children, directory, shot, capture) {
     results.push(pixelDelta(base, await frame(sample.at, kind), width, height, sample.region, kind, sample.exclude));
   }
   const passed = results.every(r => r.passed);
-  if (!passed) throw Error(`Drawing absent: ${results.filter(r => !r.passed).map(r => `${r.kind}=${r.painted}`).join(', ')}`);
+  if (!passed) throw Object.assign(Error(`Drawing absent: ${results.filter(r => !r.passed).map(r => `${r.kind}=${r.painted}`).join(', ')}`),
+    { probes: { passed, baselineAt, results } });
   return { passed, baselineAt, results };
 }

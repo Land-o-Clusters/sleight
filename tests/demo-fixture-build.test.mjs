@@ -18,8 +18,12 @@ test('demo fixture compiles and exercises only arithmetic and stdin validation w
   assert.equal(good.status, 0, good.stderr);
   assert.deepEqual(JSON.parse(good.stdout), { windowsCreated: 0, valid: true, clicks: 1, drags: 1, destination: [440, 120] });
   for (const row of [{ op: 'click', index: 20 }, { op: 'drag', to: [9999, 0] }, { op: 'open', app: 'TextEdit' }, { op: 'click', index: 0, pid: 1 }]) assert.equal(run(row).status, 65);
-  for (const [input, reason] of [[{ asleep: false, locked: false }, null], [{ asleep: true, locked: false }, 'display-asleep'],
-    [{ asleep: false, locked: true }, 'screen-locked'], [{ asleep: false }, 'screen-lock-state-unknown']]) {
+  const visible = { width: 850, height: 780 };
+  for (const [input, reason] of [[{ asleep: false, locked: false, ...visible }, null], [{ asleep: true, locked: false, ...visible }, 'display-asleep'],
+    [{ asleep: false, locked: true, ...visible }, 'screen-locked'], [{ asleep: false, ...visible }, 'screen-lock-state-unknown'],
+    [{ asleep: false, locked: false, width: 849, height: 780 }, 'screen-too-small'],
+    [{ asleep: false, locked: false, width: 850, height: 779 }, 'screen-too-small'],
+    [{ asleep: false, locked: false }, 'screen-too-small']]) {
     const p = spawnSync(binary, ['--display-selftest'], { input: JSON.stringify(input), encoding: 'utf8', timeout: 5000 });
     assert.equal(p.status, 0, p.stderr); assert.deepEqual(JSON.parse(p.stdout), { windowsCreated: 0, reason });
   }

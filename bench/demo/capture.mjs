@@ -13,7 +13,7 @@ import { prepareCharacterImport, installCharacter, checkCharacter, checkBuiltinC
 import { characterFrame } from '../../plugins/sleight/lib/hand/character-frame.mjs';
 import { readHandConfig } from '../../plugins/sleight/lib/hand/settings.mjs';
 import { writeHandSetting } from '../../plugins/sleight/lib/hand/command.mjs';
-import { verifyDrawing } from './probes.mjs';
+import { importSpriteProbe, verifyDrawing } from './probes.mjs';
 
 export const ROOT = fileURLToPath(new URL('../../', import.meta.url)).replace(/\/$/, '');
 const LOGS = join(homedir(), 'Library/Logs/sleight');
@@ -34,7 +34,7 @@ export function shotPlan() {
     ['04-narration', 'An authored fixture turn sentence in the production narration bubble.'],
     ['05-picker', 'Picker choices shown by fixture frames; settings switch ring to Tsugi. Hardware picker clicks are not demonstrated.'],
     ['06-import', 'A synthetic Codex v2 pet, imported unchanged, with the production missing-animation callout in a fixture panel. No vendor art.'],
-  ].map(([id, caption]) => ({ id, caption, seconds: 8, sourceSeconds: 16, speed: 2, deadlineMs: 120000 }));
+  ].map(([id, caption]) => ({ id, caption, seconds: 8, sourceSeconds: 16, speed: 2, deadlineMs: 240000 }));
 }
 export function recipe(id) {
   const click = atMs => ({ atMs, op: 'click', index: 0 });
@@ -126,7 +126,7 @@ export function dryRunPlan(opts) {
     `Process nice: ${getPriority()}. Dry-run command placeholders resolve inside this run's private work and evidence bank.`,
     'Live requires --owner-away, macOS, a clean pinned checkout and existing Screen Recording permission. Never requests permissions.',
     'Wait at most DM1_WAIT_CAP_MS (default 30 min) for the hold and 20 min for the live lock, logging every 30 s. Acquire the lock only when clear; never remove a foreign lock.',
-    'caffeinate -dims holds the display awake; caffeinate -u -t 5 precedes compilation and every shot quiet gap. Display-asleep or screen-locked preflight refuses with exit 7.',
+    'caffeinate -dims holds the display awake; best-effort caffeinate -u -t 5 precedes compilation and every shot quiet gap. Wake failures are logged; display, lock and visible-screen preflight decides (exit 7).',
     'Compile host, fixture, capture helper and recorder serially in a private temporary directory. No app installation or owner settings.',
     '15 s input-free gap before every attempt, then HID/pointer watch; unknown telemetry or owner input stops. A hold closes fixtures, releases the lock, waits and reruns the shot.',
     'Fixture-local AppKit mouse dispatch invokes actual mouseDown/mouseDragged/mouseUp handlers; no posted system input, engine, model or Apple events.',
@@ -135,7 +135,7 @@ export function dryRunPlan(opts) {
     'Encoder: ffmpeg if already installed; no pure Node GIF encoder exists in this checkout. Missing ffmpeg refuses before windows. Never installs anything.',
     'GIF budget: 2 MB (2,000,000 bytes). Retry 720/640/560/480 px and 128/96/64/48 colors; oversize fails without a completed marker.',
     'Import callout: 13 pt in a 304 pt panel, 720 px GIF on every rung (11.7 px font); native layout refuses clipping. Fixture needs an 850x780 pt visible screen.',
-    'Each shot requires ring pixels; character shots require sprite pixels; narration requires bubble pixels. Probe frames come only from the owned recording.',
+    'Each shot requires ring pixels; character shots require sprite pixels; narration requires bubble pixels. Probe frames come only from the owned recording. Failed probes keep probes.json and encoded clips before the shot fails.',
     'A failed shot retries once, records both failures and continues. Resume skips finished shots and puts old failures after untried shots. Contact sheet includes successful shots.',
     commandLine('/usr/bin/caffeinate', ['-dims', '-w', '<node-pid>']),
     commandLine('/usr/bin/caffeinate', ['-u', '-t', '5']),
@@ -242,6 +242,28 @@ export function waitCap(value = process.env.DM1_WAIT_CAP_MS) {
   if (!/^[1-9]\d*$/.test(String(value)) || !Number.isSafeInteger(Number(value))) throw Error('Invalid DM1_WAIT_CAP_MS');
   return Number(value);
 }
+export async function wakeDisplay(children, signal, log = console.log) {
+  signal?.throwIfAborted();
+  try { await children.run('/usr/bin/caffeinate', ['-u', '-t', '5'], { timeoutMs: 10000 }); }
+  catch (e) {
+    signal?.throwIfAborted();
+    if (e.code === 'CLEANUP') throw e;
+    log(`DM1 wake: ${safeText(e.message)}`);
+  }
+}
+export class ShotHoldBudget {
+  constructor(capMs, now = Date.now) { this.capMs = capMs; this.now = now; }
+  remaining(id) {
+    if (id !== this.id) { this.id = id; this.since = undefined; }
+    const left = this.capMs - (this.since === undefined ? 0 : this.now() - this.since);
+    if (left <= 0) throw fail('BUSY');
+    return left;
+  }
+  record(reason) {
+    if (reason === 'HOLD') this.since ??= this.now();
+    else this.since = undefined;
+  }
+}
 export async function waitClear({ exists = existsSync, now = Date.now, wait = sleep, signal,
   capMs = waitCap(), started = now(), log = console.log } = {}) {
   while (true) {
@@ -294,7 +316,7 @@ export async function withHoldRetry(run, { signal, exists = existsSync, now = Da
   }
 }
 const terminalReason = reason => ['OWNER', 'BUSY', 'TELEMETRY', 'CLEANUP', 'SIGINT', 'SIGTERM', 'SIGHUP',
-  'display-asleep', 'screen-locked', 'screen-lock-state-unknown'].includes(reason);
+  'display-asleep', 'screen-locked', 'screen-lock-state-unknown', 'screen-too-small'].includes(reason);
 
 // New shots precede old failures on resume. A hold reruns the interrupted shot without spending its retry.
 export async function runShots(state, { take, save = () => {}, signal, log = console.log, ready = reusable } = {}) {
@@ -345,6 +367,22 @@ export async function encode(children, dir, id) {
   const frames = Number([...decoded.matchAll(/^frame=(\d+)$/gm)].at(-1)?.[1]), seconds = Number([...decoded.matchAll(/^out_time_us=(\d+)$/gm)].at(-1)?.[1]) / 1e6;
   if (frames !== 240 || Math.abs(seconds - 8) > 0.05) throw Error(`Unexpected MP4 timing: ${frames} frames, ${seconds} seconds`);
   return { encoder: 'ffmpeg', seconds: 8, measuredSeconds: seconds, frames, fps: 30, gifFps, gifWidth, gifBytes, mp4Bytes: statSync(join(dir, 'demo.mp4')).size };
+}
+
+export async function processTake(children, directory, shot, capture) {
+  let probes, problem;
+  try { probes = await verifyDrawing(children, directory, shot, capture); }
+  catch (e) {
+    children.signal?.throwIfAborted();
+    if (terminalReason(failureReason(e)) || e.code === 'HOLD') throw e;
+    problem = e;
+    probes = e.probes ?? { passed: false, results: [], error: safeText(e.message) };
+  }
+  atomic(join(directory, 'probes.json'), probes);
+  // Keep reviewable clips even when the first live drawing misses a probe threshold.
+  const meta = await encode(children, directory, shot.id);
+  if (problem) throw problem;
+  return { probes, ...meta };
 }
 
 async function captureShot(shot, directory, { bin, children, work, signal, abort }) {
@@ -440,9 +478,8 @@ async function captureShot(shot, directory, { bin, children, work, signal, abort
       probe('ring', [rect[0] - 10, rect[1] - 10, rect[2] + 20, rect[3] + 20], [rect[0] + 5, rect[1] + 5, rect[2] - 10, rect[3] - 10]);
       if (character || shot.id === '05-picker' && event.atMs > 5000) {
         if (pet) {
-          const w = pet.pack.manifest.frame.w * pet.pack.manifest.scale, h = pet.pack.manifest.frame.h * pet.pack.manifest.scale;
-          probe('sprite', [target[0] + 18 + w <= f.frame[0] + f.frame[2] ? target[0] + 18 : target[0] - 18 - w,
-            target[1] + 18 + h <= f.frame[1] + f.frame[3] ? target[1] + 18 : target[1] - 18 - h, w, h]);
+          const sprite = importSpriteProbe(target, rect, f.frame, pet.pack.manifest);
+          probe('sprite', sprite.region, sprite.exclude);
         } else probe('sprite', [f.frame[0], f.frame[1] - 200, f.frame[2], 195]);
       }
       if (event.say) {
@@ -531,7 +568,7 @@ export async function main(argv) {
     const capMs = waitCap();
     await waitClear({ signal, capMs });
     // Wake before compilation as well as before each shot. No HID watch spans an intentional wake.
-    await children.run('/usr/bin/caffeinate', ['-u', '-t', '5'], { timeoutMs: 10000 });
+    await wakeDisplay(children, signal);
     const { acquireLiveLock } = await import('../live-lock.mjs');
     const bin = join(work, 'bin'); mkdirSync(bin, { mode: 0o700 });
     for (const [source, name] of compileSources) {
@@ -543,10 +580,10 @@ export async function main(argv) {
     }
     const grants = JSON.parse(await children.run(join(bin, 'helper'), ['preflight']));
     if (!grants.screenRecording) throw Error('Existing Screen Recording grant required; no prompt requested');
-    let holdEpisode;
+    const holdBudget = new ShotHoldBudget(capMs);
     const take = async shot => {
       // A mid-shot hold starts one budget that also covers repeated hold interruptions of this shot.
-      if (holdEpisode !== undefined && Date.now() - holdEpisode >= capMs) throw fail('BUSY');
+      const remaining = holdBudget.remaining(shot.id);
       const directory = join(state.out, shot.id + '-' + randomBytes(4).toString('hex')); mkdirSync(directory, { mode: 0o700 });
       const attemptWork = mkdtempSync(join(work, 'shot-'));
       const phase = new AbortController(), forward = () => phase.abort(signal.reason);
@@ -555,9 +592,9 @@ export async function main(argv) {
       let timer, holdPoll, telemetryPoll, monitorClosing = false, marker, problem, cleaned = false;
       const shotChildren = new Children(env, phase.signal);
       try {
-        release = await acquireForShot(acquireLiveLock, { signal, capMs: holdEpisode === undefined ? capMs : Math.max(1, capMs - (Date.now() - holdEpisode)) });
+        release = await acquireForShot(acquireLiveLock, { signal, capMs: remaining });
         holdPoll = setInterval(() => { if (existsSync(HOLD)) interrupt('HOLD'); }, 250);
-        await shotChildren.run('/usr/bin/caffeinate', ['-u', '-t', '5'], { timeoutMs: 10000 });
+        await wakeDisplay(shotChildren, phase.signal);
         const display = JSON.parse(await shotChildren.run(join(bin, 'fixture'), ['--preflight']));
         if (!display.ok) throw fail(display.error);
         const detect = inputWatch(Date.now()), gap = shotChildren.start(join(bin, 'helper'), ['watch-input', '1000', '16']);
@@ -576,15 +613,13 @@ export async function main(argv) {
         telemetryPoll = setInterval(() => { if (Date.now() - lastTelemetry > 3500) abort('TELEMETRY'); }, 500);
         timer = setTimeout(() => interrupt('SHOT_DEADLINE'), shot.deadlineMs);
         const capture = await captureShot(shot, directory, { bin, children: shotChildren, work: attemptWork, signal: phase.signal, abort });
-        const probes = await verifyDrawing(shotChildren, directory, shot, capture);
-        atomic(join(directory, 'probes.json'), probes);
-        const meta = await encode(shotChildren, directory, shot.id);
+        const { probes, ...meta } = await processTake(shotChildren, directory, shot, capture);
         if (shot.id === '06-import' && (meta.gifWidth !== 720 || capture.noticeLayout?.fits !== true || !(capture.noticeLayout.gifFontPixels >= 11))) throw Error('Import callout too small or clipped at GIF output size');
         phase.signal.throwIfAborted();
         marker = { id: shot.id, caption: shot.caption, capture, probes, ...meta, cleanup: true };
       } catch (e) {
         const reason = failureReason(e, phase.signal);
-        if (reason === 'HOLD') holdEpisode ??= Date.now();
+        holdBudget.record(reason);
         problem = Object.assign(fail(reason), { directory });
       } finally {
         clearTimeout(timer); clearInterval(telemetryPoll); monitorClosing = true;
@@ -592,7 +627,7 @@ export async function main(argv) {
         clearInterval(holdPoll); signal.removeEventListener('abort', forward);
         // The hold can arrive while a child is being collected. It still invalidates this take.
         if (phase.signal.reason?.code === 'HOLD' && problem?.code !== 'CLEANUP') {
-          holdEpisode ??= Date.now(); problem = Object.assign(fail('HOLD'), { directory });
+          holdBudget.record('HOLD'); problem = Object.assign(fail('HOLD'), { directory });
         }
         if (cleaned) {
           try { if (release) await release(); release = undefined; } catch { problem = Object.assign(fail('CLEANUP'), { directory }); }
@@ -601,9 +636,9 @@ export async function main(argv) {
           }
         }
       }
-      if (problem) throw problem;
+      if (problem) { holdBudget.record(problem.code); throw problem; }
       signal.throwIfAborted(); phase.signal.throwIfAborted();
-      holdEpisode = undefined;
+      holdBudget.record();
       return completedMarker(directory, marker);
     };
     const count = await runShots(state, { take, save: value => atomic(statePath, value), signal });
@@ -628,6 +663,6 @@ export async function main(argv) {
     if (stopped === 'CLEANUP') console.error(`Cleanup unproved; any owned lock retained. Private work: ${work}`);
     for (const [s, f] of Object.entries(signals)) process.removeListener(s, f);
   }
-  return stopped ? ({ OWNER: 4, HOLD: 5, BUSY: 5, TELEMETRY: 6, 'display-asleep': 7, 'screen-locked': 7, 'screen-lock-state-unknown': 7, SIGINT: 130, SIGTERM: 143, SIGHUP: 129 })[stopped] ?? 1 : 0;
+  return stopped ? ({ OWNER: 4, HOLD: 5, BUSY: 5, TELEMETRY: 6, 'display-asleep': 7, 'screen-locked': 7, 'screen-lock-state-unknown': 7, 'screen-too-small': 7, SIGINT: 130, SIGTERM: 143, SIGHUP: 129 })[stopped] ?? 1 : 0;
 }
 if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) process.exitCode = await main(process.argv.slice(2));

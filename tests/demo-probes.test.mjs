@@ -5,6 +5,7 @@ import { tmpdir } from 'node:os';
 import { basename, join } from 'node:path';
 import { registerTemp } from '../scripts/temp-leftovers.mjs';
 import { pixelDelta, requiredProbes, verifyDrawing } from '../bench/demo/probes.mjs';
+import * as probes from '../bench/demo/probes.mjs';
 
 const width = 80, height = 60;
 function paint(data, box, rgb) {
@@ -36,6 +37,19 @@ test('every shot requires ring ink; characters and narration have independent re
   assert.deepEqual(requiredProbes('02-states'), ['ring']);
   for (const id of ['03-tsugi', '03-kit', '05-picker', '06-import']) assert.deepEqual(requiredProbes(id), ['ring', 'sprite']);
   assert.deepEqual(requiredProbes('04-narration'), ['ring', 'bubble']);
+});
+test('import sprite probe excludes button wrap ink when the pet never draws', () => {
+  const p = probes.importSpriteProbe([260, 438], [200, 420, 120, 36], [80, 408, 640, 322], { frame: { w: 192, h: 208 }, scale: 0.5 });
+  assert.deepEqual(p.region, [278, 456, 96, 104]);
+  assert.deepEqual(p.exclude, [170, 390, 180, 96]);
+  const w = 800, h = 740, base = Buffer.alloc(w * h * 3, 245), ringOnly = Buffer.from(base);
+  for (let y = 460; y < 466; y++) for (let x = 278; x < 330; x++) ringOnly.set([91, 141, 255], (y * w + x) * 3);
+  assert.equal(pixelDelta(base, ringOnly, w, h, p.region, 'sprite').passed, true);
+  assert.equal(pixelDelta(base, ringOnly, w, h, p.region, 'sprite', p.exclude).passed, false);
+  const petDraws = Buffer.from(ringOnly);
+  for (let y = 492; y < 512; y++) for (let x = 310; x < 330; x++) petDraws.set([80, 95, 230], (y * w + x) * 3);
+  assert.equal(pixelDelta(base, petDraws, w, h, p.region, 'sprite', p.exclude).passed, true);
+  assert.deepEqual(probes.importSpriteProbe([700, 700], [640, 682, 120, 36], [80, 408, 640, 322], { frame: { w: 192, h: 208 }, scale: 0.5 }).region, [586, 578, 96, 104]);
 });
 test('probe extraction uses recorder clock and owned source, and a missing sprite fails despite ring pixels', async t => {
   const directory = registerTemp(t, mkdtempSync(join(tmpdir(), 'dm1-probes-'))), first = Date.parse('2026-10-26T12:00:00Z');

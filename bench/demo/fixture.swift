@@ -50,20 +50,25 @@ struct InputModel {
     mutating func up() { if grabbed { drags += 1 }; grabbed = false }
 }
 let arguments = CommandLine.arguments
-func displayRefusal(_ asleep: Bool, _ locked: Bool?) -> String? {
+func displayRefusal(_ asleep: Bool, _ locked: Bool?, _ visible: CGSize?) -> String? {
     guard let locked = locked else { return "screen-lock-state-unknown" }
     if locked { return "screen-locked" }
-    return asleep ? "display-asleep" : nil
+    if asleep { return "display-asleep" }
+    guard let visible = visible, visible.width >= 850, visible.height >= 780 else { return "screen-too-small" }
+    return nil
 }
 if arguments.count == 2 && arguments[1] == "--display-selftest" {
     guard let row = try? JSONSerialization.jsonObject(with: FileHandle.standardInput.readDataToEndOfFile()) as? [String: Any],
           let asleep = row["asleep"] as? Bool else { exit(65) }
-    emit(["windowsCreated": 0, "reason": displayRefusal(asleep, row["locked"] as? Bool) as Any? ?? NSNull()]); exit(0)
+    let visible: CGSize?
+    if let width = row["width"] as? Double, let height = row["height"] as? Double { visible = CGSize(width: width, height: height) }
+    else { visible = nil }
+    emit(["windowsCreated": 0, "reason": displayRefusal(asleep, row["locked"] as? Bool, visible) as Any? ?? NSNull()]); exit(0)
 }
 if arguments.count == 2 && arguments[1] == "--preflight" {
     let session = CGSessionCopyCurrentDictionary() as? [String: Any]
     let locked = session.map { $0["CGSSessionScreenIsLocked"] as? Bool ?? false }
-    if let reason = displayRefusal(CGDisplayIsAsleep(CGMainDisplayID()) != 0, locked) { emit(["ok": false, "error": reason]) }
+    if let reason = displayRefusal(CGDisplayIsAsleep(CGMainDisplayID()) != 0, locked, NSScreen.main?.visibleFrame.size) { emit(["ok": false, "error": reason]) }
     else { emit(["ok": true]) }
     exit(0)
 }

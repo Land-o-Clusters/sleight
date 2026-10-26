@@ -14,6 +14,7 @@ test('plan covers all requested scenes with bounded 2x takes and step deadlines'
   for (const s of plan) {
     assert.equal(s.speed, 2); assert.ok(s.seconds >= 6 && s.seconds <= 12);
     assert.equal(s.sourceSeconds, s.seconds * 2); assert.ok(s.deadlineMs > s.sourceSeconds * 1000);
+    assert.equal(s.deadlineMs, 240000);
   }
   assert.match(plan.find(s => s.id === '05-picker').caption, /settings.*hardware/i);
   assert.match(plan[0].caption, /fixture.*AppKit/i);

@@ -5,12 +5,43 @@ import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { registerTemp } from '../scripts/temp-leftovers.mjs';
 import { acquireForShot, assertAction, completedMarker, contactSheet, encodingPlan, failureReason, gifLadder, runShots, shotPlan, waitCap, waitClear, withHoldRetry, encode } from '../bench/demo/capture.mjs';
+import * as demo from '../bench/demo/capture.mjs';
 
 const fail = code => Object.assign(Error(code), { code });
 const world = t => registerTemp(t, mkdtempSync(join(tmpdir(), 'dm1-recovery-')));
 const ready = m => m?.status === 'complete';
 const done = { status: 'complete' };
 const quiet = () => {};
+
+test('wake failure is logged and ignored while abort and cleanup still stop the shot', async () => {
+  const logs = [], signal = new AbortController().signal;
+  const children = { run: async (cmd, args, options) => {
+    assert.equal(cmd, '/usr/bin/caffeinate'); assert.deepEqual(args, ['-u', '-t', '5']);
+    assert.equal(options.timeoutMs, 10000); throw Error('caffeinate exit 1: wake failed');
+  } };
+  await demo.wakeDisplay(children, signal, line => logs.push(line));
+  assert.equal(logs.length, 1); assert.match(logs[0], /DM1 wake:.*exit 1/);
+  const c = new AbortController(); c.abort(fail('HOLD'));
+  await assert.rejects(demo.wakeDisplay(children, c.signal, quiet), { code: 'HOLD' });
+  await assert.rejects(demo.wakeDisplay({ run: async () => { throw fail('CLEANUP'); } }, signal, quiet), { code: 'CLEANUP' });
+});
+
+test('hold budget spans repeated holds but resets on another shot or non-hold failure', () => {
+  let now = 0;
+  const budget = new demo.ShotHoldBudget(1000, () => now);
+  assert.equal(budget.remaining('01-ring'), 1000);
+  budget.record('HOLD'); now = 600;
+  assert.equal(budget.remaining('01-ring'), 400);
+  budget.record('HOLD'); now = 1000;
+  assert.throws(() => budget.remaining('01-ring'), { code: 'BUSY' });
+  assert.equal(budget.remaining('02-states'), 1000);
+  budget.record('HOLD'); now = 1600;
+  assert.equal(budget.remaining('02-states'), 400);
+  budget.record('Drawing absent'); now = 5000;
+  assert.equal(budget.remaining('02-states'), 1000);
+  budget.record('HOLD'); now = 5500; budget.record();
+  assert.equal(budget.remaining('02-states'), 1000);
+});
 
 test('two failed takes are saved and later shots complete; resume runs untried shots before old failures', async () => {
   const state = { markers: { '01-ring': { status: 'failed' }, '02-states': done } }, called = [], saved = [];
@@ -43,7 +74,7 @@ test('a hold reruns the same shot without spending its failure retry', async () 
 });
 
 test('owner, wait cap, telemetry, signals and cleanup each stop before the next shot', async () => {
-  for (const code of ['OWNER', 'BUSY', 'TELEMETRY', 'SIGINT', 'SIGTERM', 'SIGHUP', 'CLEANUP', 'screen-locked', 'display-asleep']) {
+  for (const code of ['OWNER', 'BUSY', 'TELEMETRY', 'SIGINT', 'SIGTERM', 'SIGHUP', 'CLEANUP', 'screen-locked', 'display-asleep', 'screen-too-small']) {
     const state = { markers: {} }; let n = 0;
     await assert.rejects(runShots(state, { ready, log: quiet, take: async () => { n++; throw fail(code); } }), { code });
     assert.equal(n, 1); assert.equal(state.markers['01-ring'].reason, code);
