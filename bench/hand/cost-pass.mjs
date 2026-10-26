@@ -201,8 +201,12 @@ export function parseArgs(argv) {
   const rounds = Number(value('--rounds') ?? 3);
   if (!Number.isInteger(rounds) || rounds < 1 || rounds > 10) throw new Error('--rounds must be a whole number from 1 to 10');
   if (!tasks.length || tasks.some(t => !/^[a-z0-9-]{1,60}$/.test(t))) throw new Error('--tasks must be task ids');
+  // --cursor-style names the style the on side's host runs, which picks the RSS budget (budgetFor). It records the run's
+  // style; the arm's own setting chooses what the host draws.
+  const cursorStyle = value('--cursor-style');
+  if (cursorStyle !== undefined && !['glove', 'ring', 'seam', 'sprite'].includes(cursorStyle)) throw new Error('--cursor-style must be glove, ring, seam or sprite');
   return { tasks, rounds, model: value('--model') ?? 'claude-haiku-5-5', effort: value('--effort') ?? 'high', out: value('--out'),
-    report: value('--report'), ownerAway: argv.includes('--owner-away') };
+    report: value('--report'), ownerAway: argv.includes('--owner-away'), ...cursorStyle ? { cursorStyle } : {} };
 }
 
 async function main(argv) {
@@ -210,7 +214,7 @@ async function main(argv) {
   try { opts = parseArgs(argv); } catch (error) { console.error(error.message); return 2; }
   if (opts.report) {
     const saved = JSON.parse(readFileSync(join(opts.report, 'cost-pass.json'), 'utf8'));
-    const cmp = compareSides(saved.entries);
+    const cmp = compareSides(saved.entries, budgetFor(saved.meta?.cursorStyle));
     console.log(reportMarkdown(cmp, saved.meta));
     return cmp.verdict === 'within' ? 0 : 1;
   }
@@ -226,7 +230,8 @@ async function main(argv) {
   }
   const out = resolve(opts.out ?? join(homedir(), 'Library/Logs/sleight', `h6-${new Date().toISOString().replace(/[:.]/g, '-')}`));
   mkdirSync(out, { recursive: true });
-  const meta = { tasks: opts.tasks, rounds: opts.rounds, model: opts.model, effort: opts.effort, started: new Date().toISOString(), finished: null };
+  const meta = { tasks: opts.tasks, rounds: opts.rounds, model: opts.model, effort: opts.effort, ...opts.cursorStyle ? { cursorStyle: opts.cursorStyle } : {},
+    started: new Date().toISOString(), finished: null };
   const save = entries => writeFileSync(join(out, 'cost-pass.json'), JSON.stringify({ meta, entries }, null, 2) + '\n');
   let n = 0;
   const entries = await runCostPass({
@@ -246,7 +251,7 @@ async function main(argv) {
   }, { ...opts, save, log: line => console.log(line) });
   meta.finished = new Date().toISOString();
   save(entries);
-  const cmp = compareSides(entries);
+  const cmp = compareSides(entries, budgetFor(meta.cursorStyle));
   const md = reportMarkdown(cmp, meta);
   writeFileSync(join(out, 'cost-pass.md'), md);
   console.log(md);

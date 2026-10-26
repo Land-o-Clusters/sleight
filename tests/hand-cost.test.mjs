@@ -84,6 +84,8 @@ test('the schedule alternates which side runs first by round and task, each side
     join(base, 'sleight-real-evidence/S/sleight-calculator-click-1'), join(base, 'sleight-bench/S/sleight-calculator-click-1')]);
   assert.throws(() => parseArgs(['--rounds', '0']), /from 1 to 10/);
   assert.deepEqual(parseArgs([]).tasks, CLAIM_TASKS);
+  assert.equal(parseArgs([]).cursorStyle, undefined); assert.equal(parseArgs(['--cursor-style', 'sprite']).cursorStyle, 'sprite');
+  assert.throws(() => parseArgs(['--cursor-style', 'Sprite']), /--cursor-style/);
 });
 
 test('trace lookup reads durable evidence first and retains both temp spellings for old traces', t => {
@@ -140,6 +142,11 @@ test('compareSides: inside the budget, over it, and invalid when a side measured
   assert.equal(BUDGET.hostAvgPct, 1);
   assert.deepEqual(['glove', 'ring', 'seam', 'sprite', undefined].map(style => budgetFor(style).rssMB), [50, 50, 50, 64, 50]);
   assert.equal(budgetFor('sprite').hostAvgPct, BUDGET.hostAvgPct);
+  // main() scores with budgetFor(meta.cursorStyle): a 60 MiB peak is over for the ring and within for the sprite.
+  const rssCheck = style => compareSides([entry('on', { rss: 60 }), entry('off')], budgetFor(style)).checks.find(c => c.name === 'hand host RSS, peak');
+  assert.deepEqual([rssCheck('ring').ok, rssCheck('ring').limit, rssCheck('sprite').ok, rssCheck('sprite').limit], [false, 50, true, 64]);
+  const source = readFileSync(new URL('../bench/hand/cost-pass.mjs', import.meta.url), 'utf8');
+  assert.equal(source.match(/compareSides\([^)]*budgetFor\(/g)?.length, 2); assert.doesNotMatch(source, /compareSides\((saved\.)?entries\)/);
 });
 
 test('runSide runs one task with the switch, samples the run\'s own tree and reads its row and trace', async () => {
