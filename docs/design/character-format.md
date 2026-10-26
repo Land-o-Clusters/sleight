@@ -15,6 +15,7 @@ my-character/
   character.json
   sheet.png          # or sheet.webp
   extra.webp         # optional extra rows
+  perch.webp         # optional perch-mode rows (or perch.png)
   preview.png        # optional, at most 256 by 256 pixels
   LICENSE.txt        # terms for a license the validator does not recognize
 ```
@@ -180,6 +181,49 @@ top of the manifest, then put `"sheet": "extra"` on each state using it. Rows st
 The manifest above adds a four-frame click in extra row 0. Add a timed entry for each missing event to make
 it count as having its own animation. Reusing an existing row directly also counts as an explicit animation assignment.
 
+## Perch mode and lines
+
+In perch mode the character is drawn on the target window's top edge (see the ring doc's perch section). A pack can add a
+third sheet and nine optional states for it:
+
+```json
+{
+  "perch": { "anchor": { "x": 96, "y": 150 }, "sheet": "perch.webp" },
+  "states": {
+    "perch": { "sheet": "perch", "row": 0, "frames": 6, "ms": [320, 120, 120, 260, 260, 400], "loop": true },
+    "high-five": { "sheet": "perch", "row": 2, "frames": 3, "ms": [90, 120, 420], "loop": false, "hotspot": { "x": 139, "y": 89 } }
+  }
+}
+```
+
+`perch.anchor` is the seat point in cell pixels: it rests on the window's top edge. It defaults to `anchor`, so a pet
+without perch art stands on the edge. `perch.sheet` is `perch.png` or `perch.webp` and follows the extra sheet's rules (8
+columns of whole cells, at most 1536 by 2288 pixels and 8 MiB). A state uses it with `"sheet": "perch"`. The states
+and their fallbacks:
+
+| State | Without its own art |
+| --- | --- |
+| perch | idle |
+| perch-peek | look at heading 180, masked at the edge; else idle's first cell |
+| perch-hop | jumping columns 0, 1, 3 and 4 |
+| perch-point-left, perch-point-right | look at heading 225 or 135, then aim, then idle's first cell |
+| sleep | idle's first cell (the host draws the z glyphs) |
+| high-five | wave, then success. Its `hotspot` is where the ring's done burst plays |
+| perch-wait | waiting-approval |
+| startle | error's first 2 frames |
+| jumping | the leap's arc. A Codex pet uses row 4 |
+
+These states do not count toward the 19 moves. `resolvePerchStates(manifest)` returns `{ anchor, states }` with every
+perch state plus `jumping`, both runs, `error` and `handoff`, resolved to concrete cells.
+
+An optional `lines` block holds the character's own short sentences, keyed by moment: `start`, `first-click`, `typing`,
+`long-wait`, `approval`, `error`, `done`, `handback` and `wake`, plus `lang` (a BCP 47 tag of at most 16 characters).
+Each moment has 1 to 16 lines. A line is 1 to 60 characters after trimming, on one line, in plain text. Emoji are
+allowed. Control and bidi characters, `<`, `>`, `{`, `}`, backticks, `*`, `_`, `[`, `]`, `|`, URLs and paths (`://`,
+`www.`, `/` before a letter, `~/`), and the words `system`, `assistant`, `ignore` and `tool` are refused. The block is
+at most 4 KiB. A block that breaks these rules is dropped with one warning, and the pack still loads. Unknown keys warn
+and are ignored. Lines are data the host draws. They never reach the model, a tool result or the cursor stream.
+
 ## Validation limits
 
 The Node loader checks these on import, installation and every load:
@@ -191,7 +235,7 @@ The Node loader checks these on import, installation and every load:
 - PNG requires IHDR first, at least one IDAT before IEND, bounded chunk lengths and no data after IEND. WebP requires VP8,
   VP8L or VP8X first and exactly one image chunk. A VP8X canvas must equal the image bitstream's dimensions and appear only
   once, first. APNG and animated WebP are refused. A header check does not prove decoding succeeds.
-- Main and extra images at most 8 MiB each, preview at most 1 MiB and `LICENSE.txt` at most 64 KiB. Total bytes, including
+- Main, extra and perch images at most 8 MiB each, preview at most 1 MiB and `LICENSE.txt` at most 64 KiB. Total bytes, including
   JSON and license, at most 16 MiB. Each image side is at most 4096 pixels; all images together are at most 16,000,000 pixels.
 - Exact cell grids, valid row and frame ranges, duration limits, scale, coordinates and acyclic explicit fallback names.
 - Required license field. A source with `character.json` must state a license. Only the generated Codex-import manifest may
@@ -232,7 +276,7 @@ host's caps.
 
 `plugins/sleight/lib/hand/character.mjs` exports `loadCharacter(folder)` and `checkCharacter(id)` for validated loads.
 Results contain the normalized `manifest`, header-only `sheets`, `files` as a map of snapshot buffers, total byte count,
-`warnings` and a 19-entry `resolved` table. Installed loads use `installed: true` to enforce private file modes.
+`warnings`, a 19-entry `resolved` table and the `perch` table from `resolvePerchStates`. Installed loads use `installed: true` to enforce private file modes.
 `listCharacters()` also returns `{ id, skipped, reason }` for stray entries and `{ id, error }` for broken characters.
 
 `resolveCharacterStates(manifest, { heading, distance })` resolves a validated manifest for one heading in degrees and a

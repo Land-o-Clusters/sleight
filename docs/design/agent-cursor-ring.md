@@ -124,7 +124,8 @@ character set, one VC3 refuses, or one too large, the client spawns the ring ins
 `hand-sprite-fallback` line (`CHARACTER_NOT_SET` or `CHARACTER_INVALID`). A later character frame replaces the earlier
 one, even when the new one fails to load.
 
-The frame's keys are exactly `hand`, `nonce`, `seq`, `id`, `sheet`, `extra` (a path or null), `cell` and `table`. Table
+The frame's keys are exactly `hand`, `nonce`, `seq`, `id`, `sheet`, `extra` (a path or null), `cell` and `table`, plus
+`perch`, `perchSheet` and `lines` for perch mode (below). Table
 entries have exactly `sheet`, `row`, `frames`, `ms`, `loop`, `flip` and `hotspot`, and may add `size`, `scale` and `then`.
 `frames` is a count from column 0 or an array of columns 0 to 7. The adapter sends arrays, which keep a state's start
 column and the doubled double-click fallback. `ms` is one number or one per column. `size` is the expected sheet's
@@ -198,3 +199,47 @@ panel or window. Each draw record gains a `sprite` object with the cell poses, e
 positions. An offscreen `CALayer.render(in:)` check of the host's layer tree (unflipped panel layer, flipped ring root,
 sprite layer) drew the sheet upright, with `contentsRect` y 0 at row 0. The window server's rendering, appearance,
 capture exclusion and live cost need VC7.
+
+### Perch mode
+
+With `perch: true` (`sleight-mcp cursor style sprite <id> --perch`), the character is drawn on the target window's top
+edge instead of trailing the ring (art direction A2). The ring still marks the exact point. The character frame adds `perch`
+(the seat point in cell pixels and a 14-entry table: the nine perch states, `jumping`, both runs, `error` and `handoff`,
+each resolved by `resolvePerchStates` so a Codex pet perches on its feet), the third sheet's path in `perchSheet`, and
+the pack's `lines`. A picker frame, `{"op":"options","perch","lines"}`, follows the character frame and every change of
+either setting. The host decodes the perch sheet through the same child and pixel checks as the other two.
+
+`PerchRuntime` (`BEGIN PERCH` in `consent-host.swift`) reacts to the ring's draws, so act delays and queueing stay the
+ring's. It places the box on the edge nearest the target, 80 pt from the window's sides (40 under 256 pt wide, centered
+under 176), 72 pt off a target within 56 pt under the edge, and on the uncovered span nearest the target after every
+window in front has cut the edge. A new aim on the same window moves the seat only past 60 pt. Under 96 pt wide, or with
+less headroom than the seat line, it peeks: the cell is masked at the edge, at most 48 pt above it. It hides under 48 pt
+wide, under 40 pt of headroom, when covered, in full screen and when the window is gone. Moves are a 280 ms drop on
+arrival, a 240 ms hop per 120 pt, a run past 360 pt (at most 600 ms), a parabola between windows on one display (60 pt
+above the higher edge, `320 + 0.5 * distance` ms up to 520), and a fade and pop over 400 pt or onto another display.
+Reduced motion makes every move a 150 ms crossfade and shows each state's first cell. Reactions follow A2's table: aim
+points toward the target's side, a click bumps 3 pt, typing, scrolling and dragging peek, waiting holds the card up to
+120 s, an error winces, and a done with `ok` high-fives while the ring's burst moves to the palm (`RingRuntime.dissolveAt`).
+After 20 s without a frame it sleeps for 3 cycles under three rising z glyphs (one replicated layer), then stills with
+one z. The next frame startles it with a 6 pt bump. A person dragging or resizing the window hides it, and it returns
+500 ms after the frame stops changing.
+
+The host rereads the window list every 0.5 s while perched and awake, every 2 s asleep and every 0.25 s while the window
+moves. One read took 0.28 ms median over 200 calls (2026-10-26, load 11). Each plan is one set of keyframe animations
+built when the frame arrives. A leap animates position, contents and contentsRect, sleep's loop animates the cell and the
+z group, and a park removes them all.
+
+Lines are a pack's own short sentences (`lines` in `character.json`), shown in a white comic bubble over the box. The nine
+moments are `start` (a turn's first aim), `first-click` (its first done with `ok`), `typing`, `long-wait` (12 s of
+thinking or waiting), `approval`, `error`, `done` (a turn that ends after a success), `handback` and `wake`. A turn ends at the relay's done without `ok`, a hand back
+or sleep. At most one line shows per 8 s (error, approval and done may replace one), and never on two consecutive acts.
+Picks avoid that moment's last `min(6, count - 1)` lines, seeded from the session seed, and a moment with one line says
+it once a turn. Lines wait for a narration bubble to fade, and one already up fades in 60 ms when narration arrives
+(the narration lane calls `PerchRuntime.narration`). The bubble has its own small nonactivating panel, the only part of
+the overlay that takes a click. A person's fresh mouse click (`personActivation`, mouse only) dismisses it, and other
+input is refused. `lines: off` turns them off.
+
+`--perch-dump [--reduce-motion] [--seed=N]` drives `RingRuntime` and `PerchRuntime` on a simulated clock with window lists
+from `{"dumpWorld": ...}` lines, plus `dumpNarration`, `dumpPaused` and `dumpClick`. It builds no panel or layer and
+decodes nothing. `tests/hand-perch.test.mjs` drives the seat rules, moves, reactions, sleep, hide rules and the lines' caps
+through it (19 tests). Appearance, the mask's direction in the flipped layer tree and live CPU need VC7.

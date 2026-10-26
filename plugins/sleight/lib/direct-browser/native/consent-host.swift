@@ -4567,7 +4567,6 @@ final class PerchBubblePanel: NSPanel {
 }
 final class PerchBubbleView: NSView {
     var dismiss: (() -> Void)?
-    override var isFlipped: Bool { true }
     override func acceptsFirstMouse(for event: NSEvent?) -> Bool { true }
     override func mouseDown(with event: NSEvent) {}
     override func mouseUp(with event: NSEvent) {
@@ -4585,7 +4584,7 @@ final class PerchHost {
     var bubble: PerchBubblePanel?
     var wake: DispatchWorkItem?
     init(host: HandHost) { self.host = host; runtime.seed = UInt64.random(in: 1...UInt64.max); runtime.book.seed = runtime.seed }
-    var active: Bool { enabled && host?.cursorStyle == "sprite" && loaded != nil }
+    var active: Bool { enabled && host?.cursorStyle == "sprite" && loaded?.frame.perch != nil }
     // A character load, a style change or the options frame: which runtime gets the character (ring trail or perch).
     func configure(character: SpriteCharacter? = nil, replace: Bool = false, perch: Bool? = nil, lines: Bool? = nil) {
         let was = active, seq = loaded?.frame.seq

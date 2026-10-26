@@ -444,7 +444,14 @@ leaves its sprite hidden. Once the host is compiled, `cursor check <id>` also ru
 Every style draws only while the hand is on (`sleight-mcp hand on`). Style changes take effect in a new sleight session
 and keep the hand's on/off setting. `sleight-mcp cursor status` prints whether the hand is on (and why not, such as an
 unsafe file), the style, selected character, stream, labels and host compilation state.
-Claude's shell can run `cursor status`, `list` and `check`; it cannot run `style`, `import` or `remove`.
+Claude's shell can run `cursor status`, `list` and `check`; it cannot run `style`, `lines`, `import` or `remove`.
+
+The sprite style reads `perch` and `lines` from the same file. With `perch: true` (default false) the character is drawn
+on the target window's top edge instead of beside the ring: `sleight-mcp cursor style sprite <character-id> --perch`
+turns it on, and the same command without `--perch` turns it off. `lines` (`on` or `off`, default `on`) lets a character
+with a lines block say a short line of its own at a few moments of a task. `sleight-mcp cursor lines off` turns them off,
+and so does the Character lines row in the menu's Cursor submenu, shown while a sprite is selected. Lines are the character's own canned text. They
+never reach Claude, a tool result or the cursor stream, and a click on the bubble dismisses one.
 
 `SLEIGHT_CURSOR_STYLE` in the MCP server's environment takes precedence over the file. An invalid nonempty value selects
 the glove. `SLEIGHT_HAND=0` disables both the built-in cursor and its public stream. Set `stream: true` to send the open
