@@ -10,7 +10,7 @@ import { randomBytes } from 'node:crypto';
 import { readFileSync, watch as fsWatch } from 'node:fs';
 import { dirname } from 'node:path';
 import { handCursorStyles, handHostBuilt, prepareHandHost } from '../direct-browser/host.mjs';
-import { CURSOR_STYLES, handConfigPath, handSetting } from './settings.mjs';
+import { handConfigPath, handSetting } from './settings.mjs';
 import { setHandPid } from './pid.mjs';
 import { currentApp as noted } from '../permissions.mjs';
 import { actionLogPath } from '../action-outcomes.mjs';
@@ -39,11 +39,12 @@ export function handWireFrame(frame) {
   if (!pid || !windowId || (!at && frame.hand !== 'status')) return 'target';
   const label = typeof frame.label === 'string' && !/[\x00-\x1f\x7f]/.test(frame.label) ? [...frame.label].slice(0, 40).join('') : undefined;
   if (frame.hand === 'status') return ['waiting', 'error', 'done', 'handback', 'thinking'].includes(frame.state)
-    ? { hand: 'status', state: frame.state, pid, windowId, ...at ? { at } : {} } : 'state';
+    ? { hand: 'status', state: frame.state, pid, windowId, ...at ? { at } : {}, ...frame.state === 'done' && typeof frame.ok === 'boolean' ? { ok: frame.ok } : {} } : 'state';
+  const rect = Array.isArray(frame.rect) && frame.rect.length === 4 && frame.rect.every(v => Number.isFinite(v) && Math.abs(v) <= 100000) && frame.rect[2] > 0 && frame.rect[3] > 0 ? frame.rect.map(round) : undefined;
   if (frame.hand === 'aim') {
-    if (!kinds.has(frame.kind)) return 'kind';
-    const rect = Array.isArray(frame.rect) && frame.rect.length === 4 && frame.rect.every(v => Number.isFinite(v) && Math.abs(v) <= 100000) && frame.rect[2] > 0 && frame.rect[3] > 0 ? frame.rect.map(round) : undefined;
-    return { hand: 'aim', kind: frame.kind, pid, windowId, at, holdMs: 0, ...rect ? { rect } : {}, ...label ? { label } : {} };
+    // The host's aim draws the same for every kind and its kind list has no move, so a move aim goes as click.
+    if (frame.kind !== 'move' && !kinds.has(frame.kind)) return 'kind';
+    return { hand: 'aim', kind: frame.kind === 'move' ? 'click' : frame.kind, pid, windowId, at, holdMs: 0, ...rect ? { rect } : {}, ...label ? { label } : {} };
   }
   const raw = frame.path === undefined || Array.isArray(frame.path) && !frame.path.length ? [frame.at] : frame.path;
   if (!Array.isArray(raw)) return 'path';
@@ -51,7 +52,9 @@ export function handWireFrame(frame) {
   if (path.some(p => !p)) return 'path';
   const delayMs = Math.min(10000, Math.max(0, Math.round(Number.isFinite(frame.delayMs) ? frame.delayMs : 0)));
   const beats = Math.min(20, Math.max(1, Math.round(Number.isFinite(frame.beats) ? frame.beats : 1)));
-  return { kind: frame.kind, pid, windowId, at, path, delayMs, beats, ...label ? { label } : {} };
+  // caretX: the type or key caret's x in global points, which the ring's bottom gap rides.
+  const caretX = ['type', 'key'].includes(frame.kind) && Number.isFinite(frame.caretX) && Math.abs(frame.caretX) <= 100000 ? round(frame.caretX) : undefined;
+  return { kind: frame.kind, pid, windowId, at, path, delayMs, beats, ...label ? { label } : {}, ...rect ? { rect } : {}, ...caretX !== undefined ? { caretX } : {} };
 }
 
 // The process's latest open client: turbo's bridge shares its host.
@@ -67,11 +70,23 @@ export async function shareConsent() {
  *  the same one after (while open), and none while the settings keep it off. The launcher creates it at startup, so turbo's first fork
  *  can share its host. */
 export function sessionHandClient(options = {}) {
-  const env = options.env ?? process.env;
-  const setting = (options.setting ?? (() => handSetting({ env })))();
-  if (env.SLEIGHT_HAND === '0' || !setting.enabled) return undefined;
-  return current ?? createHandClient({ ...options, cursorStyle: options.cursorStyle ?? setting.style });
+  try {
+    const env = options.env ?? process.env;
+    const setting = (options.setting ?? (() => handSetting({ env })))();
+    if (env.SLEIGHT_HAND === '0' || !setting.enabled) return undefined;
+    if (current) return current;
+    const cursorStyle = options.cursorStyle ?? setting.style;
+    try { return createHandClient({ ...options, cursorStyle }); }
+    catch (error) {
+      // A style the host can't draw never stops the session: it traces and shows the glove.
+      try { options.trace?.('hand-style-invalid', { code: error?.message === 'HAND_CURSOR_STYLE_INVALID' ? error.message : 'HAND_CLIENT_FAILED' }); } catch {}
+      return createHandClient({ ...options, cursorStyle: 'glove' });
+    }
+  } catch { return undefined; }
 }
+// The host's style for a settings style. The host draws no character sprite yet, so sprite draws as the ring; the sprite
+// renderer (VC4) replaces this mapping with its own host style.
+export const hostCursorStyle = style => style === 'sprite' ? 'ring' : style;
 
 // The files behind the menu's Permissions rows. A change to any of them sends the host a fresh menu frame.
 const permissionFiles = new Set(['preapproved.json', 'permissions.json', 'electron-grants.json', 'turbo.json']);
@@ -94,17 +109,17 @@ export function usageFrame(value) {
  *  permissions: the menu's Permissions rows (menu() gives { payload, offered }) and their clicks (apply), or null for none.
  *  usage: the menu's usage row ({ native?, turbo?, saved } or undefined), read at most every usageMs, or null for none. */
 export function createHandClient({ env = process.env, setting = () => handSetting({ env }), built = handHostBuilt, prepare = prepareHandHost,
-  cursorStyle,
   trace = () => {}, now = Date.now, defer = setImmediate, recheckMs = 60000, killAfterMs = 2000,
   setHand = async enabled => (await import('./command.mjs')).writeHandSetting({ enabled }),
   permissions = { menu: async () => (await command()).permissionsMenu(), apply: async (event, offered) => (await command()).applyMenuEvent(event, offered) },
-  currentApp = noted, usage = logUsage(env), usageMs = 300000,
+  currentApp = noted, usage = logUsage(env), usageMs = 300000, cursorStyle,
   watch = (folder, listener) => process.platform === 'darwin' ? fsWatch(folder, { persistent: false }, listener) : undefined } = {}) {
+  cursorStyle = hostCursorStyle(cursorStyle);
   if (cursorStyle !== undefined && !handCursorStyles.includes(cursorStyle)) throw Error('HAND_CURSOR_STYLE_INVALID');
   const nonce = randomBytes(32).toString('hex'), queue = [];
   // host: none, starting, running or dead (failed or closed this session; final). hand: the settings allow the hand.
   let seq = 0, child, host = 'none', starting, hand = false, capture = 'hidden', checked = now(), checking = false, events = '', target;
-  let style = CURSOR_STYLES.includes(cursorStyle) ? cursorStyle : undefined;
+  let style = cursorStyle;
   let buildController, buildStarted;
   // Hosts with an attached worker are left to finish their consent channel before exiting.
   const attached = new WeakSet();
@@ -123,7 +138,7 @@ export function createHandClient({ env = process.env, setting = () => handSettin
   const read = () => {
     try {
       const value = setting();
-      style ??= CURSOR_STYLES.includes(value?.style) ? value.style : 'glove';
+      style ??= handCursorStyles.includes(hostCursorStyle(value?.style)) ? hostCursorStyle(value.style) : 'glove';
       capture = value?.capture === 'visible' ? 'visible' : 'hidden';
       return value?.enabled === true;
     } catch { return false; }
@@ -140,7 +155,8 @@ export function createHandClient({ env = process.env, setting = () => handSettin
     ? { ...wire, nonce, seq: ++seq }
     : { hand: 'act', nonce, seq: ++seq, kind: wire.kind, pid: wire.pid,
       windowId: wire.windowId, at: wire.at, path: wire.path, delayMs, beats: wire.beats,
-      ...style !== 'glove' && wire.label ? { label: wire.label } : {} }) + '\n';
+      ...style !== 'glove' ? { ...wire.label ? { label: wire.label } : {}, ...wire.rect ? { rect: wire.rect } : {},
+        ...wire.caretX !== undefined ? { caretX: wire.caretX } : {} } : {} }) + '\n';
   // perms: the last Permissions rows sent, with the targets a click may act on; permsText detects a change.
   let perms, permsText, permsApp, refreshing = false, again = false;
   // stats: the usage row last sent, and when the log was last read.
@@ -329,12 +345,17 @@ export function createHandClient({ env = process.env, setting = () => handSettin
       ensure();
     },
     // Records already passed the cursor privacy projection. Aim and status share act's nonce and sequence.
+    // An aim without a point and window (the admission preview) has nothing to draw and is no dropped frame.
     cursor(event) {
       if (style === 'glove' || !hand || host === 'dead') return;
       if (event?.type === 'action' && event.phase === 'aim') {
-        client.send({ hand: 'aim', kind: ['select', 'navigate'].includes(event.kind) ? 'click' : event.kind, pid: event.window?.pid, windowId: event.window?.id,
+        if (!event.point || !event.window?.pid || !event.window?.id) return;
+        client.send({ hand: 'aim', kind: ['select', 'navigate'].includes(event.kind) ? 'click' : event.kind, pid: event.window.pid, windowId: event.window.id,
           at: event.point, rect: event.rect, label: event.label });
-      } else if (event?.type === 'status' && target && event.state !== 'idle') client.send({ hand: 'status', state: event.state, ...target });
+      } else if (event?.type === 'status' && target && event.state !== 'idle') {
+        // A call's done is its success; the ring bursts for it.
+        client.send({ hand: 'status', state: event.state, ...target, ...event.state === 'done' && event.call ? { ok: true } : {} });
+      }
     },
     hide() {
       if (host === 'running') write(JSON.stringify({ hand: 'hide', nonce }) + '\n');

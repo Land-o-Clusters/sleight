@@ -5,6 +5,10 @@ import { CURSOR_STYLES, handConfigPath, handSetting } from './settings.mjs';
 import { writeHandSetting } from './command.mjs';
 import { handHostBuilt } from '../direct-browser/host.mjs';
 
+// What a saved style needs before anything draws, in the words the status and style lines share.
+const SPRITE_NOTE = 'sprite draws as the ring until sleight has a sprite renderer.';
+const handLine = s => s.reason === 'unsafe' ? 'off (hand.json is unsafe to read; run sleight-mcp hand on or off to replace it)'
+  : s.enabled ? 'on' : s.reason === 'env' ? 'off (SLEIGHT_HAND=0)' : s.reason === 'platform' ? 'off (macOS only)' : 'off';
 const usage = 'usage: sleight-mcp cursor import <folder> [--yes]\n       sleight-mcp cursor list\n       sleight-mcp cursor check <id>\n       sleight-mcp cursor remove <id>\n       sleight-mcp cursor style <glove|ring|seam|sprite> [<character-id>]\n       sleight-mcp cursor status\n';
 function ask(input, out, prompt) {
   out(prompt);
@@ -27,9 +31,12 @@ export async function cursorCommand(args, { out = text => process.stdout.write(t
   try {
     if (op === 'status') {
       const s = handSetting({ env, path, platform });
-      out([`style     ${s.style ?? 'glove'}${s.styleReason === 'env' ? ' (SLEIGHT_CURSOR_STYLE)' : s.styleReason === 'env-invalid' ? ' (invalid SLEIGHT_CURSOR_STYLE)' : ''}`,
+      out([`hand      ${handLine(s)}`,
+        `style     ${s.style ?? 'glove'}${s.styleReason === 'env' ? ' (SLEIGHT_CURSOR_STYLE)' : s.styleReason === 'env-invalid' ? ' (invalid SLEIGHT_CURSOR_STYLE)' : ''}`,
         `character ${s.character ?? 'none'}`, `stream    ${s.stream ? 'on' : 'off'}`, `labels    ${s.labels ?? 'off'}`,
         `host      ${built() ? 'compiled' : 'not compiled'}`].join('\n') + '\n');
+      if (!s.enabled && (s.style ?? 'glove') !== 'glove') out('The hand is off, so no style draws. Turn it on with sleight-mcp hand on.\n');
+      if (s.style === 'sprite') out(`Note: ${SPRITE_NOTE}\n`);
     } else if (op === 'style') {
       const style = rest[0], character = rest[1] ?? handSetting({ env: {}, path, platform }).character;
       if (style === 'sprite') {
@@ -37,7 +44,9 @@ export async function cursorCommand(args, { out = text => process.stdout.write(t
         checkCharacter(character, options);
       }
       writeHandSetting({ style, ...style === 'sprite' ? { character } : {} }, { path, uid });
-      out(`Cursor style: ${style}. Start a new sleight session to use it.\n`);
+      const after = handSetting({ env: {}, path, platform });
+      out(`Cursor style: ${style}. ${after.enabled ? 'Start a new sleight session to use it.' : 'The hand is off, so it draws nothing yet. Turn it on with sleight-mcp hand on, then start a new sleight session.'}\n`);
+      if (style === 'sprite') out(`Note: ${SPRITE_NOTE}\n`);
       if (env.SLEIGHT_CURSOR_STYLE) out('SLEIGHT_CURSOR_STYLE in this environment still wins for servers started from here.\n');
     } else if (op === 'import') {
       const character = prepareCharacterImport(rest[0], { uid }); out(characterCallout(character));

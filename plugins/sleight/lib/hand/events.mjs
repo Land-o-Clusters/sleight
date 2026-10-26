@@ -168,11 +168,16 @@ export function createCursorEvents({ env = process.env, setting = handSettingRea
   setting = createHandSettingReader({ setting, now });
   const session = opaque(); let seq = 0, closed = false, started = false, output = sink, discoveryTimer, hostClient;
   const options = () => { try { return env.SLEIGHT_HAND === '0' ? {} : setting(); } catch { return {}; } };
-  const emit = fields => {
+  // The built-in host draws while the settings pick a drawn style and its client isn't dead (null: none could be created).
+  const drawing = () => cursorDrawing(options()) && hostClient !== null && hostClient?.enabled !== false;
+  const toHost = event => { try { if (drawing()) hostClient?.cursor?.(event); } catch {} };
+  // held: the host gets this record later, through forward (the relay paces native aims behind the act before them).
+  const emit = (fields, held = false) => {
     const event = { v: CURSOR_VERSION, seq: ++seq, ts: now(), session, ...fields };
     try { onEvent(event); } catch {}
-    try { if (cursorDrawing(options())) hostClient?.cursor?.(event); } catch {}
+    if (!held) toHost(event);
     try { if (options().stream === true) (output ??= createRendererSink({ dir: env.SLEIGHT_CURSOR_STREAM_DIR })).write(event); } catch {}
+    return event;
   };
   const start = (initialStatus = true) => {
     if (!started) { started = true; emit({ type: 'session', state: 'start', host: ['claude-code', 'codex', 'other'].includes(host) ? host : 'other', version: release });
@@ -188,7 +193,7 @@ export function createCursorEvents({ env = process.env, setting = handSettingRea
       }, 2000);
       discoveryTimer.unref?.();
     } else if (!enabled && discoveryTimer) { cancelRepeat(discoveryTimer); discoveryTimer = undefined; }
-    return !closed && (enabled || cursorDrawing(options()));
+    return !closed && (enabled || drawing());
   };
   const api = {
     call: opaque,
@@ -196,7 +201,13 @@ export function createCursorEvents({ env = process.env, setting = handSettingRea
     get labels() { return options().labels ?? 'off'; },
     get enabled() { return allowed(); },
     host(value) { if (!started && ['claude-code', 'codex', 'other'].includes(value)) host = value; },
-    action(input) { if (!allowed()) return; const record = actionRecord(input, api.labels); if (record) { start(); emit({ type: 'action', ...record }); } },
+    /** Emits the record and returns it. With held, the host gets it only from a later forward(record). */
+    action(input, { held = false } = {}) {
+      if (!allowed()) return;
+      const record = actionRecord(input, api.labels);
+      if (record) { start(); return emit({ type: 'action', ...record }, held); }
+    },
+    forward(event) { if (!closed && event) toHost(event); },
     status(state, detail = {}) {
       if (!allowed() || !states.has(state)) return;
       detail ??= {};

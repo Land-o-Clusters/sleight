@@ -57,6 +57,26 @@ test('cursor style saves only valid installed sprites and status is read-only', 
   assert.equal(await cli.cursorCommand(['style', 'sprite', 'test-cat'], opts), 1);
   output = ''; assert.equal(await cli.cursorCommand(['check', 'test-cat'], opts), 1);
 });
+test('cursor status and style say when the hand is off or the file is unsafe, and that sprite draws as the ring', async t => {
+  const w = world(t); api.installCharacter(api.prepareCharacterImport(w.folder), { root: w.root });
+  const path = join(w.base, 'hand.json'); let output = '';
+  const opts = { path, root: w.root, platform: 'darwin', env: {}, built: () => false, out: s => output += s };
+  fs.writeFileSync(path, JSON.stringify({ version: 1, enabled: false }), { mode: 0o600 });
+  assert.equal(await cli.cursorCommand(['style', 'ring'], opts), 0);
+  assert.match(output, /Cursor style: ring\. The hand is off, so it draws nothing yet\. Turn it on with sleight-mcp hand on/);
+  output = ''; assert.equal(await cli.cursorCommand(['status'], opts), 0);
+  assert.match(output, /^hand {6}off\n/); assert.match(output, /The hand is off, so no style draws/);
+  fs.writeFileSync(path, JSON.stringify({ version: 1, enabled: true }), { mode: 0o600 });
+  output = ''; assert.equal(await cli.cursorCommand(['style', 'sprite', 'test-cat'], opts), 0);
+  assert.match(output, /Start a new sleight session to use it\.\nNote: sprite draws as the ring until sleight has a sprite renderer\./);
+  output = ''; assert.equal(await cli.cursorCommand(['status'], opts), 0);
+  assert.match(output, /^hand {6}on\n/); assert.match(output, /Note: sprite draws as the ring/); assert.doesNotMatch(output, /hand is off/);
+  fs.chmodSync(path, 0o644);
+  output = ''; assert.equal(await cli.cursorCommand(['status'], opts), 0);
+  assert.match(output, /^hand {6}off \(hand\.json is unsafe to read; run sleight-mcp hand on or off to replace it\)\n/);
+  output = ''; assert.equal(await cli.cursorCommand(['status'], { ...opts, env: { SLEIGHT_HAND: '0' } }), 0);
+  assert.match(output, /^hand {6}off \(SLEIGHT_HAND=0\)\n/);
+});
 test('installed checks omit source-copy text, symlinks offer removal, and malformed folder names can be removed', async t => {
   const w = world(t); api.installCharacter(api.prepareCharacterImport(w.folder), { root: w.root });
   let output = ''; const opts = { root: w.root, out: s => output += s };

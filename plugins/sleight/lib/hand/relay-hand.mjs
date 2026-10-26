@@ -45,11 +45,19 @@ export function createRelayHand({ client, loadClient = () => import('./client.mj
   const guarded = fn => (...args) => { try { fn(...args); } catch { /* The hand never reaches the relay. */ } };
   const cursorCalls = new Set();
   const cursorById = new Map();
-  const publish = (call, entry, phase, reason) => {
+  const publish = (call, entry, phase, reason, held = false) => {
     if (!call.cursor) return;
-    try { events.action({ ...entry.record, call: call.cursor, index: entry.index, source: 'native', phase, ...(reason ? { reason: cursorReason(reason) } : {}) }); } catch {}
+    try { return events.action({ ...entry.record, call: call.cursor, index: entry.index, source: 'native', phase, ...(reason ? { reason: cursorReason(reason) } : {}) }, { held }); } catch {}
   };
-  const cancelActs = call => { for (const timer of call.timers ?? []) cancel(timer); call.timers = []; };
+  const cancelActs = call => { for (const timer of call.timers ?? []) cancel(timer); call.timers = []; call.heldAims?.clear(); };
+  // The host draws an action's aim once the act before it goes out, so the ring shows one target at a time. The public
+  // stream already has every aim from plan time. heldAims maps the earlier planned action to the later action's aim record.
+  const releaseAim = (call, action) => {
+    const aim = call.heldAims?.get(action);
+    if (!aim) return;
+    call.heldAims.delete(action);
+    try { events.forward?.(aim); } catch {}
+  };
   function finishCursor(call, phase) {
     cancelActs(call);
     if (call.cursorTerminated) return;
@@ -60,7 +68,8 @@ export function createRelayHand({ client, loadClient = () => import('./client.mj
   const cursorPlan = guarded((call, geometry, planned, reason) => {
     if (!call.cursor || call.cursorEntries || call.cursorTerminated || call.cursorHidden) return;
     const actions = call.targets?.actions?.length ? call.targets.actions : [{ kind: 'move' }];
-    let previous;
+    let previous, before;
+    call.heldAims = new Map();
     call.cursorEntries = actions.map((action, index) => {
       const n = planned?.actions.indexOf(index) ?? -1, frame = n >= 0 ? planned.frames[n] : undefined;
       const identity = call.targets?.identities[action.target?.number] ?? (action.target?.focus ? geometry?.focused : action.target?.previous ? previous : undefined);
@@ -69,14 +78,18 @@ export function createRelayHand({ client, loadClient = () => import('./client.mj
         secure: identity?.role === 'AXSecureTextField' || (['type', 'key'].includes(action.kind) && !identity?.role) }, geometry,
         target: call.target, labels: events.labels });
       const entry = { index, record: projected };
-      if (frame && projected.label && setting().style && setting().style !== 'glove') {
+      if (frame && (projected.label || projected.rect) && setting().style && setting().style !== 'glove') {
         const hostEntry = call.entries?.find(e => e.action === index);
-        if (hostEntry) hostEntry.frame = { ...hostEntry.frame, label: projected.label };
+        if (hostEntry) hostEntry.frame = { ...hostEntry.frame, ...projected.label ? { label: projected.label } : {}, ...projected.rect ? { rect: projected.rect } : {} };
       }
       const skip = reason ?? planned?.skipped.find(s => s.action === index)?.reason;
       if (!frame || skip) { entry.skipped = true; entry.ended = true; publish(call, entry, 'skipped', skip ?? 'unplanned'); }
       else {
-        publish(call, entry, 'aim');
+        // The first planned aim goes to the host now, each later one when the act before it goes out.
+        const pending = before !== undefined && !call.entries?.find(e => e.action === before)?.sent;
+        const aim = publish(call, entry, 'aim', undefined, pending);
+        if (pending && aim) call.heldAims.set(before, aim);
+        before = index;
         if (!call.done && !call.dropped) {
           const act = () => { if (!call.done && !call.dropped && !call.cursorHidden && !closed) publish(call, entry, 'act'); };
           const delay = Math.max(0, call.startedAt + frame.delayMs - now());
@@ -112,9 +125,10 @@ export function createRelayHand({ client, loadClient = () => import('./client.mj
     }
   };
 
-  function send(entry, delayMs) {
+  function send(call, entry, delayMs) {
     entry.sent = true; entry.due = now() + delayMs;
     try { if (live()) resolved?.send({ ...entry.frame, delayMs: Math.max(0, Math.round(delayMs)) }); } catch {}
+    releaseAim(call, entry.action);
   }
 
   function dispatch(call) {
@@ -124,10 +138,10 @@ export function createRelayHand({ client, loadClient = () => import('./client.mj
       if (entry.sent) continue;
       if (call.done) {
         if (now() - call.doneAt > lateMs) { entry.sent = true; note('late', call, { action: entry.action }); continue; }
-        send(entry, k++ * WRITE_MS);
-      } else if (entry.action < call.beatIndex) send(entry, 0);
+        send(call, entry, k++ * WRITE_MS);
+      } else if (entry.action < call.beatIndex) send(call, entry, 0);
       else if (held(call)) break;
-      else send(entry, entry.plannedAt - now());
+      else send(call, entry, entry.plannedAt - now());
     }
     if (call.done) forget(call);
   }

@@ -172,6 +172,32 @@ test('cursor import and remove use the hand shell guard while list and check sta
     assert.equal(await guard({ tool: 'Bash', command }, { stat }), false, command);
   }
 });
+test('a substitution in the launcher\'s arguments or xargs input refuses every launcher command, and the read-only forms still pass', async () => {
+  const refused = { turbo: ['turbo on', 'turbo off'], hand: ['hand on', 'hand capture visible'], permissions: ['permissions unblock x.y', 'permissions revoke all'],
+    cursor: ['cursor style ring', 'cursor remove cat'] };
+  const reads = { turbo: 'turbo status', hand: 'hand status', permissions: 'permissions list', cursor: 'cursor status' };
+  for (const [command, writes] of Object.entries(refused)) {
+    const read = reads[command];
+    for (const write of writes) {
+      for (const spelling of [`sleight-mcp ${read} \`sleight-mcp ${write}\``, `echo \`sleight-mcp ${write}\``, `sleight-mcp ${read} "\`sleight-mcp ${write}\`"`,
+        `sleight-mcp \`echo ${write.split(' ')[0]}\` ${write.split(' ').slice(1).join(' ')}`, `sleight-mcp $(echo ${write.split(' ')[0]}) ${write.split(' ').slice(1).join(' ')}`,
+        `sleight-mcp $'${write.split(' ')[0]}' ${write.split(' ').slice(1).join(' ')}`, `zsh -lc "sleight-mcp ${read} \\\`sleight-mcp ${write}\\\`"`,
+        `echo "${write}" | xargs sleight-mcp`, `printf '${write}' | xargs sleight-mcp`, `echo "${write}" | xargs node /x/lib/launch.mjs`,
+        `echo ${write} | timeout 5 xargs sleight-mcp`, `zsh -lc "echo ${write} | xargs sleight-mcp"`, `nice sh -c "echo ${write} | xargs sleight-mcp"`,
+        `cat cmds | xargs sleight-mcp`, 'xargs sleight-mcp < cmds', 'xargs -a cmds sleight-mcp', `echo "${read}" | xargs -n 2 sleight-mcp`,
+        `echo "'${write.split(' ')[0]}' ${write.split(' ').slice(1).join(' ')}" | xargs sleight-mcp`]) {
+        assert.equal(await guard({ tool: 'Bash', command: spelling }, { stat }), true, spelling);
+      }
+    }
+    for (const spelling of [`sleight-mcp ${read}`, `env sleight-mcp ${read}`, `sh -c "sleight-mcp ${read}"`, `node /x/lib/launch.mjs ${read}`,
+      `echo "${read}" | xargs sleight-mcp`, `printf '${read}' | xargs node /x/lib/launch.mjs`, `sleight-mcp ${read}; echo \`date\``]) {
+      assert.equal(await guard({ tool: 'Bash', command: spelling }, { stat }), false, spelling);
+    }
+  }
+  for (const spelling of ['echo `date`', 'grep -n launch.mjs README.md', 'echo $HOME | xargs ls', 'sleight-mcp --doctor']) {
+    assert.equal(await guard({ tool: 'Bash', command: spelling }, { stat }), false, spelling);
+  }
+});
 test('the action log and outcome switches are the user\'s: Claude\'s file and shell tools can\'t set them where sleight reads its environment', async () => {
   const { loggingSwitchWriteDenied: denied } = await import('../plugins/sleight/hooks/preapproved-write-guard.mjs');
   const env = '{ "env": { "SLEIGHT_ACTION_LOG": "actions.jsonl" } }';

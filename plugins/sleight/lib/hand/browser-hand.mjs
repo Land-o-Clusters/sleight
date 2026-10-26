@@ -124,17 +124,17 @@ export function createBrowserHand({ client, loadClient = () => import('./client.
     const planned = planBrowserFrame({ op, text, box, toBox, metrics, geometry, ignorePids: [resolved?.pid].filter(Number.isSafeInteger) });
     if (planned?.skip) return skip(planned.skip);
     if (planned?.frame) {
-      let label;
+      let label, wrap;
       if (token.cursor) try {
         const scale = zoomOf(metrics) * (metrics.vv?.scale > 0 ? metrics.vv.scale : 1);
         const rect = box && [planned.frame.at[0] - box.width * scale / 2, planned.frame.at[1] - box.height * scale / 2, box.width * scale, box.height * scale];
         token.record = record({ frame: planned.frame, action: { kind: EVENT_KINDS[op], role, inputType, title, description,
           rect, secure: EVENT_KINDS[op] === 'type' && !inputType }, geometry, labels: events?.labels ?? setting().labels ?? 'off' });
-        label = token.record.label;
+        label = token.record.label; wrap = token.record.rect;
         publish(token, 'aim'); publish(token, 'act'); token.shown = true;
         if (token.ended) publish(token, token.failed ? 'failed' : 'done');
       } catch {}
-      try { resolved?.send({ ...planned.frame, ...cursorDrawing(setting()) && label ? { label } : {} }); trace('hand-shown', { op, kind: planned.frame.kind }); } catch {}
+      try { resolved?.send({ ...planned.frame, ...cursorDrawing(setting()) ? { ...label ? { label } : {}, ...wrap ? { rect: wrap } : {} } : {} }); trace('hand-shown', { op, kind: planned.frame.kind }); } catch {}
     }
   }
   return {

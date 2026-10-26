@@ -608,3 +608,57 @@ test('cursorStyle is an optional spawn option and adds no wait to send', async t
   }
   assert.throws(() => createHandClient({ cursorStyle: 'unknown' }), /HAND_CURSOR_STYLE_INVALID/);
 });
+
+test('sprite draws as the ring on the host, from the option or the settings, and the session client never throws for a style', async t => {
+  t.after(() => setHandPid(0));
+  for (const options of [{ cursorStyle: 'sprite' }, { setting: () => ({ enabled: true, style: 'sprite' }) }]) {
+    const spawns = [], child = fakeChild();
+    const client = createHandClient({ setting: () => ({ enabled: true }), ...options, watch: () => undefined, permissions: null, usage: null, built: () => true,
+      prepare: async () => ({ status: 'ready', spawn: spawnOptions => { spawns.push(spawnOptions); return child; } }) });
+    t.after(() => client.close());
+    client.send(frame({ label: 'Save' })); await settle();
+    assert.equal(spawns[0].cursorStyle, 'ring'); assert.equal(child.lines[0].label, 'Save', 'ring acts keep their label');
+    client.close();
+  }
+  createHandClient({ setting: () => ({ enabled: false }), watch: () => undefined }).close();
+  const traces = [], spawns = [];
+  const base = { env: {}, built: () => true, watch: () => undefined, permissions: null, usage: null, trace: (d, detail) => traces.push([d, detail]),
+    prepare: async () => ({ status: 'ready', spawn: spawnOptions => { spawns.push(spawnOptions); return fakeChild(); } }) };
+  const fallback = sessionHandClient({ ...base, setting: () => ({ enabled: true, style: 'Ring' }) });
+  assert.ok(fallback, 'an invalid style still gives the session a hand');
+  assert.deepEqual(traces, [['hand-style-invalid', { code: 'HAND_CURSOR_STYLE_INVALID' }]]);
+  fallback.send(frame()); await settle();
+  assert.deepEqual(spawns, [{ capture: 'hidden', consent: true, cursorStyle: 'glove' }]);
+  fallback.close();
+  assert.equal(sessionHandClient({ ...base, setting: () => { throw Error('read'); } }), undefined);
+  const launch = readFileSync(new URL('../plugins/sleight/lib/launch.mjs', import.meta.url), 'utf8');
+  assert.match(launch, /try \{\n\s+hand = \(await import\('\.\/hand\/client\.mjs'\)\)\.sessionHandClient\(/, 'the launcher wraps the call so the relay always starts');
+});
+
+test('host wire frames carry rect and caretX on acts, ok on done, and a move aim as click; preview aims drop silently', async t => {
+  t.after(() => setHandPid(0));
+  const target = { pid: 501, windowId: 77, at: [10, 20] };
+  assert.deepEqual(handWireFrame({ ...target, kind: 'type', rect: [1, 2, 30, 40.456], caretX: 12.345 }),
+    { kind: 'type', ...target, path: [[10, 20]], delayMs: 0, beats: 1, rect: [1, 2, 30, 40.46], caretX: 12.35 });
+  const click = handWireFrame({ ...target, kind: 'click', caretX: 12, rect: [0, 0, 0, 4] });
+  assert.equal(click.caretX, undefined, 'caretX is for type and key'); assert.equal(click.rect, undefined, 'an empty rect is dropped');
+  assert.equal(handWireFrame({ ...target, kind: 'key', caretX: Infinity }).caretX, undefined);
+  assert.deepEqual(handWireFrame({ hand: 'status', state: 'done', ok: true, ...target }), { hand: 'status', state: 'done', pid: 501, windowId: 77, at: [10, 20], ok: true });
+  assert.equal(handWireFrame({ hand: 'status', state: 'error', ok: true, ...target }).ok, undefined, 'ok is for done only');
+  assert.equal(handWireFrame({ hand: 'status', state: 'done', ok: 'yes', ...target }).ok, undefined);
+  assert.equal(handWireFrame({ hand: 'aim', kind: 'move', ...target }).kind, 'click');
+  assert.equal(handWireFrame({ hand: 'aim', kind: 'hover', ...target }), 'kind');
+  const h = harness({ style: 'ring' }); t.after(() => h.client.close());
+  h.client.cursor({ type: 'action', phase: 'aim', kind: 'click' });
+  h.client.cursor({ type: 'action', phase: 'aim', kind: 'click', point: [1, 2] });
+  h.client.cursor({ type: 'action', phase: 'aim', kind: 'move', point: [1, 2], window: { pid: 501, id: 77 } });
+  h.client.send(frame({ kind: 'type', rect: [5, 6, 70, 20], caretX: 33 }));
+  h.client.cursor({ type: 'status', state: 'done', call: 'a'.repeat(32) });
+  h.client.cursor({ type: 'status', state: 'done' });
+  await settle();
+  assert.deepEqual(h.traces.filter(([d]) => d === 'hand-dropped'), [], 'aims without a point and window are not dropped frames');
+  const lines = h.children[0].lines;
+  assert.deepEqual(lines.map(l => [l.hand, l.kind ?? l.state]), [['aim', 'click'], ['act', 'type'], ['status', 'done'], ['status', 'done']]);
+  assert.deepEqual([lines[1].rect, lines[1].caretX], [[5, 6, 70, 20], 33]);
+  assert.equal(lines[2].ok, true, 'a call\'s done is its success'); assert.equal(lines[3].ok, undefined);
+});

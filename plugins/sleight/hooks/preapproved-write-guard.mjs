@@ -89,12 +89,51 @@ function launcherToggle(words, command, allowed = statusOnly) {
   return words.some(word => {
     if (!/\s/.test(word)) return false;
     const hit = /(?<![\w.-])(?:\S*\/)?(?:sleight-mcp|launch\.mjs)(?=[\s'"]|$)/.exec(word);
+    // A script string that runs the launcher through xargs gives it arguments from input the guard doesn't see.
+    if (hit && /(?<![\w-])xargs(?![\w-])[^;&\n]*$/.test(word.slice(0, hit.index))) return true;
     return !!hit && [...word.slice(hit.index).matchAll(new RegExp(`(?<![\\w-])${command}(?![\\w-])([^;&|)\\n]*)`, 'g'))]
       .some(match => !allowed(match[1].trim().split(/\s+/).filter(Boolean).map(commandArgument)));
   });
 }
 // `permissions` alone or `permissions list` only reads; block, unblock, revoke and sites write permissions.json or a grant.
 const listingOnly = rest => rest.length === 0 || rest.length === 1 && rest[0] === 'list';
+// The launcher's commands that change what sleight may do, each with the forms Claude's shell may run.
+const cursorReads = rest => ['list', 'check', 'status'].includes(rest[0]);
+const LAUNCHER_COMMANDS = [['turbo', statusOnly, 'turbo.json'], ['hand', statusOnly, 'hand.json'], ['cursor', cursorReads, 'hand.json'],
+  ['permissions', listingOnly, 'permissions.json']];
+const refusedLauncher = words => LAUNCHER_COMMANDS.some(([command, allowed]) => launcherToggle(words, command, allowed));
+const LAUNCHER_TEXT = /(?<![\w.-])(?:\S*\/)?(?:sleight-mcp|launch\.mjs)(?![\w.-])/g;
+// True when the launcher's arguments, up to the next unquoted ;, &, | or newline, hold text the guard can't read: a backtick,
+// a $ expansion of any kind ($(, ${, $NAME, $'...') or a <( process substitution. The shell runs a substitution before the
+// launcher sees its arguments, so it can name any subcommand. Quotes don't make it readable: double quotes still substitute,
+// and a single-quoted string may be an sh -c script.
+function launcherSubstitution(command) {
+  for (const match of command.matchAll(LAUNCHER_TEXT)) {
+    let quote = '';
+    for (let i = match.index + match[0].length; i < command.length; i++) {
+      const c = command[i];
+      if (c === '\\') { i++; continue; }
+      if (c === '`' || c === '$' && command[i + 1] !== undefined && !/\s/.test(command[i + 1]) || c === '<' && command[i + 1] === '(') return true;
+      if (quote) { if (c === quote) quote = ''; }
+      else if (c === '"' || c === "'") quote = c;
+      else if (';&|\n'.includes(c)) break;
+    }
+  }
+  return false;
+}
+// xargs takes the launcher's arguments from its input, which the guard reads only as the literal words of an echo or printf
+// that feeds it through a pipe. Any other input (a file, a redirect, another command, xargs options) is refused, and so are
+// literal words that make a refused command with the launcher's own arguments.
+function xargsLauncher(words, piped) {
+  const names = words.map(word => word.split('/').at(-1)), at = names.findIndex(launcher), from = names.indexOf('xargs');
+  if (at < 0 || from < 0 || from > at) return false;
+  if (words.slice(from + 1, at).some(word => /^-[^-]/.test(word))) return true;
+  const producer = piped?.filter(word => !word.operator).map(word => word.text);
+  if (!producer?.length || !['echo', 'printf'].includes(producer[0].split('/').at(-1))) return true;
+  const input = producer.slice(1);
+  if (input.some(word => /[$`\\'"%]|^-/.test(word))) return true;
+  return refusedLauncher([...words.slice(at), ...input.flatMap(word => word.split(/\s+/).filter(Boolean))]);
+}
 
 function shellWritePaths(command, initialDirectory, depth = 0) {
   if (depth > 8) return [];
@@ -111,6 +150,8 @@ function shellWritePaths(command, initialDirectory, depth = 0) {
     if (typeof path !== 'string') return;
     paths.push({ path: directory && !/^(?:\/|~|\$HOME|\$\{HOME\})/.test(path) ? `${directory}/${path}` : path, literalOnly, ancestor });
   };
+  // A substitution in the launcher's arguments could name any subcommand.
+  if (launcherSubstitution(command)) add('~/Library/Application Support/sleight/hand.json', true);
   for (const { words: segment, piped } of segments) {
     const texts = [];
     for (let i = 0; i < segment.length; i++) {
@@ -136,20 +177,21 @@ function shellWritePaths(command, initialDirectory, depth = 0) {
     const operands = texts.filter(text => text && !text.startsWith('-'));
     // `sleight-mcp turbo on|off` writes turbo.json for the user, so a model's shell may not run it. Position-free on purpose:
     // env, nohup, timeout, interpreter flags and sh -c strings all reach it. Only `turbo status` passes. When in doubt, deny.
-    // `hand on|off|capture` writes hand.json the same way, and only `hand status` passes.
-    if (launcherToggle(allWords, 'turbo')) add('~/Library/Application Support/sleight/turbo.json', true);
-    if (launcherToggle(allWords, 'hand')) add('~/Library/Application Support/sleight/hand.json', true);
-    // Character writes and the cursor style are the user's commands too. Only cursor list, check and status pass: an
-    // allow-list, so an argument the guard can't read (a variable, a substitution, xargs input) is refused.
-    if (launcherToggle(allWords, 'cursor', rest => ['list', 'check', 'status'].includes(rest[0]))) add('~/Library/Application Support/sleight/hand.json', true);
-    // `permissions block|unblock|revoke|sites` change what sleight may do, and only the listing passes.
-    if (launcherToggle(allWords, 'permissions', listingOnly)) add('~/Library/Application Support/sleight/permissions.json', true);
+    // `hand on|off|capture` writes hand.json the same way, and only `hand status` passes. Character writes and the cursor
+    // style are the user's commands too: only cursor list, check and status pass, an allow-list, so an argument the guard
+    // can't read (a variable, a substitution, xargs input) is refused. `permissions block|unblock|revoke|sites` change what
+    // sleight may do, and only the listing passes.
+    for (const [command, allowed, file] of LAUNCHER_COMMANDS) {
+      if (launcherToggle(allWords, command, allowed)) add(`~/Library/Application Support/sleight/${file}`, true);
+    }
+    if (xargsLauncher(allWords, piped)) add('~/Library/Application Support/sleight/hand.json', true);
     if (xargs && piped) operands.push(...piped.filter(word => !word.operator).map(word => word.text));
     if (executable === 'cd') {
       const next = operands[0];
       if (next) directory = /^(?:\/|~|\$HOME|\$\{HOME\})/.test(next) || !directory ? next : `${directory}/${next}`;
-    } else if (['bash', 'sh', 'zsh'].includes(executable) && texts.includes('-c')) {
-      paths.push(...shellWritePaths(texts[texts.indexOf('-c') + 1] ?? '', directory, depth + 1));
+    } else if (['bash', 'sh', 'zsh'].includes(executable) && texts.some(text => /^-[a-zA-Z]*c[a-zA-Z]*$/.test(text))) {
+      // -c alone or in a flag group (-lc, -ic): the script is the next word.
+      paths.push(...shellWritePaths(texts[texts.findIndex(text => /^-[a-zA-Z]*c[a-zA-Z]*$/.test(text)) + 1] ?? '', directory, depth + 1));
     } else if (['cp', 'install', 'rsync', 'ln'].includes(executable)) {
       const target = texts.findIndex(text => text === '-t' || text === '--target-directory');
       add(target >= 0 ? texts[target + 1] : operands.at(-1));
