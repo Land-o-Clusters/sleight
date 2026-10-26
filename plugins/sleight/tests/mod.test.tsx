@@ -30,7 +30,7 @@ describe('sleight mod', () => {
     on('env.get', async () => { throw Error('fixture environment unavailable') })
     on('tool.call', async () => { ran++; return { result: {} } as never })
     const result = await $.tool.call({ tool: 'Write', file_path: '/fixture/file', content: '{}' } as never)
-    expect(String(result.deny ?? result.text)).toMatch(/Only the user/)
+    expect(String(result.deny ?? result.text)).toMatch(/guard unavailable/)
     expect(ran).toBe(0)
   })
 

@@ -4,6 +4,8 @@ const directorySuffix = '/library/application support/sleight';
 // names the copy that issued turbo.json's receipt, which decides whether a startup may move it.
 const suffixes = ['preapproved.json', 'turbo.json', 'turbo-apps.json', 'turbo-owner.json', 'electron-grants.json', 'grant-seal.key', 'hand.json', 'permissions.json'].map(filename => `${directorySuffix}/${filename}`);
 const mutations = new Set(['Write', 'Edit', 'MultiEdit', 'NotebookEdit']);
+export const guardUnavailableReason = /* notice */ 'sleight guard unavailable. The tool call was refused.';
+export const guardPathReason = /* notice */ 'sleight cannot resolve this path safely. HOME, CLAUDE_CONFIG_DIR or filesystem metadata is unavailable.';
 const folded = path => path.normalize('NFC').toLowerCase();
 // Everything under these folders is sleight's own code: the helper cache (the consent host that answers sleight's cards and
 // its Touch ID confirmation, built from source) and installed copies of the plugin in Claude Code's, Codex's and Cursor's
@@ -15,6 +17,7 @@ const folded = path => path.normalize('NFC').toLowerCase();
 const TREES = [/\/library\/caches\/sleight(?:\/|$)/, /\/plugins\/cache\/[^/]+\/sleight(?:\/|$)/];
 // What each refusal names, so the person knows which protected folder the command reached.
 export const PROTECTED = Object.freeze({
+  unresolved: 'unresolved path',
   settings: "sleight's settings files (~/Library/Application Support/sleight)",
   cache: "sleight's helper cache (~/Library/Caches/sleight)",
   install: 'an installed copy of the sleight plugin',
@@ -111,14 +114,15 @@ async function protectedPath(path, options, ancestor = false) {
   const literal = await literalLabel(path, options, ancestor);
   if (literal) return literal;
   if (home) path = path.replace(/^(?:~|\$HOME|\$\{HOME\})(?=\/|$)/, () => home);
+  if (options?.configDir) path = path.replace(/^(?:\$CLAUDE_CONFIG_DIR|\$\{CLAUDE_CONFIG_DIR\})(?=\/|$)/, () => options.configDir);
   let resolved = (await stat(path.startsWith('/') ? '/' : '.').catch(() => undefined))?.realPath;
   // An unavailable root cannot establish that an alias is outside the protected
   // trees. Refuse instead of allowing a tool the host may still execute.
-  if (!resolved) return PROTECTED.settings;
+  if (!resolved) return PROTECTED.unresolved;
   for (const part of path.split('/').filter(Boolean)) {
     const next = `${resolved.replace(/\/$/, '')}/${part}`;
     const info = await stat(next).catch(() => undefined);
-    if (info && typeof info.realPath !== 'string') return PROTECTED.settings;
+    if (info && typeof info.realPath !== 'string') return PROTECTED.unresolved;
     resolved = info?.realPath ?? normalize(next);
   }
   // configDir too: a link to a custom CLAUDE_CONFIG_DIR resolves to it, and its folders above an install still count.
@@ -486,6 +490,10 @@ export async function preapprovedWriteTarget(input, options) {
   for (const candidate of paths) {
     const { path, literalOnly, ancestor } = tool === 'Bash' ? candidate : { path: candidate };
     if (typeof path !== 'string') continue;
+    // Check missing expansion roots before the literal-only/whitespace shortcut.
+    // Read-only shell operands never enter this list, so an unset HOME permits ls.
+    if (!options?.home && /^(?:~|\$HOME|\$\{HOME\})(?=\/|$)/.test(path) ||
+        !options?.configDir && /^(?:\$CLAUDE_CONFIG_DIR|\$\{CLAUDE_CONFIG_DIR\})(?=\/|$)/.test(path)) return PROTECTED.unresolved;
     if (tool === 'Bash') {
       const literal = await literalLabel(path, options, ancestor);
       if (literal) return literal;
@@ -501,7 +509,9 @@ export async function preapprovedWriteTarget(input, options) {
 }
 export const preapprovedWriteDenied = async (input, options) => !!await preapprovedWriteTarget(input, options);
 /** The refusal Claude gets, naming what the call reached. */
-export const preapprovedWriteReason = label => `Only the user changes ${label}. Ask them to make this change.`;
+export const preapprovedWriteReason = label => label === PROTECTED.unresolved
+  ? guardPathReason
+  : `Only the user changes ${label}. Ask them to make this change.`;
 
 // SLEIGHT_ACTION_LOG and SLEIGHT_OUTCOMES are the user's switches. Claude's file and shell tools may not set them where
 // sleight's MCP server reads its environment: Claude Code settings, MCP configs, the plugin's own manifest and launcher,

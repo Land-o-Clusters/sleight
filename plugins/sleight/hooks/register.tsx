@@ -6,7 +6,7 @@ import type { Frame, LogEntry, ViewStatus } from '../types'
 import { FRAME_MARKER, snapshotCode } from './snapshot'
 import { fileArgument, outcomeOf, resultEntries } from './replay'
 import type { ReplayScript } from './replay'
-import { preapprovedWriteTarget, preapprovedWriteReason, loggingSwitchWriteDenied, PROTECTED } from './preapproved-write-guard.mjs'
+import { preapprovedWriteTarget, preapprovedWriteReason, loggingSwitchWriteDenied, guardUnavailableReason } from './preapproved-write-guard.mjs'
 import { shellLaunchDenied, shellGuardReason } from './shell-guard.mjs'
 import { costSnapshot, statsFromReply, turnSummary, turnStatsText } from './turn-stats.mjs'
 import type { TurnSummary } from './turn-stats.mjs'
@@ -122,8 +122,8 @@ function createModState() {
     lastApp: undefined as string | undefined,
     // Only this exact in-flight snapshot can receive the mod's own allowance.
     snapshotInFlight: undefined as string | undefined,
-    // Pane reads move the engine's diff baseline. Only the main prompt consumes this notice.
-    snapshottedApps: new Set<string>(),
+    // Each loop consumes its own notice after a pane read moves the engine baseline.
+    snapshottedApps: new Map<string, Set<string>>([['', new Set()]]),
     paneColumns: 48,
     paneRows: 20,
     paneSurface: 'terminal',
@@ -135,6 +135,13 @@ function createModState() {
 }
 type ModState = ReturnType<typeof createModState>
 const turnBusy = (state: ModState) => state.turnRunning || state.runningAgents.size > 0
+
+function snapshotApps(state: ModState, e: { agentId?: string } = {}) {
+  const key = loopKey(e)
+  let apps = state.snapshottedApps.get(key)
+  if (!apps) { apps = new Set(state.snapshottedApps.get('')); state.snapshottedApps.set(key, apps) }
+  return apps
+}
 
 const now = () => new Date().toTimeString().slice(0, 8)
 
@@ -194,7 +201,7 @@ async function replayCurrent($: any, state: ModState, file: string) {
     if (script?.sleightReplay !== 1 || !Array.isArray(script.steps)) throw new Error('Not a sleight replay script.')
     await update($, replayFile, () => path)
     await update($, replaying, () => true)
-    state.snapshottedApps.clear()
+    snapshotApps(state).clear()
     await update($, log, list => [...list, { id, title: `Replaying ${path}`, status: 'running', at: now() } as LogEntry].slice(-LOG_LIMIT))
     const conn = await $.mcp.connect(SERVER)
     if (!conn.isConnected) throw new Error(conn.message)
@@ -209,7 +216,7 @@ async function replayCurrent($: any, state: ModState, file: string) {
     const windowText = typeof outcome.window === 'string' ? outcome.window : undefined
     for (const step of script.steps) {
       const app = appFrom(step.args?.code ?? '', windowText)
-      if (app) state.snapshottedApps.add(app)
+      if (app) for (const apps of state.snapshottedApps.values()) apps.add(app)
     }
     const entries = resultEntries(script, outcome, id, now())
     await update($, log, list => [...list.filter(entry => entry.id !== id), ...entries].slice(-LOG_LIMIT))
@@ -297,6 +304,8 @@ async function endEngineTurn($: any, state: ModState, event: 'Stop' | 'Interrupt
 }
 
 function stopEngineTurn($: any, state: ModState) {
+  state.runningAgents.clear()
+  state.turnRunning = false
   const owner = state.statsTurn
   if (owner) owner.stoppedStats = null
   const pending = endEngineTurn($, state, 'Interrupt', true, undefined, owner)
@@ -317,7 +326,7 @@ async function snapshot($: any, state: ModState, app: string) {
       throw new Error(result.isError ? text.slice(0, 200) : 'no frame in the result')
     }
     const shot = JSON.parse(line.slice(FRAME_MARKER.length))
-    state.snapshottedApps.add(app)
+    for (const apps of state.snapshottedApps.values()) apps.add(app)
     await update($, frame, () => ({ ...shot, at: now() }) as Frame)
     await update($, view, () => ({ kind: 'idle' }) as ViewStatus)
   } catch (err) {
@@ -372,26 +381,31 @@ function guardEnvelope(e: any) {
 export const register: Register = on => {
   const state = createModState()
   on('session.append', { door: 'response' }, ($, e, next) => { state.narration.observe(e); return next(e) })
-  on('session.compact', ($, e, next) => { state.narration.reset(); return next(e) })
+  on('session.compact', ($, e, next) => {
+    state.narration.reset()
+    state.runningAgents.clear()
+    state.shellUsers.clear()
+    state.turnRunning = false
+    return next(e)
+  })
 
   on('classic.PreToolUse', async ($, e, next) => {
     const event = guardEnvelope(e)
     if (!['Write', 'Edit', 'MultiEdit', 'NotebookEdit', 'Bash'].includes(event.tool)) return next(e)
     if (loggingSwitchWriteDenied(event)) return { deny: "Only the user turns on sleight's action log and outcome lines. Ask them to make this change." }
     const home = await $.env.get('HOME'), configDir = await $.env.get('CLAUDE_CONFIG_DIR')
-    if (typeof home !== 'string' || !home.startsWith('/') || configDir !== undefined && (typeof configDir !== 'string' || !configDir.startsWith('/')))
-      return { deny: preapprovedWriteReason(PROTECTED.settings) }
     const denied = await preapprovedWriteTarget(event, {
       stat: (path: string) => $.fs.stat(path, { resolve: true }),
-      home, configDir,
+      home: typeof home === 'string' && home.startsWith('/') ? home : undefined,
+      configDir: typeof configDir === 'string' && configDir.startsWith('/') ? configDir : undefined,
     })
     return denied ? { deny: preapprovedWriteReason(denied) } : next(e)
-  }).catch(() => ({ deny: preapprovedWriteReason(PROTECTED.settings) }))
+  }).catch(() => ({ deny: guardUnavailableReason }))
   on('tool.call', { tool: 'Bash' }, async ($, e, next) => {
     // Malformed identity cannot select another loop's inactive fence. The host's
     // valid main-loop envelope omits agentId, session_id and prompt_id altogether.
     const invalid = e.agentId !== undefined && (typeof e.agentId !== 'string' || !e.agentId)
-    if ((invalid || state.shellUsers.has(loopKey(e))) && shellLaunchDenied(e) && await $.env.get('SLEIGHT_SHELL_GUARD') !== '0')
+    if ((invalid || state.shellUsers.size > 0) && shellLaunchDenied(e) && await $.env.get('SLEIGHT_SHELL_GUARD') !== '0')
       return { deny: shellGuardReason }
     return next(e)
   }).catch(() => ({ deny: shellGuardReason }))
@@ -401,6 +415,9 @@ export const register: Register = on => {
     // HookFailure kind union is 'throw' | 'timeout' only, so the kind reads through a widening.
     .catch(($, e, next) => ((next.error?.kind as string | undefined) === 're-entry' ? ownCallVerdict(state, e, next.origin) : undefined) ?? next(e))
   on('session.start', async ($, e, next) => {
+    state.runningAgents.clear()
+    state.shellUsers.clear()
+    state.turnRunning = false
     state.turboEnvelope = undefined
     state.remoteTurnBound = false
     state.narration.configure('off')
@@ -417,20 +434,20 @@ export const register: Register = on => {
   // moved the engine's diff baseline. The host skips this hook for our own
   // automatic handoff, so that handoff cannot lift Stop.
   on('prompt.submit', async ($, e, next) => {
-    // An inbox delivery or subagent prompt is not the user's resume boundary.
-    // It also must not consume the main pane's diff-baseline notice.
-    if ((e as { agentId?: string }).agentId !== undefined) return next(e)
-    if (await read($, stopped)) {
+    // Child prompts consume only their own baseline notice and never lift Stop.
+    const child = (e as { agentId?: string }).agentId !== undefined
+    if (!child && await read($, stopped)) {
       // A failed collection keeps the relay alive. Lift its closing flag only at this user boundary.
       await call($, 'turn_ended', { sleight_resume: true }).catch(() => undefined)
     }
-    await update($, stopped, () => false)
-    const approvalNote = (e.origin?.kind === 'composer' || e.origin?.kind === 'bridge') &&
-        (e as { agentId?: string }).agentId === undefined ? await beginTurboTurn($, state, e.text, e.origin.kind) : undefined
+    if (!child) await update($, stopped, () => false)
+    const approvalNote = !child && (e.origin?.kind === 'composer' || e.origin?.kind === 'bridge')
+        ? await beginTurboTurn($, state, e.text, e.origin.kind) : undefined
     if (approvalNote) e = { ...e, context: [...(e.context ?? []), approvalNote] }
-    if (state.snapshottedApps.size === 0) return next(e)
-    const apps = [...state.snapshottedApps].join(', ')
-    state.snapshottedApps.clear()
+    const pendingApps = snapshotApps(state, e as { agentId?: string })
+    if (pendingApps.size === 0) return next(e)
+    const apps = [...pendingApps].join(', ')
+    pendingApps.clear()
     const note =
       `sleight: its pane or a replay read the UI state of ${apps} after your last sleight call. ` +
       'The engine diffs against the latest read, so pass { disableDiffing: true } to your next ' +
@@ -439,6 +456,7 @@ export const register: Register = on => {
   })
 
   on('turn.start', async ($, e, next) => {
+    snapshotApps(state, e as { agentId?: string })
     // Older host captures omit agentId from turn.start's type, as with prompt.submit above.
     const agentId = (e as { agentId?: string }).agentId
     if (agentId !== undefined) { state.runningAgents.add(agentId); return next(e) }
@@ -464,7 +482,7 @@ export const register: Register = on => {
   const forward = async <T extends { agentId?: string }, R>(e: T, owner: StatsTurn | undefined, next: (event: T) => Promise<R>) => {
     const main = e.agentId === undefined ? owner : undefined
     // Subagents need not raise turn.start. Their first call holds the pane's
-    // replay/refresh fence until their own turn.complete, including late work.
+    // replay/refresh fence until their completion or the lead's next completion.
     if (e.agentId !== undefined) state.runningAgents.add(e.agentId)
     // A call may be interrupted before next returns. Stop must collect it already.
     if (main) { main.forwarded++; main.used = true }
@@ -484,10 +502,9 @@ export const register: Register = on => {
     }
     state.usedThisTurn = true
     state.shellUsers.add(loopKey(e))
-    // The pane and its diff baseline belong to the main conversation. Child
-    // calls still run through Stop and the guards, with their own narration.
+    snapshotApps(state, e).clear()
+    // Child calls keep their own baseline notice and narration without changing the pane.
     if (e.agentId !== undefined) return forward(narrated(state, e), owner, next)
-    state.snapshottedApps.clear()
     const code = String(e.code ?? '')
     const entry: LogEntry = {
       id: e.tool_use_id,
@@ -551,6 +568,9 @@ export const register: Register = on => {
       state.shellUsers.delete(loopKey(e))
       if (e.agentId !== undefined) state.runningAgents.delete(e.agentId)
       if (e.agentId === undefined) {
+        // Aborted children may never complete. Keep their shell fences, but let
+        // refresh, record and replay recover at this session cleanup boundary.
+        state.runningAgents.clear()
         state.turnRunning = false
         // Stats ownership cannot gate engine cleanup, including mid-turn mod loads.
         const needsEnd = state.usedThisTurn || state.turboTurnBound || state.remoteTurnBound

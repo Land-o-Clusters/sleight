@@ -14,7 +14,7 @@ const metrics = { calls: 3, reads: 1, characters: 55, text: { docs: 10, tree: 40
   paths: { native: { actions: 2, estimatedActions: 2, estimatedCalls: 1, actionMs: 0, timedActions: 0 }, turbo: { actions: 0, estimatedActions: 0, estimatedCalls: 0, actionMs: 0, timedActions: 0 }, engine: { actions: 0, estimatedActions: 0, estimatedCalls: 0, actionMs: 0, timedActions: 0 } } };
 const usage = { input_tokens: 12, output_tokens: 34, cache_read_input_tokens: 56, cache_creation_input_tokens: 78, model: 'host-model' };
 
-function host({ cost = true, missingUsage = false, marker = false, malicious = false, paneOpen = false, usageRead, messages, narration = 'off', settingRead, moduleRegister, envRead, statRead, turboSession } = {}) {
+function host({ cost = true, missingUsage = false, marker = false, malicious = false, paneOpen = false, paneSnapshot = false, usageRead, messages, narration = 'off', settingRead, moduleRegister, envRead, statRead, turboSession } = {}) {
   const hooks = [], state = new Map(), work = [], statuses = [], replies = [], forwarded = [], hookRuns = [];
   let usageReads = 0;
   const elements = Object.fromEntries(['Box', 'Text', 'Button'].map(name => [name, name]));
@@ -61,7 +61,7 @@ function host({ cost = true, missingUsage = false, marker = false, malicious = f
     } },
     mcp: { connect: async () => ({ isConnected: true, server: 'computer' }), call: async (_server, tool, args) => {
       work.push({ tool, args });
-      if (tool === 'js' && paneOpen) return { content: [{ type: 'text', text: '' }] };
+      if (tool === 'js' && paneOpen) return { content: [{ type: 'text', text: paneSnapshot ? 'SLEIGHT_FRAME {"app":"ParentApp","width":1,"height":1}' : '' }] };
       if (tool !== 'turn_ended') throw Error('test must never call the engine');
       if (turboSession && args.sleight_turbo) return { content: [{ type: 'text', text: JSON.stringify(
         args.sleight_turbo.event === 'bootstrap' ? { sleightTurbo: { version: 1, session: turboSession, nonce: 'a'.repeat(64) } }
@@ -154,15 +154,26 @@ test('in-process teammates keep shell fences when another loop completes', async
     await h.emit('tool.call', modEnvelope(teammatePayload(prefix + 'browser_read', { tab: 'fixture' }, { agent_id })));
   assert.match((await shell('teammate-a')).deny, /shell guard/);
   assert.match((await shell('teammate-b')).deny, /shell guard/);
-  assert.equal((await shell()).allowed, true, 'child work cannot activate the main shell fence');
-  assert.equal((await shell('unused-teammate')).allowed, true);
+  assert.match((await shell()).deny, /shell guard/, 'child work fences every caller');
+  assert.match((await shell('unused-teammate')).deny, /shell guard/);
   await h.complete();
   assert.match((await shell('teammate-a')).deny, /shell guard/, 'main completion cannot clear the child fence');
   await h.complete({ agentId: 'teammate-a' });
-  assert.equal((await shell('teammate-a')).allowed, true);
+  assert.match((await shell('teammate-a')).deny, /shell guard/, 'the other child still owns its fence');
   assert.match((await shell('teammate-b')).deny, /shell guard/);
   await h.complete({ agentId: 'teammate-b' });
   assert.equal((await shell('teammate-b')).allowed, true);
+});
+
+test('lead sleight work refuses a teammate launcher until every loop completes', async () => {
+  const h = host(); await h.start(); await h.tool();
+  const shell = () => h.emit('tool.call', { tool: 'Bash', agentId: 'teammate', command: 'open -a Safari' }, { allowed: true });
+  assert.match((await shell()).deny, /shell guard/);
+  await h.emit('tool.call', { tool: prefix + 'browser_read', agentId: 'teammate' });
+  await h.complete();
+  assert.match((await shell()).deny, /shell guard/);
+  await h.complete({ agentId: 'teammate' });
+  assert.equal((await shell()).allowed, true);
 });
 
 test('a malformed loop id cannot choose an inactive shell fence', async () => {
@@ -175,23 +186,44 @@ test('a malformed loop id cannot choose an inactive shell fence', async () => {
 
 test('guard environment failures refuse the call instead of skipping protection', async () => {
   const h = host({ envRead: () => { throw Error('identity environment unavailable'); } });
-  assert.match((await h.emit('classic.PreToolUse', { tool: 'Write', file_path: '/fixture/file' })).deny, /Only the user/);
+  assert.match((await h.emit('classic.PreToolUse', { tool: 'Write', file_path: '/fixture/file' })).deny, /guard unavailable/);
   await h.tool();
   assert.match((await h.emit('tool.call', { tool: 'Bash', command: 'open fixture.pdf' })).deny, /shell guard/);
 });
 
-for (const unavailable of ['home', 'root', 'component']) test(`an unavailable guard ${unavailable} refuses an alias write`, async () => {
+for (const unavailable of ['root', 'component']) test(`an unavailable guard ${unavailable} refuses an alias write`, async () => {
   const h = host({
-    ...(unavailable === 'home' ? { envRead: () => undefined } : {}),
     statRead: path => unavailable === 'root' ? undefined : unavailable === 'component' && path === '/fixture' ? { isLink: true } : { realPath: path },
   });
+  assert.match((await h.emit('classic.PreToolUse', { tool: 'Write', file_path: '/fixture/alias' })).deny, /cannot resolve.*path/i);
+});
+
+for (const key of ['HOME', 'CLAUDE_CONFIG_DIR']) for (const value of [undefined, 'relative', null])
+  test(`an unavailable ${key} only refuses paths that need it: ${String(value)}`, async () => {
+    const h = host({ envRead: name => name === key ? value : name === 'HOME' ? '/fixture/home' : undefined });
+    for (const command of ['ls', 'ls /fixture', 'printf ok > /fixture/output']) {
+      const result = await h.emit('classic.PreToolUse', { tool: 'Bash', command }, { allowed: true });
+      assert.equal(result.allowed, true, command);
+    }
+    assert.equal((await h.emit('classic.PreToolUse', { tool: 'Write', file_path: '/fixture/output' }, { allowed: true })).allowed, true);
+    const paths = key === 'HOME' ? ['~/notes', '$HOME/notes', '${HOME}/notes', '~/notes with spaces']
+      : ['$CLAUDE_CONFIG_DIR/notes', '${CLAUDE_CONFIG_DIR}/notes', '$CLAUDE_CONFIG_DIR/notes with spaces'];
+    for (const path of paths) {
+      for (const event of [{ tool: 'Write', file_path: path }, { tool: 'Bash', command: `printf ok > "${path}"` }])
+        assert.match((await h.emit('classic.PreToolUse', event)).deny, /cannot resolve.*path/i, JSON.stringify(event));
+    }
+    assert.match((await h.emit('classic.PreToolUse', { tool: 'Write', file_path: '/fixture/home/Library/Application Support/sleight/hand.json' })).deny, /Only the user/);
+  });
+
+test('missing home still resolves literal aliases before allowing a write', async () => {
+  const h = host({ envRead: () => undefined, statRead: path => ({ realPath: path === '/fixture/alias' ? '/fixture/home/Library/Application Support/sleight/hand.json' : path }) });
   assert.match((await h.emit('classic.PreToolUse', { tool: 'Write', file_path: '/fixture/alias' })).deny, /Only the user/);
 });
 
 test('unreadable or conflicting classic hook envelopes refuse without a session fallback', async () => {
   const h = host();
   for (const event of [{}, { tool_name: 'Write' }, { tool: 'Read', tool_name: 'Write', tool_input: { file_path: '/fixture/file' } }])
-    assert.match((await h.emit('classic.PreToolUse', event)).deny, /Only the user/);
+    assert.match((await h.emit('classic.PreToolUse', event)).deny, /guard unavailable/);
   const raw = teammatePayload('Read', { file_path: '/fixture/file' });
   assert.equal(await h.emit('classic.PreToolUse', raw, raw), raw, 'valid reads still pass unchanged');
 });
@@ -217,6 +249,20 @@ test('child tools leave the main pane app, log and stats untouched', async () =>
   assert.doesNotMatch(await h.pane(), /ChildApp/);
 });
 
+for (const caller of [undefined, 'teammate']) test(`a js call clears only its loop's pane notice: ${caller ?? 'lead'}`, async () => {
+  const h = host({ paneOpen: true, paneSnapshot: true });
+  await h.start();
+  await h.start({ agentId: 'teammate' });
+  await h.emit('tool.call', { tool: prefix + 'js', code: 'await cua.getApp("ParentApp")' }, { text: 'App: ParentApp.' });
+  await h.complete();
+  await h.emit('tool.call', { tool: prefix + 'js', ...(caller ? { agentId: caller } : {}), code: 'await app.getAXState()' });
+  const prompt = async agentId => h.emit('prompt.submit', { text: 'continue', ...(agentId ? { agentId } : {}) }, e => e);
+  const lead = await prompt(), child = await prompt('teammate');
+  assert.equal(JSON.stringify(lead.context ?? []).includes('disableDiffing'), caller !== undefined);
+  assert.equal(JSON.stringify(child.context ?? []).includes('disableDiffing'), caller === undefined);
+  assert.equal((await prompt('teammate')).context, undefined, 'the child consumes its own notice once');
+});
+
 for (const start of [true, false]) test(`a child busy fence ends with its own completion, turn.start ${start}`, async () => {
   const h = host();
   if (start) await h.start({ agentId: 'teammate', turnId: 'child-turn' });
@@ -225,6 +271,30 @@ for (const start of [true, false]) test(`a child busy fence ends with its own co
   await h.complete({ agentId: 'teammate', turnId: 'child-turn' });
   assert.ok((await paneLabels(h)).includes('Refresh'));
   assert.doesNotMatch((await h.command('replay')).text, /Wait for the current run/);
+});
+
+for (const boundary of ['session.start', 'session.compact', 'stop', 'lead.complete'])
+  test(`an abandoned child cannot hold refresh, record or replay after ${boundary}`, async () => {
+    const h = host(); await h.start(); await h.start({ agentId: 'abandoned' });
+    await h.emit('tool.call', { tool: prefix + 'browser_read', agentId: 'abandoned' });
+    assert.match((await h.command('record')).text, /Wait for the current run/);
+    if (boundary === 'lead.complete') await h.complete();
+    else if (boundary === 'stop') await h.command('stop');
+    else await h.emit(boundary);
+    assert.ok((await paneLabels(h)).includes('Refresh'));
+    assert.doesNotMatch((await h.command('record')).text, /Wait for the current run/);
+    assert.doesNotMatch((await h.command('replay fixture.json')).text, /Wait for the current run/);
+    const shell = await h.emit('tool.call', { tool: 'Bash', command: 'open -a Safari' }, { allowed: true });
+    if (boundary === 'lead.complete') assert.match(shell.deny, /shell guard/, 'busy expiry must preserve the shell fence');
+    else assert.equal(shell.allowed, true);
+  });
+
+test('a child call after its completion expires at the next lead completion', async () => {
+  const h = host(); await h.start({ agentId: 'late' }); await h.complete({ agentId: 'late' });
+  await h.emit('tool.call', { tool: prefix + 'browser_read', agentId: 'late' });
+  assert.ok((await paneLabels(h)).includes('Refresh (after this turn)'));
+  await h.start(); await h.complete();
+  assert.ok((await paneLabels(h)).includes('Refresh'));
 });
 
 test('two registrations of one imported module own separate stops, shell fences and turbo capabilities', async () => {
