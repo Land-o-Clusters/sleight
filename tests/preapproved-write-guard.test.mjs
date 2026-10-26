@@ -156,6 +156,22 @@ test('hand on, off and capture are the user\'s commands the same way: every spel
     assert.equal(await guard({ tool: 'Bash', command }, { stat }), false, command);
   }
 });
+test('cursor import and remove use the hand shell guard while list and check stay open', async () => {
+  for (const command of ['sleight-mcp cursor import /tmp/cat --yes', 'sleight-mcp cursor remove cat',
+    'node /x/lib/launch.mjs cursor import /tmp/cat', 'env A=1 sleight-mcp cursor remove cat',
+    'sh -c "sleight-mcp cursor remove cat"', 'zsh -lc "cd /x && sleight-mcp cursor import /tmp/cat --yes"',
+    'timeout 5 sleight-mcp cursor remove cat', 'sleight-mcp "cursor" "remove" cat',
+    'true && sleight-mcp cursor remove cat', 'echo hi | sleight-mcp cursor import /tmp/cat --yes',
+    "printf 'remove x' | xargs sleight-mcp cursor", 'OP=remove; node launch.mjs cursor $OP x', 'sleight-mcp cursor "$OP" x',
+    'sleight-mcp cursor ${OP:-remove} x', 'sleight-mcp cursor $(echo remove) x', 'sh -c "sleight-mcp cursor $(echo remove) x"',
+    "printf 'remove' | xargs -I{} sleight-mcp cursor {} x", 'sleight-mcp cursor style sprite', 'sleight-mcp cursor']) {
+    assert.equal(await guard({ tool: 'Bash', command }, { stat }), true, command);
+  }
+  for (const command of ['sleight-mcp cursor list', 'sleight-mcp cursor check cat', 'env sleight-mcp cursor list',
+    'node /x/lib/launch.mjs cursor check cat', 'sh -c "sleight-mcp cursor list"', 'echo cursor remove cat']) {
+    assert.equal(await guard({ tool: 'Bash', command }, { stat }), false, command);
+  }
+});
 test('the action log and outcome switches are the user\'s: Claude\'s file and shell tools can\'t set them where sleight reads its environment', async () => {
   const { loggingSwitchWriteDenied: denied } = await import('../plugins/sleight/hooks/preapproved-write-guard.mjs');
   const env = '{ "env": { "SLEIGHT_ACTION_LOG": "actions.jsonl" } }';
