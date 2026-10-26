@@ -1,0 +1,105 @@
+// The menu catalog and its nonce-bound clicks. Packs use VC3's snapshot validator and atomic importer unchanged.
+import * as fs from 'node:fs';
+import { createHash } from 'node:crypto';
+import { userInfo } from 'node:os';
+import { isAbsolute, join } from 'node:path';
+import { charactersDirectory, listCharacters, prepareCharacterImport, installCharacter, characterCallout, resolveCharacterStates } from './character.mjs';
+import { characterFrame } from './character-frame.mjs';
+import { writeHandSetting } from './command.mjs';
+
+const hash = bytes => createHash('sha256').update(bytes).digest('hex');
+const sort = entries => [...entries].sort((a, b) => a.name.localeCompare(b.name) || a.id.localeCompare(b.id));
+const slug = id => id.toLowerCase().replace(/[^a-z0-9-]/g, '-');
+const title = name => typeof name === 'string' && name.length > 0 && name.length <= 60;
+const menuTitle = (name, fallback) => name.replace(/[\p{C}\p{Zl}\p{Zp}]/gu, '').slice(0, 60) || fallback;
+export function cursorMenuModel({ installed = [], found = [], style = 'glove', character } = {}) {
+  const ids = new Set(installed.map(c => c.id));
+  return [
+    ...[['ring', 'Ring (Split Seam+)'], ['seam', 'Plain ring'], ['glove', 'Glove']].map(([value, name]) => ({ title: name, op: 'select', style: value, selected: style === value })),
+    ...sort(installed).map(c => ({ title: menuTitle(c.name, c.id), op: 'select', style: 'sprite', character: c.id, selected: style === 'sprite' && character === c.id })),
+    { title: 'Add your Codex pets', children: sort(found.filter(p => !ids.has(p.id))).map(p => ({ title: menuTitle(p.name, p.id), op: 'import', key: p.key })) },
+    { title: 'Open characters folder', op: 'folder' },
+  ];
+}
+
+// Discovery reads only manifests. The click re-reads and validates the whole pack, including its atlas.
+export function findCodexPets({ home = userInfo().homedir, env = process.env, uid = process.getuid() } = {}) {
+  const roots = new Set([join(home, '.codex/pets'), ...isAbsolute(env.CODEX_HOME ?? '') ? [join(env.CODEX_HOME, 'pets')] : []]);
+  const found = [], seen = new Set();
+  for (const root of roots) {
+    try {
+      if (fs.realpathSync(root) !== root) continue;
+      const directory = fs.lstatSync(root);
+      if (!directory.isDirectory() || directory.uid !== uid || directory.mode & 0o022) continue;
+      for (const entry of fs.readdirSync(root).sort()) {
+        const folder = join(root, entry);
+        try {
+          const st = fs.lstatSync(folder), path = join(folder, 'pet.json'), info = fs.lstatSync(path);
+          if (!st.isDirectory() || st.isSymbolicLink() || st.uid !== uid || st.mode & 0o022 || fs.realpathSync(folder) !== folder ||
+              !info.isFile() || info.isSymbolicLink() || info.nlink !== 1 || info.uid !== uid || info.mode & 0o022 || info.size >= 16384) continue;
+          const fd = fs.openSync(path, fs.constants.O_RDONLY | fs.constants.O_NOFOLLOW | fs.constants.O_NONBLOCK);
+          let pet;
+          try {
+            const opened = fs.fstatSync(fd);
+            if (opened.ino !== info.ino || opened.dev !== info.dev || opened.size !== info.size) continue;
+            const bytes = Buffer.alloc(16384), count = fs.readSync(fd, bytes, 0, bytes.length, 0);
+            pet = JSON.parse(bytes.subarray(0, count).toString('utf8'));
+          } finally { fs.closeSync(fd); }
+          if (typeof pet.id !== 'string' || !/^[A-Za-z0-9_ -]{1,48}$/.test(pet.id) || !title(pet.displayName)) continue;
+          const id = slug(pet.id); if (seen.has(id)) continue;
+          seen.add(id); found.push({ id, name: pet.displayName, key: hash(folder), folder });
+        } catch {}
+      }
+    } catch {}
+  }
+  return sort(found);
+}
+
+export function createCursorPicker({ home = userInfo().homedir, env = process.env, root = charactersDirectory(), uid = process.getuid(),
+  writeSetting = writeHandSetting } = {}) {
+  let offered = new Map(), installed = new Set(), busy = false;
+  return {
+    async catalog({ style = 'glove', character } = {}) {
+      // Every installed folder gets a row, including refused packs, so a click can explain the refusal.
+      const entries = listCharacters({ root, uid }).filter(c => !c.skipped && /^[a-z0-9-]{1,48}$/.test(c.manifest?.id ?? c.id));
+      const characters = entries.map(c => ({ id: c.manifest?.id ?? c.id, name: c.manifest?.name ?? c.id }));
+      const found = findCodexPets({ home, env, uid }).filter(p => !characters.some(c => c.id === p.id));
+      offered = new Map(found.map(p => [p.key, p])); installed = new Set(characters.map(c => c.id));
+      const thumbnails = entries.filter(c => c.manifest).map(c => {
+        const frame = characterFrame(c, { nonce: '0'.repeat(64), seq: 0, resolve: resolveCharacterStates });
+        const idle = frame.table.idle;
+        frame.table = { idle: { ...idle, frames: [idle.frames[0]], ms: [100], loop: false } };
+        const key = hash(Buffer.concat([Buffer.from(JSON.stringify(frame)), c.files.get(c.manifest.sheet), ...c.manifest.extra ? [c.files.get(c.manifest.extra)] : []]));
+        return { id: c.manifest.id, key, frame };
+      });
+      return { installed: characters, pets: found.map(({ folder, ...p }) => p), thumbnails,
+        rows: cursorMenuModel({ installed: characters, found, style, character }) };
+    },
+    async apply(event) {
+      if (busy) return { ok: false, text: 'A character import is already running. Try again when it finishes.' };
+      busy = true;
+      try {
+        if (event.op === 'import' && Object.keys(event).sort().join() === 'key,op') {
+          const pet = offered.get(event.key); if (!pet) throw Error('That pet is no longer in this menu. Open Cursor again.');
+          const pack = prepareCharacterImport(pet.folder, { uid });
+          if (!pack.manifest.codex || pack.manifest.id !== pet.id) throw Error('That pet changed. Open Cursor again.');
+          installCharacter(pack, { root, uid });
+          try { await writeSetting({ style: 'sprite', character: pack.manifest.id }); }
+          catch (error) { return { ok: false, text: `Imported, but could not select it: ${error.message}\n${characterCallout(pack, { installed: true })}` }; }
+          return { ok: true, text: characterCallout(pack, { installed: true }), style: 'sprite', character: pack.manifest.id };
+        }
+        if (event.op === 'select' && (Object.keys(event).sort().join() === 'op,style' && ['ring', 'seam', 'glove'].includes(event.style) ||
+            Object.keys(event).sort().join() === 'character,op,style' && event.style === 'sprite' && installed.has(event.character))) {
+          if (event.style === 'sprite') {
+            const pack = listCharacters({ root, uid }).find(c => c.manifest?.id === event.character);
+            if (!pack) throw Error('This character cannot be loaded. Check its files in the characters folder.');
+          }
+          const setting = { style: event.style, ...event.character ? { character: event.character } : {} };
+          await writeSetting(setting); return { ok: true, ...setting };
+        }
+        throw Error('That choice is no longer in this menu. Open Cursor again.');
+      } catch (error) { return { ok: false, text: `Character import or selection failed: ${error.message}` }; }
+      finally { busy = false; }
+    },
+  };
+}
