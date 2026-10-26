@@ -44,13 +44,33 @@ final class ConsentArming {
     func presented(at timestamp: Double = ProcessInfo.processInfo.systemUptime) { presentedAt = timestamp; mouseDownAt = nil }
     func mouseBegan(_ event: NSEvent) { mouseDownAt = event.timestamp }
     private func activated(_ window: NSWindow) {
-        if let event = NSApp.currentEvent, event.window === window,
-            [.leftMouseDown, .leftMouseUp].contains(event.type) {
-            if event.type == .leftMouseDown { mouseBegan(event) }
-            // The card was already armed before this deliberate activating click began.
-            if let down = mouseDownAt, down >= presentedAt + consentArmingDelay { return }
+        if !activationExempts(window) { presented() }
+    }
+    private func activationExempts(_ window: NSWindow, now: Double = ProcessInfo.processInfo.systemUptime) -> Bool {
+        defer { mouseDownAt = nil }
+        var path = "current-event", began: Double?
+        if let event = NSApp.currentEvent, [.leftMouseDown, .leftMouseUp].contains(event.type) {
+            // Never let an invalid mouse event fall through to the HID fallback or reuse an earlier down.
+            if event.type == .leftMouseDown, event.window === window,
+                event.timestamp.isFinite, event.timestamp >= 0, event.timestamp <= now,
+                now - event.timestamp < 1, personInput(event.cgEvent) {
+                mouseBegan(event)
+                began = mouseDownAt
+            }
+        } else {
+            // NSAlert activation can carry an app-defined event instead of the activating click.
+            path = "hid"
+            let age = CGEventSource.secondsSinceLastEventType(.hidSystemState, eventType: .leftMouseDown)
+            if age.isFinite, age >= 0, age < 0.1, window.frame.contains(NSEvent.mouseLocation) {
+                began = now - age
+            }
         }
-        presented()
+        // Neither path grants consent. Dispatch still validates the actual down and up independently.
+        let exempt = began.map { $0 >= presentedAt + consentArmingDelay } ?? false
+        let message = "CONSENT_ACTIVATION path=\(path) exempt=\(exempt)"
+        os_log("%{public}@", log: OSLog(subsystem: "com.sleight.consent", category: "input"), type: .info, message)
+        FileHandle.standardError.write(Data("sleight consent: \(message)\n".utf8))
+        return exempt
     }
     func accepts(_ event: NSEvent) -> Bool { event.timestamp >= presentedAt + consentArmingDelay }
 }

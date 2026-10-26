@@ -30,6 +30,8 @@ test('real modal and handoff events route typed choices only after field focus w
       .replaceAll('window.isVisible', 'fixtureVisibleWindows.contains(ObjectIdentifier(window))')
       .replaceAll('NSWorkspace.shared.notificationCenter', 'fixtureWorkspaceCenter')
       .replaceAll('DistributedNotificationCenter.default()', 'fixtureUnlockCenter')
+      .replaceAll('CGEventSource.secondsSinceLastEventType(.hidSystemState, eventType: .leftMouseDown)', 'fixtureHIDMouseDownAge')
+      .replaceAll('NSEvent.mouseLocation', 'fixtureMouseLocation')
       .replaceAll('NSWorkspace.shared.isVoiceOverEnabled', 'fixtureVoiceOver')
       .replaceAll('NSWorkspace.shared.isSwitchControlEnabled', 'fixtureSwitchControl')
       .replaceAll('wordFocusAllowed = isKeyWindow', 'wordFocusAllowed = fixtureKeyWindow === self')
@@ -57,6 +59,9 @@ test('real modal and handoff events route typed choices only after field focus w
   assert.equal(run.status, 0, `${run.error ?? run.signal ?? ''}\n${run.stderr}${run.stdout}`);
   assert.match(run.stderr, /sleight consent refused: CONSENT_TOO_SOON/);
   assert.match(run.stderr, /sleight consent refused: PERSON_INPUT_REQUIRED/);
+  for (const path of ['current-event', 'hid']) {
+    for (const exempt of ['true', 'false']) assert.ok(run.stderr.includes(`CONSENT_ACTIVATION path=${path} exempt=${exempt}`));
+  }
   const result = JSON.parse(run.stdout);
   assert.deepEqual(result.failures, []);
   for (const route of ['window', 'application', 'equivalent']) assert.ok(result.dispatches[route] > 0, route);

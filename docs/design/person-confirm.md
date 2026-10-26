@@ -89,7 +89,7 @@ LocalAuthentication and follows the system's input rules.
 
 People using assistive input can still Cancel or Decline, and can type `allow <app>` in their own prompt for low-risk app
 cards. That prompt route cannot approve payments, operations, debugger access or Always allow. VoiceOver users with a
-physical keyboard can focus the confirmation field and type the displayed word, then Return. AX presses on protected
+physical keyboard should be able to focus the confirmation field and type the displayed word, then Return. AX presses on protected
 buttons and automated key events remain refused. These assistive-input paths, including VoiceOver interaction with the
 custom field, have not been measured with VoiceOver, Switch Control, Voice Control or the Accessibility Keyboard.
 

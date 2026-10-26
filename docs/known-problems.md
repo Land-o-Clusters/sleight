@@ -143,6 +143,8 @@ refuses terminals and OpenAI's own apps. See [approvals and guards](#approvals-a
   The native guard rejects Accessibility presses and posted input. VoiceOver, Switch Control, Voice Control and
   screen-sharing users need a physical keyboard or pointer for these cards. 1.5.0 adds a typed word plus Return from a physical
   keyboard. Switch Control's on-screen keyboard still cannot answer. Plain session-only app approvals can still use the host's prompts. Decline and Cancel remain available.
+  Mac consent arming has headless fixture coverage, including the first activating click. Real AppKit activation order
+  and assistive-input behavior remain unmeasured.
 
 - When a card or menu-bar alert closes, sleight returns activation to the app that was in front just before the card
   was clicked. This also happens when a card times out or is aborted while the card's own app is in front, even if
