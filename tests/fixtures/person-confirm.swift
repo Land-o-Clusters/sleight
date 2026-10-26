@@ -1,5 +1,5 @@
 // Drives consent-host.swift's PERSON CONFIRM section with stand-in evaluators, so no Touch ID or password sheet is ever shown.
-// Prints one JSON object: the answers each path gave, the reasons the table builds, and the menu rows' arguments.
+// Prints one JSON object: the answers each path gave and the reasons the table builds.
 var answers: [String: [Int32]] = [:]
 var cancels: [String: Int] = [:]
 let queue = DispatchQueue(label: "person-confirm-fixture")
@@ -35,17 +35,11 @@ let reasons: [String: String] = [
     "turbo-app-on bundle": personConfirmReason(["turbo-app-on", "com.example.App"]) ?? "nil",
     "unblock free text": personConfirmReason(["permissions-unblock", "com.example.App to stay safe"]) ?? "nil",
     "unknown key": personConfirmReason(["approve-everything"]) ?? "nil",
-    "subject on a plain key": personConfirmReason(["permissions-revoke-all", "com.example.App"]) ?? "nil",
+    "subject on a plain key": personConfirmReason(["permissions-sites", "com.example.App"]) ?? "nil",
     "browser name elsewhere": personConfirmReason(["turbo-app-on", "Google Chrome"]) ?? "nil",
     "too many": personConfirmReason(["turbo-on", "Helium", "x"]) ?? "nil",
 ]
-let menu: [String: [String]] = [
-    "revoke-all": menuConfirmArguments(["permissions": "revoke-all"]) ?? ["nil"],
-    "revoke electron": menuConfirmArguments(["permissions": "revoke", "target": "electron:com.example.App"]) ?? ["nil"],
-    "revoke app name": menuConfirmArguments(["permissions": "revoke", "target": "app:Text Edit"]) ?? ["nil"],
-    "block": menuConfirmArguments(["permissions": "block", "target": "com.example.App"]) ?? ["nil"],
-]
 queue.sync {
-    let data = try! JSONSerialization.data(withJSONObject: ["answers": answers, "cancels": cancels, "reasons": reasons, "menu": menu], options: [.sortedKeys])
+    let data = try! JSONSerialization.data(withJSONObject: ["answers": answers, "cancels": cancels, "reasons": reasons], options: [.sortedKeys])
     FileHandle.standardOutput.write(data + Data([10]))
 }

@@ -13,7 +13,7 @@ function uiFixture() {
 
 test('native handoff card uses guarded Continue and fixed instructions outside page content', () => {
   const source = readFileSync(new URL('../plugins/sleight/lib/direct-browser/native/consent-host.swift', import.meta.url), 'utf8');
-  assert.match(source, /\["action", "debugger", "relaunch", "opt-in", "resume", "turbo-off", "handoff"(?:, "settings")?\]/);
+  assert.match(source, /\["action", "debugger", "relaunch", "opt-in", "resume", "turbo-off", "handoff"\]/);
   assert.match(source, /"continue": "Continue"/);
   assert.match(source, /func handoffFrame\(/);
   assert.match(source, /Finish signing in or entering your code in /);

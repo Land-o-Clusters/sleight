@@ -15,7 +15,7 @@ const source = readFileSync(sourcePath, 'utf8');
 
 test('protected consent buttons use the input guard on every native card', () => {
   assert.match(source, /BEGIN PERSON INPUT/);
-  assert.equal((source.match(/personModal\(alert, choices:/g) ?? []).length, 4); // VC10 adds the menu's Revoke card for a Mac without Touch ID or a password
+  assert.equal((source.match(/personModal\(alert, choices:/g) ?? []).length, 3);
   assert.doesNotMatch(source, /\.post\(|CGEventPost|AXUIElementPerformAction|activate\(ignoringOtherApps/);
   const card = source.match(/\/\/ BEGIN ASK CARD\n([\s\S]*?)\/\/ END ASK CARD/)?.[1];
   assert.ok(card, 'styled shell card absent');

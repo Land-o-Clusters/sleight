@@ -38,7 +38,7 @@ func personInput(_ event: CGEvent?) -> Bool {
 func personChoice(_ kind: String, _ choice: String) -> Bool {
     if ["cancel", "decline", "session"].contains(choice) { return false }
     // A debugger's Once is also a consent to debugging. Plain session app approvals remain host-answerable.
-    return choice == "always" || ["action", "debugger", "relaunch", "opt-in", "resume", "turbo-off", "handoff", "settings"].contains(kind)
+    return choice == "always" || ["action", "debugger", "relaunch", "opt-in", "resume", "turbo-off", "handoff"].contains(kind)
 }
 // NSAlert owns its NSButtons and their private subclasses. Add only an AX override to a zero-storage runtime
 // subclass of the actual button class, preserving its layout, key equivalents and original modal action.
@@ -366,7 +366,7 @@ func consentInputActions(_ alert: NSAlert, choices: [String], kind: String) -> [
 // END PERSON INPUT
 
 // BEGIN PERSON CONFIRM
-// High-stakes settings changes (person-confirm.mjs names them, and the menu's Revoke rows) wait for macOS's own Touch ID or
+// High-stakes settings changes (person-confirm.mjs names them) wait for macOS's own Touch ID or
 // password sheet, which an agent can't answer: it has no finger, and the password sheet is the system's, which sleight's
 // tools refuse to drive (own-host.mjs). The sheet's reason comes only from this table: a key, and at most a bundle id or one
 // of the browser names below. On macOS it reads "consent-host is trying to <reason>."
@@ -374,11 +374,8 @@ let personConfirmReasons: [String: (plain: String, subject: String?)] = [
     "turbo-on": ("turn on sleight turbo", "turn on sleight turbo for %@"),
     "turbo-app-on": ("let sleight turbo drive an app", "let sleight turbo drive %@"),
     "permissions-unblock": ("lift one of sleight's blocks", "let sleight act in %@ again"),
-    "permissions-revoke": ("revoke one of sleight's permissions", "revoke sleight's permission for %@"),
-    "permissions-revoke-all": ("revoke everything sleight may do", nil),
     "permissions-sites": ("change the sites sleight may act on", nil),
     "permissions-repair": ("repair sleight's permissions file", nil),
-    "allow-remove": ("take an app off sleight's pre-approved list", "take %@ off sleight's pre-approved list"),
     "routine-add": ("install a sleight routine", nil),
     "routine-unlock": ("clear a sleight routine's run lock", nil),
     "watch-add": ("install a sleight watch", nil),
@@ -396,13 +393,6 @@ func personConfirmReason(_ arguments: [String]) -> String? {
     if arguments.count == 1 { return entry.plain }
     guard let template = entry.subject, personConfirmSubject(arguments[1]) else { return nil }
     return template.replacingOccurrences(of: "%@", with: arguments[1])
-}
-/// The menu's Revoke rows as [key, subject?]; nil for a row that only removes access without asking (Never Act).
-func menuConfirmArguments(_ event: [String: String]) -> [String]? {
-    if event["permissions"] == "revoke-all" { return ["permissions-revoke-all"] }
-    guard event["permissions"] == "revoke", let target = event["target"], let colon = target.firstIndex(of: ":") else { return nil }
-    let name = String(target[target.index(after: colon)...])
-    return personConfirmSubject(name) && !personConfirmBrowsers.contains(name) ? ["permissions-revoke", name] : ["permissions-revoke"]
 }
 // The helper's exit codes, which person-confirm.mjs reads.
 enum PersonConfirmResult: Int32 { case confirmed = 0, failed = 1, cancelled = 2, timedOut = 3, unavailable = 69 }
@@ -1404,25 +1394,10 @@ final class ConsentHost: NSObject, NSApplicationDelegate, NSMenuDelegate {
     }
     // Opening the submenu words the last-use times against the current time. Only Permissions submenus have this delegate.
     func menuNeedsUpdate(_ menu: NSMenu) { fillPermissions(menu) }
-    // Never Act only removes access, so it answers at once. Revoke and Revoke All are high-stakes (the owner, 2026-10-26): macOS's
-    // Touch ID or password sheet first, and the event only on a pass. A Mac that can't ask gets this host's own card instead,
-    // which only a physical click answers.
-    var personEvaluator: () -> PersonEvaluator = localAuthentication
+    // Revoke and block only remove access, so they don't ask.
     @objc func permissionClick(_ sender: NSMenuItem) {
         guard let event = sender.representedObject as? [String: String] else { return }
-        guard let confirm = menuConfirmArguments(event) else { writePermissionEvent(event); return }
-        let reason = personConfirmReason(confirm) ?? personConfirmReasons["permissions-revoke"]!.plain
-        confirmPerson(reason, evaluator: personEvaluator()) { [weak self] result in
-            if result == .confirmed || result == .unavailable && self?.confirmOnCard(reason) == true { writePermissionEvent(event) }
-        }
-    }
-    func confirmOnCard(_ reason: String) -> Bool {
-        let alert = NSAlert()
-        alert.messageText = "Revoke sleight's permission?"
-        alert.informativeText = "This Mac can't ask for Touch ID or a password, so this card confirms it instead: " + reason + "."
-        alert.addButton(withTitle: "Revoke")
-        alert.addButton(withTitle: "Cancel")
-        return personModal(alert, choices: ["revoke", "cancel"], kind: "settings") == .alertFirstButtonReturn
+        writePermissionEvent(event)
     }
     @objc func handToggle(_ sender: NSMenuItem) {
         guard let hand = hand else { return }

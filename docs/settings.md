@@ -297,18 +297,16 @@ Some changes widen what sleight may do, or run something on a schedule. After th
 macOS's own Touch ID sheet, with your account password as the system's fallback, and change nothing unless it passes:
 
 - `turbo on` and `turbo app on`
-- `permissions unblock`, `revoke`, `sites` and `repair`
-- `allow remove`
+- `permissions unblock`, `sites` and `repair`
 - `routine add` and `unlock`, and `watch <url> --find`, `watch record` and `watch unlock`
-- Revoke and Revoke All in the menu bar's Permissions submenu
 
 An agent can open a terminal window and type a command into it, and then the process chain looks like
 yours. It can't put a finger on the sensor, and sleight refuses to act on the password sheet. The sheet gives up after 60 s,
 and Cancel or Ctrl-C stops it. When nobody is at the Mac (locked, or no input for 120 s), these changes are refused
 outright: a settings change never goes to [remote approvals](#approval-scope). An account without a login password can't
-ask. The CLI refuses these changes until you set one, and the menu bar's Revoke rows ask on sleight's own card instead,
-which needs your physical click. Everything else above (hand, cursor, turning turbo or an app off, blocking, clearing site memory, removing a
-routine or watch) needs only the terminal check.
+ask, and the CLI refuses these changes until you set one. Everything else above only takes access away or changes how
+sleight looks (hand, cursor, turning turbo or an app off, blocking, revoking, `allow remove`, clearing site memory, removing a
+routine or watch), so it needs only the terminal check, and the menu bar's rows answer at once.
 
 ## Turns without a hook
 

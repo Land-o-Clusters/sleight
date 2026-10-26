@@ -26,22 +26,20 @@ account password, which an agent doesn't have.
 5. The host withdraws the sheet after 60 s (`LAContext.invalidate`), and SIGINT, SIGTERM or SIGHUP do the same, so Ctrl-C in
    the terminal cancels. The launcher kills a helper that hasn't exited 2 s after that.
 
-The menu bar's Revoke and Revoke All call the same `confirmPerson` in-process before writing the event. When the Mac can't ask,
-they fall back to an NSAlert through `personModal`, whose buttons refuse Accessibility presses and posted input.
-
 ## What counts as high-stakes
 
 | Path | High-stakes forms | Low-stakes forms (terminal check only) |
 |---|---|---|
 | `turbo` | `on`, `app on` | `off`, `app off` |
-| `permissions` | `unblock`, `revoke`, `sites`, `repair` | `block`, `memory clear` |
-| `allow` | `remove` | |
+| `permissions` | `unblock`, `sites`, `repair` | `block`, `revoke`, `memory clear` |
+| `allow` | | `remove` |
 | `routine` | `add`, `unlock` | `remove`, `--remove` |
 | `watch` | `<url> --find`, `record`, `unlock` | `remove` |
 | `hand`, `cursor` | | every form |
-| Menu bar | Revoke, Revoke All | Ghost Hand, Never Act in or on, Turn Turbo Off… (its own card), turbo's session rows |
+| Menu bar | | Ghost Hand, Revoke, Revoke All, Never Act in or on, Turn Turbo Off… (its own card), turbo's session rows |
 
-Any other form of a high-stakes family, usage errors included, asks under the generic `settings` key, so a writer added later
+Anything that only takes access away is low-stakes (sleight-arch, 2026-10-26). Any other form of a high-stakes family,
+usage errors included, asks under the generic `settings` key, so a writer added later
 is covered before anyone lists it.
 
 ## The sheet's process, and sleight's refusal

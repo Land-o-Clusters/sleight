@@ -31,16 +31,10 @@ const HIGH = [
   [['turbo', 'app', 'on', 'not a bundle id'], { key: 'turbo-app-on' }],
   [['permissions', 'unblock', 'com.example.App'], { key: 'permissions-unblock', subject: 'com.example.App' }],
   [['permissions', 'unblock', 'https://example.com'], { key: 'permissions-unblock' }],
-  [['permissions', 'revoke', 'all'], { key: 'permissions-revoke-all' }],
-  [['permissions', 'revoke', 'turbo'], { key: 'permissions-revoke' }],
-  [['permissions', 'revoke', 'com.example.App'], { key: 'permissions-revoke', subject: 'com.example.App' }],
-  [['permissions', 'revoke', 'https://example.com'], { key: 'permissions-revoke' }],
   [['permissions', 'sites', 'only', 'https://example.com'], { key: 'permissions-sites' }],
   [['permissions', 'sites', 'all'], { key: 'permissions-sites' }],
   [['permissions', 'repair'], { key: 'permissions-repair' }],
   [['permissions', 'repair', '--discard'], { key: 'permissions-repair' }],
-  [['allow', 'remove', 'com.apple.TextEdit'], { key: 'allow-remove', subject: 'com.apple.TextEdit' }],
-  [['allow', 'remove', 'TextEdit'], { key: 'allow-remove' }],
   [['routine', 'add', 'script.json', '--every', '1h'], { key: 'routine-add' }],
   [['routine', 'unlock', 'r1'], { key: 'routine-unlock' }],
   [['watch', 'https://example.com', '--find', 'x', '--every', '1h'], { key: 'watch-add' }],
@@ -48,14 +42,17 @@ const HIGH = [
   [['watch', 'unlock', 'w1'], { key: 'watch-unlock' }],
   // Forms the modules reject as usage still ask, so a writer added later is covered before anyone lists it.
   [['turbo'], { key: 'settings' }], [['turbo', 'frobnicate'], { key: 'settings' }], [['permissions', 'frobnicate'], { key: 'settings' }],
-  [['allow', 'add', 'TextEdit'], { key: 'settings' }], [['routine', 'frobnicate'], { key: 'settings' }], [['watch', 'frobnicate'], { key: 'settings' }],
+  [['allow', 'add', 'TextEdit'], { key: 'settings' }], [['allow', 'remove'], { key: 'settings' }],
+  [['permissions', 'revoke'], { key: 'settings' }], [['routine', 'frobnicate'], { key: 'settings' }], [['watch', 'frobnicate'], { key: 'settings' }],
 ];
-// Settings changes that only narrow what sleight does or change how it looks: the terminal check alone.
+// Settings changes that only take access away or change how sleight looks: the terminal check alone (sleight-arch, 2026-10-26).
+// Revoking and allow remove only take access away, so they're here too.
 const LOW = [
   ['hand', 'on'], ['hand', 'off'], ['hand', 'capture', 'visible'], ['hand'], ['cursor', 'style', 'ring'], ['cursor', 'import', '/tmp/x', '--yes'],
   ['cursor', 'remove', 'test-cat'], ['turbo', 'off'], ['turbo', 'app', 'off', 'com.example.app'], ['permissions', 'block', 'com.example.app'],
   ['permissions', 'block', 'https://example.com'], ['permissions', 'memory', 'clear', 'all'], ['routine', 'remove', 'r1'], ['routine', '--remove', 'r1'],
-  ['watch', 'remove', 'w1'],
+  ['watch', 'remove', 'w1'], ['permissions', 'revoke', 'all'], ['permissions', 'revoke', 'turbo'], ['permissions', 'revoke', 'com.example.App'],
+  ['permissions', 'revoke', 'https://example.com'], ['allow', 'remove', 'TextEdit'], ['allow', 'remove', 'com.apple.TextEdit'],
 ];
 const READS = [['hand', 'status'], ['turbo', 'status'], ['permissions'], ['permissions', 'list'], ['allow', 'list'], ['routine', 'list'],
   ['routine', 'run-now', 'r1'], ['watch', 'list'], ['watch', 'run-now', 'w1'], ['stats'], ['record', 'x.jsonl'], []];
@@ -91,8 +88,8 @@ test('a pass lets the change through; every other answer refuses in one line tha
       `sleight: permissions unblock needs Touch ID or your password, so nothing changed. Reason: ${reason}.`);
   }
   for (const code of ['unavailable', 'no helper']) {
-    const line = await confirmationRefusal(['allow', 'remove', 'TextEdit'], { confirm: confirm(code) });
-    assert.match(line, /^sleight: allow remove needs Touch ID or your password, so nothing changed\. Reason: .+\. .+; Revoke also works from the menu bar\.$/);
+    const line = await confirmationRefusal(['permissions', 'sites', 'all'], { confirm: confirm(code) });
+    assert.match(line, /^sleight: permissions sites needs Touch ID or your password, so nothing changed\. Reason: .+\. (?:Set a login password to make this change|Apple's command-line tools build it \(xcode-select --install\))\.$/);
     assert.equal(line.split('\n').length, 1);
   }
   assert.equal(await confirmationRefusal(['turbo', 'on'], { confirm: async () => { throw Error('helper crashed'); } }), confirmationLine('turbo on', 'failed'));
@@ -156,8 +153,7 @@ test('a failed, cancelled or timed-out confirmation leaves permissions.json as i
     const refusal = await settingsChangeRefusal(args, { gate: () => undefined, confirmation: { confirm: async () => result, presence: async () => true, notice: () => {} } });
     return refusal ?? run(args);
   };
-  for (const args of [['permissions', 'unblock', 'com.example.App'], ['permissions', 'sites', 'all'], ['permissions', 'revoke', 'https://a.example'],
-    ['permissions', 'repair', '--discard']]) {
+  for (const args of [['permissions', 'unblock', 'com.example.App'], ['permissions', 'sites', 'all'], ['permissions', 'repair', '--discard']]) {
     for (const result of ['failed', 'cancelled', 'timeout', 'unavailable']) {
       assert.equal(typeof await attempt(args, result), 'string', `${args.join(' ')} ${result}`);
       assert.equal(readFileSync(path, 'utf8'), before, `${args.join(' ')} after ${result}`);
@@ -219,15 +215,15 @@ test('record refuses an output in sleight\'s settings folder, through links, cas
   assert.equal(JSON.parse(readFileSync(join(elsewhere, 'out.json'), 'utf8')).sleightReplay, 1);
 });
 
-test('the host source: the CLI mode runs before any window code, and the menu\'s Revoke rows ask before writing', () => {
+test('the host source: the CLI mode runs before any window code, and the menu\'s Revoke rows answer at once', () => {
   const mode = hostSource.indexOf('if arguments.first == "--confirm-person"'), app = hostSource.indexOf('let app = NSApplication.shared');
   assert.ok(mode > 0 && mode < app);
   assert.match(hostSource, /^import LocalAuthentication$/m);
+  // Revoke and Revoke All only take access away (sleight-arch, 2026-10-26), so no menu row calls the confirmation.
   const click = /@objc func permissionClick\(_ sender: NSMenuItem\) \{([\s\S]*?)\n {4}\}/.exec(hostSource)?.[1];
   assert.ok(click);
-  assert.match(click, /guard let confirm = menuConfirmArguments\(event\) else \{ writePermissionEvent\(event\); return \}/);
-  assert.match(click, /confirmPerson\(reason, evaluator: personEvaluator\(\)\) \{ \[weak self\] result in\n\s*if result == \.confirmed \|\| result == \.unavailable && self\?\.confirmOnCard\(reason\) == true \{ writePermissionEvent\(event\) \}/);
-  assert.equal((click.match(/writePermissionEvent/g) ?? []).length, 2);
+  assert.doesNotMatch(click, /confirmPerson/);
+  assert.equal((hostSource.match(/confirmPerson\(reason, evaluator: localAuthentication\(\)\)/g) ?? []).length, 1, 'only the CLI mode asks');
   // LAContext appears only inside the seam's production evaluator.
   assert.equal((hostSource.match(/LAContext\(\)/g) ?? []).length, 1);
 });
@@ -251,8 +247,6 @@ test('Swift: the confirmation answers once per ask, times out, cancels, and buil
     'turbo-app-on bundle': 'let sleight turbo drive com.example.App', 'unblock free text': 'nil', 'unknown key': 'nil',
     'subject on a plain key': 'nil', 'browser name elsewhere': 'let sleight turbo drive Google Chrome', 'too many': 'nil',
   });
-  assert.deepEqual(out.menu, { 'revoke-all': ['permissions-revoke-all'], 'revoke electron': ['permissions-revoke', 'com.example.App'],
-    'revoke app name': ['permissions-revoke'], block: ['nil'] });
 });
 
 test('Swift: the whole host compiles, and --confirm-person-check parses its arguments without showing anything', { skip: macCommandSkip('xcrun') }, async t => {
@@ -264,8 +258,8 @@ test('Swift: the whole host compiles, and --confirm-person-check parses its argu
   assert.equal(built.status, 0, built.stderr);
   const check = (...args) => spawnSync(binary, ['--confirm-person-check', ...args], { encoding: 'utf8', timeout: 10000 });
   assert.deepEqual([check('turbo-on', 'Google Chrome').status, check('turbo-on', 'Google Chrome').stdout], [0, 'turn on sleight turbo for Google Chrome\n']);
-  assert.equal(check('permissions-revoke-all').stdout, 'revoke everything sleight may do\n');
-  for (const args of [[], ['nope'], ['turbo-on', 'Firefox'], ['permissions-unblock', 'com.example.App to stay safe'], ['turbo-on', 'Helium', 'x']]) {
+  assert.equal(check('permissions-sites').stdout, 'change the sites sleight may act on\n');
+  for (const args of [[], ['nope'], ['permissions-revoke'], ['allow-remove'], ['turbo-on', 'Firefox'], ['permissions-unblock', 'com.example.App to stay safe'], ['turbo-on', 'Helium', 'x']]) {
     const run = check(...args);
     assert.deepEqual([run.status, run.stdout], [64, ''], args.join(' '));
   }

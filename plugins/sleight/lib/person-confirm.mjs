@@ -14,8 +14,9 @@ const bundle = value => typeof value === 'string' && value.length <= 100 && /^[A
 const change = (key, subject) => subject ? { key, subject } : { key };
 
 /** { key, subject? } when args (the launcher's argv after the script) make a high-stakes change, else undefined. Read-only
- *  forms (person-gate.mjs) and the low-stakes ones (hand, cursor, turning turbo or an app off, blocking, clearing site memory,
- *  removing a routine or watch) are undefined. Any other form of a high-stakes family is high-stakes under the generic key,
+ *  forms (person-gate.mjs) and the low-stakes ones, which only take access away or change how sleight looks (hand, cursor,
+ *  turning turbo or an app off, blocking, revoking, allow remove, clearing site memory, removing a routine or watch), are
+ *  undefined. Any other form of a high-stakes family is high-stakes under the generic key,
  *  so a writer added later asks before anyone lists it here. */
 export function highStakesChange(args) {
   if (!Array.isArray(args) || settingsCommand(args) === undefined) return undefined;
@@ -27,12 +28,11 @@ export function highStakesChange(args) {
   } else if (family === 'permissions') {
     if (op === 'block' && rest.length === 2 || op === 'memory') return undefined;
     if (op === 'unblock') return change('permissions-unblock', rest.length === 2 && bundle(value));
-    if (op === 'revoke' && rest.length === 2 && value === 'all') return change('permissions-revoke-all');
-    if (op === 'revoke') return change('permissions-revoke', rest.length === 2 && bundle(value));
+    if (op === 'revoke' && rest.length === 2) return undefined;
     if (op === 'sites') return change('permissions-sites');
     if (op === 'repair') return change('permissions-repair');
   } else if (family === 'allow') {
-    if (op === 'remove') return change('allow-remove', rest.length === 2 && bundle(value));
+    if (op === 'remove' && rest.length === 2) return undefined;
   } else if (family === 'routine') {
     if (['remove', '--remove'].includes(op) && rest.length === 2) return undefined;
     if (op === 'add') return change('routine-add');
@@ -52,9 +52,9 @@ const REASONS = {
   unavailable: "this Mac can't ask for Touch ID or a password", 'no helper': "the confirmation helper couldn't be built",
   invalid: 'the confirmation helper refused the request',
 };
-// What a person can do when the Mac can't ask. The menu bar's Revoke rows fall back to sleight's own card (docs/settings.md).
-const NEXT = { unavailable: ' Set a login password to make this change; Revoke also works from the menu bar.',
-  'no helper': " Apple's command-line tools build it (xcode-select --install); Revoke also works from the menu bar." };
+// What a person can do when the Mac can't ask (docs/settings.md).
+const NEXT = { unavailable: ' Set a login password to make this change.',
+  'no helper': " Apple's command-line tools build it (xcode-select --install)." };
 export const confirmationLine = (command, code = 'failed') =>
   `sleight: ${command} needs Touch ID or your password, so nothing changed. Reason: ${REASONS[code] ?? REASONS.failed}.${NEXT[code] ?? ''}`;
 
