@@ -374,7 +374,7 @@ test('perch mode (A2): the third sheet goes through the same decode child and pi
   const f = character(), perchSheet = join(f.sheet, '..', 'perch.png');
   writeFileSync(perchSheet, png({ w: 512, h: 64, cells: [[0, 0], [0, 1]] }), { mode: 0o600 });
   const keys = ['perch', 'perch-peek', 'perch-hop', 'perch-point-left', 'perch-point-right', 'sleep', 'high-five', 'perch-wait', 'startle', 'jumping',
-    'running-right', 'running-left', 'error', 'handoff'];
+    'running-right', 'running-left', 'error', 'handoff', 'paused'];
   const table = Object.fromEntries(keys.map(k => [k, entry(0, [0, 1], { sheet: k === 'jumping' ? 'sheet' : 'perch', size: k === 'jumping' ? [512, 192] : [512, 64], scale: 0.5 })]));
   table.jumping.frames = [0]; table.jumping.ms = [100];
   const frame = { ...f, perch: { anchor: [32, 48], table }, perchSheet };
@@ -386,6 +386,20 @@ test('perch mode (A2): the third sheet goes through the same decode child and pi
   assert.equal(JSON.parse(check(frame).stdout).reason, 'size');
   // Perch entries must name a sheet the frame has.
   assert.equal(check({ ...frame, perchSheet: null }).status, 65);
+});
+
+test('perch mode: the host measures the leg spread below the seat line from the decoded cells', options, t => {
+  const f = character(), perchSheet = join(f.sheet, '..', 'perch.png');
+  // Rows 0 to 29 of cells 0 and 1 fully inked (64 by 30); the seat line at row 10, x 32: the spread is 32 px each side.
+  writeFileSync(perchSheet, png({ w: 512, h: 64, cells: [[0, 0], [0, 1]], count: 64 * 30 }), { mode: 0o600 });
+  const keys = ['perch', 'perch-peek', 'perch-hop', 'perch-point-left', 'perch-point-right', 'sleep', 'high-five', 'perch-wait', 'startle', 'jumping',
+    'running-right', 'running-left', 'error', 'handoff', 'paused'];
+  const table = Object.fromEntries(keys.map(k => [k, entry(0, [0, 1], { sheet: 'perch', size: [512, 64], scale: 0.5 })]));
+  const frame = { ...f, perch: { anchor: [32, 10], table }, perchSheet };
+  const r = spawnSync(build(t), ['--perch-dump'], { input: JSON.stringify(frame) + '\n' + JSON.stringify({ dumpDecode: true }) + '\n', encoding: 'utf8', env: testEnv() });
+  assert.equal(r.status, 0, r.stderr);
+  const legs = r.stdout.trim().split('\n').map(l => JSON.parse(l)).find(l => l.effect === 'legs');
+  assert.deepEqual([legs.loaded, legs.legs, legs.seated], [true, [16, 16], [16, 16]], 'points at scale 0.5');
 });
 
 test('sprite stays lower right and reverses its offset at edges without mirroring the art', options, t => {
