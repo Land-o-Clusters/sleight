@@ -565,3 +565,20 @@ test('with the action log off the menu frame has no usage, and a failing read on
     h.client.close();
   }
 });
+
+
+test('cursorStyle is an optional spawn option and adds no wait to send', async t => {
+  t.after(() => setHandPid(0));
+  for (const cursorStyle of ['ring', 'glove']) {
+    const spawns = [], child = fakeChild();
+    const client = createHandClient({ cursorStyle, setting: () => ({ enabled: true }), watch: () => undefined,
+      permissions: null, usage: null, built: () => true,
+      prepare: async () => ({ status: 'ready', spawn: options => { spawns.push(options); return child; } }) });
+    t.after(() => client.close());
+    assert.equal(client.send(frame()), undefined);
+    assert.equal(spawns.length, 0);
+    await settle();
+    assert.deepEqual(spawns, [{ capture: 'hidden', consent: true, cursorStyle }]);
+  }
+  assert.throws(() => createHandClient({ cursorStyle: 'unknown' }), /HAND_CURSOR_STYLE_INVALID/);
+});

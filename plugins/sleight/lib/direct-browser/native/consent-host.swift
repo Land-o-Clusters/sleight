@@ -1436,12 +1436,18 @@ final class ConsentHost: NSObject, NSApplicationDelegate, NSMenuDelegate {
 // The ghost hand's stdin frames: a kind and global top-left screen points, nonce-bound and never answered. Exact keys only.
 struct HandAct {
     let seq: Int, kind: String, pid: Int32, windowId: UInt32, at: CGPoint, path: [CGPoint], delay: Double, beats: Int
+    var label: String? = nil
 }
 // menu: the hand's setting, capture mode and the plugin version, for the shared host's Ghost Hand row.
 // permissions: the Permissions submenu's rows (permissionsData), when the relay has them. usage: the usage row (usageData),
 // when this session writes the action log and it has timed actions. A usage value this host can't admit drops only that row:
 // a bad number must never take the glove down.
-enum HandFrame { case act(String, HandAct), hide(String), menu(String, enabled: Bool, capture: String, version: String, permissions: PermissionsData?, usage: UsageStats?) }
+struct RingEvent {
+    let seq: Int, state: String, pid: Int32, windowId: UInt32, at: CGPoint?, rect: CGRect?, label: String?
+    var path: [CGPoint] = []
+    var beats: Int = 1
+}
+enum HandFrame { case act(String, HandAct), aim(String, RingEvent), status(String, RingEvent), hide(String), menu(String, enabled: Bool, capture: String, version: String, permissions: PermissionsData?, usage: UsageStats?) }
 let handKinds: Set<String> = ["click", "double", "right", "key", "type", "drag", "scroll"]
 func handFrame(_ data: [String: Any]) -> HandFrame? {
     func number(_ value: Any?) -> Double? {
@@ -1470,8 +1476,37 @@ func handFrame(_ data: [String: Any]) -> HandFrame? {
         if let parsed = permissions, parsed == nil { return nil }
         return .menu(nonce, enabled: enabled.boolValue, capture: capture, version: version, permissions: permissions ?? nil, usage: usageData(data["usage"]))
     }
-    guard data["hand"] as? String == "act",
-        Set(data.keys) == ["hand", "nonce", "seq", "kind", "pid", "windowId", "at", "path", "delayMs", "beats"],
+    if let tag = data["hand"] as? String, ["aim", "status"].contains(tag) {
+        let keys: Set<String> = tag == "aim" ? ["hand", "nonce", "seq", "kind", "pid", "windowId", "at"] : ["hand", "nonce", "seq", "state", "pid", "windowId"]
+        let optional: Set<String> = tag == "aim" ? ["rect", "holdMs", "label"] : ["at"]
+        guard keys.isSubset(of: Set(data.keys)), Set(data.keys).subtracting(keys).isSubset(of: optional),
+            let seq = integer(data["seq"], 0...9007199254740991),
+            let pid = integer(data["pid"], 1...2147483647), let window = integer(data["windowId"], 1...4294967295),
+            data["at"] == nil || point(data["at"]) != nil,
+            data["label"] == nil || data["label"] is String else { return nil }
+        var rect: CGRect?
+        if let raw = data["rect"] {
+            guard let values = raw as? [Any], values.count == 4,
+                let origin = point(Array(values.prefix(2))), let w = number(values[2]), let h = number(values[3]),
+                w > 0, h > 0, w <= 100000, h <= 100000 else { return nil }
+            rect = CGRect(origin: origin, size: CGSize(width: w, height: h))
+        }
+        let state: String
+        if tag == "aim" {
+            guard let kind = data["kind"] as? String, handKinds.contains(kind),
+                data["holdMs"] == nil || integer(data["holdMs"], 0...600) != nil else { return nil }
+            state = "aim"
+        } else {
+            guard let value = data["state"] as? String, ["waiting", "error", "done", "handback", "thinking"].contains(value) else { return nil }
+            state = value
+        }
+        let event = RingEvent(seq: seq, state: state, pid: Int32(pid), windowId: UInt32(window), at: point(data["at"]), rect: rect,
+            label: (data["label"] as? String).map { String($0.prefix(40)) })
+        return tag == "aim" ? .aim(nonce, event) : .status(nonce, event)
+    }
+    let actKeys: Set<String> = ["hand", "nonce", "seq", "kind", "pid", "windowId", "at", "path", "delayMs", "beats"]
+    guard data["hand"] as? String == "act", actKeys.isSubset(of: Set(data.keys)),
+        Set(data.keys).subtracting(actKeys).isSubset(of: ["label"]), data["label"] == nil || data["label"] is String,
         let seq = integer(data["seq"], 0...9007199254740991), let kind = data["kind"] as? String, handKinds.contains(kind),
         let pid = integer(data["pid"], 1...2147483647), let windowId = integer(data["windowId"], 1...4294967295),
         let at = point(data["at"]), let raw = data["path"] as? [Any], (1...64).contains(raw.count),
@@ -1479,7 +1514,7 @@ func handFrame(_ data: [String: Any]) -> HandFrame? {
     let path = raw.compactMap(point)
     guard path.count == raw.count else { return nil }
     return .act(nonce, HandAct(seq: seq, kind: kind, pid: Int32(pid), windowId: UInt32(windowId), at: at, path: path,
-        delay: Double(delay) / 1000, beats: beats))
+        delay: Double(delay) / 1000, beats: beats, label: (data["label"] as? String).map { String($0.prefix(40)) }))
 }
 // Consecutive repeats dropped, so a one-point route means the hand appears there without a glide.
 func handPoints(_ points: [CGPoint]) -> [CGPoint] {
@@ -1763,6 +1798,299 @@ func handPlan(_ act: HandAct, from start: (point: CGPoint, opacity: Double, stat
 }
 // END HAND MOTION
 
+// BEGIN RING PLAN
+// Values stay data until the renderer installs them. The dump consumes the very same plans without AppKit objects.
+struct RingAnimation {
+    let layer: String, keyPath: String, from: Any, to: Any, beginTime: Double, duration: Double
+    var values: [Any]? = nil
+    var path: [[Double]]? = nil
+    var repeats = false
+    var json: [String: Any] {
+        var result: [String: Any] = ["layer": layer, "keyPath": keyPath, "from": from, "to": to, "beginTime": beginTime, "duration": duration]
+        if let values = values { result["values"] = values }
+        if let path = path { result["path"] = path }
+        if repeats { result["repeat"] = true }
+        return result
+    }
+}
+struct RingChip {
+    let frame: CGRect, tether: [[Double]]
+    var json: [String:Any] { ["frame":[frame.minX,frame.minY,frame.width,frame.height],"tether":tether] }
+}
+struct RingPlan {
+    var state: String, at: CGPoint
+    var layers: [[String: Any]] = [], animations: [RingAnimation] = []
+    var total = 0.0, glide = 0.0, opacity = 1.0
+    var hold = false, dropped = false
+    var label: String?, rect: CGRect?
+    var oldLabel: String?, chip: RingChip?
+    var points: [CGPoint] = []
+    var json: [String: Any] {
+        ["state": state, "at": [at.x, at.y], "layers": layers, "animations": animations.map { $0.json }, "total": total,
+         "glide": glide, "opacity": opacity, "hold": hold, "dropped": dropped, "label": label as Any? ?? NSNull(),
+         "rect": rect.map { [$0.minX, $0.minY, $0.width, $0.height] } as Any? ?? NSNull(),
+         "chip":chip?.json as Any? ?? NSNull()]
+    }
+}
+// A replacement concept implements this seam. The host owns admission, position memory, capture, clipping and release.
+protocol RingStyling {
+    func plan(_ event: RingEvent, from: CGPoint?, reduced: Bool, secure: Bool, clip: CGRect, previousLabel: String?) -> RingPlan
+}
+struct RingStyle: RingStyling {
+    static let warm: [Double] = [1, 122.0/255, 61.0/255, 1], cool: [Double] = [91.0/255, 141.0/255, 1, 1]
+    static let ink: [Double] = [11.0/255, 13.0/255, 20.0/255, 0.55], white: [Double] = [1, 1, 1, 1]
+    static let error: [Double] = [1, 61.0/255, 96.0/255, 1]
+    static let radius = 14.0, silence = 1.2
+    static let click = 0.21, doubleClick = 0.25, right = 0.22, shake = 0.24, dissolve = 0.38
+    static let typeEnter = 0.12, key = 0.06, scrollEnter = 0.12, scrollTick = 0.12, grab = 0.09, drop = 0.2
+    static let breath = 1.6, reducedGlide = 0.07
+    static func xy(_ p: CGPoint) -> [Double] { [Double(p.x), Double(p.y)] }
+    // Path commands: move, line, quadratic curve, close. Coordinates are points with a top-left origin.
+    static func arc(_ warm: Bool, radius: Double = radius, gap: Double = 12, separation: Double = 0) -> [[Double]] {
+        let angle = warm ? 135.0 : 315.0, half = (180-gap)/2, side = warm ? -1.0 : 1.0
+        return (0...24).map { i in
+            let theta = (angle-half + (2*half)*Double(i)/24) * Double.pi/180
+            return [i == 0 ? 0 : 1, cos(theta)*radius + side*separation/sqrt(2), sin(theta)*radius - side*separation/sqrt(2)]
+        }
+    }
+    static func halves(radius: Double = radius, gap: Double = 12, separation: Double = 0) -> [[Double]] {
+        arc(true, radius: radius, gap: gap, separation: separation) + arc(false, radius: radius, gap: gap, separation: separation)
+    }
+    static func square(_ size: Double) -> [[Double]] {
+        [[0,-size/2,-size/2],[1,size/2,-size/2],[1,size/2,size/2],[1,-size/2,size/2],[3]]
+    }
+    static func rounded(_ r: CGRect) -> [[Double]] {
+        let x = Double(r.minX), y = Double(r.minY), w = Double(r.width), h = Double(r.height), c = min(6, min(w,h)/2)
+        return [[0,x+c,y],[1,x+w-c,y],[2,x+w,y,x+w,y+c],[1,x+w,y+h-c],[2,x+w,y+h,x+w-c,y+h],
+                [1,x+c,y+h],[2,x,y+h,x,y+h-c],[1,x,y+c],[2,x,y,x+c,y],[3]]
+    }
+    static func bow(_ a: CGPoint, _ b: CGPoint, offset: Double = 0) -> [[Double]] {
+        let d = max(0.001, hypot(b.x-a.x,b.y-a.y)), nx = -(b.y-a.y)/d, ny = (b.x-a.x)/d, bend = min(d*0.12,26)
+        return [[0,Double(a.x+nx*offset),Double(a.y+ny*offset)],
+                [2,Double((a.x+b.x)/2+nx*(bend+offset)),Double((a.y+b.y)/2+ny*(bend+offset)),Double(b.x+nx*offset),Double(b.y+ny*offset)]]
+    }
+    static func chip(_ text: String, at: CGPoint, clip: CGRect) -> RingChip {
+        let width = min(Double(clip.width),min(240,Double(text.count)*8+12)), height = min(16,Double(clip.height))
+        let right = Double(at.x)+18+width <= Double(clip.maxX), above = Double(at.y)-25-height >= Double(clip.minY)
+        let x = min(max(Double(clip.minX),right ? Double(at.x)+18 : Double(at.x)-18-width),Double(clip.maxX)-width)
+        let y = min(max(Double(clip.minY),above ? Double(at.y)-25-height : Double(at.y)+25),Double(clip.maxY)-height)
+        return RingChip(frame:CGRect(x:x,y:y,width:width,height:height),
+            tether:[[0,Double(at.x)+(right ? 11 : -11),Double(at.y)-11],[1,right ? x : x+width,above ? y+height : y]])
+    }
+    func plan(_ event: RingEvent, from: CGPoint?, reduced: Bool, secure: Bool, clip: CGRect, previousLabel: String?) -> RingPlan {
+        let at = event.at ?? from ?? .zero, state = event.state
+        var p = RingPlan(state: state, at: at, label: secure ? nil : event.label, rect: event.rect)
+        var route = handPoints((from.map { [$0] } ?? []) + [at])
+        if from == nil, event.path.count > 1, state != "drag" { route = handPoints(event.path + [at]) }
+        p.points = route
+        func layer(_ name: String, _ path: [[Double]], _ color: [Double], width: Double = 2.6, fill: Bool = false, opacity: Double = 1) {
+            p.layers.append(["name": name, "path": path, "color": color, "width": width, "fill": fill, "opacity": opacity])
+        }
+        func animate(_ name: String, _ key: String, _ a: Any, _ b: Any, _ begin: Double, _ duration: Double) {
+            p.animations.append(RingAnimation(layer: name, keyPath: key, from: a, to: b, beginTime: begin, duration: duration))
+        }
+        func shape(_ r: Double, _ gap: Double, _ sep: Double = 0) {
+            layer("ink", Self.halves(radius: r, gap: gap, separation: sep), Self.ink, width: 5)
+            layer("warm", Self.arc(true, radius: r, gap: gap, separation: sep), state == "error" ? Self.error : Self.warm)
+            layer("cool", Self.arc(false, radius: r, gap: gap, separation: sep), state == "error" ? Self.error : Self.cool)
+        }
+        func morph(_ r0: Double, _ g0: Double, _ r1: Double, _ g1: Double, _ begin: Double, _ duration: Double) {
+            let first = p.animations.count
+            animate("ink", "path", Self.halves(radius: r0,gap: g0), Self.halves(radius: r1,gap: g1), begin,duration)
+            for (name,warm) in [("warm",true),("cool",false)] {
+                animate(name,"path",Self.arc(warm,radius:r0,gap:g0),Self.arc(warm,radius:r1,gap:g1),begin,duration)
+            }
+            if !reduced, r0 < 14, r1 == 14, g1 == 12 {
+                let overshoot = [Self.halves(radius:14.8,gap:11),Self.arc(true,radius:14.8,gap:11),Self.arc(false,radius:14.8,gap:11)]
+                for i in 0..<3 { p.animations[first+i].values = [p.animations[first+i].from,overshoot[i],p.animations[first+i].to] }
+            }
+        }
+        func spark() {
+            let star: [[Double]] = [[0,0,-3.4],[1,1,-1],[1,3.4,0],[1,1,1],[1,0,3.4],[1,-1,1],[1,-3.4,0],[1,-1,-1],[3]]
+            layer("spark",star,Self.white,width:0.9,fill:true,opacity:0)
+        }
+        func glide(_ a: CGPoint, _ b: CGPoint, begin: Double = 0) -> Double {
+            let distance = hypot(b.x-a.x,b.y-a.y)
+            guard distance >= 0.5 else { return 0 }
+            let duration = reduced ? Self.reducedGlide : min(0.32,max(0.16,0.14 + Double(distance)*0.00055))
+            if reduced {
+                p.animations.append(RingAnimation(layer:"cursor",keyPath:"opacity",from:1.0,to:1.0,beginTime:begin,duration:duration,values:[1.0,0.0,1.0]))
+            } else {
+                p.animations.append(RingAnimation(layer:"cursor",keyPath:"position",from:Self.xy(a),to:Self.xy(b),beginTime:begin,duration:duration,path:Self.bow(a,b)))
+                let warm = Self.bow(a,b,offset:2.4), cool = Self.bow(a,b,offset:-2.4)
+                // One ink layer backs both colored ribbons.
+                if !p.layers.contains(where: { $0["name"] as? String == "trailInk" }) {
+                    layer("trailInk",warm+cool,Self.ink,width:3.8,opacity:0)
+                    layer("warmTrail",warm,Self.warm,width:1.4,opacity:0)
+                    layer("coolTrail",cool,Self.cool,width:1.4,opacity:0)
+                } else {
+                    for (name,path) in [("trailInk",warm+cool),("warmTrail",warm),("coolTrail",cool)] {
+                        animate(name,"path",path,path,begin,0.001)
+                    }
+                }
+                for name in ["trailInk","warmTrail","coolTrail"] {
+                    animate(name,"strokeEnd",0.0,1.0,begin,duration)
+                    animate(name,"strokeStart",0.0,1.0,begin+0.05,duration)
+                    animate(name,"opacity",1.0,0.0,begin+duration,0.22)
+                }
+            }
+            return duration
+        }
+        // Thinking is deliberately static, including when the preceding frame was approval waiting.
+        if state == "thinking" { shape(14,12); p.opacity = 0.35; return p }
+        if state == "aim", let rect = event.rect {
+            let relative = rect.offsetBy(dx:-at.x,dy:-at.y)
+            layer("lockInk",Self.rounded(relative),Self.ink,width:3.8)
+            layer("lock",Self.rounded(relative),Self.cool,width:1.4)
+            animate("lock","strokeEnd",0.0,1.0,0,0.14); p.total = 0.14
+            p.points += [rect.origin,CGPoint(x:rect.maxX,y:rect.maxY)]
+        } else {
+            let radius = state == "aim" ? 16.0 : state == "waiting" ? 15.0 : state == "type" ? 9.5 : 14.0
+            let gap = state == "aim" ? 40.0 : state == "waiting" ? 76.0 : state == "error" ? 30.0 : 12.0
+            shape(radius,gap,state == "waiting" ? 5 : state == "error" ? 3.5 : 0)
+            spark()
+            switch state {
+            case "aim":
+                animate("spark","opacity",0.0,0.55,0,0.12); p.total = 0.12
+            case "waiting":
+                p.hold = true; p.total = 0.16
+                animate("cursor","opacity",0.0,1.0,0,0.16)
+                if !reduced { p.animations.append(RingAnimation(layer:"cursor",keyPath:"opacity",from:1.0,to:1.0,beginTime:0.16,duration:Self.breath,values:[1.0,0.55,1.0],repeats:true)) }
+            case "error":
+                layer("cross",[[0,-3.2,-3.2],[1,3.2,3.2],[0,3.2,-3.2],[1,-3.2,3.2]],Self.white,width:1.6)
+                p.layers[p.layers.count-1]["keyline"] = true
+                p.total = Self.shake
+                if !reduced {
+                    animate("ink","path",Self.halves(),Self.halves(gap:30,separation:3.5),0,0.09)
+                    for (name,warm) in [("warm",true),("cool",false)] {
+                        animate(name,"path",Self.arc(warm),Self.arc(warm,gap:30,separation:3.5),0,0.09)
+                    }
+                }
+                if !reduced { p.animations.append(RingAnimation(layer:"cursor",keyPath:"transform.translation.x",from:0.0,to:0.0,beginTime:0,duration:Self.shake,values:[0.0,3.0,-3.0,2.0,-2.0,1.0,0.0])) }
+            case "done", "handback":
+                p.total = Self.dissolve
+                animate("cursor","opacity",1.0,0.0,0,Self.dissolve)
+                if !reduced {
+                    for name in ["ink","warm","cool"] { animate(name,"opacity",1.0,0.0,0,0.12) }
+                    for i in 0..<12 {
+                        let angle = Double(i) * Double.pi/6, warm = sin(angle)-cos(angle) > 0
+                        let point = [cos(angle)*14,sin(angle)*14], side = warm ? -1.0 : 1.0
+                        let end = [point[0]+side*(12+Double(i%3)*4),point[1]-side*(12+Double(i%3)*4)]
+                        let name = "pixel\(i)"
+                        layer(name,Self.square(i%3 == 0 ? 3.6 : 2.6),warm ? Self.warm : Self.cool,width:1.2,fill:true)
+                        p.layers[p.layers.count-1]["position"] = point
+                        animate(name,"position",point,end,Double(i%3)*0.02,0.32)
+                        animate(name,"opacity",1.0,0.0,Double(i%3)*0.02,0.34)
+                    }
+                }
+            default:
+                var t = 0.0
+                for pair in zip(route,route.dropFirst()) { t += glide(pair.0,pair.1,begin:t) }
+                p.glide = t
+                func snap(_ begin: Double, _ down: Double, _ up: Double, _ radius: Double = 10) {
+                    morph(14,12,reduced ? 14 : radius,0,begin,down)
+                    morph(reduced ? 14 : radius,0,14,12,begin+down,up)
+                    animate("spark","opacity",0.0,1.0,begin,down)
+                    animate("spark","opacity",1.0,0.0,begin+down,up)
+                    if !reduced {
+                        animate("spark","transform.scale",1.0,1.7,begin,down)
+                        animate("spark","transform.scale",1.7,1.0,begin+down,up)
+                    }
+                }
+                switch state {
+                case "click": snap(t,0.06,0.15); t += Self.click
+                case "double": snap(t,0.05,0.06,10.5); snap(t+0.13,0.05,0.07); t += Self.doubleClick
+                case "right":
+                    snap(t,0.09,0.13,10.5)
+                    layer("menu",[[0,15,9],[1,22,9],[0,15,12],[1,22,12],[0,15,15],[1,20,15]],Self.white,width:1.2,opacity:0)
+                    p.layers[p.layers.count-1]["keyline"] = true
+                    animate("menu","opacity",0.0,1.0,t,0.09); animate("menu","opacity",1.0,0.0,t+0.09,0.13)
+                    if !reduced {
+                        animate("cursor","transform.rotation.z",0.0,Double.pi/2,t,0.09)
+                        animate("cursor","transform.rotation.z",Double.pi/2,0.0,t+0.09,0.13)
+                    }
+                    t += Self.right
+                case "type", "key":
+                    if state == "type" {
+                        if !reduced { morph(14,12,9.5,24,t,Self.typeEnter) }
+                        t += Self.typeEnter
+                    }
+                    if !(state == "type" && secure) {
+                        let beats = state == "key" ? 1 : event.beats
+                        for i in 0..<beats {
+                            if !reduced {
+                                let name = i%2 == 0 ? "warm" : "cool"
+                                let r = state == "type" ? 9.5 : 14, gap = state == "type" ? 24.0 : 12.0
+                                let warm = Self.arc(true,radius:r,gap:gap), cool = Self.arc(false,radius:r,gap:gap)
+                                let shift: ([[Double]],Double) -> [[Double]] = { path,dy in path.map { [$0[0],$0[1],$0[2]+dy] } }
+                                let ink = warm+cool, tapped = i%2 == 0 ? shift(warm,-2.2)+cool : warm+shift(cool,2.2)
+                                animate("ink","path",ink,tapped,t,0.025)
+                                animate("ink","path",tapped,ink,t+0.025,0.035)
+                                animate(name,"transform.translation.y",0.0,i%2 == 0 ? -2.2 : 2.2,t,0.025)
+                                animate(name,"transform.translation.y",i%2 == 0 ? -2.2 : 2.2,0.0,t+0.025,0.035)
+                            } else { animate("spark","opacity",0.0,0.6,t,Self.key) }
+                            t += Self.key
+                        }
+                    }
+                case "scroll":
+                    if !reduced { animate("cursor","transform.rotation.z",0.0,-Double.pi/4,t,Self.scrollEnter) }
+                    t += Self.scrollEnter
+                    for _ in 0..<event.beats {
+                        if !reduced {
+                            animate("cursor","transform.translation.y",0.0,3.0,t,0.04)
+                            animate("cursor","transform.translation.y",3.0,0.0,t+0.04,0.08)
+                        }
+                        t += Self.scrollTick
+                    }
+                    if !reduced { animate("cursor","transform.rotation.z",-Double.pi/4,0.0,t,Self.scrollEnter) }
+                    t += Self.scrollEnter
+                case "drag":
+                    morph(14,12,reduced ? 14 : 11,0,t,Self.grab)
+                    animate("spark","opacity",0.0,0.9,t,Self.grab); t += Self.grab
+                    var start = at
+                    for end in handPoints(event.path) { t += glide(start,end,begin:t); start = end; p.points.append(end) }
+                    p.at = start
+                    morph(reduced ? 14 : 11,0,reduced ? 14 : 18,28,t,0.09)
+                    morph(reduced ? 14 : 18,28,14,12,t+0.09,0.11)
+                    animate("spark","opacity",0.9,0.0,t,0.09); t += Self.drop
+                default: break
+                }
+                p.total = t
+            }
+        }
+        if let label = p.label, !label.isEmpty {
+            // Chip placement uses the target clip; text remains verbatim plain text.
+            p.chip = Self.chip(label,at:p.at,clip:clip)
+            p.layers.append(["name":"chip", "text":label])
+        }
+        let old = secure ? nil : previousLabel
+        if old != p.label, let old = old, !old.isEmpty {
+            p.oldLabel = old
+            p.animations.append(RingAnimation(layer:"oldChip",keyPath:"opacity",from:1.0,to:0.0,beginTime:0,duration:0.06))
+        }
+        if let text = p.label, !text.isEmpty {
+            p.animations.append(RingAnimation(layer:"chip",keyPath:"opacity",from:0.0,to:1.0,beginTime:p.oldLabel == nil ? 0 : 0.06,duration:0.09))
+        }
+        return p
+    }
+}
+// Position memory is bound to one target, so a point-free status never leaks onto a different window.
+struct RingSession {
+    var point: CGPoint?, pid: Int32?, window: UInt32?, label: String?
+    mutating func reset() { point = nil; pid = nil; window = nil; label = nil }
+    mutating func plan(_ event: RingEvent, style: any RingStyling, reduced: Bool, secure: Bool, clip: CGRect = CGRect(x:0,y:0,width:1000,height:1000)) -> RingPlan {
+        let from = pid == event.pid && window == event.windowId ? point : nil
+        guard event.at != nil || from != nil else { reset(); var p = RingPlan(state:event.state,at:.zero); p.dropped = true; return p }
+        let plan = style.plan(event,from:from,reduced:reduced,secure:secure,clip:clip,previousLabel:from == nil ? nil : label)
+        point = plan.at; pid = event.pid; window = event.windowId; label = plan.label
+        return plan
+    }
+}
+func ringEvent(_ act: HandAct) -> RingEvent {
+    RingEvent(seq:act.seq,state:act.kind,pid:act.pid,windowId:act.windowId,at:act.at,rect:nil,label:act.label,path:act.path,beats:act.beats)
+}
+// END RING PLAN
+
 // BEGIN HAND HOST
 // The ghost hand (ROADMAP 2.7): a glove that glides to where sleight acts in a background window, flourishes and fades. It only
 // draws: the panel never activates, takes key, catches a click or shows in another process's capture unless the user chose
@@ -1821,6 +2149,11 @@ func handDemoRect(_ text: String) -> CGRect? {
 }
 
 final class HandHost: NSObject, NSApplicationDelegate {
+    var cursorStyle = "glove"
+    var ringStyle: any RingStyling = RingStyle()
+    var ringSession = RingSession()
+    var ringRoot: CALayer?
+    var ringCursor: CALayer?, ringChip: CALayer?
     var panel: HandPanel?
     var hand: CALayer?           // holds the opacity; glove over dabs inside it, siblings with one anchor
     var glove: CALayer?
@@ -1839,7 +2172,7 @@ final class HandHost: NSObject, NSApplicationDelegate {
     var captureHolds: [String: Date] = [:]
     var captureObserver: NSObjectProtocol?
     var captureHeld: Bool { captureHolds = captureHolds.filter { $0.value > Date() }; return !captureHolds.isEmpty }
-    var idle: Bool { panel == nil && hand == nil && glove == nil && dabs == nil && pending.isEmpty && fading == nil }
+    var idle: Bool { ringRoot == nil && panel == nil && hand == nil && glove == nil && dabs == nil && pending.isEmpty && fading == nil }
 
     func image(_ state: HandState) -> CGImage? {
         let scale: CGFloat = (glove?.contentsScale ?? 2) > 1 ? 2 : 1, key = state.rawValue + "@\(Int(scale))"
@@ -1897,6 +2230,10 @@ final class HandHost: NSObject, NSApplicationDelegate {
                     guard nonceBook.admit("hand", nonce), act.seq > last else { fault(); continue lines }
                     last = act.seq
                     DispatchQueue.main.async { self.consent?.noteAct(); self.schedule(act) }
+                case let .aim(nonce, event), let .status(nonce, event):
+                    guard nonceBook.admit("hand", nonce), event.seq > last else { fault(); continue lines }
+                    last = event.seq
+                    DispatchQueue.main.async { if self.cursorStyle == "ring" { self.receiveRing(event) } }
                 case let .menu(nonce, enabled, capture, version, permissions, usage):
                     guard nonceBook.admit("hand", nonce) else { fault(); continue lines }
                     DispatchQueue.main.async {
@@ -1911,6 +2248,7 @@ final class HandHost: NSObject, NSApplicationDelegate {
     }
     // A frame plays after its delay unless a hide comes first. Past 64 waiting frames, new ones are dropped.
     func schedule(_ act: HandAct) {
+        if cursorStyle == "ring" { ringCursor?.removeAnimation(forKey:"approval-breath") }
         guard !captureHeld, pending.count < 64 else { return }
         let id = next; next += 1
         let item = DispatchWorkItem { [weak self] in
@@ -1926,6 +2264,7 @@ final class HandHost: NSObject, NSApplicationDelegate {
     }
     // A frame during the hold cancels the fade and glides on from where the hand is.
     func draw(_ act: HandAct, clip: CGRect) {
+        if cursorStyle == "ring" { drawRing(ringEvent(act),clip:clip); return }
         let start = panel != nil && windowId == act.windowId ? glove.map { layer in
             (point: global((layer.presentation() ?? layer).position), opacity: Double((hand?.presentation() ?? hand)?.opacity ?? 0), state: shown) } : nil
         let plan = handPlan(act, from: start, secure: IsSecureEventInputEnabled())
@@ -1936,6 +2275,154 @@ final class HandHost: NSObject, NSApplicationDelegate {
         if !panel.isVisible { panel.orderFrontRegardless() }
         fade(after: plan.total + HandTiming.silence)
     }
+    // Ring plans use one clipped panel and a flipped root so all geometry retains the wire's top-left coordinates.
+    func drawRing(_ event: RingEvent, clip: CGRect) {
+        guard !captureHeld else { return }
+        let reduced = NSWorkspace.shared.accessibilityDisplayShouldReduceMotion
+        if ringSession.pid == event.pid, ringSession.window == event.windowId, let cursor = ringCursor {
+            let point = (cursor.presentation() ?? cursor).position
+            ringSession.point = CGPoint(x:point.x+box.minX,y:point.y+box.minY)
+        }
+        let plan = ringSession.plan(event, style: ringStyle, reduced: reduced, secure: IsSecureEventInputEnabled(), clip:clip)
+        guard !plan.dropped else { hide(); return }
+        let chipPoints = plan.chip.map { [$0.frame.origin,CGPoint(x:$0.frame.maxX,y:$0.frame.maxY)] } ?? []
+        let frame = handBox(plan.points + [plan.at] + chipPoints).intersection(clip)
+        guard !frame.isNull, frame.width >= 1, frame.height >= 1 else { hide(); return }
+        fading?.cancel(); fading = nil
+        let panel = self.panel ?? makeHandPanel(capture: capture)
+        let previousBox = box
+        self.panel = panel; box = frame; windowId = event.windowId
+        panel.setFrame(appKitRect(frame), display: false)
+        let oldChip = plan.oldLabel == nil ? nil : ringChip
+        let oldChipFrame = oldChip.map { $0.frame.offsetBy(dx:previousBox.minX,dy:previousBox.minY) }
+        oldChip?.removeFromSuperlayer()
+        ringRoot?.removeAllAnimations(); ringRoot?.removeFromSuperlayer()
+        let root = CALayer(), cursor = CALayer()
+        root.frame = CGRect(origin:.zero,size:frame.size); root.isGeometryFlipped = true
+        cursor.position = CGPoint(x:plan.at.x-frame.minX,y:plan.at.y-frame.minY); cursor.opacity = Float(plan.opacity)
+        root.addSublayer(cursor); panel.contentView?.layer?.addSublayer(root)
+        ringRoot = root; ringCursor = cursor; ringChip = nil
+        var layers: [String: CALayer] = ["cursor":cursor]
+        if let old = oldChip, let oldFrame = oldChipFrame {
+            old.frame = oldFrame.offsetBy(dx:-frame.minX,dy:-frame.minY)
+            root.addSublayer(old); layers["oldChip"] = old
+        }
+        func relative(_ commands: [[Double]], global: Bool) -> CGPath {
+            let path = CGMutablePath()
+            func point(_ c: [Double], _ i: Int) -> CGPoint {
+                CGPoint(x:c[i] - (global ? Double(frame.minX) : 0),y:c[i+1] - (global ? Double(frame.minY) : 0))
+            }
+            for c in commands {
+                switch Int(c[0]) {
+                case 0: path.move(to:point(c,1))
+                case 1: path.addLine(to:point(c,1))
+                case 2: path.addQuadCurve(to:point(c,3),control:point(c,1))
+                default: path.closeSubpath()
+                }
+            }
+            return path
+        }
+        func color(_ c: [Double]) -> CGColor { CGColor(red:c[0],green:c[1],blue:c[2],alpha:c[3]) }
+        CATransaction.begin(); CATransaction.setDisableActions(true)
+        for spec in plan.layers {
+            guard let name = spec["name"] as? String else { continue }
+            if let text = spec["text"] as? String, let geometry = plan.chip {
+                let chip = CATextLayer()
+                chip.frame = geometry.frame.offsetBy(dx:-frame.minX,dy:-frame.minY); chip.cornerRadius = 8
+                chip.string = text; chip.fontSize = 8; chip.foregroundColor = color(RingStyle.white)
+                chip.backgroundColor = color(RingStyle.ink); chip.alignmentMode = .center
+                chip.contentsScale = panel.screen?.backingScaleFactor ?? 2; chip.truncationMode = .end
+                root.addSublayer(chip)
+                let tether = CAShapeLayer()
+                tether.path = relative(geometry.tether,global:true); tether.strokeColor = color(RingStyle.ink); tether.lineWidth = 1
+                root.addSublayer(tether); layers[name] = chip; ringChip = chip
+                continue
+            }
+            guard let commands = spec["path"] as? [[Double]], let rgba = spec["color"] as? [Double] else { continue }
+            let layer = CAShapeLayer(), trail = name.contains("Trail") || name == "trailInk"
+            layer.path = relative(commands,global:trail); layer.lineWidth = spec["width"] as? Double ?? 2.6
+            layer.lineCap = .round; layer.lineJoin = .round
+            layer.fillColor = (spec["fill"] as? Bool == true) ? color(rgba) : nil
+            layer.strokeColor = (spec["fill"] as? Bool == true) ? color(RingStyle.ink) : color(rgba)
+            layer.opacity = Float(spec["opacity"] as? Double ?? 1)
+            if spec["keyline"] as? Bool == true {
+                layer.shadowPath = layer.path?.copy(strokingWithWidth:layer.lineWidth+2.4,lineCap:.round,lineJoin:.round,miterLimit:1)
+                layer.shadowColor = color(RingStyle.ink); layer.shadowOpacity = 1; layer.shadowRadius = 0; layer.shadowOffset = .zero
+            }
+            if let xy = spec["position"] as? [Double] { layer.position = CGPoint(x:xy[0],y:xy[1]) }
+            (trail ? root : cursor).addSublayer(layer); layers[name] = layer
+        }
+        let begin = CACurrentMediaTime()
+        func value(_ raw: Any, key: String, name: String) -> Any {
+            if key == "path", let commands = raw as? [[Double]] { return relative(commands,global:name.contains("Trail") || name == "trailInk") }
+            if key == "position", let xy = raw as? [Double] {
+                return NSValue(point:CGPoint(x:xy[0] - (name == "cursor" ? Double(frame.minX) : 0),y:xy[1] - (name == "cursor" ? Double(frame.minY) : 0)))
+            }
+            return raw
+        }
+        let tracks = Dictionary(grouping: plan.animations.filter { !$0.repeats }, by: { $0.layer+"/"+$0.keyPath })
+        for parts in tracks.values {
+            let parts = parts.sorted { $0.beginTime < $1.beginTime }
+            guard let first = parts.first, let last = parts.last, let layer = layers[first.layer] else { continue }
+            let end = last.beginTime+last.duration
+            var times: [NSNumber] = [0], values: [Any] = [value(first.from,key:first.keyPath,name:first.layer)]
+            for part in parts {
+                times.append(NSNumber(value:part.beginTime/end)); values.append(value(part.from,key:part.keyPath,name:part.layer))
+                if let path = part.path, path.count == 2, path[1][0] == 2, first.keyPath == "position" {
+                    let a = path[0], q = path[1]
+                    for i in 1...16 {
+                        let t = Double(i)/16, u = 1-t
+                        let xy = [u*u*a[1]+2*u*t*q[1]+t*t*q[3],u*u*a[2]+2*u*t*q[2]+t*t*q[4]]
+                        times.append(NSNumber(value:(part.beginTime+t*part.duration)/end)); values.append(value(xy,key:part.keyPath,name:part.layer))
+                    }
+                } else {
+                    let segment = part.values ?? [part.from,part.to]
+                    for (i,v) in segment.enumerated().dropFirst() {
+                        times.append(NSNumber(value:(part.beginTime+Double(i)/Double(segment.count-1)*part.duration)/end))
+                        values.append(value(v,key:part.keyPath,name:part.layer))
+                    }
+                }
+            }
+            let animation = CAKeyframeAnimation(keyPath:first.keyPath)
+            animation.values = values; animation.keyTimes = times; animation.duration = end; animation.beginTime = begin
+            animation.fillMode = .both; animation.isRemovedOnCompletion = false
+            layer.setValue(value(last.to,key:last.keyPath,name:last.layer),forKeyPath:last.keyPath)
+            layer.add(animation,forKey:first.keyPath)
+        }
+        for part in plan.animations where part.repeats {
+            guard let layer = layers[part.layer] else { continue }
+            let breath = CAKeyframeAnimation(keyPath:part.keyPath)
+            breath.values = part.values; breath.duration = part.duration; breath.beginTime = begin+part.beginTime
+            breath.repeatCount = .infinity; breath.timingFunctions = [CAMediaTimingFunction(name:.easeInEaseOut),CAMediaTimingFunction(name:.easeInEaseOut)]
+            layer.add(breath,forKey:"approval-breath")
+        }
+        CATransaction.commit()
+        if !panel.isVisible { panel.orderFrontRegardless() }
+        if !plan.hold {
+            let delay = plan.total + (["error","done","handback"].contains(plan.state) ? 0 : RingStyle.silence)
+            fadeRing(after:delay)
+        }
+    }
+    func fadeRing(after delay: Double) {
+        let fade = DispatchWorkItem { [weak self] in
+            guard let self = self, let root = self.ringRoot else { return }
+            let animation = CABasicAnimation(keyPath:"opacity")
+            animation.fromValue = root.presentation()?.opacity ?? root.opacity; animation.toValue = 0; animation.duration = HandTiming.fade
+            root.opacity = 0; root.add(animation,forKey:"silence")
+            let release = DispatchWorkItem { [weak self] in self?.release() }
+            self.fading = release
+            DispatchQueue.main.asyncAfter(deadline:.now()+HandTiming.fade,execute:release)
+        }
+        fading = fade
+        DispatchQueue.main.asyncAfter(deadline:.now()+delay,execute:fade)
+    }
+    func receiveRing(_ event: RingEvent) {
+        pending.values.forEach { $0.cancel() }; pending.removeAll()
+        ringCursor?.removeAnimation(forKey:"approval-breath")
+        guard let clip = handWindowBounds(event.windowId,pid:event.pid) else { hide(); return }
+        drawRing(event,clip:clip)
+    }
+
     // Every animation of a plan on the glove and the dabs, which run the position track 50 ms behind (the trail).
     func apply(_ plan: HandPlan, model: (CGPoint, Double, HandState)) {
         guard let hand = hand, let glove = glove, let dabs = dabs else { return }
@@ -2011,6 +2498,7 @@ final class HandHost: NSObject, NSApplicationDelegate {
         DispatchQueue.main.asyncAfter(deadline: .now() + delay, execute: item)
     }
     func release() {
+        ringRoot?.removeAllAnimations(); ringRoot?.removeFromSuperlayer(); ringRoot = nil; ringCursor = nil; ringChip = nil; ringSession.reset()
         panel?.orderOut(nil); panel?.close(); hand?.removeFromSuperlayer()
         panel = nil; hand = nil; glove = nil; dabs = nil; box = .null; fading = nil; shown = .rest
     }
@@ -2114,11 +2602,57 @@ func handDump(capture: String) -> [String: Any] {
 }
 // END HAND DUMP
 
+// A synchronous, bounded reader for plan tests. It never constructs an application, panel, view or layer.
+func ringPlanDump(glove: Bool, reduced: Bool, secure: Bool, clip: CGRect) {
+    var buffer = Data(), bound: String?, last = -1, session = RingSession()
+    let style = RingStyle()
+    func emit(_ plan: RingPlan) {
+        guard let data = try? JSONSerialization.data(withJSONObject:plan.json,options:[.sortedKeys]) else { exit(70) }
+        FileHandle.standardOutput.write(data+Data([10]))
+    }
+    while true {
+        let chunk = FileHandle.standardInput.availableData
+        if chunk.isEmpty { if !buffer.isEmpty { exit(65) }; return }
+        buffer.append(chunk)
+        guard buffer.count <= 131072 else { exit(65) }
+        while let end = buffer.firstIndex(of:10) {
+            let line = buffer.prefix(upTo:end); buffer.removeSubrange(...end)
+            guard line.count <= 8192, let data = try? JSONSerialization.jsonObject(with:line) as? [String:Any], let frame = handFrame(data),
+                let nonce = data["nonce"] as? String, bound == nil || bound == nonce else { exit(65) }
+            bound = nonce
+            let event: RingEvent
+            switch frame {
+            case let .act(_,act): event = ringEvent(act)
+            case let .aim(_,value), let .status(_,value): event = value
+            case .hide: session.reset(); emit(RingPlan(state:"hidden",at:.zero)); continue
+            case .menu:
+                var plan = RingPlan(state:"menu",at:session.point ?? .zero); plan.dropped = true; emit(plan); continue
+            }
+            guard event.seq > last else { exit(65) }; last = event.seq
+            if glove { var plan = RingPlan(state:event.state,at:event.at ?? .zero); plan.dropped = true; emit(plan) }
+            else { emit(session.plan(event,style:style,reduced:reduced,secure:secure,clip:clip)) }
+        }
+    }
+}
+
 // No arguments: the consent host. --hand [--capture=…] [--menu|--consent], --hand-demo X,Y,W,H [--capture=…] and
 // --hand-dump [--capture=…]: the hand. With --consent the hand host is the session's shared host: turbo's consent channel
 // runs on fds 3 (in) and 4 (out) beside the hand's stdin, and the menu bar glove serves both. --menu is the hand-only host: the glove and its
 // hand-only menu, with no consent channel.
 let arguments = Array(CommandLine.arguments.dropFirst())
+if arguments.first == "--ring-plan-dump" {
+    var flags = Array(arguments.dropFirst())
+    let clips = flags.filter { $0.hasPrefix("--clip=") }
+    guard clips.count <= 1 else { exit(64) }
+    let clip: CGRect
+    if let raw = clips.first { guard let value = handDemoRect(String(raw.dropFirst(7))) else { exit(64) }; clip = value }
+    else { clip = CGRect(x:0,y:0,width:1000,height:1000) }
+    flags.removeAll { $0.hasPrefix("--clip=") }
+    guard Set(flags).count == flags.count, flags.allSatisfy({ ["--cursor-style=ring", "--cursor-style=glove", "--reduce-motion", "--secure-input"].contains($0) }),
+        !(flags.contains("--cursor-style=ring") && flags.contains("--cursor-style=glove")) else { exit(64) }
+    ringPlanDump(glove: !flags.contains("--cursor-style=ring"), reduced: flags.contains("--reduce-motion"), secure: flags.contains("--secure-input"), clip:clip)
+    exit(0)
+}
 let app = NSApplication.shared
 if arguments.isEmpty {
     let host = ConsentHost()
@@ -2132,6 +2666,10 @@ if arguments.isEmpty {
     let consent = mode == "--hand" && rest.last == "--consent", menuOnly = mode == "--hand" && rest.last == "--menu"
     if consent { rest.removeLast(); guard fcntl(3, F_GETFD) != -1, fcntl(4, F_GETFD) != -1 else { exit(64) } }
     if menuOnly { rest.removeLast() }
+    let styles = rest.filter { $0.hasPrefix("--cursor-style=") }
+    guard styles.count <= 1, styles.allSatisfy({ ["--cursor-style=glove", "--cursor-style=ring"].contains($0) }) else { exit(64) }
+    let cursorStyle = styles.first.map { String($0.dropFirst(15)) } ?? "glove"
+    rest.removeAll { $0.hasPrefix("--cursor-style=") }
     guard ["--hand", "--hand-demo", "--hand-dump"].contains(mode), let capture = handCapture(rest) else { exit(64) }
     if mode == "--hand-dump" {
         guard let bytes = try? JSONSerialization.data(withJSONObject: handDump(capture: capture), options: [.sortedKeys]) else { exit(70) }
@@ -2139,7 +2677,7 @@ if arguments.isEmpty {
         exit(0)
     }
     let hand = HandHost()
-    hand.demo = demo; hand.capture = capture
+    hand.demo = demo; hand.capture = capture; hand.cursorStyle = cursorStyle
     if consent || menuOnly {
         let host = ConsentHost()
         host.input = consent ? FileHandle(fileDescriptor: 3, closeOnDealloc: true) : nil

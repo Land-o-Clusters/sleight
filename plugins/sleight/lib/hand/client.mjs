@@ -86,8 +86,9 @@ export function createHandClient({ env = process.env, setting = () => handSettin
   trace = () => {}, now = Date.now, defer = setImmediate, recheckMs = 60000, killAfterMs = 2000,
   setHand = async enabled => (await import('./command.mjs')).writeHandSetting({ enabled }),
   permissions = { menu: async () => (await command()).permissionsMenu(), apply: async (event, offered) => (await command()).applyMenuEvent(event, offered) },
-  currentApp = noted, usage = logUsage(env), usageMs = 300000,
+  currentApp = noted, usage = logUsage(env), usageMs = 300000, cursorStyle,
   watch = (folder, listener) => process.platform === 'darwin' ? fsWatch(folder, { persistent: false }, listener) : undefined } = {}) {
+  if (cursorStyle !== undefined && !['glove', 'ring'].includes(cursorStyle)) throw Error('HAND_CURSOR_STYLE_INVALID');
   const nonce = randomBytes(32).toString('hex'), queue = [];
   // host: none, starting, running or dead (failed or closed this session; final). hand: the settings allow the hand.
   let seq = 0, child, host = 'none', starting, hand = false, capture = 'hidden', checked = now(), checking = false, events = '';
@@ -226,7 +227,7 @@ export function createHandClient({ env = process.env, setting = () => handSettin
       // The first menu frame already carries the Permissions rows. The usage row follows once the log is read.
       await loadPermissions();
       if (host === 'dead') return undefined;
-      const started = result.spawn({ capture, consent });
+      const started = result.spawn({ capture, consent, ...cursorStyle === undefined ? {} : { cursorStyle } });
       started.on('error', error => { if (child === started) die('spawn', { code: error?.code }); });
       started.stdin.on('error', error => note('hand-dropped', { reason: error?.code ?? 'pipe' }));
       started.stdout?.on('data', onEvents);
