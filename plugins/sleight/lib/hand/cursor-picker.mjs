@@ -3,8 +3,8 @@ import * as fs from 'node:fs';
 import { createHash } from 'node:crypto';
 import { userInfo } from 'node:os';
 import { isAbsolute, join } from 'node:path';
-import { charactersDirectory, listCharacters, prepareCharacterImport, installCharacter, characterCallout, resolveCharacterStates } from './character.mjs';
-import { characterFrame } from './character-frame.mjs';
+import { charactersDirectory, checkCharacter, prepareCharacterImport, installCharacter, characterCallout } from './character.mjs';
+import { installedCursorCatalog } from './cursor-picker-catalog.mjs';
 import { writeHandSetting } from './command.mjs';
 
 const hash = bytes => createHash('sha256').update(bytes).digest('hex');
@@ -23,12 +23,12 @@ export function cursorMenuModel({ installed = [], found = [], style = 'glove', c
 }
 
 // Discovery reads only manifests. The click re-reads and validates the whole pack, including its atlas.
-export function findCodexPets({ home = userInfo().homedir, env = process.env, uid = process.getuid() } = {}) {
+export function findCodexPets({ home = userInfo().homedir, env = process.env, uid = process.getuid(), trace = () => {} } = {}) {
   const roots = new Set([join(home, '.codex/pets'), ...isAbsolute(env.CODEX_HOME ?? '') ? [join(env.CODEX_HOME, 'pets')] : []]);
   const found = [], seen = new Set();
   for (const root of roots) {
     try {
-      if (fs.realpathSync(root) !== root) continue;
+      if (fs.realpathSync(root) !== root) { trace('hand-picker-discovery-skipped', { reason: 'symlink-codex-root' }); continue; }
       const directory = fs.lstatSync(root);
       if (!directory.isDirectory() || directory.uid !== uid || directory.mode & 0o022) continue;
       for (const entry of fs.readdirSync(root).sort()) {
@@ -56,22 +56,16 @@ export function findCodexPets({ home = userInfo().homedir, env = process.env, ui
 }
 
 export function createCursorPicker({ home = userInfo().homedir, env = process.env, root = charactersDirectory(), uid = process.getuid(),
-  writeSetting = writeHandSetting } = {}) {
+  writeSetting = writeHandSetting, trace = () => {} } = {}) {
   let offered = new Map(), installed = new Set(), busy = false;
+  let tracedSymlink = false;
+  const discoveryTrace = (...args) => { if (!tracedSymlink) { tracedSymlink = true; try { trace(...args); } catch {} } };
   return {
     async catalog({ style = 'glove', character } = {}) {
       // Every installed folder gets a row, including refused packs, so a click can explain the refusal.
-      const entries = listCharacters({ root, uid }).filter(c => !c.skipped && /^[a-z0-9-]{1,48}$/.test(c.manifest?.id ?? c.id));
-      const characters = entries.map(c => ({ id: c.manifest?.id ?? c.id, name: c.manifest?.name ?? c.id }));
-      const found = findCodexPets({ home, env, uid }).filter(p => !characters.some(c => c.id === p.id));
+      const { characters, thumbnails } = await installedCursorCatalog({ root, uid });
+      const found = findCodexPets({ home, env, uid, trace: discoveryTrace }).filter(p => !characters.some(c => c.id === p.id));
       offered = new Map(found.map(p => [p.key, p])); installed = new Set(characters.map(c => c.id));
-      const thumbnails = entries.filter(c => c.manifest).map(c => {
-        const frame = characterFrame(c, { nonce: '0'.repeat(64), seq: 0, resolve: resolveCharacterStates });
-        const idle = frame.table.idle;
-        frame.table = { idle: { ...idle, frames: [idle.frames[0]], ms: [100], loop: false } };
-        const key = hash(Buffer.concat([Buffer.from(JSON.stringify(frame)), c.files.get(c.manifest.sheet), ...c.manifest.extra ? [c.files.get(c.manifest.extra)] : []]));
-        return { id: c.manifest.id, key, frame };
-      });
       return { installed: characters, pets: found.map(({ folder, ...p }) => p), thumbnails,
         rows: cursorMenuModel({ installed: characters, found, style, character }) };
     },
@@ -91,8 +85,7 @@ export function createCursorPicker({ home = userInfo().homedir, env = process.en
         if (event.op === 'select' && (Object.keys(event).sort().join() === 'op,style' && ['ring', 'seam', 'glove'].includes(event.style) ||
             Object.keys(event).sort().join() === 'character,op,style' && event.style === 'sprite' && installed.has(event.character))) {
           if (event.style === 'sprite') {
-            const pack = listCharacters({ root, uid }).find(c => c.manifest?.id === event.character);
-            if (!pack) throw Error('This character cannot be loaded. Check its files in the characters folder.');
+            checkCharacter(event.character, { root, uid });
           }
           const setting = { style: event.style, ...event.character ? { character: event.character } : {} };
           await writeSetting(setting); return { ok: true, ...setting };

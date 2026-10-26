@@ -6,6 +6,7 @@ import { tmpdir } from 'node:os';
 import { registerTemp } from '../scripts/temp-leftovers.mjs';
 import { encodePng } from '../bench/hand/synthetic-character.mjs';
 import * as picker from '../plugins/sleight/lib/hand/cursor-picker.mjs';
+import { installedCursorCatalog } from '../plugins/sleight/lib/hand/cursor-picker-catalog.mjs';
 import { prepareCharacterImport, installCharacter, characterCallout } from '../plugins/sleight/lib/hand/character.mjs';
 
 function world(t) {
@@ -82,4 +83,31 @@ test('installed titles lose format characters before reaching the native menu co
   const controller = picker.createCursorPicker({ home: w.home, env: {}, root: w.root, writeSetting() {} });
   const rows = (await controller.catalog()).rows;
   assert.equal(rows.find(r => r.character === 'cat').title, 'Cat');
+});
+test('catalog hashes off the main loop and reuses unchanged metadata, invalidating only an edited pack', async t => {
+  const w = world(t);
+  for (const id of ['cat', 'dog']) installCharacter(prepareCharacterImport(w.put(id)), { root: w.root });
+  let loopRan = false; setImmediate(() => { loopRan = true; });
+  const first = await installedCursorCatalog({ root: w.root, uid: process.getuid() });
+  assert.equal(loopRan, true); assert.equal(first.hashes, 2); assert.equal(first.hits, 0);
+  const second = await installedCursorCatalog({ root: w.root, uid: process.getuid() });
+  assert.equal(second.hashes, 0); assert.equal(second.hits, 2);
+  const path = join(w.root, 'cat/sheet.png'), bytes = fs.readFileSync(path); bytes[32] = 1; fs.writeFileSync(path, bytes);
+  const third = await installedCursorCatalog({ root: w.root, uid: process.getuid() });
+  assert.equal(third.hashes, 1); assert.equal(third.hits, 1);
+  assert.notEqual(third.thumbnails[0].key, first.thumbnails[0].key);
+  assert.equal(third.thumbnails[1].key, first.thumbnails[1].key);
+  fs.chmodSync(join(w.root, 'dog/sheet.png'), 0o644);
+  const fourth = await installedCursorCatalog({ root: w.root, uid: process.getuid() });
+  assert.equal(fourth.thumbnails.some(t => t.id === 'dog'), false, 'mode changes invalidate validation too');
+  fs.rmSync(join(w.root, 'cat'), { recursive: true });
+  assert.deepEqual((await installedCursorCatalog({ root: w.root, uid: process.getuid() })).characters.map(c => c.id), ['dog']);
+});
+test('a symlinked Codex root is skipped with one metadata-only trace per picker lifetime', async t => {
+  const w = world(t); w.put('cat');
+  fs.renameSync(join(w.home, '.codex'), join(w.home, 'actual-codex'));
+  fs.symlinkSync(join(w.home, 'actual-codex'), join(w.home, '.codex'));
+  const traces = [], controller = picker.createCursorPicker({ home: w.home, env: {}, root: w.root, trace: (...args) => traces.push(args) });
+  for (let i = 0; i < 3; i++) assert.deepEqual((await controller.catalog()).pets, []);
+  assert.deepEqual(traces, [['hand-picker-discovery-skipped', { reason: 'symlink-codex-root' }]]);
 });

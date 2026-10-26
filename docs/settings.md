@@ -407,9 +407,9 @@ The host compiles in the background on its first use after you enable it. That s
   keeps working. You can also edit that file yourself (`version: 1`, a boolean `enabled`, mode `0600`).
   Start a new sleight session if it started with the hand off. `sleight-mcp hand off` hides the hand in running sessions at once.
 - The glove's menu has a Ghost Hand row with a checkmark, which writes the same setting. The glove is in the menu bar
-  while turbo is in use, and for five minutes after sleight last acted while the hand is on. Without turbo its menu lists
-  only the Ghost Hand row, [Permissions](#permissions), the [usage row](#stats) when the action log is on, Settings & Help
-  and the version.
+  while turbo is in use or while the hand is on, for the host's lifetime. Without turbo its menu lists
+  the Ghost Hand row, [Permissions](#permissions), the [usage row](#stats) when the action log is on, Cursor, Settings & Help
+  and the version. Cursor offers the rings, glove, installed characters and imports from your Codex pets.
 - `sleight-mcp hand capture hidden|visible` sets whether captures show the hand. `hidden`, the default, keeps it out of
   every capture, your own screenshots and recordings included. `visible` lets your screenshots and recordings show it.
   `SLEIGHT_HAND_CAPTURE=hidden|visible` in the server's environment takes precedence over the file.

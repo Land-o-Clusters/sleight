@@ -68,4 +68,28 @@ test('native refusal of a picker-originated sprite reaches the notice, while sta
   h.event(refusal); await settle(); assert.equal(h.lines.some(f => f.op === 'notice'), false);
   h.event({ op: 'select', style: 'sprite', character: 'cat' }); await settle();
   h.event(refusal); await settle(); assert.match(h.lines.find(f => f.op === 'notice').text, /cat.*pixels.*ring/);
+  assert.deepEqual(h.calls.at(-1), { op: 'select', style: 'ring' });
+  assert.deepEqual(h.lines.filter(f => f.op === 'style').at(-1).style, 'ring');
+});
+test('a sprite loader failure persists the ring fallback through the picker writer', async t => {
+  const h = harness(t, async e => ({ ok: true, ...e }), { loadSprite: async () => { throw Error('missing sheet'); } });
+  await settle(); h.event({ op: 'select', style: 'sprite', character: 'cat' }); await settle();
+  assert.deepEqual(h.calls, [{ op: 'select', style: 'sprite', character: 'cat' }, { op: 'select', style: 'ring' }]);
+  assert.equal(h.lines.filter(f => f.op === 'style').at(-1).style, 'ring');
+});
+test('a host cannot request an internal fallback operation', async t => {
+  const h = harness(t); await settle(); h.event({ op: 'fallback', character: 'cat' }); await settle();
+  assert.deepEqual(h.calls, []);
+});
+test('a queued sprite refusal cannot replace a newer cursor choice', async t => {
+  const sprite = { manifest: { id: 'cat', frame: { w: 64, h: 64 }, sheet: 'sheet.png', states: {}, scale: 1 }, folder: '/fixture/cat',
+    sheets: { sheet: { width: 512, height: 64 } }, resolved: [{ state: 'idle', sheet: 'sheet.png', row: 0, start: 0, frames: 1, ms: [100], loop: false, hotspot: { x: 32, y: 32 } }] };
+  let release;
+  const h = harness(t, e => e.style === 'glove' ? new Promise(resolve => { release = () => resolve({ ok: true, style: 'glove' }); }) : { ok: true, ...e },
+    { loadSprite: async () => ({ character: sprite, resolve: () => [] }) });
+  await settle(); h.event({ op: 'select', style: 'sprite', character: 'cat' }); await settle();
+  h.event({ op: 'select', style: 'glove' }); await settle();
+  h.event({ hand: 'character', id: 'cat', loaded: false, reason: 'pixels', warnings: [] }); release(); await settle();
+  assert.deepEqual(h.calls, [{ op: 'select', style: 'sprite', character: 'cat' }, { op: 'select', style: 'glove' }]);
+  assert.equal(h.lines.filter(f => f.op === 'style').at(-1).style, 'glove');
 });

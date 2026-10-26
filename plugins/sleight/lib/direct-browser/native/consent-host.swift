@@ -37,6 +37,19 @@ func personInput(_ event: CGEvent?) -> Bool {
     let systemServer = ("/System/Library/PrivateFrameworks/SkyLight.framework/Resources/WindowServer" as NSString).resolvingSymlinksInPath
     return (String(cString: path) as NSString).resolvingSymlinksInPath == systemServer
 }
+// One activation rule for consent, the cursor picker and the pause control. AX entry points refuse separately,
+// even if AppKit still has a fresh hardware event from an earlier interaction.
+func personActivation(_ event: NSEvent?, windowMatches: Bool, keyboard: Bool = true,
+    highlighted: Bool = true, accessibility: Bool = false, now: Double = ProcessInfo.processInfo.systemUptime) -> Bool {
+    guard !accessibility, let event = event, windowMatches,
+        event.timestamp.isFinite, event.timestamp >= 0, event.timestamp <= now, now - event.timestamp < 5,
+        let cg = event.cgEvent, cg.getIntegerValueField(.eventSourceUnixProcessID) == 0, personInput(cg) else { return false }
+    if event.type == .leftMouseUp { return true }
+    return keyboard && highlighted && event.type == .keyDown && !event.isARepeat && [36, 49, 76].contains(event.keyCode)
+}
+func personActivation(_ event: NSEvent?, in window: NSWindow?, keyboard: Bool = true, highlighted: Bool = true) -> Bool {
+    personActivation(event, windowMatches: event?.window === window, keyboard: keyboard, highlighted: highlighted)
+}
 func personChoice(_ kind: String, _ choice: String) -> Bool {
     if ["cancel", "decline", "session"].contains(choice) { return false }
     // A debugger's Once is also a consent to debugging. Plain session app approvals remain host-answerable.
@@ -99,12 +112,11 @@ final class ConsentInputAction: NSObject {
         return dispatch(sender, typed: true)
     }
     private func dispatch(_ sender: NSButton, typed: Bool = false) -> Bool {
-        guard let event = currentEvent(), event.window === sender.window,
+        let event = currentEvent()
+        guard let event = event,
             !typed || event.type == .keyDown,
-            !mouseOnly || typed || [.leftMouseDown, .leftMouseUp].contains(event.type),
-            event.timestamp <= ProcessInfo.processInfo.systemUptime,
-            ProcessInfo.processInfo.systemUptime - event.timestamp < 5,
-            personInput(event.cgEvent) else { refuseConsentInput(sender); return false }
+            personActivation(event, in: sender.window, keyboard: !mouseOnly || typed)
+            else { refuseConsentInput(sender); return false }
         return sender.sendAction(originalAction, to: originalTarget)
     }
 }
@@ -582,7 +594,7 @@ func statusRows(_ data: [String: Any], _ choices: [String]) -> [StatusRow]? {
     return rows
 }
 // The picker stays reachable for this host's lifetime whenever the hand is on, including between actions.
-func menuVisible(_ status: String?, requests: Int, handEnabled: Bool, sinceAct: Double?) -> Bool {
+func menuVisible(_ status: String?, requests: Int, handEnabled: Bool) -> Bool {
     statusVisible(status, requests: requests) || handEnabled
 }
 // The usage row (1.4.0): the opt-in action log's last 7 days from the hand channel's menu frame, as numbers this host words.
@@ -1208,7 +1220,6 @@ final class ConsentHost: NSObject, NSApplicationDelegate, NSMenuDelegate {
     var permissions: PermissionsData?
     var usage: UsageStats?
     let cursorPicker = CursorPickerHost()
-    var lastAct: Date?
     var hookupTimer: Timer?
 
     var status: String?
@@ -1353,15 +1364,13 @@ final class ConsentHost: NSObject, NSApplicationDelegate, NSMenuDelegate {
         menu.delegate = self
         item.menu = menu
         let requests = pending.values.filter { ($0["data"] as? [String: Any])?["status"] == nil }.count
-        let since = lastAct.map { Date().timeIntervalSince($0) }
-        item.isVisible = menuVisible(status, requests: requests, handEnabled: hand?.enabled ?? false, sinceAct: since)
+        item.isVisible = menuVisible(status, requests: requests, handEnabled: hand?.enabled ?? false)
     }
     // The shared host's consent channel ended (its worker exited): an open card is aborted, its requests and status go, and the
     // hand stays.
     func channelClosed() { closeAsk(); modal.close(); pending.removeAll(); status = nil; consentOpen = false; rebuildMenu(); if !handOpen { NSApp.terminate(nil) } }
     // The hand channel ended or faulted: its state goes, and turbo's channel, if open, keeps the host.
-    func handGone() { handOpen = false; hand = nil; permissions = nil; usage = nil; lastAct = nil; rebuildMenu(); if !consentOpen { NSApp.terminate(nil) } }
-    func noteAct() { lastAct = Date(); rebuildMenu() }
+    func handGone() { handOpen = false; hand = nil; permissions = nil; usage = nil; rebuildMenu(); if !consentOpen { NSApp.terminate(nil) } }
     func handState(enabled: Bool, version: String, permissions: PermissionsData?, usage: UsageStats?) {
         hand = (enabled, version); self.permissions = permissions; self.usage = usage; rebuildMenu()
     }
@@ -1547,7 +1556,7 @@ struct CursorPickerMessage {
         case "notice":
             guard Set(data.keys) == base.union(["text"]), let text = data["text"] as? String, !text.isEmpty,
                 text.utf8.count <= 12000, text.unicodeScalars.allSatisfy({ $0.value == 10 || !CharacterSet.controlCharacters.contains($0) && !CharacterSet.illegalCharacters.contains($0) }) else { return nil }
-        case "input-check": guard Set(data.keys) == base else { return nil }
+        case "input-check", "menu-check": guard Set(data.keys) == base else { return nil }
         default: return nil
         }
         return CursorPickerMessage(op: op, data: data)
@@ -1585,12 +1594,6 @@ enum CursorPickerRow {
         rows.append(["title": "Open characters folder", "op": "folder"])
         return rows
     }
-}
-// C1's stricter hardware rule: a physical mouse event with pid 0, HID state and no poster's user data.
-func cursorPickerHardwareInput(_ event: CGEvent?) -> Bool {
-    guard let event = event, [.leftMouseDown, .leftMouseUp].contains(event.type),
-        event.getIntegerValueField(.eventSourceUnixProcessID) == 0 else { return false }
-    return personInput(event)
 }
 func writeCursorPickerEvent(_ event: [String: String]) {
     guard let nonce = nonceBook.nonce("hand"), let bytes = try? JSONSerialization.data(withJSONObject:
@@ -1653,14 +1656,85 @@ enum CursorThumbnailCache {
                 provider: provider, decode: nil, shouldInterpolate: true, intent: .defaultIntent) else { throw SpriteLoadError.changed }
         return image
     }
+    static func entries(_ dir: Int32) -> [(String, stat)] {
+        guard let stream = fdopendir(dup(dir)) else { return [] }; defer { closedir(stream) }
+        // dup shares the directory offset. Rewind so later maintenance sees the whole bank too.
+        rewinddir(stream)
+        var entries: [(String, stat)] = []
+        while let entry = readdir(stream) {
+            let name = withUnsafePointer(to: &entry.pointee.d_name) {
+                $0.withMemoryRebound(to: CChar.self, capacity: Int(MAXPATHLEN)) { String(cString: $0) }
+            }
+            var st = stat()
+            if fstatat(dir, name, &st, AT_SYMLINK_NOFOLLOW) == 0,
+                st.st_mode & S_IFMT == S_IFREG, st.st_uid == getuid(), st.st_mode & 0o7777 == 0o600 {
+                entries.append((name, st))
+            }
+        }
+        return entries
+    }
+    static func unlinkChecked(_ name: String, _ st: stat, dir: Int32) {
+        var path = [CChar](repeating: 0, count: Int(MAXPATHLEN))
+        guard fcntl(dir, F_GETPATH, &path) == 0, String(cString: path) == root(), canonical(root()) else { return }
+        var current = stat()
+        if fstatat(dir, name, &current, AT_SYMLINK_NOFOLLOW) == 0,
+            current.st_dev == st.st_dev, current.st_ino == st.st_ino, current.st_uid == getuid(),
+            current.st_mode == st.st_mode, current.st_nlink == st.st_nlink {
+            _ = unlinkat(dir, name, 0)
+        }
+    }
+    static func maintain(_ dir: Int32, limit: Int = 64) {
+        let now = Date().timeIntervalSince1970
+        for (name, st) in entries(dir) where name.hasPrefix(".thumb-") &&
+            (st.st_nlink == 1 || st.st_nlink == 2) &&
+            now - (Double(st.st_mtimespec.tv_sec) + Double(st.st_mtimespec.tv_nsec) / 1e9) > 600 {
+            unlinkChecked(name, st, dir: dir)
+        }
+        let published = entries(dir).filter { name, st in
+            name.range(of: "^[0-9a-f]{64}\\.png$", options: .regularExpression) != nil && st.st_nlink == 1
+        }.sorted { a, b in
+            if a.1.st_mtimespec.tv_sec != b.1.st_mtimespec.tv_sec { return a.1.st_mtimespec.tv_sec < b.1.st_mtimespec.tv_sec }
+            if a.1.st_mtimespec.tv_nsec != b.1.st_mtimespec.tv_nsec { return a.1.st_mtimespec.tv_nsec < b.1.st_mtimespec.tv_nsec }
+            return a.0 < b.0
+        }
+        for (name, st) in published.prefix(max(0, published.count - limit)) { unlinkChecked(name, st, dir: dir) }
+    }
+    static func repairStagingLink(_ name: String, dir: Int32) -> Bool {
+        var st = stat()
+        guard fstatat(dir, name, &st, AT_SYMLINK_NOFOLLOW) == 0, st.st_mode & S_IFMT == S_IFREG,
+            st.st_uid == getuid(), st.st_mode & 0o7777 == 0o600, st.st_nlink == 2 else { return false }
+        // Repair only a link pair left by our staging protocol, never an alias outside this directory.
+        guard let staging = entries(dir).first(where: { $0.0.hasPrefix(".thumb-") && $0.1.st_nlink == 2 &&
+            $0.1.st_dev == st.st_dev && $0.1.st_ino == st.st_ino }) else { return false }
+        unlinkChecked(name, st, dir: dir)
+        var remaining = stat()
+        if fstatat(dir, staging.0, &remaining, AT_SYMLINK_NOFOLLOW) == 0,
+            remaining.st_dev == st.st_dev, remaining.st_ino == st.st_ino, remaining.st_nlink == 1 {
+            unlinkChecked(staging.0, remaining, dir: dir)
+        }
+        var absent = stat()
+        return fstatat(dir, name, &absent, AT_SYMLINK_NOFOLLOW) != 0 && errno == ENOENT
+    }
     static func load(_ frame: SpriteFrame, key: String, cancelled: @escaping () -> Bool = { false }) throws -> Result {
         guard !cancelled() else { throw SpriteLoadError.cancelled }
         guard key.range(of: "^[0-9a-f]{64}$", options: .regularExpression) != nil else { throw SpriteLoadError.path }
         let root = root(), dir = try directory(root); defer { close(dir) }
+        maintain(dir)
         let name = key + ".png", path = root + "/" + name
         var st = stat()
-        if lstat(path, &st) == 0 { return Result(image: try read(path, cancelled: cancelled), path: path, cached: true) }
-        guard errno == ENOENT else { throw SpriteLoadError.path }
+        if fstatat(dir, name, &st, AT_SYMLINK_NOFOLLOW) == 0 {
+            if !repairStagingLink(name, dir: dir) {
+                do { return Result(image: try read(path, cancelled: cancelled), path: path, cached: true) }
+                catch {
+                    guard !cancelled(), st.st_mode & S_IFMT == S_IFREG, st.st_uid == getuid(),
+                        st.st_nlink == 1, st.st_mode & 0o7022 == 0 else { throw error }
+                    // A refused owned regular entry (mode, size or corrupt PNG) gets one regeneration attempt.
+                    unlinkChecked(name, st, dir: dir)
+                    var absent = stat()
+                    guard fstatat(dir, name, &absent, AT_SYMLINK_NOFOLLOW) != 0, errno == ENOENT else { throw error }
+                }
+            }
+        } else if errno != ENOENT { throw SpriteLoadError.path }
         let loaded = SpriteCharacter.check(frame, cancelled: cancelled)
         guard let character = loaded.character, let idle = frame.table["idle"], let sheet = character.images[idle.sheet],
             let first = idle.columns.first, let cell = sheet.cropping(to: CGRect(x: CGFloat(first) * frame.cell.width,
@@ -1681,11 +1755,19 @@ enum CursorThumbnailCache {
         let staging = ".thumb-" + UUID().uuidString
         let output = openat(dir, staging, O_WRONLY | O_CREAT | O_EXCL | O_NOFOLLOW | O_CLOEXEC, 0o600)
         guard output >= 0 else { throw SpriteLoadError.path }
-        defer { close(output); unlinkat(dir, staging, 0) }
+        defer { close(output); unlinkat(dir, staging, 0); maintain(dir) }
         var currentName = [CChar](repeating: 0, count: Int(MAXPATHLEN))
         guard fchmod(output, 0o600) == 0, write(output, data.bytes, data.length) == data.length,
-            canonical(root), fcntl(dir, F_GETPATH, &currentName) == 0, String(cString: currentName) == root,
-            linkat(dir, staging, dir, name, 0) == 0 else { throw SpriteLoadError.changed }
+            canonical(root), fcntl(dir, F_GETPATH, &currentName) == 0, String(cString: currentName) == root else { throw SpriteLoadError.changed }
+        if ProcessInfo.processInfo.environment["SLEIGHT_CURSOR_TEST"] == "1",
+            ProcessInfo.processInfo.environment["SLEIGHT_CURSOR_THUMB_FAULT"] == "eexist", root.hasPrefix("/private/tmp/") {
+            _ = linkat(dir, staging, dir, name, 0)
+        }
+        if linkat(dir, staging, dir, name, 0) != 0 {
+            // Another host won publication. Our already decoded pixels are still safe to use.
+            guard errno == EEXIST else { throw SpriteLoadError.changed }
+            return Result(image: image, path: path, cached: false)
+        }
         // Removing the private staging name restores the single-link rule before anyone reads the published PNG.
         guard unlinkat(dir, staging, 0) == 0 else { throw SpriteLoadError.changed }
         return Result(image: image, path: path, cached: false)
@@ -1702,37 +1784,81 @@ final class CursorPickerGeneration {
     func next() -> Int { lock.lock(); defer { lock.unlock() }; value += 1; return value }
     func contains(_ ticket: Int) -> Bool { lock.lock(); defer { lock.unlock() }; return value == ticket }
 }
-final class CursorPickerHost: NSObject {
+final class CursorPickerMenuItem: NSMenuItem {
+    var refused: (() -> Void)?
+    override func accessibilityPerformPress() -> Bool { refused?(); return false }
+    override func accessibilityPerformAction(_ action: NSAccessibility.Action) {
+        if action == .press { refused?() } else { super.accessibilityPerformAction(action) }
+    }
+}
+// NSMenu exposes no public window property. A non-drawing, one-point spacer observes the window AppKit
+// actually attaches our submenu to; no guessed current-event window or private AppKit class is trusted.
+final class CursorPickerWindowProbe: NSView {
+    weak var owner: CursorPickerMenu?
+    override func viewDidMoveToWindow() {
+        super.viewDidMoveToWindow()
+        if let window = window { owner?.trackingWindow = window }
+    }
+}
+final class CursorPickerMenu: NSMenu {
+    weak var trackingWindow: NSWindow?
+    weak var lastHighlighted: NSMenuItem?
+    func addWindowProbe() {
+        let probe = CursorPickerWindowProbe(frame: NSRect(x: 0, y: 0, width: 1, height: 1))
+        probe.owner = self; probe.setAccessibilityElement(false)
+        let item = NSMenuItem(title: "", action: nil, keyEquivalent: "")
+        item.view = probe; item.isEnabled = false; addItem(item)
+    }
+}
+final class CursorPickerHost: NSObject, NSMenuDelegate {
     var rows = CursorPickerRow.defaults("glove"), images: [String: NSImage] = [:]
     var imageKeys: [String: String] = [:]
+    var characterItems: [String: NSMenuItem] = [:]
+    var noticeSink: ((String) -> Void)?
     var notice: NSPanel?, generation = 0
     let epoch = CursorPickerGeneration()
     let thumbnails = DispatchQueue(label: "com.sleight.cursor-thumbnails", qos: .utility)
     weak var submenu: NSMenu?
     func install(in menu: NSMenu, enabled: Bool) {
         guard enabled else { return }
-        let entry = NSMenuItem(title: "Cursor", action: nil, keyEquivalent: ""), inner = NSMenu()
-        entry.submenu = inner; submenu = inner; fill(inner); menu.addItem(entry)
+        let entry = NSMenuItem(title: "Cursor", action: nil, keyEquivalent: ""), inner = CursorPickerMenu()
+        inner.delegate = self
+        entry.submenu = inner; submenu = inner; fill(inner)
+        // Keep the controls above help and the version footer, also in a turbo menu.
+        let help = menu.items.firstIndex { $0.action == #selector(ConsentHost.help(_:)) } ?? menu.numberOfItems
+        let at = help > 0 && menu.item(at: help - 1)?.isSeparatorItem == true ? help - 1 : help
+        menu.insertItem(NSMenuItem.separator(), at: at); menu.insertItem(entry, at: at + 1)
     }
     func fill(_ menu: NSMenu) {
         menu.removeAllItems()
+        characterItems.removeAll()
+        (menu as? CursorPickerMenu)?.addWindowProbe()
         func item(_ row: [String: Any]) -> NSMenuItem {
-            let entry = NSMenuItem(title: row["title"] as! String, action: nil, keyEquivalent: "")
+            let entry = CursorPickerMenuItem(title: row["title"] as! String, action: nil, keyEquivalent: "")
+            entry.refused = { [weak self] in self?.refuseSelection() }
             if let children = row["children"] as? [[String: Any]] {
-                let inner = NSMenu(); children.forEach { inner.addItem(item($0)) }
+                let inner = CursorPickerMenu(); inner.delegate = self; inner.addWindowProbe()
+                children.forEach { inner.addItem(item($0)) }
                 if children.isEmpty { inner.addItem(NSMenuItem(title: "No new Codex pets found", action: nil, keyEquivalent: "")) }
                 entry.submenu = inner
             } else {
                 entry.target = self; entry.action = #selector(click(_:)); entry.representedObject = row
                 entry.state = row["selected"] as? Bool == true ? .on : .off
-                if let id = row["character"] as? String { entry.image = images[id] }
+                if let id = row["character"] as? String { entry.image = images[id]; characterItems[id] = entry }
             }
             return entry
         }
         rows.forEach { menu.addItem(item($0)) }
     }
+    func menuWillOpen(_ menu: NSMenu) { (menu as? CursorPickerMenu)?.lastHighlighted = nil }
+    func menu(_ menu: NSMenu, willHighlight item: NSMenuItem?) {
+        if let item = item { (menu as? CursorPickerMenu)?.lastHighlighted = item }
+    }
     @objc func click(_ sender: NSMenuItem) {
-        guard cursorPickerHardwareInput(NSApp.currentEvent?.cgEvent) else { refuseConsentInput(); return }
+        let current = NSApp.currentEvent
+        guard let menu = sender.menu as? CursorPickerMenu, let window = menu.trackingWindow,
+            personActivation(current, in: window, highlighted: sender.isHighlighted || menu.lastHighlighted === sender)
+            else { refuseSelection(); return }
         guard let row = sender.representedObject as? [String: Any], CursorPickerRow.valid(row, nested: row["op"] as? String == "import") else { return }
         if row["op"] as? String == "folder" {
             // A click opens the existing folder in Finder. No shell or script receives the path.
@@ -1745,6 +1871,11 @@ final class CursorPickerHost: NSObject {
         var event: [String: String] = [:]
         for key in ["op", "style", "character", "key"] { if let value = row[key] as? String { event[key] = value } }
         writeCursorPickerEvent(event)
+    }
+    func refuseSelection() { refuseConsentInput(); showNotice("Choose with the mouse or keyboard") }
+    func setThumbnail(_ image: NSImage, id: String, key: String) {
+        images[id] = image; imageKeys[id] = key
+        characterItems[id]?.image = image
     }
     func receive(_ message: CursorPickerMessage) {
         switch message.op {
@@ -1761,9 +1892,8 @@ final class CursorPickerHost: NSObject {
                 guard let result = try? CursorThumbnailCache.load(frame, key: key, cancelled: { !epoch.contains(ticket) }) else { return }
                 DispatchQueue.main.async {
                     guard let self = self, self.generation == ticket else { return }
-                    let image = NSImage(cgImage: result.image, size: NSSize(width: 16, height: 16)); self.images[frame.id] = image
-                    self.imageKeys[frame.id] = key
-                    if let menu = self.submenu { self.fill(menu) }
+                    let image = NSImage(cgImage: result.image, size: NSSize(width: 16, height: 16))
+                    self.setThumbnail(image, id: frame.id, key: key)
                 }
             }
         case "notice": showNotice(message.data["text"] as! String)
@@ -1771,6 +1901,7 @@ final class CursorPickerHost: NSObject {
         }
     }
     func showNotice(_ text: String) {
+        if let sink = noticeSink { sink(text); return }
         notice?.close()
         let panel = CursorPickerNoticePanel(contentRect: NSRect(x: 0, y: 0, width: 390, height: 240), styleMask: [.titled, .closable, .nonactivatingPanel], backing: .buffered, defer: false)
         panel.title = "sleight character"; panel.level = .floating; panel.isReleasedWhenClosed = false
@@ -1797,13 +1928,48 @@ func cursorMenuDump() {
         var out: [String: Any] = [:]
         switch message.op {
         case "catalog": out = ["rows": message.data["rows"]!]
+        case "menu-check":
+            // Objects only. No application loop, ordered windows, event posting or image drawing.
+            let picker = CursorPickerHost(), menu = NSMenu()
+            picker.rows = [
+                ["title": "Cat", "op": "select", "style": "sprite", "character": "cat", "selected": true],
+                ["title": "Dog", "op": "select", "style": "sprite", "character": "dog", "selected": false]]
+            menu.addItem(NSMenuItem.separator())
+            menu.addItem(NSMenuItem(title: "Settings & Help", action: #selector(ConsentHost.help(_:)), keyEquivalent: ""))
+            menu.addItem(NSMenuItem(title: "sleight 1.5.1", action: nil, keyEquivalent: ""))
+            picker.install(in: menu, enabled: true)
+            let inner = picker.submenu!, cat = picker.characterItems["cat"]!, dog = picker.characterItems["dog"]!
+            let image = NSImage(size: NSSize(width: 16, height: 16))
+            picker.setThumbnail(image, id: "cat", key: "fixture")
+            var notices: [String] = []; picker.noticeSink = { notices.append($0) }
+            let ax = (cat as! CursorPickerMenuItem).accessibilityPerformPress()
+            cat.accessibilityPerformAction(.press)
+            out = ["sameItems": inner.item(at: 1) === cat && inner.item(at: 2) === dog,
+                "onlyCatChanged": cat.image === image && dog.image == nil && cat.state == .on,
+                "separator": menu.item(at: 0)?.isSeparatorItem == true && menu.item(at: 1)?.title == "Cursor",
+                "aboveHelp": menu.items.firstIndex(where: { $0.title == "Cursor" })! < menu.items.firstIndex(where: { $0.title == "Settings & Help" })!,
+                "axRefused": !ax, "notices": notices]
         case "input-check":
-            func check(_ pid: Int64, _ type: CGEventType) -> Bool {
-                guard let source = CGEventSource(stateID: .hidSystemState), let event = CGEvent(mouseEventSource: source, mouseType: .leftMouseDown, mouseCursorPosition: .zero, mouseButton: .left) else { return false }
-                event.type = type; event.setIntegerValueField(.eventSourceUnixProcessID, value: pid); event.setIntegerValueField(.eventSourceUserData, value: 0)
-                return cursorPickerHardwareInput(event)
+            func check(_ pid: Int64 = 0, _ type: CGEventType = .leftMouseUp, age: Double = 0,
+                key: CGKeyCode = 49, highlighted: Bool = true, windowMatches: Bool = true, ax: Bool = false) -> Bool {
+                guard let source = CGEventSource(stateID: .hidSystemState), let cg = CGEvent(keyboardEventSource: source, virtualKey: key, keyDown: true) else { return false }
+                cg.type = type; cg.setIntegerValueField(.eventSourceUnixProcessID, value: pid)
+                cg.setIntegerValueField(.eventSourceUserData, value: 0)
+                cg.timestamp = DispatchTime.now().uptimeNanoseconds - UInt64(max(0, age) * 1_000_000_000)
+                guard let event = NSEvent(cgEvent: cg) else { return false }
+                return personActivation(event, windowMatches: windowMatches, highlighted: highlighted, accessibility: ax,
+                    now: age < 0 ? event.timestamp - 1 : ProcessInfo.processInfo.systemUptime)
             }
-            out = ["hardware": check(0, .leftMouseUp), "synthetic": check(1234, .leftMouseUp), "keyboard": check(0, .keyDown), "absent": cursorPickerHardwareInput(nil)]
+            let item = CursorPickerMenuItem(title: "Fixture", action: nil, keyEquivalent: "")
+            var refused = 0; item.refused = { refused += 1 }
+            let axResult = item.accessibilityPerformPress(); item.accessibilityPerformAction(.press)
+            out = ["hardware": check(), "synthetic": check(1234), "keyboard": check(0, .keyDown),
+                "return": check(0, .keyDown, key: 36), "enter": check(0, .keyDown, key: 76),
+                "otherKey": check(0, .keyDown, key: 0), "unhighlighted": check(0, .keyDown, highlighted: false),
+                "old": check(age: 5.1), "future": check(age: -1), "mouseDown": check(0, .leftMouseDown),
+                "wrongWindow": check(windowMatches: false), "ax": check(ax: true),
+                "axMethodsRefused": !axResult && refused == 2,
+                "absent": personActivation(nil, windowMatches: true)]
         case "thumbnail":
             do {
                 let result = try CursorThumbnailCache.load(spriteFrame(message.data["frame"] as! [String: Any])!, key: message.data["key"] as! String)
@@ -3956,7 +4122,7 @@ final class HandHost: NSObject, NSApplicationDelegate {
                 case let .act(nonce, act):
                     guard nonceBook.admit("hand", nonce), act.seq > last else { fault(); continue lines }
                     last = act.seq
-                    DispatchQueue.main.async { self.consent?.noteAct(); if self.cursorStyle == "glove" { self.schedule(act) } else { self.ringFrame(ringEvent(act), delay: act.delay) } }
+                    DispatchQueue.main.async { if self.cursorStyle == "glove" { self.schedule(act) } else { self.ringFrame(ringEvent(act), delay: act.delay) } }
                 case let .aim(nonce, event), let .status(nonce, event):
                     guard nonceBook.admit("hand", nonce), event.seq > last else { fault(); continue lines }
                     last = event.seq
