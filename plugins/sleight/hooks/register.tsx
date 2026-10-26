@@ -5,7 +5,7 @@ import type { Frame, LogEntry, ViewStatus } from '../types'
 import { FRAME_MARKER, snapshotCode } from './snapshot'
 import { fileArgument, outcomeOf, resultEntries } from './replay'
 import type { ReplayScript } from './replay'
-import { preapprovedWriteDenied, loggingSwitchWriteDenied } from './preapproved-write-guard.mjs'
+import { preapprovedWriteTarget, preapprovedWriteReason, loggingSwitchWriteDenied } from './preapproved-write-guard.mjs'
 import { shellLaunchDenied, shellGuardReason } from './shell-guard.mjs'
 import { costSnapshot, statsFromReply, turnSummary, turnStatsText } from './turn-stats.mjs'
 import type { TurnSummary } from './turn-stats.mjs'
@@ -340,12 +340,12 @@ export const register: Register = on => {
     if (!['Write', 'Edit', 'MultiEdit', 'NotebookEdit', 'Bash'].includes(e.tool)) return next(e)
     if (usedThisTurn && shellLaunchDenied(e) && await $.env.get('SLEIGHT_SHELL_GUARD') !== '0') return { deny: shellGuardReason }
     if (loggingSwitchWriteDenied(e)) return { deny: "Only the user turns on sleight's action log and outcome lines. Ask them to make this change." }
-    const denied = await preapprovedWriteDenied(e, {
+    const denied = await preapprovedWriteTarget(e, {
       stat: (path: string) => $.fs.stat(path, { resolve: true }),
       home: await $.env.get('HOME'),
       configDir: await $.env.get('CLAUDE_CONFIG_DIR'),
     })
-    return denied ? { deny: "Only the user edits sleight's approval files. Ask them to make this change." } : next(e)
+    return denied ? { deny: preapprovedWriteReason(denied) } : next(e)
   })
   on('tool.check', async ($, e, next) => ownCallVerdict(e, next.origin) ?? next(e))
     // Failing open to the normal check only ever tightens. A call from inside this mod's own

@@ -121,6 +121,7 @@ export async function helperConfirm(found, { timeoutMs = 60000, notice = () => {
     timer = setTimeout(() => { try { child.kill('SIGTERM'); } catch {} finish('timeout'); }, timeoutMs + 2000);
     child.once('error', () => finish('failed'));
     // exit can come before stdout's last data, so the answer waits for the pipe to close.
-    child.once('close', code => finish(first !== undefined && verified() ? EXITS[code] ?? 'failed' : 'unverified'));
+    // 64 is the helper refusing its arguments before it prints anything; it's a refusal either way, so it says so.
+    child.once('close', code => finish(code === 64 ? 'invalid' : first !== undefined && verified() ? EXITS[code] ?? 'failed' : 'unverified'));
   });
 }

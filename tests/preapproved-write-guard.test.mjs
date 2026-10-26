@@ -2,10 +2,10 @@
 const MAC_USERS = ['', 'Users', ''].join('/');
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtempSync, mkdirSync, writeFileSync, symlinkSync, rmSync, realpathSync } from 'node:fs';
+import { mkdtempSync, mkdirSync, readFileSync, writeFileSync, symlinkSync, rmSync, realpathSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { trackTemp } from '../scripts/temp-leftovers.mjs';
+import { registerTemp, trackTemp } from '../scripts/temp-leftovers.mjs';
 
 const guard = async (...args) => {
   const { preapprovedWriteDenied } = await import('../plugins/sleight/hooks/preapproved-write-guard.mjs');
@@ -418,8 +418,14 @@ test('the helper cache and installed plugin copies deny every mutation; a source
   }
   // The benchmark's own caches and lookalike names pass, inline code included (Sonnet review finding 5).
   const bench = `${MAC_USERS}fixture/Library/Caches/sleight-bench/claude-config/plugins/cache/mkt/sleight/lib/launch.mjs`;
-  for (const path of [bench, `${MAC_USERS}fixture/Library/Caches/sleight-bench/a.json`]) {
-    for (const tool of ['Write', 'Edit']) assert.equal(await guard({ tool, file_path: path }, { stat }), false, `${tool} ${path}`);
+  for (const path of [bench, `${MAC_USERS}fixture/Library/Caches/sleight-bench/a.json`, '~/Library/Caches/sleight-bench/claude-config/plugins/cache/m/sleight/x']) {
+    for (const tool of ['Write', 'Edit']) assert.equal(await guard({ tool, file_path: path }, { stat, home: `${MAC_USERS}fixture` }), false, `${tool} ${path}`);
+  }
+  // Re-review D: the exemption is anchored to the home folder's Library/Caches, so a sleight-bench folder made inside a
+  // protected tree, or elsewhere, doesn't open it.
+  for (const path of [`${MAC_USERS}fixture/Library/Caches/sleight/Library/Caches/sleight-bench/x`,
+    `${MAC_USERS}fixture/.claude/plugins/cache/m/sleight/Library/Caches/sleight-bench/x`, `/tmp/Library/Caches/sleight-bench/plugins/cache/m/sleight/x`]) {
+    assert.equal(await guard({ tool: 'Write', file_path: path }, { stat, home: `${MAC_USERS}fixture` }), true, path);
   }
   for (const command of [`python3 -c "open('${MAC_USERS}x/Library/Caches/sleight-bench/a.json','w').write('x')"`,
     `node -e "require('fs').writeFileSync('~/Library/Caches/sleight-bench/a.json','x')"`,
@@ -434,8 +440,7 @@ test('the helper cache and installed plugin copies deny every mutation; a source
 });
 
 test('a link into the helper cache is followed for Write and Edit', async t => {
-  const root = realpathSync(mkdtempSync(join(tmpdir(), 'sleight-guard-cache-')));
-  t.after(() => rmSync(root, { recursive: true, force: true }));
+  const root = registerTemp(t, realpathSync(mkdtempSync(join(tmpdir(), 'sleight-guard-cache-'))));
   const cache = join(root, 'Library/Caches/sleight/turbo-host');
   mkdirSync(cache, { recursive: true }); writeFileSync(join(cache, 'consent-host'), 'x');
   symlinkSync(cache, join(root, 'innocent'));
@@ -465,4 +470,37 @@ test('the folders above installed plugin copies deny removal and moves; other ma
   }
   // A config folder without a plugin cache is an ordinary folder.
   assert.equal(await guard({ tool: 'Bash', command: 'rm -rf /tmp/lane-claude-empty' }, { ...options, configDir: '/tmp/lane-claude-empty' }), false);
+});
+
+// Re-review B: a link to a custom CLAUDE_CONFIG_DIR resolves to it, and the folders above its installed copy still count.
+test('a link to a custom config folder can\'t take its installed copy with it', async t => {
+  const root = registerTemp(t, realpathSync(mkdtempSync(join(tmpdir(), 'sleight-guard-config-'))));
+  const configDir = join(root, 'custom-config');
+  mkdirSync(join(configDir, 'plugins/cache/mk/sleight'), { recursive: true });
+  symlinkSync(configDir, join(root, 'link'));
+  const { lstat, realpath } = await import('node:fs/promises');
+  const real = async path => { await lstat(path); return { realPath: await realpath(path) }; };
+  const options = { stat: real, home: join(root, 'home'), configDir };
+  for (const command of [`rm -rf ${configDir}/plugins/cache`, `rm -rf ${join(root, 'link')}/plugins/cache`, `rm -rf ${join(root, 'link')}`,
+    `rm -rf ${join(root, 'link')}/plugins/cache/mk`]) {
+    assert.equal(await guard({ tool: 'Bash', command }, options), true, command);
+  }
+  assert.equal(await guard({ tool: 'Bash', command: `rm -rf ${join(root, 'link')}/projects` }, options), false);
+});
+
+test('the refusal names the protected folder the call reached', async () => {
+  const { preapprovedWriteTarget, preapprovedWriteReason, PROTECTED } = await import('../plugins/sleight/hooks/preapproved-write-guard.mjs');
+  const options = { stat, home: `${MAC_USERS}fixture` };
+  const cases = [
+    [{ tool: 'Write', file_path: '~/Library/Application Support/sleight/permissions.json' }, PROTECTED.settings],
+    [{ tool: 'Edit', file_path: '~/Library/Caches/sleight/turbo-host/k/consent-host' }, PROTECTED.cache],
+    [{ tool: 'Write', file_path: '~/.claude/plugins/cache/m/sleight/lib/launch.mjs' }, PROTECTED.install],
+    [{ tool: 'Bash', command: 'rm -rf ~/Library' }, PROTECTED.aboveSleight],
+    [{ tool: 'Bash', command: 'rm -rf ~/.claude/plugins/cache' }, PROTECTED.aboveInstall],
+    [{ tool: 'Write', file_path: '/project/notes.md' }, undefined],
+  ];
+  for (const [input, label] of cases) assert.equal(await preapprovedWriteTarget(input, options), label, JSON.stringify(input));
+  assert.equal(preapprovedWriteReason(PROTECTED.cache), "Only the user changes sleight's helper cache (~/Library/Caches/sleight). Ask them to make this change.");
+  const register = readFileSync(new URL('../plugins/sleight/hooks/register.tsx', import.meta.url), 'utf8');
+  assert.match(register, /return denied \? \{ deny: preapprovedWriteReason\(denied\) \} : next\(e\)/);
 });

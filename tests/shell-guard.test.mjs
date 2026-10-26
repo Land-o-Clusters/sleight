@@ -330,7 +330,8 @@ function installedGuard({ disabled = false, refuseWrite = false } = {}) {
       read: async (_$, atom) => atom.value, update: async (_$, atom, fn) => { atom.value = fn(atom.value); } };
     if (name === './shell-guard.mjs') return guard;
     if (name === './preapproved-write-guard.mjs') return {
-      loggingSwitchWriteDenied: () => false, preapprovedWriteDenied: async () => { checked++; return refuseWrite; },
+      loggingSwitchWriteDenied: () => false, preapprovedWriteTarget: async () => { checked++; return refuseWrite ? "sleight's settings files" : undefined; },
+      preapprovedWriteReason: label => `Only the user changes ${label}. Ask them to make this change.`,
     };
     return {};
   } });
@@ -365,7 +366,7 @@ test('installed PreToolUse returns the refusal before filesystem access and pres
   const pre = h.pre;
   assert.equal((await pre({ tool: 'Bash', command: 'open ./page.html' })).deny, guard.shellGuardReason);
   assert.equal(h.checked(), 0); assert.equal(h.passed(), 0);
-  assert.match((await pre({ tool: 'Write', file_path: 'policy' })).deny, /Only the user edits/);
+  assert.match((await pre({ tool: 'Write', file_path: 'policy' })).deny, /Only the user changes sleight's settings files/);
   assert.equal(h.checked(), 1);
   await pre({ tool: 'Read' }); assert.equal(h.passed(), 1);
 });
@@ -392,7 +393,7 @@ test('shell guard covers only sleight turns, resets on completion or stop, and s
   }
   const off = installedGuard({ disabled: true, refuseWrite: true });
   await off.use();
-  assert.match((await off.pre(event)).deny, /Only the user edits/, 'opt-out retains the approval write guard');
+  assert.match((await off.pre(event)).deny, /Only the user changes sleight's settings files/, 'opt-out retains the approval write guard');
   const allow = installedGuard({ disabled: true }); await allow.use();
   assert.equal((await allow.pre(event)).deny, undefined);
   assert.match(guard.shellGuardReason, /sleight.*guard.*this turn/i);
