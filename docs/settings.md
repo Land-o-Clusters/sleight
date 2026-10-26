@@ -387,6 +387,11 @@ The host compiles in the background on its first use after you enable it. That s
 - Without `SLEIGHT_HAND=1`, a `hand.json` that is a link or has another owner, mode or format keeps the hand off until you delete it.
 
 Claude's own file edits and shell commands can't write `hand.json` or run `hand on`, `hand off` or `hand capture`.
+A shell command that names `sleight-mcp` or `launch.mjs` next to `hand`, `turbo`, `permissions` or `cursor` passes only as
+a direct read-only form with literal arguments: `hand status`, `turbo status`, `permissions`, `permissions list`,
+`cursor list`, `cursor check <id>` or `cursor status`. A variable, substitution, glob, brace, redirection, heredoc,
+subshell, `xargs`, `parallel` or `eval` anywhere in that command refuses it. A variable or substitution as the command word
+refuses a command with one of those four words too, even without the launcher's name.
 
 ## Agent cursor
 

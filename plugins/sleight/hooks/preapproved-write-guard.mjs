@@ -101,38 +101,77 @@ const listingOnly = rest => rest.length === 0 || rest.length === 1 && rest[0] ==
 const cursorReads = rest => ['list', 'check', 'status'].includes(rest[0]);
 const LAUNCHER_COMMANDS = [['turbo', statusOnly, 'turbo.json'], ['hand', statusOnly, 'hand.json'], ['cursor', cursorReads, 'hand.json'],
   ['permissions', listingOnly, 'permissions.json']];
-const refusedLauncher = words => LAUNCHER_COMMANDS.some(([command, allowed]) => launcherToggle(words, command, allowed));
-const LAUNCHER_TEXT = /(?<![\w.-])(?:\S*\/)?(?:sleight-mcp|launch\.mjs)(?![\w.-])/g;
-// True when the launcher's arguments, up to the next unquoted ;, &, | or newline, hold text the guard can't read: a backtick,
-// a $ expansion of any kind ($(, ${, $NAME, $'...') or a <( process substitution. The shell runs a substitution before the
-// launcher sees its arguments, so it can name any subcommand. Quotes don't make it readable: double quotes still substitute,
-// and a single-quoted string may be an sh -c script.
-function launcherSubstitution(command) {
-  for (const match of command.matchAll(LAUNCHER_TEXT)) {
-    let quote = '';
-    for (let i = match.index + match[0].length; i < command.length; i++) {
-      const c = command[i];
-      if (c === '\\') { i++; continue; }
-      if (c === '`' || c === '$' && command[i + 1] !== undefined && !/\s/.test(command[i + 1]) || c === '<' && command[i + 1] === '(') return true;
-      if (quote) { if (c === quote) quote = ''; }
-      else if (c === '"' || c === "'") quote = c;
-      else if (';&|\n'.includes(c)) break;
+// Fail closed. A Bash command that names the launcher (sleight-mcp or launch.mjs) beside one of these subcommand words passes
+// only as a plain direct invocation of a read-only form: literal arguments, and no expansion, substitution, glob, brace,
+// redirection, heredoc, subshell, xargs, parallel or eval anywhere in it. Any other spelling is refused. The guard doesn't
+// try to read what the shell would make of it.
+const LAUNCHER_NAME = /sleight-mcp|launch\.mjs/;
+const SUBCOMMAND = /(?<![\w-])(?:hand|turbo|permissions|cursor)(?![\w-])/;
+const INPUT_RUNNERS = String.raw`(?<![\w-])(?:\w*args|parallel|eval|source)(?![\w-])`;
+// With the launcher named but no subcommand word: text that could still make one.
+const GENERATES = new RegExp(String.raw`[$` + '`' + String.raw`*?[\]{}]|[<>]\(|` + INPUT_RUNNERS);
+// With a subcommand word as well: anything but plain words and ;, &, |.
+const UNPLAIN = new RegExp(String.raw`[$` + '`' + String.raw`*?[\]{}()<>]|` + INPUT_RUNNERS);
+// A command word the guard can't read: an expansion, a substitution, a glob or brace, or a runner of other text.
+const UNREADABLE_WORD = new RegExp(String.raw`[$` + '`' + String.raw`*?[\]{}]|^(?:\w*args|parallel|eval|source|\.)$`);
+const PREFIXES = new Set(['env', 'command', 'nohup', 'time', 'exec', 'nice', 'sudo', 'timeout', 'caffeinate', 'stdbuf']);
+const READ_FORMS = ['hand status', 'turbo status', 'permissions', 'permissions list', 'cursor list', 'cursor status'];
+const readForm = args => READ_FORMS.includes(args.join(' ')) || args.length === 3 && args[0] === 'cursor' && args[1] === 'check' && /^[\w-]{1,64}$/.test(args[2]);
+const shellScript = (words, at) => {
+  if (!['sh', 'bash', 'zsh'].includes(words[at]?.split('/').at(-1))) return undefined;
+  const flag = words.findIndex((word, k) => k > at && /^-[a-zA-Z]*c[a-zA-Z]*$/.test(word));
+  return flag > at && words.slice(at + 1, flag).every(word => /^-[a-zA-Z]+$/.test(word)) ? words[flag + 1] ?? '' : null;
+};
+// The segment's command word, after assignments and prefixes such as env or nohup (with their options and counts).
+function commandWord(segment) {
+  for (let i = 0; i < segment.length;) {
+    if (segment[i].operator) return { unreadable: true };
+    const text = segment[i].text;
+    if (/^[A-Za-z_]\w*=/.test(text)) { i++; continue; }
+    if (PREFIXES.has(text.split('/').at(-1))) {
+      i++;
+      while (i < segment.length && !segment[i].operator && /^-|^\d+[smhd]?$/.test(segment[i].text)) i++;
+      continue;
+    }
+    return { index: i, unreadable: UNREADABLE_WORD.test(text) };
+  }
+  return {};
+}
+function launcherRefused(command, depth = 0) {
+  if (depth > 8) return true;
+  const words = shellWords(command), texts = [command, ...words.map(word => word.text)];
+  const named = texts.some(text => LAUNCHER_NAME.test(text)), sub = texts.some(text => SUBCOMMAND.test(text));
+  if (named && texts.some(text => (sub ? UNPLAIN : GENERATES).test(text))) return true;
+  // Pipelines split on ; & && || and newline; their segments on | and |&. Subshell parentheses stay in the segment.
+  const pipelines = [[[]]];
+  for (const word of words) {
+    if (word.operator && [';', '&', '&&', '||'].includes(word.text)) pipelines.push([[]]);
+    else if (word.operator && ['|', '|&'].includes(word.text)) pipelines.at(-1).push([]);
+    else pipelines.at(-1).at(-1).push(word);
+  }
+  for (const pipeline of pipelines) {
+    const pipeSub = pipeline.flat().some(word => !word.operator && SUBCOMMAND.test(word.text));
+    for (const segment of pipeline) {
+      if (!segment.length) continue;
+      const { index, unreadable } = commandWord(segment);
+      // A command word the guard can't read beside a subcommand word may be the launcher under another spelling.
+      if (unreadable && pipeSub) return true;
+      if (index === undefined) continue;
+      const plain = segment.map(word => word.text);
+      const script = shellScript(plain, index);
+      if (script === null && named && sub) return true;
+      if (script !== undefined) { if (script !== null && launcherRefused(script, depth + 1)) return true; continue; }
+      if (!(named && sub) || !segment.some(word => LAUNCHER_NAME.test(word.text))) continue;
+      // A direct invocation: the launcher itself, or node with its options and then the launcher.
+      let at = index;
+      if (plain[at].split('/').at(-1) === 'node') { at++; while (plain[at]?.startsWith('--')) at++; }
+      if (!launcher(plain[at]?.split('/').at(-1) ?? '')) return true;
+      const args = plain.slice(at + 1);
+      if (args.some(arg => arg.startsWith('~') || LAUNCHER_NAME.test(arg))) return true;
+      if (args.some(arg => SUBCOMMAND.test(arg)) && !readForm(args)) return true;
     }
   }
   return false;
-}
-// xargs takes the launcher's arguments from its input, which the guard reads only as the literal words of an echo or printf
-// that feeds it through a pipe. Any other input (a file, a redirect, another command, xargs options) is refused, and so are
-// literal words that make a refused command with the launcher's own arguments.
-function xargsLauncher(words, piped) {
-  const names = words.map(word => word.split('/').at(-1)), at = names.findIndex(launcher), from = names.indexOf('xargs');
-  if (at < 0 || from < 0 || from > at) return false;
-  if (words.slice(from + 1, at).some(word => /^-[^-]/.test(word))) return true;
-  const producer = piped?.filter(word => !word.operator).map(word => word.text);
-  if (!producer?.length || !['echo', 'printf'].includes(producer[0].split('/').at(-1))) return true;
-  const input = producer.slice(1);
-  if (input.some(word => /[$`\\'"%]|^-/.test(word))) return true;
-  return refusedLauncher([...words.slice(at), ...input.flatMap(word => word.split(/\s+/).filter(Boolean))]);
 }
 
 function shellWritePaths(command, initialDirectory, depth = 0) {
@@ -150,8 +189,6 @@ function shellWritePaths(command, initialDirectory, depth = 0) {
     if (typeof path !== 'string') return;
     paths.push({ path: directory && !/^(?:\/|~|\$HOME|\$\{HOME\})/.test(path) ? `${directory}/${path}` : path, literalOnly, ancestor });
   };
-  // A substitution in the launcher's arguments could name any subcommand.
-  if (launcherSubstitution(command)) add('~/Library/Application Support/sleight/hand.json', true);
   for (const { words: segment, piped } of segments) {
     const texts = [];
     for (let i = 0; i < segment.length; i++) {
@@ -184,7 +221,6 @@ function shellWritePaths(command, initialDirectory, depth = 0) {
     for (const [command, allowed, file] of LAUNCHER_COMMANDS) {
       if (launcherToggle(allWords, command, allowed)) add(`~/Library/Application Support/sleight/${file}`, true);
     }
-    if (xargsLauncher(allWords, piped)) add('~/Library/Application Support/sleight/hand.json', true);
     if (xargs && piped) operands.push(...piped.filter(word => !word.operator).map(word => word.text));
     if (executable === 'cd') {
       const next = operands[0];
@@ -246,6 +282,7 @@ export async function preapprovedWriteDenied(input, options) {
   if (mutations.has(tool)) {
     paths = [input.file_path, input.notebook_path, ...(Array.isArray(input.edits) ? input.edits.map(edit => edit?.file_path) : [])];
   } else if (tool === 'Bash' && typeof input.command === 'string') {
+    if (launcherRefused(input.command)) return true;
     paths = shellWritePaths(input.command);
   } else return false;
   for (const candidate of paths) {
