@@ -184,7 +184,7 @@ it count as having its own animation. Reusing an existing row directly also coun
 ## Perch mode and lines
 
 In perch mode the character is drawn on the target window's top edge (see the ring doc's perch section). A pack can add a
-third sheet and nine optional states for it:
+third sheet and ten optional states for it:
 
 ```json
 {
@@ -212,6 +212,7 @@ and their fallbacks:
 | perch-wait | waiting-approval |
 | startle | error's first 2 frames |
 | jumping | the leap's arc. A Codex pet uses row 4 |
+| paused | A1's paused pose while the person has paused sleight: waiting-approval once, holding its last cell |
 
 These states do not count toward the 19 moves. `resolvePerchStates(manifest)` returns `{ anchor, states }` with every
 perch state plus `jumping`, both runs, `error` and `handoff`, resolved to concrete cells.

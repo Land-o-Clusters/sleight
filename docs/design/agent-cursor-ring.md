@@ -203,49 +203,64 @@ capture exclusion and live cost need VC7.
 ### Perch mode
 
 With `perch: true` (`sleight-mcp cursor style sprite <id> --perch`), the character is drawn on the target window's top
-edge instead of trailing the ring (art direction A2). The ring still marks the exact point. The character frame adds `perch`
-(the seat point in cell pixels and a 14-entry table: the nine perch states, `jumping`, both runs, `error` and `handoff`,
-each resolved by `resolvePerchStates` so a Codex pet perches on its feet), the third sheet's path in `perchSheet`, and
-the pack's `lines`. A picker frame, `{"op":"options","perch","lines"}`, follows the character frame and every change of
-either setting. The host decodes the perch sheet through the same child and pixel checks as the other two.
+edge instead of trailing the ring (art direction A2). The ring still marks the exact point. With perch on, the character
+frame adds `perch` (the seat point in cell pixels and a 15-entry table: the nine perch states, `jumping`, both runs,
+`error`, `handoff` and A1's `paused`, each resolved by `resolvePerchStates` so a Codex pet perches on its feet) and the
+third sheet's path in `perchSheet`. With perch off the frame has neither. The host then never decodes the perch sheet, and a
+perch-only fault can't refuse the character. The client resends the character frame when perch flips. A picker frame,
+`{"op":"options","perch","lines"}`, follows every character frame and every change of either setting.
 
 `PerchRuntime` (`BEGIN PERCH` in `consent-host.swift`) reacts to the ring's draws, so act delays and queueing stay the
-ring's. It places the box on the edge nearest the target, 80 pt from the window's sides (40 under 256 pt wide, centered
-under 176), 72 pt off a target within 56 pt under the edge, and on the uncovered span nearest the target after every
-window in front has cut the edge. A new aim on the same window moves the seat only past 60 pt. Under 96 pt wide, or with
-less headroom than the seat line, it peeks: the cell is masked at the edge, at most 48 pt above it. It hides under 48 pt
-wide, under 40 pt of headroom, when covered, in full screen and when the window is gone. Moves are a 280 ms drop on
-arrival, a 240 ms hop per 120 pt, a run past 360 pt (at most 600 ms), a parabola between windows on one display (60 pt
-above the higher edge, `320 + 0.5 * distance` ms up to 520), and a fade and pop over 400 pt or onto another display.
-Reduced motion makes every move a 150 ms crossfade and shows each state's first cell. Reactions follow A2's table: aim
-points toward the target's side, a click bumps 3 pt, typing, scrolling and dragging peek, waiting holds the card up to
-120 s, and an error winces. Each call's done with `ok` gets a nod (a 3 pt bump and the hop's settle cells) and the ring's
-usual burst at the point. The high-five plays once a turn, at the relay's turn-end done, when the turn's last call
-succeeded, and only then does the ring's burst play at the palm (`RingRuntime.dissolveAt`). Otherwise the turn's end
-hands back.
-After 20 s without a frame it sleeps for 3 cycles under three rising z glyphs (one replicated layer), then stills with
-one z. The next frame startles it with a 6 pt bump. A person dragging or resizing the window hides it, and it returns
-500 ms after the frame stops changing.
+ring's. It places the box on the edge nearest the target, on the uncovered span nearest it after every window in front
+has cut the edge, and 72 pt off a target or a drag's other end within 56 pt under the edge. The legs hang over the title
+bar, and stay 8 pt clear of a 52 pt traffic-light cluster. Their spread below the seat line is measured per character from
+the decoded cells of every state drawn on the edge, standing ones included. Until that measure exists the box's half
+width stands in. The left margin is also at least 80 pt on windows 256 pt or wider, and the right one steps 80, 40 and 0 pt below
+256 and 176 pt. A new aim on the same window moves the seat only past 60 pt. Where the legs can't clear the buttons, under
+96 pt wide, or with less headroom than the seat line, it peeks: the cell is masked at the edge, at most 48 pt above it.
+It hides under 48 pt wide, under 40 pt of headroom, in full screen, when the window is gone, and when windows in front
+leave no 96 pt of edge. A window raised over the seat later moves it to the nearest uncovered span, or hides it until
+the edge clears.
+
+Moves are a 280 ms drop on arrival, a 240 ms hop per 120 pt, a run past 360 pt (at most 600 ms), a parabola between
+windows on one display (60 pt above the higher edge, `320 + 0.5 * distance` ms up to 520), a fade and pop over 400 pt,
+and a pop at the new seat alone onto another display. Reduced motion makes every move a 150 ms crossfade and shows each
+state's first cell. Reactions follow A2's table: aim points toward the target's side, a click bumps 3 pt, typing,
+scrolling and dragging peek, waiting holds the card up to 120 s, and an error winces. Each call's done with `ok` gets a
+nod (a 3 pt bump and the hop's settle cells) and the ring's usual burst at the point. The high-five plays once a turn,
+at the relay's turn-end done, when the turn's last call succeeded, and only then does the ring's burst play at the palm
+(`RingRuntime.dissolveAt`). Otherwise the turn's end hands back. C1's paused frame shows the `paused` pose and stops
+sleep. After 20 s without a frame it sleeps for 3 cycles under three rising z glyphs (one replicated layer), then stills
+with one z. The next frame startles it with a 6 pt bump. After 10 minutes asleep it goes, and the next frame brings it
+back. A person dragging or resizing the window hides it, and it returns 500 ms after the frame stops changing.
 
 The host rereads the window list every 0.5 s while perched and awake, every 2 s asleep and every 0.25 s while the window
-moves. One read took 0.28 ms median over 200 calls (2026-10-26, load 11). Each plan is one set of keyframe animations
-built when the frame arrives. A leap animates position, contents and contentsRect, sleep's loop animates the cell and the
-z group, and a park removes them all.
+moves, on a timer with a fifth of the interval as leeway, and stops after 10 minutes asleep. A minimized window, a Space
+switch or a moved window hides the character after up to 0.5 s (2 s asleep), not A2's 120 ms. One read took
+0.28 ms median over 200 calls (2026-10-26, load 11). Each plan is one set of keyframe animations built when the frame
+arrives, one per key path whose values change: the dump's `keyPaths` is what the host installs. An arrival animates
+position, contentsRect and opacity, a leap position, contents and contentsRect, sleep's loop contentsRect and the z
+group, and a park removes them all.
 
-Lines are a pack's own short sentences (`lines` in `character.json`), shown in a white comic bubble over the box. The nine
-moments are `start` (a turn's first aim), `first-click` (its first done with `ok`), `typing`, `long-wait` (12 s of
-thinking or waiting), `approval`, `error`, `done` (a turn that ends after a success), `handback` and `wake`. A turn ends at the relay's done without `ok`, a hand back
-or sleep. At most one line shows per 8 s (error, approval and done may replace one), and never on two consecutive acts.
-Picks avoid that moment's last `min(6, count - 1)` lines, seeded from the session seed, and a moment with one line says
-it once a turn. Lines wait for a narration bubble to fade, and one already up fades in 60 ms when narration arrives
-(the narration lane calls `PerchRuntime.narration`). The bubble has its own small nonactivating panel, the only part of
-the overlay that takes a click. A person's fresh mouse click (`personActivation`, mouse only) dismisses it, and other
-input is refused. `lines: off` turns them off.
+Lines are a pack's own short sentences (`lines` in `character.json`), shown in a white comic bubble in both sprite modes:
+over the perched box, or over the trailing sprite. Its moments are `start` (a turn's first aim), `first-click` (its
+first done with `ok`), `typing`, `long-wait` (12 s of thinking or waiting), `approval`, `error`, `done` (a turn that ends
+after a success), `handback` and `wake` (waking, when the frame has no moment of its own). A turn ends at the relay's
+done without `ok`, a hand back or sleep. At most one line shows per 8 s, every moment included (an error burst says one
+line), and never on two consecutive acts. Picks avoid that moment's last `min(6, count - 1)` lines, seeded from the
+session seed, and a moment with one line says it once a turn. C2's narration bubble goes first: a line due while it is
+up waits for it to fade (and is dropped if that takes over 5 s), and a line already up fades in 60 ms. From C1's clear
+before an action that needs the pointer until that action's done or idle, no line shows, approval's waiting included.
+The bubble has its own small nonactivating panel, hidden from accessibility, the only part of the overlay that takes a
+click. A person's fresh mouse click (`personActivation`, mouse only) dismisses it, and other input is refused. Lines never
+reach Claude's context or a tool result, but with `hand capture visible` a bubble can show in a screenshot Claude takes.
+`lines: off` turns them off. A lines block the host's own check refuses is dropped with a warning on stderr.
 
 `--perch-dump [--reduce-motion] [--seed=N]` drives `RingRuntime` and `PerchRuntime` on a simulated clock with window lists
-from `{"dumpWorld": ...}` lines, plus `dumpNarration`, `dumpPaused` and `dumpClick`. It builds no panel or layer and
-decodes nothing. `tests/hand-perch.test.mjs` drives the seat rules, moves, reactions, sleep, hide rules and the lines' caps
-through it (19 tests). Appearance, the mask's direction in the flipped layer tree and live CPU need VC7.
+from `{"dumpWorld": ...}` lines, plus clear and menu frames, `dumpNarration`, `dumpPaused`, `dumpClick`, `dumpLegs` and
+`dumpDecode`. It builds no panel or layer and decodes only for `dumpDecode`. `tests/hand-perch.test.mjs` drives the seat
+rules, cover, moves, reactions, sleep, hide rules, trail lines and the lines' caps through it (26 tests). Appearance, the
+mask's direction in the flipped layer tree and live CPU need VC7.
 
 ## Narration
 

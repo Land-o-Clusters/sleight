@@ -478,8 +478,10 @@ The sprite style reads `perch` and `lines` from the same file. With `perch: true
 on the target window's top edge instead of beside the ring: `sleight-mcp cursor style sprite <character-id> --perch`
 turns it on, and the same command without `--perch` turns it off. `lines` (`on` or `off`, default `on`) lets a character
 with a lines block say a short line of its own at a few moments of a task. `sleight-mcp cursor lines off` turns them off,
-and so does the Character lines row in the menu's Cursor submenu, shown while a sprite is selected. Lines are the character's own canned text. They
-never reach Claude, a tool result or the cursor stream, and a click on the bubble dismisses one.
+and so does the Character lines row in the menu's Cursor submenu, shown while a sprite is selected. Lines show in both
+sprite modes, by the trailing sprite or over the perched one. They are the character's own canned text and never reach
+Claude's context, a tool result or the cursor stream. With `hand capture visible`, a screenshot Claude takes can show a
+bubble. A click on the bubble dismisses it.
 
 `SLEIGHT_CURSOR_STYLE` in the MCP server's environment takes precedence over the file. An invalid nonempty value selects
 the glove. `SLEIGHT_HAND=0` disables both the built-in cursor and its public stream. Set `stream: true` to send the open
