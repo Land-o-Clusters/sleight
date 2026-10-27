@@ -96,7 +96,7 @@ for (const phase of ['pre-press', 'poll', 'validate', 'cleanup']) test(`baseline
   assert.throws(() => s.finderRoleInventory({}, api, receipt, phase), error => {
     const diagnostic = JSON.parse(JSON.stringify(s.finderStaticFailure(error)));
     assert.deepEqual(diagnostic, { failureReason: 'baseline-changed', errorName: 'Error', errorCode: 'unavailable',
-      phase, baselineCount: 1, currentCount: 1, missingRole: 'AXWindow', missingIndex: 0 });
+      phase, baselineCount: 1, currentCount: 1, missingRole: 'AXWindow', missingIndex: 0, scrollAreasBaseline: 0, scrollAreasMatched: 0 });
     assert.deepEqual(finderDiagnostic({ finderFailure: diagnostic }), { finderFailure: diagnostic });
     assert.doesNotMatch(JSON.stringify({ message: error.message, diagnostic }), /owner-private|\/owner\/private/);
     return true;
@@ -107,13 +107,14 @@ test('baseline diagnostics discard private vocabulary, invalid counts and extra 
   const classify = source();
   for (const value of ['owner-private-title', -1, 0.5, NaN, Infinity, Number.MAX_SAFE_INTEGER + 1, null, {}, []]) {
     const input = { message: 'Finder pre-action baseline role inventory changed', name: 'Error', phase: 'owner-private-title',
-      baselineCount: value, currentCount: value, missingIndex: value, missingRole: '/owner/private/path', title: 'owner-private-title' };
+      baselineCount: value, currentCount: value, missingIndex: value, scrollAreasBaseline: value, scrollAreasMatched: value,
+      missingRole: '/owner/private/path', title: 'owner-private-title' };
     const expected = { failureReason: 'baseline-changed', errorName: 'Error', errorCode: 'unavailable' };
     assert.deepEqual(classify(input), expected);
     assert.deepEqual(finderDiagnostic({ finderBaselineChange: { ...input, ...expected } }), { finderBaselineChange: expected });
   }
   const error = new Error('Finder pre-action baseline role inventory changed');
-  for (const key of ['phase', 'baselineCount', 'currentCount', 'missingIndex', 'missingRole'])
+  for (const key of ['phase', 'baselineCount', 'currentCount', 'missingIndex', 'missingRole', 'scrollAreasBaseline', 'scrollAreasMatched'])
     Object.defineProperty(error, key, { get() { throw new Error('owner-private-getter-error'); } });
   assert.deepEqual(classify(error), { failureReason: 'baseline-changed', errorName: 'Error', errorCode: 'unavailable' });
 });

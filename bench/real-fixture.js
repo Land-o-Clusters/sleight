@@ -250,7 +250,7 @@ function finderStaticFailure(error) {
   if (reason === 'baseline-changed') {
     var phase = field('phase');
     if (['pre-press', 'poll', 'validate', 'cleanup'].indexOf(phase) !== -1) result.phase = phase;
-    ['baselineCount', 'currentCount', 'missingIndex'].forEach(function (key) {
+    ['baselineCount', 'currentCount', 'missingIndex', 'scrollAreasBaseline', 'scrollAreasMatched'].forEach(function (key) {
       var value = field(key);
       if (typeof value === 'number' && isFinite(value) && value >= 0 && value <= 9007199254740991 && Math.floor(value) === value) result[key] = value;
     });
@@ -283,12 +283,19 @@ function finderBaselineChange(current, receipt, api, phase) {
     if (entry.role !== 'AXWindow') continue;
     var matches = current.filter(function (item) { return api.equal(item.reference, entry.reference); });
     if (matches.length !== 1 || matches[0].role !== 'AXWindow')
-      return Object.assign(new Error('Finder pre-action baseline role inventory changed'), {
+      return Object.assign(new Error('Finder pre-action baseline role inventory changed'), finderScrollAreaCounts(current, receipt, api), {
         phase: phase, baselineCount: receipt.baseline.length, currentCount: current.length,
         missingRole: 'AXWindow', missingIndex: index
       });
   }
   return null;
+}
+
+function finderScrollAreaCounts(current, receipt, api) {
+  var baseline = receipt.baseline.filter(function (entry) { return entry.role === 'AXScrollArea'; });
+  return { scrollAreasBaseline: baseline.length, scrollAreasMatched: baseline.filter(function (entry) {
+    return current.some(function (item) { return item.role === 'AXScrollArea' && api.equal(entry.reference, item.reference); });
+  }).length };
 }
 
 // Scroll areas are inert, regardless of their number or identity. They never
@@ -322,10 +329,12 @@ function openFinderFolder(request, app, previous, api, clock, retain) {
   var before = finderRoleInventory(app, api), window, sheet, requested = false;
   // These references stay inside this helper. The temporal addition requires
   // exclusive Finder setup; inventory and the menu action are separate calls.
-  request.finderOwnership = { schema: 'finder-role-baseline-v1', baseline: before, created: [] };
+  request.finderOwnership = { schema: 'finder-role-baseline-v1', baseline: before, created: [], documentless: [] };
   if (previous && !before.some(function (item) { return api.equal(item.reference, previous); })) throw new Error('Finder previous window absent from inventory');
   function candidates(phase) {
-    return finderRoleInventory(app, api, request.finderOwnership, phase).filter(function (item) {
+    var entries = finderRoleInventory(app, api, request.finderOwnership, phase);
+    request.finderScrollAreas = finderScrollAreaCounts(entries, request.finderOwnership, api);
+    return entries.filter(function (item) {
       return item.role === 'AXWindow' && !before.some(function (other) { return api.equal(item.reference, other.reference); });
     }).map(function (item) { return item.reference; });
   }
@@ -357,7 +366,13 @@ function openFinderFolder(request, app, previous, api, clock, retain) {
       window = fresh[0];
       request.finderOwnership.created.push(window);
       retain(window);
-      if (clock.emit) clock.emit({ stage: 'finder-window-retained', referenceExported: false });
+      // Capture only Finder's known documentless default. Folder names never
+      // authorize this fallback, even when they were read at creation.
+      if (!api.text(window, 'AXDocument') && !api.text(window, 'AXURL')) {
+        var title = api.text(window, 'AXTitle');
+        if (title === 'Recents') request.finderOwnership.documentless.push({ reference: window, title: title });
+      }
+      if (clock.emit) clock.emit(Object.assign({ stage: 'finder-window-retained', referenceExported: false }, request.finderScrollAreas));
       break;
     }
     api.finderFolderGuard(app, null, null);
@@ -375,6 +390,9 @@ function openFinderFolder(request, app, previous, api, clock, retain) {
   }
   if (!sheet) throw new Error('Finder Go to Folder sheet unconfirmed');
   validate();
+  // Once navigation starts, a lost document cannot revive the default-title
+  // fallback. Cleanup must then prove the fixture location.
+  request.finderOwnership.documentless = [];
   api.submitFolder(window, sheet, request.target, validate);
   if (clock.emit) clock.emit({ stage: 'finder-folder-submitted', target: request.target });
   return window;
@@ -668,7 +686,7 @@ function recoverSetup(window, request, api, app, failure) {
     return 'unconfirmed';
   }
   if (request.bundle === 'com.apple.finder' && request.mode === 'folder') {
-    if (api.exists(window) && !api.matches(window, request, true)) {
+    if (api.exists(window) && !finderFixtureWindow(window, request, api)) {
       if (failure) Object.assign(failure, finderMissingFailure('fixture-location-mismatch'));
       return 'unconfirmed';
     }
@@ -785,18 +803,24 @@ function finderFixtureWindow(window, request, api) {
     var current = api.path(document), root = api.path(request.fixtureRoot || request.target);
     return !!current && !!root && (current === root || current.indexOf(root + '/') === 0);
   }
-  return api.text(window, 'AXTitle') === request.token;
+  var title = api.text(window, 'AXTitle');
+  if (title === request.token) return true;
+  var receipt = finderRoleLedger(request.finderOwnership, api);
+  return title === 'Recents' && Array.isArray(receipt.documentless) && receipt.documentless.filter(function (entry) {
+    return entry && entry.title === title && api.equal(entry.reference, window);
+  }).length === 1;
 }
 
 function closeFinderFixtureWindows(owned, request, app, api) {
   var receipt = finderRoleLedger(request.finderOwnership, api);
   function contains(list, window) { return list.some(function (item) { return api.equal(item, window); }); }
   var baseline = receipt.baseline.filter(function (entry) { return entry.role === 'AXWindow'; })
-    .map(function (entry) { return entry.reference; }), reported = false;
+    .map(function (entry) { return entry.reference; }), reported = false, scrollAreas;
   if (!owned || !contains(receipt.created, owned) || contains(baseline, owned))
     throw new Error('Finder fixture window ownership unconfirmed');
   function inventory() {
     var entries = finderRoleInventory(app, api);
+    scrollAreas = finderScrollAreaCounts(entries, receipt, api);
     var changed = finderBaselineChange(entries, receipt, api, 'cleanup');
     if (changed && !reported && api.emit) {
       reported = true;
@@ -825,6 +849,103 @@ function closeFinderFixtureWindows(owned, request, app, api) {
     if (listed(window)) throw new Error('Finder fixture window is still open');
   });
   inventory();
+  if (api.emit) api.emit(Object.assign({ stage: 'finder-cleanup' }, scrollAreas));
+}
+
+// One setup and cleanup, using the production creation ledger in one AX host.
+// Only the newly retained window's title and location enter this probe receipt.
+function finderSetupProbe(request, app, api, clock) {
+  var owned, baseline, fileMenu = api.fileMenu;
+  var result = { probe: 'finder-setup', passed: false, snapshots: [], cleanupConfirmed: false };
+  function snapshot(phase, fresh) {
+    var current = finderRoleInventory(app, api), receipt = request.finderOwnership;
+    baseline = baseline || receipt.baseline;
+    var owners = baseline.filter(function (entry) { return entry.role === 'AXWindow'; });
+    var remaining = current.filter(function (entry) { return entry.role === 'AXWindow' &&
+      !receipt.created.some(function (window) { return api.equal(entry.reference, window); }); });
+    var row = { phase: phase, roles: current.map(function (entry) { return entry.role; }),
+      ownerWindowCount: owners.length, ownerWindowsEqual: owners.length === remaining.length && owners.every(function (entry) {
+        return remaining.filter(function (item) { return api.equal(entry.reference, item.reference); }).length === 1;
+      }), desktopReferenceEquality: baseline.filter(function (entry) { return entry.role === 'AXScrollArea'; }).map(function (entry) {
+        return current.filter(function (item) { return item.role === 'AXScrollArea'; }).map(function (item) {
+          return api.equal(entry.reference, item.reference);
+        });
+      }) };
+    Object.assign(row, finderScrollAreaCounts(current, receipt, api));
+    if (fresh) row.createdWindow = { document: api.text(fresh, 'AXDocument'), url: api.text(fresh, 'AXURL'), title: api.text(fresh, 'AXTitle') };
+    result.snapshots.push(row);
+  }
+  api.fileMenu = function (target, titles, validate, refuse, tracked) {
+    return fileMenu.call(api, target, titles, function () { validate(); snapshot('before-new'); }, refuse, tracked);
+  };
+  try {
+    openFinderFolder(request, app, null, api, clock, function (window) {
+      owned = window;
+      snapshot('after-new', window);
+    });
+    var deadline = clock.now() + 5000, document, path, root = api.path(request.fixtureRoot);
+    do {
+      clock.check();
+      finderRoleInventory(app, api, request.finderOwnership, 'validate');
+      document = api.text(owned, 'AXDocument') || api.text(owned, 'AXURL');
+      path = document && api.path(document);
+      if (root && path && (path === root || path.indexOf(root + '/') === 0)) break;
+      clock.wait(100);
+    } while (clock.now() < deadline);
+    if (!root || !path || !(path === root || path.indexOf(root + '/') === 0)) throw new Error('Finder fixture identity changed');
+    snapshot('after-navigation', owned);
+    result.navigationConfirmed = true;
+  } catch (error) { result.failure = finderStaticFailure(error); }
+  finally {
+    api.fileMenu = fileMenu;
+    // Cancellation ends setup but leaves a separate bounded cleanup window.
+    if (clock.beginCleanup) clock.beginCleanup();
+    try {
+      if (owned) {
+        var failure = {};
+        result.cleanup = recoverSetup(owned, request, api, app, failure);
+        if (result.cleanup !== 'closed retained fixture') result.cleanupFailure = failure;
+        result.cleanupConfirmed = result.cleanup === 'closed retained fixture';
+      }
+      if (request.finderOwnership) snapshot('after-cleanup');
+    } catch (error) { result.cleanupFailure = finderStaticFailure(error); }
+  }
+  result.passed = !result.failure && result.navigationConfirmed === true && result.cleanupConfirmed &&
+    result.snapshots.length > 0 && result.snapshots.every(function (row) { return row.ownerWindowsEqual; });
+  return result;
+}
+
+function runFinderSetupProbe(request, free) {
+  if (request.ownerAway !== true || request.bundle !== 'com.apple.finder' ||
+      !/^\/private\/tmp\/sleight-finder-probe-[A-Za-z0-9]+$/.test(request.fixtureRoot || '') ||
+      request.target !== request.fixtureRoot + '/Finder-probe' || request.control !== request.fixtureRoot + '/control.json' ||
+      request.stopOnLiveHold !== true || !$.AXIsProcessTrusted()) throw new Error('Invalid Finder probe request');
+  function application() {
+    var values = $.NSRunningApplication.runningApplicationsWithBundleIdentifier('com.apple.finder');
+    if (Number(values.count) !== 1) throw new Error('Ambiguous fixture process');
+    return values.objectAtIndex(0);
+  }
+  var target = application(), pid = runningPid(target), birth = finderProcessBirth(pid);
+  if (!(pid > 0) || !finderBirthParts(birth)) throw new Error('Finder probe process identity unavailable');
+  var cleanup = false, deadline = Date.now() + 20000;
+  var clock = { now: function () { return Date.now(); }, wait: function (ms) { waitForLaunch(ms / 1000); },
+    beginCleanup: function () { cleanup = true; deadline = Date.now() + 10000; },
+    check: function () {
+      free();
+      var current = application();
+      if (runningPid(current) !== pid || current.isTerminated || runningBundle(current) !== 'com.apple.finder' ||
+          finderProcessBirth(pid) !== birth) throw new Error('Fixture process changed');
+      if (Date.now() >= deadline) throw new Error('Finder probe deadline reached');
+      if (!cleanup) {
+        var data = $.NSData.dataWithContentsOfFile(request.control);
+        if (data.isNil()) throw new Error('Finder setup control unavailable');
+        var control = JSON.parse(ObjC.unwrap($.NSString.alloc.initWithDataEncoding(data, $.NSUTF8StringEncoding)));
+        if (control.cancelled === true) throw new Error('Fixture opening interrupted before identity was recorded');
+      }
+    } };
+  var api = nativeAX({ bundle: 'com.apple.finder', setup: true }, clock);
+  clock.check();
+  return JSON.stringify(finderSetupProbe(Object.assign({}, request, { mode: 'folder', token: 'Finder-probe' }), api.app(target), api, clock));
 }
 
 // Word put an untitled document's Don't Save sheet only behind AXFocusedUIElement, absent from AXWindows and AXSheets
@@ -1744,6 +1865,7 @@ function run(argv) {
   var request = JSON.parse(argv[0]);
   function free() { if (request.stopOnLiveHold === true && $.NSFileManager.defaultManager.fileExistsAtPath('/tmp/sleight-hold')) throw new Error('Live hold exists; fixture stopped'); }
   free();
+  if (request.mode === 'finder-probe') return runFinderSetupProbe(request, free);
   if (request.mode === 'self-test') {
     var terminated = false;
     var fake = { processIdentifier: 42, bundleIdentifier: $('com.apple.Preview'),
@@ -1992,7 +2114,9 @@ function run(argv) {
   emit({ stage: 'ready', pid: pid, pids: pids.slice(), processHandoff: processHandoff, fixtureWindow: fixtureWindow,
     processStartedAtMs: processStartedAtMs,
     inheritReady: state.inheritReady, bundle: runningBundle(target) || request.bundle,
-    fresh: state.fresh, totalWaitMs: state.retryWaitMs, setupCase: state.setupCase });
+    fresh: state.fresh, totalWaitMs: state.retryWaitMs, setupCase: state.setupCase,
+    scrollAreasBaseline: request.finderScrollAreas && request.finderScrollAreas.scrollAreasBaseline,
+    scrollAreasMatched: request.finderScrollAreas && request.finderScrollAreas.scrollAreasMatched });
   state.setup = false;
   while (command() !== 'close') {
     state.observation = {};

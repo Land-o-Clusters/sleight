@@ -231,7 +231,7 @@ test('folder navigation creates a separate window and uses only its own AX Go to
   const s = source(), previous = {}, window = {}, sheet = {}, calls = [];
   let navigated = false, retained, created = false;
   const api = { fileMenu: (_app, titles, validate) => { validate(); calls.push(titles[0]); created = true; },
-    focused: () => window, equal: (a, b) => a === b, exists: () => true, finderRole: () => 'AXWindow',
+    focused: () => window, equal: (a, b) => a === b, exists: () => true, finderRole: () => 'AXWindow', text: () => '',
     windows: () => created ? [previous, window] : [previous],
     finderFolderGuard: (_app, w) => { if (w) assert.equal(w, window); },
     menu: (_app, menu, titles, validate) => { validate(); calls.push(menu + ':' + titles[0]); },
@@ -253,6 +253,7 @@ function folderTrial(change = () => {}) {
     windows: () => f.current, exists: w => f.current?.includes(w), equal: (a, b) => !!a && a === b,
     finderRole: w => api.exists(w) ? 'AXWindow' : null,
     focused: () => f.focused,
+    text: () => '',
     fileMenu: (_app, _titles, validate) => {
       validate(); f.commands.push('new'); f.current = [previous, foreign, window]; f.focused = window;
     },
@@ -349,7 +350,7 @@ for (const [name, change, pattern] of [
   ['foreign dialog while Go menu opens', (f, api) => { api.menu = (_a, _n, _t, validate) => { f.dialog = {}; validate(); }; }, /Foreign/],
   ['focus switch while sheet appears', (f, api) => { api.folderSheet = () => { f.focused = f.foreign; return f.sheet; }; }, /lost focus/],
   ['foreign sheet', (f, api) => { api.folderSheet = () => { f.dialog = {}; return f.sheet; }; }, /Foreign/],
-]) test(`folder navigation refuses ${name} and keeps only the proven window`, () => {
+]) test(`folder navigation refuses ${name} and retains only the unique new candidate`, () => {
   const f = folderTrial(change);
   assert.throws(f.run, pattern);
   assert.deepEqual(f.retained, [f.window]);
@@ -694,7 +695,7 @@ function finderRun(change = () => {}) {
     dialog: () => [], fileMenu: () => { navigated = true; calls.push('new-window'); },
     menu: () => calls.push('go-menu'), folderSheet: () => sheet, submitFolder: () => calls.push('submit'),
     windows: () => navigated ? [previous, window] : [previous], exists: () => true, finderRole: () => 'AXWindow', finderFolderGuard() {},
-    equal: (a, b) => a === b, readiness: () => ({}), matches: () => true, wait: () => { time += 100; },
+    equal: (a, b) => a === b, text: () => '', readiness: () => ({}), matches: () => true, wait: () => { time += 100; },
   };
   s.nativeAX = () => api;
   s.closeOwnedWindow = (owned, _request, app) => { assert.equal(owned, window); assert.equal(app.pid, 43); calls.push('close'); };
@@ -755,7 +756,7 @@ test('JXA retains the candidate before first validation fails and closes only it
     };
     api.text = (w, attribute) => {
       assert.equal(w, window, 'never read owner window content for cleanup');
-      return attribute === 'AXDocument' ? '/fixture/Collections-1' : '';
+      return attribute === 'AXTitle' ? 'Recents' : '';
     };
     api.path = value => value;
     api.closeButton = (w, validate) => {
