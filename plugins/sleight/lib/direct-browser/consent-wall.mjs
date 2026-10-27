@@ -64,7 +64,11 @@ export function inspectConsent(el, options = {}, read) {
     }
     return attr(node, 'aria-label') || visibleText(node) || attr(node, 'alt') || attr(node, 'title');
   };
+  // One synchronous inspection uses one label observation per held node.
+  // Discard it on return, before any input or later verification can run.
+  const observedLabels = new Map();
   const labels = node => {
+    if (observedLabels.has(node)) return observedLabels.get(node);
     const result = [name(node), attr(node, 'aria-label'), visibleText(node), attr(node, 'alt')];
     for (const label of read(node, 'labels') ?? []) if (visible(label)) result.push(visibleText(label));
     for (const child of [node, ...descendants(node)]) {
@@ -77,6 +81,7 @@ export function inspectConsent(el, options = {}, read) {
         if (content && !/^(?:none|normal)$/.test(content)) result.push(content.replace(/^["']|["']$/g, ''));
       }
     }
+    observedLabels.set(node, result);
     return result;
   };
   const accepting = node => labels(node).some(acceptsCookies);
