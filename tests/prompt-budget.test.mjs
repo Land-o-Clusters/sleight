@@ -9,7 +9,7 @@ import { batchingDescription, createRelay, promptNotice } from '../plugins/sleig
 import { compactJsDescription } from '../plugins/sleight/lib/tool-description.mjs';
 import { guardedCode } from '../plugins/sleight/lib/document-scope.mjs';
 import { SCROLL_LOOP_NOTE, TEXTLESS_NOTE } from '../plugins/sleight/lib/compact-reads.mjs';
-import { browserTools, closedTabOutcome } from '../plugins/sleight/lib/direct-browser/tools.mjs';
+import { browserTools, closedTabOutcome, popupObservationHeader } from '../plugins/sleight/lib/direct-browser/tools.mjs';
 import { handoffMessages } from '../plugins/sleight/lib/direct-browser/handoff.mjs';
 import { closedSubmitWarning, shortStepOutcomes } from '../plugins/sleight/lib/direct-browser/act.mjs';
 import { guardUnavailableReason, guardPathReason } from '../plugins/sleight/hooks/preapproved-write-guard.mjs';
@@ -94,9 +94,9 @@ test('the turbo skill reopens the page after an away handoff within its reviewed
 });
 
 test('wait and closed-submit review outcomes have a reviewed prompt budget', () => {
-  const outcomes = [...Object.values(shortStepOutcomes), closedSubmitWarning];
+  const outcomes = [...Object.values(shortStepOutcomes), closedSubmitWarning, popupObservationHeader];
   assert.equal(hash(JSON.stringify(outcomes)), baseline.browserReviewOutcomes);
-  assert.ok(outcomes.reduce((sum, text) => sum + text.length, 0) <= 205);
+  assert.ok(outcomes.reduce((sum, text) => sum + text.length, 0) <= 241);
 });
 
 function placement(t, env = {}) {
@@ -438,6 +438,29 @@ test('AO prompt inventory counts browser_open and first-call guidance only under
 });
 
 import { withMT } from './fixtures/mt-env.mjs';
+test('PF7 batch wording is default-off with its own catalog hash and unchanged schemas and notices', { skip }, async t => {
+  const saved = process.env.SLEIGHT_FORM_BATCH;
+  t.after(() => { if (saved === undefined) delete process.env.SLEIGHT_FORM_BATCH; else process.env.SLEIGHT_FORM_BATCH = saved; });
+  await withMT(undefined, async () => {
+    delete process.env.SLEIGHT_FORM_BATCH;
+    const before = browserTools('bfixture');
+    for (const value of ['0', 'true', 'yes']) {
+      process.env.SLEIGHT_FORM_BATCH = value;
+      assert.deepEqual(browserTools('bfixture'), before);
+    }
+    process.env.SLEIGHT_FORM_BATCH = '1';
+    const after = browserTools('bfixture');
+    assert.deepEqual(after.map(t => t.inputSchema), before.map(t => t.inputSchema));
+    assert.deepEqual(after.filter(t => t.name !== 'browser_fill'), before.filter(t => t.name !== 'browser_fill'));
+    assert.equal(hash(JSON.stringify(after)), baseline.browserToolsFormBatch);
+    assert.equal(JSON.stringify(after).length - JSON.stringify(before).length, 50);
+    assert.match(after.find(t => t.name === 'browser_fill').description, /same call as the last field/);
+    assert.match(after.find(t => t.name === 'browser_fill').description, /select\/listbox\/combobox/);
+    assert.match(after.find(t => t.name === 'browser_fill').description, /only when user asked/);
+    assert.equal(hash(JSON.stringify([...noticeInventory(), ...sharedNoticeInventory(), ...taggedNoticeInventory()].map(e => e.text))), baseline.notices);
+  });
+  await withMT('0', async () => assert.equal(hash(JSON.stringify(browserTools('bfixture'))), baseline.browserToolsLegacy));
+});
 for (const mode of [undefined, '0']) test(`MT browser descriptions stay pinned inside existing budgets, switch=${mode}`, async () => withMT(mode, async () => {
   const tools = browserTools('bfixture');
   // HO1 pins both catalogs after the handoff wording trim.

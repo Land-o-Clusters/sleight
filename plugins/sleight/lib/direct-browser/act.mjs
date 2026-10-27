@@ -217,6 +217,8 @@ export function createActionRunner({ check, snapshot, backgroundClick = (tab, lo
     try { validate(steps); } catch (error) { error.notRun = true; throw error; }
     const { page, state } = tab, since = state.snapshotNo > 0 ? state.snapshotNo : undefined, lines = []; let stoppedAt = null;
     let observed, observeError, confirmation, blocker, carry, carryPopupFrom, closed = false, observeWaitMs = 600, recordingStopped = false, paused = false;
+    const fullOnce = process.env.SLEIGHT_FULL_OBSERVE_ONCE === '1' && observe === 'full';
+    let fullObservation = false;
     const read = async options => { const capturedAt = now(), result = await snapshot(page, options); observed = { ...result, capturedAt }; return observed; };
     // Keep requests across step watchers: a wait after a click must see work that click left in flight.
     const batchWatch = watch(page, state, now);
@@ -644,7 +646,10 @@ export function createActionRunner({ check, snapshot, backgroundClick = (tab, lo
     const needsRead = !lossFixes || observe !== 'none' || stoppedAt !== null || lines.some(line => /\[ref=/.test(line));
     if (!closed && !state.dialog && state.actionPending) lines.push('Read deferred: input still pending; wait for it before browser_read.');
     else if (!closed && !state.dialog && !state.stuck && needsRead) try {
-      await Promise.race([read({ since, maxChars: 8000 }), batchWatch.dialogReady]);
+      await Promise.race([read({ since: fullOnce ? undefined : since, maxChars: 8000 }).then(value => {
+        fullObservation = fullOnce;
+        return value;
+      }), batchWatch.dialogReady]);
     } catch (error) {
       if (!state.dialog && /Snapshot (unavailable|acquisition)/i.test(error.message)) await probePage(tab);
       if (!state.dialog) observeError = clean(error.message);
@@ -656,18 +661,19 @@ export function createActionRunner({ check, snapshot, backgroundClick = (tab, lo
     }
     if (blocker && observed && observed !== blocker && !observed.text.includes(blocker.text)) observed.text += '\nBlocker controls (untrusted page content):\n' + blocker.text;
     if (observed) {
-      const changed = observed.text.split('\n').filter(line => /^[+~-]\s/.test(line)).length;
+      // A full page includes unchanged rows. They are context, never change evidence.
+      const changed = fullOnce ? 0 : observed.text.split('\n').filter(line => /^[+~-]\s/.test(line)).length;
       // One final snapshot describes the whole batch, never the effect of each input.
       // Keep each dispatch/refusal line and the delivered snapshot; deduplicate only the shared count.
       const shared = changed && lines.filter(line => line.includes('input sent; observation below')).length > 1;
       const detail = changed ? changed + ' lines changed (batch observation below)'
-        : /no (?:visible )?changes?/i.test(observed.text) ? `no visible change within ${observeWaitMs} ms` : 'input sent; page below';
+        : !fullOnce && /no (?:visible )?changes?/i.test(observed.text) ? `no visible change within ${observeWaitMs} ms` : 'input sent; page below';
       for (let i = 0; i < lines.length; i++) lines[i] = lines[i].replace('input sent; observation below', shared ? 'input sent' : detail);
       if (shared) lines.push(shortStepOutcomes.batch.replace('<count>', changed));
     }
     if (observeError) lines.push('Read unavailable: ' + observeError + '; use browser_read before retrying.');
     if (!needsRead) for (let i = 0; i < lines.length; i++) lines[i] = lines[i].replace('input sent; observation below', 'input sent');
-    return { lines, stoppedAt, observe: observed, ...(paused ? { paused: true } : {}), ...(closed ? { closed: true } : {}), ...(confirmation ? { confirmation } : {}) };
+    return { lines, stoppedAt, observe: observed, ...(fullObservation && observed ? { fullObservation: true } : {}), ...(paused ? { paused: true } : {}), ...(closed ? { closed: true } : {}), ...(confirmation ? { confirmation } : {}) };
     } finally { batchWatch.stop(); if (recordingStopped) carry?.stop(); }
   };
 }
