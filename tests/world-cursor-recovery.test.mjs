@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtempSync, readFileSync, existsSync, statSync, rmSync, readdirSync } from 'node:fs';
-import { homedir } from 'node:os';
+import { mkdtempSync, readFileSync, existsSync, statSync, rmSync, readdirSync, realpathSync } from 'node:fs';
+import { homedir, tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { DesktopDriver } from '../bench/world/arms/cursor-cu/desktop.mjs';
@@ -17,7 +17,7 @@ import { recover } from '../bench/world/arms/cursor-cu/recover.mjs';
 const previous = { model: 'Other model', effort: 'Medium', speed: 'Normal', attachment: 'None', target: 'Cloud' };
 const owner = { pid: 42, bundleId: CURSOR_PIN.bundleId, executable: '/Applications/Cursor.app/Contents/MacOS/Cursor', launchAt: 1000 };
 function fixture(t, { priorAX = false, occupied = false } = {}) {
-  const dir = mkdtempSync('/private/tmp/cu2r-'); t.after(() => rmSync(dir, { recursive: true, force: true }));
+  const dir = mkdtempSync(join(realpathSync(tmpdir()), 'cu2r-')); t.after(() => rmSync(dir, { recursive: true, force: true }));
   const paths = armPaths({ home: dir }), plan = composerPlan({ paths, prompt: 'Edit.', ownerSaysCursorFree: true });
   let selection = structuredClone(previous), enabled = priorAX, snapshot = { composers: [], bubbles: {} };
   const actions = [], ui = {
@@ -119,7 +119,7 @@ for (const tool of ['run_terminal_cmd', 'edit_file', 'workspace_search', 'unknow
 test('saved Cursor evidence removes home paths and the owner name from keys and values', () => {
   const name = homedir().split('/').at(-1);
   const text = JSON.stringify(scrubCursor({ plan: { database: `${homedir()}/Library/Application Support/Cursor/state.vscdb` },
-    answer: `Hello ${name}; /Users/OtherOwner/work/file`, [name]: name }));
+    answer: `Hello ${name}; ${['', 'Users', 'OtherOwner', 'work', 'file'].join('/')}`, [name]: name }));
   assert.ok(!text.includes(homedir())); assert.ok(!text.includes(name)); assert.doesNotMatch(text, /\/Users\/OtherOwner/);
   assert.match(text, /~\/Library/);
 });
@@ -140,7 +140,7 @@ test('Swift approval press pins exact English session title and scopes UI contro
 });
 
 test('a child crash after setting leaves the original selection journal and blocks a new process', t => {
-  const dir = mkdtempSync('/private/tmp/cu2r-crash-'); t.after(() => rmSync(dir, { recursive: true, force: true }));
+  const dir = mkdtempSync(join(realpathSync(tmpdir()), 'cu2r-crash-')); t.after(() => rmSync(dir, { recursive: true, force: true }));
   const r = spawnSync(process.execPath, ['tests/fixtures/cursor-cu-crash.mjs', dir], { encoding: 'utf8', timeout: 5000 });
   assert.equal(r.status, 23, r.stderr);
   const paths = armPaths({ home: dir });

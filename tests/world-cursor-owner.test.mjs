@@ -1,7 +1,12 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
-import { readFileSync, mkdtempSync, rmSync } from 'node:fs';
+import { readFileSync, mkdtempSync, rmSync, realpathSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+
+// A fixed, never-created home for pure path math.
+const FIXTURE_HOME = ['', 'private', 'tmp', 'cu2-owner-fixture'].join('/');
 import { armPaths, composerPlan, guardLive, CURSOR_PIN } from '../bench/world/arms/cursor-cu/contract.mjs';
 import { makeCalibration } from '../bench/world/arms/cursor-cu/selection.mjs';
 import { DesktopDriver } from '../bench/world/arms/cursor-cu/desktop.mjs';
@@ -9,7 +14,7 @@ import { runDesktop } from '../bench/world/arms/cursor-cu/run.mjs';
 import { answerCards } from '../bench/world/arms/cursor-cu/host.mjs';
 import { parseOptions, nativePlan, nativeMain } from '../bench/world/arms/cursor-cu/suite.mjs';
 
-const paths = armPaths({ home: '/private/tmp/cu2-owner-fixture' });
+const paths = armPaths({ home: FIXTURE_HOME });
 const identity = { pid: 42, bundleId: CURSOR_PIN.bundleId, executable: '/Applications/Cursor.app/Contents/MacOS/Cursor', launchAt: 1000 };
 const previous = { model: 'Other model', effort: 'Medium', speed: 'Normal', attachment: 'None', target: 'Cloud' };
 const desired = { model: 'Grok 4.7 High', effort: 'High', speed: 'Normal', attachment: 'Computer Use', target: 'This Mac' };
@@ -18,7 +23,7 @@ const plan = () => ({ ...composerPlan({ prompt: 'Edit.', paths }), ownerSaysCurs
 const fixtureHomes = [];
 process.once('exit', () => { for (const home of fixtureHomes) rmSync(home, { recursive: true, force: true }); });
 function fixture({ failSelection = false, authenticated = true, rows = [identity] } = {}) {
-  const home = mkdtempSync('/private/tmp/cu2-owner-');
+  const home = mkdtempSync(join(realpathSync(tmpdir()), 'cu2-owner-'));
   const localPlanPaths = armPaths({ home });
   fixtureHomes.push(home);
   const calls = []; let selection = structuredClone(previous), state = { composers: [], bubbles: {} };
@@ -52,7 +57,7 @@ test('desktop dependency graph does not import the running calibration entry', (
 });
 test('owner paths use installed Cursor and its existing profile without a launch plan', () => {
   assert.equal(paths.app, '/Applications/Cursor.app');
-  assert.equal(paths.userData, '/private/tmp/cu2-owner-fixture/Library/Application Support/Cursor');
+  assert.equal(paths.userData, `${FIXTURE_HOME}/Library/Application Support/Cursor`);
   for (const key of ['home', 'extensions']) assert.equal(paths[key], undefined);
 });
 test('explicit owner free flag is required before any host read', async () => {

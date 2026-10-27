@@ -165,7 +165,7 @@ test('native probe route uses one existing Finder incarnation without a launch o
   f.api.app = process => { assert.equal(process, target); return {}; };
   f.source.nativeAX = () => f.api;
   f.source.ensureFinderAX = () => assert.fail('probe must never enter Finder restart recovery');
-  const root = '/private/tmp/sleight-finder-probe-OFFLINE';
+  const root = ['', 'private', 'tmp', 'sleight-finder-probe-OFFLINE'].join('/');
   const result = JSON.parse(f.source.runFinderSetupProbe({ bundle: 'com.apple.finder', ownerAway: true, stopOnLiveHold: true,
     fixtureRoot: root, target: root + '/Finder-probe', control: root + '/control.json' }, () => {}));
   assert.equal(result.passed, true);

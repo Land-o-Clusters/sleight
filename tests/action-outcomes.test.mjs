@@ -785,13 +785,14 @@ test('with both switches off the guard code is the base build\'s, byte for byte'
   // PL1 changes the serialized list picker and its guard callbacks; the compact reuse payload stays the same.
   // PL1b restricts nested keyboard focus and click provenance. Substituting the original picker reproduces the PL1 pins.
   // PL1c checks direct rows and stops when focus disappears after keys. Restoring the PL1b picker reproduces its pins.
+  // PF2 adds the bounded list-focus recovery click. Restoring the pre-PF2 picker reproduces the previous pins.
   assert.deepEqual({
     guarded: hash(guardedCode('await app.click(1);', window)),
     guardedLean: hash(guardedCode('await app.click(1);', window, undefined, undefined, { prompt: 'lean' })),
     reuse: hash(guardedCode('await app.click(1);', window, undefined, undefined, { reuseSetup: true, acknowledge: true })),
     read: hash(readCode('void 0;', { acknowledge: true })),
     repl: hash(replSetupCode()),
-  }, { guarded: '13dbbddbff96ef95', guardedLean: 'f173538d2c0e28c3', reuse: 'b824edb3aa6dc2c4', read: 'daf83f5edf48896f', repl: 'daf83f5edf48896f' });
+  }, { guarded: '75ddffb71fa5b5e4', guardedLean: '396defb39a4665f7', reuse: 'b824edb3aa6dc2c4', read: '72e105e76c044da6', repl: '72e105e76c044da6' });
 });
 
 test('DP1 off preserves the pre-DP1 guard, read and REPL bytes', () => {
@@ -807,8 +808,8 @@ test('DP1 off preserves the pre-DP1 guard, read and REPL bytes', () => {
       repl: replSetupCode(),
     };
     assert.deepEqual(Object.fromEntries(Object.entries(codes).map(([key, code]) => [key, hash(code)])), {
-      guarded: '13dbbddbff96ef95', guardedLean: 'f173538d2c0e28c3', reuse: 'b824edb3aa6dc2c4',
-      read: '222eeec1db65d980', repl: '222eeec1db65d980',
+      guarded: '75ddffb71fa5b5e4', guardedLean: '396defb39a4665f7', reuse: 'b824edb3aa6dc2c4',
+      read: '75f023828daff4eb', repl: '75f023828daff4eb',
     });
     for (const code of Object.values(codes)) assert.doesNotMatch(code, /closedLast|beforeRead|state\.dp1|state\.closeRead|\[sleight:dp1\]/);
   } finally {
