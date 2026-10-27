@@ -128,8 +128,8 @@ test('Finder cleanup refuses matching fixture paths without a creation receipt',
 test('Finder cleanup preserves an unreceipted extra window even at the exact target path', () => {
   const f = fixture(), extra = { ...f.windows[0] };
   f.windows.push(extra);
-  assert.throws(() => f.close(), /extra window ownership unconfirmed/);
-  assert.deepEqual(f.closed, []);
+  f.close();
+  assert.deepEqual(f.closed, f.windows.slice(0, 4));
   assert.ok(f.api.windows().includes(extra));
 });
 

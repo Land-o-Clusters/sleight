@@ -243,10 +243,20 @@ function finderStaticFailure(error) {
   if (writeCode) { reason = 'ax-write-failed'; if (code === undefined) code = Number(writeCode[1]); }
   var names = ['Error', 'TypeError', 'RangeError', 'ReferenceError', 'SyntaxError', 'URIError', 'EvalError',
     'NSInvalidArgumentException', 'NSRangeException', 'NSInternalInconsistencyException', 'NSUnknownKeyException', 'NSGenericException'];
-  return { failureReason: reason,
+  var result = { failureReason: reason,
     errorName: name === undefined ? 'unavailable' : names.indexOf(name) !== -1 ? name : 'other',
     errorCode: code === undefined ? 'unavailable' : typeof code === 'number' &&
       (code === 0 || code >= -25214 && code <= -25200 && code === Math.floor(code)) ? code : 'other' };
+  if (reason === 'baseline-changed') {
+    var phase = field('phase');
+    if (['pre-press', 'poll', 'validate', 'cleanup'].indexOf(phase) !== -1) result.phase = phase;
+    ['baselineCount', 'currentCount', 'missingIndex'].forEach(function (key) {
+      var value = field(key);
+      if (typeof value === 'number' && isFinite(value) && value >= 0 && value <= 9007199254740991 && Math.floor(value) === value) result[key] = value;
+    });
+    if (field('missingRole') === 'AXWindow') result.missingRole = 'AXWindow';
+  }
+  return result;
 }
 
 function finderMissingFailure(reason) {
@@ -265,9 +275,25 @@ function finderRoleLedger(receipt, api) {
   return receipt;
 }
 
-// Keep every reference in the inventory, including inert baseline scroll areas.
-// Only new AXWindow references can become fixture candidates.
-function finderRoleInventory(app, api, receipt) {
+function finderBaselineChange(current, receipt, api, phase) {
+  for (var index = 0; index < receipt.baseline.length; index++) {
+    var entry = receipt.baseline[index];
+    // Finder can replace the desktop scroll area when a window opens. Only
+    // baseline windows have a persistent identity that setup must preserve.
+    if (entry.role !== 'AXWindow') continue;
+    var matches = current.filter(function (item) { return api.equal(item.reference, entry.reference); });
+    if (matches.length !== 1 || matches[0].role !== 'AXWindow')
+      return Object.assign(new Error('Finder pre-action baseline role inventory changed'), {
+        phase: phase, baselineCount: receipt.baseline.length, currentCount: current.length,
+        missingRole: 'AXWindow', missingIndex: index
+      });
+  }
+  return null;
+}
+
+// Scroll areas are inert, regardless of their number or identity. They never
+// become fixture candidates. Reject malformed inventories before using them.
+function finderRoleInventory(app, api, receipt, phase) {
   if (receipt) finderRoleLedger(receipt, api);
   var windows = api.windows(app), message = 'Finder fixture window inventory unconfirmed', result = [];
   if (!Array.isArray(windows)) throw windowInventoryError(message, 'malformed-list');
@@ -283,15 +309,8 @@ function finderRoleInventory(app, api, receipt) {
     result.push({ reference: item, role: role });
   });
   if (receipt) {
-    receipt.baseline.forEach(function (entry) {
-      var matches = result.filter(function (current) { return api.equal(current.reference, entry.reference); });
-      if (matches.length !== 1 || matches[0].role !== entry.role)
-        throw new Error('Finder pre-action baseline role inventory changed');
-    });
-    result.forEach(function (entry, index) {
-      if (entry.role !== 'AXWindow' && !receipt.baseline.some(function (before) { return api.equal(entry.reference, before.reference); }))
-        throw windowInventoryError(message, 'non-window-or-stale', windows.length, index);
-    });
+    var changed = finderBaselineChange(result, receipt, api, phase);
+    if (changed) throw changed;
   }
   return result;
 }
@@ -305,23 +324,23 @@ function openFinderFolder(request, app, previous, api, clock, retain) {
   // exclusive Finder setup; inventory and the menu action are separate calls.
   request.finderOwnership = { schema: 'finder-role-baseline-v1', baseline: before, created: [] };
   if (previous && !before.some(function (item) { return api.equal(item.reference, previous); })) throw new Error('Finder previous window absent from inventory');
-  function candidates() {
-    return finderRoleInventory(app, api, request.finderOwnership).filter(function (item) {
-      return !before.some(function (other) { return api.equal(item.reference, other.reference); });
+  function candidates(phase) {
+    return finderRoleInventory(app, api, request.finderOwnership, phase).filter(function (item) {
+      return item.role === 'AXWindow' && !before.some(function (other) { return api.equal(item.reference, other.reference); });
     }).map(function (item) { return item.reference; });
   }
   function unopened() {
     clock.check();
-    if (candidates().length) throw new Error('Finder window appeared before New Finder Window');
+    if (candidates('pre-press').length) throw new Error('Finder window appeared before New Finder Window');
     api.finderFolderGuard(app, null, null);
-    if (candidates().length) throw new Error('Finder window appeared before New Finder Window');
+    if (candidates('pre-press').length) throw new Error('Finder window appeared before New Finder Window');
   }
   function validate() {
     clock.check();
-    var fresh = candidates();
+    var fresh = candidates('validate');
     if (fresh.length !== 1 || !api.equal(fresh[0], window)) throw new Error('New Finder fixture window identity changed');
     api.finderFolderGuard(app, window, sheet);
-    fresh = candidates();
+    fresh = candidates('validate');
     if (fresh.length !== 1 || !api.equal(fresh[0], window)) throw new Error('New Finder fixture window identity changed');
   }
   try {
@@ -332,17 +351,19 @@ function openFinderFolder(request, app, previous, api, clock, retain) {
   var deadline = clock.now() + 5000;
   while (clock.now() < deadline) {
     clock.check();
-    var fresh = candidates();
+    var fresh = candidates('poll');
     if (fresh.length > 1) throw new Error('New Finder fixture window ambiguous');
-    if (fresh.length === 1) { window = fresh[0]; break; }
+    if (fresh.length === 1) {
+      window = fresh[0];
+      request.finderOwnership.created.push(window);
+      retain(window);
+      if (clock.emit) clock.emit({ stage: 'finder-window-retained', referenceExported: false });
+      break;
+    }
     api.finderFolderGuard(app, null, null);
     clock.wait(100);
   }
   if (!window) throw new Error('New Finder fixture window unconfirmed');
-  validate();
-  request.finderOwnership.created.push(window);
-  retain(window);
-  if (clock.emit) clock.emit({ stage: 'finder-window-retained', referenceExported: false });
   validate();
   api.menu(app, 'Go', ['Go to Folder…', 'Go to Folder...'], validate, true, true);
   deadline = clock.now() + 5000;
@@ -770,15 +791,21 @@ function finderFixtureWindow(window, request, api) {
 function closeFinderFixtureWindows(owned, request, app, api) {
   var receipt = finderRoleLedger(request.finderOwnership, api);
   function contains(list, window) { return list.some(function (item) { return api.equal(item, window); }); }
-  var baseline = receipt.baseline.map(function (entry) { return entry.reference; });
+  var baseline = receipt.baseline.filter(function (entry) { return entry.role === 'AXWindow'; })
+    .map(function (entry) { return entry.reference; }), reported = false;
   if (!owned || !contains(receipt.created, owned) || contains(baseline, owned))
     throw new Error('Finder fixture window ownership unconfirmed');
   function inventory() {
-    var windows = finderRoleInventory(app, api, receipt).map(function (entry) { return entry.reference; });
-    if (windows.some(function (window) {
-      return !contains(baseline, window) && !contains(receipt.created, window);
-    })) throw new Error('Finder extra window ownership unconfirmed');
-    return windows;
+    var entries = finderRoleInventory(app, api);
+    var changed = finderBaselineChange(entries, receipt, api, 'cleanup');
+    if (changed && !reported && api.emit) {
+      reported = true;
+      api.emit({ stage: 'finder-baseline-changed', finderBaselineChange: finderStaticFailure(changed) });
+    }
+    // Closing a recorded fixture does not depend on unchanged owner windows.
+    // Unrecorded windows stay untouched, even when they point into the bank.
+    return entries.filter(function (entry) { return entry.role === 'AXWindow'; })
+      .map(function (entry) { return entry.reference; });
   }
   function listed(window) { return contains(inventory(), window); }
   function validate(window) {

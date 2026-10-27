@@ -86,3 +86,34 @@ test('bounded native error schema accepts AX codes and fixed exception names onl
   }
   for (const code of [NaN, Infinity, -25215, -25199, 0.5, '0']) assert.equal(classify({ code }).errorCode, 'other');
 });
+
+for (const phase of ['pre-press', 'poll', 'validate', 'cleanup']) test(`baseline diagnostics preserve fixed metadata in ${phase}`, () => {
+  const s = { ObjC: { import() {} } };
+  runInNewContext(readFileSync(new URL('../bench/real-fixture.js', import.meta.url), 'utf8'), s);
+  const owner = { role: 'AXWindow', title: 'owner-private-title', document: '/owner/private/path' };
+  const receipt = { schema: 'finder-role-baseline-v1', baseline: [{ reference: owner, role: 'AXWindow' }], created: [] };
+  const api = { windows: () => [{ role: 'AXScrollArea' }], equal: (a, b) => a === b, finderRole: w => w.role };
+  assert.throws(() => s.finderRoleInventory({}, api, receipt, phase), error => {
+    const diagnostic = JSON.parse(JSON.stringify(s.finderStaticFailure(error)));
+    assert.deepEqual(diagnostic, { failureReason: 'baseline-changed', errorName: 'Error', errorCode: 'unavailable',
+      phase, baselineCount: 1, currentCount: 1, missingRole: 'AXWindow', missingIndex: 0 });
+    assert.deepEqual(finderDiagnostic({ finderFailure: diagnostic }), { finderFailure: diagnostic });
+    assert.doesNotMatch(JSON.stringify({ message: error.message, diagnostic }), /owner-private|\/owner\/private/);
+    return true;
+  });
+});
+
+test('baseline diagnostics discard private vocabulary, invalid counts and extra data at both boundaries', () => {
+  const classify = source();
+  for (const value of ['owner-private-title', -1, 0.5, NaN, Infinity, Number.MAX_SAFE_INTEGER + 1, null, {}, []]) {
+    const input = { message: 'Finder pre-action baseline role inventory changed', name: 'Error', phase: 'owner-private-title',
+      baselineCount: value, currentCount: value, missingIndex: value, missingRole: '/owner/private/path', title: 'owner-private-title' };
+    const expected = { failureReason: 'baseline-changed', errorName: 'Error', errorCode: 'unavailable' };
+    assert.deepEqual(classify(input), expected);
+    assert.deepEqual(finderDiagnostic({ finderBaselineChange: { ...input, ...expected } }), { finderBaselineChange: expected });
+  }
+  const error = new Error('Finder pre-action baseline role inventory changed');
+  for (const key of ['phase', 'baselineCount', 'currentCount', 'missingIndex', 'missingRole'])
+    Object.defineProperty(error, key, { get() { throw new Error('owner-private-getter-error'); } });
+  assert.deepEqual(classify(error), { failureReason: 'baseline-changed', errorName: 'Error', errorCode: 'unavailable' });
+});
