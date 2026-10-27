@@ -10,9 +10,10 @@ import { fileURLToPath } from 'node:url';
 import { createPackageInventory, packageFiles } from '../plugins/sleight/lib/direct-browser/session-host.mjs';
 import { acceptedInstalledPackage } from '../plugins/sleight/lib/direct-browser/installed-config.mjs';
 import { buildReceipt } from '../plugins/sleight/lib/direct-browser/turbo-setup.mjs';
+import { trackTemp } from '../scripts/temp-leftovers.mjs';
 
 function fixture(t) {
-  const root = mkdtempSync(join(realpathSync(tmpdir()), 'sleight-package-cache-'));
+  const root = trackTemp(mkdtempSync(join(realpathSync(tmpdir()), 'sleight-package-cache-')));
   t.after(() => rmSync(root, { recursive: true, force: true }));
   const content = { 'host.mjs': 'export const value = 1;', 'native/peer-host.c': 'peer',
     'native/consent-host.swift': 'consent', 'playwright-files.json': '{}',

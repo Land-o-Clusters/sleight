@@ -1,7 +1,7 @@
 // Reviewer's adversarial cases, restricted to owned temporary package fixtures.
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtempSync, realpathSync, mkdirSync, writeFileSync, readFileSync, rmSync, chmodSync, lstatSync, utimesSync,
+import { existsSync, mkdtempSync, realpathSync, mkdirSync, writeFileSync, readFileSync, rmSync, chmodSync, lstatSync, utimesSync,
   renameSync, linkSync, copyFileSync, constants } from 'node:fs';
 import { execFileSync, spawn } from 'node:child_process';
 import { createHash } from 'node:crypto';
@@ -24,7 +24,8 @@ function fixture(t) {
 const flip = (file, orig) => writeFileSync(file, 'x'.repeat(Buffer.byteLength(orig)));
 
 // 1. Shared-mapping write: bytes change, no stat field changes while the mapping lives.
-test('a write through a live MAP_SHARED mapping is detected at the first check after the 1 s TTL', async t => {
+test('a write through a live MAP_SHARED mapping is detected at the first check after the 1 s TTL',
+  { skip: !existsSync('/usr/bin/python3') && 'needs /usr/bin/python3' }, async t => {
   const f = fixture(t), file = join(f.root, 'lib/act.mjs');
   assert.equal(f.inventory.current(), true);
   const acceptedAt = performance.now(), before = lstatSync(file, { bigint: true });
