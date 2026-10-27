@@ -7,6 +7,7 @@ import { join } from 'node:path';
 import { registerTemp } from '../scripts/temp-leftovers.mjs';
 import * as live from '../bench/remote-approval-live.mjs';
 import { remotePlan, runRemoteApproval, gradeRemote } from '../bench/remote-approval-live.mjs';
+import { REMOTE_NOTICE } from '../bench/remote-approval-evidence.mjs';
 
 test('dry-run has no live effects, fixes TextEdit, loads the mod and uses an interactive session', async () => {
   const result = await runRemoteApproval({ dryRun: true }, new Proxy({}, { get: () => () => assert.fail('dry-run touched live IO') }));
@@ -22,7 +23,7 @@ test('live requires owner-away, takes and releases only its own lock, waits on h
   const order = [], written = [];
   const plan = remotePlan();
   const turns = [
-    { firstToolAt: 100, noticeAt: 250, text: '"TextEdit" needs approval on the Mac. Ask the user to reply: allow TextEdit', grants: [], complete: false },
+    { firstToolAt: 100, noticeResult: { t: 250, text: REMOTE_NOTICE }, grants: [], complete: false },
     { text: 'Please reply: allow TextEdit', grants: [], complete: false },
     { text: 'RA1 fixture complete', grants: ['com.apple.TextEdit'], complete: true },
     { text: 'Please reply: allow TextEdit, Mail', grants: [], complete: false },
@@ -31,6 +32,8 @@ test('live requires owner-away, takes and releases only its own lock, waits on h
     hold: async () => { order.push('hold'); },
     lock: async () => { order.push('lock'); return async () => order.push('unlock'); },
     login: async () => { order.push('login'); },
+    prewarm: async () => { order.push('prewarm'); return { status: 'ready' }; },
+    evidence: async () => { order.push('evidence'); return '/fixture/evidence'; },
     prepare: async () => ({ fixture: 'RA1 fixture', mail: 'Mail', bank: '/fixture/bank' }),
     fixture: async () => { order.push('fixture'); },
     session: async () => ({ submit: async text => { order.push(text); return turns.shift(); }, close: async () => { order.push('close'); return { clean: true }; } }),
@@ -44,19 +47,22 @@ test('live requires owner-away, takes and releases only its own lock, waits on h
   assert.ok(order.indexOf('hold') < order.indexOf('fixture'));
   assert.ok(order.indexOf('lock') < order.indexOf('fixture'));
   assert.ok(order.indexOf('login') >= 0 && order.indexOf('login') < order.indexOf('fixture'));
+  assert.ok(order.indexOf('prewarm') > order.indexOf('login') && order.indexOf('prewarm') < order.indexOf('fixture'));
+  assert.ok(order.indexOf('evidence') < order.indexOf('cleanup'));
+  assert.equal(result.noticeMs, 150);
   assert.ok(order.indexOf('close') < order.indexOf('cleanup'));
   assert.ok(order.indexOf('cleanup') < order.indexOf('unlock'));
   assert.ok(order.includes('yes')); assert.ok(order.includes('allow TextEdit'));
   assert.equal(written.length, 1);
-  assert.match(written[0].path, /docs\/benchmarks\/2026-10-25-remote-approval-/);
+  assert.equal(written[0].path, '/fixture/evidence/report.json');
   assert.equal(plan.app, 'TextEdit');
 });
 
 test('grading rejects hangs, a yes grant, missing mail app, model-only completion and a wrong typed grant', () => {
-  const notice = { firstToolAt: 0, noticeAt: 10001, text: '"TextEdit" needs approval on the Mac. Ask the user to reply: allow TextEdit' };
+  const notice = { firstToolAt: 0, noticeResult: { t: 45001, text: REMOTE_NOTICE } };
   const yes = { grants: [] }, typed = { grants: ['com.apple.TextEdit'], complete: true };
   assert.equal(gradeRemote({ notice, yes, typed, upfront: { text: 'allow TextEdit, Mail' }, mail: 'Mail' }).passed, false);
-  notice.noticeAt = 9000;
+  notice.noticeResult.t = 44000;
   assert.equal(gradeRemote({ notice, yes, typed, upfront: { text: 'allow TextEdit, Mail' }, mail: 'Mail' }).passed, true);
   for (const changes of [{ yes: { grants: ['com.apple.TextEdit'] } }, { typed: { grants: [], complete: true } },
     { typed: { grants: ['com.apple.TextEdit'], complete: false } }, { upfront: { text: 'allow TextEdit' } }]) {
@@ -68,6 +74,7 @@ test('failed child collection or fixture cleanup retains the live lock and write
   let released = false, writes = 0, saved;
   const io = { hold: async () => {}, lock: async () => async () => { released = true; },
     login: async () => {},
+    prewarm: async () => ({ status: 'ready' }), evidence: async () => '/fixture/evidence',
     prepare: async () => ({ fixture: 'RA1 fixture', mail: 'Mail' }), fixture: async () => {},
     session: async () => ({ submit: async () => { throw Error('fixture refusal sk-ant-fixture123'); }, close: async () => ({ clean: false }) }),
     cleanup: async () => true, write: (_path, value) => { writes++; saved = value; }, now: () => new Date('2026-10-25T01:02:03Z') };
@@ -88,6 +95,7 @@ test('missing account login fails before preparing or opening the fixture and pr
   assert.equal(target.command, 'claude');
   let released = false, checked = 0;
   const io = { now: () => new Date('2026-10-25T01:02:03Z'), hold: async () => {},
+    evidence: async () => '/fixture/evidence',
     lock: async () => async () => { released = true; }, write() {},
     login: () => live.assertRemoteLogin(target, { home, run(command, args, options) {
       checked++;

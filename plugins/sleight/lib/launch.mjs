@@ -1046,6 +1046,7 @@ export function turboState(readConfig, env = process.env) {
 
 export async function run({ leaseDirectory, inspectInput: inspectStoppedInput, healthHelperFactory = createAppHealthHelper,
   directBrowser, ensureTurbo = false, shellRoute = false,
+  logging = approvalLogging,
   approvalStorage = { load: loadPreapproved, live: livePreapproved, add: addPreapproved },
   paymentCardFactory = createPaymentCard, recoverClipboard = recoverNativeClipboard } = {}) {
   await recoverClipboard();
@@ -1089,7 +1090,7 @@ export async function run({ leaseDirectory, inspectInput: inspectStoppedInput, h
   const permissionCheck = createPermissionCheck(), webBrowser = webBrowserCheck();
   if (permissionCheck.sitesLimited()) webBrowser.ask();
   const appBlocked = (bundleId, app) => permissionCheck.app({ bundleId, name: app });
-  const { trace, grantAudit } = approvalLogging(preapproved);
+  const { trace, grantAudit } = logging(preapproved);
   helperTrace = trace;
   handTrace = trace;
   for (const event of earlyHandTrace.splice(0)) trace?.(...event);
