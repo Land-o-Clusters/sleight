@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { PassThrough } from 'node:stream';
-import { parseTypedApps, isPresent, predictApps, upfrontAsk, remoteApprovalNotice } from '../plugins/sleight/lib/remote-approvals.mjs';
+import { parseTypedApps, isPresent, predictApps, upfrontAsk, remoteApprovalNotice, physicalApprovalNotice } from '../plugins/sleight/lib/remote-approvals.mjs';
 import { createRelay } from '../plugins/sleight/lib/relay.mjs';
 
 const apps = [
@@ -50,8 +50,12 @@ function harness(t, options = {}) {
   return { client, server, logs, close: () => relay.close(), call: msg => clientIn.write(JSON.stringify(msg) + '\n'), engine: msg => serverOut.write(JSON.stringify(msg) + '\n') };
 }
 const tick = () => new Promise(r => setImmediate(r));
-const card = (id, app = 'com.apple.TextEdit', extra = {}) => ({ id, method: 'elicitation/create', params: {
-  message: `Allow Computer Use to use "${app}"?`, _meta: { connector_id: 'computer-use', tool_params: { app }, persist: ['session', 'always'], riskLevel: 'low' }, ...extra } });
+const card = (id, app = 'com.apple.TextEdit', extra = {}) => {
+  const name = apps.find(a => a.id === app)?.name ?? app;
+  return { id, method: 'elicitation/create', params: {
+    message: `Allow Computer Use to use "${name}"?`, _meta: { connector_id: 'computer-use', tool_params: { app },
+      tool_params_display: [{ name: 'app', value: name }], persist: ['session', 'always'], riskLevel: 'low' }, ...extra } };
+};
 async function user(h, text, origin = 'bridge', id = 1) {
   h.call({ id: 'bootstrap', method: 'tools/call', params: { name: 'turn_ended', arguments: { sleight_turbo: { event: 'bootstrap' } } } });
   await tick();
@@ -60,7 +64,7 @@ async function user(h, text, origin = 'bridge', id = 1) {
   await tick(); return envelope;
 }
 
-test('authenticated mod text approves a plain session app card, with no card or Always write', async t => {
+test('authenticated allow TextEdit approves a real engine card, with no dialog or Always write', async t => {
   let asks = 0;
   const h = harness(t, { ask: async () => { asks++; return 'decline'; }, alwaysAllow: () => assert.fail('no persistent grant') });
   await user(h, 'allow TextEdit');
@@ -69,6 +73,88 @@ test('authenticated mod text approves a plain session app card, with no card or 
     { action: 'accept', content: {}, _meta: { persist: 'session' } });
   assert.ok(h.logs.some(line => /typed.*TextEdit/.test(line)));
   assert.ok(!h.server.some(m => m.method === 'tools/call'), 'user text never reaches the engine');
+});
+
+for (const panel of [false, true]) test(`away real TextEdit card returns the remote phrase, native panel=${panel}`, async t => {
+  const h = harness(t, { ask: panel ? () => new Promise(() => {}) : undefined,
+    remoteApprovals: { presence: async () => ({ idleSeconds: 999, locked: false }), catalog: async () => ({ apps }) } });
+  h.call({ id: 10, method: 'tools/call', params: { name: 'js', arguments: { code: 'await cua.getApp("TextEdit")' } } });
+  h.engine(card('real-away')); await tick();
+  assert.equal(h.server.find(m => m.id === 'real-away')?.result.action, 'decline');
+  assert.equal(h.client.find(m => m.id === 10)?.result.content[0].text, remoteApprovalNotice('TextEdit'));
+});
+
+for (const variant of ['different-id', 'missing-app', 'ambiguous', 'no-catalog', 'catalog-error', 'high-risk', 'forbidden']) {
+  test(`away real card stays physical for ${variant}, even with typed authority`, async t => {
+    const entries = variant === 'no-catalog' ? [] : [...apps, { id: 'com.apple.Terminal', name: 'Terminal' }];
+    const h = harness(t, { engineForbiddenTargets: true, remoteApprovals: {
+      presence: async () => ({ idleSeconds: 999, locked: false }),
+      catalog: async () => { if (variant === 'catalog-error') throw Error('catalog unavailable'); return { apps: entries }; },
+    } });
+    await user(h, 'allow TextEdit and Terminal');
+    const c = card('physical-shape');
+    if (variant === 'different-id') c.params.message = 'Allow Computer Use to use "Mail"?';
+    if (variant === 'missing-app') {
+      c.params.message = 'Allow Computer Use to use "Missing"?'; c.params._meta.tool_params.app = 'com.fixture.Missing';
+    }
+    if (variant === 'ambiguous') {
+      c.params.message = 'Allow Computer Use to use "Duplicate"?'; c.params._meta.tool_params.app = 'one.duplicate';
+    }
+    if (variant === 'high-risk') c.params._meta.riskLevel = 'high';
+    if (variant === 'forbidden') {
+      c.params.message = 'Allow Computer Use to use "Terminal"?'; c.params._meta.tool_params.app = 'com.apple.Terminal';
+    }
+    h.call({ id: 10, method: 'tools/call', params: { name: 'js', arguments: { code: '1' } } });
+    h.engine(c); await tick();
+    assert.equal(h.server.find(m => m.id === c.id)?.result.action, 'decline');
+    assert.equal(h.client.find(m => m.id === 10)?.result.content[0].text, physicalApprovalNotice);
+  });
+}
+
+test('bundle-id message compatibility uses the same session key as a real card', async t => {
+  const h = harness(t);
+  h.engine(card('old-shape', undefined, { message: 'Allow Computer Use to use "com.apple.TextEdit"?' })); await tick();
+  h.call({ id: 'old-shape', result: { action: 'accept' } }); await tick();
+  h.engine(card('real-shape')); await tick();
+  assert.deepEqual(h.server.find(m => m.id === 'real-shape')?.result,
+    { action: 'accept', content: {}, _meta: { persist: 'session' } });
+  await user(h, 'open TextEdit');
+  assert.equal(JSON.parse(h.client.find(m => m.id === 1).result.content[0].text).sleightRemote.context, undefined);
+});
+
+for (const source of ['session', 'list']) test(`a mismatched display name cannot use ${source} memory or grant it`, async t => {
+  const h = harness(t, { preapproved: source === 'list' ? { allows: () => true, list: () => ['com.apple.TextEdit'] } : undefined });
+  if (source === 'session') {
+    h.engine(card('accepted')); await tick();
+    h.call({ id: 'accepted', result: { action: 'accept' } }); await tick();
+  }
+  h.engine(card('mismatch', undefined, { message: 'Allow Computer Use to use "Mail"?' })); await tick();
+  assert.equal(h.server.some(m => m.id === 'mismatch' && m.result?.action === 'accept'), false);
+  h.call({ id: 'mismatch', result: { action: 'accept' } }); await tick();
+  await user(h, 'open Mail');
+  assert.equal(JSON.parse(h.client.find(m => m.id === 1).result.content[0].text).sleightRemote.context, upfrontAsk([apps[1]]));
+});
+
+test('accepting a mismatched card grants no session access for either named app', async t => {
+  const h = harness(t);
+  h.engine(card('mismatch', undefined, { message: 'Allow Computer Use to use "Mail"?' })); await tick();
+  h.call({ id: 'mismatch', result: { action: 'accept' } }); await tick();
+  h.engine(card('real')); await tick();
+  assert.ok(h.client.some(m => m.id === 'real' && m.method === 'elicitation/create'));
+  assert.equal(h.server.some(m => m.id === 'real' && m.result?.action === 'accept'), false);
+  await user(h, 'open TextEdit and open Mail');
+  assert.equal(JSON.parse(h.client.find(m => m.id === 1).result.content[0].text).sleightRemote.context, upfrontAsk(apps.slice(0, 2)));
+});
+
+test('remote shell cards require catalog identity even when the shell resolver would accept', async t => {
+  let resolutions = 0, asked;
+  const h = harness(t, { panelOnly: true, resolveApprovalApp: async () => { resolutions++; return 'com.apple.TextEdit'; },
+    ask: async (_message, appApproval) => { asked = appApproval; return 'decline'; } });
+  await user(h, 'allow TextEdit', 'composer');
+  h.engine(card('shell-mismatch', undefined, { message: 'Allow Computer Use to use "Mail"?' })); await tick();
+  assert.equal(resolutions, 0);
+  assert.equal(asked, false);
+  assert.equal(h.server.find(m => m.id === 'shell-mismatch')?.result.action, 'decline');
 });
 
 for (const variant of ['action', 'payment', 'consent', 'no-session', 'always-only', 'other-connector']) test(`typed grant cannot answer ${variant}`, async t => {
