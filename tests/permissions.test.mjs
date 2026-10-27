@@ -428,7 +428,7 @@ test('the doctor: an unsafe file is the one problem, with its fix; otherwise cou
 test('the doctor prints the permissions section after the ghost hand\'s, read-only', async t => {
   const w = world(t), lines = [];
   const { doctor } = await import('../plugins/sleight/lib/launch.mjs');
-  const code = await doctor({ env: { CODEX_HOME: '/no-such-sleight-home', SLEIGHT_CHATGPT_APP: '/no-such-ChatGPT.app' }, log: x => lines.push(x),
+  const code = await doctor({ settings: () => [], env: { CODEX_HOME: '/no-such-sleight-home', SLEIGHT_CHATGPT_APP: '/no-such-ChatGPT.app' }, log: x => lines.push(x),
     turbo: async () => ['turbo (direct browser path)'], hand: async () => ['ghost hand'], permissions: async () => permissionsDoctorLines({ home: w.home }) });
   assert.equal(code, 1);
   assert.match(lines[0], /^sleight \d+\.\d+\.\d+$/);

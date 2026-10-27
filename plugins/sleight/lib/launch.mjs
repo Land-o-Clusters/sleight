@@ -207,15 +207,15 @@ async function permissionsDoctorSection() {
   catch (err) { return ['permissions', `PROBLEM   could not read the permissions (${err.message})`]; }
 }
 
-export async function doctor({ env = process.env, log = console.log, app = process.argv.includes('--doctor') ? process.argv[process.argv.indexOf('--doctor') + 1] : undefined, timeoutMs = 5000, startupTimeoutMs = 10000, launchctlList = listLaunchdJobs, forbiddenTargets = readForbiddenTargets, preapprovedIO, auditDirectory, turbo = turboDoctorLines, hand = handDoctorSection, permissions = permissionsDoctorSection, codex = codexDoctor, cursor = cursorDoctor, grok = grokDoctor, grokbot = grokbotDoctor } = {}) {
+export async function doctor({ env = process.env, log = console.log, app = process.argv.includes('--doctor') ? process.argv[process.argv.indexOf('--doctor') + 1] : undefined, timeoutMs = 5000, startupTimeoutMs = 10000, launchctlList = listLaunchdJobs, forbiddenTargets = readForbiddenTargets, preapprovedIO, auditDirectory, turbo = turboDoctorLines, hand = handDoctorSection, permissions = permissionsDoctorSection, settings = async () => [(await import('./settings-link.mjs')).settingsDoctorLine(undefined, env)], codex = codexDoctor, cursor = cursorDoctor, grok = grokDoctor, grokbot = grokbotDoctor } = {}) {
   if (app !== undefined && (typeof app !== 'string' || !app.trim() || app.startsWith('-'))) {
     log('usage: sleight-mcp --doctor [running app name or bundle ID]'); return 1;
   }
   log(doctorVersionLine());
-  log((await import('./settings-link.mjs')).settingsDoctorLine());
   for (const line of await turbo()) log(line);
   for (const line of await hand()) log(line);
   for (const line of await permissions()) log(line);
+  for (const line of await settings()) log(line);
   for (const line of codex(env)) log(line);
   for (const line of cursor()) log(line);
   for (const line of grok(env)) log(line);

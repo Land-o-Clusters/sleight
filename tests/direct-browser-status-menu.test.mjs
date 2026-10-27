@@ -14,7 +14,7 @@ test('the menu bar item starts hidden, carries the glove template glyph and has 
   assert.match(source, /item\.isVisible = false/);
   assert.match(source, /image\.isTemplate = true/);
   assert.doesNotMatch(source, /"sleight disconnected"/);
-  assert.match(source, /let wanted = !controlRetiring && \(settingsMenu \|\| cursorPause\.paused \|\| menuVisible\(status, requests: requests, handEnabled: hand\?\.enabled \?\? false\)\)/);
+  assert.match(source, /item\.isVisible = plan\.visible\(retiring: controlRetiring, owns: owns\)/);
   // The hookup runs on the bar button only, starts on a connect transition and leaves no timer behind.
   assert.match(source, /if hookupConnects\(from: previous, to: status\)/);
   assert.match(source, /if index == hookupFrameCount \{ timer\.invalidate\(\); self\.hookupTimer = nil \}/);
@@ -32,7 +32,7 @@ test('Turn Turbo Off asks first, and Settings & Help opens only the fixed docs a
   assert.match(confirmOff, /alert\.addButton\(withTitle: "Turn Off"\)\n\s*alert\.addButton\(withTitle: "Cancel"\)\n\s*let answer = personModal\(alert, choices: \["turbo-off", "cancel"\], kind: "turbo-off"\)\n\s*if answer == \.alertFirstButtonReturn \{ respond\(id, choice\) \}/);
   assert.equal(confirmOff.match(/respond\(/g)?.length, 1, 'only the confirmed first button responds');
   // This alert must install GB12's guarded actions and retain them throughout the abortable modal.
-  assert.match(source, /func personModal\([^\n]+\{\n\s*let actions = consentInputActions\(alert, choices: choices, kind: kind\)\n(?:\s*defer \{ for action in actions \{ action\.typing\?\.invalidate\(\) \} \}\n)?\s*focus\.presenting\(\[:\]\)\n(?:\s*consentArming\(alert\.window\)\.presented\(\)\n)?\s*let result = withExtendedLifetime\(actions\) \{ modal\.run\(abort: \{ NSApp\.abortModal\(\) \}\) \{ alert\.runModal\(\) \} \}\n[^}]*DispatchQueue\.main\.async \{ self\.showNextAsk\(\) \}\n\s*return result/);
+  assert.match(source, /func personModal\([^\n]+\{\n(?:\s*if channelValidationOnly \{ return \.abort \}\n)?\s*let actions = consentInputActions\(alert, choices: choices, kind: kind\)\n(?:\s*defer \{ for action in actions \{ action\.typing\?\.invalidate\(\) \} \}\n)?\s*focus\.presenting\(\[:\]\)\n(?:\s*consentArming\(alert\.window\)\.presented\(\)\n)?\s*let result = withExtendedLifetime\(actions\) \{ modal\.run\(abort: \{ NSApp\.abortModal\(\) \}\) \{ alert\.runModal\(\) \} \}\n[^}]*DispatchQueue\.main\.async \{ self\.showNextAsk\(\) \}\n\s*return result/);
   assert.match(source, /return choice == "always" \|\| \[[^\n]*"turbo-off"(?:, "handoff")?\]\.contains\(kind\)/);
   assert.match(source, /URL\(string: "https:\/\/github\.com\/Land-o-Clusters\/sleight\/blob\/main\/docs\/settings\.md#" \+ \(status == nil \? "ghost-hand" : "turbo"\)\)/);
   assert.equal(source.match(/NSWorkspace\.shared\.open/g)?.length, 2, 'help plus the hardware-clicked characters folder');

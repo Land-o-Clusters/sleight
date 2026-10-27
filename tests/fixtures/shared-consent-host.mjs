@@ -4,7 +4,7 @@ import { spawn } from 'node:child_process';
 export async function runSharedHost(binary, steps, args = ['--hand', '--consent'], {
   spawnProcess = spawn, timeoutMs = 30000, readyTimeoutMs = 10000, collectTimeoutMs = 3000,
 } = {}) {
-  const child = spawnProcess(binary, args, { stdio: ['pipe', 'pipe', 'pipe', 'pipe', 'pipe'], env: { PATH: '/usr/bin:/bin', LANG: 'en_US.UTF-8' } });
+  const child = spawnProcess(binary, ['--channels-selftest', ...args], { stdio: ['pipe', 'pipe', 'pipe', 'pipe', 'pipe'], env: { PATH: '/usr/bin:/bin', LANG: 'en_US.UTF-8', HOME: process.env.HOME, CLAUDE_CONFIG_DIR: process.env.CLAUDE_CONFIG_DIR } });
   const out = { stdout: '', consent: '', stderr: '', alive: [] };
   let closed = false, code, readiness, cursor = 0, rejectFailure;
   const pauses = new Set();

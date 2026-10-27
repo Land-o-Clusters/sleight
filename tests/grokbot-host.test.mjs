@@ -142,7 +142,7 @@ test('keeps raw bundle values and unknown permission values out of doctor output
 
 test('launcher prints Grok Bot metadata before unavailable engine discovery stops doctor', { skip: macCommandSkip('plutil') }, async () => {
   const lines = [], io = fixture();
-  const code = await doctor({ env: { CODEX_HOME: '/no-such-sleight-home', SLEIGHT_CHATGPT_APP: '/no-such-ChatGPT.app' },
+  const code = await doctor({ settings: () => [], env: { CODEX_HOME: '/no-such-sleight-home', SLEIGHT_CHATGPT_APP: '/no-such-ChatGPT.app' },
     turbo: async () => [], hand: async () => [], permissions: async () => [], codex: () => [], cursor: () => [], grok: () => [],
     grokbot: () => grokbotDoctorLines(grokbotStatus(io)), log: line => lines.push(line),
   });

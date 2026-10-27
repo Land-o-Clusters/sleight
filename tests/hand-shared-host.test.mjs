@@ -10,8 +10,7 @@ import { swiftModuleCache } from '../bench/swift-cache.mjs';
 import { runSharedHost as shared } from './fixtures/shared-consent-host.mjs';
 
 // The shared host: one consent-host process per session serves the hand (stdin, toggle events on stdout) and turbo's consent
-// channel (fd 3 in, fd 4 out). These tests never show anything: the turbo status is disconnected and the hand is off, so the
-// glove stays hidden, and every hand frame names a window that doesn't exist.
+// channel (fd 3 in, fd 4 out). --channels-selftest runs the production parsers with menus, cards and drawing suppressed.
 const sourcePath = new URL('../plugins/sleight/lib/direct-browser/native/consent-host.swift', import.meta.url).pathname;
 const skip = macCommandSkip('xcrun');
 let built;
@@ -135,7 +134,7 @@ test('a usage value the host can\'t admit drops only the usage row: the frame st
 
 test('--consent needs its two descriptors, and the arguments stay strict', { skip }, () => {
   const binary = build();
-  const run = args => spawnSync(binary, args, { input: '', encoding: 'utf8', timeout: 30000, env: { PATH: '/usr/bin:/bin' } });
+  const run = args => spawnSync(binary, ['--channels-selftest', ...args], { input: '', encoding: 'utf8', timeout: 30000, env: { PATH: '/usr/bin:/bin' } });
   assert.equal(run(['--hand', '--consent']).status, 64, 'no fd 3 or 4');
   for (const args of [['--hand', '--consent', '--capture=visible'], ['--hand', '--consent', '--consent'], ['--consent'], ['--hand-dump', '--consent'], ['--hand', '--menu', '--consent'], ['--hand', '--consent', '--menu'], ['--hand-dump', '--menu'], ['--hand', '--menu', '--capture=hidden']]) {
     assert.equal(run(args).status, 64, args.join(' '));
@@ -143,7 +142,7 @@ test('--consent needs its two descriptors, and the arguments stay strict', { ski
 });
 
 test('the dump renders every hookup frame as a template image', { skip }, () => {
-  const result = spawnSync(build(), ['--hand-dump'], { encoding: 'utf8', timeout: 30000, env: { PATH: '/usr/bin:/bin' } });
+  const result = spawnSync(build(), ['--channels-selftest', '--hand-dump'], { encoding: 'utf8', timeout: 30000, env: { PATH: '/usr/bin:/bin' } });
   assert.equal(result.status, 0, result.stderr);
   assert.deepEqual(JSON.parse(result.stdout).hookup, { frames: 10, rendered: 10, template: true, seconds: 0.8 });
 });
