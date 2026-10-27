@@ -34,15 +34,19 @@ test('cookie policy sits outside deferred browser guidance in both skill variant
 });
 
 test('both turbo description variants carry the same policy before any engine acquisition', () => {
-  const before = process.env.SLEIGHT_MT;
+  const before = process.env.SLEIGHT_MT, pointBefore = process.env.SLEIGHT_POINT_INPUT;
   try {
-    for (const mode of [undefined, '0']) {
+    for (const mode of [undefined, '0']) for (const point of [undefined, '1']) {
+      if (point === undefined) delete process.env.SLEIGHT_POINT_INPUT; else process.env.SLEIGHT_POINT_INPUT = point;
       if (mode === undefined) delete process.env.SLEIGHT_MT; else process.env.SLEIGHT_MT = mode;
       const tools = browserTools('bfixture');
       assert.ok(tools.find(tool => tool.name === 'browser_act').description.endsWith(policy));
       assert.equal(tools.filter(tool => tool.description.includes(policy)).length, 1);
     }
-  } finally { if (before === undefined) delete process.env.SLEIGHT_MT; else process.env.SLEIGHT_MT = before; }
+  } finally {
+    if (before === undefined) delete process.env.SLEIGHT_MT; else process.env.SLEIGHT_MT = before;
+    if (pointBefore === undefined) delete process.env.SLEIGHT_POINT_INPUT; else process.env.SLEIGHT_POINT_INPUT = pointBefore;
+  }
 });
 
 for (const prompt of [undefined, 'lean']) test(`engine native acquisition delivers the cookie rule with browser rules deferred: ${prompt ?? 'default'}`, t => {

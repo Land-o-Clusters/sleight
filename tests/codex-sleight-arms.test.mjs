@@ -74,7 +74,7 @@ for (const [surface, model] of MODELS) {
     const toml = setup.codexConfig.toml;
     assert.match(toml, /enabled_tools = \["browser_open", "browser_read", "browser_act", "browser_fill", "browser_tabs"\]/);
     assert.match(toml, /enabled_tools = \["js", "js_reset", "open_file"\]/);
-    assert.match(toml, /SLEIGHT_SURFACES = "browser,computer"/); assert.match(toml, /SLEIGHT_SKILL = "none"/);
+    assert.match(toml, /SLEIGHT_SURFACES = "browser,computer"/); assert.match(toml, /SLEIGHT_SKILL = "default"/);
     assert.ok(!/SLEIGHT_TURBO = "0"/.test(toml), 'turbo stays on');
     assert.match(toml, /"--turbo-guard", "bbench"/); assert.ok(!toml.includes('--gate-window'));
     assert.match(toml, /SLEIGHT_TURBO_REAL_BROWSER = .*product-remote-debugging/);

@@ -9,6 +9,7 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 import { registerTemp } from '../scripts/temp-leftovers.mjs';
 import { turboSetup } from '../bench/turbo/setup.mjs';
 import { skillRules } from '../plugins/sleight/lib/launch.mjs';
+import { turboFirstRules } from '../plugins/sleight/lib/turbo-first-rules.mjs';
 
 const root = fileURLToPath(new URL('..', import.meta.url));
 const cache = join(homedir(), 'Library/Caches/sleight-bench/fowlbrowser');
@@ -34,12 +35,12 @@ test('turbo arm offers the engine companion and the installed turbo skill before
   const engine = setup.mcpServers['plugin:sleight:computer'];
   assert.equal(engine.command, join(root, 'plugins/sleight/bin/sleight-mcp'));
   assert.equal(engine.env.SLEIGHT_SURFACES, 'browser,computer');
-  assert.equal(engine.env.SLEIGHT_SKILL, 'none', 'the combined prompt supplies the skill once');
+  assert.equal(engine.env.SLEIGHT_SKILL, 'default', 'native acquisition still supplies its full guidance');
   assert.ok(setup.allowed.split(',').includes('mcp__plugin_sleight_computer__js'));
   assert.equal(setup.allowed.split(',').length, 8);
   const browserRules = readFileSync(join(root, 'plugins/sleight/skills/drive-mac-apps/BROWSERS.turbo-v3.md'), 'utf8').trimEnd().replace('{browser}', 'bbench').replace('{application}', ' (Google Chrome)');
   const installed = skillRules(undefined, {}).replace(/## Browsers\n[\s\S]*?(?=\n## |$)/, browserRules + '\n');
-  assert.ok(setup.promptPrefix.includes(installed), 'native rules and production turbo browser rules are preserved together');
+  assert.equal(setup.promptPrefix, turboFirstRules(installed) + '\n\n', 'same first-browser projection as the product relay');
   assert.match(setup.promptPrefix, /Never translate refs or handles between paths/);
 });
 
@@ -63,7 +64,7 @@ test('the combined turbo prompt shares the screenshot A/B switch and keeps lint 
     const setup = turboSetup({ task: fixtureTask, repo: root, dir, prompt: fixtureTask.prompt, env });
     assert.doesNotMatch(setup.promptPrefix, /<!--|vale ai-tells/);
     assert.equal(setup.promptPrefix.includes('When a document pane or table exposes no text'), prompt !== 'lean' && flag !== '0');
-    const native = skillRules(undefined, env).split('## Browsers')[0];
+    const native = turboFirstRules(skillRules(undefined, env)).split('## Browsers')[0];
     assert.ok(setup.promptPrefix.startsWith(native));
   }
 });
@@ -117,7 +118,8 @@ test('the gate tasks and optional takeover in both browser orders keep both serv
       const setup = mod.agentSetup({ task, surface: 'sleight-turbo', dir, mcpRoot: '/fixture/mcp',
         settings: '/fixture/settings.json', model: 'haiku', effort: 'high', world: true });
       assert.deepEqual(Object.keys(setup.mcpConfig.mcpServers).sort(), ['plugin:sleight:computer', 'sleight-turbo'], task.name);
-      assert.match(setup.prompt, /mcp__plugin_sleight_computer__js/);
+      assert.ok(setup.args[setup.args.indexOf('--allowedTools') + 1].split(',').includes('mcp__plugin_sleight_computer__js'),
+        'native tools stay available while native how-to is deferred');
       assert.equal(mod.surfaceObserved('sleight-turbo', task), false, 'route choice cannot prove extension tab ownership');
     }
     const settings = mod.roundSettings('sleight-turbo', { mcpRoot: '/fixture/mcp' });

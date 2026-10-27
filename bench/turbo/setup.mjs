@@ -1,4 +1,5 @@
 import { requestedSubmitRules } from '../../plugins/sleight/lib/requested-submit.mjs';
+import { turboFirstRules } from '../../plugins/sleight/lib/turbo-first-rules.mjs';
 import { dirname, join } from 'node:path';
 import { readFileSync } from 'node:fs';
 import { browserTools } from '../../plugins/sleight/lib/direct-browser/tools.mjs';
@@ -51,7 +52,8 @@ export function turboSetup({ task, repo, dir, prompt, env = process.env, realBro
     command: `node "${join(repo, 'bench/turbo/engine-browser-guard.mjs')}" ${browser}` }] };
   return { command: common.command, args: common.args, settings: { ...common.settings, hooks: { PreToolUse: [guard] } },
     mcpServers: { 'plugin:sleight:computer': { command: join(repo, 'plugins/sleight/bin/sleight-mcp'),
-      env: { SLEIGHT_SURFACES: 'browser,computer', SLEIGHT_SKILL: 'none', SLEIGHT_HAND: hand, ...(env.SLEIGHT_RS !== undefined ? { SLEIGHT_RS: env.SLEIGHT_RS } : {}) } },
+      // Native how-to is deferred from the turbo prefix, and arrives on native acquisition.
+      env: { SLEIGHT_SURFACES: 'browser,computer', SLEIGHT_SKILL: 'default', SLEIGHT_HAND: hand, ...(env.SLEIGHT_RS !== undefined ? { SLEIGHT_RS: env.SLEIGHT_RS } : {}) } },
       // The worker's hand (H8) follows the same switch, and its hand-skipped and hand-shown events reach SLEIGHT_TRACE.
       'sleight-turbo': { command: process.execPath, args: [join(repo, 'bench/turbo/v3-server.mjs')],
       // SLEIGHT_TRACE comes from the arm's env (the real gate passes its traceEnv) or else the runner's own.
@@ -64,7 +66,7 @@ export function turboSetup({ task, repo, dir, prompt, env = process.env, realBro
           : typeof process.env.SLEIGHT_TRACE === 'string' && process.env.SLEIGHT_TRACE ? { SLEIGHT_TRACE: process.env.SLEIGHT_TRACE } : {}) } } },
     allowed: [...browserTools(browser).map(tool => 'mcp__sleight-turbo__' + tool.name),
       'mcp__plugin_sleight_computer__js', 'mcp__plugin_sleight_computer__js_reset', 'mcp__plugin_sleight_computer__open_file'].join(','),
-    promptPrefix: installed + '\n\n',
+    promptPrefix: turboFirstRules(installed) + '\n\n',
     env: { ...common.env, CLAUDE_CONFIG_DIR: configDir },
     metadata: { ...common.metadata, configDir, surface: SURFACE, measurement: MEASUREMENT,
       path: 'model-selected', turboVersion: 3, standsInFor: application.slice(2, -1), runtime: 'V10 join required', playwright: '1.64.0', profile: 'owned-temporary', headless: true,

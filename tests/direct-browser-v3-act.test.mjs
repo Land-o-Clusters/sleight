@@ -146,7 +146,9 @@ test('v3 runs text, keys, choice, toggle, hover and drag operations in order', a
     { do: 'select', ref: 'e2', values: ['A', 'B'] }, { do: 'check', ref: 'e3' }, { do: 'uncheck', ref: 'e3' },
     { do: 'hover', ref: 'e4' }, { do: 'drag', ref: 'e4', to: 'f2e5' }];
   const result = await f.run(f.tab, steps, { userMessage: 'Fill these fields' });
-  assert.equal(result.lines.length, 7); assert.equal(result.stoppedAt, null);
+  assert.equal(result.lines.filter(line => /^\d+ /.test(line)).length, 7);
+  assert.equal(result.lines.at(-1), 'Batch observation: 1 lines changed.');
+  assert.equal(result.stoppedAt, null);
   assert.deepEqual(f.actions.map(a => a[0]), ['fill', 'press', 'selectOption', 'check', 'uncheck', 'hover', 'dragTo']);
   assert.equal(f.checks.length, 7);
   assert.equal(f.actions[0][2], 'hello');
@@ -306,6 +308,41 @@ test('v3 a changed diff is described as changed rather than no visible change', 
   const f = fixture({ effect: '+ button "Next" [ref=e2]\n- button "Previous" [ref=e1]' });
   const result = await f.run(f.tab, [{ do: 'click', ref: 'e1' }], {});
   assert.match(result.lines[0], /2 lines changed/);
+});
+
+test('PF3 a batch reports its shared change count once while keeping each input outcome', async () => {
+  const effect = '+ textbox "Name" [ref=e1]\n- textbox "Old name" [ref=e2]';
+  const f = fixture({ effect });
+  const result = await f.run(f.tab, [{ do: 'type', ref: 'e1', text: 'Ada' }, { do: 'type', ref: 'e2', text: 'Lee' }], {});
+  assert.deepEqual(result.lines, ['1 type e1: input sent', '2 type e2: input sent', 'Batch observation: 2 lines changed.']);
+  assert.equal(result.observe.text, effect);
+  assert.equal(result.stoppedAt, null);
+  assert.equal(f.actions.filter(a => a[0] === 'fill').length, 2);
+});
+
+test('PF3 shared observations preserve refusals and later unexecuted steps', async () => {
+  const f = fixture({ effect: '+ textbox "Name" [ref=e1]' });
+  f.states.set('e3', { submit: true, form: true });
+  f.tab.state.submitUnconfirmed = { snapshotNo: 1 };
+  const result = await f.run(f.tab, [
+    { do: 'type', ref: 'e1', text: 'Ada' }, { do: 'type', ref: 'e2', text: 'Lee' },
+    { do: 'click', ref: 'e3' }, { do: 'type', ref: 'e4', text: 'not sent' },
+  ], {});
+  assert.deepEqual(result.lines, ['1 type e1: input sent', '2 type e2: input sent',
+    '3 click e3: not run: Read before resubmitting', '4 type: not reached', 'Batch observation: 1 lines changed.']);
+  assert.equal(result.stoppedAt, 3);
+  assert.equal(f.actions.filter(a => a[0] === 'fill').length, 2);
+  assert.ok(f.tab.state.submitUnconfirmed, 'formatting cannot clear the submit fence');
+});
+
+test('PF3 compaction never calls absent or unchanged evidence a successful batch', async () => {
+  for (const options of [{}, { snapshotFail: true }]) {
+    const f = fixture(options);
+    const result = await f.run(f.tab, [{ do: 'type', ref: 'e1', text: 'Ada' }, { do: 'type', ref: 'e2', text: 'Lee' }], {});
+    assert.doesNotMatch(result.lines.join('\n'), /Batch observation:.*lines changed|success|verified/);
+    assert.match(result.lines.join('\n'), options.snapshotFail ? /Read unavailable/ : /no visible change/i);
+    assert.equal(f.actions.filter(a => a[0] === 'fill').length, 2);
+  }
 });
 
 test('v3 bare Enter classifies the focused field and its payment form', async () => {

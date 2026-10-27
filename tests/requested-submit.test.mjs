@@ -4,6 +4,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { requestedSubmitRules } from '../plugins/sleight/lib/requested-submit.mjs';
+import { turboFirstRules } from '../plugins/sleight/lib/turbo-first-rules.mjs';
 import { skillRules } from '../plugins/sleight/lib/launch.mjs';
 import { traceEnv, abFlags } from '../bench/fowl/real-gate-setup.mjs';
 import { turboSetup } from '../bench/turbo/setup.mjs';
@@ -34,7 +35,7 @@ test('the turbo skill loader agrees with the installed loader for both RS sides 
   for (const prompt of [undefined, 'lean']) for (const rs of ['0', '1', '', 'off', 'false', '00']) {
     const env = { SLEIGHT_PROMPT: prompt, SLEIGHT_RS: rs };
     const setup = turboSetup({ task, repo: '/repo', dir: `${MAC_TMP}/rs-unit/out`, prompt: task.prompt, env });
-    const native = skillRules(undefined, env).split('## Browsers')[0];
+    const native = turboFirstRules(skillRules(undefined, env)).split('## Browsers')[0];
     assert.ok(setup.promptPrefix.startsWith(native));
     assert.equal(setup.mcpServers['plugin:sleight:computer'].env.SLEIGHT_RS, rs);
     // The Codex browser arm wraps the same generated server specification.

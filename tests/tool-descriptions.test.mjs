@@ -10,9 +10,9 @@ import { withMT } from './fixtures/mt-env.mjs';
 
 for (const mode of [undefined, '0']) test(`Touch and cookie guidance have a measured description budget, switch=${mode}`, async () => withMT(mode, async () => {
   const tools = browserTools('bfixture'), act = tools.find(tool => tool.name === 'browser_act');
-  assert.equal(act.description.length, mode === '0' ? 1034 : 1183);
+  assert.equal(act.description.length, mode === '0' ? 1034 : 1059);
   // HO1 keeps both browser catalogs below their 1.5.0 description budgets.
-  assert.equal(tools.map(tool => tool.description).join('\n').length, mode === '0' ? 2454 : 2735);
+  assert.equal(tools.map(tool => tool.description).join('\n').length, mode === '0' ? 2454 : 2381);
   // HO1 pins each handoff description below its 1.5.0 original (169/203 bytes).
   assert.ok(Buffer.byteLength(tools.at(-1).description) <= (mode === '0' ? 169 : 203));
   assert.equal(Buffer.byteLength(tools.at(-1).description), mode === '0' ? 166 : 201);
@@ -58,8 +58,7 @@ function descriptions(value, path) {
 
 test('PDF and whole-thread discovery preserve the read cap and permission boundary within the measured budget', () => {
   const tool = browserTools('bfixture').find(tool => tool.name === 'browser_read');
-  // Whole guidance adds 53 characters to the current p143 read description.
-  assert.equal(tool.description.length, 700);
+  assert.equal(tool.description.length, 506);
   assert.match(tool.description, /Reads never grant permission/);
   assert.match(tool.description, /PDFs: tab or file; ref continues/);
   assert.match(tool.description, /user message: Read PDF "<path>"/);

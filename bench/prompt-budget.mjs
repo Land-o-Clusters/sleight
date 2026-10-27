@@ -9,6 +9,8 @@ import { batchingDescription, createRelay, promptNotice, promptTool } from '../p
 import { NATIVE_HANDOFF_TOOL } from '../plugins/sleight/lib/native-handoff.mjs';
 import { FLOW_TOOL } from '../plugins/sleight/lib/flow-rules.mjs';
 import { engineBrowserOpen, engineOpenTool, withBrowserOpenFirst } from '../plugins/sleight/lib/engine-browser-open.mjs';
+import { turboFirstRules } from '../plugins/sleight/lib/turbo-first-rules.mjs';
+import { browserTools } from '../plugins/sleight/lib/direct-browser/tools.mjs';
 
 const firstRule = 'execute exactly one of the API calls shown below, optionally assigning its result to a variable. Do not add other API calls, waits, or snapshots to that invocation.';
 const skillPath = fileURLToPath(new URL('../plugins/sleight/skills/drive-mac-apps/SKILL.md', import.meta.url));
@@ -177,7 +179,7 @@ export function budget(env = process.env) {
   const browserCore = engineBrowserOpen(env);
   const variants = ['default', 'lean'];
   const rows = ['skill', 'tool descriptions', 'js rewrite', 'relay notices', 'shared notices', 'marked notices'].map(source => ({ source }));
-  const details = {};
+  const details = {}, turboFirst = {};
   for (const variant of variants) {
     const prompt = variant === 'lean' ? 'lean' : undefined;
     const toolEntries = [...tools(prompt), ...(browserCore ? [engineOpenTool(prompt)] : [])].flatMap(tool => descriptions(tool, tool.name));
@@ -186,13 +188,19 @@ export function budget(env = process.env) {
     const texts = [metadata + skillRules(skillPath, { SLEIGHT_PROMPT: prompt }), toolEntries.map(e => e.text).join('\n'),
       (browserCore ? withBrowserOpenFirst : text => text)(batchingDescription(firstRule, true, prompt)), notices.map(e => e.text).join('\n'), shared.map(e => e.text).join('\n'),
       marked.map(e => e.text).join('\n')];
+    const browser = readFileSync(new URL('../plugins/sleight/skills/drive-mac-apps/BROWSERS.turbo-v3.md', import.meta.url), 'utf8')
+      .trimEnd().replace('{browser}', 'bbench').replace('{application}', ' (Google Chrome)');
+    const full = skillRules(skillPath, { SLEIGHT_PROMPT: prompt }).replace(/## Browsers\n[\s\S]*?(?=\n## |$)/, browser + '\n');
+    const first = turboFirstRules(full), catalog = JSON.stringify(browserTools('bbench'));
+    turboFirst[variant] = { catalog: size(catalog), rules: size(first), fullRules: size(full),
+      combined: size(catalog + '\n' + first), deferredCharacters: full.length - first.length };
     rows.forEach((row, i) => { row[variant] = size(texts[i]); });
     details[variant] = { tools: toolEntries.map(e => ({ source: e.path, ...size(e.text) })), notices: notices.map(e => ({ source: e.path, ...size(e.text) })), shared: shared.map(e => ({ source: e.path, ...size(e.text) })),
       marked: marked.map(e => ({ source: e.path, ...size(e.text) })) };
   }
   const total = Object.fromEntries(variants.map(variant => [variant, { characters: rows.reduce((sum, row) => sum + row[variant].characters, 0), lines: rows.reduce((sum, row) => sum + row[variant].lines, 0) }]));
   const upfront = upfrontAsk([{ name: 'Mail' }, { name: 'Word' }]), refusal = remoteApprovalNotice('TextEdit');
-  const conditional = { remoteApprovals: { ordinary: size(''),
+  const conditional = { turboFirst, remoteApprovals: { ordinary: size(''),
     upfront: { text: upfront, ...size(upfront) }, refusal: { text: refusal, ...size(refusal) }, physical: { text: physicalApprovalNotice, ...size(physicalApprovalNotice) } } };
   return { rows, total, conditional, reductionPercent: 100 * (1 - total.lean.characters / total.default.characters), details };
 }

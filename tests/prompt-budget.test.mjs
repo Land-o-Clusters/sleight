@@ -13,6 +13,7 @@ import { browserTools, closedTabOutcome } from '../plugins/sleight/lib/direct-br
 import { handoffMessages } from '../plugins/sleight/lib/direct-browser/handoff.mjs';
 import { closedSubmitWarning, shortStepOutcomes } from '../plugins/sleight/lib/direct-browser/act.mjs';
 import { guardUnavailableReason, guardPathReason } from '../plugins/sleight/hooks/preapproved-write-guard.mjs';
+import { turboFirstRules } from '../plugins/sleight/lib/turbo-first-rules.mjs';
 // The budget script parses relay.mjs with the typescript dev dependency, which CI doesn't install.
 const budget = await import('../bench/prompt-budget.mjs').catch(error => {
   if (error.code === 'ERR_MODULE_NOT_FOUND') return null;
@@ -84,7 +85,7 @@ test('handoff status lines have a measured prompt budget', () => {
 test('wait and closed-submit review outcomes have a reviewed prompt budget', () => {
   const outcomes = [...Object.values(shortStepOutcomes), closedSubmitWarning];
   assert.equal(hash(JSON.stringify(outcomes)), baseline.browserReviewOutcomes);
-  assert.ok(outcomes.reduce((sum, text) => sum + text.length, 0) <= 165);
+  assert.ok(outcomes.reduce((sum, text) => sum + text.length, 0) <= 205);
 });
 
 function placement(t, env = {}) {
@@ -439,18 +440,37 @@ for (const mode of [undefined, '0']) test(`MT browser descriptions stay pinned i
   // Release trim: the 65536 string limit is validate()'s default, so the catalog drops it (-252 in each mode).
   // G11F's cookie sentence adds 94 catalog characters in each mode.
   // TL1's max_steps schema adds 57 catalog characters; descriptions stay unchanged.
-  assert.equal(tools.find(tool => tool.name === 'browser_act').description.length, mode === '0' ? 1034 : 1183);
+  assert.equal(tools.find(tool => tool.name === 'browser_act').description.length, mode === '0' ? 1034 : 1059);
   // HO1 saves 2 catalog bytes by default and 3 in the legacy variant versus 1.5.0.
-  assert.equal(JSON.stringify(tools).length, mode === '0' ? 6162 : 6445);
+  assert.equal(JSON.stringify(tools).length, mode === '0' ? 6162 : 6089);
   const descriptions = tools.map(tool => tool.description).join('\n');
   for (const prompt of [undefined, 'lean']) {
     const combined = skillRules(skillPath, { SLEIGHT_PROMPT: prompt }).length + descriptions.length;
     // HO1 pins the combined skill and description sizes in both MT variants.
-    assert.equal(combined, (prompt === 'lean' ? 6268 : 9895) - (mode === '0' ? 281 : 0));
+    assert.equal(combined, mode === '0' ? (prompt === 'lean' ? 5987 : 9614)
+      : (prompt === 'lean' ? 5914 : 9541));
   }
   assert.ok(JSON.stringify(tools).length < 8000);
   for (const tool of tools) assert.ok(tool.description.length <= 2048, tool.name);
 }));
+
+test('PF3 keeps every 1.5.0 input schema and pins both first and full turbo guidance', { skip }, () => {
+  const schemas = browserTools('bbench').map(({ name, inputSchema }) => ({ name, inputSchema }));
+  assert.equal(hash(JSON.stringify(schemas)), baseline.browserSchemas150);
+  const browser = readFileSync(new URL('../plugins/sleight/skills/drive-mac-apps/BROWSERS.turbo-v3.md', import.meta.url), 'utf8')
+    .trimEnd().replace('{browser}', 'bbench').replace('{application}', ' (Google Chrome)');
+  const full = skillRules(skillPath, {}).replace(/## Browsers\n[\s\S]*?(?=\n## |$)/, browser + '\n');
+  assert.equal(hash(full), baseline.browserFullRules);
+  assert.equal(hash(turboFirstRules(full)), baseline.browserFirstRules);
+  const measured = budget.budget({}).conditional.turboFirst.default;
+  assert.equal(measured.catalog.characters, 6087);
+  assert.equal(measured.rules.characters, 4940);
+  assert.equal(measured.deferredCharacters, 3389);
+  assert.equal(measured.combined.characters, 11028);
+  // This counts the browser catalog + skill, not host framing, native tools or Haiku tokens.
+  assert.ok(measured.combined.characters < 11736, 'below the same df27db01 surface');
+  assert.ok(measured.combined.characters < 14166, 'below p160 a3706679');
+});
 
 // Remote context is absent on the ordinary path and inventoried as a conditional per-turn addition.
 test('remote approval context has its own measured conditional budget', { skip }, () => {

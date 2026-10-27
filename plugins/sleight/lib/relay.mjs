@@ -1,4 +1,5 @@
 import { parseTypedApps, isPresent, predictApps, upfrontAsk, remoteApprovalNotice, physicalApprovalNotice, resolveApp } from './remote-approvals.mjs';
+import { turboFirstRules } from './turbo-first-rules.mjs';
 // A stdio relay between Claude Code and the computer-use server.
 //
 // The server scopes app approvals and cleanup to a Codex session and turn,
@@ -1574,8 +1575,16 @@ export function createRelay({
   let browserRulesShown = false;
   const browserRules = firstCallRules?.match(/## Browsers\n[\s\S]*?(?=\n## |$)/)?.[0];
   const nativeRules = browserRules ? firstCallRules.replace(browserRules, '').trim() : firstCallRules;
-  function rulesFor(browser, policyRewritten = false) {
+  function rulesFor(browser, policyRewritten = false, turbo = false) {
     if (!firstCallRules) return;
+    if (turbo && !rulesShown) {
+      if (browserRulesShown) return;
+      browserRulesShown = true;
+      // Keep rulesShown false: a later engine acquisition still needs all native guidance.
+      return guidanceForHost(turboFirstRules(requestedSubmitRules(firstCallRules, {
+        SLEIGHT_RS: '0', SLEIGHT_CONFIRM_PAYMENTS: confirmPayments, SLEIGHT_PROMPT: prompt,
+      })), grokClient);
+    }
     if (!rulesShown) {
       rulesShown = true;
       if (browser) browserRulesShown = true;
@@ -4437,7 +4446,7 @@ export function createRelay({
         const rendered = result.text;
         const content = [{ type: 'text', text: rendered }, ...(result.images ?? [])];
         tagRunScreenshots(result.images, { source: 'turbo' });
-        const rules = rulesFor(true);
+        const rules = rulesFor(true, false, true);
         if (rules) content.push(ruleItem(rules));
         toClient({ jsonrpc: '2.0', id: msg.id, result: { isError: result.isError,
           content } }, delivered => {
