@@ -1,5 +1,6 @@
 {
   "skill": "f42832edd95ce6513f0ac3f126e6508421c1ffe93dec46950249549061ed4044",
+  "browserSkill": "2fd4c240d2f6e7cef4d8fbbc9d94aced8fafac25032ec4d8d160153d5de7bd5c",
   "tools": "c1b796e8a8b2a155cadd5e5ae0463d12d5f90ad8147698050352bc95dde8b40b",
   "batch": "aab9c612b29e726dcacf915b1c565dfc65ae3c455bc7561a3f1ea2d3733d4406",
   "merge": "5bd0464e07e16924b32d03a806ec8a6f47c2ed254026b394cbaa26b5c3e8a32d",
@@ -58,8 +59,8 @@
   "browserToolsLegacy": "a2c815d6f1f3f8f711c23375882dd61e22756ea5a17f3c8f886b6a149bb021d4",
   "browserToolsMT": "a2bca22e113383b28af9ec384c8a31d3f40e7481b4dfe638d854d6b8b7b605d1",
   "browserSchemas150": "1f75c80e48f6d915f4e86dfb934dcdafcab1cace1062772c029bc6b24bd2a55d",
-  "browserFirstRules": "dd5aabbfd7fe45e9d03e1301279fd8648bf62104e8dbd8bebc095beb71ec22f4",
-  "browserFullRules": "b4de7100c1f096befc715e31cb72421eb4ae200330c4d108fbd36bd4eb1acff9",
+  "browserFirstRules": "f49456ea7e6c1d994aeee9278c542c56972fab77c8c63c42c4562850e708c60b",
+  "browserFullRules": "3939a70fa6847e3dd79baca81b83db7fb0064640d7306cdbc2317021bae84c5f",
   "browserHandoffOutcomes": "e3f9fa33c0a2f2d4b3891446fcedd2ac5df1f7d93c86d4d46d578dd6914560b1",
   "makeCharacterDescription": "d63280d56154cbc8c75afefd1a4a73a57fb4e1c9ac2afdc8aa486ac5e47fa114",
   "makeCharacterBody": "e6cad416e68fefd0e7b7611c96ff3fd209168bb4d3c9aec81b8e2830dfa17b8d"

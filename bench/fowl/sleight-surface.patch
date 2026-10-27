@@ -1,5 +1,5 @@
 diff --git a/tools/rounds.mjs b/tools/rounds.mjs
-index 0ca0919..190835d 100644
+index 0ca0919..48bb3a2 100644
 --- a/tools/rounds.mjs
 +++ b/tools/rounds.mjs
 @@ -1,6 +1,7 @@
@@ -286,7 +286,7 @@ index 0ca0919..190835d 100644
      if (app && app !== front) { write({ kind: 'front', app, initial: firstFront || undefined }); front = app; }
      firstFront = false;
    };
-@@ -909,25 +1016,91 @@ async function startMonitor(hosts, file) {
+@@ -909,30 +1016,97 @@ async function startMonitor(hosts, file) {
      }
    };
    const done = Promise.all([loop(tickFront, 250, (t) => ticks.push(t)), loop(tickInventory, 1000)]);
@@ -385,7 +385,21 @@ index 0ca0919..190835d 100644
    // Each stream-json line as it arrived, stamped with `t` (parseTranscript times calls and errors by it). A Codex
    // agent's own events go to codex-events.jsonl, translated into events.jsonl.
    const events = fs.createWriteStream(path.join(dir, 'events.jsonl'));
-@@ -962,20 +1135,24 @@ function runAgent(task, out, { model, effort, mcpRoot, hosts, surface, codex })
+   const raw = codexAgent && fs.createWriteStream(path.join(dir, 'codex-events.jsonl'));
+   const state = { started: run.started, seen: new Set(), answer: null };
++  const initEvents = [];
+   let stderr = '';
+   child.stderr.on('data', (d) => { stderr += d; });
+   if (codexAgent) child.stdin.end(setup.prompt);
+@@ -947,6 +1121,7 @@ function runAgent(task, out, { model, effort, mcpRoot, hosts, surface, codex })
+         let e; try { e = JSON.parse(line); } catch { (raw || events).write(line + '\n'); continue; }
+         if (raw) raw.write(JSON.stringify({ t: Date.now(), ...e }) + '\n');
+         for (const ev of codexAgent ? codexAgentEvent(e, state, { model, now: Date.now() }) : [e]) {
++          if (ev.type === 'system' && ev.subtype === 'init') initEvents.push(ev);
+           events.write(JSON.stringify({ t: Date.now(), ...ev }) + '\n');
+           if (ev.type === 'assistant') for (const c of ev.message?.content || []) if (c.type === 'tool_use') {
+             run.firstToolAt ??= Date.now();
+@@ -962,20 +1137,26 @@ function runAgent(task, out, { model, effort, mcpRoot, hosts, surface, codex })
    return (async () => {
      await gotResult;
      clearTimeout(cap);
@@ -405,6 +419,8 @@ index 0ca0919..190835d 100644
      // A remote server's record dir (journal, frames, elicitations) comes back next to the transcript.
      if (remote && !codexAgent) await sh('rsync', ['-a', '-e', `ssh ${remote.ssh.slice(0, -1).join(' ')}`, `${remote.host}:${remote.runDir}/${task.name}/`, `${dir}/`]).catch((err) => { run.pullError = err.message; });
 +    run.finished = Date.now();
++    run.inventoryErrors = [...(run.inventoryErrors || []),
++      ...require(path.join(SLEIGHT_REPO, 'bench/mcp-catalog.mjs')).sleightInitProblems(initEvents, setup.mcpConfig)];
      events.end();
      if (raw) raw.end();
      if (stderr) fs.writeFileSync(path.join(dir, 'stderr.txt'), stderr);
@@ -419,7 +435,7 @@ index 0ca0919..190835d 100644
      return run;
    })();
  }
-@@ -1013,7 +1190,7 @@ const defaultCodexBrowsers = (args) => (args['codex-browsers'] ? CONFIG.codexBro
+@@ -1013,7 +1194,7 @@ const defaultCodexBrowsers = (args) => (args['codex-browsers'] ? CONFIG.codexBro
  // (a Mac without the user entry). Preflight: the proxy, ChatGPT's node and a live Codex browser socket.
  function loadCodex(args) {
    const home = os.homedir();
@@ -428,7 +444,7 @@ index 0ca0919..190835d 100644
    if (!entry) {
      const pluginDir = path.join(home, '.codex/plugins/cache/openai-bundled/unified-computer-use');
      const version = fs.existsSync(pluginDir) ? fs.readdirSync(pluginDir).sort().at(-1) : null;
-@@ -1071,7 +1248,7 @@ export async function takeoverAct(task, hosts, finished) {
+@@ -1071,7 +1252,7 @@ export async function takeoverAct(task, hosts, finished) {
      const tab = Object.values(await inventory(hosts)).filter((t) => tagged(task.name, t.url)).sort((a, b) => b.id - a.id)[0];
      if (!tab) return { error: 'no tab of the agent on the demo site' };
      from = Date.now();
@@ -437,7 +453,7 @@ index 0ca0919..190835d 100644
      await sleep(600);
      const windows = (await cua('list_windows', { on_screen_only: true })).windows
        .filter((w) => w.app_name === BROWSER_APP[tab.browser]).sort((a, b) => (b.z_index ?? 0) - (a.z_index ?? 0));
-@@ -1102,12 +1279,14 @@ function listDownloads(dir) {
+@@ -1102,12 +1283,14 @@ function listDownloads(dir) {
  // --- Main ---
  
  async function main() {
@@ -453,7 +469,7 @@ index 0ca0919..190835d 100644
    if (args.remote) args.gui = true; // the round holds the remote Mac's GUI lock
    // Stopped by hand: still run the exit handlers (agents, the remote connection and its lock, the site).
    for (const signal of ['SIGINT', 'SIGTERM']) process.on(signal, () => process.exit(130));
-@@ -1121,27 +1300,63 @@ async function main() {
+@@ -1121,27 +1304,63 @@ async function main() {
      tasks = tasks.filter((t) => !t.takeover);
    }
    const surface = args.surface || 'fowlbrowser';
@@ -522,7 +538,7 @@ index 0ca0919..190835d 100644
  
    // --serve: the sites the tasks grade against (forms.json, codex-h2h.json), up before the agents and killed after grading.
    let server = null;
-@@ -1161,8 +1376,11 @@ async function main() {
+@@ -1161,8 +1380,11 @@ async function main() {
    }
  
    // Only browsers with FowlBrowser connected are watched; a task in one that isn't stops the round before it starts.
@@ -536,7 +552,7 @@ index 0ca0919..190835d 100644
    if (missing.length) {
      console.error(`Not connected: ${missing.join(', ')} (no FowlBrowser socket in ${remote ? `${remote.host}:~/.fowlbrowser` : SOCKET_DIR}). Open the browser with the extension loaded, ` +
        'or pick tasks with --only, or move them to the other browser with --swap.');
-@@ -1173,19 +1391,22 @@ async function main() {
+@@ -1173,19 +1395,22 @@ async function main() {
    const roundStart = Date.now();
    const start = await inventory(hosts);
    const startKeys = new Set(Object.keys(start));
@@ -562,7 +578,7 @@ index 0ca0919..190835d 100644
    const grades = await Promise.all(tasks.map((t) => t.grade && getJson(t.grade)));
    const sites = await Promise.all(tasks.map((t) => t.site && getJson(t.site.log)));
    sites.forEach((site, i) => site && fs.writeFileSync(path.join(out, tasks[i].name, 'site.json'), JSON.stringify(site, null, 1)));
-@@ -1193,6 +1414,9 @@ async function main() {
+@@ -1193,6 +1418,9 @@ async function main() {
    server?.kill();
  
    // Grade
@@ -572,7 +588,7 @@ index 0ca0919..190835d 100644
    const journals = tasks.map((t) => readJsonl(path.join(out, t.name, 'journal.jsonl')));
    const transcripts = tasks.map((t) => parseTranscript(readJsonl(path.join(out, t.name, 'events.jsonl')) || []));
    const elicitations = tasks.map((t, i) => elicitationsOf(readJsonl(path.join(out, t.name, 'elicitations.jsonl')) || [], transcripts[i].calls));
-@@ -1222,19 +1446,23 @@ async function main() {
+@@ -1222,19 +1450,23 @@ async function main() {
    const rows = tasks.map((task, i) => {
      const run = runs[i]; const journal = journals[i]; const site = sites[i]; const mySurface = surfaceOf(task);
      const controlled = controlledBy(mySurface, task.name);
@@ -606,7 +622,7 @@ index 0ca0919..190835d 100644
      const timing = gradeTime({ task, run, journal });
      const tokens = gradeTokens(run);
      const callCell = gradeCalls(transcripts[i], elicitations[i]);
-@@ -1242,14 +1470,15 @@ async function main() {
+@@ -1242,14 +1474,15 @@ async function main() {
      for (const p of outcome.problems) problems.push(`${task.name} · outcome · ${p}`);
      for (const p of checks) problems.push(`${task.name} · ${p}`);
      for (const p of cursor.problems) problems.push(`${task.name} · cursor · ${p}`);
@@ -624,7 +640,7 @@ index 0ca0919..190835d 100644
    });
    const touched = new Set([...journals.flatMap((journal) => (journal || []).map((e) => e.tab).filter(Boolean)),
      ...tasks.flatMap((t, i) => (isCodex(surfaceOf(t)) ? transcripts[i].tabRefs.map((id) => `${t.browser}:${id}`) : surfaceOf(t) === 'devtools' ? [...runs[i].tabs] : []))]);
-@@ -1266,14 +1495,14 @@ async function main() {
+@@ -1266,14 +1499,14 @@ async function main() {
    const created = new Set(tasks.flatMap((t, i) => (isCodex(surfaceOf(t)) ? [...codexCreatedTabs({ browser: t.browser, transcript: transcripts[i], startKeys })]
      : surfaceOf(t) === 'devtools' ? [...runs[i].tabs].filter((k) => !startKeys.has(k)) : [...createdTabs([journals[i]], startKeys)])));
    if (!args['keep-tabs']) {
@@ -641,7 +657,7 @@ index 0ca0919..190835d 100644
        catch (err) { problems.push(`round · teardown · could not close ${k}: ${err.message}`); }
      }
    }
-@@ -1294,11 +1523,13 @@ async function main() {
+@@ -1294,11 +1527,13 @@ async function main() {
    for (const host of Object.values(hosts)) host.close();
    if (remote) for (const p of await remote.close()) problems.push(`round · remote · ${p}`);
  

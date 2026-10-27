@@ -4389,7 +4389,7 @@ export function createRelay({
     }
     // js can retain a tab handle; local app tools can target its browser window
     // directly. Fence both routes, including presence reads before dispatch.
-    if (msg.method === 'tools/call' && ['js', 'drag', 'hover', 'menu_bar', 'open_file', 'select_window'].includes(msg.params?.name) &&
+    if (msg.method === 'tools/call' && ['js', 'drag', 'hover', 'menu_bar', 'notifications', 'open_file', 'select_window'].includes(msg.params?.name) &&
         (handoffPresencePending || directBrowser?.handoffPending?.())) {
       if (msg.id !== undefined) toClient({ jsonrpc: '2.0', id: msg.id, result: { isError: true,
         content: [{ type: 'text', text: handoffMessages.pending }] } });

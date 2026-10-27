@@ -17,6 +17,8 @@ const browserAppCalls = [
   ['drag', { app: 'com.google.Chrome', from: [1, 2], to: [3, 4] }],
   ['hover', { app: 'Google Chrome', at: [1, 2] }],
   ['menu_bar', { app: 'Google Chrome', op: 'press', item: 0 }],
+  ['notifications', { op: 'list' }],
+  ['notifications', { op: 'press', banner: 0, button: 'Continue' }],
   ['open_file', { app: 'Google Chrome', path: '/tmp/fixture.html' }],
   ['select_window', { app: '/Applications/Google Chrome.app', title: 'Sign in' }],
 ];
@@ -101,11 +103,11 @@ test('browser handoff fences concurrent reads while its presence signal is pendi
   send('handoff', 'browser_tabs', { do: 'handoff', tab: 't1', wait: true });
   await new Promise(resolve => setImmediate(resolve));
   send('read', 'browser_read', { tab: 't1' });
-  for (const [name, args] of browserAppCalls) send(name, name, args);
+  for (const [name, args] of browserAppCalls) send(name + (args.op ?? ''), name, args);
   await new Promise(resolve => setImmediate(resolve));
   assert.equal(calls.length, 0, 'no read may overtake the presence check');
   assert.equal(replies.find(row => row.id === 'read').result.isError, true);
-  for (const [name] of browserAppCalls) assert.match(replies.find(row => row.id === name)?.result.content[0].text ?? '', /^Handoff pending/, name);
+  for (const [name, args] of browserAppCalls) assert.match(replies.find(row => row.id === name + (args.op ?? ''))?.result.content[0].text ?? '', /^Handoff pending/, name);
   finishPresence({ locked: true, idleSeconds: 0 });
   for (let n = 0; n < 10 && !calls.length; n++) await new Promise(resolve => setImmediate(resolve));
   assert.equal(calls[0].name, 'browser_tabs');
@@ -157,8 +159,9 @@ test(`away browser handoff fences engine js across worker IPC until ${mode}`, as
     assert.match(reply.result.content[0].text, /^Handoff pending/);
   }
   for (const [name, args] of browserAppCalls) {
-    send(name, name, args); await tick();
-    const reply = replies.find(row => row.id === name);
+    const id = name + (args.op ?? '');
+    send(id, name, args); await tick();
+    const reply = replies.find(row => row.id === id);
     assert.equal(reply?.result.isError, true, name);
     assert.match(reply.result.content[0].text, /^Handoff pending/, name);
     const before = replies.length;
@@ -230,6 +233,44 @@ test('a new user turn clears a missing handoff release without accepting an old 
     controls[1].handoffState(false); await new Promise(resolve => setImmediate(resolve));
     assert.equal(f.bridge.handoffPending(), false);
   } finally { await f.bridge.detach(); }
+});
+
+test('a new begin keeps the handoff fence until the old runtime ends and its call cleanup finishes', async () => {
+  let finishEnd, finishCall, markEnded, markStarted;
+  const ended = new Promise(resolve => { markEnded = resolve; });
+  const started = new Promise(resolve => { markStarted = resolve; });
+  const endGate = new Promise(resolve => { finishEnd = resolve; });
+  const callGate = new Promise(resolve => { finishCall = resolve; });
+  const f = await fixture({}, undefined, {}, async (_request, options) => {
+    options.handoffState(true); markStarted();
+    await callGate;
+    return { text: 'old cleanup finished', isError: false };
+  }, async () => {
+    markEnded(); await endGate;
+    return { revoked: true, cleanup: [] };
+  });
+  const bind = turn => f.bridge.bind({ ...f.bridge.bootstrapEnvelope(), event: 'begin', turn, text: 'Continue.' });
+  let call, binding;
+  try {
+    await bind('old');
+    call = f.bridge.call({ name: 'browser_tabs', arguments: { do: 'handoff', tab: 't1', wait: true } });
+    await started;
+    assert.equal(f.bridge.handoffPending(), true);
+    binding = bind('new');
+    await ended;
+    assert.equal(f.bridge.handoffPending(), true, 'the old runtime is still ending');
+    finishEnd(); await new Promise(resolve => setImmediate(resolve));
+    assert.equal(f.bridge.handoffPending(), true, 'begin still waits for the old call cleanup');
+    assert.equal(f.events.filter(row => row[0] === 'begin').length, 1);
+    finishCall(); await call;
+    assert.equal(await binding, true);
+    assert.equal(f.bridge.handoffPending(), false);
+    assert.equal(f.events.filter(row => row[0] === 'begin').length, 2);
+  } finally {
+    finishEnd(); finishCall();
+    await Promise.allSettled([call, binding]);
+    await f.bridge.detach();
+  }
 });
 
 for (const loss of ['disconnect', 'error', 'exit']) test(`worker ${loss} releases a handoff fence`, async () => {

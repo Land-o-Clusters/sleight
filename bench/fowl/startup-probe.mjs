@@ -16,7 +16,7 @@ export function startupProbePlan({ arm, repo, mcp, empty, settings, env }) {
   const plan = { env: { ...env, ENABLE_CLAUDEAI_MCP_SERVERS: 'false' },
     mcpConfig: { mcpServers: { 'plugin:sleight:computer': { command: join(repo, 'plugins/sleight/bin/sleight-mcp') } } },
     settingsOverrides: { enabledPlugins: { 'sleight@sleight': false } },
-    args: ['-p', '--model', 'haiku', '--output-format', 'stream-json', '--verbose', '--strict-mcp-config',
+    args: ['-p', '--model', 'haiku', '--output-format', 'stream-json', '--verbose', '--setting-sources', '', '--no-chrome',
       '--mcp-config', arm === 'mcp' || arm === 'both' ? mcp : empty, '--settings', settings,
       ...(plugin ? ['--plugin-dir', join(repo, 'plugins/sleight')] : [])] };
   return plugin ? sleightPluginLaunch(plan) : plan;
@@ -35,7 +35,7 @@ async function main() {
   const empty = join(dir, 'empty.json');
   writeFileSync(empty, JSON.stringify({ mcpServers: {} }));
   const settings = join(dir, 'settings.json');
-  writeFileSync(settings, JSON.stringify({ enabledPlugins: { 'sleight@sleight': false }, allowedMcpServers: [{ serverName: 'plugin:sleight:computer' }] }));
+  writeFileSync(settings, JSON.stringify({ enabledPlugins: { 'sleight@sleight': false } }));
 
   function once(arm) {
     const launch = startupProbePlan({ arm, repo, mcp, empty, settings, env });

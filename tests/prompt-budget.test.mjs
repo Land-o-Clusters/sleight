@@ -82,6 +82,17 @@ test('handoff status lines have a measured prompt budget', () => {
   assert.equal(Object.values(handoffMessages).reduce((size, text) => size + text.length, 0), 647);
 });
 
+test('the turbo skill reopens the page after an away handoff within its reviewed section byte budget', () => {
+  const skill = readFileSync(new URL('../plugins/sleight/skills/drive-mac-apps/BROWSERS.turbo-v3.md', import.meta.url), 'utf8');
+  assert.match(skill, /Reopen the page on their reply\./);
+  assert.doesNotMatch(skill, /Read fresh on their next message/);
+  assert.ok(Buffer.byteLength(skill) <= 2459);
+  // PF3 + HO3: the section cap rises from 1,854 to 2,459 bytes while deferring 3,389 native
+  // characters from the first request. Its catalog + first rules fall to 11,026 bytes.
+  // Pin the section separately from HO1P's unchanged engine skill and catalogs.
+  assert.equal(hash(skill), baseline.browserSkill);
+});
+
 test('wait and closed-submit review outcomes have a reviewed prompt budget', () => {
   const outcomes = [...Object.values(shortStepOutcomes), closedSubmitWarning];
   assert.equal(hash(JSON.stringify(outcomes)), baseline.browserReviewOutcomes);
@@ -464,9 +475,10 @@ test('PF3 keeps every 1.5.0 input schema and pins both first and full turbo guid
   assert.equal(hash(turboFirstRules(full)), baseline.browserFirstRules);
   const measured = budget.budget({}).conditional.turboFirst.default;
   assert.equal(measured.catalog.characters, 6087);
-  assert.equal(measured.rules.characters, 4940);
+  assert.equal(measured.rules.characters, 4938);
   assert.equal(measured.deferredCharacters, 3389);
-  assert.equal(measured.combined.characters, 11028);
+  assert.equal(measured.combined.characters, 11026);
+  assert.equal(Buffer.byteLength(JSON.stringify(browserTools('bbench')) + '\n' + turboFirstRules(full)), 11026);
   // This counts the browser catalog + skill, not host framing, native tools or Haiku tokens.
   assert.ok(measured.combined.characters < 11736, 'below the same df27db01 surface');
   assert.ok(measured.combined.characters < 14166, 'below p160 a3706679');
