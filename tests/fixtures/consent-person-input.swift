@@ -171,16 +171,21 @@ continuation.accessibilityPerformAction(.press)
 let beforeRefusals = fixtureRefusals.count
 let beforeTracking = (continuation as! AXFixtureButton).trackingCalls
 for sample in [event(.privateState, Int64(getpid())), event(.combinedSessionState, Int64(getpid())), event(.hidSystemState, Int64(getpid())),
-    event(.hidSystemState, 0, key: true)] {
+    event(.hidSystemState, 0, 9), event(.hidSystemState, 0, key: true)] {
     continueEvent = sample; press(continueGuard, continuation, continueEvent)
 }
 check(receipt.choices == beforeContinue, "Continue refuses posted events and Space")
 let handoffRefusals = Array(fixtureRefusals.dropFirst(beforeRefusals))
-check(handoffRefusals == Array(repeating: "PERSON_INPUT_REQUIRED", count: 4), "every posted Continue and Space emits the shared refusal code")
+check(handoffRefusals == Array(repeating: "PERSON_INPUT_REQUIRED", count: 5), "every posted Continue and Space emits the shared refusal code")
 check((continuation as! AXFixtureButton).trackingCalls == beforeTracking, "posted downs refuse before AppKit tracking can swallow the action")
 continueEvent = event(.hidSystemState); press(continueGuard, continuation, continueEvent)
 check(receipt.choices == beforeContinue + ["Continue"], "deliberate HID Continue click reaches original action")
 check((continuation as! AXFixtureButton).trackingCalls == beforeTracking + 1, "deliberate HID down retains AppKit tracking")
+continueEvent = event(.hidSystemState, Int64(fixtureWindowServerPid))
+check(personInput(continueEvent!.cgEvent), "WindowServer process-path branch accepts nonzero PID")
+press(continueGuard, continuation, continueEvent)
+check(receipt.choices == beforeContinue + ["Continue", "Continue"], "WindowServer HID click reaches the original action")
+check((continuation as! AXFixtureButton).trackingCalls == beforeTracking + 2, "WindowServer HID down retains AppKit tracking")
 receipt.choices = beforeContinue
 check(windows.allSatisfy { !$0.isVisible }, "button windows stay unordered")
 let result: [String: Any] = ["refused": refused, "accepted": receipt.choices, "handoffRefusals": handoffRefusals]

@@ -81,7 +81,7 @@ export async function runProbe({ directory, binaries, say = record => console.lo
   const steps = [];
   try {
     await waitReady(0);
-    for (const mode of ['ax', 'pid', 'hid']) {
+    for (const mode of ['ax', 'pid', 'hid', 'hidpid']) {
       const start = await arm(mode);
       // Each poster gets a fully armed card, including a newly shown replacement card.
       await new Promise(resolve => setTimeout(resolve, 600));

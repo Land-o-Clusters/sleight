@@ -4,9 +4,25 @@ import Foundation
 import Darwin
 
 func fail(_ text: String) -> Never { fputs(text + "\n", stderr); exit(1) }
+// BEGIN CONSENT PROBE MOUSE EVENT
+func consentProbeMouseEvent(mode: String, type: CGEventType, point: CGPoint) -> CGEvent? {
+    guard ["pid", "hid", "hidpid"].contains(mode), [.leftMouseDown, .leftMouseUp].contains(type),
+        point.x.isFinite, point.y.isFinite,
+        let source = CGEventSource(stateID: mode == "pid" ? .privateState : .hidSystemState) else { return nil }
+    source.userData = 0
+    guard let event = CGEvent(mouseEventSource: source, mouseType: type,
+        mouseCursorPosition: point, mouseButton: .left) else { return nil }
+    if mode != "pid" {
+        event.setIntegerValueField(.eventSourceStateID, value: Int64(CGEventSourceStateID.hidSystemState.rawValue))
+        event.setIntegerValueField(.eventSourceUnixProcessID, value: 0)
+    }
+    event.setIntegerValueField(.eventSourceUserData, value: 0)
+    return event
+}
+// END CONSENT PROBE MOUSE EVENT
 let args = Array(CommandLine.arguments.dropFirst())
-guard args.count == 4, let pid = Int32(args[1]), pid > 0,
-    let x = Double(args[2]), let y = Double(args[3]), x.isFinite, y.isFinite else { fail("usage: poster ax|pid|hid PID X Y") }
+guard args.count == 4, ["ax", "pid", "hid", "hidpid"].contains(args[0]), let pid = Int32(args[1]), pid > 0,
+    let x = Double(args[2]), let y = Double(args[3]), x.isFinite, y.isFinite else { fail("usage: poster ax|pid|hid|hidpid PID X Y") }
 // These checks never request TCC permission. The operator supplies it outside this probe if needed.
 guard AXIsProcessTrusted() else { fail("Accessibility is not granted; no permission prompt requested") }
 let mode = args[0]
@@ -34,26 +50,16 @@ if mode == "ax" {
     let result = AXUIElementPerformAction(button, kAXPressAction as CFString)
     print("{\"mode\":\"ax\",\"axResult\":\(result.rawValue)}")
 } else {
-    guard ["pid", "hid"].contains(mode) else { fail("unknown posting mode") }
     guard CGPreflightPostEventAccess() else { fail("Post-event access is not granted; no permission prompt requested") }
-    let state: CGEventSourceStateID = mode == "hid" ? .hidSystemState : .privateState
-    guard let source = CGEventSource(stateID: state) else { fail("event source unavailable") }
-    source.userData = 0
     for type in [CGEventType.leftMouseDown, .leftMouseUp] {
-        guard let event = CGEvent(mouseEventSource: source, mouseType: type,
-            mouseCursorPosition: CGPoint(x: x, y: y), mouseButton: .left) else { fail("mouse event unavailable") }
-        // Try spoofed HID provenance through WindowServer, not just an in-memory NSEvent seam.
-        if mode == "hid" {
-            event.setIntegerValueField(.eventSourceStateID, value: Int64(CGEventSourceStateID.hidSystemState.rawValue))
-            event.setIntegerValueField(.eventSourceUnixProcessID, value: 0)
-        }
-        event.setIntegerValueField(.eventSourceUserData, value: 0)
+        guard let event = consentProbeMouseEvent(mode: mode, type: type, point: CGPoint(x: x, y: y))
+            else { fail("mouse event unavailable") }
         let fields: [String: Any] = ["mode": mode, "type": event.type.rawValue,
             "sourceState": event.getIntegerValueField(.eventSourceStateID),
             "sourcePid": event.getIntegerValueField(.eventSourceUnixProcessID),
             "userData": event.getIntegerValueField(.eventSourceUserData)]
         print(String(data: try! JSONSerialization.data(withJSONObject: fields, options: [.sortedKeys]), encoding: .utf8)!)
-        if mode == "pid" { event.postToPid(pid) } else { event.post(tap: .cghidEventTap) }
+        if mode == "pid" || mode == "hidpid" { event.postToPid(pid) } else { event.post(tap: .cghidEventTap) }
         usleep(100_000)
     }
 }

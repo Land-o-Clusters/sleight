@@ -26,6 +26,7 @@ export const checks = Object.freeze([
     { id: `${target}-continue`, mode: 'click', target, expected: 'accepted', instruction: 'This is a fixture sign-in wait card. Do not sign in anywhere. Wait for the click prompt, then click Continue with your mouse. Do not type a word.' },
     { id: `${target}-posted-click`, mode: 'posted-click', target, expected: 'refused', instruction: 'Keep your hands off the card. The script posts a click to this fixture card only. It must stay paused.' },
   ]),
+  { id: 'native-hidpid-click', mode: 'posted-click', posterMode: 'hidpid', target: 'native', expected: 'refused', instruction: 'Keep your hands off the card. The script posts a HID-source click with its source PID forced to zero to this fixture card only. It must stay paused.' },
 ]);
 
 export function parseArgs(args) {
@@ -180,7 +181,7 @@ export async function runCheck(check, { open, post, signal, say = console.error,
         postTarget = { window: ready.window, x: ready.x, y: ready.y, windowRect: rect };
       }
       const at = postAt = host.receipts.length;
-      posting = await post({ mode: check.mode === 'key' ? 'key' : 'click', pid: host.pid, ...postTarget });
+      posting = await post({ mode: check.mode === 'key' ? 'key' : check.posterMode ?? 'click', pid: host.pid, ...postTarget });
       if (posting.status !== 0) throw Error('PERSON_CHECK_POST_FAILED');
       await until(() => answer !== undefined || host.receipts.slice(at).some(r => r.event === 'refused'), 5000);
       // A refusal alone is insufficient: the card must remain pending after the full posted sequence.
@@ -238,14 +239,6 @@ export async function runLive({ compile, open, post, voiceOver, save, cleanup, s
     const checkSignal = AbortSignal.any([...signal ? [signal] : [], AbortSignal.timeout(20 * 60000)]);
     for (const check of checks) {
       await waitForHold({ isHeld, signal: checkSignal, now, pause, capMs });
-      if (check.id === 'physical-typing' || check.id === 'native-continue') {
-        say('Turn VoiceOver off yourself if it is on. Waiting for VoiceOver to be off.');
-        const deadline = now() + PERSON_MS;
-        while (await voiceOver()) {
-          checkSignal.throwIfAborted(); if (now() >= deadline) throw Error('PERSON_CHECK_VOICEOVER_OFF_TIMEOUT');
-          await pause(500, undefined, { signal: checkSignal });
-        }
-      }
       const controller = new AbortController();
       const monitor = setInterval(() => {
         try { if (isHeld()) controller.abort(Error('PERSON_CHECK_HOLD_APPEARED')); }
@@ -253,8 +246,31 @@ export async function runLive({ compile, open, post, voiceOver, save, cleanup, s
       }, 100);
       let row;
       try {
-        if (isHeld()) controller.abort(Error('PERSON_CHECK_HOLD_APPEARED'));
-        row = await runCheck(check, { ...checkOptions, open: () => open(binaries), post, say, now, pause,
+        const rowStart = now();
+        const rowSignal = AbortSignal.any([checkSignal, controller.signal]);
+        try {
+          if (isHeld()) controller.abort(Error('PERSON_CHECK_HOLD_APPEARED'));
+          if (check.id === 'physical-typing' || check.id === 'native-continue') {
+            say('Turn VoiceOver off yourself if it is on. Waiting for VoiceOver to be off.');
+            const deadline = now() + PERSON_MS;
+            while (await voiceOver()) {
+              rowSignal.throwIfAborted();
+              if (isHeld()) controller.abort(Error('PERSON_CHECK_HOLD_APPEARED'));
+              rowSignal.throwIfAborted();
+              if (now() >= deadline) throw Error('PERSON_CHECK_VOICEOVER_OFF_TIMEOUT');
+              await pause(500, undefined, { signal: rowSignal });
+            }
+          }
+          rowSignal.throwIfAborted();
+          if (isHeld()) controller.abort(Error('PERSON_CHECK_HOLD_APPEARED'));
+          rowSignal.throwIfAborted();
+        } catch (failure) {
+          // No host was opened for this row. Earlier rows already confirmed their child cleanup.
+          row = { id: check.id, target: check.target ?? 'protected-action', expected: check.expected,
+            startedAt: new Date(rowStart).toISOString(), endedAt: new Date(now()).toISOString(), durationMs: now() - rowStart,
+            outcome: 'error', passed: false, error: failure.message, resumed: false, freshReads: 0, cleanupConfirmed: true };
+        }
+        row ??= await runCheck(check, { ...checkOptions, open: () => open(binaries), post, say, now, pause,
           signal: AbortSignal.any([checkSignal, controller.signal]) });
       } finally { clearInterval(monitor); }
       rows.push(row);
@@ -313,7 +329,7 @@ export async function main(args = process.argv.slice(2)) {
     const result = await runLive({ compile, signal: controller.signal,
       open: () => openHost({ binaries, directory }),
       post: ({ mode, pid, window, x, y, windowRect: rect }) => invoke(mode === 'key' ? ['key', String(pid)]
-        : ['click', String(pid), String(window), String(x), String(y),
+        : [mode, String(pid), String(window), String(x), String(y),
           String(rect.x), String(rect.y), String(rect.width), String(rect.height)]),
       voiceOver: () => { const r = invoke(['voiceover']); if (r.status !== 0 || !/^(true|false)\n$/.test(r.stdout)) throw Error('PERSON_CHECK_VOICEOVER_UNPROVED'); return r.stdout.trim() === 'true'; },
       cleanup: () => rmSync(directory, { recursive: true, force: true }),

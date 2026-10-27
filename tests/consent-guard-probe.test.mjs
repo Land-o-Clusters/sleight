@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import { mkdtempSync, existsSync, writeFileSync, chmodSync, readFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { spawnSync } from 'node:child_process';
 import { compileProbe, probeHostSource, runProbe, stepVerdict } from '../bench/consent-guard-probe.mjs';
 import { macCommandSkip } from './requirements.mjs';
 import { registerTemp, trackTemp } from '../scripts/temp-leftovers.mjs';
@@ -19,14 +20,19 @@ test('missing delivery is inconclusive and acceptance outweighs a refusal receip
   assert.doesNotMatch(instrumented, /alert.buttons\[0\].keyEquivalent = "\\r"/);
 });
 
-test('probe and separate poster compile without launching either binary', { skip: macCommandSkip('xcrun') }, t => {
+test('probe compiles without launch and separate poster rejects invalid arguments', { skip: macCommandSkip('xcrun') }, t => {
   const directory = registerTemp(t, trackTemp(mkdtempSync(join(tmpdir(), 'sleight-consent-probe-build-'))));
   const binaries = compileProbe(directory);
   assert.ok(existsSync(binaries.host));
   assert.ok(existsSync(binaries.poster));
+  for (const args of [[], ['unknown', '123', '10', '20'], ['hidpid', '0', '10', '20']]) {
+    const invalid = spawnSync(binaries.poster, args, { encoding: 'utf8', timeout: 10000 });
+    assert.equal(invalid.status, 1); assert.match(invalid.stderr, /^usage:/);
+    assert.equal(invalid.stdout, '');
+  }
 });
 
-test('probe uses card receipts for all five steps and closes its owned host, fake processes only', async t => {
+test('probe uses card receipts for all six steps and closes its owned host, fake processes only', async t => {
   const directory = registerTemp(t, trackTemp(mkdtempSync(join(tmpdir(), 'sleight-consent-probe-fake-'))));
   const host = join(directory, 'host'), poster = join(directory, 'poster'), stopped = join(directory, 'stopped');
   const shown = join(directory, 'shown');
@@ -64,9 +70,9 @@ process.exitCode = sinceShow >= 600 ? 0 : 1;
   const result = await runProbe({ directory, binaries: { host, poster }, say: record => log.push(record) });
   assert.equal(result.passed, true);
   assert.deepEqual(result.steps.map(({ step, verdict }) => [step, verdict]), [
-    ['ax', 'refused'], ['pid', 'refused'], ['hid', 'refused'], ['person-click', 'accepted'], ['person-return', 'accepted'],
+    ['ax', 'refused'], ['pid', 'refused'], ['hid', 'refused'], ['hidpid', 'refused'], ['person-click', 'accepted'], ['person-return', 'accepted'],
   ]);
-  assert.equal(log.filter(record => record.poster).length, 3);
+  assert.equal(log.filter(record => record.poster).length, 4);
   assert.ok(log.filter(record => record.poster).every(record => JSON.parse(record.attempted).sinceShow >= 600));
   assert.equal(readFileSync(stopped, 'utf8'), 'closed');
   assert.equal(existsSync(join(directory, 'grants.json')), false);
