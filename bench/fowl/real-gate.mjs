@@ -20,6 +20,7 @@ import { startRoundAllow, allowPlan } from './chrome-allow.mjs';
 import { watchCover, windowCover } from './window-cover.mjs';
 import { guardBrowserGroup } from './group-cover.mjs';
 import { gradeGateTask, browserEvidence, runErrorClass, harnessFailure, coverEvidence, coverText, withAnswerGraders, currentAnswerGraders } from './real-gate-grade.mjs';
+import { settingsLogUrl } from './settings-grade.mjs';
 import { taskSupport, raceBundles, isCodexSurface, isCodexSleightSurface, runsCodexExec, sleightKind, codexModelFor } from './support.mjs';
 import { CODEX_SLEIGHT_HOME, ensureCodexSleightHome, writeCodexSleightConfig, approvalSummary, PROXY, SLEIGHT_MCP } from '../codex-sleight.mjs';
 import { engineSpan, readEngine } from '../engine-version.mjs';
@@ -426,6 +427,8 @@ export async function runRealGate({ args, repo = repoRoot, mcpRoot, runner, task
         try { watch = await (runtime.watchBrowser || watchNavigations)(browser); }
         catch (error) { navigation = { observed: false, reason: error.message }; }
       }
+      const settingsLog = settingsLogUrl(arm.task);
+      const beforeSettings = settingsLog ? await getJson(settingsLog) : null;
       const run = await (runtime.runAgent || runGateAgent)(arm, { signal: controller.signal }).catch(error => {
         if (error.groupClean === false || error.collectionError) cleanupProven = false;
         throw error;
@@ -449,18 +452,20 @@ export async function runRealGate({ args, repo = repoRoot, mcpRoot, runner, task
       run.afterExit = after;
       run.tabs = new Set(Object.keys(after));
       const grade = await getJson(arm.task.grade);
-      const site = await getJson(arm.task.name === 'form-checkout' ? 'http://127.0.0.1:5413/gate-log/p04' : arm.task.site?.log);
+      const site = settingsLog ? (Number.isSafeInteger(beforeSettings?.cursor)
+        ? await getJson(`${settingsLog}?after=${beforeSettings.cursor}`) : { error: 'settings submission cursor unavailable' })
+        : await getJson(arm.task.name === 'form-checkout' ? 'http://127.0.0.1:5413/gate-log/p04' : arm.task.site?.log);
       const evidence = run.evidence;
       // A failed navigation log on Chrome or Helium proves no visit; only Firefox and Safari fall back to tool text.
       const visits = navigation ? (navigation.observed ? navigation.urls : []) : null;
-      const outcome = gradeGateTask({ task: arm.task, run, grade, site, runner, after, startKeys,
+      const text = name => { try { return readFileSync(join(arm.dir, name), 'utf8'); } catch { return ''; } };
+      const outcome = gradeGateTask({ task: arm.task, run, grade, site, runner, after, startKeys, eventsText: text('events.jsonl'),
         observed: observation.observed, observationReason: observation.reason, ownerCheck: observation.ownerCheck, evidence, visits });
       if (run.inventoryErrors?.length) {
         outcome.problems.push(...run.inventoryErrors);
         outcome.ok = false;
         outcome.cell = 'FAIL: ' + outcome.problems.join('; ');
       }
-      const text = name => { try { return readFileSync(join(arm.dir, name), 'utf8'); } catch { return ''; } };
       const errorClass = outcome.ok ? null : runErrorClass({ eventsText: text('events.jsonl'), stderr: text('stderr.txt') });
       // Cover evidence on every row, pass or fail; race-score --exclude-covered decides over all rounds which rows to leave out.
       const covered = coverEvidence({ eventsText: text('events.jsonl'), readings: [cover, coverRun] });

@@ -1,5 +1,5 @@
 // FowlBrowser's pinned forms, assets and gradeToken are reused unchanged. Only
-// checkout gets a server-side visit and submission log; task HTML stays identical.
+// checkout and settings get server-side evidence; task HTML stays identical.
 import { createServer } from 'node:http';
 import { readFile } from 'node:fs/promises';
 import { extname, join, resolve, sep } from 'node:path';
@@ -28,6 +28,12 @@ export async function startGateForms(root, { ports = [5413, 5414], gradeToken } 
     const grade = /^\/grade\/(\w+)$/.exec(url.pathname);
     if (grade) return json(200, gradeToken(grade[1], submissions));
     if (url.pathname === '/gate-log/p04') return json(200, { lines });
+    if (/^\/gate-log\/p0[78]$/.test(url.pathname)) {
+      const after = Number(url.searchParams.get('after') ?? 0);
+      if (!Number.isSafeInteger(after) || after < 0 || after > serial) return json(400, { error: 'invalid submission cursor' });
+      const records = [...submissions.values()].flat().filter(record => Number(record.id.slice(4)) > after);
+      return json(200, { cursor: serial, submissions: records });
+    }
     let name = decodeURIComponent(url.pathname);
     if (name === '/') name = '/index.html';
     if (!extname(name)) name += '.html';
