@@ -54,7 +54,7 @@ export async function openMailImport(fixture, ctx, { helper = mailHelper, run = 
   const command = await helper(ctx.signal), control = join(ctx.dir, 'mail-control.json');
   const controller = new AbortController(), stages = new Map();
   const stage = id => { if (!stages.has(id)) stages.set(id, Promise.withResolvers()); return stages.get(id); };
-  let buffered = '', completed, counter = 0, ready, removed = false;
+  let buffered = '', completed, counter = 0, ready, removed = false, activityReported = false;
   const diagnostic = ctx.fixtureDiagnostics.find(d => d.app === 'Mail');
   const lease = { app: 'Mail', bundle: 'com.apple.mail', diagnostics: diagnostic, nonce: ctx.nonce, localOnly: false, retainedWindow: false, retainedMailbox: false, launched: false,
     async snapshot() {
@@ -95,8 +95,15 @@ export async function openMailImport(fixture, ctx, { helper = mailHelper, run = 
       for (let newline; (newline = buffered.indexOf('\n')) >= 0;) {
         const line = buffered.slice(0, newline); buffered = buffered.slice(newline + 1);
         let event; try { event = JSON.parse(line); } catch { continue; }
+        if (event.stage === 'ready' || event.stage === 'closed' || event.actionTaken === true || event.launched === true || event.imported === true) {
+          activityReported = true;
+          if (diagnostic.cleanup === 'nothing created') { diagnostic.cleanup = 'unconfirmed'; removed = false; }
+        }
         if (event.stage === 'ready') { ready = event; Object.assign(lease, event); }
-        if (event.stage === 'untouched') { diagnostic.cleanup = 'nothing created'; diagnostic.actionTaken = false; removed = true; lease.running = event.running; }
+        if (event.stage === 'untouched' && !activityReported && event.nonce === ctx.nonce &&
+            event.actionTaken === false && event.launched === false && event.imported === false) {
+          diagnostic.cleanup = 'nothing created'; diagnostic.actionTaken = false; removed = true;
+        }
         if (event.stage === 'setup-failure') Object.assign(diagnostic, { actionTaken: event.actionTaken, cleanup: event.cleanup,
           cleanupError: event.cleanupError || undefined, imported: event.imported });
         if (event.stage === 'closed') { removed = event.removed === true; diagnostic.cleanup = 'closed retained fixture'; diagnostic.appQuit = event.appQuit === true; }
@@ -114,14 +121,18 @@ export async function openMailImport(fixture, ctx, { helper = mailHelper, run = 
     try {
       return await Promise.race([stage(id).promise, response.then(result => {
         throw Object.assign(new Error(result.stderr.trim() || `Mail helper exited before ${id}`),
-          { noMutation: result.groupClean && ['closed retained fixture', 'nothing created'].includes(diagnostic.cleanup) && diagnostic.imported !== true });
+          { noMutation: result.groupClean === true && ['closed retained fixture', 'nothing created'].includes(diagnostic.cleanup) && diagnostic.imported !== true });
       }), new Promise((_, reject) => { timer = setTimeout(() => reject(new Error(`Mail helper ${id} timed out`)), 40000); })]);
     } finally { clearTimeout(timer); }
   }
   try { await waitStage('ready'); }
   catch (error) {
-    if (completed?.groupClean && removed && ['closed retained fixture', 'nothing created'].includes(diagnostic.cleanup)) {
+    if (completed?.groupClean === true && removed && ['closed retained fixture', 'nothing created'].includes(diagnostic.cleanup)) {
       lease.cleaned = true;
+      if (diagnostic.cleanup === 'nothing created') {
+        diagnostic.windowCleanupConfirmed = true;
+        diagnostic.helperCollectionConfirmed = true;
+      }
       ctx.pendingAcquisitions?.delete('mailImport');
     }
     throw error;

@@ -8,6 +8,57 @@ struct MailError: Error, CustomStringConvertible {
     init(_ value: String) { description = value }
 }
 var beforeMutation: (() throws -> Void)?
+var actionTaken = false
+var requestNonce: String?
+
+func mailRecoveryStep(_ code: AXError) -> String {
+    if code == .apiDisabled {
+        return "Enable Accessibility for the process running the harness (Terminal.app for a Terminal run) in System Settings > Privacy & Security > Accessibility, then retry"
+    } else if code == .cannotComplete {
+        return "Mail did not answer Accessibility queries, bring Mail to idle and retry"
+    } else {
+        return "Mail could not provide the scoped Accessibility query, bring Mail to idle and retry with its mailbox sidebar visible"
+    }
+}
+func queryFailure(_ code: AXError, attempts: Int) -> MailError {
+    MailError("MAIL_SCOPED_AX_QUERY_UNAVAILABLE: \(code.rawValue) after \(attempts) attempts; \(mailRecoveryStep(code)).")
+}
+
+// Retry reads only. A failed action may already have taken effect.
+func retryMailQuery<Value>(setTimeout: (Float) -> AXError, query: () -> (AXError, Value),
+    pause: (TimeInterval) -> Void = { Thread.sleep(forTimeInterval: $0) }) throws -> Value {
+    let configured = setTimeout(2)
+    guard configured == .success else { throw queryFailure(configured, attempts: 0) }
+    for attempt in 0..<3 {
+        let (code, value) = query()
+        if code == .success { return value }
+        guard code == .cannotComplete, attempt < 2 else { throw queryFailure(code, attempts: attempt + 1) }
+        pause(0.15 * Double(attempt + 1))
+    }
+    throw MailError("MAIL_SCOPED_AX_QUERY_UNAVAILABLE")
+}
+
+// Inspect container roles only, stopping at outlines and all content controls.
+// Never enumerate message rows, text values, or an app-wide descendant tree.
+func mailboxScope<Element>(_ root: Element, role: (Element) throws -> String,
+    children: (Element) throws -> [Element]) throws -> Element {
+    var pending = [(root, 0)], outlines: [Element] = [], visited = 0
+    let containers = [kAXWindowRole, kAXGroupRole, kAXSplitGroupRole, kAXScrollAreaRole]
+    while !pending.isEmpty {
+        let (node, depth) = pending.removeFirst()
+        visited += 1
+        guard visited <= 64, depth <= 8 else { throw MailError("MAIL_SIDEBAR_QUERY_LIMIT: bring Mail to idle with its mailbox sidebar visible and retry.") }
+        let kind = try role(node)
+        if kind == kAXOutlineRole { outlines.append(node); continue }
+        if containers.contains(kind) {
+            let next = try children(node)
+            guard visited + pending.count + next.count <= 64 else { throw MailError("MAIL_SIDEBAR_QUERY_LIMIT: bring Mail to idle with its mailbox sidebar visible and retry.") }
+            pending += next.map { ($0, depth + 1) }
+        }
+    }
+    guard outlines.count == 1 else { throw MailError("MAIL_SIDEBAR_UNPROVED: show one mailbox sidebar in the Mail viewer and retry.") }
+    return outlines[0]
+}
 func dialogCategory(_ title: String, modal: Bool) -> String? {
     let value = title.lowercased()
     if value.contains("permission") || value.contains("accessibility") || value.contains("screen recording") || value.hasPrefix("allow ") { return "permission" }
@@ -43,6 +94,63 @@ func localImportProof(_ text: [String], name: String) throws {
 func requireSettledCreation(_ pending: Bool) throws {
     guard !pending else { throw MailError("MAIL_CREATION_CLEANUP_UNCONFIRMED: a creation command has no retained completion reference") }
 }
+func queryRecoverySelfTest() throws -> [String: Any] {
+    var immediateCalls = 0, immediatePauses = 0
+    let immediate: [String] = try retryMailQuery(setTimeout: { _ in .success }, query: {
+        immediateCalls += 1; return (.success, ["local"])
+    }, pause: { _ in immediatePauses += 1 })
+    guard immediate == ["local"], immediateCalls == 1, immediatePauses == 0 else { throw MailError("Successful query repeated") }
+    var attempts = 0, timeout: Float = 0, delays: [TimeInterval] = []
+    let values: [String] = try retryMailQuery(setTimeout: { timeout = $0; return .success }, query: {
+        attempts += 1
+        return attempts < 3 ? (.cannotComplete, ["stale"]) : (.success, [])
+    }, pause: { delays.append($0) })
+    guard values.isEmpty, attempts == 3, timeout == 2, delays == [0.15, 0.3] else { throw MailError("Query retry result, timeout or backoff failed") }
+    var exhausted = 0
+    do {
+        let _: [String] = try retryMailQuery(setTimeout: { _ in .success }, query: { exhausted += 1; return (.cannotComplete, []) }, pause: { _ in })
+        throw MailError("Exhausted query admitted")
+    } catch let error as MailError {
+        guard exhausted == 3, error.description.contains("-25204"), error.description.contains("bring Mail to idle") else { throw error }
+    }
+    var permanentAttempts = 0
+    for code in [AXError.apiDisabled, .parameterizedAttributeUnsupported, .invalidUIElement, .notImplemented] {
+        var calls = 0
+        do {
+            let _: [String] = try retryMailQuery(setTimeout: { _ in .success }, query: { calls += 1; return (code, []) },
+                pause: { _ in calls += 100 })
+            throw MailError("Permanent query failure admitted")
+        } catch let error as MailError {
+            guard calls == 1, error.description.contains(String(code.rawValue)) else { throw error }
+            if code == .apiDisabled { guard error.description.contains("Terminal.app"), error.description.contains("Privacy & Security > Accessibility") else { throw error } }
+        }
+        permanentAttempts = calls
+    }
+    var timeoutQueryCalls = 0
+    do {
+        let _: [String] = try retryMailQuery(setTimeout: { _ in .invalidUIElement }, query: { timeoutQueryCalls += 1; return (.success, []) })
+        throw MailError("Invalid timeout admitted")
+    } catch let error as MailError { guard timeoutQueryCalls == 0, error.description.contains("-25202 after 0 attempts") else { throw error } }
+    let roles = ["window": kAXWindowRole, "split": kAXSplitGroupRole, "scroll": kAXScrollAreaRole,
+        "sidebar": kAXOutlineRole, "messages": kAXTableRole]
+    let edges = ["window": ["split", "messages"], "split": ["scroll"], "scroll": ["sidebar"]]
+    let scope = try mailboxScope("window", role: { roles[$0]! }, children: { node in
+        guard node != "messages", node != "sidebar" else { throw MailError("Owner message rows or sidebar contents enumerated") }
+        return edges[node] ?? []
+    })
+    guard scope == "sidebar" else { throw MailError("Sidebar scope lost") }
+    do {
+        _ = try mailboxScope("window", role: { $0 == "window" ? kAXWindowRole : kAXOutlineRole }, children: { _ in ["first", "second"] })
+        throw MailError("Ambiguous sidebar admitted")
+    } catch let error as MailError { guard error.description.contains("MAIL_SIDEBAR_UNPROVED") else { throw error } }
+    do {
+        _ = try mailboxScope(0, role: { _ in kAXWindowRole }, children: { _ in Array(1...65) })
+        throw MailError("Large container tree admitted")
+    } catch let error as MailError { guard error.description.contains("MAIL_SIDEBAR_QUERY_LIMIT") else { throw error } }
+    return ["attempts": attempts, "delays": delays, "timeout": timeout, "exhaustedAttempts": exhausted,
+        "permanentAttempts": permanentAttempts, "staleValueDiscarded": values.isEmpty, "apiDisabledGuidance": true,
+        "sidebarOnly": true, "ambiguousSidebarRefused": true, "treeLimitRefused": true]
+}
 func selfTest() throws {
     let state = Creation<String>(==)
     try state.begin()
@@ -61,7 +169,8 @@ func selfTest() throws {
     guard dialogCategory("Sign in", modal: false) == "signin", dialogCategory("Welcome to Mail", modal: false) == "first-run",
         dialogCategory("Allow Accessibility", modal: false) == "permission", dialogCategory("unexpected", modal: true) == "unrelated-modal",
         fixtureDialogTitle("Import"), !fixtureDialogTitle("Sign in") else { throw MailError("Dialog classification failed") }
-    try emit(["selfTest": true, "existingWindowsRead": 0, "ambiguousCreationRefused": true, "localDestinationRequired": true, "unsettledCreationRefused": true, "dialogStops": true])
+    try emit(["selfTest": true, "existingWindowsRead": 0, "ambiguousCreationRefused": true, "localDestinationRequired": true, "unsettledCreationRefused": true, "dialogStops": true,
+        "queryRecovery": try queryRecoverySelfTest()])
 }
 func emit(_ value: [String: Any]) throws {
     FileHandle.standardOutput.write(try JSONSerialization.data(withJSONObject: value, options: [.sortedKeys]) + Data([10]))
@@ -71,7 +180,7 @@ func read(_ element: AXUIElement, _ attribute: String) throws -> CFTypeRef? {
     var value: CFTypeRef?
     let code = AXUIElementCopyAttributeValue(element, attribute as CFString, &value)
     if code == .attributeUnsupported || code == .noValue { return nil }
-    guard code == .success else { throw MailError("MAIL_AX_READ: \(code.rawValue)") }
+    guard code == .success else { throw MailError("MAIL_AX_READ: \(code.rawValue); \(mailRecoveryStep(code)).") }
     return value
 }
 func text(_ element: AXUIElement, _ attribute: String = kAXTitleAttribute) throws -> String { try read(element, attribute) as? String ?? "" }
@@ -119,12 +228,16 @@ func menu(_ app: AXUIElement, _ name: String, _ titles: [String], beforePress: (
 // A server-side AX text predicate returns only matching nonce/local nodes. An
 // unsupported predicate stops setup; it never falls back to walking owner mail.
 func search(_ root: AXUIElement, _ needle: String) throws -> [AXUIElement] {
-    var value: CFTypeRef?
     let query: [String: Any] = ["AXSearchText": needle, "AXSearchKey": ["AXAnyTypeSearchKey"], "AXResultsLimit": 2,
         "AXDirection": "AXDirectionNext", "AXImmediateDescendantsOnly": false]
-    let code = AXUIElementCopyParameterizedAttributeValue(root, "AXUIElementsForSearchPredicate" as CFString, query as CFDictionary, &value)
-    guard code == .success else { throw MailError("MAIL_SCOPED_AX_QUERY_UNAVAILABLE: \(code.rawValue); owner mail inventory refused") }
-    return value as? [AXUIElement] ?? []
+    return try retryMailQuery(setTimeout: { AXUIElementSetMessagingTimeout(root, $0) }, query: {
+        var value: CFTypeRef?
+        let code = AXUIElementCopyParameterizedAttributeValue(root, "AXUIElementsForSearchPredicate" as CFString, query as CFDictionary, &value)
+        return (code, value as? [AXUIElement] ?? [])
+    })
+}
+func mailboxScope(_ root: AXUIElement) throws -> AXUIElement {
+    try mailboxScope(root, role: { try text($0, kAXRoleAttribute) }, children: { try children($0) })
 }
 func present(_ node: AXUIElement) throws -> Bool {
     var role: CFTypeRef?
@@ -151,6 +264,7 @@ final class Session {
     var observer: AXObserver?
     var owned: [AXUIElement] = []
     var viewer: AXUIElement?
+    var sidebar: AXUIElement?
     var mailbox: AXUIElement?
     var imported = false
     var removed = false
@@ -209,7 +323,9 @@ final class Session {
     }
     func focus(_ node: AXUIElement) throws {
         try checkDialog()
-        guard try present(node), AXUIElementPerformAction(node, kAXRaiseAction as CFString) == .success else { throw MailError("MAIL_RETAINED_RAISE_UNAVAILABLE") }
+        guard try present(node) else { throw MailError("MAIL_RETAINED_RAISE_UNAVAILABLE") }
+        try beforeMutation?()
+        guard AXUIElementPerformAction(node, kAXRaiseAction as CFString) == .success else { throw MailError("MAIL_RETAINED_RAISE_UNAVAILABLE") }
         guard target.activate(options: []) else { throw MailError("MAIL_OWNED_ACTIVATION_UNAVAILABLE") }
         try safeWait()
         guard let focused = element(try read(app, kAXFocusedWindowAttribute)), CFEqual(focused, node) else { throw MailError("MAIL_RETAINED_FOCUS_LOST") }
@@ -241,11 +357,18 @@ final class Session {
     }
     func setup() throws {
         let name = request["name"] as! String, source = request["root"] as! String
+        // Prove scoped reads before opening a viewer or changing a window.
+        guard let existing = element(try read(app, kAXMainWindowAttribute)) else { throw MailError("MAIL_VIEWER_UNAVAILABLE: open a Mail viewer with its mailbox sidebar visible and retry.") }
+        let preflight = try mailboxScope(existing)
+        guard try search(preflight, name).isEmpty else { throw MailError("MAIL_NONCE_ALREADY_PRESENT") }
+        guard try search(preflight, "On My Mac").count == 1 else { throw MailError("MAIL_LOCAL_SECTION_UNPROVED") }
         let view = try created { try menu(app, "File", ["New Viewer Window"]) }
         viewer = view
         try focus(view)
-        guard try search(view, name).isEmpty else { throw MailError("MAIL_NONCE_ALREADY_PRESENT") }
-        let local = try search(view, "On My Mac")
+        let scope = try mailboxScope(view)
+        sidebar = scope
+        guard try search(scope, name).isEmpty else { throw MailError("MAIL_NONCE_ALREADY_PRESENT") }
+        let local = try search(scope, "On My Mac")
         guard local.count == 1 else { throw MailError("MAIL_LOCAL_SECTION_UNPROVED") }
         let wizard = try created { try menu(app, "File", ["Import Mailboxes…", "Import Mailboxes..."]) }
         let radios = try walk(wizard).filter { try text($0, kAXRoleAttribute) == kAXRadioButtonRole && text($0).contains("Files in mbox format") }
@@ -261,7 +384,7 @@ final class Session {
         try press(button(wizard, ["Import", "Continue"]))
         for _ in 0..<100 { try safeWait(); if let done = try? button(wizard, ["Done"]) { try press(done); break } }
         try focus(view)
-        let roots = try search(view, name)
+        let roots = try search(scope, name)
         guard roots.count == 1, try text(roots[0]) == name else { throw MailError("MAIL_IMPORTED_ROOT_UNPROVED") }
         var ancestor: AXUIElement? = roots[0], localOwned = false
         for _ in 0..<20 {
@@ -339,13 +462,13 @@ final class Session {
         try checkDialog()
         try requireSettledCreation(creationPending)
         if imported && !removed {
-            guard let mailbox, let viewer, try text(mailbox) == request["name"] as! String else { throw MailError("MAIL_IMPORTED_CLEANUP_UNCONFIRMED: retained nonce mailbox unavailable") }
+            guard let mailbox, let sidebar, try text(mailbox) == request["name"] as! String else { throw MailError("MAIL_IMPORTED_CLEANUP_UNCONFIRMED: retained nonce mailbox unavailable") }
             try select(mailbox)
             let confirm = try created { try menu(app, "Mailbox", ["Delete Mailbox…", "Delete Mailbox..."]) }
             let values = try walk(confirm).map { try text($0, kAXValueAttribute) + text($0) }
             guard values.contains(where: { $0.contains(request["name"] as! String) }) else { throw MailError("MAIL_DELETE_CONFIRMATION_NONCE_UNPROVED") }
             try press(button(confirm, ["Delete"]))
-            for _ in 0..<50 { try safeWait(); if try search(viewer, request["name"] as! String).isEmpty { removed = true; break } }
+            for _ in 0..<50 { try safeWait(); if try search(sidebar, request["name"] as! String).isEmpty { removed = true; break } }
             guard removed else { throw MailError("MAIL_IMPORTED_REMOVAL_UNCONFIRMED") }
         }
         for node in owned.reversed() { try close(node) }
@@ -364,17 +487,17 @@ func main() throws {
     guard let data = CommandLine.arguments.dropFirst().first?.data(using: .utf8), let request = try JSONSerialization.jsonObject(with: data) as? [String: Any],
         request["ownerPresent"] as? Bool == true, let control = request["control"] as? String,
         let name = request["name"] as? String, name.hasPrefix("Sleight-Mail-"), let root = request["root"] as? String, root.hasSuffix("/" + name), request["folders"] is [String] else { throw MailError("MAIL_OWNER_PRESENT_OR_REQUEST_UNPROVED") }
-    guard AXIsProcessTrusted() else { throw MailError("MAIL_ACCESSIBILITY_UNAVAILABLE: no permission request made") }
+    requestNonce = request["nonce"] as? String
+    guard AXIsProcessTrusted() else { throw queryFailure(.apiDisabled, attempts: 0) }
     let running = NSRunningApplication.runningApplications(withBundleIdentifier: "com.apple.mail")
     guard running.count <= 1 else { throw MailError("MAIL_PROCESS_AMBIGUOUS") }
     // A fresh Mail launch can display account setup and restored owner mail.
     // Without a prelaunch scoped readiness proof, preserve the installed app.
     guard let target = running.first else {
-        try emit(["stage": "untouched", "actionTaken": false, "running": false, "launched": false])
         throw MailError("MAIL_NOT_RUNNING: fresh launch account/restoration boundary unproved; no app launched")
     }
     let session = try Session(request, target, launched: false)
-    beforeMutation = { [weak session] in try session?.checkDialog() }
+    beforeMutation = { [weak session] in try session?.checkDialog(); actionTaken = true }
     defer { beforeMutation = nil }
     do {
         try session.setup()
@@ -393,6 +516,8 @@ func main() throws {
             // No AX cleanup follows a permission/account/first-run/modal stop.
             throw error
         }
+        // A read-only preflight owns no windows or mailbox to clean up.
+        if !actionTaken { throw error }
         var cleanup = "unconfirmed", cleanupError: String?
         do { try session.cleanup(); cleanup = "closed retained fixture" } catch let failure { cleanupError = String(describing: failure) }
         if let dialog = session.blockedDialog { try emit(["stage": "app-dialog", "dialog": dialog, "cleanup": "unconfirmed"]) }
@@ -400,4 +525,9 @@ func main() throws {
         throw error
     }
 }
-do { try main() } catch { FileHandle.standardError.write(Data((String(describing: error) + "\n").utf8)); exit(1) }
+do { try main() } catch {
+    if !actionTaken, let nonce = requestNonce {
+        try? emit(["stage": "untouched", "nonce": nonce, "actionTaken": false, "launched": false, "imported": false])
+    }
+    FileHandle.standardError.write(Data((String(describing: error) + "\n").utf8)); exit(1)
+}

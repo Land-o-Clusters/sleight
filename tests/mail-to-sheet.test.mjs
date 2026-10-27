@@ -6,7 +6,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { runInNewContext } from 'node:vm';
 import { mailToSheetTask, prepareMailToSheet, transferCSV } from '../bench/tasks-mail-to-sheet.mjs';
-import { setupMailImport, prepareMailFixture } from '../bench/real-mail.mjs';
+import { setupMailImport, prepareMailFixture, openMailImport } from '../bench/real-mail.mjs';
 import { executeRealTask, cleanupContained } from '../bench/real-run.mjs';
 import { getTasks } from '../bench/tasks.mjs';
 import { selectSuiteTasks } from '../bench/shop.mjs';
@@ -18,6 +18,60 @@ function context(t, nonce = 'bt2test') {
   t.after(() => rmSync(dir, { recursive: true, force: true }));
   return { dir, nonce, ownerPresent: true };
 }
+
+// Losing a no-action receipt, accepting a contradictory receipt, or skipping
+// helper collection must change the real lifecycle's lock decision.
+for (const [label, receipt, groupClean, untouched, extraEvents = []] of [
+  ['untouched preflight', { actionTaken: false, launched: false, imported: false }, true, true],
+  ['missing receipt', null, true, false],
+  ['action attempted', { actionTaken: true, launched: false, imported: false }, true, false],
+  ['app launched', { actionTaken: false, launched: true, imported: false }, true, false],
+  ['mail imported', { actionTaken: false, launched: false, imported: true }, true, false],
+  ['helper uncollected', { actionTaken: false, launched: false, imported: false }, false, false],
+  ['wrong nonce', { actionTaken: false, launched: false, imported: false, nonce: 'other' }, true, false],
+  ['incomplete receipt', { actionTaken: false }, true, false],
+  ['contradictory activity', { actionTaken: false, launched: false, imported: false }, true, false,
+    [{ stage: 'action', actionTaken: true },
+      { stage: 'untouched', nonce: 'bt2test', actionTaken: false, launched: false, imported: false }]],
+]) test(`Mail preflight lock decision: ${label}`, async t => {
+  const ctx = context(t);
+  const lockPath = `${ctx.dir}-fake-live.lock`;
+  t.after(() => rmSync(lockPath, { force: true }));
+  let commands = 0;
+  const task = mailToSheetTask(() => assert.fail('Numbers must not open'), {
+    importMail: current => setupMailImport(current, { importer: (fixture, state) => openMailImport(fixture, state, {
+      helper: async () => 'fake-mail-helper',
+      run: async (_, args, options) => {
+        commands++;
+        const request = JSON.parse(args[0]);
+        if (receipt) options.onStdout(JSON.stringify({ stage: 'untouched', nonce: request.nonce, ...receipt }) + '\n');
+        for (const event of extraEvents) options.onStdout(JSON.stringify(event) + '\n');
+        return { groupClean, exit: { code: 1 }, stderr: 'MAIL_SCOPED_AX_QUERY_UNAVAILABLE: -25204', stdout: '' };
+      },
+    }) }),
+  });
+  const result = await executeRealTask(task, ctx, {
+    lock: async () => { writeFileSync(lockPath, 'fake owner'); return async () => rmSync(lockPath); },
+    drive: () => assert.fail('no driver before fixture setup completes'),
+  });
+  assert.equal(commands, 1);
+  assert.equal(result.passed, false);
+  assert.match(result.reason, /MAIL_SCOPED_AX_QUERY_UNAVAILABLE/);
+  assert.equal(existsSync(lockPath), !untouched);
+  assert.equal(ctx.fixtureLockUnconfirmed, !untouched);
+  if (untouched) {
+    assert.equal(result.cleanupError, undefined);
+    assert.equal(result.liveLockKept, undefined);
+    assert.equal(ctx.pendingAcquisitions.size, 0);
+    assert.equal(ctx.fixtureDiagnostics[0].actionTaken, false);
+    assert.equal(ctx.fixtureDiagnostics[0].windowCleanupConfirmed, true);
+    assert.equal(ctx.fixtureDiagnostics[0].helperCollectionConfirmed, true);
+    assert.equal(ctx.mailImport.cleaned, true);
+  } else {
+    assert.ok(result.cleanupError);
+    assert.ok(result.liveLockKept);
+  }
+});
 
 // These exports and receipts are synthetic. No helper, app, Apple event or UI is used.
 function appState(ctx) {
