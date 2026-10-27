@@ -18,6 +18,7 @@ const underClaude = () => ({ ok: false, reason: 'claude' });
 const clean = { env: {} };
 
 const WRITES = [
+  ['menu'], ['link'], ['unlink'],
   ['hand', 'on'], ['hand', 'off'], ['hand', 'capture', 'hidden'], ['hand', 'capture', 'visible'],
   ['turbo', 'on'], ['turbo', 'on', '--browser', 'chrome'], ['turbo', 'off'], ['turbo', 'app', 'on', 'com.example.app'], ['turbo', 'app', 'off', 'com.example.app'],
   ['permissions', 'block', 'com.example.app'], ['permissions', 'unblock', 'https://example.com'], ['permissions', 'revoke', 'all'],

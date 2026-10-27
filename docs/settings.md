@@ -282,6 +282,7 @@ Run settings commands from Terminal, iTerm2, Ghostty, WezTerm, kitty or Alacritt
 Anywhere else, including tmux or screen, an editor's terminal (VS Code, Cursor), Warp and the Code tab's terminal panel,
 the launcher prints one line with the reason and exits with code 3.
 
+- Run `menu`, `link` and `unlink` in your own terminal. `menu` opens the menu bar settings without a session.
 - Run `hand on`, `off` and `capture` in your own terminal. `hand status` runs anywhere.
 - Run `turbo on`, `off` and `turbo app on|off` in your own terminal. `turbo status` runs anywhere.
 - Run `cursor style`, `import` and `remove` in your own terminal. `cursor list`, `check` and `status` run anywhere.
@@ -290,6 +291,22 @@ the launcher prints one line with the reason and exits with code 3.
 - Run `routine add`, `remove` and `unlock` in your own terminal. `routine list` and `run-now` run anywhere.
 - Run `watch <url> --find`, `watch record`, `remove` and `unlock` in your own terminal. `watch list`, `notes` and
   `run-now` run anywhere.
+
+The installed launcher is `<installPath>/bin/sleight-mcp`, where Claude Code's plugin listing gives `installPath`.
+Run `"<installPath>/bin/sleight-mcp" link` to offer a `~/.local/bin/sleight` command. It creates the command only after you
+answer yes. The link points to a private `.sleight-shim-v1` file beside it. Setup offers the same link after a successful check. If `~/.local/bin` is missing from PATH, it prints
+`export PATH="$HOME/.local/bin:$PATH"` for you to add yourself. It never edits shell startup files.
+The command finds Claude Code's current `sleight@sleight` install each time, so it follows plugin updates. If that record
+is missing, it tries the install that created it. `sleight unlink` removes only a link and shim made by sleight.
+
+### Menu without a session
+
+Run `sleight menu` after linking, or `"<installPath>/bin/sleight-mcp" menu`. On first use it prints that it is compiling
+the host. It exits after the menu is ready and keeps the menu running after you close the terminal. If a sleight host
+already shows the menu, it reports that instead. The menu has Ghost Hand, Cursor, Character lines for a selected sprite,
+Permissions, the usage row when logging is on, Settings & Help and the version. It has Quit Menu instead of session pause
+and resume controls. It runs without a cursor overlay, relay or engine. Settings choices use the same files and person-input
+checks as the session menu. Choose Quit Menu to close it.
 
 ### Changes that ask for Touch ID or your password
 
@@ -419,11 +436,11 @@ The host compiles in the background on its first use after you enable it. That s
 - Without `SLEIGHT_HAND=1`, a `hand.json` that is a link or has another owner, mode or format keeps the hand off until you delete it.
 
 Claude's own file edits and shell commands can't write `hand.json` or run `hand on`, `hand off` or `hand capture`.
-A shell command that names `sleight-mcp` or `launch.mjs` next to `hand`, `turbo`, `permissions` or `cursor` passes only as
+A shell command that names `sleight`, `sleight-mcp` or `launch.mjs` next to `hand`, `turbo`, `permissions`, `cursor`, `menu`, `link` or `unlink` passes only as
 a direct read-only form with literal arguments: `hand status`, `turbo status`, `permissions`, `permissions list`,
 `cursor list`, `cursor check <id>`, `cursor status`, `runs list` or `runs open <id>`. A variable, substitution, glob, brace, redirection, heredoc,
 subshell, `xargs`, `parallel` or `eval` anywhere in that command refuses it. A variable or substitution as the command word
-refuses a command with one of those four words too, even without the launcher's name. An interpreter or shell next to one
+refuses a command with one of those settings words too, even without the launcher's name. An interpreter or shell next to one
 of those words passes only when it runs a read-only form. A pipe into a shell always refuses. Read-only tools (`grep`, `rg`,
 `cat`, `head`, `tail`, `wc`, `ls`, `file`, `stat`, `diff`, and `git log`, `show`, `diff`, `grep`, `blame` or `status`)
 can read the launcher's files and mention those words, as long as the command has no output redirection, `-exec` or

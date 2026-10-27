@@ -166,7 +166,7 @@ const FIND_WRITERS = new Set(['rm', 'mv', 'cp', 'ln', 'chmod', 'chown', 'chgrp',
 // A path with glob or brace characters names whatever its folder holds that matches; the folder decides.
 const globFolder = path => /[*?[{]/.test(path) ? path.slice(0, path.search(/[*?[{]/)).replace(/\/[^/]*$/, '') : undefined;
 const PROTECTED_NAME = /(?:preapproved|turbo|turbo-apps|turbo-owner|electron-grants|hand|permissions)\.json|grant-seal\.key/i;
-const launcher = name => name === 'sleight-mcp' || name === 'launch.mjs';
+const launcher = name => name === 'sleight' || name === 'sleight-mcp' || name === 'launch.mjs';
 const commandArgument = value => value.replace(/^['"]+|[;&|)'"]+$/g, '');
 // True when the words run the launcher's command with arguments `allowed` refuses (by default anything but status), as
 // separate words or inside a -c string, where the arguments run to the next shell operator.
@@ -179,7 +179,7 @@ function launcherToggle(words, command, allowed = statusOnly) {
   }
   return words.some(word => {
     if (!/\s/.test(word)) return false;
-    const hit = /(?<![\w.-])(?:\S*\/)?(?:sleight-mcp|launch\.mjs)(?=[\s'"]|$)/.exec(word);
+    const hit = /(?<![\w.-])(?:\S*\/)?(?:sleight-mcp|sleight|launch\.mjs)(?=[\s'"]|$)/.exec(word);
     // A script string that runs the launcher through xargs gives it arguments from input the guard doesn't see.
     if (hit && /(?<![\w-])xargs(?![\w-])[^;&\n]*$/.test(word.slice(0, hit.index))) return true;
     return !!hit && [...word.slice(hit.index).matchAll(new RegExp(`(?<![\\w-])${command}(?![\\w-])([^;&|)\\n]*)`, 'g'))]
@@ -191,13 +191,13 @@ const listingOnly = rest => rest.length === 0 || rest.length === 1 && rest[0] ==
 // The launcher's commands that change what sleight may do, each with the forms Claude's shell may run.
 const cursorReads = rest => ['list', 'check', 'status'].includes(rest[0]);
 const LAUNCHER_COMMANDS = [['turbo', statusOnly, 'turbo.json'], ['hand', statusOnly, 'hand.json'], ['cursor', cursorReads, 'hand.json'],
-  ['permissions', listingOnly, 'permissions.json']];
-// Fail closed. A Bash command that names the launcher (sleight-mcp or launch.mjs) beside one of these subcommand words passes
+  ['permissions', listingOnly, 'permissions.json'], ...['menu', 'link', 'unlink'].map(word => [word, () => false, 'hand.json'])];
+// Fail closed. A Bash command that names the launcher (sleight, sleight-mcp or launch.mjs) beside one of these subcommand words passes
 // only as a plain direct invocation of a read-only form: literal arguments, and no expansion, substitution, glob, brace,
 // redirection, heredoc, subshell, xargs, parallel or eval anywhere in it. Any other spelling is refused, except read-only
 // tools (grep, cat, git log) that can't run anything. The guard doesn't try to read what the shell would make of it.
-const LAUNCHER_NAME = /sleight-mcp|launch\.mjs/;
-const SUBCOMMAND = /(?<![\w-])(?:hand|turbo|permissions|cursor)(?![\w.-])/; // not turbo.json or hand.json
+const LAUNCHER_NAME = /(?<![\w.-])(?:sleight-mcp|sleight|launch\.mjs)(?![\w.-])/;
+const SUBCOMMAND = /(?<![\w-])(?:hand|turbo|permissions|cursor|menu|link|unlink)(?![\w.-])/; // not turbo.json or hand.json
 const INPUT_RUNNERS = String.raw`(?<![\w-])(?:\w*args|parallel|eval|source)(?![\w-])`;
 const EXPANDS = String.raw`[$` + '`' + String.raw`*?[\]{}]`;
 // With the launcher named but no subcommand word: text that could still make one.
@@ -526,7 +526,7 @@ const unescaped = (text, concatenate = true) => {
 };
 const switched = text => typeof text === 'string' && SWITCHES.test(unescaped(text));
 // Paths are matched lowercased (folded).
-const CONFIG = /(?:^|\/)(?:\.claude\/[^/]*\.json|\.claude\.json|\.?mcp\.json|managed-settings\.json|settings(?:\.local)?\.json|\.claude-plugin\/plugin\.json|bin\/sleight-mcp|launchagents\/[^/]+\.plist|\.config\/fish\/(?:[^/]+\/)*[^/]+\.fish|\.(?:zshrc|zshenv|zprofile|zlogin|bashrc|bash_profile|profile|envrc)|\.zshrc\.d\/[^/]+)$/;
+const CONFIG = /(?:^|\/)(?:\.claude\/[^/]*\.json|\.claude\.json|\.?mcp\.json|managed-settings\.json|settings(?:\.local)?\.json|\.claude-plugin\/plugin\.json|bin\/sleight(?:-mcp)?|launchagents\/[^/]+\.plist|\.config\/fish\/(?:[^/]+\/)*[^/]+\.fish|\.(?:zshrc|zshenv|zprofile|zlogin|bashrc|bash_profile|profile|envrc)|\.zshrc\.d\/[^/]+)$/;
 const CONFIG_TEXT = /(?:settings(?:\.local)?|\.claude|mcp|managed-settings|plugin)\.json|\.plist\b|\.fish\b|\.(?:zshrc|zshenv|zprofile|zlogin|bashrc|bash_profile|profile|envrc)\b/;
 // Commands that can write a file they name in their own text. awk only with an output redirect, a pipe or system().
 const SETTERS = /\b(?:claude\s+(?:mcp|config)|launchctl\s+setenv|python\d*(?:\.\d+)?|node|ruby|perl|jq|plutil|defaults|osascript)\b|\bg?awk\b[^\n]*(?:>|\||\bsystem\s*\()/;

@@ -1347,7 +1347,46 @@ func glyphImage(_ svg: String) -> NSImage? {
     return image
 }
 
+// BEGIN MENU INSTANCE
+// Session hosts share the presence lock; a standalone menu needs it exclusively.
+// Keep the inode after release: unlinking a flock file would let two hosts own different inodes.
+final class MenuInstance {
+    private var descriptor: Int32 = -1
+    func claim(_ path: String = "/private/tmp/sleight-menu-\(getuid()).lock", standalone: Bool = true) -> Bool {
+        if descriptor >= 0 { return true }
+        let fd = open(path, O_RDWR | O_CREAT | O_NOFOLLOW | O_CLOEXEC, mode_t(0o600))
+        guard fd >= 0 else { exit(78) }
+        var info = stat()
+        guard fstat(fd, &info) == 0, info.st_uid == getuid(), info.st_nlink == 1,
+            info.st_mode & S_IFMT == S_IFREG, info.st_mode & 0o777 == 0o600 else { close(fd); exit(78) }
+        guard flock(fd, (standalone ? LOCK_EX : LOCK_SH) | LOCK_NB) == 0 else {
+            let held = errno == EWOULDBLOCK; close(fd)
+            if !held { exit(78) }; return false
+        }
+        descriptor = fd; return true
+    }
+    func release() { if descriptor >= 0 { close(descriptor); descriptor = -1 } }
+    deinit { release() }
+}
+// END MENU INSTANCE
+func writeMenuReady(_ existing: Bool) {
+    guard let nonce = nonceBook.nonce("hand"), let data = try? JSONSerialization.data(withJSONObject:
+        ["hand": "menu-ready", "nonce": nonce, "existing": existing]) else { return }
+    FileHandle.standardOutput.write(data + Data([10]))
+}
+// The same plan controls the live menu and the no-window dump.
+struct SettingsMenuPlan {
+    let menuOnly: Bool
+    var pause: Bool { !menuOnly }
+    var quit: Bool { menuOnly }
+    var cursor: Bool { menuOnly }
+    var json: [String: Any] { ["pause": pause, "resume": pause, "quit": quit, "drawsCursor": !menuOnly,
+        "extraRows": quit ? ["Quit Menu"] : []] }
+}
 final class ConsentHost: NSObject, NSApplicationDelegate, NSMenuDelegate {
+    var settingsMenu = false, settingsReady = false
+    let menuInstance = MenuInstance()
+    var menuRetry: Timer?
     let cursorPause = CursorPauseControl()
     var cursorControlSession = false
     var controlRetiring = false
@@ -1396,6 +1435,7 @@ final class ConsentHost: NSObject, NSApplicationDelegate, NSMenuDelegate {
         })
     override init() {
         super.init()
+        item.isVisible = false
         // Posted on the main thread before the activating click is handled; nil queue runs it there and then.
         NotificationCenter.default.addObserver(forName: NSApplication.willBecomeActiveNotification, object: nil, queue: nil) { [weak self] _ in
             self?.focus.hostActivating()
@@ -1547,7 +1587,8 @@ final class ConsentHost: NSObject, NSApplicationDelegate, NSMenuDelegate {
     }
     func rebuildMenu() {
         let menu = CursorPickerMenu(); menu.addWindowProbe()
-        if hand?.enabled == true || cursorPause.paused {
+        let plan = SettingsMenuPlan(menuOnly: settingsMenu)
+        if plan.pause && (hand?.enabled == true || cursorPause.paused) {
             let entry = CursorPauseMenuItem(title: cursorPause.failed ? "Pause not confirmed. Try again" : cursorPause.paused ? "Resume sleight" : "Pause sleight", action: #selector(cursorPauseClick(_:)), keyEquivalent: "")
             entry.target = self; menu.addItem(entry); menu.addItem(NSMenuItem.separator())
         }
@@ -1568,14 +1609,30 @@ final class ConsentHost: NSObject, NSApplicationDelegate, NSMenuDelegate {
             if !menu.items.isEmpty { menu.addItem(NSMenuItem.separator()) }
             add(handRows(enabled: hand.enabled, version: hand.version, permissions: permissionMenu, usage: usage), to: menu, id: "")
         }
-        cursorPicker.install(in: menu, enabled: hand?.enabled == true)
+        cursorPicker.install(in: menu, enabled: plan.cursor || hand?.enabled == true)
+        if plan.quit {
+            menu.addItem(NSMenuItem.separator())
+            let quit = CursorPickerMenuItem(title: "Quit Menu", action: #selector(quitMenu(_:)), keyEquivalent: "")
+            quit.target = self; menu.addItem(quit)
+        }
         menu.delegate = self
         item.menu = menu
         let requests = pending.values.filter { ($0["data"] as? [String: Any])?["status"] == nil }.count
-        item.isVisible = !controlRetiring && (cursorPause.paused || menuVisible(status, requests: requests, handEnabled: hand?.enabled ?? false))
+        let wanted = !controlRetiring && (settingsMenu || cursorPause.paused || menuVisible(status, requests: requests, handEnabled: hand?.enabled ?? false))
+        item.isVisible = wanted && menuInstance.claim(standalone: settingsMenu)
+        if !wanted { menuInstance.release() }
+        menuRetry?.invalidate(); menuRetry = nil
+        // A waiting session gets its controls back after the menu owner quits. No timer while visible or retired.
+        if wanted && !item.isVisible && !settingsMenu {
+            menuRetry = Timer.scheduledTimer(withTimeInterval: 1, repeats: false) { [weak self] _ in self?.rebuildMenu() }
+        }
+        if settingsMenu && !settingsReady {
+            settingsReady = true; writeMenuReady(!item.isVisible)
+            if !item.isVisible { NSApp.terminate(nil) }
+        }
     }
     // Hide before reporting the fault, so a replacement never appears beside an obsolete status item.
-    func retireControl() { controlRetiring = true; hookupTimer?.invalidate(); hookupTimer = nil; item.isVisible = false }
+    func retireControl() { menuRetry?.invalidate(); menuRetry = nil; menuInstance.release(); controlRetiring = true; hookupTimer?.invalidate(); hookupTimer = nil; item.isVisible = false }
     // The shared host's consent channel ended (its worker exited): an open card is aborted, its requests and status go, and the
     // hand stays.
     func channelClosed() { closeAsk(); modal.close(); pending.removeAll(); status = nil; consentOpen = false; rebuildMenu(); if !handOpen { NSApp.terminate(nil) } }
@@ -1618,6 +1675,10 @@ final class ConsentHost: NSObject, NSApplicationDelegate, NSMenuDelegate {
         guard let event = sender.representedObject as? [String: String] else { return }
         writePermissionEvent(event)
     }
+    @objc func quitMenu(_ sender: NSMenuItem) {
+        guard settingsMenu, personMenuActivation(sender) else { return }
+        NSApp.terminate(nil)
+    }
     @objc func handToggle(_ sender: NSMenuItem) {
         guard personMenuActivation(sender) else { return }
         guard let hand = hand else { return }
@@ -1625,7 +1686,7 @@ final class ConsentHost: NSObject, NSApplicationDelegate, NSMenuDelegate {
     }
     func menuWillOpen(_ menu: NSMenu) {
         (menu as? CursorPickerMenu)?.lastHighlighted = nil
-        if menu === item.menu, hand?.enabled == true { writeCursorPickerEvent(["op": "refresh"]) }
+        if menu === item.menu, settingsMenu || hand?.enabled == true { writeCursorPickerEvent(["op": "refresh"]) }
     }
     func menu(_ menu: NSMenu, willHighlight entry: NSMenuItem?) { if let entry = entry { (menu as? CursorPickerMenu)?.lastHighlighted = entry } }
     @objc func cursorPauseClick(_ sender: NSMenuItem) {
@@ -6108,6 +6169,7 @@ final class HandHost: NSObject, NSApplicationDelegate {
         }
         consent?.rebuildMenu()
     }
+    var settingsMenu = false
     var cursorStyle = "glove" { didSet { if cursorStyle != "sprite" { spriteLoader.cancel(); ringRuntime.character = nil; perch.configure(replace: true) } } }
     let spriteLoader = SpriteLoader()
     lazy var perch = PerchHost(host: self)   // perch mode and lines (BEGIN PERCH)
@@ -6188,6 +6250,7 @@ final class HandHost: NSObject, NSApplicationDelegate {
                 guard line.count <= 65536, let data = try? JSONSerialization.jsonObject(with: line) as? [String: Any],
                     line.count <= 8192 || data["hand"] as? String == "character" && line.count <= 32768 || data["hand"] as? String == "picker",
                     let frame = handFrame(data) else { fault(); continue lines }
+                if settingsMenu && !["menu", "picker", "hide"].contains(data["hand"] as? String ?? "") { fault(); continue lines }
                 switch frame {
                 case let .pause(nonce, phase, token, value):
                     guard nonceBook.admit("hand", nonce) else { fault(); continue lines }
@@ -7027,6 +7090,10 @@ if arguments.first == "--check-character" {
     FileHandle.standardOutput.write(out + Data([10]))
     exit(0)
 }
+if arguments == ["--settings-menu-dump"] {
+    let bytes = try! JSONSerialization.data(withJSONObject: SettingsMenuPlan(menuOnly: true).json, options: [.sortedKeys])
+    FileHandle.standardOutput.write(bytes + Data([10])); exit(0)
+}
 if arguments.first == "--perch-dump" {
     let flags = Array(arguments.dropFirst()), seeds = flags.filter { $0.hasPrefix("--seed=") }
     guard seeds.count <= 1, flags.allSatisfy({ $0 == "--reduce-motion" || $0.hasPrefix("--seed=") }), Set(flags).count == flags.count else { exit(64) }
@@ -7090,7 +7157,8 @@ if arguments.isEmpty {
     let mode = arguments[0]
     var rest = Array(arguments.dropFirst()), demo: CGRect?
     if mode == "--hand-demo" { guard let first = rest.first, let rect = handDemoRect(first) else { exit(64) }; demo = rect; rest.removeFirst() }
-    let consent = mode == "--hand" && rest.last == "--consent", menuOnly = mode == "--hand" && rest.last == "--menu"
+    let consent = mode == "--hand" && rest.last == "--consent", menuOnly = mode == "--hand" && ["--menu", "--settings-menu"].contains(rest.last ?? "")
+    let settingsMenu = mode == "--hand" && rest.last == "--settings-menu"
     if consent { rest.removeLast(); guard fcntl(3, F_GETFD) != -1, fcntl(4, F_GETFD) != -1 else { exit(64) } }
     if menuOnly { rest.removeLast() }
     let styles = rest.filter { $0.hasPrefix("--cursor-style=") }
@@ -7104,10 +7172,12 @@ if arguments.isEmpty {
         exit(0)
     }
     let hand = HandHost()
+    hand.settingsMenu = settingsMenu
     hand.demo = demo; hand.capture = capture; hand.cursorStyle = cursorStyle
     hand.ringRuntime = RingRuntime(theme: ringThemes[cursorStyle] ?? .seamPlus, seed: UInt64.random(in: 1...UInt64.max))
     if consent || menuOnly {
         let host = ConsentHost()
+        host.settingsMenu = settingsMenu
         host.cursorPicker.rows = CursorPickerRow.defaults(cursorStyle)
         host.input = consent ? FileHandle(fileDescriptor: 3, closeOnDealloc: true) : nil
         if consent { host.output = FileHandle(fileDescriptor: 4, closeOnDealloc: true) }
