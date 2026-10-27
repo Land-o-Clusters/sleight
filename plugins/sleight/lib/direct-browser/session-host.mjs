@@ -31,8 +31,10 @@ export function packageFiles(root, uid = process.getuid?.()) {
   return packageEntries(root, uid).filter(entry => entry.stat.isFile()).map(entry => entry.path);
 }
 
-// ctime cannot be restored with utimes by an ordinary package writer. Keep nanoseconds
-// as bigint: millisecond rounding could hide a same-size write with a restored mtime.
+// Keep nanoseconds: millisecond rounding could hide a same-size write with a restored
+// mtime. Live shared mappings can change bytes without moving either timestamp, so
+// identities alone only permit reuse until the last full verification's TTL expires.
+const PACKAGE_VERIFICATION_TTL_NS = 1_000_000_000n;
 const identityFields = ['dev', 'ino', 'size', 'mode', 'uid', 'gid', 'nlink', 'mtimeNs', 'ctimeNs'];
 const sameIdentity = (a, b) => !!a && !!b && identityFields.every(key => a[key] === b[key]);
 const sameTree = (a, b) => !!a && a.size === b.size && [...b].every(([path, stat]) => sameIdentity(a.get(path), stat));
@@ -53,7 +55,7 @@ export function createPackageInventory({ root = fileURLToPath(new URL('../..', i
     paths.add(file.path);
   }
   if (minimum.some(name => ![...paths].some(path => path === name || path.endsWith('/' + name)))) throw Error('HOST_PACKAGE_MISMATCH');
-  let identity, verified;
+  let identity, verified, verifiedAt = 0n;
   const current = () => {
     const fail = () => { verified = undefined; return false; };
     try {
@@ -63,9 +65,10 @@ export function createPackageInventory({ root = fileURLToPath(new URL('../..', i
       const entries = packageEntries(root, uid), actual = entries.filter(entry => entry.stat.isFile());
       if (actual.length !== paths.size || actual.some(entry => !paths.has(entry.path))) return fail();
       const tree = new Map([['', dir], ...entries.map(entry => [entry.path, entry.stat])]);
-      if (sameTree(verified, tree)) return process.version === manifest.node;
-      // Any changed file or directory invalidates the whole snapshot. Recheck all
-      // bytes, including art, before publishing another reusable snapshot.
+      const now = process.hrtime.bigint();
+      if (sameTree(verified, tree) && now - verifiedAt < PACKAGE_VERIFICATION_TTL_NS) return process.version === manifest.node;
+      // A changed identity or expired TTL requires all bytes, including art. Start
+      // the TTL before hashing so verification time cannot extend the reuse window.
       verified = undefined;
       for (const file of manifest.files) {
         const fd = openSync(join(root, file.path), constants.O_RDONLY | constants.O_NOFOLLOW);
@@ -79,7 +82,7 @@ export function createPackageInventory({ root = fileURLToPath(new URL('../..', i
       const after = new Map([['', lstatSync(root, { bigint: true })],
         ...packageEntries(root, uid).map(entry => [entry.path, entry.stat])]);
       if (realpathSync(root) !== root || !sameTree(tree, after)) return fail();
-      verified = tree;
+      verified = tree; verifiedAt = now;
       identity ??= { dev: dir.dev, ino: dir.ino };
       return process.version === manifest.node;
     } catch { return fail(); }

@@ -32,6 +32,25 @@ function countReads(t) {
   t.after(() => { t.mock.restoreAll(); syncBuiltinESMExports(); });
   return () => reads;
 }
+test('full hashes expire at 1 s despite repeated checks and start before hashing', t => {
+  const f = fixture(t), reads = countReads(t);
+  let now = 0n;
+  t.mock.method(process.hrtime, 'bigint', () => now);
+  assert.equal(f.inventory.current(), true);
+  const count = f.receipt.files.length;
+  for (now = 100_000_000n; now < 1_000_000_000n; now += 100_000_000n) assert.equal(f.inventory.current(), true);
+  assert.equal(reads(), count, 'fast checks do not slide the expiry');
+  assert.equal(f.inventory.current(), true);
+  assert.equal(reads(), count * 2, 'exactly 1 s forces a full hash');
+  const original = fs.readFileSync;
+  t.mock.method(fs, 'readFileSync', (...args) => { now += 200_000_000n; return original(...args); });
+  syncBuiltinESMExports();
+  now = 2_000_000_000n;
+  assert.equal(f.inventory.current(), true);
+  const before = reads();
+  assert.equal(f.inventory.current(), true);
+  assert.equal(reads(), before + count, 'a hash taking over 1 s cannot seed a fresh reuse window');
+});
 test('unchanged checks validate identities without rereading bytes; a metadata change rehashes every file', t => {
   const f = fixture(t), reads = countReads(t), count = f.receipt.files.length;
   assert.equal(f.inventory.current(), true); assert.equal(reads(), count);
