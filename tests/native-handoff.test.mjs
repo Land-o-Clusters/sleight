@@ -63,8 +63,11 @@ test(`away native handoff returns before Continue and keeps the card (locked=${p
   const pending = f.received.find(row => row.id === 'handoff');
   assert.ok(pending, 'away handoff must return without waiting for the person');
   assert.equal(pending.result.isError, false);
-  assert.match(JSON.stringify(pending), /app kept for the user/);
-  assert.match(JSON.stringify(pending), /Continue/);
+  assert.match(JSON.stringify(pending), /app kept for the user/i);
+  assert.match(JSON.stringify(pending), /card.*turn ends/i);
+  assert.match(JSON.stringify(pending), /end.*turn/i);
+  assert.match(JSON.stringify(pending), /reply/i);
+  assert.doesNotMatch(JSON.stringify(pending), /click Continue/i);
   assert.equal(f.cards.length, 1);
   assert.equal(f.dismissed.length, 0);
   const before = f.outbound.length;
@@ -78,6 +81,30 @@ test(`away native handoff returns before Continue and keeps the card (locked=${p
   assert.equal(f.inputLease.owned.size, 0);
   f.send(rpc('fresh', 'js', { code: 'var fresh = await cua.getApp("com.example.Reader")' }));
   assert.equal(f.outbound.at(-1).id, 'fresh');
+});
+
+for (const host of ['missing', 'throws', 'open-throws']) test(`away native handoff with ${host} host reports nothing waiting`, async t => {
+  const f = await fixture(t, { remoteApprovals: { presence: async () => ({ locked: true, idleSeconds: 0 }) },
+    handoffUi: async () => { if (host === 'open-throws') throw Error('private host detail');
+      return host === 'missing' ? undefined : { authenticate: () => true, present() { throw Error('private host detail'); } }; } });
+  f.send(rpc('handoff', 'app_handoff')); await tick();
+  const text = JSON.stringify(f.received.find(row => row.id === 'handoff'));
+  assert.match(text, /not resumed/i);
+  assert.match(text, /nothing is waiting/i);
+  assert.match(text, /sign-in.*Mac/i);
+  assert.doesNotMatch(text, /Continue|card|private host detail/);
+  assert.equal(f.inputLease.owned.size, 0);
+  f.send(rpc('fresh', 'js', { code: 'var fresh = await cua.getApp("com.example.Reader")' }));
+  assert.equal(f.outbound.at(-1).id, 'fresh');
+});
+
+test('native handoff refuses id-less tool calls while the card is pending', async t => {
+  const f = await fixture(t, { remoteApprovals: { presence: async () => ({ locked: true, idleSeconds: 0 }) } });
+  f.send(rpc('handoff', 'app_handoff')); await tick();
+  const before = f.outbound.length;
+  f.send(rpc(undefined, 'js', { code: 'await cua.getApp("com.example.Reader")' }));
+  await tick();
+  assert.equal(f.outbound.length, before);
 });
 
 test('present native handoff still waits for Continue with a fake presence signal', async t => {

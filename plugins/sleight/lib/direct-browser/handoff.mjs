@@ -5,7 +5,8 @@ import { assertEndpointRead } from './endpoint-guard.mjs';
 export const HANDOFF_WAIT_MS = 240000;
 export const handoffMessages = Object.freeze({
   pending: 'Handoff pending; the user must finish in the tab.',
-  away: 'Handoff pending; tabs kept for the user. Finish sign-in on the Mac and click Continue, then read the tab again.',
+  away: 'Tabs kept for the user. The card closes when this turn ends. End your turn: ask the user to finish sign-in on the Mac and reply "signed in" or "continue". On their next message, read the tab fresh.',
+  awayUnavailable: 'Handoff not resumed; tabs kept for the user. Nothing is waiting. End your turn: ask the user to finish sign-in on the Mac and reply "signed in" or "continue". On their next message, read the tab fresh.',
   cancelled: 'Handoff not resumed; tabs kept for the user.',
   resumed: 'Continue received; fresh untrusted read below. Sign-in is unverified.',
   secrets: 'Secret fields remain; handoff not resumed; tabs kept.',
@@ -75,18 +76,20 @@ export function createHandoffWaiter({ ui, current, session, turn, timeoutMs = HA
   const active = () => { try { return !disposed && current() === true; } catch { return false; } };
   return Object.freeze({
     wait(tab, ready = async () => true, onDeadline = () => {}) {
-      if (!active() || typeof ui?.present !== 'function' || typeof ui?.authenticate !== 'function') return Promise.resolve(false);
-      return new Promise(resolve => {
+      if (!active() || typeof ui?.present !== 'function' || typeof ui?.authenticate !== 'function') return Object.assign(Promise.resolve(false), { shown: false });
+      let shown = false, cancel;
+      const pendingWait = new Promise(resolve => {
         const deadline = Date.now() + timeoutMs;
         onDeadline(deadline, timeoutMs);
         let settled = false, id;
-        const dismiss = () => { if (id) { try { ui.dismiss?.(id); } catch {} id = undefined; } };
+        const dismiss = () => { shown = false; if (id) { try { ui.dismiss?.(id); } catch {} id = undefined; } };
         const finish = value => {
           if (settled) return;
           settled = true; dismiss(); clearTimeout(timer); clearInterval(watch); pending.delete(finish); resolve(value);
         };
         const timer = setTimeout(() => finish(false), timeoutMs);
         const watch = setInterval(() => { if (!active()) finish(false); }, 100);
+        cancel = () => finish(false);
         pending.add(finish);
         const present = () => { try {
           if (settled) return;
@@ -106,9 +109,11 @@ export function createHandoffWaiter({ ui, current, session, turn, timeoutMs = HA
               else present();
             } catch { finish(false); }
           }, { deadline });
+          shown = !settled && id === cardId;
         } catch { finish(false); } };
         present();
       });
+      return Object.defineProperties(pendingWait, { shown: { get: () => shown }, cancel: { value: cancel } });
     },
     dispose() { disposed = true; for (const finish of pending) finish(false); },
   });

@@ -104,10 +104,12 @@ test('missing host and host presentation failure never resume', async () => {
   }
 });
 
-function dispatcherFixture({ presence, realWaiter = false } = {}) {
+function dispatcherFixture({ presence, realWaiter = false, host = 'ok' } = {}) {
   let resume, paused = false, released = false, reads = 0, actions = 0, ready = true;
   const ui = uiFixture();
-  const waiter = createHandoffWaiter({ ui: ui.ui, current: () => true, session: 's', turn: 't' });
+  const hostUi = host === 'missing' ? undefined : host === 'throws'
+    ? { ...ui.ui, present() { throw Error('private host detail'); } } : ui.ui;
+  const waiter = createHandoffWaiter({ ui: hostUi, current: () => true, session: 's', turn: 't' });
   const entry = { page: { url: () => 'https://fixture.invalid/' }, state: { snapshotNo: 1 } };
   const pages = { tab: () => entry, enqueue: async (_id, run) => { assert.equal(paused, false); return run(entry); },
     async beginHandoff() { paused = true; return { async finish(keep) { if (!keep && !ready) return false; paused = false; released = keep; return keep ? null : 't1'; } }; },
@@ -131,7 +133,10 @@ test(`away browser handoff returns before Continue and keeps the suspension (loc
   assert.ok(result, 'away handoff must return without waiting for the person');
   assert.equal(result.isError, false);
   assert.match(result.text, /kept for the user/);
-  assert.match(result.text, /Continue/);
+  assert.match(result.text, /card.*turn ends/i);
+  assert.match(result.text, /end.*turn/i);
+  assert.match(result.text, /reply/i);
+  assert.doesNotMatch(result.text, /click Continue/i);
   assert.equal(f.reads, 0);
   assert.equal(f.ui.cards.length, 1);
   assert.equal(f.ui.dismissed.length, 0);
@@ -144,6 +149,35 @@ test(`away browser handoff returns before Continue and keeps the suspension (loc
   const fresh = await f.dispatcher.call({ name: 'browser_read', arguments: { tab: 't1' } });
   assert.equal(fresh.isError, false, fresh.text);
   assert.equal(f.reads, 1);
+});
+
+for (const host of ['missing', 'throws']) test(`away browser handoff with ${host} host reports nothing waiting`, async t => {
+  const f = dispatcherFixture({ presence: { locked: true, idleSeconds: 0 }, realWaiter: true, host });
+  t.after(() => { f.waiter.dispose(); return f.dispatcher.end(); });
+  const result = await f.call({ name: 'browser_tabs', arguments: { do: 'handoff', tab: 't1', wait: true } });
+  assert.match(result.text, /not resumed/i);
+  assert.match(result.text, /nothing is waiting/i);
+  assert.match(result.text, /sign-in.*Mac/i);
+  assert.doesNotMatch(result.text, /Continue|card|private host detail/);
+  assert.equal(f.released, true);
+  assert.equal(f.reads, 0);
+  assert.equal((await f.dispatcher.call({ name: 'browser_read', arguments: { tab: 't1' } })).isError, false);
+});
+
+test('ending the dispatcher after an away result dismisses the card and ignores late Continue', async () => {
+  const f = dispatcherFixture({ presence: { locked: true, idleSeconds: 0 }, realWaiter: true });
+  try {
+    await f.call({ name: 'browser_tabs', arguments: { do: 'handoff', tab: 't1', wait: true } });
+    await f.dispatcher.end();
+    await new Promise(resolve => setImmediate(resolve));
+    assert.deepEqual(f.ui.dismissed, [f.ui.cards[0].id]);
+    assert.equal(f.released, true);
+    f.ui.answer('continue');
+    await new Promise(resolve => setImmediate(resolve));
+    assert.equal(f.released, true);
+    assert.equal(f.reads, 0);
+    assert.equal((await f.dispatcher.call({ name: 'browser_read', arguments: { tab: 't1' } })).isError, true);
+  } finally { f.waiter.dispose(); await f.dispatcher.end(); }
 });
 
 test('away browser handoff keeps waiting after a premature Continue and preserves tabs on Cancel', async t => {

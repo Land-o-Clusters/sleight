@@ -188,6 +188,7 @@ export async function createV3Bridge({ startupTimeoutMs = 120000, timeoutMs = 31
   trace('worker-spawned');
   let hello, active = false, lost = false, generation = 0, sequence = 0, ending, callTimeoutMs = timeoutMs;
   let paused = false, pauseSync = Promise.resolve();
+  let handoffCall;
   const latePauseIds = new Set();
   let traceTurn = 0, traceCall = 0, toolsRegistered = false;
   const pending = new Map(), turns = new Set(); let deliveries = new WeakMap(), resolveReady, rejectReady;
@@ -209,6 +210,13 @@ export async function createV3Bridge({ startupTimeoutMs = 120000, timeoutMs = 31
   }
   child.on('message', frame => {
     if (lost) return;
+    if (hello && exact(frame, ['version', 'id', 'handoffState']) && frame.version === 3) {
+      const entry = pending.get(frame.id);
+      if (frame.handoffState === true && active && entry?.handoff && !handoffCall) handoffCall = frame.id;
+      else if (frame.handoffState === false && handoffCall === frame.id) handoffCall = undefined;
+      else lose(undefined, 'worker-protocol');
+      return;
+    }
     if (exact(frame, ['version', 'cursorStatus']) && frame.version === 3) { (dependencies.cursorEvents ?? sessionCursorEvents()).status(frame.cursorStatus?.state, frame.cursorStatus); return; }
     if (exact(frame, ['version', 'cursor']) && frame.version === 3) { (dependencies.cursorEvents ?? sessionCursorEvents()).action(frame.cursor); return; }
     if (exact(frame, ['version', 'hand']) && frame.version === 3) {
@@ -292,6 +300,7 @@ export async function createV3Bridge({ startupTimeoutMs = 120000, timeoutMs = 31
     return ending;
   }
   const bridge = Object.freeze({ browser: hello.browser, application: applicationName(config.executable),
+    handoffPending: () => handoffCall !== undefined,
     setPaused(value) {
       if (typeof value !== 'boolean' || paused === value) return;
       paused = value;
@@ -371,7 +380,8 @@ export async function createV3Bridge({ startupTimeoutMs = 120000, timeoutMs = 31
 }
 export function createV3Frontend(bridge) {
   if (!isV3Bridge(bridge)) throw Error('TRUSTED_ROUTE_REQUIRED');
-  const frontend = Object.freeze({ browser: bridge.browser, application: bridge.application, tools: bridge.tools, call: bridge.call, delivered: bridge.delivered, end: bridge.endTurn, setPaused: bridge.setPaused });
+  const frontend = Object.freeze({ browser: bridge.browser, application: bridge.application, tools: bridge.tools, call: bridge.call, delivered: bridge.delivered, end: bridge.endTurn, setPaused: bridge.setPaused,
+    handoffPending: bridge.handoffPending });
   frontends.add(frontend); return frontend;
 }
 
@@ -529,6 +539,7 @@ export function serveV3Worker({ channel, browser, begin, current = () => true, c
       if (handoffPresent !== undefined && (typeof handoffPresent !== 'boolean' || request.name !== 'browser_tabs' ||
           request.arguments.do !== 'handoff' || request.arguments.wait !== true)) throw Error('INVALID_HANDOFF_PRESENCE');
       const result = await owner.call(request, { say: narrationLine(say, request.arguments), handoffPresent, pauseCheck, handoffDrain: detail => send({ version: 3, id: frame.id, handoffDrain: detail }),
+        handoffState: value => send({ version: 3, id: frame.id, handoffState: value }),
         handoffDeadline: detail => send({ version: 3, id: frame.id, handoff: detail }), pdfBuilding: () => {
         if (epoch === generation && !ended && runtime === owner && ['browser_read', 'browser_open', 'browser_act', 'browser_fill'].includes(request.name))
           send({ version: 3, id: frame.id, pdfBuild: true });

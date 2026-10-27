@@ -30,8 +30,8 @@ const skillPath = new URL('../plugins/sleight/skills/drive-mac-apps/SKILL.md', i
 // p143 plus the cookie rule: default 1062 words, lean 517 words.
 // HT1R counts the two conditional hook refusals in both variants (+151 characters).
 // SM1R counts the new conditional managed-PATH refusal label (+54 characters).
-// HO1's native pending-handoff result adds 131 conditional characters in each variant.
-const leanRatio = 32597 / 45543;
+// HO1R counts shown-card and unavailable-host results plus accurate handoff descriptions.
+const leanRatio = 32899 / 45839;
 const leanSkill = () => skillRules(skillPath, { SLEIGHT_PROMPT: 'lean' });
 
 test('hook guard refusals join the pinned notice inventory', { skip }, () => {
@@ -78,7 +78,7 @@ test('the self-closed popup outcome has a reviewed prompt budget', () => {
 
 test('handoff status lines have a measured prompt budget', () => {
   assert.equal(hash(JSON.stringify(handoffMessages)), baseline.browserHandoffOutcomes);
-  assert.equal(Object.values(handoffMessages).reduce((size, text) => size + text.length, 0), 362);
+  assert.equal(Object.values(handoffMessages).reduce((size, text) => size + text.length, 0), 649);
 });
 
 test('wait and closed-submit review outcomes have a reviewed prompt budget', () => {
@@ -439,11 +439,12 @@ for (const mode of [undefined, '0']) test(`MT browser descriptions stay pinned i
   // G11F's cookie sentence adds 94 catalog characters in each mode.
   // TL1's max_steps schema adds 57 catalog characters; descriptions stay unchanged.
   assert.equal(tools.find(tool => tool.name === 'browser_act').description.length, mode === '0' ? 1034 : 1183);
-  assert.equal(JSON.stringify(tools).length, mode === '0' ? 6165 : 6447);
+  // HO1R adds 62 catalog characters by default and 52 in the legacy variant.
+  assert.equal(JSON.stringify(tools).length, mode === '0' ? 6217 : 6509);
   const descriptions = tools.map(tool => tool.description).join('\n');
   for (const prompt of [undefined, 'lean']) {
     const combined = skillRules(skillPath, { SLEIGHT_PROMPT: prompt }).length + descriptions.length;
-    assert.equal(combined, (prompt === 'lean' ? 6270 : 9897) - (mode === '0' ? 280 : 0));
+    assert.equal(combined, (prompt === 'lean' ? 6332 : 9959) - (mode === '0' ? 290 : 0));
   }
   assert.ok(JSON.stringify(tools).length < 8000);
   for (const tool of tools) assert.ok(tool.description.length <= 2048, tool.name);

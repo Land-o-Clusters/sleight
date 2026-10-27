@@ -57,8 +57,8 @@ export function browserTools(browser) {
       inputSchema: object({ tab, fields: { type: 'array', minItems: 1, maxItems: 60, items: object({ ref,
         value: { type: ['string', 'boolean', 'number', 'array'], items: text, maxItems: 100 } }, ['ref', 'value']) }, submit: ref }, ['tab', 'fields']) },
     { name: 'browser_tabs', description: (process.env.SLEIGHT_MT !== '0'
-      ? 'List, close, keep or hand off owned tabs. For sign-in or a code, handoff wait:true waits for the user\'s Continue click and reads fresh. Never request secrets. Hand off a payment the user did not ask for.'
-      : 'List, close, keep or hand off owned tabs. handoff wait:true waits for the user\'s Continue click, then reads fresh. Never request secrets. Never acquire engine-path tabs.'),
+      ? 'List, close, keep or hand off owned tabs. For sign-in or a code, handoff wait:true waits for Continue and reads fresh when the user is present; away, end the turn and ask them to sign in and reply. Never request secrets. Hand off a payment the user did not ask for.'
+      : 'List, close, keep or hand off owned tabs. handoff wait:true waits for Continue and reads fresh when present; away, end the turn and ask the user to sign in and reply. Never request secrets. Never acquire engine-path tabs.'),
       inputSchema: object({ do: { type: 'string', enum: ['list', 'close', 'keep', 'handoff'] }, tab, wait: { type: 'boolean' } }, ['do']) },
   ].map(tool => structuredClone(tool));
 }
@@ -169,7 +169,7 @@ export const closedTabOutcome = 'tab closed itself (sign-in and payment popups d
 export function createToolDispatcher({ browser, pages, snapshot, runSteps, fillFields, ctx, sites, onSite, pdf,
   endpoint, tracePhase, onAction, captureImage = screenshot, exportData = exportPageData, siteMemory = siteMemoryFromEnvironment(), deliverSnapshot = (state, capture) => { state.snapshotNo = Math.max(state.snapshotNo, capture.number); return true; }, now = Date.now } = {}) {
   if (!pages || [snapshot, runSteps, fillFields, deliverSnapshot].some(fn => typeof fn !== 'function')) throw Error('v3 tool dependencies required');
-  let ended = false, ending, callNo = 0, handingOff = false;
+  let ended = false, ending, callNo = 0, handingOff = false, handoffWait;
   const lossFixes = process.env.SLEIGHT_LB12 !== '0';
   const deliveries = new WeakMap();
   const hintedOrigins = new Set(), openers = new WeakMap(), controlObservations = new WeakMap();
@@ -228,7 +228,7 @@ export function createToolDispatcher({ browser, pages, snapshot, runSteps, fillF
     return result;
   };
   return Object.freeze({ tools: () => browserTools(browser),
-    async call(input, { handoffDeadline, handoffDrain, handoffPresent = true, pauseCheck } = {}) {
+    async call(input, { handoffDeadline, handoffDrain, handoffState, handoffPresent = true, pauseCheck } = {}) {
       let request, started = false;
       const ordinal = ++callNo;
       const phase = name => { try { tracePhase?.(name, ordinal); } catch {} };
@@ -244,13 +244,16 @@ export function createToolDispatcher({ browser, pages, snapshot, runSteps, fillF
             handingOff = true;
             let suspension, background = false;
             try {
+              handoffState?.(true);
               suspension = await pages.beginHandoff(a.tab, ownedTabs => handoffDrain?.({ ownedTabs }));
+              if (ended) return textResult(handoffMessages.cancelled);
               let target;
               const pending = ctx.handoff(a.tab, async () => {
                 target = await suspension.finish(false);
                 return target === null ? null : !!target;
               }, (deadline, waitMs) => handoffDeadline?.({ deadline, waitMs, ownedTabs: suspension.ownedTabs ?? 1 }));
-              if (handoffPresent === false) {
+              handoffWait = pending;
+              if (handoffPresent === false && pending.shown === true) {
                 // The RPC ends now; the card and suspension remain bound to this
                 // turn. A late Continue restores access without an unsolicited read.
                 const held = suspension;
@@ -259,14 +262,14 @@ export function createToolDispatcher({ browser, pages, snapshot, runSteps, fillF
                     if (held.cancel) await held.cancel(); else await held.finish(true);
                   } else if (target === undefined) await held.finish(false);
                 }).catch(async () => { if (held.cancel) await held.cancel(); else await held.finish(true); })
-                  .finally(() => { handingOff = false; }).catch(() => {});
+                  .then(() => { handoffWait = undefined; handingOff = false; handoffState?.(false); }).catch(() => {});
                 background = true;
                 return textResult(handoffMessages.away);
               }
               const resumed = await pending;
               if (!resumed || ended) {
                 if (suspension.cancel) await suspension.cancel(); else await suspension.finish(true);
-                return textResult(handoffMessages.cancelled);
+                return textResult(handoffPresent === false ? handoffMessages.awayUnavailable : handoffMessages.cancelled);
               }
               else if (target === undefined) target = await suspension.finish(false);
               if (!target || ended) return textResult(handoffMessages.cancelled);
@@ -274,7 +277,10 @@ export function createToolDispatcher({ browser, pages, snapshot, runSteps, fillF
                 const observed = await capture(entry, { maxChars: 8000 });
                 return finish([`${target}: ${handoffMessages.resumed}`], observed.text, entry, observed);
               });
-            } finally { if (!background) { if (suspension) await suspension.finish(true); handingOff = false; } }
+            } finally { if (!background) {
+              if (suspension) await suspension.finish(true);
+              handoffWait = undefined; handingOff = false; handoffState?.(false);
+            } }
           }
           // An app window has no web origin to show (vscode-file: is opaque), so its row carries the registry's trusted label.
           if (a.do === 'list') return textResult((await pages.list()).map(row => `${clean(row.tab)} ${row.label ? clean(row.label) : originOf(row.url)}${row.opener ? ' (opener ' + clean(row.opener) + ')' : ''}`).join('\n') || 'No owned tabs.');
@@ -484,6 +490,7 @@ export function createToolDispatcher({ browser, pages, snapshot, runSteps, fillF
     },
     end() {
       ended = true;
+      handoffWait?.cancel?.();
       for (const release of recipeListeners) release();
       const pdfCleanup = pdf?.dispose();
       if (!ending) ending = Promise.allSettled([Promise.resolve().then(() => pages.endTurn()), pdfCleanup]).then(([tabs, files]) => ({ revoked: true,
