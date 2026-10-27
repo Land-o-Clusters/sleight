@@ -3563,6 +3563,7 @@ export function createRelay({
           typeof frame.turn !== 'string' || !/^[A-Za-z0-9_-]{1,128}$/.test(frame.turn) || remoteTurns.has(frame.turn) ||
           remoteTurns.size >= 10000 || typeof frame.text !== 'string' || Buffer.byteLength(frame.text) > 65536) { refuse(); return; }
       remoteTurns.add(frame.turn);
+      trace('mod-turn-begin', { origin: frame.origin });
       const generation = stopGeneration;
       (async () => {
         promptOrigin = frame.origin;

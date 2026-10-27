@@ -49,11 +49,12 @@ const loopKey = (e: { agentId?: string }) => e.agentId ?? ''
 // enters atoms, pane history, prompt context or model-facing tool results.
 type TurboEnvelope = { version: 1; session: string; nonce: string }
 
-async function beginTurboTurn($: Pick<EngineInterface, 'process' | 'plugin'>, state: ModState, text: string, origin: 'composer' | 'bridge'): Promise<string | undefined> {
+async function beginTurboTurn($: Pick<EngineInterface, 'process' | 'plugin' | 'ui'>, state: ModState, text: string, origin: 'composer' | 'bridge'): Promise<string | undefined> {
   if (state.turboSequence >= Number.MAX_SAFE_INTEGER) return
   const turn = `turbo-${++state.turboSequence}`
   let context: string | undefined
   const running = state.turboPending.then(async () => {
+    let refused = false
     try {
       let enabled = false
       let present = origin !== 'bridge'
@@ -72,7 +73,8 @@ async function beginTurboTurn($: Pick<EngineInterface, 'process' | 'plugin'>, st
       for (let attempt = 0; attempt < 2; attempt++) {
         if (!state.turboEnvelope) {
           const response = await call($, 'turn_ended', { sleight_turbo: { event: 'bootstrap' } })
-          if (response.isError || response.content?.length !== 1 || response.content[0]?.type !== 'text' ||
+          if (response.isError) { refused = true; return }
+          if (response.content?.length !== 1 || response.content[0]?.type !== 'text' ||
               typeof response.content[0].text !== 'string' || response.content[0].text.length > 4096) return
           const data = JSON.parse(response.content[0].text)
           const envelope = data?.sleightTurbo
@@ -83,8 +85,9 @@ async function beginTurboTurn($: Pick<EngineInterface, 'process' | 'plugin'>, st
         }
         let response
         try { response = await call($, 'turn_ended', { sleight_turbo: { ...state.turboEnvelope, event: 'begin', turn, text, origin, turbo: enabled } }) }
-        catch { state.turboEnvelope = undefined; continue }
-        if (response.isError) { state.turboEnvelope = undefined; continue }
+        catch { refused = true; state.turboEnvelope = undefined; continue }
+        if (response.isError) { refused = true; state.turboEnvelope = undefined; continue }
+        refused = false
         if (origin === 'bridge') state.remoteTurnBound = true
         try {
           const remote = JSON.parse(response.content?.[0]?.text ?? '')?.sleightRemote
@@ -94,7 +97,12 @@ async function beginTurboTurn($: Pick<EngineInterface, 'process' | 'plugin'>, st
         } catch { /* A missing context line changes no authority. */ }
         break
       }
-    } catch { state.turboEnvelope = undefined }
+    } catch { refused = true; state.turboEnvelope = undefined }
+    finally {
+      try {
+        if (refused) $.ui.log('sleight: turn_ended was refused; typed approvals could not reach the relay for this prompt.', { to: 'debug' })
+      } catch { /* Diagnostics must not block the next prompt. */ }
+    }
   })
   state.turboPending = running
   await running

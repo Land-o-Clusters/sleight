@@ -64,6 +64,25 @@ async function user(h, text, origin = 'bridge', id = 1) {
   await tick(); return envelope;
 }
 
+test('accepted mod begin emits only origin, never prompt text or the binding envelope', async t => {
+  const traces = [];
+  const h = harness(t, { trace: (direction, msg) => traces.push({ direction, msg }) });
+  const text = 'private prompt allow TextEdit';
+  const envelope = await user(h, text, 'composer');
+  assert.deepEqual(traces.filter(row => row.direction === 'mod-turn-begin'), [
+    { direction: 'mod-turn-begin', msg: { origin: 'composer' } },
+  ]);
+  h.call({ id: 2, method: 'tools/call', params: { name: 'turn_ended', arguments: { sleight_turbo: {
+    ...envelope, event: 'begin', turn: 'user-1', text, origin: 'composer', turbo: false,
+  } } } });
+  h.call({ id: 3, method: 'tools/call', params: { name: 'turn_ended', arguments: { sleight_turbo: {
+    ...envelope, nonce: 'f'.repeat(64), event: 'begin', turn: 'forged', text, origin: 'composer', turbo: false,
+  } } } });
+  await tick();
+  assert.equal(traces.filter(row => row.direction === 'mod-turn-begin').length, 1, 'refused and replayed frames get no receipt');
+  assert.doesNotMatch(JSON.stringify(traces), new RegExp(text + '|' + envelope.nonce + '|' + envelope.session));
+});
+
 test('authenticated allow TextEdit approves a real engine card, with no dialog or Always write', async t => {
   let asks = 0;
   const h = harness(t, { ask: async () => { asks++; return 'decline'; }, alwaysAllow: () => assert.fail('no persistent grant') });
