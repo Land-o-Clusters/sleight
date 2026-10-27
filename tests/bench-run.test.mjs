@@ -13,6 +13,7 @@ import { privateMailResult, publicPrivateMailRow, publicPrivateMailRows } from '
 import { privateDriverEnvironment } from '../bench/driver.mjs';
 import { guardGenericOperation } from '../bench/generic-approval.mjs';
 import { genericSettings } from '../bench/plugin-arm.mjs';
+import { sleightPluginLaunch } from '../bench/sleight-plugin-launch.mjs';
 import { cpuSplit } from '../bench/footprint.mjs';
 import { webBrowsers } from '../bench/tasks-web.mjs';
 import { WORLD_APPS, worldPassApps } from '../bench/world/tasks.mjs';
@@ -154,6 +155,10 @@ async function runner({ hygieneResult = { leftWindows: [], errors: [] }, hygiene
     basename: path => path.split('/').at(-1), dirname, join, fileURLToPath: () => '/fixture/bench/run.mjs', homedir: () => '/owner', tmpdir: () => `${MAC_TMP}/unit`,
     existsSync: path => path === holdPath ? holdAfterPreflight && preflightDone : true, realpathSync: path => path, mkdirSync: path => directories.push(path), rmdirSync(path) { assert.equal(path, lockPath); }, statSync: path => { assert.equal(path, lockPath); return { dev: 1, ino: 1 }; },
     writeFileSync: (path, value) => { files.set(path, JSON.parse(value)); saved.push(JSON.parse(value)); }, randomBytes: () => ({ toString: () => 'nonce' }),
+    readFileSync: path => {
+      assert.ok(['/fixture/bench/settings.json', '/fixture/bench/private-settings.json'].includes(path));
+      return readFileSync(new URL('../bench/' + path.split('/').at(-1), import.meta.url), 'utf8');
+    },
     privateMailResult, publicPrivateMailRow, publicPrivateMailRows,
     readEngine: () => { engineReadCount++; return { version: engineReads.length > 1 ? engineReads.shift() : engineReads[0], at: 'fixture' }; }, engineSpan,
     privateDriverEnvironment, assertPrivateClaudePolicy: () => calls.push('policy audit'),
@@ -173,7 +178,7 @@ async function runner({ hygieneResult = { leftWindows: [], errors: [] }, hygiene
       if (preparationError) throw new Error(preparationError);
       return { generic: true, cwd: `${MAC_TMP}/own-arm`, args: ['--strict-mcp-config', '--setting-sources', '', '--tools', '', '--disable-slash-commands', '--permission-prompts', 'none', '--no-session-persistence'], env: {}, identity: {}, servers: ['rival'] };
     },
-    genericSettings, acceptGenericCatalog() {}, worldCLI, worldArm, worldSettings, assertWorldCLI,
+    genericSettings, sleightPluginLaunch, acceptGenericCatalog() {}, worldCLI, worldArm, worldSettings, assertWorldCLI,
     isNativeArm, nativeArmPlan,
     ensureCuaDaemon: async dir => {
       calls.push(['cua daemon', dir]);
@@ -821,13 +826,14 @@ test('generic default comparisons use the guarded lifecycle for every arm and pr
   assert.ok(result.calls.filter(Array.isArray).filter(call => call[0] === 'driver').every(args => args.includes('--disallowedTools')));
 });
 
-test('generic comparisons use the same strict Claude options and stream format for both arms', async () => {
+test('generic comparisons isolate MCP while allowing the sleight mod connection', async () => {
   const result = await runner({ suite: 'default', arm: 'sleight,mcp:rival', drive: true, outcome: { passed: true } });
   assert.equal(result.error, undefined);
   const commands = result.calls.filter(call => Array.isArray(call) && call[0] === 'driver');
   assert.equal(commands.length, 6);
   for (const args of commands) {
-    for (const flag of ['--strict-mcp-config', '--disable-slash-commands', '--no-session-persistence']) assert.ok(args.includes(flag), flag);
+    for (const flag of ['--disable-slash-commands', '--no-session-persistence']) assert.ok(args.includes(flag), flag);
+    assert.equal(args.includes('--strict-mcp-config'), !args.includes('--plugin-dir'));
     for (const flag of ['--setting-sources', '--tools']) { assert.ok(args.includes(flag)); assert.equal(args[args.indexOf(flag) + 1], ''); }
     assert.equal(args[args.indexOf('--output-format') + 1], 'stream-json');
     assert.equal(args.includes('--append-system-prompt'), false);
@@ -839,6 +845,7 @@ test('generic comparisons use the same strict Claude options and stream format f
     if (args.includes('--plugin-dir')) {
       const config = result.files.get(args[args.indexOf('--mcp-config') + 1]);
       assert.equal(config.mcpServers['plugin:sleight:computer'].command, '/fixture/plugins/sleight/bin/sleight-mcp');
+      assert.deepEqual(settings.allowedMcpServers, [{ serverName: 'plugin:sleight:computer' }]);
       assert.equal(settings.hooks.Elicitation[0].matcher, '^plugin:sleight:computer$');
     }
   }
@@ -846,12 +853,13 @@ test('generic comparisons use the same strict Claude options and stream format f
   assert.ok(result.envs.every(env => env.BENCH_APPROVAL_STOP && env.BENCH_ARM_SERVERS));
 });
 
-test('clean arms strip the sleight arm to strict MCP and empty setting sources and record the setup', async () => {
+test('clean arms isolate sleight with a connection allowlist and record the setup', async () => {
   const clean = await runner({ suite: 'real', arm: 'sleight', cleanArms: true, drive: true, outcome: { passed: true } });
   assert.equal(clean.error, undefined);
   assert.equal(clean.saved.at(-1).armSetup, 'clean');
   const args = clean.calls.filter(call => Array.isArray(call) && call[0] === 'driver').at(-1).slice(1);
-  assert.ok(args.includes('--strict-mcp-config'));
+  assert.equal(args.includes('--strict-mcp-config'), false);
+  assert.deepEqual(clean.files.get(args[args.indexOf('--settings') + 1]).allowedMcpServers, [{ serverName: 'plugin:sleight:computer' }]);
   assert.equal(args[args.indexOf('--setting-sources') + 1], '');
   const config = clean.files.get(args[args.indexOf('--mcp-config') + 1]);
   assert.deepEqual(Object.keys(config.mcpServers), ['plugin:sleight:computer']);
@@ -859,6 +867,16 @@ test('clean arms strip the sleight arm to strict MCP and empty setting sources a
   const normal = await runner({ suite: 'real', arm: 'sleight', drive: true, outcome: { passed: true } });
   assert.equal(normal.saved.at(-1).armSetup, 'normal');
   assert.equal(normal.calls.filter(call => Array.isArray(call) && call[0] === 'driver').at(-1).includes('--strict-mcp-config'), false);
+});
+
+test('clean private-mail launches retain the private trace and telemetry settings', async () => {
+  const result = await runner({ privateMail: true, cleanArms: true, drive: true, outcome: { passed: true } });
+  assert.equal(result.error, undefined);
+  const args = result.calls.filter(call => Array.isArray(call) && call[0] === 'driver').at(-1);
+  const settings = result.files.get(args[args.indexOf('--settings') + 1]);
+  assert.equal(settings.env?.SLEIGHT_TRACE, '');
+  assert.equal(settings.env.OTEL_LOG_TOOL_CONTENT, '0');
+  assert.deepEqual(settings.allowedMcpServers, [{ serverName: 'plugin:sleight:computer' }]);
 });
 
 test('clean arms confirm the codex bench home configures only the engine server', async () => {

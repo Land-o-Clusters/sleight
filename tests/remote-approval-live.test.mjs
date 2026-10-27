@@ -252,7 +252,8 @@ for (const failure of ['none', 'blocked', 'launch', 'close']) test(`fixed login 
     const mcp = JSON.parse(readFileSync(plan.args[plan.args.indexOf('--mcp-config') + 1], 'utf8'));
     assert.deepEqual(Object.keys(mcp.mcpServers), ['plugin:sleight:computer']);
     assert.ok(plan.args.includes('--plugin-dir'));
-    assert.ok(plan.args.includes('--strict-mcp-config'));
+    assert.equal(plan.args.includes('--strict-mcp-config'), false);
+    assert.deepEqual(settings.allowedMcpServers, [{ serverName: 'plugin:sleight:computer' }]);
     assert.equal(plan.args[plan.args.indexOf('--setting-sources') + 1], '');
     const current = JSON.parse(readFileSync(configFile, 'utf8'));
     assert.equal(current.projects[plan.cwd].hasTrustDialogAccepted, true);

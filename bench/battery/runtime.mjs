@@ -16,6 +16,7 @@ import { setupFixture, checkFixture, stateReadCode, targetURL } from './fixtures
 import { writeDocument } from './documents.mjs';
 import { streamMetrics } from './metrics.mjs';
 import { stateSetupRequest } from './scripting.mjs';
+import { sleightPluginLaunch } from '../sleight-plugin-launch.mjs';
 
 const root = fileURLToPath(new URL('../../', import.meta.url));
 const hostScript = fileURLToPath(new URL('./host.js', import.meta.url));
@@ -26,6 +27,16 @@ const sessionKey = /^(CLAUDECODE|CLAUDE_CODE_|CLAUDE_AGENT_SDK_|CLAUDE_PID$|CLAU
 // a margin past it, because one poll can block for the 6 s accessibility messaging timeout on more than one read.
 export const STARTUP_MS = 60000;
 const READY_MARGIN_MS = 20000;
+
+export function batteryClaudePlan({ cleanArms, mcp, settings, baseSettings, env, option }) {
+  const plan = { env, settingsOverrides: baseSettings,
+    mcpConfig: { mcpServers: { 'plugin:sleight:computer': { command: join(root, 'plugins/sleight/bin/sleight-mcp') } } },
+    args: ['--plugin-dir', join(root, 'plugins/sleight'), '--allowedTools', tools,
+      ...(cleanArms ? ['--mcp-config', mcp, '--setting-sources', ''] : []),
+      '--no-session-persistence', '--disallowedTools', outside.join(','), '--settings', settings,
+      '--output-format', 'stream-json', '--verbose', '--model', option('model', 'claude-haiku-5-5'), '--effort', option('effort', 'high')] };
+  return cleanArms ? sleightPluginLaunch(plan) : plan;
+}
 
 function canonicalPath(path, kind) {
   try {
@@ -189,15 +200,13 @@ export async function liveRuntime({ pass, option, localFixtures, ownerPresent, c
       try { runGit(path); throw new Error('ARM_INSIDE_REPO'); } catch (error) { if (error.message === 'ARM_INSIDE_REPO') throw error; }
     }
     const mcp = join(bank, 'mcp.json'), settings = join(bank, 'settings.json');
-    writeFileSync(mcp, JSON.stringify({ mcpServers: { 'plugin:sleight:computer': { command: join(root, 'plugins/sleight/bin/sleight-mcp') } } }), { mode: 0o600 });
     const baseSettings = JSON.parse(readFileSync(join(root, 'bench/settings.json'), 'utf8'));
-    writeFileSync(settings, JSON.stringify(baseSettings), { mode: 0o600 });
+    const launch = batteryClaudePlan({ cleanArms, mcp, settings, baseSettings, env, option });
+    writeFileSync(mcp, JSON.stringify(launch.mcpConfig), { mode: 0o600 });
+    writeFileSync(settings, JSON.stringify(launch.settingsOverrides), { mode: 0o600 });
     // Same temporary approval transaction as bench/run.mjs. Restore even after a safety stop.
     restore = approveOnly([...new Set(pass.runs.map(row => row.bundle))], join(bank, 'approvals-before.json'));
-    const claudeArgs = ['--plugin-dir', join(root, 'plugins/sleight'), '--allowedTools', tools,
-      ...(cleanArms ? ['--mcp-config', mcp, '--strict-mcp-config', '--setting-sources', ''] : []),
-      '--no-session-persistence', '--disallowedTools', outside.join(','), '--settings', settings,
-      '--output-format', 'stream-json', '--verbose', '--model', option('model', 'claude-haiku-5-5'), '--effort', option('effort', 'high')];
+    const claudeArgs = launch.args;
     let catalog;
     const discovery = streamMetrics('sleight');
     const discover = new AbortController();
