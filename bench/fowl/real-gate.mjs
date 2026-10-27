@@ -119,10 +119,10 @@ export function realGatePlan({ args, tasks, repo = repoRoot, mcpRoot, armHome, r
       ...(args['chrome-local-state'] ? { localState: args['chrome-local-state'] } : {}) };
     const setup = realAgentSetup({ task, surface, dir, realBrowser: browser, repo, armHome, dryRun, mcpRoot, chromeFiles,
       model: args.model || 'haiku', effort: args.effort || 'high', allowBenchmarkAppPrompts: args['no-allow-benchmark-app-prompts'] !== true });
-    return { ...setup, args: runsCodexExec(surface) ? setup.args : [...setup.args, setup.prompt],
+    return { ...setup, ...(surface === 'cursor-cu' && { cursorPlan: { ...setup.cursorPlan, ownerSaysCursorFree: args['owner-says-cursor-free'] === true } }), args: runsCodexExec(surface) ? setup.args : [...setup.args, setup.prompt],
       task, surface, dir };
   });
-  return { mode: 'real-browser', out, browser, arms, unsupported, mcpRoot, surface, ownerAway: args['owner-away'] === true };
+  return { mode: 'real-browser', out, browser, arms, unsupported, mcpRoot, surface, ownerSaysCursorFree: args['owner-says-cursor-free'] === true, ownerAway: args['owner-away'] === true };
 }
 
 async function freePort(port) {
@@ -283,7 +283,7 @@ export function gatePreflight(plan, { executable = executableProblem } = {}) {
 }
 
 export async function admitRealGate(plan, { terminal = terminalAncestor } = {}) {
-  if (plan.surface === 'cursor-cu') guardCursorLive({ ownerAway: plan.ownerAway });
+  if (plan.surface === 'cursor-cu') guardCursorLive({ ownerAway: plan.ownerAway, ownerSaysCursorFree: plan.ownerSaysCursorFree });
   if (existsSync('/Library/Application Support/ClaudeCode/CLAUDE.md')) throw Error('Managed Claude policy cannot be excluded');
   if (existsSync(plan.out)) throw Error('Gate output already exists');
   const problems = gatePreflight(plan);
@@ -292,9 +292,9 @@ export async function admitRealGate(plan, { terminal = terminalAncestor } = {}) 
   if (plan.surface === 'peekaboo' && !terminal()) throw Error('Peekaboo\'s grants are on Terminal.app, so its rounds run from a Terminal window: ' +
     'put the rounds.sh command in a .command file and run: open -a Terminal <file>.command');
   if (plan.surface === 'cursor-cu') {
-    await new CursorDesktopDriver().preflight({ paths: armPaths() });
+    await new CursorDesktopDriver().preflight({ paths: armPaths(), ownerSaysCursorFree: plan.ownerSaysCursorFree });
     inspectCursorBundle(armPaths().app);
-    if (!(await cursorReadiness()).authStored) throw Error('Cursor desktop needs login in its isolated profile; run node bench/world/arms/cursor-cu/setup.mjs');
+    if (!(await cursorReadiness()).authStored) throw Error('Cursor owner login missing; keep the installed signed-in Cursor running');
   } else if (isCodexSurface(plan.surface)) {
     if (codexConfigServers(codexHome()).length !== 1 || !existsSync(join(codexHome(), 'auth.json'))) throw Error('Codex benchmark home needs its isolated engine server and login');
   } else if (isCodexSleightSurface(plan.surface)) {

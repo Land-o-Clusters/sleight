@@ -7,7 +7,7 @@ import { DatabaseSync } from 'node:sqlite';
 import { CURSOR_PIN, armPaths, assertBundlePin, resolveModel, composerPlan, approvalDecision, assertDesktopReady } from '../bench/world/arms/cursor-cu/contract.mjs';
 import { detectRun, readCursorState } from '../bench/world/arms/cursor-cu/state.mjs';
 import { runDesktop } from '../bench/world/arms/cursor-cu/run.mjs';
-import { launchPlan, setupPlan, loginReadiness, inspectBundle } from '../bench/world/arms/cursor-cu/setup.mjs';
+import { setupPlan, loginReadiness, inspectBundle } from '../bench/world/arms/cursor-cu/setup.mjs';
 import { probePlan, guardLive, runProbe } from '../bench/world/arms/cursor-cu/probe.mjs';
 import { DesktopDriver } from '../bench/world/arms/cursor-cu/desktop.mjs';
 
@@ -15,7 +15,7 @@ const model = { modelId: 'grok-4.7', parameters: [{ id: 'effort', value: 'high' 
 const config = { selectedModels: [model], maxMode: false };
 const home = ['', 'Users', 'bench'].join('/');
 const paths = () => armPaths({ home });
-const plan = () => composerPlan({ prompt: 'Edit the fixture.', paths: paths() });
+const plan = () => composerPlan({ prompt: 'Edit the fixture.', paths: paths(), ownerSaysCursorFree: true });
 // Source-derived schema samples, not recordings. Cursor was never launched by this lane.
 const start = (extra = {}) => ({ composerId: 'chat-1', text: '', status: 'generating', latestChatGenerationUUID: 'turn-1',
   modelConfig: config, fullConversationHeadersOnly: [{ bubbleId: 'human', type: 1 }, { bubbleId: 'answer', type: 2 }], ...extra });
@@ -27,7 +27,7 @@ test('bundle pin requires version, commit, identifier, team, verified seal and c
   const found = { ...CURSOR_PIN, signatureVerified: true };
   assert.equal(assertBundlePin(found).version, '3.27.12');
   for (const key of ['version', 'commit', 'bundleId', 'teamId', 'cdhash']) assert.throws(() => assertBundlePin({ ...found, [key]: 'other' }), /pin/);
-  assert.throws(() => assertBundlePin({ ...found, signatureVerified: false }), /signature/);
+  assert.throws(() => assertBundlePin({ ...found, signatureVerified: false }), /identifier|signature/);
 });
 
 test('bundle inspection verifies the resource seal and captures cdhash from codesign stderr', () => {
@@ -37,24 +37,23 @@ test('bundle inspection verifies the resource seal and captures cdhash from code
     writeFileSync(join(dir, 'Contents/Resources/app/product.json'), JSON.stringify({ ...CURSOR_PIN, darwinBundleIdentifier: CURSOR_PIN.bundleId }));
     const calls = [];
     const pin = inspectBundle(dir, (cmd, args) => { calls.push([cmd, args]); return { status: 0,
-      stderr: `TeamIdentifier=${CURSOR_PIN.teamId}\nCDHash=${CURSOR_PIN.cdhash}\n` }; });
-    assert.equal(pin.cdhash, CURSOR_PIN.cdhash); assert.deepEqual(calls[0][1], ['--verify', '--deep', '--strict', dir]);
-    assert.throws(() => inspectBundle(dir, () => ({ status: 1 })), /signature/);
+      stdout: CURSOR_PIN.bundleId + '\n', stderr: `TeamIdentifier=${CURSOR_PIN.teamId}\nCDHash=${CURSOR_PIN.cdhash}\n` }; });
+    assert.equal(pin.cdhash, CURSOR_PIN.cdhash); assert.deepEqual(calls[0][1], ['-extract', 'CFBundleIdentifier', 'raw', '-o', '-', join(dir, 'Contents/Info.plist')]);
+    assert.throws(() => inspectBundle(dir, () => ({ status: 1 })), /identifier|signature/);
   } finally { rmSync(dir, { recursive: true, force: true }); }
 });
 
-test('desktop profile and HOME stay in the fixed cache, helper rendezvous is shared, symlinks refuse', () => {
+test('owner profile and installed app are fixed, symlinks refuse', () => {
   const p = paths();
-  for (const key of ['app', 'home', 'userData', 'extensions', 'workspace']) assert.ok(p[key].startsWith(p.root + '/'), key);
-  assert.equal(p.helperSupport, `${home}/Library/Application Support/cursor-computer-use`);
-  assert.equal(p.userData, `${home}/Library/Caches/sleight-bench/cursor-cu-arm/desktop/user-data`);
-  for (const root of [`${home}/.cursor`, `${home}/Library/Application Support/Cursor`, '/tmp/cursor', p.root + '/../escape'])
-    assert.throws(() => armPaths({ home, root }), /fixed/);
+  assert.equal(p.app, '/Applications/Cursor.app');
+  assert.equal(p.userData, `${home}/Library/Application Support/Cursor`);
+  assert.equal(p.home, undefined); assert.equal(p.extensions, undefined);
+  assert.throws(() => armPaths({ home, root: '/tmp/cursor' }), /fixed/);
   const dir = mkdtempSync(join(realpathSync(tmpdir()), 'ca2-path-'));
   try {
-    const root = join(dir, 'Library/Caches/sleight-bench/cursor-cu-arm/desktop');
-    mkdirSync(root, { recursive: true }); symlinkSync('/tmp', join(root, 'user-data'));
-    assert.throws(() => armPaths({ home: dir }), /symlink refused: .*user-data/);
+    const root = join(dir, 'Library/Application Support');
+    mkdirSync(root, { recursive: true }); symlinkSync('/tmp', join(root, 'Cursor'));
+    assert.throws(() => armPaths({ home: dir }), /symlink refused/);
   } finally { rmSync(dir, { recursive: true }); }
 });
 
@@ -76,14 +75,10 @@ test('composer plan excludes setup from timing, uses desktop UI, and never selec
   assert.throws(() => composerPlan({ prompt: '', paths: paths() }), /prompt/);
 });
 
-test('launch requests isolated desktop paths and the shared helper rendezvous, with no test mocks', () => {
-  const p = launchPlan(paths());
-  assert.equal(p.env.HOME, paths().home); assert.equal(p.env.CUA_APP_SUPPORT_DIR, paths().helperSupport);
-  assert.ok(p.args.includes('--user-data-dir=' + paths().userData));
-  assert.ok(p.args.includes('--extensions-dir=' + paths().extensions));
-  assert.ok(!p.args.some(a => /disable-extensions|smoke-test|test-feature/.test(a)));
-  assert.ok(!('CURSOR_CONFIG_DIR' in p.env));
-  assert.ok(setupPlan({ paths: paths() }).ownerSteps.some(s => s.includes('Screen Recording')));
+test('setup uses the installed logged-in session without a launch or login flow', () => {
+  const p = setupPlan({ paths: paths() });
+  assert.equal(p.launch, undefined); assert.equal(p.mutates, false);
+  assert.ok(p.ownerSteps.some(s => s.includes('--owner-says-cursor-free')));
 });
 
 test('approval gate defaults to refuse, requires bundle and exact supported prompt, never Always Allow', () => {
@@ -140,9 +135,9 @@ test('default readiness detects a stored auth row without exposing its value', (
 
 test('live guards refuse owner-present, hold and lock; dry probe does not even inspect them', async () => {
   const calls = [];
-  assert.throws(() => guardLive({}, { exists: () => { throw Error('must refuse owner first'); } }), /owner-away/);
-  assert.throws(() => guardLive({ ownerAway: true }, { exists: path => path.endsWith('sleight-hold') }), /hold/);
-  assert.throws(() => guardLive({ ownerAway: true }, { exists: path => path.endsWith('sleight-live.lock') }), /lock/);
+  assert.throws(() => guardLive({ ownerSaysCursorFree: true }, { exists: () => { throw Error('must refuse owner first'); } }), /owner-away/);
+  assert.throws(() => guardLive({ ownerAway: true, ownerSaysCursorFree: true }, { exists: path => path.endsWith('sleight-hold') }), /hold/);
+  assert.throws(() => guardLive({ ownerAway: true, ownerSaysCursorFree: true }, { exists: path => path.endsWith('sleight-live.lock') }), /lock/);
   const dry = await runProbe({ dryRun: true }, { exists: () => assert.fail('dry plan inspected live paths'), run: () => calls.push('run') });
   assert.equal(dry.runs.length, 2); assert.deepEqual(dry.runs.map(r => r.task), ['textedit-edit', 'mdn']); assert.deepEqual(calls, []);
   assert.deepEqual(probePlan().runs.map(r => r.runs), [1, 1]);
@@ -150,7 +145,9 @@ test('live guards refuse owner-present, hold and lock; dry probe does not even i
 
 test('missing calibration blocks before inspection, profile writes or desktop launch', async () => {
   assert.throws(() => assertDesktopReady(paths()), /calibration missing/i);
-  const driver = new DesktopDriver({ processes: async () => [], inspect: () => assert.fail('must not inspect or launch'), launch: () => assert.fail('must not launch') });
+  const own = { pid: 42, bundleId: CURSOR_PIN.bundleId, executable: paths().app + '/Contents/MacOS/Cursor', launchAt: 1 };
+  const driver = new DesktopDriver({ processes: async () => [own], inspect: () => CURSOR_PIN, readiness: async () => ({ authStored: true }),
+    ui: { bind: async () => {}, readiness: async () => ({ loggedIn: true, busy: false }) } });
   await assert.rejects(driver.open(plan()), /calibration missing/i);
   assert.equal(probePlan().liveReady, false);
 });
@@ -161,7 +158,7 @@ function fakeDriver({ cleanup = true, failSetup = false, states = [state(), stat
     async submit(p, { onSubmit }) { calls.push('submit'); onSubmit(); }, async readState() { return states[Math.min(index++, states.length - 1)]; },
     async cancel() { calls.push('cancel'); return true; }, async close() { calls.push('close'); return cleanup; } };
 }
-test('desktop results record exact provenance and timing and collect only their own copy', async () => {
+test('desktop results record exact provenance and timing and preserve owner Cursor', async () => {
   const driver = fakeDriver();
   const r = await runDesktop(plan(), { driver, now: () => 1000, pause: async () => {} });
   assert.equal(r.duration_ms, 600); assert.equal(r.route, 'desktop'); assert.equal(r.cursorVersion, '3.27.12');

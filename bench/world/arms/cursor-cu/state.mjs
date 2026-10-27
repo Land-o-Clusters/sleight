@@ -12,14 +12,16 @@ export async function retryBusy(read, { now = Date.now, pause = ms => new Promis
   }
 }
 
-export function readCursorState(paths, { exists = existsSync, open } = {}) {
+export function readCursorState(paths, { exists = existsSync, open, composerId } = {}) {
   ordinaryPath(paths.database);
   if (!exists(paths.database)) return { composers: [], bubbles: {} };
   if (!open) throw Error('Cursor state reader needs a readonly SQLite opener');
   const db = open(paths.database, { readOnly: true, timeout: 100 });
   try {
     // No auth values, file contents or unrelated app state are selected.
-    const rows = db.prepare("SELECT key, value FROM cursorDiskKV WHERE key LIKE 'composerData:%'").all();
+    if (composerId && !/^[A-Za-z0-9-]{1,100}$/.test(composerId)) throw Error('unsupported Cursor composer id');
+    const rows = composerId ? db.prepare('SELECT key, value FROM cursorDiskKV WHERE key = ?').all('composerData:' + composerId)
+      : db.prepare("SELECT key, value FROM cursorDiskKV WHERE key LIKE 'composerData:%'").all();
     const composers = rows.map(r => JSON.parse(String(r.value)));
     const bubbles = {};
     for (const c of composers) {
@@ -31,9 +33,16 @@ export function readCursorState(paths, { exists = existsSync, open } = {}) {
   } finally { db.close(); }
 }
 
-export async function profileState(paths) {
+export async function profileState(paths, { composerId } = {}) {
   const { DatabaseSync } = await import('node:sqlite');
-  return retryBusy(() => readCursorState(paths, { open: (file, opts) => new DatabaseSync(file, opts) }));
+  if (composerId) return retryBusy(() => readCursorState(paths, { composerId, open: (file, opts) => new DatabaseSync(file, opts) }));
+  // Before creating a chat only IDs are needed, never owner conversations or bubbles.
+  return retryBusy(() => {
+    const db = new DatabaseSync(ordinaryPath(paths.database), { readOnly: true, timeout: 100 });
+    try { return { composers: db.prepare("SELECT key FROM cursorDiskKV WHERE key LIKE 'composerData:%'").all()
+      .map(row => ({ composerId: row.key.slice('composerData:'.length) })), bubbles: {} }; }
+    finally { db.close(); }
+  });
 }
 
 export function pendingAppApprovals(snapshot, composerId) {

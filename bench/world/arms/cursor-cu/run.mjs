@@ -1,4 +1,4 @@
-import { CURSOR_PIN } from './contract.mjs';
+import { CURSOR_PIN, requireOwnerFree } from './contract.mjs';
 import { detectRun } from './state.mjs';
 import { scrubCursor } from './scrub.mjs';
 
@@ -8,6 +8,7 @@ export async function runDesktop(plan, { driver, signal, now = Date.now, pause =
   let lastState;
   const seenTools = new Map();
   try {
+    requireOwnerFree(plan);
     signal?.throwIfAborted();
     opened = true; clean = false; await driver.open(plan, { signal });
     bound = await driver.setup(plan, { signal });
@@ -42,7 +43,7 @@ export async function runDesktop(plan, { driver, signal, now = Date.now, pause =
     if (opened) {
       if (submitted && !completed) { try { await driver.cancel(plan); } catch (error) { reason ??= error.message; } }
       try { clean = await driver.close(plan) === true; } catch (error) { reason ??= error.message; clean = false; }
-      if (!clean) reason = [reason, 'Cursor owned-copy cleanup unverified'].filter(Boolean).join('; ');
+      if (!clean) reason = [reason, 'Cursor selection restoration or run cancellation unverified'].filter(Boolean).join('; ');
     }
   }
   reason = scrubCursor(reason);

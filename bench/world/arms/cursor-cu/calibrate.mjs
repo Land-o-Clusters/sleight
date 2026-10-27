@@ -1,123 +1,46 @@
-import { existsSync, writeFileSync } from 'node:fs';
+import { existsSync, writeFileSync, mkdirSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { CURSOR_PIN, armPaths, ordinaryPath, resolveModel } from './contract.mjs';
-import { prepareCopy } from './setup.mjs';
+import { armPaths, ordinaryPath, guardLive, requireOwnerFree } from './contract.mjs';
+import { DesktopDriver } from './desktop.mjs';
 import { detectRun } from './state.mjs';
 
-const roots = new Set(['contextAttachments', 'attachments', 'context', 'selectedContext', 'subagentType', 'selectedSubagents', 'selectedMcp', 'mcp', 'target', 'environment', 'location', 'computerUse', 'isComputerUse']);
-// Field names are data too. Keep only known schema keys, never dynamic identifiers.
-const markerKeys = new Set([...roots, 'type', 'kind', 'name', 'provider', 'providerIdentifier', 'targetType']);
-const shapeKeys = new Set([...markerKeys, 'composer', 'bubbles', 'modelConfig', 'selectedModels', 'parameters', 'maxMode', 'value',
-  'status', 'generatingBubbleIds', 'fullConversationHeadersOnly', 'timingInfo', 'clientStartTime', 'clientSettleTime',
-  'toolFormerData', 'toolCall', 'tool', 'case', 'args', 'result', 'params', 'additionalData', 'operation', 'details', 'computerUseApp', 'success', 'isError']);
-const values = { attachment: ['computer-use', 'computerUse', 'Computer Use', 'cursor-computer-use'], target: ['local', 'This Mac', 'this-mac'] };
-const safePath = path => Array.isArray(path) && path.length > 0 && path.length < 16 && roots.has(path[0]) &&
-  path.every(k => (Number.isSafeInteger(k) && k >= 0 && k < 100) || markerKeys.has(k));
-const at = (row, path) => path.reduce((v, k) => v?.[k], row);
-function markers(row, kind) {
-  const found = [];
-  const walk = (v, path) => {
-    if (!safePath(path)) return;
-    if (values[kind].includes(v)) { found.push({ path, value: v }); return; }
-    if (v && typeof v === 'object') for (const [key, child] of Object.entries(v)) walk(child, [...path, Array.isArray(v) ? Number(key) : key]);
-  };
-  for (const [key, value] of Object.entries(row)) walk(value, [key]);
-  if (found.length !== 1) throw Error(`Cursor calibration ${kind} marker missing or ambiguous in persisted selection`);
-  return found[0];
-}
-function shape(value, depth = 0) {
-  if (depth > 12) return 'nested';
-  if (Array.isArray(value)) return [...new Map(value.map(v => { const s = shape(v, depth + 1); return [JSON.stringify(s), s]; })).values()];
-  if (value && typeof value === 'object') return Object.fromEntries(Object.entries(value)
-    .filter(([k]) => shapeKeys.has(k))
-    .map(([k, v]) => [k, shape(v, depth + 1)]));
-  return value === null ? 'null' : typeof value;
-}
-export function makeCalibration(composer, { settled, ownerModelLabel, bubbles = [] } = {}) {
-  if (!settled) throw Error('Cursor calibration requires a settled harmless turn');
-  if (ownerModelLabel !== 'Grok 4.7 High') throw Error('Cursor calibration requires the visible Grok 4.7 High selection');
-  const id = composer.modelConfig?.selectedModels?.[0]?.modelId;
-  if (typeof id !== 'string' || !/^[A-Za-z0-9_.:/-]{1,160}$/.test(id) || /^(auto|default)$/i.test(id)) throw Error('unsupported calibrated model id');
-  const resolved = resolveModel(composer.modelConfig, { modelId: id });
-  // Save only the parameters the benchmark uses, never account-supplied freeform metadata.
-  const model = { ...resolved, parameters: [{ id: 'effort', value: 'high' }, { id: 'fast', value: 'false' }] };
-  const selection = { model, attachment: markers(composer, 'attachment'), target: markers(composer, 'target') };
-  return validateCalibration({ version: 1, pin: CURSOR_PIN, selection, shapes: { composer: shape(composer), bubbles: shape(bubbles) } });
-}
-export function validateCalibration(c) {
-  if (!c || c.version !== 1 || Object.keys(c).sort().join() !== 'pin,selection,shapes,version') throw Error('invalid Cursor calibration shape');
-  for (const [k, v] of Object.entries(CURSOR_PIN)) if (c.pin?.[k] !== v) throw Error('Cursor calibration pin mismatch');
-  if (Object.keys(c.pin).length !== Object.keys(CURSOR_PIN).length || Object.keys(c.selection ?? {}).sort().join() !== 'attachment,model,target') throw Error('invalid Cursor calibration shape');
-  for (const kind of ['attachment', 'target']) {
-    const marker = c.selection[kind];
-    if (Object.keys(marker ?? {}).sort().join() !== 'path,value' || !safePath(marker.path) || !values[kind].includes(marker.value)) throw Error(`invalid calibration ${kind} marker`);
-  }
-  const m = c.selection.model;
-  if (!m || Object.keys(m).sort().join() !== 'effort,label,model,parameters,speed' || m.label !== 'Grok 4.7 High' || m.effort !== 'high' || m.speed !== 'normal' ||
-    typeof m.model !== 'string' || !/^[A-Za-z0-9_.:/-]{1,160}$/.test(m.model) || /^(auto|default)$/i.test(m.model) ||
-    JSON.stringify(m.parameters) !== JSON.stringify([{ id: 'effort', value: 'high' }, { id: 'fast', value: 'false' }])) throw Error('invalid calibration model shape');
-  const checkShape = (v, depth = 0) => {
-    if (depth > 16) throw Error('invalid calibration shape depth');
-    if (typeof v === 'string') { if (!['string', 'number', 'boolean', 'undefined', 'null', 'nested'].includes(v)) throw Error('invalid calibration shape value'); }
-    else if (v && typeof v === 'object') for (const [k, child] of Object.entries(v)) {
-      if (!Array.isArray(v) && !shapeKeys.has(k)) throw Error('invalid calibration shape field');
-      checkShape(child, depth + 1);
-    } else throw Error('invalid calibration shape');
-  };
-  checkShape(c.shapes);
-  return c;
-}
-export function verifySelection(composer, calibration) {
-  const { selection } = validateCalibration(calibration), selected = composer?.modelConfig?.selectedModels;
-  const actual = selected?.length === 1 && selected[0];
-  const params = new Map((actual?.parameters ?? []).map(p => [p.id, p.value]));
-  const differences = [];
-  if (actual?.modelId !== selection.model.model) differences.push('model id differs');
-  if (params.get('effort') !== 'high') differences.push('effort must be high');
-  if (params.get('fast') !== 'false') differences.push('fast must be off');
-  if (composer?.modelConfig?.maxMode === true) differences.push('model maxMode must be off');
-  if (params.size !== (actual?.parameters ?? []).length) differences.push('model parameters are ambiguous');
-  for (const kind of ['attachment', 'target']) if (at(composer, selection[kind].path) !== selection[kind].value) differences.push(`${kind} differs from calibration`);
-  if (differences.length) throw Error('Cursor selection mismatch: ' + differences.join('; '));
-  return resolveModel(composer.modelConfig, { modelId: selection.model.model });
-}
-
+export { makeCalibration, validateCalibration, verifySelection } from './selection.mjs';
+import { makeCalibration } from './selection.mjs';
 export function calibrationPlan() {
   return { arm: 'cursor-cu', supervised: true, paths: armPaths(), prompt: 'Say ready.', timeoutMs: 1200000,
-    preconditions: ['quit your own Cursor first', 'no pre-existing shared helper', 'exclusive benchmark live lock', 'no sleight-hold'],
-    preparation: ['prepare and verify the pinned signed copy if absent', 'launch the exact copied executable on the benchmark workspace'],
-    ownerSteps: ['Log in inside the isolated copy. Trust only its benchmark workspace if asked.',
-      'Enable Computer Use and install its helper if needed. Grant the helper Accessibility and Screen Recording, and complete Enable Computer Use yourself.',
-      'Choose Computer Use / This Mac / Grok 4.7 High, high effort, normal speed.',
-      'Submit exactly: Say ready. Wait for the turn to settle. The harness reads only the isolated profile and writes scrubbed calibration.'],
-    writes: ['isolated Cursor profile through the owner UI', 'calibration.json with selection markers and field shapes'] };
+    preconditions: ['--owner-says-cursor-free', 'installed Cursor running with owner login', 'exclusive benchmark live lock', 'no sleight-hold'],
+    preparation: ['bind installed Cursor without launching or quitting it', 'save owner selections and open a new chat'],
+    ownerSteps: ['Choose Computer Use / This Mac / Grok 4.7 High, high effort, normal speed in the new chat.',
+      'Submit exactly: Say ready. Wait for the turn to settle. The harness saves selection markers and field shapes, then restores your selections.'],
+    writes: ['new chat in owner Cursor', 'calibration.json with selection markers and field shapes'] };
 }
-export async function calibrate({ dryRun = false, ownerAway = false } = {}, { driver, lock, print = console.log, now = Date.now, exists = existsSync,
-  pause = ms => new Promise(r => setTimeout(r, ms)), signal, prepare = prepareCopy, guard,
-  save = (file, data) => writeFileSync(ordinaryPath(file), data, { mode: 0o600, flag: 'wx' }) } = {}) {
-  const plan = calibrationPlan();
-  if (dryRun) return plan;
-  if (exists(plan.paths.calibration)) throw Error('Cursor calibration already exists; refusing launch');
-  const { guardLive } = await import('./contract.mjs');
-  (guard ?? guardLive)({ ownerAway, supervised: true });
-  driver ??= new (await import('./desktop.mjs')).DesktopDriver();
-  // Admission is read-only and precedes lock acquisition and launch.
+export async function calibrate({ dryRun = false, ownerAway = false, ownerSaysCursorFree = false } = {}, { driver, lock, print = console.log, now = Date.now, exists = existsSync,
+  pause = ms => new Promise(r => setTimeout(r, ms)), signal, guard,
+  save = (file, data) => { mkdirSync(ordinaryPath(calibrationPlan().paths.root), { recursive: true, mode: 0o700 }); writeFileSync(ordinaryPath(file), data, { mode: 0o600, flag: 'wx' }); } } = {}) {
+  const plan = { ...calibrationPlan(), ownerSaysCursorFree };
+  if (dryRun) return calibrationPlan();
+  requireOwnerFree({ ownerSaysCursorFree });
+  if (exists(plan.paths.calibration)) throw Error('Cursor calibration already exists; refusing another calibration');
+  (guard ?? guardLive)({ ownerAway, supervised: true, ownerSaysCursorFree });
+  driver ??= new DesktopDriver();
+  // Admission is read-only and precedes lock acquisition and UI changes.
   await driver.preflight(plan, { calibration: true });
   const release = await (lock ?? (await import('../../../live-lock.mjs')).acquireLiveLock)();
-  let opened = false, clean = true, capture;
+  let opened = false, clean = true, capture, pinnedRun;
   const start = now();
   try {
-    prepare(plan.paths);
     opened = true; clean = false;
     await driver.open(plan, { calibration: true, signal });
+    const bound = await driver.setupCalibration(plan, { signal });
     print(plan.ownerSteps.join('\n'));
     while (now() - start < plan.timeoutMs) {
       signal?.throwIfAborted(); await driver.foreignGuard();
       const snapshot = await driver.readState();
-      const found = detectRun(snapshot, { prompt: plan.prompt, submittedAt: start, allowUncalibratedModel: true });
+      const found = detectRun(snapshot, { prompt: plan.prompt, submittedAt: start, allowUncalibratedModel: true, baselineIds: bound.baselineIds, composerId: driver.composerId, ...pinnedRun });
+      if (found.started && !pinnedRun) pinnedRun = { composerId: found.composerId, generationId: found.generationId };
       if (found.ended) {
-        await driver.unique(driver.page.getByText('Grok 4.7 High', { exact: true }), 'calibration model');
+        await driver.verifyCalibrationUI();
         capture = makeCalibration(snapshot.composers.find(c => c.composerId === found.composerId), {
           settled: true, ownerModelLabel: 'Grok 4.7 High', bubbles: snapshot.bubbles[found.composerId] });
         break;
@@ -126,7 +49,11 @@ export async function calibrate({ dryRun = false, ownerAway = false } = {}, { dr
     }
     if (!capture) throw Error('Cursor calibration timed out before the harmless turn settled');
   } finally {
-    if (opened) clean = await driver.close() === true;
+    if (opened) {
+      let idle = true;
+      if (!capture) { try { idle = await driver.cancel?.(plan, { calibration: true }) !== false; } catch { idle = false; } }
+      try { clean = await driver.close() === true && idle; } catch { clean = false; }
+    }
     if (clean) await release();
     else print('Cursor calibration cleanup unverified; live lock retained');
   }
@@ -139,8 +66,8 @@ if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.ur
   for (const s of ['SIGINT', 'SIGTERM', 'SIGHUP']) process.on(s, abort);
   try {
     const args = process.argv.slice(2);
-    if (args.some(a => a !== '--dry-run') || args.length > 1) throw Error('calibrate accepts --dry-run only; live mode requires the owner present');
-    console.log(JSON.stringify(await calibrate({ dryRun: args.includes('--dry-run') }, { signal: controller.signal }), null, 2));
+    if (args.some(a => !['--dry-run', '--owner-says-cursor-free'].includes(a)) || new Set(args).size !== args.length) throw Error('calibrate accepts --dry-run and --owner-says-cursor-free; live mode requires the owner present');
+    console.log(JSON.stringify(await calibrate({ dryRun: args.includes('--dry-run'), ownerSaysCursorFree: args.includes('--owner-says-cursor-free') }, { signal: controller.signal }), null, 2));
   } catch (error) { console.error(error.message); process.exitCode = 1; }
   finally { for (const s of ['SIGINT', 'SIGTERM', 'SIGHUP']) process.removeListener(s, abort); }
 }

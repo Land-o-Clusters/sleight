@@ -4,13 +4,7 @@ import { CURSOR_PIN, armPaths, composerPlan, approvalDecision } from '../bench/w
 import { assertNoForeignCursor, sameLaunch, answerCards } from '../bench/world/arms/cursor-cu/host.mjs';
 import { makeCalibration, verifySelection, validateCalibration, calibrationPlan, calibrate } from '../bench/world/arms/cursor-cu/calibrate.mjs';
 import { browserEvidence, evidenceProblems } from '../bench/fowl/real-gate-grade.mjs';
-import { DesktopDriver } from '../bench/world/arms/cursor-cu/desktop.mjs';
 import { pendingAppApprovals } from '../bench/world/arms/cursor-cu/state.mjs';
-import { prepareCopy } from '../bench/world/arms/cursor-cu/setup.mjs';
-import { mkdtempSync, mkdirSync, rmSync, realpathSync, existsSync } from 'node:fs';
-import { tmpdir } from 'node:os';
-import { join } from 'node:path';
-import { runDesktop } from '../bench/world/arms/cursor-cu/run.mjs';
 
 const paths = armPaths({ home: ['', 'Users', 'bench'].join('/') });
 const own = { pid: 42, bundleId: CURSOR_PIN.bundleId, executable: paths.app + '/Contents/MacOS/Cursor', launchAt: 1000 };
@@ -19,15 +13,11 @@ const composer = () => ({ composerId: 'chat', modelConfig: structuredClone(confi
   text: 'secret prompt', accessToken: 'SECRET', accountId: 'PRIVATE', unrelated: { password: 'SECRET' } });
 const calibration = () => makeCalibration(composer(), { ownerModelLabel: 'Grok 4.7 High', settled: true });
 
-test('foreign Cursor refuses by bundle or executable and only an exact launch is owned', () => {
-  assert.doesNotThrow(() => assertNoForeignCursor([], paths));
+test('installed Cursor must already be running with its exact executable and identity', () => {
+  assert.throws(() => assertNoForeignCursor([], paths), /already running/);
   assert.doesNotThrow(() => assertNoForeignCursor([own], paths, own));
-  for (const p of [own, { ...own, executable: '/Applications/Cursor.app/Contents/MacOS/Cursor' }, { ...own, bundleId: 'unknown' }])
-    assert.throws(() => assertNoForeignCursor([p], paths), /quit your own Cursor first/);
-  for (const change of [{ pid: 43 }, { launchAt: 2000 }, { executable: '/other' }, { bundleId: 'other' }]) {
-    assert.equal(sameLaunch(own, { ...own, ...change }), false);
-    assert.throws(() => assertNoForeignCursor([{ ...own, ...change }], paths, own), /quit your own Cursor first/);
-  }
+  assert.throws(() => assertNoForeignCursor([{ ...own, executable: '/scratch/Cursor.app/Contents/MacOS/Cursor' }], paths), /installed/);
+  assert.throws(() => assertNoForeignCursor([{ ...own, pid: 43 }], paths, own), /changed/);
   assert.equal(sameLaunch({}, {}), false);
 });
 
@@ -55,89 +45,26 @@ test('selection check compares calibrated id, high effort, fast off, attachment 
   ]) { const x = composer(); mutate(x); assert.throws(() => verifySelection(x, c), new RegExp(field)); }
 });
 
-test('live composer preparation verifies stored selection and only creates a chat, fills and submits the prompt', async () => {
-  for (const mismatch of [false, true]) {
-    const calls = [], c = composer(); let reads = 0;
-    if (mismatch) c.modelConfig.selectedModels[0].parameters[1].value = 'true';
-    const d = new DesktopDriver({ readState: async () => ({ composers: reads++ ? [c] : [], bubbles: {} }) });
-    const plan = composerPlan({ prompt: 'Edit the fixture.', paths });
-    const input = { fill: async text => calls.push(['fill', text]), innerText: async () => plan.prompt, press: async key => calls.push(['press', key]) };
-    Object.assign(d, { paths, calibration: calibration(), guard: async () => {}, unique: async locator => locator,
-      page: { getByRole: () => ({ click: async () => calls.push(['new chat']) }), locator: () => input,
-        getByText: () => assert.fail('no attachment, target or model UI selection') } });
-    if (mismatch) { await assert.rejects(d.setup(plan), /fast/); assert.deepEqual(calls, [['new chat']]); }
-    else {
-      await d.setup(plan); await d.submit(plan, { onSubmit: () => calls.push(['submit boundary']) });
-      assert.deepEqual(calls, [['new chat'], ['fill', plan.prompt], ['submit boundary'], ['press', 'Enter']]);
-    }
-  }
-});
-
 test('calibration dry run is print-only, including no host discovery or lock reads', async () => {
   const p = await calibrate({ dryRun: true }, { driver: new Proxy({}, { get() { assert.fail('driver accessed'); } }) });
   assert.deepEqual(p, calibrationPlan());
   assert.ok(p.ownerSteps.some(s => s.includes('Say ready.')));
 });
 
-test('foreign Cursor admission refuses before profile reads, copying or launch', async () => {
-  const d = new DesktopDriver({ processes: async () => [own], calibrationReader: () => assert.fail('read calibration'),
-    inspect: () => assert.fail('inspect'), launch: () => assert.fail('launch') });
-  await assert.rejects(d.open(composerPlan({ prompt: 'x', paths })), /quit your own Cursor first/);
-});
-
-test('foreign Cursor appearing after launch cannot certify cleanup before submit', async () => {
-  const calls = [], driver = { open: async () => calls.push('open'), setup: async () => assertNoForeignCursor([{ ...own, pid: 99 }], paths, own),
-    close: async () => { calls.push('close'); return false; } };
-  const out = await runDesktop(composerPlan({ prompt: 'Edit.', paths }), { driver });
-  assert.equal(out.groupClean, false); assert.equal(out.is_error, true);
-  assert.match(out.safetyStop, /quit your own Cursor first/);
-  assert.deepEqual(calls, ['open', 'close']);
-});
-
-test('quit and cancel never touch a foreign Cursor; own quit waits for its helper to disappear', async () => {
-  const helper = { pid: 50, bundleId: 'co.anysphere.cursor-computer-use', executable: '/benchmark/Helper.app/Contents/MacOS/CUCursorService', launchAt: 1100 };
-  for (const foreign of [false, true]) {
-    let quit = false, onExit;
-    const child = { pid: own.pid, exitCode: null, once: (_event, callback) => { onExit = callback; } };
-    const d = new DesktopDriver({ exists: () => false, processes: async () => quit ? [] : [own, helper,
-      ...(foreign ? [{ ...own, pid: 99, executable: '/Applications/Cursor.app/Contents/MacOS/Cursor' }] : [])] });
-    Object.assign(d, { paths, identity: own, launchedAt: 1000, app: { process: () => child, evaluate: async fn => fn({ app: { quit: () => {
-      quit = true; child.exitCode = 0; onExit?.();
-    } } }) }, input: { isVisible: async () => true, press: () => assert.fail('foreign cancellation input') } });
-    if (foreign) assert.equal(await d.cancel(), false);
-    assert.equal(await d.close(), !foreign); assert.equal(quit, !foreign);
-    if (!foreign) assert.deepEqual(d.helpers, [helper]);
-  }
-});
-
-test('copy preparation stages only a pinned app and preserves an existing copy', () => {
-  const home = mkdtempSync(join(realpathSync(tmpdir()), 'ca3-copy-'));
-  try {
-    const paths = armPaths({ home }), calls = [];
-    const dependencies = { inspect: app => { calls.push(['inspect', app]); return CURSOR_PIN; }, run: (command, args) => {
-      assert.equal(command, '/usr/bin/ditto'); assert.equal(args[0], '/Applications/Cursor.app');
-      assert.ok(args[1].startsWith(paths.root + '/copy-')); mkdirSync(args[1]); return { status: 0 };
-    } };
-    prepareCopy(paths, dependencies); assert.equal(existsSync(paths.app), true);
-    prepareCopy(paths, { ...dependencies, run: () => assert.fail('overwrite') });
-    assert.equal(calls.at(-1)[1], paths.app);
-  } finally { rmSync(home, { recursive: true, force: true }); }
-});
-
-test('supervised calibration binds the harmless settled turn, scrubs, quits and saves after clean collection', async () => {
+test('supervised calibration binds the harmless settled turn, scrubs, restores and saves after clean collection', async () => {
   for (const clean of [true, false]) {
     const calls = [], c = { ...composer(), status: 'completed', latestChatGenerationUUID: 'turn', generatingBubbleIds: [],
       fullConversationHeadersOnly: [{ bubbleId: 'human' }, { bubbleId: 'answer' }] };
     const d = { preflight: async () => calls.push('preflight'), open: async () => calls.push('open'), foreignGuard: async () => {},
       readState: async () => ({ composers: [c], bubbles: { chat: [{ bubbleId: 'human', type: 1, text: 'Say ready.' },
         { bubbleId: 'answer', type: 2, text: 'ready', timingInfo: { clientStartTime: 1100, clientSettleTime: 1600 } }] } }),
-      unique: async () => ({}), page: { getByText: () => ({}) }, close: async () => { calls.push('close'); return clean; } };
-    const options = { driver: d, now: () => 1000, guard: () => {}, prepare: () => calls.push('prepare'), print: () => {},
+      setupCalibration: async () => ({ baselineIds: [] }), verifyCalibrationUI: async () => {}, close: async () => { calls.push('close'); return clean; } };
+    const options = { driver: d, exists: () => false, now: () => 1000, guard: () => {}, print: () => {},
       lock: async () => { calls.push('lock'); return () => calls.push('release'); },
       save: (file, text) => { calls.push('save'); assert.ok(file.endsWith('/calibration.json')); assert.ok(!text.includes('SECRET')); } };
-    if (clean) { const out = await calibrate({}, options); assert.equal(out.selection.model.model, 'account-grok-47'); }
-    else await assert.rejects(calibrate({}, options), /cleanup unverified/);
-    assert.deepEqual(calls, ['preflight', 'lock', 'prepare', 'open', 'close', ...(clean ? ['release', 'save'] : [])]);
+    if (clean) { const out = await calibrate({ ownerSaysCursorFree: true }, options); assert.equal(out.selection.model.model, 'account-grok-47'); }
+    else await assert.rejects(calibrate({ ownerSaysCursorFree: true }, options), /cleanup unverified/);
+    assert.deepEqual(calls, ['preflight', 'lock', 'open', 'close', ...(clean ? ['release', 'save'] : [])]);
   }
 });
 

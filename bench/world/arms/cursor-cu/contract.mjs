@@ -14,7 +14,12 @@ export function assertDesktopReady(paths = armPaths()) {
   return JSON.parse(readFileSync(paths.calibration, 'utf8'));
 }
 
-export function guardLive({ ownerAway = false, supervised = false } = {}, { exists = existsSync } = {}) {
+export function requireOwnerFree({ ownerSaysCursorFree = false } = {}) {
+  if (ownerSaysCursorFree !== true) throw Error('Cursor requires --owner-says-cursor-free: the owner must explicitly free their own logged-in Cursor for this run');
+}
+
+export function guardLive({ ownerAway = false, supervised = false, ownerSaysCursorFree = false } = {}, { exists = existsSync } = {}) {
+  requireOwnerFree({ ownerSaysCursorFree });
   if (!ownerAway && !supervised) throw Error('Cursor desktop requires --owner-away');
   if (exists('/tmp/sleight-hold')) throw Error('sleight-hold is active');
   if (exists('/tmp/sleight-live.lock')) throw Error('sleight live lock is held');
@@ -32,9 +37,9 @@ export function ordinaryPath(path) {
 export function armPaths({ home = homedir(), root } = {}) {
   const fixed = join(home, 'Library/Caches/sleight-bench/cursor-cu-arm/desktop');
   if (root !== undefined && root !== fixed) throw Error('Cursor desktop root is fixed under the benchmark cache');
-  const paths = { root: fixed, app: join(fixed, 'Cursor.app'), home: join(fixed, 'home'), userData: join(fixed, 'user-data'),
-    extensions: join(fixed, 'extensions'), helperSupport: join(home, 'Library/Application Support/cursor-computer-use'), workspace: join(fixed, 'workspace'),
-    database: join(fixed, 'user-data/User/globalStorage/state.vscdb'), receipt: join(fixed, 'setup.json'), calibration: join(fixed, 'calibration.json') };
+  const paths = { root: fixed, app: '/Applications/Cursor.app', userData: join(home, 'Library/Application Support/Cursor'),
+    workspace: join(fixed, 'workspace'), database: join(home, 'Library/Application Support/Cursor/User/globalStorage/state.vscdb'),
+    calibration: join(fixed, 'calibration.json') };
   Object.values(paths).forEach(ordinaryPath);
   return paths;
 }
@@ -55,14 +60,14 @@ export function resolveModel(config, { modelId } = {}) {
   return { label: 'Grok 4.7 High', model: selected.modelId, effort: 'high', speed: 'normal', parameters: selected.parameters };
 }
 
-export function composerPlan({ prompt, paths = armPaths(), timeoutMs = 300000, allowedApps = [], allowBenchmarkAppPrompts = true } = {}) {
+export function composerPlan({ prompt, paths = armPaths(), timeoutMs = 300000, allowedApps = [], allowBenchmarkAppPrompts = true, ownerSaysCursorFree = false } = {}) {
   if (typeof prompt !== 'string' || !prompt.trim() || prompt.length > 100000 || prompt.includes('\0')) throw Error('invalid Cursor task prompt');
   if (!Number.isSafeInteger(timeoutMs) || timeoutMs < 1 || timeoutMs > 2400000) throw Error('invalid Cursor timeout');
-  return { arm: 'cursor-cu', route: 'desktop', liveReady: false, blockers: DESKTOP_BLOCKERS, paths, prompt, timeoutMs, attachment: 'Computer Use', target: 'This Mac',
+  return { arm: 'cursor-cu', route: 'desktop', ownerSaysCursorFree, liveReady: false, blockers: DESKTOP_BLOCKERS, paths, prompt, timeoutMs, attachment: 'Computer Use', target: 'This Mac',
     modelLabel: 'Grok 4.7 High', effort: 'high', speed: 'normal', allowedApps, allowBenchmarkAppPrompts,
-    steps: ['refuse foreign Cursor processes', 'new agent composer', 'verify calibrated persisted selection without changing it',
-      'fill prompt', 'submit', 'poll profile state', 'quit owned copy and verify owned helper exit'],
-    timing: { start: 'harness-submit', end: 'recorded-clientSettleTime', excludes: ['launch', 'login', 'composer setup', 'fixture check', 'cleanup'] },
+    steps: ['bind the installed running Cursor and existing login', 'save owner selections', 'open a new chat', 'set and verify run selections',
+      'fill prompt', 'submit', 'poll only run chat state', 'restore owner selections and leave Cursor and chats open'],
+    timing: { start: 'harness-submit', end: 'recorded-clientSettleTime', excludes: ['attachment', 'composer setup', 'fixture check', 'cleanup'] },
     stateSource: 'User/globalStorage/state.vscdb: cursorDiskKV composerData and bubbleId',
     calibration: paths.calibration };
 }

@@ -11,11 +11,16 @@ export function sameLaunch(a, b) {
     Number.isFinite(a.launchAt) && a.launchAt > 0 && !!a.bundleId &&
     ['pid', 'bundleId', 'executable', 'launchAt'].every(k => a[k] === b?.[k]);
 }
-export function assertNoForeignCursor(processes, paths, owned) {
-  const executable = paths.app + '/Contents/MacOS/Cursor';
-  if (!Array.isArray(processes) || processes.some(p =>
-    (p.bundleId === CURSOR_PIN.bundleId || p.executable === executable) && !sameLaunch(p, owned)))
-    throw Error('Cursor benchmark refused: quit your own Cursor first (foreign or unproved Cursor launch)');
+export function installedCursor(processes, paths, bundleId = CURSOR_PIN.bundleId) {
+  const rows = processes.filter(p => p.bundleId === bundleId || p.executable === paths.app + '/Contents/MacOS/Cursor');
+  if (rows.length !== 1 || rows[0].bundleId !== bundleId || rows[0].executable !== paths.app + '/Contents/MacOS/Cursor' || !sameLaunch(rows[0], rows[0]))
+    throw Error('Cursor benchmark requires one installed Cursor already running with the owner login');
+  return rows[0];
+}
+export function assertNoForeignCursor(processes, paths, bound) {
+  const current = installedCursor(processes, paths);
+  if (bound && !sameLaunch(current, bound)) throw Error('Cursor installed process changed during the run');
+  return current;
 }
 export async function answerCards(plan, owners, ax, requests = []) {
   const cards = await ax.read(owners);

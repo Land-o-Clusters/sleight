@@ -15,7 +15,7 @@ const stepsText = () => '# ID KIND TASKS\nprobe probe -\n' + [1, 2, 3].map(i => 
 function fixture() {
   const dir = temp(), script = join(dir, 'queue.sh'), file = join(dir, 'main.steps');
   writeFileSync(script, '# fixture\n'); writeFileSync(file, stepsText());
-  return { dir, script, steps: readSteps(file), out: join(dir, 'output'), root: process.cwd() };
+  return { dir, script, steps: readSteps(file), out: join(dir, 'output'), root: process.cwd(), ownerSaysCursorFree: true };
 }
 function nativeResult(tasks, passed = true) {
   return { groupClean: true, results: tasks.map(task => ({ task, arm: 'cursor-cu', run: 1, groupClean: true, passed, seconds: 2 })) };
@@ -146,11 +146,11 @@ test('probe failure stops qualification; resume archives that attempt before ret
 
 test('owner Cursor admission refusal is logged and starts no runner', async () => {
   const f = fixture(), a = fake(f, { execute: async (call, log) => {
-    assert.ok(call.args.includes('--preflight')); writeFileSync(log, 'Cursor benchmark refused: quit your own Cursor first\n'); return { code: 1, signal: null };
+    assert.ok(call.args.includes('--preflight')); writeFileSync(log, 'Cursor benchmark requires installed running owner Cursor\n'); return { code: 1, signal: null };
   } });
   try {
     assert.equal(await runQueue({ ...f, runtime: a.runtime }), 1);
-    assert.match(readFileSync(join(f.out, 'probe.log'), 'utf8'), /quit your own Cursor first/);
+    assert.match(readFileSync(join(f.out, 'probe.log'), 'utf8'), /installed running owner Cursor/);
     assert.equal(JSON.parse(readFileSync(join(f.out, 'probe.receipt.json'))).runnerRc, null);
   } finally { rmSync(f.dir, { recursive: true }); }
 });
@@ -254,11 +254,11 @@ test('probe --out plans attributable child banks; dry mode never inspects or wri
     assert.equal(existsSync(out), false);
     const exit = process.exitCode;
     try {
-      const r = await runProbe({ out, ownerAway: true }, { exists: () => false, preflight: async () => {},
+      const r = await runProbe({ out, ownerAway: true, ownerSaysCursorFree: true }, { exists: () => false, preflight: async () => {},
         run: async () => ({ failed: true, groupClean: true }) });
       assert.equal(r.results.length, 1); assert.equal(r.failed, true); assert.equal(process.exitCode, 1);
       assert.equal(JSON.parse(readFileSync(out)).failed, true);
     } finally { process.exitCode = exit; }
-    await assert.rejects(runProbe({ out, ownerAway: true }, { preflight: () => assert.fail('must refuse existing output first') }), /output already exists/);
+    await assert.rejects(runProbe({ out, ownerAway: true, ownerSaysCursorFree: true }, { preflight: () => assert.fail('must refuse existing output first') }), /output already exists/);
   } finally { rmSync(f.dir, { recursive: true }); }
 });

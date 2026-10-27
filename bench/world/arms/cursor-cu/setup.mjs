@@ -1,5 +1,5 @@
 import { spawnSync } from 'node:child_process';
-import { existsSync, readFileSync, mkdirSync, mkdtempSync, renameSync, rmSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import { resolve, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { createRequire } from 'node:module';
@@ -7,63 +7,36 @@ import { armPaths, assertBundlePin, ordinaryPath, CURSOR_PIN, DESKTOP_BLOCKERS }
 import { retryBusy } from './state.mjs';
 const require = createRequire(import.meta.url);
 
-export function prepareCopy(paths = armPaths(), { run = spawnSync, inspect = inspectBundle } = {}) {
-  if (existsSync(ordinaryPath(paths.app))) return inspect(paths.app);
-  inspect('/Applications/Cursor.app');
-  mkdirSync(ordinaryPath(paths.root), { recursive: true, mode: 0o700 });
-  const staging = mkdtempSync(join(paths.root, 'copy-'));
-  try {
-    const copy = join(staging, 'Cursor.app');
-    const result = run('/usr/bin/ditto', ['/Applications/Cursor.app', copy], { stdio: 'pipe', timeout: 120000 });
-    if (result.error || result.status !== 0) throw Error('Cursor benchmark copy failed');
-    const pin = inspect(copy);
-    if (existsSync(paths.app)) throw Error('Cursor copy appeared during preparation; refusing overwrite');
-    renameSync(copy, paths.app);
-    return pin;
-  } finally { rmSync(staging, { recursive: true, force: true }); }
-}
-
 export function inspectBundle(app, run = spawnSync) {
   ordinaryPath(app);
   const product = JSON.parse(readFileSync(join(app, 'Contents/Resources/app/product.json'), 'utf8'));
+  const plist = run('/usr/bin/plutil', ['-extract', 'CFBundleIdentifier', 'raw', '-o', '-', join(app, 'Contents/Info.plist')], { encoding: 'utf8', stdio: 'pipe', timeout: 10000 });
+  if (plist.error || plist.status !== 0 || !plist.stdout?.trim()) throw Error('Cursor Info.plist bundle identifier unavailable');
   const verified = run('/usr/bin/codesign', ['--verify', '--deep', '--strict', app], { stdio: 'pipe', timeout: 60000 });
   if (verified.error || verified.status !== 0) throw Error('Cursor signature verification failed');
   // codesign metadata is written to stderr; the CLI's status and verified seal are separate checks.
   const result = run('/usr/bin/codesign', ['-d', '--verbose=4', app], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'], timeout: 20000 });
   if (result.error || result.status !== 0) throw Error('Cursor signature metadata unavailable');
-  return assertBundlePin({ version: product.version, commit: product.commit, bundleId: product.darwinBundleIdentifier,
+  return assertBundlePin({ version: product.version, commit: product.commit, bundleId: plist.stdout.trim(),
     teamId: /^TeamIdentifier=(.+)$/m.exec(result.stderr)?.[1], cdhash: /^CDHash=(.+)$/m.exec(result.stderr)?.[1], signatureVerified: true });
 }
 
-export function launchPlan(paths = armPaths()) {
-  Object.values(paths).forEach(ordinaryPath);
-  return { executablePath: join(paths.app, 'Contents/MacOS/Cursor'), args: [
-    `--user-data-dir=${paths.userData}`, `--extensions-dir=${paths.extensions}`, '--new-window', '--skip-welcome',
-    '--skip-release-notes', '--disable-updates', '--disable-telemetry', '--skip-add-to-recently-opened', paths.workspace],
-    env: { HOME: paths.home, CUA_APP_SUPPORT_DIR: paths.helperSupport, PATH: '/usr/bin:/bin:/usr/sbin:/sbin',
-      ...Object.fromEntries(['USER', 'LOGNAME', 'TMPDIR', 'LANG'].filter(k => typeof process.env[k] === 'string').map(k => [k, process.env[k]])) } };
-}
-
 export function setupPlan({ paths = armPaths() } = {}) {
-  return { arm: 'cursor-cu', route: 'desktop', liveReady: false, blockers: DESKTOP_BLOCKERS, pin: CURSOR_PIN, paths, launch: launchPlan(paths), mutates: false,
+  return { arm: 'cursor-cu', route: 'desktop', liveReady: false, blockers: DESKTOP_BLOCKERS, pin: CURSOR_PIN, paths, mutates: false,
     ownerSteps: [
-      `Calibration prepares the pinned signed copy at ${paths.app} if absent. The runner verifies it before every launch.`,
-      'Launch only the copied executable with the printed arguments and environment. Do not use the global cursor URL handler.',
-      'Log in once in that isolated desktop profile. Keep the profile between runs.',
-      'Trust only the empty benchmark workspace if Cursor asks.',
-      'Quit your own Cursor first. The copy shares its computer-use helper; a pre-existing helper also stops admission.',
-      'Enable Computer Use and target This Mac in the isolated composer. Keep the helper shared, as the owner decided.',
-      'Grant Cursor Computer Use Accessibility and Screen Recording in System Settings. Complete any Enable Computer Use click yourself.',
-      'Select Grok 4.7 High, high effort, normal speed. The probe refuses missing or different recorded parameters.',
-      'The harness answers only Allow in this chat for benchmark and task apps through bound Accessibility. Use --no-allow-benchmark-app-prompts to stop on every card.',
-      'Quit the isolated copy before the probe; never grant it Always Allow through the harness.',
+      'Keep your installed /Applications/Cursor.app running with your existing login.',
+      'When Cursor is free, explicitly pass --owner-says-cursor-free. Live fixtures also require --owner-away.',
+      'Run supervised calibration once. Computer Use must already be enabled with its helper permissions granted.',
+      'The harness saves model and Computer Use selections, opens a new chat and selects Grok 4.7 High, high effort, normal speed, This Mac.',
+      'It restores the saved selections on success, failure and interruption, and leaves Cursor and every chat open.',
+      'Only Allow in this chat cards for allowlisted apps may be answered. Always Allow needs the owner.',
     ] };
 }
 
 export function loginReadiness({ paths = armPaths(), authPresent = storedAuth } = {}) {
   const authStored = authPresent(paths);
   return { arm: 'cursor-cu', route: 'desktop', config: paths.userData, loggedIn: 'unverified', authStored, ready: false,
-    missing: [authStored ? 'live login validity' : 'isolated desktop login', 'live helper permissions', 'live composer/model calibration'],
+    missing: [authStored ? 'live login validity' : 'owner desktop login', 'live helper permissions', 'live composer/model calibration'],
     fix: 'node bench/world/arms/cursor-cu/setup.mjs' };
 }
 

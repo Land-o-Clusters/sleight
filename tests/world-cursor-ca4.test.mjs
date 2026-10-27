@@ -39,7 +39,7 @@ const pending = () => {
   return s;
 };
 const card = { owner: own, title: 'Allow Cursor to use TextEdit?', name: request.name, bundleId: request.bundleId, source: 'Computer Use', button: 'Allow in this chat', id: 'card' };
-const plan = () => composerPlan({ prompt: 'Edit.', paths, allowedApps: [request.bundleId], timeoutMs: 5000 });
+const plan = () => composerPlan({ prompt: 'Edit.', paths, ownerSaysCursorFree: true, allowedApps: [request.bundleId], timeoutMs: 5000 });
 const temp = () => trackTemp(mkdtempSync(join(realTmp, 'sleight-ca4-test-')));
 
 test('nativeMain grades the raw Cursor answer and saves a scrubbed copy', async () => {
@@ -84,9 +84,8 @@ function guardFixture({ visible = () => false, readState = async () => snapshot(
   const d = new DesktopDriver({ readState, exists: () => false, processes: async () => [own], now: () => time,
     pause: async ms => { time += ms; }, ax: { read: async (_owners, executable) => { assert.equal(executable, own.executable); scans++; return cards(time); },
       press: async (c, _owners, executable) => { assert.equal(executable, own.executable); presses++; await press(c); } } });
-  const element = { isVisible: async () => visible(time), innerText: async () => card.title };
   Object.assign(d, { paths, identity: own, launchedAt: 1000, composerId: 'chat', submitted: true,
-    page: { getByRole: () => ({ all: async () => visible(time) ? [element] : [] }), getByText: () => ({ all: async () => [element], count: async () => visible(time) ? 1 : 0 }) } });
+    ui: { cardsVisible: async () => visible(time) } });
   return { d, time: () => time, scans: () => scans, presses: () => presses };
 }
 test('idle guard avoids native AX scans', async () => {
@@ -165,61 +164,26 @@ test('scrubbing covers nested JSON strings, binary MIME payloads and credential 
   assert.equal(out.safe.app, 'com.google.Chrome'); assert.equal(out.safe.success, true);
 });
 
-test('Swift enables web accessibility only after owned-copy validation and validates expected executable', () => {
+test('Swift enables web accessibility only after process identity validation and validates expected executable', () => {
   const source = readFileSync(new URL('../bench/world/arms/cursor-cu/macos.swift', import.meta.url), 'utf8');
   assert.match(source, /AXManualAccessibility/);
   assert.match(source, /expectedExecutable/);
   assert.ok(source.indexOf('try owned(owner') < source.indexOf('"AXManualAccessibility"'));
   assert.match(source, /app\.executableURL\?\.path == expectedExecutable/);
 });
-test('partial launch rejection cannot certify cleanup', async () => {
-  const d = new DesktopDriver({ launch: async () => { throw Error('keychain blocked launch'); }, inspect: () => {}, exists: () => false });
-  d.preflight = async () => {};
-  const dir = temp();
-  try {
-    const p = composerPlan({ prompt: 'Edit.', paths: armPaths({ home: dir }) });
-    const out = await runDesktop(p, { driver: d });
-    assert.equal(out.groupClean, false); assert.match(out.safetyStop, /keychain/);
-  } finally { rmSync(dir, { recursive: true, force: true }); }
+test('stalled profile and AX reads stop within their explicit timeouts', async () => {
+  const never = () => new Promise(() => {}), d = new DesktopDriver({ readState: never, operationTimeoutMs: 10 });
+  await assert.rejects(d.readState(), /profile read timeout/);
+  const f = guardFixture({ readState: async () => pending() });
+  f.d.operationTimeoutMs = 10; f.d.ax.read = never;
+  await assert.rejects(f.d.guard(plan()), /AX card read timeout/);
 });
-test('stalled launch and profile reads stop within their explicit timeouts', async () => {
-  const dir = temp();
-  try {
-    const never = () => new Promise(() => {}), d = new DesktopDriver({ launch: never, readState: never, inspect: () => {}, exists: () => false, operationTimeoutMs: 15, launchTimeoutMs: 15 });
-    d.preflight = async () => {};
-    const launch = await Promise.race([runDesktop(composerPlan({ prompt: 'Edit.', paths: armPaths({ home: dir }) }), { driver: d }), new Promise(r => setTimeout(() => r('hung'), 200))]);
-    assert.notEqual(launch, 'hung'); assert.equal(launch.groupClean, false); assert.match(launch.safetyStop, /timeout/);
-    await assert.rejects(Promise.race([d.readState(), new Promise((_, reject) => setTimeout(() => reject(Error('unbounded')), 200))]), /Cursor.*timeout/);
-  } finally { rmSync(dir, { recursive: true, force: true }); }
-});
-test('stalled identity, window, process, AX and quit reads stop without certifying cleanup', async () => {
-  const dir = temp(), never = () => new Promise(() => {});
-  try {
-    const p = composerPlan({ prompt: 'Edit.', paths: armPaths({ home: dir }) });
-    for (const stalled of ['identity', 'window']) {
-      const identity = { ...own, executable: p.paths.app + '/Contents/MacOS/Cursor', launchAt: Date.now() };
-      const d = new DesktopDriver({ exists: () => false, inspect: () => {}, operationTimeoutMs: 10,
-        processes: async () => [identity], launch: async () => ({ process: () => ({ pid: own.pid }),
-          evaluate: stalled === 'identity' ? never : async () => ({ userData: p.paths.userData, home: p.paths.home, version: CURSOR_PIN.version }), firstWindow: never }) });
-      d.preflight = async () => {};
-      await assert.rejects(d.open(p), /Cursor.*timeout/); assert.equal(d.partialLaunch, true);
-    }
-    const d = new DesktopDriver({ processes: never, operationTimeoutMs: 10 });
-    await assert.rejects(d.preflight(p), /process read timeout/);
-    const f = guardFixture({ readState: async () => pending() });
-    f.d.operationTimeoutMs = 10; f.d.ax.read = never;
-    await assert.rejects(f.d.guard(plan()), /AX card read timeout/);
-    d.foreignGuard = async () => [];
-    d.app = { evaluate: never, process: () => ({ exitCode: null, once() {} }) };
-    assert.equal(await d.close(), false);
-  } finally { rmSync(dir, { recursive: true, force: true }); }
-});
-test('calibration checks existing file before any launch and passes caller ownerAway', async () => {
+test('calibration checks existing file before attachment and passes caller ownerAway', async () => {
   const seen = [], options = { exists: () => true, guard: x => seen.push(x), driver: { preflight: () => assert.fail('preflight before existing calibration check') } };
-  await assert.rejects(calibrate({ ownerAway: false }, options), /already exists/);
+  await assert.rejects(calibrate({ ownerAway: false, ownerSaysCursorFree: true }, options), /already exists/);
   assert.deepEqual(seen, []);
   options.exists = () => false; options.driver.preflight = () => { throw Error('stop before lock'); };
-  await assert.rejects(calibrate({ ownerAway: false }, options), /stop before lock/);
+  await assert.rejects(calibrate({ ownerAway: false, ownerSaysCursorFree: true }, options), /stop before lock/);
   assert.equal(seen[0].ownerAway, false);
 });
 test('calibration shapes accept known fields only and discard dynamic ids', () => {
@@ -229,8 +193,8 @@ test('calibration shapes accept known fields only and discard dynamic ids', () =
   for (const key of ['innocentLookingKey', 'abcd1234', 'userId', 'composerId', 'bubbleId']) assert.ok(!text.includes('"' + key + '"'), key);
   assert.ok(text.includes('modelConfig'));
 });
-test('direct Cursor gate admission enforces owner-away before other side effects', async () => {
-  await assert.rejects(admitRealGate({ surface: 'cursor-cu', ownerAway: false, out: join(realTmp, 'ca4-not-created'), arms: [] }), /requires --owner-away/);
+test('direct Cursor gate admission enforces owner-free flag before other side effects', async () => {
+  await assert.rejects(admitRealGate({ surface: 'cursor-cu', ownerAway: false, out: join(realTmp, 'ca4-not-created'), arms: [] }), /owner-says-cursor-free/);
 });
 test('SQLite WAL busy retry is bounded, closes each connection and never retries unrelated errors', async () => {
   assert.equal(typeof state.retryBusy, 'function');
