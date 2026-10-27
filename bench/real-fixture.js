@@ -322,7 +322,9 @@ function finderRoleInventory(app, api, receipt, phase) {
       if (api.equal(item, other)) throw windowInventoryError(message, 'duplicate-identity', windows.length, index, { duplicateIndex: otherIndex });
     });
     var panel = receipt && receipt.folderPanel;
-    if (panel && panel.reference && api.equal(item, panel.reference)) {
+    if (panel && panel.reference && (api.equal(item, panel.reference) ||
+        (panel.sheetGeometry && api.text(item, 'AXRole') === 'AXSheet' && api.finderPanelMatches &&
+         api.finderPanelMatches(panel.window, item, panel)))) {
       if (!api.finderPanelMatches || !api.finderPanelMatches(panel.window, item, panel))
         throw new Error('Finder folder sheet identity changed');
       return;
@@ -1637,6 +1639,53 @@ function nativeAX(state, clock) {
   }
   var promptApi = { text: text, title: identityTitle, titleFree: titleFree, children: children, path: path, read: read, equal: equal };
   var folderPanels = [];
+  function finderPanelBinding(panel) {
+    return folderPanels.filter(function (entry) { return equal(entry.reference, panel); })[0];
+  }
+  function finderSheetGeometry(panel) {
+    var frame = api.frame(panel), number = text(panel, 'AXWindowNumber');
+    return { frame: frame && { x: frame.x, y: frame.y, width: frame.width, height: frame.height }, number: number };
+  }
+  function finderSheetShape(panel, receipt) {
+    if (!receipt.sheetGeometry || !receipt.commandWindowConfirmed || !receipt.attempted ||
+        text(panel, 'AXRole') !== 'AXSheet' || text(panel, 'AXIdentifier') !== 'GoToWindow' ||
+        text(panel, 'AXSubrole') !== receipt.subrole || !equal(read(panel, 'AXParent'), receipt.window)) return false;
+    var owner = read(panel, 'AXWindow');
+    if (owner && !equal(owner, receipt.window)) return false;
+    var current = finderSheetGeometry(panel), expected = receipt.sheetGeometry;
+    return current.number === expected.number && !!current.frame && !!expected.frame &&
+      ['x', 'y', 'width', 'height'].every(function (key) {
+        return isFinite(current.frame[key]) && isFinite(expected.frame[key]) &&
+          Math.abs(current.frame[key] - expected.frame[key]) <= 3;
+      });
+  }
+  function finderCurrentSheet(receipt) {
+    var sheets = children(receipt.window, 'AXSheets');
+    var childSheets = children(receipt.window).filter(function (child) { return text(child, 'AXRole') === 'AXSheet'; });
+    // Each inventory must contain at most one sheet. Do not deduplicate distinct
+    // references by their shape, which could hide a second attached sheet.
+    var inventories = [sheets, childSheets];
+    [children(receipt.app), api.windows(receipt.app)].forEach(function (nodes) {
+      inventories.push(nodes.filter(function (panel) {
+        return text(panel, 'AXRole') === 'AXSheet' && equal(read(panel, 'AXParent'), receipt.window);
+      }));
+    });
+    if (inventories.some(function (panels) { return panels.length > 1; }) ||
+        inventories.some(function (panels) { return panels.some(function (panel) { return !finderSheetShape(panel, receipt); }); }))
+      throw new Error('Finder folder sheet identity changed');
+    if (!sheets.length && !childSheets.length && inventories.some(function (panels) { return panels.length; }))
+      throw new Error('Finder folder sheet identity changed');
+    return sheets[0] || childSheets[0] || null;
+  }
+  function finderPanelEqual(candidate, panel) {
+    var receipt = finderPanelBinding(panel);
+    if (!receipt || !receipt.sheetGeometry) return equal(candidate, panel);
+    return !!candidate && !!finderCurrentSheet(receipt) && finderSheetShape(candidate, receipt);
+  }
+  function finderFocusEqual(candidate, panel) {
+    // A dismissed retained reference can still appear in a final focus read.
+    return equal(candidate, panel) || finderPanelEqual(candidate, panel);
+  }
   function finderFolderFocus(app, previous, window, sheet, budget) {
     var now = clock && clock.now ? clock.now : Date.now, deadline = now() + 1000;
     budget = budget || { reads: 6 };
@@ -1652,11 +1701,12 @@ function nativeAX(state, clock) {
       current = read(app, 'AXFocusedWindow');
     }
     while (true) {
-      if (equal(current, previous) || (!current && !previous)) return current;
+      if (equal(current, previous) || (!current && !previous) ||
+          (binding && finderPanelEqual(current, binding.reference) && finderPanelEqual(previous, binding.reference))) return current;
       // Only our retained window and its retained panel can trade focus during
       // an animation. A foreign or missing element fails on its first read.
-      if (!binding || !((equal(previous, binding.window) && equal(current, binding.reference)) ||
-          (equal(previous, binding.reference) && equal(current, binding.window))))
+      if (!binding || !((equal(previous, binding.window) && finderFocusEqual(current, binding.reference)) ||
+          (finderFocusEqual(previous, binding.reference) && equal(current, binding.window))))
         throw new Error('Finder folder focus changed during validation');
       if (budget.deadline === undefined) budget.deadline = deadline;
       var remaining = budget.deadline - now();
@@ -1708,14 +1758,14 @@ function nativeAX(state, clock) {
     api.finderFolderGuard(app, window, panel);
     var input = read(app, 'AXFocusedUIElement'), within = false;
     for (var node = input, depth = 0; node && depth < 12; node = read(node, 'AXParent'), depth++) {
-      if (equal(node, panel)) { within = true; break; }
+      if (finderPanelEqual(node, panel)) { within = true; break; }
       if (equal(node, app) || equal(node, window)) break;
     }
     if (!within || (expectedInput && !equal(input, expectedInput)) ||
         ['AXTextField', 'AXComboBox'].indexOf(text(input, 'AXRole')) === -1)
       throw new Error('Finder folder keyboard target unconfirmed');
     var pid = Ref();
-    if (Number($.AXUIElementGetPid(panel, pid)) !== 0 || !(Number(pid[0]) > 0))
+    if (Number($.AXUIElementGetPid(api.folderSheet(window, app), pid)) !== 0 || !(Number(pid[0]) > 0))
       throw new Error('Finder folder keyboard target unconfirmed');
     var down = $.CGEventCreateKeyboardEvent(null, key, true), up = $.CGEventCreateKeyboardEvent(null, key, false);
     // CGEventRef is a C reference, without Objective-C's isNil method.
@@ -1740,7 +1790,7 @@ function nativeAX(state, clock) {
         if (!sheet && window && receipt && receipt.attempted === true &&
             receipt.commandWindowConfirmed === true && equal(receipt.window, window))
           sheet = self.folderSheet(window, app, receipt);
-        if (!sheet || !equal(element, sheet)) {
+        if (!sheet || !finderPanelEqual(element, sheet)) {
           if (text(element, 'AXIdentifier') === 'GoToWindow') throw new Error('Foreign Finder Go to Folder panel; setup refused');
           throw new Error('Foreign Finder dialog; folder setup refused');
         }
@@ -1767,13 +1817,13 @@ function nativeAX(state, clock) {
         if (node && depth === 12) throw new Error('Finder focused element ancestry unconfirmed');
         if (window) {
           if (!this.exists(window) || this.listed(app, window) !== true) throw new Error('Finder folder window vanished');
-          if (sheet && !equal(this.folderSheet(window, app), sheet)) throw new Error('Finder folder sheet identity changed');
+          if (sheet && !finderPanelEqual(this.folderSheet(window, app), sheet)) throw new Error('Finder folder sheet identity changed');
           // AXFocusedWindow can be the parent or its sheet. Never raise either.
-          if (!equal(focused, window) && !(sheet && equal(focused, sheet))) throw new Error('Finder folder window lost focus');
+          if (!equal(focused, window) && !(sheet && finderPanelEqual(focused, sheet))) throw new Error('Finder folder window lost focus');
           // Dialog inspection itself may span a focus change.
           var current = finderFolderFocus(app, focused, window, sheet, budget);
-          if (!equal(current, window) && !(sheet && equal(current, sheet))) throw new Error('Finder folder window lost focus');
-          if (!equal(current, focused)) {
+          if (!equal(current, window) && !(sheet && finderPanelEqual(current, sheet))) throw new Error('Finder folder window lost focus');
+          if (!equal(current, focused) && !(sheet && finderPanelEqual(current, sheet) && finderPanelEqual(focused, sheet))) {
             // Recheck the tree and ownership after waiting, within the same budget.
             focused = current;
             continue;
@@ -1783,9 +1833,10 @@ function nativeAX(state, clock) {
       }
     },
     finderPanelExists: function (panel) {
+      var receipt = finderPanelBinding(panel);
+      if (receipt && receipt.sheetGeometry) return !!finderCurrentSheet(receipt);
       try { if (!text(panel, 'AXRole')) return false; }
       catch (error) { if (error.code === -25202) return false; throw error; }
-      var receipt = folderPanels.filter(function (entry) { return equal(entry.reference, panel); })[0];
       if (!receipt) return true;
       // A failed read of the parent or app cannot prove the panel disappeared.
       var nodes = children(receipt.window, 'AXSheets').concat(children(receipt.window), this.windows(receipt.app), children(receipt.app));
@@ -1798,6 +1849,9 @@ function nativeAX(state, clock) {
       return nodes.some(function (item) { return equal(item, panel); });
     },
     finderPanelMatches: function (window, panel, receipt) {
+      if (receipt && receipt.sheetGeometry)
+        return equal(receipt.window, window) && !!finderCurrentSheet(receipt) &&
+          (equal(panel, receipt.reference) || finderSheetShape(panel, receipt));
       var shape = finderPanelShape(panel);
       return !!shape && (!receipt || (receipt.attempted === true && equal(receipt.window, window) &&
         equal(receipt.reference, panel) && shape.role === receipt.role && shape.subrole === receipt.subrole &&
@@ -1808,6 +1862,7 @@ function nativeAX(state, clock) {
       receipt = receipt || folderPanels.filter(function (entry) { return equal(entry.window, window); })[0];
       if (receipt && receipt.attempted !== true) return null;
       if (receipt && receipt.reference) {
+        if (receipt.sheetGeometry) return finderCurrentSheet(receipt);
         return this.finderPanelExists(receipt.reference) && this.finderPanelMatches(window, receipt.reference, receipt) ? receipt.reference : null;
       }
       var candidates = children(window, 'AXSheets').concat(children(window));
@@ -1824,8 +1879,19 @@ function nativeAX(state, clock) {
         if (hidden) candidates.push(hidden);
       }
       var found = [];
+      var attached = children(window, 'AXSheets'), childSheets = children(window).filter(function (child) {
+        return text(child, 'AXRole') === 'AXSheet';
+      });
+      var onlySheet = attached[0] || childSheets[0], sheetReceipt = null;
+      if (receipt && receipt.commandWindowConfirmed && attached.length <= 1 && childSheets.length <= 1 && onlySheet &&
+          text(onlySheet, 'AXIdentifier') === 'GoToWindow' && equal(read(onlySheet, 'AXParent'), window)) {
+        sheetReceipt = Object.assign({}, receipt, { app: app, subrole: text(onlySheet, 'AXSubrole'), sheetGeometry: finderSheetGeometry(onlySheet) });
+        if (!sheetReceipt.sheetGeometry.frame || !finderCurrentSheet(sheetReceipt)) sheetReceipt = null;
+      }
       candidates.forEach(function (candidate) {
-        if (equal(candidate, window) || found.some(function (item) { return equal(item, candidate); })) return;
+        if (equal(candidate, window) || found.some(function (item) {
+          return equal(item, candidate) || (sheetReceipt && finderSheetShape(item, sheetReceipt) && finderSheetShape(candidate, sheetReceipt));
+        })) return;
         var shape = finderPanelShape(candidate);
         if (shape && (receipt || shape.role === 'AXSheet') && finderPanelParent(window, candidate, app, receipt)) found.push(candidate);
       });
@@ -1835,6 +1901,11 @@ function nativeAX(state, clock) {
         var shape = finderPanelShape(panel);
         receipt.reference = panel; receipt.role = shape.role; receipt.subrole = shape.subrole; receipt.app = app;
         receipt.goToWindow = text(panel, 'AXIdentifier') === 'GoToWindow';
+        if (shape.role === 'AXSheet' && receipt.goToWindow && receipt.commandWindowConfirmed &&
+            equal(read(panel, 'AXParent'), window)) {
+          var geometry = finderSheetGeometry(panel);
+          if (geometry.frame) receipt.sheetGeometry = geometry;
+        }
         folderPanels.push(receipt);
         if (clock && clock.emit) clock.emit({ stage: 'finder-panel-retained', panelRole: shape.role,
           panelSubrole: shape.subrole, panelParentConfirmed: true, referenceExported: false });
@@ -1845,7 +1916,7 @@ function nativeAX(state, clock) {
       var self = this;
       function check() {
         if (validate) validate();
-        if (!equal(self.folderSheet(window, app), panel)) throw new Error('Finder folder sheet identity changed');
+        if (!finderPanelEqual(self.folderSheet(window, app), panel)) throw new Error('Finder folder sheet identity changed');
       }
       if (clock && clock.check) clock.check();
       check();
@@ -1853,7 +1924,7 @@ function nativeAX(state, clock) {
         for (var attempt = 0; attempt < 3 && self.finderPanelExists(panel); attempt++) self.wait();
         return !self.finderPanelExists(panel);
       }
-      var goToWindow = text(panel, 'AXIdentifier') === 'GoToWindow';
+      var goToWindow = text(self.folderSheet(window, app), 'AXIdentifier') === 'GoToWindow';
       if (goToWindow) {
         try { finderPanelKey(app, window, panel, 53, check); }
         catch (error) {
@@ -1865,14 +1936,14 @@ function nativeAX(state, clock) {
         }
         if (dismissed()) return;
         check();
-        var closes = finderPanelControls(panel).nodes.filter(function (node) {
+        var closes = finderPanelControls(self.folderSheet(window, app)).nodes.filter(function (node) {
           return text(node, 'AXRole') === 'AXButton' && text(node, 'AXIdentifier') === 'CloseButton';
         });
         if (closes.length > 1) throw new Error('Finder folder sheet controls ambiguous');
         if (closes.length === 1) {
           press(closes[0], function () {
             check();
-            var current = finderPanelControls(panel).nodes.filter(function (node) {
+            var current = finderPanelControls(self.folderSheet(window, app)).nodes.filter(function (node) {
               return text(node, 'AXRole') === 'AXButton' && text(node, 'AXIdentifier') === 'CloseButton';
             });
             if (current.length !== 1 || !equal(current[0], closes[0])) throw new Error('Finder folder sheet identity changed');
@@ -1881,26 +1952,26 @@ function nativeAX(state, clock) {
         }
       }
       check();
-      var code = Number($.AXUIElementPerformAction(panel, $('AXCancel')));
+      var code = Number($.AXUIElementPerformAction(self.folderSheet(window, app), $('AXCancel')));
       if (code !== 0 && code !== -25206) throw new Error('Finder folder sheet cancellation failed: ' + code);
       if (dismissed()) return;
       check();
-      var cancel = read(panel, 'AXCancelButton'), explicit = !!cancel;
+      var cancel = read(self.folderSheet(window, app), 'AXCancelButton'), explicit = !!cancel;
       if (!cancel) {
-        var matches = buttons(panel, ['Cancel'], 6);
+        var matches = buttons(self.folderSheet(window, app), ['Cancel'], 6);
         if (matches.length === 1) cancel = matches[0];
       }
       if (cancel && text(cancel, 'AXRole') === 'AXButton') {
         press(cancel, function () {
           check();
-          var current = explicit ? read(panel, 'AXCancelButton') : buttons(panel, ['Cancel'], 6);
+          var current = explicit ? read(self.folderSheet(window, app), 'AXCancelButton') : buttons(self.folderSheet(window, app), ['Cancel'], 6);
           if (explicit ? !equal(current, cancel) : current.length !== 1 || !equal(current[0], cancel))
             throw new Error('Finder folder sheet identity changed');
         });
         if (dismissed()) return;
       }
       if (!goToWindow) throw new Error('Finder folder sheet cancellation unavailable');
-      var fields = finderPanelControls(panel).fields;
+      var fields = finderPanelControls(self.folderSheet(window, app)).fields;
       if (fields.length === 1) {
         check();
         code = Number($.AXUIElementPerformAction(fields[0], $('AXCancel')));
@@ -1914,17 +1985,18 @@ function nativeAX(state, clock) {
       if (Number($.AXUIElementGetPid(window, pidRef)) !== 0) throw new Error('Finder folder window process unavailable');
       var app = $.AXUIElementCreateApplication(Number(pidRef[0]));
       $.AXUIElementSetMessagingTimeout(app, 0.5);
-      if (!equal(this.folderSheet(window, app), sheet)) throw new Error('Finder folder sheet identity changed');
-      var controls = finderPanelControls(sheet), fields = controls.fields;
-      var go = buttons(sheet, ['Go'], 6);
+      if (!finderPanelEqual(this.folderSheet(window, app), sheet)) throw new Error('Finder folder sheet identity changed');
+      var currentSheet = this.folderSheet(window, app);
+      var controls = finderPanelControls(currentSheet), fields = controls.fields;
+      var go = buttons(currentSheet, ['Go'], 6);
       if (!go.length) {
-        var defaultButton = read(sheet, 'AXDefaultButton');
+        var defaultButton = read(currentSheet, 'AXDefaultButton');
         if (defaultButton && text(defaultButton, 'AXRole') === 'AXButton' &&
             controls.nodes.some(function (node) { return equal(node, defaultButton); })) go = [defaultButton];
       }
-      var keyboard = go.length === 0 && text(sheet, 'AXIdentifier') === 'GoToWindow';
+      var keyboard = go.length === 0 && text(currentSheet, 'AXIdentifier') === 'GoToWindow';
       if (fields.length !== 1 || !(go.length === 1 || keyboard) ||
-          (keyboard && text(sheet, 'AXRole') === 'AXSheet' && !text(sheet, 'AXSubrole') &&
+          (keyboard && text(currentSheet, 'AXRole') === 'AXSheet' && !text(currentSheet, 'AXSubrole') &&
            (text(fields[0], 'AXRole') !== 'AXTextField' || text(fields[0], 'AXIdentifier') !== 'PathTextField')))
         throw new Error('Finder folder sheet controls ambiguous');
       if (clock && clock.check) clock.check();
@@ -1936,7 +2008,7 @@ function nativeAX(state, clock) {
       if (code !== 0) throw Object.assign(new Error('Finder folder AXValue failed: ' + code), { code: code, attribute: 'AXValue' });
       var self = this;
       function beforeGo() {
-        if (!equal(self.folderSheet(window, app), sheet)) throw new Error('Finder folder sheet identity changed');
+        if (!finderPanelEqual(self.folderSheet(window, app), sheet)) throw new Error('Finder folder sheet identity changed');
         if (validate) validate();
         self.finderFolderGuard(app, window, sheet);
         if (validate) validate();

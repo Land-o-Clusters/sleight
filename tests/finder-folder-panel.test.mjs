@@ -45,8 +45,9 @@ function fixture({ role = 'AXWindow', subrole = 'AXDialog', parent = 'window', f
     app.AXFocusedWindow = measuredSheet ? window : panel; app.AXFocusedUIElement = field;
   };
   const dismiss = () => {
-    panel.gone = true; app.AXChildren = app.AXChildren.filter(w => w !== panel);
+    panel.gone = true; app.AXChildren = app.AXChildren.filter(w => w !== panel && !(w.AXRole === 'AXSheet' && w.AXParent === window));
     app.AXWindows = app.AXWindows.filter(w => w !== panel); window.AXSheets = [];
+    window.AXChildren = [];
     app.AXFocusedWindow = window; app.AXFocusedUIElement = window;
   };
   const native = v => v;
@@ -94,6 +95,11 @@ function fixture({ role = 'AXWindow', subrole = 'AXDialog', parent = 'window', f
     if (fail === 'retention-receipt' && event.stage === 'finder-panel-retained') throw new Error('receipt failure');
   } };
   const api = source.nativeAX({ setup: true, bundle: 'com.apple.finder' }, clock);
+  if (measuredSheet) {
+    panel.testFrame = { x: 100, y: 100, width: 500, height: 200 };
+    panel.AXWindowNumber = 71;
+    api.frame = element => element.testFrame || null;
+  }
   const request = { bundle: 'com.apple.finder', mode: 'folder', fixtureRoot: '/fixture', target: '/fixture/target', token: 'target' };
   // Paths are fixture strings; all AX reads, menu presses and writes use the native adapter.
   api.path = v => v || null;
@@ -125,6 +131,164 @@ function retainedPanel() {
   assert.equal(f.request.finderOwnership.folderPanel.reference, f.panel);
   return f;
 }
+
+function revendedSheet(f, changes = {}) {
+  const panel = { ...f.panel, testFrame: { ...f.panel.testFrame }, ...changes };
+  f.window.AXSheets = [panel]; f.window.AXChildren = [panel];
+  f.app.AXChildren = [panel]; f.field.AXParent = panel; f.close.AXParent = panel;
+  if (f.app.AXFocusedWindow === f.panel) f.app.AXFocusedWindow = panel;
+  return panel;
+}
+
+test('guard accepts newly vended sheet references in each inventory and focused ancestry', () => {
+  const f = retainedPanel();
+  revendedSheet(f);
+  f.setHook((element, name) => {
+    if (element === f.window && ['AXSheets', 'AXChildren'].includes(name))
+      f.window[name] = [{ ...f.panel, testFrame: { ...f.panel.testFrame } }];
+  });
+  f.api.finderFolderGuard(f.app, f.window, f.panel);
+  assert.equal(f.api.finderPanelExists(f.panel), true);
+});
+
+test('focus comparisons settle when every focused-sheet read returns a new reference', () => {
+  const f = retainedPanel();
+  revendedSheet(f);
+  let reads = 0;
+  f.setHook((element, name) => {
+    if (element === f.app && name === 'AXFocusedWindow') {
+      assert.ok(++reads < 12, 'focus revalidation must terminate');
+      f.app.AXFocusedWindow = { ...f.panel, testFrame: { ...f.panel.testFrame } };
+    }
+  });
+  f.api.finderFolderGuard(f.app, f.window, f.panel);
+  assert.equal(f.clock.now(), 0);
+});
+
+test('role inventory accepts the current sheet when AXWindows lists a re-vended reference', () => {
+  const f = retainedPanel(), panel = revendedSheet(f);
+  f.app.AXWindows.push(panel);
+  const entries = f.source.finderRoleInventory(f.app, f.api, f.request.finderOwnership, 'cleanup-inventory');
+  assert.deepEqual(Array.from(entries, entry => entry.reference), [f.owner, f.window]);
+});
+
+test('submission accepts a sheet re-vended after the path field write', () => {
+  const f = fixture({ measuredSheet: true });
+  const write = f.native.AXUIElementSetAttributeValue;
+  f.native.AXUIElementSetAttributeValue = (...args) => {
+    const code = write(...args); revendedSheet(f); f.panel.gone = true; return code;
+  };
+  assert.equal(f.open(), f.window);
+  assert.deepEqual(f.keys, [[36, true], [36, false]]);
+  assert.equal(f.api.finderPanelExists(f.panel), false);
+  assert.equal(f.recover(), 'closed retained fixture');
+});
+
+test('dismissal wait sees the re-vended sheet even when the original AX reference is invalid', () => {
+  const f = retainedPanel();
+  revendedSheet(f); f.panel.gone = true;
+  assert.equal(f.api.finderPanelExists(f.panel), true);
+  f.window.AXSheets = []; f.window.AXChildren = []; f.app.AXChildren = [];
+  assert.equal(f.api.finderPanelExists(f.panel), false);
+});
+
+test('cleanup accepts a re-vended sheet', () => {
+  const f = retainedPanel(); revendedSheet(f); f.panel.gone = true;
+  assert.equal(f.recover(), 'closed retained fixture');
+  assert.deepEqual(f.keys, [[53, true], [53, false]]);
+});
+
+for (const attribute of ['AXSheets', 'AXChildren', 'app-children', 'app-windows']) test(`second sheet in ${attribute} refuses guard, dismissal and cancellation`, () => {
+  const f = retainedPanel(), current = revendedSheet(f);
+  if (attribute === 'app-children') f.app.AXChildren = [current, { ...current }];
+  else if (attribute === 'app-windows') f.app.AXWindows.push(current, { ...current });
+  else f.window[attribute] = [current, { ...current }];
+  assert.throws(() => f.api.finderFolderGuard(f.app, f.window, f.panel), /sheet identity changed/);
+  assert.throws(() => f.api.finderPanelExists(f.panel), /sheet identity changed/);
+  assert.throws(f.recover, /sheet identity changed/);
+  assert.deepEqual(f.keys, []);
+});
+
+for (const change of ['identifier', 'parent', 'owner', 'number', 'missing-number', 'frame', 'missing-frame', 'subrole']) {
+  test(`re-vended sheet with changed ${change} refuses submission and cleanup`, () => {
+    const f = retainedPanel();
+    const changes = {
+      identifier: { AXIdentifier: 'ForeignPanel' }, parent: { AXParent: f.owner }, owner: { AXWindow: f.owner },
+      number: { AXWindowNumber: 72 }, 'missing-number': { AXWindowNumber: undefined },
+      frame: { testFrame: { ...f.panel.testFrame, x: 104 } }, 'missing-frame': { testFrame: null },
+      subrole: { AXSubrole: 'AXDialog' },
+    };
+    revendedSheet(f, changes[change]);
+    assert.throws(f.submit, /sheet identity changed/);
+    assert.throws(f.recover, /sheet identity changed/);
+    assert.deepEqual(f.writes, []); assert.deepEqual(f.keys, []);
+  });
+}
+
+test('frame tolerance stays anchored to the original sheet', () => {
+  const f = retainedPanel();
+  const panel = revendedSheet(f, { testFrame: { x: 103, y: 97, width: 503, height: 197 } });
+  f.api.finderFolderGuard(f.app, f.window, f.panel);
+  panel.testFrame.x = 106;
+  assert.throws(() => f.api.finderFolderGuard(f.app, f.window, f.panel), /sheet identity changed/);
+});
+
+for (const key of ['x', 'y', 'width', 'height']) test(`equal sheet reference cannot bypass ${key} frame drift`, () => {
+  const f = retainedPanel(); f.panel.testFrame[key] += 4;
+  assert.throws(f.submit, /sheet identity changed/);
+  assert.throws(f.recover, /sheet identity changed/);
+  assert.deepEqual(f.writes, []); assert.deepEqual(f.keys, []);
+});
+
+for (const foreign of ['second-sheet', 'foreign-parent']) test(`${foreign} appearing after field input blocks Return and cleanup`, () => {
+  const f = fixture({ measuredSheet: true });
+  const write = f.native.AXUIElementSetAttributeValue;
+  f.native.AXUIElementSetAttributeValue = (...args) => {
+    const code = write(...args), panel = revendedSheet(f);
+    if (foreign === 'second-sheet') f.window.AXSheets.push({ ...panel });
+    else { panel.AXParent = f.owner; panel.AXWindow = f.owner; }
+    return code;
+  };
+  assert.throws(f.open, /sheet identity changed/);
+  assert.throws(f.recover, /sheet identity changed/);
+  assert.equal(f.writes.length, 1); assert.deepEqual(f.keys, []);
+});
+
+test('discovery tolerates sheet references re-vended before retention', () => {
+  const f = fixture({ measuredSheet: true });
+  f.setHook((element, name) => {
+    if (element === f.window && ['AXSheets', 'AXChildren'].includes(name) && f.present())
+      f.window[name] = [{ ...f.panel, testFrame: { ...f.panel.testFrame } }];
+  });
+  assert.equal(f.open(), f.window);
+  assert.deepEqual(f.keys, [[36, true], [36, false]]);
+});
+
+test('submission waits for dismissal of the current sheet after reference replacement', () => {
+  const f = fixture({ measuredSheet: true });
+  const post = f.native.CGEventPostToPid;
+  let submitted = false;
+  f.native.CGEventPostToPid = (pid, event) => {
+    if (event.key !== 36) return post(pid, event);
+    if (event.down) {
+      submitted = true; revendedSheet(f); f.panel.gone = true;
+      f.window.AXDocument = '/fixture/target';
+    }
+  };
+  const wait = f.clock.wait;
+  f.clock.wait = ms => { wait(ms); if (submitted) f.dismiss(); };
+  assert.equal(f.open(), f.window);
+  assert.equal(f.clock.now(), 100);
+  assert.equal(f.api.finderPanelExists(f.panel), false);
+});
+
+test('cleanup resolves the current sheet for CloseButton after ineffective Escape', () => {
+  const f = fixture({ measuredSheet: true, fail: 'before-write', escapeNoop: true });
+  assert.throws(f.open, /setup failure/);
+  revendedSheet(f); f.panel.gone = true;
+  assert.equal(f.recover(), 'closed retained fixture');
+  assert.ok(f.actions.some(([target]) => target === f.close));
+});
 
 function focusSequence(f, sequence) {
   const reads = [];
