@@ -359,21 +359,30 @@ for (const mode of [undefined, '0']) test(`MTb capability advice survives dispat
 for (const mode of [undefined, '0']) test(`MT descriptions and scroll guidance, switch=${mode}`, async () => withMT(mode, async () => {
   const tools = browserTools('bfixture'), descriptions = Object.fromEntries(tools.map(t => [t.name, t.description]));
   for (const tool of tools) assert.ok(tool.description.length <= 2048);
+  // HO1 retains the waiting handoff invocation in both description variants.
+  assert.match(descriptions.browser_tabs, /handoff wait:true/);
+  // HO1 waits for the person before reading fresh.
+  assert.match(descriptions.browser_tabs, /here await (?:user's )?Continue, reread/);
+  // HO1 ends away turns and asks for a reply after sign-in.
+  assert.match(descriptions.browser_tabs, /away end turn, ask user to sign in and reply/);
+  // HO1 keeps the secret-request prohibition.
+  assert.match(descriptions.browser_tabs, /Never request secrets/);
   if (mode === '0') {
     assert.match(descriptions.browser_act, /Stops at boundaries or failure/);
     assert.match(descriptions.browser_fill, /Values are text, boolean, number or string array/);
-    assert.match(descriptions.browser_tabs, /Never acquire engine-path tabs/);
+    // HO1 preserves the legacy engine-tab boundary.
+    assert.match(descriptions.browser_tabs, /No engine-path tabs/);
   } else {
     assert.match(descriptions.browser_act, /navigates, opens a tab, raises a dialog, loads or closes the page, or reaches the settle cap/);
     assert.match(descriptions.browser_act, /later steps read "not reached"/);
     assert.match(descriptions.browser_fill, /text or a number for a textbox/);
     assert.match(descriptions.browser_fill, /virtual list/);
-    assert.match(descriptions.browser_tabs, /payment the user did not ask for/);
+    // HO1 keeps the unrequested-payment handoff.
+    assert.match(descriptions.browser_tabs, /Hand off unasked payments/);
     assert.match(descriptions.browser_fill, /true or false for a checkbox, switch or the radio option to choose/);
     assert.match(descriptions.browser_fill, /submit is an observed ref, only when the user asked for that submit/);
-    assert.match(descriptions.browser_tabs, /keep or hand off owned tabs/);
-    assert.match(descriptions.browser_tabs, /handoff wait:true waits for the user's Continue click and reads fresh/);
-    assert.match(descriptions.browser_tabs, /Never request secrets/);
+    // HO1 preserves all four owned-tab operations.
+    assert.match(descriptions.browser_tabs, /Owned tabs: list\/close\/keep\/handoff/);
   }
   assert.match(descriptions.browser_act, /Never blindly resend an uncertain submit\. click accepts modifier:cmd\/ctrl\./);
   assert.doesNotMatch(descriptions.browser_act, /modifier:[^.]*shift|modifier:[^.]*alt/);

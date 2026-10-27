@@ -50,6 +50,7 @@ for (const host of ['Claude Code', 'Codex']) for (const dedupeRules of [false, t
     assert.ok(received.find(msg => msg.id === 1).result.content.some(item => item.text?.includes('# Driving Mac apps')));
     assert.ok(received.find(msg => msg.id === 4).result.content.some(item => item.text?.includes('tree lines omitted')));
     const wire = JSON.stringify({ received, approvals });
+    // HO1 pins serialized replies with the shorter app_handoff description.
     assert.equal(createHash('sha256').update(wire).digest('hex'), baseline[host][String(dedupeRules)]);
   });
 }

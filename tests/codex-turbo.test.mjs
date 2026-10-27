@@ -263,6 +263,7 @@ test('under Claude Code the relay\'s traffic is unchanged by Codex turbo', async
   const transcript = normalize({ toClient: h.toClient, toServer, worker: h.events });
   const path = fixturePath(process.env.SLEIGHT_MT === '0' ? 'claude-code-parity.json' : 'claude-code-parity-mt.json');
   if (process.env.SLEIGHT_WRITE_PARITY === '1') writeFileSync(path, JSON.stringify(transcript, null, 1) + '\n');
+  // HO1 re-pins the shorter browser_tabs and app_handoff descriptions.
   assert.deepEqual(transcript, json(path));
 });
 

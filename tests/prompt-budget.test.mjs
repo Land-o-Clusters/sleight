@@ -30,8 +30,8 @@ const skillPath = new URL('../plugins/sleight/skills/drive-mac-apps/SKILL.md', i
 // p143 plus the cookie rule: default 1062 words, lean 517 words.
 // HT1R counts the two conditional hook refusals in both variants (+151 characters).
 // SM1R counts the new conditional managed-PATH refusal label (+54 characters).
-// HO1R counts shown-card and unavailable-host results plus accurate handoff descriptions.
-const leanRatio = 32899 / 45839;
+// HO1 pins the shortened default and lean handoff descriptions.
+const leanRatio = 32878 / 45814;
 const leanSkill = () => skillRules(skillPath, { SLEIGHT_PROMPT: 'lean' });
 
 test('hook guard refusals join the pinned notice inventory', { skip }, () => {
@@ -272,7 +272,7 @@ test('the launcher selects nosavestop without changing default, disabled or merg
 
 test('only lean selects shorter text and RS off keeps the original skill hash', { skip }, () => {
   assert.ok(leanSkill().length < skillRules(skillPath, {}).length);
-  // Runtime guard notices belong to the same pinned inventory as relay advice.
+  // HO1 changes descriptions only; the verified notices hash stays unchanged.
   assert.equal(hash(JSON.stringify([...noticeInventory(), ...sharedNoticeInventory(), ...taggedNoticeInventory()].map(e => e.text))), baseline.notices);
   for (const env of [{}, { SLEIGHT_PROMPT: 'default' }, { SLEIGHT_PROMPT: 'LEAN' }]) {
     assert.equal(hash(skillRules(skillPath, { ...env, SLEIGHT_RS: '0' })), baseline.skill);
@@ -428,6 +428,7 @@ test('AO prompt inventory counts browser_open and first-call guidance only under
 import { withMT } from './fixtures/mt-env.mjs';
 for (const mode of [undefined, '0']) test(`MT browser descriptions stay pinned inside existing budgets, switch=${mode}`, async () => withMT(mode, async () => {
   const tools = browserTools('bfixture');
+  // HO1 pins both catalogs after the handoff wording trim.
   assert.equal(hash(JSON.stringify(tools)), mode === '0' ? baseline.browserToolsLegacy : baseline.browserToolsMT);
   // p143 integration (fd1b screenshots/motion, fd3b waits, fd5b links/viewport, g2b download, g1b handoff, g4b PDF):
   // +363 characters for g3g export (path, format, bom, completeness receipt).
@@ -439,12 +440,13 @@ for (const mode of [undefined, '0']) test(`MT browser descriptions stay pinned i
   // G11F's cookie sentence adds 94 catalog characters in each mode.
   // TL1's max_steps schema adds 57 catalog characters; descriptions stay unchanged.
   assert.equal(tools.find(tool => tool.name === 'browser_act').description.length, mode === '0' ? 1034 : 1183);
-  // HO1R adds 62 catalog characters by default and 52 in the legacy variant.
-  assert.equal(JSON.stringify(tools).length, mode === '0' ? 6217 : 6509);
+  // HO1 saves 2 catalog bytes by default and 3 in the legacy variant versus 1.5.0.
+  assert.equal(JSON.stringify(tools).length, mode === '0' ? 6162 : 6445);
   const descriptions = tools.map(tool => tool.description).join('\n');
   for (const prompt of [undefined, 'lean']) {
     const combined = skillRules(skillPath, { SLEIGHT_PROMPT: prompt }).length + descriptions.length;
-    assert.equal(combined, (prompt === 'lean' ? 6332 : 9959) - (mode === '0' ? 290 : 0));
+    // HO1 pins the combined skill and description sizes in both MT variants.
+    assert.equal(combined, (prompt === 'lean' ? 6268 : 9895) - (mode === '0' ? 281 : 0));
   }
   assert.ok(JSON.stringify(tools).length < 8000);
   for (const tool of tools) assert.ok(tool.description.length <= 2048, tool.name);

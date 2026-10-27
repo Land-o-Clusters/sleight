@@ -396,7 +396,7 @@
      },
      {
       "name": "browser_tabs",
-      "description": "List, close, keep or hand off owned tabs. For sign-in or a code, handoff wait:true waits for the user's Continue click and reads fresh. Never request secrets. Hand off a payment the user did not ask for.",
+      "description": "Owned tabs: list/close/keep/handoff. Sign-in/code: handoff wait:true; here await user's Continue, reread; away end turn, ask user to sign in and reply. Never request secrets. Hand off unasked payments.",
       "inputSchema": {
        "type": "object",
        "properties": {
@@ -428,7 +428,7 @@
      },
      {
       "name": "app_handoff",
-      "description": "Pause the current native app for sign-in. Wait for the person to click Continue, then acquire and read the same app fresh, including its new window. Never request passwords or codes. Cancel keeps the app open.",
+      "description": "Pause native sign-in. Present: wait for the user's Continue, read same app fresh, new windows too. Away: end turn, ask user to sign in and reply. Never request passwords/codes. Cancel keeps app open.",
       "inputSchema": {
        "type": "object",
        "properties": {},

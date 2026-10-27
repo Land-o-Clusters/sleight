@@ -57,8 +57,8 @@ export function browserTools(browser) {
       inputSchema: object({ tab, fields: { type: 'array', minItems: 1, maxItems: 60, items: object({ ref,
         value: { type: ['string', 'boolean', 'number', 'array'], items: text, maxItems: 100 } }, ['ref', 'value']) }, submit: ref }, ['tab', 'fields']) },
     { name: 'browser_tabs', description: (process.env.SLEIGHT_MT !== '0'
-      ? 'List, close, keep or hand off owned tabs. For sign-in or a code, handoff wait:true waits for Continue and reads fresh when the user is present; away, end the turn and ask them to sign in and reply. Never request secrets. Hand off a payment the user did not ask for.'
-      : 'List, close, keep or hand off owned tabs. handoff wait:true waits for Continue and reads fresh when present; away, end the turn and ask the user to sign in and reply. Never request secrets. Never acquire engine-path tabs.'),
+      ? "Owned tabs: list/close/keep/handoff. Sign-in/code: handoff wait:true; here await user's Continue, reread; away end turn, ask user to sign in and reply. Never request secrets. Hand off unasked payments."
+      : "Owned tabs: list/close/keep; handoff wait:true: here await Continue, reread; away end turn, ask user to sign in and reply. Never request secrets. No engine-path tabs."),
       inputSchema: object({ do: { type: 'string', enum: ['list', 'close', 'keep', 'handoff'] }, tab, wait: { type: 'boolean' } }, ['do']) },
   ].map(tool => structuredClone(tool));
 }

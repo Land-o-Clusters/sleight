@@ -2,19 +2,38 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { PassThrough } from 'node:stream';
-import { createRelay } from '../plugins/sleight/lib/relay.mjs';
+import { createRelay, promptTool } from '../plugins/sleight/lib/relay.mjs';
 import { localToolDefinitions } from '../plugins/sleight/lib/launch.mjs';
 import { browserTools } from '../plugins/sleight/lib/direct-browser/tools.mjs';
+import { NATIVE_HANDOFF_TOOL } from '../plugins/sleight/lib/native-handoff.mjs';
 import { withMT } from './fixtures/mt-env.mjs';
 
 for (const mode of [undefined, '0']) test(`Touch and cookie guidance have a measured description budget, switch=${mode}`, async () => withMT(mode, async () => {
   const tools = browserTools('bfixture'), act = tools.find(tool => tool.name === 'browser_act');
   assert.equal(act.description.length, mode === '0' ? 1034 : 1183);
-  assert.equal(tools.map(tool => tool.description).join('\n').length, mode === '0' ? 2457 : 2737);
+  // HO1 keeps both browser catalogs below their 1.5.0 description budgets.
+  assert.equal(tools.map(tool => tool.description).join('\n').length, mode === '0' ? 2454 : 2735);
+  // HO1 pins each handoff description below its 1.5.0 original (169/203 bytes).
+  assert.ok(Buffer.byteLength(tools.at(-1).description) <= (mode === '0' ? 169 : 203));
+  assert.equal(Buffer.byteLength(tools.at(-1).description), mode === '0' ? 166 : 201);
   assert.match(act.description, /paste\(ref,text\).*Electron refuses paste/);
   assert.match(act.description, /touch emulates a touch layout; clicks stay mouse clicks/);
   assert.match(act.description, /empty resets all/);
 }));
+
+test('HO1 native handoff wording preserves both presence flows within the original byte budgets', () => {
+  for (const prompt of [undefined, 'lean']) {
+    const description = promptTool(NATIVE_HANDOFF_TOOL, prompt).description;
+    // HO1 pins default/lean bytes within the 1.5.0 originals (209/140 bytes).
+    assert.ok(Buffer.byteLength(description) <= (prompt === 'lean' ? 140 : 209));
+    assert.equal(Buffer.byteLength(description), prompt === 'lean' ? 140 : 199);
+    assert.match(description, /(?:Present: wait for the|Here await) user's Continue[;,] (?:read same app fresh|reread app)/);
+    assert.match(description, /Away: end turn, ask user to sign in and reply/);
+    assert.match(description, /Never request passwords\/codes/);
+    assert.match(description, /Cancel keeps app open/);
+    if (prompt !== 'lean') assert.match(description, /new windows too/);
+  }
+});
 
 // Engine entry-point fixture reproducing the 2026-10-16 trace length (3,511 after batching).
 const engine = readFileSync(new URL('fixtures/engine-js-description.txt', import.meta.url), 'utf8').trimEnd();

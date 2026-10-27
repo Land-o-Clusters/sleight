@@ -495,7 +495,7 @@ export function batchingDescription(description, variant = true, prompt, windows
 const NATIVE_DENIED = /* lean notice */ 'Native access stopped: use the handle returned by cua.getApp directly, after a standalone native app read. No native lease for this browser call.';
 // SLEIGHT_PROMPT=lean descriptions of the tools sleight adds. Each tool keeps its default text.
 const LEAN_TOOL_DESCRIPTIONS = {
-  app_handoff: 'Pause native sign-in. Present: Continue reads same app fresh. Away: end turn, ask user to sign in and reply. Never request passwords/codes. Cancel keeps it open.',
+  app_handoff: "Here await user's Continue; reread app. Away: end turn, ask user to sign in and reply. Never request passwords/codes. Cancel keeps app open.",
   document_scope: 'Ask the user to approve the last observed document or window for this session, after a js call with only let app = await cua.getApp("App") (or { windowId: 123 }). Actions need an approved matching Window and URL; window changes stop them. A mistake guard, not isolation from arbitrary JavaScript.',
   review_changes: 'Shows this session\'s saved-file changes. Before editing, read the window with a standalone cua.getApp call. op "list": each touched document\'s diff or size/date summary; op "review": the user picks Keep, Undo or Later per document. Only the user can decide. Undo restores the session backup, refusing if the file changed after the last agent action; unsaved buffers aren\'t restored. Backups end with the session.',
   flow_exception: 'Ask the user to allow, once, the exact call a flow rule last stopped. No decision arguments. Retry the identical call after approval; never work around a refusal.',
