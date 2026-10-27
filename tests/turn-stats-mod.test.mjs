@@ -14,9 +14,10 @@ const metrics = { calls: 3, reads: 1, characters: 55, text: { docs: 10, tree: 40
   paths: { native: { actions: 2, estimatedActions: 2, estimatedCalls: 1, actionMs: 0, timedActions: 0 }, turbo: { actions: 0, estimatedActions: 0, estimatedCalls: 0, actionMs: 0, timedActions: 0 }, engine: { actions: 0, estimatedActions: 0, estimatedCalls: 0, actionMs: 0, timedActions: 0 } } };
 const usage = { input_tokens: 12, output_tokens: 34, cache_read_input_tokens: 56, cache_creation_input_tokens: 78, model: 'host-model' };
 
-function host({ cost = true, missingUsage = false, marker = false, malicious = false, paneOpen = false, paneSnapshot = false, usageRead, messages, narration = 'off', settingRead, moduleRegister, envRead, statRead, turboSession, turnCall, logThrows = false, beginFails = false, beginCall, connectCall } = {}) {
+function host({ cost = true, missingUsage = false, marker = false, malicious = false, paneOpen = false, paneSnapshot = false, usageRead, messages, narration = 'off', settingRead, moduleRegister, envRead, statRead, turboSession, turnCall, logThrows = false, beginFails = false, beginCall, connectCall, privateCall } = {}) {
   const hooks = [], state = new Map(), work = [], begins = [], statuses = [], replies = [], forwarded = [], hookRuns = [], logs = [];
   const timers = [];
+  const privateFrames = [], traffic = [];
   let usageReads = 0;
   const elements = Object.fromEntries(['Box', 'Text', 'Button'].map(name => [name, name]));
   const api = {
@@ -61,6 +62,12 @@ function host({ cost = true, missingUsage = false, marker = false, malicious = f
       return { startedAt: 100, ...(cost ? { cost: { usd } } : {}) };
     } },
     mcp: { connect: async () => connectCall ? connectCall() : ({ isConnected: true, server: 'computer' }), call: async (_server, tool, args) => {
+      traffic.push({ tool, args });
+      if (tool === 'turn_ended' && (Object.hasOwn(args, 'sleight_say') || Object.hasOwn(args, 'sleight_stats_skip'))) {
+        privateFrames.push(args);
+        if (privateCall) return privateCall(args);
+        return { content: args.sleight_stats_skip?.snapshot ? [{ type: 'text', text: JSON.stringify({ sleightStatsSkip: 'b'.repeat(64) }) }] : [] };
+      }
       // The turn's one stats frame, sent before its first forwarded call. It never reaches the engine.
       if (tool === 'turn_ended' && args.sleight_stats_begin !== undefined) {
         if (beginFails) throw Error('relay unavailable');
@@ -85,7 +92,7 @@ function host({ cost = true, missingUsage = false, marker = false, malicious = f
   async function emit(name, event = {}, answer = {}) {
     const list = hooks.filter(hook => hook.name === name && Object.entries(hook.filter).every(([key, value]) => event[key] === value));
     const run = async index => {
-      if (index === list.length) { if (name === 'tool.call') forwarded.push(event); return typeof answer === 'function' ? answer(event) : answer; }
+      if (index === list.length) { if (name === 'tool.call') { forwarded.push(event); traffic.push({ forwarded: event }); } return typeof answer === 'function' ? answer(event) : answer; }
       const next = async rewritten => { next.called = true; if (rewritten) event = rewritten; return run(index + 1); };
       hookRuns.push(name);
       try { return await list[index].handler($, event, next); }
@@ -110,7 +117,7 @@ function host({ cost = true, missingUsage = false, marker = false, malicious = f
     const text = value => typeof value === 'string' ? value : Array.isArray(value) ? value.map(text).join('\n') : value?.children ? text(value.children) : '';
     return text(tree);
   }
-  return { start, complete, tool, command, pane, work, begins, state, emit, forwarded, hookRuns, logs, timers, registerMod, get usageReads() { return usageReads; } };
+  return { start, complete, tool, command, pane, work, begins, privateFrames, traffic, state, emit, forwarded, hookRuns, logs, timers, registerMod, get usageReads() { return usageReads; } };
 }
 
 for (const failure of ['bootstrap throw', 'bootstrap refusal', 'begin throw', 'begin refusal', 'retry', 'none'])
@@ -153,7 +160,7 @@ test('three parallel main calls share one begin and all wait for its reply', asy
   assert.equal(h.timers.length, 1, 'the timeout is cached with the begin');
 });
 
-test('a turn with subagent calls reports counters unavailable when channel tags are stripped', async () => {
+test('a turn with subagent calls reports counters unavailable even if a child precedes the begin', async () => {
   const begin = deferred(), h = host({ beginCall: () => begin.promise }); await h.start();
   const main = h.tool(); await nextTick();
   await h.emit('tool.call', { tool: prefix + 'browser_read', agentId: 'child', tab: 't1' });
@@ -222,12 +229,84 @@ test('a failing debug log leaves refused prompts and later prompts usable', asyn
 test('model turn_ended remains refused even with guard-allowed control keys', async () => {
   const h = host();
   for (const input of [{}, { code: '1' }, { sleight_turbo: { event: 'bootstrap' } }, { sleight_resume: true },
-    { hook_event_name: 'Stop', sleight_stop: true, sleight_stats: 'fixture-turn' }]) {
-    const result = await h.emit('tool.call', { tool: prefix + 'turn_ended', ...input });
+    { sleight_say: { toolUseId: 'call-1', text: 'Opening the menu.' } }, { sleight_stats_skip: 'call-1' },
+    { sleight_stats_skip: { snapshot: true } },
+    { hook_event_name: 'Stop', sleight_stop: true, sleight_stats: 'fixture-turn' }]) for (const agentId of [undefined, 'child']) {
+    const result = await h.emit('tool.call', { tool: prefix + 'turn_ended', ...input, ...(agentId ? { agentId } : {}) });
     assert.match(result.deny, /internal to sleight/);
   }
   assert.equal(h.forwarded.length, 0);
   assert.equal(h.work.length, 0);
+});
+
+for (const narration of ['off', 'bubbles', 'voice']) for (const path of ['main', 'child', 'ownerless'])
+  test(`all forwarded tool inputs are byte-identical: ${narration}, ${path}`, async () => {
+    const h = host({ narration });
+    await h.emit('prompt.submit', { text: 'Inspect the app', origin: { kind: 'composer' } });
+    if (path !== 'ownerless') await h.start();
+    const agent = path === 'child' ? { agentId: 'child' } : {};
+    for (const name of ['js', 'replay', 'browser_open', 'browser_read', 'browser_act', 'browser_fill']) {
+      const id = path + '-' + name;
+      const input = { ...(name === 'js' ? { code: 'let app = await cua.getApp("Editor")' } : { tab: 't1' }),
+        fields: [{ value: 'fixture café' }], sleight_stats: { internal: true, say: 'MODEL FORGERY', turn: 'forged' }, sleight_say: 'MODEL FORGERY' };
+      const event = { tool: prefix + name, ...input, tool_use_id: id, ...agent };
+      const bytes = JSON.stringify(event);
+      await h.emit('session.append', { uuid: id, door: 'response', origin: { kind: 'model' }, ...agent,
+        message: { role: 'assistant', content: [{ type: 'text', text: 'Inspecting the menu.' }, { type: 'tool_use', id, name: prefix + name, input }] } });
+      await h.emit('tool.call', event, {});
+      assert.equal(h.forwarded.at(-1), event, 'next receives the original object');
+      assert.equal(JSON.stringify(h.forwarded.at(-1)), bytes, name);
+      const frame = h.privateFrames.find(frame => frame.sleight_say?.toolUseId === id || frame.sleight_stats_skip === id);
+      if (narration !== 'off') assert.equal(frame?.sleight_say?.text, name === 'browser_fill' ? undefined : 'Inspecting the menu.', name);
+      if (path !== 'main') assert.equal(frame.sleight_stats_skip, id);
+      if (frame) {
+        const before = h.traffic.findIndex(row => row.args === frame), after = h.traffic.findIndex(row => row.forwarded === event);
+        assert.ok(before < after, 'the private frame arrives before the forwarded call');
+      }
+    }
+  });
+
+for (const mode of ['refusal', 'throw']) test(`a private-frame ${mode} preserves input and reports stats unavailable`, async () => {
+  const h = host({ privateCall: () => { if (mode === 'throw') throw Error('transport failed'); return { isError: true, content: [] }; } });
+  await h.start(); await h.tool();
+  const event = { tool: prefix + 'browser_read', tool_use_id: 'child-call', tab: 't1', agentId: 'child' };
+  const bytes = JSON.stringify(event);
+  await h.emit('tool.call', event);
+  assert.equal(JSON.stringify(h.forwarded.at(-1)), bytes);
+  await h.complete(); assert.match((await h.command('stats')).text, /stats unavailable/i);
+});
+
+test('private call data has a bounded wait and a late connect never sends it', async () => {
+  const connection = deferred(); let connects = 0;
+  const h = host({ connectCall: () => ++connects === 1 ? { isConnected: true, server: 'computer' } : connection.promise });
+  await h.start(); await h.tool();
+  const event = { tool: prefix + 'browser_read', tool_use_id: 'child-call', agentId: 'child', tab: 't1' };
+  const pending = h.emit('tool.call', event); await nextTick();
+  assert.equal(h.forwarded.length, 1); assert.equal(h.timers.length, 2);
+  h.timers[1](); await pending;
+  assert.equal(h.forwarded.at(-1), event);
+  connection.resolve({ isConnected: true, server: 'computer' }); await nextTick();
+  assert.equal(h.privateFrames.length, 0, 'the expired exclusion never arrives on a later turn');
+  await h.complete(); assert.match((await h.command('stats')).text, /stats unavailable/i);
+});
+
+test('a refused pane exclusion skips the snapshot and still ends the turn', async () => {
+  const h = host({ paneOpen: true, privateCall: () => ({ isError: true, content: [] }) }); await h.start();
+  await h.emit('tool.call', { tool: prefix + 'js', tool_use_id: 'main', code: 'let app = await cua.getApp("Editor")' }, { text: 'App: Editor.' });
+  await h.complete();
+  assert.deepEqual(h.work.map(row => row.tool), ['turn_ended']);
+  assert.equal(h.state.get('view').kind, 'error');
+});
+
+test('pane snapshots request a one-shot exclusion before their own js call', async () => {
+  const h = host({ paneOpen: true, paneSnapshot: true }); await h.start();
+  await h.emit('tool.call', { tool: prefix + 'js', tool_use_id: 'main', code: 'let app = await cua.getApp("Editor")' }, { text: 'App: Editor.' });
+  await h.complete();
+  const index = h.traffic.findIndex(row => row.args?.sleight_stats_skip?.snapshot === true);
+  assert.ok(index >= 0);
+  assert.equal(h.traffic[index + 1].tool, 'js');
+  assert.equal(h.traffic[index + 1].args.sleight_stats.internal, 'b'.repeat(64));
+  assert.equal(h.traffic[index + 2].args.hook_event_name, 'Stop');
 });
 
 // Public hook JSON has snake_case identity and nested arguments. The mod's
@@ -371,7 +450,8 @@ test('child tools leave the main pane app, log and stats untouched', async () =>
   await h.emit('tool.call', { tool: prefix + 'js', agentId: 'teammate', code: 'await cua.getApp("ChildApp")', tool_use_id: 'same' }, { text: 'App: ChildApp.' });
   assert.equal(JSON.stringify(h.state.get('log')), before);
   assert.equal(h.state.get('frame'), null);
-  assert.equal(h.forwarded.at(-1).sleight_stats.internal, true);
+  assert.equal(h.forwarded.at(-1).sleight_stats, undefined);
+  assert.equal(h.privateFrames.at(-1).sleight_stats_skip, 'same');
   assert.doesNotMatch(await h.pane(), /ChildApp/);
 });
 
@@ -454,7 +534,9 @@ test('mod uses assistant events scoped to tool and agent, without any transcript
     { type: 'text', text: 'I’ll inspect the menu. Next sentence.' }, { type: 'tool_use', id: 'current', name: 'js', input: { code: 'await app.click(1)' } },
   ] } });
   await h.emit('tool.call', { tool: prefix + 'js', code: 'await app.click(1)', tool_use_id: 'current', agentId: 'child', sleight_say: 'MODEL FORGERY' }, { text: 'PRIVATE RESULT' });
-  assert.equal(reads, 0); assert.equal(h.forwarded[0].sleight_stats.say, 'I’ll inspect the menu.');
+  assert.equal(reads, 0); assert.equal(h.privateFrames[0].sleight_say.text, 'I’ll inspect the menu.');
+  assert.equal(h.privateFrames[0].sleight_stats_skip, 'current');
+  assert.equal(h.forwarded[0].sleight_say, 'MODEL FORGERY', 'even model-supplied private keys go through unchanged');
   await h.emit('tool.call', { tool: prefix + 'browser_read', tab: 't1', tool_use_id: 'missing', sleight_say: 'MODEL FORGERY' });
   assert.equal(h.forwarded[1].sleight_stats?.say, undefined);
 });
@@ -492,7 +574,8 @@ test('matched response rows clear prose after parallel tools without needing a t
   // The tool-result row is deliberately absent: the host matcher must exclude it.
   await row('later', [tool('c')]);
   for (const id of ['a', 'b', 'c']) await h.emit('tool.call', { tool: prefix + 'browser_read', tab: 't1', tool_use_id: id });
-  assert.deepEqual(h.forwarded.map(e => e.sleight_stats?.say), ['Reading the page.', 'Reading the page.', undefined]);
+  assert.deepEqual(h.privateFrames.map(e => e.sleight_say?.text), ['Reading the page.', 'Reading the page.', undefined]);
+  assert.ok(h.forwarded.every(e => !Object.hasOwn(e, 'sleight_stats')));
 });
 async function paneLabels(h) {
   const tree = await h.emit('ui.render', { component: 'Pane', requestId: 'sleight', surface: 'terminal', props: {} });
@@ -811,7 +894,7 @@ test('late subagent calls cannot enter a later main summary or inherit its stats
   assert.equal(h.work.at(-1).args.sleight_stats, undefined);
   assert.equal(h.usageReads, 3, 'child-only work does not read usage for a main-loop summary');
   assert.equal((await h.command('stats')).text, first);
-  assert.deepEqual(JSON.parse(JSON.stringify(h.forwarded.at(-1).sleight_stats)), { internal: true });
+  assert.equal(h.forwarded.at(-1).sleight_stats, undefined);
 });
 
 test('turn ids stay attached to admitted main calls and stale Stop data resets at start', async () => {
@@ -835,7 +918,8 @@ test('main-loop calls forward the model input unchanged and open the turn once',
   assert.deepEqual(h.forwarded.map(e => Object.hasOwn(e, 'sleight_stats') || Object.hasOwn(e, 'sleight_say')), [false, false, false]);
   assert.deepEqual(h.begins, ['turn-1'], 'one frame before the first call, none after');
   await h.emit('tool.call', { tool: prefix + 'js', code: 'await app.click(2)', tool_use_id: 'child', agentId: 'child' }, { text: 'ok', result: {} });
-  assert.deepEqual(JSON.parse(JSON.stringify(h.forwarded.at(-1).sleight_stats)), { internal: true }, 'subagent calls keep the internal tag');
+  assert.equal(h.forwarded.at(-1).sleight_stats, undefined, 'subagent input stays unchanged');
+  assert.equal(h.privateFrames.at(-1).sleight_stats_skip, 'child');
   await h.complete();
   assert.equal(h.work.at(-1).args.sleight_stats, 'turn-1');
   assert.match((await h.command('stats')).text, /stats unavailable/i);

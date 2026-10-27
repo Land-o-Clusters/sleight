@@ -57,12 +57,14 @@ async function beginOwnedWarm(h) {
   h.send({ method: 'notifications/initialized' }); await tick();
   return h.sent.find(m => m.params?.arguments?.title === 'Prepare sleight REPL');
 }
-test('a stats begin leaves the docs fixture reply byte-identical, even with private metadata', async t => {
+test('private mod frames leave the docs fixture reply byte-identical, even with private metadata', async t => {
   const replies = [];
-  for (const frame of [false, true]) {
+  for (const frame of [undefined, { sleight_stats_begin: 'turn-1' },
+    { sleight_say: { toolUseId: 'toolu_first', text: 'Opening the app.' } },
+    { sleight_stats_skip: 'toolu_child' }, { sleight_stats_skip: { snapshot: true } }]) {
     const h = harness(t, { warmRepl: true });
     if (frame) h.send({ id: 'stats', method: 'tools/call', params: { name: 'turn_ended',
-      arguments: { sleight_stats_begin: 'turn-1' }, _meta: { privateFrame: true } } });
+      arguments: frame, _meta: { privateFrame: true } } });
     const warm = await beginOwnedWarm(h);
     h.reply(warm.id, [text(ownedDocs), text('[sleight:guard-ready]\n')]); await tick();
     h.call(1, 'await cua.getApp("Example")'); h.reply(1, [text('ordinary output')]); await tick();
@@ -71,7 +73,7 @@ test('a stats begin leaves the docs fixture reply byte-identical, even with priv
     assert.equal(ownedDocs.length - delivered.text.length, 201);
     replies.push(Buffer.from(JSON.stringify(reply)));
   }
-  assert.deepEqual(replies[1], replies[0]);
+  for (const reply of replies) assert.deepEqual(reply, replies[0]);
 });
 test('only the isolated app-free warmup projects the known native fence, once', async t => {
   const h = harness(t, { warmRepl: true });
