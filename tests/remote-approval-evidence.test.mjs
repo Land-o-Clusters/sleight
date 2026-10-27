@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtempSync, readFileSync, readdirSync, statSync, writeFileSync, mkdirSync, realpathSync } from 'node:fs';
+import { mkdtempSync, readFileSync, readdirSync, statSync, writeFileSync, mkdirSync, realpathSync, existsSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { registerTemp } from '../scripts/temp-leftovers.mjs';
@@ -12,6 +12,106 @@ const notice = '"TextEdit" needs approval on the Mac. Ask the user to reply: all
 const tool = (t, input = { code: 'var app = await cua.getApp("TextEdit")' }) => ({ type: 'assistant', t,
   message: { id: 'm1', content: [{ type: 'tool_use', id: 't1', name: 'mcp__plugin_sleight_computer__js', input }] } });
 const result = (t, text) => ({ type: 'user', t, message: { content: [{ type: 'tool_result', tool_use_id: 't1', content: text }] } });
+
+for (const echo of [false, true]) test(`wrong-app notice fails with assistant echo ${echo}`, () => {
+  const rows = [tool(0), result(500, '"Mail" needs approval on the Mac. Ask')];
+  if (echo) rows.push({ type: 'assistant', t: 600, message: { content: [{ type: 'text', text: notice }] } });
+  const timing = evidence.noticeTiming(rows);
+  assert.equal(timing.noticeAt, null);
+  assert.equal(timing.noticeResult, null);
+  assert.equal(timing.noticeMs, null);
+  const combined = evidence.transcriptRows(rows).map(row => row.text ?? '').join('\n');
+  assert.equal(live.gradeRemote({ notice: { ...timing, text: combined } }).checks.notice, false);
+});
+
+test('grade uses time and text from the matching result even when combined text and time disagree', () => {
+  const rows = [tool(0), result(500, '"Mail" needs approval on the Mac. Ask'),
+    result(44000, [{ type: 'text', text: 'Other output' }, { type: 'text', text: notice }])];
+  const timing = evidence.noticeTiming(rows);
+  assert.equal(timing.noticeAt, 44000);
+  assert.equal(timing.noticeResult.t, 44000);
+  const graded = live.gradeRemote({ notice: { ...timing, noticeAt: 90000, text: 'unrelated assistant text' } });
+  assert.equal(graded.checks.notice, true);
+  assert.equal(graded.noticeMs, 44000);
+  timing.noticeResult.text = '"Mail" needs approval on the Mac. Ask';
+  assert.equal(live.gradeRemote({ notice: { ...timing, text: notice } }).checks.notice, false);
+});
+
+test('evidence caps inputs and assistant text at 4 KiB and all transcript rows at 400', () => {
+  const rows = evidence.transcriptRows([tool(0, { code: '🙂'.repeat(50000) }), result(1, '🙂'.repeat(50000)),
+    { type: 'assistant', t: 2, message: { content: Array.from({ length: 500 }, () => ({ type: 'text', text: '🙂'.repeat(2000) })) } }]);
+  assert.equal(rows.length, 400);
+  assert.deepEqual(rows.at(-1), { type: 'truncated', truncated: 103 });
+  for (const row of rows.slice(0, -1)) {
+    assert.ok(Buffer.byteLength(row.input ?? row.text) <= 4096);
+    assert.ok(!(row.input ?? row.text).includes('\uFFFD'));
+  }
+  assert.equal(evidence.transcriptRows(Array.from({ length: 400 }, (_, i) => tool(i))).length, 400);
+});
+
+for (const stage of ['snapshot', 'write', 'rename']) test(`evidence ${stage} failure is recorded once and never escapes save or flush`, () => {
+  const diagnostics = evidence.createServerEvidence();
+  let attempts = 0, failures = 0;
+  const fail = () => { attempts++; throw Object.assign(Error('private path must not be logged'), { code: 'ENOSPC' }); };
+  if (stage === 'snapshot') diagnostics.snapshot = fail;
+  const saver = evidence.createEvidenceSaver({ destination: '/fixture/diagnostics', diagnostics,
+    write: stage === 'write' ? fail : () => {}, rename: stage === 'rename' ? fail : () => {},
+    onFailure: row => { failures++; assert.deepEqual(row, { count: 1, code: 'ENOSPC' }); throw Error('observer failed'); } });
+  assert.doesNotThrow(() => { saver.save(); saver.save(); saver.flush(); saver.flush(); });
+  assert.equal(attempts, 1);
+  assert.equal(failures, 1);
+  if (stage !== 'snapshot') assert.deepEqual(diagnostics.snapshot().evidenceWriteError, { count: 1, code: 'ENOSPC' });
+});
+
+test('evidence snapshots run once per 250 ms with one final dirty flush', () => {
+  let clock = 0, pending, cancelled = 0, snapshots = 0, writes = 0, renames = 0, unrefs = 0;
+  const saver = evidence.createEvidenceSaver({ destination: '/fixture/diagnostics', now: () => clock,
+    diagnostics: { snapshot: () => { snapshots++; return {}; } },
+    write: () => { writes++; }, rename: () => { renames++; },
+    schedule: (callback, delay) => { assert.equal(delay, 249); pending = callback; return { unref() { unrefs++; } }; },
+    cancel: () => { cancelled++; pending = undefined; } });
+  saver.save();
+  clock = 1;
+  for (let i = 0; i < 2000; i++) saver.save();
+  assert.equal(snapshots, 1); assert.equal(unrefs, 1);
+  clock = 250; const callback = pending; pending = undefined; callback();
+  assert.equal(snapshots, 2);
+  clock = 251; saver.save(); saver.flush();
+  assert.equal(snapshots, 3); assert.equal(cancelled, 1);
+  saver.flush();
+  assert.equal(writes, 3); assert.equal(renames, 3); assert.equal(pending, undefined);
+});
+
+test('hold abort after prepare removes only the unused owned bank', async t => {
+  const bank = registerTemp(t, realpathSync(mkdtempSync(join(tmpdir(), 'sleight-ra1-abort-'))));
+  writeFileSync(join(bank, 'note.txt'), 'owned fixture');
+  let prepared = false, unlocked = false;
+  const io = { now: () => new Date('2026-10-26T00:00:00Z'),
+    hold: async () => { if (prepared) throw Error('hold aborted'); },
+    lock: async () => async () => { unlocked = true; }, login: async () => {}, prewarm: async () => ({ status: 'ready' }),
+    prepare: async () => { prepared = true; return { bank }; },
+    fixture: () => assert.fail('abort opened fixture'), session: () => assert.fail('abort launched session'),
+    cleanup: () => assert.fail('unused bank requested app cleanup'), evidence: async () => '/fixture/evidence', write: () => {} };
+  const report = await live.runRemoteApproval({ ownerAway: true }, io);
+  assert.equal(report.error, 'hold aborted'); assert.equal(report.passed, false);
+  assert.equal(report.cleanup, true); assert.equal(unlocked, true); assert.equal(existsSync(bank), false);
+});
+
+for (const asyncWrite of [false, true]) test(`report output failure returns a failed report after unlock, async ${asyncWrite}`, async () => {
+  let unlocked = false;
+  const turns = [{ ...evidence.noticeTiming([tool(0), result(500, notice)]), grants: [] }, { grants: [] },
+    { complete: true, grants: ['com.apple.TextEdit'] }, { text: 'allow TextEdit, Mail' }];
+  const fail = () => { assert.equal(unlocked, true); throw Error('EEXIST'); };
+  const io = { now: () => new Date('2026-10-26T00:00:00Z'), hold: async () => {},
+    lock: async () => async () => { unlocked = true; }, login: async () => {}, prewarm: async () => ({ status: 'ready' }),
+    prepare: async () => ({ bank: '/fixture/bank', mail: 'Mail' }), fixture: async () => {},
+    session: async () => ({ submit: async () => turns.shift(), close: async () => ({ clean: true }) }),
+    evidence: async () => '/fixture/evidence', cleanup: async () => true,
+    write: asyncWrite ? async () => fail() : fail };
+  const report = await live.runRemoteApproval({ ownerAway: true }, io);
+  assert.equal(report.passed, false); assert.equal(report.outputError, 'EEXIST');
+  assert.equal(report.collected, true); assert.equal(report.cleanup, true);
+});
 
 test('evidence selects transcript fields, scrubs before byte limits, and writes private files', t => {
   const base = registerTemp(t, realpathSync(mkdtempSync(join(tmpdir(), 'sleight-ra1-evidence-'))));
@@ -87,17 +187,26 @@ test('trace attribution reports measured phases and leaves missing phases unknow
 });
 
 // This runs the real polling/receipt code with a synthetic PTY and transcript, never Claude or an app.
-for (const [firstAt, noticeAt, pass] of [[0, 44000, true], [0, 46000, false], [100000, 144000, true]]) test(`first notice at ${noticeAt} ms: ${pass ? 'accepted' : 'deadline'}`, async t => {
+for (const [firstAt, noticeAt, pass, wrong = false, complete = false] of [[0, 44000, true], [0, 46000, false],
+  [100000, 144000, true], [0, 46000, false, true], [0, 44000, true, false, true]]) test(`first notice at ${noticeAt} ms: ${pass ? 'accepted' : 'deadline'}, wrong ${wrong}, complete ${complete}`, async t => {
   const home = registerTemp(t, realpathSync(mkdtempSync(join(tmpdir(), 'sleight-ra1-poll-'))));
   const login = live.remoteLoginPlan({ home, env: { PATH: '/usr/bin' } });
-  let now = 0, finish, plan, transcript, turn, nonce, submitted = false;
+  let now = 0, finish, plan, transcript, turn, nonce, submitted = false, wrongWritten = false;
   const closed = new Promise(r => { finish = r; });
   const session = await live.realSession({ bank: join(home, 'bank'), token: 'owned-fixture' }, {
     login, hold: async () => {}, signal: new AbortController().signal, now: () => now,
     wait: async ms => {
       if (submitted) now += ms;
+      if (submitted && wrong && now >= 500 && !wrongWritten) {
+        wrongWritten = true;
+        for (const row of [result(500, '"Mail" needs approval on the Mac. Ask'),
+          { type: 'assistant', t: 600, message: { id: 'echo', content: [{ type: 'text', text: notice }] } }])
+          writeFileSync(transcript, JSON.stringify({ ...row, timestamp: new Date(row.t).toISOString() }) + '\n', { flag: 'a' });
+      }
       if (submitted && now >= noticeAt && !turn) {
-        writeFileSync(transcript, JSON.stringify({ ...result(noticeAt, notice), timestamp: new Date(noticeAt).toISOString() }) + '\n', { flag: 'a' });
+        const rows = [result(noticeAt, notice + (complete ? '\nowned-fixture' : ''))];
+        if (complete) rows.push({ type: 'assistant', message: { id: 'completion', content: [{ type: 'text', text: 'owned-fixture' }] } });
+        for (const row of rows) writeFileSync(transcript, JSON.stringify({ ...row, timestamp: new Date(noticeAt).toISOString() }) + '\n', { flag: 'a' });
         turn = plan.env.BENCH_CU_TURN_RECEIPT;
         writeFileSync(turn, JSON.stringify({ sessionId: plan.env.BENCH_CU_SESSION, nonce }));
       }
@@ -119,6 +228,7 @@ for (const [firstAt, noticeAt, pass] of [[0, 44000, true], [0, 46000, false], [1
     assert.equal(answer.noticeMs, 44000);
     assert.deepEqual(answer.presence, { idleSeconds: 160, locked: false });
     assert.equal(answer.firstResultAt, noticeAt);
+    assert.equal(answer.complete, complete);
   } else {
     await assert.rejects(session.submit(live.remotePlan().first), /deadline/);
     const snapshot = session.diagnostics();
@@ -167,8 +277,11 @@ test('stderr keeps the latest 16 KiB and redacts opaque authentication values wi
   const tail = logger.snapshot().stderr;
   assert.ok(Buffer.byteLength(tail) <= 16384); assert.ok(tail.endsWith('latest-line\n')); assert.ok(!tail.includes('old-line'));
   for (const raw of ['{"accessToken":"opaque-value"}', 'refresh_token=opaque-value', 'Authorization: Bearer opaque-value',
-    'ANTHROPIC_API_KEY=opaque-value', 'sk-proj-opaque-value', 'ghp_opaque-value', 'eyJhbGciOiJIUzI1NiJ9.payload.signature']) {
+    'ANTHROPIC_API_KEY=opaque-value', 'sk-proj-opaque-value', 'ghp_opaque-value', 'eyJhbGciOiJIUzI1NiJ9.payload.signature',
+    'Authorization: Basic b3BhcXVlLXZhbHVl', 'npm_12345678901234567890', 'AKIA1234567890ABCDEF',
+    'x-api-key opaque-value', 'password is opaque-value', 'https://user:opaque-value@example.test']) {
     assert.doesNotMatch(evidence.scrubRemoteValue(raw), /opaque-value|eyJhbGci/);
+    assert.doesNotMatch(evidence.scrubRemoteValue(raw), /b3BhcXVlLXZhbHVl|npm_12345678901234567890|AKIA1234567890ABCDEF/);
   }
 });
 

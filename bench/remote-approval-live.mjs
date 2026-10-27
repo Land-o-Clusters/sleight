@@ -14,11 +14,10 @@ import { openFixture, closeFixtures } from './real-fixture.mjs';
 import { removeTemp } from '../scripts/temp-leftovers.mjs';
 import { assertLogin } from './preflight.mjs';
 import { prepareHandHost } from '../plugins/sleight/lib/direct-browser/host.mjs';
-import { FIRST_NOTICE_MS, noticeTiming, scrubRemoteValue, transcriptRows, writeRemoteEvidence } from './remote-approval-evidence.mjs';
+import { FIRST_NOTICE_MS, REMOTE_NOTICE, expectedNoticeResult, noticeTiming, scrubRemoteValue, transcriptRows, writeRemoteEvidence } from './remote-approval-evidence.mjs';
 
 const root = fileURLToPath(new URL('..', import.meta.url));
 const sleep = ms => new Promise(r => setTimeout(r, ms));
-const note = '"TextEdit" needs approval on the Mac. Ask the user to reply: allow TextEdit';
 // This dedicated benchmark profile keeps its keychain identity across runs without changing another arm.
 export function remoteLoginPlan({ home = homedir(), env = process.env } = {}) {
   const clean = Object.fromEntries(['PATH', 'USER', 'LOGNAME', 'TMPDIR', 'LANG'].filter(k => typeof env[k] === 'string').map(k => [k, env[k]]));
@@ -44,9 +43,9 @@ export function remotePlan() {
     upfront: 'write a note in TextEdit and email it to me' };
 }
 export function gradeRemote({ notice = {}, yes = {}, typed = {}, upfront = {}, mail }) {
-  const elapsed = Number.isFinite(notice.noticeAt) && Number.isFinite(notice.firstToolAt) ? notice.noticeAt - notice.firstToolAt : NaN;
+  const elapsed = Number.isFinite(notice.noticeResult?.t) && Number.isFinite(notice.firstToolAt) ? notice.noticeResult.t - notice.firstToolAt : NaN;
   const checks = {
-    notice: Number.isFinite(elapsed) && elapsed >= 0 && elapsed < FIRST_NOTICE_MS && notice.text?.includes(note),
+    notice: Number.isFinite(elapsed) && elapsed >= 0 && elapsed < FIRST_NOTICE_MS && notice.noticeResult.text?.includes(REMOTE_NOTICE) === true,
     yes: Array.isArray(yes.grants) && yes.grants.length === 0 && yes.complete !== true,
     typed: typed.complete === true && typed.grants?.includes('com.apple.TextEdit'),
     upfront: typeof mail === 'string' && mail.length > 0 && new RegExp(`allow TextEdit, ${mail.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}`, 'i').test(upfront.text ?? ''),
@@ -92,14 +91,18 @@ export async function runRemoteApproval(options = {}, io) {
     try { report.evidence = await io.evidence({ report, bank }); }
     catch (error) { report.passed = false; report.evidenceError = error.message; }
     if (bank && fixtureStarted && collected && report.evidence) try { await io.hold(); cleanup = await io.cleanup(bank) === true; } catch (error) { report.cleanupError = error.message; }
-    else cleanup = !fixtureStarted;
+    else {
+      cleanup = !fixtureStarted;
+      if (bank && !fixtureStarted) removeTemp(bank.bank);
+    }
     report.collected = collected; report.cleanup = cleanup;
     if (!collected || !cleanup) { report.passed = false; report.lockRetained = !!release; }
     else if (release) try { await release(); } catch (error) { report.passed = false; report.lockError = error.message; }
     report.bank = bank?.bank;
     const output = report.evidence && join(report.evidence, 'report.json');
     report.output = output;
-    if (output) io.write(output, scrubRemoteValue(report));
+    if (output) try { await io.write(output, scrubRemoteValue(report)); }
+    catch (error) { report.passed = false; report.outputError = error.message; }
   }
   return report;
 }
@@ -240,7 +243,7 @@ export async function realSession(bank, { hold, signal, upfront = false, login =
         await hold(); signal.throwIfAborted(); refresh();
         if (closed) throw Error('Interactive Claude exited during the fixture task');
         const current = events.slice(start), first = current.find(e => e.type === 'assistant' && e.message?.content?.some(b => b.type === 'tool_use'));
-        const gotNotice = current.some(e => e.type === 'user' && e.message?.content?.some(b => b.type === 'tool_result' && JSON.stringify(b.content).includes('needs approval on the Mac')));
+        const gotNotice = expectedNoticeResult(current) !== null;
         if (first && text.startsWith(remotePlan().first)) {
           const noticeDeadline = first.t - began + FIRST_NOTICE_MS;
           timeout = gotNotice ? Math.max(120000, noticeDeadline) : noticeDeadline;

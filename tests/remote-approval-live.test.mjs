@@ -7,6 +7,7 @@ import { join } from 'node:path';
 import { registerTemp } from '../scripts/temp-leftovers.mjs';
 import * as live from '../bench/remote-approval-live.mjs';
 import { remotePlan, runRemoteApproval, gradeRemote } from '../bench/remote-approval-live.mjs';
+import { REMOTE_NOTICE } from '../bench/remote-approval-evidence.mjs';
 
 test('dry-run has no live effects, fixes TextEdit, loads the mod and uses an interactive session', async () => {
   const result = await runRemoteApproval({ dryRun: true }, new Proxy({}, { get: () => () => assert.fail('dry-run touched live IO') }));
@@ -22,7 +23,7 @@ test('live requires owner-away, takes and releases only its own lock, waits on h
   const order = [], written = [];
   const plan = remotePlan();
   const turns = [
-    { firstToolAt: 100, noticeAt: 250, text: '"TextEdit" needs approval on the Mac. Ask the user to reply: allow TextEdit', grants: [], complete: false },
+    { firstToolAt: 100, noticeResult: { t: 250, text: REMOTE_NOTICE }, grants: [], complete: false },
     { text: 'Please reply: allow TextEdit', grants: [], complete: false },
     { text: 'RA1 fixture complete', grants: ['com.apple.TextEdit'], complete: true },
     { text: 'Please reply: allow TextEdit, Mail', grants: [], complete: false },
@@ -58,10 +59,10 @@ test('live requires owner-away, takes and releases only its own lock, waits on h
 });
 
 test('grading rejects hangs, a yes grant, missing mail app, model-only completion and a wrong typed grant', () => {
-  const notice = { firstToolAt: 0, noticeAt: 45001, text: '"TextEdit" needs approval on the Mac. Ask the user to reply: allow TextEdit' };
+  const notice = { firstToolAt: 0, noticeResult: { t: 45001, text: REMOTE_NOTICE } };
   const yes = { grants: [] }, typed = { grants: ['com.apple.TextEdit'], complete: true };
   assert.equal(gradeRemote({ notice, yes, typed, upfront: { text: 'allow TextEdit, Mail' }, mail: 'Mail' }).passed, false);
-  notice.noticeAt = 44000;
+  notice.noticeResult.t = 44000;
   assert.equal(gradeRemote({ notice, yes, typed, upfront: { text: 'allow TextEdit, Mail' }, mail: 'Mail' }).passed, true);
   for (const changes of [{ yes: { grants: ['com.apple.TextEdit'] } }, { typed: { grants: [], complete: true } },
     { typed: { grants: ['com.apple.TextEdit'], complete: false } }, { upfront: { text: 'allow TextEdit' } }]) {
