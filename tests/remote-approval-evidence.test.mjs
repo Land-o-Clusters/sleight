@@ -101,7 +101,8 @@ test('hold abort after prepare removes only the unused owned bank', async t => {
 
 for (const asyncWrite of [false, true]) test(`report output failure returns a failed report after unlock, async ${asyncWrite}`, async () => {
   let unlocked = false;
-  const turns = [{ ...evidence.noticeTiming([tool(0), result(500, notice)]), grants: [] }, { grants: [] },
+  const turns = [{ ...evidence.noticeTiming([tool(0), result(500, notice)], [], 0),
+    modTurnBegin: { t: 0, direction: 'mod-turn-begin' }, grants: [] }, { grants: [] },
     { complete: true, grants: ['com.apple.TextEdit'] }, { text: 'allow TextEdit, Mail' }];
   const fail = () => { assert.equal(unlocked, true); throw Error('EEXIST'); };
   const io = { now: () => new Date('2026-10-26T00:00:00Z'), hold: async () => {},
@@ -111,6 +112,8 @@ for (const asyncWrite of [false, true]) test(`report output failure returns a fa
     evidence: async () => '/fixture/evidence', cleanup: async () => true,
     write: asyncWrite ? async () => fail() : fail };
   const report = await live.runRemoteApproval({ ownerAway: true }, io);
+  assert.equal(report.error, undefined);
+  assert.equal(turns.length, 0, 'all four turns completed before the output failure');
   assert.equal(report.passed, false); assert.equal(report.outputError, 'EEXIST');
   assert.equal(report.collected, true); assert.equal(report.cleanup, true);
 });
@@ -139,6 +142,12 @@ test('evidence selects transcript fields, scrubs before byte limits, and writes 
   assert.ok(Buffer.byteLength(saved[0].rows[1].text) <= 4096);
   assert.equal(saved[0].turns[0].presence.idleSeconds, 150);
   assert.throws(() => evidence.writeRemoteEvidence({ started: '2026-10-26T01:02:03.004Z' }, { root: base }), /EEXIST/);
+});
+
+test('mod begin receipt survives evidence filtering without prompt or binding payloads', () => {
+  const logger = evidence.createServerEvidence({ now: () => 123 });
+  logger.trace('mod-turn-begin', { origin: 'composer', text: 'private user prompt', nonce: 'private-nonce', session: 'private-session' });
+  assert.deepEqual(logger.snapshot().trace, [{ t: 123, direction: 'mod-turn-begin' }]);
 });
 
 test('keychain and credential payloads are omitted whole, including split stderr chunks', () => {

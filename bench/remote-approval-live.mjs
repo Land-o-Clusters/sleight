@@ -45,6 +45,8 @@ export function remotePlan() {
 export function gradeRemote({ notice = {}, yes = {}, typed = {}, upfront = {}, mail }) {
   const elapsed = Number.isFinite(notice.noticeResult?.t) && Number.isFinite(notice.firstToolAt) ? notice.noticeResult.t - notice.firstToolAt : NaN;
   const checks = {
+    mod: notice.modTurnBegin?.direction === 'mod-turn-begin' && Number.isFinite(notice.modTurnBegin.t) &&
+      Number.isFinite(notice.submitAt) && notice.modTurnBegin.t >= notice.submitAt,
     notice: Number.isFinite(elapsed) && elapsed >= 0 && elapsed < FIRST_NOTICE_MS && notice.noticeResult.text?.includes(REMOTE_NOTICE) === true,
     yes: Array.isArray(yes.grants) && yes.grants.length === 0 && yes.complete !== true,
     typed: typed.complete === true && typed.grants?.includes('com.apple.TextEdit'),
@@ -71,6 +73,7 @@ export async function runRemoteApproval(options = {}, io) {
     report.noticeMs = gradeRemote({ notice: report.notice }).noticeMs;
     // Fail before feeding any approval if the first engine request did not actually stop.
     if (!gradeRemote({ notice: report.notice }).checks.notice) throw Error('First unapproved call did not return the required notice within 45 s');
+    if (!gradeRemote({ notice: report.notice }).checks.mod) throw Error('mod did not reach the server (guard, connect or mod load)');
     await io.hold(); report.yes = await session.submit('yes');
     if (report.yes.grants.length || report.yes.complete) throw Error('Bare yes granted app access');
     await io.hold(); report.typed = await session.submit('allow TextEdit');
@@ -261,8 +264,10 @@ export async function realSession(bank, { hold, signal, upfront = false, login =
       const output = tools.filter(b => b.type === 'text').map(b => b.text).join('\n');
       const results = tools.filter(b => b.type === 'tool_result').map(plain).join('\n');
       const grants = existsSync(audit) ? readFileSync(audit, 'utf8').split('\n').filter(Boolean).slice(grantsBefore).map(line => JSON.parse(line).app) : [];
-      const timing = noticeTiming(rows, diagnostics().server?.trace, began, now());
-      return { text: transcriptRows(rows).filter(row => row.type !== 'tool_use').map(row => row.text).join('\n'), ...timing, presence: turn.presence, grants,
+      const trace = diagnostics().server?.trace ?? [], observedAt = now();
+      const timing = noticeTiming(rows, trace, began, observedAt);
+      const modTurnBegin = trace.find(row => row.direction === 'mod-turn-begin' && row.t >= began && row.t <= observedAt) ?? null;
+      return { text: transcriptRows(rows).filter(row => row.type !== 'tool_use').map(row => row.text).join('\n'), ...timing, modTurnBegin, presence: turn.presence, grants,
         complete: output.includes(bank.token) && results.includes(bank.token) };
     },
     async close() { try { await pty.stop(); return await pty.closed; } finally { restoreTrust(); } },

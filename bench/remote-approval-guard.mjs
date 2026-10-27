@@ -3,7 +3,16 @@ import ts from 'typescript';
 import { resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 const TOOL = 'mcp__plugin_sleight_computer__js';
+const TURN_END = 'mcp__plugin_sleight_computer__turn_ended';
+export const MOD_KEYS = new Set(['sleight_turbo', 'sleight_resume', 'sleight_stop', 'sleight_stats', 'hook_event_name']);
+// The mod's tool.call hook owns origin checks. This arm passes only its control key set, never model code or extra keys.
+export function modOwnCall(event) {
+  if (event?.tool_name !== TURN_END || !event.tool_input || typeof event.tool_input !== 'object' || Array.isArray(event.tool_input)) return false;
+  const keys = Object.keys(event.tool_input);
+  return keys.length > 0 && keys.every(key => MOD_KEYS.has(key));
+}
 export function remoteGuardDecision(event, { upfront = false } = {}) {
+  if (modOwnCall(event)) return true;
   if (upfront || event?.tool_name !== TOOL || typeof event.tool_input?.code !== 'string') return false;
   const ast = ts.createSourceFile('fixture.js', event.tool_input.code, ts.ScriptTarget.Latest, true, ts.ScriptKind.JS);
   if (ast.parseDiagnostics.length || !ast.statements.length) return false;
@@ -30,7 +39,8 @@ export function remoteGuardDecision(event, { upfront = false } = {}) {
 }
 if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
   let text = ''; for await (const chunk of process.stdin) text += chunk;
-  let allow = false; try { allow = remoteGuardDecision(JSON.parse(text), { upfront: process.env.RA1_UPFRONT === '1' }); } catch {}
+  let allow = false, mod = false;
+  try { const event = JSON.parse(text); mod = modOwnCall(event); allow = remoteGuardDecision(event, { upfront: process.env.RA1_UPFRONT === '1' }); } catch {}
   process.stdout.write(JSON.stringify({ hookSpecificOutput: { hookEventName: 'PreToolUse', permissionDecision: allow ? 'allow' : 'deny',
-    permissionDecisionReason: allow ? 'RA1 owned TextEdit read' : 'RA1 allows only TextEdit acquisition and state reads; upfront asks use no tools' } }));
+    permissionDecisionReason: allow ? mod ? 'RA1 mod turn binding' : 'RA1 owned TextEdit read' : 'RA1 allows only TextEdit acquisition and state reads; upfront asks use no tools' } }));
 }

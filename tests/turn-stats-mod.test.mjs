@@ -14,8 +14,8 @@ const metrics = { calls: 3, reads: 1, characters: 55, text: { docs: 10, tree: 40
   paths: { native: { actions: 2, estimatedActions: 2, estimatedCalls: 1, actionMs: 0, timedActions: 0 }, turbo: { actions: 0, estimatedActions: 0, estimatedCalls: 0, actionMs: 0, timedActions: 0 }, engine: { actions: 0, estimatedActions: 0, estimatedCalls: 0, actionMs: 0, timedActions: 0 } } };
 const usage = { input_tokens: 12, output_tokens: 34, cache_read_input_tokens: 56, cache_creation_input_tokens: 78, model: 'host-model' };
 
-function host({ cost = true, missingUsage = false, marker = false, malicious = false, paneOpen = false, paneSnapshot = false, usageRead, messages, narration = 'off', settingRead, moduleRegister, envRead, statRead, turboSession } = {}) {
-  const hooks = [], state = new Map(), work = [], statuses = [], replies = [], forwarded = [], hookRuns = [];
+function host({ cost = true, missingUsage = false, marker = false, malicious = false, paneOpen = false, paneSnapshot = false, usageRead, messages, narration = 'off', settingRead, moduleRegister, envRead, statRead, turboSession, turnCall, logThrows = false } = {}) {
+  const hooks = [], state = new Map(), work = [], statuses = [], replies = [], forwarded = [], hookRuns = [], logs = [];
   let usageReads = 0;
   const elements = Object.fromEntries(['Box', 'Text', 'Button'].map(name => [name, name]));
   const api = {
@@ -50,7 +50,7 @@ function host({ cost = true, missingUsage = false, marker = false, malicious = f
     testState: state,
     env: { get: async key => envRead ? envRead(key) : key === 'HOME' ? '/fixture/home' : undefined },
     fs: { stat: async path => statRead ? statRead(path) : ({ realPath: path }) },
-    ui: { status: text => statuses.push(text), log() {}, toast() {}, panes: async () => paneOpen ? [{ id: 'sleight' }] : [], open: async () => work.push('open'), resolve: () => elements },
+    ui: { status: text => statuses.push(text), log: (text, options) => { logs.push({ text, options }); if (logThrows) throw Error('debug unavailable'); }, toast() {}, panes: async () => paneOpen ? [{ id: 'sleight' }] : [], open: async () => work.push('open'), resolve: () => elements },
     plugin: { root: '/fixture/plugin' },
     process: { run: async () => settingRead ? settingRead() : ({ exitCode: 0, stdout: JSON.stringify({ enabled: false, narration, presence: { idleSeconds: 0, locked: false } }) }) },
     session: { messages: async args => typeof messages === 'function' ? messages(args) : messages ?? [], usage: async () => {
@@ -63,6 +63,7 @@ function host({ cost = true, missingUsage = false, marker = false, malicious = f
       work.push({ tool, args });
       if (tool === 'js' && paneOpen) return { content: [{ type: 'text', text: paneSnapshot ? 'SLEIGHT_FRAME {"app":"ParentApp","width":1,"height":1}' : '' }] };
       if (tool !== 'turn_ended') throw Error('test must never call the engine');
+      if (turnCall) return turnCall(args);
       if (turboSession && args.sleight_turbo) return { content: [{ type: 'text', text: JSON.stringify(
         args.sleight_turbo.event === 'bootstrap' ? { sleightTurbo: { version: 1, session: turboSession, nonce: 'a'.repeat(64) } }
           : { sleightRemote: { turboBound: true } }) }] };
@@ -101,8 +102,31 @@ function host({ cost = true, missingUsage = false, marker = false, malicious = f
     const text = value => typeof value === 'string' ? value : Array.isArray(value) ? value.map(text).join('\n') : value?.children ? text(value.children) : '';
     return text(tree);
   }
-  return { start, complete, tool, command, pane, work, state, emit, forwarded, hookRuns, registerMod, get usageReads() { return usageReads; } };
+  return { start, complete, tool, command, pane, work, state, emit, forwarded, hookRuns, logs, registerMod, get usageReads() { return usageReads; } };
 }
+
+for (const failure of ['bootstrap throw', 'bootstrap refusal', 'begin throw', 'begin refusal', 'retry', 'none'])
+  test(`mod logs one payload-free line when turn binding fails: ${failure}`, async () => {
+    let begins = 0;
+    const envelope = { version: 1, session: 'fixture-session', nonce: 'a'.repeat(64) };
+    const h = host({ turnCall: args => {
+      const bootstrap = args.sleight_turbo.event === 'bootstrap';
+      if (!bootstrap) begins++;
+      if (failure === (bootstrap ? 'bootstrap throw' : 'begin throw')) throw Error('private refusal text');
+      if (failure === (bootstrap ? 'bootstrap refusal' : 'begin refusal') || failure === 'retry' && !bootstrap && begins === 1)
+        return { isError: true, content: [{ type: 'text', text: 'private refusal text' }] };
+      return { content: [{ type: 'text', text: JSON.stringify(bootstrap ? { sleightTurbo: envelope } : { sleightRemote: {} }) }] };
+    } });
+    const result = await h.emit('prompt.submit', { text: 'allow TextEdit private user text', origin: { kind: 'composer' } }, event => event);
+    assert.equal(result.context, undefined, 'failure diagnostics never enter model context');
+    assert.equal(h.logs.length, ['retry', 'none'].includes(failure) ? 0 : 1);
+    for (const row of h.logs) {
+      assert.match(row.text, /turn_ended.*typed approvals/);
+      assert.equal(row.options.to, 'debug');
+      assert.doesNotMatch(row.text, /private|TextEdit|fixture-session|aaaa/);
+    }
+    assert.equal(begins, failure.startsWith('bootstrap') ? 0 : failure === 'none' ? 1 : 2);
+  });
 
 const deferred = () => {
   let resolve, reject;
@@ -110,6 +134,27 @@ const deferred = () => {
   return { promise, resolve, reject };
 };
 const nextTick = () => new Promise(resolve => setImmediate(resolve));
+
+test('a failing debug log leaves refused prompts and later prompts usable', async () => {
+  const h = host({ logThrows: true, turnCall: () => { throw Error('host hook denied'); } });
+  for (let prompt = 0; prompt < 2; prompt++) {
+    const event = { text: 'allow fixture', origin: { kind: 'composer' } };
+    assert.equal(await h.emit('prompt.submit', event, value => value), event);
+  }
+  assert.equal(h.logs.length, 2);
+  assert.equal(h.work.length, 2, 'the later prompt still attempts bootstrap');
+});
+
+test('model turn_ended remains refused even with guard-allowed control keys', async () => {
+  const h = host();
+  for (const input of [{}, { code: '1' }, { sleight_turbo: { event: 'bootstrap' } }, { sleight_resume: true },
+    { hook_event_name: 'Stop', sleight_stop: true, sleight_stats: 'fixture-turn' }]) {
+    const result = await h.emit('tool.call', { tool: prefix + 'turn_ended', ...input });
+    assert.match(result.deny, /internal to sleight/);
+  }
+  assert.equal(h.forwarded.length, 0);
+  assert.equal(h.work.length, 0);
+});
 
 // Public hook JSON has snake_case identity and nested arguments. The mod's
 // published ToolCallEnvelope flattens the arguments; tool.call adds agentId.

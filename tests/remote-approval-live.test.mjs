@@ -1,4 +1,7 @@
 import { remoteGuardDecision } from '../bench/remote-approval-guard.mjs';
+import * as guard from '../bench/remote-approval-guard.mjs';
+import ts from 'typescript';
+import { spawnSync } from 'node:child_process';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
@@ -8,6 +11,92 @@ import { registerTemp } from '../scripts/temp-leftovers.mjs';
 import * as live from '../bench/remote-approval-live.mjs';
 import { remotePlan, runRemoteApproval, gradeRemote } from '../bench/remote-approval-live.mjs';
 import { REMOTE_NOTICE } from '../bench/remote-approval-evidence.mjs';
+
+const TURN_END = 'mcp__plugin_sleight_computer__turn_ended';
+const modCalls = [
+  { sleight_turbo: { event: 'bootstrap' } },
+  { sleight_turbo: { version: 1, session: 'fixture-session', nonce: 'a'.repeat(64), event: 'begin',
+    turn: 'turbo-1', text: 'allow TextEdit', origin: 'composer', turbo: false } },
+  { sleight_resume: true },
+  ...['Stop', 'Interrupt'].flatMap(hook_event_name => [
+    { hook_event_name }, { hook_event_name, sleight_stop: true },
+    { hook_event_name, sleight_stats: 'fixture-turn' }, { hook_event_name, sleight_stop: true, sleight_stats: 'fixture-turn' },
+  ]),
+];
+for (const tool_input of modCalls) test(`guard passes mod control in both modes: ${JSON.stringify(tool_input)}`, () => {
+  for (const upfront of [false, true]) assert.equal(remoteGuardDecision({ tool_name: TURN_END, tool_input }, { upfront }), true);
+});
+
+for (const tool_input of [{}, { code: '1' }, { sleight_turbo: {}, code: '1' }, { sleight_turbo: {}, extra: true },
+  { sleight_resume: true, app: 'Mail' }, null, [], ['sleight_stop'], 'sleight_stop', true, 1]) {
+  test(`guard refuses model-shaped or malformed turn control: ${JSON.stringify(tool_input)}`, () => {
+    for (const upfront of [false, true]) assert.equal(remoteGuardDecision({ tool_name: TURN_END, tool_input }, { upfront }), false);
+  });
+}
+test('mod keys on another tool do not pass the guard', () => {
+  for (const upfront of [false, true]) for (const tool_name of ['turn_ended', 'mcp__other__turn_ended', 'Bash'])
+    assert.equal(remoteGuardDecision({ tool_name, tool_input: modCalls[0] }, { upfront }), false);
+});
+
+test('every mod turn_ended call stays within the guard key set, including conditional spreads', () => {
+  assert.ok(guard.MOD_KEYS instanceof Set);
+  assert.deepEqual([...guard.MOD_KEYS].sort(), ['sleight_turbo', 'sleight_resume', 'sleight_stop', 'sleight_stats', 'hook_event_name'].sort());
+  const source = readFileSync(new URL('../plugins/sleight/hooks/register.tsx', import.meta.url), 'utf8');
+  const ast = ts.createSourceFile('register.tsx', source, ts.ScriptTarget.Latest, true, ts.ScriptKind.TSX);
+  let calls = 0;
+  const collect = node => {
+    if (ts.isObjectLiteralExpression(node)) {
+      for (const property of node.properties) {
+        if (ts.isSpreadAssignment(property)) collect(property.expression);
+        else {
+          assert.ok(ts.isPropertyAssignment(property) || ts.isShorthandPropertyAssignment(property), 'unknown mod property');
+          const name = property.name;
+          assert.ok(ts.isIdentifier(name) || ts.isStringLiteral(name), 'dynamic mod key needs review');
+          assert.ok(guard.MOD_KEYS.has(name.text), `guard blocks mod key ${name.text}`);
+        }
+      }
+    } else if (ts.isParenthesizedExpression(node)) collect(node.expression);
+    else if (ts.isConditionalExpression(node)) { collect(node.whenTrue); collect(node.whenFalse); }
+    else assert.fail(`unknown mod argument or spread: ${node.getText(ast)}`);
+  };
+  const visit = node => {
+    if (ts.isCallExpression(node) && ts.isIdentifier(node.expression) && node.expression.text === 'call' &&
+        ts.isStringLiteral(node.arguments[1]) && node.arguments[1].text === 'turn_ended') {
+      calls++; collect(node.arguments[2]);
+    }
+    ts.forEachChild(node, visit);
+  };
+  visit(ast);
+  assert.ok(calls >= 4, 'all current call sites were collected');
+});
+
+for (const upfront of [false, true]) test(`configured PreToolUse command passes bootstrap and begin, upfront=${upfront}`, async t => {
+  const home = mkdtempSync(join(tmpdir(), 'sleight-ra1-guard-'));
+  let plan, finish, session;
+  t.after(() => session?.close());
+  registerTemp(t, home);
+  const closed = new Promise(resolve => { finish = resolve; });
+  session = await live.realSession({ bank: join(home, 'bank') }, {
+    upfront, login: live.remoteLoginPlan({ home, env: { PATH: process.env.PATH } }),
+    signal: new AbortController().signal, hold: async () => {}, wait: async () => {},
+    launch(p, output) { plan = p; output('❯\n'); return { closed, async stop() { finish({ clean: true }); } }; },
+  });
+  const settings = JSON.parse(readFileSync(plan.args[plan.args.indexOf('--settings') + 1], 'utf8'));
+  const hook = settings.hooks.PreToolUse[0];
+  assert.equal(hook.matcher, '.*');
+  const command = hook.hooks[0].command.match(/^"([^"]+)" "([^"]+)"$/);
+  assert.ok(command, 'configured command is the executable and guard script');
+  for (const tool_input of [modCalls[0], modCalls[1], { code: '1' }, { ...modCalls[0], extra: true }]) {
+    const result = spawnSync(command[1], [command[2]], { env: plan.env, encoding: 'utf8', timeout: 5000,
+      input: JSON.stringify({ hook_event_name: 'PreToolUse', tool_name: TURN_END, tool_input }) });
+    assert.equal(result.status, 0, result.stderr);
+    const verdict = JSON.parse(result.stdout).hookSpecificOutput;
+    assert.equal(verdict.hookEventName, 'PreToolUse');
+    const allow = tool_input === modCalls[0] || tool_input === modCalls[1];
+    assert.equal(verdict.permissionDecision, allow ? 'allow' : 'deny');
+    if (allow) assert.equal(verdict.permissionDecisionReason, 'RA1 mod turn binding');
+  }
+});
 
 test('dry-run has no live effects, fixes TextEdit, loads the mod and uses an interactive session', async () => {
   const result = await runRemoteApproval({ dryRun: true }, new Proxy({}, { get: () => () => assert.fail('dry-run touched live IO') }));
@@ -23,7 +112,8 @@ test('live requires owner-away, takes and releases only its own lock, waits on h
   const order = [], written = [];
   const plan = remotePlan();
   const turns = [
-    { firstToolAt: 100, noticeResult: { t: 250, text: REMOTE_NOTICE }, grants: [], complete: false },
+    { submitAt: 50, modTurnBegin: { t: 75, direction: 'mod-turn-begin' }, firstToolAt: 100,
+      noticeResult: { t: 250, text: REMOTE_NOTICE }, grants: [], complete: false },
     { text: 'Please reply: allow TextEdit', grants: [], complete: false },
     { text: 'RA1 fixture complete', grants: ['com.apple.TextEdit'], complete: true },
     { text: 'Please reply: allow TextEdit, Mail', grants: [], complete: false },
@@ -59,15 +149,38 @@ test('live requires owner-away, takes and releases only its own lock, waits on h
 });
 
 test('grading rejects hangs, a yes grant, missing mail app, model-only completion and a wrong typed grant', () => {
-  const notice = { firstToolAt: 0, noticeResult: { t: 45001, text: REMOTE_NOTICE } };
+  const notice = { submitAt: 0, modTurnBegin: { t: 0, direction: 'mod-turn-begin' }, firstToolAt: 0, noticeResult: { t: 45001, text: REMOTE_NOTICE } };
   const yes = { grants: [] }, typed = { grants: ['com.apple.TextEdit'], complete: true };
   assert.equal(gradeRemote({ notice, yes, typed, upfront: { text: 'allow TextEdit, Mail' }, mail: 'Mail' }).passed, false);
   notice.noticeResult.t = 44000;
   assert.equal(gradeRemote({ notice, yes, typed, upfront: { text: 'allow TextEdit, Mail' }, mail: 'Mail' }).passed, true);
   for (const changes of [{ yes: { grants: ['com.apple.TextEdit'] } }, { typed: { grants: [], complete: true } },
-    { typed: { grants: ['com.apple.TextEdit'], complete: false } }, { upfront: { text: 'allow TextEdit' } }]) {
+    { typed: { grants: ['com.apple.TextEdit'], complete: false } }, { upfront: { text: 'allow TextEdit' } },
+    { notice: { ...notice, modTurnBegin: null } }, { notice: { ...notice, modTurnBegin: { t: -1, direction: 'mod-turn-begin' } } }]) {
     assert.equal(gradeRemote({ notice, yes, typed, upfront: { text: 'allow TextEdit, Mail' }, mail: 'Mail', ...changes }).passed, false);
   }
+});
+
+test('missing mod begin receipt stops before yes, with evidence and owned cleanup', async () => {
+  const prompts = [];
+  let closed = 0, cleaned = 0, released = 0, saved;
+  const io = {
+    now: () => new Date('2026-10-27T06:06:22Z'), hold: async () => {}, login: async () => {},
+    lock: async () => async () => { released++; }, prewarm: async () => ({ status: 'ready' }),
+    prepare: async () => ({ fixture: 'owned', mail: 'Mail' }), fixture: async () => {},
+    session: async () => ({ submit: async text => {
+      prompts.push(text);
+      return { submitAt: 0, firstToolAt: 1, noticeResult: { t: 2, text: REMOTE_NOTICE }, grants: [], complete: false };
+    }, close: async () => { closed++; return { clean: true }; } }),
+    evidence: async () => '/fixture/evidence', cleanup: async () => { cleaned++; return true; },
+    write: (_path, report) => { saved = report; },
+  };
+  const report = await runRemoteApproval({ ownerAway: true }, io);
+  assert.equal(report.passed, false);
+  assert.match(report.error, /mod did not reach the server \(guard, connect or mod load\)/);
+  assert.equal(prompts.length, 1, 'no yes or typed approval without a begin receipt');
+  assert.equal(closed, 1); assert.equal(cleaned, 1); assert.equal(released, 1);
+  assert.equal(saved.error, report.error);
 });
 
 test('failed child collection or fixture cleanup retains the live lock and writes failure evidence', async () => {
