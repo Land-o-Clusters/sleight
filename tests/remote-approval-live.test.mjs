@@ -114,8 +114,8 @@ test('live requires owner-away, takes and releases only its own lock, waits on h
   const turns = [
     { submitAt: 50, modTurnBegin: { t: 75, direction: 'mod-turn-begin' }, firstToolAt: 100,
       noticeResult: { t: 250, text: REMOTE_NOTICE }, grants: [], complete: false },
-    { text: 'Please reply: allow TextEdit', grants: [], complete: false },
-    { text: 'RA1 fixture complete', grants: ['com.apple.TextEdit'], complete: true },
+    { submitAt: 300, modTurnBegin: { t: 300, direction: 'mod-turn-begin' }, text: 'Please reply: allow TextEdit', grants: [], complete: false },
+    { submitAt: 400, modTurnBegin: { t: 400, direction: 'mod-turn-begin' }, text: 'RA1 fixture complete', grants: ['com.apple.TextEdit'], complete: true },
     { text: 'Please reply: allow TextEdit, Mail', grants: [], complete: false },
   ];
   const io = {
@@ -150,18 +150,22 @@ test('live requires owner-away, takes and releases only its own lock, waits on h
 
 test('grading rejects hangs, a yes grant, missing mail app, model-only completion and a wrong typed grant', () => {
   const notice = { submitAt: 0, modTurnBegin: { t: 0, direction: 'mod-turn-begin' }, firstToolAt: 0, noticeResult: { t: 45001, text: REMOTE_NOTICE } };
-  const yes = { grants: [] }, typed = { grants: ['com.apple.TextEdit'], complete: true };
+  const begin = { submitAt: 1, modTurnBegin: { t: 1, direction: 'mod-turn-begin' } };
+  const yes = { ...begin, grants: [] }, typed = { ...begin, grants: ['com.apple.TextEdit'], complete: true };
   assert.equal(gradeRemote({ notice, yes, typed, upfront: { text: 'allow TextEdit, Mail' }, mail: 'Mail' }).passed, false);
   notice.noticeResult.t = 44000;
   assert.equal(gradeRemote({ notice, yes, typed, upfront: { text: 'allow TextEdit, Mail' }, mail: 'Mail' }).passed, true);
-  for (const changes of [{ yes: { grants: ['com.apple.TextEdit'] } }, { typed: { grants: [], complete: true } },
-    { typed: { grants: ['com.apple.TextEdit'], complete: false } }, { upfront: { text: 'allow TextEdit' } },
+  for (const changes of [{ yes: { ...yes, modTurnBegin: null } }, { typed: { ...typed, modTurnBegin: null } },
+    { yes: { ...yes, grants: ['com.apple.TextEdit'] } }, { typed: { ...typed, grants: [], complete: true } },
+    { typed: { ...typed, grants: ['com.apple.TextEdit'], complete: false } }, { upfront: { text: 'allow TextEdit' } },
     { notice: { ...notice, modTurnBegin: null } }, { notice: { ...notice, modTurnBegin: { t: -1, direction: 'mod-turn-begin' } } }]) {
     assert.equal(gradeRemote({ notice, yes, typed, upfront: { text: 'allow TextEdit, Mail' }, mail: 'Mail', ...changes }).passed, false);
   }
 });
 
-test('missing mod begin receipt stops before yes, with evidence and owned cleanup', async () => {
+for (const presence of [undefined, { locked: false, idleSeconds: 0 }, { locked: false, idleSeconds: 119.9 },
+  { locked: false, idleSeconds: 120 }, { locked: true, idleSeconds: 0 }, { locked: false, idleSeconds: -1 }])
+test(`missing mod begin receipt stops before yes with cleanup, presence=${JSON.stringify(presence)}`, async () => {
   const prompts = [];
   let closed = 0, cleaned = 0, released = 0, saved;
   const io = {
@@ -170,14 +174,17 @@ test('missing mod begin receipt stops before yes, with evidence and owned cleanu
     prepare: async () => ({ fixture: 'owned', mail: 'Mail' }), fixture: async () => {},
     session: async () => ({ submit: async text => {
       prompts.push(text);
-      return { submitAt: 0, firstToolAt: 1, noticeResult: { t: 2, text: REMOTE_NOTICE }, grants: [], complete: false };
+      return { presence, submitAt: 0, firstToolAt: 1, noticeResult: { t: 2, text: REMOTE_NOTICE }, grants: [], complete: false };
     }, close: async () => { closed++; return { clean: true }; } }),
     evidence: async () => '/fixture/evidence', cleanup: async () => { cleaned++; return true; },
     write: (_path, report) => { saved = report; },
   };
   const report = await runRemoteApproval({ ownerAway: true }, io);
   assert.equal(report.passed, false);
-  assert.match(report.error, /mod did not reach the server \(guard, connect or mod load\)/);
+  assert.match(report.error, /mod did not reach the server for notice/);
+  const skip = presence?.locked === false && presence.idleSeconds >= 0 && presence.idleSeconds < 120;
+  if (skip) { assert.match(report.error, /person-present skip possible with turbo off/); assert.doesNotMatch(report.error, /guard, connect or mod load/); }
+  else assert.match(report.error, /guard, connect or mod load; check for a presence change since submit/);
   assert.equal(prompts.length, 1, 'no yes or typed approval without a begin receipt');
   assert.equal(closed, 1); assert.equal(cleaned, 1); assert.equal(released, 1);
   assert.equal(saved.error, report.error);

@@ -42,14 +42,28 @@ export function remotePlan() {
     first: 'Use computer use to read the short note in the macOS plain text editor. Report its first line verbatim. Use var app for the app handle and nodeRepl.write(await app.getAXState({disableDiffing:true})) to read it. Do not edit anything. If a tool refuses approval, stop and report the exact notice.',
     upfront: 'write a note in TextEdit and email it to me' };
 }
+function hasModBegin(turn) {
+  return turn.modTurnBegin?.direction === 'mod-turn-begin' && Number.isFinite(turn.modTurnBegin.t) &&
+    Number.isFinite(turn.submitAt) && turn.modTurnBegin.t >= turn.submitAt;
+}
+function requireModBegin(turn, label) {
+  if (hasModBegin(turn)) return;
+  const p = turn.presence;
+  // The mod skips ordinary composer text when turbo is off and the person is present.
+  // This is a pre-submit sample, so report a possible skip, never a proved cause.
+  const possibleSkip = label !== 'typed' && p?.locked === false && Number.isFinite(p.idleSeconds) &&
+    p.idleSeconds >= 0 && p.idleSeconds < 120;
+  throw Error(`mod did not reach the server for ${label} (${possibleSkip
+    ? 'person-present skip possible with turbo off; HID idle below 120 s'
+    : 'guard, connect or mod load; check for a presence change since submit'})`);
+}
 export function gradeRemote({ notice = {}, yes = {}, typed = {}, upfront = {}, mail }) {
   const elapsed = Number.isFinite(notice.noticeResult?.t) && Number.isFinite(notice.firstToolAt) ? notice.noticeResult.t - notice.firstToolAt : NaN;
   const checks = {
-    mod: notice.modTurnBegin?.direction === 'mod-turn-begin' && Number.isFinite(notice.modTurnBegin.t) &&
-      Number.isFinite(notice.submitAt) && notice.modTurnBegin.t >= notice.submitAt,
+    mod: [notice, yes, typed].every(hasModBegin),
     notice: Number.isFinite(elapsed) && elapsed >= 0 && elapsed < FIRST_NOTICE_MS && notice.noticeResult.text?.includes(REMOTE_NOTICE) === true,
-    yes: Array.isArray(yes.grants) && yes.grants.length === 0 && yes.complete !== true,
-    typed: typed.complete === true && typed.grants?.includes('com.apple.TextEdit'),
+    yes: hasModBegin(yes) && Array.isArray(yes.grants) && yes.grants.length === 0 && yes.complete !== true,
+    typed: hasModBegin(typed) && typed.complete === true && typed.grants?.includes('com.apple.TextEdit'),
     upfront: typeof mail === 'string' && mail.length > 0 && new RegExp(`allow TextEdit, ${mail.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}`, 'i').test(upfront.text ?? ''),
   };
   return { passed: Object.values(checks).every(Boolean), checks, noticeMs: Number.isFinite(elapsed) ? elapsed : null };
@@ -73,10 +87,12 @@ export async function runRemoteApproval(options = {}, io) {
     report.noticeMs = gradeRemote({ notice: report.notice }).noticeMs;
     // Fail before feeding any approval if the first engine request did not actually stop.
     if (!gradeRemote({ notice: report.notice }).checks.notice) throw Error('First unapproved call did not return the required notice within 45 s');
-    if (!gradeRemote({ notice: report.notice }).checks.mod) throw Error('mod did not reach the server (guard, connect or mod load)');
+    requireModBegin(report.notice, 'notice');
     await io.hold(); report.yes = await session.submit('yes');
+    requireModBegin(report.yes, 'yes');
     if (report.yes.grants.length || report.yes.complete) throw Error('Bare yes granted app access');
     await io.hold(); report.typed = await session.submit('allow TextEdit');
+    requireModBegin(report.typed, 'typed');
     collected = (await session.close()).clean === true; session = undefined;
     if (!collected) throw Error('Interactive child collection unconfirmed');
     // The upfront request gets a new relay session, so TextEdit is unapproved again.
@@ -259,7 +275,7 @@ export async function realSession(bank, { hold, signal, upfront = false, login =
       refresh();
       turn.end = events.length;
       const rows = events.slice(start), tools = rows.flatMap(e => e.message?.content ?? []);
-      for (const tool of tools.filter(b => b.type === 'tool_use')) if (!/^mcp__plugin_sleight_computer__(js|turn_ended)$/.test(tool.name)) throw Error('Unexpected tool outside the TextEdit fixture');
+      for (const tool of tools.filter(b => b.type === 'tool_use')) if (tool.name !== 'mcp__plugin_sleight_computer__js') throw Error('Unexpected tool outside the TextEdit fixture');
       const plain = b => typeof b.content === 'string' ? b.content : (b.content ?? []).filter(c => c.type === 'text').map(c => c.text).join('\n');
       const output = tools.filter(b => b.type === 'text').map(b => b.text).join('\n');
       const results = tools.filter(b => b.type === 'tool_result').map(plain).join('\n');

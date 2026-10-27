@@ -60,7 +60,8 @@ function fixture(check, options = {}) {
     if (check.mode === 'posted-click') {
       assert.deepEqual([attempt.window, attempt.x, attempt.y], [17, 20, 40]);
       assert.deepEqual(attempt.windowRect, { x: 10, y: 20, width: 400, height: 240 });
-      if (!options.noDelivery) receipt({ event: 'mouse-down', window: attempt.window, insideButton: true });
+      if (!options.noDelivery) receipt({ event: 'mouse-down', window: attempt.window, insideButton: true,
+        sourceState: 1, sourcePid: 0, userData: 0, ...options.deliveredEvent });
     }
     if (options.postFail) return { status: 1 };
     if (!options.noRefusal) receipt({ event: 'refused', code: 'PERSON_INPUT_REQUIRED' });
@@ -379,4 +380,26 @@ test('runner and poster never toggle VoiceOver, send Apple events, or import the
   assert.equal((swift.match(/postToPid\(pid\)/g) ?? []).length, 3, 'one key or mouse-down plus mouse-up, always PID scoped');
   assert.match(swift, /CGPreflightPostEventAccess/);
   assert.doesNotMatch(swift, /CGRequestPostEventAccess|AXIsProcessTrustedWithOptions/);
+});
+
+
+test('saved mouse provenance uses only the delivered receipt, including refusal and acceptance failures', async () => {
+  const check = checks.find(c => c.id === 'native-hidpid-click');
+  for (const deliveredEvent of [
+    { sourceState: 1, sourcePid: 0, userData: 0 },
+    { sourceState: 7, sourcePid: 54321, userData: 9 },
+  ]) {
+    for (const unexpectedAccept of [false, true]) {
+      const row = await runFixture(check, { deliveredEvent: { ...deliveredEvent, text: 'never retain', x: 999 }, unexpectedAccept });
+      assert.deepEqual(row.receivedEvent, deliveredEvent, 'actual delivery can differ from requested HID PID-zero fields');
+      assert.equal(row.passed, !unexpectedAccept);
+      assert.equal(row.mouseDownReachedButton, true);
+      assert.deepEqual(JSON.parse(JSON.stringify(row)).receivedEvent, deliveredEvent);
+      assert.doesNotMatch(JSON.stringify(row), /never retain/);
+    }
+  }
+  const missing = await runFixture(check, { noDelivery: true });
+  assert.equal(missing.receivedEvent, null);
+  assert.equal(missing.mouseDownReachedButton, false);
+  assert.equal(missing.passed, false);
 });

@@ -102,8 +102,9 @@ test('hold abort after prepare removes only the unused owned bank', async t => {
 for (const asyncWrite of [false, true]) test(`report output failure returns a failed report after unlock, async ${asyncWrite}`, async () => {
   let unlocked = false;
   const turns = [{ ...evidence.noticeTiming([tool(0), result(500, notice)], [], 0),
-    modTurnBegin: { t: 0, direction: 'mod-turn-begin' }, grants: [] }, { grants: [] },
-    { complete: true, grants: ['com.apple.TextEdit'] }, { text: 'allow TextEdit, Mail' }];
+    modTurnBegin: { t: 0, direction: 'mod-turn-begin' }, grants: [] },
+    { submitAt: 1, modTurnBegin: { t: 1, direction: 'mod-turn-begin' }, grants: [] },
+    { submitAt: 2, modTurnBegin: { t: 2, direction: 'mod-turn-begin' }, complete: true, grants: ['com.apple.TextEdit'] }, { text: 'allow TextEdit, Mail' }];
   const fail = () => { assert.equal(unlocked, true); throw Error('EEXIST'); };
   const io = { now: () => new Date('2026-10-26T00:00:00Z'), hold: async () => {},
     lock: async () => async () => { unlocked = true; }, login: async () => {}, prewarm: async () => ({ status: 'ready' }),
