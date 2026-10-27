@@ -1,11 +1,17 @@
 import { requestedSubmitRules } from '../../plugins/sleight/lib/requested-submit.mjs';
-import { turboFirstRules } from '../../plugins/sleight/lib/turbo-first-rules.mjs';
 import { dirname, join } from 'node:path';
-import { readFileSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
+import { createRequire } from 'node:module';
+import { fileURLToPath } from 'node:url';
 import { browserTools } from '../../plugins/sleight/lib/direct-browser/tools.mjs';
 import { worldAgentSetup } from '../world/arms/browser.mjs';
 import { benchHand } from '../hand/bench-hand.mjs';
 import { screenshotGuidance } from '../../plugins/sleight/lib/screenshot-guidance.mjs';
+
+// A release A/B runs this harness on the previous plugin tree too. 1.4.2 has no turbo-first module, so its side keeps
+// the prefix and skill switch it was measured with. require() keeps setup synchronous for the pinned runner.
+const firstRulesPath = fileURLToPath(new URL('../../plugins/sleight/lib/turbo-first-rules.mjs', import.meta.url));
+const turboFirstRules = existsSync(firstRulesPath) ? createRequire(import.meta.url)(firstRulesPath).turboFirstRules : undefined;
 
 export const SURFACE = 'sleight-turbo';
 export const MEASUREMENT = 'v3 tools and worker boundary plus engine companion; V10 runtime join excluded';
@@ -53,7 +59,7 @@ export function turboSetup({ task, repo, dir, prompt, env = process.env, realBro
   return { command: common.command, args: common.args, settings: { ...common.settings, hooks: { PreToolUse: [guard] } },
     mcpServers: { 'plugin:sleight:computer': { command: join(repo, 'plugins/sleight/bin/sleight-mcp'),
       // Native how-to is deferred from the turbo prefix, and arrives on native acquisition.
-      env: { SLEIGHT_SURFACES: 'browser,computer', SLEIGHT_SKILL: 'default', SLEIGHT_HAND: hand, ...(env.SLEIGHT_RS !== undefined ? { SLEIGHT_RS: env.SLEIGHT_RS } : {}) } },
+      env: { SLEIGHT_SURFACES: 'browser,computer', SLEIGHT_SKILL: turboFirstRules ? 'default' : 'none', SLEIGHT_HAND: hand, ...(env.SLEIGHT_RS !== undefined ? { SLEIGHT_RS: env.SLEIGHT_RS } : {}) } },
       // The worker's hand (H8) follows the same switch, and its hand-skipped and hand-shown events reach SLEIGHT_TRACE.
       'sleight-turbo': { command: process.execPath, args: [join(repo, 'bench/turbo/v3-server.mjs')],
       // SLEIGHT_TRACE comes from the arm's env (the real gate passes its traceEnv) or else the runner's own.
@@ -66,7 +72,7 @@ export function turboSetup({ task, repo, dir, prompt, env = process.env, realBro
           : typeof process.env.SLEIGHT_TRACE === 'string' && process.env.SLEIGHT_TRACE ? { SLEIGHT_TRACE: process.env.SLEIGHT_TRACE } : {}) } } },
     allowed: [...browserTools(browser).map(tool => 'mcp__sleight-turbo__' + tool.name),
       'mcp__plugin_sleight_computer__js', 'mcp__plugin_sleight_computer__js_reset', 'mcp__plugin_sleight_computer__open_file'].join(','),
-    promptPrefix: turboFirstRules(installed) + '\n\n',
+    promptPrefix: (turboFirstRules ? turboFirstRules(installed) : installed) + '\n\n',
     env: { ...common.env, CLAUDE_CONFIG_DIR: configDir },
     metadata: { ...common.metadata, configDir, surface: SURFACE, measurement: MEASUREMENT,
       path: 'model-selected', turboVersion: 3, standsInFor: application.slice(2, -1), runtime: 'V10 join required', playwright: '1.64.0', profile: 'owned-temporary', headless: true,
