@@ -667,7 +667,7 @@ export function createActionRunner({ check, snapshot, backgroundClick = (tab, lo
       // Keep each dispatch/refusal line and the delivered snapshot; deduplicate only the shared count.
       const shared = changed && lines.filter(line => line.includes('input sent; observation below')).length > 1;
       const detail = changed ? changed + ' lines changed (batch observation below)'
-        : /no (?:visible )?changes?/i.test(observed.text) ? `no visible change within ${observeWaitMs} ms` : 'input sent; page below';
+        : !fullOnce && /no (?:visible )?changes?/i.test(observed.text) ? `no visible change within ${observeWaitMs} ms` : 'input sent; page below';
       for (let i = 0; i < lines.length; i++) lines[i] = lines[i].replace('input sent; observation below', shared ? 'input sent' : detail);
       if (shared) lines.push(shortStepOutcomes.batch.replace('<count>', changed));
     }

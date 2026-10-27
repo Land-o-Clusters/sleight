@@ -3,11 +3,12 @@ import { utilityLocator } from './direct-browser-utility-fixture.mjs';
 import assert from 'node:assert/strict';
 import { EventEmitter } from 'node:events';
 import { createActionRunner, overlaySignature, inspectTarget, placeClear } from '../plugins/sleight/lib/direct-browser/act.mjs';
+import { createToolDispatcher } from '../plugins/sleight/lib/direct-browser/tools.mjs';
 import { deliverSnapshot } from '../plugins/sleight/lib/direct-browser/rules.mjs';
 import { createSessionPause, PAUSED_NOTE } from '../plugins/sleight/lib/session-pause.mjs';
 
 // Playwright boundary only. There is no engine object and no catch-all method fake.
-function fixture({ effect = '', submit = false, fail, onClick, snapshotFail = false, onCheck, backgroundClick } = {}) {
+function fixture({ effect = '', submit = false, fail, onClick, snapshotFail = false, onSnapshot, onCheck, backgroundClick } = {}) {
   const page = new EventEmitter(), actions = [], states = new Map(); let time = 0, number = 1, overlay = { count: 0, hash: 1 };
   const metadata = { name: 'Continue', submit, payment: false, form: submit, formSignature: 'before' };
   const loc = ref => utilityLocator({
@@ -49,7 +50,8 @@ function fixture({ effect = '', submit = false, fail, onClick, snapshotFail = fa
   };
   const run = createActionRunner({ check, ...(backgroundClick ? { backgroundClick } : {}), now: () => time, sleep: async ms => { time += ms; },
     snapshot: async (p, options) => { assert.equal(p, page); if (snapshotFail) throw Error('read unavailable');
-      return { text: effect || 'No visible changes.', number: ++number, options }; } });
+      const override = await onSnapshot?.(options, tab);
+      return { text: effect || 'No visible changes.', number: ++number, options, ...override }; } });
   return { page, tab, run, checks, actions, states, time: () => time, setOverlay: next => { overlay = next; } };
 }
 
@@ -84,6 +86,55 @@ test('PF7 full observation keeps refusal, pending and failed-read boundaries', a
   assert.deepEqual(refused.actions, []); assert.match(refusal.lines.join('\n'), /Read before resubmitting/);
   assert.ok(refused.tab.state.submitUnconfirmed);
 });
+
+test('PF7 full page wording cannot declare no visible change after a changed click', async t => {
+  const prior = process.env.SLEIGHT_FULL_OBSERVE_ONCE;
+  t.after(() => { if (prior === undefined) delete process.env.SLEIGHT_FULL_OBSERVE_ONCE; else process.env.SLEIGHT_FULL_OBSERVE_ONCE = prior; });
+  for (const flag of [undefined, '0', 'true', 'yes', '1']) {
+    if (flag === undefined) delete process.env.SLEIGHT_FULL_OBSERVE_ONCE; else process.env.SLEIGHT_FULL_OBSERVE_ONCE = flag;
+    const f = fixture({ effect: '# Snapshot 2 (untrusted page content)\n- heading "No changes pending"\n- checkbox "Enabled" [checked] [ref=e1]',
+      onClick: () => f.states.set('e1', { checked: true }) });
+    const result = await f.run(f.tab, [{ do: 'click', ref: 'e1' }], {}, { observe: 'full' });
+    assert.equal(f.states.get('e1').checked, true);
+    assert.equal(f.actions.filter(action => action[0] === 'click').length, 1);
+    if (flag === '1') {
+      assert.equal(result.lines[0], '1 click e1: input sent; page below');
+      assert.doesNotMatch(result.lines.join('\n'), /no visible change/i);
+    } else assert.equal(result.lines[0], '1 click e1: 2 lines changed (batch observation below)');
+  }
+});
+
+for (const boundary of ['failed final read', 'stuck before final read'])
+  test(`PF7 partial blocker snapshot never supplies the full marker: ${boundary}`, async t => {
+    const prior = process.env.SLEIGHT_FULL_OBSERVE_ONCE;
+    process.env.SLEIGHT_FULL_OBSERVE_ONCE = '1';
+    t.after(() => { if (prior === undefined) delete process.env.SLEIGHT_FULL_OBSERVE_ONCE; else process.env.SLEIGHT_FULL_OBSERVE_ONCE = prior; });
+    const reads = [];
+    const f = fixture({ fail: 'covering element intercepts pointer events', onSnapshot(options, tab) {
+      reads.push(options);
+      if (!options.find) throw Error('final read unavailable');
+      assert.equal(options.find, 'Accept cookies');
+      if (boundary === 'stuck before final read') tab.state.stuck = true;
+      return { text: '# Partial blocker (untrusted page content)\n- button "Accept cookies" [ref=e2]' };
+    } });
+    let runnerResult, recaptures = 0;
+    const d = createToolDispatcher({ siteMemory: null,
+      pages: { tab: () => f.tab, enqueue: async (_id, fn) => fn(f.tab), closedOpener: () => undefined },
+      runSteps: async (...args) => { runnerResult = await f.run(...args); return runnerResult; },
+      snapshot: async page => {
+        assert.equal(page, f.page); recaptures++;
+        return { text: '# Full recapture (untrusted page content)\n- heading "Whole page"', number: 3 };
+      }, fillFields: () => assert.fail('no fill'),
+    });
+    const result = await d.call({ name: 'browser_act', arguments: { tab: 't1', steps: [{ do: 'click', ref: 'e1' }], observe: 'full' } });
+    assert.equal(result.isError, false);
+    assert.match(runnerResult.observe.text, /Partial blocker/);
+    assert.equal(runnerResult.fullObservation, undefined);
+    assert.equal(reads.length, boundary === 'failed final read' ? 2 : 1);
+    assert.equal(recaptures, 1, 'the dispatcher must replace the partial runner snapshot');
+    assert.match(result.text, /Full recapture/); assert.doesNotMatch(result.text, /Partial blocker/);
+    assert.equal(d.delivered(result), true); assert.equal(f.tab.state.snapshotNo, 3);
+  });
 
 test('pause during a turbo step finishes that input and drops later steps', async () => {
   const pause = createSessionPause();

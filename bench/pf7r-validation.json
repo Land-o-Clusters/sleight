@@ -1,0 +1,397 @@
+{
+  "base": "b25b58fa0c6f5b5b53a116d25d25759fd3213be1",
+  "selection": "rg -l 'direct-browser/(act|tools|tool-surface)\\.mjs' tests -g '*.test.mjs'",
+  "files": [
+    "tests/browser-paste.real.test.mjs",
+    "tests/browser-paste.test.mjs",
+    "tests/consent-walls.real.test.mjs",
+    "tests/consent-walls.test.mjs",
+    "tests/direct-browser-closed-handle.test.mjs",
+    "tests/direct-browser-developer-read.real.test.mjs",
+    "tests/direct-browser-developer-read.test.mjs",
+    "tests/direct-browser-download.test.mjs",
+    "tests/direct-browser-edit-context.real.test.mjs",
+    "tests/direct-browser-electron-context.real.test.mjs",
+    "tests/direct-browser-electron-context.test.mjs",
+    "tests/direct-browser-electron-handoff.test.mjs",
+    "tests/direct-browser-electron-runtime.test.mjs",
+    "tests/direct-browser-export.real.test.mjs",
+    "tests/direct-browser-export.test.mjs",
+    "tests/direct-browser-fd3.real.test.mjs",
+    "tests/direct-browser-fd3.test.mjs",
+    "tests/direct-browser-fd3b.real.test.mjs",
+    "tests/direct-browser-fd3b.test.mjs",
+    "tests/direct-browser-fd3c.real.test.mjs",
+    "tests/direct-browser-fd3c.test.mjs",
+    "tests/direct-browser-fd3d.real.test.mjs",
+    "tests/direct-browser-fd3d.test.mjs",
+    "tests/direct-browser-fd4.real.test.mjs",
+    "tests/direct-browser-fd5.real.test.mjs",
+    "tests/direct-browser-fill-boundary.test.mjs",
+    "tests/direct-browser-handoff.test.mjs",
+    "tests/direct-browser-keyboard-ref-actions.test.mjs",
+    "tests/direct-browser-keyboard-refs.test.mjs",
+    "tests/direct-browser-mc1-act.test.mjs",
+    "tests/direct-browser-motion.test.mjs",
+    "tests/direct-browser-multiselect.real.test.mjs",
+    "tests/direct-browser-page.test.mjs",
+    "tests/direct-browser-pdf.real.test.mjs",
+    "tests/direct-browser-pdf.test.mjs",
+    "tests/direct-browser-point-errors.real.test.mjs",
+    "tests/direct-browser-point-fd2e.real.test.mjs",
+    "tests/direct-browser-point-fd2f.real.test.mjs",
+    "tests/direct-browser-point-geometry.real.test.mjs",
+    "tests/direct-browser-point-opt-in.test.mjs",
+    "tests/direct-browser-points.real.test.mjs",
+    "tests/direct-browser-points.test.mjs",
+    "tests/direct-browser-popup-observe.test.mjs",
+    "tests/direct-browser-port-children.real.test.mjs",
+    "tests/direct-browser-screenshot.real.test.mjs",
+    "tests/direct-browser-screenshot.test.mjs",
+    "tests/direct-browser-submit-fence.real.test.mjs",
+    "tests/direct-browser-touch.real.test.mjs",
+    "tests/direct-browser-touch.test.mjs",
+    "tests/direct-browser-v10r-focus-review.real.test.mjs",
+    "tests/direct-browser-v3-act.real.test.mjs",
+    "tests/direct-browser-v3-act.test.mjs",
+    "tests/direct-browser-v3-context.real.test.mjs",
+    "tests/direct-browser-v3-context.test.mjs",
+    "tests/direct-browser-v3-tools.real.test.mjs",
+    "tests/direct-browser-v3-tools.test.mjs",
+    "tests/direct-browser-v3-viewport.test.mjs",
+    "tests/direct-browser-v3-worker.test.mjs",
+    "tests/direct-browser-whole.real.test.mjs",
+    "tests/direct-browser-whole.test.mjs",
+    "tests/direct-browser-x6-hidden.real.test.mjs",
+    "tests/direct-browser-x6.test.mjs",
+    "tests/hand-browser.test.mjs",
+    "tests/pf7-headless-proof.test.mjs",
+    "tests/prompt-budget.test.mjs",
+    "tests/site-memory.real.test.mjs",
+    "tests/site-memory.test.mjs",
+    "tests/tool-descriptions.test.mjs",
+    "tests/turbo-v3-arm.real.test.mjs",
+    "tests/turbo-v3-handoff.test.mjs",
+    "tests/turbo-v3-protocol.test.mjs",
+    "tests/turbo-v3-session.test.mjs",
+    "tests/turn-stats-relay.test.mjs"
+  ],
+  "focused": {
+    "command": "CLAUDE_CONFIG_DIR=$(mktemp -d /tmp/lane-claude-XXXXXX) SLEIGHT_LIVE_DOM_TEST=0 SLEIGHT_EDIT_CONTEXT_REAL_TEST=0 SLEIGHT_PF7_HEADLESS_TEST=0 nice -n 20 node --test --test-reporter=tap --test-concurrency=1 tests/browser-paste.real.test.mjs tests/browser-paste.test.mjs tests/consent-walls.real.test.mjs tests/consent-walls.test.mjs tests/direct-browser-closed-handle.test.mjs tests/direct-browser-developer-read.real.test.mjs tests/direct-browser-developer-read.test.mjs tests/direct-browser-download.test.mjs tests/direct-browser-edit-context.real.test.mjs tests/direct-browser-electron-context.real.test.mjs tests/direct-browser-electron-context.test.mjs tests/direct-browser-electron-handoff.test.mjs tests/direct-browser-electron-runtime.test.mjs tests/direct-browser-export.real.test.mjs tests/direct-browser-export.test.mjs tests/direct-browser-fd3.real.test.mjs tests/direct-browser-fd3.test.mjs tests/direct-browser-fd3b.real.test.mjs tests/direct-browser-fd3b.test.mjs tests/direct-browser-fd3c.real.test.mjs tests/direct-browser-fd3c.test.mjs tests/direct-browser-fd3d.real.test.mjs tests/direct-browser-fd3d.test.mjs tests/direct-browser-fd4.real.test.mjs tests/direct-browser-fd5.real.test.mjs tests/direct-browser-fill-boundary.test.mjs tests/direct-browser-handoff.test.mjs tests/direct-browser-keyboard-ref-actions.test.mjs tests/direct-browser-keyboard-refs.test.mjs tests/direct-browser-mc1-act.test.mjs tests/direct-browser-motion.test.mjs tests/direct-browser-multiselect.real.test.mjs tests/direct-browser-page.test.mjs tests/direct-browser-pdf.real.test.mjs tests/direct-browser-pdf.test.mjs tests/direct-browser-point-errors.real.test.mjs tests/direct-browser-point-fd2e.real.test.mjs tests/direct-browser-point-fd2f.real.test.mjs tests/direct-browser-point-geometry.real.test.mjs tests/direct-browser-point-opt-in.test.mjs tests/direct-browser-points.real.test.mjs tests/direct-browser-points.test.mjs tests/direct-browser-popup-observe.test.mjs tests/direct-browser-port-children.real.test.mjs tests/direct-browser-screenshot.real.test.mjs tests/direct-browser-screenshot.test.mjs tests/direct-browser-submit-fence.real.test.mjs tests/direct-browser-touch.real.test.mjs tests/direct-browser-touch.test.mjs tests/direct-browser-v10r-focus-review.real.test.mjs tests/direct-browser-v3-act.real.test.mjs tests/direct-browser-v3-act.test.mjs tests/direct-browser-v3-context.real.test.mjs tests/direct-browser-v3-context.test.mjs tests/direct-browser-v3-tools.real.test.mjs tests/direct-browser-v3-tools.test.mjs tests/direct-browser-v3-viewport.test.mjs tests/direct-browser-v3-worker.test.mjs tests/direct-browser-whole.real.test.mjs tests/direct-browser-whole.test.mjs tests/direct-browser-x6-hidden.real.test.mjs tests/direct-browser-x6.test.mjs tests/hand-browser.test.mjs tests/pf7-headless-proof.test.mjs tests/prompt-budget.test.mjs tests/site-memory.real.test.mjs tests/site-memory.test.mjs tests/tool-descriptions.test.mjs tests/turbo-v3-arm.real.test.mjs tests/turbo-v3-handoff.test.mjs tests/turbo-v3-protocol.test.mjs tests/turbo-v3-session.test.mjs tests/turn-stats-relay.test.mjs > /private/tmp/pf7r-focused.tap 2>&1",
+    "exit": 0,
+    "tests": 2500,
+    "pass": 1753,
+    "fail": 0,
+    "skipped": 747,
+    "cancelled": 0,
+    "log": "/private/tmp/pf7r-focused.tap"
+  },
+  "headless": {
+    "command": "CLAUDE_CONFIG_DIR=$(mktemp -d /tmp/lane-claude-XXXXXX) SLEIGHT_PF7_HEADLESS_TEST=1 nice -n 20 node --test --test-reporter=tap --test-concurrency=1 tests/pf7-headless-proof.test.mjs > /private/tmp/pf7r-headless.tap 2>&1",
+    "exit": 0,
+    "tests": 4,
+    "pass": 4,
+    "fail": 0,
+    "skipped": 0,
+    "cancelled": 0,
+    "ownedBrowsersClosed": 4,
+    "log": "/private/tmp/pf7r-headless.tap"
+  },
+  "mutationProof": {
+    "source_sha256": {
+      "plugins/sleight/lib/direct-browser/act.mjs": "87fce496112a103b3b58f692689b3237509d337b189865c00cfac49bd0d7c22c",
+      "plugins/sleight/lib/direct-browser/tools.mjs": "2da28c12956a2bbcbb46ccf8d6a6fa6ae50aeb90c37e676ce0674147f2a334fc"
+    },
+    "runs": [
+      {
+        "name": "page-no-change-text",
+        "source": "plugins/sleight/lib/direct-browser/act.mjs",
+        "before": "!fullOnce && /no (?:visible )?changes?/i",
+        "after": "/no (?:visible )?changes?/i",
+        "command": [
+          "nice",
+          "-n",
+          "20",
+          "node",
+          "--test",
+          "--test-reporter=tap",
+          "--test-concurrency=1",
+          "--test-name-pattern=^PF7 ",
+          "tests/direct-browser-v3-act.test.mjs"
+        ],
+        "exit": 1,
+        "counts": {
+          "tests": 5,
+          "pass": 4,
+          "fail": 1,
+          "cancelled": 0,
+          "skipped": 0
+        },
+        "failed_tests": [
+          "PF7 full page wording cannot declare no visible change after a changed click"
+        ],
+        "killed": true,
+        "log": "/private/tmp/pf7r-mutant-page-no-change-text.tap"
+      },
+      {
+        "name": "parent-action-pending",
+        "source": "plugins/sleight/lib/direct-browser/tools.mjs",
+        "before": "!entry.state.actionPending && !entry.state.dialog && !entry.state.stuck",
+        "after": "!entry.state.dialog && !entry.state.stuck",
+        "command": [
+          "nice",
+          "-n",
+          "20",
+          "node",
+          "--test",
+          "--test-reporter=tap",
+          "--test-concurrency=1",
+          "--test-name-pattern=^PF7 ",
+          "tests/direct-browser-popup-observe.test.mjs"
+        ],
+        "exit": 1,
+        "counts": {
+          "tests": 31,
+          "pass": 30,
+          "fail": 1,
+          "cancelled": 0,
+          "skipped": 0
+        },
+        "failed_tests": [
+          "PF7 optional popup observation refuses parent pending input"
+        ],
+        "killed": true,
+        "log": "/private/tmp/pf7r-mutant-parent-action-pending.tap"
+      },
+      {
+        "name": "parent-dialog",
+        "source": "plugins/sleight/lib/direct-browser/tools.mjs",
+        "before": "!entry.state.actionPending && !entry.state.dialog && !entry.state.stuck",
+        "after": "!entry.state.actionPending && !entry.state.stuck",
+        "command": [
+          "nice",
+          "-n",
+          "20",
+          "node",
+          "--test",
+          "--test-reporter=tap",
+          "--test-concurrency=1",
+          "--test-name-pattern=^PF7 ",
+          "tests/direct-browser-popup-observe.test.mjs"
+        ],
+        "exit": 1,
+        "counts": {
+          "tests": 31,
+          "pass": 30,
+          "fail": 1,
+          "cancelled": 0,
+          "skipped": 0
+        },
+        "failed_tests": [
+          "PF7 optional popup observation refuses parent pending dialog"
+        ],
+        "killed": true,
+        "log": "/private/tmp/pf7r-mutant-parent-dialog.tap"
+      },
+      {
+        "name": "parent-stuck",
+        "source": "plugins/sleight/lib/direct-browser/tools.mjs",
+        "before": "!entry.state.actionPending && !entry.state.dialog && !entry.state.stuck",
+        "after": "!entry.state.actionPending && !entry.state.dialog",
+        "command": [
+          "nice",
+          "-n",
+          "20",
+          "node",
+          "--test",
+          "--test-reporter=tap",
+          "--test-concurrency=1",
+          "--test-name-pattern=^PF7 ",
+          "tests/direct-browser-popup-observe.test.mjs"
+        ],
+        "exit": 1,
+        "counts": {
+          "tests": 31,
+          "pass": 30,
+          "fail": 1,
+          "cancelled": 0,
+          "skipped": 0
+        },
+        "failed_tests": [
+          "PF7 optional popup observation refuses parent stuck page"
+        ],
+        "killed": true,
+        "log": "/private/tmp/pf7r-mutant-parent-stuck.tap"
+      },
+      {
+        "name": "screenshot-exclusion",
+        "source": "plugins/sleight/lib/direct-browser/tools.mjs",
+        "before": "a.observe !== 'screenshot' && !motion &&",
+        "after": "!motion &&",
+        "command": [
+          "nice",
+          "-n",
+          "20",
+          "node",
+          "--test",
+          "--test-reporter=tap",
+          "--test-concurrency=1",
+          "--test-name-pattern=^PF7 ",
+          "tests/direct-browser-popup-observe.test.mjs"
+        ],
+        "exit": 1,
+        "counts": {
+          "tests": 31,
+          "pass": 30,
+          "fail": 1,
+          "cancelled": 0,
+          "skipped": 0
+        },
+        "failed_tests": [
+          "PF7 screenshot observation preserves parent images without reading a child"
+        ],
+        "killed": true,
+        "log": "/private/tmp/pf7r-mutant-screenshot-exclusion.tap"
+      },
+      {
+        "name": "motion-exclusion",
+        "source": "plugins/sleight/lib/direct-browser/tools.mjs",
+        "before": "a.observe !== 'screenshot' && !motion &&",
+        "after": "a.observe !== 'screenshot' &&",
+        "command": [
+          "nice",
+          "-n",
+          "20",
+          "node",
+          "--test",
+          "--test-reporter=tap",
+          "--test-concurrency=1",
+          "--test-name-pattern=^PF7 ",
+          "tests/direct-browser-popup-observe.test.mjs"
+        ],
+        "exit": 1,
+        "counts": {
+          "tests": 31,
+          "pass": 30,
+          "fail": 1,
+          "cancelled": 0,
+          "skipped": 0
+        },
+        "failed_tests": [
+          "PF7 motion observation preserves parent frames without reading a child"
+        ],
+        "killed": true,
+        "log": "/private/tmp/pf7r-mutant-motion-exclusion.tap"
+      },
+      {
+        "name": "popup-notice-membership",
+        "source": "plugins/sleight/lib/direct-browser/tools.mjs",
+        "before": "!parent.popups.includes(notice) || notice.closed",
+        "after": "notice.closed",
+        "command": [
+          "nice",
+          "-n",
+          "20",
+          "node",
+          "--test",
+          "--test-reporter=tap",
+          "--test-concurrency=1",
+          "--test-name-pattern=^PF7 ",
+          "tests/direct-browser-popup-observe.test.mjs"
+        ],
+        "exit": 1,
+        "counts": {
+          "tests": 31,
+          "pass": 30,
+          "fail": 1,
+          "cancelled": 0,
+          "skipped": 0
+        },
+        "failed_tests": [
+          "PF7 optional popup observation refuses notice removed while queued"
+        ],
+        "killed": true,
+        "log": "/private/tmp/pf7r-mutant-popup-notice-membership.tap"
+      },
+      {
+        "name": "turn-ended-before-combine",
+        "source": "plugins/sleight/lib/direct-browser/tools.mjs",
+        "before": "if (!ended && !childResult.isError)",
+        "after": "if (!childResult.isError)",
+        "command": [
+          "nice",
+          "-n",
+          "20",
+          "node",
+          "--test",
+          "--test-reporter=tap",
+          "--test-concurrency=1",
+          "--test-name-pattern=^PF7 ",
+          "tests/direct-browser-popup-observe.test.mjs"
+        ],
+        "exit": 1,
+        "counts": {
+          "tests": 31,
+          "pass": 30,
+          "fail": 1,
+          "cancelled": 0,
+          "skipped": 0
+        },
+        "failed_tests": [
+          "PF7 turn ending after the child read never combines its text"
+        ],
+        "killed": true,
+        "log": "/private/tmp/pf7r-mutant-turn-ended-before-combine.tap"
+      },
+      {
+        "name": "early-full-marker",
+        "source": "plugins/sleight/lib/direct-browser/act.mjs",
+        "before": "let fullObservation = false;",
+        "after": "let fullObservation = fullOnce;",
+        "command": [
+          "nice",
+          "-n",
+          "20",
+          "node",
+          "--test",
+          "--test-reporter=tap",
+          "--test-concurrency=1",
+          "--test-name-pattern=^PF7 ",
+          "tests/direct-browser-v3-act.test.mjs"
+        ],
+        "exit": 1,
+        "counts": {
+          "tests": 5,
+          "pass": 3,
+          "fail": 2,
+          "cancelled": 0,
+          "skipped": 0
+        },
+        "failed_tests": [
+          "PF7 partial blocker snapshot never supplies the full marker: failed final read",
+          "PF7 partial blocker snapshot never supplies the full marker: stuck before final read"
+        ],
+        "killed": true,
+        "log": "/private/tmp/pf7r-mutant-early-full-marker.tap"
+      }
+    ],
+    "restored": true,
+    "mutants": 9,
+    "killed": 9,
+    "command": "CLAUDE_CONFIG_DIR=$(mktemp -d /tmp/lane-claude-XXXXXX) nice -n 20 python3 scripts/pf7r-mutation-proof.py --output /private/tmp/pf7r-mutations.json",
+    "exit": 0
+  },
+  "prose": {
+    "npmLintExit": 0,
+    "npmLintFiles": 167,
+    "directValeExit": 0,
+    "errors": 0,
+    "warnings": 0,
+    "suggestions": 0
+  },
+  "testSha256": {
+    "tests/direct-browser-v3-act.test.mjs": "3dba181bc766e4e2d89330fd6b9d847709a001e5efe64fd4d7e511625ad1dd39",
+    "tests/direct-browser-popup-observe.test.mjs": "eb141653e1c972887fffd7716845bf5c80af613a8e5d75f20ab3103cc73e587c",
+    "scripts/pf7r-mutation-proof.py": "fc8163f3b8a6dd296f414b200c44687f7c9c48cf7e2f1110fdd8a97d5948c42c"
+  }
+}
