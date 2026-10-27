@@ -56,7 +56,10 @@ export function createProtocol({ output = process.stdout, start, tools = browser
       process.stderr.write(`turbo bench: ${String(error?.code ?? error?.message ?? error).slice(0, 200)}\n`);
       result = { text: `Turbo bench unavailable (effect unknown${startup ? `, startup stage ${startup}` : ''}). Read before any retry.`, isError: true };
     }
-    await send({ id, result: { content: [{ type: 'text', text: result.text }], isError: result.isError } });
+    // Match relay.mjs's direct-browser projection. The production worker has
+    // already bounded and downscaled images; preserve their MIME, bytes and order.
+    // 1.4.2 returns text only, so it needs no newer image module or launcher import.
+    await send({ id, result: { content: [{ type: 'text', text: result.text }, ...(result.images ?? [])], isError: result.isError } });
     // An undelivered observation cannot unlock a submit retry. The product
     // surface decides which results represent deliverable observations.
     session?.delivered?.(result, request);
