@@ -6,7 +6,22 @@ import { createV3Bridge } from '../../plugins/sleight/lib/direct-browser/worker.
 import { fixturePolicy } from './setup.mjs';
 import { workerSwitches } from '../replay/switches.mjs';
 
-export async function createSession({ origins, taskMessage, forkWorker = fork, realBrowser } = {}) {
+const runProductMetadata = async (...args) => (await import('../../plugins/sleight/lib/launch.mjs')).runScript(...args);
+async function readHandoffPresence(run) {
+  if (process.env.SLEIGHT_REMOTE_APPROVALS === '0') return true;
+  let timer;
+  try {
+    // Use the relay's reader and policy, including its 1500 ms read budget.
+    // Older A-side plugins have no reader; they retain their existing wait.
+    return await Promise.race([
+      import('../../plugins/sleight/lib/remote-approvals.mjs').then(async ({ createRemoteApprovals, isPresent }) =>
+        isPresent(await createRemoteApprovals({ run }).presence())),
+      new Promise(resolve => { timer = setTimeout(() => resolve(true), 1500); timer.unref?.(); }),
+    ]);
+  } catch { return true; } finally { clearTimeout(timer); }
+}
+
+export async function createSession({ origins, taskMessage, forkWorker = fork, realBrowser, runMetadata = runProductMetadata } = {}) {
   // Tasks on the public web name no local fixture; any origins that are named still have to be runner fixtures.
   if (!Array.isArray(origins)) throw Error('Runner fixture origins required');
   if (origins.length) fixturePolicy(origins);
@@ -37,7 +52,11 @@ export async function createSession({ origins, taskMessage, forkWorker = fork, r
   let closing;
   try {
     if (!await bridge.bind({ ...bridge.bootstrapEnvelope(), event: 'begin', turn: 'benchturn', text: taskMessage })) throw Error('V3_PRIVATE_PROVIDERS_UNAVAILABLE');
-    return Object.freeze({ call: bridge.call, delivered: bridge.delivered,
+    return Object.freeze({
+      call: async input => {
+        const waiting = input?.name === 'browser_tabs' && input.arguments?.do === 'handoff' && input.arguments.wait === true;
+        return waiting ? bridge.call(input, { handoffPresent: await readHandoffPresence(runMetadata) }) : bridge.call(input);
+      }, delivered: bridge.delivered,
       close: () => closing ??= bridge.close() });
   } catch (error) { await bridge.close(); throw startupError(error, 'bind'); }
 }
