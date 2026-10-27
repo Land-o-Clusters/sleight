@@ -1,4 +1,5 @@
 import { hostCall } from './host.mjs';
+import { rememberCursorPrivateNames } from './scrub.mjs';
 
 export const RUN_SELECTION = Object.freeze({ model: 'Grok 4.7 High', effort: 'High', speed: 'Normal', attachment: 'Computer Use', target: 'This Mac' });
 export const SELECTION_CONTROLS = Object.freeze({ model: 'Select model', effort: 'Reasoning effort', speed: 'Speed', attachment: 'Computer Use', target: 'Computer Use target' });
@@ -14,24 +15,47 @@ export class CursorUI {
     this.window = undefined; this.composerId = undefined;
     this.window = (await this.invoke('bind')).window;
   }
-  invoke(action, extra = {}) { return this.call('ui', { owner: this.owner, expectedExecutable: this.expectedExecutable, window: this.window, composerId: this.composerId, action, ...extra }); }
-  readiness() { return this.invoke('readiness'); }
-  async selection() { return validateUISelection(await this.invoke('selection', { controls: SELECTION_CONTROLS })); }
-  async select(value, { signal } = {}) {
+  invoke(action, extra = {}, { timeoutMs = 20000 } = {}) { return this.call('ui', { owner: this.owner, expectedExecutable: this.expectedExecutable, window: this.window, composerId: this.composerId, action, ...extra }, { timeoutMs }); }
+  readiness(extra = {}) { return this.invoke('readiness', extra); }
+  async accessibilityState(options) {
+    const result = await this.invoke('accessibility-state', {}, options);
+    rememberCursorPrivateNames(result.privateNames);
+    return result.enabled;
+  }
+  async setAccessibility(enabled, options) { return this.invoke('accessibility-set', { enabled }, options); }
+  async bindCurrentChat() { this.composerId = (await this.invoke('bind-current-chat')).composerId; }
+  async selection(options) {
+    const value = validateUISelection(await this.invoke('selection', { controls: SELECTION_CONTROLS }, options));
+    this.lastVerifiedSelection = value; return value;
+  }
+  async select(value, { signal, restore = false } = {}) {
     const wanted = validateUISelection(value);
+    const budget = { timeoutMs: restore ? 60000 : 20000 };
     for (const [key, label] of Object.entries(wanted)) {
       signal?.throwIfAborted();
-      const current = await this.selection();
-      if (current[key] !== label) {
-        await this.invoke('choose', { control: SELECTION_CONTROLS[key], value: label });
-        signal?.throwIfAborted();
-        await this.invoke('choose', { control: SELECTION_CONTROLS[key], value: label, menuOpen: true });
+      for (let attempt = 0; attempt < (restore ? 2 : 1); attempt++) {
+        const current = await this.selection(budget);
+        if (current[key] === label) break;
+        let opened = false;
+        try {
+          // No abort checkpoint inside this pair. Complete the pick or dismiss our menu.
+          await this.invoke('choose', { control: SELECTION_CONTROLS[key], value: label }, budget);
+          opened = true;
+          await this.invoke('choose', { control: SELECTION_CONTROLS[key], value: label, menuOpen: true }, budget);
+          if ((await this.selection(budget))[key] !== label) throw Error('Cursor selection did not settle');
+          break;
+        } catch (error) {
+          // A native refusal before AXPress must not send Escape into an owner's dialog.
+          if (opened || error.mutationAttempted !== false) await this.invoke('close-menu', {}, budget);
+          try { await this.selection(budget); } catch { this.lastVerifiedSelection = null; }
+          if (!restore || attempt === 1) throw error;
+        }
       }
     }
     signal?.throwIfAborted();
-    if (JSON.stringify(await this.selection()) !== JSON.stringify(wanted)) throw Error('Cursor selection did not settle');
+    if (JSON.stringify(await this.selection(budget)) !== JSON.stringify(wanted)) throw Error('Cursor selection did not settle');
   }
-  async newChat() { this.composerId = undefined; await this.invoke('new-chat'); }
+  async newChat() { await this.invoke('new-chat'); }
   async bindChat(composerId) {
     if (!/^[A-Za-z0-9-]{1,100}$/.test(composerId)) throw Error('Cursor chat binding invalid');
     await this.invoke('bind-chat', { composerId });

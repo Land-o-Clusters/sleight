@@ -3,7 +3,8 @@ import { resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { armPaths, ordinaryPath, guardLive, requireOwnerFree } from './contract.mjs';
 import { DesktopDriver } from './desktop.mjs';
-import { detectRun } from './state.mjs';
+import { detectRun, assertComputerUseOnly } from './state.mjs';
+import { scrubCursor } from './scrub.mjs';
 
 export { makeCalibration, validateCalibration, verifySelection } from './selection.mjs';
 import { makeCalibration } from './selection.mjs';
@@ -37,6 +38,7 @@ export async function calibrate({ dryRun = false, ownerAway = false, ownerSaysCu
     while (now() - start < plan.timeoutMs) {
       signal?.throwIfAborted(); await driver.foreignGuard();
       const snapshot = await driver.readState();
+      assertComputerUseOnly(snapshot, driver.composerId);
       const found = detectRun(snapshot, { prompt: plan.prompt, submittedAt: start, allowUncalibratedModel: true, baselineIds: bound.baselineIds, composerId: driver.composerId, ...pinnedRun });
       if (found.started && !pinnedRun) pinnedRun = { composerId: found.composerId, generationId: found.generationId };
       if (found.ended) {
@@ -67,7 +69,7 @@ if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.ur
   try {
     const args = process.argv.slice(2);
     if (args.some(a => !['--dry-run', '--owner-says-cursor-free'].includes(a)) || new Set(args).size !== args.length) throw Error('calibrate accepts --dry-run and --owner-says-cursor-free; live mode requires the owner present');
-    console.log(JSON.stringify(await calibrate({ dryRun: args.includes('--dry-run'), ownerSaysCursorFree: args.includes('--owner-says-cursor-free') }, { signal: controller.signal }), null, 2));
+    console.log(JSON.stringify(scrubCursor(await calibrate({ dryRun: args.includes('--dry-run'), ownerSaysCursorFree: args.includes('--owner-says-cursor-free') }, { signal: controller.signal })), null, 2));
   } catch (error) { console.error(error.message); process.exitCode = 1; }
   finally { for (const s of ['SIGINT', 'SIGTERM', 'SIGHUP']) process.removeListener(s, abort); }
 }

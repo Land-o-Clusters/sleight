@@ -1,5 +1,5 @@
 import { CURSOR_PIN, requireOwnerFree } from './contract.mjs';
-import { detectRun } from './state.mjs';
+import { detectRun, assertComputerUseOnly } from './state.mjs';
 import { scrubCursor } from './scrub.mjs';
 
 export async function runDesktop(plan, { driver, signal, now = Date.now, pause = ms => new Promise(r => setTimeout(r, ms)), onEvent } = {}) {
@@ -17,9 +17,12 @@ export async function runDesktop(plan, { driver, signal, now = Date.now, pause =
     if (!submitted) throw Error('Cursor driver did not record its submit boundary');
     for (;;) {
       signal?.throwIfAborted();
+      const snapshot = await driver.readState();
+      if (driver.composerId) assertComputerUseOnly(snapshot, driver.composerId);
+      found = detectRun(snapshot, { prompt: plan.prompt, submittedAt, baselineIds: bound.baselineIds,
+        calibration: driver.calibration, composerId: driver.composerId, ...pinnedRun });
+      if (found.composerId) assertComputerUseOnly(snapshot, found.composerId);
       await driver.guard?.(plan);
-      found = detectRun(await driver.readState(), { prompt: plan.prompt, submittedAt, baselineIds: bound.baselineIds,
-        calibration: driver.calibration, ...pinnedRun });
       if (found.started && !pinnedRun) pinnedRun = { composerId: found.composerId, generationId: found.generationId };
       if (found.started && onEvent) {
         const tools = scrubCursor(found.tools), changed = [];
@@ -49,6 +52,7 @@ export async function runDesktop(plan, { driver, signal, now = Date.now, pause =
   reason = scrubCursor(reason);
   return { type: 'result', is_error: !!reason || !completed, result: found?.answer ?? '', reason, groupClean: clean,
     ...(reason && !/Cursor run timeout/.test(reason) && { safetyStop: reason }),
+    restoration: scrubCursor(driver.restoration),
     route: 'desktop', cursorVersion: CURSOR_PIN.version, cursorCommit: CURSOR_PIN.commit, cursorCdhash: CURSOR_PIN.cdhash,
     model: found?.model?.model ?? null, effort: found?.model?.effort ?? plan.effort, speed: found?.model?.speed ?? plan.speed,
     modelRequested: plan.modelLabel, composerId: found?.composerId ?? null, generationId: found?.generationId ?? null,

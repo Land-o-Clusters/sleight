@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
-import { readFileSync } from 'node:fs';
+import { readFileSync, mkdtempSync, rmSync } from 'node:fs';
 import { armPaths, composerPlan, guardLive, CURSOR_PIN } from '../bench/world/arms/cursor-cu/contract.mjs';
 import { makeCalibration } from '../bench/world/arms/cursor-cu/selection.mjs';
 import { DesktopDriver } from '../bench/world/arms/cursor-cu/desktop.mjs';
@@ -15,18 +15,28 @@ const previous = { model: 'Other model', effort: 'Medium', speed: 'Normal', atta
 const desired = { model: 'Grok 4.7 High', effort: 'High', speed: 'Normal', attachment: 'Computer Use', target: 'This Mac' };
 const selectedComposer = () => ({ modelConfig: { selectedModels: [{ modelId: 'grok-4.7', parameters: [{ id: 'effort', value: 'high' }, { id: 'fast', value: 'false' }] }] }, contextAttachments: [{ type: 'computer-use' }], target: { type: 'local' } });
 const plan = () => ({ ...composerPlan({ prompt: 'Edit.', paths }), ownerSaysCursorFree: true });
+const fixtureHomes = [];
+process.once('exit', () => { for (const home of fixtureHomes) rmSync(home, { recursive: true, force: true }); });
 function fixture({ failSelection = false, authenticated = true, rows = [identity] } = {}) {
+  const home = mkdtempSync('/private/tmp/cu2-owner-');
+  const localPlanPaths = armPaths({ home });
+  fixtureHomes.push(home);
   const calls = []; let selection = structuredClone(previous), state = { composers: [], bubbles: {} };
+  let accessibility = false;
   const ui = {
+    window: 7, composerId: 'original', bindCurrentChat: async () => {},
+    accessibilityState: async () => accessibility, setAccessibility: async value => { accessibility = value; },
     bind: async () => calls.push('bind'), bindChat: async id => calls.push(['bind chat', id]), readiness: async () => ({ loggedIn: authenticated, busy: false }),
     selection: async () => structuredClone(selection),
     select: async value => { calls.push(['select', structuredClone(value)]); selection = structuredClone(value); if (failSelection && value.model === desired.model) throw Error('selection failed'); },
-    newChat: async () => { calls.push('new chat'); state = { composers: [{ composerId: 'new', ...selectedComposer() }], bubbles: {} }; },
+    newChat: async () => { calls.push('new chat'); state = { composers: [{ composerId: 'new', fullConversationHeadersOnly: [], generatingBubbleIds: [], ...selectedComposer() }], bubbles: { new: [] } }; },
     fill: async () => calls.push('fill'), submit: async () => calls.push('submit'),
     cancel: async () => { calls.push('cancel'); return true; }, idle: async () => true,
   };
   const d = new DesktopDriver({ inspect: () => ({ ...CURSOR_PIN, signatureVerified: true }), processes: async () => rows,
     readiness: async () => ({ authStored: authenticated }), calibrationReader: () => makeCalibration(selectedComposer(), { settled: true, ownerModelLabel: 'Grok 4.7 High' }), ui, readState: async () => state, exists: () => false });
+  const preflight = d.preflight.bind(d);
+  d.preflight = (p, opts) => preflight({ ...p, paths: localPlanPaths }, opts);
   return { d, calls, ui, selection: () => selection };
 }
 
@@ -93,7 +103,7 @@ test('whole card snapshot refuses Always Allow and unlisted apps before any pres
 test('calibrate live entry without owner flag refuses promptly before host discovery', () => {
   const r = spawnSync(process.execPath, ['--permission', '--allow-fs-read=*', 'bench/world/arms/cursor-cu/calibrate.mjs'], { encoding: 'utf8', timeout: 5000 });
   assert.equal(r.status, 1, r.stderr); assert.equal(r.signal, null);
-  assert.match(r.stderr, /owner-says-cursor-free|already exists/);
+  assert.match(r.stderr, /requires --owner-says-cursor-free/);
   assert.doesNotMatch(r.stderr, /unsettled top-level await/);
 });
 

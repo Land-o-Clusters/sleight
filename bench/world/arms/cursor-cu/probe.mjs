@@ -3,6 +3,7 @@ import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { armPaths, composerPlan, guardLive, DESKTOP_BLOCKERS } from './contract.mjs';
 import { setupPlan } from './setup.mjs';
+import { scrubCursor } from './scrub.mjs';
 
 export { guardLive } from './contract.mjs';
 
@@ -37,7 +38,7 @@ export async function runProbe(options = {}, { exists = existsSync, run, preflig
   if (report.failed) process.exitCode = 1;
   if (plan.out) {
     mkdirSync(dirname(plan.out), { recursive: true, mode: 0o700 });
-    writeFileSync(plan.out, JSON.stringify(report, null, 2) + '\n', { flag: 'wx', mode: 0o600 });
+    writeFileSync(plan.out, JSON.stringify(scrubCursor(report), null, 2) + '\n', { flag: 'wx', mode: 0o600 });
   }
   return report;
 }
@@ -54,6 +55,6 @@ if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.ur
       else if (key === '--out' && !options.out && args[i + 1] && !args[i + 1].startsWith('--')) options.out = args[++i];
       else throw Error('probe accepts --dry-run, --owner-says-cursor-free, --owner-away and --out FILE only');
     }
-    console.log(JSON.stringify(await runProbe(options), null, 2));
+    console.log(JSON.stringify(scrubCursor(await runProbe(options)), null, 2));
   } catch (error) { console.error(error.message); process.exitCode = 1; }
 }

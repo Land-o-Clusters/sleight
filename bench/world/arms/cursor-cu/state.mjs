@@ -45,6 +45,31 @@ export async function profileState(paths, { composerId } = {}) {
   });
 }
 
+export function assertEmptyChat(snapshot, composerId) {
+  const c = snapshot.composers.find(c => c.composerId === composerId), bubbles = snapshot.bubbles[composerId];
+  if (!c || !Array.isArray(c.fullConversationHeadersOnly) || c.fullConversationHeadersOnly.length ||
+    !Array.isArray(bubbles) || bubbles.length || c.status === 'generating' || c.generatingBubbleIds?.length)
+    throw Error('Cursor new chat must be empty with no conversation or generation');
+}
+
+export function isComputerUseTool(row) {
+  const wire = row.toolCall?.tool ?? row.toolCall;
+  const params = row.params?.value ?? row.params ?? wire?.value?.args ?? row.input;
+  // Explicit conflicting discriminators refuse, even if arbitrary payload text mentions Computer Use.
+  if (row.tool !== undefined && !['computer_use', 'mcp'].includes(row.tool)) return false;
+  if (wire?.case !== undefined && !['computerUseToolCall', 'mcpToolCall'].includes(wire.case)) return false;
+  if (params?.providerIdentifier !== undefined && params.providerIdentifier !== 'cursor-computer-use') return false;
+  if (row.tool === 'computer_use' || wire?.case === 'computerUseToolCall') return true;
+  return params?.providerIdentifier === 'cursor-computer-use' ||
+    /^(?:mcp__)?cursor[-_]computer[-_]use__[A-Za-z0-9_]+$/.test(row.toolName ?? row.name ?? '');
+}
+
+export function assertComputerUseOnly(snapshot, composerId) {
+  // Admission proved this chat empty. Include newly written tool rows even before headers or timing settle.
+  const tools = (snapshot.bubbles[composerId] ?? []).flatMap(b => b.toolFormerData ? [b.toolFormerData] : []);
+  if (tools.some(row => !isComputerUseTool(row))) throw Error('Cursor safety stop: non-Computer-Use tool in run chat');
+}
+
 export function pendingAppApprovals(snapshot, composerId) {
   const composer = snapshot.composers.find(c => c.composerId === composerId);
   if (!composer || !composer.latestChatGenerationUUID) return [];

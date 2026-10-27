@@ -7,8 +7,8 @@ import { taskSupport } from '../bench/fowl/support.mjs';
 import { runGateAgent } from '../bench/fowl/real-gate.mjs';
 import { armPaths } from '../bench/world/arms/cursor-cu/contract.mjs';
 import { worldLoginReadiness } from '../bench/world/login-readiness.mjs';
-import { mkdtempSync, rmSync } from 'node:fs';
-import { tmpdir } from 'node:os';
+import { mkdtempSync, rmSync, readFileSync } from 'node:fs';
+import { tmpdir, homedir } from 'node:os';
 import { join } from 'node:path';
 
 test('native world route selects the shared fixture and defaults to high effort Grok', () => {
@@ -64,10 +64,12 @@ test('Chrome run records Cursor fields and uses submit-to-end time while retaini
     const p = realAgentSetup({ task: { name: 'mdn', browser: 'chrome', prompt: 'Look up MDN.', result: 'the answer' }, surface: 'cursor-cu', dir: taskDir,
       realBrowser: { browser: 'chrome' }, dryRun: true });
     const r = await runGateAgent({ ...p, dir: taskDir, surface: 'cursor-cu', task: { name: 'mdn' } }, { runCursor: async () => ({
-      type: 'result', is_error: false, result: 'RESULT: answer', duration_ms: 700, submittedAt: 1000, recordedEndAt: 1700,
+      type: 'result', is_error: false, result: 'RESULT: answer ' + homedir(), duration_ms: 700, submittedAt: 1000, recordedEndAt: 1700,
       groupClean: true, cursorVersion: '3.27.12', route: 'desktop', model: 'grok-4.7', effort: 'high', calls: 0, tools: [] }) });
     assert.equal(r.result.cursorVersion, '3.27.12'); assert.equal(r.finished - r.started, 700); assert.ok(r.outerStarted > 0);
     assert.equal(r.agentSeconds, 0.7);
     assert.equal(r.evidence.successfulCalls, 0);
+    assert.ok(r.result.result.includes(homedir()));
+    assert.ok(!readFileSync(join(taskDir, 'run.json'), 'utf8').includes(homedir()));
   } finally { rmSync(dir, { recursive: true, force: true }); }
 });

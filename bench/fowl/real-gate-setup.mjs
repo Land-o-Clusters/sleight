@@ -1,4 +1,5 @@
 import { existsSync, mkdirSync, writeFileSync } from 'node:fs';
+import { scrubCursor } from '../world/arms/cursor-cu/scrub.mjs';
 import { homedir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -119,7 +120,7 @@ export function realAgentSetup({ task, surface, dir, realBrowser, armHome, dryRu
       timeoutMs: (task.budgetSeconds || 600) * 1000, allowBenchmarkAppPrompts });
     return { command: null, args: [], env: {}, prompt, mcpConfig: null, cursorPlan,
       metadata: { arm: 'cursor-cu', route: 'desktop', cursorVersion: '3.27.12', model: 'Grok 4.7 High', effort: 'high', speed: 'normal',
-        configDir: cursorPlan.paths.userData, browser: 'chrome', headless: false, qualificationOnly: true } };
+        configDir: scrubCursor(cursorPlan.paths.userData), browser: 'chrome', headless: false, qualificationOnly: true } };
   }
   if (isCodexSurface(surface)) return codexBrowserSetup({ dir, prompt, realBrowser, surface });
   // The sleight-in-Codex arms build the sleight / sleight-turbo arm for this browser, then run it under Codex.

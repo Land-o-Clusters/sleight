@@ -52,11 +52,19 @@ async function hostExecutable() {
   return compiled;
 }
 // Never invoked by dry plans. The repository owns this fixed host interface.
-export async function hostCall(operation, data = {}) {
-  const result = await execute(await hostExecutable(), [operation, JSON.stringify(data)], { timeout: 20000, maxBuffer: 1024 * 1024 });
-  return JSON.parse(result.stdout);
+export async function hostCall(operation, data = {}, { timeoutMs = 20000 } = {}) {
+  try {
+    const result = await execute(await hostExecutable(), [operation, JSON.stringify(data)], { timeout: timeoutMs, maxBuffer: 1024 * 1024 });
+    return JSON.parse(result.stdout);
+  } catch (error) {
+    try {
+      const status = JSON.parse(error.stdout);
+      if (typeof status.mutationAttempted === 'boolean') error.mutationAttempted = status.mutationAttempted;
+    } catch { /* A timeout can leave the mutation uncertain. */ }
+    throw error;
+  }
 }
-export const inventory = paths => hostCall('inventory', { executable: paths.app + '/Contents/MacOS/Cursor' });
+export const inventory = (paths, options) => hostCall('inventory', { executable: paths.app + '/Contents/MacOS/Cursor' }, options);
 export const accessibility = {
   read: (owners, expectedExecutable) => hostCall('cards', { owners, expectedExecutable, apps: BENCHMARK_APPS }),
   press: (card, owners, expectedExecutable) => hostCall('press', { owners, expectedExecutable, apps: BENCHMARK_APPS, card }),

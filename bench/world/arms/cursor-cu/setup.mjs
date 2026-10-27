@@ -3,8 +3,9 @@ import { existsSync, readFileSync } from 'node:fs';
 import { resolve, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { createRequire } from 'node:module';
-import { armPaths, assertBundlePin, ordinaryPath, CURSOR_PIN, DESKTOP_BLOCKERS } from './contract.mjs';
+import { armPaths, assertBundlePin, ordinaryPath, CURSOR_PIN, DESKTOP_BLOCKERS, requireOwnerFree } from './contract.mjs';
 import { retryBusy } from './state.mjs';
+import { scrubCursor } from './scrub.mjs';
 const require = createRequire(import.meta.url);
 
 export function inspectBundle(app, run = spawnSync) {
@@ -33,9 +34,10 @@ export function setupPlan({ paths = armPaths() } = {}) {
     ] };
 }
 
-export function loginReadiness({ paths = armPaths(), authPresent = storedAuth } = {}) {
+export function loginReadiness({ paths = armPaths(), authPresent = storedAuth, ownerSaysCursorFree = false } = {}) {
+  requireOwnerFree({ ownerSaysCursorFree });
   const authStored = authPresent(paths);
-  return { arm: 'cursor-cu', route: 'desktop', config: paths.userData, loggedIn: 'unverified', authStored, ready: false,
+  return { arm: 'cursor-cu', route: 'desktop', config: scrubCursor(paths.userData), loggedIn: 'unverified', authStored, ready: false,
     missing: [authStored ? 'live login validity' : 'owner desktop login', 'live helper permissions', 'live composer/model calibration'],
     fix: 'node bench/world/arms/cursor-cu/setup.mjs' };
 }
@@ -52,10 +54,10 @@ function storedAuth(paths) {
   } finally { db.close(); }
 }
 
-export async function readLoginReadiness(paths = armPaths()) { return retryBusy(() => loginReadiness({ paths })); }
+export async function readLoginReadiness(paths = armPaths(), { ownerSaysCursorFree = false } = {}) { return retryBusy(() => loginReadiness({ paths, ownerSaysCursorFree })); }
 
 if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
   const args = process.argv.slice(2);
-  if (args.some(a => !['--dry-run', '--readiness'].includes(a))) throw Error('setup only prints steps; use --readiness for metadata');
-  console.log(JSON.stringify(args.includes('--readiness') ? await readLoginReadiness() : setupPlan(), null, 2));
+  if (args.some(a => !['--dry-run', '--readiness', '--owner-says-cursor-free'].includes(a))) throw Error('setup only prints steps; use --readiness for metadata');
+  console.log(JSON.stringify(scrubCursor(args.includes('--readiness') ? await readLoginReadiness(undefined, { ownerSaysCursorFree: args.includes('--owner-says-cursor-free') }) : setupPlan()), null, 2));
 }

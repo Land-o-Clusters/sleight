@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
-import { tmpdir } from 'node:os';
+import { tmpdir, homedir } from 'node:os';
 import { realpathSync } from 'node:fs';
 const realTmp = realpathSync(tmpdir());
 import { trackTemp } from '../scripts/temp-leftovers.mjs';
@@ -35,7 +35,7 @@ const snapshot = (ended = true, tools = []) => ({ composers: [{ ...composer(), s
 ] } });
 const request = { name: 'TextEdit', bundleId: 'com.apple.TextEdit', toolCallId: 'request', generationId: 'turn' };
 const pending = () => {
-  const s = snapshot(false, [{ toolCallId: 'request', status: 'needs_user_approval', additionalData: { computerUseApp: { name: request.name, bundleId: request.bundleId } } }]);
+  const s = snapshot(false, [{ toolCallId: 'request', tool: 'computer_use', status: 'needs_user_approval', additionalData: { computerUseApp: { name: request.name, bundleId: request.bundleId } } }]);
   return s;
 };
 const card = { owner: own, title: 'Allow Cursor to use TextEdit?', name: request.name, bundleId: request.bundleId, source: 'Computer Use', button: 'Allow in this chat', id: 'card' };
@@ -52,7 +52,9 @@ test('nativeMain grades the raw Cursor answer and saves a scrubbed copy', async 
       execute: async (_task, _ctx, { drive }) => { const d = await drive('Edit.'); graded = d.out.result; return { ...d, seconds: 9, passed: true }; },
     });
     assert.equal(graded, answer);
-    const saved = JSON.parse(readFileSync(join(dir, 'results.json'), 'utf8')).results[0];
+    const savedText = readFileSync(join(dir, 'results.json'), 'utf8');
+    assert.ok(!savedText.includes(homedir()));
+    const saved = JSON.parse(savedText).results[0];
     assert.doesNotMatch(JSON.stringify(saved), /hunter2/);
     assert.doesNotMatch(JSON.stringify(out.results[0]), /hunter2/);
   } finally { process.exitCode = exit; rmSync(dir, { recursive: true, force: true }); }

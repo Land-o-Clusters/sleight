@@ -115,7 +115,7 @@ test('state reader queries only selected composer and bubble keys with a readonl
 });
 
 test('readiness is metadata only and does not claim a token presence proves helper grants', () => {
-  const r = loginReadiness({ paths: paths(), authPresent: () => true });
+  const r = loginReadiness({ paths: paths(), authPresent: () => true, ownerSaysCursorFree: true });
   assert.equal(r.loggedIn, 'unverified'); assert.equal(r.authStored, true); assert.equal(r.ready, false);
   assert.ok(r.missing.includes('live helper permissions'));
 });
@@ -128,7 +128,7 @@ test('default readiness detects a stored auth row without exposing its value', (
     db.exec('CREATE TABLE ItemTable (key TEXT PRIMARY KEY, value TEXT)');
     db.prepare('INSERT INTO ItemTable (key,value) VALUES (?,?)').run('cursorAuth/accessToken', 'fixture-value-only');
     db.close();
-    const r = loginReadiness({ paths: p }); assert.equal(r.authStored, true); assert.equal(r.loggedIn, 'unverified');
+    const r = loginReadiness({ paths: p, ownerSaysCursorFree: true }); assert.equal(r.authStored, true); assert.equal(r.loggedIn, 'unverified');
     assert.ok(!JSON.stringify(r).includes('fixture-value-only'));
   } finally { rmSync(dir, { recursive: true, force: true }); }
 });

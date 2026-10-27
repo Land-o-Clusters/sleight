@@ -52,11 +52,11 @@ export async function runCursorPlan(plan, { signal, ...options } = {}) {
 
 export async function nativeMain(argv, runtime = {}) {
   const args = parseOptions(argv), plan = nativePlan(args);
-  if (args['dry-run']) { (runtime.print ?? console.log)(JSON.stringify(plan, null, 2)); return plan; }
+  if (args['dry-run']) { (runtime.print ?? console.log)(JSON.stringify(scrubCursor(plan), null, 2)); return plan; }
   (runtime.guard ?? guardLive)({ ownerAway: plan.ownerAway, ownerSaysCursorFree: plan.ownerSaysCursorFree });
   await (runtime.preflight ?? (p => new DesktopDriver().preflight(p)))({ paths: armPaths(), ownerSaysCursorFree: plan.ownerSaysCursorFree });
   (runtime.inspect ?? inspectBundle)(armPaths().app);
-  const readiness = await (runtime.readiness ?? readLoginReadiness)();
+  const readiness = await (runtime.readiness ?? readLoginReadiness)(undefined, { ownerSaysCursorFree: plan.ownerSaysCursorFree });
   if (!readiness.authStored) throw Error('Cursor owner login missing; keep the installed signed-in Cursor running');
   if (existsSync(plan.out)) throw Error('Cursor result output already exists');
   const { acquireLiveLock } = await import('../../../live-lock.mjs');
@@ -90,7 +90,7 @@ export async function nativeMain(argv, runtime = {}) {
         timingBoundary: inner ? plan.timingBoundary : 'outer drive through task check, including startup', qualificationOnly: true });
       if (result.groupClean === false || result.cleanupUnconfirmed || ctx.fixtureLockUnconfirmed || result.liveLockKept) clean = false;
       mkdirSync(resolve(plan.out, '..'), { recursive: true, mode: 0o700 });
-      writeFileSync(plan.out, JSON.stringify({ ...plan, results, groupClean: clean }, null, 2), { mode: 0o600 });
+      writeFileSync(plan.out, JSON.stringify(scrubCursor({ ...plan, results, groupClean: clean }), null, 2), { mode: 0o600 });
       if (!clean || controller.signal.aborted || result.approvalStop || result.safetyStop) break;
     }
   } finally {

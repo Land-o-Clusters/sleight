@@ -3,6 +3,7 @@ import AppKit
 import ApplicationServices
 import Foundation
 
+var mutationAttempted = false
 func refuse(_ message: String) throws -> Never { throw NSError(domain: "Cursor benchmark", code: 1, userInfo: [NSLocalizedDescriptionKey: message]) }
 func emit(_ value: Any) throws {
     let data = try JSONSerialization.data(withJSONObject: value, options: [.sortedKeys])
@@ -48,8 +49,8 @@ func cards(_ data: [String: Any]) throws -> [Card] {
     for owner in owners {
         let app = try owned(owner, expectedExecutable), pid = app.processIdentifier, root = AXUIElementCreateApplication(pid)
         if app.bundleIdentifier == "com.todesktop.230313mzl4w4u92" {
-            // Chromium builds web AX lazily. This touches only the bound installed app.
-            guard AXUIElementSetAttributeValue(root, "AXManualAccessibility" as CFString, kCFBooleanTrue) == .success else { try refuse("Cursor approval stop: web accessibility unavailable") }
+            // Only open() may enable this after durably recording its prior value.
+            guard attr(root, "AXManualAccessibility") as? Bool == true else { try refuse("Cursor approval stop: web accessibility unavailable") }
         }
         guard AXUIElementSetMessagingTimeout(root, 2) == .success,
               let windows = attr(root, "AXWindows") as? [AXUIElement] else { try refuse("Cursor approval stop: AX windows unavailable") }
@@ -92,6 +93,23 @@ func ui(_ data: [String: Any]) throws -> Any {
           executable == "/Applications/Cursor.app/Contents/MacOS/Cursor", let action = data["action"] as? String else { try refuse("Cursor UI binding missing") }
     let app = try owned(owner, executable), root = AXUIElementCreateApplication(app.processIdentifier)
     guard AXUIElementSetMessagingTimeout(root, 2) == .success else { try refuse("Cursor UI timeout setup failed") }
+    if action == "accessibility-state" {
+        guard let enabled = attr(root, "AXManualAccessibility") as? Bool else { try refuse("Cursor prior accessibility value unavailable") }
+        return ["enabled": enabled, "privateNames": [NSUserName(), NSFullUserName()]] as [String: Any]
+    }
+    if action == "accessibility-set" {
+        guard let enabled = data["enabled"] as? Bool,
+              AXUIElementSetAttributeValue(root, "AXManualAccessibility" as CFString, enabled ? kCFBooleanTrue : kCFBooleanFalse) == .success,
+              attr(root, "AXManualAccessibility") as? Bool == enabled else { try refuse("Cursor accessibility change unverified") }
+        return ["enabled": enabled]
+    }
+    if action == "close-menu" {
+        // Cleanup must still work after a timed out or truncated menu tree read.
+        guard let down = CGEvent(keyboardEventSource: nil, virtualKey: 53, keyDown: true),
+              let up = CGEvent(keyboardEventSource: nil, virtualKey: 53, keyDown: false) else { try refuse("Cursor menu dismissal unavailable") }
+        down.postToPid(app.processIdentifier); up.postToPid(app.processIdentifier)
+        return ["dismissed": true]
+    }
     func number(_ window: AXUIElement) -> Int? { (attr(window, "AXWindowNumber") as? NSNumber)?.intValue }
     if action == "bind" {
         guard let focused = attr(root, "AXFocusedWindow"), CFGetTypeID(focused) == AXUIElementGetTypeID() else { try refuse("Cursor focused window unavailable") }
@@ -103,16 +121,20 @@ func ui(_ data: [String: Any]) throws -> Any {
     let matches = windows.filter { number($0) == id }
     guard matches.count == 1 else { try refuse("Cursor bound window disappeared") }
     let window = matches[0]
-    var nodes: [AXUIElement] = [], visited = 0
-    func scan(_ node: AXUIElement, _ depth: Int) throws {
-        visited += 1
-        guard visited <= 12000, depth <= 40 else { try refuse("Cursor UI tree truncated") }
-        var pid: pid_t = 0
-        guard AXUIElementGetPid(node, &pid) == .success, pid == app.processIdentifier else { try refuse("Cursor UI pid changed") }
-        nodes.append(node)
-        for child in attr(node, "AXChildren") as? [AXUIElement] ?? [] { try scan(child, depth + 1) }
+    func subtree(_ root: AXUIElement) throws -> [AXUIElement] {
+        var result: [AXUIElement] = [], visited = 0
+        func scan(_ node: AXUIElement, _ depth: Int) throws {
+            visited += 1
+            guard visited <= 12000, depth <= 40 else { try refuse("Cursor UI tree truncated") }
+            var pid: pid_t = 0
+            guard AXUIElementGetPid(node, &pid) == .success, pid == app.processIdentifier else { try refuse("Cursor UI pid changed") }
+            result.append(node)
+            for child in attr(node, "AXChildren") as? [AXUIElement] ?? [] { try scan(child, depth + 1) }
+        }
+        try scan(root, 0); return result
     }
-    try scan(window, 0)
+    let windowNodes = try subtree(window)
+    var nodes = windowNodes
     func role(_ node: AXUIElement) -> String { attr(node, "AXRole") as? String ?? "" }
     func named(_ node: AXUIElement, _ name: String) -> Bool {
         ["AXTitle", "AXDescription", "AXHelp"].contains { attr(node, $0) as? String == name }
@@ -124,8 +146,9 @@ func ui(_ data: [String: Any]) throws -> Any {
         guard rows.count == 1 else { try refuse("Cursor UI control absent or ambiguous") }; return rows[0]
     }
     func press(_ node: AXUIElement) throws {
-        guard attr(node, "AXEnabled") as? Bool != false,
-              AXUIElementPerformAction(node, "AXPress" as CFString) == .success else { try refuse("Cursor UI AXPress refused") }
+        guard attr(node, "AXEnabled") as? Bool != false else { try refuse("Cursor UI control disabled") }
+        mutationAttempted = true
+        guard AXUIElementPerformAction(node, "AXPress" as CFString) == .success else { try refuse("Cursor UI AXPress refused") }
     }
     func input() throws -> AXUIElement {
         try unique(nodes.filter { node in ["AXTextArea", "AXTextField"].contains(role(node)) && ["Ask", "Ask anything", "Agent input"].contains(where: { named(node, $0) }) })
@@ -139,16 +162,33 @@ func ui(_ data: [String: Any]) throws -> Any {
         }
         return false
     }
-    if action == "bind-chat" || data["composerId"] != nil {
-        guard let composer = data["composerId"] as? String, !composer.isEmpty, composer.count <= 100,
-              nodes.filter({ attr($0, "AXIdentifier") as? String == composer || attr($0, "AXIdentifier") as? String == "composer-" + composer }).count == 1 else { try refuse("Cursor run chat UI binding unavailable or changed; supervised UI calibration required") }
-        if action == "bind-chat" { return ["bound": true] }
+    if action == "bind-current-chat" {
+        let candidates = windowNodes.filter { node in
+            guard let id = attr(node, "AXIdentifier") as? String else { return false }
+            return id.range(of: "^composer-[A-Za-z0-9-]{1,100}$", options: .regularExpression) != nil || UUID(uuidString: id) != nil
+        }
+        let composer = try unique(candidates)
+        nodes = try subtree(composer)
+        _ = try input()
+        guard let id = attr(composer, "AXIdentifier") as? String else { try refuse("Cursor owner chat identifier unavailable") }
+        return ["composerId": id.hasPrefix("composer-") ? String(id.dropFirst(9)) : id]
     }
-    if ["new-chat", "choose", "fill", "submit", "cancel"].contains(action), nodes.contains(where: { role($0) == "AXSheet" || attr($0, "AXSubrole") as? String == "AXDialog" }) { try refuse("Cursor UI dialog requires the owner") }
+    guard let composerID = data["composerId"] as? String, !composerID.isEmpty, composerID.count <= 100 else { try refuse("Cursor chat container binding missing") }
+    let composer = try unique(windowNodes.filter { attr($0, "AXIdentifier") as? String == composerID || attr($0, "AXIdentifier") as? String == "composer-" + composerID })
+    nodes = try subtree(composer)
+    if action == "bind-chat" {
+        guard (attr(try input(), "AXValue") as? String ?? "").isEmpty,
+              buttons(["Stop", "Stop generating"]).isEmpty else { try refuse("Cursor new chat is not empty or idle") }
+        return ["bound": true]
+    }
+    if ["new-chat", "choose", "fill", "submit", "cancel"].contains(action), windowNodes.contains(where: { role($0) == "AXSheet" || attr($0, "AXSubrole") as? String == "AXDialog" }) { try refuse("Cursor UI dialog requires the owner") }
     switch action {
     case "readiness":
-        let login = !buttons(["Account", "Manage Account"]).isEmpty && buttons(["Sign In", "Log In"]).isEmpty && !buttons(["New Chat", "New Agent"]).isEmpty
-        return ["loggedIn": login, "busy": !buttons(["Stop", "Stop generating"]).isEmpty]
+        let account = windowNodes.contains { node in ["Account", "Manage Account"].contains { named(node, $0) } }
+        let signedOut = windowNodes.contains { node in ["Sign In", "Log In"].contains { named(node, $0) } }
+        let busyNodes = data["ownerAdmission"] as? Bool == true ? windowNodes : nodes
+        let busy = busyNodes.contains { node in ["Stop", "Stop generating"].contains { named(node, $0) } }
+        return ["loggedIn": account && !signedOut && !buttons(["New Chat", "New Agent"]).isEmpty, "busy": busy]
     case "selection":
         guard let labels = data["controls"] as? [String: String], labels.count == 5 else { try refuse("Cursor selection controls missing") }
         var result: [String: String] = [:]
@@ -215,6 +255,7 @@ do {
     default: try refuse("unknown Cursor host operation")
     }
 } catch {
+    try? emit(["mutationAttempted": mutationAttempted])
     FileHandle.standardError.write(Data((error.localizedDescription + "\n").utf8))
     exit(1)
 }
