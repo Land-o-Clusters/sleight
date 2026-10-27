@@ -58,14 +58,25 @@ export function instrumentHost(source = readFileSync(hostSource, 'utf8')) {
         FileHandle.standardError.write(Data("PC1 ".utf8) + bytes + Data([10]))
     }
 }
+// BEGIN PERSON CHECK MOUSE RECEIPT
+func pc1MouseDownReceipt(_ event: NSEvent, insideButton: Bool) {
+    var data: [String: Any] = ["window": event.windowNumber, "insideButton": insideButton]
+    if let delivered = event.cgEvent {
+        data["sourceState"] = delivered.getIntegerValueField(.eventSourceStateID)
+        data["sourcePid"] = delivered.getIntegerValueField(.eventSourceUnixProcessID)
+        data["userData"] = delivered.getIntegerValueField(.eventSourceUserData)
+    }
+    pc1Receipt("mouse-down", data)
+}
+// END PERSON CHECK MOUSE RECEIPT
 // BEGIN PERSON INPUT`);
   insert('func refuseConsentInput(_ button: NSButton? = nil, tooSoon: Bool = false) {', 'func refuseConsentInput(_ button: NSButton? = nil, tooSoon: Bool = false) {\n    pc1Receipt("refused", ["code": tooSoon ? "CONSENT_TOO_SOON" : "PERSON_INPUT_REQUIRED"])');
   insert('return sender.sendAction(originalAction, to: originalTarget)', `pc1Receipt("dispatch", ["typed": typed, "keyCode": event.type == .keyDown ? Int(event.keyCode) : -1, "mouse": [.leftMouseDown, .leftMouseUp].contains(event.type)])
         return sender.sendAction(originalAction, to: originalTarget)`);
   insert('_ = focusForTyping()', 'if focusForTyping() { pc1Receipt("focused") }');
   insert('func trackMouseDown(_ event: NSEvent, perform: () -> Void) {', `func trackMouseDown(_ event: NSEvent, perform: () -> Void) {
-        pc1Receipt("mouse-down", ["window": event.windowNumber,
-            "insideButton": button.map { $0.bounds.contains($0.convert(event.locationInWindow, from: nil)) } ?? false])`);
+        pc1MouseDownReceipt(event,
+            insideButton: button.map { $0.bounds.contains($0.convert(event.locationInWindow, from: nil)) } ?? false)`);
   insert('NSSound(named: "Glass")?.play()', `NSSound(named: "Glass")?.play()
         var data: [String: Any] = ["pid": Int(getpid())]
         if let button = buttons.first(where: { $0.title == "Continue" }) {
@@ -218,11 +229,14 @@ export async function runCheck(check, { open, post, signal, say = console.error,
     try { await host.close(); cleanupConfirmed = true; }
     catch (error) { row = { ...row, passed: false, cleanupError: error.message }; }
   }
+  const mouseDown = postTarget && host.receipts.slice(postAt).find(r => r.event === 'mouse-down' &&
+    r.window === postTarget.window && r.insideButton === true);
+  const receivedEvent = mouseDown ? Object.fromEntries(['sourceState', 'sourcePid', 'userData'].map(key =>
+    [key, mouseDown[key] ?? null])) : null;
   const result = { id: check.id, target: check.target ?? 'protected-action', expected: check.expected,
     startedAt: new Date(start).toISOString(), endedAt: new Date(now()).toISOString(), durationMs: now() - start,
     ...row, resumed, freshReads, cleanupConfirmed, ...(posting ? { postExitCode: posting.status } : {}),
-    ...(postTarget ? { postTarget, mouseDownReachedButton: host.receipts.slice(postAt).some(r => r.event === 'mouse-down' &&
-      r.window === postTarget.window && r.insideButton === true) } : {}) };
+    ...(postTarget ? { postTarget, mouseDownReachedButton: Boolean(mouseDown), receivedEvent } : {}) };
   say(JSON.stringify(result)); return result;
 }
 

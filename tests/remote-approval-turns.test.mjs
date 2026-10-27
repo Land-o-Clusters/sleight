@@ -10,7 +10,16 @@ import { realSession, remoteLoginPlan, remotePlan, runRemoteApproval } from '../
 import { REMOTE_NOTICE } from '../bench/remote-approval-evidence.mjs';
 import { recordTurnEnd } from '../bench/world/arms/claude-cu/turn-ended.mjs';
 
-for (const binding of ['valid', 'foreign nonce', 'foreign session', 'missing begin', 'stale begin', 'future begin', 'wrong trace']) test(`configured RA1 Stop hook and four-turn sequence: ${binding}`, async t => {
+const invalidBegins = ['missing begin', 'stale begin', 'future begin', 'wrong trace'];
+const cases = [
+  ...['valid', 'foreign nonce', 'foreign session'].map(binding => ({ binding, failTurn: 1 })),
+  ...invalidBegins.flatMap(binding => [1, 2, 3].map(failTurn => ({ binding, failTurn }))),
+  ...[{}, { sleight_turbo: { event: 'bootstrap' } },
+    { sleight_turbo: { event: 'begin', text: 'allow TextEdit' } }].flatMap(input => [1, 2, 3, 4].map(failTurn =>
+    ({ binding: 'model turn_ended', failTurn, modelTool: { name: 'mcp__plugin_sleight_computer__turn_ended', input } }))),
+  { binding: 'foreign tool', failTurn: 1, modelTool: { name: 'mcp__other__js', input: {} } },
+];
+for (const { binding, failTurn, modelTool } of cases) test(`configured RA1 Stop hook and four-turn sequence: ${binding}, turn ${failTurn}, ${JSON.stringify(modelTool?.input)}`, async t => {
   const home = registerTemp(t, realpathSync(mkdtempSync(join(tmpdir(), 'sleight-ra1-turns-'))));
   const login = remoteLoginPlan({ home, env: { PATH: process.env.PATH } });
   const bank = { bank: join(home, 'bank'), token: 'RA1-owned-fixture', fixture: 'owned-note', mail: 'Mail' };
@@ -62,17 +71,19 @@ for (const binding of ['valid', 'foreign nonce', 'foreign session', 'missing beg
             // Old receipts must be removed before the next prompt, including the text-only yes turn.
             assert.equal(existsSync(p.env.BENCH_CU_TURN_RECEIPT), false);
             pending = () => {
-              writeFileSync(diagnosticsFile, JSON.stringify({ trace: binding === 'missing begin' ? [] : [{
-                direction: binding === 'wrong trace' ? 'call-received' : 'mod-turn-begin',
-                t: binding === 'stale begin' ? submittedAt - 1 : binding === 'future begin' ? clock + 1 : submittedAt,
+              const beginBinding = prompts.length === failTurn ? binding : 'valid';
+              writeFileSync(diagnosticsFile, JSON.stringify({ trace: beginBinding === 'missing begin' ? [] : [{
+                direction: beginBinding === 'wrong trace' ? 'call-received' : 'mod-turn-begin',
+                t: beginBinding === 'stale begin' ? submittedAt - 1 : beginBinding === 'future begin' ? clock + 1 : submittedAt,
               }] }));
               const typed = text === 'allow TextEdit', first = text.startsWith(remotePlan().first);
               const blocks = [{ type: 'text', text: typed ? fixture.token : options.upfront ? 'Please reply: allow TextEdit, Mail' : 'Please reply: allow TextEdit' }];
               const rows = [];
-              if (first || typed) {
+              if (first || typed || modelTool && prompts.length === failTurn) {
                 const id = randomUUID();
                 rows.push({ type: 'assistant', message: { id: randomUUID(), content: [{ type: 'tool_use', id,
-                  name: 'mcp__plugin_sleight_computer__js', input: { code: 'nodeRepl.write(await app.getAXState())' } }] } },
+                  name: 'mcp__plugin_sleight_computer__js', input: { code: 'nodeRepl.write(await app.getAXState())' },
+                  ...(modelTool && prompts.length === failTurn ? modelTool : {}) }] } },
                 { type: 'user', message: { content: [{ type: 'tool_result', tool_use_id: id, content: typed ? fixture.token : REMOTE_NOTICE }] } });
               }
               rows.push({ type: 'assistant', message: { id: randomUUID(), content: blocks, stop_reason: 'end_turn' } });
@@ -98,10 +109,17 @@ for (const binding of ['valid', 'foreign nonce', 'foreign session', 'missing beg
     assert.equal(report.collected, true);
     return;
   }
-  if (binding !== 'valid') {
-    assert.equal(report.error, 'mod did not reach the server (guard, connect or mod load)');
+  if (modelTool) {
+    assert.equal(report.error, 'Unexpected tool outside the TextEdit fixture');
     assert.equal(report.passed, false);
-    assert.equal(prompts.length, 1, 'missing current begin receipt must not advance to yes');
+    assert.equal(prompts.length, failTurn, 'model control calls must stop the run at the offending prompt');
+    assert.equal(report.collected, true);
+    return;
+  }
+  if (binding !== 'valid') {
+    assert.equal(report.error, `mod did not reach the server for ${['notice', 'yes', 'typed'][failTurn - 1]} (guard, connect or mod load; check for a presence change since submit)`);
+    assert.equal(report.passed, false);
+    assert.equal(prompts.length, failTurn, 'missing current begin receipt must not advance to another prompt');
     assert.equal(report.collected, true);
     return;
   }

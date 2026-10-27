@@ -5,6 +5,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { macCommandSkip } from './requirements.mjs';
+import { instrumentHost } from '../bench/person-checks-1-5.mjs';
 import { registerTemp, trackTemp } from '../scripts/temp-leftovers.mjs';
 
 test('person-check click encoding binds global and window points without posting or creating a window',
@@ -78,4 +79,51 @@ test('consent probe constructs HID PID-zero forgery metadata without posting',
     }
     // The only global path is the existing tap probe; hidpid must stay on the supplied PID.
     assert.match(poster, /if mode == "pid" \|\| mode == "hidpid" \{ event.postToPid\(pid\) \} else \{ event.post\(tap: \.cghidEventTap\) \}/);
+  });
+
+// Execute only the receipt helper with constructed events. No app, window, run loop or input post.
+test('person-check mouse receipt records only delivered source fields beside delivery geometry',
+  { skip: macCommandSkip('xcrun') }, t => {
+    const source = instrumentHost();
+    const block = source.match(/\/\/ BEGIN PERSON CHECK MOUSE RECEIPT\n([\s\S]*?)\/\/ END PERSON CHECK MOUSE RECEIPT/)?.[1];
+    assert.ok(block);
+    assert.doesNotMatch(block, /NSApp|postToPid|\.post\(/);
+    assert.match(source, /func trackMouseDown\(_ event: NSEvent, perform: \(\) -> Void\) \{\s*pc1MouseDownReceipt\(event,/);
+    const dir = registerTemp(t, trackTemp(realpathSync(mkdtempSync(join(tmpdir(), 'sleight-person-receipt-')))));
+    const swift = join(dir, 'main.swift'), binary = join(dir, 'fixture');
+    writeFileSync(swift, 'import AppKit\n' + `
+      var rows: [[String: Any]] = []
+      func pc1Receipt(_ event: String, _ data: [String: Any]) {
+        rows.append(data.merging(["event": event]) { $1 })
+      }
+    ` + block + `
+      for (state, pid, data, inside) in [(Int64(1), Int64(0), Int64(0), true),
+          (Int64(7), Int64(54321), Int64(9), false)] {
+        let source = CGEventSource(stateID: .privateState)!
+        let cg = CGEvent(mouseEventSource: source, mouseType: .leftMouseDown,
+          mouseCursorPosition: CGPoint(x: 13, y: 29), mouseButton: .left)!
+        cg.setIntegerValueField(.eventSourceStateID, value: state)
+        cg.setIntegerValueField(.eventSourceUnixProcessID, value: pid)
+        cg.setIntegerValueField(.eventSourceUserData, value: data)
+        let event = NSEvent(cgEvent: cg)!
+        pc1MouseDownReceipt(event, insideButton: inside)
+        let row = rows.last!
+        precondition(row["sourceState"] as? Int64 == event.cgEvent!.getIntegerValueField(.eventSourceStateID))
+        precondition(row["sourcePid"] as? Int64 == event.cgEvent!.getIntegerValueField(.eventSourceUnixProcessID))
+        precondition(row["userData"] as? Int64 == event.cgEvent!.getIntegerValueField(.eventSourceUserData))
+      }
+      print(String(data: try! JSONSerialization.data(withJSONObject: rows), encoding: .utf8)!)
+    `);
+    const built = spawnSync('/usr/bin/xcrun', ['swiftc', '-module-cache-path', join(dir, 'cache'), swift, '-o', binary],
+      { encoding: 'utf8', timeout: 120000 });
+    assert.equal(built.status, 0, built.stderr);
+    const run = spawnSync(binary, [], { encoding: 'utf8', timeout: 10000 });
+    assert.equal(run.status, 0, run.stderr + run.stdout);
+    const rows = JSON.parse(run.stdout);
+    assert.equal(rows.length, 2);
+    for (const [i, row] of rows.entries()) {
+      assert.deepEqual(Object.keys(row).sort(), ['event', 'insideButton', 'sourcePid', 'sourceState', 'userData', 'window']);
+      assert.deepEqual(row, { event: 'mouse-down', window: 0, insideButton: i === 0,
+        sourceState: i === 0 ? 1 : 7, sourcePid: i === 0 ? 0 : 54321, userData: i === 0 ? 0 : 9 });
+    }
   });
