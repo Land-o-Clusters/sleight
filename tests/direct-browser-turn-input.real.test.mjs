@@ -65,3 +65,30 @@ test('automatic keeps close the oldest target across real filtered turns', { ski
   assert.equal(firstPage.isClosed(), true, 'upstream closes the old target after its filtered handle was released');
   assert.equal(secondPage.isClosed(), false);
 });
+
+test('three JavaScript dialog turns close every target without unproved cleanup', { skip, timeout: 60000 }, async t => {
+  const h = await bank(t), turns = [];
+  for (const kind of ['confirm', 'alert', 'prompt']) {
+    const f = await h.start(doc('<button id="ask">Ask</button>',
+      `document.querySelector('#ask').onclick = () => ${kind}('Fixture dialog');`));
+    // start() ends the previous real runtime, including its cleanup receipt.
+    for (const previous of turns) assert.equal(previous.page.isClosed(), true);
+    const page = hostPage(h, f), result = await f.act([{ do: 'click', ref: f.ref('Ask') }]);
+    assert.equal(result.isError, false, result.text);
+    assert.match(result.text, new RegExp('dialog ' + kind + ' is waiting'));
+    assert.ok(!result.text.includes(pendingTabNote));
+    assert.ok(f.entry.state.dialog, 'a real unanswered JavaScript dialog is pending');
+    turns.push({ f, page });
+  }
+  await h.start(ordinary);
+  for (const { f, page } of turns) {
+    assert.equal(page.isClosed(), true);
+    assert.equal(f.entry.released, false, 'no dialog target was kept');
+    const receipt = await f.registry.endTurn();
+    assert.equal(receipt.cleanedUp, true);
+    assert.ok(receipt.rows.every(row => row.closed && !row.kept && !row.cleanupRequired));
+  }
+  const { targetInfos } = await h.raw.send('Target.getTargets');
+  assert.equal(targetInfos.filter(info => turns.some(({ f }) => f.entry.targetId === info.targetId)).length, 0);
+  assert.equal(h.wire.filter(row => row.method === 'Page.handleJavaScriptDialog').length, 0, 'cleanup closes targets without answering dialogs');
+});

@@ -226,15 +226,15 @@ export function createToolDispatcher({ browser, pages, snapshot, runSteps, fillF
     return { ...value, capturedAt };
   };
   // A file chooser a page opens after its step returned is reported on the next result; delivered() commits the count.
-  const finishResult = async (ordinal, lines, body, entry, observed, imageRequested = false, { allowHints = true, input, inputEpoch, reportedDialog } = {}) => {
+  const finishResult = async (ordinal, lines, body, entry, observed, imageRequested = false, { allowHints = true, input, inputEpoch } = {}) => {
     const pending = inputState(entry);
     if (input && (inputEpoch === undefined || pending.epoch === inputEpoch)) {
       pending.edited = input.submitted ? false : pending.edited || input.edited === true;
       if (input.ask !== undefined) pending.ask = input.ask === true;
     }
-    const dialog = reportedDialog && reportedDialog === entry.state.dialog ? reportedDialog : undefined;
-    const otherInput = pending.edited || pending.ask || observed?.pendingUserInput === true;
-    const preserve = dialog || otherInput;
+    // A JavaScript dialog blocks the in-page release steps. Closing the tab
+    // dismisses it without leaving a hooked target outside the automatic cap.
+    const preserve = !entry.state.dialog && (pending.edited || pending.ask || observed?.pendingUserInput === true);
     let picture = typeof imageRequested === 'object' ? imageRequested : undefined;
     if (imageRequested === true) try { picture = await captureImage(entry, { current: () => !ended, allowed: () => !siteLine(pageURL(entry)) }); }
     catch { picture = { note: 'Screenshot skipped: safe capture unavailable.' }; }
@@ -252,7 +252,7 @@ export function createToolDispatcher({ browser, pages, snapshot, runSteps, fillF
     const text = [...lines, ...(chooser ? [chooser.note.replace(/^a/, 'A') + '.'] : []), ...(nativeNotice ? [nativeNotice] : []), ...(body === undefined ? [] : [body]), ...(picture ? [picture.note] : []), ...(hints ? [hints] : []), ...(preserve ? [pendingTabNote] : [])].join('\n');
     const result = textResult(text);
     if (!ended && picture?.images) result.images = picture.images;
-    if (!ended) deliveries.set(result, { ordinal, entry, epoch: pending.epoch, preserve: !!preserve, dialog, otherInput, state: entry.state, chooser, nativeNavigationNo,
+    if (!ended) deliveries.set(result, { ordinal, entry, epoch: pending.epoch, preserve: !!preserve, state: entry.state, chooser, nativeNavigationNo,
       capture: observed && Number.isSafeInteger(observed.number) ? { page: entry.page, state: entry.state, number: observed.number, capturedAt: observed.capturedAt } : null, hintOrigin, text, images: imageDigest(result.images) });
     return result;
   };
@@ -486,7 +486,7 @@ export function createToolDispatcher({ browser, pages, snapshot, runSteps, fillF
             // A row that a scroll step found carries a ref from the page read, which only a delivered read makes usable.
             if (a.observe === 'none' && (!lossFixes || result.stoppedAt == null) && !lines.some(line => /\[ref=/.test(line))) observed = undefined;
             const reply = await finish(lines, observed?.text, entry, observed, picture ?? a.observe === 'screenshot',
-              { inputEpoch, reportedDialog: result.dialog, input: { ...result.input,
+              { inputEpoch, input: { ...result.input,
                 ...(result.confirmation ? { ask: true } : a.steps.some(step => !['wait', 'viewport', 'hover', 'scroll'].includes(step.do))
                   ? { ask: result.input?.ask === true } : {}) } });
             // Only the registry can name a child. Page text and target URLs confer no ownership.
@@ -509,7 +509,7 @@ export function createToolDispatcher({ browser, pages, snapshot, runSteps, fillF
           if (landed) return textResult([...lines, landed].join('\n'), true);
           let observed;
           try { observed = await capture(entry, { since: entry.state.snapshotNo || undefined, maxChars: 8000 }); } catch { lines.push('Read unavailable; use browser_read before retrying.'); }
-          return await finish(lines, observed?.text, entry, observed, false, { inputEpoch, reportedDialog: result.submitted?.dialog, input: {
+          return await finish(lines, observed?.text, entry, observed, false, { inputEpoch, input: {
             edited: result.rows.some(row => row.status === 'set'), submitted: result.submitted?.status === 'done',
             ask: !!result.submitted?.confirmation || result.submitted?.input?.ask === true || result.rows.some(row => row.reason?.startsWith('confirmation required')),
           } });
@@ -570,7 +570,7 @@ export function createToolDispatcher({ browser, pages, snapshot, runSteps, fillF
     end() {
       ended = true;
       const preserve = lastDelivered && lastDelivered.epoch === inputState(lastDelivered.entry).epoch &&
-        (lastDelivered.otherInput || lastDelivered.dialog === lastDelivered.state.dialog) &&
+        !lastDelivered.state.dialog &&
         !siteLine(pageURL(lastDelivered.entry)) ? lastDelivered.entry : undefined;
       handoffWait?.cancel?.();
       for (const release of recipeListeners) release();

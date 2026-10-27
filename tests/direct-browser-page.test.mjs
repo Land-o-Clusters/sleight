@@ -66,19 +66,11 @@ async function inputTurn({ sites, ...options } = {}) {
     action(value) { action = value; }, fields(value) { fields = value; } };
 }
 
-for (const kind of ['dialog', 'fill dialog', 'modal', 'payment', 'sign-in', 'edited form']) test('turn end preserves the delivered ' + kind + ' for the user', async () => {
+for (const kind of ['modal', 'payment', 'sign-in', 'edited form']) test('turn end preserves the delivered ' + kind + ' for the user', async () => {
   const f = await inputTurn(), entry = f.registry.tab(f.tab), fence = { startedAt: 1 };
   entry.state.submitUnconfirmed = fence;
   let result;
-  if (kind === 'dialog') {
-    entry.state.dialog = { type: () => 'confirm', message: () => 'Private dialog' };
-    f.action({ lines: ['dialog confirm is waiting; message (untrusted page content): "Private dialog"'], dialog: entry.state.dialog });
-    result = await f.d.call({ name: 'browser_act', arguments: { tab: f.tab, steps: [{ do: 'click', ref: 'e1' }] } });
-  } else if (kind === 'fill dialog') {
-    entry.state.dialog = { type: () => 'confirm', message: () => 'Private dialog' };
-    f.fields({ rows: [], submitted: { status: 'unconfirmed', lines: ['dialog confirm is waiting'], dialog: entry.state.dialog } });
-    result = await f.d.call({ name: 'browser_fill', arguments: { tab: f.tab, fields: [{ ref: 'e1', value: 'Edited' }], submit: 'e2' } });
-  } else if (kind === 'modal') {
+  if (kind === 'modal') {
     f.action({ lines: ['the page answered with a dialog or panel (below) and no request has started'], input: { ask: true } });
     result = await f.d.call({ name: 'browser_act', arguments: { tab: f.tab, steps: [{ do: 'click', ref: 'e1' }] } });
   } else if (kind === 'payment') {
@@ -120,13 +112,37 @@ test('a site blocked after delivery cannot be kept for input', async () => {
   assert.equal(f.pages[0].isClosed(), true);
 });
 
-test('a reported dialog cleared after delivery cannot keep the tab', async () => {
+for (const kind of ['confirm', 'alert', 'prompt', 'fill dialog']) test('turn end closes a reported JavaScript ' + kind, async () => {
   const f = await inputTurn(), entry = f.registry.tab(f.tab);
-  entry.state.dialog = { type: () => 'confirm', message: () => 'Confirm fixture' };
-  f.action({ lines: ['dialog confirm is waiting'], dialog: entry.state.dialog });
+  entry.state.dialog = { type: () => kind, message: () => 'Private dialog' };
+  let result;
+  if (kind === 'fill dialog') {
+    f.fields({ rows: [{ ref: 'e1', status: 'set' }], submitted: { status: 'unconfirmed', lines: ['dialog confirm is waiting'], dialog: entry.state.dialog } });
+    result = await f.d.call({ name: 'browser_fill', arguments: { tab: f.tab, fields: [{ ref: 'e1', value: 'Edited' }], submit: 'e2' } });
+  } else {
+    f.action({ lines: ['dialog ' + kind + ' is waiting'], dialog: entry.state.dialog, input: { ask: true, edited: true } });
+    result = await f.d.call({ name: 'browser_act', arguments: { tab: f.tab, steps: [{ do: 'click', ref: 'e1' }] } });
+  }
+  assert.match(result.text, /dialog .* is waiting/);
+  assert.ok(!result.text.includes(pendingTabNote)); f.d.delivered(result);
+  assert.deepEqual(await f.d.end(), { revoked: true, cleanup: [] });
+  assert.equal(entry.page.isClosed(), true);
+  assert.equal(entry.released, false);
+});
+
+test('a JavaScript dialog opened after delivery prevents automatic keep', async () => {
+  const f = await inputTurn(), entry = f.registry.tab(f.tab);
+  f.observe({ pendingUserInput: true }); await f.read();
+  entry.state.dialog = {};
+  assert.deepEqual(await f.d.end(), { revoked: true, cleanup: [] });
+  assert.equal(entry.page.isClosed(), true);
+});
+
+test('a reported JavaScript dialog cleared before the result has no keep notice', async () => {
+  const f = await inputTurn(), entry = f.registry.tab(f.tab), dialog = {};
+  f.action(() => { entry.state.dialog = null; return { lines: ['dialog confirm is waiting'], dialog }; });
   const result = await f.d.call({ name: 'browser_act', arguments: { tab: f.tab, steps: [{ do: 'click', ref: 'e1' }] } });
-  assert.equal(result.text.split('\n').at(-1), pendingTabNote); f.d.delivered(result);
-  entry.state.dialog = null;
+  assert.ok(!result.text.includes(pendingTabNote)); f.d.delivered(result);
   await f.d.end(); assert.equal(f.pages[0].isClosed(), true);
 });
 
