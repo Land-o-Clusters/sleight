@@ -685,9 +685,13 @@ function isAppApproval(msg) {
 }
 
 // Persist metadata alone does not establish that a card grants app access.
-function plainAppCard(msg) {
+function plainAppCard(msg, apps = []) {
   const match = /^Allow Computer Use to use "([^"\r\n]+)"\?$/.exec(msg.params?.message ?? '');
-  return isAppApproval(msg) && !!match && match[1] === msg.params?._meta?.tool_params?.app;
+  const app = msg.params?._meta?.tool_params?.app;
+  // Real engine cards quote the display name and carry the bundle ID in tool_params.app.
+  // Only an unambiguous catalog match may bridge those two identities.
+  return isAppApproval(msg) && !!match && (match[1] === app ||
+    typeof app === 'string' && /^[A-Za-z0-9-]+(?:\.[A-Za-z0-9-]+)+$/.test(app) && resolveApp(match[1], apps)?.id === app);
 }
 
 // A window whose title follows its active tab (a browser) is retitled by a new tab. When the tree Claude last saw for the
@@ -5565,17 +5569,24 @@ export function createRelay({
     }
     // A blocked app's card is declined before any path answers it, the document path included.
     if (isAppApproval(msg) && declineBlockedApproval(msg)) return;
-    if (panelOnly && isAppApproval(msg) && !shellAppCards.has(msg)) {
+    if ((panelOnly || remoteApprovals) && isAppApproval(msg) && !shellAppCards.has(msg)) {
       const match = /^Allow Computer Use to use "([^"\r\n]+)"\?$/.exec(msg.params?.message ?? '');
       const app = msg.params?._meta?.tool_params?.app;
       // A display-name mismatch is resolved only against an engine-supplied bundle ID. Unknown names, changed
       // identities, action wording and lookup failures retain their one-action card and grant no session access.
-      if (match && match[1] !== app && typeof app === 'string' && /^[A-Za-z0-9-]+(?:\.[A-Za-z0-9-]+)+$/.test(app) && resolveApprovalApp) {
+      if (match && match[1] !== app && typeof app === 'string' && /^[A-Za-z0-9-]+(?:\.[A-Za-z0-9-]+)+$/.test(app) && (remoteApprovals || resolveApprovalApp)) {
         const generation = stopGeneration;
         shellAppCards.set(msg, false);
-        Promise.resolve().then(() => resolveApprovalApp(match[1])).catch(() => undefined).then(id => {
-          if (generation !== stopGeneration || closing || disposed) return;
-          shellAppCards.set(msg, id === app);
+        Promise.resolve().then(async () => {
+          if (!remoteApprovals) return (await resolveApprovalApp(match[1])) === app;
+          await waitCatalog();
+          return plainAppCard(msg, remoteCatalog.apps);
+        }).catch(() => false).then(plain => {
+          if (generation !== stopGeneration || closing || disposed) {
+            if (remoteApprovals) toServer({ jsonrpc: '2.0', id: msg.id, result: { action: 'cancel' } });
+            return;
+          }
+          shellAppCards.set(msg, plain);
           observeServerMessage(msg);
         });
         return;
@@ -5886,7 +5897,6 @@ export function createRelay({
       if (!msg.error && !msg.result?.isError) cursorStatus('thinking', { say: callNarration.get(msg.id) });
       hand?.result(msg.id, !!(msg.error || msg.result?.isError)); reportPreapprovals(msg); finishedCall(msg.id);
     }
-    if (remoteApprovals && isAppApproval(msg) && !shellAppCards.has(msg)) shellAppCards.set(msg, plainAppCard(msg));
     if (engineForbiddenTargets && isAppApproval(msg)) {
       const warning = forbiddenTargetWarning(msg.params?._meta?.tool_params?.app);
       if (warning && msg.params) msg.params.message = `${msg.params.message ?? 'Allow Computer Use?'} ${warning}`;
