@@ -40,7 +40,7 @@ test('recipe timings show click, drag, statuses, perch reactions and narration b
 });
 test('encoding is silent, 2x, bounded GIF retries and standard MP4', () => {
   const commands = demo.encodingPlan('/tmp/take/take.mov', '/tmp/take');
-  assert.match(commands.mp4.join(' '), /setpts=PTS\/2/);
+  assert.match(commands.mp4.join(' '), /setpts=\(PTS-STARTPTS\)\/2/);
   assert.ok(commands.mp4.includes('yuv420p')); assert.ok(commands.mp4.includes('+faststart'));
   assert.ok(commands.gifs.length > 1);
   for (const args of [commands.mp4, ...commands.gifs]) { assert.ok(args.includes('-an')); assert.ok(args.includes('-threads')); }

@@ -59,9 +59,9 @@ export const gifLadder = id => (id === '06-import' ? [[720, 128, 20], [720, 96, 
 export function encodingPlan(source, out, id) {
   const common = ['-hide_banner', '-loglevel', 'error', '-nostdin', '-y', '-threads', '1', '-filter_threads', '1', '-filter_complex_threads', '1', '-ss', '1', '-t', '16', '-i', source, '-an'];
   return {
-    mp4: [...common, '-vf', 'setpts=PTS/2,fps=30,scale=960:-2', '-t', '8', '-c:v', 'libx264', '-threads', '1', '-preset', 'fast', '-crf', '23', '-pix_fmt', 'yuv420p', '-movflags', '+faststart', join(out, 'demo.mp4')],
+    mp4: [...common, '-vf', 'setpts=(PTS-STARTPTS)/2,fps=30,scale=960:-2', '-t', '8', '-c:v', 'libx264', '-threads', '1', '-preset', 'fast', '-crf', '23', '-pix_fmt', 'yuv420p', '-movflags', '+faststart', join(out, 'demo.mp4')],
     gifs: gifLadder(id).map(([width, colors, fps]) => [...common, '-vf',
-      `setpts=PTS/2,fps=${fps},scale=${width}:-2:flags=lanczos,split[a][b];[a]palettegen=max_colors=${colors}:stats_mode=diff[p];[b][p]paletteuse=dither=bayer:bayer_scale=5:diff_mode=rectangle`,
+      `setpts=(PTS-STARTPTS)/2,fps=${fps},scale=${width}:-2:flags=lanczos,split[a][b];[a]palettegen=max_colors=${colors}:stats_mode=diff[p];[b][p]paletteuse=dither=bayer:bayer_scale=5:diff_mode=rectangle`,
       '-t', '8', '-loop', '0', join(out, 'demo.gif')]),
   };
 }
