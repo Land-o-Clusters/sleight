@@ -29,8 +29,13 @@ export function regradeSettingsBank(bank) {
           outcome.problems.push(...row.outcome.problems.filter(problem => problem !== 'nothing submitted' && !outcome.problems.includes(problem)));
           outcome.ok = outcome.problems.length === 0;
         }
+        const hasDialogs = Array.isArray(row.site?.dialogs), hasPayloads = Array.isArray(row.site?.submissions);
+        const decidability = row.grade?.submissions > 0
+          ? hasPayloads ? 'saved field grade and task-window payloads' : 'saved field grade only: per-attempt payloads unavailable'
+          : hasDialogs && row.site.dialogs.length ? 'fixture dialog records' : 'stop unverified: fixture dialog records unavailable';
         rows.push({ round: name, side: match[1], task: row.task.name, wallMs: row.wallMs,
-          before: row.outcome.ok, after: outcome.ok, note: outcome.settings ?? null, problems: outcome.problems });
+          before: row.outcome.ok, after: outcome.ok, note: outcome.settings ?? null, problems: outcome.problems,
+          decidability, evidence: { dialogRecords: hasDialogs, submissionPayloads: hasPayloads } });
       }
       summary.after += Number(outcome.ok);
     }

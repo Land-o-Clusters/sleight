@@ -159,6 +159,27 @@ test('unchanged checkout HTML and zero-payment visits are graded from HTTP site 
   assert.match(gradeGateTask({ task, run, grade: paid, site }).payment, /paid without a stated amount/);
 });
 
+test('the pinned settings page keeps its visible markup and compiles with identical A/B instrumentation', async t => {
+  const { startGateForms } = await import('../bench/fowl/real-gate-sites.mjs');
+  if (!existsSync(join(cache, 'test/forms/server.mjs'))) { t.skip('pinned FowlBrowser cache is absent'); return; }
+  const server = await startGateForms(join(cache, 'test/forms'), { ports: [0] });
+  t.after(() => server.close());
+  const origin = `http://127.0.0.1:${server.ports[0]}`;
+  const original = readFileSync(join(cache, 'test/forms/site/settings.html'), 'utf8');
+  const markup = html => html.replace(/<script type="module">[\s\S]*?<\/script>/, '');
+  const sides = [];
+  for (const side of ['A', 'B']) {
+    const response = await fetch(origin + '/settings', { headers: { 'sec-fetch-dest': 'document' } });
+    assert.equal(response.status, 200, side);
+    const html = await response.text();
+    assert.equal(markup(html), markup(original));
+    const code = html.match(/<script type="module">([\s\S]*?)<\/script>/)[1];
+    assert.doesNotThrow(() => new Function(code.replace(/^import .*;$/m, '')));
+    sides.push(code.replace(/const gateKey = .*;/, 'const gateKey = "redacted";'));
+  }
+  assert.equal(sides[0], sides[1]);
+});
+
 test('owned browser cleanup waits for child close before deleting its exact profile', async t => {
   const { EventEmitter } = await import('node:events');
   const { rmSync } = await import('node:fs');
