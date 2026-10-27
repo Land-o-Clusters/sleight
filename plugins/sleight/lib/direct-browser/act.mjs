@@ -30,6 +30,9 @@ export const shortStepOutcomes = Object.freeze({ quiet: 'page quiet after <ms> m
 const dialogOutcome = dialog => `dialog ${clean(dialog.type())} is waiting; message (untrusted page content): "${clean(dialog.message())}"`;
 const lineBreak = /[\r\n]/;
 const clean = value => String(value ?? '').replace(/[\r\n\t]+/g, ' ').slice(0, 240);
+const registryPopupOutcome = (row, tab) => row.blocked ? endpointBlock : row.closed
+  ? 'opened background tab that closed itself; opener below'
+  : `opened background tab ${row.tab} (opener ${tab.tab ?? 'this tab'}); the opener's page is below`;
 const refOf = value => typeof value === 'string' && /^(?:(?:f\d+)?e\d+|[sx]\d+)$/.test(value) ? value : null;
 async function bounded(task, ms) {
   let timer;
@@ -212,7 +215,7 @@ export function createActionRunner({ check, snapshot, backgroundClick = (tab, lo
     // A bad step list is refused before any input, so the caller must not report it as an unconfirmed outcome.
     try { validate(steps); } catch (error) { error.notRun = true; throw error; }
     const { page, state } = tab, since = state.snapshotNo > 0 ? state.snapshotNo : undefined, lines = []; let stoppedAt = null;
-    let observed, observeError, confirmation, blocker, carry, closed = false, observeWaitMs = 600, recordingStopped = false, paused = false;
+    let observed, observeError, confirmation, blocker, carry, carryPopupFrom, closed = false, observeWaitMs = 600, recordingStopped = false, paused = false;
     const read = async options => { const capturedAt = now(), result = await snapshot(page, options); observed = { ...result, capturedAt }; return observed; };
     // Keep requests across step watchers: a wait after a click must see work that click left in flight.
     const batchWatch = watch(page, state, now);
@@ -223,7 +226,7 @@ export function createActionRunner({ check, snapshot, backgroundClick = (tab, lo
       const named = steps[index], step = named.do === 'navigate' ? { ...named, do: 'click' } : named, point = hasPoint(step);
       let label = `${index + 1} ${named.do}${step.ref ? ' ' + step.ref : ''}`;
       const pointCache = {};
-      let pointHandle, endpoint, endHandle;
+      let pointHandle, endpoint, endHandle, popupTab, popupNotice;
       let locator, target, started = false, armed, activity, deferred = false, staging, submit, inputPending = false, stepFinished = false, settleCapped = false, settleNote, clickRetry = '', recoverClick = false, controlRecipe, consentDecline = false, consentNote, controlObserved = false, cursorToken, cursorFailed = false;
       let pointsReleased = false;
       const releasePoints = async () => {
@@ -309,7 +312,9 @@ export function createActionRunner({ check, snapshot, backgroundClick = (tab, lo
           staging = trusted ? await ctx.stageUploads(target, step.paths) : await stageUserUploads(ctx.files, step.paths, step.ref);
           if (!Array.isArray(staging?.payloads) || !staging.payloads.length) throw Error('user-named file staging required');
         }
-        guardChooser(page, state); const popupFrom = tab.popups?.length ?? 0;
+        guardChooser(page, state); const popupFrom = carry ? carryPopupFrom : tab.popups?.length ?? 0;
+        // Background allocation can publish an owned tab without a Playwright popup event.
+        const openedPopup = () => tab.popups?.find((row, i) => i >= popupFrom && (row.tab || row.blocked));
         // Visible dialogs and panels before the input, to tell a submit that answered with one from a silent one.
         const overlayRead = async () => { try { return await trustedLocatorRead(locator, overlaySignature); } catch { return null; } };
         const overlayBase = locator && (step.do === 'click' || enter) ? await overlayRead() : null;
@@ -440,6 +445,8 @@ export function createActionRunner({ check, snapshot, backgroundClick = (tab, lo
         // under the batch, so no further input goes out.
         if (carry) {
           const earlier = carry.boundary; carry.stop(); carry = null;
+          popupNotice = openedPopup(); popupTab = popupNotice?.tab;
+          if (popupNotice) throw Error(registryPopupOutcome(popupNotice, tab) + '; after the previous step, no further input sent');
           if (earlier) throw Error('the page changed after the previous step; read it before more input');
         }
         // A Playwright click can remain pending until a page dialog is answered.
@@ -471,6 +478,7 @@ export function createActionRunner({ check, snapshot, backgroundClick = (tab, lo
           } catch (error) { if (!armed.boundary) throw error; }
           let landed;
           for (;;) {
+            if (openedPopup()) break;
             const boundary = armed.boundary;
             if (boundary && !['navigation', 'document'].includes(boundary.kind)) break;
             if (boundary?.kind === 'navigation' && landed !== boundary) {
@@ -489,13 +497,13 @@ export function createActionRunner({ check, snapshot, backgroundClick = (tab, lo
           else if (waiting) settleNote = shortStepOutcomes.quiet.replace('<ms>', observeWaitMs) + (step.ms > WAIT_CAP && observeWaitMs >= WAIT_CAP ? ' (cap)' : '');
         }
         // Electron fences one input per invocation; lookahead changes only settling, never sends that next input.
-        const batched = quiet && !inputPending && !armed.boundary && ['type', 'press'].includes((steps[index + 1] ?? nextStep)?.do);
+        const batched = quiet && !inputPending && !armed.boundary && !openedPopup() && ['type', 'press'].includes((steps[index + 1] ?? nextStep)?.do);
         if (!short) observeWaitMs = batched ? 40 : 600;
         // A submit's clock starts when the gate arms the fence (submit.startedAt), which in a trusted turn is after `start`: the
         // delivered read clears the fence only if taken a full second after that moment (rules.mjs deliverSnapshot), so both wait on it.
         const origin = submits && submit ? Math.max(start, submit.startedAt) : start;
         const settleUntil = batched ? now() + 40 : origin + (submits ? 5000 : 600);
-        while (!short && !conditionWait && !armed.boundary && now() < settleUntil) {
+        while (!short && !conditionWait && !armed.boundary && !openedPopup() && now() < settleUntil) {
           if (submits && locator) {
             // A key can return before the navigation it started has committed, and the node is gone mid-read. Give the
             // navigation boundary a moment to register; destroyed evidence without one still stops the batch.
@@ -512,11 +520,12 @@ export function createActionRunner({ check, snapshot, backgroundClick = (tab, lo
           if (submits && overlayShown && !armed.pending.size && now() >= origin + 1000) break;
           await Promise.race([armed.boundaryReady, sleep(Math.min(50, settleUntil - now()))]);
         }
+        popupNotice = openedPopup(); popupTab = popupNotice?.tab;
         // Carry watchers only across steps this invocation will run. The Electron caller guards its next invocation.
-        if (batched && steps[index + 1] && !armed.boundary) carry = armed;
+        if (batched && steps[index + 1] && !armed.boundary && !popupNotice) { carry = armed; carryPopupFrom = popupFrom; }
         const boundary = armed.boundary;
         if (boundary?.kind === 'navigation' && typeof page._connection?.toImpl === 'function') await waitForThinPage(page, { now, sleep });
-        if (consentDecline) consentNote = ['popup', 'dialog', 'close'].includes(boundary?.kind)
+        if (consentDecline) consentNote = popupNotice || ['popup', 'dialog', 'close'].includes(boundary?.kind)
           ? 'Decline unverified: the action opened another surface or closed the tab'
           : await verifyConsent(page, state);
         closed = lossFixes && boundary?.kind === 'close';
@@ -526,10 +535,10 @@ export function createActionRunner({ check, snapshot, backgroundClick = (tab, lo
           else {
             submit.settledAt = now();
             // No navigation, document, dialog or popup, no form change, no request in flight: the refund waits for the next payment check.
-            if (!boundary && !formChanged && !armed.pending.size && activity?.observable && await activity.verify()) deferred = trusted ? ctx.refund(target, activity) : deferRefund(ctx, target, activity);
+            if (!boundary && !popupNotice && !formChanged && !armed.pending.size && activity?.observable && await activity.verify()) deferred = trusted ? ctx.refund(target, activity) : deferRefund(ctx, target, activity);
           }
         }
-        const popupTab = tab.popups?.slice(popupFrom).find(row => row.tab && !row.blocked)?.tab, navPath = boundary?.kind === 'navigation' ? pathOf(page.url()) : '';
+        const navPath = boundary?.kind === 'navigation' ? pathOf(page.url()) : '';
         // A tab the page opened during a click without the background modifier is probably in the foreground.
         const clicked = ['click', 'press'].includes(step.do) || point && step.do === 'drag';
         const foregroundTabs = clicked ? (await tab.takeForeground?.() ?? 0) + (boundary?.kind === 'popup' && tab.background === false
@@ -537,16 +546,19 @@ export function createActionRunner({ check, snapshot, backgroundClick = (tab, lo
           + (boundary?.kind === 'popup' && tab.background === true && tab.popupIsBackground?.(boundary.popup) === false ? 1 : 0) : 0;
         // The click carried the background modifier only if sleight sent it; a tab the page opened after the click's dispatch ended got no such help.
         const why = tab.background === false ? 'this click carried no background modifier' : 'the page opened it after a click, outside the background handling';
-        const outcome = conditionWait && typeof result === 'string' ? result + (boundary ? '; page changed (read below)' : '')
+        const popupOutcome = boundary?.kind === 'popup' ? endpointURL(boundary.popup.url(), tab.endpoint) ? endpointBlock : boundary.popup.isClosed() ? 'opened background tab that closed itself; opener below'
+          : foregroundTabs > 0 ? `opened a tab that probably took the foreground (${why}, and sleight cannot tell which tab was active before); opener below: ` + originOf(boundary.popup.url())
+          : `opened background tab${popupTab ? ' ' + popupTab : ''} at ${originOf(boundary.popup.url())} (opener ${tab.tab ?? 'this tab'})`
+          : popupNotice ? popupNotice.blocked || popupNotice.closed ? registryPopupOutcome(popupNotice, tab)
+          : foregroundTabs > 0 ? `opened a tab ${popupTab} that probably took the foreground (${why}, and sleight cannot tell which tab was active before); the opener's page is below`
+          : registryPopupOutcome(popupNotice, tab) : undefined;
+        const outcome = conditionWait && typeof result === 'string' ? result + (popupOutcome ? '; ' + popupOutcome : boundary ? '; page changed (read below)' : '')
           : boundary?.kind === 'navigation' ? 'navigated, address (untrusted page content): ' + originOf(page.url()) + navPath + ' (new page below)'
           : boundary?.kind === 'document' ? 'new document (read below)'
           : boundary?.kind === 'dialog' ? dialogOutcome(boundary.dialog)
-          : boundary?.kind === 'popup' ? endpointURL(boundary.popup.url(), tab.endpoint) ? endpointBlock : boundary.popup.isClosed() ? 'opened background tab that closed itself; opener below'
-            : foregroundTabs > 0 ? `opened a tab that probably took the foreground (${why}, and sleight cannot tell which tab was active before); opener below: ` + originOf(boundary.popup.url())
-            : `opened background tab${popupTab ? ' ' + popupTab : ''} at ${originOf(boundary.popup.url())} (opener ${tab.tab ?? 'this tab'})`
+          : boundary?.kind === 'popup' ? popupOutcome
           : boundary?.kind === 'close' ? 'tab closed' + (submit && state.submitUnconfirmed === submit ? '; ' + closedSubmitWarning : '')
-          : popupTab && foregroundTabs > 0 ? `opened a tab ${popupTab} that probably took the foreground (${why}, and sleight cannot tell which tab was active before); the opener's page is below`
-          : popupTab ? `opened background tab ${popupTab} (opener ${tab.tab ?? 'this tab'}); the opener's page is below`
+          : popupOutcome ? popupOutcome
           : settleNote ?? (typeof result === 'string' ? result
           : submits && state.submitUnconfirmed && overlayShown && !armed.pending.size ? 'the page answered with a dialog or panel (below) and no request has started; answer it, or read before another submit'
           : submits && state.submitUnconfirmed ? 'submit unconfirmed after 5 s; read before resubmitting'
@@ -563,10 +575,10 @@ export function createActionRunner({ check, snapshot, backgroundClick = (tab, lo
             : `. ${raisable.length > 1 ? 'Tabs' : 'Tab'} ${raisable.join(', ')} (opened by this page, another origin) can be raised to the foreground by the page at any time, and sleight cannot block or detect that` : '') + (heldOpenings > 0 ? '. Page script tried to open ' + (heldOpenings > 1 ? heldOpenings + ' tabs' : 'a tab') + ' after this input; held, nothing opened' : ''));
         // A click with work still pending at its settle deadline has no confirmed control outcome either.
         const controlSettleCapped = settleCapped || armed.pending.size > 0;
-        if (controlRecipe && !inputPending && !submits && !target.payment && !target.element?.payment && !target.element?.form && !boundary && !controlSettleCapped) {
+        if (controlRecipe && !inputPending && !submits && !target.payment && !target.element?.payment && !target.element?.form && !boundary && !popupNotice && !controlSettleCapped) {
           try { const event = await controlRecipe.finish(); if (event) { onControl(event); controlObserved = true; } } catch {}
         }
-        if (boundary || settleCapped) { stoppedAt = index + 1; break; }
+        if (boundary || popupNotice || settleCapped) { stoppedAt = index + 1; break; }
       } catch (error) {
         cursorFailed = true;
         paused ||= error.paused === true;
@@ -606,7 +618,7 @@ export function createActionRunner({ check, snapshot, backgroundClick = (tab, lo
         try { hand?.finish?.(cursorToken, cursorFailed); } catch {}
         if (!cursorToken && ['click', 'check', 'uncheck', 'select', 'navigate', 'type', 'paste', 'press', 'drag', 'scroll', 'hover', 'move', 'back', 'forward', 'reload', 'upload'].includes(named.do)) try { hand?.skipped?.({ op: named.do }); } catch {}
         stepFinished = true;
-        try { onStep?.({ control: controlObserved, boundary: armed?.boundary?.kind }); } catch {}
+        try { onStep?.({ control: controlObserved, boundary: armed?.boundary?.kind ?? (popupNotice ? 'popup' : undefined) }); } catch {}
         try { await controlRecipe?.dispose(); } catch {}
         if (consentDecline) await releaseConsent(state);
         if (activity && !deferred) activity.stop();

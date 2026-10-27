@@ -438,7 +438,7 @@ export function createToolDispatcher({ browser, pages, snapshot, runSteps, fillF
           if (result.paused) return textResult(JSON.stringify(result) + '\n' + PAUSED_NOTE, true);
           await assertEndpointRead(entry.page, endpoint);
           const lines = result.rows.map(row => `${clean(row.ref)}: ${clean(row.status)}${row.reason ? ': ' + clean(row.reason) : row.note ? ' (' + clean(row.note) + ')' : ''}`);
-          lines.push(...blocked());
+          lines.push(...new Set([...blocked(), ...(result.stopped ? [clean(result.stopped)] : [])]));
           if (result.submitted) lines.push('submit: ' + clean(result.submitted.status), ...(result.submitted.lines ?? []));
           const landed = siteLine(pageURL(entry));
           if (landed) return textResult([...lines, landed].join('\n'), true);
