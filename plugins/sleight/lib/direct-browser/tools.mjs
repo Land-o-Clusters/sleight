@@ -9,6 +9,7 @@ import { check } from './rules.mjs';
 import { waitForThinPage } from './waits.mjs';
 import { isV3Context } from './v3-context.mjs';
 import { handoffMessages } from './handoff.mjs';
+import { pendingTabNote } from '../browser-turn-input.mjs';
 import { siteMemoryFromEnvironment } from '../site-memory.mjs';
 import { readWhole, validateWholeOptions } from './whole.mjs';
 import { validatePointStep, pointInputEnabled } from './points.mjs';
@@ -177,6 +178,21 @@ export function createToolDispatcher({ browser, pages, snapshot, runSteps, fillF
   let ended = false, ending, callNo = 0, handingOff = false, handoffWait;
   const lossFixes = process.env.SLEIGHT_LB12 !== '0';
   const deliveries = new WeakMap();
+  let lastDelivered;
+  const inputs = new WeakMap(), inputListeners = new Set();
+  const inputState = entry => {
+    if (!inputs.has(entry)) {
+      const state = { epoch: 0, edited: false, ask: false }, page = entry.page;
+      inputs.set(entry, state);
+      const reset = () => { state.epoch++; state.edited = state.ask = false; };
+      const navigate = frame => { if (frame === page.mainFrame?.()) reset(); };
+      const stop = () => { reset(); page.off('framenavigated', navigate); page.off('domcontentloaded', reset); page.off('close', stop); inputListeners.delete(stop); };
+      if (typeof page.on === 'function') {
+        page.on('framenavigated', navigate); page.on('domcontentloaded', reset); page.on('close', stop); inputListeners.add(stop);
+      }
+    }
+    return inputs.get(entry);
+  };
   const hintedOrigins = new Set(), openers = new WeakMap(), controlObservations = new WeakMap();
   const recipePages = new WeakSet(), recipeListeners = new Set();
   const watchRecipes = entry => {
@@ -210,7 +226,15 @@ export function createToolDispatcher({ browser, pages, snapshot, runSteps, fillF
     return { ...value, capturedAt };
   };
   // A file chooser a page opens after its step returned is reported on the next result; delivered() commits the count.
-  const finish = async (lines, body, entry, observed, imageRequested = false, { allowHints = true } = {}) => {
+  const finishResult = async (ordinal, lines, body, entry, observed, imageRequested = false, { allowHints = true, input, inputEpoch } = {}) => {
+    const pending = inputState(entry);
+    if (input && (inputEpoch === undefined || pending.epoch === inputEpoch)) {
+      pending.edited = input.submitted ? false : pending.edited || input.edited === true;
+      if (input.ask !== undefined) pending.ask = input.ask === true;
+    }
+    const dialog = entry.state.dialog;
+    const otherInput = pending.edited || pending.ask || observed?.pendingUserInput === true;
+    const preserve = dialog || otherInput;
     let picture = typeof imageRequested === 'object' ? imageRequested : undefined;
     if (imageRequested === true) try { picture = await captureImage(entry, { current: () => !ended, allowed: () => !siteLine(pageURL(entry)) }); }
     catch { picture = { note: 'Screenshot skipped: safe capture unavailable.' }; }
@@ -225,10 +249,10 @@ export function createToolDispatcher({ browser, pages, snapshot, runSteps, fillF
       const url = pageURL(entry), origin = new URL(url).origin;
       if (!hintedOrigins.has(origin)) { hints = siteMemory.hints(url); hintOrigin = origin; }
     } catch {}
-    const text = [...lines, ...(chooser ? [chooser.note.replace(/^a/, 'A') + '.'] : []), ...(nativeNotice ? [nativeNotice] : []), ...(body === undefined ? [] : [body]), ...(picture ? [picture.note] : []), ...(hints ? [hints] : [])].join('\n');
+    const text = [...lines, ...(chooser ? [chooser.note.replace(/^a/, 'A') + '.'] : []), ...(nativeNotice ? [nativeNotice] : []), ...(body === undefined ? [] : [body]), ...(picture ? [picture.note] : []), ...(hints ? [hints] : []), ...(preserve ? [pendingTabNote] : [])].join('\n');
     const result = textResult(text);
     if (!ended && picture?.images) result.images = picture.images;
-    if (!ended && (chooser || nativeNotice || observed && Number.isSafeInteger(observed.number))) deliveries.set(result, { state: entry.state, chooser, nativeNavigationNo,
+    if (!ended) deliveries.set(result, { ordinal, entry, epoch: pending.epoch, preserve: !!preserve, dialog, otherInput, state: entry.state, chooser, nativeNavigationNo,
       capture: observed && Number.isSafeInteger(observed.number) ? { page: entry.page, state: entry.state, number: observed.number, capturedAt: observed.capturedAt } : null, hintOrigin, text, images: imageDigest(result.images) });
     return result;
   };
@@ -236,6 +260,9 @@ export function createToolDispatcher({ browser, pages, snapshot, runSteps, fillF
     async call(input, { handoffDeadline, handoffDrain, handoffState, handoffPresent = true, pauseCheck } = {}) {
       let request, started = false, popupObservation;
       const ordinal = ++callNo;
+      // Any later call can change the page, even when its result is lost.
+      lastDelivered = undefined;
+      const finish = (...args) => finishResult(ordinal, ...args);
       const phase = name => { try { tracePhase?.(name, ordinal); } catch {} };
       try {
         pauseCheck?.();
@@ -324,6 +351,7 @@ export function createToolDispatcher({ browser, pages, snapshot, runSteps, fillF
         if (opener && a.export !== undefined) throw Error('Export ref belongs to a closed tab; read its opener for a fresh ref');
         if (opener) { closedNote = `${a.tab} closed itself; reading its opener ${opener}.`; const { ref: _stale, ...rest } = a; a = { ...rest, tab: opener }; }
         const result = await pages.enqueue(a.tab, async entry => {
+          const inputEpoch = inputState(entry).epoch; // Observe document changes before any input.
           pauseCheck?.();
           if (ended) throw Error('turn ended');
           await entry.checkAttachment?.();
@@ -457,7 +485,10 @@ export function createToolDispatcher({ browser, pages, snapshot, runSteps, fillF
             }
             // A row that a scroll step found carries a ref from the page read, which only a delivered read makes usable.
             if (a.observe === 'none' && (!lossFixes || result.stoppedAt == null) && !lines.some(line => /\[ref=/.test(line))) observed = undefined;
-            const reply = await finish(lines, observed?.text, entry, observed, picture ?? a.observe === 'screenshot');
+            const reply = await finish(lines, observed?.text, entry, observed, picture ?? a.observe === 'screenshot',
+              { inputEpoch, input: { ...result.input,
+                ...(result.confirmation ? { ask: true } : a.steps.some(step => !['wait', 'viewport', 'hover', 'scroll'].includes(step.do))
+                  ? { ask: result.input?.ask === true } : {}) } });
             // Only the registry can name a child. Page text and target URLs confer no ownership.
             // The read runs after this opener queue releases, so opposing queues cannot deadlock.
             if (process.env.SLEIGHT_POPUP_OBSERVE === '1' && a.observe !== 'none' && a.observe !== 'screenshot' && !motion &&
@@ -478,7 +509,10 @@ export function createToolDispatcher({ browser, pages, snapshot, runSteps, fillF
           if (landed) return textResult([...lines, landed].join('\n'), true);
           let observed;
           try { observed = await capture(entry, { since: entry.state.snapshotNo || undefined, maxChars: 8000 }); } catch { lines.push('Read unavailable; use browser_read before retrying.'); }
-          return await finish(lines, observed?.text, entry, observed);
+          return await finish(lines, observed?.text, entry, observed, false, { inputEpoch, input: {
+            edited: result.rows.some(row => row.status === 'set'), submitted: result.submitted?.status === 'done',
+            ask: !!result.submitted?.confirmation || result.submitted?.input?.ask === true || result.rows.some(row => row.reason?.startsWith('confirmation required')),
+          } });
         });
         if (popupObservation && !ended && !result.isError) {
           const { parent, notice, tab } = popupObservation;
@@ -497,7 +531,7 @@ export function createToolDispatcher({ browser, pages, snapshot, runSteps, fillF
               const text = result.text + '\n\n' + childResult.text, combined = textResult(text);
               const parts = [deliveries.get(result), deliveries.get(childResult)].filter(Boolean);
               deliveries.delete(result); deliveries.delete(childResult);
-              deliveries.set(combined, { parts, text, images: imageDigest(undefined) });
+              deliveries.set(combined, { ordinal, parts, text, images: imageDigest(undefined) });
               return combined;
             }
           } catch { /* Optional read failed. Preserve the opener's outcomes and delivery receipt. */ }
@@ -524,6 +558,10 @@ export function createToolDispatcher({ browser, pages, snapshot, runSteps, fillF
         if (part.chooser) { part.state.chooserReported = part.chooser.chooser; part.state.hiddenReported = part.chooser.hidden; }
         if (part.nativeNavigationNo) part.state.nativeNavigationReported = Math.max(part.state.nativeNavigationReported ?? 0, part.nativeNavigationNo);
         const accepted = !!part.capture && deliverSnapshot(part.state, part.capture) === true;
+        if (record.ordinal === callNo && part.epoch === inputState(part.entry).epoch) {
+          lastDelivered = part.preserve ? part : undefined;
+          delivered ||= part.preserve;
+        }
         if (accepted && part.hintOrigin) hintedOrigins.add(part.hintOrigin);
         delivered ||= accepted;
       }
@@ -531,10 +569,14 @@ export function createToolDispatcher({ browser, pages, snapshot, runSteps, fillF
     },
     end() {
       ended = true;
+      const preserve = lastDelivered && lastDelivered.epoch === inputState(lastDelivered.entry).epoch &&
+        (lastDelivered.otherInput || lastDelivered.dialog === lastDelivered.state.dialog) &&
+        !siteLine(pageURL(lastDelivered.entry)) ? lastDelivered.entry : undefined;
       handoffWait?.cancel?.();
       for (const release of recipeListeners) release();
+      for (const stop of inputListeners) stop();
       const pdfCleanup = pdf?.dispose();
-      if (!ending) ending = Promise.allSettled([Promise.resolve().then(() => pages.endTurn()), pdfCleanup]).then(([tabs, files]) => ({ revoked: true,
+      if (!ending) ending = Promise.allSettled([Promise.resolve().then(() => pages.endTurn({ preserve })), pdfCleanup]).then(([tabs, files]) => ({ revoked: true,
         cleanup: [...(tabs.status === 'fulfilled' && tabs.value?.cleanedUp ? [] : [{ resource: 'owned-tabs', status: 'retained', code: 'CLEANUP_UNPROVED' }]),
           ...(files.status === 'fulfilled' && !files.value?.retained ? [] : [{ resource: 'pdf-files', status: 'retained', code: 'CLEANUP_UNPROVED' }])] }));
       return ending;

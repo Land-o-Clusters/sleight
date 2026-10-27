@@ -55,6 +55,26 @@ function fixture({ effect = '', submit = false, fail, onClick, snapshotFail = fa
   return { page, tab, run, checks, actions, states, time: () => time, setOverlay: next => { overlay = next; } };
 }
 
+test('completed typing carries edited input evidence for turn cleanup', async () => {
+  const f = fixture();
+  const result = await f.run(f.tab, [{ do: 'type', ref: 'e1', text: 'Edited' }], {});
+  assert.equal(result.input.edited, true);
+});
+
+test('clicking a checkbox carries edited input evidence for turn cleanup', async () => {
+  const f = fixture(); f.states.set('e1', { role: 'checkbox', kind: 'checkbox' });
+  const result = await f.run(f.tab, [{ do: 'click', ref: 'e1' }], {});
+  assert.equal(result.input?.edited, true);
+});
+
+test('a submit answered by an HTML modal carries a pending input marker', async () => {
+  let f;
+  f = fixture({ submit: true, onClick: () => f.setOverlay({ count: 1, hash: 2 }) });
+  const result = await f.run(f.tab, [{ do: 'click', ref: 'e1' }], {});
+  assert.equal(result.input.ask, true);
+  assert.match(result.lines.join('\n'), /dialog or panel/);
+});
+
 test('PF7 full observation is acquired once without declaring every context row changed', async t => {
   const prior = process.env.SLEIGHT_FULL_OBSERVE_ONCE;
   t.after(() => { if (prior === undefined) delete process.env.SLEIGHT_FULL_OBSERVE_ONCE; else process.env.SLEIGHT_FULL_OBSERVE_ONCE = prior; });

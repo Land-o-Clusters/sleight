@@ -2537,7 +2537,7 @@ export function createPageRegistry({ browser, session, context = browser?.contex
   const namedChildren = new Map();
   const queued = new WeakMap();
   let namedQueue = Promise.resolve();
-  let ended = false, cleanup, handoffActive;
+  let ended = false, cleanup, handoffActive, preservedEntry;
   const track = promise => {
     tasks.add(promise); promise.then(() => tasks.delete(promise), () => tasks.delete(promise)); return promise;
   };
@@ -3152,7 +3152,8 @@ export function createPageRegistry({ browser, session, context = browser?.contex
       return { tab: id, closed: entry.page.isClosed() };
     },
     keep: id => release(id, 'keep'), handoff: id => release(id, 'handoff'),
-    endTurn() {
+    endTurn({ preserve } = {}) {
+      if (!ended) preservedEntry = preserve;
       ended = true;
       for (const entry of records.values()) entry.developer?.stop();
       if (!cleanup) cleanup = (async () => {
@@ -3170,6 +3171,16 @@ export function createPageRegistry({ browser, session, context = browser?.contex
           }
           if (entry.released || entry.page.isClosed()) { rows.push({ tab: entry.tab, kept: entry.released, closed: entry.page.isClosed(),
             ...(entry.handoffCleanupRequired ? { cleanupRequired: true } : {}) }); continue; }
+          // One exact owned entry from this turn's last delivered result. Keep its
+          // ownership, hooks and submit fence; ended already revokes every tool.
+          // A later registry never acquires existing pages as new task tabs.
+          if (entry === preservedEntry && !entry.blocked) {
+            let cleanupRequired = false;
+            try { await deadline(() => restoreViewport(entry.page, { release: true }), timeoutMs); }
+            catch { cleanupRequired = true; }
+            rows.push({ tab: entry.tab, kept: !entry.page.isClosed(), closed: entry.page.isClosed(),
+              ...(cleanupRequired ? { cleanupRequired: true } : {}) }); continue;
+          }
           try {
             await deadline(() => entry.page.close({ runBeforeUnload: false }), timeoutMs);
             rows.push({ tab: entry.tab, closed: entry.page.isClosed() });

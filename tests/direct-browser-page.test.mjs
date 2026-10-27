@@ -6,6 +6,7 @@ import { hookAnswer } from './adversarial/fixtures/hook.mjs';
 import { createPageRegistry, backgroundClick, frameShield, popupHook, hookProof, hookOpen, hookSource, newHook } from '../plugins/sleight/lib/direct-browser/page.mjs';
 import { activationKey } from '../plugins/sleight/lib/direct-browser/act.mjs';
 import { setViewport } from '../plugins/sleight/lib/direct-browser/viewport.mjs';
+import { createToolDispatcher } from '../plugins/sleight/lib/direct-browser/tools.mjs';
 
 function fixture(options = {}) {
   const calls = [], pages = [], context = new EventEmitter();
@@ -47,6 +48,150 @@ function fixture(options = {}) {
   const registry = createPageRegistry({ browser, session, timeoutMs: 100, popupWaitMs: 5, canResumeHandoff: async () => true, ...options });
   return { registry, calls, page, pages, session, context };
 }
+
+// No browser is launched. Exercise the real dispatcher receipt and owned-tab cleanup together.
+async function inputTurn() {
+  const f = fixture(), opened = await f.registry.openTab({ url: 'https://fixture.invalid/' });
+  let observation = { text: '- button "Done" [ref=e1]', number: 1 }, action = { lines: ['1 click e1: input sent'] }, fields = { rows: [] };
+  const d = createToolDispatcher({ pages: f.registry, siteMemory: null,
+    snapshot: async () => observation, runSteps: async () => typeof action === 'function' ? action() : action, fillFields: async () => fields });
+  const read = async (tab = opened.tab, deliver = true) => {
+    const result = await d.call({ name: 'browser_read', arguments: { tab } });
+    if (deliver) d.delivered(result);
+    return result;
+  };
+  return { ...f, d, tab: opened.tab, read,
+    observe(value) { observation = { ...observation, ...value }; },
+    action(value) { action = value; }, fields(value) { fields = value; } };
+}
+
+for (const kind of ['dialog', 'modal', 'payment', 'sign-in', 'edited form']) test('turn end preserves the delivered ' + kind + ' for the user', async () => {
+  const f = await inputTurn(), entry = f.registry.tab(f.tab), fence = { startedAt: 1 };
+  entry.state.submitUnconfirmed = fence;
+  let result;
+  if (kind === 'dialog') {
+    entry.state.dialog = { type: () => 'confirm', message: () => 'Private dialog' };
+    f.action({ lines: ['dialog confirm is waiting; message (untrusted page content): "Private dialog"'] });
+    result = await f.d.call({ name: 'browser_act', arguments: { tab: f.tab, steps: [{ do: 'click', ref: 'e1' }] } });
+  } else if (kind === 'payment') {
+    f.action({ lines: ['1 click e1: not run: confirmation required through the trusted consent UI'], confirmation: { step: 1 } });
+    result = await f.d.call({ name: 'browser_act', arguments: { tab: f.tab, steps: [{ do: 'click', ref: 'e1' }] } });
+  } else if (kind === 'edited form') {
+    f.fields({ rows: [{ ref: 'e1', status: 'set' }] });
+    result = await f.d.call({ name: 'browser_fill', arguments: { tab: f.tab, fields: [{ ref: 'e1', value: 'Edited' }] } });
+  } else {
+    f.observe({ pendingUserInput: true });
+    result = await f.read(f.tab, false);
+  }
+  assert.match(result.text, /Tab stays open at turn end for your input\./);
+  f.d.delivered(result);
+  const beforeEnd = f.calls.length;
+  assert.deepEqual(await f.d.end(), { revoked: true, cleanup: [] });
+  assert.equal((await f.registry.endTurn()).cleanedUp, true, 'worker cleanup repeats registry cleanup');
+  assert.equal(entry.page.isClosed(), false);
+  assert.equal(entry.released, false, 'automatic retention never releases target ownership');
+  assert.equal(entry.state.submitUnconfirmed, fence, 'retention never clears a submit fence');
+  assert.equal(f.calls.slice(beforeEnd).some(row => row[0] === 'detach'), false);
+  assert.throws(() => f.registry.tab(f.tab), /ended/);
+});
+
+test('ordinary finished pages still close at turn end', async () => {
+  const f = await inputTurn(); await f.read(); await f.d.end();
+  assert.equal(f.pages[0].isClosed(), true);
+});
+
+test('only the last delivered pending tab survives, bounding automatic keeps to one', async () => {
+  const f = await inputTurn(), second = await f.registry.openTab({ url: 'https://fixture.invalid/second' });
+  f.observe({ pendingUserInput: true });
+  await f.read(); await f.read(second.tab); await f.d.end();
+  assert.equal(f.pages.filter(page => !page.isClosed()).length, 1);
+  assert.equal(f.pages[1].isClosed(), false);
+});
+
+for (const delivery of ['missing', 'copied', 'changed']) test('a ' + delivery + ' delivery receipt cannot preserve a pending tab', async () => {
+  const f = await inputTurn(); f.observe({ pendingUserInput: true });
+  const result = await f.read(f.tab, false);
+  if (delivery === 'copied') f.d.delivered({ ...result });
+  if (delivery === 'changed') { result.text += '\nchanged'; f.d.delivered(result); }
+  await f.d.end(); assert.equal(f.pages[0].isClosed(), true);
+});
+
+test('a newer ordinary result replaces a pending result', async () => {
+  const f = await inputTurn(); f.observe({ pendingUserInput: true }); await f.read();
+  f.observe({ pendingUserInput: false, number: 2 }); await f.read(); await f.d.end();
+  assert.equal(f.pages[0].isClosed(), true);
+});
+
+test('a delivered form submit clears the earlier edit retention', async () => {
+  const f = await inputTurn();
+  f.fields({ rows: [{ ref: 'e1', status: 'set' }] });
+  const edit = await f.d.call({ name: 'browser_fill', arguments: { tab: f.tab, fields: [{ ref: 'e1', value: 'Edited' }] } });
+  f.d.delivered(edit);
+  f.fields({ rows: [{ ref: 'e1', status: 'set' }], submitted: { status: 'done' } });
+  const submit = await f.d.call({ name: 'browser_fill', arguments: { tab: f.tab, fields: [{ ref: 'e1', value: 'Edited' }], submit: 'e2' } });
+  f.d.delivered(submit); await f.d.end(); assert.equal(f.pages[0].isClosed(), true);
+});
+
+test('navigation after a delivered pending result invalidates its retention', async () => {
+  const f = await inputTurn(); f.observe({ pendingUserInput: true }); await f.read();
+  f.pages[0].emit('domcontentloaded'); await f.d.end(); assert.equal(f.pages[0].isClosed(), true);
+});
+
+test('a later undelivered call invalidates the earlier pending receipt', async () => {
+  const f = await inputTurn(); f.observe({ pendingUserInput: true }); await f.read();
+  await f.read(f.tab, false); await f.d.end(); assert.equal(f.pages[0].isClosed(), true);
+});
+
+test('edited form state survives a later read without granting another task the tab', async () => {
+  const f = await inputTurn();
+  f.fields({ rows: [{ ref: 'e1', status: 'set' }] });
+  const edit = await f.d.call({ name: 'browser_fill', arguments: { tab: f.tab, fields: [{ ref: 'e1', value: 'Edited' }] } });
+  f.d.delivered(edit); await f.read(); await f.d.end(); assert.equal(f.pages[0].isClosed(), false);
+  const next = createPageRegistry({ browser: { contexts: () => [f.context] }, session: f.session, timeoutMs: 100, popupWaitMs: 5 });
+  assert.deepEqual(await next.list(), []); await next.endTurn();
+  assert.equal(f.pages[0].isClosed(), false);
+});
+
+test('automatic retention clears viewport emulation and retries failed restoration without closing the tab', async () => {
+  const f = await inputTurn(), entry = f.registry.tab(f.tab);
+  entry.page.context = () => f.context; entry.page.emulateMedia = async () => {};
+  await setViewport(entry.page, { reduced_motion: true });
+  const send = entry.cdp.send.bind(entry.cdp); let fail = true;
+  entry.cdp.send = async (method, params) => {
+    if (fail && method === 'Emulation.setEmulatedMedia') throw Error('restore failed');
+    return send(method, params);
+  };
+  f.observe({ pendingUserInput: true }); await f.read();
+  assert.deepEqual((await f.d.end()).cleanup, [{ resource: 'owned-tabs', status: 'retained', code: 'CLEANUP_UNPROVED' }]);
+  assert.equal(entry.page.isClosed(), false);
+  fail = false;
+  assert.equal((await f.registry.endTurn()).cleanedUp, true);
+  assert.ok(f.calls.some(row => row[0] === 'Emulation.setEmulatedMedia' && row[1].media === ''));
+  assert.equal(entry.page.isClosed(), false);
+});
+
+test('a late old receipt cannot replace the newest ordinary result', async () => {
+  const f = await inputTurn(); f.observe({ pendingUserInput: true });
+  const old = await f.read(f.tab, false);
+  f.observe({ pendingUserInput: false, number: 2 }); await f.read();
+  f.d.delivered(old); await f.d.end(); assert.equal(f.pages[0].isClosed(), true);
+});
+
+test('an edit that navigates cannot mark the new finished document as an unsubmitted form', async () => {
+  const f = await inputTurn();
+  f.action(() => { f.pages[0].emit('domcontentloaded'); return { lines: ['1 type e1: navigated'], input: { edited: true } }; });
+  const result = await f.d.call({ name: 'browser_act', arguments: { tab: f.tab, steps: [{ do: 'type', ref: 'e1', text: 'Edited' }] } });
+  f.d.delivered(result); await f.d.end(); assert.equal(f.pages[0].isClosed(), true);
+});
+
+test('a payment ask remains pending across a delivered wait and read', async () => {
+  const f = await inputTurn();
+  f.action({ lines: ['1 click e1: not run: confirmation required through the trusted consent UI'], confirmation: { step: 1 } });
+  const ask = await f.d.call({ name: 'browser_act', arguments: { tab: f.tab, steps: [{ do: 'click', ref: 'e1' }] } });
+  f.d.delivered(ask); f.action({ lines: ['1 wait: settled'] });
+  const wait = await f.d.call({ name: 'browser_act', arguments: { tab: f.tab, steps: [{ do: 'wait' }] } });
+  f.d.delivered(wait); await f.read(); await f.d.end(); assert.equal(f.pages[0].isClosed(), false);
+});
 
 test('waiting handoff switches hooks off, blocks access, and resumes the same tab with new hooks', async () => {
   const f = fixture(), { tab } = await f.registry.openTab({ url: 'https://fixture.invalid/' });

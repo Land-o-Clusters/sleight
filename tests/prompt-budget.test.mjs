@@ -14,6 +14,7 @@ import { handoffMessages } from '../plugins/sleight/lib/direct-browser/handoff.m
 import { closedSubmitWarning, shortStepOutcomes } from '../plugins/sleight/lib/direct-browser/act.mjs';
 import { guardUnavailableReason, guardPathReason } from '../plugins/sleight/hooks/preapproved-write-guard.mjs';
 import { turboFirstRules } from '../plugins/sleight/lib/turbo-first-rules.mjs';
+import { pendingTabNote } from '../plugins/sleight/lib/browser-turn-input.mjs';
 // The budget script parses relay.mjs with the typescript dev dependency, which CI doesn't install.
 const budget = await import('../bench/prompt-budget.mjs').catch(error => {
   if (error.code === 'ERR_MODULE_NOT_FOUND') return null;
@@ -32,13 +33,15 @@ const skillPath = new URL('../plugins/sleight/skills/drive-mac-apps/SKILL.md', i
 // HT1R counts the two conditional hook refusals in both variants (+151 characters).
 // SM1R counts the new conditional managed-PATH refusal label (+54 characters).
 // HO1 pins the shortened default and lean handoff descriptions.
-const leanRatio = 32878 / 45814;
+// KT1 adds one fixed 40-character pending-tab notice (+43 inventoried characters).
+const leanRatio = 32921 / 45857;
 const leanSkill = () => skillRules(skillPath, { SLEIGHT_PROMPT: 'lean' });
 
 test('hook guard refusals join the pinned notice inventory', { skip }, () => {
   const texts = taggedNoticeInventory().map(entry => entry.text);
   assert.ok(texts.includes(guardUnavailableReason));
   assert.ok(texts.includes(guardPathReason));
+  assert.ok(texts.includes(pendingTabNote));
 });
 
 test('make-character description stays below 60 tokens even at one token per UTF-8 byte', t => {

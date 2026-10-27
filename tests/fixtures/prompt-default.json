@@ -1,11 +1,11 @@
 {
-  "browserToolsFormBatch": "72894dd1a357dba68c76a0424030b5bb1be49f224fc6d350cd05f1b3957891c2",
+  "browserToolsFormBatch": "9649c48b2b3233f640513d2c4159dca438a9a0aacf0158c6c92d8fa97f615dbe",
   "skill": "f42832edd95ce6513f0ac3f126e6508421c1ffe93dec46950249549061ed4044",
   "browserSkill": "2fd4c240d2f6e7cef4d8fbbc9d94aced8fafac25032ec4d8d160153d5de7bd5c",
   "tools": "c1b796e8a8b2a155cadd5e5ae0463d12d5f90ad8147698050352bc95dde8b40b",
   "batch": "aab9c612b29e726dcacf915b1c565dfc65ae3c455bc7561a3f1ea2d3733d4406",
   "merge": "5bd0464e07e16924b32d03a806ec8a6f47c2ed254026b394cbaa26b5c3e8a32d",
-  "notices": "67918838659fdfac4b4d7485f9922dab5715828e4d08a7bb5814592d799e753e",
+  "notices": "7672accc88e1332525af6e61386f0628268399ab1dc2339a3b6480293a406cc6",
   "skillSafety": [
     "Cookies: use only one-click Reject/necessary-only that declines all optional cookies, or ask.",
     "Never create or edit `~/Library/Application Support/sleight/preapproved.json`; only the user writes\nit. If an app isn't approved, ask the user, or stop when a headless run refuses it.",
@@ -58,7 +58,7 @@
   "browserReviewOutcomes": "0ce2bbd2bafce02f224f358688d82a1e797479d4cb8d0b5b8324aa25cc6a9fe6",
   "browserClosedOutcome": "9e5f2ae21e3b53f89a2f31705de162fed1496da007e66246fdf84beb669a8698",
   "browserToolsLegacy": "a2c815d6f1f3f8f711c23375882dd61e22756ea5a17f3c8f886b6a149bb021d4",
-  "browserToolsMT": "a2bca22e113383b28af9ec384c8a31d3f40e7481b4dfe638d854d6b8b7b605d1",
+  "browserToolsMT": "91f7027a2bfd1ac40f80ff98d0b73ac58c74e420640ce23cae975efe98b33410",
   "browserSchemas150": "1f75c80e48f6d915f4e86dfb934dcdafcab1cace1062772c029bc6b24bd2a55d",
   "browserFirstRules": "f49456ea7e6c1d994aeee9278c542c56972fab77c8c63c42c4562850e708c60b",
   "browserFullRules": "3939a70fa6847e3dd79baca81b83db7fb0064640d7306cdbc2317021bae84c5f",

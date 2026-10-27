@@ -216,6 +216,7 @@ export function createActionRunner({ check, snapshot, backgroundClick = (tab, lo
     // A bad step list is refused before any input, so the caller must not report it as an unconfirmed outcome.
     try { validate(steps); } catch (error) { error.notRun = true; throw error; }
     const { page, state } = tab, since = state.snapshotNo > 0 ? state.snapshotNo : undefined, lines = []; let stoppedAt = null;
+    const input = {};
     let observed, observeError, confirmation, blocker, carry, carryPopupFrom, closed = false, observeWaitMs = 600, recordingStopped = false, paused = false;
     const fullOnce = process.env.SLEIGHT_FULL_OBSERVE_ONCE === '1' && observe === 'full';
     let fullObservation = false;
@@ -462,6 +463,12 @@ export function createActionRunner({ check, snapshot, backgroundClick = (tab, lo
           if (stepFinished) { armed.stop(); await releasePoints(); }
         });
         const result = await bounded(Promise.race([performed, armed.dialogReady]), actionTimeoutMs);
+        if (!inputPending && !submits && (['type', 'paste', 'select', 'check', 'uncheck', 'upload'].includes(step.do) ||
+            ['click', 'press', 'drag'].includes(step.do) && ['checkbox', 'radio', 'switch', 'slider', 'range', 'select'].some(role =>
+              role === target?.element?.kind || role === target?.element?.role) ||
+            step.do === 'press' && !activation && ['text', 'textarea', 'contenteditable'].includes(target?.element?.kind))) {
+          input.edited = true; input.submitted = false;
+        }
         let formChanged = false, overlayShown = false;
         // Repeated key presses and typing do not need their own observation: a step followed by another press
         // or type settles briefly and the last of the run settles fully. Enter, Return and Space can activate
@@ -541,6 +548,8 @@ export function createActionRunner({ check, snapshot, backgroundClick = (tab, lo
             if (!boundary && !popupNotice && !formChanged && !armed.pending.size && activity?.observable && await activity.verify()) deferred = trusted ? ctx.refund(target, activity) : deferRefund(ctx, target, activity);
           }
         }
+        if (submits && !state.submitUnconfirmed) { input.submitted = true; input.edited = false; }
+        if (submits && overlayShown) input.ask = true;
         const navPath = boundary?.kind === 'navigation' ? pathOf(page.url()) : '';
         // A tab the page opened during a click without the background modifier is probably in the foreground.
         const clicked = ['click', 'press'].includes(step.do) || point && step.do === 'drag';
@@ -673,7 +682,7 @@ export function createActionRunner({ check, snapshot, backgroundClick = (tab, lo
     }
     if (observeError) lines.push('Read unavailable: ' + observeError + '; use browser_read before retrying.');
     if (!needsRead) for (let i = 0; i < lines.length; i++) lines[i] = lines[i].replace('input sent; observation below', 'input sent');
-    return { lines, stoppedAt, observe: observed, ...(fullObservation && observed ? { fullObservation: true } : {}), ...(paused ? { paused: true } : {}), ...(closed ? { closed: true } : {}), ...(confirmation ? { confirmation } : {}) };
+    return { lines, stoppedAt, observe: observed, ...(Object.keys(input).length ? { input } : {}), ...(fullObservation && observed ? { fullObservation: true } : {}), ...(paused ? { paused: true } : {}), ...(closed ? { closed: true } : {}), ...(confirmation ? { confirmation } : {}) };
     } finally { batchWatch.stop(); if (recordingStopped) carry?.stop(); }
   };
 }

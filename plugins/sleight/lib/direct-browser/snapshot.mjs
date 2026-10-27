@@ -513,6 +513,7 @@ function rowsOf(tree, secrets, viewport) {
       // through value changes and sibling reorders, including child-frame refs.
       const key = ref ?? `${parent ?? 'root'}/${index}`;
       rows.push({ key, ref, parent, depth, line, previous,
+        pendingUserInput: role === 'dialog' || role === 'alertdialog' || protectedValue,
         ...(role === 'link' && !protectedValue && node.url ? { link: { name: scrub(node.name || node.text || '', secrets), url: scrub(node.url, secrets) } } : {}) });
       previous = key;
       if (!protectedValue && node.children) visit(node.children, key, depth + 1);
@@ -719,7 +720,9 @@ export async function snapshot(page, { ref, find, maxChars = 8000, since, links,
     if (continuation) state.continuations.delete(ref);
     for (const map of [state.history, state.continuations, state.pending]) while (map.size > 8) map.delete(map.keys().next().value);
     await assertEndpointRead(page);
-    return { text: result.text, number, ...(pointView ? { viewSignature: pointView.signature } : {}) };
+    return { text: result.text, number,
+      ...(history.rows.some(row => row.pendingUserInput) ? { pendingUserInput: true } : {}),
+      ...(pointView ? { viewSignature: pointView.signature } : {}) };
   } catch (error) {
     retireKeyboard(state);
     state.deliveredClosed.clear();
