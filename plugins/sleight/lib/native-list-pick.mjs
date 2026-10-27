@@ -374,6 +374,7 @@ export function listPicker({ read, observe, press, scroll, click, parse, sameEle
         }
         const n = named.kids.length, lo = Math.floor(3 * n / 8), hi = Math.max(lo, Math.ceil(5 * n / 8) - 1);
         const tries = [...(n ? [named.kids[Math.floor((lo + hi) / 2)]] : []), named.list];
+        let focusClickedAt;
         for (let i = 0; ; i++) {
           try { await click(tries[i].body); }
           catch (error) {
@@ -382,9 +383,42 @@ export function listPicker({ read, observe, press, scroll, click, parse, sameEle
             return stop('not-a-list', 'Neither a row of the list nor the list itself had a frame to click (' + String(error?.message ?? error).split('\n')[0] + '). No key was sent.');
           }
           lastClick = { number: tries[i].number, line: tries[i].body }; focusRow = tries[i].body;
+          focusClickedAt = now();
           break;
         }
         v = await look();
+        // A background click can select its row while focus still names an enclosing container (Firefox, release
+        // smoke 2026-10-27). Give that read one chance to settle. Repeat only the exact row whose selection is then
+        // proven, in the same unique list, with focus on a passive ancestor. No key or wheel goes out on this path.
+        const focusCandidate = () => {
+          const { rows } = parseRows(lastText);
+          const lists = rows.map((row, i) => i).filter(i => LIST_ROLE.test(rows[i].body) && sameElement(named.list.body, rows[i].body));
+          if (lists.length !== 1) return undefined;
+          const list = lists[0], focus = /^The focused UI element is (\d+) (.+?)\r?$/m.exec(lastText);
+          const at = focus ? rows.findIndex(row => row.number === Number(focus[1]) && sameElement(focus[2], row.body)) : -1;
+          if (at < 0 || !/^(?:container|scroll area|standard window|HTML content)(?: |,|$)/i.test(rows[at].body)) return undefined;
+          if (/\([^()]*\bsettable\b[^()]*\)/.test(rows[at].body) || /(?:^|, )(?:Secondary Actions|Actions):/.test(rows[at].body)) return undefined;
+          let ancestor = parent(rows, list);
+          while (ancestor >= 0 && ancestor !== at) ancestor = parent(rows, ancestor);
+          if (ancestor !== at) return undefined;
+          const matches = childRows(rows, list).filter(row => sameElement(lastClick.line, row.body));
+          if (matches.length !== 1 || !keyFocus(rows, rows.indexOf(matches[0]), list)) return undefined;
+          return matches[0];
+        };
+        if (v.problem && focusCandidate() && reads < maxReads && now() < deadline) {
+          // No system double-click interval reader is available in the engine realm. Use a 600 ms gap from
+          // completion of the first click so fast reads cannot turn the recovery into a double-click.
+          const repeatGap = 600;
+          await sleep(Math.min(Math.max(80, repeatGap - (now() - focusClickedAt)), deadline - now()));
+          if (now() < deadline) v = await look();
+          const row = focusCandidate();
+          if (v.problem && row && /\((?:[^()]*, )?selected(?:, [^()]*)?\)/.test(row.body) && reads < maxReads &&
+              now() < deadline && now() - focusClickedAt >= repeatGap) {
+            await click(row.body);
+            lastClick = { number: row.number, line: row.body };
+            v = await look();
+          }
+        }
         if (v.problem || !sameElement(v.list, named.list.body)) return stop('focus-lost', 'The click did not focus the named list. No key was sent.');
       }
     }
