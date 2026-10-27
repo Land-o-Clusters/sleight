@@ -9,6 +9,7 @@ struct MailError: Error, CustomStringConvertible {
 }
 var beforeMutation: (() throws -> Void)?
 var actionTaken = false
+var dialogBlocked = false
 var requestNonce: String?
 
 func mailRecoveryStep(_ code: AXError) -> String {
@@ -17,7 +18,7 @@ func mailRecoveryStep(_ code: AXError) -> String {
     } else if code == .cannotComplete {
         return "Mail did not answer Accessibility queries, bring Mail to idle and retry"
     } else {
-        return "Mail could not provide the scoped Accessibility query, bring Mail to idle and retry with its mailbox sidebar visible"
+        return "Mail could not provide the requested Accessibility metadata, bring Mail to idle and retry with its mailbox sidebar visible"
     }
 }
 func queryFailure(_ code: AXError, attempts: Int) -> MailError {
@@ -26,13 +27,14 @@ func queryFailure(_ code: AXError, attempts: Int) -> MailError {
 
 // Retry reads only. A failed action may already have taken effect.
 func retryMailQuery<Value>(setTimeout: (Float) -> AXError, query: () -> (AXError, Value),
-    pause: (TimeInterval) -> Void = { Thread.sleep(forTimeInterval: $0) }) throws -> Value {
+    pause: (TimeInterval) -> Void = { Thread.sleep(forTimeInterval: $0) },
+    failure: (AXError, Int) -> MailError = queryFailure) throws -> Value {
     let configured = setTimeout(2)
-    guard configured == .success else { throw queryFailure(configured, attempts: 0) }
+    guard configured == .success else { throw failure(configured, 0) }
     for attempt in 0..<3 {
         let (code, value) = query()
         if code == .success { return value }
-        guard code == .cannotComplete, attempt < 2 else { throw queryFailure(code, attempts: attempt + 1) }
+        guard code == .cannotComplete, attempt < 2 else { throw failure(code, attempt + 1) }
         pause(0.15 * Double(attempt + 1))
     }
     throw MailError("MAIL_SCOPED_AX_QUERY_UNAVAILABLE")
@@ -177,11 +179,14 @@ func emit(_ value: [String: Any]) throws {
 }
 func wait() { CFRunLoopRunInMode(.defaultMode, 0.1, false) }
 func read(_ element: AXUIElement, _ attribute: String) throws -> CFTypeRef? {
-    var value: CFTypeRef?
-    let code = AXUIElementCopyAttributeValue(element, attribute as CFString, &value)
-    if code == .attributeUnsupported || code == .noValue { return nil }
-    guard code == .success else { throw MailError("MAIL_AX_READ: \(code.rawValue); \(mailRecoveryStep(code)).") }
-    return value
+    try retryMailQuery(setTimeout: { AXUIElementSetMessagingTimeout(element, $0) }, query: {
+        var value: CFTypeRef?
+        let code = AXUIElementCopyAttributeValue(element, attribute as CFString, &value)
+        if code == .attributeUnsupported || code == .noValue { return (.success, nil) }
+        return (code, code == .success ? value : nil)
+    }, failure: { code, attempts in
+        MailError("MAIL_AX_READ: \(code.rawValue) after \(attempts) attempts; \(mailRecoveryStep(code)).")
+    })
 }
 func text(_ element: AXUIElement, _ attribute: String = kAXTitleAttribute) throws -> String { try read(element, attribute) as? String ?? "" }
 func children(_ element: AXUIElement, _ attribute: String = kAXChildrenAttribute) throws -> [AXUIElement] { try read(element, attribute) as? [AXUIElement] ?? [] }
@@ -287,6 +292,7 @@ final class Session {
             if retained && fixtureDialogTitle(title) { continue }
             if let category = dialogCategory(title, modal: modal) {
                 blockedDialog = ["app": "Mail", "bundle": "com.apple.mail", "category": category]
+                dialogBlocked = true
                 throw MailError("MAIL_APP_DIALOG_STOP: \(category)")
             }
         }
@@ -474,6 +480,7 @@ final class Session {
         for node in owned.reversed() { try close(node) }
         if launched {
             guard target.bundleIdentifier == "com.apple.mail", target.processIdentifier == pid else { throw MailError("MAIL_LAUNCHED_IDENTITY_CHANGED") }
+            try beforeMutation?()
             guard target.terminate() else { throw MailError("MAIL_LAUNCHED_QUIT_REFUSED") }
             for _ in 0..<50 { try safeWait(); if target.isTerminated { break } }
             guard target.isTerminated else { throw MailError("MAIL_LAUNCHED_QUIT_UNCONFIRMED") }
@@ -526,7 +533,7 @@ func main() throws {
     }
 }
 do { try main() } catch {
-    if !actionTaken, let nonce = requestNonce {
+    if !actionTaken, !dialogBlocked, let nonce = requestNonce {
         try? emit(["stage": "untouched", "nonce": nonce, "actionTaken": false, "launched": false, "imported": false])
     }
     FileHandle.standardError.write(Data((String(describing: error) + "\n").utf8)); exit(1)
