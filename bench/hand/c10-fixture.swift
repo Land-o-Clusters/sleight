@@ -12,8 +12,11 @@ import WebKit
 // C10 owns these two windows. The stdin protocol never posts input or addresses another app.
 // --selftest is arithmetic only. --preflight reads grants and HID idle without prompting.
 // --serve DIR HOST_BINARY constructs the fixture only after the JS owner's away and lock gates.
+// The capture reply comes from a detached task while the input timer emits on the main thread; one line at a time.
+let emitLock = NSLock()
 func emit(_ value: [String: Any]) {
     guard let data = try? JSONSerialization.data(withJSONObject: value, options: [.sortedKeys]) else { exit(70) }
+    emitLock.lock(); defer { emitLock.unlock() }
     do { try FileHandle.standardOutput.write(contentsOf: data + Data([10])) } catch { exit(0) }
 }
 func idle() -> Double? {
@@ -99,7 +102,7 @@ final class Fixture: NSObject, NSApplicationDelegate, WKNavigationDelegate {
     var web: WKWebView?, replayToken: String?
     let originTop: CGFloat = CGDisplayBounds(CGMainDisplayID()).maxY
     func global(_ rect: CGRect) -> CGRect { CGRect(x: rect.minX, y: originTop - rect.maxY, width: rect.width, height: rect.height) }
-    func rect(_ r: CGRect) -> [Double] { [Double(r.minX), Double(r.minY), Double(r.width), Double(r.height)] }
+    nonisolated func rect(_ r: CGRect) -> [Double] { [Double(r.minX), Double(r.minY), Double(r.width), Double(r.height)] }
     func make(_ title: String) -> NSWindow {
         let w = NSWindow(contentRect: CGRect(x: 200, y: 200, width: 720, height: 420), styleMask: [.titled, .closable, .miniaturizable, .resizable], backing: .buffered, defer: false)
         w.title = title; w.isReleasedWhenClosed = false; w.backgroundColor = .white; w.sharingType = .readOnly
@@ -176,7 +179,8 @@ final class Fixture: NSObject, NSApplicationDelegate, WKNavigationDelegate {
             if let values = row["bubble"] as? [Double], values.count == 4, values.allSatisfy({ $0.isFinite }), values[2] > 0, values[3] > 0 {
                 bubble = CGRect(x: values[0], y: values[1], width: values[2], height: values[3])
             }
-            Task { await capture(name, host, token, bubble, row["ocr"] as? Bool ?? true) }
+            let ids = (target: UInt32(target.windowNumber), cover: cover.isVisible ? UInt32(cover.windowNumber) : nil as UInt32?)
+            Task.detached { await self.capture(name, host, token, bubble, row["ocr"] as? Bool ?? true, ids.target, ids.cover) }
         case "replay":
             let path = output + "/replay.html"
             var st = stat()
@@ -209,10 +213,10 @@ final class Fixture: NSObject, NSApplicationDelegate, WKNavigationDelegate {
             emit(["event": "reply", "token": token].merging(result) { _, b in b })
         }
     }
-    func capture(_ name: String, _ host: Int32, _ token: String, _ bubble: CGRect?, _ ocr: Bool) async {
+    nonisolated func capture(_ name: String, _ host: Int32, _ token: String, _ bubble: CGRect?, _ ocr: Bool, _ targetID: UInt32, _ coverID: UInt32?) async {
         do {
             let content = try await SCShareableContent.excludingDesktopWindows(false, onScreenWindowsOnly: true)
-            guard let targetWindow = content.windows.first(where: { $0.windowID == UInt32(target.windowNumber) }),
+            guard let targetWindow = content.windows.first(where: { $0.windowID == targetID }),
                   let screen = content.displays.first(where: { $0.frame.contains(targetWindow.frame) }) else { throw NSError(domain: "fixture", code: 1) }
             // Only the owned fixture windows and the pinned host binary are included, even when another app overlaps them.
             var region = targetWindow.frame.insetBy(dx: -80, dy: -160).intersection(screen.frame)
@@ -222,7 +226,7 @@ final class Fixture: NSObject, NSApplicationDelegate, WKNavigationDelegate {
                 guard !region.isNull, !region.isEmpty else { throw NSError(domain: "fixture", code: 5) }
             }
             let owned = content.windows.filter { window in
-                window.windowID == UInt32(target.windowNumber) || (cover.isVisible && window.windowID == UInt32(cover.windowNumber)) || window.owningApplication?.processID == host
+                window.windowID == targetID || window.windowID == coverID || window.owningApplication?.processID == host
             }.filter { $0.frame.intersects(region) }
             let filter = SCContentFilter(display: screen, including: owned)
             let config = SCStreamConfiguration(); config.showsCursor = false; config.capturesAudio = false
