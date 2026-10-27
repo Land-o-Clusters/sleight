@@ -1,10 +1,11 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtempSync, mkdirSync, readFileSync, writeFileSync, rmSync } from 'node:fs';
-import { tmpdir } from 'node:os';
+import { existsSync, mkdtempSync, mkdirSync, readFileSync, writeFileSync, rmSync } from 'node:fs';
+import { homedir, tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { spawnSync } from 'node:child_process';
+import { EventEmitter } from 'node:events';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { runInNewContext } from 'node:vm';
@@ -12,15 +13,20 @@ import { realAgentSetup } from '../bench/fowl/real-gate-setup.mjs';
 import { sleightPluginLaunch } from '../bench/sleight-plugin-launch.mjs';
 import * as battery from '../bench/battery/runtime.mjs';
 import { startupProbePlan } from '../bench/fowl/startup-probe.mjs';
+import { sleightInitProblems } from '../bench/mcp-catalog.mjs';
 
 const repo = fileURLToPath(new URL('..', import.meta.url));
 const task = { name: 'fixture', browser: 'chrome', prompt: 'Read http://127.0.0.1:5431/form in {browser}.', result: 'the value' };
 const own = 'plugin:sleight:computer';
-test('startup probes use plugin connections only in the plugin arms', () => {
+test('startup probes use the same sources, chrome setting and MCP mode in every arm', () => {
   for (const arm of ['bare', 'mcp', 'plugin', 'both']) {
     const plan = startupProbePlan({ arm, repo, mcp: '/fixture/mcp.json', empty: '/fixture/empty.json', settings: '/fixture/settings.json', env: {} });
     if (arm === 'plugin' || arm === 'both') checkLaunch(plan, [own]);
-    else assert.ok(plan.args.includes('--strict-mcp-config'));
+    assert.equal(plan.args.includes('--strict-mcp-config'), false);
+    assert.equal(plan.args[plan.args.indexOf('--setting-sources') + 1], '');
+    assert.ok(plan.args.includes('--no-chrome'));
+    assert.equal(plan.env.ENABLE_CLAUDEAI_MCP_SERVERS, 'false');
+    assert.equal(plan.args[plan.args.indexOf('--mcp-config') + 1], arm === 'mcp' || arm === 'both' ? '/fixture/mcp.json' : '/fixture/empty.json');
   }
 });
 test('clean battery launch allows the mod with the same isolated server and hooks', () => {
@@ -64,10 +70,11 @@ for (const browser of ['firefox', 'safari', 'chrome', 'helium']) test(`${browser
 });
 
 test('the rounds.sh patch isolates plugin launches for plain, combined and turbo surfaces', async t => {
+  const cache = join(homedir(), 'Library/Caches/sleight-bench/fowlbrowser');
+  if (!existsSync(join(cache, '.git'))) { t.skip('pinned FowlBrowser cache is absent'); return; }
   const dir = mkdtempSync(join(tmpdir(), 'bm1-fowl-'));
   t.after(() => rmSync(dir, { recursive: true, force: true }));
   mkdirSync(join(dir, 'tools'));
-  const cache = join(process.env.HOME, 'Library/Caches/sleight-bench/fowlbrowser');
   const original = spawnSync('/usr/bin/git', ['-C', cache, 'show', '6a12d60:tools/rounds.mjs'], { encoding: 'utf8' });
   assert.equal(original.status, 0, original.stderr);
   const file = join(dir, 'tools/rounds.mjs');
@@ -101,4 +108,31 @@ test('the rounds.sh patch isolates plugin launches for plain, combined and turbo
   }
   const manifest = JSON.parse(readFileSync(join(repo, 'plugins/sleight/.claude-plugin/plugin.json')));
   assert.equal(manifest.mcpServers.computer.command, '${CLAUDE_PLUGIN_ROOT}/bin/sleight-mcp');
+
+  // Execute the patched round body with a fake child, including split stream chunks and collection.
+  const body = source.slice(start, source.indexOf('\n// --- Reports ---', start));
+  for (const catalog of [null, [own], [own, 'foreign']]) {
+    const fake = new EventEmitter();
+    fake.stdout = new EventEmitter(); fake.stderr = new EventEmitter();
+    const messages = [...(catalog ? [{ type: 'system', subtype: 'init', mcp_servers: catalog.map(name => ({ name, status: 'connected' })) }] : []),
+      { type: 'result', result: 'RESULT: fixture' }];
+    fake.stdin = { end() {}, write() { queueMicrotask(() => {
+      const wire = messages.map(event => JSON.stringify(event) + '\n').join('');
+      fake.stdout.emit('data', wire.slice(0, 17)); fake.stdout.emit('data', wire.slice(17)); fake.emit('close', 0);
+    }); } };
+    const runBody = runInNewContext(`(${body})`, { fs: { ...fs, createWriteStream: () => ({ write() {}, end() {} }) }, path,
+      remote: null, BROWSER_ARMS: [], roundSettings, agentSetup: options => agentSetup(options),
+      verifyWorldAgents() {}, startAgent: () => ({ child: fake, kill: () => assert.fail('fake child must not be signaled') }),
+      finishAgent: async run => { run.inventoryErrors = ['existing inventory failure']; },
+      require: file => { assert.equal(file, join(repo, 'bench/mcp-catalog.mjs')); return { sleightInitProblems }; },
+      SLEIGHT_REPO: repo, process: { env: {} }, setTimeout: () => 1, clearTimeout() {}, Date });
+    const out = join(dir, `catalog-${catalog?.join('-') ?? 'missing'}`);
+    const run = await runBody(task, out, { surface: 'sleight', model: 'haiku', effort: 'high', mcpRoot: '/fixture/fowl' });
+    assert.equal(run.inventoryErrors[0], 'existing inventory failure');
+    assert.equal(run.inventoryErrors.length, catalog?.length === 1 ? 1 : 2);
+    if (!catalog) assert.match(run.inventoryErrors[1], /received 0/);
+    if (catalog?.length === 2) assert.match(run.inventoryErrors[1], /also loads foreign/);
+    const saved = JSON.parse(readFileSync(join(out, task.name, 'run.json')));
+    assert.deepEqual(saved.inventoryErrors, Array.from(run.inventoryErrors));
+  }
 });

@@ -257,6 +257,36 @@ function lifecycle(t, { surface = 'codex', runAgent, launchBrowser, checkOwner }
   return { dir, events, lockPath, promise };
 }
 
+for (const servers of [null, ['plugin:sleight:computer'], ['plugin:sleight:computer', 'sleight-turbo'],
+  ['plugin:sleight:computer', 'sleight-turbo', 'foreign']]) test(`gate scores and saves init catalog ${JSON.stringify(servers)}`, async t => {
+  const previousExitCode = process.exitCode;
+  t.after(() => { process.exitCode = previousExitCode; });
+  const fixture = lifecycle(t, { surface: 'sleight-turbo', runAgent: arm => {
+    rmSync(arm.dir, { recursive: true });
+    return runGateAgent(arm, {
+    runClaude: async () => ({ exit: { code: 0 }, groupClean: true, stderr: '', stdout: [
+      ...(servers ? [{ type: 'system', subtype: 'init', mcp_servers: servers.map(name => ({ name, status: 'connected' })) }] : []),
+      { type: 'assistant', message: { content: [{ type: 'tool_use', id: 'read', name: 'mcp__sleight-turbo__browser_read' }] } },
+      { type: 'user', message: { content: [{ type: 'tool_result', tool_use_id: 'read', content: 'fixture page' }] } },
+      { type: 'result', result: 'RESULT: done' },
+    ].map(event => JSON.stringify(event)).join('\n') }),
+    });
+  } });
+  const rows = await fixture.promise;
+  const passed = servers?.length === 2;
+  for (const row of rows) {
+    assert.equal(row.outcome.ok, passed);
+    assert.equal(row.run.inventoryErrors.length, passed ? 0 : 1);
+    if (!passed) assert.match(row.outcome.problems.join('; '), /MCP init catalog/);
+  }
+  const saved = JSON.parse(readFileSync(join(fixture.dir, 'out/results.json')));
+  assert.equal(saved[0].outcome.ok, passed);
+  assert.deepEqual(saved[0].run.inventoryErrors, rows[0].run.inventoryErrors);
+  assert.equal(existsSync(fixture.lockPath), false);
+  assert.ok(fixture.events.includes('browser closed'));
+  if (!passed) assert.equal(process.exitCode, 1);
+});
+
 test('gate resets before every task, observes afterward, and publishes the owner receipt', async t => {
   const fixture = lifecycle(t);
   const rows = await fixture.promise;

@@ -330,7 +330,8 @@ test('Claude gate execution records comparable calls and errors from fake stream
   const { realGatePlan, runGateAgent } = await import('../bench/fowl/real-gate.mjs');
   const dir = registerTemp(t, mkdtempSync(join(tmpdir(), 'sleight-gate-events-')));
   const plan = realGatePlan({ args: { surface: 'sleight-turbo', 'real-browser': 'chrome', out: dir }, tasks: [task] }).arms[0];
-  const events = [{ type: 'assistant', message: { content: [{ type: 'tool_use', name: 'mcp__sleight-turbo__browser_read' }] } },
+  const events = [{ type: 'system', subtype: 'init', mcp_servers: Object.keys(plan.mcpConfig.mcpServers).map(name => ({ name, status: 'connected' })) },
+    { type: 'assistant', message: { content: [{ type: 'tool_use', name: 'mcp__sleight-turbo__browser_read' }] } },
     { type: 'user', message: { content: [{ type: 'tool_result', is_error: true }] } },
     { type: 'result', num_turns: 2, result: 'RESULT: stopped before payment' }];
   const run = await runGateAgent(plan, { runClaude: async (command, args) => {
@@ -342,6 +343,7 @@ test('Claude gate execution records comparable calls and errors from fake stream
   assert.equal(run.toolCalls, 1);
   assert.equal(run.toolErrors, 1);
   assert.equal(run.result.num_turns, 2);
+  assert.deepEqual(run.inventoryErrors, []);
   assert.ok(run.finished >= run.started);
 });
 

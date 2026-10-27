@@ -29,6 +29,7 @@ import { armPaths, guardLive as guardCursorLive } from '../world/arms/cursor-cu/
 import { inspectBundle as inspectCursorBundle, readLoginReadiness as cursorReadiness } from '../world/arms/cursor-cu/setup.mjs';
 import { scrubCursor } from '../world/arms/cursor-cu/scrub.mjs';
 import { startServer as startWholeSite } from './site/server.mjs';
+import { sleightInitProblems } from '../mcp-catalog.mjs';
 
 const repoRoot = fileURLToPath(new URL('../..', import.meta.url));
 const runCursorPlan = (plan, options) => runCursorDesktop(plan, { driver: new CursorDesktopDriver(), ...options });
@@ -209,6 +210,7 @@ export async function runGateAgent(plan, { signal, runClaude = runOwned, runNati
       const final = messages.findLast(event => event.type === 'result');
       const innerInteractive = plan.metadata?.interactive === true && Number.isFinite(final?.agentSeconds) && final.agentSeconds >= 0;
       result = { exitCode: run.exit.code, result: final,
+        inventoryErrors: sleightInitProblems(messages, plan.mcpConfig),
         // Only our interactive adapter has an inner agent boundary. Ordinary CLIs
         // cannot replace the harness clock by printing their own timing field.
         agentSeconds: innerInteractive ? final.agentSeconds : run.agentSeconds ?? null,
@@ -453,6 +455,11 @@ export async function runRealGate({ args, repo = repoRoot, mcpRoot, runner, task
       const visits = navigation ? (navigation.observed ? navigation.urls : []) : null;
       const outcome = gradeGateTask({ task: arm.task, run, grade, site, runner, after, startKeys,
         observed: observation.observed, observationReason: observation.reason, ownerCheck: observation.ownerCheck, evidence, visits });
+      if (run.inventoryErrors?.length) {
+        outcome.problems.push(...run.inventoryErrors);
+        outcome.ok = false;
+        outcome.cell = 'FAIL: ' + outcome.problems.join('; ');
+      }
       const text = name => { try { return readFileSync(join(arm.dir, name), 'utf8'); } catch { return ''; } };
       const errorClass = outcome.ok ? null : runErrorClass({ eventsText: text('events.jsonl'), stderr: text('stderr.txt') });
       // Cover evidence on every row, pass or fail; race-score --exclude-covered decides over all rounds which rows to leave out.
