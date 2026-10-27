@@ -7,7 +7,7 @@
 //     [--codex-model M] [--codex-effort E] [--dry-run] [--setup-only] [--owner-away] [--owner-present] [--clean-arms] [--analytics-config BANK]
 //
 // --clean-arms publishes the CPU comparison without the owner's setup (LAWS, 2026-10-10): the
-// sleight arm runs with strict MCP configuration and empty setting sources, so only sleight's
+// sleight arm runs with an MCP allowlist and empty setting sources, so only sleight's
 // server and mod load, and the pass confirms the Codex home configures only the engine server.
 // The results record armSetup: clean or normal, and the summary table splits each arm's own CPU.
 //
@@ -29,7 +29,7 @@
 
 import { execFileSync } from 'node:child_process';
 import { randomBytes } from 'node:crypto';
-import { existsSync, mkdirSync, realpathSync, rmdirSync, statSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync, realpathSync, rmdirSync, statSync, writeFileSync } from 'node:fs';
 import { homedir, tmpdir } from 'node:os';
 import { basename, dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -68,6 +68,7 @@ import { benchHand } from './hand/bench-hand.mjs';
 import { analyticsArm, writeAnalyticsMcp } from './analytics-validation.mjs';
 import { actionLogPath } from '../plugins/sleight/lib/action-outcomes.mjs';
 import { refreshHub } from './hub-refresh.mjs';
+import { sleightPluginLaunch } from './sleight-plugin-launch.mjs';
 
 // The desktop arm owns no Claude CLI, MCP config or engine approval list.
 // Dispatch before the ordinary runner prepares any of those resources.
@@ -225,7 +226,7 @@ for (const name of armNames) {
     arm.servers ??= [arm.server];
     if (!arm.generic) {
       if (name === 'sleight') {
-        // Strict mode suppresses plugin MCP registration; retain the same server identity.
+        // Retain the plugin identity for both the model and the mod's connection.
         const mcp = join(arm.cwd, 'bench-mcp.json');
         arm.mcp = { mcpServers: { [arm.server]: { command: join(ROOT, 'plugins/sleight/bin/sleight-mcp') } } };
         if (!isDryRun) writeFileSync(mcp, JSON.stringify(arm.mcp), { mode: 0o600 });
@@ -237,18 +238,28 @@ for (const name of armNames) {
     arm.env.BENCH_ARM_SERVERS = JSON.stringify(arm.servers);
     arm.env.BENCH_APPROVAL_STOP = arm.stopFile;
     arm.settings = join(arm.cwd, 'bench-settings.json');
-    const settings = arm.ownHooks ? mergeArmHooks(genericSettings(arm, ROOT), arm.ownHooks) : genericSettings(arm, ROOT);
+    let settings = arm.ownHooks ? mergeArmHooks(genericSettings(arm, ROOT), arm.ownHooks) : genericSettings(arm, ROOT);
+    if (name === 'sleight') {
+      const launch = sleightPluginLaunch({ args: arm.args, env: arm.env, mcpConfig: arm.mcp, settingsOverrides: settings });
+      arm.args = launch.args; arm.env = launch.env; settings = launch.settingsOverrides;
+    }
     if (!isDryRun) writeFileSync(arm.settings, JSON.stringify(world ? worldSettings(settings) : settings), { mode: 0o600 });
   }
   if (cleanArms && name === 'sleight' && !guardedPass) {
     // Clean arms keep the owner's user plugins, settings and MCP servers out of the CPU comparison:
-    // strict MCP with only sleight's server, the mod still loaded through --plugin-dir.
+    // an MCP allowlist admits sleight's server and the mod's own connection.
     const mcp = join(arm.cwd, 'bench-mcp.json');
+    arm.mcp = { mcpServers: { [arm.server]: analytics?.server ?? { command: join(ROOT, 'plugins/sleight/bin/sleight-mcp') } } };
     if (!isDryRun) {
       if (analytics) writeAnalyticsMcp(analyticsBank, { root: ROOT });
-      else writeFileSync(mcp, JSON.stringify({ mcpServers: { [arm.server]: { command: join(ROOT, 'plugins/sleight/bin/sleight-mcp') } } }), { mode: 0o600 });
+      else writeFileSync(mcp, JSON.stringify(arm.mcp), { mode: 0o600 });
     }
     arm.args.push('--mcp-config', mcp, '--strict-mcp-config', '--setting-sources', '');
+    const launch = sleightPluginLaunch({ args: arm.args, env: arm.env,
+      mcpConfig: arm.mcp });
+    arm.args = launch.args; arm.env = launch.env;
+    arm.settings = join(arm.cwd, 'bench-settings.json');
+    arm.cleanSettings = launch.settingsOverrides;
   }
   if (isDryRun) continue;
   const ok = ARMS[name].check?.() ?? true;
@@ -292,6 +303,10 @@ if (calculatorGate && (isDryRun || selected.some(task => task.id !== 'calculator
 const privatePass = selected.some(task => task.privateMail);
 if (privatePass && (selected.some(task => !task.privateMail) || armNames.some(name => name !== 'sleight'))) {
   throw new Error('Mimestream and chat tasks require a separate sleight-only pass selected with --tasks');
+}
+if (!isDryRun && ARMS.sleight.cleanSettings) {
+  const settings = JSON.parse(readFileSync(join(ROOT, 'bench', privatePass ? 'private-settings.json' : 'settings.json'), 'utf8'));
+  writeFileSync(ARMS.sleight.settings, JSON.stringify({ ...settings, ...ARMS.sleight.cleanSettings }), { mode: 0o600 });
 }
 
 // SLEIGHT_APPROVAL_PROMPT=client keeps approvals going to approve.mjs, even

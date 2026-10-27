@@ -13,6 +13,7 @@ import { VirtualTerminal } from './world/arms/claude-cu/terminal.mjs';
 import { openFixture, closeFixtures } from './real-fixture.mjs';
 import { removeTemp } from '../scripts/temp-leftovers.mjs';
 import { assertLogin } from './preflight.mjs';
+import { sleightPluginLaunch } from './sleight-plugin-launch.mjs';
 import { prepareHandHost } from '../plugins/sleight/lib/direct-browser/host.mjs';
 import { FIRST_NOTICE_MS, REMOTE_NOTICE, expectedNoticeResult, noticeTiming, scrubRemoteValue, transcriptRows, writeRemoteEvidence } from './remote-approval-evidence.mjs';
 
@@ -37,7 +38,7 @@ export function remotePlan() {
   return { app: 'TextEdit', bundle: 'com.apple.TextEdit', interactive: true,
     approvals: 'empty arm store; no persistent writes', engineAlwaysList: 'untouched; a bypass fails the notice check',
     args: ['--plugin-dir', join(root, 'plugins/sleight'), '--model', 'claude-haiku-5-5', '--effort', 'high',
-      '--no-chrome', '--setting-sources', '', '--strict-mcp-config', '--tools', '',
+      '--no-chrome', '--setting-sources', '', '--tools', '',
       '--allowedTools', 'mcp__plugin_sleight_computer__js,mcp__plugin_sleight_computer__turn_ended', '--disable-slash-commands'],
     first: 'Use computer use to read the short note in the macOS plain text editor. Report its first line verbatim. Use var app for the app handle and nodeRepl.write(await app.getAXState({disableDiffing:true})) to read it. Do not edit anything. If a tool refuses approval, stop and report the exact notice.',
     upfront: 'write a note in TextEdit and email it to me' };
@@ -182,17 +183,20 @@ export async function realSession(bank, { hold, signal, upfront = false, login =
   mkdirSync(config, { recursive: true, mode: 0o700 });
   const mcp = join(dir, 'mcp.json'), settings = join(dir, 'settings.json'), turnFile = join(dir, 'turn-' + id + '.json');
   const nonce = randomUUID(), audit = join(dir, 'approvals.jsonl'), diagnosticsFile = join(dir, 'server-diagnostics.json');
-  writeFileSync(mcp, JSON.stringify({ mcpServers: { 'plugin:sleight:computer': { command: process.execPath,
+  const mcpConfig = { mcpServers: { 'plugin:sleight:computer': { command: process.execPath,
     args: [fileURLToPath(new URL('./remote-approval-server.mjs', import.meta.url))],
-    env: { SLEIGHT_TURBO: '0', SLEIGHT_HAND: '0', SLEIGHT_APPROVAL_PROMPT: 'dialog', RA1_AUDIT: audit, RA1_DIAGNOSTICS: diagnosticsFile } } } }), { mode: 0o600 });
-  writeFileSync(settings, JSON.stringify({ autoMemoryEnabled: false, enabledPlugins: {}, claudeMdExcludes: ['**'],
-    hooks: { PreToolUse: [{ matcher: '.*', hooks: [{ type: 'command', command: `"${process.execPath}" "${fileURLToPath(new URL('./remote-approval-guard.mjs', import.meta.url))}"`, timeout: 5 }] }], Stop: [{ hooks: [{ type: 'command', command: `"${process.execPath}" "${fileURLToPath(new URL('./world/arms/claude-cu/turn-ended.mjs', import.meta.url))}"`, timeout: 5 }] }] } }), { mode: 0o600 });
+    env: { SLEIGHT_TURBO: '0', SLEIGHT_HAND: '0', SLEIGHT_APPROVAL_PROMPT: 'dialog', RA1_AUDIT: audit, RA1_DIAGNOSTICS: diagnosticsFile } } } };
+  const launchPlan = sleightPluginLaunch({ args: remotePlan().args, mcpConfig,
+    settingsOverrides: { autoMemoryEnabled: false, enabledPlugins: {}, claudeMdExcludes: ['**'],
+      hooks: { PreToolUse: [{ matcher: '.*', hooks: [{ type: 'command', command: `"${process.execPath}" "${fileURLToPath(new URL('./remote-approval-guard.mjs', import.meta.url))}"`, timeout: 5 }] }], Stop: [{ hooks: [{ type: 'command', command: `"${process.execPath}" "${fileURLToPath(new URL('./world/arms/claude-cu/turn-ended.mjs', import.meta.url))}"`, timeout: 5 }] }] } } });
+  writeFileSync(mcp, JSON.stringify(mcpConfig), { mode: 0o600 });
+  writeFileSync(settings, JSON.stringify(launchPlan.settingsOverrides), { mode: 0o600 });
   const env = { ...login.env };
   Object.assign(env, { CLAUDE_CONFIG_DIR: config, TERM: 'xterm-256color', CLAUDE_CODE_DISABLE_AUTO_MEMORY: '1', ENABLE_CLAUDEAI_MCP_SERVERS: 'false',
     DISABLE_AUTOUPDATER: '1', DISABLE_TELEMETRY: '1', DO_NOT_TRACK: '1',
     RA1_UPFRONT: upfront ? '1' : '0', BENCH_CU_SESSION: id, BENCH_CU_NONCE: nonce, BENCH_CU_TURN_DIR: dir, BENCH_CU_TURN_RECEIPT: turnFile });
   const plan = { command: login.command, cwd: dir, env,
-    args: [...remotePlan().args, '--session-id', id, '--mcp-config', mcp, '--settings', settings] };
+    args: [...launchPlan.args, '--session-id', id, '--mcp-config', mcp, '--settings', settings] };
   const configFile = join(config, '.claude.json');
   const before = existsSync(configFile) ? JSON.parse(readFileSync(configFile, 'utf8')) : {};
   let restored = false;

@@ -5,6 +5,7 @@ import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { nativeBrowserSetup, windowPrompt, turboWindowPrompt } from './native-setup.mjs';
 import { turboSetup } from '../turbo/setup.mjs';
+import { sleightPluginLaunch } from '../sleight-plugin-launch.mjs';
 import { codexExecPlan } from '../codex-arm.mjs';
 import { modelId } from './accounting.mjs';
 import { worldAgentSetup, browserArmSetup, defaultArmRoot } from '../world/arms/browser.mjs';
@@ -157,7 +158,7 @@ export function realAgentSetup({ task, surface, dir, realBrowser, armHome, dryRu
     '--strict-mcp-config', '--mcp-config', join(dir, 'mcp.json'), '--settings', settings,
     '--allowedTools', arm.allowed, '--tools', '', ...(surface === 'claude-in-chrome' ? [] : ['--no-chrome']), ...arm.args,
     ...(engine || surface === 'sleight-turbo' ? ['--plugin-dir', join(repo, 'plugins/sleight')] : [])];
-  return { command: arm.command, args, prompt: fullPrompt, mcpConfig: { mcpServers: arm.mcpServers },
+  const plan = { command: arm.command, args, prompt: fullPrompt, mcpConfig: { mcpServers: arm.mcpServers },
     settingsOverrides: engine || surface === 'sleight-turbo' ? { ...arm.settings, hooks: { ...arm.settings.hooks,
       Elicitation: [{ matcher: 'plugin:sleight:computer', hooks: [{ type: 'command', timeout: 5,
         command: `node "${join(repo, 'bench/fowl/origin-hook.mjs')}"` }] }],
@@ -167,4 +168,5 @@ export function realAgentSetup({ task, surface, dir, realBrowser, armHome, dryRu
     metadata: { ...arm.metadata, browser: realBrowser.browser, profile: realBrowser.profileName || realBrowser.profileRoot,
       profileMode: realBrowser.profileMode || 'fresh', ...(realBrowser.profileFolder ? { profileFolder: realBrowser.profileFolder } : {}),
       browserVersion: realBrowser.version ?? null, permissionMode: 'default', headless: false, focus: surface === 'sleight-turbo' ? 'host monitor' : 'not measured' } };
+  return engine || surface === 'sleight-turbo' ? sleightPluginLaunch(plan) : plan;
 }

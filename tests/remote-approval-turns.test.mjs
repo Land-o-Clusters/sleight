@@ -58,7 +58,8 @@ for (const { binding, failTurn, modelTool } of cases) test(`configured RA1 Stop 
           const mcp = JSON.parse(readFileSync(p.args[p.args.indexOf('--mcp-config') + 1], 'utf8'));
           diagnosticsFile = mcp.mcpServers['plugin:sleight:computer'].env.RA1_DIAGNOSTICS;
           assert.equal(p.args[p.args.indexOf('--setting-sources') + 1], '');
-          assert.ok(p.args.includes('--strict-mcp-config'));
+          assert.equal(p.args.includes('--strict-mcp-config'), false);
+          assert.deepEqual(settings.allowedMcpServers, [{ serverName: 'plugin:sleight:computer' }]);
           assert.equal(p.env.CLAUDE_CONFIG_DIR, login.env.CLAUDE_CONFIG_DIR);
           assert.equal(JSON.parse(readFileSync(join(p.env.CLAUDE_CONFIG_DIR, '.claude.json'), 'utf8')).projects[p.cwd].hasTrustDialogAccepted, true);
           const project = join(p.env.CLAUDE_CONFIG_DIR, 'projects', 'fixture');
