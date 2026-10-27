@@ -307,15 +307,21 @@ function finderRoleInventory(app, api, receipt, phase) {
   windows.forEach(function (item, index) {
     if (!item) throw windowInventoryError(message, 'missing-element', windows.length, index);
     if (!api.equal(item, item)) throw windowInventoryError(message, 'failed-self-identity', windows.length, index);
-    var detail = {}, role = api.finderRole ? api.finderRole(item, detail) : null;
-    if (['AXWindow', 'AXScrollArea'].indexOf(role) === -1)
-      throw windowInventoryError(message, 'non-window-or-stale', windows.length, index, detail);
     windows.slice(0, index).forEach(function (other, otherIndex) {
       if (api.equal(item, other)) throw windowInventoryError(message, 'duplicate-identity', windows.length, index, { duplicateIndex: otherIndex });
     });
+    var panel = receipt && receipt.folderPanel;
+    if (panel && panel.reference && api.equal(item, panel.reference)) {
+      if (!api.finderPanelMatches || !api.finderPanelMatches(panel.window, item, panel))
+        throw new Error('Finder folder sheet identity changed');
+      return;
+    }
+    var detail = {}, role = api.finderRole ? api.finderRole(item, detail) : null;
+    if (['AXWindow', 'AXScrollArea'].indexOf(role) === -1)
+      throw windowInventoryError(message, 'non-window-or-stale', windows.length, index, detail);
     result.push({ reference: item, role: role });
   });
-  if (receipt) {
+  if (receipt && phase !== 'cleanup-inventory') {
     var changed = finderBaselineChange(result, receipt, api, phase);
     if (changed) throw changed;
   }
@@ -380,10 +386,13 @@ function openFinderFolder(request, app, previous, api, clock, retain) {
   }
   if (!window) throw new Error('New Finder fixture window unconfirmed');
   validate();
-  api.menu(app, 'Go', ['Go to Folder…', 'Go to Folder...'], validate, true, true);
+  var panel = request.finderOwnership.folderPanel = { window: window, attempted: false };
+  api.menu(app, 'Go', ['Go to Folder…', 'Go to Folder...'], validate, true, true, function () {
+    panel.attempted = true;
+  });
   deadline = clock.now() + 5000;
   while (clock.now() < deadline) {
-    sheet = api.folderSheet(window, app);
+    sheet = api.folderSheet(window, app, panel);
     validate();
     if (sheet) break;
     clock.wait(100);
@@ -392,11 +401,16 @@ function openFinderFolder(request, app, previous, api, clock, retain) {
   validate();
   // Once navigation starts, a lost document cannot revive the default-title
   // fallback. Cleanup must then prove the fixture location.
-  request.finderOwnership.documentless = [];
-  api.submitFolder(window, sheet, request.target, validate);
+  api.submitFolder(window, sheet, request.target, validate, function () { request.finderOwnership.documentless = []; });
   if (clock.emit) clock.emit({ stage: 'finder-folder-submitted', target: request.target });
   return window;
   } catch (error) {
+    // An AXPress can take effect and still return an error. Retain its panel
+    // before recovery, even when setup never reached the polling loop.
+    var attemptedPanel = request.finderOwnership.folderPanel;
+    if (attemptedPanel && attemptedPanel.attempted && !attemptedPanel.reference) {
+      try { api.folderSheet(window, app, attemptedPanel); } catch (_) {}
+    }
     if (requested) error.finderWindowRequested = true;
     throw error;
   }
@@ -721,7 +735,7 @@ function chooseFileMenu(file, titles, api) {
     }
     if (items.length !== 1) throw new Error('Fixture menu item unavailable or ambiguous');
     if (api.beforePress) api.beforePress();
-    api.press(items[0]);
+    api.press(items[0], api.commandAttempt);
   } catch (error) {
     try { if (openingAttempted) api.cancel(menus.length === 1 ? menus[0] : file); }
     catch (failure) {
@@ -819,7 +833,7 @@ function closeFinderFixtureWindows(owned, request, app, api) {
   if (!owned || !contains(receipt.created, owned) || contains(baseline, owned))
     throw new Error('Finder fixture window ownership unconfirmed');
   function inventory() {
-    var entries = finderRoleInventory(app, api);
+    var entries = finderRoleInventory(app, api, receipt, 'cleanup-inventory');
     scrollAreas = finderScrollAreaCounts(entries, receipt, api);
     var changed = finderBaselineChange(entries, receipt, api, 'cleanup');
     if (changed && !reported && api.emit) {
@@ -834,6 +848,7 @@ function closeFinderFixtureWindows(owned, request, app, api) {
   function listed(window) { return contains(inventory(), window); }
   function validate(window) {
     inventory();
+    if (api.finderFolderGuard) api.finderFolderGuard(app, null, null);
     if (api.dialog(app, window, Object.assign({}, request, { refuseDialogs: true })).length)
       throw new Error('Finder dialog present; fixture cleanup refused');
     if (!listed(window) || contains(baseline, window) || !finderFixtureWindow(window, request, api))
@@ -841,6 +856,21 @@ function closeFinderFixtureWindows(owned, request, app, api) {
     if (!listed(window)) throw new Error('Finder fixture identity changed');
   }
   inventory();
+  var panel = receipt.folderPanel;
+  if (panel && panel.reference && api.finderPanelExists(panel.reference)) {
+    function validatePanel() {
+      if (!panel.attempted || !contains(receipt.created, panel.window) || !api.equal(panel.window, owned) ||
+          !api.finderPanelMatches || !api.finderPanelMatches(owned, panel.reference, panel) || !finderFixtureWindow(owned, request, api))
+        throw new Error('Finder folder sheet identity changed');
+      inventory();
+      api.finderFolderGuard(app, owned, panel.reference);
+    }
+    validatePanel();
+    api.cancelFolderPanel(app, owned, panel.reference, validatePanel);
+    for (var panelAttempt = 0; panelAttempt < 30 && api.finderPanelExists(panel.reference); panelAttempt++) api.wait();
+    if (api.finderPanelExists(panel.reference)) throw new Error('Finder folder sheet cleanup unconfirmed');
+    if (api.emit) api.emit({ stage: 'finder-panel-cleanup', panelDismissed: true });
+  }
   receipt.created.forEach(function (window) {
     if (!listed(window)) return;
     validate(window);
@@ -858,7 +888,7 @@ function finderSetupProbe(request, app, api, clock) {
   var owned, baseline, fileMenu = api.fileMenu;
   var result = { probe: 'finder-setup', passed: false, snapshots: [], cleanupConfirmed: false };
   function snapshot(phase, fresh) {
-    var current = finderRoleInventory(app, api), receipt = request.finderOwnership;
+    var receipt = request.finderOwnership, current = finderRoleInventory(app, api, receipt, 'cleanup-inventory');
     baseline = baseline || receipt.baseline;
     var owners = baseline.filter(function (entry) { return entry.role === 'AXWindow'; });
     var remaining = current.filter(function (entry) { return entry.role === 'AXWindow' &&
@@ -898,6 +928,9 @@ function finderSetupProbe(request, app, api, clock) {
   } catch (error) { result.failure = finderStaticFailure(error); }
   finally {
     api.fileMenu = fileMenu;
+    var panel = request.finderOwnership && request.finderOwnership.folderPanel;
+    if (panel) result.panel = { commandAttempted: panel.attempted === true, retained: !!panel.reference,
+      role: panel.role || null, subrole: panel.subrole || null, parentConfirmed: !!panel.reference };
     // Cancellation ends setup but leaves a separate bounded cleanup window.
     if (clock.beginCleanup) clock.beginCleanup();
     try {
@@ -1348,7 +1381,7 @@ function nativeAX(state, clock) {
       // These optional attributes can remain unsupported on a valid app
       // window. Their absence allows the existing nonce-title identity fallback.
       if (code === -25205 && state && (state.setup || state.cleanup || state.observation) &&
-          ['AXDocument', 'AXURL', 'AXSheets', 'AXSubrole', 'AXMainWindow', 'AXWindows', 'AXChildren', 'AXValue', 'AXWindowNumber', 'AXParent'].indexOf(attribute) !== -1) {
+          ['AXDocument', 'AXURL', 'AXSheets', 'AXSubrole', 'AXMainWindow', 'AXWindows', 'AXChildren', 'AXValue', 'AXWindowNumber', 'AXParent', 'AXWindow', 'AXCancelButton'].indexOf(attribute) !== -1) {
         if (state.office) state.officeLastError = { code: code, attribute: attribute };
         return null;
       }
@@ -1445,12 +1478,12 @@ function nativeAX(state, clock) {
     return found;
   }
   function equal(a, b) { return !!a && !!b && !!$.CFEqual(a, b); }
-  function menu(app, name, titles, beforePress, refuseDialogs, finderBaseline) {
+  function menu(app, name, titles, beforePress, refuseDialogs, finderBaseline, commandAttempt) {
     var bar = read(app, 'AXMenuBar');
     var files = children(bar).filter(function (item) { return text(item, 'AXTitle') === name; });
     if (files.length !== 1) throw new Error('Fixture needs the ' + name + ' menu');
     var trackedOpening = finderBaseline === true && state.bundle === 'com.apple.finder', commandGuard = trackedOpening ? beforePress : undefined;
-    chooseFileMenu(files[0], titles, { tracksOpeningAttempt: trackedOpening,
+    chooseFileMenu(files[0], titles, { tracksOpeningAttempt: trackedOpening, commandAttempt: commandAttempt,
       press: function (element, onAttempt) { press(element, commandGuard, onAttempt); }, children: children, text: text,
       beforePress: function () { commandGuard = beforePress; },
       enabled: function (item) { return Number(ObjC.unwrap(read(item, 'AXEnabled'))) === 1; }, cancel: function (menu) {
@@ -1566,6 +1599,24 @@ function nativeAX(state, clock) {
       windowNumber(window, binding.app) === binding.receipt.windowNumber;
   }
   var promptApi = { text: text, title: identityTitle, titleFree: titleFree, children: children, path: path, read: read, equal: equal };
+  var folderPanels = [];
+  function finderPanelShape(panel) {
+    var role = text(panel, 'AXRole'), subrole = text(panel, 'AXSubrole');
+    return (role === 'AXSheet' && ['', 'AXUnknown', 'AXDialog', 'AXSystemDialog'].indexOf(subrole) !== -1) ||
+      (role === 'AXWindow' && ['AXDialog', 'AXSystemDialog'].indexOf(subrole) !== -1)
+      ? { role: role, subrole: subrole } : null;
+  }
+  function finderPanelParent(window, panel) {
+    // App-parented panels must explicitly name their owning AXWindow. A
+    // focused panel or an untitled window alone never establishes ownership.
+    var owner = read(panel, 'AXWindow');
+    if (owner && !equal(owner, panel) && !equal(owner, window)) return false;
+    for (var parent = read(panel, 'AXParent'), depth = 0; parent && depth < 12; parent = read(parent, 'AXParent'), depth++) {
+      if (equal(parent, window)) return true;
+      if (text(parent, 'AXRole') === 'AXWindow') return false;
+    }
+    return !parent && equal(owner, window);
+  }
   var api = {
     emit: clock && clock.emit,
     title: identityTitle, titleFree: titleFree, retain: retain, windowNumber: windowNumber,
@@ -1605,18 +1656,70 @@ function nativeAX(state, clock) {
         if (!equal(current, focused)) throw new Error('Finder folder focus changed during validation');
       }
     },
-    folderSheet: function (window, app) {
-      var sheets = children(window, 'AXSheets');
-      var sheet = sheets.length === 1 ? sheets[0] : this.hiddenSheet(app, window);
-      if (!sheet || text(sheet, 'AXRole') !== 'AXSheet') return null;
-      // A Go to Folder sheet is valid only under the new window this helper created.
-      for (var parent = read(sheet, 'AXParent'), depth = 0; parent && depth < 12; parent = read(parent, 'AXParent'), depth++) {
-        if (equal(parent, window)) return sheet;
-        if (text(parent, 'AXRole') === 'AXWindow') return null;
-      }
-      return null;
+    finderPanelExists: function (panel) {
+      try { return !!text(panel, 'AXRole'); }
+      catch (error) { if (error.code === -25202) return false; throw error; }
     },
-    submitFolder: function (window, sheet, target, validate) {
+    finderPanelMatches: function (window, panel, receipt) {
+      var shape = finderPanelShape(panel);
+      return !!shape && (!receipt || (receipt.attempted === true && equal(receipt.window, window) &&
+        equal(receipt.reference, panel) && shape.role === receipt.role && shape.subrole === receipt.subrole)) && finderPanelParent(window, panel);
+    },
+    folderSheet: function (window, app, receipt) {
+      receipt = receipt || folderPanels.filter(function (entry) { return equal(entry.window, window); })[0];
+      if (receipt && receipt.attempted !== true) return null;
+      if (receipt && receipt.reference) {
+        return this.finderPanelExists(receipt.reference) && this.finderPanelMatches(window, receipt.reference, receipt) ? receipt.reference : null;
+      }
+      var candidates = children(window, 'AXSheets').concat(children(window));
+      if (receipt) {
+        candidates = candidates.concat(this.windows(app), children(app));
+        var focused = this.focused(app);
+        if (focused) candidates.push(focused);
+        for (var node = read(app, 'AXFocusedUIElement'), depth = 0; node && depth < 12; node = read(node, 'AXParent'), depth++) {
+          candidates.push(node);
+          if (equal(node, app)) break;
+        }
+      } else {
+        var hidden = this.hiddenSheet(app, window);
+        if (hidden) candidates.push(hidden);
+      }
+      var found = [];
+      candidates.forEach(function (candidate) {
+        if (equal(candidate, window) || found.some(function (item) { return equal(item, candidate); })) return;
+        var shape = finderPanelShape(candidate);
+        if (shape && (receipt || shape.role === 'AXSheet') && finderPanelParent(window, candidate)) found.push(candidate);
+      });
+      if (found.length !== 1) return null;
+      var panel = found[0];
+      if (receipt) {
+        var shape = finderPanelShape(panel);
+        receipt.reference = panel; receipt.role = shape.role; receipt.subrole = shape.subrole;
+        folderPanels.push(receipt);
+        if (clock && clock.emit) clock.emit({ stage: 'finder-panel-retained', panelRole: shape.role,
+          panelSubrole: shape.subrole, panelParentConfirmed: true, referenceExported: false });
+      }
+      return panel;
+    },
+    cancelFolderPanel: function (app, window, panel, validate) {
+      var self = this;
+      function check() {
+        if (validate) validate();
+        if (!equal(self.folderSheet(window, app), panel)) throw new Error('Finder folder sheet identity changed');
+      }
+      if (clock && clock.check) clock.check();
+      check();
+      var code = Number($.AXUIElementPerformAction(panel, $('AXCancel')));
+      if (code === -25206) {
+        var cancel = read(panel, 'AXCancelButton');
+        if (!cancel || text(cancel, 'AXRole') !== 'AXButton') throw new Error('Finder folder sheet cancellation unavailable');
+        press(cancel, function () {
+          check();
+          if (!equal(read(panel, 'AXCancelButton'), cancel)) throw new Error('Finder folder sheet cancellation identity changed');
+        });
+      } else if (code !== 0) throw new Error('Finder folder sheet cancellation failed: ' + code);
+    },
+    submitFolder: function (window, sheet, target, validate, onNavigate) {
       var pidRef = Ref();
       if (Number($.AXUIElementGetPid(window, pidRef)) !== 0) throw new Error('Finder folder window process unavailable');
       var app = $.AXUIElementCreateApplication(Number(pidRef[0]));
@@ -1647,7 +1750,7 @@ function nativeAX(state, clock) {
         if (validate) validate();
         self.finderFolderGuard(app, window, sheet);
         if (validate) validate();
-      });
+      }, onNavigate);
     },
     applications: function () {
       var values = $.NSRunningApplication.runningApplicationsWithBundleIdentifier(state.bundle), result = [];
