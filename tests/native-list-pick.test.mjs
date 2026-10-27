@@ -825,6 +825,169 @@ test('CC2: a frameless first row is retried once on the list itself; both framel
     .run(24, names[60]), /boom/);
 });
 
+// PF2: both release-smoke Firefox arms selected the focusing row while the engine still named the enclosing
+// container as focused. A's next pick clicked that same selected row and finished; B abandoned the helper for
+// an 81-scroll loop. Model the delayed selection read separately from the click that establishes list focus.
+function containerFocusList({ selected = true, delayed = true, recover = true, alter } = {}) {
+  const names = airports(), m = webList(names, { browser: 'firefox', focus: 'city' });
+  const tree = m.tree, click = m.clickLine;
+  let before, stale = false;
+  m.focusClicks = [];
+  m.tree = async () => {
+    let text = await tree();
+    if (m.focus !== 'list') {
+      text = text.replace(/\n(?:Selected:|The focused UI element is)[\s\S]*$/,
+        '\nThe focused UI element is 1 container Book a trip · Skyway');
+    }
+    if (!m.focusClicks.length) before = text;
+    if (stale) { stale = false; return before; }
+    return alter ? alter(text, m) : text;
+  };
+  m.clickLine = async line => {
+    m.focusClicks.push(line);
+    const result = await click(line);
+    if (m.focusClicks.length === 1 || !recover) m.focus = 'container';
+    if (!selected) m.selected = undefined;
+    if (m.focusClicks.length === 1) stale = delayed;
+    return result;
+  };
+  return { m, names };
+}
+
+test('PF2: a proven selection under container focus gets one recovery click and completes the search', async () => {
+  for (const delayed of [false, true]) {
+    const { m, names } = containerFocusList({ delayed });
+    const { run } = namedPicker(m, 'firefox');
+    const result = await run(m.list, names[612]);
+    assert.equal(result.clicked, true, JSON.stringify(result));
+    assert.equal(names[m.selected], names[612]);
+    assert.equal(m.focusClicks.length, 3, 'initial focus, same-row recovery, final target');
+    assert.equal(m.focusClicks[0].replace('(selectable)', '(selected)'), m.focusClicks[1]);
+    assert.equal(m.keysElsewhere, 0, 'the recovery sends no key before list focus is observed');
+    assert.ok(result.reads < 30, JSON.stringify(result));
+  }
+});
+
+test('PF2: an unconfirmed focus click is never repeated', async () => {
+  const { m, names } = containerFocusList({ selected: false });
+  const result = await namedPicker(m, 'firefox').run(m.list, names[612]);
+  assert.equal(result.reason, 'focus-lost');
+  assert.equal(m.focusClicks.length, 1);
+  assert.equal(m.keys.length + m.ticks.length, 0);
+});
+
+test('PF2: focus recovery stops after one repeat even if the row stays selected', async () => {
+  const { m, names } = containerFocusList({ recover: false });
+  const result = await namedPicker(m, 'firefox').run(m.list, names[612]);
+  assert.equal(result.reason, 'focus-lost');
+  assert.equal(m.focusClicks.length, 2);
+  assert.equal(m.keys.length + m.ticks.length, 0);
+});
+
+test('PF2: no focus recovery when a fresh read names another control or an ambiguous list', async () => {
+  for (const change of [
+    text => text.replace('The focused UI element is 1 container Book a trip · Skyway', 'The focused UI element is 47 pop up button Sapporo'),
+    text => text.replaceAll('container Book a trip · Skyway', 'container (settable) Book a trip · Skyway'),
+    text => text.replaceAll('container Book a trip · Skyway', 'container Book a trip · Skyway, Actions: Press'),
+    text => text.replace('\n72 menu bar', '\n\t98 list Departing from\n72 menu bar'),
+    text => text.replace(/text \(selected\) /, 'button (selected) '),
+    text => text.replace(/text \(selected\) [^\n]+/, 'text (selected) Another row'),
+  ]) {
+    const { m, names } = containerFocusList({ alter: (text, m) => m.focusClicks.length ? change(text) : text });
+    const result = await namedPicker(m, 'firefox').run(m.list, names[612]);
+    assert.equal(result.reason, 'focus-lost');
+    assert.equal(m.focusClicks.length, 1);
+    assert.equal(m.keys.length + m.ticks.length, 0);
+  }
+});
+
+test('PF2: focus recovery respects the read and time caps', async () => {
+  for (const maxReads of [2, 3]) {
+    const { m, names } = containerFocusList();
+    const result = await namedPicker(m, 'firefox').run(m.list, names[612], { maxReads });
+    assert.equal(result.clicked, false);
+    assert.ok(result.reads <= maxReads, JSON.stringify(result));
+    assert.equal(m.focusClicks.length, 1);
+  }
+  const { m, names } = containerFocusList();
+  let clock = 0;
+  const result = await namedPicker(m, 'firefox', { now: () => clock, sleep: async ms => { clock += ms; } })
+    .run(m.list, names[612], { timeoutMs: 40 });
+  assert.equal(result.clicked, false);
+  assert.equal(m.focusClicks.length, 1);
+  assert.equal(m.keys.length + m.ticks.length, 0);
+});
+
+test('PF2: focus that moves during the settling read cancels the recovery', async () => {
+  const { m, names } = containerFocusList();
+  let moved = false;
+  const tree = m.tree;
+  m.tree = async () => {
+    const text = await tree();
+    return moved ? text.replace('The focused UI element is 1 container Book a trip · Skyway',
+      'The focused UI element is 47 pop up button Sapporo') : text;
+  };
+  const result = await namedPicker(m, 'firefox', { sleep: async () => { moved = true; } }).run(m.list, names[612]);
+  assert.equal(result.reason, 'focus-lost');
+  assert.equal(m.focusClicks.length, 1);
+  assert.equal(m.keys.length + m.ticks.length, 0);
+});
+
+test('PF2: a changed window during focus recovery stops before a second click', async () => {
+  const { m, names } = containerFocusList();
+  let moved = false;
+  const tree = m.tree;
+  m.tree = async () => {
+    const text = await tree();
+    return moved ? text.replace('Window: "Book a trip · Skyway"', 'Window: "Another window"') : text;
+  };
+  await assert.rejects(namedPicker(m, 'firefox', { sleep: async () => { moved = true; } }).run(m.list, names[612]), /window changed/);
+  assert.equal(m.focusClicks.length, 1);
+  assert.equal(m.keys.length + m.ticks.length, 0);
+});
+
+test('PF2: the serialized guard recovers container focus and verifies the final selection', async () => {
+  const { m, names } = containerFocusList();
+  const handle = { getAXState: async () => m.tree(), pressKey: async key => m.key(key),
+    scroll: async (number, direction, ticks) => m.wheel(number, direction, ticks),
+    click: async number => {
+      const line = m.rendered.includes(m.selected) && number === m.list + 1 + m.rendered.indexOf(m.selected)
+        ? `text (selected) ${names[m.selected]}` : `text (selectable) ${names[m.rendered[number - m.list - 1]]}`;
+      await m.clickLine(line);
+    } };
+  const context = { cua: { getApp: async () => handle }, setTimeout, nodeRepl: { write() {} } };
+  const run = code => runInNewContext(`(async () => { ${code} })()`, context);
+  await run(readCode('await cua.getApp("Firefox");'));
+  const result = await run(guardedCode(`return await app.pickFromList(${m.list}, ${JSON.stringify(names[612])});`, travelWindow('firefox')));
+  assert.equal(result.clicked, true, JSON.stringify(result));
+  assert.equal(names[m.selected], names[612]);
+  assert.equal(m.focusClicks.length, 3);
+  assert.equal(m.keysElsewhere, 0);
+});
+
+test('PF2: a revoked input lease stops the serialized focus recovery before another click', async () => {
+  const dir = trackTemp(mkdtempSync(join(tmpdir(), 'sleight-list-recovery-lease-')));
+  const AsyncFunction = Object.getPrototypeOf(async function () {}).constructor;
+  try {
+    const path = join(dir, 'lease.json');
+    writeFileSync(path, JSON.stringify({ token: 'owner', expires: Date.now() + 30000 }));
+    const { m, names } = containerFocusList();
+    const raw = { getAXState: async () => m.tree(), pressKey: async key => m.key(key),
+      scroll: async (number, direction, ticks) => m.wheel(number, direction, ticks),
+      click: async number => {
+        await m.clickLine(`text (selectable) ${names[m.rendered[number - m.list - 1]]}`);
+        writeFileSync(path, JSON.stringify({ token: 'someone else', expires: Date.now() + 30000 }));
+      } };
+    const code = guardedCode(`return await app.pickFromList(${m.list}, ${JSON.stringify(names[612])});`,
+      travelWindow('firefox'), undefined, { path, token: 'owner' });
+    try {
+      await assert.rejects(new AsyncFunction('app', 'cua', 'nodeRepl', code)(raw, { getApp: async () => raw }, { write() {} }), /Input lease stopped/);
+    } finally { delete globalThis.__sleightDocumentGuard; delete globalThis.__sleightDocumentGuardSetup; }
+    assert.equal(m.focusClicks.length, 1);
+    assert.equal(m.keys.length + m.ticks.length, 0);
+  } finally { rmSync(dir, { recursive: true, force: true }); }
+});
+
 test('CC2: without a list argument, focus on a pop up button stops as before and names the list form', async () => {
   for (const browser of ['safari', 'firefox']) {
     const m = webList(airports(), { browser, focus: 'city' });
