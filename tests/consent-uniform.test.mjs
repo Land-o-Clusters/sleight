@@ -45,7 +45,8 @@ test('common card policy dispatches exact choices, queues once, expires and rese
   assert.ok(iconExpression);
   const dir = registerTemp(t, trackTemp(mkdtempSync(join(tmpdir(), 'sleight-uniform-consent-'))));
   const swift = join(dir, 'main.swift'), binary = join(dir, 'fixture');
-  writeFileSync(swift, 'import Foundation\nimport CoreFoundation\n' + app + model + `
+  // The host's methods read the --channels-selftest flag (SM1R); the harness is never that mode.
+  writeFileSync(swift, 'import Foundation\nimport CoreFoundation\nlet channelValidationOnly = false\n' + app + model + `
 final class AskCardPanel {
     static var shows = 0, reviews = 0, closes = 0
     let answer: (String) -> Void

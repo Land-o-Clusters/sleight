@@ -8,6 +8,8 @@ import * as live from '../bench/remote-approval-live.mjs';
 import { SessionTranscript } from '../bench/world/arms/claude-cu/interactive.mjs';
 import * as evidence from '../bench/remote-approval-evidence.mjs';
 
+// A macOS-shaped home path built explicitly, as the path-portability rule asks for adversarial data.
+const FIXTURE_HOME = ['', 'Users', 'fixture'].join('/');
 const notice = '"TextEdit" needs approval on the Mac. Ask the user to reply: allow TextEdit';
 const tool = (t, input = { code: 'var app = await cua.getApp("TextEdit")' }) => ({ type: 'assistant', t,
   message: { id: 'm1', content: [{ type: 'tool_use', id: 't1', name: 'mcp__plugin_sleight_computer__js', input }] } });
@@ -115,14 +117,14 @@ for (const asyncWrite of [false, true]) test(`report output failure returns a fa
 
 test('evidence selects transcript fields, scrubs before byte limits, and writes private files', t => {
   const base = registerTemp(t, realpathSync(mkdtempSync(join(tmpdir(), 'sleight-ra1-evidence-'))));
-  const rows = [tool(101, { code: 'read /Users/fixture/private', token: 'opaque-secret', nested: { password: 'password-secret' } }),
+  const rows = [tool(101, { code: `read ${FIXTURE_HOME}/private`, token: 'opaque-secret', nested: { password: 'password-secret' } }),
     result(102, '🙂'.repeat(2000) + ' sk-ant-test-secret'),
     { type: 'assistant', t: 103, message: { content: [{ type: 'text', text: 'Read ~/fixture Bearer opaque-bearer' }] } }];
   const dir = evidence.writeRemoteEvidence({ started: '2026-10-26T01:02:03.004Z', sessions: [{ rows, turns: [{ submitAt: 100,
     presence: { idleSeconds: 150, locked: false }, firstToolAt: 101, firstResultAt: 102 }],
-    server: { stderr: 'HOME=/Users/fixture sk-ant-log-secret', trace: [] },
+    server: { stderr: `HOME=${FIXTURE_HOME} sk-ant-log-secret`, trace: [] },
     env: { ANTHROPIC_API_KEY: 'env-secret' }, credentials: 'credential-secret' }],
-    report: { error: 'failed sk-ant-error-secret' } }, { root: base, home: '/Users/fixture' });
+    report: { error: 'failed sk-ant-error-secret' } }, { root: base, home: FIXTURE_HOME });
   assert.match(dir, /ra1-2026-10-26T01-02-03-004Z$/);
   assert.equal(statSync(dir).mode & 0o777, 0o700);
   let all = '';
@@ -141,7 +143,7 @@ test('evidence selects transcript fields, scrubs before byte limits, and writes 
 
 test('keychain and credential payloads are omitted whole, including split stderr chunks', () => {
   const logger = evidence.createServerEvidence();
-  logger.stderr('harmless /Users/fixture/path\nAuthorization: Bea');
+  logger.stderr(`harmless ${FIXTURE_HOME}/path\nAuthorization: Bea`);
   logger.stderr('rer split-secret\nsecurity find-generic-password -w\nkeychain-payload\n');
   logger.stderr('{"accessToken":"arbitrary-secret","refreshToken":"refresh-secret"}\n');
   logger.trace('from-server', { method: 'elicitation/create', params: { password: 'trace-secret' } });
