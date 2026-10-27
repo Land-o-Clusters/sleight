@@ -7,6 +7,8 @@ import { join } from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { captureRecordingFrame } from '../../plugins/sleight/lib/direct-browser/recording.mjs';
 import { createTurnRecording } from '../../plugins/sleight/lib/turn-recording.mjs';
+// A Pillow child that stops reading stdin under heavy load once held a full check for 13 minutes; fail fast instead.
+const PIL_TIMEOUT_MS = 60000;
 
 // Optional macOS image decoders operate only on synthetic fixture pixels.
 let grader;
@@ -60,7 +62,7 @@ export const inset = (box, n = 4) => ({ x: box.x + n, y: box.y + n, width: box.w
 // OCR uses macOS Vision and the GIF checks use Pillow; skip where either is missing (Linux CI, clean Macs).
 export function gradeSkip() {
   if (process.platform !== 'darwin') return 'macOS Vision OCR required';
-  return spawnSync('python3', ['-c', 'import PIL'], { encoding: 'utf8' }).status === 0 ? false : 'python3 Pillow required';
+  return spawnSync('python3', ['-c', 'import PIL'], { encoding: 'utf8', timeout: PIL_TIMEOUT_MS }).status === 0 ? false : 'python3 Pillow required';
 }
 export async function rawFrame(page) { return PNG.sync.read(await page.screenshot({ type: 'png', scale: 'css', caret: 'hide' })); }
 export async function record(f, handle, t) {
@@ -92,7 +94,7 @@ for y in range(math.ceil(box['y']*s)+top,math.floor((box['y']+box['height'])*s)+
   count+=im.getpixel((x,y))!=want
 print(count)
 assert count==0,('unmasked GIF pixels',count)
-`, path, JSON.stringify([frame.width, frame.height, box])], { input: reference, encoding: 'utf8' });
+`, path, JSON.stringify([frame.width, frame.height, box])], { input: reference, encoding: 'utf8', timeout: PIL_TIMEOUT_MS });
   assert.equal(result.status, 0, result.stderr);
   t.diagnostic(`saved GIF: ${result.stdout.trim()} differing pixels`);
   const gif = readFileSync(path);
@@ -119,8 +121,8 @@ w,h,box=json.loads(sys.argv[1]); raw=sys.stdin.buffer.read(); image=Image.open(i
 s=min(1,640/w,480/h) if gif else 1
 left=(640-math.floor(w*s))//2 if gif else 0; top=(480-math.floor(h*s))//2 if gif else 0
 image.crop((math.ceil(box['x']*s)+left,math.ceil(box['y']*s)+top,math.floor((box['x']+box['width'])*s)+left,math.floor((box['y']+box['height'])*s)+top)).save(sys.stdout.buffer,format='PNG')
-`, JSON.stringify([frame.width, frame.height, box])], { input: bytes });
-    assert.equal(cropped.status, 0, cropped.stderr.toString());
+`, JSON.stringify([frame.width, frame.height, box])], { input: bytes, timeout: PIL_TIMEOUT_MS });
+    assert.equal(cropped.status, 0, cropped.error?.message ?? cropped.stderr.toString());
     bytes = cropped.stdout;
   }
   const ocr = recognize(t, bytes), qr = recognize(t, original, 'decode-qr');
