@@ -95,13 +95,18 @@ const grokApproval = id => ({ id, method: 'elicitation/create', params: {
   message: 'Allow Calculator?', requestedSchema: { type: 'object', properties: {} },
   _meta: { connector_id: 'computer-use', persist: ['session', 'always'], riskLevel: 'low', tool_params: { app: 'Calculator' } },
 } });
-for (const native of [false, true]) for (const dedupeRules of [false, true]) test(`Grok retries first-call guidance after oversized image delivery: native=${native}, dedupe=${dedupeRules}`, t => {
-  const h = grokRelay(t, { firstCallRules: skillRules(), dedupeRules });
+for (const native of [false, true]) for (const dedupeRules of [false, true]) test(`Grok retries held first-call guidance after oversized image delivery: native=${native}, dedupe=${dedupeRules}`, async t => {
+  const h = grokRelay(t, { firstCallRules: skillRules(), dedupeRules, warmRepl: true });
   const policy = readFileSync(new URL('fixtures/engine-confirmations-policy.txt', import.meta.url), 'utf8').trimEnd();
   const docs = '## Computer Use\nNative reference.\n\n' + policy;
+  h.engine({ id: 0, result: {} });
+  h.client({ method: 'notifications/initialized' }); await tick(0);
+  const warm = h.sent.find(msg => msg.params?.arguments?.title === 'Prepare sleight REPL');
+  assert.ok(warm);
+  h.engine({ id: warm.id, result: { content: [{ type: 'text', text: docs }] } }); await tick(0);
   const call = id => h.client({ id, method: 'tools/call', params: { name: 'js', arguments: { code: id === 1 && native ? 'var app = await cua.getApp("Calculator")' : 'nodeRepl.write(4)' } } });
   call(1);
-  h.engine({ id: 1, result: { content: [{ type: 'text', text: docs }, { type: 'image', data: 'A'.repeat(30000), mimeType: 'image/png' }] } });
+  h.engine({ id: 1, result: { content: [{ type: 'image', data: 'A'.repeat(30000), mimeType: 'image/png' }] } });
   assert.equal(h.received.at(-1).result.isError, true);
   assert.match(h.received.at(-1).result.content[0].text, /Do not replay input automatically/);
   assert.match(JSON.stringify(h.received.at(-1).result.content), /computer__js/);

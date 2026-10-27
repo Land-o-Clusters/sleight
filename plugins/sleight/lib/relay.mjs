@@ -1558,6 +1558,10 @@ export function createRelay({
   const callSeqs = new Map();
   let docsShown = false;
   let deferredEngineDocs = [], clientJsDelivered = false, deferredRules;
+  // Only copies taken from sleight's held documentation can enter the retry queue.
+  // Symbols survive content transforms but cannot be forged by client JSON or page text.
+  const deferredDocumentation = Symbol('sleight deferred documentation');
+  const heldDocumentation = item => !!item?.[deferredDocumentation] || deferredEngineDocs.includes(item);
   let undeliveredGuidance = [];
   const engineDocs = (content = [], embedded = false) => content.flatMap(item => {
     if (item.type !== 'text') return [];
@@ -2753,7 +2757,7 @@ export function createRelay({
       updateRetries.delete(msg.id); reconnectNotes.delete(msg.id);
     }
     if (clientOut.writableEnded || clientOut.destroyed) {
-      const guidance = (msg.result?.content ?? []).filter(item => ruleBlocks.trusted(item) || engineDocs([item], true).length).map(docOrigin.full);
+      const guidance = (msg.result?.content ?? []).filter(item => ruleBlocks.trusted(item) || heldDocumentation(item)).map(docOrigin.full);
       ruleBlocks.retry(guidance);
       for (const item of guidance) if (!undeliveredGuidance.some(c => c.text === item.text)) undeliveredGuidance.push(item);
       if (msg.method === undefined) { resultBudget.finish(msg.id); fullDocumentationCalls.delete(msg.id); }
@@ -2804,7 +2808,8 @@ export function createRelay({
         content: [{ type: 'text', text: msg.error.message }] } };
       if (Array.isArray(msg.result?.content)) {
         const texts = msg.result.content.filter(item => item.type === 'text').map(item => item.text);
-        msg.result.content = [...deferredEngineDocs.filter(item => !texts.some(text => text.startsWith(item.text.trimEnd()))), ...msg.result.content];
+        msg.result.content = [...deferredEngineDocs.filter(item => !texts.some(text => text.startsWith(item.text.trimEnd())))
+          .map(item => ({ ...item, [deferredDocumentation]: true })), ...msg.result.content];
         deferredEngineDocs = [];
       }
     }
@@ -2833,7 +2838,7 @@ export function createRelay({
       // Replay only guidance, never an image or action output. It already passed the docs and rule
       // transforms, whose once-per-session state advanced before the final serialized cap.
       msg.result = grokResult(msg.result, () => {
-        const guidance = msg.result.content.filter(item => ruleBlocks.trusted(item) || engineDocs([item], true).length).map(docOrigin.full);
+        const guidance = msg.result.content.filter(item => ruleBlocks.trusted(item) || heldDocumentation(item)).map(docOrigin.full);
         ruleBlocks.retry(guidance);
         for (const item of guidance) if (!undeliveredGuidance.some(c => c.text === item.text)) undeliveredGuidance.push(item);
         return guidance;
@@ -2867,7 +2872,7 @@ export function createRelay({
     trace('to-client', msg);
     if (msg.method === undefined && msg.id !== undefined) onClientReply(msg);
     const retainedGuidance = modelVisible && Array.isArray(msg.result?.content)
-      ? msg.result.content.filter(item => ruleBlocks.trusted(item) || engineDocs([item], true).length) : [];
+      ? msg.result.content.filter(item => ruleBlocks.trusted(item) || heldDocumentation(item)) : [];
     const runImages = msg.method === undefined && !msg.error && !msg.result?.isError
       ? msg.result?.content?.filter(item => item?.type === 'image') : undefined;
     const runDetail = runScreenshotDetails.get(runImages?.at(-1)) ?? { source: 'native' };
@@ -5556,7 +5561,10 @@ export function createRelay({
     }
     const emptyNote = !msg.error && !msg.result?.isError && noOutputNotice(jsCode, msg.result?.content);
     if (emptyNote) msg.result.content.push({ type: 'text', text: promptNotice(emptyNote, prompt) });
-    if (jsCode !== undefined) replWarmup.attach(msg);
+    if (jsCode !== undefined) {
+      replWarmup.docs = replWarmup.docs.map(item => ({ ...item, [deferredDocumentation]: true }));
+      replWarmup.attach(msg);
+    }
     if (jsCode !== undefined) browserRecovery.observe(jsCode, msg);
     if (pendingBrowser && !msg.result?._meta?.['codex/toolSurface']?.app?.appId &&
         msg.result?.isError && Array.isArray(msg.result.content)) {
