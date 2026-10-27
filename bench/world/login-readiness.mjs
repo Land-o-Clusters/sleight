@@ -38,12 +38,12 @@ export function loginTarget(name, { armHome, env = process.env }) {
 
 // Rows for the given arms. Codex is native Codex on its own login, so it has no row here.
 export function worldLoginReadiness(arms = LOGIN_ARMS, { armHome = defaultArmHome(), env = process.env, home = homedir(),
-  login = assertLogin, exists = existsSync, cursorReadiness = cursorLoginReadiness } = {}) {
+  login = assertLogin, exists = existsSync, cursorReadiness = cursorLoginReadiness, ownerSaysCursorFree = false } = {}) {
   // USER and LOGNAME as the runs have them (armEnv keeps the host's): the keychain login is found by user.
   const base = { HOME: home, PATH: '/usr/bin:/bin:/usr/sbin:/sbin',
     ...Object.fromEntries(['USER', 'LOGNAME'].filter(key => typeof env[key] === 'string').map(key => [key, env[key]])) };
   return arms.filter(name => name !== 'codex').map(name => {
-    if (name === 'cursor-cu') return cursorReadiness();
+    if (name === 'cursor-cu') return cursorReadiness({ ownerSaysCursorFree });
     const target = loginTarget(name, { armHome, env });
     const loginEnv = { ...base, CLAUDE_CONFIG_DIR: target.config };
     if (!exists(target.command)) return { ...target, loggedIn: false, reason: 'Claude CLI is not installed', fix: target.setup };
@@ -63,7 +63,7 @@ export function formatReadiness(rows) {
 if (process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1]) {
   const i = process.argv.indexOf('--arm');
   const arms = i >= 0 ? process.argv[i + 1].split(',') : LOGIN_ARMS;
-  const rows = worldLoginReadiness(arms);
+  const rows = worldLoginReadiness(arms, { ownerSaysCursorFree: process.argv.includes('--owner-says-cursor-free') });
   console.log(process.argv.includes('--json') ? JSON.stringify(rows, null, 2) : formatReadiness(rows));
   process.exitCode = rows.every(row => row.loggedIn === true) ? 0 : 1;
 }

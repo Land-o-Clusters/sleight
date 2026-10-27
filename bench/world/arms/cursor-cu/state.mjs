@@ -12,14 +12,16 @@ export async function retryBusy(read, { now = Date.now, pause = ms => new Promis
   }
 }
 
-export function readCursorState(paths, { exists = existsSync, open } = {}) {
+export function readCursorState(paths, { exists = existsSync, open, composerId } = {}) {
   ordinaryPath(paths.database);
   if (!exists(paths.database)) return { composers: [], bubbles: {} };
   if (!open) throw Error('Cursor state reader needs a readonly SQLite opener');
   const db = open(paths.database, { readOnly: true, timeout: 100 });
   try {
     // No auth values, file contents or unrelated app state are selected.
-    const rows = db.prepare("SELECT key, value FROM cursorDiskKV WHERE key LIKE 'composerData:%'").all();
+    if (composerId && !/^[A-Za-z0-9-]{1,100}$/.test(composerId)) throw Error('unsupported Cursor composer id');
+    const rows = composerId ? db.prepare('SELECT key, value FROM cursorDiskKV WHERE key = ?').all('composerData:' + composerId)
+      : db.prepare("SELECT key, value FROM cursorDiskKV WHERE key LIKE 'composerData:%'").all();
     const composers = rows.map(r => JSON.parse(String(r.value)));
     const bubbles = {};
     for (const c of composers) {
@@ -31,9 +33,41 @@ export function readCursorState(paths, { exists = existsSync, open } = {}) {
   } finally { db.close(); }
 }
 
-export async function profileState(paths) {
+export async function profileState(paths, { composerId } = {}) {
   const { DatabaseSync } = await import('node:sqlite');
-  return retryBusy(() => readCursorState(paths, { open: (file, opts) => new DatabaseSync(file, opts) }));
+  if (composerId) return retryBusy(() => readCursorState(paths, { composerId, open: (file, opts) => new DatabaseSync(file, opts) }));
+  // Before creating a chat only IDs are needed, never owner conversations or bubbles.
+  return retryBusy(() => {
+    const db = new DatabaseSync(ordinaryPath(paths.database), { readOnly: true, timeout: 100 });
+    try { return { composers: db.prepare("SELECT key FROM cursorDiskKV WHERE key LIKE 'composerData:%'").all()
+      .map(row => ({ composerId: row.key.slice('composerData:'.length) })), bubbles: {} }; }
+    finally { db.close(); }
+  });
+}
+
+export function assertEmptyChat(snapshot, composerId) {
+  const c = snapshot.composers.find(c => c.composerId === composerId), bubbles = snapshot.bubbles[composerId];
+  if (!c || !Array.isArray(c.fullConversationHeadersOnly) || c.fullConversationHeadersOnly.length ||
+    !Array.isArray(bubbles) || bubbles.length || c.status === 'generating' || c.generatingBubbleIds?.length)
+    throw Error('Cursor new chat must be empty with no conversation or generation');
+}
+
+export function isComputerUseTool(row) {
+  const wire = row.toolCall?.tool ?? row.toolCall;
+  const params = row.params?.value ?? row.params ?? wire?.value?.args ?? row.input;
+  // Explicit conflicting discriminators refuse, even if arbitrary payload text mentions Computer Use.
+  if (row.tool !== undefined && !['computer_use', 'mcp'].includes(row.tool)) return false;
+  if (wire?.case !== undefined && !['computerUseToolCall', 'mcpToolCall'].includes(wire.case)) return false;
+  if (params?.providerIdentifier !== undefined && params.providerIdentifier !== 'cursor-computer-use') return false;
+  if (row.tool === 'computer_use' || wire?.case === 'computerUseToolCall') return true;
+  return params?.providerIdentifier === 'cursor-computer-use' ||
+    /^(?:mcp__)?cursor[-_]computer[-_]use__[A-Za-z0-9_]+$/.test(row.toolName ?? row.name ?? '');
+}
+
+export function assertComputerUseOnly(snapshot, composerId) {
+  // Admission proved this chat empty. Include newly written tool rows even before headers or timing settle.
+  const tools = (snapshot.bubbles[composerId] ?? []).flatMap(b => b.toolFormerData ? [b.toolFormerData] : []);
+  if (tools.some(row => !isComputerUseTool(row))) throw Error('Cursor safety stop: non-Computer-Use tool in run chat');
 }
 
 export function pendingAppApprovals(snapshot, composerId) {

@@ -12,7 +12,7 @@ import { scrubCursor } from './scrub.mjs';
 
 export function parseOptions(argv) {
   const args = {};
-  const flags = ['dry-run', 'owner-away', 'allow-benchmark-app-prompts', 'no-allow-benchmark-app-prompts', 'no-hub', 'world'];
+  const flags = ['dry-run', 'owner-says-cursor-free', 'owner-away', 'allow-benchmark-app-prompts', 'no-allow-benchmark-app-prompts', 'no-hub', 'world'];
   const values = ['suite', 'arm', 'tasks', 'runs', 'out', 'surface', 'real-browser', 'real-profile', 'only', 'model', 'effort'];
   for (let i = 0; i < argv.length; i++) {
     const key = argv[i].slice(2);
@@ -38,8 +38,8 @@ export function nativePlan(args = {}) {
   if (!Number.isSafeInteger(count) || count < 1 || count > 5) throw Error('Cursor runs must be 1..5');
   return { arm: 'cursor-cu', suite: 'world', route: 'desktop', liveReady: false, blockers: DESKTOP_BLOCKERS, dryRun: !!args['dry-run'], pin: CURSOR_PIN,
     out: resolve(args.out ?? join(homedir(), 'Library/Caches/sleight-bench/cursor-cu-arm/results', `native-${randomUUID()}.json`)),
-    ownerAway: !!args['owner-away'], setup: setupPlan(),
-    composer: composerPlan({ prompt: '<shared world fixture prompt>', allowBenchmarkAppPrompts: !args['no-allow-benchmark-app-prompts'] }),
+    ownerAway: !!args['owner-away'], ownerSaysCursorFree: !!args['owner-says-cursor-free'], setup: setupPlan(),
+    composer: composerPlan({ ownerSaysCursorFree: !!args['owner-says-cursor-free'], prompt: '<shared world fixture prompt>', allowBenchmarkAppPrompts: !args['no-allow-benchmark-app-prompts'] }),
     runs: Array.from({ length: count }, (_, i) => tasks.map(task => ({ task: task.id, run: i + 1, check: 'shared world task.check',
       allowedApps: task.allowedApps, timeoutMs: task.timeoutMs }))).flat(),
     timingBoundary: 'harness submit to persisted clientSettleTime; setup, checks and cleanup excluded',
@@ -52,12 +52,12 @@ export async function runCursorPlan(plan, { signal, ...options } = {}) {
 
 export async function nativeMain(argv, runtime = {}) {
   const args = parseOptions(argv), plan = nativePlan(args);
-  if (args['dry-run']) { (runtime.print ?? console.log)(JSON.stringify(plan, null, 2)); return plan; }
-  (runtime.guard ?? guardLive)({ ownerAway: plan.ownerAway });
-  await (runtime.preflight ?? (p => new DesktopDriver().preflight(p)))({ paths: armPaths() });
+  if (args['dry-run']) { (runtime.print ?? console.log)(JSON.stringify(scrubCursor(plan), null, 2)); return plan; }
+  (runtime.guard ?? guardLive)({ ownerAway: plan.ownerAway, ownerSaysCursorFree: plan.ownerSaysCursorFree });
+  await (runtime.preflight ?? (p => new DesktopDriver().preflight(p)))({ paths: armPaths(), ownerSaysCursorFree: plan.ownerSaysCursorFree });
   (runtime.inspect ?? inspectBundle)(armPaths().app);
-  const readiness = await (runtime.readiness ?? readLoginReadiness)();
-  if (!readiness.authStored) throw Error('Cursor desktop isolated login missing; run node bench/world/arms/cursor-cu/setup.mjs');
+  const readiness = await (runtime.readiness ?? readLoginReadiness)(undefined, { ownerSaysCursorFree: plan.ownerSaysCursorFree });
+  if (!readiness.authStored) throw Error('Cursor owner login missing; keep the installed signed-in Cursor running');
   if (existsSync(plan.out)) throw Error('Cursor result output already exists');
   const { acquireLiveLock } = await import('../../../live-lock.mjs');
   const { executeRealTask } = await import('../../../real-run.mjs');
@@ -75,7 +75,7 @@ export async function nativeMain(argv, runtime = {}) {
       const result = await (runtime.execute ?? executeRealTask)(task, ctx, { signal: controller.signal, lockHeld: true,
         permissionCheck: observePermission, stop: abort,
         drive: async prompt => {
-          const p = composerPlan({ prompt, allowedApps: row.allowedApps, timeoutMs: row.timeoutMs,
+          const p = composerPlan({ ownerSaysCursorFree: plan.ownerSaysCursorFree, prompt, allowedApps: row.allowedApps, timeoutMs: row.timeoutMs,
             allowBenchmarkAppPrompts: !args['no-allow-benchmark-app-prompts'] });
           const out = await (runtime.run ?? runCursorPlan)(p, { signal: controller.signal });
           return { code: out.is_error ? 1 : 0, out, agentSeconds: out.agentSeconds, agentTiming: out.agentTiming, groupClean: out.groupClean, reason: out.reason, safetyStop: out.safetyStop,
@@ -90,7 +90,7 @@ export async function nativeMain(argv, runtime = {}) {
         timingBoundary: inner ? plan.timingBoundary : 'outer drive through task check, including startup', qualificationOnly: true });
       if (result.groupClean === false || result.cleanupUnconfirmed || ctx.fixtureLockUnconfirmed || result.liveLockKept) clean = false;
       mkdirSync(resolve(plan.out, '..'), { recursive: true, mode: 0o700 });
-      writeFileSync(plan.out, JSON.stringify({ ...plan, results, groupClean: clean }, null, 2), { mode: 0o600 });
+      writeFileSync(plan.out, JSON.stringify(scrubCursor({ ...plan, results, groupClean: clean }), null, 2), { mode: 0o600 });
       if (!clean || controller.signal.aborted || result.approvalStop || result.safetyStop) break;
     }
   } finally {
@@ -106,14 +106,14 @@ export async function nativeMain(argv, runtime = {}) {
 export async function chromeMain(argv, runtime = {}) {
   const args = parseOptions(argv);
   if (args.surface !== 'cursor-cu' || args['real-browser'] !== 'chrome') throw Error('Cursor race requires --surface cursor-cu --real-browser chrome');
-  if (!args['dry-run']) { guardLive({ ownerAway: args['owner-away'] }); await new DesktopDriver().preflight({ paths: armPaths() }); }
+  if (!args['dry-run']) { guardLive({ ownerAway: args['owner-away'], ownerSaysCursorFree: !!args['owner-says-cursor-free'] }); await new DesktopDriver().preflight({ paths: armPaths(), ownerSaysCursorFree: !!args['owner-says-cursor-free'] }); }
   const { runRealGate } = await import('../../../fowl/real-gate.mjs');
   // The task definitions live in the repository, so dry plans work before a Fowl clone exists.
   const tasks = JSON.parse(readFileSync(new URL('../../tasks/fowlbrowser.json', import.meta.url), 'utf8'));
   const result = await (runtime.run ?? runRealGate)({ args, tasks, mcpRoot: join(homedir(), 'Library/Caches/sleight-bench/fowlbrowser'),
     ...(args['dry-run'] && { runtime: {
       readEngine: () => ({ used: false, reason: 'Cursor desktop uses its own computer-use helper' }),
-      readVersion: () => null, preflight: () => ['live admission requires calibration and no foreign Cursor'],
+      readVersion: () => null, preflight: () => ['live admission requires calibration, owner free flag and installed Cursor login'],
     } }) });
   return { result, failed: !!process.exitCode };
 }

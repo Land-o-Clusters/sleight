@@ -6,6 +6,7 @@ import { appendFileSync, closeSync, existsSync, mkdirSync, mkdtempSync, openSync
 import { homedir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { requireOwnerFree } from './contract.mjs';
 import { setTimeout as sleep } from 'node:timers/promises';
 
 const HERE = fileURLToPath(import.meta.url);
@@ -40,7 +41,7 @@ export function readSteps(file) {
   return steps;
 }
 
-export function invocation(step, { root = ROOT, out = OUT } = {}) {
+export function invocation(step, { root = ROOT, out = OUT, ownerSaysCursorFree = false } = {}) {
   const result = join(out, step.id + (step.kind === 'chrome' ? '' : '.json'));
   let command = 'node', args;
   if (step.kind === 'probe') args = ['bench/world/arms/cursor-cu/probe.mjs', '--owner-away', '--out', result];
@@ -51,6 +52,7 @@ export function invocation(step, { root = ROOT, out = OUT } = {}) {
     args = ['bench/fowl/rounds.sh', '--surface', 'cursor-cu', '--real-browser', 'chrome', '--only', step.tasks.join(','),
       '--model', 'Grok 4.7 High', '--effort', 'high', '--owner-away', '--no-hub', '--out', result];
   }
+  if (ownerSaysCursorFree) args.push('--owner-says-cursor-free');
   return { root, command, args, result };
 }
 
@@ -145,7 +147,8 @@ export async function admission(preflight) {
 }
 
 // Tests inject only an in-memory runtime here. CLI execution has no alternate root, inspector or runner.
-export async function runQueue({ script, steps, out = OUT, root = ROOT, runtime = {} }) {
+export async function runQueue({ script, steps, out = OUT, root = ROOT, ownerSaysCursorFree = false, runtime = {} }) {
+  requireOwnerFree({ ownerSaysCursorFree });
   const identify = runtime.identify ?? (() => identity(script, steps, root));
   const held = runtime.held ?? (() => existsSync('/tmp/sleight-hold'));
   const locked = runtime.locked ?? (() => existsSync('/tmp/sleight-live.lock'));
@@ -169,7 +172,7 @@ export async function runQueue({ script, steps, out = OUT, root = ROOT, runtime 
     } else atomic(identityFile, JSON.stringify(pin, null, 2) + '\n');
     for (const step of steps) {
       if (interrupted) return 130;
-      const stem = join(out, step.id), call = invocation(step, { root, out });
+      const stem = join(out, step.id), call = invocation(step, { root, out, ownerSaysCursorFree });
       if (existsSync(stem + '.rc') && readFileSync(stem + '.rc', 'utf8').trim() === '0') {
         const receipt = json(stem + '.receipt.json');
         const evidence = completed(step, call, receipt.runnerRc, readFileSync(stem + '.log', 'utf8'));
@@ -195,9 +198,8 @@ export async function runQueue({ script, steps, out = OUT, root = ROOT, runtime 
       const logFile = stem + '.log';
       log(`start ${step.id} kind=${step.kind} build=${pin.build}`);
       const startedAt = new Date().toISOString();
-      // The existing project preflight distinguishes the copy by exact executable and launch identity.
-      // It refuses the owner's Cursor and pre-existing helper without quitting either process.
-      const preflight = { root, command: 'node', args: ['bench/world/arms/cursor-cu/queue.mjs', '--preflight'] };
+      // Read-only admission binds the installed process and existing owner session.
+      const preflight = { root, command: 'node', args: ['bench/world/arms/cursor-cu/queue.mjs', '--preflight', '--owner-says-cursor-free'] };
       const admitted = await run(preflight, logFile, { onChild });
       let exit = admitted, rc = admitted.code ?? 130, reason, completion;
       if (rc === 0 && !admitted.signal && !interrupted) {
@@ -212,7 +214,7 @@ export async function runQueue({ script, steps, out = OUT, root = ROOT, runtime 
             completion = completed(step, call, rc, readFileSync(logFile, 'utf8')); rc = 0;
           } catch (error) { reason = error.message; if (rc === 0) rc = 1; }
         }
-      } else reason = 'Cursor admission refused or interrupted; see step log (quit your own Cursor first when named)';
+      } else reason = 'Cursor admission refused or interrupted; see step log (keep the installed signed-in Cursor running)';
       if (interrupted) rc = 130;
       const receipt = { ...step, pin: pinText, root, command: [call.command, ...call.args], startedAt, endedAt: new Date().toISOString(),
         preflightRc: admitted.code, runnerRc: exit === admitted ? null : exit.code, signal: exit.signal, rc,
@@ -229,10 +231,11 @@ export async function runQueue({ script, steps, out = OUT, root = ROOT, runtime 
 }
 
 async function main(argv) {
-  if (argv.length === 1 && argv[0] === '--preflight') {
+  if (argv[0] === '--preflight') {
+    if (argv.length !== 2 || argv[1] !== '--owner-says-cursor-free') requireOwnerFree();
     const { DesktopDriver } = await import('./desktop.mjs');
     const { armPaths } = await import('./contract.mjs');
-    process.exitCode = await admission(() => new DesktopDriver().preflight({ paths: armPaths() })); return;
+    process.exitCode = await admission(() => new DesktopDriver().preflight({ paths: armPaths(), ownerSaysCursorFree: true })); return;
   }
   const [script, ...options] = argv;
   if (!script) throw Error('Use ledger/p142/cursor150/queue.sh');
@@ -240,7 +243,7 @@ async function main(argv) {
   if (options.length === 1 && options[0] === '--dry-run') {
     for (const step of steps) {
       console.log(`# ${step.id} kind=${step.kind} tasks=${step.tasks.length}`);
-      console.log('# Live admission: refuse the owner Cursor or any unowned Cursor/helper, then verify calibration.');
+      console.log('# Live admission: require --owner-says-cursor-free, installed running Cursor, existing login and calibration.');
       console.log('cfg=$(mktemp -d /tmp/lane-claude-XXXXXX); ( ' + commandText(invocation(step)) + ' ); rc=$?; rm -rf "$cfg"; exit "$rc"');
     }
     console.log(`# ${steps.length} steps; 63 native + 39 Chrome qualification trials, plus the two-task probe; no runners executed`); return;
@@ -251,8 +254,8 @@ async function main(argv) {
     const call = invocation(step); call.args.push('--dry-run');
     const exit = await execute(call, null, { planning: true }); process.exitCode = exit.code; return;
   }
-  if (options.length) throw Error('Usage: queue.sh [--dry-run | --runner-dry-run probe|native|chrome]');
-  process.exitCode = await runQueue({ script: resolve(script), steps });
+  if (options.length !== 1 || options[0] !== '--owner-says-cursor-free') requireOwnerFree();
+  process.exitCode = await runQueue({ script: resolve(script), steps, ownerSaysCursorFree: true });
 }
 
 if (process.argv[1] && resolve(process.argv[1]) === HERE) {

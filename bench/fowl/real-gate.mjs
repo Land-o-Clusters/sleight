@@ -27,6 +27,7 @@ import { runDesktop as runCursorDesktop } from '../world/arms/cursor-cu/run.mjs'
 import { DesktopDriver as CursorDesktopDriver } from '../world/arms/cursor-cu/desktop.mjs';
 import { armPaths, guardLive as guardCursorLive } from '../world/arms/cursor-cu/contract.mjs';
 import { inspectBundle as inspectCursorBundle, readLoginReadiness as cursorReadiness } from '../world/arms/cursor-cu/setup.mjs';
+import { scrubCursor } from '../world/arms/cursor-cu/scrub.mjs';
 import { startServer as startWholeSite } from './site/server.mjs';
 
 const repoRoot = fileURLToPath(new URL('../..', import.meta.url));
@@ -119,10 +120,10 @@ export function realGatePlan({ args, tasks, repo = repoRoot, mcpRoot, armHome, r
       ...(args['chrome-local-state'] ? { localState: args['chrome-local-state'] } : {}) };
     const setup = realAgentSetup({ task, surface, dir, realBrowser: browser, repo, armHome, dryRun, mcpRoot, chromeFiles,
       model: args.model || 'haiku', effort: args.effort || 'high', allowBenchmarkAppPrompts: args['no-allow-benchmark-app-prompts'] !== true });
-    return { ...setup, args: runsCodexExec(surface) ? setup.args : [...setup.args, setup.prompt],
+    return { ...setup, ...(surface === 'cursor-cu' && { cursorPlan: { ...setup.cursorPlan, ownerSaysCursorFree: args['owner-says-cursor-free'] === true } }), args: runsCodexExec(surface) ? setup.args : [...setup.args, setup.prompt],
       task, surface, dir };
   });
-  return { mode: 'real-browser', out, browser, arms, unsupported, mcpRoot, surface, ownerAway: args['owner-away'] === true };
+  return { mode: 'real-browser', out, browser, arms, unsupported, mcpRoot, surface, ownerSaysCursorFree: args['owner-says-cursor-free'] === true, ownerAway: args['owner-away'] === true };
 }
 
 async function freePort(port) {
@@ -223,7 +224,7 @@ export async function runGateAgent(plan, { signal, runClaude = runOwned, runNati
       ...(plan.surface === 'cursor-cu' && { outerStarted: started, outerFinished: finished,
         ...(Number.isFinite(result.result?.duration_ms) && { started: result.result.submittedAt, finished: result.result.recordedEndAt,
           secondsTiming: { start: 'submit', end: 'persisted-clientSettleTime', startupIncluded: false } }) }), agentConfig: plan.metadata };
-    writeFileSync(join(plan.dir, 'run.json'), JSON.stringify(receipt, null, 2));
+    writeFileSync(join(plan.dir, 'run.json'), JSON.stringify(plan.surface === 'cursor-cu' ? scrubCursor(receipt) : receipt, null, 2));
     if (!groupClean) throw Object.assign(Error('BENCH_AGENT_CLEANUP_UNPROVED'), { groupClean: false });
     return receipt;
   } catch (error) {
@@ -283,7 +284,7 @@ export function gatePreflight(plan, { executable = executableProblem } = {}) {
 }
 
 export async function admitRealGate(plan, { terminal = terminalAncestor } = {}) {
-  if (plan.surface === 'cursor-cu') guardCursorLive({ ownerAway: plan.ownerAway });
+  if (plan.surface === 'cursor-cu') guardCursorLive({ ownerAway: plan.ownerAway, ownerSaysCursorFree: plan.ownerSaysCursorFree });
   if (existsSync('/Library/Application Support/ClaudeCode/CLAUDE.md')) throw Error('Managed Claude policy cannot be excluded');
   if (existsSync(plan.out)) throw Error('Gate output already exists');
   const problems = gatePreflight(plan);
@@ -292,9 +293,9 @@ export async function admitRealGate(plan, { terminal = terminalAncestor } = {}) 
   if (plan.surface === 'peekaboo' && !terminal()) throw Error('Peekaboo\'s grants are on Terminal.app, so its rounds run from a Terminal window: ' +
     'put the rounds.sh command in a .command file and run: open -a Terminal <file>.command');
   if (plan.surface === 'cursor-cu') {
-    await new CursorDesktopDriver().preflight({ paths: armPaths() });
+    await new CursorDesktopDriver().preflight({ paths: armPaths(), ownerSaysCursorFree: plan.ownerSaysCursorFree });
     inspectCursorBundle(armPaths().app);
-    if (!(await cursorReadiness()).authStored) throw Error('Cursor desktop needs login in its isolated profile; run node bench/world/arms/cursor-cu/setup.mjs');
+    if (!(await cursorReadiness(undefined, { ownerSaysCursorFree: plan.ownerSaysCursorFree })).authStored) throw Error('Cursor owner login missing; keep the installed signed-in Cursor running');
   } else if (isCodexSurface(plan.surface)) {
     if (codexConfigServers(codexHome()).length !== 1 || !existsSync(join(codexHome(), 'auth.json'))) throw Error('Codex benchmark home needs its isolated engine server and login');
   } else if (isCodexSleightSurface(plan.surface)) {
@@ -333,7 +334,7 @@ export async function runRealGate({ args, repo = repoRoot, mcpRoot, runner, task
       environment: { ...(env.CLAUDE_CONFIG_DIR ? { CLAUDE_CONFIG_DIR: env.CLAUDE_CONFIG_DIR } : {}),
         ...(env.CODEX_HOME ? { CODEX_HOME: env.CODEX_HOME } : {}),
         ...Object.fromEntries(['SLEIGHT_TURBO', 'FOWL_GATE_WINDOW', 'BENCH_SUITE', 'BENCH_RACE_APPS'].filter(key => env[key] !== undefined).map(key => [key, env[key]])) } })) };
-    (runtime.print || console.log)(JSON.stringify(printable, null, 2)); return printable;
+    (runtime.print || console.log)(JSON.stringify(plan.arms.some(arm => arm.surface === 'cursor-cu') ? scrubCursor(printable) : printable, null, 2)); return printable;
   }
   if (!plan.arms.length) throw Error('No runnable gate tasks: ' + plan.unsupported.map(row => row.reason).join('; '));
   // The live copy always reads Chrome's own profile list, so a substitute list would pin a different folder.
@@ -463,8 +464,9 @@ export async function runRealGate({ args, repo = repoRoot, mcpRoot, runner, task
         agentTiming: run.agentTiming, secondsTiming: run.secondsTiming, toolCalls: run.toolCalls, toolErrors: run.toolErrors,
         successfulBrowserCalls: evidence?.successfulCalls ?? null, run: { ...run, tabs: [...run.tabs] }, start, observation, navigation: navigation ?? null,
         agentConfig: arm.metadata, grade, site, outcome, errorClass, cover, coverRun, ...(covered ? { coverEvidence: covered } : {}) };
-      rows.push(row);
-      writeFileSync(join(arm.dir, 'run.json'), JSON.stringify(row, null, 2));
+      const savedRow = arm.surface === 'cursor-cu' ? scrubCursor(row) : row;
+      rows.push(savedRow);
+      writeFileSync(join(arm.dir, 'run.json'), JSON.stringify(savedRow, null, 2));
       writeFileSync(join(plan.out, 'results.json'), JSON.stringify(rows, null, 2));
       if (run.safetyStop) throw Error(run.safetyStop);
     }

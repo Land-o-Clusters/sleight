@@ -1,6 +1,22 @@
+import { homedir, userInfo } from 'node:os';
+
+const home = homedir();
+const names = new Set([home.split('/').at(-1), userInfo().username].filter(Boolean));
+export function rememberCursorPrivateNames(values) {
+  for (const value of values ?? []) if (typeof value === 'string' && value.trim() && value.length <= 200)
+    for (const name of [value.trim(), ...value.trim().split(/\s+/)]) names.add(name);
+}
+function privatePaths(text) {
+  let safe = text.replaceAll(home, '~').replace(/\/Users\/[^/\s"'<>\\]+/g, '~');
+  for (const name of [...names].sort((a, b) => b.length - a.length)) {
+    const escaped = name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    safe = safe.replace(new RegExp(name.length < 3 ? `(?<![A-Za-z])${escaped}(?![A-Za-z])` : escaped, 'gi'), '[owner]');
+  }
+  return safe;
+}
 const privateKey = /auth|credential|secret|password|token|cookie|account|email|(?:user|owner|org|tenant).?id|^(?:user|owner|org|organization|tenant)$|api.?key|access.?key|signature|session.?id|image|screenshot|base64|binary/i;
 function safeText(text) {
-  return text
+  return privatePaths(text)
     .replace(/\b(?:set-cookie|cookie|authorization)\s*:\s*[^\r\n]+/gi, '[credential header removed]')
     .replace(/\b(Bearer|Basic)\s+[^\s"'<>]+/gi, '$1 [redacted]')
     .replace(/\b(?:sk|pk|ghp|gho|github_pat|xox[baprs])[-_][A-Za-z0-9_-]+/g, '[redacted]')
@@ -23,7 +39,7 @@ export function scrubCursor(value, depth = 0) {
     if (['image', 'image_url', 'input_image', 'screenshot', 'binary'].includes(value.type)) return undefined;
     if (/^(?:image|audio|video)\/|^application\/octet-stream/i.test(value.mimeType ?? value.mime_type ?? '')) return undefined;
     return Object.fromEntries(Object.entries(value).filter(([k]) => !privateKey.test(k))
-      .map(([k, v]) => [k, scrubCursor(v, depth + 1)]).filter(([, v]) => v !== undefined));
+      .map(([k, v]) => [privatePaths(k), scrubCursor(v, depth + 1)]).filter(([, v]) => v !== undefined));
   }
   return value;
 }
