@@ -32,8 +32,8 @@ func fail(_ code: String, _ detail: String? = nil) -> Never {
     exit(2)
 }
 
-struct StreamPlan { let name: String; let windows: [CGWindowID]; let composite: Bool; var cropFirst = false }
-struct Plan { let out: URL; let fps: Int; let duration: Double?; let codec: String; let streams: [StreamPlan] }
+struct StreamPlan { let name: String; let windows: [CGWindowID]; let composite: Bool; var cropFirst = false; var followOwners = false }
+struct Plan { let out: URL; let fps: Int; let duration: Double?; let codec: String; let streams: [StreamPlan]; let scale: Double? }
 
 let codecs = ["prores422hq": AVVideoCodecType.proRes422HQ, "hevc": AVVideoCodecType.hevc]
 
@@ -48,8 +48,9 @@ func readPlan(_ path: String) -> Plan {
         guard let name = item["name"] as? String, name.range(of: "^[A-Za-z0-9][A-Za-z0-9_-]{0,63}$", options: .regularExpression) != nil,
               names.insert(name).inserted, let ids = item["windows"] as? [Int], ids.allSatisfy({ $0 > 0 && $0 <= Int(UInt32.max) }),
               Set(ids).count == ids.count, let composite = item["composite"] as? Bool, composite == (ids.count > 1),
-              item["crop"] == nil || (composite && item["crop"] as? String == "first") else { fail("bad-stream") }
-        return StreamPlan(name: name, windows: ids.map { CGWindowID($0) }, composite: composite, cropFirst: item["crop"] != nil)
+              item["crop"] == nil || (composite && item["crop"] as? String == "first"),
+              item["followOwners"] == nil || (item["followOwners"] as? Bool == true && composite && item["crop"] as? String == "first") else { fail("bad-stream") }
+        return StreamPlan(name: name, windows: ids.map { CGWindowID($0) }, composite: composite, cropFirst: item["crop"] != nil, followOwners: item["followOwners"] as? Bool ?? false)
     }
     var isDirectory: ObjCBool = false
     guard let out = raw["out"] as? String, out.hasPrefix("/"), FileManager.default.fileExists(atPath: out, isDirectory: &isDirectory),
@@ -58,7 +59,9 @@ func readPlan(_ path: String) -> Plan {
     let duration = raw["duration"] as? Double
     if raw["duration"] != nil && !(raw["duration"] is NSNull) { guard let seconds = duration, seconds > 0 else { fail("bad-duration") } }
     guard let codec = raw["codec"] as? String, codecs[codec] != nil else { fail("bad-codec") }
-    return Plan(out: URL(fileURLWithPath: out, isDirectory: true), fps: fps, duration: duration, codec: codec, streams: streams)
+    let scale = raw["scale"] as? Double
+    guard raw["scale"] == nil || scale == 2 else { fail("bad-scale") }
+    return Plan(out: URL(fileURLWithPath: out, isDirectory: true), fps: fps, duration: duration, codec: codec, streams: streams, scale: scale)
 }
 
 func outputSettings(_ codec: String, width: Int, height: Int) -> [String: Any] {
@@ -218,14 +221,23 @@ func makeRecorder(_ stream: StreamPlan, _ content: SCShareableContent, _ plan: P
         guard let display = content.displays.first(where: { $0.frame.contains(union) }) else {
             throw NSError(domain: "capture", code: 3, userInfo: [NSLocalizedDescriptionKey: "composite-spans-displays \(stream.name)"])
         }
-        filter = SCContentFilter(display: display, including: windows)
+        if stream.followOwners {
+            // DM1 pins the fixture and the renderer with explicit window ids. Include only those windows' owners so new
+            // perch/ring panels stay in the recording after the host recreates them. The crop remains the first fixture.
+            let pids = Set(windows.compactMap { $0.owningApplication?.processID })
+            let apps = content.applications.filter { pids.contains($0.processID) }
+            guard pids.count == 2, apps.count == 2 else {
+                throw NSError(domain: "capture", code: 4, userInfo: [NSLocalizedDescriptionKey: "two-fixture-owners-required"])
+            }
+            filter = SCContentFilter(display: display, including: apps, exceptingWindows: [])
+        } else { filter = SCContentFilter(display: display, including: windows) }
         config.sourceRect = union.offsetBy(dx: -display.frame.minX, dy: -display.frame.minY)
         sizePt = union.size
     } else {
         filter = SCContentFilter(desktopIndependentWindow: windows[0])
         sizePt = filter.contentRect.size
     }
-    let scale = Double(filter.pointPixelScale)
+    let scale = plan.scale ?? Double(filter.pointPixelScale)
     config.width = even(sizePt.width * scale)
     config.height = even(sizePt.height * scale)
     return try Recorder(plan: stream, windows: windows, filter: filter, config: config, sizePt: sizePt, scale: scale,
@@ -268,6 +280,7 @@ func record(_ plan: Plan) async {
         do { try await recorder.stream.startCapture(); started.append(recorder) }
         catch { recorder.report("start: \(error.localizedDescription)"); stop("error"); break }
     }
+    if started.count == recorders.count { emit(["ok": true, "event": "ready"]) }
     if let seconds = plan.duration { DispatchQueue.global().asyncAfter(deadline: .now() + seconds) { stop("duration") } }
     await withCheckedContinuation { (done: CheckedContinuation<Void, Never>) in
         DispatchQueue.global().async { stopSignal.wait(); done.resume() }
@@ -293,6 +306,9 @@ case (3, "record"):
     let plan = readPlan(args[2])
     Task { await record(plan) }
     dispatchMain()
+case (3, "validate"):
+    let plan = readPlan(args[2])
+    emit(["ok": true, "streams": plan.streams.count, "scale": plan.scale as Any? ?? NSNull(), "captureStarted": false])
 case (2, "list"): emit(["ok": true, "windows": listWindows()])
 case (2, "codecs"): emit(codecAvailability().reduce(into: ["ok": true] as [String: Any]) { $0[$1.key] = $1.value })
 case (2, "request-permission"): emit(["ok": true, "granted": CGRequestScreenCaptureAccess()])
