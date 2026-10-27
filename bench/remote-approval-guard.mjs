@@ -4,7 +4,7 @@ import { resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 const TOOL = 'mcp__plugin_sleight_computer__js';
 const TURN_END = 'mcp__plugin_sleight_computer__turn_ended';
-export const MOD_KEYS = new Set(['sleight_turbo', 'sleight_resume', 'sleight_stop', 'sleight_stats', 'hook_event_name']);
+export const MOD_KEYS = new Set(['sleight_turbo', 'sleight_resume', 'sleight_stop', 'sleight_stats', 'sleight_stats_begin', 'hook_event_name']);
 // The mod's tool.call hook owns origin checks. This arm passes only its control key set, never model code or extra keys.
 export function modOwnCall(event) {
   if (event?.tool_name !== TURN_END || !event.tool_input || typeof event.tool_input !== 'object' || Array.isArray(event.tool_input)) return false;

@@ -18,7 +18,7 @@ function harness(t, options = {}) {
     return clientIn.write(JSON.stringify({ id, method: 'tools/call', params: { name, arguments: tagged } }) + '\n');
   };
   const answer = (id, text = '') => serverOut.write(JSON.stringify({ id, result: { content: [{ type: 'text', text }] } }) + '\n');
-  return { output, sent, call, answer };
+  return { output, sent, call, answer, clientIn };
 }
 
 test('only a mod turn-end request receives stats; ordinary results have no stats text or metadata', t => {
@@ -40,6 +40,36 @@ test('only a mod turn-end request receives stats; ordinary results have no stats
   assert.equal(h.sent.find(msg => msg.id === 2).params.arguments.sleight_stats, undefined, 'the engine sees only its normal turn-end arguments');
   h.call(3, 'turn_ended', { hook_event_name: 'Stop', sleight_stats: true }); h.answer(3);
   assert.equal(h.output.find(msg => msg.id === 3).result._meta['sleight/stats'], null);
+});
+
+// PF4: the model's input carries no private argument. The mod opens the turn with one frame; untagged
+// calls count toward it, internal ones never do, and a frame with extra keys or no mod is refused.
+test('an opened turn counts untagged calls until its end; internal and pre-frame calls never count', t => {
+  const h = harness(t);
+  const raw = (id, name, args) => h.clientIn.write(JSON.stringify({ id, method: 'tools/call', params: { name, arguments: args } }) + '\n');
+  raw(1, 'js', { code: 'nodeRepl.write(1)' }); h.answer(1, 'before any frame');
+  raw(2, 'turn_ended', { sleight_stats_begin: 'turn-1', hook_event_name: 'Stop' });
+  assert.equal(h.output.find(msg => msg.id === 2).result.isError, true, 'a frame with other keys is refused');
+  raw(3, 'turn_ended', { sleight_stats_begin: 'turn-1' });
+  assert.deepEqual(h.output.find(msg => msg.id === 3).result, { isError: false, content: [] });
+  assert.equal(h.sent.some(msg => msg.id === 2 || msg.id === 3), false, 'frames never reach the engine');
+  raw(4, 'js', { code: 'nodeRepl.write(2)' }); h.answer(4, 'counted');
+  raw(5, 'js', { code: 'nodeRepl.write(3)', sleight_stats: { internal: true } }); h.answer(5, 'pane snapshot');
+  assert.equal(h.sent.find(msg => msg.id === 5).params.arguments.sleight_stats, undefined, 'the tag is removed before forwarding');
+  h.call(6, 'turn_ended', { hook_event_name: 'Stop', sleight_stats: true }); h.answer(6);
+  const end = h.output.find(msg => msg.id === 6).result;
+  assert.equal(end._meta?.['sleight/stats']?.calls, 1, 'only the call after the frame counts');
+  assert.equal(end._meta['sleight/stats'].characters, 'counted'.length);
+  raw(7, 'js', { code: 'nodeRepl.write(4)' }); h.answer(7, 'after the end');
+  h.call(8, 'turn_ended', { hook_event_name: 'Stop', sleight_stats: true }); h.answer(8);
+  assert.equal(h.output.find(msg => msg.id === 8).result._meta['sleight/stats'], null, 'the turn closed with its end');
+});
+
+test('a host without the mod refuses the frame and keeps counting nothing', t => {
+  const h = harness(t, { modHost: () => false });
+  h.clientIn.write(JSON.stringify({ id: 1, method: 'tools/call', params: { name: 'turn_ended', arguments: { sleight_stats_begin: 'turn-1' } } }) + '\n');
+  assert.equal(h.output.find(msg => msg.id === 1).result.isError, true);
+  assert.equal(h.sent.some(msg => msg.id === 1), false);
 });
 
 test('hosts without the protected mod and normal turn ends receive no stats payload', t => {

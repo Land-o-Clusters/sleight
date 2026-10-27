@@ -31,7 +31,7 @@ const replaying = atom({ plugin: 'sleight', key: 'replaying' } as const, false)
 const receipt = atom({ plugin: 'sleight', key: 'receipt' } as const, null as { path?: string; review?: string; unavailable?: boolean } | null)
 const stats = atom({ plugin: 'sleight', key: 'stats' } as const, null as TurnSummary | null)
 
-type StatsTurn = { id: string; used: boolean; forwarded: number; baseline?: Awaited<ReturnType<typeof hostCost>>; stoppedStats: ReturnType<typeof statsFromReply>; stopping?: Promise<string | undefined> }
+type StatsTurn = { id: string; used: boolean; forwarded: number; begun?: Promise<unknown>; baseline?: Awaited<ReturnType<typeof hostCost>>; stoppedStats: ReturnType<typeof statsFromReply>; stopping?: Promise<string | undefined> }
 
 async function hostCost($: any) {
   try { return costSnapshot(await $.session.usage()) } catch { return null }
@@ -386,6 +386,40 @@ function guardEnvelope(e: any) {
   return { ...e.tool_input, tool: e.tool_name }
 }
 
+// The main loop forwards the model's input as sent: in auto mode a hook-rewritten input sets the
+// allow rule aside and Claude Code's local classifier judges each call (about 0.6 s, 2.1.289).
+// The relay counts an untagged call toward the turn forward() opened. Subagent and own calls keep
+// the private internal tag (removed by the relay before forwarding), as does a narration line.
+function counted<T extends { agentId?: string; sleight_say?: string }>(e: T, owner: StatsTurn | undefined) {
+  const sleight_say = e.sleight_say
+  const event = { ...e }; delete event.sleight_say
+  const say = sleight_say ? { say: sleight_say } : {}
+  if (e.agentId !== undefined || !owner) return { ...event, sleight_stats: { internal: true, ...say } }
+  return sleight_say ? { ...event, sleight_stats: say } : event
+}
+
+// File scope: the host's static validator follows $ only into functions declared at the top of the file.
+async function forward<T extends { agentId?: string }, R>($: any, state: ModState, e: T, owner: StatsTurn | undefined, next: (event: T) => Promise<R>) {
+  const main = e.agentId === undefined ? owner : undefined
+  // Subagents need not raise turn.start. Their first call holds the pane's
+  // replay/refresh fence until their completion or the lead's next completion.
+  if (e.agentId !== undefined) state.runningAgents.add(e.agentId)
+  // A call may be interrupted before next returns. Stop must collect it already.
+  if (main) { main.forwarded++; main.used = true }
+  // One frame per turn, before its first call, names the turn the relay attributes untagged calls to.
+  // Parallel calls wait on the same frame. A refused or failed frame leaves this turn's stats
+  // unavailable; the call itself goes on.
+  if (main) {
+    main.begun ??= call($, 'turn_ended', { sleight_stats_begin: main.id }).catch(() => undefined)
+    await main.begun
+  }
+  const ran = await next(counted(e, owner))
+  // An explicit denial did not reach the engine. Other pending or completed calls
+  // still own stats; thrown calls may have sent input and retain their counters.
+  if (main && (ran as { deny?: unknown }).deny !== undefined) main.used = --main.forwarded > 0
+  return ran
+}
+
 export const register: Register = on => {
   const state = createModState()
   on('session.append', { door: 'response' }, ($, e, next) => { state.narration.observe(e); return next(e) })
@@ -479,30 +513,6 @@ export const register: Register = on => {
     return next(e)
   })
 
-  // A private argument, removed by the relay before forwarding. Subagents are outside
-  // these main-loop counters, even when an old child calls during a later turn.
-  const counted = <T extends { agentId?: string; sleight_say?: string }>(e: T, owner: StatsTurn | undefined) => {
-    const sleight_say = e.sleight_say
-    const event = { ...e }; delete event.sleight_say
-    const say = sleight_say ? { say: sleight_say } : {}
-    if (e.agentId !== undefined || !owner) return { ...event, sleight_stats: { internal: true, ...say } }
-    return { ...event, sleight_stats: { turn: owner.id, ...say } }
-  }
-
-  const forward = async <T extends { agentId?: string }, R>(e: T, owner: StatsTurn | undefined, next: (event: T) => Promise<R>) => {
-    const main = e.agentId === undefined ? owner : undefined
-    // Subagents need not raise turn.start. Their first call holds the pane's
-    // replay/refresh fence until their completion or the lead's next completion.
-    if (e.agentId !== undefined) state.runningAgents.add(e.agentId)
-    // A call may be interrupted before next returns. Stop must collect it already.
-    if (main) { main.forwarded++; main.used = true }
-    const ran = await next(counted(e, owner))
-    // An explicit denial did not reach the engine. Other pending or completed calls
-    // still own stats; thrown calls may have sent input and retain their counters.
-    if (main && (ran as { deny?: unknown }).deny !== undefined) main.used = --main.forwarded > 0
-    return ran
-  }
-
   on('tool.call', { tool: JS_TOOL }, async ($, e, next) => {
     const owner = state.statsTurn
     if (next.origin?.plugin === 'sleight') return next(e)
@@ -514,7 +524,7 @@ export const register: Register = on => {
     state.shellUsers.add(loopKey(e))
     snapshotApps(state, e).clear()
     // Child calls keep their own baseline notice and narration without changing the pane.
-    if (e.agentId !== undefined) return forward(narrated(state, e), owner, next)
+    if (e.agentId !== undefined) return forward($, state, narrated(state, e), owner, next)
     const code = String(e.code ?? '')
     const entry: LogEntry = {
       id: e.tool_use_id,
@@ -523,7 +533,7 @@ export const register: Register = on => {
       at: now(),
     }
     await update($, log, list => [...list, entry].slice(-LOG_LIMIT))
-    const ran = await forward(narrated(state, e), owner, next)
+    const ran = await forward($, state, narrated(state, e), owner, next)
     const app = appFrom(code, ran.text)
     if (app) state.lastApp = app
     state.actions++
@@ -542,7 +552,7 @@ export const register: Register = on => {
     if (state.replayActive) return { deny: 'A replay is running. Wait for it to stop before sending another tool call.' }
     state.usedThisTurn = true
     state.shellUsers.add(loopKey(e))
-    return forward(narrated(state, e), owner, next)
+    return forward($, state, narrated(state, e), owner, next)
   })
 
   // Compact browser verbs are session work too. The fixed completion hook must
@@ -555,10 +565,10 @@ export const register: Register = on => {
     if (state.replayActive) return { deny: 'A replay is running. Wait for it to stop before sending another tool call.' }
     state.usedThisTurn = true
     state.shellUsers.add(loopKey(e))
-    if ((e as { agentId?: string }).agentId !== undefined) return forward(narrated(state, e), owner, next)
+    if ((e as { agentId?: string }).agentId !== undefined) return forward($, state, narrated(state, e), owner, next)
     const entry: LogEntry = { id: (e as { tool_use_id: string }).tool_use_id, title: name, status: 'running', at: now() }
     await update($, log, list => [...list, entry].slice(-LOG_LIMIT))
-    const ran = await forward(narrated(state, e), owner, next)
+    const ran = await forward($, state, narrated(state, e), owner, next)
     state.actions++
     const status: LogEntry['status'] = ran.deny !== undefined ? 'refused' : ran.isError ? 'error' : 'done'
     await update($, log, list => list.map(one => one.id === entry.id ? { ...one, status } : one))

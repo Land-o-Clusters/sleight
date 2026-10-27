@@ -14,8 +14,8 @@ const metrics = { calls: 3, reads: 1, characters: 55, text: { docs: 10, tree: 40
   paths: { native: { actions: 2, estimatedActions: 2, estimatedCalls: 1, actionMs: 0, timedActions: 0 }, turbo: { actions: 0, estimatedActions: 0, estimatedCalls: 0, actionMs: 0, timedActions: 0 }, engine: { actions: 0, estimatedActions: 0, estimatedCalls: 0, actionMs: 0, timedActions: 0 } } };
 const usage = { input_tokens: 12, output_tokens: 34, cache_read_input_tokens: 56, cache_creation_input_tokens: 78, model: 'host-model' };
 
-function host({ cost = true, missingUsage = false, marker = false, malicious = false, paneOpen = false, paneSnapshot = false, usageRead, messages, narration = 'off', settingRead, moduleRegister, envRead, statRead, turboSession, turnCall, logThrows = false } = {}) {
-  const hooks = [], state = new Map(), work = [], statuses = [], replies = [], forwarded = [], hookRuns = [], logs = [];
+function host({ cost = true, missingUsage = false, marker = false, malicious = false, paneOpen = false, paneSnapshot = false, usageRead, messages, narration = 'off', settingRead, moduleRegister, envRead, statRead, turboSession, turnCall, logThrows = false, beginFails = false } = {}) {
+  const hooks = [], state = new Map(), work = [], begins = [], statuses = [], replies = [], forwarded = [], hookRuns = [], logs = [];
   let usageReads = 0;
   const elements = Object.fromEntries(['Box', 'Text', 'Button'].map(name => [name, name]));
   const api = {
@@ -60,6 +60,11 @@ function host({ cost = true, missingUsage = false, marker = false, malicious = f
       return { startedAt: 100, ...(cost ? { cost: { usd } } : {}) };
     } },
     mcp: { connect: async () => ({ isConnected: true, server: 'computer' }), call: async (_server, tool, args) => {
+      // The turn's one stats frame, sent before its first forwarded call. It never reaches the engine.
+      if (tool === 'turn_ended' && args.sleight_stats_begin !== undefined) {
+        if (beginFails) throw Error('relay unavailable');
+        begins.push(args.sleight_stats_begin); return { content: [] };
+      }
       work.push({ tool, args });
       if (tool === 'js' && paneOpen) return { content: [{ type: 'text', text: paneSnapshot ? 'SLEIGHT_FRAME {"app":"ParentApp","width":1,"height":1}' : '' }] };
       if (tool !== 'turn_ended') throw Error('test must never call the engine');
@@ -102,7 +107,7 @@ function host({ cost = true, missingUsage = false, marker = false, malicious = f
     const text = value => typeof value === 'string' ? value : Array.isArray(value) ? value.map(text).join('\n') : value?.children ? text(value.children) : '';
     return text(tree);
   }
-  return { start, complete, tool, command, pane, work, state, emit, forwarded, hookRuns, logs, registerMod, get usageReads() { return usageReads; } };
+  return { start, complete, tool, command, pane, work, begins, state, emit, forwarded, hookRuns, logs, registerMod, get usageReads() { return usageReads; } };
 }
 
 for (const failure of ['bootstrap throw', 'bootstrap refusal', 'begin throw', 'begin refusal', 'retry', 'none'])
@@ -189,7 +194,8 @@ for (const prompt_id of [undefined, null]) test(`promptless separate teammate co
   await h.complete();
   assert.equal(h.work.length, 1);
   assert.equal(h.work[0].args.hook_event_name, 'Stop');
-  assert.equal(h.forwarded[0].sleight_stats.turn, 'turn-1');
+  assert.equal(h.forwarded[0].sleight_stats, undefined, 'the main loop forwards the model input as sent');
+  assert.deepEqual(h.begins, ['turn-1']);
 });
 
 test('in-process teammates keep shell fences when another loop completes', async () => {
@@ -381,14 +387,14 @@ test('mod uses assistant events scoped to tool and agent, without any transcript
   await h.emit('tool.call', { tool: prefix + 'js', code: 'await app.click(1)', tool_use_id: 'current', agentId: 'child', sleight_say: 'MODEL FORGERY' }, { text: 'PRIVATE RESULT' });
   assert.equal(reads, 0); assert.equal(h.forwarded[0].sleight_stats.say, 'I’ll inspect the menu.');
   await h.emit('tool.call', { tool: prefix + 'browser_read', tab: 't1', tool_use_id: 'missing', sleight_say: 'MODEL FORGERY' });
-  assert.equal(h.forwarded[1].sleight_stats.say, undefined);
+  assert.equal(h.forwarded[1].sleight_stats?.say, undefined);
 });
 test('off mod never inspects message payloads or reads settings from tool forwarding', async () => {
   let reads = 0;
   const h = host({ settingRead: () => new Promise(() => {}), messages: () => { reads++; throw Error('unexpected transcript'); } });
   await h.start();
   await h.emit('session.append', { door: 'response', get message() { throw Error('off message read'); } });
-  await h.tool(); assert.equal(reads, 0); assert.equal(h.forwarded[0].sleight_stats.say, undefined);
+  await h.tool(); assert.equal(reads, 0); assert.equal(h.forwarded[0].sleight_stats, undefined);
 });
 test('unused sleight matches only response rows and measures per-row harness cost', async t => {
   for (const mode of ['off', 'bubbles']) {
@@ -417,7 +423,7 @@ test('matched response rows clear prose after parallel tools without needing a t
   // The tool-result row is deliberately absent: the host matcher must exclude it.
   await row('later', [tool('c')]);
   for (const id of ['a', 'b', 'c']) await h.emit('tool.call', { tool: prefix + 'browser_read', tab: 't1', tool_use_id: id });
-  assert.deepEqual(h.forwarded.map(e => e.sleight_stats.say), ['Reading the page.', 'Reading the page.', undefined]);
+  assert.deepEqual(h.forwarded.map(e => e.sleight_stats?.say), ['Reading the page.', 'Reading the page.', undefined]);
 });
 async function paneLabels(h) {
   const tree = await h.emit('ui.render', { component: 'Pane', requestId: 'sleight', surface: 'terminal', props: {} });
@@ -742,14 +748,38 @@ test('late subagent calls cannot enter a later main summary or inherit its stats
 test('turn ids stay attached to admitted main calls and stale Stop data resets at start', async () => {
   const h = host(); await h.start(); await h.tool(); await h.command('stop');
   await h.start({ turnId: 'turn-2' }); h.state.set('stopped', false); await h.tool();
-  assert.equal(h.forwarded.at(-1).sleight_stats.turn, 'turn-2');
+  assert.equal(h.forwarded.at(-1).sleight_stats, undefined); assert.deepEqual(h.begins, ['turn-1', 'turn-2']);
   await h.complete({ turnId: 'turn-1', isAborted: true });
   assert.match((await h.command('stats')).text, /No completed/);
   assert.equal(h.work.at(-1).args.sleight_stats, undefined, 'mismatched completion still cleans up without stats');
   await h.tool();
-  assert.equal(h.forwarded.at(-1).sleight_stats.turn, 'turn-2');
+  assert.equal(h.forwarded.at(-1).sleight_stats, undefined); assert.deepEqual(h.begins, ['turn-1', 'turn-2'], 'one frame per turn');
   await h.complete({ turnId: 'turn-2' });
   assert.equal(h.work.at(-1).args.sleight_stats, 'turn-2');
+});
+
+// PF4: in auto mode Claude Code sets the allow rule aside for a hook-rewritten input and asks its local
+// classifier per call (about 0.6 s each on 2.1.289). The main loop's input therefore goes out as sent.
+test('main-loop calls forward the model input unchanged and open the turn once', async () => {
+  const h = host(); await h.start();
+  for (const name of ['js', 'browser_read', 'replay']) await h.emit('tool.call', { tool: prefix + name, code: 'await app.click(1)', tool_use_id: `main-${name}` }, { text: 'ok', result: {} });
+  assert.deepEqual(h.forwarded.map(e => Object.hasOwn(e, 'sleight_stats') || Object.hasOwn(e, 'sleight_say')), [false, false, false]);
+  assert.deepEqual(h.begins, ['turn-1'], 'one frame before the first call, none after');
+  await h.emit('tool.call', { tool: prefix + 'js', code: 'await app.click(2)', tool_use_id: 'child', agentId: 'child' }, { text: 'ok', result: {} });
+  assert.deepEqual(JSON.parse(JSON.stringify(h.forwarded.at(-1).sleight_stats)), { internal: true }, 'subagent calls keep the internal tag');
+  await h.complete();
+  assert.equal(h.work.at(-1).args.sleight_stats, 'turn-1');
+  assert.match((await h.command('stats')).text, /3 calls/);
+});
+
+test('a refused stats frame still forwards the call unchanged and ends the turn', async () => {
+  const h = host({ beginFails: true }); await h.start();
+  const result = await h.emit('tool.call', { tool: prefix + 'js', code: 'await app.click(1)', tool_use_id: 'main' }, { text: 'ok', result: {} });
+  assert.equal(result.text, 'ok');
+  assert.equal(h.forwarded[0].sleight_stats, undefined); assert.deepEqual(h.begins, []);
+  await h.complete();
+  assert.equal(h.work.at(-1).args.hook_event_name, 'Stop');
+  assert.equal(h.work.at(-1).args.sleight_stats, 'turn-1', 'the relay answers unavailable for a turn it never opened');
 });
 
 test('partial or malformed host usage remains unavailable field by field', () => {
@@ -775,7 +805,7 @@ for (const scenario of ['mismatch', 'mid-turn load', 'subagent start']) test(`${
     await h.start({ turnId: 'child-turn', agentId: 'child' });
     assert.equal(h.usageReads, reads, 'child start does not read a cost baseline');
     await h.tool();
-    assert.equal(h.forwarded.at(-1).sleight_stats.turn, 'turn-1');
+    assert.equal(h.forwarded.at(-1).sleight_stats, undefined); assert.deepEqual(h.begins, ['turn-1']);
   }
   if (scenario === 'subagent start') await h.complete({ agentId: 'child', turnId: 'child-turn' });
   await h.complete(scenario === 'mismatch' ? { turnId: 'different' } : {});

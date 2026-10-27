@@ -20,7 +20,7 @@ const modCalls = [
   { sleight_resume: true },
   ...['Stop', 'Interrupt'].flatMap(hook_event_name => [
     { hook_event_name }, { hook_event_name, sleight_stop: true },
-    { hook_event_name, sleight_stats: 'fixture-turn' }, { hook_event_name, sleight_stop: true, sleight_stats: 'fixture-turn' },
+    { hook_event_name, sleight_stats: 'fixture-turn' }, { sleight_stats_begin: 'fixture-turn' }, { hook_event_name, sleight_stop: true, sleight_stats: 'fixture-turn' },
   ]),
 ];
 for (const tool_input of modCalls) test(`guard passes mod control in both modes: ${JSON.stringify(tool_input)}`, () => {
@@ -40,7 +40,7 @@ test('mod keys on another tool do not pass the guard', () => {
 
 test('every mod turn_ended call stays within the guard key set, including conditional spreads', () => {
   assert.ok(guard.MOD_KEYS instanceof Set);
-  assert.deepEqual([...guard.MOD_KEYS].sort(), ['sleight_turbo', 'sleight_resume', 'sleight_stop', 'sleight_stats', 'hook_event_name'].sort());
+  assert.deepEqual([...guard.MOD_KEYS].sort(), ['sleight_turbo', 'sleight_resume', 'sleight_stop', 'sleight_stats', 'sleight_stats_begin', 'hook_event_name'].sort());
   const source = readFileSync(new URL('../plugins/sleight/hooks/register.tsx', import.meta.url), 'utf8');
   const ast = ts.createSourceFile('register.tsx', source, ts.ScriptTarget.Latest, true, ts.ScriptKind.TSX);
   let calls = 0;

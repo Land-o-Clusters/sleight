@@ -1126,10 +1126,13 @@ export function createRelay({
   const journal = receipts || stateReview ? new TurnJournal({ redactTitles: redactReceiptTitles }) : undefined;
   const turnStats = new Map(), statsCalls = new Map(), closedStats = new Set();
   const statsEnds = new Map();
+  // The main-loop turn the mod opened (sleight_stats_begin); the model's untagged calls count toward it.
+  let statsOpen;
   const statsId = value => typeof value === 'string' && value.length > 0 && value.length <= 128 ? value : undefined;
   const finishStats = id => {
     const log = turnStats.get(id);
     turnStats.delete(id);
+    if (statsOpen === id) statsOpen = undefined;
     for (const [call, owner] of statsCalls) if (owner === log) statsCalls.delete(call);
     closedStats.add(id);
     if (closedStats.size > 64) closedStats.delete(closedStats.values().next().value);
@@ -1142,8 +1145,9 @@ export function createRelay({
         const msg = args[0], tag = msg.params?.arguments?.sleight_stats;
         // This transport never reaches the engine, nor does its title select the exclusion.
         if (msg.params?.name !== TURN_END_TOOL && msg.params?.arguments) delete msg.params.arguments.sleight_stats;
-        const id = statsId(tag?.turn);
-        if (!modHost() || !id || tag.internal === true || closedStats.has(id) ||
+        // An untagged call is the model's own, on the turn the mod opened. Internal calls never count.
+        const id = statsId(tag?.turn) ?? (tag?.internal === true ? undefined : statsOpen);
+        if (!modHost() || !id || tag?.internal === true || closedStats.has(id) ||
             !STATS_TOOLS.has(msg.params?.name)) return;
         if (!turnStats.has(id)) {
           if (turnStats.size >= 8) {
@@ -3494,6 +3498,7 @@ export function createRelay({
     if (read) completenessCalls.set(carryId, read);
     turnId = randomUUID();
     turnUsed = false;
+    statsOpen = undefined;
     spaceNoted.clear();
   }
 
@@ -3597,6 +3602,19 @@ export function createRelay({
         }
         reply({ isError: false, content: [{ type: 'text', text: JSON.stringify({ sleightRemote: { turboBound, ...(context ? { context } : {}) } }) }] });
       })().catch(refuse);
+      return;
+    }
+    // The mod opens a main-loop stats turn once, before its first forwarded call, so the model's own
+    // input stays as sent. In auto mode Claude Code sets the allow rule aside for a hook-rewritten
+    // input and asks its local classifier per call (about 0.6 s each, 2.1.289; PF4). Host-protected
+    // own hook call: it never reaches journals, tracing or the engine.
+    if (msg.method === 'tools/call' && msg.params?.name === TURN_END_TOOL && Object.hasOwn(msg.params.arguments ?? {}, 'sleight_stats_begin')) {
+      const id = statsId(msg.params.arguments.sleight_stats_begin);
+      const accepted = modHost() && !disposed && msg.id !== undefined && id !== undefined &&
+        Object.keys(msg.params.arguments).length === 1 && !closedStats.has(id);
+      if (accepted) statsOpen = id;
+      if (!disposed && !clientOut.destroyed && !clientOut.writableEnded)
+        clientOut.write(JSON.stringify({ jsonrpc: '2.0', id: msg.id, result: { isError: !accepted, content: [] } }) + '\n');
       return;
     }
     if (modHost() && msg.method === 'tools/call' && msg.params?.name === TURN_END_TOOL) promptOrigin = undefined;
@@ -6332,7 +6350,7 @@ export function createRelay({
   function dispose() {
     if (disposed) return;
     for (const log of turnStats.values()) log.reset();
-    turnStats.clear(); statsCalls.clear(); closedStats.clear(); statsEnds.clear();
+    turnStats.clear(); statsCalls.clear(); closedStats.clear(); statsEnds.clear(); statsOpen = undefined;
     finishReceipt();
     disposed = true;
     nativeHandoff?.cancel?.();
