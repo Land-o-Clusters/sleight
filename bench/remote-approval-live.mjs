@@ -171,7 +171,7 @@ export async function realSession(bank, { hold, signal, upfront = false, login =
   const env = { ...login.env };
   Object.assign(env, { CLAUDE_CONFIG_DIR: config, TERM: 'xterm-256color', CLAUDE_CODE_DISABLE_AUTO_MEMORY: '1', ENABLE_CLAUDEAI_MCP_SERVERS: 'false',
     DISABLE_AUTOUPDATER: '1', DISABLE_TELEMETRY: '1', DO_NOT_TRACK: '1',
-    RA1_UPFRONT: upfront ? '1' : '0', BENCH_CU_SESSION: id, BENCH_CU_NONCE: nonce, BENCH_CU_TURN_RECEIPT: turnFile });
+    RA1_UPFRONT: upfront ? '1' : '0', BENCH_CU_SESSION: id, BENCH_CU_NONCE: nonce, BENCH_CU_TURN_DIR: dir, BENCH_CU_TURN_RECEIPT: turnFile });
   const plan = { command: login.command, cwd: dir, env,
     args: [...remotePlan().args, '--session-id', id, '--mcp-config', mcp, '--settings', settings] };
   const configFile = join(config, '.claude.json');
