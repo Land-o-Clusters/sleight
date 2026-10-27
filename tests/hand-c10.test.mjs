@@ -424,7 +424,9 @@ test('attended checks exit successfully and intact incomplete attended markers a
 
 test('priority service transports stdin, output, environment and owned cleanup without nicing child commands', async () => {
   const { PrioritySpawner, priorityPlan } = await import('../bench/hand/c10-priority.mjs'), { Children } = await api();
-  assert.deepEqual(priorityPlan(0), { servicePriority: 0, runnerPriority: 20 });
+  assert.deepEqual(priorityPlan(0), { servicePriority: 0, runnerPriority: 19 });
+  // A real setPriority call with the planned value must be accepted (20 threw ERR_OUT_OF_RANGE live, 2026-10-27).
+  assert.ok(priorityPlan(0).runnerPriority >= -20 && priorityPlan(0).runnerPriority <= 19);
   assert.throws(() => priorityPlan(20), /normal-priority launcher/);
   const spawner = new PrioritySpawner(process.env); await spawner.ready;
   const children = new Children(process.env, new AbortController().signal, spawner.spawn.bind(spawner));
