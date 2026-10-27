@@ -310,6 +310,11 @@ test('native Mail ownership self-test rejects focus-only and ambiguous creation,
   assert.equal(evidence.localDestinationRequired, true);
   assert.equal(evidence.unsettledCreationRefused, true);
   assert.equal(evidence.dialogStops, true);
+  assert.deepEqual(evidence.queryRecovery, {
+    attempts: 3, delays: [0.15, 0.3], timeout: 2, exhaustedAttempts: 3,
+    permanentAttempts: 1, staleValueDiscarded: true, apiDisabledGuidance: true,
+    sidebarOnly: true, ambiguousSidebarRefused: true, treeLimitRefused: true,
+  });
 });
 
 test('native Mail helper refuses a request without the owner-present boundary before any AX use', { skip: macCommandSkip('xcrun') }, async () => {
