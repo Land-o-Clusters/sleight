@@ -14,7 +14,7 @@ const picked = 'text (selected) Alder Depot COL-0005';
 function fixture(recording, { focus = 'container', nested = false, duplicate = false, missing = false,
   focusAfterScroll = focus, nestedBody = 'text Detail', wrapperBody = 'group Row detail' } = {}) {
   let clicked, advanced = false, started = false;
-  const clicks = [], keys = [], scrolls = [], notes = [];
+  const clicks = [], clickLines = [], keys = [], scrolls = [], notes = [];
   const tree = () => {
     let text = recording.current;
     if (duplicate) text = text.replace('\t44 close button', '\t100 list Collection\n\t44 close button');
@@ -49,6 +49,7 @@ function fixture(recording, { focus = 'container', nested = false, duplicate = f
       const line = tree().split('\n').find(line => new RegExp('^\\s*' + number + ' ').test(line));
       assert.ok(line, 'click must name a current element');
       assert.match(line, /text \((?:selectable|selected)\)/, 'only plain list rows clicked');
+      clickLines.push(line.replace(/^\s*\d+ /, ''));
       clicked = line.replace(/^\s*\d+ text \([^)]*\) /, ''); clicks.push(number);
     },
     pressKey: async key => { assert.ok(['row', 'nested'].includes(focus), 'no key with focus outside the list'); keys.push(key); advanced = true; },
@@ -60,7 +61,7 @@ function fixture(recording, { focus = 'container', nested = false, duplicate = f
   const pick = (number, options = {}) => run(guardedCode(`return await app.pickFromList(${number}, ${JSON.stringify(recording.target)});`,
     windowFromText(recording.current), undefined, undefined,
     { literals: [number], seenLines: { [number]: 'list Collection' }, uniqueSeen: [number], ...options }));
-  return { start, pick, clicks, keys, scrolls, notes, tree };
+  return { start, pick, clicks, clickLines, keys, scrolls, notes, tree };
 }
 
 for (const recording of recordings) {
@@ -68,7 +69,8 @@ for (const recording of recordings) {
     const h = fixture(recording);
     await h.start();
     await assert.rejects(h.pick(29), /focus-lost.*The click did not focus the named list\. No key was sent\./);
-    assert.deepEqual(h.clicks, [37]);
+    assert.deepEqual(h.clicks, [37, 37]);
+    assert.deepEqual(h.clickLines, [row, picked]);
     assert.deepEqual(h.keys, []);
     assert.deepEqual(h.scrolls, []);
     assert.match(h.notes.join('\n'), /pickFromList\(29\) went to element 32, the same "list Collection".*renumbered/);
@@ -78,7 +80,8 @@ for (const recording of recordings) {
     const h = fixture(recording);
     await h.start();
     await assert.rejects(h.pick(32), /focus-lost.*The click did not focus the named list\. No key was sent\./);
-    assert.deepEqual(h.clicks, [37]);
+    assert.deepEqual(h.clicks, [37, 37]);
+    assert.deepEqual(h.clickLines, [row, picked]);
     assert.deepEqual(h.keys, []);
     assert.deepEqual(h.scrolls, []);
   });

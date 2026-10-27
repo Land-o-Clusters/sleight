@@ -757,9 +757,10 @@ test('lp1 review: a click the next read does not show as selected is reported un
 // (-10005 elementHasNoFrame) in 3 of 6 runs. Held-out shape: the webList geometry with focus left on the City control.
 function namedPicker(m, browser, extra = {}) {
   const clicks = [];
+  let clock = 0;
   const run = listPicker({ read: m.tree, observe() {}, press: m.key, scroll: (line, direction, ticks) => {
     assert.equal(line, m.listLine); return m.wheel(m.list, direction, ticks);
-  }, parse: windowFromText, sameElement, expected: travelWindow(browser), sleep: async () => {},
+  }, parse: windowFromText, sameElement, expected: travelWindow(browser), now: () => clock, sleep: async ms => { clock += ms; },
   click: async line => {
     if (line === m.listLine) { clicks.push('list'); return m.clickNumber(m.list); }
     clicks.push(await m.clickLine(line));
@@ -870,6 +871,85 @@ test('PF2: a proven selection under container focus gets one recovery click and 
 
 test('PF2: an unconfirmed focus click is never repeated', async () => {
   const { m, names } = containerFocusList({ selected: false });
+  const result = await namedPicker(m, 'firefox').run(m.list, names[612]);
+  assert.equal(result.reason, 'focus-lost');
+  assert.equal(m.focusClicks.length, 1);
+  assert.equal(m.keys.length + m.ticks.length, 0);
+});
+
+test('PF2R: recovery clicks are separated by at least 600 ms after fast or slow reads', async () => {
+  for (const readMs of [0, 100, 700]) {
+    const { m, names } = containerFocusList({ delayed: false, recover: false });
+    let clock = 0;
+    const times = [], waits = [], tree = m.tree;
+    m.tree = async () => { clock += readMs; return tree(); };
+    const click = m.clickLine;
+    m.clickLine = async line => { times.push(clock); return click(line); };
+    const result = await namedPicker(m, 'firefox', { now: () => clock, sleep: async ms => { waits.push(ms); clock += ms; } })
+      .run(m.list, names[612]);
+    assert.equal(result.reason, 'focus-lost');
+    assert.equal(times.length, 2);
+    assert.ok(times[1] - times[0] >= 600, `read ${readMs} ms: click gap ${times[1] - times[0]} ms`);
+    assert.ok(waits.reduce((a, b) => a + b, 0) <= 600, 'read time counts toward the gap');
+    assert.equal(m.keys.length + m.ticks.length, 0);
+  }
+});
+
+test('PF2R: an early timer wake never permits a recovery double-click', async () => {
+  const { m, names } = containerFocusList({ delayed: false });
+  const result = await namedPicker(m, 'firefox', { now: () => 0, sleep: async () => {} }).run(m.list, names[612]);
+  assert.equal(result.reason, 'focus-lost');
+  assert.equal(m.focusClicks.length, 1);
+  assert.equal(m.keys.length + m.ticks.length, 0);
+});
+
+test('PF2R: recovery waits cannot spend past the deadline or click at it', async () => {
+  for (const timeoutMs of [599, 600]) {
+    const { m, names } = containerFocusList({ delayed: false });
+    let clock = 0;
+    const result = await namedPicker(m, 'firefox', { now: () => clock, sleep: async ms => { clock += ms; } })
+      .run(m.list, names[612], { timeoutMs });
+    assert.equal(result.reason, 'focus-lost');
+    assert.equal(clock, timeoutMs);
+    assert.equal(m.focusClicks.length, 1);
+    assert.equal(m.keys.length + m.ticks.length, 0);
+  }
+});
+
+test('PF2R: a passive sibling container cannot recover list focus', async () => {
+  const { m, names } = containerFocusList({ delayed: false, alter: text => text
+    .replace('\n72 menu bar', '\n\t98 container Other region\n72 menu bar')
+    .replace('The focused UI element is 1 container Book a trip · Skyway', 'The focused UI element is 98 container Other region') });
+  const result = await namedPicker(m, 'firefox').run(m.list, names[612]);
+  assert.equal(result.reason, 'focus-lost');
+  assert.equal(m.focusClicks.length, 1);
+  assert.equal(m.keys.length + m.ticks.length, 0);
+});
+
+test('PF2R: an ancestor with an unsupported role cannot recover list focus', async () => {
+  const { m, names } = containerFocusList({ delayed: false, alter: text => text
+    .replaceAll('container Book a trip · Skyway', 'group Book a trip · Skyway') });
+  const result = await namedPicker(m, 'firefox').run(m.list, names[612]);
+  assert.equal(result.reason, 'focus-lost');
+  assert.equal(m.focusClicks.length, 1);
+  assert.equal(m.keys.length + m.ticks.length, 0);
+});
+
+test('PF2R: two rows matching the focusing click cannot recover list focus', async () => {
+  const { m, names } = containerFocusList({ delayed: false, alter: (text, model) => model.focusClicks.length
+    ? text.replace(/^(\t+)\d+ (text \(selected\) [^\n]+)$/m, (line, indent, body) => line + '\n' + indent + '98 ' + body) : text });
+  const result = await namedPicker(m, 'firefox').run(m.list, names[612]);
+  assert.equal(result.reason, 'focus-lost');
+  assert.equal(m.focusClicks.length, 1);
+  assert.equal(m.keys.length + m.ticks.length, 0);
+});
+
+test('PF2R: a selected row that becomes settable cannot recover list focus', async () => {
+  const { m, names } = containerFocusList({ delayed: false, alter: (text, model) => model.focusClicks.length
+    ? text.replace('text (selected) ', 'text (settable, selected) ') : text });
+  // The model can still click this row; the picker must refuse its newly advertised writable state.
+  const click = m.clickLine;
+  m.clickLine = async line => click(line.replace('text (settable, selected)', 'text (selected)'));
   const result = await namedPicker(m, 'firefox').run(m.list, names[612]);
   assert.equal(result.reason, 'focus-lost');
   assert.equal(m.focusClicks.length, 1);

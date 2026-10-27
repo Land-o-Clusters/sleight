@@ -374,6 +374,7 @@ export function listPicker({ read, observe, press, scroll, click, parse, sameEle
         }
         const n = named.kids.length, lo = Math.floor(3 * n / 8), hi = Math.max(lo, Math.ceil(5 * n / 8) - 1);
         const tries = [...(n ? [named.kids[Math.floor((lo + hi) / 2)]] : []), named.list];
+        let focusClickedAt;
         for (let i = 0; ; i++) {
           try { await click(tries[i].body); }
           catch (error) {
@@ -382,6 +383,7 @@ export function listPicker({ read, observe, press, scroll, click, parse, sameEle
             return stop('not-a-list', 'Neither a row of the list nor the list itself had a frame to click (' + String(error?.message ?? error).split('\n')[0] + '). No key was sent.');
           }
           lastClick = { number: tries[i].number, line: tries[i].body }; focusRow = tries[i].body;
+          focusClickedAt = now();
           break;
         }
         v = await look();
@@ -404,10 +406,14 @@ export function listPicker({ read, observe, press, scroll, click, parse, sameEle
           return matches[0];
         };
         if (v.problem && focusCandidate() && reads < maxReads && now() < deadline) {
-          await sleep(Math.min(80, deadline - now()));
+          // No system double-click interval reader is available in the engine realm. Use a 600 ms gap from
+          // completion of the first click so fast reads cannot turn the recovery into a double-click.
+          const repeatGap = 600;
+          await sleep(Math.min(Math.max(80, repeatGap - (now() - focusClickedAt)), deadline - now()));
           if (now() < deadline) v = await look();
           const row = focusCandidate();
-          if (v.problem && row && /\((?:[^()]*, )?selected(?:, [^()]*)?\)/.test(row.body) && reads < maxReads && now() < deadline) {
+          if (v.problem && row && /\((?:[^()]*, )?selected(?:, [^()]*)?\)/.test(row.body) && reads < maxReads &&
+              now() < deadline && now() - focusClickedAt >= repeatGap) {
             await click(row.body);
             lastClick = { number: row.number, line: row.body };
             v = await look();
