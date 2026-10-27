@@ -329,8 +329,6 @@ for (const [name, change, pattern] of [
   ['multiple new windows', (f, api) => { api.fileMenu = () => { f.current.push(f.window, {}); }; }, /ambiguous/],
   ['vanished candidate', (f, api) => { api.exists = w => w !== f.window; }, /inventory/],
   ['owner window closes during creation', (f, api) => { api.fileMenu = () => { f.current = [f.foreign, f.window]; }; }, /pre-action/],
-  ['new window has no focus', (f, api) => { const create = api.fileMenu; api.fileMenu = (...args) => { create(...args); f.focused = f.foreign; }; }, /lost focus/],
-  ['missing focus', (f, api) => { const create = api.fileMenu; api.fileMenu = (...args) => { create(...args); f.focused = null; }; }, /lost focus/],
   ['foreign dialog before creation', f => { f.dialog = {}; }, /Foreign/],
 ]) test(`folder ownership refuses ${name} before retention or navigation`, () => {
   const f = folderTrial(change);
@@ -340,6 +338,8 @@ for (const [name, change, pattern] of [
 });
 
 for (const [name, change, pattern] of [
+  ['new window has no focus', (f, api) => { const create = api.fileMenu; api.fileMenu = (...args) => { create(...args); f.focused = f.foreign; }; }, /lost focus/],
+  ['missing focus', (f, api) => { const create = api.fileMenu; api.fileMenu = (...args) => { create(...args); f.focused = null; }; }, /lost focus/],
   ['focus switch while Go menu opens', (f, api) => { api.menu = (_a, _n, _t, validate, refuse) => {
     assert.equal(refuse, true); f.focused = f.foreign; validate(); f.commands.push('go');
   }; }, /lost focus/],
@@ -405,11 +405,11 @@ test('native Finder AXValue write failure retains its operation in the closed di
 });
 
 for (const boundary of ['write', 'press']) test(`native folder ${boundary} revalidates baseline after its nested folder guard`, () => {
-  const f = nativeFolderTrial(), area = { AXRole: 'AXScrollArea' };
+  const f = nativeFolderTrial(), area = { AXRole: 'AXWindow' };
   f.app.AXWindows.push(area);
-  const ledger = { schema: 'finder-role-baseline-v1', baseline: [{ reference: area, role: 'AXScrollArea' }], created: [f.window] };
+  const ledger = { schema: 'finder-role-baseline-v1', baseline: [{ reference: area, role: 'AXWindow' }], created: [f.window] };
   let guards = 0;
-  f.api.finderFolderGuard = () => { if (++guards === (boundary === 'write' ? 1 : 2)) area.AXRole = 'AXWindow'; };
+  f.api.finderFolderGuard = () => { if (++guards === (boundary === 'write' ? 1 : 2)) area.AXRole = 'AXScrollArea'; };
   const validate = () => f.s.finderRoleInventory(f.app, f.api, ledger);
   assert.throws(() => f.api.submitFolder(f.window, f.sheet, '/fixture/target', validate), /baseline/);
   assert.equal(f.writes.length, boundary === 'write' ? 0 : 1);
@@ -573,16 +573,16 @@ test('native Go menu rechecks focus after command bookkeeping and cancels only i
 
 for (const name of ['File', 'Go']) for (const attribute of ['AXMenuBar', 'AXChildren', 'AXTitle'])
   test(`Finder ${name} opening refuses baseline mutation during ${attribute} lookup without cancelling an unowned menu`, () => {
-    const f = nativeFolderTrial(), area = { AXRole: 'AXScrollArea' };
+    const f = nativeFolderTrial(), area = { AXRole: 'AXWindow' };
     f.app.AXWindows.push(area);
-    const ledger = { schema: 'finder-role-baseline-v1', baseline: [{ reference: area, role: 'AXScrollArea' }], created: [f.window] };
+    const ledger = { schema: 'finder-role-baseline-v1', baseline: [{ reference: area, role: 'AXWindow' }], created: [f.window] };
     const item = { AXRole: 'AXMenuItem', AXTitle: 'Command', AXEnabled: 1 }, menu = { AXRole: 'AXMenu', AXChildren: [item] };
     const top = { AXRole: 'AXMenuBarItem', AXTitle: name, AXChildren: [menu] };
     f.app.AXMenuBar = { AXChildren: [top] };
     let changed = false;
     const read = f.native.AXUIElementCopyAttributeValue, actions = [];
     f.native.AXUIElementCopyAttributeValue = (element, key, output) => {
-      if (!changed && key === attribute) { changed = true; area.AXRole = 'AXWindow'; }
+      if (!changed && key === attribute) { changed = true; area.AXRole = 'AXScrollArea'; }
       return read(element, key, output);
     };
     f.native.AXUIElementPerformAction = (element, action) => { actions.push([element, action]); return 0; };
@@ -594,15 +594,15 @@ for (const name of ['File', 'Go']) for (const attribute of ['AXMenuBar', 'AXChil
   });
 
 test('Finder menu still cancels its observed menu after a later baseline refusal', () => {
-  const f = nativeFolderTrial(), area = { AXRole: 'AXScrollArea' };
+  const f = nativeFolderTrial(), area = { AXRole: 'AXWindow' };
   f.app.AXWindows.push(area);
-  const ledger = { schema: 'finder-role-baseline-v1', baseline: [{ reference: area, role: 'AXScrollArea' }], created: [f.window] };
+  const ledger = { schema: 'finder-role-baseline-v1', baseline: [{ reference: area, role: 'AXWindow' }], created: [f.window] };
   const item = { AXRole: 'AXMenuItem', AXTitle: 'Command', AXEnabled: 1 }, menu = { AXRole: 'AXMenu', AXChildren: [item] };
   const top = { AXRole: 'AXMenuBarItem', AXTitle: 'File', AXChildren: [menu] }, actions = [];
   f.app.AXMenuBar = { AXChildren: [top] };
   const read = f.native.AXUIElementCopyAttributeValue;
   f.native.AXUIElementCopyAttributeValue = (element, key, output) => {
-    if (element === menu && key === 'AXChildren') area.AXRole = 'AXWindow';
+    if (element === menu && key === 'AXChildren') area.AXRole = 'AXScrollArea';
     return read(element, key, output);
   };
   f.native.AXUIElementPerformAction = (element, action) => { actions.push([element, action]); return 0; };
@@ -741,6 +741,39 @@ test('JXA Finder cleanup exports closed failure objects before rethrowing a clea
   const failure = events.find(event => event.stage === 'finder-failure');
   assert.deepEqual(failure.finderFailure, { failureReason: 'fixture-identity-changed', errorName: 'Error', errorCode: 'unavailable' });
   assert.deepEqual(failure.finderCleanupFailure, failure.finderFailure);
+});
+
+test('JXA retains the candidate before first validation fails and closes only its fixture despite baseline drift', () => {
+  let closed = false;
+  const { run, events, calls } = finderRun(({ api, window, previous }) => {
+    let drifted = false;
+    const inventory = api.windows;
+    api.windows = () => inventory().filter(w => !(drifted && w === previous) && !(closed && w === window));
+    api.exists = w => w !== window || !closed;
+    api.finderFolderGuard = (_app, w) => {
+      if (w) { drifted = true; throw new Error('Finder folder window lost focus'); }
+    };
+    api.text = (w, attribute) => {
+      assert.equal(w, window, 'never read owner window content for cleanup');
+      return attribute === 'AXDocument' ? '/fixture/Collections-1' : '';
+    };
+    api.path = value => value;
+    api.closeButton = (w, validate) => {
+      assert.equal(w, window); validate(); closed = true; calls.push('recover-close');
+    };
+    api.emit = event => events.push(event);
+  });
+  assert.throws(run, /lost focus/);
+  assert.equal(closed, true);
+  assert.equal(calls.filter(call => call === 'recover-close').length, 1);
+  assert.equal(calls.includes('go-menu'), false);
+  const failure = events.find(event => event.stage === 'setup-failure');
+  assert.equal(failure.cleanup, 'closed retained fixture');
+  assert.equal(failure.finderFailure.failureReason, 'window-focus-lost');
+  assert.equal(failure.finderCleanupFailure, undefined);
+  const drift = events.find(event => event.stage === 'finder-baseline-changed');
+  assert.equal(drift.finderBaselineChange.phase, 'cleanup');
+  assert.equal(drift.finderBaselineChange.missingRole, 'AXWindow');
 });
 
 test('JXA Finder setup and cleanup work with kernel births when AppKit launch dates are absent', () => {
@@ -961,12 +994,11 @@ for (const extra of [false, true]) test(`R2 cleanup preserves baseline fixture-r
     closeButton: (w, guard) => { guard(); closed.push(w); windows = windows.filter(item => item !== w); } };
   const request = { fixtureRoot: '/fixture', target: '/fixture/current', finderOwnership: {
     schema: 'finder-role-baseline-v1', baseline: [{ reference: baseline, role: 'AXWindow' }], created: [owned] } };
-  if (extra) assert.throws(() => s.closeFinderFixtureWindows(owned, request, {}, api), /ownership unconfirmed/);
-  else s.closeFinderFixtureWindows(owned, request, {}, api);
+  s.closeFinderFixtureWindows(owned, request, {}, api);
   assert.ok(windows.includes(baseline));
   assert.ok(!closed.includes(baseline));
   if (extra) assert.ok(windows.includes(unknown));
-  else assert.deepEqual(closed, [owned]);
+  assert.deepEqual(closed, [owned]);
 });
 
 test('R2 path alone never authorizes Finder cleanup', () => {
@@ -1144,13 +1176,13 @@ test('R5 identity lookup latency cannot turn an immediate AX error into timeout 
   assert.equal(forces, 0);
 });
 
-test('R2 setup recovery checks extra windows even after the retained window disappears', () => {
+test('R2 setup recovery leaves extra windows alone after the retained window disappears', () => {
   const s = source(), owned = {}, extra = {}, request = { bundle: 'com.apple.finder', mode: 'folder',
     finderOwnership: { schema: 'finder-role-baseline-v1', baseline: [], created: [owned] } };
-  assert.throws(() => s.recoverSetup(owned, request, {
+  assert.equal(s.recoverSetup(owned, request, {
     exists: () => false, finderRole: () => 'AXWindow', windows: () => [extra], equal: (a, b) => a === b,
     closeButton: () => assert.fail('preserve an extra window without creation proof'),
-  }, {}), /ownership unconfirmed/);
+  }, {}), 'closed retained fixture');
 });
 
 test('R3 default acquisition retains the exact synthetic task lock after Finder cleanup fails', async t => {
