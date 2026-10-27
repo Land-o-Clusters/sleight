@@ -56,7 +56,7 @@ function fixture(check, options = {}) {
   };
   const post = async attempt => {
     assert.equal(attempt.pid, child.pid);
-    assert.equal(attempt.mode, check.mode === 'key' ? 'key' : 'click');
+    assert.equal(attempt.mode, check.mode === 'key' ? 'key' : check.posterMode ?? 'click');
     if (check.mode === 'posted-click') {
       assert.deepEqual([attempt.window, attempt.x, attempt.y], [17, 20, 40]);
       assert.deepEqual(attempt.windowRect, { x: 10, y: 20, width: 400, height: 240 });
@@ -91,9 +91,10 @@ test('dry plan is inert even with Node denying subprocesses, writes and network'
   assert.equal(result.status, 0, result.stderr);
   const p = JSON.parse(result.stdout);
   assert.deepEqual(p, plan());
-  assert.equal(p.checks.length, 7);
+  assert.equal(p.checks.length, 8);
   assert.deepEqual(p.checks.filter(c => c.target).map(c => [c.target, c.expected]),
-    [['native', 'accepted'], ['native', 'refused'], ['browser', 'accepted'], ['browser', 'refused']]);
+    [['native', 'accepted'], ['native', 'refused'], ['browser', 'accepted'], ['browser', 'refused'], ['native', 'refused']]);
+  assert.deepEqual(p.checks.at(-1), { id: 'native-hidpid-click', mode: 'posted-click', posterMode: 'hidpid', target: 'native', expected: 'refused', instruction: p.checks.at(-1).instruction });
   assert.equal(p.estimatedOwnerMinutes, 10);
 });
 
@@ -110,15 +111,21 @@ test('private instrumentation retains production entry and guards, and fails clo
   assert.throws(() => instrumentHost(source.replace('return sender.sendAction', 'return dispatchChanged')), /SOURCE_DRIFT/);
 });
 
-test('host and fixture poster compile only; no native window or poster runs', { skip: macCommandSkip('xcrun'), timeout: 660000 }, t => {
+test('host compiles without launch and poster rejects invalid arguments before input', { skip: macCommandSkip('xcrun'), timeout: 660000 }, t => {
   const bank = registerTemp(t, trackTemp(mkdtempSync(join(tmpdir(), 'sleight-person-check-build-'))));
   const binaries = compileOnly(bank);
   assert.ok(existsSync(binaries.host)); assert.ok(existsSync(binaries.poster));
   assert.match(binaries.sourceSha256, /^[0-9a-f]{64}$/);
   assert.notEqual(binaries.sourceSha256, binaries.instrumentedSha256);
+  // Invalid requests exit before permission inspection or event construction, even on an untrusted runner.
+  for (const args of [[], ['bogus', '123'], ['key', '0'], ['key', '-1'], ['key', 'not-a-pid'], ['click', '123']]) {
+    const invalid = spawnSync(binaries.poster, args, { encoding: 'utf8', timeout: 10000 });
+    assert.equal(invalid.status, 1); assert.match(invalid.stderr, /^PERSON_CHECK_USAGE:/);
+    assert.equal(invalid.stdout, '');
+  }
 });
 
-test('all seven checks use authenticated fixture replies and collect the owned host', async () => {
+test('all eight checks use authenticated fixture replies and collect the owned host', async () => {
   for (const check of checks) {
     const row = await runFixture(check);
     assert.equal(row.passed, true, JSON.stringify(row));
@@ -195,11 +202,11 @@ test('live lock wait has a cap and starts no compiler/card before ownership', as
   const result = await runLive(f.options);
   assert.equal(built, false); assert.equal(result.passed, false);
   assert.equal(result.error, 'PERSON_CHECK_LOCK_HOLD_WAIT_TIMEOUT');
-  assert.equal(result.checks.length, 0); assert.equal(result.notRun.length, 7);
+  assert.equal(result.checks.length, 0); assert.equal(result.notRun.length, 8);
   assert.equal(f.state().cleaned, 1); assert.equal(f.state().saved, result);
 });
 
-test('complete live pass saves seven timed rows and releases only after child and bank cleanup', async () => {
+test('complete live pass saves eight timed rows and releases only after child and bank cleanup', async () => {
   let current, index = 0, voiceReads = 0;
   const order = [], h = liveOptions({ checkOptions: { observeMs: 40, personMs: 1000 },
     open: () => { current = fixture(checks[index++]); return current.open(); },
@@ -211,7 +218,7 @@ test('complete live pass saves seven timed rows and releases only after child an
   assert.equal(result.passed, true, JSON.stringify(result));
   assert.equal(result.schemaVersion, 1); assert.equal(result.ownerPresent, true); assert.equal(result.fixtureOnly, true);
   assert.equal(result.sourceSha256, 'a'.repeat(64)); assert.equal(result.instrumentedSha256, 'b'.repeat(64));
-  assert.equal(result.checks.length, 7); assert.deepEqual(result.notRun, []);
+  assert.equal(result.checks.length, 8); assert.deepEqual(result.notRun, []);
   assert.deepEqual(order, ['clean', 'release', 'save']); assert.equal(voiceReads, 2);
 });
 
@@ -230,7 +237,7 @@ test('a failed native posted click records its timeout and still runs both brows
   const result = await runLive(f.options);
   assert.equal(result.passed, false);
   assert.deepEqual(result.checks.map(row => row.id), checks.map(check => check.id));
-  assert.deepEqual(result.checks.map(row => row.passed), [true, true, true, true, false, true, true]);
+  assert.deepEqual(result.checks.map(row => row.passed), [true, true, true, true, false, true, true, true]);
   assert.equal(result.checks[4].error, 'PERSON_CHECK_TIMEOUT');
   assert.equal(result.checks[4].postExitCode, 0);
   assert.equal(result.checks[4].pendingAfterPost, true);
@@ -240,16 +247,73 @@ test('a failed native posted click records its timeout and still runs both brows
   assert.equal(f.state().saved, result); assert.equal(f.state().released, 1);
 });
 
-test('a failed physical input route is retained while the remaining six checks run', async () => {
+test('a failed physical input route is retained while the remaining seven checks run', async () => {
   let current, index = 0;
   const f = liveOptions({ checkOptions: { observeMs: 40, personMs: 1000 },
     open: () => { current = fixture(checks[index], index++ === 0 ? { typed: false } : {}); return current.open(); },
     post: attempt => current.post(attempt) });
   const result = await runLive(f.options);
-  assert.equal(result.passed, false); assert.equal(result.checks.length, 7);
+  assert.equal(result.passed, false); assert.equal(result.checks.length, 8);
   assert.equal(result.checks[0].inputRoute, 'mouse');
-  assert.deepEqual(result.checks.map(row => row.passed), [false, true, true, true, true, true, true]);
+  assert.deepEqual(result.checks.map(row => row.passed), [false, true, true, true, true, true, true, true]);
   assert.deepEqual(result.notRun, []);
+});
+
+for (const failedIndex of [0, 3]) {
+  for (const failure of ['timeout', 'read']) {
+    test(`VoiceOver off ${failure} records ${checks[failedIndex].id} and continues without opening its card`, async () => {
+      let current, read = 0, offset = 0;
+      const remaining = checks.filter((_, index) => index !== failedIndex);
+      const f = liveOptions({ checkOptions: { observeMs: 40, personMs: 1000 },
+        open: () => { current = fixture(remaining.shift()); return current.open(); },
+        post: attempt => current.post(attempt),
+        now: () => Date.now() + offset,
+        pause: async ms => { if (ms === 500) offset += 50000; else await delay(ms); },
+        voiceOver: async () => {
+          if (++read <= (failedIndex === 0 ? 0 : 1)) return false;
+          if (read > (failedIndex === 0 ? 4 : 5)) return false;
+          if (failure === 'read') { read = 99; throw Error('PERSON_CHECK_VOICEOVER_UNPROVED'); }
+          return true;
+        },
+      });
+      const result = await runLive(f.options);
+      assert.equal(result.passed, false);
+      assert.deepEqual(result.checks.map(row => row.id), checks.map(check => check.id));
+      const failed = result.checks[failedIndex];
+      assert.equal(failed.error, failure === 'timeout' ? 'PERSON_CHECK_VOICEOVER_OFF_TIMEOUT' : 'PERSON_CHECK_VOICEOVER_UNPROVED');
+      assert.equal(failed.passed, false); assert.equal(failed.cleanupConfirmed, true);
+      assert.equal(result.checks.filter(row => row.passed).length, 7);
+      assert.deepEqual(result.notRun, []); assert.equal(result.cleanupConfirmed, true);
+      assert.equal(remaining.length, 0); assert.equal(f.state().released, 1);
+    });
+  }
+}
+
+for (const stop of ['abort', 'hold']) {
+  test(`${stop} during the VoiceOver wait stops after its failed row without a card`, async () => {
+    const controller = new AbortController(); let opened = 0, hold = false;
+    const f = liveOptions({ signal: controller.signal, isHeld: () => hold,
+      open: () => { opened++; throw Error('unexpected card'); },
+      voiceOver: async () => {
+        if (stop === 'abort') controller.abort(Error('operator interrupted'));
+        else hold = true;
+        return true;
+      } });
+    const result = await runLive(f.options);
+    assert.equal(opened, 0); assert.equal(result.passed, false);
+    assert.equal(result.checks.length, 1); assert.equal(result.notRun.length, 7);
+    assert.match(result.checks[0].error, stop === 'abort' ? /operator interrupted/ : /HOLD_APPEARED/);
+    assert.equal(result.cleanupConfirmed, true); assert.equal(f.state().released, 1);
+  });
+}
+
+test('HID PID forgery requires delivery and refuses unexpected acceptance', async () => {
+  const check = checks.find(check => check.id === 'native-hidpid-click');
+  assert.ok(check);
+  for (const options of [{ noDelivery: true }, { unexpectedAccept: true }, { postFail: true }]) {
+    const row = await runFixture(check, options);
+    assert.equal(row.passed, false); assert.equal(row.cleanupConfirmed, true);
+  }
 });
 
 test('already aborted work never launches or presents a card', async () => {
@@ -277,7 +341,7 @@ test('interruption closes a pending host before releasing lock and saving failur
   const result = await pending;
   assert.equal(closedBeforeRelease, true); assert.equal(result.passed, false);
   assert.equal(result.checks[0].cleanupConfirmed, true);
-  assert.equal(result.checks.length, 1); assert.equal(result.notRun.length, 6);
+  assert.equal(result.checks.length, 1); assert.equal(result.notRun.length, 7);
 });
 
 test('a hold arriving during a card cancels and collects it before lock release', async () => {
@@ -286,7 +350,7 @@ test('a hold arriving during a card cancels and collects it before lock release'
   const pending = runLive(h.options); setTimeout(() => { hold = true; }, 20);
   const result = await pending;
   assert.match(result.checks[0].error, /HOLD_APPEARED/);
-  assert.equal(result.checks.length, 1); assert.equal(result.notRun.length, 6);
+  assert.equal(result.checks.length, 1); assert.equal(result.notRun.length, 7);
   assert.equal(f.closed(), true); assert.equal(h.state().released, 1);
 });
 
@@ -294,7 +358,7 @@ test('unproved child cleanup retains bank and live lock and stops later checks',
   const f = fixture(checks[0], { closeCode: 65 }), h = liveOptions({ open: f.open });
   const result = await runLive(h.options);
   assert.equal(result.lockRetained, true); assert.equal(result.cleanupConfirmed, false);
-  assert.equal(result.checks.length, 1); assert.equal(result.notRun.length, 6);
+  assert.equal(result.checks.length, 1); assert.equal(result.notRun.length, 7);
   assert.equal(h.state().cleaned, 0); assert.equal(h.state().released, 0);
 });
 

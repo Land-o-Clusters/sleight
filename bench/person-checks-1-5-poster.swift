@@ -6,7 +6,7 @@ import Darwin
 func fail(_ text: String) -> Never { fputs(text + "\n", stderr); exit(1) }
 // BEGIN PERSON CHECK MOUSE EVENT
 // PID posting bypasses the global event routing that normally annotates the target window.
-// Match shell-card-poster's encoding, keeping the event's private-source provenance intact.
+// Match shell-card-poster's encoding. Only the explicit hidpid probe forges source provenance.
 private typealias PersonWindowLocationSetter = @convention(c) (CGEvent, CGPoint) -> Void
 private typealias PersonWindowLocationGetter = @convention(c) (CGEvent) -> CGPoint
 private let personWindowLocation: (set: PersonWindowLocationSetter, get: PersonWindowLocationGetter)? = {
@@ -17,7 +17,7 @@ private let personWindowLocation: (set: PersonWindowLocationSetter, get: PersonW
         unsafeBitCast(getter, to: PersonWindowLocationGetter.self))
 }()
 func personCheckMouseEvent(type: CGEventType, source: CGEventSource, window: Int,
-    rect: CGRect, point: CGPoint) -> CGEvent? {
+    rect: CGRect, point: CGPoint, hidpid: Bool = false) -> CGEvent? {
     guard [.leftMouseDown, .leftMouseUp].contains(type), window > 0,
         [rect.minX, rect.minY, rect.width, rect.height, point.x, point.y].allSatisfy({ $0.isFinite }),
         rect.width > 0, rect.height > 0, rect.contains(point), let location = personWindowLocation else { return nil }
@@ -27,6 +27,11 @@ func personCheckMouseEvent(type: CGEventType, source: CGEventSource, window: Int
         windowNumber: window, context: nil, eventNumber: 1, clickCount: 1,
         pressure: type == .leftMouseDown ? 1 : 0), let event = native.cgEvent else { return nil }
     event.setSource(source)
+    if hidpid {
+        event.setIntegerValueField(.eventSourceStateID, value: Int64(CGEventSourceStateID.hidSystemState.rawValue))
+        event.setIntegerValueField(.eventSourceUnixProcessID, value: 0)
+        event.setIntegerValueField(.eventSourceUserData, value: 0)
+    }
     event.location = point
     event.flags = []
     event.setIntegerValueField(.mouseEventWindowUnderMousePointer, value: Int64(window))
@@ -47,10 +52,10 @@ if args == ["voiceover"] {
     print(NSWorkspace.shared.isVoiceOverEnabled ? "true" : "false")
     exit(0)
 }
-guard (args.count == 2 && args[0] == "key" || args.count == 9 && args[0] == "click"),
-    let pid = Int32(args[1]), pid > 0,
-    CGPreflightPostEventAccess() else { fail("POST_EVENT_ACCESS_REQUIRED: no permission requested") }
-guard let source = CGEventSource(stateID: .privateState) else { fail("EVENT_SOURCE_UNAVAILABLE") }
+guard (args.count == 2 && args[0] == "key" || args.count == 9 && ["click", "hidpid"].contains(args[0])),
+    let pid = Int32(args[1]), pid > 0 else { fail("PERSON_CHECK_USAGE: key PID | click|hidpid PID WINDOW X Y RECT_X RECT_Y WIDTH HEIGHT") }
+guard CGPreflightPostEventAccess() else { fail("POST_EVENT_ACCESS_REQUIRED: no permission requested") }
+guard let source = CGEventSource(stateID: args[0] == "hidpid" ? .hidSystemState : .privateState) else { fail("EVENT_SOURCE_UNAVAILABLE") }
 source.userData = 0
 if args[0] == "key" {
     // Exactly one posted letter, after the person focuses the field. No Return or HID spoofing.
@@ -63,8 +68,8 @@ if args[0] == "key" {
     let point = CGPoint(x: values[0], y: values[1])
     let rect = CGRect(x: values[2], y: values[3], width: values[4], height: values[5])
     // Encode both events before posting either. A missing annotation never sends a partial click.
-    guard let down = personCheckMouseEvent(type: .leftMouseDown, source: source, window: window, rect: rect, point: point),
-        let up = personCheckMouseEvent(type: .leftMouseUp, source: source, window: window, rect: rect, point: point)
+    guard let down = personCheckMouseEvent(type: .leftMouseDown, source: source, window: window, rect: rect, point: point, hidpid: args[0] == "hidpid"),
+        let up = personCheckMouseEvent(type: .leftMouseUp, source: source, window: window, rect: rect, point: point, hidpid: args[0] == "hidpid")
         else { fail("EVENT_UNAVAILABLE") }
     down.postToPid(pid)
     usleep(100_000)
