@@ -12,6 +12,14 @@ import { createSessionPause } from '../plugins/sleight/lib/session-pause.mjs';
 import { createHandoffWaiter } from '../plugins/sleight/lib/direct-browser/handoff.mjs';
 import { createToolDispatcher } from '../plugins/sleight/lib/direct-browser/tools.mjs';
 
+const browserAppCalls = [
+  ['drag', { app: 'com.google.Chrome', from: [1, 2], to: [3, 4] }],
+  ['hover', { app: 'Google Chrome', at: [1, 2] }],
+  ['menu_bar', { app: 'Google Chrome', op: 'press', item: 0 }],
+  ['open_file', { app: 'Google Chrome', path: '/tmp/fixture.html' }],
+  ['select_window', { app: '/Applications/Google Chrome.app', title: 'Sign in' }],
+];
+
 for (const mode of [undefined, '0']) test(`MTb worker distinguishes uncertain input from capability loss, switch=${mode}`, async () => withMT(mode, async () => {
   assert.equal(failure(true).text, 'Input outcome is unconfirmed. Read state before retrying' + (mode === '0' ? '; use the engine browser path if needed.' : '.'));
   assert.match(failure(false).text, /Use the engine browser path/);
@@ -83,6 +91,8 @@ test('browser handoff fences concurrent reads while its presence signal is pendi
   const clientIn = new PassThrough(), clientOut = new PassThrough(), serverIn = new PassThrough(), serverOut = new PassThrough(), replies = [];
   clientOut.on('data', bytes => replies.push(...bytes.toString().trim().split('\n').map(JSON.parse)));
   const relay = createRelay({ clientIn, clientOut, serverIn, serverOut, changeReview: false,
+    localTools: { tools: browserAppCalls.map(([name]) => ({ name })),
+      call: async () => assert.fail('no local app action may pass a pending handoff') },
     directBrowser: createV3Frontend(f.bridge), remoteApprovals: { presence: () => new Promise(resolve => { finishPresence = resolve; }) } });
   t.after(async () => { relay.dispose(); for (const stream of [clientIn, clientOut, serverIn, serverOut]) stream.destroy(); await f.bridge.detach(); });
   await f.bridge.bind({ ...f.bridge.bootstrapEnvelope(), event: 'begin', turn: 'pending-presence', text: 'Find my receipt.' });
@@ -90,15 +100,17 @@ test('browser handoff fences concurrent reads while its presence signal is pendi
   send('handoff', 'browser_tabs', { do: 'handoff', tab: 't1', wait: true });
   await new Promise(resolve => setImmediate(resolve));
   send('read', 'browser_read', { tab: 't1' });
+  for (const [name, args] of browserAppCalls) send(name, name, args);
   await new Promise(resolve => setImmediate(resolve));
   assert.equal(calls.length, 0, 'no read may overtake the presence check');
   assert.equal(replies.find(row => row.id === 'read').result.isError, true);
+  for (const [name] of browserAppCalls) assert.match(replies.find(row => row.id === name)?.result.content[0].text ?? '', /^Handoff pending/, name);
   finishPresence({ locked: true, idleSeconds: 0 });
   for (let n = 0; n < 10 && !calls.length; n++) await new Promise(resolve => setImmediate(resolve));
   assert.equal(calls[0].name, 'browser_tabs');
 });
 
-for (const mode of ['continue', 'cancel', 'expiry', 'turn-end'])
+for (const mode of ['continue', 'cancel', 'expiry', 'turn-end', 'worker-loss', 'cleanup-failure'])
 test(`away browser handoff fences engine js across worker IPC until ${mode}`, async t => {
   const cards = [], dismissed = [], trusted = new WeakSet();
   const waiter = createHandoffWaiter({ current: () => true, session: 's', turn: 't', timeoutMs: mode === 'expiry' ? 50 : 1000,
@@ -106,7 +118,11 @@ test(`away browser handoff fences engine js across worker IPC until ${mode}`, as
       present(id, _data, _choices, deliver) { cards.push({ id, deliver }); } } });
   let resumed = 0, kept = 0;
   const dispatcher = createToolDispatcher({ pages: {
-    async beginHandoff() { return { async finish(keep) { if (keep) kept++; else resumed++; return keep ? null : 't1'; } }; },
+    async beginHandoff() { return { async finish(keep) {
+      if (keep) { kept++; if (mode === 'cleanup-failure') throw Error('fixture detach failed'); }
+      else resumed++;
+      return keep ? null : 't1';
+    } }; },
     async endTurn() { return { cleanedUp: true }; } }, ctx: { handoff: (...args) => waiter.wait(...args) },
     snapshot: async () => assert.fail('away handoff must not read'), runSteps() {}, fillFields() {} });
   const f = await fixture({}, undefined, {}, (request, options) => dispatcher.call(request, options), () => dispatcher.end());
@@ -116,6 +132,8 @@ test(`away browser handoff fences engine js across worker IPC until ${mode}`, as
   serverIn.on('data', bytes => outbound.push(...bytes.toString().trim().split('\n').map(JSON.parse)));
   let finishPresence;
   const relay = createRelay({ clientIn, clientOut, serverIn, serverOut, changeReview: false,
+    localTools: { tools: browserAppCalls.map(([name]) => ({ name })),
+      call: async () => assert.fail('no local app action may pass a pending handoff') },
     directBrowser: createV3Frontend(f.bridge), remoteApprovals: { presence: () => new Promise(resolve => { finishPresence = resolve; }) } });
   t.after(async () => { waiter.dispose(); relay.dispose(); await f.bridge.detach();
     for (const stream of [clientIn, clientOut, serverIn, serverOut]) stream.destroy(); });
@@ -137,15 +155,31 @@ test(`away browser handoff fences engine js across worker IPC until ${mode}`, as
     assert.equal(reply?.result.isError, true, id);
     assert.match(reply.result.content[0].text, /^Handoff pending/);
   }
+  for (const [name, args] of browserAppCalls) {
+    send(name, name, args); await tick();
+    const reply = replies.find(row => row.id === name);
+    assert.equal(reply?.result.isError, true, name);
+    assert.match(reply.result.content[0].text, /^Handoff pending/, name);
+    const before = replies.length;
+    send(undefined, name, args);
+    await tick(); assert.equal(replies.length, before, 'id-less app calls are dropped');
+  }
   const answer = (choice = 'continue') => { const card = cards.at(-1), event = { id: card.id, choice }; trusted.add(event); card.deliver(event); };
   if (mode === 'continue') answer();
   else if (mode === 'cancel') answer('cancel');
   else if (mode === 'turn-end') await f.bridge.end();
+  else if (mode === 'worker-loss') f.child.disconnect();
+  else if (mode === 'cleanup-failure') answer('cancel');
   else await new Promise(resolve => setTimeout(resolve, 80));
   await tick(); await tick();
   assert.deepEqual(dismissed, [cards[0].id]);
   assert.equal(resumed, mode === 'continue' ? 1 : 0);
   if (mode !== 'continue') { assert.ok(kept > 0); answer(); await tick(); assert.equal(resumed, 0); }
+  if (mode === 'cleanup-failure') {
+    assert.equal(f.bridge.handoffPending(), true, 'failed cleanup remains fenced in this turn');
+    await f.bridge.end();
+    await f.bridge.bind({ ...f.bridge.bootstrapEnvelope(), event: 'begin', turn: 'after-cleanup-failure', text: 'Continue.' });
+  }
   send('fresh', 'js', { code: 'await cua.getBrowser()' }); await tick();
   assert.equal(outbound.some(row => row.id === 'fresh'), true);
   assert.equal(replies.filter(row => row.id === 'handoff').length, 1);
@@ -164,9 +198,73 @@ test(`handoff lifecycle IPC refuses ${mode} authority`, async () => {
     const result = await f.bridge.call(mode === 'ordinary' ? { name: 'browser_read', arguments: { tab: 't1' } }
       : { name: 'browser_tabs', arguments: { do: 'handoff', tab: 't1', wait: true } });
     assert.match(result.text, /unavailable|unconfirmed/i);
-    assert.equal(f.bridge.handoffPending(), mode === 'wrong-id', 'a mismatched release must leave the original fence in place');
+    assert.equal(f.child.connected, false, 'invalid lifecycle authority must disconnect the worker');
+    assert.equal(f.bridge.handoffPending(), false, 'a disconnected worker must release its handoff fence');
     assert.equal((await f.bridge.call({ name: 'browser_read', arguments: { tab: 't1' } })).isError, true);
   } finally { await f.bridge.detach(); }
+});
+
+test('a new user turn clears a missing handoff release without accepting an old release for the new card', async () => {
+  const controls = [];
+  const f = await fixture({}, undefined, {}, async (_request, options) => {
+    controls.push(options); options.handoffState(true);
+    return { text: 'away', isError: false };
+  }, async () => { throw Error('cleanup failed'); });
+  const bind = turn => f.bridge.bind({ ...f.bridge.bootstrapEnvelope(), event: 'begin', turn, text: 'Continue.' });
+  const handoff = () => f.bridge.call({ name: 'browser_tabs', arguments: { do: 'handoff', tab: 't1', wait: true } });
+  try {
+    await bind('first'); await handoff();
+    assert.equal(f.bridge.handoffPending(), true);
+    await assert.rejects(f.bridge.bind({ ...f.bridge.bootstrapEnvelope(), nonce: '0'.repeat(64), event: 'begin', turn: 'forged', text: 'Continue.' }), /TRUSTED_TURN_REQUIRED/);
+    await assert.rejects(bind('first'), /TRUSTED_TURN_REQUIRED/);
+    assert.equal(f.bridge.handoffPending(), true, 'invalid or replayed begins cannot release a pending card');
+    await f.bridge.end();
+    await bind('second');
+    assert.equal(f.bridge.handoffPending(), false);
+    await handoff();
+    assert.equal(f.bridge.handoffPending(), true);
+    controls[0].handoffState(false); await new Promise(resolve => setImmediate(resolve));
+    assert.equal(f.child.connected, true);
+    assert.equal(f.bridge.handoffPending(), true, 'the old release cannot clear the new card');
+    controls[1].handoffState(false); await new Promise(resolve => setImmediate(resolve));
+    assert.equal(f.bridge.handoffPending(), false);
+  } finally { await f.bridge.detach(); }
+});
+
+for (const loss of ['disconnect', 'error', 'exit']) test(`worker ${loss} releases a handoff fence`, async () => {
+  const f = await fixture({}, undefined, {}, async (_request, options) => {
+    options.handoffState(true); return { text: 'away', isError: false };
+  });
+  try {
+    await f.bridge.bind({ ...f.bridge.bootstrapEnvelope(), event: 'begin', turn: 'loss', text: 'Sign in.' });
+    await f.bridge.call({ name: 'browser_tabs', arguments: { do: 'handoff', tab: 't1', wait: true } });
+    assert.equal(f.bridge.handoffPending(), true);
+    f.child.emit(loss, loss === 'error' ? Error('fixture loss') : 1);
+    assert.equal(f.bridge.handoffPending(), false);
+  } finally { await f.bridge.detach(); }
+});
+
+for (const boundary of ['end', 'begin']) test(`a handoff start arriving after ${boundary} is ignored and its matching release is accepted`, async () => {
+  let controls, finish;
+  const f = await fixture({}, undefined, {}, async (_request, options) => {
+    controls = options; await new Promise(resolve => { finish = resolve; });
+    return { text: 'late handoff', isError: false };
+  });
+  try {
+    await f.bridge.bind({ ...f.bridge.bootstrapEnvelope(), event: 'begin', turn: 'old', text: 'Sign in.' });
+    const call = f.bridge.call({ name: 'browser_tabs', arguments: { do: 'handoff', tab: 't1', wait: true } });
+    while (!controls) await new Promise(resolve => setImmediate(resolve));
+    const stopped = boundary === 'end' ? f.bridge.end()
+      : f.bridge.bind({ ...f.bridge.bootstrapEnvelope(), event: 'begin', turn: 'new', text: 'Continue.' });
+    await new Promise(resolve => setImmediate(resolve));
+    controls.handoffState(true); await new Promise(resolve => setImmediate(resolve));
+    assert.equal(f.child.connected, true);
+    assert.equal(f.bridge.handoffPending(), false);
+    controls.handoffState(false); finish();
+    await call; await stopped;
+    assert.equal(f.child.connected, true);
+    assert.equal(f.bridge.handoffPending(), false);
+  } finally { finish?.(); await f.bridge.detach(); }
 });
 test('human pause crosses worker IPC immediately and invalidates the in-flight remainder through resume', async () => {
   let entered, finish, steps = 0;

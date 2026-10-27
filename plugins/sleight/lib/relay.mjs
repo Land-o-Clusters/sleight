@@ -4319,9 +4319,10 @@ export function createRelay({
     if (nativeHandoff && msg.method === 'tools/call' && msg.params?.name !== TURN_END_TOOL && (msg.id === undefined || msg.id !== nativeHandoff.readId)) {
       leaseStop(msg, promptNotice('handoff pending; the user must finish in the app.', prompt)); return;
     }
-    // js can retain an engine tab handle, so fence every js call while turbo's
-    // handoff owns the tab, including the presence read before worker dispatch.
-    if (msg.method === 'tools/call' && msg.params?.name === 'js' && (handoffPresencePending || directBrowser?.handoffPending?.())) {
+    // js can retain a tab handle; local app tools can target its browser window
+    // directly. Fence both routes, including presence reads before dispatch.
+    if (msg.method === 'tools/call' && ['js', 'drag', 'hover', 'menu_bar', 'open_file', 'select_window'].includes(msg.params?.name) &&
+        (handoffPresencePending || directBrowser?.handoffPending?.())) {
       if (msg.id !== undefined) toClient({ jsonrpc: '2.0', id: msg.id, result: { isError: true,
         content: [{ type: 'text', text: handoffMessages.pending }] } });
       return;

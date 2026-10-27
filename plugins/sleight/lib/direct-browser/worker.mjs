@@ -189,6 +189,9 @@ export async function createV3Bridge({ startupTimeoutMs = 120000, timeoutMs = 31
   let hello, active = false, lost = false, generation = 0, sequence = 0, ending, callTimeoutMs = timeoutMs;
   let paused = false, pauseSync = Promise.resolve();
   let handoffCall;
+  // Keep release ids across turn changes: an old cleanup may finish after the
+  // next user's card starts, but must never release that new card's fence.
+  const handoffCalls = new Set();
   const latePauseIds = new Set();
   let traceTurn = 0, traceCall = 0, toolsRegistered = false;
   const pending = new Map(), turns = new Set(); let deliveries = new WeakMap(), resolveReady, rejectReady;
@@ -199,7 +202,7 @@ export async function createV3Bridge({ startupTimeoutMs = 120000, timeoutMs = 31
   // stage and reason say why a worker never became ready (unavailableFrame); after hello they are unused.
   function lose(code = 'V3_WORKER_UNAVAILABLE', stage = 'worker-disconnect', reason) {
     if (lost) return;
-    lost = true; fence(); clearTimeout(timer);
+    lost = true; fence(); handoffCall = undefined; handoffCalls.clear(); clearTimeout(timer);
     const error = Error(typeof code === 'string' ? code : 'V3_WORKER_UNAVAILABLE');
     if (!hello) Object.assign(error, { stage, reason: reason ?? error.message });
     rejectReady(error);
@@ -212,8 +215,16 @@ export async function createV3Bridge({ startupTimeoutMs = 120000, timeoutMs = 31
     if (lost) return;
     if (hello && exact(frame, ['version', 'id', 'handoffState']) && frame.version === 3) {
       const entry = pending.get(frame.id);
-      if (frame.handoffState === true && active && entry?.handoff && !handoffCall) handoffCall = frame.id;
-      else if (frame.handoffState === false && handoffCall === frame.id) handoffCall = undefined;
+      if (frame.handoffState === true && entry?.handoff && !handoffCalls.has(frame.id) &&
+          (!active || entry.generation !== generation || !handoffCall)) {
+        handoffCalls.add(frame.id);
+        // A stop or a new prompt can overtake the worker's start frame.
+        // Remember only its release; it grants no fence in the current turn.
+        if (active && entry.generation === generation) handoffCall = frame.id;
+      }
+      else if (frame.handoffState === false && handoffCalls.delete(frame.id)) {
+        if (handoffCall === frame.id) handoffCall = undefined;
+      }
       else lose(undefined, 'worker-protocol');
       return;
     }
@@ -280,7 +291,7 @@ export async function createV3Bridge({ startupTimeoutMs = 120000, timeoutMs = 31
     if (Buffer.byteLength(JSON.stringify(frame)) > 131072) return Promise.reject(Error('INVALID_ARGUMENT'));
     return new Promise((resolve, reject) => {
       const timer = setTimeout(() => { if (method === 'pause') retirePause(); else lose(); reject(Error('V3_WORKER_UNAVAILABLE')); }, deadlineMs);
-      pending.set(frame.id, { resolve, reject, timer, handoff: method === 'call' && params.name === 'browser_tabs' && params.arguments?.do === 'handoff' && params.arguments.wait === true, ...(method === 'call' ? { tool: params.name } : {}) });
+      pending.set(frame.id, { resolve, reject, timer, generation, handoff: method === 'call' && params.name === 'browser_tabs' && params.arguments?.do === 'handoff' && params.arguments.wait === true, ...(method === 'call' ? { tool: params.name } : {}) });
       const failed = () => {
         if (method !== 'pause') { lose(); return; }
         const entry = pending.get(frame.id); if (!entry) return;
@@ -325,7 +336,7 @@ export async function createV3Bridge({ startupTimeoutMs = 120000, timeoutMs = 31
       // Binding carries the user's prompt, including questions asked during pause. Only tool input waits for Resume.
       await pauseSync;
       if (lost || !current()) return false;
-      fence(); const epoch = generation;
+      fence(); handoffCall = undefined; const epoch = generation;
       callTimeoutMs = timeoutMs;
       trace('turn-begin', ++traceTurn); traceCall = 0;
       const result = await rpc('begin', { turn: frame.turn, text: frame.text, apps: [...apps], appSecret: serverAppSecret(),
