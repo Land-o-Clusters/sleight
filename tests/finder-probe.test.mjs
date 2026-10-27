@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync, rmSync } from 'node:fs';
 import { runInNewContext } from 'node:vm';
+import { tmpdir } from 'node:os';
 import { runFinderProbe } from '../bench/finder-probe.mjs';
 import { trackTemp } from '../scripts/temp-leftovers.mjs';
 
@@ -95,6 +96,7 @@ for (const confirmed of [false, true]) test(`probe runner ${confirmed ? 'release
   let releases = 0, calls = 0;
   const result = await runFinderProbe({ ownerAway: true }, {
     hold: () => false,
+    tempRoot: tmpdir(),
     lock: async () => async () => { releases++; },
     run: async (command, args, options) => {
       calls++;
@@ -119,7 +121,7 @@ for (const confirmed of [false, true]) test(`probe runner ${confirmed ? 'release
 test('probe cancellation asks its existing host to clean up before collecting it', async t => {
   const controller = new AbortController(); let releases = 0;
   const result = await runFinderProbe({ ownerAway: true, signal: controller.signal }, {
-    hold: () => false, lock: async () => async () => { releases++; },
+    hold: () => false, tempRoot: tmpdir(), lock: async () => async () => { releases++; },
     run: async (_command, args) => {
       const request = JSON.parse(args[3]);
       trackTemp(request.fixtureRoot); t.after(() => rmSync(request.fixtureRoot, { recursive: true, force: true }));
@@ -136,7 +138,7 @@ test('probe cancellation asks its existing host to clean up before collecting it
 for (const failure of ['uncollected', 'bad-exit', 'missing-receipt']) test(`probe keeps its synthetic lock after ${failure}`, async t => {
   let releases = 0;
   const result = await runFinderProbe({ ownerAway: true }, {
-    hold: () => false, lock: async () => async () => { releases++; },
+    hold: () => false, tempRoot: tmpdir(), lock: async () => async () => { releases++; },
     run: async (_command, args) => {
       const request = JSON.parse(args[3]);
       trackTemp(request.fixtureRoot); t.after(() => rmSync(request.fixtureRoot, { recursive: true, force: true }));
@@ -175,7 +177,7 @@ test('native probe route uses one existing Finder incarnation without a launch o
 for (const when of ['before-release', 'after-release']) test(`receipt failure ${when} reports the actual synthetic lock state`, async t => {
   let releases = 0, writes = 0;
   const operation = runFinderProbe({ ownerAway: true }, {
-    hold: () => false, lock: async () => async () => { releases++; },
+    hold: () => false, tempRoot: tmpdir(), lock: async () => async () => { releases++; },
     persist: () => {
       writes++;
       if (when === 'before-release' || writes === 2) throw new Error('offline receipt failure');
@@ -194,4 +196,123 @@ for (const when of ['before-release', 'after-release']) test(`receipt failure ${
     assert.equal(result.passed, false);
     assert.equal(releases, 1);
   }
+});
+
+for (const debug of [false, true]) test(`raw setup and cleanup failures use only the diagnostic channel (debug=${debug})`, () => {
+  const f = fixture(), diagnostics = [];
+  f.clock.debugFailure = debug ? (step, error) => f.source.finderProbeDebug(step, error, text => diagnostics.push(text)) : null;
+  const setupError = new Error('local setup: Recents'), cleanupError = new Error('local cleanup: Recents');
+  f.api.menu = () => { throw setupError; };
+  f.api.closeButton = () => { throw cleanupError; };
+  const originalMenu = f.api.menu, result = f.run();
+  assert.equal(result.passed, false);
+  assert.equal(result.panel.commandAttempted, false);
+  assert.equal(result.cleanupConfirmed, false);
+  assert.equal(result.failure.failureReason, 'unclassified');
+  assert.equal(result.cleanupFailure.failureReason, 'unclassified');
+  assert.doesNotMatch(JSON.stringify([result, f.events]), /local setup|local cleanup|stack:/);
+  assert.equal(f.api.menu, originalMenu, 'probe restores instrumented methods');
+  if (debug) {
+    assert.ok(diagnostics.some(text => text.includes('step=setup.menu') && text.includes(setupError.message) && text.includes(setupError.stack)));
+    assert.ok(diagnostics.some(text => text.includes('step=cleanup.closeButton') && text.includes(cleanupError.message) && text.includes(cleanupError.stack)));
+  } else assert.deepEqual(diagnostics, []);
+});
+
+test('debug reports a cleanup refusal that returns instead of throwing', () => {
+  const f = fixture({ failure: 'location' }), diagnostics = [];
+  f.clock.debugFailure = (step, error) => diagnostics.push([step, error.message]);
+  const result = f.run();
+  assert.equal(result.cleanupConfirmed, false);
+  assert.ok(diagnostics.some(([step]) => step === 'cleanup.recoverSetup'));
+});
+
+test('a failed final snapshot cannot pass the probe after a confirmed fixture close', () => {
+  const f = fixture(), inventory = f.api.windows;
+  let closed = false;
+  f.api.emit = event => { if (event.stage === 'finder-cleanup') closed = true; };
+  f.api.windows = () => { if (closed) throw new Error('offline final snapshot failed'); return inventory(); };
+  const result = f.run();
+  assert.equal(result.cleanupConfirmed, true);
+  assert.equal(result.cleanupFailure.failureReason, 'unclassified');
+  assert.equal(result.passed, false);
+  assert.deepEqual(f.closed, [f.owned]);
+});
+
+test('a failed diagnostic writer or error getter cannot replace the original failure', () => {
+  const f = fixture(), error = {};
+  for (const key of ['message', 'stack']) Object.defineProperty(error, key, { get() { throw new Error('getter failed'); } });
+  const messages = [];
+  assert.doesNotThrow(() => f.source.finderProbeDebug('offline', error, text => messages.push(text)));
+  assert.match(messages[0], /message: unavailable\nstack: unavailable/);
+  assert.doesNotThrow(() => f.source.finderProbeDebug('offline', new Error('original'), () => { throw new Error('stderr failed'); }));
+});
+
+for (const debug of [false, true]) test(`runner forwards helper debug only to stderr and preserves both sanitized receipt writes (debug=${debug})`, async t => {
+  const diagnostics = [], persisted = [], f = fixture(), local = 'local-only error and stack for Recents\n';
+  f.api.menu = () => { throw new Error('offline pre-command failure'); };
+  let releases = 0;
+  const result = await runFinderProbe({ ownerAway: true, debug }, {
+    hold: () => false, tempRoot: tmpdir(), stderr: text => diagnostics.push(text),
+    lock: async () => async () => { releases++; },
+    persist: receipt => persisted.push(JSON.stringify(receipt)),
+    run: async (_command, args) => {
+      const request = JSON.parse(args[3]);
+      trackTemp(request.fixtureRoot); t.after(() => rmSync(request.fixtureRoot, { recursive: true, force: true }));
+      assert.equal(request.debug, debug);
+      return { groupClean: true, exit: { code: 0 }, stdout: JSON.stringify(f.run()), stderr: local };
+    },
+  });
+  assert.equal(result.passed, false);
+  assert.equal(result.panel.commandAttempted, false);
+  assert.equal(result.cleanupConfirmed, true);
+  assert.equal(result.liveLockKept, false);
+  assert.deepEqual(f.closed, [f.owned]);
+  assert.equal(releases, 1);
+  assert.equal(persisted.length, 2);
+  assert.doesNotMatch(JSON.stringify([result, persisted]), /local-only|offline pre-command|stack:/);
+  assert.deepEqual(diagnostics, debug ? [local] : []);
+});
+
+test('debug reports a runner failure before authorization without starting a helper', async () => {
+  const diagnostics = [];
+  await assert.rejects(runFinderProbe({ debug: true }, { stderr: text => diagnostics.push(text) }), /owner-away/);
+  assert.match(diagnostics[0], /step=authorization/);
+  assert.match(diagnostics[0], /message: Finder probe requires explicit --owner-away/);
+  assert.match(diagnostics[0], /stack: Error:/);
+});
+
+for (const debug of [false, true]) test(`native probe writes raw failure only to local stderr (debug=${debug})`, () => {
+  const f = fixture(), diagnostics = [], target = { processIdentifier: 42, bundleIdentifier: 'com.apple.finder' };
+  const error = new Error('local Go-menu error for Recents');
+  f.api.menu = () => { throw error; };
+  const native = value => ({ dataUsingEncoding: () => value });
+  Object.assign(native, {
+    AXIsProcessTrusted: () => true,
+    NSRunningApplication: { runningApplicationsWithBundleIdentifier: () => ({ count: 1, objectAtIndex: () => target }) },
+    NSData: { dataWithContentsOfFile: () => ({ isNil: () => false }) },
+    NSString: { alloc: { initWithDataEncoding: () => '{"cancelled":false}' } },
+    NSFileHandle: { fileHandleWithStandardError: { writeData: text => diagnostics.push(text) } },
+  });
+  f.source.$ = native; f.source.ObjC.unwrap = value => value;
+  f.source.finderProcessBirth = () => '1.000000';
+  f.api.app = () => ({});
+  f.source.nativeAX = () => f.api;
+  const root = ['', 'private', 'tmp', 'sleight-finder-probe-OFFLINE'].join('/');
+  const stdout = f.source.runFinderSetupProbe({ bundle: 'com.apple.finder', ownerAway: true, stopOnLiveHold: true,
+    debug, fixtureRoot: root, target: root + '/Finder-probe', control: root + '/control.json' }, () => {});
+  const result = JSON.parse(stdout);
+  assert.equal(result.panel.commandAttempted, false);
+  assert.equal(result.cleanupConfirmed, true);
+  assert.doesNotMatch(stdout, /local Go-menu|stack:/);
+  if (debug) assert.ok(diagnostics.some(text => text.includes('step=setup.menu') && text.includes(error.message) && text.includes(error.stack)));
+  else assert.deepEqual(diagnostics, []);
+});
+
+test('menu cancellation diagnostics include the swallowed cleanup error without putting it in a receipt', () => {
+  const f = fixture(), diagnostics = [], error = new Error('local cancellation failed');
+  assert.throws(() => f.source.chooseFileMenu({}, ['Go'], {
+    tracksOpeningAttempt: true, press: (_element, attempt) => attempt(), children: () => [],
+    cancel: () => { throw error; }, debugFailure: (step, failure) => diagnostics.push([step, failure]),
+  }), /menu item unavailable/);
+  assert.deepEqual(diagnostics, [['menu cancellation', error]]);
 });

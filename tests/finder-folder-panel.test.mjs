@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync, rmSync } from 'node:fs';
 import { runInNewContext } from 'node:vm';
+import { tmpdir } from 'node:os';
 import { runFinderProbe } from '../bench/finder-probe.mjs';
 import { trackTemp } from '../scripts/temp-leftovers.mjs';
 
@@ -131,6 +132,71 @@ function retainedPanel() {
   assert.equal(f.request.finderOwnership.folderPanel.reference, f.panel);
   return f;
 }
+
+test('pre-command validation never reads sheet geometry and closes only its new window on failure', async t => {
+  const f = fixture({ measuredSheet: true }), original = f.api.menu;
+  let releases = 0, frameReads = 0;
+  f.api.frame = () => { frameReads++; throw new Error('must not read geometry before the command'); };
+  f.api.menu = function (app, name, ...args) {
+    if (name === 'Go') throw new Error('offline Go-menu failure');
+    return original.call(this, app, name, ...args);
+  };
+  const result = await runFinderProbe({ ownerAway: true }, {
+    hold: () => false, tempRoot: tmpdir(), lock: async () => async () => { releases++; },
+    run: async (_command, args) => {
+      const request = JSON.parse(args[3]);
+      trackTemp(request.fixtureRoot); t.after(() => rmSync(request.fixtureRoot, { recursive: true, force: true }));
+      return { groupClean: true, exit: { code: 0 }, stdout: JSON.stringify(f.probe()) };
+    },
+  });
+  assert.equal(result.panel.commandAttempted, false);
+  assert.equal(frameReads, 0);
+  assert.equal(result.cleanupConfirmed, true);
+  assert.equal(result.liveLockKept, false);
+  assert.equal(releases, 1);
+  assert.deepEqual(f.app.AXWindows, [f.owner]);
+  assert.equal(f.actions.some(([target]) => target === f.goItem), false);
+});
+
+test('a failing retention callback still leaves a documentless cleanup receipt', () => {
+  const f = fixture();
+  let owned;
+  assert.throws(() => f.source.openFinderFolder(f.request, f.app, f.owner, f.api, f.clock, window => {
+    owned = window;
+    throw new Error('offline retention failure');
+  }), /offline retention failure/);
+  assert.equal(f.request.finderOwnership.folderPanel, undefined);
+  assert.equal(f.source.recoverSetup(owned, f.request, f.api, f.app, {}), 'closed retained fixture');
+  assert.deepEqual(f.app.AXWindows, [f.owner]);
+  assert.equal(f.actions.some(([target]) => target === f.goItem), false);
+});
+
+for (const attribute of ['AXPosition', 'AXSize']) test(`unsupported initial ${attribute} retains equality-only sheet identity`, () => {
+  const f = fixture({ measuredSheet: true });
+  f.api.frame = () => { throw Object.assign(new Error('unsupported geometry'), { code: -25205, attribute }); };
+  assert.equal(f.open(), f.window);
+  assert.equal(f.request.finderOwnership.folderPanel.sheetGeometry, undefined);
+  assert.equal(f.recover(), 'closed retained fixture');
+  assert.deepEqual(f.app.AXWindows, [f.owner]);
+});
+
+for (const attribute of ['AXPosition', 'AXSize']) test(`unsupported initial ${attribute} never authorizes a replacement sheet`, () => {
+  const f = fixture({ measuredSheet: true, fail: 'before-write' });
+  f.api.frame = () => { throw Object.assign(new Error('unsupported geometry'), { code: -25205, attribute }); };
+  assert.throws(f.open, /setup failure before navigation/);
+  revendedSheet(f); f.panel.gone = true;
+  assert.throws(f.submit, /sheet identity changed|AX fixture read failed/);
+  assert.throws(f.recover, /sheet identity changed|inventory|Foreign Finder/);
+  assert.deepEqual(f.writes, []); assert.deepEqual(f.keys, []);
+});
+
+for (const attribute of ['AXPosition', 'AXSize']) test(`unsupported retained ${attribute} fails the existing geometry binding`, () => {
+  const f = retainedPanel();
+  f.api.frame = () => { throw Object.assign(new Error('unsupported geometry'), { code: -25205, attribute }); };
+  assert.throws(f.submit, /sheet identity changed/);
+  assert.throws(f.recover, /sheet identity changed/);
+  assert.deepEqual(f.writes, []); assert.deepEqual(f.keys, []);
+});
 
 function revendedSheet(f, changes = {}) {
   const panel = { ...f.panel, testFrame: { ...f.panel.testFrame }, ...changes };

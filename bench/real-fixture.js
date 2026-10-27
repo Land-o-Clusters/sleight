@@ -386,13 +386,13 @@ function openFinderFolder(request, app, previous, api, clock, retain) {
     if (fresh.length === 1) {
       window = fresh[0];
       request.finderOwnership.created.push(window);
-      retain(window);
       // Capture only Finder's known documentless default. Folder names never
       // authorize this fallback, even when they were read at creation.
       if (!api.text(window, 'AXDocument') && !api.text(window, 'AXURL')) {
         var title = api.text(window, 'AXTitle');
         if (title === 'Recents') request.finderOwnership.documentless.push({ reference: window, title: title });
       }
+      retain(window);
       if (clock.emit) clock.emit(Object.assign({ stage: 'finder-window-retained', referenceExported: false }, request.finderScrollAreas));
       break;
     }
@@ -767,6 +767,7 @@ function chooseFileMenu(file, titles, api) {
   } catch (error) {
     try { if (openingAttempted) api.cancel(menus.length === 1 ? menus[0] : file); }
     catch (failure) {
+      if (api.debugFailure) api.debugFailure('menu cancellation', failure);
       if (api.tracksOpeningAttempt) error.finderMenuCleanupFailure = finderStaticFailure(failure);
       error.menuCleanupError = failure.message;
     }
@@ -926,6 +927,18 @@ function closeFinderFixtureWindows(owned, request, app, api) {
 function finderSetupProbe(request, app, api, clock) {
   var owned, baseline, fileMenu = api.fileMenu;
   var result = { probe: 'finder-setup', passed: false, snapshots: [], cleanupConfirmed: false };
+  var phase = 'setup', originals = {};
+  // Diagnostics stay on the local stderr channel. Never attach errors or
+  // stacks to the receipt, including errors swallowed by nested cleanup.
+  if (clock.debugFailure) Object.keys(api).forEach(function (name) {
+    if (typeof api[name] !== 'function') return;
+    var original = originals[name] = api[name];
+    api[name] = function () {
+      try { return original.apply(this, arguments); }
+      catch (error) { clock.debugFailure(phase + '.' + name, error); throw error; }
+    };
+  });
+  fileMenu = api.fileMenu;
   function snapshot(phase, fresh) {
     var receipt = request.finderOwnership, current = finderRoleInventory(app, api, receipt, 'cleanup-inventory');
     baseline = baseline || receipt.baseline;
@@ -964,60 +977,91 @@ function finderSetupProbe(request, app, api, clock) {
     if (!root || !path || !(path === root || path.indexOf(root + '/') === 0)) throw new Error('Finder fixture identity changed');
     snapshot('after-navigation', owned);
     result.navigationConfirmed = true;
-  } catch (error) { result.failure = finderStaticFailure(error); }
+  } catch (error) {
+    if (clock.debugFailure) clock.debugFailure('setup', error);
+    result.failure = finderStaticFailure(error);
+  }
   finally {
     api.fileMenu = fileMenu;
+    phase = 'cleanup';
     var panel = request.finderOwnership && request.finderOwnership.folderPanel;
     if (panel) result.panel = { commandAttempted: panel.attempted === true, retained: !!panel.reference,
       role: panel.role || null, subrole: panel.subrole || null, parentConfirmed: !!panel.reference };
     // Cancellation ends setup but leaves a separate bounded cleanup window.
-    if (clock.beginCleanup) clock.beginCleanup();
     try {
+      if (clock.beginCleanup) clock.beginCleanup();
       if (owned) {
         var failure = {};
         result.cleanup = recoverSetup(owned, request, api, app, failure);
-        if (result.cleanup !== 'closed retained fixture') result.cleanupFailure = failure;
+        if (result.cleanup !== 'closed retained fixture') {
+          if (clock.debugFailure) clock.debugFailure('cleanup.recoverSetup', new Error('Finder cleanup returned ' + result.cleanup));
+          result.cleanupFailure = failure;
+        }
         result.cleanupConfirmed = result.cleanup === 'closed retained fixture';
       }
       if (request.finderOwnership) snapshot('after-cleanup');
-    } catch (error) { result.cleanupFailure = finderStaticFailure(error); }
+    } catch (error) {
+      if (clock.debugFailure) clock.debugFailure('cleanup', error);
+      result.cleanupFailure = finderStaticFailure(error);
+    }
+    Object.keys(originals).forEach(function (name) { api[name] = originals[name]; });
   }
-  result.passed = !result.failure && result.navigationConfirmed === true && result.cleanupConfirmed &&
+  result.passed = !result.failure && !result.cleanupFailure && result.navigationConfirmed === true && result.cleanupConfirmed &&
     result.snapshots.length > 0 && result.snapshots.every(function (row) { return row.ownerWindowsEqual; });
   return result;
 }
 
-function runFinderSetupProbe(request, free) {
-  if (request.ownerAway !== true || request.bundle !== 'com.apple.finder' ||
-      !/^\/private\/tmp\/sleight-finder-probe-[A-Za-z0-9]+$/.test(request.fixtureRoot || '') ||
-      request.target !== request.fixtureRoot + '/Finder-probe' || request.control !== request.fixtureRoot + '/control.json' ||
-      request.stopOnLiveHold !== true || !$.AXIsProcessTrusted()) throw new Error('Invalid Finder probe request');
-  function application() {
-    var values = $.NSRunningApplication.runningApplicationsWithBundleIdentifier('com.apple.finder');
-    if (Number(values.count) !== 1) throw new Error('Ambiguous fixture process');
-    return values.objectAtIndex(0);
+function finderProbeDebug(step, error, write) {
+  function field(name) {
+    try { return String(error && error[name] || 'unavailable'); }
+    catch (_) { return 'unavailable'; }
   }
-  var target = application(), pid = runningPid(target), birth = finderProcessBirth(pid);
-  if (!(pid > 0) || !finderBirthParts(birth)) throw new Error('Finder probe process identity unavailable');
-  var cleanup = false, deadline = Date.now() + 20000;
-  var clock = { emit: function () {}, now: function () { return Date.now(); }, wait: function (ms) { waitForLaunch(ms / 1000); },
-    beginCleanup: function () { cleanup = true; deadline = Date.now() + 10000; },
-    check: function () {
-      free();
-      var current = application();
-      if (runningPid(current) !== pid || current.isTerminated || runningBundle(current) !== 'com.apple.finder' ||
-          finderProcessBirth(pid) !== birth) throw new Error('Fixture process changed');
-      if (Date.now() >= deadline) throw new Error('Finder probe deadline reached');
-      if (!cleanup) {
-        var data = $.NSData.dataWithContentsOfFile(request.control);
-        if (data.isNil()) throw new Error('Finder setup control unavailable');
-        var control = JSON.parse(ObjC.unwrap($.NSString.alloc.initWithDataEncoding(data, $.NSUTF8StringEncoding)));
-        if (control.cancelled === true) throw new Error('Fixture opening interrupted before identity was recorded');
-      }
-    } };
-  var api = nativeAX({ bundle: 'com.apple.finder', setup: true }, clock);
-  clock.check();
-  return JSON.stringify(finderSetupProbe(Object.assign({}, request, { mode: 'folder', token: 'Finder-probe' }), api.app(target), api, clock));
+  // A failed diagnostic must not replace the original failure or block cleanup.
+  try { write('[finder-probe debug] step=' + step + '\nmessage: ' + field('message') + '\nstack: ' + field('stack') + '\n'); }
+  catch (_) {}
+}
+
+function runFinderSetupProbe(request, free) {
+  var debugFailure = request.debug === true ? function (step, error) {
+    finderProbeDebug(step, error, function (message) {
+      $.NSFileHandle.fileHandleWithStandardError.writeData($(message).dataUsingEncoding($.NSUTF8StringEncoding));
+    });
+  } : null;
+  try {
+    if (request.ownerAway !== true || request.bundle !== 'com.apple.finder' ||
+        !/^\/private\/tmp\/sleight-finder-probe-[A-Za-z0-9]+$/.test(request.fixtureRoot || '') ||
+        request.target !== request.fixtureRoot + '/Finder-probe' || request.control !== request.fixtureRoot + '/control.json' ||
+        request.stopOnLiveHold !== true || !$.AXIsProcessTrusted()) throw new Error('Invalid Finder probe request');
+    function application() {
+      var values = $.NSRunningApplication.runningApplicationsWithBundleIdentifier('com.apple.finder');
+      if (Number(values.count) !== 1) throw new Error('Ambiguous fixture process');
+      return values.objectAtIndex(0);
+    }
+    var target = application(), pid = runningPid(target), birth = finderProcessBirth(pid);
+    if (!(pid > 0) || !finderBirthParts(birth)) throw new Error('Finder probe process identity unavailable');
+    var cleanup = false, deadline = Date.now() + 20000;
+    var clock = { emit: function () {}, debugFailure: debugFailure, now: function () { return Date.now(); }, wait: function (ms) { waitForLaunch(ms / 1000); },
+      beginCleanup: function () { cleanup = true; deadline = Date.now() + 10000; },
+      check: function () {
+        free();
+        var current = application();
+        if (runningPid(current) !== pid || current.isTerminated || runningBundle(current) !== 'com.apple.finder' ||
+            finderProcessBirth(pid) !== birth) throw new Error('Fixture process changed');
+        if (Date.now() >= deadline) throw new Error('Finder probe deadline reached');
+        if (!cleanup) {
+          var data = $.NSData.dataWithContentsOfFile(request.control);
+          if (data.isNil()) throw new Error('Finder setup control unavailable');
+          var control = JSON.parse(ObjC.unwrap($.NSString.alloc.initWithDataEncoding(data, $.NSUTF8StringEncoding)));
+          if (control.cancelled === true) throw new Error('Fixture opening interrupted before identity was recorded');
+        }
+      } };
+    var api = nativeAX({ bundle: 'com.apple.finder', setup: true }, clock);
+    clock.check();
+    return JSON.stringify(finderSetupProbe(Object.assign({}, request, { mode: 'folder', token: 'Finder-probe' }), api.app(target), api, clock));
+  } catch (error) {
+    if (debugFailure) debugFailure('probe host', error);
+    throw error;
+  }
 }
 
 // Word put an untitled document's Don't Save sheet only behind AXFocusedUIElement, absent from AXWindows and AXSheets
@@ -1430,8 +1474,12 @@ function nativeAX(state, clock) {
       if (capture) capture.roleValueProbe = function () { return roleValueDiagnostic(object); };
       return object;
     };
-    if (state && (state.cleanup || state.observation)) return cleanupRead(operation, state, clock);
-    return state && state.officeWaiting ? operation() : setupRead(operation, state, clock);
+    var checked = function () {
+      try { return operation(); }
+      catch (error) { if (clock && clock.debugFailure) clock.debugFailure('AX read ' + attribute, error); throw error; }
+    };
+    if (state && (state.cleanup || state.observation)) return cleanupRead(checked, state, clock);
+    return state && state.officeWaiting ? checked() : setupRead(checked, state, clock);
   }
   function text(element, attribute, capture) {
     var value = read(element, attribute, undefined, capture), raw = value ? ObjC.unwrap(value) : value;
@@ -1523,6 +1571,7 @@ function nativeAX(state, clock) {
     if (files.length !== 1) throw new Error('Fixture needs the ' + name + ' menu');
     var trackedOpening = finderBaseline === true && state.bundle === 'com.apple.finder', commandGuard = trackedOpening ? beforePress : undefined;
     chooseFileMenu(files[0], titles, { tracksOpeningAttempt: trackedOpening, commandAttempt: commandAttempt,
+      debugFailure: clock && clock.debugFailure,
       press: function (element, onAttempt) { press(element, commandGuard, onAttempt); }, children: children, text: text,
       beforePress: function () { commandGuard = beforePress; },
       enabled: function (item) { return Number(ObjC.unwrap(read(item, 'AXEnabled'))) === 1; }, cancel: function (menu) {
@@ -1643,7 +1692,14 @@ function nativeAX(state, clock) {
     return folderPanels.filter(function (entry) { return equal(entry.reference, panel); })[0];
   }
   function finderSheetGeometry(panel) {
-    var frame = api.frame(panel), number = text(panel, 'AXWindowNumber');
+    var frame = null;
+    try { frame = api.frame(panel); }
+    catch (error) {
+      // Geometry is optional only for the initial equality-only binding. A
+      // bound sheet with missing geometry still fails finderSheetShape.
+      if (error.code !== -25205 || ['AXPosition', 'AXSize'].indexOf(error.attribute) === -1) throw error;
+    }
+    var number = text(panel, 'AXWindowNumber');
     return { frame: frame && { x: frame.x, y: frame.y, width: frame.width, height: frame.height }, number: number };
   }
   function finderSheetShape(panel, receipt) {
@@ -1928,6 +1984,7 @@ function nativeAX(state, clock) {
       if (goToWindow) {
         try { finderPanelKey(app, window, panel, 53, check); }
         catch (error) {
+          if (clock && clock.debugFailure) clock.debugFailure('panel Escape', error);
           // Direct AX cancellation can still target our retained panel when a
           // focus change or unrelated dialog makes keyboard input unsafe.
           if (['Finder folder keyboard target unconfirmed', 'Finder folder window lost focus',
