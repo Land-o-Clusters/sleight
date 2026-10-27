@@ -201,6 +201,9 @@ final class ConsentInputAction: NSObject {
         button.sendAction(on: .leftMouseUp)
     }
     func trackMouseDown(_ event: NSEvent, perform: () -> Void) {
+        // AppKit may end tracking without dispatching an action. Refuse a posted down here so
+        // a protected button always reports it, even when no mouse-up action follows.
+        guard personInput(event.cgEvent) else { refuseConsentInput(button); return }
         mouseDown = event
         defer { mouseDown = nil }
         perform()

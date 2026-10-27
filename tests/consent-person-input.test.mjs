@@ -36,13 +36,17 @@ test('Swift consent input fixture refuses AX and posted input but admits a HID e
   assert.ok(block, 'person input guard absent');
   const dir = registerTemp(t, trackTemp(realpathSync(mkdtempSync(join(tmpdir(), 'sleight-person-input-')))));
   const binary = join(dir, 'fixture'), swift = join(dir, 'main.swift');
-  writeFileSync(swift, 'import AppKit\nimport Carbon.HIToolbox\nimport ObjectiveC\nimport Darwin\nimport os.log\n' + block[1] + readFileSync(new URL('./fixtures/consent-person-input.swift', import.meta.url), 'utf8'));
+  // Observe the production refusal function without changing any input or dispatch decision.
+  const observed = block[1].replace('let reason = tooSoon ? "CONSENT_TOO_SOON" : "PERSON_INPUT_REQUIRED"',
+    'let reason = tooSoon ? "CONSENT_TOO_SOON" : "PERSON_INPUT_REQUIRED"\n    fixtureRefusals.append(reason)');
+  writeFileSync(swift, 'import AppKit\nimport Carbon.HIToolbox\nimport ObjectiveC\nimport Darwin\nimport os.log\nvar fixtureRefusals: [String] = []\n' + observed + readFileSync(new URL('./fixtures/consent-person-input.swift', import.meta.url), 'utf8'));
   const built = spawnSync('/usr/bin/xcrun', ['swiftc', '-module-cache-path', swiftModuleCache(), swift, '-o', binary], { encoding: 'utf8', timeout: 600000 });
   assert.equal(built.status, 0, built.stderr);
   const run = spawnSync(binary, [], { encoding: 'utf8', timeout: 10000 });
   assert.equal(run.status, 0, run.stderr + run.stdout);
   const receipts = JSON.parse(run.stdout);
-  assert.deepEqual(receipts, { refused: [], accepted: ['Always allow', 'Always allow', 'Allow this session', 'Decline', 'Always allow'] });
+  assert.deepEqual(receipts, { refused: [], accepted: ['Always allow', 'Always allow', 'Allow this session', 'Decline', 'Always allow'],
+    handoffRefusals: Array(4).fill('PERSON_INPUT_REQUIRED') });
   assert.ok(run.stderr.trim().split('\n').every(line => line === 'sleight consent refused: PERSON_INPUT_REQUIRED'));
   // Send only receipts that crossed the native action to the actual grant pipeline. A refused input emits none.
   const path = join(dir, 'grants.json'), store = createGrantStore({ path }), presented = [];
