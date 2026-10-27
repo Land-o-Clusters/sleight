@@ -68,7 +68,7 @@ test('five eager schemas use type arrays without schema compositions at any leve
   assert.deepEqual(tools[0].inputSchema.properties.browser.enum, ['bfixture']);
   assert.ok(JSON.stringify(tools).length < 8000);
 });
-function fixture() {
+function fixture({ fullObservation = false } = {}) {
   const calls = [], state = { snapshotNo: 0, submitUnconfirmed: false };
   const page = Object.freeze({ title: async () => 'Fixture', url: () => 'https://example.invalid/' });
   const tab = { page, state };
@@ -83,13 +83,25 @@ function fixture() {
   let number = 0;
   const dispatcher = createToolDispatcher({ browser: 'bfixture', pages,
     snapshot: async (p, opts) => { assert.equal(p, page); calls.push(['snapshot', opts]); return { text: 'untrusted snapshot', number: ++number }; },
-    runSteps: async (t, steps, ctx) => { assert.equal(t, tab); calls.push(['act', steps, ctx]); return { lines: ['1 click e1: done'], stoppedAt: null, observe: { text: '+ changed', number: ++number, capturedAt: Date.now() } }; },
+    runSteps: async (t, steps, ctx) => { assert.equal(t, tab); calls.push(['act', steps, ctx]); return { lines: ['1 click e1: done'], stoppedAt: null, fullObservation, observe: { text: '+ changed', number: ++number, capturedAt: Date.now() } }; },
     fillFields: async (t, fields, opts, ctx) => { assert.equal(t, tab); calls.push(['fill', fields, opts, ctx]); return { rows: fields.map(f => ({ ref: f.ref, status: 'set' })), submitted: { status: 'done' } }; },
     ctx: { userMessage: { source: 'user', text: 'trusted' } },
     deliverSnapshot: (s, capture) => { assert.equal(s, state); s.snapshotNo = capture.number; return true; },
   });
   return { dispatcher, calls, state };
 }
+test('PF7 dispatcher delivers the exact full observation receipt without a second capture', async () => {
+  for (const fullObservation of [false, true]) {
+    const { dispatcher: d, calls, state } = fixture({ fullObservation });
+    const result = await d.call({ name: 'browser_act', arguments: { tab: 't1', steps: [{ do: 'click', ref: 'e1' }], observe: 'full' } });
+    assert.equal(result.isError, false);
+    assert.equal(calls.filter(call => call[0] === 'snapshot').length, fullObservation ? 0 : 1);
+    assert.equal(state.snapshotNo, 0);
+    assert.equal(d.delivered({ ...result }), false);
+    assert.equal(d.delivered(result), true);
+    assert.equal(state.snapshotNo, fullObservation ? 1 : 2);
+  }
+});
 test('open returns its owned tab and first snapshot without delivering a private read', async () => {
   const { dispatcher: d, calls, state } = fixture();
   const out = await d.call({ name: 'browser_open', arguments: { url: 'https://example.invalid/' } });

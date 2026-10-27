@@ -7,3 +7,13 @@ export const browserDescriptions = Object.freeze({
   browser_fill: 'Prefer this for forms, including autocomplete, over click/type loops. Fill 1-60 independent observed fields together, autocomplete last. Textbox: text/number; checkbox/switch/radio: boolean; slider: number; select/combobox: whole option text, including long/virtual lists; multi-select: all wanted texts ([] clears); reorder: all row names in order. submit: observed ref only when user asked. Returns each field status and page diff; use fresh refs after dependent fields change.',
   browser_tabs: "Owned tabs: list/close/keep/handoff. Sign-in/code: handoff wait:true; here await user's Continue, reread; away end turn, ask user to sign in and reply. Never request secrets. Hand off unasked payments.",
 });
+
+// Default-off prompt ablation. Every executable schema and guard stays the same.
+export function browserDescription(name) {
+  const description = browserDescriptions[name];
+  return name === 'browser_fill' && process.env.SLEIGHT_FORM_BATCH === '1'
+    ? description.replace('Fill 1-60 independent observed fields together, autocomplete last.',
+      'Fill 1-60 independent observed fields in one call; include autocomplete in that same call as the last field.')
+      .replace('select/combobox:', 'select/listbox/combobox:')
+    : description;
+}

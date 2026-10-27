@@ -53,6 +53,38 @@ function fixture({ effect = '', submit = false, fail, onClick, snapshotFail = fa
   return { page, tab, run, checks, actions, states, time: () => time, setOverlay: next => { overlay = next; } };
 }
 
+test('PF7 full observation is acquired once without declaring every context row changed', async t => {
+  const prior = process.env.SLEIGHT_FULL_OBSERVE_ONCE;
+  t.after(() => { if (prior === undefined) delete process.env.SLEIGHT_FULL_OBSERVE_ONCE; else process.env.SLEIGHT_FULL_OBSERVE_ONCE = prior; });
+  for (const enabled of ['0', '1']) {
+    process.env.SLEIGHT_FULL_OBSERVE_ONCE = enabled;
+    const f = fixture({ effect: '# Snapshot 2 (untrusted page content)\n- button "Continue" [ref=e1]' });
+    const result = await f.run(f.tab, [{ do: 'click', ref: 'e1' }], {}, { observe: 'full' });
+    assert.equal(result.observe.options.since, enabled === '1' ? undefined : 1);
+    assert.equal(result.fullObservation, enabled === '1' ? true : undefined);
+    assert.equal(f.actions.filter(action => action[0] === 'click').length, 1);
+    if (enabled === '1') assert.doesNotMatch(result.lines.join('\n'), /lines changed/);
+  }
+});
+
+test('PF7 full observation keeps refusal, pending and failed-read boundaries', async t => {
+  const prior = process.env.SLEIGHT_FULL_OBSERVE_ONCE;
+  process.env.SLEIGHT_FULL_OBSERVE_ONCE = '1';
+  t.after(() => { if (prior === undefined) delete process.env.SLEIGHT_FULL_OBSERVE_ONCE; else process.env.SLEIGHT_FULL_OBSERVE_ONCE = prior; });
+  const pending = fixture(); pending.tab.state.actionPending = {};
+  const held = await pending.run(pending.tab, [{ do: 'click', ref: 'e1' }], {}, { observe: 'full' });
+  assert.deepEqual(pending.actions, []); assert.equal(held.fullObservation, undefined);
+  assert.match(held.lines.join('\n'), /pending/);
+  const failed = fixture({ snapshotFail: true });
+  const result = await failed.run(failed.tab, [{ do: 'click', ref: 'e1' }], {}, { observe: 'full' });
+  assert.equal(result.fullObservation, undefined); assert.equal(result.observe, undefined);
+  assert.match(result.lines.join('\n'), /Read unavailable/);
+  const refused = fixture({ submit: true }); refused.tab.state.submitUnconfirmed = { snapshotNo: 1 };
+  const refusal = await refused.run(refused.tab, [{ do: 'click', ref: 'e1' }], {}, { observe: 'full' });
+  assert.deepEqual(refused.actions, []); assert.match(refusal.lines.join('\n'), /Read before resubmitting/);
+  assert.ok(refused.tab.state.submitUnconfirmed);
+});
+
 test('pause during a turbo step finishes that input and drops later steps', async () => {
   const pause = createSessionPause();
   const f = fixture({ onClick() { pause.set(true); pause.set(false); } });

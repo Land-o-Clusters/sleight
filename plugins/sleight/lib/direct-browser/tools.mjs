@@ -12,7 +12,8 @@ import { handoffMessages } from './handoff.mjs';
 import { siteMemoryFromEnvironment } from '../site-memory.mjs';
 import { readWhole, validateWholeOptions } from './whole.mjs';
 import { validatePointStep, pointInputEnabled } from './points.mjs';
-import { browserDescriptions } from './tool-surface.mjs';
+import { browserDescription } from './tool-surface.mjs';
+export const popupObservationHeader = 'New tab <tab> (untrusted page content):';
 // v3's five eagerly advertised tools. No generic JavaScript or authority fields.
 const object = (properties, required) => ({ type: 'object', properties, required, additionalProperties: false });
 // validate() caps every string at 65536 characters, so the catalog leaves that limit out.
@@ -63,8 +64,8 @@ export function browserTools(browser) {
       inputSchema: object({ do: { type: 'string', enum: ['list', 'close', 'keep', 'handoff'] }, tab, wait: { type: 'boolean' } }, ['do']) },
   ].map(tool => structuredClone(process.env.SLEIGHT_MT === '0' ? tool : { ...tool,
     description: tool.name === 'browser_act'
-      ? browserDescriptions[tool.name].replace(' Cookies:', pointDescription + ' Cookies:')
-      : browserDescriptions[tool.name] }));
+      ? browserDescription(tool.name).replace(' Cookies:', pointDescription + ' Cookies:')
+      : browserDescription(tool.name) }));
 }
 
 function data(value, depth = 0) {
@@ -233,7 +234,7 @@ export function createToolDispatcher({ browser, pages, snapshot, runSteps, fillF
   };
   return Object.freeze({ tools: () => browserTools(browser),
     async call(input, { handoffDeadline, handoffDrain, handoffState, handoffPresent = true, pauseCheck } = {}) {
-      let request, started = false;
+      let request, started = false, popupObservation;
       const ordinal = ++callNo;
       const phase = name => { try { tracePhase?.(name, ordinal); } catch {} };
       try {
@@ -322,7 +323,7 @@ export function createToolDispatcher({ browser, pages, snapshot, runSteps, fillF
         const opener = request.name === 'browser_read' && !developerRead(a) ? pages.closedOpener?.(a.tab) : undefined;
         if (opener && a.export !== undefined) throw Error('Export ref belongs to a closed tab; read its opener for a fresh ref');
         if (opener) { closedNote = `${a.tab} closed itself; reading its opener ${opener}.`; const { ref: _stale, ...rest } = a; a = { ...rest, tab: opener }; }
-        return await pages.enqueue(a.tab, async entry => {
+        const result = await pages.enqueue(a.tab, async entry => {
           pauseCheck?.();
           if (ended) throw Error('turn ended');
           await entry.checkAttachment?.();
@@ -450,13 +451,22 @@ export function createToolDispatcher({ browser, pages, snapshot, runSteps, fillF
             const landed = siteLine(pageURL(entry));
             if (landed) return textResult([...lines, landed].join('\n'), true);
             let observed = result.observe;
-            if (a.observe === 'full' && observed) {
+            if (a.observe === 'full' && observed && result.fullObservation !== true) {
               try { observed = await capture(entry, { maxChars: 8000 }); }
               catch { observed = undefined; lines.push('Read unavailable; use browser_read before retrying.'); }
             }
             // A row that a scroll step found carries a ref from the page read, which only a delivered read makes usable.
             if (a.observe === 'none' && (!lossFixes || result.stoppedAt == null) && !lines.some(line => /\[ref=/.test(line))) observed = undefined;
-            return await finish(lines, observed?.text, entry, observed, picture ?? a.observe === 'screenshot');
+            const reply = await finish(lines, observed?.text, entry, observed, picture ?? a.observe === 'screenshot');
+            // Only the registry can name a child. Page text and target URLs confer no ownership.
+            // The read runs after this opener queue releases, so opposing queues cannot deadlock.
+            if (process.env.SLEIGHT_POPUP_OBSERVE === '1' && a.observe !== 'none' && a.observe !== 'screenshot' && !motion &&
+                !entry.state.actionPending && !entry.state.dialog && !entry.state.stuck) {
+              const opened = entry.popups?.slice(popupStart) ?? [];
+              if (opened.length === 1 && opened[0].tab && opened[0].tab !== a.tab && !opened[0].closed && !opened[0].blocked)
+                popupObservation = { parent: entry, notice: opened[0], tab: opened[0].tab };
+            }
+            return reply;
           }
           const result = await guardPageTask(entry, () => fillFields(entry, a.fields, { ...(pauseCheck ? { pauseCheck } : {}), submit: a.submit, ...(onAction ? { onAction } : {}) }, privateContext));
           if (result.paused) return textResult(JSON.stringify(result) + '\n' + PAUSED_NOTE, true);
@@ -470,6 +480,29 @@ export function createToolDispatcher({ browser, pages, snapshot, runSteps, fillF
           try { observed = await capture(entry, { since: entry.state.snapshotNo || undefined, maxChars: 8000 }); } catch { lines.push('Read unavailable; use browser_read before retrying.'); }
           return await finish(lines, observed?.text, entry, observed);
         });
+        if (popupObservation && !ended && !result.isError) {
+          const { parent, notice, tab } = popupObservation;
+          try {
+            const childResult = await pages.enqueue(tab, async child => {
+              pauseCheck?.();
+              if (ended || pages.tab(a.tab) !== parent || child.opener !== a.tab ||
+                  !parent.popups.includes(notice) || notice.closed || notice.blocked || child.state.stuck ||
+                  child.state.actionPending || child.state.dialog) throw Error('popup observation unavailable');
+              const observed = await capture(child, { maxChars: 8000 });
+              if (ended || pages.tab(tab) !== child || pages.tab(a.tab) !== parent || child.opener !== a.tab ||
+                  notice.closed || notice.blocked) throw Error('popup observation unavailable');
+              return finish([popupObservationHeader.replace('<tab>', tab)], observed.text, child, observed);
+            });
+            if (!ended && !childResult.isError) {
+              const text = result.text + '\n\n' + childResult.text, combined = textResult(text);
+              const parts = [deliveries.get(result), deliveries.get(childResult)].filter(Boolean);
+              deliveries.delete(result); deliveries.delete(childResult);
+              deliveries.set(combined, { parts, text, images: imageDigest(undefined) });
+              return combined;
+            }
+          } catch { /* Optional read failed. Preserve the opener's outcomes and delivery receipt. */ }
+        }
+        return result;
       } catch (error) {
         if (error.paused) return textResult(PAUSED_NOTE, true);
         if (error.recoveryOutcome) return textResult(error.message, true);
@@ -486,10 +519,14 @@ export function createToolDispatcher({ browser, pages, snapshot, runSteps, fillF
     delivered(result) {
       const record = deliveries.get(result); deliveries.delete(result);
       if (!record || ended || result.isError || result.text !== record.text || imageDigest(result.images) !== record.images) return false;
-      if (record.chooser) { record.state.chooserReported = record.chooser.chooser; record.state.hiddenReported = record.chooser.hidden; }
-      if (record.nativeNavigationNo) record.state.nativeNavigationReported = Math.max(record.state.nativeNavigationReported ?? 0, record.nativeNavigationNo);
-      const delivered = !!record.capture && deliverSnapshot(record.state, record.capture) === true;
-      if (delivered && record.hintOrigin) hintedOrigins.add(record.hintOrigin);
+      let delivered = false;
+      for (const part of record.parts ?? [record]) {
+        if (part.chooser) { part.state.chooserReported = part.chooser.chooser; part.state.hiddenReported = part.chooser.hidden; }
+        if (part.nativeNavigationNo) part.state.nativeNavigationReported = Math.max(part.state.nativeNavigationReported ?? 0, part.nativeNavigationNo);
+        const accepted = !!part.capture && deliverSnapshot(part.state, part.capture) === true;
+        if (accepted && part.hintOrigin) hintedOrigins.add(part.hintOrigin);
+        delivered ||= accepted;
+      }
       return delivered;
     },
     end() {
