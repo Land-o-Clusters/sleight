@@ -65,6 +65,10 @@ for (const command of ['ln -s ~/.local/bin/sleight /tmp/zz && /tmp/zz hand off',
   'cp ~/.local/bin/sleight /tmp/s; /tmp/s hand off']) {
   test(`managed short-path alias refuses ${command}`, async () => assert.equal(await target(command), PROTECTED.launcher));
 }
+// A launcher name as a directory of the command word still refuses (SM1R2 review). Never execute these strings.
+for (const command of ['/opt/sleight-mcp/run menu', './launch.mjs/x hand on', 'sleight-mcp/x hand on', 'env /opt/sleight-mcp/run menu']) {
+  test(`launcher directory in the command word refuses ${command}`, async () => assert.equal(await target(command), PROTECTED.launcher));
+}
 // Both launcher names use the same command-position check, including opaque wrappers. Never execute these strings.
 for (const form of [
   'if true; then CMD menu; fi', 'while true; do CMD hand on; done',

@@ -350,7 +350,7 @@ function segmentNamesLauncher(segment, depth = 0) {
   const code = INTERPRETERS.test(name) && plain.slice(index + 1).some(word => /^-(?:[a-zA-Z]*[ceE]|-eval)(?:=|$)/.test(word));
   const dataArguments = readTool(segment) || ['echo', 'printf', 'git', 'gh', 'npm'].includes(name) || INTERPRETERS.test(name) && !code;
   return segment.some((word, i) => !word.operator &&
-    (dataArguments && i !== index ? LAUNCHER_NAME.test(word.text) : launcherText(i === index ? name : word.text)));
+    (dataArguments && i !== index ? LAUNCHER_NAME.test(word.text) : (i === index ? launcherText(name) || LAUNCHER_NAME.test(word.text) : launcherText(word.text))));
 }
 function launcherRefused(command, depth = 0) {
   if (depth > 8) return true;
