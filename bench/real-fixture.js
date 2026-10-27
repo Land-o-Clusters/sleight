@@ -365,7 +365,9 @@ function openFinderFolder(request, app, previous, api, clock, retain) {
     clock.check();
     var fresh = candidates('validate');
     if (fresh.length !== 1 || !api.equal(fresh[0], window)) throw new Error('New Finder fixture window identity changed');
-    api.finderFolderGuard(app, window, sheet);
+    var panelReceipt = request.finderOwnership.folderPanel;
+    api.finderFolderGuard(app, window, sheet, panelReceipt);
+    if (!sheet && panelReceipt && panelReceipt.reference) sheet = panelReceipt.reference;
     fresh = candidates('validate');
     if (fresh.length !== 1 || !api.equal(fresh[0], window)) throw new Error('New Finder fixture window identity changed');
   }
@@ -1528,7 +1530,7 @@ function nativeAX(state, clock) {
         var pidRef = Ref();
         if (Number($.AXUIElementGetPid(app, pidRef)) !== 0) throw new Error('File-menu cancellation lost the app identity');
         var down = $.CGEventCreateKeyboardEvent(null, 53, true), up = $.CGEventCreateKeyboardEvent(null, 53, false);
-        if (!down || down.isNil() || !up || up.isNil()) throw new Error('File-menu Escape could not be created');
+        if (!down || !up) throw new Error('File-menu Escape could not be created');
         if (clock && clock.check) clock.check();
         $.CGEventPostToPid(Number(pidRef[0]), down); $.CGEventPostToPid(Number(pidRef[0]), up);
       } }, refuseDialogs === true || state.refuseDialogs);
@@ -1669,7 +1671,7 @@ function nativeAX(state, clock) {
     walk(panel, 0);
     return { fields: fields.length ? fields : combos, nodes: nodes };
   }
-  function finderPanelKey(app, window, panel, key, validate, onAttempt) {
+  function finderPanelKey(app, window, panel, key, validate, onAttempt, expectedInput) {
     if (validate) validate();
     api.finderFolderGuard(app, window, panel);
     var input = read(app, 'AXFocusedUIElement'), within = false;
@@ -1677,13 +1679,15 @@ function nativeAX(state, clock) {
       if (equal(node, panel)) { within = true; break; }
       if (equal(node, app) || equal(node, window)) break;
     }
-    if (!within || ['AXTextField', 'AXComboBox'].indexOf(text(input, 'AXRole')) === -1)
+    if (!within || (expectedInput && !equal(input, expectedInput)) ||
+        ['AXTextField', 'AXComboBox'].indexOf(text(input, 'AXRole')) === -1)
       throw new Error('Finder folder keyboard target unconfirmed');
     var pid = Ref();
     if (Number($.AXUIElementGetPid(panel, pid)) !== 0 || !(Number(pid[0]) > 0))
       throw new Error('Finder folder keyboard target unconfirmed');
     var down = $.CGEventCreateKeyboardEvent(null, key, true), up = $.CGEventCreateKeyboardEvent(null, key, false);
-    if (!down || down.isNil() || !up || up.isNil()) throw new Error('Finder folder keyboard target unconfirmed');
+    // CGEventRef is a C reference, without Objective-C's isNil method.
+    if (!down || !up) throw new Error('Finder folder keyboard target unconfirmed');
     $.CGEventSetFlags(down, 0); $.CGEventSetFlags(up, 0);
     if (validate) validate();
     api.finderFolderGuard(app, window, panel);
@@ -1696,9 +1700,14 @@ function nativeAX(state, clock) {
     title: identityTitle, titleFree: titleFree, retain: retain, windowNumber: windowNumber,
     bindRetained: function (window, request, app, receipt) { return receipt ? retain(window, request, app, receipt) : null; },
     read: read, text: text, children: children, press: press, fileMenu: fileMenu, menu: menu, path: path,
-    finderFolderGuard: function (app, window, sheet) {
-      var focused = this.focused(app);
+    finderFolderGuard: function (app, window, sheet, receipt) {
+      var self = this, focused = this.focused(app);
       function refuseForeign(element) {
+        // The sheet can arrive after folderSheet's poll but during this scan.
+        // Adopt only through the same guarded command and parent checks.
+        if (!sheet && window && receipt && receipt.attempted === true &&
+            receipt.commandWindowConfirmed === true && equal(receipt.window, window))
+          sheet = self.folderSheet(window, app, receipt);
         if (!sheet || !equal(element, sheet)) {
           if (text(element, 'AXIdentifier') === 'GoToWindow') throw new Error('Foreign Finder Go to Folder panel; setup refused');
           throw new Error('Foreign Finder dialog; folder setup refused');
@@ -1800,12 +1809,40 @@ function nativeAX(state, clock) {
       }
       if (clock && clock.check) clock.check();
       check();
-      var code = Number($.AXUIElementPerformAction(panel, $('AXCancel')));
-      if (code !== 0 && code !== -25206) throw new Error('Finder folder sheet cancellation failed: ' + code);
       function dismissed() {
         for (var attempt = 0; attempt < 3 && self.finderPanelExists(panel); attempt++) self.wait();
         return !self.finderPanelExists(panel);
       }
+      var goToWindow = text(panel, 'AXIdentifier') === 'GoToWindow';
+      if (goToWindow) {
+        try { finderPanelKey(app, window, panel, 53, check); }
+        catch (error) {
+          // Direct AX cancellation can still target our retained panel when a
+          // focus change or unrelated dialog makes keyboard input unsafe.
+          if (['Finder folder keyboard target unconfirmed', 'Finder folder window lost focus',
+              'Finder folder focus changed during validation', 'Foreign Finder Go to Folder panel; setup refused',
+              'Foreign Finder dialog; folder setup refused'].indexOf(error.message) === -1) throw error;
+        }
+        if (dismissed()) return;
+        check();
+        var closes = finderPanelControls(panel).nodes.filter(function (node) {
+          return text(node, 'AXRole') === 'AXButton' && text(node, 'AXIdentifier') === 'CloseButton';
+        });
+        if (closes.length > 1) throw new Error('Finder folder sheet controls ambiguous');
+        if (closes.length === 1) {
+          press(closes[0], function () {
+            check();
+            var current = finderPanelControls(panel).nodes.filter(function (node) {
+              return text(node, 'AXRole') === 'AXButton' && text(node, 'AXIdentifier') === 'CloseButton';
+            });
+            if (current.length !== 1 || !equal(current[0], closes[0])) throw new Error('Finder folder sheet identity changed');
+          });
+          if (dismissed()) return;
+        }
+      }
+      check();
+      var code = Number($.AXUIElementPerformAction(panel, $('AXCancel')));
+      if (code !== 0 && code !== -25206) throw new Error('Finder folder sheet cancellation failed: ' + code);
       if (dismissed()) return;
       check();
       var cancel = read(panel, 'AXCancelButton'), explicit = !!cancel;
@@ -1822,9 +1859,7 @@ function nativeAX(state, clock) {
         });
         if (dismissed()) return;
       }
-      // GoToWindow may expose cancellation only through its focused input.
-      // Restrict the keyboard fallback to that identifier and retained panel.
-      if (text(panel, 'AXIdentifier') !== 'GoToWindow') throw new Error('Finder folder sheet cancellation unavailable');
+      if (!goToWindow) throw new Error('Finder folder sheet cancellation unavailable');
       var fields = finderPanelControls(panel).fields;
       if (fields.length === 1) {
         check();
@@ -1832,8 +1867,7 @@ function nativeAX(state, clock) {
         if (code !== 0 && code !== -25206) throw new Error('Finder folder sheet cancellation failed: ' + code);
         if (dismissed()) return;
       }
-      finderPanelKey(app, window, panel, 53, check);
-      if (!dismissed()) throw new Error('Finder folder sheet cleanup unconfirmed');
+      throw new Error('Finder folder sheet cleanup unconfirmed');
     },
     submitFolder: function (window, sheet, target, validate, onNavigate) {
       var pidRef = Ref();
@@ -1849,7 +1883,10 @@ function nativeAX(state, clock) {
             controls.nodes.some(function (node) { return equal(node, defaultButton); })) go = [defaultButton];
       }
       var keyboard = go.length === 0 && text(sheet, 'AXIdentifier') === 'GoToWindow';
-      if (fields.length !== 1 || !(go.length === 1 || keyboard)) throw new Error('Finder folder sheet controls ambiguous');
+      if (fields.length !== 1 || !(go.length === 1 || keyboard) ||
+          (keyboard && text(sheet, 'AXRole') === 'AXSheet' && !text(sheet, 'AXSubrole') &&
+           (text(fields[0], 'AXRole') !== 'AXTextField' || text(fields[0], 'AXIdentifier') !== 'PathTextField')))
+        throw new Error('Finder folder sheet controls ambiguous');
       if (clock && clock.check) clock.check();
       if (validate) validate();
       this.finderFolderGuard(app, window, sheet);
@@ -1865,7 +1902,7 @@ function nativeAX(state, clock) {
         if (validate) validate();
       }
       if (keyboard) {
-        finderPanelKey(app, window, sheet, 36, beforeGo, onNavigate);
+        finderPanelKey(app, window, sheet, 36, beforeGo, onNavigate, fields[0]);
       } else press(go[0], beforeGo, onNavigate);
     },
     applications: function () {
