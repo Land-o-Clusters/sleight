@@ -384,7 +384,7 @@
      },
      {
       "name": "browser_tabs",
-      "description": "Owned tabs: list/close/keep/handoff. Sign-in/code: handoff wait:true; here await user's Continue, reread; away end turn, ask user to sign in and reply. Never request secrets. Hand off unasked payments.",
+      "description": "Owned tabs; keep: open after turn. Sign-in/code: handoff wait:true; here await user's Continue, reread; away end turn, ask user to sign in/reply. Never request secrets. Hand off unasked payments.",
       "inputSchema": {
        "type": "object",
        "properties": {
