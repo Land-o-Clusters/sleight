@@ -13,7 +13,7 @@ const script = fileURLToPath(new URL('./real-fixture.js', import.meta.url));
 // Titles, paths, dialog text and raw helper output never enter this schema.
 const finderEnums = {
   stage: ['identified', 'identified-process', 'armed', 'ready', 'closed', 'setup-failure', 'untouched', 'action', 'retry',
-    'finder-relaunch', 'finder-recovered', 'finder-window-retained', 'finder-folder-submitted', 'finder-failure', 'finder-baseline-changed', 'menu-items', 'menu-cancel', 'readiness'],
+    'finder-relaunch', 'finder-recovered', 'finder-window-retained', 'finder-folder-submitted', 'finder-failure', 'finder-baseline-changed', 'finder-cleanup', 'menu-items', 'menu-cancel', 'readiness'],
   app: ['Finder'], bundle: ['com.apple.finder'], observedBundle: ['com.apple.finder'],
   cleanup: ['nothing created', 'closed retained fixture', 'unconfirmed'],
   setupCase: ['already-running', 'cold-launch'], attribute: ['AXWindows', 'AXRole', 'AXValue', 'AXFocusedWindow'],
@@ -39,7 +39,7 @@ const finderEnums = {
 };
 const finderNumbers = new Set(['pid', 'fromPid', 'toPid', 'startedAtMs', 'fromStartedAtMs', 'toStartedAtMs',
   'processStartedAtMs', 'code', 'count', 'index', 'duplicateIndex', 'axCode', 'waitMs', 'totalWaitMs', 'elapsedMs', 'enabled']);
-const finderCounts = new Set(['baselineCount', 'currentCount', 'missingIndex']);
+const finderCounts = new Set(['baselineCount', 'currentCount', 'missingIndex', 'scrollAreasBaseline', 'scrollAreasMatched']);
 const finderFlags = new Set(['running', 'launched', 'fresh', 'actionTaken', 'referenceExported', 'originalExitConfirmed', 'appAbsent',
   'windowCleanupConfirmed', 'helperCollectionConfirmed', 'menuCancelled', 'finished', 'titleMatches', 'appQuit', 'stop']);
 const finderObjects = new Set(['finderRelaunch', 'finderRecovery', 'finderAXError', 'finderFailure', 'finderCleanupFailure',
@@ -372,7 +372,7 @@ export async function openFixture(ctx, request, { run = runOwned, open = execute
             diagnostics[event.phase + 'TotalWaitMs'] = event.totalWaitMs;
           } else diagnostics.retries.push(retry);
         }
-        for (const key of ['finderRelaunch', 'finderRecovery', 'finderAXError', 'finderFailure', 'finderCleanupFailure', 'finderMenuCleanupFailure', 'finderBaselineChange', 'fixtureWindow', 'menuCleanup', 'menuCleanupError', 'menuCleared', 'menuEscapePid', 'windows', 'fresh', 'totalWaitMs', 'actionTaken', 'cleanup', 'cleanupError', 'menuCancelled', 'menuCancelMethod', 'menuItems', 'menuCommands', 'readiness', 'navigation', 'creation', 'foregroundFallback', 'launchWait', 'readWait', 'cleanupReadWait', 'observationReadWait', 'setupCase', 'inheritReady', 'placement']) {
+        for (const key of ['finderRelaunch', 'finderRecovery', 'finderAXError', 'finderFailure', 'finderCleanupFailure', 'finderMenuCleanupFailure', 'finderBaselineChange', 'scrollAreasBaseline', 'scrollAreasMatched', 'fixtureWindow', 'menuCleanup', 'menuCleanupError', 'menuCleared', 'menuEscapePid', 'windows', 'fresh', 'totalWaitMs', 'actionTaken', 'cleanup', 'cleanupError', 'menuCancelled', 'menuCancelMethod', 'menuItems', 'menuCommands', 'readiness', 'navigation', 'creation', 'foregroundFallback', 'launchWait', 'readWait', 'cleanupReadWait', 'observationReadWait', 'setupCase', 'inheritReady', 'placement']) {
           if (event[key] !== undefined) diagnostics[key] = event[key];
         }
         ctx.onFixtureDiagnostics?.(diagnostics);

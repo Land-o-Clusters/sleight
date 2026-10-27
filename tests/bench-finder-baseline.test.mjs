@@ -13,7 +13,7 @@ function trial({ windowCount = 1, cleanup = false } = {}) {
   runInNewContext(readFileSync(new URL('../bench/real-fixture.js', import.meta.url), 'utf8'), s);
   const area = { role: 'AXScrollArea', document: '/fixture/target' };
   const baseline = [area, ...Array.from({ length: windowCount }, () => ({ role: 'AXWindow', document: '/fixture/target' }))];
-  const owned = { role: 'AXWindow', document: '/fixture/target' }, sheet = {};
+  const owned = { role: 'AXWindow', document: cleanup ? '/fixture/target' : '', title: 'Recents' }, sheet = {};
   const f = { area, baseline, owned, current: [...baseline, ...(cleanup ? [owned] : [])], actions: [], retained: [], hooks: {}, hits: [] };
   const hit = name => { f.hits.push(name); f.hooks[name]?.(); };
   const request = { bundle: 'com.apple.finder', mode: 'folder', target: '/fixture/target', fixtureRoot: '/fixture', token: 'fixture' };
@@ -26,16 +26,17 @@ function trial({ windowCount = 1, cleanup = false } = {}) {
     finderFolderGuard: (_a, w) => { hit(w ? 'owned-guard' : 'baseline-guard'); assert.ok(!w || w === owned); },
     menu: (_a, _n, _t, validate) => { hit('go-menu'); validate(); f.actions.push(['go', owned]); },
     folderSheet: w => { assert.equal(w, owned); hit('sheet'); return sheet; },
-    submitFolder: (w, _sheet, _target, validate) => { hit('submit'); validate(); f.actions.push(['write', w]); },
+    submitFolder: (w, _sheet, target, validate) => { hit('submit'); validate(); f.actions.push(['write', w]); w.document = target; },
     dialog: () => { hit('dialog'); return []; },
-    text: (w, attr) => { hit('location'); return attr === 'AXDocument' ? w.document : ''; }, path: value => value,
+    text: (w, attr) => { hit('location'); return attr === 'AXDocument' ? w.document : attr === 'AXURL' ? w.url || '' : w.title || ''; }, path: value => value,
     closeButton: (w, validate) => { hit('close-control'); validate(); f.actions.push(['close', w]); f.current = f.current.filter(item => item !== w); hit('after-close'); },
     wait() {}, emit: event => f.events.push(JSON.parse(JSON.stringify(event))),
   };
   f.api = api; f.request = request; f.events = []; f.source = s;
   f.open = () => s.openFinderFolder(request, {}, baseline[0], api, { check() {}, now: () => 0, wait: () => assert.fail('no polling') }, w => f.retained.push(w));
   f.close = () => s.closeFinderFixtureWindows(owned, request, {}, api);
-  f.recover = () => s.recoverSetup(f.retained[0], request, api, {}, {});
+  f.failure = {};
+  f.recover = () => s.recoverSetup(f.retained[0], request, api, {}, f.failure);
   api.matches = w => w.document === request.target;
   return f;
 }
@@ -78,6 +79,10 @@ for (const [name, mutate] of Object.entries(scrollChanges)) {
     assert.deepEqual(f.retained, [f.owned]);
     f.close();
     assert.deepEqual(f.actions.filter(([action]) => action === 'close'), [['close', f.owned]]);
+    assert.deepEqual(f.request.finderScrollAreas && JSON.parse(JSON.stringify(f.request.finderScrollAreas)), {
+      scrollAreasBaseline: 1, scrollAreasMatched: name === 'added' ? 1 : 0,
+    });
+    assert.deepEqual(f.events.at(-1), { stage: 'finder-cleanup', scrollAreasBaseline: 1, scrollAreasMatched: name === 'added' ? 1 : 0 });
   });
   test(`cleanup tolerates ${name} inert scroll area`, () => {
     const f = trial({ cleanup: true }); mutate(f); f.close();
@@ -112,9 +117,55 @@ for (const failure of ['first-validation', 'retention-receipt']) test(`candidate
     f.source.openFinderFolder(f.request, {}, f.baseline[1], f.api, clock, w => f.retained.push(w)), /lost focus|receipt failure/);
   assert.deepEqual(f.retained, [f.owned]);
   assert.deepEqual(Array.from(f.request.finderOwnership.created), [f.owned]);
+  assert.equal(f.owned.document, '', 'failure precedes navigation');
+  assert.equal(f.owned.title, 'Recents');
   assert.equal(f.recover(), 'closed retained fixture');
   assert.deepEqual(f.actions.filter(([action]) => action === 'close'), [['close', f.owned]]);
   assert.ok(f.current.includes(f.baseline[1]));
+});
+
+for (const [name, before, after] of [
+  ['user folder title', { title: 'Documents' }],
+  ['unknown default title', { title: 'Recent Items' }],
+  ['empty title', { title: '' }],
+  ['fixture-location-mismatch', { document: '/owner/Collections-1' }],
+  ['foreign AXURL', { url: '/owner/Collections-1' }],
+  ['title changed after creation', {}, f => { f.owned.title = 'Documents'; }],
+  ['default title was not observed at creation', { title: 'Documents' }, f => { f.owned.title = 'Recents'; }],
+  ['document added after creation', {}, f => { f.owned.document = '/owner/Collections-1'; }],
+  ['URL added after creation', {}, f => { f.owned.url = '/owner/Collections-1'; }],
+  ['missing creation-title receipt', {}, f => { delete f.request.finderOwnership.documentless; }],
+  ['duplicate creation-title receipt', {}, f => { f.request.finderOwnership.documentless.push(f.request.finderOwnership.documentless[0]); }],
+]) test(`recovery leaves the retained window open for ${name}`, () => {
+  const f = trial(); Object.assign(f.owned, before);
+  f.hooks['owned-guard'] = () => { throw new Error('Finder folder window lost focus'); };
+  assert.throws(f.open, /lost focus/);
+  assert.deepEqual(f.retained, [f.owned]);
+  after?.(f);
+  assert.equal(f.recover(), 'unconfirmed');
+  assert.equal(f.failure.failureReason, 'fixture-location-mismatch');
+  assert.deepEqual(f.actions.filter(([action]) => action === 'close'), []);
+  assert.ok(f.current.includes(f.owned));
+  assert.ok(f.current.includes(f.baseline[1]));
+});
+
+test('navigation revokes the documentless default-title fallback', () => {
+  const f = trial();
+  f.api.submitFolder = () => { throw new Error('navigation failed'); };
+  assert.throws(f.open, /navigation failed/);
+  assert.equal(f.recover(), 'unconfirmed');
+  assert.equal(f.failure.failureReason, 'fixture-location-mismatch');
+  assert.equal(f.actions.some(([action]) => action === 'close'), false);
+});
+
+test('documentless recovery rechecks the creation title at the close press boundary', () => {
+  const f = trial();
+  f.hooks['owned-guard'] = () => { throw new Error('Finder folder window lost focus'); };
+  assert.throws(f.open, /lost focus/);
+  f.hooks['close-control'] = () => { f.owned.title = 'Owner folder'; };
+  assert.throws(f.recover, /identity changed/);
+  assert.equal(f.actions.some(([action]) => action === 'close'), false);
+  assert.ok(f.current.includes(f.owned));
 });
 
 for (const name of ['missing', 'replaced', 'window-role']) test(`cleanup closes its fixture despite ${name} baseline window and reports drift`, () => {
@@ -122,7 +173,8 @@ for (const name of ['missing', 'replaced', 'window-role']) test(`cleanup closes 
   assert.deepEqual(f.actions, [['close', f.owned]]);
   const diagnostic = f.events.find(event => event.finderBaselineChange)?.finderBaselineChange;
   assert.deepEqual(diagnostic, { failureReason: 'baseline-changed', errorName: 'Error', errorCode: 'unavailable',
-    phase: 'cleanup', baselineCount: 2, currentCount: name === 'missing' ? 2 : 3, missingRole: 'AXWindow', missingIndex: 1 });
+    phase: 'cleanup', baselineCount: 2, currentCount: name === 'missing' ? 2 : 3, missingRole: 'AXWindow', missingIndex: 1,
+    scrollAreasBaseline: 1, scrollAreasMatched: 1 });
   assert.deepEqual(finderDiagnostic({ finderBaselineChange: diagnostic }), { finderBaselineChange: diagnostic });
   assert.ok(f.current.every(item => item !== f.owned));
 });
@@ -139,6 +191,7 @@ for (const phase of ['pre-press', 'poll', 'validate']) test(`setup attaches ${ph
     assert.deepEqual(JSON.parse(JSON.stringify(f.source.finderStaticFailure(error))), {
       failureReason: 'baseline-changed', errorName: 'Error', errorCode: 'unavailable', phase,
       baselineCount: 2, currentCount: phase === 'pre-press' ? 1 : 2, missingRole: 'AXWindow', missingIndex: 1,
+      scrollAreasBaseline: 1, scrollAreasMatched: 1,
     });
     return true;
   });
@@ -148,13 +201,15 @@ test('parent fixture receipt retains sanitized cleanup drift without failing the
   const dir = trackTemp(mkdtempSync(join(tmpdir(), 'sleight-fb1-receipt-')));
   t.after(() => rmSync(dir, { recursive: true, force: true }));
   const drift = { failureReason: 'baseline-changed', errorName: 'Error', errorCode: 'unavailable',
-    phase: 'cleanup', baselineCount: 2, currentCount: 2, missingRole: 'AXWindow', missingIndex: 1 };
+    phase: 'cleanup', baselineCount: 2, currentCount: 2, missingRole: 'AXWindow', missingIndex: 1,
+    scrollAreasBaseline: 1, scrollAreasMatched: 0 };
   const ctx = { dir, lockPath: join(dir, 'synthetic-lock') };
   const lease = await openFixture(ctx, { app: 'Finder', bundle: 'com.apple.finder', mode: 'folder' }, {
     helper: async () => ({ command: 'fake', args: [] }), open: () => assert.fail('no app launch'),
     run: async (_command, _args, { onStdout }) => {
-      const events = [{ stage: 'armed' }, { stage: 'ready' },
+      const events = [{ stage: 'armed' }, { stage: 'ready', scrollAreasBaseline: 1, scrollAreasMatched: 0 },
         { stage: 'finder-baseline-changed', finderBaselineChange: { ...drift, title: 'owner-private-title', path: '/owner/private' } },
+        { stage: 'finder-cleanup', scrollAreasBaseline: 1, scrollAreasMatched: 0 },
         { stage: 'closed' }];
       const stdout = events.map(event => JSON.stringify(event)).join('\n') + '\n';
       onStdout(stdout);
@@ -163,6 +218,8 @@ test('parent fixture receipt retains sanitized cleanup drift without failing the
   });
   await lease.close();
   assert.deepEqual(lease.diagnostics.finderBaselineChange, drift);
+  assert.equal(lease.diagnostics.scrollAreasBaseline, 1);
+  assert.equal(lease.diagnostics.scrollAreasMatched, 0);
   assert.equal(lease.diagnostics.windowCleanupConfirmed, true);
   assert.doesNotMatch(JSON.stringify(lease.diagnostics), /owner-private|\/owner\/private/);
   assert.equal(await lease.dispose(), true);
@@ -223,23 +280,40 @@ for (const lockHeld of [false, true]) test(`baseline failure during actual clean
   assert.deepEqual(f.actions, []);
 });
 
-test('native close revalidates window baseline when press bookkeeping changes it before AXPress', () => {
+for (const change of ['baseline drift', 'fixture location']) test(`production cleanup revalidates ${change} before native AXPress`, () => {
   const s = { ObjC: { import() {}, unwrap: value => value, castRefToObject: value => value } };
   runInNewContext(readFileSync(new URL('../bench/real-fixture.js', import.meta.url), 'utf8'), s);
-  const area = { AXRole: 'AXWindow' }, window = { AXRole: 'AXWindow', AXCloseButton: {} }, app = { AXWindows: [area, window] };
+  const area = { AXRole: 'AXWindow' }, window = { AXRole: 'AXWindow', AXDocument: '/fixture/target', AXCloseButton: {} }, app = { AXWindows: [area, window] };
   const ledger = { schema: 'finder-role-baseline-v1', baseline: [{ reference: area, role: 'AXWindow' }], created: [window] };
-  let validations = 0, presses = 0;
+  let closeRead = false, changed = false, presses = 0;
+  const events = [];
   const native = value => value;
   native.CFEqual = (a, b) => a === b;
   native.AXUIElementCopyAttributeValue = (element, attribute, output) => {
+    if (attribute === 'AXCloseButton') closeRead = true;
     const value = element[attribute]; output[0] = Array.isArray(value) ? { count: value.length, objectAtIndex: i => value[i] } : value; return 0;
   };
-  native.AXUIElementPerformAction = () => { presses++; return 0; };
+  native.AXUIElementPerformAction = button => {
+    assert.equal(button, window.AXCloseButton); presses++;
+    app.AXWindows = app.AXWindows.filter(w => w !== window); return 0;
+  };
   s.$ = native; s.Ref = () => [];
-  const api = s.nativeAX({ cleanup: true }, { check() { if (validations === 1) area.AXRole = 'AXScrollArea'; } });
-  const validate = () => { s.finderRoleInventory(app, api, ledger); validations++; };
-  assert.throws(() => api.closeButton(window, validate, true), /baseline/);
-  assert.equal(presses, 0);
+  const api = s.nativeAX({ cleanup: true }, { emit: e => events.push(e), check() {
+    if (!closeRead || changed) return;
+    changed = true;
+    if (change === 'baseline drift') area.AXRole = 'AXScrollArea';
+    else window.AXDocument = '/owner/private';
+  } });
+  api.path = value => value; api.dialog = () => [];
+  const request = { bundle: 'com.apple.finder', mode: 'folder', target: '/fixture/target', fixtureRoot: '/fixture', finderOwnership: ledger };
+  const close = () => s.closeOwnedWindow(window, request, app, api);
+  if (change === 'fixture location') { assert.throws(close, /identity changed/); assert.equal(presses, 0); }
+  else {
+    close(); assert.equal(presses, 1);
+    assert.equal(events.filter(e => e.stage === 'finder-baseline-changed').length, 1);
+  }
+  assert.equal(changed, true);
+  assert.ok(app.AXWindows.includes(area));
 });
 
 test('ordinary native close preserves its existing single validation callback', () => {
