@@ -1,7 +1,7 @@
 import { tmpdir } from 'node:os';
 import { idleClock } from './fixtures/socket-clock.mjs';
 import { test } from 'node:test';
-import { spawnDemand } from './fixtures/socket-demand-owner.mjs';
+import { demandWait, spawnDemand } from './fixtures/socket-demand-owner.mjs';
 import { trackTemp, removeTemp } from '../scripts/temp-leftovers.mjs';
 import assert from 'node:assert/strict';
 import { EventEmitter } from 'node:events';
@@ -257,16 +257,59 @@ test('closing retains ownership until the old relay has finished collection', as
   await replacement.close();
 });
 
-test('separate starter processes create one session and one live process group', async t => {
+test('separate starter processes create one session and one live process group', { timeout: 15000 }, async t => {
   const f = fixture(t);
   const children = await Promise.all([spawnDemand(f), spawnDemand(f)]);
-  await ensureSocketSession({ directory: f.directory, notice() {}, spawnSession: async () => {} });
-  const result = JSON.parse((await callSocket({ tool: 'js', args: { code: 'pid' } }, f)).content[0].text);
+  const admissions = await demandWait(Promise.all(children.map(child => child.admission)), 'both starter admission outcomes');
+  assert.equal(admissions.filter(result => result.ready).length, 1);
+  assert.equal(admissions.filter(result => result.code === 1 && !result.signal).length, 1);
+  assert.match(readFileSync(join(f.directory, 'session.log'), 'utf8'), /occupied by a starting or closing session/);
+  await demandWait(ensureSocketSession({ directory: f.directory, startupMs: 5000, notice() {}, spawnSession: async () => {} }), 'session readiness');
+  const result = JSON.parse((await demandWait(callSocket({ tool: 'js', args: { code: 'pid' } }, { ...f, timeoutMs: 5000 }), 'session pid reply')).content[0].text);
   assert.ok(children.some(child => child.pid === result.pid));
   assert.doesNotThrow(() => process.kill(-result.pid, 0));
-  await callSocket({ tool: 'js', args: { code: 'stop' } }, f);
-  const exits = await Promise.all(children.map(child => child.sessionExit));
+  await demandWait(callSocket({ tool: 'js', args: { code: 'stop' } }, { ...f, timeoutMs: 5000 }), 'session stop reply');
+  const exits = await demandWait(Promise.all(children.map(child => child.sessionExit)), 'both starter exits after stop');
   assert.deepEqual(exits.map(exit => exit.code).sort(), [0, 1]);
+});
+
+test('a late second starter exposes shutdown before both admission attempts', { timeout: 15000 }, async t => {
+  const f = fixture(t);
+  const first = await spawnDemand(f);
+  await ensureSocketSession({ directory: f.directory, startupMs: 5000, notice() {}, spawnSession: async () => {} });
+  await callSocket({ tool: 'js', args: { code: 'stop' } }, { ...f, timeoutMs: 5000 });
+  await demandWait(first.sessionExit, 'first starter shutdown before late admission');
+  // Model a second process that was not scheduled until after the first stopped.
+  const second = await spawnDemand(f);
+  await ensureSocketSession({ directory: f.directory, startupMs: 5000, notice() {}, spawnSession: async () => {} });
+  const pid = JSON.parse((await callSocket({ tool: 'js', args: { code: 'pid' } }, { ...f, timeoutMs: 5000 })).content[0].text).pid;
+  assert.equal(pid, second.pid);
+  assert.notEqual(pid, first.pid);
+  // The old concurrent test assumes this child lost admission and waits forever for its exit.
+  await assert.rejects(demandWait(second.sessionExit, 'late second starter exit after first shutdown', 100),
+    /waiting for late second starter exit after first shutdown/);
+  await callSocket({ tool: 'js', args: { code: 'stop' } }, { ...f, timeoutMs: 5000 });
+  assert.equal((await demandWait(second.sessionExit, 'late second starter shutdown')).code, 0);
+});
+
+for (const [mode, waiting] of [['', 'session shutdown'], ['--stall-startup', 'socket publication']]) {
+  test(`fixture watchdog bounds ${waiting}`, { timeout: 15000 }, async t => {
+    const f = fixture(t);
+    const child = await spawnDemand(f, { fixtureArgs: [mode, '--deadline-ms', '1000'] });
+    const exit = await demandWait(child.sessionExit, `watchdog exit during ${waiting}`);
+    assert.equal(exit.code, 1);
+    assert.equal(exit.signal, null);
+    assert.match(readFileSync(join(f.directory, 'session.log'), 'utf8'), new RegExp(`timed out waiting for ${waiting}`));
+  });
+}
+
+test('cleanup kills and collects a fixture that ignores its stop message', { timeout: 15000 }, async t => {
+  const f = fixture(t);
+  const child = await spawnDemand(f, { fixtureArgs: ['--ignore-stop'], cleanupMs: 100 });
+  assert.deepEqual(await demandWait(child.admission, 'fixture readiness before stuck cleanup'), { ready: true });
+  await assert.rejects(f.cleanup[0](), /waiting for fixture \d+ graceful shutdown/);
+  assert.deepEqual(await demandWait(child.sessionExit, 'ignored-stop fixture collection'), { code: null, signal: 'SIGKILL' });
+  assert.throws(() => process.kill(child.pid, 0), { code: 'ESRCH' });
 });
 
 test('each independent caller sees the session identity on stdout before tool output', async t => {
