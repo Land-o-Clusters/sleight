@@ -69,6 +69,7 @@ import { analyticsArm, writeAnalyticsMcp } from './analytics-validation.mjs';
 import { actionLogPath } from '../plugins/sleight/lib/action-outcomes.mjs';
 import { refreshHub } from './hub-refresh.mjs';
 import { sleightPluginLaunch } from './sleight-plugin-launch.mjs';
+import { mcpCatalogProblems } from './mcp-catalog.mjs';
 
 // The desktop arm owns no Claude CLI, MCP config or engine approval list.
 // Dispatch before the ordinary runner prepares any of those resources.
@@ -428,9 +429,14 @@ for (const name of armNames.filter(n => !ARMS[n].codex && !ARMS[n].unsupported &
   const catalog = await armServers(arm);
   if (arm.generic) { acceptGenericCatalog(arm, catalog); continue; }
   const { servers } = catalog;
+  if (arm.guarded || (cleanArms && name === 'sleight')) {
+    const problems = mcpCatalogProblems(servers, [arm.server]);
+    if (problems.length) throw new Error(`${name} arm: ${problems.join('; ')}`);
+    continue;
+  }
   const own = servers.find(s => s.name === arm.server);
   if (own?.status !== 'connected') throw new Error(`${name} arm: ${arm.server} is ${own?.status ?? 'missing'}`);
-  const leaked = servers.filter(s => s.name !== arm.server && (arm.guarded || otherServers.includes(s.name)));
+  const leaked = servers.filter(s => s.name !== arm.server && otherServers.includes(s.name));
   if (leaked.length) throw new Error(`${name} arm also loads ${leaked.map(s => s.name).join(', ')}`);
 }
 }

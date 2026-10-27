@@ -14,6 +14,7 @@ import { privateDriverEnvironment } from '../bench/driver.mjs';
 import { guardGenericOperation } from '../bench/generic-approval.mjs';
 import { genericSettings } from '../bench/plugin-arm.mjs';
 import { sleightPluginLaunch } from '../bench/sleight-plugin-launch.mjs';
+import { mcpCatalogProblems } from '../bench/mcp-catalog.mjs';
 import { cpuSplit } from '../bench/footprint.mjs';
 import { webBrowsers } from '../bench/tasks-web.mjs';
 import { WORLD_APPS, worldPassApps } from '../bench/world/tasks.mjs';
@@ -178,7 +179,7 @@ async function runner({ hygieneResult = { leftWindows: [], errors: [] }, hygiene
       if (preparationError) throw new Error(preparationError);
       return { generic: true, cwd: `${MAC_TMP}/own-arm`, args: ['--strict-mcp-config', '--setting-sources', '', '--tools', '', '--disable-slash-commands', '--permission-prompts', 'none', '--no-session-persistence'], env: {}, identity: {}, servers: ['rival'] };
     },
-    genericSettings, sleightPluginLaunch, acceptGenericCatalog() {}, worldCLI, worldArm, worldSettings, assertWorldCLI,
+    genericSettings, sleightPluginLaunch, mcpCatalogProblems, acceptGenericCatalog() {}, worldCLI, worldArm, worldSettings, assertWorldCLI,
     isNativeArm, nativeArmPlan,
     ensureCuaDaemon: async dir => {
       calls.push(['cua daemon', dir]);
@@ -906,6 +907,13 @@ test('sleight preflight refuses servers belonging to a generic comparison arm', 
   assert.equal(result.driverOptions.length, 0);
   assert.equal(result.exitCode, 1);
   assert.match(result.saved.at(-1).results[0].reason, /also loads/);
+});
+
+for (const extraServer of ['user-server', 'connector', 'lcu']) test(`clean sleight preflight refuses ${extraServer}`, async () => {
+  const result = await runner({ suite: 'default', cleanArms: true, drive: true, extraServer });
+  assert.equal(result.driverOptions.length, 0);
+  assert.equal(result.exitCode, 1);
+  assert.match(result.saved.at(-1).results[0].reason, new RegExp(`also loads ${extraServer}`));
 });
 
 for (const surface of ['hooks', 'LSP servers', 'agents']) test(`${surface} rejection is recorded before any preflight, fixture or live lock`, async () => {
