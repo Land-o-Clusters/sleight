@@ -300,6 +300,8 @@ refuses terminals and OpenAI's own apps. See [approvals and guards](#approvals-a
 - Screen readers cannot pick a cursor style from the menu, the same limit the consent cards have. Use a hardware mouse or Return or Space on a highlighted row.
 - Typed confirmation needs a physical keyboard, so cards can't be answered from Switch Control's on-screen keyboard. The mask length is readable over AX. VoiceOver reading and key-window behavior are unverified live.
 - Waiting handoff covers owned turbo browser tabs and native apps with a lease. Document-scoped native mode and Electron turbo still stop.
+- After a turbo worker is lost, sleight disconnects it and stops using it but doesn't kill it. If the worker's event loop hangs, we haven't verified that its sign-in card goes away.
+- A local tool call admitted before a browser handoff begins can still run once its own approval completes, while the handoff waits. The handoff fence doesn't recheck calls it already admitted.
 - The card lasts 4 minutes, and a shorter host tool timeout ends the wait earlier. Closed shadow-root login forms and custom auth controls are not checked. A populated text field beside a login form refuses resume.
 - The shell guard reads literal commands only. Once any loop uses sleight, it fences launchers for every caller in that mod registration. Each loop's completion removes only its own fence. Codex, Cursor and Grok hosts do not get it.
 - Split-pane teammates have separate mod instances. Whether their launch loads the lead's plugin and mod needs a live check. Promptless teammate cleanup has only offline coverage.
@@ -693,6 +695,9 @@ native reference, and oversized first results defer the browser reference while 
   The next read stops the search. Jumps check the sort order only on the rows they see.
 - The focusing click of `app.pickFromList(<list number>, …)` selects a row of that list, which stays selected if the
   search then stops. The list number is checked against the line Claude saw, as a click's is.
+- If the focusing click selects a plain list row while focus stays on a passive ancestor, the picker clicks that row once
+  more after at least 600 ms. Whether that gives Firefox's list focus is unverified live. If focus stays outside the list,
+  the picker stops without sending a key.
 - The engine tree may omit actions for a group or cell whose only action is the default press, so the passive-role check is the main protection for nested focus (measured in PL1b review, 2026-10-20).
 
 ### Model time in 1.4.0
@@ -1105,6 +1110,9 @@ compaction, so it cannot isolate wording alone. That A/B has not run live.
 
 ## Benchmark environment
 
+- Finder fixture recovery can close a documentless Recents window when its creation receipt recorded that same default
+  title and the window is still listed outside the baseline with no dialog. Other documentless titles stay unconfirmed and
+  keep the live lock. The live Finder probe hasn't qualified this recovery path yet.
 - The hub refresh after a pass (`bench/hub-refresh.mjs`) reads the native and app claim folders that `bench/results-hub.mjs` names
   (`app-claim/native-results-1018b` and `app-claim/results-1018`), so a new claim pass appears only after someone points the hub at its
   folder. The race folders are found by name (`race-MMDD` under `~/Projects/sleight-wt`), so rounds saved anywhere else stay out. Validation
