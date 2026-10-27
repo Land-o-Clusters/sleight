@@ -75,9 +75,9 @@ test('snapshot exports the fixed V3 interface', () => {
   assert.equal(typeof module.snapshot, 'function');
 });
 
-for (const role of ['dialog', 'alertdialog']) test('a delivered ' + role + ' row marks user input pending', async () => {
+for (const role of ['dialog', 'alertdialog']) test('a page-authored ' + role + ' row alone cannot mark user input pending', async () => {
   const { page } = fixture([{ role, name: 'Confirm', children: [{ role: 'button', name: 'Continue', ref: 'e1' }] }]);
-  assert.equal((await module.snapshot(page)).pendingUserInput, true);
+  assert.equal((await module.snapshot(page)).pendingUserInput, undefined);
 });
 
 test('a protected sign-in field marks user input pending without exposing its value', async () => {
@@ -96,8 +96,8 @@ test('a modal omitted by a filtered read does not mark that result pending', asy
   assert.equal((await module.snapshot(page, { ref: 'e1' })).pendingUserInput, undefined);
 });
 
-test('a known modal remains pending in an unchanged diff and clears when removed', async () => {
-  const f = fixture([{ role: 'dialog', name: 'Confirm', ref: 'e1' }]);
+test('a known protected field remains pending in an unchanged diff and clears when removed', async () => {
+  const f = fixture([{ role: 'textbox', name: 'Password', ref: 'e1' }]);
   const first = await module.snapshot(f.page);
   const unchanged = await module.snapshot(f.page, { since: first.number });
   assert.equal(unchanged.pendingUserInput, true);

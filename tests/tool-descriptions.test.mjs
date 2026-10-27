@@ -12,10 +12,10 @@ for (const mode of [undefined, '0']) test(`Touch and cookie guidance have a meas
   const tools = browserTools('bfixture'), act = tools.find(tool => tool.name === 'browser_act');
   assert.equal(act.description.length, mode === '0' ? 1034 : 1059);
   // HO1 keeps both browser catalogs below their 1.5.0 description budgets.
-  assert.equal(tools.map(tool => tool.description).join('\n').length, mode === '0' ? 2454 : 2381);
+  assert.equal(tools.map(tool => tool.description).join('\n').length, mode === '0' ? 2454 : 2375);
   // HO1 pins each handoff description below its 1.5.0 original (169/203 bytes).
   assert.ok(Buffer.byteLength(tools.at(-1).description) <= (mode === '0' ? 169 : 203));
-  assert.equal(Buffer.byteLength(tools.at(-1).description), mode === '0' ? 166 : 201);
+  assert.equal(Buffer.byteLength(tools.at(-1).description), mode === '0' ? 166 : 195);
   assert.match(act.description, /paste\(ref,text\).*Electron refuses paste/);
   assert.match(act.description, /touch emulates a touch layout; clicks stay mouse clicks/);
   assert.match(act.description, /empty resets all/);

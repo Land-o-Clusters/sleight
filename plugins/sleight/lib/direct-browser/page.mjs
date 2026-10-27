@@ -16,6 +16,9 @@ import { releasePointView } from './points.mjs';
 
 // Preserve recovery advice when the dispatcher hides an uncertain operation's details.
 const capabilityError = message => Object.assign(Error(message), { capability: true });
+// The upstream connection survives turn-local Playwright connections and filters.
+// Only automatically kept targets enter this bank; explicit keep stays explicit.
+const automaticKeeps = new WeakMap();
 
 function deadline(task, ms, message = 'background preparation timed out') {
   let timer;
@@ -2538,6 +2541,9 @@ export function createPageRegistry({ browser, session, context = browser?.contex
   const queued = new WeakMap();
   let namedQueue = Promise.resolve();
   let ended = false, cleanup, handoffActive, preservedEntry;
+  const keepScope = upstream ?? context;
+  if (!automaticKeeps.has(keepScope)) automaticKeeps.set(keepScope, { tail: Promise.resolve(), previous: null });
+  const keeps = automaticKeeps.get(keepScope);
   const track = promise => {
     tasks.add(promise); promise.then(() => tasks.delete(promise), () => tasks.delete(promise)); return promise;
   };
@@ -2926,22 +2932,50 @@ export function createPageRegistry({ browser, session, context = browser?.contex
     if (ended) throw Error('turn ended');
     return entry;
   };
+  const releaseEntry = async entry => {
+    if (entry.userReleased) return entry.userViewport;
+    if (entry.state.stuck) await terminatePageScripts(entry);
+    if (entry.reattaching) await deadline(() => entry.reattaching, timeoutMs, 'Native debugger reattachment still pending; tab retained.');
+    await deadline(() => stopPageWaits(entry.page), timeoutMs);
+    await deadline(() => entry.queue, timeoutMs);
+    await deadline(() => entry.ready, timeoutMs);
+    const viewport = await deadline(() => restoreViewport(entry.page, { release: true }), timeoutMs);
+    await deadline(() => removeHook(entry), timeoutMs);
+    entry.developer?.stop();
+    if (!entry.userDetached) { await entry.cdp?.detach(); entry.userDetached = true; }
+    await releaseTarget?.(entry.targetId);
+    if (entry.page.isClosed()) throw Error('owned tab closed during release');
+    entry.userViewport = viewport; entry.userReleased = true;
+    return viewport;
+  };
+  const keepAutomatically = entry => {
+    const keeping = keeps.tail.then(async () => {
+      const previous = keeps.previous;
+      if (previous && previous.targetId !== entry.targetId) {
+        await previous.close(); keeps.previous = null;
+      }
+      await releaseEntry(entry);
+      entry.released = true; entry.release = 'keep';
+      keeps.previous = { targetId: entry.targetId, async close() {
+        // An old turn's filtered page handle has been disconnected. Close only
+        // this recorded target through the same trusted browser connection.
+        if (upstream) {
+          const { targetInfos } = await upstream.send('Target.getTargets');
+          if (!targetInfos.some(info => info.targetId === entry.targetId)) return;
+          const result = await upstream.send('Target.closeTarget', { targetId: entry.targetId });
+          if (result?.success !== true) throw Error('previous automatically kept tab cleanup unconfirmed');
+        } else if (!entry.page.isClosed()) await entry.page.close({ runBeforeUnload: false });
+      } };
+    });
+    keeps.tail = keeping.catch(() => {});
+    return keeping;
+  };
   const release = async (id, kind) => {
     const entry = tab(id);
     entry.releasing = true;
     const releasing = track((async () => {
       try {
-        if (entry.state.stuck) await terminatePageScripts(entry);
-        if (entry.reattaching) await deadline(() => entry.reattaching, timeoutMs, 'Native debugger reattachment still pending; tab retained.');
-        await deadline(() => stopPageWaits(entry.page), timeoutMs);
-        await deadline(() => entry.queue, timeoutMs);
-        await deadline(() => entry.ready, timeoutMs);
-        const viewport = await deadline(() => restoreViewport(entry.page, { release: true }), timeoutMs);
-        await deadline(() => removeHook(entry), timeoutMs);
-        entry.developer?.stop();
-        await entry.cdp?.detach();
-        await releaseTarget?.(entry.targetId);
-        if (entry.page.isClosed()) throw Error('owned tab closed during release');
+        const viewport = await releaseEntry(entry);
         entry.released = true; entry.release = kind;
         return { tab: id, kept: true, handoff: kind === 'handoff',
           ...(viewport.includes('previous size unknown') ? { viewport } : {}) };
@@ -3171,12 +3205,11 @@ export function createPageRegistry({ browser, session, context = browser?.contex
           }
           if (entry.released || entry.page.isClosed()) { rows.push({ tab: entry.tab, kept: entry.released, closed: entry.page.isClosed(),
             ...(entry.handoffCleanupRequired ? { cleanupRequired: true } : {}) }); continue; }
-          // One exact owned entry from this turn's last delivered result. Keep its
-          // ownership, hooks and submit fence; ended already revokes every tool.
-          // A later registry never acquires existing pages as new task tabs.
+          // Hand the last reported pending tab to the user as explicit keep does.
+          // The in-memory submit fence survives; ended revokes every tool.
           if (entry === preservedEntry && !entry.blocked) {
             let cleanupRequired = false;
-            try { await deadline(() => restoreViewport(entry.page, { release: true }), timeoutMs); }
+            try { await deadline(() => track(keepAutomatically(entry)), timeoutMs); }
             catch { cleanupRequired = true; }
             rows.push({ tab: entry.tab, kept: !entry.page.isClosed(), closed: entry.page.isClosed(),
               ...(cleanupRequired ? { cleanupRequired: true } : {}) }); continue;

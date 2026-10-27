@@ -374,7 +374,7 @@ for (const mode of [undefined, '0']) test(`MT descriptions and scroll guidance, 
   // HO1 retains the waiting handoff invocation in both description variants.
   assert.match(descriptions.browser_tabs, /handoff wait:true/);
   // HO1 waits for the person before reading fresh.
-  assert.match(descriptions.browser_tabs, /here await (?:user's )?Continue, reread|Continue then reread/);
+  assert.match(descriptions.browser_tabs, mode === '0' ? /here await Continue, reread/ : /here await user's Continue, reread/);
   // HO1 ends away turns and asks for a reply after sign-in.
   assert.match(descriptions.browser_tabs, /away end turn, ask user to sign in(?: and reply|\/reply)/);
   // HO1 keeps the secret-request prohibition.
@@ -393,8 +393,8 @@ for (const mode of [undefined, '0']) test(`MT descriptions and scroll guidance, 
     assert.match(descriptions.browser_tabs, /Hand off unasked payments/);
     assert.match(descriptions.browser_fill, /checkbox\/switch\/radio: boolean/);
     assert.match(descriptions.browser_fill, /submit: observed ref only when user asked/);
-    // HO1 preserves all four owned-tab operations.
-    assert.match(descriptions.browser_tabs, /list\/close\/keep\/handoff/);
+    // The schema advertises all four operations; keep's lifetime needs prose.
+    assert.deepEqual(tools.find(tool => tool.name === 'browser_tabs').inputSchema.properties.do.enum, ['list', 'close', 'keep', 'handoff']);
     assert.match(descriptions.browser_tabs, /keep: open after turn/);
   }
   assert.match(descriptions.browser_act, /Never blindly resend an uncertain submit\. click (?:accepts )?modifier:cmd\/ctrl\./);

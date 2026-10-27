@@ -226,13 +226,13 @@ export function createToolDispatcher({ browser, pages, snapshot, runSteps, fillF
     return { ...value, capturedAt };
   };
   // A file chooser a page opens after its step returned is reported on the next result; delivered() commits the count.
-  const finishResult = async (ordinal, lines, body, entry, observed, imageRequested = false, { allowHints = true, input, inputEpoch } = {}) => {
+  const finishResult = async (ordinal, lines, body, entry, observed, imageRequested = false, { allowHints = true, input, inputEpoch, reportedDialog } = {}) => {
     const pending = inputState(entry);
     if (input && (inputEpoch === undefined || pending.epoch === inputEpoch)) {
       pending.edited = input.submitted ? false : pending.edited || input.edited === true;
       if (input.ask !== undefined) pending.ask = input.ask === true;
     }
-    const dialog = entry.state.dialog;
+    const dialog = reportedDialog && reportedDialog === entry.state.dialog ? reportedDialog : undefined;
     const otherInput = pending.edited || pending.ask || observed?.pendingUserInput === true;
     const preserve = dialog || otherInput;
     let picture = typeof imageRequested === 'object' ? imageRequested : undefined;
@@ -486,7 +486,7 @@ export function createToolDispatcher({ browser, pages, snapshot, runSteps, fillF
             // A row that a scroll step found carries a ref from the page read, which only a delivered read makes usable.
             if (a.observe === 'none' && (!lossFixes || result.stoppedAt == null) && !lines.some(line => /\[ref=/.test(line))) observed = undefined;
             const reply = await finish(lines, observed?.text, entry, observed, picture ?? a.observe === 'screenshot',
-              { inputEpoch, input: { ...result.input,
+              { inputEpoch, reportedDialog: result.dialog, input: { ...result.input,
                 ...(result.confirmation ? { ask: true } : a.steps.some(step => !['wait', 'viewport', 'hover', 'scroll'].includes(step.do))
                   ? { ask: result.input?.ask === true } : {}) } });
             // Only the registry can name a child. Page text and target URLs confer no ownership.
@@ -509,7 +509,7 @@ export function createToolDispatcher({ browser, pages, snapshot, runSteps, fillF
           if (landed) return textResult([...lines, landed].join('\n'), true);
           let observed;
           try { observed = await capture(entry, { since: entry.state.snapshotNo || undefined, maxChars: 8000 }); } catch { lines.push('Read unavailable; use browser_read before retrying.'); }
-          return await finish(lines, observed?.text, entry, observed, false, { inputEpoch, input: {
+          return await finish(lines, observed?.text, entry, observed, false, { inputEpoch, reportedDialog: result.submitted?.dialog, input: {
             edited: result.rows.some(row => row.status === 'set'), submitted: result.submitted?.status === 'done',
             ask: !!result.submitted?.confirmation || result.submitted?.input?.ask === true || result.rows.some(row => row.reason?.startsWith('confirmation required')),
           } });

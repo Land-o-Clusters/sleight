@@ -276,6 +276,7 @@ for (const event of ['navigation', 'document', 'dialog', 'popup', 'close']) test
   } });
   const result = await f.run(f.tab, [{ do: 'click', ref: 'e1' }, { do: 'type', ref: 'e2', text: 'must not run' }], {});
   assert.equal(result.stoppedAt, 1); assert.match(result.lines[1], /not reached/);
+  assert.equal(result.dialog, event === 'dialog' ? f.tab.state.dialog : undefined, 'only the dialog reported by the runner carries retention evidence');
   assert.equal(f.actions.length, 1);
   for (const name of ['request', 'requestfinished', 'requestfailed', 'framenavigated', 'load', 'dialog', 'popup', 'close'])
     assert.equal(f.page.listenerCount(name), 0, name);
@@ -466,6 +467,7 @@ test('v3 refuses to input behind a waiting dialog', async () => {
   const f = fixture(); f.tab.state.dialog = { type: () => 'confirm', message: () => 'Continue?' };
   const result = await f.run(f.tab, [{ do: 'click', ref: 'e1' }], {});
   assert.equal(f.actions.length, 0); assert.match(result.lines[0], /dialog/);
+  assert.equal(result.dialog, f.tab.state.dialog);
 });
 
 test('v3 action failure redacts echoed text and files', async () => {

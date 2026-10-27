@@ -91,7 +91,7 @@ test('the turbo skill reopens the page after an away handoff within its reviewed
   assert.doesNotMatch(skill, /Read fresh on their next message/);
   assert.ok(Buffer.byteLength(skill) <= 2459);
   // PF3 + HO3: the section cap rises from 1,854 to 2,459 bytes while deferring 3,389 native
-  // characters from the first request. Its catalog + first rules fall to 11,026 bytes.
+  // characters from the first request. Its catalog + first rules fall to 11,020 bytes.
   // Pin the section separately from HO1P's unchanged engine skill and catalogs.
   assert.equal(hash(skill), baseline.browserSkill);
 });
@@ -479,13 +479,13 @@ for (const mode of [undefined, '0']) test(`MT browser descriptions stay pinned i
   // TL1's max_steps schema adds 57 catalog characters; descriptions stay unchanged.
   assert.equal(tools.find(tool => tool.name === 'browser_act').description.length, mode === '0' ? 1034 : 1059);
   // HO1 saves 2 catalog bytes by default and 3 in the legacy variant versus 1.5.0.
-  assert.equal(JSON.stringify(tools).length, mode === '0' ? 6162 : 6089);
+  assert.equal(JSON.stringify(tools).length, mode === '0' ? 6162 : 6083);
   const descriptions = tools.map(tool => tool.description).join('\n');
   for (const prompt of [undefined, 'lean']) {
     const combined = skillRules(skillPath, { SLEIGHT_PROMPT: prompt }).length + descriptions.length;
     // HO1 pins the combined skill and description sizes in both MT variants.
     assert.equal(combined, mode === '0' ? (prompt === 'lean' ? 5987 : 9614)
-      : (prompt === 'lean' ? 5914 : 9541));
+      : (prompt === 'lean' ? 5908 : 9535));
   }
   assert.ok(JSON.stringify(tools).length < 8000);
   for (const tool of tools) assert.ok(tool.description.length <= 2048, tool.name);
@@ -500,13 +500,13 @@ test('PF3 keeps every 1.5.0 input schema and pins both first and full turbo guid
   assert.equal(hash(full), baseline.browserFullRules);
   assert.equal(hash(turboFirstRules(full)), baseline.browserFirstRules);
   const measured = budget.budget({}).conditional.turboFirst.default;
-  assert.equal(measured.catalog.characters, 6087);
+  assert.equal(measured.catalog.characters, 6081);
   assert.equal(measured.rules.characters, 4938);
   assert.equal(measured.deferredCharacters, 3389);
-  assert.equal(measured.combined.characters, 11026);
-  assert.equal(Buffer.byteLength(JSON.stringify(browserTools('bbench')) + '\n' + turboFirstRules(full)), 11026);
+  assert.equal(measured.combined.characters, 11020);
+  assert.equal(Buffer.byteLength(JSON.stringify(browserTools('bbench')) + '\n' + turboFirstRules(full)), 11020);
   // This counts the browser catalog + skill, not host framing, native tools or Haiku tokens.
-  assert.ok(measured.combined.characters < 11736, 'below the same df27db01 surface');
+  assert.ok(measured.combined.characters <= 11736, 'below the same df27db01 surface');
   assert.ok(measured.combined.characters < 14166, 'below p160 a3706679');
 });
 

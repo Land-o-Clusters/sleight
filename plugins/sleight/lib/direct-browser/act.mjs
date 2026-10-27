@@ -682,7 +682,7 @@ export function createActionRunner({ check, snapshot, backgroundClick = (tab, lo
     }
     if (observeError) lines.push('Read unavailable: ' + observeError + '; use browser_read before retrying.');
     if (!needsRead) for (let i = 0; i < lines.length; i++) lines[i] = lines[i].replace('input sent; observation below', 'input sent');
-    return { lines, stoppedAt, observe: observed, ...(Object.keys(input).length ? { input } : {}), ...(fullObservation && observed ? { fullObservation: true } : {}), ...(paused ? { paused: true } : {}), ...(closed ? { closed: true } : {}), ...(confirmation ? { confirmation } : {}) };
+    return { lines, stoppedAt, observe: observed, ...(state.dialog ? { dialog: state.dialog } : {}), ...(Object.keys(input).length ? { input } : {}), ...(fullObservation && observed ? { fullObservation: true } : {}), ...(paused ? { paused: true } : {}), ...(closed ? { closed: true } : {}), ...(confirmation ? { confirmation } : {}) };
     } finally { batchWatch.stop(); if (recordingStopped) carry?.stop(); }
   };
 }

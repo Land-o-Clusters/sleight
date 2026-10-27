@@ -513,7 +513,9 @@ function rowsOf(tree, secrets, viewport) {
       // through value changes and sibling reorders, including child-frame refs.
       const key = ref ?? `${parent ?? 'root'}/${index}`;
       rows.push({ key, ref, parent, depth, line, previous,
-        pendingUserInput: role === 'dialog' || role === 'alertdialog' || protectedValue,
+        // Page-authored dialog roles include cookie notices. Only a protected
+        // field is a sign-in handoff here; action stops report their own asks.
+        pendingUserInput: protectedValue,
         ...(role === 'link' && !protectedValue && node.url ? { link: { name: scrub(node.name || node.text || '', secrets), url: scrub(node.url, secrets) } } : {}) });
       previous = key;
       if (!protectedValue && node.children) visit(node.children, key, depth + 1);
