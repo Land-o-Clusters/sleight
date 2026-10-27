@@ -409,10 +409,10 @@ export async function prepareHandHost(options = {}) {
   // session's: hand frames on stdin and control events on stdout. Session clients open fds 3 and 4 at first use, then
   // pass those consent pipes to each turbo worker. --menu remains available to standalone hand clients. cursorStyle is the
   // glove, the Split Seam+ ring or plain Split Seam ('seam', for comparison).
-  return Object.freeze({ status: 'ready', spawn: ({ capture = 'hidden', consent = false, cursorStyle = 'glove' } = {}) => {
-    if (!['hidden', 'visible'].includes(capture) || typeof consent !== 'boolean') throw Error('HAND_CAPTURE_INVALID');
+  return Object.freeze({ status: 'ready', spawn: ({ capture = 'hidden', consent = false, cursorStyle = 'glove', menuOnly = false } = {}) => {
+    if (!['hidden', 'visible'].includes(capture) || typeof consent !== 'boolean' || typeof menuOnly !== 'boolean' || menuOnly && consent) throw Error('HAND_CAPTURE_INVALID');
     if (!handCursorStyles.includes(cursorStyle)) throw Error('HAND_CURSOR_STYLE_INVALID');
-    return spawn(executable('consent-host', receipt), ['--hand', '--capture=' + capture, '--cursor-style=' + cursorStyle, consent ? '--consent' : '--menu'],
+    return spawn(executable('consent-host', receipt), ['--hand', '--capture=' + capture, '--cursor-style=' + cursorStyle, menuOnly ? '--settings-menu' : consent ? '--consent' : '--menu'],
       { env: consentEnvironment(), stdio: ['pipe', 'pipe', 'ignore', ...consent ? ['pipe', 'pipe'] : []] });
   }, checkCharacter: (frame, options) => checkCharacterInHost(executable('consent-host', receipt), frame, options) });
 }

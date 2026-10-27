@@ -115,7 +115,7 @@ export function usageFrame(value) {
  *  permissions: the menu's Permissions rows (menu() gives { payload, offered }) and their clicks (apply), or null for none.
  *  usage: the menu's usage row ({ native?, turbo?, saved } or undefined), read at most every usageMs, or null for none. */
 export function createHandClient({ env = process.env, setting = () => handSetting({ env }), built = handHostBuilt, prepare = prepareHandHost,
-  trace = () => {}, onPause = () => {}, now = Date.now, defer = setImmediate, recheckMs = 60000, killAfterMs = 2000,
+  menuOnly = false, onMenuReady = () => {}, trace = () => {}, onPause = () => {}, now = Date.now, defer = setImmediate, recheckMs = 60000, killAfterMs = 2000,
   setHand = async enabled => (await import('./command.mjs')).writeHandSetting({ enabled }),
   permissions = { menu: async () => (await command()).permissionsMenu(), apply: async (event, offered) => (await command()).applyMenuEvent(event, offered) },
   currentApp = noted, usage = logUsage(env), usageMs = 300000, cursorStyle, character, loadSprite = installedSprite, cursorPicker,
@@ -326,7 +326,7 @@ export function createHandClient({ env = process.env, setting = () => handSettin
     style = next.style; if (next.character) character = next.character;
     pickerLoad = undefined;
     let sprite;
-    if (style === 'sprite') {
+    if (!menuOnly && style === 'sprite') {
       try {
         const loaded = await loadSprite(character);
         spriteSource = loaded; sprite = spriteFrame();
@@ -350,6 +350,12 @@ export function createHandClient({ env = process.env, setting = () => handSettin
         keys === 'hand,nonce,op,style' && event.op === 'select' && ['ring', 'seam', 'glove'].includes(event.style) ||
         keys === 'character,hand,nonce,op,style' && event.op === 'select' && event.style === 'sprite' && characterIdValid(event.character))) {
       note('hand-picker-refused', {}); return true;
+    }
+    if (menuOnly && event.op === 'refresh') {
+      // No actions drive rechecks in a standalone menu. Opening it reads external CLI changes too, even when the settings
+      // directory did not exist when the watcher was installed.
+      style = undefined; character = undefined; hand = read();
+      write(menu()); refreshPermissions(); refreshUsage();
     }
     if (pickerBusy) {
       // Refreshes coalesce; a person's action must survive a refresh already in flight.
@@ -388,6 +394,8 @@ export function createHandClient({ env = process.env, setting = () => handSettin
       const text = events.slice(0, end); events = events.slice(end + 1);
       let event;
       try { event = JSON.parse(text); } catch {}
+      if (menuOnly && event?.hand === 'menu-ready' && event.nonce === nonce &&
+          Object.keys(event).sort().join() === 'existing,hand,nonce' && typeof event.existing === 'boolean') { onMenuReady(event.existing); continue; }
       if (event?.hand === 'narration-check' && event.nonce === nonce && Object.keys(event).sort().join() === 'hand,nonce,secure,token' && typeof event.secure === 'boolean') {
         const done = narrationChecks.get(event.token); narrationChecks.delete(event.token); done?.(!event.secure); continue;
       }
@@ -402,7 +410,7 @@ export function createHandClient({ env = process.env, setting = () => handSettin
       if (event?.hand === 'clear-ready' && event.nonce === nonce && Object.keys(event).sort().join() === 'hand,nonce,token') {
         clearWaiters.get(event.token)?.(true); continue;
       }
-      if (event?.hand === 'pause' && event.nonce === nonce && Object.keys(event).sort().join() === 'hand,nonce,paused,phase,token' &&
+      if (!menuOnly && event?.hand === 'pause' && event.nonce === nonce && Object.keys(event).sort().join() === 'hand,nonce,paused,phase,token' &&
           typeof event.paused === 'boolean' && /^[0-9a-f]{32}$/.test(event.token) && ['request', 'commit', 'confirm', 'cancel', 'restored'].includes(event.phase)) {
         if (event.phase === 'restored') {
           if (restoreRequest?.token === event.token && event.paused === true) { clearTimeout(restoreRequest.timer); restoreRequest = undefined; }
@@ -465,7 +473,7 @@ export function createHandClient({ env = process.env, setting = () => handSettin
       if (host === 'dead') return undefined;
       // Sprite style needs a valid installed character. Without one the host draws the ring, with one trace line.
       let sprite;
-      if (style === 'sprite') {
+      if (!menuOnly && style === 'sprite') {
         try {
           if (!characterIdValid(character)) throw Error('CHARACTER_NOT_SET');
           const { character: loaded, resolve } = await loadSprite(character);
@@ -477,7 +485,7 @@ export function createHandClient({ env = process.env, setting = () => handSettin
         }
         if (host === 'dead') return undefined;
       }
-      const started = result.spawn({ capture, consent, ...cursorStyle !== undefined || style !== 'glove' ? { cursorStyle: style } : {} });
+      const started = result.spawn({ capture, consent, ...menuOnly ? { menuOnly: true } : {}, ...cursorStyle !== undefined || style !== 'glove' ? { cursorStyle: style } : {} });
       started.on('error', error => { if (child === started) die('spawn', { code: error?.code }); });
       started.stdin.on('error', error => { if (child === started) die('pipe', { code: error?.code }); });
       started.stdout?.on('data', chunk => { if (child === started) onEvents(chunk, started); });
@@ -526,7 +534,7 @@ export function createHandClient({ env = process.env, setting = () => handSettin
   function ensure() {
     if (host === 'running') return Promise.resolve(true);
     if (host === 'dead') return Promise.resolve(false);
-    if (!starting) begin(serial(true));
+    if (!starting) begin(serial(!menuOnly));
     return starting;
   }
   // The settings are read again when sleight's settings folder changes (the Ghost Hand row or the hand command), and at most
@@ -561,6 +569,7 @@ export function createHandClient({ env = process.env, setting = () => handSettin
   catch {} // no settings folder yet: the minute's recheck covers it
 
   const client = Object.freeze({
+    startMenu() { return menuOnly ? ensure() : Promise.resolve(false); },
     checkNarration(done) {
       if (host !== 'running' || narrationChecks.size >= 32) { done(false); return; }
       const token = randomBytes(16).toString('hex'); narrationChecks.set(token, done);
@@ -576,7 +585,7 @@ export function createHandClient({ env = process.env, setting = () => handSettin
       recheck();
       // A new app to act in changes the menu's Never Act in row.
       if (host === 'running' && currentApp()?.bundleId !== permsApp) refreshPermissions();
-      if (!hand || host === 'dead' || paused && frame?.state !== 'paused') return;
+      if (menuOnly || !hand || host === 'dead' || paused && frame?.state !== 'paused') return;
       if (style === 'glove' && ['aim', 'status'].includes(frame?.hand)) return;
       const wire = handWireFrame({ ...frame, say: narration === 'off' ? undefined : frame.say });
       if (typeof wire === 'string') { note('hand-dropped', { reason: wire }); return; }

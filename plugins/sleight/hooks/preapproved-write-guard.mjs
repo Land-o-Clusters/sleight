@@ -2,7 +2,8 @@ const directorySuffix = '/library/application support/sleight';
 // grant-seal.key seals the Electron Always records in electron-grants.json; writing it would forge consent. hand.json is the
 // user's ghost hand opt-out. permissions.json holds the apps and sites the user told sleight never to act in. turbo-owner.json
 // names the copy that issued turbo.json's receipt, which decides whether a startup may move it.
-const suffixes = ['preapproved.json', 'turbo.json', 'turbo-apps.json', 'turbo-owner.json', 'electron-grants.json', 'grant-seal.key', 'hand.json', 'permissions.json'].map(filename => `${directorySuffix}/${filename}`);
+const suffixes = ['preapproved.json', 'turbo.json', 'turbo-apps.json', 'turbo-owner.json', 'electron-grants.json', 'grant-seal.key', 'hand.json', 'permissions.json', 'menu-presence.lock', 'menu-session.lock', 'settings-link.json'].map(filename => `${directorySuffix}/${filename}`);
+const shimSuffixes = ['/.local/bin/sleight', '/.local/bin/.sleight-shim-v1'];
 const mutations = new Set(['Write', 'Edit', 'MultiEdit', 'NotebookEdit']);
 export const guardUnavailableReason = /* notice */ 'sleight guard unavailable. The tool call was refused.';
 export const guardPathReason = /* notice */ 'sleight cannot resolve this path safely. HOME, CLAUDE_CONFIG_DIR or filesystem metadata is unavailable.';
@@ -24,10 +25,12 @@ export const PROTECTED = Object.freeze({
   aboveSleight: "a folder that holds sleight's settings or helper cache",
   aboveInstall: 'a folder that holds an installed copy of sleight',
   launcher: "sleight's settings through its launcher",
+  shim: /* notice */ "sleight's managed PATH command (~/.local/bin/sleight)",
 });
 const protectedLiteral = path => {
   const value = folded(normalize(path));
   if (suffixes.some(suffix => value.endsWith(suffix)) || value.endsWith(directorySuffix)) return PROTECTED.settings;
+  if (shimSuffixes.some(suffix => value.endsWith(suffix))) return PROTECTED.shim;
   return TREES[0].test(value) ? PROTECTED.cache : TREES[1].test(value) ? PROTECTED.install : undefined;
 };
 // Literally under <home>/Library/Caches/sleight-bench, before any link is resolved.
@@ -76,6 +79,8 @@ const normalize = path => {
 // Without the home folder, only ~ spellings can be judged.
 const above = (path, home) => {
   const root = home ?? '/~', value = folded(normalize(path.replace(/^(?:~|\$HOME|\$\{HOME\})(?=\/|$)/, () => root)));
+  if (value.startsWith('/') && shimSuffixes.map(suffix => folded(normalize(root + suffix)))
+    .some(file => file.startsWith(value === '/' ? '/' : value + '/'))) return PROTECTED.shim;
   return value.startsWith('/') && [`${root}/Library/Application Support/sleight`, `${root}/Library/Caches/sleight`].map(path => folded(normalize(path)))
     .some(folder => value === folder || folder.startsWith(value === '/' ? '/' : value + '/')) ? PROTECTED.aboveSleight : undefined;
 };
@@ -165,21 +170,23 @@ const FIND_WRITERS = new Set(['rm', 'mv', 'cp', 'ln', 'chmod', 'chown', 'chgrp',
   'python', 'python3', 'node', 'ruby', 'xargs', 'dd', 'install', 'rsync', 'ditto', 'touch', 'shred', 'srm']);
 // A path with glob or brace characters names whatever its folder holds that matches; the folder decides.
 const globFolder = path => /[*?[{]/.test(path) ? path.slice(0, path.search(/[*?[{]/)).replace(/\/[^/]*$/, '') : undefined;
-const PROTECTED_NAME = /(?:preapproved|turbo|turbo-apps|turbo-owner|electron-grants|hand|permissions)\.json|grant-seal\.key/i;
-const launcher = name => name === 'sleight-mcp' || name === 'launch.mjs';
+const PROTECTED_NAME = /(?:preapproved|turbo|turbo-apps|turbo-owner|electron-grants|hand|permissions|settings-link)\.json|grant-seal\.key|menu-(?:presence|session)\.lock|\.sleight-shim-v1/i;
+const launcher = name => ['sleight', 'sleight-mcp', 'launch.mjs', '.sleight-shim-v1'].includes(name);
 const commandArgument = value => value.replace(/^['"]+|[;&|)'"]+$/g, '');
 // True when the words run the launcher's command with arguments `allowed` refuses (by default anything but status), as
 // separate words or inside a -c string, where the arguments run to the next shell operator.
 const statusOnly = rest => rest[0] === 'status';
 function launcherToggle(words, command, allowed = statusOnly) {
-  const names = words.map(word => word.split('/').at(-1)), first = names.findIndex(launcher);
+  const names = words.map(word => word.split('/').at(-1));
+  const { index } = commandWord(words.map(text => ({ text })));
+  const first = names.findIndex((name, at) => launcher(name) && (name !== 'sleight' || at === index || at === index + 1 && names[index] === 'node'));
   if (first >= 0) {
     const at = names.indexOf(command, first + 1);
     if (at >= 0 && !allowed(names.slice(at + 1).map(commandArgument))) return true;
   }
   return words.some(word => {
     if (!/\s/.test(word)) return false;
-    const hit = /(?<![\w.-])(?:\S*\/)?(?:sleight-mcp|launch\.mjs)(?=[\s'"]|$)/.exec(word);
+    const hit = /(?<![\w.-])(?:\S*\/)?(?:sleight-mcp|\.sleight-shim-v1|launch\.mjs)(?=[\s'"]|$)/.exec(word);
     // A script string that runs the launcher through xargs gives it arguments from input the guard doesn't see.
     if (hit && /(?<![\w-])xargs(?![\w-])[^;&\n]*$/.test(word.slice(0, hit.index))) return true;
     return !!hit && [...word.slice(hit.index).matchAll(new RegExp(`(?<![\\w-])${command}(?![\\w-])([^;&|)\\n]*)`, 'g'))]
@@ -191,13 +198,14 @@ const listingOnly = rest => rest.length === 0 || rest.length === 1 && rest[0] ==
 // The launcher's commands that change what sleight may do, each with the forms Claude's shell may run.
 const cursorReads = rest => ['list', 'check', 'status'].includes(rest[0]);
 const LAUNCHER_COMMANDS = [['turbo', statusOnly, 'turbo.json'], ['hand', statusOnly, 'hand.json'], ['cursor', cursorReads, 'hand.json'],
-  ['permissions', listingOnly, 'permissions.json']];
-// Fail closed. A Bash command that names the launcher (sleight-mcp or launch.mjs) beside one of these subcommand words passes
+  ['permissions', listingOnly, 'permissions.json'], ...['menu', 'link', 'unlink'].map(word => [word, () => false, 'hand.json'])];
+// Fail closed. A Bash command that names the launcher (sleight, sleight-mcp or launch.mjs) beside one of these subcommand words passes
 // only as a plain direct invocation of a read-only form: literal arguments, and no expansion, substitution, glob, brace,
 // redirection, heredoc, subshell, xargs, parallel or eval anywhere in it. Any other spelling is refused, except read-only
 // tools (grep, cat, git log) that can't run anything. The guard doesn't try to read what the shell would make of it.
-const LAUNCHER_NAME = /sleight-mcp|launch\.mjs/;
-const SUBCOMMAND = /(?<![\w-])(?:hand|turbo|permissions|cursor)(?![\w.-])/; // not turbo.json or hand.json
+const LAUNCHER_NAME = /(?<![\w.-])(?:sleight-mcp|launch\.mjs)(?![\w.-])|(?:^|[^\w.-])\.sleight-shim-v1(?![\w.-])|\/\.local\/bin\/sleight(?![\w./:-])/;
+const launcherText = text => LAUNCHER_NAME.test(text) || /(?<![\w./-])sleight(?![\w./:-])/.test(text);
+const SUBCOMMAND = /(?<![\w-])(?:hand|turbo|permissions|cursor|menu|link|unlink)(?![\w.-])/; // not turbo.json or hand.json
 const INPUT_RUNNERS = String.raw`(?<![\w-])(?:\w*args|parallel|eval|source)(?![\w-])`;
 const EXPANDS = String.raw`[$` + '`' + String.raw`*?[\]{}]`;
 // With the launcher named but no subcommand word: text that could still make one.
@@ -318,10 +326,35 @@ function runsSubcommand(segment) {
   if (segment[index].text.split('/').at(-1) === 'node') { index++; while (segment[index]?.text.startsWith('--')) index++; }
   return launcher(segment[index]?.text.split('/').at(-1) ?? '') && segment[index + 1]?.text === 'runs';
 }
+// Literal launcher words share the conservative segment check, including command positions behind keywords and wrappers.
+// The short product name in print/read arguments is data. Hard filenames keep their whole-text copy/alias check.
+// Interpreter code is inspected separately from ordinary arguments.
+function segmentNamesLauncher(segment, depth = 0) {
+  if (depth > 8) return true;
+  const { index } = commandWord(segment);
+  if (index === undefined) return segment.some(word => !word.operator && LAUNCHER_NAME.test(word.text));
+  const plain = segment.map(word => word.text), name = plain[index].split('/').at(-1);
+  const hardName = segment.some(word => !word.operator && LAUNCHER_NAME.test(word.text));
+  if (!hardName && SHELLS.has(name)) {
+    const script = shellScript(plain, index);
+    if (typeof script !== 'string') return false;
+    const segments = [[]];
+    for (const word of shellWords(script)) {
+      if (word.operator && [';', '&', '&&', '||', '|', '|&'].includes(word.text)) segments.push([]);
+      else segments.at(-1).push(word);
+    }
+    return segments.some(segment => segmentNamesLauncher(segment, depth + 1));
+  }
+  if (name === 'node') { let at = index + 1; while (plain[at]?.startsWith('--')) at++; if (launcher(plain[at]?.split('/').at(-1) ?? '')) return true; }
+  // -c/-e source is code, unlike commit messages, path operands and node --test arguments.
+  const code = INTERPRETERS.test(name) && plain.slice(index + 1).some(word => /^-(?:[a-zA-Z]*[ceE]|-eval)(?:=|$)/.test(word));
+  const dataArguments = readTool(segment) || ['echo', 'printf', 'git', 'gh', 'npm'].includes(name) || INTERPRETERS.test(name) && !code;
+  return segment.some((word, i) => !word.operator &&
+    (dataArguments && i !== index ? LAUNCHER_NAME.test(word.text) : (i === index ? launcherText(name) || LAUNCHER_NAME.test(word.text) : launcherText(word.text))));
+}
 function launcherRefused(command, depth = 0) {
   if (depth > 8) return true;
   const words = shellWords(command), texts = [command, ...words.map(word => word.text)];
-  const named = texts.some(text => LAUNCHER_NAME.test(text));
   // Pipelines split on ; & && || and newline; their segments on | and |&. Subshell parentheses stay in the segment.
   const pipelines = [[[]]];
   for (const word of words) {
@@ -329,6 +362,7 @@ function launcherRefused(command, depth = 0) {
     else if (word.operator && ['|', '|&'].includes(word.text)) pipelines.at(-1).push([]);
     else pipelines.at(-1).at(-1).push(word);
   }
+  const named = texts.some(text => LAUNCHER_NAME.test(text)) || pipelines.flat().some(segment => segmentNamesLauncher(segment));
   const sub = texts.some(text => SUBCOMMAND.test(text)) || pipelines.flat().some(runsSubcommand);
   // Piped text run as code can be anything. Piped text as xargs arguments refuses once the launcher or a subcommand shows.
   for (const pipeline of pipelines) for (const segment of pipeline.slice(1)) {
@@ -336,7 +370,7 @@ function launcherRefused(command, depth = 0) {
     if (runs === 'code' || runs === 'arguments' && (named || sub)) return true;
   }
   const reads = readOnly(command, words);
-  const launcherSegments = pipelines.flat().filter(segment => segment.some(word => !word.operator && LAUNCHER_NAME.test(word.text)));
+  const launcherSegments = pipelines.flat().filter(segment => segmentNamesLauncher(segment));
   // Only read tools name the launcher: nothing here can run it, so the command-wide rule is off.
   const exempt = named && reads && launcherSegments.every(readTool);
   if (named && !exempt && texts.some(text => (sub ? UNPLAIN : GENERATES).test(text))) return true;
@@ -344,20 +378,27 @@ function launcherRefused(command, depth = 0) {
     const pipeSub = pipeline.flat().some(word => !word.operator && SUBCOMMAND.test(word.text)) || pipeline.some(runsSubcommand);
     for (const segment of pipeline) {
       if (!segment.length || reads && readTool(segment)) continue;
-      const segNamed = segment.some(word => !word.operator && LAUNCHER_NAME.test(word.text));
+      const segNamed = segmentNamesLauncher(segment);
       const segSub = segment.some(word => !word.operator && SUBCOMMAND.test(word.text)) || runsSubcommand(segment);
       const { index, unreadable } = commandWord(segment);
       // A command word the guard can't read beside a subcommand word may be the launcher under another spelling.
       if (unreadable && pipeSub) return true;
       if (index === undefined) { if (segNamed && segSub) return true; continue; }
       const plain = segment.map(word => word.text);
+      const script = shellScript(plain, index);
+      if (!segNamed && typeof script === 'string' && plain.at(-1) === script) {
+        if (launcherRefused(script, depth + 1)) return true;
+        continue;
+      }
       if (segSub) {
         // Beside a subcommand word, every word is plain: no expansion, glob, brace or joined quoting.
         if (segment.some(word => !word.operator && (word.joined || EXPANDING_WORD.test(word.text)))) return true;
         const name = plain[index].split('/').at(-1);
-        if (SHELLS.has(name) || INTERPRETERS.test(name)) { if (!runsLauncherReadForm(segment, index)) return true; continue; }
+        if (SHELLS.has(name) || INTERPRETERS.test(name)) {
+          if (name === 'node' && plain[index + 1] === '--test' && !segNamed) continue;
+          if (!runsLauncherReadForm(segment, index)) return true; continue;
+        }
       }
-      const script = shellScript(plain, index);
       if (script === null && named && sub) return true;
       if (script !== undefined) { if (script !== null && launcherRefused(script, depth + 1)) return true; continue; }
       if (!(named && sub) || !segNamed) continue;
@@ -387,6 +428,13 @@ function shellWritePaths(command, initialDirectory, depth = 0) {
   const add = (path, literalOnly = false, ancestor = false) => {
     if (typeof path !== 'string') return;
     paths.push({ path: directory && !/^(?:\/|~|\$HOME|\$\{HOME\})/.test(path) ? `${directory}/${path}` : path, literalOnly, ancestor });
+  };
+  const destination = (target, sources, contents = false) => {
+    if (typeof target !== 'string') return;
+    // A file copied into a directory keeps its basename. Inspect that resulting path without treating every home-folder
+    // copy as a write to every protected descendant. Replacing a PATH parent or copying directory contents still counts.
+    add(target, false, contents || /\/\.local(?:\/bin)?\/?$/i.test(target));
+    for (const source of sources) add(`${target}/${source.split('/').filter(Boolean).at(-1)}`, false, true);
   };
   for (const { words: segment, piped } of segments) {
     const texts = [];
@@ -430,12 +478,19 @@ function shellWritePaths(command, initialDirectory, depth = 0) {
       // -c alone or in a flag group (-lc, -ic): the script is the next word.
       paths.push(...shellWritePaths(texts[texts.findIndex(text => /^-[a-zA-Z]*c[a-zA-Z]*$/.test(text)) + 1] ?? '', directory, depth + 1));
     } else if (['cp', 'install', 'rsync', 'ln'].includes(executable)) {
+      // A hard link creates a second write path to the same executable or receipt. Refuse it at creation, before its
+      // later spelling can lose the protected filename. Folder symlinks reach the protected descendants too.
+      if (executable === 'ln') operands.slice(0, -1).forEach(path => add(path, false, true));
       const target = texts.findIndex(text => text === '-t' || text === '--target-directory');
-      add(target >= 0 ? texts[target + 1] : operands.at(-1));
+      destination(target >= 0 ? texts[target + 1] : operands.at(-1), operands.slice(0, -1), executable === 'rsync' ||
+        executable === 'cp' && texts.some(arg => /^-[^-]*[Rr]/.test(arg)) && operands.slice(0, -1).some(arg => arg.endsWith('/')));
       const attached = texts.find(text => text.startsWith('--target-directory='));
-      if (attached) add(attached.slice('--target-directory='.length));
-    } else if (executable === 'rm') operands.forEach(path => add(path, false, true));
-    else if (executable === 'mv') operands.forEach((path, at) => add(path, false, at < operands.length - 1));
+      if (attached) destination(attached.slice('--target-directory='.length), operands);
+    } else if (['rm', 'unlink'].includes(executable)) operands.forEach(path => add(path, false, true));
+    else if (executable === 'mv') {
+      operands.forEach((path, at) => add(path, false, at < operands.length - 1));
+      destination(operands.at(-1), operands.slice(0, -1));
+    }
     else if (['chmod', 'chown', 'chgrp', 'chflags'].includes(executable)) operands.forEach(path => add(path, false, texts.some(arg => /^-[^-]*R/.test(arg))));
     else if (executable === 'find' && texts.some((arg, at) => arg === '-delete' ||
       ['-exec', '-execdir', '-ok', '-okdir'].includes(arg) && FIND_WRITERS.has(texts[at + 1]?.split('/').at(-1)))) {
@@ -456,7 +511,7 @@ function shellWritePaths(command, initialDirectory, depth = 0) {
       texts.filter(arg => /^--output(?:-document)?=/.test(arg)).forEach(arg => add(arg.slice(arg.indexOf('=') + 1)));
     } else if (executable === 'git' && ['checkout', 'restore', 'apply'].includes(texts[0])) operands.slice(1).forEach(path => add(path));
     else if (executable === 'patch') operands.forEach(path => add(path));
-    else if (['tee', 'truncate'].includes(executable) ||
+    else if (['tee', 'truncate', 'touch'].includes(executable) ||
       (['sed', 'perl'].includes(executable) && texts.some(arg => /^-[^-]*i/.test(arg))) ||
       (executable === 'defaults' && ['write', 'delete', 'import'].includes(texts[0]))) operands.forEach(path => add(path));
     else if (executable === 'plutil' && texts.some(arg => ['-replace', '-insert', '-remove', '-convert'].includes(arg))) {
@@ -471,7 +526,7 @@ function shellWritePaths(command, initialDirectory, depth = 0) {
       const writes = /\bopen\s*\([^)]*,\s*(?:mode\s*=\s*)?['"][wax][+bt]*['"]|\b(?:writeFile(?:Sync)?|appendFile(?:Sync)?|unlink(?:Sync)?|rename(?:Sync)?|copyFile(?:Sync)?|rm(?:Sync)?|remove|truncate|File\.write)\s*\(|\b(?:unlink|rename|chmod|chown|rmtree|move|symlink)\b/;
       if (!writes.test(source)) continue;
       // Inline code is scanned as text only, never passed to the filesystem resolver.
-      for (const match of source.matchAll(/(?:~|\$\{?HOME\}?|\/|\.{1,2}\/)[^'"`;\n()<>|]*?(?:(?:preapproved|turbo|turbo-apps|turbo-owner|electron-grants|hand|permissions)\.json|grant-seal\.key|\/sleight(?=['"`;,)\s]|$)|\/(?:library\/caches|plugins\/cache\/[^/'"`;\n()<>|]+)\/sleight(?![\w.-])(?:\/[^'"`;\n()<>|]*)?|\/library\/caches\/sleight-bench\/[^'"`;\n()<>|]*)|\b(?:(?:preapproved|turbo|turbo-apps|turbo-owner|electron-grants|hand|permissions)\.json|grant-seal\.key)\b/gi)) add(match[0], true);
+      for (const match of source.matchAll(/(?:~|\$\{?HOME\}?|\/|\.{1,2}\/)[^'"`;\n()<>|]*?(?:(?:preapproved|turbo|turbo-apps|turbo-owner|electron-grants|hand|permissions|settings-link)\.json|menu-(?:presence|session)\.lock|\.sleight-shim-v1|grant-seal\.key|\/sleight(?=['"`;,)\s]|$)|\/(?:library\/caches|plugins\/cache\/[^/'"`;\n()<>|]+)\/sleight(?![\w.-])(?:\/[^'"`;\n()<>|]*)?|\/library\/caches\/sleight-bench\/[^'"`;\n()<>|]*)|\b(?:(?:preapproved|turbo|turbo-apps|turbo-owner|electron-grants|hand|permissions|settings-link)\.json|menu-(?:presence|session)\.lock|\.sleight-shim-v1|grant-seal\.key)\b/gi)) add(match[0], true);
     }
   }
   return paths;
@@ -490,6 +545,9 @@ export async function preapprovedWriteTarget(input, options) {
   for (const candidate of paths) {
     const { path, literalOnly, ancestor } = tool === 'Bash' ? candidate : { path: candidate };
     if (typeof path !== 'string') continue;
+    // A short-name write through an opaque shell root may be the managed executable. This concerns write targets only;
+    // product names in arguments, messages and ordinary paths never enter this branch.
+    if (tool === 'Bash' && /(?:^|\/)sleight$/i.test(path) && /[$`]/.test(path.replace(/^\$(?:HOME|\{HOME\})(?=\/)/, ''))) return PROTECTED.unresolved;
     // Check missing expansion roots before the literal-only/whitespace shortcut.
     // Read-only shell operands never enter this list, so an unset HOME permits ls.
     if (!options?.home && /^(?:~|\$HOME|\$\{HOME\})(?=\/|$)/.test(path) ||
@@ -526,7 +584,7 @@ const unescaped = (text, concatenate = true) => {
 };
 const switched = text => typeof text === 'string' && SWITCHES.test(unescaped(text));
 // Paths are matched lowercased (folded).
-const CONFIG = /(?:^|\/)(?:\.claude\/[^/]*\.json|\.claude\.json|\.?mcp\.json|managed-settings\.json|settings(?:\.local)?\.json|\.claude-plugin\/plugin\.json|bin\/sleight-mcp|launchagents\/[^/]+\.plist|\.config\/fish\/(?:[^/]+\/)*[^/]+\.fish|\.(?:zshrc|zshenv|zprofile|zlogin|bashrc|bash_profile|profile|envrc)|\.zshrc\.d\/[^/]+)$/;
+const CONFIG = /(?:^|\/)(?:\.claude\/[^/]*\.json|\.claude\.json|\.?mcp\.json|managed-settings\.json|settings(?:\.local)?\.json|\.claude-plugin\/plugin\.json|bin\/sleight(?:-mcp)?|launchagents\/[^/]+\.plist|\.config\/fish\/(?:[^/]+\/)*[^/]+\.fish|\.(?:zshrc|zshenv|zprofile|zlogin|bashrc|bash_profile|profile|envrc)|\.zshrc\.d\/[^/]+)$/;
 const CONFIG_TEXT = /(?:settings(?:\.local)?|\.claude|mcp|managed-settings|plugin)\.json|\.plist\b|\.fish\b|\.(?:zshrc|zshenv|zprofile|zlogin|bashrc|bash_profile|profile|envrc)\b/;
 // Commands that can write a file they name in their own text. awk only with an output redirect, a pipe or system().
 const SETTERS = /\b(?:claude\s+(?:mcp|config)|launchctl\s+setenv|python\d*(?:\.\d+)?|node|ruby|perl|jq|plutil|defaults|osascript)\b|\bg?awk\b[^\n]*(?:>|\||\bsystem\s*\()/;

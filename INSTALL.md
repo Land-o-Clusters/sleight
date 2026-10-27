@@ -62,6 +62,18 @@ If it is `/Users/you/.claude/plugins/cache/sleight/sleight/1.4.0`, run:
 "/Users/you/.claude/plugins/cache/sleight/sleight/1.4.0/bin/sleight-mcp" --doctor
 ```
 
+To put `sleight` on PATH, run this in your own terminal and answer yes:
+
+```bash
+"<installPath>/bin/sleight-mcp" link
+```
+
+It creates `~/.local/bin/sleight`, linked to a private `.sleight-shim-v1` file beside it. If that folder is missing from PATH, the command prints the line to add yourself;
+it never edits shell startup files. The shim follows the current `sleight@sleight` install after plugin updates and falls
+back to the install that created it if the record is missing. `sleight unlink` removes only the shim sleight made.
+Run `sleight menu` for settings without a session, then choose Quit Menu to close it. The first use compiles the menu host.
+The menu runs without a computer-use engine or cursor overlay. See [settings commands](docs/settings.md#commands-you-run-yourself).
+
 Start a new Claude Code session so the plugin loads.
 
 ## Codex
@@ -179,7 +191,8 @@ prints a line with `setup` in it, Computer Use isn't on yet. Give the user this 
 
 Setup runs OpenAI's helper installer, which asks for an administrator's Touch ID or password. It then opens the
 Accessibility and Screen Recording panes, where the user allows Codex Computer Use, and runs the doctor again. To preview
-what it will do, add `--dry-run`. See the [install validation limits](README.md#install-validation).
+what it will do, add `--dry-run`. After a successful check in your own terminal, setup also offers the optional `sleight`
+command. See the [install validation limits](README.md#install-validation).
 
 For turbo in Claude Code or Codex, the user turns on remote debugging once at `chrome://inspect/#remote-debugging`. Chrome then asks
 them to allow each connection. The doctor's first lines say whether turbo is ready ([settings](docs/settings.md#turbo)).

@@ -57,7 +57,7 @@ test('doctor honors the Grok home and disabled Claude import, without reading au
 
 test('launcher prints the Grok section before an unavailable engine stops doctor', async () => {
   const lines = [];
-  const code = await doctor({ env: { CODEX_HOME: '/no-such-sleight-home', SLEIGHT_CHATGPT_APP: '/no-such-ChatGPT.app' },
+  const code = await doctor({ settings: () => [], env: { CODEX_HOME: '/no-such-sleight-home', SLEIGHT_CHATGPT_APP: '/no-such-ChatGPT.app' },
     turbo: async () => [], hand: async () => [], permissions: async () => [], codex: () => [], cursor: () => [],
     grok: () => grokDoctorLines(grokStatus(fake(imported))), grokbot: () => [], log: line => lines.push(line),
   });

@@ -29,7 +29,8 @@ const skillPath = new URL('../plugins/sleight/skills/drive-mac-apps/SKILL.md', i
 // G11B shortens the eager cookie rule and counts conditional guard notices.
 // p143 plus the cookie rule: default 1062 words, lean 517 words.
 // HT1R counts the two conditional hook refusals in both variants (+151 characters).
-const leanRatio = 32412 / 45358;
+// SM1R counts the new conditional managed-PATH refusal label (+54 characters).
+const leanRatio = 32466 / 45412;
 const leanSkill = () => skillRules(skillPath, { SLEIGHT_PROMPT: 'lean' });
 
 test('hook guard refusals join the pinned notice inventory', { skip }, () => {

@@ -162,7 +162,7 @@ test('doctor and status lines name each state, and only an unsafe file or captur
 test('doctor prints the ghost hand section after turbo, read-only', async t => {
   const w = world(t), lines = [];
   const { doctor } = await import('../plugins/sleight/lib/launch.mjs');
-  const code = await doctor({ env: { CODEX_HOME: '/no-such-sleight-home', SLEIGHT_CHATGPT_APP: '/no-such-ChatGPT.app' }, log: x => lines.push(x),
+  const code = await doctor({ settings: () => [], env: { CODEX_HOME: '/no-such-sleight-home', SLEIGHT_CHATGPT_APP: '/no-such-ChatGPT.app' }, log: x => lines.push(x),
     turbo: async () => ['turbo (direct browser path)'], hand: async () => handDoctorLines(w.setting(), false) });
   assert.equal(code, 1);
   assert.match(lines[0], /^sleight \d+\.\d+\.\d+$/);
