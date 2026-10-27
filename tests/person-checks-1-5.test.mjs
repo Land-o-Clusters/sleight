@@ -38,7 +38,8 @@ function fixture(check, options = {}) {
         const message = JSON.parse(String(data));
         if (message.dismiss) return;
         frame = message; reads++;
-        receipt({ event: 'ready', pid: options.wrongPid ? 9999 : child.pid, x: 20, y: 40 });
+        receipt({ event: 'ready', pid: options.wrongPid ? 9999 : child.pid, x: 20, y: 40,
+          window: 17, windowRect: { x: 10, y: 20, width: 400, height: 240 }, ...options.ready });
         if (check.mode === 'key') receipt({ event: 'focused' });
         if (['typed', 'click'].includes(check.mode) && !options.silent) {
           timers.push(setTimeout(accept, options.early ? 0 : 100));
@@ -56,7 +57,11 @@ function fixture(check, options = {}) {
   const post = async attempt => {
     assert.equal(attempt.pid, child.pid);
     assert.equal(attempt.mode, check.mode === 'key' ? 'key' : 'click');
-    if (check.mode === 'posted-click') assert.deepEqual([attempt.x, attempt.y], [20, 40]);
+    if (check.mode === 'posted-click') {
+      assert.deepEqual([attempt.window, attempt.x, attempt.y], [17, 20, 40]);
+      assert.deepEqual(attempt.windowRect, { x: 10, y: 20, width: 400, height: 240 });
+      if (!options.noDelivery) receipt({ event: 'mouse-down', window: attempt.window, insideButton: true });
+    }
     if (options.postFail) return { status: 1 };
     if (!options.noRefusal) receipt({ event: 'refused', code: 'PERSON_INPUT_REQUIRED' });
     if (options.unexpectedAccept) accept();
@@ -126,13 +131,29 @@ test('all seven checks use authenticated fixture replies and collect the owned h
     if (check.expected === 'refused') {
       assert.equal(row.refusalCode, 'PERSON_INPUT_REQUIRED');
       assert.equal(row.pendingAfterPost, true);
+      if (check.target) {
+        assert.equal(row.postTarget.window, 17);
+        assert.equal(row.mouseDownReachedButton, true);
+      }
     }
+  }
+});
+
+test('posted handoff clicks require finite geometry and a proved target window before posting', async () => {
+  for (const ready of [{ window: undefined }, { window: 0 }, { window: 1.5 }, { x: NaN },
+    { x: 500 }, { y: -100 }, { windowRect: undefined },
+    { windowRect: { x: 10, y: 20, width: 0, height: 240 } }]) {
+    const f = fixture(checks[4], { ready });
+    let posted = false;
+    const row = await runCheck(checks[4], { ...f, post: () => { posted = true; }, say: quiet });
+    assert.equal(row.error, 'PERSON_CHECK_BUTTON_UNPROVED', JSON.stringify(ready));
+    assert.equal(row.passed, false); assert.equal(row.cleanupConfirmed, true); assert.equal(posted, false);
   }
 });
 
 test('wrong input route, VoiceOver state, PID, early resume and failed post cannot pass', async () => {
   for (const [index, options] of [[0, { typed: false }], [2, { voiceOver: false }], [0, { wrongPid: true }],
-    [3, { typed: true }], [3, { early: true }], [4, { postFail: true }], [4, { unexpectedAccept: true }],
+    [3, { typed: true }], [3, { early: true }], [4, { postFail: true }], [4, { unexpectedAccept: true }], [4, { noDelivery: true }],
     [1, { unexpectedAccept: true }], [0, { silent: true, run: { personMs: 80 } }]]) {
     assert.equal((await runFixture(checks[index], options)).passed, false);
   }
@@ -194,6 +215,43 @@ test('complete live pass saves seven timed rows and releases only after child an
   assert.deepEqual(order, ['clean', 'release', 'save']); assert.equal(voiceReads, 2);
 });
 
+test('a failed native posted click records its timeout and still runs both browser checks', async () => {
+  let current, index = 0;
+  const f = liveOptions({ checkOptions: { observeMs: 40, personMs: 10000 },
+    open: () => {
+      const check = checks[index++];
+      current = fixture(check, check.id === 'native-posted-click' ? { noRefusal: true } : {});
+      return current.open();
+    },
+    post: attempt => current.post(attempt),
+    // Advance the refusal deadline without spending five seconds in this fake.
+    now: (() => { let n = Date.now(); return () => (n += 500); })(),
+  });
+  const result = await runLive(f.options);
+  assert.equal(result.passed, false);
+  assert.deepEqual(result.checks.map(row => row.id), checks.map(check => check.id));
+  assert.deepEqual(result.checks.map(row => row.passed), [true, true, true, true, false, true, true]);
+  assert.equal(result.checks[4].error, 'PERSON_CHECK_TIMEOUT');
+  assert.equal(result.checks[4].postExitCode, 0);
+  assert.equal(result.checks[4].pendingAfterPost, true);
+  assert.equal(result.checks[4].resumed, false); assert.equal(result.checks[4].freshReads, 0);
+  assert.equal(result.checks[4].mouseDownReachedButton, true);
+  assert.equal(result.cleanupConfirmed, true); assert.deepEqual(result.notRun, []);
+  assert.equal(f.state().saved, result); assert.equal(f.state().released, 1);
+});
+
+test('a failed physical input route is retained while the remaining six checks run', async () => {
+  let current, index = 0;
+  const f = liveOptions({ checkOptions: { observeMs: 40, personMs: 1000 },
+    open: () => { current = fixture(checks[index], index++ === 0 ? { typed: false } : {}); return current.open(); },
+    post: attempt => current.post(attempt) });
+  const result = await runLive(f.options);
+  assert.equal(result.passed, false); assert.equal(result.checks.length, 7);
+  assert.equal(result.checks[0].inputRoute, 'mouse');
+  assert.deepEqual(result.checks.map(row => row.passed), [false, true, true, true, true, true, true]);
+  assert.deepEqual(result.notRun, []);
+});
+
 test('already aborted work never launches or presents a card', async () => {
   let opened = false;
   await assert.rejects(runCheck(checks[0], { signal: AbortSignal.abort(Error('stop first')),
@@ -219,6 +277,7 @@ test('interruption closes a pending host before releasing lock and saving failur
   const result = await pending;
   assert.equal(closedBeforeRelease, true); assert.equal(result.passed, false);
   assert.equal(result.checks[0].cleanupConfirmed, true);
+  assert.equal(result.checks.length, 1); assert.equal(result.notRun.length, 6);
 });
 
 test('a hold arriving during a card cancels and collects it before lock release', async () => {
@@ -227,6 +286,7 @@ test('a hold arriving during a card cancels and collects it before lock release'
   const pending = runLive(h.options); setTimeout(() => { hold = true; }, 20);
   const result = await pending;
   assert.match(result.checks[0].error, /HOLD_APPEARED/);
+  assert.equal(result.checks.length, 1); assert.equal(result.notRun.length, 6);
   assert.equal(f.closed(), true); assert.equal(h.state().released, 1);
 });
 
@@ -252,7 +312,7 @@ test('runner and poster never toggle VoiceOver, send Apple events, or import the
   for (const text of [js, swift]) {
     assert.doesNotMatch(text, /osascript|System Events|NSAppleScript|AESend|AppleEvent|setVoiceOver|voiceOverEnabled\s*=|\.post\(tap:|bench\/run\.mjs/);
   }
-  assert.equal((swift.match(/postToPid\(pid\)/g) ?? []).length, 2, 'key or mouse-down plus mouse-up, always PID scoped');
+  assert.equal((swift.match(/postToPid\(pid\)/g) ?? []).length, 3, 'one key or mouse-down plus mouse-up, always PID scoped');
   assert.match(swift, /CGPreflightPostEventAccess/);
   assert.doesNotMatch(swift, /CGRequestPostEventAccess|AXIsProcessTrustedWithOptions/);
 });

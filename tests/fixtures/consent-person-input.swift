@@ -11,7 +11,8 @@ let receipt = Receipt()
 // synchronously so the real runtime subclass and target guard can be tested without displaying a window.
 final class AXFixtureButton: NSButton {
     var duringMouseDown: (() -> Void)?
-    override func mouseDown(with event: NSEvent) { duringMouseDown?() }
+    var trackingCalls = 0
+    override func mouseDown(with event: NSEvent) { trackingCalls += 1; duringMouseDown?() }
     override func accessibilityPerformPress() -> Bool { sendAction(action, to: target) }
     override func accessibilityPerformAction(_ action: NSAccessibility.Action) {
         if action == .press { _ = accessibilityPerformPress() }
@@ -167,14 +168,20 @@ eventWindow = continuation.window!.windowNumber
 let beforeContinue = receipt.choices
 check(!continuation.accessibilityPerformPress(), "Continue refuses AXPress")
 continuation.accessibilityPerformAction(.press)
-for sample in [event(.combinedSessionState, Int64(getpid())), event(.hidSystemState, Int64(getpid())),
+let beforeRefusals = fixtureRefusals.count
+let beforeTracking = (continuation as! AXFixtureButton).trackingCalls
+for sample in [event(.privateState, Int64(getpid())), event(.combinedSessionState, Int64(getpid())), event(.hidSystemState, Int64(getpid())),
     event(.hidSystemState, 0, key: true)] {
     continueEvent = sample; press(continueGuard, continuation, continueEvent)
 }
 check(receipt.choices == beforeContinue, "Continue refuses posted events and Space")
+let handoffRefusals = Array(fixtureRefusals.dropFirst(beforeRefusals))
+check(handoffRefusals == Array(repeating: "PERSON_INPUT_REQUIRED", count: 4), "every posted Continue and Space emits the shared refusal code")
+check((continuation as! AXFixtureButton).trackingCalls == beforeTracking, "posted downs refuse before AppKit tracking can swallow the action")
 continueEvent = event(.hidSystemState); press(continueGuard, continuation, continueEvent)
 check(receipt.choices == beforeContinue + ["Continue"], "deliberate HID Continue click reaches original action")
+check((continuation as! AXFixtureButton).trackingCalls == beforeTracking + 1, "deliberate HID down retains AppKit tracking")
 receipt.choices = beforeContinue
 check(windows.allSatisfy { !$0.isVisible }, "button windows stay unordered")
-let result: [String: Any] = ["refused": refused, "accepted": receipt.choices]
+let result: [String: Any] = ["refused": refused, "accepted": receipt.choices, "handoffRefusals": handoffRefusals]
 print(String(data: try! JSONSerialization.data(withJSONObject: result), encoding: .utf8)!)

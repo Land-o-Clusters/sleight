@@ -62,12 +62,19 @@ export function instrumentHost(source = readFileSync(hostSource, 'utf8')) {
   insert('return sender.sendAction(originalAction, to: originalTarget)', `pc1Receipt("dispatch", ["typed": typed, "keyCode": event.type == .keyDown ? Int(event.keyCode) : -1, "mouse": [.leftMouseDown, .leftMouseUp].contains(event.type)])
         return sender.sendAction(originalAction, to: originalTarget)`);
   insert('_ = focusForTyping()', 'if focusForTyping() { pc1Receipt("focused") }');
+  insert('func trackMouseDown(_ event: NSEvent, perform: () -> Void) {', `func trackMouseDown(_ event: NSEvent, perform: () -> Void) {
+        pc1Receipt("mouse-down", ["window": event.windowNumber,
+            "insideButton": button.map { $0.bounds.contains($0.convert(event.locationInWindow, from: nil)) } ?? false])`);
   insert('NSSound(named: "Glass")?.play()', `NSSound(named: "Glass")?.play()
         var data: [String: Any] = ["pid": Int(getpid())]
         if let button = buttons.first(where: { $0.title == "Continue" }) {
             let rect = panel.convertToScreen(button.convert(button.bounds, to: nil))
+            let top = NSScreen.screens.first?.frame.maxY ?? 0
+            data["window"] = panel.windowNumber
             data["x"] = rect.midX
-            data["y"] = (NSScreen.screens.first?.frame.maxY ?? 0) - rect.midY
+            data["y"] = top - rect.midY
+            data["windowRect"] = ["x": panel.frame.minX, "y": top - panel.frame.maxY,
+                "width": panel.frame.width, "height": panel.frame.height]
         }
         pc1Receipt("ready", data)`);
   return source;
@@ -133,7 +140,7 @@ export async function runCheck(check, { open, post, signal, say = console.error,
   personMs = PERSON_MS, observeMs = 800 } = {}) {
   signal?.throwIfAborted();
   const start = now(), host = open(), id = randomUUID();
-  let answer, resumed = false, freshReads = 0, waiter, pending, cleanupConfirmed = false, posting;
+  let answer, resumed = false, freshReads = 0, waiter, pending, cleanupConfirmed = false, posting, postTarget, postAt;
   const until = async (predicate, timeout = personMs) => {
     const deadline = now() + timeout;
     while (!predicate()) {
@@ -164,17 +171,26 @@ export async function runCheck(check, { open, post, signal, say = console.error,
       await until(() => host.receipts.some(r => r.event === 'focused'));
     }
     if (['key', 'posted-click'].includes(check.mode)) {
-      if (check.mode === 'posted-click' && ![ready.x, ready.y].every(Number.isFinite)) throw Error('PERSON_CHECK_BUTTON_UNPROVED');
-      const at = host.receipts.length;
-      posting = await post({ mode: check.mode === 'key' ? 'key' : 'click', pid: host.pid, x: ready.x ?? 0, y: ready.y ?? 0 });
+      if (check.mode === 'posted-click') {
+        const rect = ready.windowRect;
+        if (!Number.isSafeInteger(ready.window) || ready.window <= 0 || !rect ||
+            ![ready.x, ready.y, rect.x, rect.y, rect.width, rect.height].every(Number.isFinite) ||
+            rect.width <= 0 || rect.height <= 0 || ready.x < rect.x || ready.x >= rect.x + rect.width ||
+            ready.y < rect.y || ready.y >= rect.y + rect.height) throw Error('PERSON_CHECK_BUTTON_UNPROVED');
+        postTarget = { window: ready.window, x: ready.x, y: ready.y, windowRect: rect };
+      }
+      const at = postAt = host.receipts.length;
+      posting = await post({ mode: check.mode === 'key' ? 'key' : 'click', pid: host.pid, ...postTarget });
       if (posting.status !== 0) throw Error('PERSON_CHECK_POST_FAILED');
       await until(() => answer !== undefined || host.receipts.slice(at).some(r => r.event === 'refused'), 5000);
       // A refusal alone is insufficient: the card must remain pending after the full posted sequence.
       await pause(observeMs, undefined, { signal }); host.check(); signal?.throwIfAborted();
       const refused = host.receipts.slice(at).some(r => r.event === 'refused' && r.code === 'PERSON_INPUT_REQUIRED');
       const accepted = answer !== undefined || host.receipts.some(r => r.event === 'dispatch');
+      const reached = check.mode === 'key' || host.receipts.slice(at).some(r => r.event === 'mouse-down' &&
+        r.window === postTarget.window && r.insideButton === true);
       row = { outcome: accepted ? 'accepted' : refused ? 'refused' : 'no-receipt',
-        passed: refused && !accepted && freshReads === 0, refusalCode: refused ? 'PERSON_INPUT_REQUIRED' : null,
+        passed: refused && reached && !accepted && freshReads === 0, refusalCode: refused ? 'PERSON_INPUT_REQUIRED' : null,
         pendingAfterPost: answer === undefined, observedPendingMs: observeMs };
     } else {
       if (check.mode === 'click') {
@@ -193,7 +209,8 @@ export async function runCheck(check, { open, post, signal, say = console.error,
           : answer === 'continue' && click && resumed && freshReads === 1,
         inputRoute: typed ? 'typed-return' : click ? 'mouse' : 'unproved', voiceOver: dispatch?.voiceOver ?? null };
     }
-  } catch (error) { row = { outcome: 'error', passed: false, error: (signal?.aborted ? signal.reason : error)?.message ?? error.message }; }
+  } catch (error) { row = { outcome: 'error', passed: false, error: (signal?.aborted ? signal.reason : error)?.message ?? error.message,
+    ...(posting ? { pendingAfterPost: answer === undefined } : {}) }; }
   finally {
     waiter?.dispose();
     if (pending) await pending;
@@ -202,7 +219,9 @@ export async function runCheck(check, { open, post, signal, say = console.error,
   }
   const result = { id: check.id, target: check.target ?? 'protected-action', expected: check.expected,
     startedAt: new Date(start).toISOString(), endedAt: new Date(now()).toISOString(), durationMs: now() - start,
-    ...row, resumed, freshReads, cleanupConfirmed, ...(posting ? { postExitCode: posting.status } : {}) };
+    ...row, resumed, freshReads, cleanupConfirmed, ...(posting ? { postExitCode: posting.status } : {}),
+    ...(postTarget ? { postTarget, mouseDownReachedButton: host.receipts.slice(postAt).some(r => r.event === 'mouse-down' &&
+      r.window === postTarget.window && r.insideButton === true) } : {}) };
   say(JSON.stringify(result)); return result;
 }
 
@@ -240,7 +259,9 @@ export async function runLive({ compile, open, post, voiceOver, save, cleanup, s
       } finally { clearInterval(monitor); }
       rows.push(row);
       if (!row.cleanupConfirmed) { cleanupConfirmed = false; break; }
-      if (!row.passed) break;
+      // A failed assertion belongs in its row. Cancellation and unproved cleanup still stop the pass.
+      checkSignal.throwIfAborted();
+      if (controller.signal.aborted) throw controller.signal.reason;
     }
   } catch (failure) { error = signal?.aborted ? signal.reason?.message ?? failure.message
     : budget.aborted && !binaries ? 'PERSON_CHECK_LOCK_HOLD_WAIT_TIMEOUT' : failure.message; }
@@ -291,7 +312,9 @@ export async function main(args = process.argv.slice(2)) {
     console.error('Fixture cards only. Allow about 10 minutes. No real sign-in, app approval or payment. Ctrl-C stops the pass.');
     const result = await runLive({ compile, signal: controller.signal,
       open: () => openHost({ binaries, directory }),
-      post: ({ mode, pid, x, y }) => invoke([mode, String(pid), String(x), String(y)]),
+      post: ({ mode, pid, window, x, y, windowRect: rect }) => invoke(mode === 'key' ? ['key', String(pid)]
+        : ['click', String(pid), String(window), String(x), String(y),
+          String(rect.x), String(rect.y), String(rect.width), String(rect.height)]),
       voiceOver: () => { const r = invoke(['voiceover']); if (r.status !== 0 || !/^(true|false)\n$/.test(r.stdout)) throw Error('PERSON_CHECK_VOICEOVER_UNPROVED'); return r.stdout.trim() === 'true'; },
       cleanup: () => rmSync(directory, { recursive: true, force: true }),
       save: result => { retain = !result.cleanupConfirmed; console.log(JSON.stringify({ result: writeResult(result), passed: result.passed })); } });
