@@ -46,7 +46,7 @@ for (const mode of ['1', '0']) for (const enabled of [false, true])
     const json = JSON.stringify(browserTools('bfixture'));
     const pins = mode === '0'
       ? { off: ['edfcf4e93bab46652c571cb4270631aef8e28a5f3ed86e11ee5e637cc2b0f920', 6165], on: ['8ecfb437f4224b5f98060af0a8944634deb5764a9577437a11da7c0a3b228bf0', 6584] }
-      : { off: ['4952cf11b2551872cee1a571cf5fd8d2aaa2ff136f67dc70e9858e8951ffef5f', 6447], on: ['7e5586c947792757f4580f0533b723a154e2cee1f2f94c0a85a88e3483608e49', 6866] };
+      : { off: ['58afbc3e5759b38e5dc99bcde63dcae86b60512212a732cdf53294aae56a1436', 6086], on: ['9f4063dad0d9010213a58b5b8c8ad0ab423da759f7925de13bb0fd7110356b05', 6505] };
     const [hash, length] = pins[enabled ? 'on' : 'off'];
     assert.equal(json.length, length);
     assert.equal(createHash('sha256').update(json).digest('hex'), hash);

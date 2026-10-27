@@ -12,6 +12,7 @@ import { handoffMessages } from './handoff.mjs';
 import { siteMemoryFromEnvironment } from '../site-memory.mjs';
 import { readWhole, validateWholeOptions } from './whole.mjs';
 import { validatePointStep, pointInputEnabled } from './points.mjs';
+import { browserDescriptions } from './tool-surface.mjs';
 // v3's five eagerly advertised tools. No generic JavaScript or authority fields.
 const object = (properties, required) => ({ type: 'object', properties, required, additionalProperties: false });
 // validate() caps every string at 65536 characters, so the catalog leaves that limit out.
@@ -60,7 +61,8 @@ export function browserTools(browser) {
       ? 'List, close, keep or hand off owned tabs. For sign-in or a code, handoff wait:true waits for the user\'s Continue click and reads fresh. Never request secrets. Hand off a payment the user did not ask for.'
       : 'List, close, keep or hand off owned tabs. handoff wait:true waits for the user\'s Continue click, then reads fresh. Never request secrets. Never acquire engine-path tabs.'),
       inputSchema: object({ do: { type: 'string', enum: ['list', 'close', 'keep', 'handoff'] }, tab, wait: { type: 'boolean' } }, ['do']) },
-  ].map(tool => structuredClone(tool));
+  ].map(tool => structuredClone(process.env.SLEIGHT_MT === '0' ? tool : { ...tool,
+    description: browserDescriptions[tool.name] + (tool.name === 'browser_act' ? pointDescription : '') }));
 }
 
 function data(value, depth = 0) {

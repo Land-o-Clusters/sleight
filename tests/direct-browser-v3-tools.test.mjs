@@ -254,7 +254,7 @@ test('an app window lists with its trusted label instead of the opaque app origi
 
 test('browser_fill names the list reorder it already performs', () => {
   const fill = browserTools('bfixture').find(t => t.name === 'browser_fill');
-  assert.match(fill.description, process.env.SLEIGHT_MT === '0' ? /drag-reorderable list takes all its row names in the wanted order/ : /all row names in the wanted order for a drag-reorderable list/);
+  assert.match(fill.description, process.env.SLEIGHT_MT === '0' ? /drag-reorderable list takes all its row names in the wanted order/ : /reorder: all row names in order/);
 });
 
 // The user's site blocks (permissions.mjs): sites(url) gives the line to relay, and onSite reports the origin turbo acts on.
@@ -364,20 +364,21 @@ for (const mode of [undefined, '0']) test(`MT descriptions and scroll guidance, 
     assert.match(descriptions.browser_fill, /Values are text, boolean, number or string array/);
     assert.match(descriptions.browser_tabs, /Never acquire engine-path tabs/);
   } else {
-    assert.match(descriptions.browser_act, /navigates, opens a tab, raises a dialog, loads or closes the page, or reaches the settle cap/);
-    assert.match(descriptions.browser_act, /later steps read "not reached"/);
-    assert.match(descriptions.browser_fill, /text or a number for a textbox/);
+    assert.match(descriptions.browser_act, /Navigation, new tab, dialog, document load\/close, settle cap or failure stops the batch/);
+    assert.match(descriptions.browser_act, /later steps are not reached/);
+    assert.match(descriptions.browser_fill, /Textbox: text\/number/);
     assert.match(descriptions.browser_fill, /virtual list/);
-    assert.match(descriptions.browser_tabs, /payment the user did not ask for/);
-    assert.match(descriptions.browser_fill, /true or false for a checkbox, switch or the radio option to choose/);
-    assert.match(descriptions.browser_fill, /submit is an observed ref, only when the user asked for that submit/);
-    assert.match(descriptions.browser_tabs, /keep or hand off owned tabs/);
-    assert.match(descriptions.browser_tabs, /handoff wait:true waits for the user's Continue click and reads fresh/);
+    assert.match(descriptions.browser_tabs, /Hand off unrequested payments/);
+    assert.match(descriptions.browser_fill, /checkbox\/switch\/radio: boolean/);
+    assert.match(descriptions.browser_fill, /submit: observed ref only when user asked/);
+    assert.match(descriptions.browser_tabs, /List\/close\/keep\/handoff owned tabs only/);
+    assert.match(descriptions.browser_tabs, /handoff wait:true waits for Continue then reads fresh/);
     assert.match(descriptions.browser_tabs, /Never request secrets/);
   }
-  assert.match(descriptions.browser_act, /Never blindly resend an uncertain submit\. click accepts modifier:cmd\/ctrl\./);
+  assert.match(descriptions.browser_act, /Never blindly resend an uncertain submit\. click (?:accepts )?modifier:cmd\/ctrl\./);
   assert.doesNotMatch(descriptions.browser_act, /modifier:[^.]*shift|modifier:[^.]*alt/);
-  assert.match(descriptions.browser_fill, /For a multi-select, an array sets exactly those option texts; \[\] clears all\./);
+  assert.match(descriptions.browser_fill, mode === '0' ? /For a multi-select, an array sets exactly those option texts; \[\] clears all\./
+    : /multi-select: all wanted texts \(\[\] clears\)/);
   assert.deepEqual(tools.find(tool => tool.name === 'browser_act').inputSchema.properties.steps.items.properties.modifier.enum, ['cmd', 'ctrl']);
   const { dispatcher, calls } = fixture();
   const result = await dispatcher.call({ name: 'browser_act', arguments: { tab: 't1', steps: [{ do: 'scroll', to: 'e1' }] } });

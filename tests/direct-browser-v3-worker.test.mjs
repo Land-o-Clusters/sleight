@@ -5,6 +5,7 @@ import { createV3Bridge, createV3Frontend, serveV3Worker, applicationName, serve
 import { prepareInstalledStartup, directBrowserRules, skillRules } from '../plugins/sleight/lib/launch.mjs';
 import { createRelay } from '../plugins/sleight/lib/relay.mjs';
 import { PassThrough } from 'node:stream';
+import { readFileSync } from 'node:fs';
 import { failure } from '../plugins/sleight/lib/direct-browser/worker.mjs';
 import { withMT } from './fixtures/mt-env.mjs';
 import { PAUSED_NOTE } from '../plugins/sleight/lib/session-pause.mjs';
@@ -451,6 +452,44 @@ test('direct browser rules follow a native acquisition once without losing brows
     assert.match(browser, /Never translate refs or handles between paths/);
     assert.doesNotMatch(browser, /Never create or edit/);
     assert.doesNotMatch(JSON.stringify(replies.find(row => row.id === 3)), /Turbo selects/);
+  } finally {
+    relay?.dispose(); await f.bridge.detach();
+    for (const stream of [clientIn, clientOut, serverIn, serverOut]) stream.destroy();
+  }
+});
+
+for (const oldSubmit of [false, true]) test(`PF3 turbo first defers native how-to and keeps safety, old submit wording=${oldSubmit}`, async () => {
+  const f = await fixture();
+  const clientIn = new PassThrough(), clientOut = new PassThrough(), serverIn = new PassThrough(), serverOut = new PassThrough();
+  const replies = [];
+  clientOut.on('data', bytes => replies.push(...bytes.toString().trim().split('\n').map(JSON.parse)));
+  let relay;
+  try {
+    const prepared = await prepareInstalledStartup(() => f.bridge);
+    const rules = directBrowserRules(skillRules(undefined, {}), prepared.directBrowser);
+    const firstCallRules = oldSubmit ? rules.replace("Submit in that call only when the user asked for that submit and the engine's confirmation policy\ndoesn't require confirming it. Otherwise stop before the final click.",
+      "Submit in that call when requested and the engine's confirmation policy permits it. Otherwise stop before the final click.") : rules;
+    relay = createRelay({ clientIn, clientOut, serverIn, serverOut, ...prepared, changeReview: false, firstCallRules });
+    await f.bridge.bind({ ...f.bridge.bootstrapEnvelope(), event: 'begin', turn: 'turn1', text: 'read' });
+    for (const id of [1, 2]) {
+      clientIn.write(JSON.stringify({ id, method: 'tools/call', params: { name: 'browser_read', arguments: { tab: 't1' } } }) + '\n');
+      await new Promise(resolve => setImmediate(resolve));
+    }
+    const text = id => replies.find(row => row.id === id).result.content.map(item => item.text ?? '').join('\n');
+    assert.doesNotMatch(text(1), /## Calls|## Text, menus and files/);
+    assert.match(text(1), /Turbo selects/);
+    assert.ok(text(1).includes("Submit in that call only when the user asked for that submit and the engine's confirmation policy\ndoesn't require confirming it. Otherwise stop before the final click."));
+    const safety = JSON.parse(readFileSync(new URL('fixtures/prompt-default.json', import.meta.url))).skillSafety;
+    for (const passage of safety) assert.ok(text(1).includes(passage), passage);
+    assert.doesNotMatch(text(2), /Turbo selects/);
+    clientIn.write(JSON.stringify({ id: 3, method: 'tools/call', params: { name: 'js', arguments: { code: 'let app = await cua.getApp("Editor")' } } }) + '\n');
+    serverOut.write(JSON.stringify({ id: 3, result: { content: [{ type: 'text', text: '## Computer Use\nNative reference.' }] } }) + '\n');
+    assert.match(text(3), /## Calls/);
+    assert.match(text(3), /## Text, menus and files/);
+    assert.ok(text(3).includes(rules.replace(/## Browsers\n[\s\S]*?(?=\n## |$)/, '').trim()));
+    clientIn.write(JSON.stringify({ id: 4, method: 'tools/call', params: { name: 'js', arguments: { code: 'nodeRepl.write(4)' } } }) + '\n');
+    serverOut.write(JSON.stringify({ id: 4, result: { content: [{ type: 'text', text: '4' }] } }) + '\n');
+    assert.doesNotMatch(text(4), /## Calls/);
   } finally {
     relay?.dispose(); await f.bridge.detach();
     for (const stream of [clientIn, clientOut, serverIn, serverOut]) stream.destroy();

@@ -53,10 +53,13 @@
     ]
   },
   "js": "9ec4a1d4a94be18503d350cf9cd3433d1adb9b6479ff5aa870df59e06574b491",
-  "browserReviewOutcomes": "5c573cbc59689bbf2ba45e41b65b742c79050aa11cf002ec7d4f43a1acd80438",
+  "browserReviewOutcomes": "fdcaab6e6b7598f0817a475b58ab6bba0b3dcb1510895d1edfef03c363e31177",
   "browserClosedOutcome": "9e5f2ae21e3b53f89a2f31705de162fed1496da007e66246fdf84beb669a8698",
   "browserToolsLegacy": "edfcf4e93bab46652c571cb4270631aef8e28a5f3ed86e11ee5e637cc2b0f920",
-  "browserToolsMT": "4952cf11b2551872cee1a571cf5fd8d2aaa2ff136f67dc70e9858e8951ffef5f",
+  "browserToolsMT": "58afbc3e5759b38e5dc99bcde63dcae86b60512212a732cdf53294aae56a1436",
+  "browserSchemas150": "1f75c80e48f6d915f4e86dfb934dcdafcab1cace1062772c029bc6b24bd2a55d",
+  "browserFirstRules": "aa266d328112d8df6ae64a3a7b483bcd19bd06230778c0390b4c10d37971af34",
+  "browserFullRules": "5c21e2adb1653026c271019442421df19f2ebac413d244487816955b24599a01",
   "browserHandoffOutcomes": "d99b28cc1fb0fa080bae67acd03d6001b190fd21819848c48897a1ac9bb5c6d2",
   "makeCharacterDescription": "d63280d56154cbc8c75afefd1a4a73a57fb4e1c9ac2afdc8aa486ac5e47fa114",
   "makeCharacterBody": "e6cad416e68fefd0e7b7611c96ff3fd209168bb4d3c9aec81b8e2830dfa17b8d"
