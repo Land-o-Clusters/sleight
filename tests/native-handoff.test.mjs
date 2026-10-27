@@ -153,6 +153,44 @@ for (const [name, read, waiting] of [
   assert.equal(f.inputLease.owned.size, 0);
 });
 
+for (const remoteApprovals of ['0', '1']) for (const [name, read] of [
+  ['locked', async () => ({ locked: true, idleSeconds: 0 })],
+  ['idle', async () => ({ locked: false, idleSeconds: 120 })],
+  ['present', async () => ({ locked: false, idleSeconds: 119 })],
+  ['missing', async () => undefined],
+  ['failed', async () => { throw Error('metadata unavailable'); }],
+  ['stalled', () => new Promise(() => {})],
+]) test(`bridge native handoff skips ${name} presence, remote approvals=${remoteApprovals}`, async t => {
+  let reads = 0;
+  const options = remoteApprovalOptions({ SLEIGHT_REMOTE_APPROVALS: remoteApprovals }, async (script, request) => {
+    assert.equal(script, 'remote-approvals.js');
+    if (request.operation === 'catalog') return { apps: [], defaults: {} };
+    assert.deepEqual(request, { operation: 'presence' });
+    reads++; return read();
+  });
+  const f = await fixture(t, options);
+  f.send(rpc('bootstrap', 'turn_ended', { sleight_turbo: { event: 'bootstrap' } })); await tick();
+  const envelope = JSON.parse(f.received.find(row => row.id === 'bootstrap').result.content[0].text).sleightTurbo;
+  f.send(rpc('begin', 'turn_ended', { sleight_turbo: { ...envelope, event: 'begin', turn: 'bridge-handoff',
+    text: 'Find my receipt.', origin: 'bridge', turbo: false } })); await tick();
+  assert.equal(f.received.find(row => row.id === 'begin').result.isError, false);
+  f.send(rpc('handoff', 'app_handoff')); await tick();
+  assert.equal(reads, 0);
+  const kept = f.received.find(row => row.id === 'handoff');
+  assert.ok(kept, 'bridge handoff must return without waiting for Continue or presence');
+  assert.equal(kept.result.isError, false);
+  assert.match(JSON.stringify(kept), /App kept for the user/);
+  assert.equal(f.cards.length, 1);
+  assert.equal(f.dismissed.length, 0);
+  const before = f.outbound.length;
+  f.send(rpc('blocked', 'js', { code: 'await app.getAXState()' }));
+  assert.equal(f.outbound.length, before);
+  f.answer('continue'); await tick();
+  assert.equal(f.outbound.length, before, 'late Continue must not read without a new call');
+  assert.equal(f.received.filter(row => row.id === 'handoff').length, 1);
+  assert.equal(f.inputLease.owned.size, 0);
+});
+
 for (const mode of ['cancel', 'expiry', 'turn-end', 'engine-end', 'host-cancel'])
 test(`away native ${mode} cancels the retained card without replying twice`, async t => {
   const f = await fixture(t, { handoffTimeoutMs: mode === 'expiry' ? 20 : 1000,

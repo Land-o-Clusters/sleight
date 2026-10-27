@@ -1012,7 +1012,7 @@ export function createRelay({
   }
   catalogReady.then(() => { catalogSettled = true; applyTyped(); });
   const remotePresent = async () => promptOrigin !== 'bridge' && isPresent(await remoteRead('presence'));
-  const handoffPresent = async () => isPresent(await metadataRead(presence));
+  const handoffPresent = async () => promptOrigin !== 'bridge' && isPresent(await metadataRead(presence));
   const appIdentity = app => remoteCatalog.apps?.find(a => a.id === app) ?? resolveApp(app, remoteCatalog.apps);
 
   let clientHost; // the menu bar's host line, from initialize's clientInfo (host-label.mjs)

@@ -73,7 +73,7 @@ const handoff = { jsonrpc: '2.0', id: 1, method: 'tools/call',
   params: { name: 'browser_tabs', arguments: { do: 'handoff', tab: 't1', wait: true } } };
 
 // Run the same fake worker and real dispatcher through the installed relay path.
-const productSession = origin => async ({ forkWorker, runMetadata, taskMessage }) => {
+const productSession = (origin, remoteApprovals) => async ({ forkWorker, runMetadata, taskMessage }) => {
   const bridge = await createV3Bridge({}, { readConfig: () => ({}), acceptPackage: () => ({ current: () => true }), forkWorker });
   const prepared = await prepareInstalledStartup(() => bridge);
   const [clientIn, clientOut, serverIn, serverOut] = Array.from({ length: 4 }, () => new PassThrough());
@@ -85,7 +85,8 @@ const productSession = origin => async ({ forkWorker, runMetadata, taskMessage }
     }
   });
   const relay = createRelay({ ...prepared, clientIn, clientOut, serverIn, serverOut, changeReview: false,
-    ...remoteApprovalOptions({ SLEIGHT_REMOTE_APPROVALS: '0' }, runMetadata) });
+    ...remoteApprovalOptions({ SLEIGHT_REMOTE_APPROVALS: remoteApprovals }, (script, request) =>
+      request.operation === 'catalog' ? { apps: [], defaults: {} } : runMetadata(script, request)) });
   const call = (name, args) => new Promise(resolve => {
     const id = ++serial; pending.set(id, resolve);
     clientIn.write(JSON.stringify({ id, method: 'tools/call', params: { name, arguments: args } }) + '\n');
@@ -104,21 +105,22 @@ const productSession = origin => async ({ forkWorker, runMetadata, taskMessage }
   })() };
 };
 
-for (const origin of ['composer', 'bridge']) for (const [name, read, waiting] of [
+for (const [origin, remoteApprovals] of [['composer', '0'], ['bridge', '0'], ['bridge', '1']]) for (const [name, read, presentWaiting] of [
   ['locked', async () => ({ locked: true, idleSeconds: 0 }), false],
   ['idle', async () => ({ locked: false, idleSeconds: 120 }), false],
   ['present', async () => ({ locked: false, idleSeconds: 119 }), true],
   ['failed', async () => { throw Error('metadata unavailable'); }, true],
   ['missing', async () => undefined, true],
   ['stalled', () => new Promise(() => {}), true],
-]) test(`product browser handoff with remote approvals off reads ${name} presence, origin=${origin}`, async t => {
-  const f = await fixture(t, read, productSession(origin));
-  if (name === 'stalled') t.mock.timers.enable({ apis: ['setTimeout'] });
+]) test(`product browser handoff with ${name} presence, origin=${origin}, remote approvals=${remoteApprovals}`, async t => {
+  const waiting = origin === 'bridge' ? false : presentWaiting;
+  const f = await fixture(t, read, productSession(origin, remoteApprovals));
+  if (name === 'stalled' && origin !== 'bridge') t.mock.timers.enable({ apis: ['setTimeout'] });
   let settled = false;
   const pending = f.protocol.message(handoff).then(() => { settled = true; });
   await tick();
-  assert.equal(f.metadataReads, 1);
-  if (name === 'stalled') {
+  assert.equal(f.metadataReads, origin === 'bridge' ? 0 : 1);
+  if (name === 'stalled' && origin !== 'bridge') {
     t.mock.timers.tick(1499); await tick();
     assert.equal(f.requests.some(frame => frame.method === 'call'), false);
     t.mock.timers.tick(1); await tick();
