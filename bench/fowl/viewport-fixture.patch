@@ -1,0 +1,26 @@
+diff --git a/test/demo/server.mjs b/test/demo/server.mjs
+index e00cc6e..ba0a040 100644
+--- a/test/demo/server.mjs
++++ b/test/demo/server.mjs
+@@ -55,6 +55,21 @@ let sized = '';
+ const size = () => { const s = innerWidth + 'x' + innerHeight; if (s !== sized) { sized = s; log({ kind: 'size', width: innerWidth, height: innerHeight }); } };
+ let timer; addEventListener('resize', () => { clearTimeout(timer); timer = setTimeout(size, 150); });
+ size();
++// Flush once when hidden or closed, before the debounced resize report can be lost.
++let finalSize = '';
++const finalReport = (reason) => {
++  const dimensions = innerWidth + 'x' + innerHeight;
++  if (dimensions === finalSize) return;
++  finalSize = dimensions;
++  clearTimeout(timer);
++  navigator.sendBeacon(base + '/api/log', JSON.stringify({ kind: 'size', field: reason,
++    width: innerWidth, height: innerHeight, path: location.pathname.slice(base.length) }));
++};
++addEventListener('pagehide', () => finalReport('pagehide'));
++document.addEventListener('visibilitychange', () => {
++  if (document.visibilityState === 'hidden') finalReport('visibilitychange');
++  else finalSize = '';
++});
+ </script>`;
+ 
+ const STYLE = `<style>

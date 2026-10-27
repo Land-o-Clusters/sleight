@@ -1,5 +1,5 @@
 diff --git a/tools/rounds.mjs b/tools/rounds.mjs
-index 0ca0919..48bb3a2 100644
+index 0ca0919..f620d12 100644
 --- a/tools/rounds.mjs
 +++ b/tools/rounds.mjs
 @@ -1,6 +1,7 @@
@@ -103,6 +103,24 @@ index 0ca0919..48bb3a2 100644
  }
  
  // task.numbers: [{name, pattern, unit?, min, max}]: the answer must quote each number within its range. `pattern` has
+@@ -594,7 +622,7 @@ export function gradeTakeover({ task, act, site }) {
+ 
+ // The view must be back to the user's size by turn end: FowlBrowser's journal (viewport set/clear lines, any surface
+ // without them skips this part) and, for both surfaces, the demo page's own size log: it went to a phone width and its
+-// last size before turn end equals its first.
++// last report before turn end, including a lifecycle beacon, equals its first size in both dimensions.
+ export function gradeViewport({ task, journal, site, turnEndAt }) {
+   if (!task.viewport) return { problems: [] };
+   const problems = [];
+@@ -604,7 +632,7 @@ export function gradeViewport({ task, journal, site, turnEndAt }) {
+   if (!sizes.length) problems.push('the page never reported its size');
+   else {
+     if (!sizes.some((e) => e.width <= task.viewport.maxWidth)) problems.push(`the page never got ${task.viewport.maxWidth} px wide or less`);
+-    if (sizes.at(-1).width !== sizes[0].width) problems.push(`the page was left at ${sizes.at(-1).width}x${sizes.at(-1).height} (it started at ${sizes[0].width}x${sizes[0].height})`);
++    if (sizes.at(-1).width !== sizes[0].width || sizes.at(-1).height !== sizes[0].height) problems.push(`the page was left at ${sizes.at(-1).width}x${sizes.at(-1).height} (it started at ${sizes[0].width}x${sizes[0].height})`);
+   }
+   return { problems };
+ }
 @@ -691,11 +719,28 @@ export function codexAgentEvent(e, state, { model, now }) {
  }
  
