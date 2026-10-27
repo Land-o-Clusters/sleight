@@ -425,6 +425,7 @@ function openFinderFolder(request, app, previous, api, clock, retain) {
       api.finderFolderGuard(app, window, sheet);
       clock.wait(100);
     }
+    api.finderFolderGuard(app, window, null);
   }
   if (clock.emit) clock.emit({ stage: 'finder-folder-submitted', target: request.target });
   return window;
@@ -1481,7 +1482,7 @@ function nativeAX(state, clock) {
       try { return matchesOf(window, request); }
       catch (error) { if (error.code === -25205 && error.attribute === 'AXTitle') return false; throw error; }
     };
-    var focused = read(app, 'AXFocusedWindow');
+    var focused = finderFolderFocus(app);
     var candidates = [];
     // A fixture window the task already closed is an invalid element (-25202, TextEdit 2026-10-16): it has no sheets left to scan.
     if (owned) { try { candidates = candidates.concat(children(owned, 'AXSheets')); } catch (error) { if (error.code !== -25202) throw error; } }
@@ -1636,6 +1637,37 @@ function nativeAX(state, clock) {
   }
   var promptApi = { text: text, title: identityTitle, titleFree: titleFree, children: children, path: path, read: read, equal: equal };
   var folderPanels = [];
+  function finderFolderFocus(app, previous, window, sheet, budget) {
+    var now = clock && clock.now ? clock.now : Date.now, deadline = now() + 1000;
+    budget = budget || { reads: 6 };
+    var retained = folderPanels.filter(function (entry) {
+      return equal(entry.app, app) && (!window || equal(entry.window, window)) &&
+        (!sheet || equal(entry.reference, sheet));
+    });
+    var binding = retained.length === 1 ? retained[0] : null;
+    var current = read(app, 'AXFocusedWindow');
+    if (arguments.length === 1) {
+      if (!binding) return current;
+      previous = current;
+      current = read(app, 'AXFocusedWindow');
+    }
+    while (true) {
+      if (equal(current, previous) || (!current && !previous)) return current;
+      // Only our retained window and its retained panel can trade focus during
+      // an animation. A foreign or missing element fails on its first read.
+      if (!binding || !((equal(previous, binding.window) && equal(current, binding.reference)) ||
+          (equal(previous, binding.reference) && equal(current, binding.window))))
+        throw new Error('Finder folder focus changed during validation');
+      if (budget.deadline === undefined) budget.deadline = deadline;
+      var remaining = budget.deadline - now();
+      if (budget.reads-- <= 0 || remaining <= 0) throw new Error('Finder folder focus changed during validation');
+      if (clock && clock.check) clock.check();
+      if (clock && clock.wait) clock.wait(Math.min(100, remaining));
+      else $.NSThread.sleepForTimeInterval(0.1);
+      previous = current;
+      current = read(app, 'AXFocusedWindow');
+    }
+  }
   function finderPanelShape(panel) {
     var role = text(panel, 'AXRole'), subrole = text(panel, 'AXSubrole');
     return (role === 'AXSheet' && ['', 'AXUnknown', 'AXDialog', 'AXSystemDialog', 'AXStandardWindow'].indexOf(subrole) !== -1) ||
@@ -1701,7 +1733,7 @@ function nativeAX(state, clock) {
     bindRetained: function (window, request, app, receipt) { return receipt ? retain(window, request, app, receipt) : null; },
     read: read, text: text, children: children, press: press, fileMenu: fileMenu, menu: menu, path: path,
     finderFolderGuard: function (app, window, sheet, receipt) {
-      var self = this, focused = this.focused(app);
+      var self = this, focused = this.focused(app), budget = { reads: 6 };
       function refuseForeign(element) {
         // The sheet can arrive after folderSheet's poll but during this scan.
         // Adopt only through the same guarded command and parent checks.
@@ -1723,23 +1755,31 @@ function nativeAX(state, clock) {
             refuseForeign(child);
         });
       }
-      this.windows(app).forEach(inspect);
-      children(app).forEach(inspect);
-      if (focused) inspect(focused);
-      var node = read(app, 'AXFocusedUIElement'), depth = 0;
-      for (; node && depth < 12; node = read(node, 'AXParent'), depth++) {
-        inspect(node);
-        if (text(node, 'AXRole') === 'AXWindow' || equal(node, app)) break;
-      }
-      if (node && depth === 12) throw new Error('Finder focused element ancestry unconfirmed');
-      if (window) {
-        if (!this.exists(window) || this.listed(app, window) !== true) throw new Error('Finder folder window vanished');
-        if (sheet && !equal(this.folderSheet(window, app), sheet)) throw new Error('Finder folder sheet identity changed');
-        // AXFocusedWindow can be the parent or its sheet. Never raise either.
-        if (!equal(focused, window) && !(sheet && equal(focused, sheet))) throw new Error('Finder folder window lost focus');
-        // Dialog inspection itself may span a focus change.
-        var current = this.focused(app);
-        if (!equal(current, focused)) throw new Error('Finder folder focus changed during validation');
+      while (true) {
+        this.windows(app).forEach(inspect);
+        children(app).forEach(inspect);
+        if (focused) inspect(focused);
+        var node = read(app, 'AXFocusedUIElement'), depth = 0;
+        for (; node && depth < 12; node = read(node, 'AXParent'), depth++) {
+          inspect(node);
+          if (text(node, 'AXRole') === 'AXWindow' || equal(node, app)) break;
+        }
+        if (node && depth === 12) throw new Error('Finder focused element ancestry unconfirmed');
+        if (window) {
+          if (!this.exists(window) || this.listed(app, window) !== true) throw new Error('Finder folder window vanished');
+          if (sheet && !equal(this.folderSheet(window, app), sheet)) throw new Error('Finder folder sheet identity changed');
+          // AXFocusedWindow can be the parent or its sheet. Never raise either.
+          if (!equal(focused, window) && !(sheet && equal(focused, sheet))) throw new Error('Finder folder window lost focus');
+          // Dialog inspection itself may span a focus change.
+          var current = finderFolderFocus(app, focused, window, sheet, budget);
+          if (!equal(current, window) && !(sheet && equal(current, sheet))) throw new Error('Finder folder window lost focus');
+          if (!equal(current, focused)) {
+            // Recheck the tree and ownership after waiting, within the same budget.
+            focused = current;
+            continue;
+          }
+        }
+        return;
       }
     },
     finderPanelExists: function (panel) {
@@ -1935,7 +1975,7 @@ function nativeAX(state, clock) {
     readEpoch: function () { return state && state.readEpoch || 0; },
     wait: function () { $.NSThread.sleepForTimeInterval(0.1); },
     equal: function (a, b) { return !!a && !!b && !!$.CFEqual(a, b); },
-    focused: function (app) { return read(app, 'AXFocusedWindow'); },
+    focused: finderFolderFocus,
     mainWindow: function (app) { return read(app, 'AXMainWindow'); },
     windowCount: function (app) { return children(app, 'AXWindows').length; },
     // true or false only when the app's window list was read; undefined when it couldn't be.

@@ -119,6 +119,196 @@ for (const delayedSheet of [false, true]) test(`measured macOS 27 sheet submits 
   assert.deepEqual(f.app.AXWindows, [f.owner]);
 });
 
+function retainedPanel() {
+  const f = fixture({ measuredSheet: true, fail: 'before-write' });
+  assert.throws(f.open, /setup failure before navigation/);
+  assert.equal(f.request.finderOwnership.folderPanel.reference, f.panel);
+  return f;
+}
+
+function focusSequence(f, sequence) {
+  const reads = [];
+  f.setHook((element, name) => {
+    if (element !== f.app || name !== 'AXFocusedWindow') return;
+    f.app.AXFocusedWindow = sequence[Math.min(reads.length, sequence.length - 1)];
+    reads.push(f.app.AXFocusedWindow);
+  });
+  return reads;
+}
+
+for (const direction of ['window-to-sheet', 'sheet-to-window']) {
+  test(`guard settles ${direction} during dialog inspection`, () => {
+    const f = retainedPanel();
+    const [before, after] = direction === 'window-to-sheet' ? [f.window, f.panel] : [f.panel, f.window];
+    f.app.AXFocusedWindow = before;
+    let flipped = false;
+    f.setHook((element, name) => {
+      if (!flipped && element === f.window && name === 'AXSubrole') {
+        flipped = true; f.app.AXFocusedWindow = after;
+      }
+    });
+    const started = f.clock.now();
+    f.api.finderFolderGuard(f.app, f.window, f.panel);
+    assert.equal(flipped, true);
+    assert.equal(f.app.AXFocusedWindow, after);
+    assert.equal(f.clock.now() - started, 100);
+    assert.deepEqual(f.writes, []); assert.deepEqual(f.keys, []);
+  });
+
+  for (const dismissed of [false, true]) test(`focus reader settles ${direction} after ${dismissed ? 'dismissal' : 'opening'}`, () => {
+    const f = retainedPanel();
+    if (dismissed) f.dismiss();
+    const [before, after] = direction === 'window-to-sheet' ? [f.window, f.panel] : [f.panel, f.window];
+    const reads = focusSequence(f, [before, after, before, after, after]);
+    const started = f.clock.now();
+    assert.equal(f.api.focused(f.app), after);
+    assert.deepEqual(reads.slice(-2), [after, after]);
+    assert.equal(reads.length, 5);
+    assert.equal(f.clock.now() - started, 300);
+  });
+}
+
+test('guard refuses a foreign window appearing during dialog inspection without waiting', () => {
+  const f = retainedPanel();
+  f.setHook((element, name) => {
+    if (element === f.window && name === 'AXSubrole') f.app.AXFocusedWindow = f.owner;
+  });
+  const started = f.clock.now();
+  assert.throws(() => f.api.finderFolderGuard(f.app, f.window, f.panel), /focus changed during validation/);
+  assert.equal(f.clock.now(), started);
+  assert.deepEqual(f.writes, []); assert.deepEqual(f.keys, []);
+});
+
+for (const foreign of ['window', 'sheet', 'missing']) test(`settling refuses ${foreign} focus on its first read`, () => {
+  const f = retainedPanel();
+  const stranger = foreign === 'window' ? f.owner : foreign === 'sheet'
+    ? { AXRole: 'AXSheet', AXParent: f.owner } : null;
+  const reads = focusSequence(f, [f.window, f.panel, stranger, f.window, f.window]);
+  const started = f.clock.now();
+  assert.throws(() => f.api.finderFolderGuard(f.app, f.window, f.panel), /focus changed during validation/);
+  assert.equal(reads.length, 3);
+  assert.equal(f.clock.now() - started, 100);
+  assert.deepEqual(f.writes, []); assert.deepEqual(f.keys, []);
+});
+
+test('endless window-sheet alternation fails after six waits', () => {
+  const f = retainedPanel();
+  const reads = focusSequence(f, Array.from({ length: 12 }, (_, index) => index % 2 ? f.panel : f.window));
+  const started = f.clock.now();
+  assert.throws(() => f.api.finderFolderGuard(f.app, f.window, f.panel), /focus changed during validation/);
+  assert.equal(reads.length, 8);
+  assert.equal(f.clock.now() - started, 600);
+  assert.deepEqual(f.writes, []); assert.deepEqual(f.keys, []);
+});
+
+test('slow focus reads reach the one-second deadline before the read limit', () => {
+  const f = retainedPanel();
+  let reads = 0;
+  f.setHook((element, name) => {
+    if (element !== f.app || name !== 'AXFocusedWindow') return;
+    f.app.AXFocusedWindow = reads++ % 2 ? f.panel : f.window;
+    f.clock.wait(200);
+  });
+  const started = f.clock.now();
+  assert.throws(() => f.api.focused(f.app), /focus changed during validation/);
+  assert.equal(reads, 4);
+  assert.equal(f.clock.now() - started, 1000);
+});
+
+test('an unretained sheet cannot authorize a focus transition', () => {
+  const f = fixture({ measuredSheet: true });
+  f.app.AXWindows.push(f.window); f.show();
+  let reads = 0;
+  f.setHook((element, name) => {
+    if (element === f.app && name === 'AXFocusedWindow') f.app.AXFocusedWindow = reads++ ? f.panel : f.window;
+  });
+  assert.throws(() => f.api.finderFolderGuard(f.app, f.window, f.panel), /focus changed during validation/);
+  assert.equal(f.clock.now(), 0);
+});
+
+test('settled focus cannot bypass a retained panel parent change', () => {
+  const f = retainedPanel();
+  f.panel.AXParent = f.owner; f.panel.AXWindow = f.owner;
+  focusSequence(f, [f.window, f.panel, f.panel]);
+  assert.throws(() => f.api.finderFolderGuard(f.app, f.window, f.panel), /sheet identity changed/);
+});
+
+test('guard rechecks panel ownership after waiting for focus to settle', () => {
+  const f = retainedPanel();
+  let flipped = false;
+  f.setHook((element, name) => {
+    if (!flipped && element === f.window && name === 'AXSubrole') {
+      flipped = true; f.app.AXFocusedWindow = f.panel;
+    }
+  });
+  const wait = f.clock.wait;
+  f.clock.wait = ms => {
+    wait(ms); f.panel.AXParent = f.owner; f.panel.AXWindow = f.owner;
+  };
+  assert.throws(() => f.api.finderFolderGuard(f.app, f.window, f.panel), /sheet identity changed/);
+  assert.deepEqual(f.writes, []); assert.deepEqual(f.keys, []);
+});
+
+test('repeated transitions during revalidation share the same six-read budget', () => {
+  const f = retainedPanel();
+  const listed = f.api.listed;
+  f.api.listed = (...args) => {
+    const result = listed(...args);
+    f.app.AXFocusedWindow = f.app.AXFocusedWindow === f.window ? f.panel : f.window;
+    return result;
+  };
+  const started = f.clock.now();
+  assert.throws(() => f.api.finderFolderGuard(f.app, f.window, f.panel), /focus changed during validation/);
+  assert.equal(f.clock.now() - started, 600);
+  assert.deepEqual(f.writes, []); assert.deepEqual(f.keys, []);
+});
+
+for (const foreign of [false, true]) test(`submission checks focus after sheet dismissal (foreign=${foreign})`, () => {
+  const f = fixture({ measuredSheet: true });
+  const post = f.native.CGEventPostToPid;
+  let reads;
+  f.native.CGEventPostToPid = (pid, event) => {
+    post(pid, event);
+    if (event.key === 36 && !event.down) reads = focusSequence(f, [f.panel, foreign ? f.owner : f.window, f.window]);
+  };
+  if (foreign) assert.throws(f.open, /focus changed during validation/);
+  else assert.equal(f.open(), f.window);
+  assert.equal(f.present(), false);
+  if (foreign) assert.equal(reads.length, 2);
+  else assert.deepEqual(reads.slice(-2), [f.window, f.window]);
+});
+
+test('opening settles a late sheet that takes focus during the guarded adoption scan', () => {
+  const f = fixture({ measuredSheet: true, delayedSheet: true });
+  const emit = f.clock.emit;
+  f.clock.emit = event => {
+    emit(event);
+    if (event.stage === 'finder-panel-retained') f.app.AXFocusedWindow = f.panel;
+  };
+  assert.equal(f.open(), f.window);
+  assert.equal(f.clock.now(), 100);
+  assert.deepEqual(f.keys, [[36, true], [36, false]]);
+});
+
+for (const foreign of [false, true]) test(`cleanup checks focus after Escape dismissal (foreign=${foreign})`, () => {
+  const f = retainedPanel();
+  const post = f.native.CGEventPostToPid;
+  let reads;
+  f.native.CGEventPostToPid = (pid, event) => {
+    post(pid, event);
+    if (event.key === 53 && !event.down) reads = focusSequence(f, [f.panel, foreign ? f.owner : f.window, f.window]);
+  };
+  if (foreign) {
+    assert.throws(f.recover, /focus changed during validation/);
+    assert.equal(f.actions.some(([target]) => target === f.window.AXCloseButton), false);
+    assert.equal(reads.length, 2);
+  } else {
+    assert.equal(f.recover(), 'closed retained fixture');
+    assert.deepEqual(reads.slice(-2), [f.window, f.window]);
+  }
+  assert.equal(f.present(), false);
+});
+
 test('measured sheet cleanup sends Escape first and verifies disappearance before any Close press', () => {
   const f = fixture({ measuredSheet: true, fail: 'before-write', cancelCode: -25206 });
   assert.throws(f.open, /setup failure/);
