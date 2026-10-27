@@ -5,6 +5,23 @@ const TURN_END_TOOL = 'mcp__plugin_sleight_computer__turn_ended'
 const REPLAY_TOOL = 'mcp__plugin_sleight_computer__replay'
 const PANE = { plugin: 'sleight', component: 'Pane', requestId: 'sleight' } as const
 const SURFACES = ['terminal', 'desktop'] as const
+type McpCall = { server: string; tool: string; args: Record<string, unknown> }
+const SNAPSHOT_TOKEN = 'c'.repeat(64)
+
+// The relay issues this only for the mod's private snapshot request.
+function snapshotExclusion(call: McpCall) {
+  if (call.tool !== 'turn_ended' || typeof call.args.sleight_stats_skip !== 'object') return undefined
+  expect(call.args).toEqual({ sleight_stats_skip: { snapshot: true } })
+  return { content: [{ type: 'text', text: JSON.stringify({ sleightStatsSkip: SNAPSHOT_TOKEN }) }] }
+}
+
+function expectSnapshot(calls: McpCall[], app: string) {
+  expect(calls.map(call => call.tool)).toEqual(['turn_ended', 'js', 'turn_ended'])
+  expect(calls[0]!.args).toEqual({ sleight_stats_skip: { snapshot: true } })
+  expect(calls[1]!.args).toEqual({ code: calls[1]!.args.code, title: 'sleight pane snapshot', sleight_stats: { internal: SNAPSHOT_TOKEN } })
+  expect(String(calls[1]!.args.code)).toContain(`const APP = "${app}"`)
+  expect(calls[2]!.args).toEqual({ hook_event_name: 'Stop' })
+}
 
 describe('sleight mod', () => {
   test('a promptless teammate turn keeps its shell fence and ends through the mod dispatcher', async ($, on) => {
@@ -21,8 +38,10 @@ describe('sleight mod', () => {
     const shell = await $.tool.call({ tool: 'Bash', command: 'open fixture.pdf' } as never)
     expect(shell.deny).toMatch(/shell guard/)
     await $.turn.complete({ turnId: 'inbox-turn', answer: '', durationMs: 1, isAborted: false, reason: 'answer' } as never)
-    expect(ended.length).toBe(1)
-    expect(ended[0]!.hook_event_name).toBe('Stop')
+    expect(ended).toEqual([
+      { sleight_stats_begin: 'inbox-turn' },
+      { hook_event_name: 'Stop', sleight_stats: 'inbox-turn' },
+    ])
   })
 
   test('a failed guard environment read refuses through its host catch handler', async ($, on) => {
@@ -50,12 +69,16 @@ describe('sleight mod', () => {
     })
   for (const mode of ['off','bubbles']) test(`assistant event narration ${mode} uses private stats without transcript reads`, async ($, on) => {
     const forwarded: Record<string, unknown>[] = []
+    const frames: McpCall[] = [], order: string[] = []
     let reads = 0
+    mock.clock(on)
+    on('mcp.connect', async (_$, e) => ({ value: { isConnected: true, server: e.server } }) as never)
+    on('mcp.call', async (_$, e) => { frames.push(e); order.push('frame'); return { value: { content: [] } } as never })
     on('session.messages', async () => { reads++; throw Error('transcript read forbidden') })
     on('process.run', async () => ({ value: { exitCode: 0, stdout: JSON.stringify({ enabled: false, narration: mode, presence: { idleSeconds: 0, locked: false } }), stderr: '' } }) as never)
     on('turn.start', async (_$, e) => ({ turnId: e.turnId }) as never)
     on('ui.status', async () => ({ value: undefined }))
-    on('tool.call', { tool: JS_TOOL }, async (_$, e) => { forwarded.push(e); return { result: { content: [] } } as never })
+    on('tool.call', { tool: JS_TOOL }, async (_$, e) => { forwarded.push(e); order.push(e.tool_use_id); return { result: { content: [] } } as never })
     on('prompt.submit', async (_$, e) => ({ text: e.text }))
     await $.prompt.submit({ text: 'Inspect the menu', origin: { kind: 'composer' } } as never)
     await $.turn.start({ turnId: 'narration-turn' } as never)
@@ -69,9 +92,19 @@ describe('sleight mod', () => {
       message: { type: 'assistant', role: 'assistant', content: [{ type: 'tool_use', id: 'later-call', name: JS_TOOL, input: { code: 'await app.click(3)' } }] } })
     for (const id of ['narration-call', 'parallel-call', 'later-call'])
       await $.tool.call({ tool: JS_TOOL, code: 'await app.click(3)', tool_use_id: id, sleight_say: 'MODEL FORGERY' } as never)
-    expect(forwarded.map(e => (e.sleight_stats as { say?: string }).say)).toEqual(
-      mode === 'off' ? [undefined, undefined, undefined] : ['I’ll inspect the menu.', 'I’ll inspect the menu.', undefined])
-    for (const event of forwarded) expect(event.sleight_say).toBeUndefined()
+    expect(frames.map(call => ({ tool: call.tool, args: call.args }))).toEqual([
+      { tool: 'turn_ended', args: { sleight_stats_begin: 'narration-turn' } },
+      ...(mode === 'off' ? [] : ['narration-call', 'parallel-call'].map(toolUseId => ({
+        tool: 'turn_ended', args: { sleight_say: { toolUseId, text: 'I’ll inspect the menu.' } },
+      }))),
+    ])
+    expect(order).toEqual(mode === 'off'
+      ? ['frame', 'narration-call', 'parallel-call', 'later-call']
+      : ['frame', 'frame', 'narration-call', 'frame', 'parallel-call', 'later-call'])
+    // Forged model tags stay byte-for-byte in the input. Only the relay strips them.
+    expect(forwarded).toEqual(
+      ['narration-call', 'parallel-call', 'later-call'].map(tool_use_id => ({ tool: JS_TOOL, code: 'await app.click(3)', tool_use_id, sleight_say: 'MODEL FORGERY' })))
+    for (const event of forwarded) expect(event.sleight_stats).toBeUndefined()
     expect(reads).toBe(0)
   })
   const turboEnvelope = { version: 1, session: 'private-host-session', nonce: 'a'.repeat(64) }
@@ -395,13 +428,14 @@ describe('sleight mod', () => {
   })
 
   test('/sleight replay uses this session and logs each result and wait on both surfaces', async ($, on) => {
-    const calls: unknown[] = []
+    const calls: McpCall[] = []
+    mock.clock(on)
     on('ui.open', async () => ({ value: { isPlaced: true } }) as never)
     on('fs.read', async () => ({ value: JSON.stringify(script) }) as never)
     on('mcp.connect', async () => ({ value: { isConnected: true, server: 'session-computer' } }) as never)
     on('mcp.call', async (_$, e) => {
       calls.push(e)
-      return { value: { content: [{ type: 'text', text: JSON.stringify({ ok: true, steps: 2, waits: [{ step: 1, waitedMs: 0 }, { step: 2, waitedMs: 500 }] }) }] } } as never
+      return { value: snapshotExclusion(e) ?? { content: [{ type: 'text', text: JSON.stringify({ ok: true, steps: 2, waits: [{ step: 1, waitedMs: 0 }, { step: 2, waitedMs: 500 }] }) }] } } as never
     })
     const result = await $.command.run({ command: 'sleight', args: 'replay "task with spaces.json"' } as never)
     expect(String((result as { text?: string }).text)).toMatch(/Replay finished/)
@@ -413,10 +447,16 @@ describe('sleight mod', () => {
       expect(await ui.find({ key: 'replay-file' })).toBeDefined()
       expect(await ui.find({ key: 'replay' })).toBeDefined()
       expect(await ui.find({ key: 'record' })).toBeDefined()
+      const before = calls.length
       await ui.press({ key: 'refresh' })
+      expectSnapshot(calls.slice(before), 'Calculator')
+      for (const call of calls.slice(before)) expect(call.server).toBe('session-computer')
       await ui.unmount()
     }
-    expect(calls.some((value: any) => value.tool === 'js' && value.args.code.includes('const APP = "Calculator"'))).toBe(true)
+    expect(calls.slice(0, 2)).toEqual([
+      { server: 'session-computer', tool: 'replay', args: { script } },
+      { server: 'session-computer', tool: 'turn_ended', args: { hook_event_name: 'Stop' } },
+    ])
   })
 
   test('a replay stop gives Claude the original stop, window and remaining work', async ($, on) => {
@@ -686,18 +726,23 @@ describe('sleight mod', () => {
   test('the picture is sized to the rows the pane has and carries only what the surface draws', async ($, on) => {
     on('tool.call', { tool: JS_TOOL }, async () => ({ result: { content: [{ type: 'text', text: 'App: Calculator.' }] } }) as never)
     // Stand-ins for the engine: the pane's snapshot goes to the MCP server.
-    const codes: string[] = []
+    const calls: McpCall[] = []
+    mock.clock(on)
     on('mcp.connect', async (_$, e) => ({ value: { isConnected: true, server: e.server } }) as never)
     on('mcp.call', async (_$, e) => {
-      codes.push(String(e.args.code ?? ''))
-      return { value: { content: [] } } as never
+      calls.push(e)
+      return { value: snapshotExclusion(e) ?? { content: [] } } as never
     })
-    await $.tool.call({ tool: JS_TOOL, code: 'await cua.getApp("Calculator")', title: 'Read' } as never)
+    await $.tool.call({ tool: JS_TOOL, code: 'await cua.getApp("Calculator")', title: 'Read', tool_use_id: 'picture-acquire' } as never)
+    expect(calls.map(call => ({ tool: call.tool, args: call.args }))).toEqual([
+      { tool: 'turn_ended', args: { sleight_stats_skip: 'picture-acquire' } },
+    ])
     for (const surface of SURFACES) {
-      codes.length = 0
+      calls.length = 0
       const ui = await $.ui.mount({ ...PANE, surface, props: { bodyColumns: 60, scroll: { offset: 0, bodyRows: 30 } } as never })
       await ui.press({ key: 'refresh' })
-      const snapshot = codes.find(code => code.includes('ROWS ='))
+      expectSnapshot(calls, 'Calculator')
+      const snapshot = String(calls[1]!.args.code)
       expect(snapshot?.match(/ROWS = (\d+)/)?.[1]).toBe('21')
       // Each surface gets only what it draws: cells for a terminal, an image elsewhere.
       expect(snapshot?.match(/TERMINAL = (\w+)/)?.[1]).toBe(String(surface === 'terminal'))
@@ -710,11 +755,21 @@ describe('sleight mod', () => {
     // A 1x1 JPEG, as the engine's snapshot returns an image for the desktop.
     const jpeg = '/9j/4AAQSkZJRgABAQEASABIAAD/2wBDAP//////////////////////////////////////////////////////////////////////////////////////wgALCAABAAEBAREA/8QAFBABAAAAAAAAAAAAAAAAAAAAAP/aAAgBAQABPxA='
     const frame = { app: 'Calculator', width: 674, height: 408, columns: 46, rows: 13, image: { mime: 'image/jpeg', base64: jpeg } }
+    const calls: McpCall[] = []
+    mock.clock(on)
     on('mcp.connect', async (_$, e) => ({ value: { isConnected: true, server: e.server } }) as never)
-    on('mcp.call', async () => ({ value: { content: [{ type: 'text', text: 'Window: "Calculator", App: Calculator.\nSLEIGHT_FRAME ' + JSON.stringify(frame) }] } }) as never)
-    await $.tool.call({ tool: JS_TOOL, code: 'await cua.getApp("Calculator")', title: 'Read' } as never)
+    on('mcp.call', async (_$, e) => {
+      calls.push(e)
+      return { value: snapshotExclusion(e) ?? { content: e.tool === 'js'
+        ? [{ type: 'text', text: 'Window: "Calculator", App: Calculator.\nSLEIGHT_FRAME ' + JSON.stringify(frame) }] : [] } } as never
+    })
+    await $.tool.call({ tool: JS_TOOL, code: 'await cua.getApp("Calculator")', title: 'Read', tool_use_id: 'desktop-acquire' } as never)
+    expect(calls.map(call => ({ tool: call.tool, args: call.args }))).toEqual([
+      { tool: 'turn_ended', args: { sleight_stats_skip: 'desktop-acquire' } },
+    ])
     const ui = await $.ui.mount({ ...PANE, surface: 'desktop', props: { bodyColumns: 60, scroll: { offset: 0, bodyRows: 30 } } as never })
     await ui.press({ key: 'refresh' })
+    expectSnapshot(calls.slice(1), 'Calculator')
     expect(await ui.find({ type: 'Svg' })).toBeDefined()
     expect(await ui.find({ text: /Couldn’t refresh|Couldn't refresh/ })).toBeUndefined()
     await ui.unmount()
@@ -790,12 +845,15 @@ describe('sleight mod', () => {
       { tool: 'js', args: { code: 'await app.click({"id":"Seven"});', title: 'Press Seven' } },
     ] }
     const contexts: unknown[] = []
-    const calls: unknown[] = []
+    const calls: McpCall[] = []
+    mock.clock(on)
     on('ui.open', async () => ({ value: { isPlaced: true } }) as never)
     on('fs.read', async () => ({ value: JSON.stringify(windowScript) }) as never)
     on('mcp.connect', async (_$, e) => ({ value: { isConnected: true, server: e.server } }) as never)
     on('mcp.call', async (_$, e) => {
       calls.push(e)
+      const excluded = snapshotExclusion(e)
+      if (excluded) return { value: excluded } as never
       if (e.tool === 'replay') {
         return { value: { content: [{ type: 'text', text: JSON.stringify({
           ok: true, steps: 2, waits: [{ step: 1, waitedMs: 0 }, { step: 2, waitedMs: 0 }],
@@ -808,8 +866,9 @@ describe('sleight mod', () => {
     const result = await $.command.run({ command: 'sleight', args: 'replay task.json' } as never)
     expect(String((result as { text?: string }).text)).toMatch(/Replay finished/)
     const ui = await $.ui.mount({ ...PANE, surface: 'desktop', props: { bodyColumns: 60 } as never })
+    const before = calls.length
     await ui.press({ key: 'refresh' })
-    expect(calls.some((value: any) => value.tool === 'js' && String(value.args?.code ?? '').includes('const APP = "Calculator"'))).toBe(true)
+    expectSnapshot(calls.slice(before), 'Calculator')
     await $.prompt.submit({ text: 'Continue the task', asUser: true } as never)
     expect(JSON.stringify(contexts.at(-1))).toMatch(/Calculator.*disableDiffing/)
   })
@@ -828,17 +887,22 @@ describe('sleight mod', () => {
   })
 
   test('a turn that used an app still ends the engine turn when the pane list fails', async ($, on) => {
-    const calls: string[] = []
+    const calls: { tool: string; args: Record<string, unknown> }[] = []
+    mock.clock(on)
     on('tool.call', { tool: JS_TOOL }, async () => ({ result: { content: [{ type: 'text', text: 'App: Calculator.' }] } }) as never)
     on('mcp.connect', async (_$, e) => ({ value: { isConnected: true, server: e.server } }) as never)
-    on('mcp.call', async (_$, e) => { calls.push(e.tool); return { value: { content: [] } } as never })
+    on('mcp.call', async (_$, e) => { calls.push({ tool: e.tool, args: e.args }); return { value: { content: [] } } as never })
     on('ui.panes', async () => { throw new Error('pane list unavailable') })
     on('turn.start', async (_$, e) => ({ turnId: e.turnId }) as never)
     on('turn.complete', async () => ({ text: '' }) as never)
     await $.turn.start({ turnId: 'turn-1' } as never)
     await $.tool.call({ tool: JS_TOOL, code: 'await cua.getApp("Calculator")' } as never)
+    expect(calls).toEqual([{ tool: 'turn_ended', args: { sleight_stats_begin: 'turn-1' } }])
     await $.turn.complete({ turnId: 'turn-1', answer: '', durationMs: 1, isAborted: false, reason: 'answer' } as never)
-    expect(calls).toEqual(['turn_ended'])
+    expect(calls).toEqual([
+      { tool: 'turn_ended', args: { sleight_stats_begin: 'turn-1' } },
+      { tool: 'turn_ended', args: { hook_event_name: 'Stop', sleight_stats: 'turn-1' } },
+    ])
   })
 
   test('Claude may not call turn_ended', async $ => {
@@ -847,17 +911,22 @@ describe('sleight mod', () => {
   })
   for (const name of ['browser_open', 'browser_read', 'browser_act', 'browser_fill']) {
     test(`${name} marks a browser-only turn for the fixed completion hook`, async ($, on) => {
-      const calls: string[] = []
+      const calls: { tool: string; args: Record<string, unknown> }[] = []
+      mock.clock(on)
       const tool = `mcp__plugin_sleight_computer__${name}`
       on('tool.call', { tool: tool as never }, async () => ({ result: { content: [] } }) as never)
       on('mcp.connect', async (_$, e) => ({ value: { isConnected: true, server: e.server } }) as never)
-      on('mcp.call', async (_$, e) => { calls.push(e.tool); return { value: { content: [] } } as never })
+      on('mcp.call', async (_$, e) => { calls.push({ tool: e.tool, args: e.args }); return { value: { content: [] } } as never })
       on('turn.start', async (_$, e) => ({ turnId: e.turnId }) as never)
       on('turn.complete', async () => ({ text: '' }) as never)
       await $.turn.start({ turnId: 'turbo-turn' } as never)
       await $.tool.call({ tool, tab: 't1', fields: [{ ref: 'r1', value: 'private fixture' }] } as never)
+      expect(calls).toEqual([{ tool: 'turn_ended', args: { sleight_stats_begin: 'turbo-turn' } }])
       await $.turn.complete({ turnId: 'turbo-turn', answer: '', durationMs: 1, isAborted: false, reason: 'answer' } as never)
-      expect(calls).toEqual(['turn_ended'])
+      expect(calls).toEqual([
+        { tool: 'turn_ended', args: { sleight_stats_begin: 'turbo-turn' } },
+        { tool: 'turn_ended', args: { hook_event_name: 'Stop', sleight_stats: 'turbo-turn' } },
+      ])
     })
   }
   test('/sleight stop also refuses every compact browser tool', async ($, on) => {
