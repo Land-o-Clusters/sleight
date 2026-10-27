@@ -9,13 +9,15 @@ import { failure } from '../plugins/sleight/lib/direct-browser/worker.mjs';
 import { withMT } from './fixtures/mt-env.mjs';
 import { PAUSED_NOTE } from '../plugins/sleight/lib/session-pause.mjs';
 import { createSessionPause } from '../plugins/sleight/lib/session-pause.mjs';
+import { createHandoffWaiter } from '../plugins/sleight/lib/direct-browser/handoff.mjs';
+import { createToolDispatcher } from '../plugins/sleight/lib/direct-browser/tools.mjs';
 
 for (const mode of [undefined, '0']) test(`MTb worker distinguishes uncertain input from capability loss, switch=${mode}`, async () => withMT(mode, async () => {
   assert.equal(failure(true).text, 'Input outcome is unconfirmed. Read state before retrying' + (mode === '0' ? '; use the engine browser path if needed.' : '.'));
   assert.match(failure(false).text, /Use the engine browser path/);
 }));
 
-async function fixture(config = {}, tracePhase, bridgeOptions = {}, call) {
+async function fixture(config = {}, tracePhase, bridgeOptions = {}, call, end) {
   const child = new EventEmitter(), endpoint = new EventEmitter(), events = [];
   child.connected = endpoint.connected = true;
   child.send = value => { queueMicrotask(() => endpoint.emit('message', structuredClone(value))); };
@@ -26,7 +28,7 @@ async function fixture(config = {}, tracePhase, bridgeOptions = {}, call) {
     events.push(['begin', message, extra]);
     return { async call(request, options) { events.push(['call', request]); return call ? call(request, options) : { text: 'plain result', isError: false }; },
       delivered(result) { events.push(['delivered', result]); return true; },
-      async end() { events.push(['end']); return { revoked: true, cleanup: [] }; } };
+      async end() { events.push(['end']); return end ? end() : { revoked: true, cleanup: [] }; } };
   } });
   let forkOptions;
   const bridge = await createV3Bridge(bridgeOptions, { readConfig: () => config, acceptPackage: () => ({ current: () => true }), tracePhase,
@@ -40,6 +42,130 @@ test('private narration crosses worker IPC as call context, outside the runtime 
     await f.bridge.bind({ ...f.bridge.bootstrapEnvelope(), event: 'begin', turn: 'narration-turn', text: 'Inspect the menu.' });
     await f.bridge.call({ name: 'browser_read', arguments: { tab: 't1' }, say: 'I’ll inspect the menu. https://private.test/x' });
     assert.deepEqual(received, [{ request: { name: 'browser_read', arguments: { tab: 't1' } }, say: 'I’ll inspect the menu.' }]);
+  } finally { await f.bridge.detach(); }
+});
+
+test('private handoff presence crosses worker IPC outside the tool arguments', async () => {
+  const received = [];
+  const f = await fixture({}, undefined, {}, async (request, options) => {
+    received.push({ request, present: options.handoffPresent }); return { text: 'fixture', isError: false };
+  });
+  try {
+    await f.bridge.bind({ ...f.bridge.bootstrapEnvelope(), event: 'begin', turn: 'presence-turn', text: 'Find my receipt.' });
+    const request = { name: 'browser_tabs', arguments: { do: 'handoff', tab: 't1', wait: true } };
+    await f.bridge.call(request, { handoffPresent: false });
+    assert.deepEqual(received, [{ request, present: false }]);
+  } finally { await f.bridge.detach(); }
+});
+
+for (const [presence, expected] of [[{ locked: true, idleSeconds: 0 }, false],
+  [{ locked: false, idleSeconds: 120 }, false], [{ locked: false, idleSeconds: 119 }, true], [undefined, true]])
+test(`relay uses remote-approval presence for handoff: ${JSON.stringify(presence)}`, async t => {
+  const controls = [];
+  const f = await fixture({}, undefined, {}, async (_request, options) => {
+    controls.push(options.handoffPresent); return { text: 'fixture', isError: false };
+  });
+  const clientIn = new PassThrough(), clientOut = new PassThrough(), serverIn = new PassThrough(), serverOut = new PassThrough();
+  const relay = createRelay({ clientIn, clientOut, serverIn, serverOut, changeReview: false,
+    directBrowser: createV3Frontend(f.bridge), remoteApprovals: { presence: async () => presence } });
+  t.after(async () => { relay.dispose(); for (const stream of [clientIn, clientOut, serverIn, serverOut]) stream.destroy(); await f.bridge.detach(); });
+  await f.bridge.bind({ ...f.bridge.bootstrapEnvelope(), event: 'begin', turn: 'relay-presence', text: 'Find my receipt.' });
+  clientIn.write(JSON.stringify({ id: 'handoff', method: 'tools/call', params: {
+    name: 'browser_tabs', arguments: { do: 'handoff', tab: 't1', wait: true } } }) + '\n');
+  for (let n = 0; n < 10 && !controls.length; n++) await new Promise(resolve => setImmediate(resolve));
+  assert.deepEqual(controls, [expected]);
+});
+
+test('browser handoff fences concurrent reads while its presence signal is pending', async t => {
+  let finishPresence;
+  const calls = [];
+  const f = await fixture({}, undefined, {}, async request => { calls.push(request); return { text: 'fixture', isError: false }; });
+  const clientIn = new PassThrough(), clientOut = new PassThrough(), serverIn = new PassThrough(), serverOut = new PassThrough(), replies = [];
+  clientOut.on('data', bytes => replies.push(...bytes.toString().trim().split('\n').map(JSON.parse)));
+  const relay = createRelay({ clientIn, clientOut, serverIn, serverOut, changeReview: false,
+    directBrowser: createV3Frontend(f.bridge), remoteApprovals: { presence: () => new Promise(resolve => { finishPresence = resolve; }) } });
+  t.after(async () => { relay.dispose(); for (const stream of [clientIn, clientOut, serverIn, serverOut]) stream.destroy(); await f.bridge.detach(); });
+  await f.bridge.bind({ ...f.bridge.bootstrapEnvelope(), event: 'begin', turn: 'pending-presence', text: 'Find my receipt.' });
+  const send = (id, name, args) => clientIn.write(JSON.stringify({ id, method: 'tools/call', params: { name, arguments: args } }) + '\n');
+  send('handoff', 'browser_tabs', { do: 'handoff', tab: 't1', wait: true });
+  await new Promise(resolve => setImmediate(resolve));
+  send('read', 'browser_read', { tab: 't1' });
+  await new Promise(resolve => setImmediate(resolve));
+  assert.equal(calls.length, 0, 'no read may overtake the presence check');
+  assert.equal(replies.find(row => row.id === 'read').result.isError, true);
+  finishPresence({ locked: true, idleSeconds: 0 });
+  for (let n = 0; n < 10 && !calls.length; n++) await new Promise(resolve => setImmediate(resolve));
+  assert.equal(calls[0].name, 'browser_tabs');
+});
+
+for (const mode of ['continue', 'cancel', 'expiry', 'turn-end'])
+test(`away browser handoff fences engine js across worker IPC until ${mode}`, async t => {
+  const cards = [], dismissed = [], trusted = new WeakSet();
+  const waiter = createHandoffWaiter({ current: () => true, session: 's', turn: 't', timeoutMs: mode === 'expiry' ? 50 : 1000,
+    ui: { authenticate: event => trusted.delete(event), dismiss: id => dismissed.push(id),
+      present(id, _data, _choices, deliver) { cards.push({ id, deliver }); } } });
+  let resumed = 0, kept = 0;
+  const dispatcher = createToolDispatcher({ pages: {
+    async beginHandoff() { return { async finish(keep) { if (keep) kept++; else resumed++; return keep ? null : 't1'; } }; },
+    async endTurn() { return { cleanedUp: true }; } }, ctx: { handoff: (...args) => waiter.wait(...args) },
+    snapshot: async () => assert.fail('away handoff must not read'), runSteps() {}, fillFields() {} });
+  const f = await fixture({}, undefined, {}, (request, options) => dispatcher.call(request, options), () => dispatcher.end());
+  const clientIn = new PassThrough(), clientOut = new PassThrough(), serverIn = new PassThrough(), serverOut = new PassThrough();
+  const replies = [], outbound = [];
+  clientOut.on('data', bytes => replies.push(...bytes.toString().trim().split('\n').map(JSON.parse)));
+  serverIn.on('data', bytes => outbound.push(...bytes.toString().trim().split('\n').map(JSON.parse)));
+  let finishPresence;
+  const relay = createRelay({ clientIn, clientOut, serverIn, serverOut, changeReview: false,
+    directBrowser: createV3Frontend(f.bridge), remoteApprovals: { presence: () => new Promise(resolve => { finishPresence = resolve; }) } });
+  t.after(async () => { waiter.dispose(); relay.dispose(); await f.bridge.detach();
+    for (const stream of [clientIn, clientOut, serverIn, serverOut]) stream.destroy(); });
+  await f.bridge.bind({ ...f.bridge.bootstrapEnvelope(), event: 'begin', turn: 'engine-fence', text: 'Find my receipt.' });
+  const send = (id, name, args) => clientIn.write(JSON.stringify({ id, method: 'tools/call', params: { name, arguments: args } }) + '\n');
+  const tick = () => new Promise(resolve => setImmediate(resolve));
+  send('handoff', 'browser_tabs', { do: 'handoff', tab: 't1', wait: true }); await tick();
+  send('during-presence', 'js', { code: 'await cua.getBrowser()' }); await tick();
+  assert.equal(outbound.some(row => row.id === 'during-presence'), false);
+  assert.equal(replies.find(row => row.id === 'during-presence')?.result.isError, true);
+  finishPresence({ locked: true, idleSeconds: 0 });
+  for (let n = 0; n < 20 && !replies.some(row => row.id === 'handoff'); n++) await tick();
+  assert.equal(cards.length, 1);
+  assert.equal(replies.find(row => row.id === 'handoff')?.result.isError, false);
+  for (const [id, code] of [['browser', 'await cua.getBrowser()'], ['tab', 'await cua.getTab("t1")'], ['handle', 'await tab.getAXState()']]) {
+    send(id, 'js', { code }); await tick();
+    assert.equal(outbound.some(row => row.id === id), false, id);
+    const reply = replies.find(row => row.id === id);
+    assert.equal(reply?.result.isError, true, id);
+    assert.match(reply.result.content[0].text, /^Handoff pending/);
+  }
+  const answer = (choice = 'continue') => { const card = cards.at(-1), event = { id: card.id, choice }; trusted.add(event); card.deliver(event); };
+  if (mode === 'continue') answer();
+  else if (mode === 'cancel') answer('cancel');
+  else if (mode === 'turn-end') await f.bridge.end();
+  else await new Promise(resolve => setTimeout(resolve, 80));
+  await tick(); await tick();
+  assert.deepEqual(dismissed, [cards[0].id]);
+  assert.equal(resumed, mode === 'continue' ? 1 : 0);
+  if (mode !== 'continue') { assert.ok(kept > 0); answer(); await tick(); assert.equal(resumed, 0); }
+  send('fresh', 'js', { code: 'await cua.getBrowser()' }); await tick();
+  assert.equal(outbound.some(row => row.id === 'fresh'), true);
+  assert.equal(replies.filter(row => row.id === 'handoff').length, 1);
+});
+
+for (const mode of ['ordinary', 'wrong-id', 'nonboolean'])
+test(`handoff lifecycle IPC refuses ${mode} authority`, async () => {
+  const f = await fixture({}, undefined, {}, async (_request, options) => {
+    options.handoffState(mode === 'nonboolean' ? 'false' : true);
+    await Promise.resolve();
+    if (mode === 'wrong-id') f.child.emit('message', { version: 3, id: 'other-call', handoffState: false });
+    return { text: 'fixture', isError: false };
+  });
+  try {
+    await f.bridge.bind({ ...f.bridge.bootstrapEnvelope(), event: 'begin', turn: 'invalid-handoff-state', text: 'Read.' });
+    const result = await f.bridge.call(mode === 'ordinary' ? { name: 'browser_read', arguments: { tab: 't1' } }
+      : { name: 'browser_tabs', arguments: { do: 'handoff', tab: 't1', wait: true } });
+    assert.match(result.text, /unavailable|unconfirmed/i);
+    assert.equal(f.bridge.handoffPending(), mode === 'wrong-id', 'a mismatched release must leave the original fence in place');
+    assert.equal((await f.bridge.call({ name: 'browser_read', arguments: { tab: 't1' } })).isError, true);
   } finally { await f.bridge.detach(); }
 });
 test('human pause crosses worker IPC immediately and invalidates the in-flight remainder through resume', async () => {

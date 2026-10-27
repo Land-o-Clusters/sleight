@@ -69,7 +69,7 @@ import { DOCUMENT_TOOL, WINDOW_HEADER, documentKey, documentLabel, windowFromTex
 import { ChangeReview, REVIEW_TOOL, isChangeCancel } from './change-review.mjs';
 import { FLOW_TOOL } from './flow-rules.mjs';
 import { NATIVE_HANDOFF_TOOL, openNativeHandoffUi } from './native-handoff.mjs';
-import { createHandoffWaiter, HANDOFF_WAIT_MS } from './direct-browser/handoff.mjs';
+import { createHandoffWaiter, HANDOFF_WAIT_MS, handoffMessages } from './direct-browser/handoff.mjs';
 import { browserCall, browserReply, nativeBindings, browserLeaseNote } from './browser-call.mjs';
 import { nativeArgumentsProblem } from './native-arguments.mjs';
 import { BrowserRecovery } from './browser-recovery.mjs';
@@ -495,7 +495,7 @@ export function batchingDescription(description, variant = true, prompt, windows
 const NATIVE_DENIED = /* lean notice */ 'Native access stopped: use the handle returned by cua.getApp directly, after a standalone native app read. No native lease for this browser call.';
 // SLEIGHT_PROMPT=lean descriptions of the tools sleight adds. Each tool keeps its default text.
 const LEAN_TOOL_DESCRIPTIONS = {
-  app_handoff: 'Pause native sign-in. Person-only Continue reads same app fresh, including new windows. Never request passwords/codes. Cancel keeps it open.',
+  app_handoff: 'Pause native sign-in. Present: Continue reads same app fresh. Away: end turn, ask user to sign in and reply. Never request passwords/codes. Cancel keeps it open.',
   document_scope: 'Ask the user to approve the last observed document or window for this session, after a js call with only let app = await cua.getApp("App") (or { windowId: 123 }). Actions need an approved matching Window and URL; window changes stop them. A mistake guard, not isolation from arbitrary JavaScript.',
   review_changes: 'Shows this session\'s saved-file changes. Before editing, read the window with a standalone cua.getApp call. op "list": each touched document\'s diff or size/date summary; op "review": the user picks Keep, Undo or Later per document. Only the user can decide. Undo restores the session backup, refusing if the file changed after the last agent action; unsaved buffers aren\'t restored. Backups end with the session.',
   flow_exception: 'Ask the user to allow, once, the exact call a flow rule last stopped. No decision arguments. Retry the identical call after approval; never work around a refusal.',
@@ -1049,6 +1049,7 @@ export function createRelay({
   const codexTurns = new Set();
   const codexTurbo = () => codexClient && !modHost();
   let turboNoticeShown = false;
+  let handoffPresencePending;
   const directNames = new Set(directBrowser?.tools().map(tool => tool.name) ??
     (turboUnavailable ? ['browser_open','browser_read','browser_act','browser_fill','browser_tabs'] : []));
   const directTurnEnds = new Map();
@@ -1867,6 +1868,7 @@ export function createRelay({
   }
   let leaseWindow;
   let nativeHandoff;
+  const nativeHandoffUnavailable = /* notice */ 'Handoff not resumed; app kept for the user. Nothing is waiting. End your turn: ask the user to finish sign-in on the Mac and reply "signed in" or "continue". On their next message, acquire the app fresh.';
   async function handoffNativeApp(msg) {
     const args = msg.params.arguments ?? {};
     if (msg.id === undefined || !args || typeof args !== 'object' || Array.isArray(args) || Object.keys(args).length) {
@@ -1893,19 +1895,29 @@ export function createRelay({
     cursorStatus('handback', { app: target.app });
     running.add(msg.id); localRunning.add(msg.id); leaseCalls.set(msg.id, { key });
     callDetails.set(msg.id, 'native sign-in handoff'); clearTimeout(idleTimer); refreshHeartbeat();
-    let ui, waiter;
+    let ui, waiter, returned = false, present = true;
     try {
+      present = await remotePresent();
+      if (!current()) throw Error('Handoff not resumed; app kept for the user.');
       ui = await handoffUi();
       if (!current()) throw Error('Handoff not resumed; app kept for the user.');
       waiter = createHandoffWaiter({ ui, current, session: sessionId, turn: turnId, timeoutMs: handoffTimeoutMs });
       state.cancel = () => waiter.dispose();
-      const resumed = await waiter.wait({ app: target.appId });
+      const pending = waiter.wait({ app: target.appId });
+      if (!present && pending.shown !== true) throw Error(nativeHandoffUnavailable);
+      if (!present) {
+        returned = true;
+        toClient({ jsonrpc: '2.0', id: msg.id, result: { isError: false, content: [{ type: 'text',
+          text: 'App kept for the user. The card closes when this turn ends. End your turn: ask the user to finish sign-in on the Mac and reply "signed in" or "continue". On their next message, acquire the app fresh.' }] } });
+      }
+      const resumed = await pending;
       if (!resumed || !current()) throw Error('Handoff not resumed; app kept for the user.');
-      inputLease.renew([key]);
       // The person's Continue permits replacing the previous window identity,
       // not the app identity. Forget stale refs/selection before the usual
       // acquisition path, which still asks engine approvals and binds a lease.
       forgetHandles(); compactor.reset();
+      if (returned) return;
+      inputLease.renew([key]);
       const id = `sleight-signin-${nextInternalId++}`, handle = `__sleightSigninApp${nextInternalId++}`;
       state.readId = id;
       const reply = await new Promise(resolve => {
@@ -1929,7 +1941,7 @@ export function createRelay({
         ...(reply.result.content ?? []),
       ] } });
     } catch (error) {
-      if (!disposed && generation === stopGeneration) leaseStop(msg, promptNotice(/^Handoff /.test(error.message) ? error.message : 'Handoff not resumed; app kept for the user.', prompt));
+      if (!returned && !disposed && generation === stopGeneration) leaseStop(msg, promptNotice(!present ? nativeHandoffUnavailable : /^Handoff /.test(error.message) ? error.message : 'Handoff not resumed; app kept for the user.', prompt));
     } finally {
       waiter?.dispose(); try { ui?.close?.(); } catch {}
       if (nativeHandoff === state) nativeHandoff = undefined;
@@ -4303,8 +4315,15 @@ export function createRelay({
       state.cancel?.();
       Promise.resolve(state.done).then(() => handleClient(msg)); return;
     }
-    if (nativeHandoff && msg.method === 'tools/call' && msg.params?.name !== TURN_END_TOOL && msg.id !== nativeHandoff.readId) {
+    if (nativeHandoff && msg.method === 'tools/call' && msg.params?.name !== TURN_END_TOOL && (msg.id === undefined || msg.id !== nativeHandoff.readId)) {
       leaseStop(msg, promptNotice('handoff pending; the user must finish in the app.', prompt)); return;
+    }
+    // js can retain an engine tab handle, so fence every js call while turbo's
+    // handoff owns the tab, including the presence read before worker dispatch.
+    if (msg.method === 'tools/call' && msg.params?.name === 'js' && (handoffPresencePending || directBrowser?.handoffPending?.())) {
+      if (msg.id !== undefined) toClient({ jsonrpc: '2.0', id: msg.id, result: { isError: true,
+        content: [{ type: 'text', text: handoffMessages.pending }] } });
+      return;
     }
     if (msg.method === 'tools/call' && msg.params?.name === NATIVE_HANDOFF_TOOL.name) {
       const pending = handoffNativeApp(msg);
@@ -4323,6 +4342,9 @@ export function createRelay({
         return;
       }
       if (closing || disposed) { leaseStop(msg, 'this session is closing.'); return; }
+      if (handoffPresencePending) {
+        toClient({ jsonrpc: '2.0', id: msg.id, result: { isError: true, content: [{ type: 'text', text: handoffMessages.pending }] } }); return;
+      }
       // In Codex, only a call from the thread and turn the prompt hook bound reaches the worker.
       const owner = codexTurbo() ? codexCallTurn(msg.params._meta) : undefined;
       if (codexTurbo() && (!owner || !codexBinding || owner.thread !== codexBinding.thread || owner.turn !== codexBinding.turn)) {
@@ -4337,9 +4359,19 @@ export function createRelay({
       callDetails.set(msg.id, msg.params.name);
       recordAction('sent', msg.id);
       pauseHost?.activity();
-      directBrowser.call({ name: msg.params.name, arguments: msg.params.arguments, ...callNarration.has(msg.id) ? { say: callNarration.get(msg.id) } : {} }).then(result => {
-        cursorStatus(result.isError ? 'error' : 'done', { say: callNarration.get(msg.id) });
-        if (!result.isError) cursorStatus('thinking', { say: callNarration.get(msg.id) });
+      const directCall = { name: msg.params.name, arguments: msg.params.arguments, ...callNarration.has(msg.id) ? { say: callNarration.get(msg.id) } : {} };
+      const waitingHandoff = msg.params.name === 'browser_tabs' && msg.params.arguments?.do === 'handoff' && msg.params.arguments.wait === true;
+      const generation = stopGeneration, handoffTurn = turnId;
+      const presenceCheck = waitingHandoff ? {} : undefined;
+      if (presenceCheck) handoffPresencePending = presenceCheck;
+      const called = waitingHandoff ? remotePresent().then(present => {
+        if (closing || disposed || generation !== stopGeneration || handoffTurn !== turnId) throw Error('SESSION_ENDED');
+        return directBrowser.call(directCall, { handoffPresent: present });
+      }) : directBrowser.call(directCall);
+      called.then(result => {
+        const handoffPending = directBrowser.handoffPending?.() === true;
+        cursorStatus(handoffPending ? 'handback' : result.isError ? 'error' : 'done', { say: callNarration.get(msg.id) });
+        if (!result.isError && !handoffPending) cursorStatus('thinking', { say: callNarration.get(msg.id) });
         finishedCall(msg.id);
         const rendered = result.text;
         const content = [{ type: 'text', text: rendered }, ...(result.images ?? [])];
@@ -4357,7 +4389,7 @@ export function createRelay({
         cursorStatus('error');
         finishedCall(msg.id);
         toClient({ jsonrpc: '2.0', id: msg.id, error: { code: -32603, message: 'Direct browser route unavailable.' } });
-      });
+      }).finally(() => { if (presenceCheck && handoffPresencePending === presenceCheck) handoffPresencePending = undefined; });
       return;
     }
     if (replWarmup.hold(msg)) return;
