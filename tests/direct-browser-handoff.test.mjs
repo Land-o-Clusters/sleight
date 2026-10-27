@@ -136,6 +136,8 @@ test(`away browser handoff returns before Continue and keeps the suspension (loc
   assert.match(result.text, /card.*turn ends/i);
   assert.match(result.text, /end.*turn/i);
   assert.match(result.text, /reply/i);
+  assert.match(result.text, /open the page again/i);
+  assert.doesNotMatch(result.text, /read the tab fresh/i);
   assert.doesNotMatch(result.text, /click Continue/i);
   assert.equal(f.reads, 0);
   assert.equal(f.ui.cards.length, 1);
@@ -158,6 +160,7 @@ for (const host of ['missing', 'throws']) test(`away browser handoff with ${host
   assert.match(result.text, /not resumed/i);
   assert.match(result.text, /nothing is waiting/i);
   assert.match(result.text, /sign-in.*Mac/i);
+  assert.match(result.text, /open the page again/i);
   assert.doesNotMatch(result.text, /Continue|card|private host detail/);
   assert.equal(f.released, true);
   assert.equal(f.reads, 0);

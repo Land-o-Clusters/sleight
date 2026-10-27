@@ -78,7 +78,7 @@ test('the self-closed popup outcome has a reviewed prompt budget', () => {
 
 test('handoff status lines have a measured prompt budget', () => {
   assert.equal(hash(JSON.stringify(handoffMessages)), baseline.browserHandoffOutcomes);
-  assert.equal(Object.values(handoffMessages).reduce((size, text) => size + text.length, 0), 649);
+  assert.equal(Object.values(handoffMessages).reduce((size, text) => size + text.length, 0), 647);
 });
 
 test('wait and closed-submit review outcomes have a reviewed prompt budget', () => {
