@@ -35,7 +35,7 @@ async function main() {
   const empty = join(dir, 'empty.json');
   writeFileSync(empty, JSON.stringify({ mcpServers: {} }));
   const settings = join(dir, 'settings.json');
-  writeFileSync(settings, JSON.stringify({ enabledPlugins: { 'sleight@sleight': false }, allowedMcpServers: [{ serverName: 'plugin:sleight:computer' }] }));
+  writeFileSync(settings, JSON.stringify({ enabledPlugins: { 'sleight@sleight': false } }));
 
   function once(arm) {
     const launch = startupProbePlan({ arm, repo, mcp, empty, settings, env });

@@ -6,15 +6,21 @@ clean arm's launch contract through `sleightPluginLaunch`, the builder used by t
 benchmark. It is a connection check, with no speed claim. Keep each checkout's evidence
 separate. Do not run it from a headless build lane.
 
-Use the benchmark's pinned Claude Code 2.1.289 executable and a disposable account-login
-config. If that config needs authentication, the owner completes the login first. Never
-fall back to an API key. The command below creates a fresh config; stop at the login
-failure if the host cannot use the account there.
+Use the benchmark's pinned Claude Code 2.1.289 executable and its logged-in config at
+`$HOME/.config/sleight-bench/world/arms/sleight/claude-config`. Stop if that config needs
+authentication. Never fall back to an API key.
+
+Do not set `allowedMcpServers`. On 2.1.289, BM2's smoke with that setting printed
+`Warning: MCP server blocked by enterprise policy: plugin:sleight:computer` and loaded
+0 MCP servers. Without it, both A and B loaded exactly 1 connected sleight server,
+ran 4 js calls, and recorded auto-mode `permissionDecisionMs` of 0 to 1 ms. Isolation
+uses empty setting sources and `sleightInitProblems`, which rejects any server outside
+the arm's descriptor, including disconnected extras.
 
 From the BM2 harness checkout (the product checkout defaults to that same directory):
 
 ```sh
-CLAUDE_CONFIG_DIR=$(mktemp -d /tmp/lane-claude-XXXXXX) nice -n 20 node --input-type=module <<'JS'
+CLAUDE_CONFIG_DIR="$HOME/.config/sleight-bench/world/arms/sleight/claude-config" nice -n 20 node --input-type=module <<'JS'
 import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { join } from 'node:path';
@@ -30,8 +36,10 @@ const config = { mcpServers: { [own]: {
 } } };
 const env = Object.fromEntries(Object.entries(process.env).filter(([k]) =>
   !k.startsWith('ANTHROPIC_') && !k.startsWith('CLAUDE') || k === 'CLAUDE_CONFIG_DIR'));
+const prompt = 'Make exactly four separate js calls, each only console.log("BM2-N") with N from 1 to 4 in order. Do not acquire or drive any app. Then reply DONE.';
+// The prompt precedes variadic --allowedTools so the host does not consume it as a tool name.
 const plan = sleightPluginLaunch({ mcpConfig: config, env, settingsOverrides: {}, args: [
-  '-p', '--model', 'claude-haiku-5-5', '--effort', 'high', '--permission-mode', 'default',
+  '-p', prompt, '--model', 'claude-haiku-5-5', '--effort', 'high', '--permission-mode', 'default',
   '--output-format', 'stream-json', '--verbose', '--no-session-persistence',
   '--plugin-dir', join(repo, 'plugins/sleight'), '--setting-sources', '', '--no-chrome',
   '--mcp-config', join(dir, 'mcp.json'), '--settings', join(dir, 'settings.json'),
@@ -42,9 +50,8 @@ writeFileSync(join(dir, 'mcp.json'), JSON.stringify(config), { mode: 0o600 });
 writeFileSync(join(dir, 'settings.json'), JSON.stringify(plan.settingsOverrides), { mode: 0o600 });
 writeFileSync(join(dir, 'args.json'), JSON.stringify(plan.args));
 const command = join(homedir(), '.config/sleight-bench/world/arms/sleight/node_modules/.bin/claude');
-const prompt = 'Make exactly four separate js calls, each only console.log("BM2-N") with N from 1 to 4 in order. Do not acquire or drive any app. Then reply DONE.';
 console.log(dir);
-const run = await runOwned(command, [...plan.args, prompt], {
+const run = await runOwned(command, plan.args, {
   cwd: dir, env: plan.env, timeoutMs: 120000
 });
 writeFileSync(join(dir, 'events.jsonl'), run.stdout);
@@ -63,7 +70,8 @@ Before accepting the smoke, inspect `host.log`, `events.jsonl` and the relay tra
   `connected after Nms` for that same server. Record which path ran. A twin connection
   need not also print `connected after`.
 - Reject a refusal containing `strict`, `connects no plugin servers`, or
-  `Your organization's MCP policy does not allow`. Reject `Suppressing plugin MCP server`
+  `Your organization's MCP policy does not allow`, or `MCP server blocked by enterprise policy`.
+  Reject `Suppressing plugin MCP server`
   when it points at a different server name. A missing mod connection line also fails.
 - Exactly 1 system init event must list `plugin:sleight:computer`, connected, with no other server.
   For a later turbo or combined-arm smoke, use that arm's descriptor and require exactly

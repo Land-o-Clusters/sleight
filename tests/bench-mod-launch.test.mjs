@@ -26,6 +26,7 @@ test('startup probes use the same sources, chrome setting and MCP mode in every 
     assert.equal(plan.args[plan.args.indexOf('--setting-sources') + 1], '');
     assert.ok(plan.args.includes('--no-chrome'));
     assert.equal(plan.env.ENABLE_CLAUDEAI_MCP_SERVERS, 'false');
+    assert.equal(Object.hasOwn(plan.settingsOverrides, 'allowedMcpServers'), false);
     assert.equal(plan.args[plan.args.indexOf('--mcp-config') + 1], arm === 'mcp' || arm === 'both' ? '/fixture/mcp.json' : '/fixture/empty.json');
   }
 });
@@ -43,7 +44,7 @@ test('launch refuses unexpected companion servers and keeps existing hooks', () 
     settingsOverrides: { allowedMcpServers: [{ serverName: 'foreign' }], hooks: { Stop: [{ fixture: true }] } },
     env: { ENABLE_CLAUDEAI_MCP_SERVERS: 'true' } };
   const clean = sleightPluginLaunch(plan);
-  assert.deepEqual(clean.settingsOverrides.allowedMcpServers, [{ serverName: own }]);
+  assert.equal(Object.hasOwn(clean.settingsOverrides, 'allowedMcpServers'), false);
   assert.deepEqual(clean.settingsOverrides.hooks, { Stop: [{ fixture: true }] });
   assert.equal(clean.env.ENABLE_CLAUDEAI_MCP_SERVERS, 'false');
   assert.ok(clean.args.includes('--no-chrome'));
@@ -52,11 +53,30 @@ test('launch refuses unexpected companion servers and keeps existing hooks', () 
   assert.throws(() => sleightPluginLaunch({ ...plan, args: [] }), /requires its plugin/);
   assert.throws(() => sleightPluginLaunch({ ...plan, args: [...plan.args, '--setting-sources', 'user'] }), /empty setting sources/);
 });
+test('launch removes a supplied MCP allowlist without changing the input settings', () => {
+  for (const allowedMcpServers of [[], [{ serverName: own }], [{ serverName: 'foreign' }]]) {
+    const settingsOverrides = { allowedMcpServers, enabledPlugins: { 'sleight@sleight': false }, hooks: { Stop: [] } };
+    const plan = sleightPluginLaunch({ args: ['--plugin-dir', '/fixture/plugin'],
+      mcpConfig: { mcpServers: { [own]: {} } }, settingsOverrides, env: {} });
+    assert.deepEqual(plan.settingsOverrides, { enabledPlugins: { 'sleight@sleight': false }, hooks: { Stop: [] } });
+    assert.equal(settingsOverrides.allowedMcpServers, allowedMcpServers);
+  }
+});
+test('startup probe writes control settings without an MCP allowlist', () => {
+  const dir = mkdtempSync(join(tmpdir(), 'bm3-startup-'));
+  try {
+    const source = readFileSync(join(repo, 'bench/fowl/startup-probe.mjs'), 'utf8');
+    const writer = source.slice(source.indexOf('  const settings ='), source.indexOf('\n\n  function once'));
+    runInNewContext(writer, { dir, join, writeFileSync });
+    assert.deepEqual(JSON.parse(readFileSync(join(dir, 'settings.json'), 'utf8')),
+      { enabledPlugins: { 'sleight@sleight': false } });
+  } finally { rmSync(dir, { recursive: true, force: true }); }
+});
 function checkLaunch(plan, servers) {
   assert.equal(plan.args.includes('--strict-mcp-config'), false, 'strict mode refuses the mod connection');
   assert.equal(plan.args[plan.args.indexOf('--setting-sources') + 1], '');
   assert.equal(plan.args[plan.args.indexOf('--plugin-dir') + 1], join(repo, 'plugins/sleight'));
-  assert.deepEqual(plan.settingsOverrides.allowedMcpServers, servers.map(serverName => ({ serverName })));
+  assert.equal(Object.hasOwn(plan.settingsOverrides, 'allowedMcpServers'), false);
   assert.equal(plan.env.ENABLE_CLAUDEAI_MCP_SERVERS, 'false');
   assert.deepEqual(Object.keys(plan.mcpConfig.mcpServers).sort(), [...servers].sort());
   assert.equal(plan.mcpConfig.mcpServers[own].command, join(repo, 'plugins/sleight/bin/sleight-mcp'));
@@ -101,7 +121,7 @@ test('the rounds.sh patch isolates plugin launches for plain, combined and turbo
     const out = join(dir, `written-${surface}-${world}`);
     prepare(task, out, { surface, world, model: 'haiku', effort: 'high', mcpRoot: '/fixture/fowl', versionVerified: true });
     const settings = JSON.parse(readFileSync(generated.args[generated.args.indexOf('--settings') + 1], 'utf8'));
-    assert.deepEqual(settings.allowedMcpServers, generated.settingsOverrides.allowedMcpServers);
+    assert.equal(Object.hasOwn(settings, 'allowedMcpServers'), false);
     assert.ok(settings.hooks.Stop.length > 0, 'the round Stop hook survives settings overrides');
     const config = JSON.parse(readFileSync(join(out, task.name, 'mcp.json'), 'utf8'));
     assert.deepEqual(config, generated.mcpConfig);

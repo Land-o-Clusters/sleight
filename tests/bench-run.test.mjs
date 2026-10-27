@@ -846,7 +846,7 @@ test('generic comparisons isolate MCP while allowing the sleight mod connection'
     if (args.includes('--plugin-dir')) {
       const config = result.files.get(args[args.indexOf('--mcp-config') + 1]);
       assert.equal(config.mcpServers['plugin:sleight:computer'].command, '/fixture/plugins/sleight/bin/sleight-mcp');
-      assert.deepEqual(settings.allowedMcpServers, [{ serverName: 'plugin:sleight:computer' }]);
+      assert.equal(Object.hasOwn(settings, 'allowedMcpServers'), false);
       assert.equal(settings.hooks.Elicitation[0].matcher, '^plugin:sleight:computer$');
     }
   }
@@ -854,13 +854,13 @@ test('generic comparisons isolate MCP while allowing the sleight mod connection'
   assert.ok(result.envs.every(env => env.BENCH_APPROVAL_STOP && env.BENCH_ARM_SERVERS));
 });
 
-test('clean arms isolate sleight with a connection allowlist and record the setup', async () => {
+test('clean arms isolate sleight with empty setting sources and record the setup', async () => {
   const clean = await runner({ suite: 'real', arm: 'sleight', cleanArms: true, drive: true, outcome: { passed: true } });
   assert.equal(clean.error, undefined);
   assert.equal(clean.saved.at(-1).armSetup, 'clean');
   const args = clean.calls.filter(call => Array.isArray(call) && call[0] === 'driver').at(-1).slice(1);
   assert.equal(args.includes('--strict-mcp-config'), false);
-  assert.deepEqual(clean.files.get(args[args.indexOf('--settings') + 1]).allowedMcpServers, [{ serverName: 'plugin:sleight:computer' }]);
+  assert.equal(Object.hasOwn(clean.files.get(args[args.indexOf('--settings') + 1]), 'allowedMcpServers'), false);
   assert.equal(args[args.indexOf('--setting-sources') + 1], '');
   const config = clean.files.get(args[args.indexOf('--mcp-config') + 1]);
   assert.deepEqual(Object.keys(config.mcpServers), ['plugin:sleight:computer']);
@@ -877,7 +877,7 @@ test('clean private-mail launches retain the private trace and telemetry setting
   const settings = result.files.get(args[args.indexOf('--settings') + 1]);
   assert.equal(settings.env?.SLEIGHT_TRACE, '');
   assert.equal(settings.env.OTEL_LOG_TOOL_CONTENT, '0');
-  assert.deepEqual(settings.allowedMcpServers, [{ serverName: 'plugin:sleight:computer' }]);
+  assert.equal(Object.hasOwn(settings, 'allowedMcpServers'), false);
 });
 
 test('clean arms confirm the codex bench home configures only the engine server', async () => {

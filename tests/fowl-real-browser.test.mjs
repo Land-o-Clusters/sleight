@@ -337,7 +337,7 @@ test('Claude gate execution records comparable calls and errors from fake stream
   const run = await runGateAgent(plan, { runClaude: async (command, args) => {
     assert.equal(command, plan.command); assert.equal(args.at(-1), plan.prompt);
     assert.equal(args.includes('--strict-mcp-config'), false);
-    assert.deepEqual(plan.settingsOverrides.allowedMcpServers, [{ serverName: 'plugin:sleight:computer' }, { serverName: 'sleight-turbo' }]);
+    assert.equal(Object.hasOwn(plan.settingsOverrides, 'allowedMcpServers'), false);
     return { exit: { code: 0 }, stdout: events.map(e => JSON.stringify(e)).join('\n'), stderr: '', groupClean: true };
   } });
   assert.equal(run.toolCalls, 1);
