@@ -128,6 +128,7 @@ export class SessionTranscript {
             (this.foreignPending ??= new Map()).set(block.id, Date.now());
         }
         if (block.type === 'text') {
+          this.onText?.({ type: 'assistant', t, message: { content: [block] } });
           this.lastText = block.text;
           const matches = [...block.text.matchAll(/^RESULT[^\r\n]*$/gm)];
           if (matches.length) this.answer = matches.at(-1)[0];
