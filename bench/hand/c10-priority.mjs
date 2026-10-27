@@ -9,7 +9,8 @@ import { setTimeout as sleep } from 'node:timers/promises';
 
 export function priorityPlan(priority = getPriority()) {
   if (priority !== 0) throw Error('C10 needs a normal-priority launcher; use zsh bench/hand/c10.command (no outer nice).');
-  return { servicePriority: 0, runnerPriority: 20 };
+  // os.setPriority accepts -20 to 19; 19 is the lowest priority Node can set.
+  return { servicePriority: 0, runnerPriority: 19 };
 }
 
 export class PrioritySpawner {
@@ -64,7 +65,7 @@ export class PrioritySpawner {
       const ready = await Promise.race([this.ready, new Promise((_, reject) => {
         timer = setTimeout(() => reject(Error('Spawn service ready timed out')), 10000);
       })]);
-      priorityPlan(ready.priority); setPriority(process.pid, 20);
+      setPriority(process.pid, priorityPlan(ready.priority).runnerPriority);
     } finally { clearTimeout(timer); }
   }
   async close() {

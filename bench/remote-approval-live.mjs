@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 // Import-safe RA1 owner-away check. The interactive PTY is shared with the benchmark; this file never imports run.mjs.
-import { existsSync, mkdirSync, mkdtempSync, lstatSync, copyFileSync, readFileSync, writeFileSync, unlinkSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, writeFileSync, unlinkSync } from 'node:fs';
 import { tmpdir, homedir, loadavg, userInfo } from 'node:os';
 import { join, resolve, basename } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -13,10 +13,26 @@ import { launchPty, SessionTranscript, terminalGate } from './world/arms/claude-
 import { VirtualTerminal } from './world/arms/claude-cu/terminal.mjs';
 import { openFixture, closeFixtures } from './real-fixture.mjs';
 import { trackTemp } from '../scripts/temp-leftovers.mjs';
+import { assertLogin } from './preflight.mjs';
 
 const root = fileURLToPath(new URL('..', import.meta.url));
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 const note = '"TextEdit" needs approval on the Mac. Ask the user to reply: allow TextEdit';
+// This dedicated benchmark profile keeps its keychain identity across runs without changing another arm.
+export function remoteLoginPlan({ home = homedir(), env = process.env } = {}) {
+  const clean = Object.fromEntries(['PATH', 'USER', 'LOGNAME', 'TMPDIR', 'LANG'].filter(k => typeof env[k] === 'string').map(k => [k, env[k]]));
+  return { command: 'claude', env: { ...clean, HOME: home,
+    CLAUDE_CONFIG_DIR: join(home, 'Library', 'Caches', 'sleight-bench', 'remote-approval', 'claude') } };
+}
+export function assertRemoteLogin(plan = remoteLoginPlan(), options) {
+  try { assertLogin(plan, options); }
+  catch (error) {
+    // Home paths are scrubbed from the report. A shell expansion keeps the recovery command runnable.
+    if (/^Not logged in/.test(error.message)) error.message = error.message.replace(/\nFix: [\s\S]*$/,
+      '\nFix: env CLAUDE_CONFIG_DIR="$HOME/Library/Caches/sleight-bench/remote-approval/claude" claude auth login');
+    throw error;
+  }
+}
 export function remotePlan() {
   return { app: 'TextEdit', bundle: 'com.apple.TextEdit', interactive: true,
     approvals: 'empty arm store; no persistent writes', engineAlwaysList: 'untouched; a bypass fails the notice check',
@@ -45,6 +61,7 @@ export async function runRemoteApproval(options = {}, io) {
   let release, bank, session, collected = true, fixtureStarted = false, cleanup = false;
   try {
     await io.hold(); release = await io.lock(); await io.hold();
+    await io.login();
     bank = await io.prepare();
     await io.hold(); fixtureStarted = true; await io.fixture(bank);
     session = await io.session(bank);
@@ -79,7 +96,8 @@ export async function runRemoteApproval(options = {}, io) {
 
 export function realDependencies() {
   const execute = promisify(execFile), controller = new AbortController();
-  for (const signal of ['SIGINT', 'SIGTERM']) process.once(signal, () => controller.abort());
+  const login = remoteLoginPlan();
+  for (const signal of ['SIGINT', 'SIGTERM', 'SIGHUP']) process.once(signal, () => controller.abort());
   const hold = async () => { while (existsSync('/tmp/sleight-hold')) { controller.signal.throwIfAborted(); await sleep(1000); } controller.signal.throwIfAborted(); };
   const metadata = async operation => {
     const { stdout } = await execute('/usr/bin/osascript', ['-l', 'JavaScript', join(root, 'plugins/sleight/lib/remote-approvals.js'), JSON.stringify({ operation })],
@@ -88,6 +106,7 @@ export function realDependencies() {
   };
   return {
     now: () => new Date(), hold,
+    login: () => assertRemoteLogin(login),
     lock: () => acquireLiveLock('/tmp/sleight-live.lock', { wait: true, interval: 1000, signal: controller.signal }),
     prepare: async () => {
       const presence = await metadata('presence');
@@ -105,48 +124,71 @@ export function realDependencies() {
       if (lease.running !== false || lease.launched !== true) throw Error('The TextEdit fixture must own a cold launch; existing user windows are never read');
     },
     cleanup: async bank => { await closeFixtures(bank); return !bank.exitDisagreements?.length; },
-    session: (bank, options) => realSession(bank, { hold, signal: controller.signal, ...options }),
+    session: (bank, options) => realSession(bank, { hold, signal: controller.signal, login, ...options }),
     write: (path, value) => { mkdirSync(join(root, 'docs/benchmarks'), { recursive: true }); writeFileSync(path, JSON.stringify(value, null, 2) + '\n', { mode: 0o600, flag: 'wx' }); },
   };
 }
 
-async function realSession(bank, { hold, signal, upfront = false }) {
-  const id = randomUUID(), dir = join(bank.bank, id), config = join(dir, 'claude');
+export async function realSession(bank, { hold, signal, upfront = false, login = remoteLoginPlan(), launch = launchPty }) {
+  const id = randomUUID(), config = login.env.CLAUDE_CONFIG_DIR;
+  mkdirSync(join(bank.bank, id), { recursive: true, mode: 0o700 });
+  // Claude keys project trust by the folder's real path (/var/folders is /private/var/folders), as the claude-cu arm does.
+  const dir = realpathSync(join(bank.bank, id));
   mkdirSync(config, { recursive: true, mode: 0o700 });
-  // Copy only an existing benchmark account-login file, never read the keychain or the owner's Claude config.
-  const login = join(homedir(), 'Library/Caches/sleight-bench/claude-config/.credentials.json');
-  const info = lstatSync(login);
-  if (!info.isFile() || info.isSymbolicLink() || info.uid !== process.getuid() || info.mode & 0o077 || info.size > 65536) throw Error('A private benchmark account login file is required');
-  copyFileSync(login, join(config, '.credentials.json'));
   const mcp = join(dir, 'mcp.json'), settings = join(dir, 'settings.json'), turnFile = join(dir, 'turn-' + id + '.json');
   const nonce = randomUUID(), audit = join(dir, 'approvals.jsonl');
-  writeFileSync(join(config, '.claude.json'), JSON.stringify({ hasCompletedOnboarding: true, projects: { [dir]: { hasTrustDialogAccepted: true, enabledMcpServers: ['plugin:sleight:computer'] } } }), { mode: 0o600 });
   writeFileSync(mcp, JSON.stringify({ mcpServers: { 'plugin:sleight:computer': { command: process.execPath,
     args: [fileURLToPath(new URL('./remote-approval-server.mjs', import.meta.url))],
     env: { SLEIGHT_TURBO: '0', SLEIGHT_HAND: '0', SLEIGHT_APPROVAL_PROMPT: 'dialog', RA1_AUDIT: audit } } } }), { mode: 0o600 });
   writeFileSync(settings, JSON.stringify({ autoMemoryEnabled: false, enabledPlugins: {}, claudeMdExcludes: ['**'],
     hooks: { PreToolUse: [{ matcher: '.*', hooks: [{ type: 'command', command: `"${process.execPath}" "${fileURLToPath(new URL('./remote-approval-guard.mjs', import.meta.url))}"`, timeout: 5 }] }], Stop: [{ hooks: [{ type: 'command', command: `"${process.execPath}" "${fileURLToPath(new URL('./world/arms/claude-cu/turn-ended.mjs', import.meta.url))}"`, timeout: 5 }] }] } }), { mode: 0o600 });
-  const env = Object.fromEntries(['PATH', 'HOME', 'USER', 'LOGNAME', 'TMPDIR', 'LANG'].filter(k => typeof process.env[k] === 'string').map(k => [k, process.env[k]]));
+  const env = { ...login.env };
   Object.assign(env, { CLAUDE_CONFIG_DIR: config, TERM: 'xterm-256color', CLAUDE_CODE_DISABLE_AUTO_MEMORY: '1', ENABLE_CLAUDEAI_MCP_SERVERS: 'false',
     DISABLE_AUTOUPDATER: '1', DISABLE_TELEMETRY: '1', DO_NOT_TRACK: '1',
     RA1_UPFRONT: upfront ? '1' : '0', BENCH_CU_SESSION: id, BENCH_CU_NONCE: nonce, BENCH_CU_TURN_RECEIPT: turnFile });
-  const plan = { command: 'claude', cwd: dir, env,
+  const plan = { command: login.command, cwd: dir, env,
     args: [...remotePlan().args, '--session-id', id, '--mcp-config', mcp, '--settings', settings] };
+  const configFile = join(config, '.claude.json');
+  const before = existsSync(configFile) ? JSON.parse(readFileSync(configFile, 'utf8')) : {};
+  let restored = false;
+  const restoreTrust = () => {
+    if (restored) return;
+    restored = true;
+    process.off('exit', restoreTrust);
+    // Read again after child collection so account refreshes and other Claude metadata survive.
+    const current = JSON.parse(readFileSync(configFile, 'utf8'));
+    if (Object.hasOwn(before.projects ?? {}, dir)) current.projects[dir] = before.projects[dir];
+    else if (current.projects) delete current.projects[dir];
+    if (!Object.hasOwn(before, 'projects') && current.projects && !Object.keys(current.projects).length) delete current.projects;
+    if (Object.hasOwn(before, 'hasCompletedOnboarding')) current.hasCompletedOnboarding = before.hasCompletedOnboarding;
+    else delete current.hasCompletedOnboarding;
+    writeFileSync(configFile, JSON.stringify(current, null, 2) + '\n', { mode: 0o600 });
+  };
+  // An exit the finally blocks never reach (a signal that ends the process) still removes this run's trust.
+  process.once('exit', restoreTrust);
+  writeFileSync(configFile, JSON.stringify({ ...before, hasCompletedOnboarding: true,
+    projects: { ...before.projects, [dir]: { hasTrustDialogAccepted: true, enabledMcpServers: ['plugin:sleight:computer'] } } }), { mode: 0o600 });
   // No print mode: the real terminal composer must raise prompt.submit with a trusted origin.
   const screen = new VirtualTerminal(), transcript = new SessionTranscript(id), events = [];
   transcript.onEvent = event => events.push(event);
-  const pty = launchPty(plan, data => screen.write(data));
+  let pty;
+  try { pty = launch(plan, data => screen.write(data)); }
+  catch (error) { restoreTrust(); throw error; }
   let closed; pty.closed.then(value => { closed = value; });
   const refresh = () => transcript.update({ env, sessionId: id });
   const readyAt = Date.now();
   try {
   while (!terminalGate(screen).ready) {
     await hold(); signal.throwIfAborted();
-    if (closed || Date.now() - readyAt > 30000 || terminalGate(screen).blocked) { await pty.stop(); throw Error('Interactive Claude startup is not ready; inspect the isolated arm'); }
+    if (closed || Date.now() - readyAt > 30000 || terminalGate(screen).blocked) throw Error('Interactive Claude startup is not ready; inspect the isolated arm');
     await sleep(100);
   }
   await sleep(1000);
-  } catch (error) { await pty.stop(); error.collected = (await pty.closed).clean === true; throw error; }
+  } catch (error) {
+    try { await pty.stop(); error.collected = (await pty.closed).clean === true; }
+    finally { restoreTrust(); }
+    throw error;
+  }
   return {
     async submit(text) {
       await hold(); signal.throwIfAborted(); refresh();
@@ -179,7 +221,7 @@ async function realSession(bank, { hold, signal, upfront = false }) {
       return { text: output + '\n' + results, firstToolAt: first?.t, noticeAt: notice?.t, grants,
         complete: output.includes(bank.token) && results.includes(bank.token), events: rows };
     },
-    async close() { await pty.stop(); return await pty.closed; },
+    async close() { try { await pty.stop(); return await pty.closed; } finally { restoreTrust(); } },
   };
 }
 
