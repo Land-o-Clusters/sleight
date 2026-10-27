@@ -336,12 +336,14 @@ export async function createV3Bridge({ startupTimeoutMs = 120000, timeoutMs = 31
       // Binding carries the user's prompt, including questions asked during pause. Only tool input waits for Resume.
       await pauseSync;
       if (lost || !current()) return false;
-      fence(); handoffCall = undefined; const epoch = generation;
+      fence(); const epoch = generation;
       callTimeoutMs = timeoutMs;
       trace('turn-begin', ++traceTurn); traceCall = 0;
       const result = await rpc('begin', { turn: frame.turn, text: frame.text, apps: [...apps], appSecret: serverAppSecret(),
         ...(validHostLabel(host) ? { host } : {}) });
       if (epoch !== generation || lost || !current()) return false;
+      // The begin reply follows the old runtime's end and its call cleanup.
+      handoffCall = undefined;
       active = result?.available === true;
       // An app turn's first calls prepare it and may wait on the user's clicks; the worker names that deadline, within 10 minutes.
       // It lasts until the first call returns, when preparation is over.

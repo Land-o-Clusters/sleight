@@ -81,6 +81,15 @@ test('handoff status lines have a measured prompt budget', () => {
   assert.equal(Object.values(handoffMessages).reduce((size, text) => size + text.length, 0), 647);
 });
 
+test('the turbo skill reopens the page after an away handoff within its existing byte budget', () => {
+  const skill = readFileSync(new URL('../plugins/sleight/skills/drive-mac-apps/BROWSERS.turbo-v3.md', import.meta.url), 'utf8');
+  assert.match(skill, /Reopen the page on their reply\./);
+  assert.doesNotMatch(skill, /Read fresh on their next message/);
+  assert.ok(Buffer.byteLength(skill) <= 1854);
+  // HO3 pins the turbo section separately from HO1P's unchanged engine skill and catalogs.
+  assert.equal(hash(skill), baseline.browserSkill);
+});
+
 test('wait and closed-submit review outcomes have a reviewed prompt budget', () => {
   const outcomes = [...Object.values(shortStepOutcomes), closedSubmitWarning];
   assert.equal(hash(JSON.stringify(outcomes)), baseline.browserReviewOutcomes);
