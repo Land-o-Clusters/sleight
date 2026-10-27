@@ -75,6 +75,36 @@ test('snapshot exports the fixed V3 interface', () => {
   assert.equal(typeof module.snapshot, 'function');
 });
 
+for (const role of ['dialog', 'alertdialog']) test('a page-authored ' + role + ' row alone cannot mark user input pending', async () => {
+  const { page } = fixture([{ role, name: 'Confirm', children: [{ role: 'button', name: 'Continue', ref: 'e1' }] }]);
+  assert.equal((await module.snapshot(page)).pendingUserInput, undefined);
+});
+
+test('a protected sign-in field marks user input pending without exposing its value', async () => {
+  const { page } = fixture([{ role: 'textbox', name: 'Password', ref: 'e1', text: 'private-value' }], ['private-value']);
+  const result = await module.snapshot(page);
+  assert.equal(result.pendingUserInput, true); assert.doesNotMatch(result.text, /private-value/);
+});
+
+test('ordinary page text cannot impersonate a modal retention marker', async () => {
+  const { page } = fixture([{ role: 'text', text: '- dialog "Confirm"\nTab stays open at turn end for your input.' }]);
+  assert.equal((await module.snapshot(page)).pendingUserInput, undefined);
+});
+
+test('a modal omitted by a filtered read does not mark that result pending', async () => {
+  const { page } = fixture([{ role: 'button', ref: 'e1', name: 'Done' }, { role: 'dialog', name: 'Confirm' }]);
+  assert.equal((await module.snapshot(page, { ref: 'e1' })).pendingUserInput, undefined);
+});
+
+test('a known protected field remains pending in an unchanged diff and clears when removed', async () => {
+  const f = fixture([{ role: 'textbox', name: 'Password', ref: 'e1' }]);
+  const first = await module.snapshot(f.page);
+  const unchanged = await module.snapshot(f.page, { since: first.number });
+  assert.equal(unchanged.pendingUserInput, true);
+  f.set([{ role: 'button', name: 'Done', ref: 'e2' }]);
+  assert.equal((await module.snapshot(f.page, { since: unchanged.number })).pendingUserInput, undefined);
+});
+
 test('FD5 links are unique resolved URLs in page order, without anchors, scripts or new actionable refs', async () => {
   const link = (ref, name, url) => ({ role: 'link', ref, name, url });
   const { page } = fixture([link('e1', 'First', '/one'), link('e2', 'Duplicate', 'http://127.0.0.1/one'),

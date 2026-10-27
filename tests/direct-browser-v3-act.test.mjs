@@ -55,6 +55,26 @@ function fixture({ effect = '', submit = false, fail, onClick, snapshotFail = fa
   return { page, tab, run, checks, actions, states, time: () => time, setOverlay: next => { overlay = next; } };
 }
 
+test('completed typing carries edited input evidence for turn cleanup', async () => {
+  const f = fixture();
+  const result = await f.run(f.tab, [{ do: 'type', ref: 'e1', text: 'Edited' }], {});
+  assert.equal(result.input.edited, true);
+});
+
+test('clicking a checkbox carries edited input evidence for turn cleanup', async () => {
+  const f = fixture(); f.states.set('e1', { role: 'checkbox', kind: 'checkbox' });
+  const result = await f.run(f.tab, [{ do: 'click', ref: 'e1' }], {});
+  assert.equal(result.input?.edited, true);
+});
+
+test('a submit answered by an HTML modal carries a pending input marker', async () => {
+  let f;
+  f = fixture({ submit: true, onClick: () => f.setOverlay({ count: 1, hash: 2 }) });
+  const result = await f.run(f.tab, [{ do: 'click', ref: 'e1' }], {});
+  assert.equal(result.input.ask, true);
+  assert.match(result.lines.join('\n'), /dialog or panel/);
+});
+
 test('PF7 full observation is acquired once without declaring every context row changed', async t => {
   const prior = process.env.SLEIGHT_FULL_OBSERVE_ONCE;
   t.after(() => { if (prior === undefined) delete process.env.SLEIGHT_FULL_OBSERVE_ONCE; else process.env.SLEIGHT_FULL_OBSERVE_ONCE = prior; });
@@ -256,6 +276,7 @@ for (const event of ['navigation', 'document', 'dialog', 'popup', 'close']) test
   } });
   const result = await f.run(f.tab, [{ do: 'click', ref: 'e1' }, { do: 'type', ref: 'e2', text: 'must not run' }], {});
   assert.equal(result.stoppedAt, 1); assert.match(result.lines[1], /not reached/);
+  assert.equal(result.dialog, event === 'dialog' ? f.tab.state.dialog : undefined, 'only the dialog reported by the runner carries retention evidence');
   assert.equal(f.actions.length, 1);
   for (const name of ['request', 'requestfinished', 'requestfailed', 'framenavigated', 'load', 'dialog', 'popup', 'close'])
     assert.equal(f.page.listenerCount(name), 0, name);
@@ -446,6 +467,7 @@ test('v3 refuses to input behind a waiting dialog', async () => {
   const f = fixture(); f.tab.state.dialog = { type: () => 'confirm', message: () => 'Continue?' };
   const result = await f.run(f.tab, [{ do: 'click', ref: 'e1' }], {});
   assert.equal(f.actions.length, 0); assert.match(result.lines[0], /dialog/);
+  assert.equal(result.dialog, f.tab.state.dialog);
 });
 
 test('v3 action failure redacts echoed text and files', async () => {
