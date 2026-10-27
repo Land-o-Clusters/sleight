@@ -2993,6 +2993,7 @@ export function createPageRegistry({ browser, session, context = browser?.contex
         try {
           if (typeof page._connection?.toImpl === 'function') await trackPageWaits(page);
           await guardPageTask(entry, () => page.goto(parsed.href, { waitUntil: 'domcontentloaded', timeout: timeoutMs }), { afterMs: 3000 });
+          phase('browser-open-navigated');
           if (typeof page._connection?.toImpl === 'function') await guardPageTask(entry, () => waitForThinPage(page));
         }
         catch (error) { await assertEndpointRead(page); throw error; }

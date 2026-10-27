@@ -77,7 +77,7 @@ const phases = new Set(('worker-spawn-start worker-spawned bridge-ready tools-re
   + 'turn-end-requested turn-end worker-entry helpers-check-start helpers-check-end connection-select-start connection-select-end '
   + 'worker-ready worker-hand-dropped connection-start connection-end runtime-ready '
   + 'browser-open-start browser-open-create-start browser-open-create-end browser-open-attach-end browser-open-identify-end '
-  + 'browser-open-adopt-end browser-open-ready-end browser-open-goto-start browser-open-goto-end browser-open-capture-start '
+  + 'browser-open-adopt-end browser-open-ready-end browser-open-goto-start browser-open-navigated browser-open-goto-end browser-open-capture-start '
   + 'browser-open-capture-end browser-open-end').split(' '));
 // Numeric ordinals correlate calls without recording user text, tool arguments or page results.
 // Both processes append to the relay's existing trace file. Disabled tracing reads no clock and does no I/O.

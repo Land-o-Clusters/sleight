@@ -176,6 +176,21 @@ for (const event of ['navigation', 'document', 'dialog', 'popup', 'close']) test
     assert.equal(f.page.listenerCount(name), 0, name);
 });
 
+test('a registry popup stops a submit batch without clearing the unconfirmed-submit fence', async () => {
+  const f = fixture({ submit: true, onClick() { f.tab.popups.push({ tab: 'tchild' }); } });
+  f.tab.popups = [];
+  const result = await f.run(f.tab, [{ do: 'click', ref: 'e1' }, { do: 'click', ref: 'e2' }], {}, { observe: 'none' });
+  assert.equal(result.stoppedAt, 1);
+  assert.match(result.lines[0], /opened background tab tchild/);
+  assert.match(result.lines[1], /not reached/);
+  assert.equal(f.actions.length, 1);
+  assert.ok(f.tab.state.submitUnconfirmed, 'opening a tab does not prove the submit completed');
+  assert.ok(result.observe, 'deliver the opener read on the boundary');
+  assert.equal(f.time(), 0);
+  assert.equal(deliverSnapshot(f.tab.state, { ...result.observe, state: f.tab.state }), false);
+  assert.ok(f.tab.state.submitUnconfirmed, 'an immediate delivered read cannot release the submit fence');
+});
+
 test('v3 never retries a timed out dispatched input and keeps the cover\'s page text out of the harness line', async () => {
   const f = fixture({ fail: 'Timeout 1000ms exceeded: Cookie notice intercepts pointer events' });
   const result = await f.run(f.tab, [{ do: 'click', ref: 'e1' }, { do: 'click', ref: 'e2' }], {});

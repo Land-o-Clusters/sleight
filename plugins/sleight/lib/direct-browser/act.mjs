@@ -223,7 +223,7 @@ export function createActionRunner({ check, snapshot, backgroundClick = (tab, lo
       const named = steps[index], step = named.do === 'navigate' ? { ...named, do: 'click' } : named, point = hasPoint(step);
       let label = `${index + 1} ${named.do}${step.ref ? ' ' + step.ref : ''}`;
       const pointCache = {};
-      let pointHandle, endpoint, endHandle;
+      let pointHandle, endpoint, endHandle, popupTab;
       let locator, target, started = false, armed, activity, deferred = false, staging, submit, inputPending = false, stepFinished = false, settleCapped = false, settleNote, clickRetry = '', recoverClick = false, controlRecipe, consentDecline = false, consentNote, controlObserved = false, cursorToken, cursorFailed = false;
       let pointsReleased = false;
       const releasePoints = async () => {
@@ -310,6 +310,8 @@ export function createActionRunner({ check, snapshot, backgroundClick = (tab, lo
           if (!Array.isArray(staging?.payloads) || !staging.payloads.length) throw Error('user-named file staging required');
         }
         guardChooser(page, state); const popupFrom = tab.popups?.length ?? 0;
+        // Background allocation can publish an owned tab without a Playwright popup event.
+        const openedPopup = () => tab.popups?.find((row, i) => i >= popupFrom && row.tab && !row.blocked)?.tab;
         // Visible dialogs and panels before the input, to tell a submit that answered with one from a silent one.
         const overlayRead = async () => { try { return await trustedLocatorRead(locator, overlaySignature); } catch { return null; } };
         const overlayBase = locator && (step.do === 'click' || enter) ? await overlayRead() : null;
@@ -471,6 +473,7 @@ export function createActionRunner({ check, snapshot, backgroundClick = (tab, lo
           } catch (error) { if (!armed.boundary) throw error; }
           let landed;
           for (;;) {
+            if (openedPopup()) break;
             const boundary = armed.boundary;
             if (boundary && !['navigation', 'document'].includes(boundary.kind)) break;
             if (boundary?.kind === 'navigation' && landed !== boundary) {
@@ -489,13 +492,13 @@ export function createActionRunner({ check, snapshot, backgroundClick = (tab, lo
           else if (waiting) settleNote = shortStepOutcomes.quiet.replace('<ms>', observeWaitMs) + (step.ms > WAIT_CAP && observeWaitMs >= WAIT_CAP ? ' (cap)' : '');
         }
         // Electron fences one input per invocation; lookahead changes only settling, never sends that next input.
-        const batched = quiet && !inputPending && !armed.boundary && ['type', 'press'].includes((steps[index + 1] ?? nextStep)?.do);
+        const batched = quiet && !inputPending && !armed.boundary && !openedPopup() && ['type', 'press'].includes((steps[index + 1] ?? nextStep)?.do);
         if (!short) observeWaitMs = batched ? 40 : 600;
         // A submit's clock starts when the gate arms the fence (submit.startedAt), which in a trusted turn is after `start`: the
         // delivered read clears the fence only if taken a full second after that moment (rules.mjs deliverSnapshot), so both wait on it.
         const origin = submits && submit ? Math.max(start, submit.startedAt) : start;
         const settleUntil = batched ? now() + 40 : origin + (submits ? 5000 : 600);
-        while (!short && !conditionWait && !armed.boundary && now() < settleUntil) {
+        while (!short && !conditionWait && !armed.boundary && !openedPopup() && now() < settleUntil) {
           if (submits && locator) {
             // A key can return before the navigation it started has committed, and the node is gone mid-read. Give the
             // navigation boundary a moment to register; destroyed evidence without one still stops the batch.
@@ -512,11 +515,12 @@ export function createActionRunner({ check, snapshot, backgroundClick = (tab, lo
           if (submits && overlayShown && !armed.pending.size && now() >= origin + 1000) break;
           await Promise.race([armed.boundaryReady, sleep(Math.min(50, settleUntil - now()))]);
         }
+        popupTab = openedPopup();
         // Carry watchers only across steps this invocation will run. The Electron caller guards its next invocation.
-        if (batched && steps[index + 1] && !armed.boundary) carry = armed;
+        if (batched && steps[index + 1] && !armed.boundary && !popupTab) carry = armed;
         const boundary = armed.boundary;
         if (boundary?.kind === 'navigation' && typeof page._connection?.toImpl === 'function') await waitForThinPage(page, { now, sleep });
-        if (consentDecline) consentNote = ['popup', 'dialog', 'close'].includes(boundary?.kind)
+        if (consentDecline) consentNote = popupTab || ['popup', 'dialog', 'close'].includes(boundary?.kind)
           ? 'Decline unverified: the action opened another surface or closed the tab'
           : await verifyConsent(page, state);
         closed = lossFixes && boundary?.kind === 'close';
@@ -526,10 +530,10 @@ export function createActionRunner({ check, snapshot, backgroundClick = (tab, lo
           else {
             submit.settledAt = now();
             // No navigation, document, dialog or popup, no form change, no request in flight: the refund waits for the next payment check.
-            if (!boundary && !formChanged && !armed.pending.size && activity?.observable && await activity.verify()) deferred = trusted ? ctx.refund(target, activity) : deferRefund(ctx, target, activity);
+            if (!boundary && !popupTab && !formChanged && !armed.pending.size && activity?.observable && await activity.verify()) deferred = trusted ? ctx.refund(target, activity) : deferRefund(ctx, target, activity);
           }
         }
-        const popupTab = tab.popups?.slice(popupFrom).find(row => row.tab && !row.blocked)?.tab, navPath = boundary?.kind === 'navigation' ? pathOf(page.url()) : '';
+        const navPath = boundary?.kind === 'navigation' ? pathOf(page.url()) : '';
         // A tab the page opened during a click without the background modifier is probably in the foreground.
         const clicked = ['click', 'press'].includes(step.do) || point && step.do === 'drag';
         const foregroundTabs = clicked ? (await tab.takeForeground?.() ?? 0) + (boundary?.kind === 'popup' && tab.background === false
@@ -563,10 +567,10 @@ export function createActionRunner({ check, snapshot, backgroundClick = (tab, lo
             : `. ${raisable.length > 1 ? 'Tabs' : 'Tab'} ${raisable.join(', ')} (opened by this page, another origin) can be raised to the foreground by the page at any time, and sleight cannot block or detect that` : '') + (heldOpenings > 0 ? '. Page script tried to open ' + (heldOpenings > 1 ? heldOpenings + ' tabs' : 'a tab') + ' after this input; held, nothing opened' : ''));
         // A click with work still pending at its settle deadline has no confirmed control outcome either.
         const controlSettleCapped = settleCapped || armed.pending.size > 0;
-        if (controlRecipe && !inputPending && !submits && !target.payment && !target.element?.payment && !target.element?.form && !boundary && !controlSettleCapped) {
+        if (controlRecipe && !inputPending && !submits && !target.payment && !target.element?.payment && !target.element?.form && !boundary && !popupTab && !controlSettleCapped) {
           try { const event = await controlRecipe.finish(); if (event) { onControl(event); controlObserved = true; } } catch {}
         }
-        if (boundary || settleCapped) { stoppedAt = index + 1; break; }
+        if (boundary || popupTab || settleCapped) { stoppedAt = index + 1; break; }
       } catch (error) {
         cursorFailed = true;
         paused ||= error.paused === true;
@@ -606,7 +610,7 @@ export function createActionRunner({ check, snapshot, backgroundClick = (tab, lo
         try { hand?.finish?.(cursorToken, cursorFailed); } catch {}
         if (!cursorToken && ['click', 'check', 'uncheck', 'select', 'navigate', 'type', 'paste', 'press', 'drag', 'scroll', 'hover', 'move', 'back', 'forward', 'reload', 'upload'].includes(named.do)) try { hand?.skipped?.({ op: named.do }); } catch {}
         stepFinished = true;
-        try { onStep?.({ control: controlObserved, boundary: armed?.boundary?.kind }); } catch {}
+        try { onStep?.({ control: controlObserved, boundary: armed?.boundary?.kind ?? (popupTab ? 'popup' : undefined) }); } catch {}
         try { await controlRecipe?.dispose(); } catch {}
         if (consentDecline) await releaseConsent(state);
         if (activity && !deferred) activity.stop();

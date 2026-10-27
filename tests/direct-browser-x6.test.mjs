@@ -77,6 +77,70 @@ test('wait carries a request from the preceding click instead of declaring the p
   assert.ok(f.snapshots[0][1] >= 1200);
 });
 
+for (const pending of [false, true]) test(`an owned background popup ends the batch without a popup event, pending request: ${pending}`, async t => {
+  const f = fixture(), request = { resourceType: () => 'document' };
+  f.tab.popups = [];
+  let inputs = 0;
+  const boundaries = [];
+  f.page.getByRef = () => utilityLocator({ evaluate: async () => ({}), click: async () => {
+    inputs++;
+    // The registry creates target=_blank destinations itself in the background.
+    // That path publishes an owned handle without emitting page.popup.
+    f.tab.popups.push({ tab: 'tchild', opener: 'tparent' });
+    if (pending) f.page.emit('request', request);
+  } });
+  const result = await f.run(f.tab, [{ do: 'click', ref: 'e1' }, { do: 'wait', ms: 500 },
+    { do: 'click', ref: 'e2' }], {}, { observe: 'none', onStep: event => boundaries.push(event.boundary) });
+  t.diagnostic(`simulated settle/wait time: ${f.time()} ms; input calls: ${inputs}`);
+  assert.equal(result.stoppedAt, 1, result.lines.join('\n'));
+  assert.match(result.lines[0], /opened background tab tchild/);
+  assert.match(result.lines[1], /not reached/);
+  assert.match(result.lines[2], /not reached/);
+  assert.equal(inputs, 1);
+  assert.deepEqual(boundaries, ['popup'], 'control memory must forget the previous opener at this boundary');
+  assert.ok(result.observe, 'the boundary must return the opener read even with observe:none');
+  assert.equal(f.time(), 0, 'the observed popup needs no extra settle timer or following wait');
+  assert.equal(f.page.listenerCount('request'), 0);
+});
+
+test('a registry popup observed during settling ends that wait early', async () => {
+  const f = fixture();
+  f.tab.popups = [];
+  f.page.getByRef = () => utilityLocator({ evaluate: async () => ({}), click: async () => {
+    f.schedule(125, () => f.tab.popups.push({ tab: 'tchild', opener: 'tparent' }));
+  } });
+  const result = await f.run(f.tab, [{ do: 'click', ref: 'e1' }, { do: 'wait', ms: 500 }], {});
+  assert.equal(result.stoppedAt, 1, result.lines.join('\n'));
+  assert.ok(f.time() >= 125 && f.time() < 600, `settle took ${f.time()} ms`);
+  assert.match(result.lines[1], /not reached/);
+});
+
+test('a late registry popup also ends a numeric wait with an active request', async () => {
+  const f = fixture();
+  f.tab.popups = [];
+  f.schedule(10, () => f.page.emit('request', { resourceType: () => 'fetch' }));
+  f.schedule(125, () => f.tab.popups.push({ tab: 'tchild' }));
+  const result = await f.run(f.tab, [{ do: 'wait', ms: 500 }, { do: 'click', ref: 'e2' }], {}, { observe: 'none' });
+  assert.equal(result.stoppedAt, 1);
+  assert.match(result.lines[0], /opened background tab tchild/);
+  assert.match(result.lines[1], /not reached/);
+  assert.ok(f.time() >= 125 && f.time() < 500, `wait took ${f.time()} ms`);
+  assert.ok(result.observe);
+});
+
+test('an earlier or blocked popup does not stop an unrelated later batch', async () => {
+  const f = fixture();
+  f.tab.popups = [{ tab: 'told', opener: 'tparent' }];
+  let inputs = 0;
+  f.page.getByRef = () => utilityLocator({ evaluate: async () => ({}), click: async () => {
+    inputs++;
+    f.tab.popups.push({ tab: 'tblocked', blocked: true });
+  } });
+  const result = await f.run(f.tab, [{ do: 'click', ref: 'e1' }, { do: 'click', ref: 'e2' }], {});
+  assert.equal(inputs, 2);
+  assert.equal(result.stoppedAt, null, result.lines.join('\n'));
+});
+
 test('a short step caps a streaming fetch and returns a read without an input failure', async () => {
   const f = fixture();
   f.schedule(10, () => f.page.emit('request', { resourceType: () => 'fetch' }));

@@ -41,7 +41,7 @@ test('headless worker records twenty opens, skips quiet viewport reads and settl
     const phases = before.filter(row => row.call === start.call && row.turn === start.turn);
     assert.deepEqual(phases.map(row => row.phase), ['browser-open-start', 'browser-open-create-start', 'browser-open-create-end',
       'browser-open-attach-end', 'browser-open-identify-end', 'browser-open-adopt-end', 'browser-open-ready-end',
-      'browser-open-goto-start', 'browser-open-goto-end', 'browser-open-capture-start', 'browser-open-capture-end', 'browser-open-end']);
+      'browser-open-goto-start', 'browser-open-navigated', 'browser-open-goto-end', 'browser-open-capture-start', 'browser-open-capture-end', 'browser-open-end']);
     assert.ok(phases.every((row, i) => i === 0 || Date.parse(row.t) >= Date.parse(phases[i - 1].t)));
   }
   assert.doesNotMatch(JSON.stringify(before), /Local fixture|127\.0\.0\.1|sleight-x6-dom/);

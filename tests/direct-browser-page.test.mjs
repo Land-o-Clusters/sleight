@@ -273,11 +273,22 @@ test('open phase events bracket allocation, attachment, adoption, readiness and 
   const f = fixture(), phases = [];
   await f.registry.openTab({ url: 'https://fixture.invalid/private', tracePhase: phase => phases.push([phase, f.calls.at(-1)?.[0]]) });
   assert.deepEqual(phases.map(row => row[0]), ['browser-open-create-start', 'browser-open-create-end', 'browser-open-attach-end',
-    'browser-open-identify-end', 'browser-open-adopt-end', 'browser-open-ready-end', 'browser-open-goto-start', 'browser-open-goto-end']);
+    'browser-open-identify-end', 'browser-open-adopt-end', 'browser-open-ready-end', 'browser-open-goto-start', 'browser-open-navigated', 'browser-open-goto-end']);
   assert.equal(phases[0][1], undefined);
   assert.equal(phases.at(-1)[1], 'goto');
   assert.doesNotMatch(JSON.stringify(phases), /private|fixture\.invalid/);
   await f.registry.endTurn();
+});
+
+test('an unsuccessful goto retains the tab without reporting the navigated phase', async () => {
+  const f = fixture(), phases = [];
+  f.context.on('page', page => { page.goto = async () => { throw Error('navigation failed'); }; });
+  await assert.rejects(f.registry.openTab({ url: 'https://fixture.invalid/private', tracePhase: phase => phases.push(phase) }),
+    error => error.message === 'navigation failed' && typeof error.ownedTab === 'string');
+  assert.equal(phases.at(-1), 'browser-open-goto-start');
+  assert.ok(!phases.includes('browser-open-navigated'));
+  assert.equal(f.pages[0].closed, false);
+  assert.equal((await f.registry.endTurn()).cleanedUp, true);
 });
 
 test('never exposes an existing user page or a popup with a foreign opener', async () => {
