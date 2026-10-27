@@ -1716,19 +1716,27 @@ function nativeAX(state, clock) {
       });
   }
   function finderCurrentSheet(receipt) {
-    var sheets = children(receipt.window, 'AXSheets');
-    var childSheets = children(receipt.window).filter(function (child) { return text(child, 'AXRole') === 'AXSheet'; });
+    // Read the parent and app outside the candidate catch. Their invalidation
+    // cannot establish that a sheet was dismissed.
+    var inventories = [children(receipt.window, 'AXSheets'), children(receipt.window),
+      children(receipt.app), api.windows(receipt.app)].map(function (nodes, inventory) {
+      return nodes.filter(function (panel) {
+        try {
+          if (inventory > 0 && text(panel, 'AXRole') !== 'AXSheet') return false;
+          if (inventory > 1 && !equal(read(panel, 'AXParent'), receipt.window)) return false;
+          if (!finderSheetShape(panel, receipt)) throw new Error('Finder folder sheet identity changed');
+          return true;
+        } catch (error) {
+          // A candidate can vanish between inventory and attribute reads.
+          if (error.code === -25202 && !equal(panel, receipt.window) && !equal(panel, receipt.app)) return false;
+          throw error;
+        }
+      });
+    });
     // Each inventory must contain at most one sheet. Do not deduplicate distinct
     // references by their shape, which could hide a second attached sheet.
-    var inventories = [sheets, childSheets];
-    [children(receipt.app), api.windows(receipt.app)].forEach(function (nodes) {
-      inventories.push(nodes.filter(function (panel) {
-        return text(panel, 'AXRole') === 'AXSheet' && equal(read(panel, 'AXParent'), receipt.window);
-      }));
-    });
-    if (inventories.some(function (panels) { return panels.length > 1; }) ||
-        inventories.some(function (panels) { return panels.some(function (panel) { return !finderSheetShape(panel, receipt); }); }))
-      throw new Error('Finder folder sheet identity changed');
+    if (inventories.some(function (panels) { return panels.length > 1; })) throw new Error('Finder folder sheet identity changed');
+    var sheets = inventories[0], childSheets = inventories[1];
     if (!sheets.length && !childSheets.length && inventories.some(function (panels) { return panels.length; }))
       throw new Error('Finder folder sheet identity changed');
     return sheets[0] || childSheets[0] || null;
@@ -1891,11 +1899,12 @@ function nativeAX(state, clock) {
     finderPanelExists: function (panel) {
       var receipt = finderPanelBinding(panel);
       if (receipt && receipt.sheetGeometry) return !!finderCurrentSheet(receipt);
+      // Even an invalid retained panel cannot excuse a failed parent/app read.
+      var nodes = receipt ? children(receipt.window, 'AXSheets').concat(children(receipt.window),
+        this.windows(receipt.app), children(receipt.app)) : [];
       try { if (!text(panel, 'AXRole')) return false; }
       catch (error) { if (error.code === -25202) return false; throw error; }
       if (!receipt) return true;
-      // A failed read of the parent or app cannot prove the panel disappeared.
-      var nodes = children(receipt.window, 'AXSheets').concat(children(receipt.window), this.windows(receipt.app), children(receipt.app));
       var focused = this.focused(receipt.app);
       if (focused) nodes.push(focused);
       for (var node = read(receipt.app, 'AXFocusedUIElement'), depth = 0; node && depth < 12; node = read(node, 'AXParent'), depth++) {

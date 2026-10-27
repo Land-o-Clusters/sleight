@@ -258,6 +258,88 @@ test('dismissal wait sees the re-vended sheet even when the original AX referenc
   assert.equal(f.api.finderPanelExists(f.panel), false);
 });
 
+for (const inventory of ['AXSheets', 'AXChildren', 'app-children', 'app-windows']) {
+  for (const attribute of ['AXRole', 'AXParent', 'AXIdentifier']) {
+    test(`dismissal skips a ${inventory} child invalidated while reading ${attribute}`, () => {
+      const f = retainedPanel();
+      f.dismiss(); delete f.panel.gone;
+      if (inventory === 'app-children') f.app.AXChildren = [f.panel];
+      else if (inventory === 'app-windows') f.app.AXWindows.push(f.panel);
+      else f.window[inventory] = [f.panel];
+      let invalidations = 0;
+      const read = f.native.AXUIElementCopyAttributeValue;
+      f.native.AXUIElementCopyAttributeValue = (element, name, output) => {
+        if (element === f.panel && name === attribute) { invalidations++; return -25202; }
+        return read(element, name, output);
+      };
+      assert.equal(f.api.finderPanelExists(f.panel), false);
+      assert.ok(invalidations > 0);
+    });
+  }
+}
+
+for (const phase of ['submission', 'cleanup']) test(`${phase} confirms dismissal after a child vanishes mid-filter`, () => {
+  const f = phase === 'cleanup' ? retainedPanel() : fixture({ measuredSheet: true });
+  const post = f.native.CGEventPostToPid;
+  let invalidations = 0;
+  f.native.CGEventPostToPid = (pid, event) => {
+    post(pid, event);
+    if (event.down && event.key === (phase === 'cleanup' ? 53 : 36)) {
+      f.window.AXChildren = [f.panel];
+      f.setHook((element, name) => {
+        if (element === f.panel && name === 'AXRole') {
+          invalidations++; f.window.AXChildren = [];
+        }
+      });
+    }
+  };
+  if (phase === 'submission') assert.equal(f.open(), f.window);
+  assert.equal(f.recover(), 'closed retained fixture');
+  assert.equal(invalidations, 1);
+  assert.deepEqual(f.app.AXWindows, [f.owner]);
+});
+
+for (const target of ['window', 'app']) test(`measured sheet dismissal fails closed on an invalid ${target}`, () => {
+  const f = retainedPanel(); f.dismiss();
+  const read = f.native.AXUIElementCopyAttributeValue;
+  f.native.AXUIElementCopyAttributeValue = (element, name, output) =>
+    element === f[target] ? -25202 : read(element, name, output);
+  assert.throws(() => f.api.finderPanelExists(f.panel), error => error.code === -25202);
+});
+
+for (const attribute of ['AXRole', 'AXParent', 'AXIdentifier']) {
+  test(`sheet dismissal fails closed on another child error reading ${attribute}`, () => {
+    const f = retainedPanel();
+    const read = f.native.AXUIElementCopyAttributeValue;
+    f.native.AXUIElementCopyAttributeValue = (element, name, output) =>
+      element === f.panel && name === attribute ? -25203 : read(element, name, output);
+    assert.throws(() => f.api.finderPanelExists(f.panel), error => error.code === -25203);
+    assert.equal(f.present(), true);
+  });
+}
+
+test('an invalid transient child does not hide a surviving attached sheet', () => {
+  const f = retainedPanel();
+  f.window.AXChildren = [{ gone: true }, f.panel];
+  assert.equal(f.api.finderPanelExists(f.panel), true);
+  assert.equal(f.present(), true);
+});
+
+for (const target of ['window', 'app']) test(`an invalid ${target} remains fatal when returned as a child`, () => {
+  const f = retainedPanel();
+  f.window.AXChildren = [f[target]];
+  const read = f.native.AXUIElementCopyAttributeValue;
+  f.native.AXUIElementCopyAttributeValue = (element, name, output) =>
+    element === f[target] && name === 'AXRole' ? -25202 : read(element, name, output);
+  assert.throws(() => f.api.finderPanelExists(f.panel), error => error.code === -25202);
+});
+
+for (const target of ['window', 'app']) test(`equality-only dismissal still checks an invalid ${target} after the panel vanishes`, () => {
+  const f = fixture({ fail: 'before-write' }); assert.throws(f.open, /setup failure before navigation/);
+  f.dismiss(); f[target].gone = true;
+  assert.throws(() => f.api.finderPanelExists(f.panel), error => error.code === -25202);
+});
+
 test('cleanup accepts a re-vended sheet', () => {
   const f = retainedPanel(); revendedSheet(f); f.panel.gone = true;
   assert.equal(f.recover(), 'closed retained fixture');
