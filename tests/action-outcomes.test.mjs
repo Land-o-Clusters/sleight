@@ -519,9 +519,10 @@ test('outcomes can be disabled while the log still gets them', async t => {
 
 test('turn stats receive input-span receipts when outcomes are enabled', async t => {
   const h = relayHarness(t, { outcomes: true });
-  await h.call(1, '', 'js', { code: 'let app = await cua.getApp("TextEdit")', sleight_stats: { turn: 'timed-turn' } });
+  await h.call('stats-begin', '', 'turn_ended', { sleight_stats_begin: 'timed-turn' });
+  await h.call(1, '', 'js', { code: 'let app = await cua.getApp("TextEdit")' });
   await h.reply(1, form());
-  await h.call(2, '', 'js', { code: 'await app.click(3);', sleight_stats: { turn: 'timed-turn' } });
+  await h.call(2, '', 'js', { code: 'await app.click(3);' });
   const mark = /"outcomeMark":"(\[sleight:filtered-read:[0-9a-f]{16}\])"/.exec(h.sentCode(2))[1];
   const f = engine([form(), form()], { timed: true });
   await f.run('await app.click(3);', { outcomeMark: mark, actions: ['click'] });

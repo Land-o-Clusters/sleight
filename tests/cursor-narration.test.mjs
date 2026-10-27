@@ -162,7 +162,7 @@ test('native aim, act and waiting records retain the admitted call line independ
   assert.equal(records.find(r => r.state === 'waiting').say, 'First menu.');
   assert.equal(frames[0].say, 'First menu.'); assert.equal(frames.at(-1).say, 'Second menu.');
 });
-test('relay strips the private argument before engine and logs and binds result status to the correct call', async t => {
+test('private frames bind bubble text to real Claude Code toolUseId metadata without entering engine or logs', async t => {
   const clientIn = new PassThrough(), clientOut = new PassThrough(), serverIn = new PassThrough(), serverOut = new PassThrough();
   const sent = [], statuses = [], logs = [];
   serverIn.on('data', bytes => sent.push(...bytes.toString().trim().split('\n').map(JSON.parse)));
@@ -171,13 +171,17 @@ test('relay strips the private argument before engine and logs and binds result 
     cursor: { close() {}, narration: 'bubbles', status: (state, detail) => statuses.push({ state, ...detail }) }, actionLog: { request: m => logs.push(JSON.stringify(m)) } });
   t.after(() => relay.close());
   for (const [id, say] of [[1, 'First menu.'], [2, 'Second menu.']]) {
-    clientIn.write(JSON.stringify({ jsonrpc: '2.0', id, method: 'tools/call', params: { name: 'js', arguments: { code: '1+1', sleight_stats: { internal: true, say } } } }) + '\n');
+    clientIn.write(JSON.stringify({ jsonrpc: '2.0', id: 'say-' + id, method: 'tools/call', params: { name: 'turn_ended',
+      arguments: { sleight_say: { toolUseId: 'toolu_' + id, text: say } } } }) + '\n');
+    clientIn.write(JSON.stringify({ jsonrpc: '2.0', id, method: 'tools/call', params: { name: 'js', arguments: { code: '1+1' },
+      _meta: { 'claudecode/toolUseId': 'toolu_' + id } } }) + '\n');
     await settle();
     serverOut.write(JSON.stringify({ jsonrpc: '2.0', id, result: { content: [{ type: 'text', text: 'PRIVATE TOOL RESULT' }] } }) + '\n');
     await settle();
   }
   assert.equal(sent.length, 2);
   assert.ok(!JSON.stringify(sent).includes('sleight_say')); assert.ok(!logs.join('').includes('menu.'));
+  assert.ok(!logs.join('').includes('sleight_say'));
   assert.deepEqual(statuses.filter(s => s.state === 'done').map(s => s.say), ['First menu.', 'Second menu.']);
 });
 

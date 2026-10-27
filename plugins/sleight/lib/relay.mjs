@@ -1113,10 +1113,7 @@ export function createRelay({
     // again before the first drag (3/3 textedit-drag runs, 2026-10-08). sleight's descriptions
     // are short, so all but the internal turn_ended load up front, local tools included.
     .map(t => promptTool(t, prompt))
-    // The host validates rewritten calls too. Admit only this private optional object,
-    // which the mod overwrites and the relay removes before any tool executes.
-    .map(t => modHost() && STATS_TOOLS.has(t.name) && t.inputSchema?.type === 'object' && t.inputSchema.additionalProperties === false ? { ...t,
-      inputSchema: { ...t.inputSchema, properties: { ...t.inputSchema.properties, sleight_stats: { type: 'object' } } } } : t)
+    // Private stats transport is never advertised in the model's tool schemas.
     .map(t => (t.name !== TURN_END_TOOL && t.name !== TURN_START_TOOL ? { ...t, _meta: { ...t._meta, 'anthropic/alwaysLoad': true } } : t)) });
   let startup = startupCache?.bind({
     send: msg => toClient(msg), forward: msg => clientLine(JSON.stringify(msg), true),
@@ -1126,24 +1123,33 @@ export function createRelay({
   const journal = receipts || stateReview ? new TurnJournal({ redactTitles: redactReceiptTitles }) : undefined;
   const turnStats = new Map(), statsCalls = new Map(), closedStats = new Set();
   const statsEnds = new Map();
+  // One-shot mod data, keyed by the host's tool-use id, never by model input.
+  const modCalls = new Map(), statsExcluded = new Set(), statsUnavailable = new Set(), snapshotTokens = new Set();
+  const boundedSet = (set, key, value = true) => {
+    if (!set.has(key) && set.size >= 200) set.delete(set.keys().next().value);
+    set instanceof Map ? set.set(key, value) : set.add(key);
+  };
+  // The main-loop turn the mod opened (sleight_stats_begin); the model's untagged calls count toward it.
+  let statsOpen;
   const statsId = value => typeof value === 'string' && value.length > 0 && value.length <= 128 ? value : undefined;
   const finishStats = id => {
     const log = turnStats.get(id);
     turnStats.delete(id);
+    if (statsOpen === id) statsOpen = undefined;
     for (const [call, owner] of statsCalls) if (owner === log) statsCalls.delete(call);
     closedStats.add(id);
     if (closedStats.size > 64) closedStats.delete(closedStats.values().next().value);
-    return log ? log.frame() : unavailableStatsFrame();
+    const unavailable = statsUnavailable.delete(id);
+    return log && !unavailable ? log.frame() : unavailableStatsFrame();
   };
   const recordAction = (method, ...args) => {
     try { actionLog?.[method](...args); } catch {}
     try {
       if (method === 'request') {
-        const msg = args[0], tag = msg.params?.arguments?.sleight_stats;
-        // This transport never reaches the engine, nor does its title select the exclusion.
-        if (msg.params?.name !== TURN_END_TOOL && msg.params?.arguments) delete msg.params.arguments.sleight_stats;
-        const id = statsId(tag?.turn);
-        if (!modHost() || !id || tag.internal === true || closedStats.has(id) ||
+        const msg = args[0], excluded = statsExcluded.delete(msg.id);
+        // Only the private channel can exclude a call. Model input cannot select its stats owner.
+        const id = excluded ? undefined : statsOpen;
+        if (!modHost() || !id || closedStats.has(id) ||
             !STATS_TOOLS.has(msg.params?.name)) return;
         if (!turnStats.has(id)) {
           if (turnStats.size >= 8) {
@@ -2293,6 +2299,7 @@ export function createRelay({
   }
   function finishedCall(id) {
     callNarration.delete(id);
+    statsExcluded.delete(id);
     openedWindowCalls.delete(id);
     openedFlowPlans.delete(id);
     openedWindowReads.delete(id);
@@ -3507,19 +3514,71 @@ export function createRelay({
       serverIn.write(line + '\n');
       return;
     }
-    // Remove private narration before startup caching, tracing, journals and all execution paths.
-    if (!startupReady && msg.method === 'tools/call' && msg.params?.arguments) {
-      const raw = msg.params.arguments.sleight_stats?.say;
-      if (msg.params.arguments.sleight_stats && typeof msg.params.arguments.sleight_stats === 'object') delete msg.params.arguments.sleight_stats.say;
+    // Resolve private data before startup caching, tracing, journals or execution. A model-supplied
+    // tag is always discarded. Pane snapshots instead carry an unguessable, one-shot mod token.
+    if (!startupReady && msg.method === 'tools/call' && msg.params?.name !== TURN_END_TOOL && msg.params?.arguments) {
+      const args = msg.params.arguments;
+      const token = args.sleight_stats?.internal;
+      const snapshot = modHost() && msg.params.name === 'js' && typeof token === 'string' && snapshotTokens.delete(token);
+      delete args.sleight_stats; delete args.sleight_say;
+      const toolUseId = msg.params._meta?.['claudecode/toolUseId'];
+      const data = modHost() && typeof toolUseId === 'string' ? modCalls.get(toolUseId) : undefined;
+      if (data) modCalls.delete(toolUseId);
+      if ((snapshot || data?.skip) && msg.id !== undefined) boundedSet(statsExcluded, msg.id);
+      if (data?.skip && statsOpen) boundedSet(statsUnavailable, statsOpen);
       callNarration.delete(msg.id);
-      const say = modHost() && cursor?.narration && cursor.narration !== 'off' ? narrationLine(raw, msg.params.arguments) : undefined;
+      const say = modHost() && cursor?.narration && cursor.narration !== 'off' ? narrationLine(data?.text, args) : undefined;
       if (say && msg.id !== undefined) {
         if (callNarration.size >= 200) callNarration.delete(callNarration.keys().next().value);
         callNarration.set(msg.id, say);
       }
     }
-    if (pauseBlocked(msg)) { callNarration.delete(msg.id); pauseReply(msg); return; }
+    if (pauseBlocked(msg)) { callNarration.delete(msg.id); statsExcluded.delete(msg.id); pauseReply(msg); return; }
     if (msg.method === 'initialize') codexClient = codexTurnClient(msg.params?.clientInfo);
+    // Open the host stats window before documentation ownership sees any private-frame metadata.
+    // Main-loop input stays as sent, avoiding Claude Code's per-call classifier for rewritten input.
+    if (msg.method === 'tools/call' && msg.params?.name === TURN_END_TOOL && Object.hasOwn(msg.params.arguments ?? {}, 'sleight_stats_begin')) {
+      const id = statsId(msg.params.arguments.sleight_stats_begin);
+      const accepted = modHost() && !disposed && msg.id !== undefined && id !== undefined &&
+        Object.keys(msg.params.arguments).length === 1 && !closedStats.has(id);
+      statsOpen = accepted ? id : undefined;
+      if (msg.id !== undefined && !disposed && !clientOut.destroyed && !clientOut.writableEnded)
+        clientOut.write(JSON.stringify({ jsonrpc: '2.0', id: msg.id, result: { isError: !accepted, content: [] } }) + '\n');
+      return;
+    }
+    // These frames are reachable only by the mod: its tool.call hook refuses model turn_ended.
+    // Handle them before docs ownership, approval origins, turn rotation, journals and the engine.
+    if (msg.method === 'tools/call' && msg.params?.name === TURN_END_TOOL &&
+        ['sleight_say', 'sleight_stats_skip'].some(key => Object.hasOwn(msg.params.arguments ?? {}, key))) {
+      const args = msg.params.arguments, say = args.sleight_say, skip = args.sleight_stats_skip;
+      const hasSay = Object.hasOwn(args, 'sleight_say'), hasSkip = Object.hasOwn(args, 'sleight_stats_skip');
+      const snapshot = hasSkip && !hasSay && skip && typeof skip === 'object' && !Array.isArray(skip) &&
+        Object.keys(skip).length === 1 && skip.snapshot === true;
+      const sayId = hasSay && say && typeof say === 'object' && !Array.isArray(say) &&
+        Object.keys(say).length === 2 && typeof say.text === 'string' && say.text.length <= 1024 && statsId(say.toolUseId);
+      const skipId = hasSkip && statsId(skip);
+      const accepted = modHost() && !disposed && msg.id !== undefined &&
+        Object.keys(args).every(key => ['sleight_say', 'sleight_stats_skip'].includes(key)) &&
+        (snapshot || (!hasSay || sayId) && (!hasSkip || skipId) && (!hasSay || !hasSkip || sayId === skipId));
+      let content = [];
+      if (accepted) {
+        if (snapshot) {
+          const token = randomBytes(32).toString('hex');
+          boundedSet(snapshotTokens, token);
+          content = [{ type: 'text', text: JSON.stringify({ sleightStatsSkip: token }) }];
+        } else {
+          const id = sayId || skipId;
+          boundedSet(modCalls, id, { ...modCalls.get(id), ...(hasSay ? { text: say.text } : {}), ...(hasSkip ? { skip: true } : {}) });
+        }
+      }
+      if (msg.id !== undefined && !disposed && !clientOut.destroyed && !clientOut.writableEnded)
+        clientOut.write(JSON.stringify({ jsonrpc: '2.0', id: msg.id, result: { isError: !accepted, content } }) + '\n');
+      return;
+    }
+    if (msg.method === 'tools/call' && msg.params?.name === TURN_END_TOOL && msg.params.arguments?.hook_event_name) {
+      if (!statsId(msg.params.arguments.sleight_stats)) statsOpen = undefined;
+      modCalls.clear(); snapshotTokens.clear();
+    }
     if (msg.method === 'tools/call') {
       if (docOrigin.owns(msg.id)) {
         docOrigin.invalidate();
@@ -6333,7 +6392,8 @@ export function createRelay({
   function dispose() {
     if (disposed) return;
     for (const log of turnStats.values()) log.reset();
-    turnStats.clear(); statsCalls.clear(); closedStats.clear(); statsEnds.clear();
+    turnStats.clear(); statsCalls.clear(); closedStats.clear(); statsEnds.clear(); statsOpen = undefined;
+    modCalls.clear(); statsExcluded.clear(); statsUnavailable.clear(); snapshotTokens.clear();
     finishReceipt();
     disposed = true;
     nativeHandoff?.cancel?.();

@@ -47,9 +47,6 @@
          "enum": [
           "bfixture"
          ]
-        },
-        "sleight_stats": {
-         "type": "object"
         }
        },
        "required": [
@@ -159,9 +156,6 @@
          },
          "required": [],
          "additionalProperties": false
-        },
-        "sleight_stats": {
-         "type": "object"
         }
        },
        "required": [],
@@ -320,9 +314,6 @@
          "type": "integer",
          "minimum": 50,
          "maximum": 1000
-        },
-        "sleight_stats": {
-         "type": "object"
         }
        },
        "required": [
@@ -379,9 +370,6 @@
         "submit": {
          "type": "string",
          "pattern": "^(?:(?:f[0-9]+)?e[0-9]+|[sx][0-9]+)$"
-        },
-        "sleight_stats": {
-         "type": "object"
         }
        },
        "required": [

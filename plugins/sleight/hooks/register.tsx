@@ -31,7 +31,7 @@ const replaying = atom({ plugin: 'sleight', key: 'replaying' } as const, false)
 const receipt = atom({ plugin: 'sleight', key: 'receipt' } as const, null as { path?: string; review?: string; unavailable?: boolean } | null)
 const stats = atom({ plugin: 'sleight', key: 'stats' } as const, null as TurnSummary | null)
 
-type StatsTurn = { id: string; used: boolean; forwarded: number; baseline?: Awaited<ReturnType<typeof hostCost>>; stoppedStats: ReturnType<typeof statsFromReply>; stopping?: Promise<string | undefined> }
+type StatsTurn = { id: string; used: boolean; forwarded: number; begun?: Promise<unknown>; statsUnavailable?: boolean; baseline?: Awaited<ReturnType<typeof hostCost>>; stoppedStats: ReturnType<typeof statsFromReply>; stopping?: Promise<string | undefined> }
 
 async function hostCost($: any) {
   try { return costSnapshot(await $.session.usage()) } catch { return null }
@@ -162,10 +162,24 @@ function setStatus($: { ui: { status: (text: string | undefined) => void } }, st
 }
 
 // Runs one call on the engine as this mod.
-async function call($: any, tool: string, args: Record<string, unknown>) {
-  const conn = await $.mcp.connect(SERVER)
-  if (!conn.isConnected) throw new Error(conn.message)
-  return $.mcp.call(conn.server, tool, args)
+async function call($: any, tool: string, args: Record<string, unknown>, bounded = false) {
+  if (!bounded) {
+    const conn = await $.mcp.connect(SERVER)
+    if (!conn.isConnected) throw new Error(conn.message)
+    return $.mcp.call(conn.server, tool, args)
+  }
+  let settled = false
+  return new Promise<any>(resolve => {
+    const finish = (reply: any) => { if (!settled) { settled = true; resolve(reply) } }
+    $.clock.after(2000, () => finish({ isError: true, content: [] }))
+    // Late connections cannot send stale control data after the model call has gone on.
+    ;(async () => {
+      const conn = await $.mcp.connect(SERVER)
+      if (settled) return
+      if (!conn.isConnected) { finish({ isError: true, content: [] }); return }
+      finish(await $.mcp.call(conn.server, tool, args))
+    })().catch(() => finish({ isError: true, content: [] }))
+  })
 }
 
 async function recordCurrent($: any, state: ModState, file?: string) {
@@ -275,8 +289,9 @@ async function replayCurrent($: any, state: ModState, file: string) {
 async function endEngineTurn($: any, state: ModState, event: 'Stop' | 'Interrupt', checked = false, completed?: TurnSummary, owner?: StatsTurn) {
   try {
     const ended = await call($, 'turn_ended', { hook_event_name: event, ...(checked ? { sleight_stop: true } : {}), ...(owner?.used && (completed || checked) ? { sleight_stats: owner.id } : {}) })
-    if (checked && owner) owner.stoppedStats = statsFromReply(ended)
-    if (completed) await storeStats($, state, { ...completed, stats: statsFromReply(ended) }, owner)
+    const collected = owner?.statsUnavailable ? null : statsFromReply(ended)
+    if (checked && owner) owner.stoppedStats = collected
+    if (completed) await storeStats($, state, { ...completed, stats: collected }, owner)
     let latest = (ended as { _meta?: { 'sleight/receipt'?: { path?: string; review?: string; unavailable?: boolean } } })._meta?.['sleight/receipt']
     // The installed host's $.mcp.call keeps content but drops _meta. The relay supplies JSON
     // in one fixed marker so paths with spaces and multi-line reviews don't need a prose parser.
@@ -327,7 +342,12 @@ async function snapshot($: any, state: ModState, app: string) {
     // Leave rows for the status, controls, file input, "Actions" and three log lines.
     const code = snapshotCode(app, Math.max(8, state.paneColumns - 2), Math.max(4, state.paneRows - 9), state.paneSurface === 'terminal')
     state.snapshotInFlight = code
-    const result = await call($, 'js', { code, title: 'sleight pane snapshot', sleight_stats: { internal: true } }).finally(() => { state.snapshotInFlight = undefined })
+    // mcp.call's host types do not promise whether it supplies claudecode/toolUseId.
+    // A private, single-use token excludes only this snapshot with either metadata shape.
+    const excluded = await call($, 'turn_ended', { sleight_stats_skip: { snapshot: true } }, true)
+    const token = JSON.parse(excluded.content?.[0]?.text ?? '{}').sleightStatsSkip
+    if (excluded.isError || typeof token !== 'string' || !/^[a-f0-9]{64}$/.test(token)) throw Error('pane stats exclusion unavailable')
+    const result = await call($, 'js', { code, title: 'sleight pane snapshot', sleight_stats: { internal: token } }).finally(() => { state.snapshotInFlight = undefined })
     const text = result.content.map((block: { text?: string }) => block.text ?? '').join('\n')
     const line = text.split('\n').find((l: string) => l.startsWith(FRAME_MARKER))
     if (result.isError || !line) {
@@ -339,6 +359,8 @@ async function snapshot($: any, state: ModState, app: string) {
     await update($, view, () => ({ kind: 'idle' }) as ViewStatus)
   } catch (err) {
     await update($, view, () => ({ kind: 'error', message: (err as Error).message }) as ViewStatus)
+  } finally {
+    state.snapshotInFlight = undefined
   }
 }
 
@@ -367,12 +389,6 @@ function ownCallVerdict(state: ModState, e: { tool: string; input: unknown }, or
   return undefined
 }
 
-// The existing genuine-prompt turbo-state reply includes narration mode. No extra process,
-// file read, transcript request or awaited work is added to a tool call.
-function narrated<T extends { tool_use_id?: string; agentId?: string }>(state: ModState, event: T) {
-  return { ...event, sleight_say: state.narration.take(event) ?? '' }
-}
-
 // The mod declarations specify a flat ToolCallEnvelope for classic.PreToolUse;
 // the hooks guide describes stdin JSON. Accept both without guessing identity
 // from a transcript, cwd, parent session or prompt id. Conflicts refuse.
@@ -384,6 +400,52 @@ function guardEnvelope(e: any) {
   if (typeof e.tool_name !== 'string' || !e.tool_input || typeof e.tool_input !== 'object' || Array.isArray(e.tool_input))
     throw Error('missing hook tool input')
   return { ...e.tool_input, tool: e.tool_name }
+}
+
+// Every loop forwards the model's input as sent: in auto mode a hook-rewritten input sets the
+// allow rule aside and Claude Code's local classifier judges each call (about 0.6 s, 2.1.289).
+// Narration and stats exclusions use host ids on the mod's private channel instead.
+
+async function beginStats($: any, owner: StatsTurn) {
+  const reply = await call($, 'turn_ended', { sleight_stats_begin: owner.id }, true)
+  owner.statsUnavailable ||= reply.isError === true
+}
+
+// File scope: the host's static validator follows $ only into functions declared at the top of the file.
+async function forward<T extends { agentId?: string; tool_use_id?: string }, R>($: any, state: ModState, e: T, owner: StatsTurn | undefined, next: (event: T) => Promise<R>) {
+  const main = e.agentId === undefined ? owner : undefined
+  // Subagents need not raise turn.start. Their first call holds the pane's
+  // replay/refresh fence until their completion or the lead's next completion.
+  if (e.agentId !== undefined) {
+    state.runningAgents.add(e.agentId)
+    // A child's transport may fail or precede the main begin. Never label mixed counters main-only.
+    if (owner) owner.statsUnavailable = true
+  }
+  // A call may be interrupted before next returns. Stop must collect it already.
+  if (main) { main.forwarded++; main.used = true }
+  // One frame per turn, before its first call, names the turn the relay attributes untagged calls to.
+  // Parallel calls wait on the same frame. A refused or failed frame leaves this turn's stats
+  // unavailable; the call itself goes on.
+  if (main) {
+    main.begun ??= beginStats($, main).catch(() => { main.statsUnavailable = true })
+    await main.begun
+  }
+  const text = state.narration.take(e)
+  const toolUseId = e.tool_use_id
+  if (toolUseId && (text || !main)) {
+    try {
+      const reply = await call($, 'turn_ended', {
+        ...(text ? { sleight_say: { toolUseId, text } } : {}),
+        ...(!main ? { sleight_stats_skip: toolUseId } : {}),
+      }, true)
+      if (reply.isError && owner) owner.statsUnavailable = true
+    } catch { if (owner) owner.statsUnavailable = true }
+  } else if (!main && owner) owner.statsUnavailable = true
+  const ran = await next(e)
+  // An explicit denial did not reach the engine. Other pending or completed calls
+  // still own stats; thrown calls may have sent input and retain their counters.
+  if (main && (ran as { deny?: unknown }).deny !== undefined) main.used = --main.forwarded > 0
+  return ran
 }
 
 export const register: Register = on => {
@@ -479,30 +541,6 @@ export const register: Register = on => {
     return next(e)
   })
 
-  // A private argument, removed by the relay before forwarding. Subagents are outside
-  // these main-loop counters, even when an old child calls during a later turn.
-  const counted = <T extends { agentId?: string; sleight_say?: string }>(e: T, owner: StatsTurn | undefined) => {
-    const sleight_say = e.sleight_say
-    const event = { ...e }; delete event.sleight_say
-    const say = sleight_say ? { say: sleight_say } : {}
-    if (e.agentId !== undefined || !owner) return { ...event, sleight_stats: { internal: true, ...say } }
-    return { ...event, sleight_stats: { turn: owner.id, ...say } }
-  }
-
-  const forward = async <T extends { agentId?: string }, R>(e: T, owner: StatsTurn | undefined, next: (event: T) => Promise<R>) => {
-    const main = e.agentId === undefined ? owner : undefined
-    // Subagents need not raise turn.start. Their first call holds the pane's
-    // replay/refresh fence until their completion or the lead's next completion.
-    if (e.agentId !== undefined) state.runningAgents.add(e.agentId)
-    // A call may be interrupted before next returns. Stop must collect it already.
-    if (main) { main.forwarded++; main.used = true }
-    const ran = await next(counted(e, owner))
-    // An explicit denial did not reach the engine. Other pending or completed calls
-    // still own stats; thrown calls may have sent input and retain their counters.
-    if (main && (ran as { deny?: unknown }).deny !== undefined) main.used = --main.forwarded > 0
-    return ran
-  }
-
   on('tool.call', { tool: JS_TOOL }, async ($, e, next) => {
     const owner = state.statsTurn
     if (next.origin?.plugin === 'sleight') return next(e)
@@ -514,7 +552,7 @@ export const register: Register = on => {
     state.shellUsers.add(loopKey(e))
     snapshotApps(state, e).clear()
     // Child calls keep their own baseline notice and narration without changing the pane.
-    if (e.agentId !== undefined) return forward(narrated(state, e), owner, next)
+    if (e.agentId !== undefined) return forward($, state, e, owner, next)
     const code = String(e.code ?? '')
     const entry: LogEntry = {
       id: e.tool_use_id,
@@ -523,7 +561,7 @@ export const register: Register = on => {
       at: now(),
     }
     await update($, log, list => [...list, entry].slice(-LOG_LIMIT))
-    const ran = await forward(narrated(state, e), owner, next)
+    const ran = await forward($, state, e, owner, next)
     const app = appFrom(code, ran.text)
     if (app) state.lastApp = app
     state.actions++
@@ -542,7 +580,7 @@ export const register: Register = on => {
     if (state.replayActive) return { deny: 'A replay is running. Wait for it to stop before sending another tool call.' }
     state.usedThisTurn = true
     state.shellUsers.add(loopKey(e))
-    return forward(narrated(state, e), owner, next)
+    return forward($, state, e, owner, next)
   })
 
   // Compact browser verbs are session work too. The fixed completion hook must
@@ -555,10 +593,10 @@ export const register: Register = on => {
     if (state.replayActive) return { deny: 'A replay is running. Wait for it to stop before sending another tool call.' }
     state.usedThisTurn = true
     state.shellUsers.add(loopKey(e))
-    if ((e as { agentId?: string }).agentId !== undefined) return forward(narrated(state, e), owner, next)
+    if ((e as { agentId?: string }).agentId !== undefined) return forward($, state, e, owner, next)
     const entry: LogEntry = { id: (e as { tool_use_id: string }).tool_use_id, title: name, status: 'running', at: now() }
     await update($, log, list => [...list, entry].slice(-LOG_LIMIT))
-    const ran = await forward(narrated(state, e), owner, next)
+    const ran = await forward($, state, e, owner, next)
     state.actions++
     const status: LogEntry['status'] = ran.deny !== undefined ? 'refused' : ran.isError ? 'error' : 'done'
     await update($, log, list => list.map(one => one.id === entry.id ? { ...one, status } : one))
