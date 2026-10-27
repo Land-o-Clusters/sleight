@@ -1,0 +1,412 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
+import { runInNewContext } from 'node:vm';
+
+function fixture({ role = 'AXWindow', subrole = 'AXDialog', parent = 'window', fail, cancelCode = 0,
+  identifier, inputRole = 'AXTextField', button = true, cancelNoop = false, fieldCancel = false, escapeNoop = false } = {}) {
+  const source = { ObjC: { import() {}, unwrap: v => v, castRefToObject: v => v }, Ref: () => [] };
+  runInNewContext(readFileSync(new URL('../bench/real-fixture.js', import.meta.url), 'utf8'), source);
+  const owner = { AXRole: 'AXWindow', AXSubrole: 'AXStandardWindow' };
+  const window = { AXRole: 'AXWindow', AXSubrole: 'AXStandardWindow', AXTitle: 'Recents', AXCloseButton: {} };
+  const app = { AXRole: 'AXApplication', AXWindows: [owner], AXChildren: [], AXFocusedWindow: owner };
+  const field = { AXRole: inputRole }, go = { AXRole: 'AXButton', AXTitle: 'Go' };
+  const cancel = { AXRole: 'AXButton', AXTitle: 'arbitrary cancel title' };
+  const panel = { AXRole: role, AXSubrole: subrole, AXIdentifier: identifier, AXChildren: button ? [field, go] : [field], AXCancelButton: cancel,
+    AXParent: parent === 'window' ? window : parent === 'foreign' ? owner : app };
+  if (parent === 'attribute') panel.AXWindow = window;
+  if (parent === 'self') panel.AXWindow = panel;
+  field.AXParent = panel;
+  const newItem = { AXRole: 'AXMenuItem', AXTitle: 'New Finder Window', AXEnabled: 1 };
+  const goItem = { AXRole: 'AXMenuItem', AXTitle: 'Go to Folder…', AXEnabled: 1 };
+  const top = (name, item) => ({ AXRole: 'AXMenuBarItem', AXTitle: name,
+    AXChildren: [{ AXRole: 'AXMenu', AXChildren: [item] }] });
+  app.AXMenuBar = { AXChildren: [top('File', newItem), top('Go', goItem)] };
+  const actions = [], events = [], writes = [], keys = [];
+  let time = 0, retained, hook = () => {};
+  const present = () => !panel.gone && app.AXChildren.includes(panel);
+  const show = () => {
+    app.AXChildren.push(panel);
+    if (role === 'AXSheet') window.AXSheets = [panel];
+    else app.AXWindows.push(panel);
+    app.AXFocusedWindow = panel; app.AXFocusedUIElement = field;
+  };
+  const dismiss = () => {
+    panel.gone = true; app.AXChildren = app.AXChildren.filter(w => w !== panel);
+    app.AXWindows = app.AXWindows.filter(w => w !== panel); window.AXSheets = [];
+    app.AXFocusedWindow = window; app.AXFocusedUIElement = window;
+  };
+  const native = v => v;
+  Object.assign(native, {
+    CFEqual: (a, b) => a === b,
+    AXUIElementGetPid: (_window, ref) => { ref[0] = 42; return 0; },
+    AXUIElementCreateApplication: () => app, AXUIElementSetMessagingTimeout() {},
+    AXUIElementCopyAttributeValue: (element, name, output) => {
+      hook(element, name);
+      if (element.gone) return -25202;
+      const value = element[name];
+      output[0] = Array.isArray(value) ? { count: value.length, objectAtIndex: i => value[i] } : value;
+      return value === undefined ? -25212 : 0;
+    },
+    AXUIElementSetAttributeValue: (element, name, value) => { writes.push([element, name, value]); return fail === 'write-error' ? -25203 : 0; },
+    AXUIElementPerformAction: (element, action) => {
+      actions.push([element, action]);
+      if (element === newItem) { app.AXWindows.push(window); app.AXFocusedWindow = window; }
+      if (element === goItem) { show(); if (fail === 'press-error') return -25204; }
+      if (element === panel && action === 'AXCancel') { if (!cancelCode && !cancelNoop) dismiss(); return cancelCode; }
+      if (element === field && action === 'AXCancel') { if (fieldCancel) dismiss(); return fieldCancel ? 0 : -25206; }
+      if (element === cancel && !cancelNoop) dismiss();
+      if (element === go) { window.AXDocument = '/fixture/target'; dismiss(); }
+      if (element === window.AXCloseButton) { app.AXWindows = app.AXWindows.filter(w => w !== window); window.gone = true; }
+      return 0;
+    },
+    NSThread: { sleepForTimeInterval() { time += 100; } },
+    CGEventCreateKeyboardEvent: (_source, key, down) => ({ key, down, isNil: () => false }),
+    CGEventSetFlags: (event, flags) => { assert.equal(flags, 0); event.flags = flags; },
+    CGEventPostToPid: (pid, event) => {
+      assert.equal(pid, 42); assert.equal(event.flags, 0); keys.push([event.key, event.down]);
+      if (!event.down) return;
+      if (event.key === 36) assert.equal(request.finderOwnership.documentless.length, 0);
+      if (event.key === 36) { window.AXDocument = '/fixture/target'; dismiss(); }
+      if (event.key === 53 && !escapeNoop) dismiss();
+    },
+  });
+  source.$ = native;
+  const clock = { check() {}, now: () => time, wait: ms => { time += ms; }, emit(event) {
+    events.push(event);
+    if (fail === 'retention-receipt' && event.stage === 'finder-panel-retained') throw new Error('receipt failure');
+  } };
+  const api = source.nativeAX({ setup: true, bundle: 'com.apple.finder' }, clock);
+  const request = { bundle: 'com.apple.finder', mode: 'folder', fixtureRoot: '/fixture', target: '/fixture/target', token: 'target' };
+  // Paths are fixture strings; all AX reads, menu presses and writes use the native adapter.
+  api.path = v => v || null;
+  const submit = api.submitFolder;
+  if (fail === 'before-write') api.submitFolder = () => { throw new Error('setup failure before navigation'); };
+  if (fail === 'controls') panel.AXChildren = [];
+  return { source, api, app, owner, window, panel, request, actions, events, writes, keys, show, dismiss, present, native, clock, goItem, newItem, field, cancel,
+    setHook: fn => { hook = fn; }, submit: () => submit.call(api, window, panel, request.target),
+    open: () => source.openFinderFolder(request, app, owner, api, clock, w => { retained = w; }),
+    recover: () => source.recoverSetup(retained, request, api, app, {}),
+    probe: () => source.finderSetupProbe(request, app, api, clock) };
+}
+
+for (const [role, subrole, parent] of [
+  ['AXSheet', '', 'window'], ['AXWindow', 'AXDialog', 'window'],
+  ['AXWindow', 'AXSystemDialog', 'attribute'],
+]) test(`own Go to Folder ${role}/${subrole} with ${parent} parent is accepted without reading its title`, () => {
+  const f = fixture({ role, subrole, parent });
+  f.setHook((element, name) => { if (element === f.panel && name === 'AXTitle') assert.fail('panel title is not identity'); });
+  assert.equal(f.open(), f.window);
+  const panel = f.request.finderOwnership.folderPanel;
+  assert.equal(panel.attempted, true);
+  assert.equal(panel.reference, f.panel);
+  assert.equal(panel.role, role); assert.equal(panel.subrole, subrole);
+  assert.equal(f.request.finderOwnership.created.length, 1);
+  assert.deepEqual(f.writes, [[f.field, 'AXValue', '/fixture/target']]);
+  assert.equal(f.events.filter(e => e.stage === 'finder-panel-retained').length, 1);
+});
+
+for (const [role, subrole, parent] of [
+  ['AXSheet', 'AXStandardWindow', 'window'], ['AXSheet', '', 'self'],
+  ['AXWindow', 'AXDialog', 'self'], ['AXWindow', 'AXSystemDialog', 'application'],
+]) test(`GoToWindow ${role}/${subrole} with ${parent} parent uses its command receipt`, () => {
+  const f = fixture({ role, subrole, parent, identifier: 'GoToWindow' });
+  assert.equal(f.open(), f.window);
+  assert.equal(f.request.finderOwnership.folderPanel.goToWindow, true);
+  assert.deepEqual(f.writes, [[f.field, 'AXValue', '/fixture/target']]);
+});
+
+for (const role of ['AXSheet', 'AXWindow']) test(`stale GoToWindow ${role} is refused without a command or cleanup action`, () => {
+  const f = fixture({ role, identifier: 'GoToWindow' }); f.show();
+  assert.throws(f.open, /Foreign Finder Go to Folder panel/);
+  assert.deepEqual(f.actions, []); assert.deepEqual(f.writes, []); assert.deepEqual(f.keys, []);
+  assert.equal(f.present(), true);
+});
+
+for (const inputRole of ['AXTextField', 'AXComboBox']) test(`GoToWindow with ${inputRole} and no Go button submits Return to the proved input`, () => {
+  const f = fixture({ role: 'AXSheet', subrole: 'AXStandardWindow', identifier: 'GoToWindow', inputRole, button: false });
+  assert.equal(f.open(), f.window);
+  assert.deepEqual(f.keys, [[36, true], [36, false]]);
+  assert.equal(f.present(), false);
+  assert.equal(f.request.finderOwnership.documentless.length, 0);
+});
+
+test('a default button within the retained sheet submits without an English Go title', () => {
+  const f = fixture({ identifier: 'GoToWindow' });
+  const go = f.panel.AXChildren[1]; go.AXTitle = 'Open'; f.panel.AXDefaultButton = go;
+  assert.equal(f.open(), f.window);
+  assert.ok(f.actions.some(([target]) => target === go)); assert.deepEqual(f.keys, []);
+});
+
+for (const failure of ['missing-focus', 'foreign-focus', 'input-change']) test(`Return refuses ${failure} and recovery cancels only the retained panel`, () => {
+  const f = fixture({ role: 'AXSheet', identifier: 'GoToWindow', button: false });
+  const write = f.native.AXUIElementSetAttributeValue;
+  f.native.AXUIElementSetAttributeValue = (...args) => {
+    const code = write(...args);
+    if (failure === 'foreign-focus') f.app.AXFocusedWindow = f.owner;
+    else if (failure === 'missing-focus') delete f.app.AXFocusedUIElement;
+    else f.app.AXFocusedUIElement = { AXRole: 'AXButton', AXParent: f.panel };
+    return code;
+  };
+  assert.throws(f.open, /keyboard target unconfirmed|lost focus/);
+  assert.deepEqual(f.keys, []);
+  assert.equal(f.recover(), 'closed retained fixture'); assert.equal(f.present(), false);
+});
+
+for (const fail of ['before-write', 'controls', 'press-error', 'retention-receipt', 'write-error']) {
+  for (const role of ['AXSheet', 'AXWindow']) test(`recovery dismisses own ${role} and closes documentless created window after ${fail}`, () => {
+    const f = fixture({ role, fail });
+    assert.throws(f.open, /setup failure|controls ambiguous|press failed|receipt failure|AXValue failed/);
+    assert.equal(f.request.finderOwnership.folderPanel.reference, f.panel);
+    assert.equal(f.recover(), 'closed retained fixture');
+    assert.equal(f.present(), false);
+    assert.deepEqual(f.app.AXWindows, [f.owner]);
+    assert.deepEqual(f.actions.filter(([target, action]) => target === f.panel && action === 'AXCancel'), [[f.panel, 'AXCancel']]);
+    assert.equal(f.actions.filter(([target]) => target === f.window.AXCloseButton).length, 1);
+    assert.equal(f.actions.some(([target]) => target === f.owner), false);
+    assert.deepEqual(f.writes, fail === 'write-error' ? [[f.field, 'AXValue', '/fixture/target']] : []);
+  });
+}
+
+test('a foreign dialog already present refuses before New Finder Window', () => {
+  const f = fixture(); f.show();
+  assert.throws(f.open, /Foreign Finder dialog/);
+  assert.deepEqual(f.actions, []); assert.deepEqual(f.writes, []);
+});
+
+test('a foreign dialog appearing while the Go menu opens never gets a command receipt', () => {
+  const f = fixture();
+  const action = f.native.AXUIElementPerformAction;
+  f.native.AXUIElementPerformAction = (element, name) => {
+    const code = action(element, name);
+    if (element.AXTitle === 'Go' && name === 'AXPress') f.show();
+    return code;
+  };
+  assert.throws(f.open, /identity changed|Foreign Finder dialog/);
+  assert.equal(f.request.finderOwnership.folderPanel.attempted, false);
+  assert.equal(f.request.finderOwnership.folderPanel.reference, undefined);
+  assert.equal(f.actions.some(([target]) => target === f.goItem), false);
+  assert.throws(f.recover, /Foreign Finder dialog/);
+  assert.equal(f.present(), true);
+});
+
+for (const parent of ['foreign', 'application']) test(`post-command dialog with ${parent} parent refuses adoption and cleanup`, () => {
+  const f = fixture({ parent });
+  assert.throws(f.open, /identity changed|Foreign Finder dialog/);
+  assert.equal(f.request.finderOwnership.folderPanel.reference, undefined);
+  assert.throws(f.recover, /Foreign Finder dialog/);
+  assert.equal(f.present(), true); assert.deepEqual(f.writes, []);
+});
+
+test('a plain untitled standard window is never adopted as a Go to Folder panel', () => {
+  const f = fixture({ subrole: 'AXStandardWindow' });
+  assert.throws(f.open, /identity changed/);
+  assert.equal(f.request.finderOwnership.folderPanel.reference, undefined);
+  assert.deepEqual(f.writes, []);
+});
+
+for (const mutation of ['parent', 'role', 'subrole', 'replacement', 'identifier']) test(`recovery refuses ${mutation} drift before cancelling or closing`, () => {
+  const f = fixture({ fail: 'before-write' }); assert.throws(f.open);
+  if (mutation === 'parent') f.panel.AXParent = f.owner;
+  if (mutation === 'role') f.panel.AXRole = 'AXGroup';
+  if (mutation === 'subrole') f.panel.AXSubrole = 'AXStandardWindow';
+  if (mutation === 'replacement') { f.dismiss(); f.app.AXWindows.push({ AXRole: 'AXWindow', AXSubrole: 'AXDialog' }); }
+  if (mutation === 'identifier') f.panel.AXIdentifier = 'GoToWindow';
+  const count = f.actions.length;
+  assert.throws(f.recover, /identity changed|Foreign Finder dialog|dialog present/);
+  assert.equal(f.actions.length, count);
+});
+
+test('a foreign dialog after retention does not strand our panel or permit closing the foreign one', () => {
+  const f = fixture({ fail: 'before-write' }); assert.throws(f.open);
+  const foreign = { AXRole: 'AXSheet', AXParent: f.owner }; f.app.AXChildren.push(foreign);
+  assert.throws(f.recover, /Foreign Finder dialog/);
+  assert.equal(f.present(), false);
+  assert.ok(f.app.AXChildren.includes(foreign));
+  assert.equal(f.actions.some(([target]) => target === foreign || target === f.window.AXCloseButton), false);
+});
+
+test('a failed command with a panel arriving after setup is retained again during cleanup', () => {
+  const f = fixture(), action = f.native.AXUIElementPerformAction;
+  f.native.AXUIElementPerformAction = (element, name) => element === f.goItem ? -25204 : action(element, name);
+  assert.throws(f.open, /press failed/);
+  assert.equal(f.request.finderOwnership.folderPanel.reference, undefined);
+  f.show();
+  assert.equal(f.recover(), 'closed retained fixture');
+  assert.equal(f.present(), false);
+});
+
+test('a Go action returning success with its sheet still open fails setup and cancels the sheet', () => {
+  const f = fixture(), action = f.native.AXUIElementPerformAction;
+  f.native.AXUIElementPerformAction = (element, name) => {
+    if (element.AXRole === 'AXButton' && element.AXTitle === 'Go') {
+      f.window.AXDocument = '/fixture/target'; return 0;
+    }
+    return action(element, name);
+  };
+  assert.throws(f.open, /still open after submission/);
+  assert.equal(f.recover(), 'closed retained fixture');
+  assert.equal(f.present(), false);
+});
+
+test('panel cancellation fallback uses its AXCancelButton after unsupported AXCancel', () => {
+  const f = fixture({ fail: 'before-write', cancelCode: -25206 }); assert.throws(f.open);
+  assert.equal(f.recover(), 'closed retained fixture');
+  assert.ok(f.actions.some(([element]) => element === f.cancel));
+});
+
+for (const cancelCode of [0, -25206]) test(`GoToWindow cancellation continues after ineffective panel action ${cancelCode}`, () => {
+  const f = fixture({ role: 'AXSheet', identifier: 'GoToWindow', fail: 'before-write', cancelCode, cancelNoop: true });
+  assert.throws(f.open);
+  assert.equal(f.recover(), 'closed retained fixture');
+  assert.equal(f.present(), false);
+  assert.deepEqual(f.keys, [[53, true], [53, false]]);
+  assert.equal(f.actions.some(([target, action]) => target === f.field && action === 'AXCancel'), true);
+});
+
+test('GoToWindow input cancellation works when Escape and panel actions are unavailable', () => {
+  const f = fixture({ role: 'AXSheet', identifier: 'GoToWindow', fail: 'before-write', cancelCode: -25206, fieldCancel: true });
+  delete f.panel.AXCancelButton;
+  assert.throws(f.open); assert.equal(f.recover(), 'closed retained fixture');
+  assert.equal(f.present(), false); assert.deepEqual(f.keys, []);
+});
+
+test('an English Cancel button is bound and rechecked when AXCancelButton is absent', () => {
+  const f = fixture({ fail: 'before-write', cancelCode: -25206 });
+  delete f.panel.AXCancelButton; f.cancel.AXTitle = 'Cancel'; f.panel.AXChildren.push(f.cancel);
+  assert.throws(f.open); assert.equal(f.recover(), 'closed retained fixture');
+  assert.equal(f.present(), false); assert.ok(f.actions.some(([target]) => target === f.cancel));
+});
+
+test('a retained panel is cancelled even if the failed Go attempt revoked parent-title cleanup', () => {
+  const f = fixture();
+  const action = f.native.AXUIElementPerformAction;
+  f.native.AXUIElementPerformAction = (element, name) => {
+    if (element.AXRole === 'AXButton' && element.AXTitle === 'Go') return -25204;
+    return action(element, name);
+  };
+  assert.throws(f.open, /press failed/);
+  assert.equal(f.request.finderOwnership.documentless.length, 0);
+  assert.equal(f.recover(), 'unconfirmed');
+  assert.equal(f.present(), false);
+  assert.equal(f.actions.some(([target]) => target === f.window.AXCloseButton), false);
+});
+
+test('a dismissed panel retaining readable AXRole is absent once its app tree no longer contains it', () => {
+  const f = fixture({ fail: 'before-write' }); assert.throws(f.open);
+  f.dismiss(); delete f.panel.gone;
+  assert.equal(f.api.finderPanelExists(f.panel), false);
+  assert.equal(f.recover(), 'closed retained fixture');
+});
+
+for (const target of ['parent', 'app']) test(`an invalid ${target} read cannot count as panel dismissal`, () => {
+  const f = fixture({ fail: 'before-write' }); assert.throws(f.open);
+  const read = f.native.AXUIElementCopyAttributeValue;
+  f.native.AXUIElementCopyAttributeValue = (element, name, output) =>
+    element === (target === 'parent' ? f.window : f.app) ? -25202 : read(element, name, output);
+  assert.throws(() => f.api.finderPanelExists(f.panel), /read failed/);
+  assert.equal(f.present(), true);
+});
+
+test('all ineffective cancellation routes report unconfirmed cleanup and keep the parent open', () => {
+  const f = fixture({ identifier: 'GoToWindow', fail: 'before-write', cancelCode: -25206, cancelNoop: true, escapeNoop: true });
+  assert.throws(f.open);
+  assert.throws(f.recover, /sheet cleanup unconfirmed/);
+  assert.equal(f.present(), true);
+  assert.equal(f.actions.some(([target]) => target === f.window.AXCloseButton), false);
+});
+
+test('failed panel cancellation leaves its fixture window open', () => {
+  const f = fixture({ fail: 'before-write', cancelCode: -25204 }); assert.throws(f.open);
+  assert.throws(f.recover, /cancellation failed/);
+  assert.ok(f.app.AXWindows.includes(f.window));
+  assert.equal(f.actions.some(([target]) => target === f.window.AXCloseButton), false);
+});
+
+test('cancellation rechecks panel parent after reading its fallback button', () => {
+  const f = fixture({ fail: 'before-write', cancelCode: -25206 }); assert.throws(f.open);
+  f.setHook((element, name) => { if (element === f.panel && name === 'AXCancelButton') f.panel.AXParent = f.owner; });
+  assert.throws(f.recover, /identity changed/);
+  assert.equal(f.actions.some(([target]) => target === f.cancel || target === f.window.AXCloseButton), false);
+});
+
+test('two panels opened after the command remain ambiguous and neither is dismissed', () => {
+  const f = fixture();
+  const action = f.native.AXUIElementPerformAction;
+  f.native.AXUIElementPerformAction = (element, name) => {
+    const code = action(element, name);
+    if (element === f.goItem) f.app.AXChildren.push({ AXRole: 'AXSheet', AXParent: f.window });
+    return code;
+  };
+  assert.throws(f.open, /identity changed|Foreign Finder dialog/);
+  assert.equal(f.request.finderOwnership.folderPanel.reference, undefined);
+  assert.throws(f.recover, /Foreign Finder dialog/);
+  assert.equal(f.actions.some(([target]) => target === f.panel || target === f.window.AXCloseButton), false);
+});
+
+test('a pre-existing attached sheet refuses before either menu action', () => {
+  const f = fixture({ role: 'AXSheet' }); f.show();
+  assert.throws(f.open, /Foreign Finder dialog/);
+  assert.deepEqual(f.actions, []);
+});
+
+test('a cyclic panel parent chain cannot use its AXWindow attribute as an escape', () => {
+  const f = fixture({ parent: 'attribute' });
+  const group = { AXRole: 'AXGroup' }; group.AXParent = group; f.panel.AXParent = group;
+  assert.throws(f.open, /identity changed|Foreign Finder dialog/);
+  assert.equal(f.request.finderOwnership.folderPanel.reference, undefined);
+  assert.deepEqual(f.writes, []);
+});
+
+test('navigation revokes default-title cleanup exactly when Go is attempted', () => {
+  const f = fixture();
+  const write = f.native.AXUIElementSetAttributeValue;
+  f.native.AXUIElementSetAttributeValue = (...args) => {
+    assert.equal(f.request.finderOwnership.documentless.length, 1);
+    return write(...args);
+  };
+  const action = f.native.AXUIElementPerformAction;
+  f.native.AXUIElementPerformAction = (element, name) => {
+    if (element.AXTitle === 'Go' && element.AXRole === 'AXButton') assert.equal(f.request.finderOwnership.documentless.length, 0);
+    return action(element, name);
+  };
+  assert.equal(f.open(), f.window);
+});
+
+test('setup probe records panel metadata and excludes its AXWindow from owner windows', () => {
+  const f = fixture({ fail: 'before-write' }), result = f.probe();
+  assert.equal(result.cleanupConfirmed, true);
+  assert.deepEqual(JSON.parse(JSON.stringify(result.panel)), { commandAttempted: true, retained: true,
+    role: 'AXWindow', subrole: 'AXDialog', parentConfirmed: true });
+  assert.equal(result.snapshots.every(row => row.ownerWindowsEqual), true);
+});
+
+test('native probe clock supports production menu action receipts before its first snapshot', () => {
+  const f = fixture(), target = { processIdentifier: 42, bundleIdentifier: 'com.apple.finder' };
+  Object.assign(f.native, {
+    AXIsProcessTrusted: () => true,
+    NSRunningApplication: { runningApplicationsWithBundleIdentifier: () => ({ count: 1, objectAtIndex: () => target }) },
+    NSData: { dataWithContentsOfFile: () => ({ isNil: () => false }) },
+    NSString: { alloc: { initWithDataEncoding: () => '{"cancelled":false}' } },
+  });
+  f.source.finderProcessBirth = () => '1.000000';
+  const nativeAX = f.source.nativeAX;
+  f.source.nativeAX = (state, clock) => {
+    assert.equal(typeof clock.emit, 'function');
+    const api = nativeAX(state, clock); api.path = value => value || null; return api;
+  };
+  const root = ['', 'private', 'tmp', 'sleight-finder-probe-OFFLINE'].join('/');
+  // The fake Go button reports the fixed fixture path used throughout this tree.
+  const action = f.native.AXUIElementPerformAction;
+  f.native.AXUIElementPerformAction = (element, name) => {
+    const code = action(element, name);
+    if (element.AXRole === 'AXButton' && element.AXTitle === 'Go') f.window.AXDocument = root + '/Finder-probe';
+    return code;
+  };
+  const result = JSON.parse(f.source.runFinderSetupProbe({ bundle: 'com.apple.finder', ownerAway: true, stopOnLiveHold: true,
+    fixtureRoot: root, target: root + '/Finder-probe', control: root + '/control.json' }, () => {}));
+  assert.equal(result.passed, true, JSON.stringify(result));
+  assert.equal(result.cleanupConfirmed, true);
+  assert.equal(f.present(), false);
+  assert.deepEqual(f.app.AXWindows, [f.owner]);
+});

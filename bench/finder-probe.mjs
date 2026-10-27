@@ -9,7 +9,7 @@ const helper = fileURLToPath(new URL('./real-fixture.js', import.meta.url));
 export async function runFinderProbe({ dryRun = false, ownerAway = false, signal } = {}, deps = {}) {
   if (dryRun) return { dryRun: true, opensWindows: false, writesFiles: false, setups: 1,
     command: 'node bench/finder-probe.mjs --owner-away',
-    records: ['roles', 'desktopReferenceEquality', 'ownerWindowsEqual', 'createdWindow', 'scrollAreasBaseline', 'scrollAreasMatched'],
+    records: ['roles', 'desktopReferenceEquality', 'ownerWindowsEqual', 'createdWindow', 'scrollAreasBaseline', 'scrollAreasMatched', 'panel'],
     cleanup: 'Production cleanup closes only the retained created window. Unconfirmed cleanup keeps the live lock.',
     coverage: 'Run once with zero owner windows and once with one existing owner window. This probe never creates an owner window.' };
   if (!ownerAway) throw new Error('Finder probe requires explicit --owner-away');

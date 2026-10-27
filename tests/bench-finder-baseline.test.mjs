@@ -151,7 +151,7 @@ for (const [name, before, after] of [
 
 test('navigation revokes the documentless default-title fallback', () => {
   const f = trial();
-  f.api.submitFolder = () => { throw new Error('navigation failed'); };
+  f.api.submitFolder = (_window, _sheet, _target, _validate, onNavigate) => { onNavigate(); throw new Error('navigation failed'); };
   assert.throws(f.open, /navigation failed/);
   assert.equal(f.recover(), 'unconfirmed');
   assert.equal(f.failure.failureReason, 'fixture-location-mismatch');
