@@ -95,7 +95,8 @@ export async function openMailImport(fixture, ctx, { helper = mailHelper, run = 
       for (let newline; (newline = buffered.indexOf('\n')) >= 0;) {
         const line = buffered.slice(0, newline); buffered = buffered.slice(newline + 1);
         let event; try { event = JSON.parse(line); } catch { continue; }
-        if (event.stage === 'ready' || event.stage === 'closed' || event.actionTaken === true || event.launched === true || event.imported === true) {
+        if (event.stage === 'ready' || event.stage === 'closed' || event.stage === 'app-dialog' || event.stage === 'setup-failure' ||
+            event.actionTaken === true || event.launched === true || event.imported === true) {
           activityReported = true;
           if (diagnostic.cleanup === 'nothing created') { diagnostic.cleanup = 'unconfirmed'; removed = false; }
         }

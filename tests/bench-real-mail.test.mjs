@@ -2,7 +2,7 @@
 const MAC_TMP = ['', 'private', 'tmp'].join('/');
 import test from './macos-only.mjs';
 import assert from 'node:assert/strict';
-import { appendFileSync, copyFileSync, mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync } from 'node:fs';
+import { appendFileSync, copyFileSync, mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import * as mail from '../bench/real-mail.mjs';
@@ -297,6 +297,69 @@ test('native dialog stop publishes category and collects exact registered helper
   await assert.rejects(ctx.windowLeases[0].close(), /aborted/i);
   assert.equal(await ctx.windowLeases[0].dispose(), true);
   assert.ok(ctx.pendingAcquisitions.has('mailImport'));
+});
+
+for (const stages of [
+  ['app-dialog', 'setup-failure', 'untouched'],
+  ['setup-failure', 'untouched'],
+  ['untouched', 'app-dialog', 'untouched'],
+]) test(`native setup stop cannot accept untouched receipt after ${stages.join(', ')}`, async t => {
+  const ctx = context(t); ctx.ownerPresent = true;
+  let failure;
+  await assert.rejects(mail.setupMailImport(ctx, { importer: (fixture, current) => mail.openMailImport(fixture, current, {
+    helper: async () => 'isolated-test-helper',
+    run: async (_, __, options) => {
+      for (const stage of stages) options.onStdout(JSON.stringify({ stage, nonce: ctx.nonce,
+        actionTaken: false, launched: false, imported: false, cleanup: 'unconfirmed',
+        dialog: { app: 'Mail', bundle: 'com.apple.mail', category: 'signin' } }) + '\n');
+      return { groupClean: true, exit: { code: 1 }, stderr: 'MAIL_APP_DIALOG_STOP', stdout: '' };
+    },
+  }) }), error => { failure = error; return /MAIL_APP_DIALOG_STOP/.test(error.message); });
+  assert.notEqual(failure.noMutation, true);
+  assert.equal(ctx.fixtureDiagnostics[0].cleanup, 'unconfirmed');
+  assert.notEqual(ctx.mailImport.cleaned, true);
+  assert.notEqual(ctx.fixtureDiagnostics[0].windowCleanupConfirmed, true);
+  assert.notEqual(ctx.fixtureDiagnostics[0].helperCollectionConfirmed, true);
+  assert.ok(ctx.pendingAcquisitions.has('mailImport'));
+});
+
+test('native Mail fake checks mutation dispatch ordering and bounded attribute reads', { skip: macCommandSkip('xcrun') }, async t => {
+  const ctx = context(t), source = readFileSync(new URL('../bench/real-mail.swift', import.meta.url), 'utf8');
+  // Compile the actual function bodies against fake platform calls. Changing a
+  // dispatch guard or read policy changes this executable's behavior.
+  function declaration(name, method = false) {
+    const prefix = method ? '    ' : '';
+    const start = source.search(new RegExp(`^${prefix}func ${name}(?:<[^>]+>)?\\(`, 'm'));
+    assert.notEqual(start, -1, name);
+    const rest = source.slice(start);
+    const end = rest.slice(rest.indexOf('\n') + 1).search(method ? /^    func |^}/m : /^func |^\/\/ |^final class /m);
+    assert.notEqual(end, -1, name);
+    return rest.slice(0, rest.indexOf('\n') + 1 + end);
+  }
+  const error = source.slice(source.indexOf('struct MailError:'), source.indexOf('var beforeMutation:'));
+  const globals = error + ['mailRecoveryStep', 'queryFailure', 'retryMailQuery', 'dialogCategory', 'fixtureDialogTitle', 'read', 'text', 'children',
+    'press', 'set', 'walk', 'button', 'menu', 'present', 'close'].map(name => declaration(name)).join('\n');
+  const methods = ['checkDialog', 'focus', 'key', 'cleanup'].map(name => declaration(name, true)).join('\n');
+  const fake = readFileSync(new URL('./fixtures/mail-ax-fake.swift', import.meta.url), 'utf8')
+    .replace('// PRODUCTION_GLOBALS', globals).replace('// PRODUCTION_METHODS', methods)
+    .replace('// PRODUCTION_GUARD', source.match(/^    beforeMutation = .+$/m)?.[0] ?? '')
+    .replace('// PRODUCTION_FAILURE', source.slice(source.lastIndexOf('\ndo { try main() } catch {')));
+  const path = join(ctx.dir, 'fake.swift'), executable = join(ctx.dir, 'fake');
+  writeFileSync(path, fake);
+  const compilation = await runOwned('/usr/bin/xcrun', ['swiftc', '-module-cache-path', join(ctx.dir, 'module-cache'), path, '-o', executable], { timeoutMs: 180000 });
+  assert.equal(compilation.groupClean, true);
+  assert.equal(compilation.exit?.code, 0, compilation.stderr);
+  for (const [mode, untouched] of [['--untouched', true], ['--dialog', false], ['--action', false]]) {
+    const failure = await runOwned(executable, [mode], { timeoutMs: 15000 });
+    assert.equal(failure.groupClean, true);
+    assert.equal(failure.exit?.code, 1, failure.stderr);
+    assert.equal(failure.stdout.includes('untouched'), untouched, mode);
+  }
+  const result = await runOwned(executable, [], { timeoutMs: 15000 });
+  assert.equal(result.groupClean, true);
+  assert.equal(result.exit?.code, 0, result.stderr);
+  assert.deepEqual(JSON.parse(result.stdout), { mutationSites: 9, dialogStops: 6, failedActionAttempts: 1,
+    readAttempts: { role: 3, children: 3, main: 3 } });
 });
 
 test('native Mail ownership self-test rejects focus-only and ambiguous creation, and requires local destination proof', { skip: macCommandSkip('xcrun') }, async () => {
