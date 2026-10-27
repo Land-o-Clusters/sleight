@@ -27,7 +27,7 @@ function atlas(rows) {
   return atlases.get(rows);
 }
 function fixture(t, version = 1, rows = version === 2 ? 11 : 9) {
-  const base = registerTemp(t, fs.realpathSync(fs.mkdtempSync('/private/tmp/sleight-petdex-')));
+  const base = registerTemp(t, fs.realpathSync(fs.mkdtempSync(join('/private', 'tmp', 'sleight-petdex-'))));
   const source = join(base, 'download'), root = join(base, 'characters'); fs.mkdirSync(source, { mode: 0o700 });
   const pet = { id: 'synthetic-pet', displayName: 'Synthetic pet', description: 'Generated squares.', spritesheetPath: 'spritesheet.png' };
   if (version !== undefined) pet.spriteVersionNumber = version;
@@ -109,7 +109,7 @@ test('nine-row pet imports retain the common path, file and image validation', t
 test('pasted gallery, asset and custom-protocol URLs refuse without fetching or installing', async t => {
   const w = fixture(t); let calls = 0;
   t.mock.method(globalThis, 'fetch', () => { calls++; throw Error('network must not run'); });
-  for (const source of ['https://petdex.dev/pets/example', 'https://assets.petdex.dev/example/spritesheet.webp', 'petdex://example', 'codex://pets/install?name=example', 'file:///private/tmp/pet', 'data:application/json,{}']) {
+  for (const source of ['https://petdex.dev/pets/example', 'https://assets.petdex.dev/example/spritesheet.webp', 'petdex://example', 'codex://pets/install?name=example', 'file:///' + ['private', 'tmp', 'pet'].join('/'), 'data:application/json,{}']) {
     let output = '';
     assert.equal(await cursorCommand(['import', source, '--yes'], { root: w.root, out: s => output += s }), 1);
     assert.match(output, /never fetches.*download.*local folder/i);

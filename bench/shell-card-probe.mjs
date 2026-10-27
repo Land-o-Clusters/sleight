@@ -13,10 +13,10 @@ const hostURL = new URL('../plugins/sleight/lib/direct-browser/native/consent-ho
 const icon = fileURLToPath(new URL('../plugins/sleight/assets/icon.png', import.meta.url));
 export function shellCardSource(source = readFileSync(hostURL, 'utf8')) {
   const entry = '// No arguments: the consent host.';
-  const refusal = 'func refuseConsentInput(_ button: NSButton? = nil) {';
+  const refusal = 'func refuseConsentInput(_ button: NSButton? = nil, tooSoon: Bool = false) {';
   const answer = '        output.write(bytes + Data([10]))';
   if ([entry, refusal, answer].some(marker => source.split(marker).length !== 2)) throw Error('SHELL_CARD_SOURCE_DRIFT');
-  return source.slice(0, source.indexOf(entry)).replace(refusal, refusal + '\n    shellReceipt("refused")')
+  return source.slice(0, source.indexOf(entry)).replace(refusal, refusal + '\n    shellReceipt(tooSoon ? "too-soon" : "refused")')
     .replace(answer, '        shellReceipt(choice == "once" ? "accepted" : "cancelled", ["id": id])\n' + answer) +
     readFileSync(new URL('./shell-card-fixture.swift', import.meta.url), 'utf8');
 }

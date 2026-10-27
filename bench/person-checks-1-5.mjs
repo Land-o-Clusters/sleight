@@ -58,7 +58,7 @@ export function instrumentHost(source = readFileSync(hostSource, 'utf8')) {
     }
 }
 // BEGIN PERSON INPUT`);
-  insert('func refuseConsentInput(_ button: NSButton? = nil) {', 'func refuseConsentInput(_ button: NSButton? = nil) {\n    pc1Receipt("refused", ["code": "PERSON_INPUT_REQUIRED"])');
+  insert('func refuseConsentInput(_ button: NSButton? = nil, tooSoon: Bool = false) {', 'func refuseConsentInput(_ button: NSButton? = nil, tooSoon: Bool = false) {\n    pc1Receipt("refused", ["code": tooSoon ? "CONSENT_TOO_SOON" : "PERSON_INPUT_REQUIRED"])');
   insert('return sender.sendAction(originalAction, to: originalTarget)', `pc1Receipt("dispatch", ["typed": typed, "keyCode": event.type == .keyDown ? Int(event.keyCode) : -1, "mouse": [.leftMouseDown, .leftMouseUp].contains(event.type)])
         return sender.sendAction(originalAction, to: originalTarget)`);
   insert('_ = focusForTyping()', 'if focusForTyping() { pc1Receipt("focused") }');

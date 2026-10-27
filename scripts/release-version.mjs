@@ -23,6 +23,8 @@ function discover(root, errors) {
     for (const entry of readdirSync(join(root, directory), { withFileTypes: true })) {
       if (excluded.has(entry.name)) continue;
       const path = directory ? `${directory}/${entry.name}` : entry.name;
+      // Top-level examples/ holds sample marketplaces with their own versions, not sleight's release.
+      if (path === 'examples') continue;
       // Refuse production boundaries without following targets, including broken links and cycles.
       if (entry.isSymbolicLink() && productionDirectoryPath.test(path)) {
         errors.push(`${path}: symlink at a production manifest directory`);

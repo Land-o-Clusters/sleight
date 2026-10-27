@@ -14,8 +14,8 @@ const block = (source, name) => source.split(`// BEGIN ${name}\n`)[1].split(`// 
 test('shell fixture keeps production panel and person guard, with receipt-only instrumentation', () => {
   const source = shellCardSource(production);
   assert.equal(block(source, 'ASK CARD'), block(production, 'ASK CARD'));
-  assert.equal(block(source, 'PERSON INPUT').replace('    shellReceipt("refused")\n', ''), block(production, 'PERSON INPUT'));
-  assert.equal(source.split('// GB18Q FIXTURE')[0].replace('    shellReceipt("refused")\n', '')
+  assert.equal(block(source, 'PERSON INPUT').replace('    shellReceipt(tooSoon ? "too-soon" : "refused")\n', ''), block(production, 'PERSON INPUT'));
+  assert.equal(source.split('// GB18Q FIXTURE')[0].replace('    shellReceipt(tooSoon ? "too-soon" : "refused")\n', '')
     .replace('        shellReceipt(choice == "once" ? "accepted" : "cancelled", ["id": id])\n', ''),
     production.slice(0, production.indexOf('// No arguments: the consent host.')));
   assert.match(source, /host\.receive\(frame\)/);
