@@ -5,6 +5,7 @@ import { assertEndpointRead } from './endpoint-guard.mjs';
 export const HANDOFF_WAIT_MS = 240000;
 export const handoffMessages = Object.freeze({
   pending: 'Handoff pending; the user must finish in the tab.',
+  away: 'Handoff pending; tabs kept for the user. Finish sign-in on the Mac and click Continue, then read the tab again.',
   cancelled: 'Handoff not resumed; tabs kept for the user.',
   resumed: 'Continue received; fresh untrusted read below. Sign-in is unverified.',
   secrets: 'Secret fields remain; handoff not resumed; tabs kept.',

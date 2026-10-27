@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { createHandoffWaiter } from '../plugins/sleight/lib/direct-browser/handoff.mjs';
 import { validateToolCall, createToolDispatcher } from '../plugins/sleight/lib/direct-browser/tools.mjs';
+import { isPresent } from '../plugins/sleight/lib/remote-approvals.mjs';
 
 function uiFixture() {
   const cards = [], dismissed = [], events = new WeakSet();
@@ -66,7 +67,8 @@ test('waiting handoff takes no authority or secret from tool arguments', () => {
   const call = arguments_ => validateToolCall({ name: 'browser_tabs', arguments: arguments_ });
   assert.doesNotThrow(() => call({ do: 'handoff', tab: 't1', wait: true }));
   for (const args of [{ do: 'keep', tab: 't1', wait: true }, { do: 'list', wait: false },
-    { do: 'handoff', tab: 't1', wait: true, signedIn: true }, { do: 'handoff', tab: 't1', wait: true, password: 'secret' }]) {
+    { do: 'handoff', tab: 't1', wait: true, signedIn: true }, { do: 'handoff', tab: 't1', wait: true, password: 'secret' },
+    { do: 'handoff', tab: 't1', wait: true, handoffPresent: false }]) {
     assert.throws(() => call(args));
   }
 });
@@ -102,17 +104,75 @@ test('missing host and host presentation failure never resume', async () => {
   }
 });
 
-function dispatcherFixture() {
-  let resume, paused = false, released = false, reads = 0, actions = 0;
+function dispatcherFixture({ presence, realWaiter = false } = {}) {
+  let resume, paused = false, released = false, reads = 0, actions = 0, ready = true;
+  const ui = uiFixture();
+  const waiter = createHandoffWaiter({ ui: ui.ui, current: () => true, session: 's', turn: 't' });
   const entry = { page: { url: () => 'https://fixture.invalid/' }, state: { snapshotNo: 1 } };
   const pages = { tab: () => entry, enqueue: async (_id, run) => { assert.equal(paused, false); return run(entry); },
-    async beginHandoff() { paused = true; return { async finish(keep) { paused = false; released = keep; return keep ? null : 't1'; } }; },
+    async beginHandoff() { paused = true; return { async finish(keep) { if (!keep && !ready) return false; paused = false; released = keep; return keep ? null : 't1'; } }; },
     async endTurn() { return { cleanedUp: true }; } };
-  const dispatcher = createToolDispatcher({ pages, ctx: { handoff: () => new Promise(resolve => { resume = resolve; }) },
+  const dispatcher = createToolDispatcher({ pages, ctx: { handoff: (...args) => realWaiter ? waiter.wait(...args) : new Promise(resolve => { resume = resolve; }) },
     snapshot: async () => { reads++; return { text: '# fresh untrusted snapshot', number: 2 }; },
     runSteps: async () => { actions++; return { lines: [] }; }, fillFields: async () => assert.fail('unexpected fill') });
-  return { dispatcher, resume: value => resume(value), get reads() { return reads; }, get actions() { return actions; }, get released() { return released; } };
+  return { dispatcher, ui, waiter, setReady: value => { ready = value; },
+    call: input => dispatcher.call(input, { handoffPresent: isPresent(presence) }),
+    resume: value => realWaiter ? ui.answer(value ? 'continue' : 'cancel') : resume(value),
+    get reads() { return reads; }, get actions() { return actions; }, get released() { return released; } };
 }
+
+for (const presence of [{ locked: true, idleSeconds: 0 }, { locked: false, idleSeconds: 120 }])
+test(`away browser handoff returns before Continue and keeps the suspension (locked=${presence.locked})`, async t => {
+  const f = dispatcherFixture({ presence, realWaiter: true });
+  t.after(() => { f.waiter.dispose(); return f.dispatcher.end(); });
+  let result;
+  f.call({ name: 'browser_tabs', arguments: { do: 'handoff', tab: 't1', wait: true } }).then(value => { result = value; });
+  await new Promise(resolve => setImmediate(resolve));
+  assert.ok(result, 'away handoff must return without waiting for the person');
+  assert.equal(result.isError, false);
+  assert.match(result.text, /kept for the user/);
+  assert.match(result.text, /Continue/);
+  assert.equal(f.reads, 0);
+  assert.equal(f.ui.cards.length, 1);
+  assert.equal(f.ui.dismissed.length, 0);
+  f.ui.answer('continue', false); await new Promise(resolve => setImmediate(resolve));
+  assert.equal(f.ui.dismissed.length, 0);
+  const blocked = await f.dispatcher.call({ name: 'browser_read', arguments: { tab: 't1' } });
+  assert.equal(blocked.isError, true);
+  f.resume(true); await new Promise(resolve => setImmediate(resolve));
+  assert.equal(f.reads, 0, 'a late Continue must not create an unsolicited snapshot');
+  const fresh = await f.dispatcher.call({ name: 'browser_read', arguments: { tab: 't1' } });
+  assert.equal(fresh.isError, false, fresh.text);
+  assert.equal(f.reads, 1);
+});
+
+test('away browser handoff keeps waiting after a premature Continue and preserves tabs on Cancel', async t => {
+  const f = dispatcherFixture({ presence: { locked: true, idleSeconds: 0 }, realWaiter: true });
+  t.after(() => { f.waiter.dispose(); return f.dispatcher.end(); });
+  f.setReady(false);
+  const result = await f.call({ name: 'browser_tabs', arguments: { do: 'handoff', tab: 't1', wait: true } });
+  assert.equal(result.isError, false);
+  f.ui.answer('continue'); await new Promise(resolve => setImmediate(resolve));
+  assert.equal(f.ui.cards.length, 2);
+  assert.equal(f.reads, 0);
+  assert.equal((await f.dispatcher.call({ name: 'browser_read', arguments: { tab: 't1' } })).isError, true);
+  f.ui.answer('cancel'); await new Promise(resolve => setImmediate(resolve));
+  assert.equal(f.released, true);
+  assert.equal(f.reads, 0);
+});
+
+test('the attended handoff wait expires at four minutes and never resumes on a late Continue', async t => {
+  t.mock.timers.enable({ apis: ['setTimeout', 'setInterval', 'Date'] });
+  const f = uiFixture(), waiter = createHandoffWaiter({ ui: f.ui, current: () => true, session: 's', turn: 't' });
+  let resumed;
+  waiter.wait('t1').then(value => { resumed = value; });
+  t.mock.timers.tick(239999); await Promise.resolve();
+  assert.equal(resumed, undefined);
+  t.mock.timers.tick(1); await Promise.resolve();
+  assert.equal(resumed, false);
+  f.answer('continue'); await Promise.resolve();
+  assert.equal(resumed, false);
+});
 
 test('waiting handoff blocks concurrent reads and input, then returns a fresh read', async () => {
   const f = dispatcherFixture();

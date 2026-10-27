@@ -3,7 +3,7 @@
   "tools": "c1b796e8a8b2a155cadd5e5ae0463d12d5f90ad8147698050352bc95dde8b40b",
   "batch": "aab9c612b29e726dcacf915b1c565dfc65ae3c455bc7561a3f1ea2d3733d4406",
   "merge": "5bd0464e07e16924b32d03a806ec8a6f47c2ed254026b394cbaa26b5c3e8a32d",
-  "notices": "32434323562229b77b6720ed8af6edf91f45bb63ac06e767d8c0f45f5580e40d",
+  "notices": "be815c9abd636a73da06193a7e2685dd29aeebe9792c63d499412cbca5643a87",
   "skillSafety": [
     "Cookies: use only one-click Reject/necessary-only that declines all optional cookies, or ask.",
     "Never create or edit `~/Library/Application Support/sleight/preapproved.json`; only the user writes\nit. If an app isn't approved, ask the user, or stop when a headless run refuses it.",
@@ -57,7 +57,7 @@
   "browserClosedOutcome": "9e5f2ae21e3b53f89a2f31705de162fed1496da007e66246fdf84beb669a8698",
   "browserToolsLegacy": "edfcf4e93bab46652c571cb4270631aef8e28a5f3ed86e11ee5e637cc2b0f920",
   "browserToolsMT": "4952cf11b2551872cee1a571cf5fd8d2aaa2ff136f67dc70e9858e8951ffef5f",
-  "browserHandoffOutcomes": "d99b28cc1fb0fa080bae67acd03d6001b190fd21819848c48897a1ac9bb5c6d2",
+  "browserHandoffOutcomes": "417a7381db2b67ae61df54d2939f307a044ddc68d039e6f29ca831ebd8e23318",
   "makeCharacterDescription": "d63280d56154cbc8c75afefd1a4a73a57fb4e1c9ac2afdc8aa486ac5e47fa114",
   "makeCharacterBody": "e6cad416e68fefd0e7b7611c96ff3fd209168bb4d3c9aec81b8e2830dfa17b8d"
 }

@@ -328,7 +328,7 @@ export async function createV3Bridge({ startupTimeoutMs = 120000, timeoutMs = 31
       if (active && validWait(result.waitMs) && result.waitMs > timeoutMs) callTimeoutMs = result.waitMs;
       return active;
     },
-    async call(input) {
+    async call(input, { handoffPresent = true } = {}) {
       if (paused) return { text: PAUSED_NOTE, isError: true };
       let request;
       try { const { say, ...tool } = input; request = validateToolCall(tool, hello.browser);
@@ -340,6 +340,7 @@ export async function createV3Bridge({ startupTimeoutMs = 120000, timeoutMs = 31
       trace('call-start', turn, call);
       try {
         const waiting = request.name === 'browser_tabs' && request.arguments.do === 'handoff' && request.arguments.wait === true;
+        if (waiting) request.handoffPresent = handoffPresent === true;
         const reply = await rpc('call', request, waiting ? HANDOFF_DRAIN_WAIT_MS : callTimeoutMs);
         if (epoch === generation) callTimeoutMs = timeoutMs;
         if (!active || lost || epoch !== generation || !current()) return failure(request.name !== 'browser_read');
@@ -523,9 +524,11 @@ export function serveV3Worker({ channel, browser, begin, current = () => true, c
         return !!record && record.runtime === runtime && record.hash === frame.params.hash && record.hash === hash(record.result) && runtime.delivered(record.result) === true;
       }
       try { pauseCheck(); } catch { return { resultId: frame.id, result: { text: PAUSED_NOTE, isError: true } }; }
-      const { say, ...tool } = frame.params;
+      const { say, handoffPresent, ...tool } = frame.params;
       const request = validateToolCall(tool, browser), owner = runtime;
-      const result = await owner.call(request, { say: narrationLine(say, request.arguments), pauseCheck, handoffDrain: detail => send({ version: 3, id: frame.id, handoffDrain: detail }),
+      if (handoffPresent !== undefined && (typeof handoffPresent !== 'boolean' || request.name !== 'browser_tabs' ||
+          request.arguments.do !== 'handoff' || request.arguments.wait !== true)) throw Error('INVALID_HANDOFF_PRESENCE');
+      const result = await owner.call(request, { say: narrationLine(say, request.arguments), handoffPresent, pauseCheck, handoffDrain: detail => send({ version: 3, id: frame.id, handoffDrain: detail }),
         handoffDeadline: detail => send({ version: 3, id: frame.id, handoff: detail }), pdfBuilding: () => {
         if (epoch === generation && !ended && runtime === owner && ['browser_read', 'browser_open', 'browser_act', 'browser_fill'].includes(request.name))
           send({ version: 3, id: frame.id, pdfBuild: true });

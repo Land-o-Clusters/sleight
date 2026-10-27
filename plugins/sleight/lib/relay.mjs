@@ -69,7 +69,7 @@ import { DOCUMENT_TOOL, WINDOW_HEADER, documentKey, documentLabel, windowFromTex
 import { ChangeReview, REVIEW_TOOL, isChangeCancel } from './change-review.mjs';
 import { FLOW_TOOL } from './flow-rules.mjs';
 import { NATIVE_HANDOFF_TOOL, openNativeHandoffUi } from './native-handoff.mjs';
-import { createHandoffWaiter, HANDOFF_WAIT_MS } from './direct-browser/handoff.mjs';
+import { createHandoffWaiter, HANDOFF_WAIT_MS, handoffMessages } from './direct-browser/handoff.mjs';
 import { browserCall, browserReply, nativeBindings, browserLeaseNote } from './browser-call.mjs';
 import { nativeArgumentsProblem } from './native-arguments.mjs';
 import { BrowserRecovery } from './browser-recovery.mjs';
@@ -1049,6 +1049,7 @@ export function createRelay({
   const codexTurns = new Set();
   const codexTurbo = () => codexClient && !modHost();
   let turboNoticeShown = false;
+  let handoffPresencePending;
   const directNames = new Set(directBrowser?.tools().map(tool => tool.name) ??
     (turboUnavailable ? ['browser_open','browser_read','browser_act','browser_fill','browser_tabs'] : []));
   const directTurnEnds = new Map();
@@ -1893,19 +1894,28 @@ export function createRelay({
     cursorStatus('handback', { app: target.app });
     running.add(msg.id); localRunning.add(msg.id); leaseCalls.set(msg.id, { key });
     callDetails.set(msg.id, 'native sign-in handoff'); clearTimeout(idleTimer); refreshHeartbeat();
-    let ui, waiter;
+    let ui, waiter, returned = false;
     try {
+      const present = await remotePresent();
+      if (!current()) throw Error('Handoff not resumed; app kept for the user.');
       ui = await handoffUi();
       if (!current()) throw Error('Handoff not resumed; app kept for the user.');
       waiter = createHandoffWaiter({ ui, current, session: sessionId, turn: turnId, timeoutMs: handoffTimeoutMs });
       state.cancel = () => waiter.dispose();
-      const resumed = await waiter.wait({ app: target.appId });
+      const pending = waiter.wait({ app: target.appId });
+      if (!present) {
+        returned = true;
+        toClient({ jsonrpc: '2.0', id: msg.id, result: { isError: false, content: [{ type: 'text',
+          text: 'Handoff pending; app kept for the user. Finish sign-in on the Mac and click Continue, then acquire the app again for a fresh read.' }] } });
+      }
+      const resumed = await pending;
       if (!resumed || !current()) throw Error('Handoff not resumed; app kept for the user.');
-      inputLease.renew([key]);
       // The person's Continue permits replacing the previous window identity,
       // not the app identity. Forget stale refs/selection before the usual
       // acquisition path, which still asks engine approvals and binds a lease.
       forgetHandles(); compactor.reset();
+      if (returned) return;
+      inputLease.renew([key]);
       const id = `sleight-signin-${nextInternalId++}`, handle = `__sleightSigninApp${nextInternalId++}`;
       state.readId = id;
       const reply = await new Promise(resolve => {
@@ -1929,7 +1939,7 @@ export function createRelay({
         ...(reply.result.content ?? []),
       ] } });
     } catch (error) {
-      if (!disposed && generation === stopGeneration) leaseStop(msg, promptNotice(/^Handoff /.test(error.message) ? error.message : 'Handoff not resumed; app kept for the user.', prompt));
+      if (!returned && !disposed && generation === stopGeneration) leaseStop(msg, promptNotice(/^Handoff /.test(error.message) ? error.message : 'Handoff not resumed; app kept for the user.', prompt));
     } finally {
       waiter?.dispose(); try { ui?.close?.(); } catch {}
       if (nativeHandoff === state) nativeHandoff = undefined;
@@ -4323,6 +4333,7 @@ export function createRelay({
         return;
       }
       if (closing || disposed) { leaseStop(msg, 'this session is closing.'); return; }
+      if (handoffPresencePending) { leaseStop(msg, handoffMessages.pending); return; }
       // In Codex, only a call from the thread and turn the prompt hook bound reaches the worker.
       const owner = codexTurbo() ? codexCallTurn(msg.params._meta) : undefined;
       if (codexTurbo() && (!owner || !codexBinding || owner.thread !== codexBinding.thread || owner.turn !== codexBinding.turn)) {
@@ -4337,7 +4348,16 @@ export function createRelay({
       callDetails.set(msg.id, msg.params.name);
       recordAction('sent', msg.id);
       pauseHost?.activity();
-      directBrowser.call({ name: msg.params.name, arguments: msg.params.arguments, ...callNarration.has(msg.id) ? { say: callNarration.get(msg.id) } : {} }).then(result => {
+      const directCall = { name: msg.params.name, arguments: msg.params.arguments, ...callNarration.has(msg.id) ? { say: callNarration.get(msg.id) } : {} };
+      const waitingHandoff = msg.params.name === 'browser_tabs' && msg.params.arguments?.do === 'handoff' && msg.params.arguments.wait === true;
+      const generation = stopGeneration, handoffTurn = turnId;
+      const presenceCheck = waitingHandoff ? {} : undefined;
+      if (presenceCheck) handoffPresencePending = presenceCheck;
+      const called = waitingHandoff ? remotePresent().then(present => {
+        if (closing || disposed || generation !== stopGeneration || handoffTurn !== turnId) throw Error('SESSION_ENDED');
+        return directBrowser.call(directCall, { handoffPresent: present });
+      }) : directBrowser.call(directCall);
+      called.then(result => {
         cursorStatus(result.isError ? 'error' : 'done', { say: callNarration.get(msg.id) });
         if (!result.isError) cursorStatus('thinking', { say: callNarration.get(msg.id) });
         finishedCall(msg.id);
@@ -4357,7 +4377,7 @@ export function createRelay({
         cursorStatus('error');
         finishedCall(msg.id);
         toClient({ jsonrpc: '2.0', id: msg.id, error: { code: -32603, message: 'Direct browser route unavailable.' } });
-      });
+      }).finally(() => { if (presenceCheck && handoffPresencePending === presenceCheck) handoffPresencePending = undefined; });
       return;
     }
     if (replWarmup.hold(msg)) return;

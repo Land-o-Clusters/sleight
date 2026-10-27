@@ -42,6 +42,59 @@ test('private narration crosses worker IPC as call context, outside the runtime 
     assert.deepEqual(received, [{ request: { name: 'browser_read', arguments: { tab: 't1' } }, say: 'I’ll inspect the menu.' }]);
   } finally { await f.bridge.detach(); }
 });
+
+test('private handoff presence crosses worker IPC outside the tool arguments', async () => {
+  const received = [];
+  const f = await fixture({}, undefined, {}, async (request, options) => {
+    received.push({ request, present: options.handoffPresent }); return { text: 'fixture', isError: false };
+  });
+  try {
+    await f.bridge.bind({ ...f.bridge.bootstrapEnvelope(), event: 'begin', turn: 'presence-turn', text: 'Find my receipt.' });
+    const request = { name: 'browser_tabs', arguments: { do: 'handoff', tab: 't1', wait: true } };
+    await f.bridge.call(request, { handoffPresent: false });
+    assert.deepEqual(received, [{ request, present: false }]);
+  } finally { await f.bridge.detach(); }
+});
+
+for (const [presence, expected] of [[{ locked: true, idleSeconds: 0 }, false],
+  [{ locked: false, idleSeconds: 120 }, false], [{ locked: false, idleSeconds: 119 }, true], [undefined, true]])
+test(`relay uses remote-approval presence for handoff: ${JSON.stringify(presence)}`, async t => {
+  const controls = [];
+  const f = await fixture({}, undefined, {}, async (_request, options) => {
+    controls.push(options.handoffPresent); return { text: 'fixture', isError: false };
+  });
+  const clientIn = new PassThrough(), clientOut = new PassThrough(), serverIn = new PassThrough(), serverOut = new PassThrough();
+  const relay = createRelay({ clientIn, clientOut, serverIn, serverOut, changeReview: false,
+    directBrowser: createV3Frontend(f.bridge), remoteApprovals: { presence: async () => presence } });
+  t.after(async () => { relay.dispose(); for (const stream of [clientIn, clientOut, serverIn, serverOut]) stream.destroy(); await f.bridge.detach(); });
+  await f.bridge.bind({ ...f.bridge.bootstrapEnvelope(), event: 'begin', turn: 'relay-presence', text: 'Find my receipt.' });
+  clientIn.write(JSON.stringify({ id: 'handoff', method: 'tools/call', params: {
+    name: 'browser_tabs', arguments: { do: 'handoff', tab: 't1', wait: true } } }) + '\n');
+  for (let n = 0; n < 10 && !controls.length; n++) await new Promise(resolve => setImmediate(resolve));
+  assert.deepEqual(controls, [expected]);
+});
+
+test('browser handoff fences concurrent reads while its presence signal is pending', async t => {
+  let finishPresence;
+  const calls = [];
+  const f = await fixture({}, undefined, {}, async request => { calls.push(request); return { text: 'fixture', isError: false }; });
+  const clientIn = new PassThrough(), clientOut = new PassThrough(), serverIn = new PassThrough(), serverOut = new PassThrough(), replies = [];
+  clientOut.on('data', bytes => replies.push(...bytes.toString().trim().split('\n').map(JSON.parse)));
+  const relay = createRelay({ clientIn, clientOut, serverIn, serverOut, changeReview: false,
+    directBrowser: createV3Frontend(f.bridge), remoteApprovals: { presence: () => new Promise(resolve => { finishPresence = resolve; }) } });
+  t.after(async () => { relay.dispose(); for (const stream of [clientIn, clientOut, serverIn, serverOut]) stream.destroy(); await f.bridge.detach(); });
+  await f.bridge.bind({ ...f.bridge.bootstrapEnvelope(), event: 'begin', turn: 'pending-presence', text: 'Find my receipt.' });
+  const send = (id, name, args) => clientIn.write(JSON.stringify({ id, method: 'tools/call', params: { name, arguments: args } }) + '\n');
+  send('handoff', 'browser_tabs', { do: 'handoff', tab: 't1', wait: true });
+  await new Promise(resolve => setImmediate(resolve));
+  send('read', 'browser_read', { tab: 't1' });
+  await new Promise(resolve => setImmediate(resolve));
+  assert.equal(calls.length, 0, 'no read may overtake the presence check');
+  assert.equal(replies.find(row => row.id === 'read').result.isError, true);
+  finishPresence({ locked: true, idleSeconds: 0 });
+  for (let n = 0; n < 10 && !calls.length; n++) await new Promise(resolve => setImmediate(resolve));
+  assert.equal(calls[0].name, 'browser_tabs');
+});
 test('human pause crosses worker IPC immediately and invalidates the in-flight remainder through resume', async () => {
   let entered, finish, steps = 0;
   const started = new Promise(resolve => { entered = resolve; });

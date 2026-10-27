@@ -56,6 +56,71 @@ test('native handoff waits without reads, accepts a new window of the same bundl
   assert.deepEqual(f.dismissed, [f.cards[0].id]);
 });
 
+for (const presence of [{ locked: true, idleSeconds: 0 }, { locked: false, idleSeconds: 120 }])
+test(`away native handoff returns before Continue and keeps the card (locked=${presence.locked})`, async t => {
+  const f = await fixture(t, { remoteApprovals: { presence: async () => presence } });
+  f.send(rpc('handoff', 'app_handoff')); await tick();
+  const pending = f.received.find(row => row.id === 'handoff');
+  assert.ok(pending, 'away handoff must return without waiting for the person');
+  assert.equal(pending.result.isError, false);
+  assert.match(JSON.stringify(pending), /app kept for the user/);
+  assert.match(JSON.stringify(pending), /Continue/);
+  assert.equal(f.cards.length, 1);
+  assert.equal(f.dismissed.length, 0);
+  const before = f.outbound.length;
+  f.send(rpc('blocked', 'js', { code: 'await app.getAXState()' }));
+  assert.equal(f.outbound.length, before);
+  f.answer('continue', false); await tick();
+  assert.equal(f.dismissed.length, 0);
+  f.answer('continue'); await tick();
+  assert.equal(f.outbound.length, before, 'a late Continue must not read without a new call');
+  assert.equal(f.received.filter(row => row.id === 'handoff').length, 1);
+  assert.equal(f.inputLease.owned.size, 0);
+  f.send(rpc('fresh', 'js', { code: 'var fresh = await cua.getApp("com.example.Reader")' }));
+  assert.equal(f.outbound.at(-1).id, 'fresh');
+});
+
+test('present native handoff still waits for Continue with a fake presence signal', async t => {
+  const f = await fixture(t, { remoteApprovals: { presence: async () => ({ locked: false, idleSeconds: 119 }) } });
+  f.send(rpc('handoff', 'app_handoff')); await tick();
+  assert.equal(f.cards.length, 1);
+  assert.equal(f.received.some(row => row.id === 'handoff'), false);
+  f.answer('continue'); await tick();
+  const fresh = f.outbound.at(-1);
+  assert.match(fresh.params.arguments.code, /cua.getApp/);
+  f.reply(result(fresh.id, 'Receipt INV-42')); await tick();
+  assert.equal(f.received.find(row => row.id === 'handoff').result.isError, false);
+});
+
+for (const mode of ['cancel', 'expiry', 'turn-end', 'engine-end', 'host-cancel'])
+test(`away native ${mode} cancels the retained card without replying twice`, async t => {
+  const f = await fixture(t, { handoffTimeoutMs: mode === 'expiry' ? 20 : 1000,
+    remoteApprovals: { presence: async () => ({ locked: true, idleSeconds: 0 }) } });
+  f.send(rpc('handoff', 'app_handoff')); await tick();
+  assert.equal(f.received.filter(row => row.id === 'handoff').length, 1);
+  if (mode === 'cancel') f.answer('cancel');
+  if (mode === 'turn-end') f.send(rpc('end', 'turn_ended'));
+  if (mode === 'engine-end') f.relay.engineEnded('Fixture engine exited.');
+  if (mode === 'host-cancel') f.send({ method: 'notifications/cancelled', params: { requestId: 'handoff' } });
+  await new Promise(resolve => setTimeout(resolve, mode === 'expiry' ? 35 : 10));
+  f.answer('continue'); await tick();
+  assert.equal(f.outbound.filter(row => row.params?.name === 'js').length, 1);
+  assert.equal(f.inputLease.owned.size, 0);
+  assert.equal(f.received.filter(row => row.id === 'handoff').length, 1);
+  assert.equal(f.dismissed.length, 1);
+});
+
+test('cancelling native handoff during its presence read never presents a late card', async t => {
+  let finishPresence;
+  const f = await fixture(t, { remoteApprovals: { presence: () => new Promise(resolve => { finishPresence = resolve; }) } });
+  f.send(rpc('handoff', 'app_handoff')); await tick();
+  f.send({ method: 'notifications/cancelled', params: { requestId: 'handoff' } });
+  finishPresence({ locked: true, idleSeconds: 0 }); await tick();
+  assert.equal(f.cards.length, 0);
+  assert.equal(f.inputLease.owned.size, 0);
+  assert.equal(f.received.filter(row => row.id === 'handoff').length, 1);
+});
+
 for (const mode of ['cancel', 'expiry', 'turn-end', 'normal-turn-end', 'engine-end', 'host-cancel']) test(`native ${mode} grants no acquisition`, async t => {
   const f = await fixture(t, { handoffTimeoutMs: mode === 'expiry' ? 20 : 1000 });
   f.send(rpc('handoff', 'app_handoff')); await tick();

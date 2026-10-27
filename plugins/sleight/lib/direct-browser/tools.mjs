@@ -228,7 +228,7 @@ export function createToolDispatcher({ browser, pages, snapshot, runSteps, fillF
     return result;
   };
   return Object.freeze({ tools: () => browserTools(browser),
-    async call(input, { handoffDeadline, handoffDrain, pauseCheck } = {}) {
+    async call(input, { handoffDeadline, handoffDrain, handoffPresent = true, pauseCheck } = {}) {
       let request, started = false;
       const ordinal = ++callNo;
       const phase = name => { try { tracePhase?.(name, ordinal); } catch {} };
@@ -242,14 +242,28 @@ export function createToolDispatcher({ browser, pages, snapshot, runSteps, fillF
           if (a.do === 'handoff' && a.wait === true) {
             if (typeof pages.beginHandoff !== 'function' || typeof ctx?.handoff !== 'function') throw Error('waiting handoff unavailable on this surface');
             handingOff = true;
-            let suspension;
+            let suspension, background = false;
             try {
               suspension = await pages.beginHandoff(a.tab, ownedTabs => handoffDrain?.({ ownedTabs }));
               let target;
-              const resumed = await ctx.handoff(a.tab, async () => {
+              const pending = ctx.handoff(a.tab, async () => {
                 target = await suspension.finish(false);
                 return target === null ? null : !!target;
               }, (deadline, waitMs) => handoffDeadline?.({ deadline, waitMs, ownedTabs: suspension.ownedTabs ?? 1 }));
+              if (handoffPresent === false) {
+                // The RPC ends now; the card and suspension remain bound to this
+                // turn. A late Continue restores access without an unsolicited read.
+                const held = suspension;
+                Promise.resolve(pending).then(async resumed => {
+                  if (!resumed || ended) {
+                    if (held.cancel) await held.cancel(); else await held.finish(true);
+                  } else if (target === undefined) await held.finish(false);
+                }).catch(async () => { if (held.cancel) await held.cancel(); else await held.finish(true); })
+                  .finally(() => { handingOff = false; }).catch(() => {});
+                background = true;
+                return textResult(handoffMessages.away);
+              }
+              const resumed = await pending;
               if (!resumed || ended) {
                 if (suspension.cancel) await suspension.cancel(); else await suspension.finish(true);
                 return textResult(handoffMessages.cancelled);
@@ -260,7 +274,7 @@ export function createToolDispatcher({ browser, pages, snapshot, runSteps, fillF
                 const observed = await capture(entry, { maxChars: 8000 });
                 return finish([`${target}: ${handoffMessages.resumed}`], observed.text, entry, observed);
               });
-            } finally { if (suspension) await suspension.finish(true); handingOff = false; }
+            } finally { if (!background) { if (suspension) await suspension.finish(true); handingOff = false; } }
           }
           // An app window has no web origin to show (vscode-file: is opaque), so its row carries the registry's trusted label.
           if (a.do === 'list') return textResult((await pages.list()).map(row => `${clean(row.tab)} ${row.label ? clean(row.label) : originOf(row.url)}${row.opener ? ' (opener ' + clean(row.opener) + ')' : ''}`).join('\n') || 'No owned tabs.');
