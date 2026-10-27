@@ -6,6 +6,7 @@ import { lineBreakRefusal } from './rules.mjs';
 import { snapshotAcquisitionPending } from './snapshot.mjs';
 import { assertPageResponsive } from './page-health.mjs';
 import { checkConsent } from './consent-wall.mjs';
+import { endpointBlock } from './endpoint-guard.mjs';
 // Whole-form strategies are sleight's own (the v2 forms.mjs they came from is gone). Playwright's
 // aria-ref selector routes fNeM refs to their child frame, without parent fallback.
 class FieldError extends Error {}
@@ -105,6 +106,19 @@ export function createFillFields({ check, runSteps, backgroundClick = guardedCli
     if (!tab?.page || !tab.state) throw new FieldError('fill needs an owned tab');
     const { page } = tab, rows = fields.map(({ ref }) => ({ ref, status: 'not reached' }));
     let stopped, sent = false, paused = false;
+    const popupFrom = tab.popups?.length ?? 0;
+    const stopReason = () => {
+      const popup = tab.popups?.find((row, i) => i >= popupFrom && (row.tab || row.blocked));
+      if (popup) stopped = popup.blocked ? endpointBlock : popup.closed
+        ? 'background popup opened and closed itself; read the opener before continuing'
+        : `background popup ${popup.tab} opened; read the tabs before continuing`;
+      return stopped;
+    };
+    const observeAction = result => {
+      paused ||= result?.paused === true;
+      stopReason();
+      if (result?.stoppedAt != null) stopped ||= 'action batch stopped; read the page before continuing';
+    };
     const handlers = { framenavigated: () => { stopped = 'new document; read the page before continuing'; },
       dialog: () => { stopped = 'dialog is waiting; answer it before continuing'; },
       popup: () => { stopped = 'background popup opened; read the tabs before continuing'; },
@@ -112,7 +126,7 @@ export function createFillFields({ check, runSteps, backgroundClick = guardedCli
     for (const [name, fn] of Object.entries(handlers)) page.on(name, fn);
     let submitted = { status: submit === undefined ? 'not requested' : 'not reached' };
     try {
-      for (let i = 0; i < fields.length && !stopped; i++) {
+      for (let i = 0; i < fields.length && !stopReason(); i++) {
         const { ref, value } = fields[i]; sent = false;
         try {
           checkPause();
@@ -120,10 +134,11 @@ export function createFillFields({ check, runSteps, backgroundClick = guardedCli
           if (tab.state.actionPending) throw new FieldError('an earlier input is still pending; wait before filling');
           if (snapshotAcquisitionPending(page)) throw new FieldError('Snapshot acquisition is still pending; wait before another action or read.');
           const nativeText = async () => {
+            if (stopReason()) throw new FieldError(stopped);
             if (!isV3Context(ctx)) throw new FieldError('keyboard-only refs require a trusted context');
             if (!['string', 'number'].includes(typeof value)) throw new FieldError('EditContext fields need text or a number');
             const result = await runSteps(tab, [{ do: 'type', ref, text: String(value) }], ctx, { pauseCheck, ...onAction ? { onAction } : {} });
-            paused ||= result?.paused === true;
+            observeAction(result);
             sent = !!result?.lines?.length && !result.lines.some(line => /: not run:/.test(line));
             if (!result?.lines?.length || actionFailed(result)) throw new FieldError('EditContext field stopped; read the page');
             rows[i].status = 'set';
@@ -136,8 +151,9 @@ export function createFillFields({ check, runSteps, backgroundClick = guardedCli
             const step = typeof value === 'boolean' ? { do: value ? 'check' : 'uncheck', ref } :
               Array.isArray(value) ? { do: 'select', ref, values: value } :
               kind === 'select' ? { do: 'select', ref, values: [String(value)] } : { do: 'type', ref, text: String(value) };
+            if (stopReason()) throw new FieldError(stopped);
             const result = await runSteps(tab, [step], ctx, { pauseCheck, ...onAction ? { onAction } : {} });
-            paused ||= result?.paused === true;
+            observeAction(result);
             sent = !result?.lines?.some(line => /: not run:/.test(line));
             if (actionFailed(result)) throw new FieldError('closed-root field stopped; read the page');
             rows[i].status = 'set'; continue;
@@ -147,7 +163,7 @@ export function createFillFields({ check, runSteps, backgroundClick = guardedCli
           if (state.nativeEditContext) { await nativeText(); continue; }
           if (state.kind === 'select' && state.disabled) {
             const until = now() + 1500;
-            while (state.disabled && !stopped && now() < until) {
+            while (state.disabled && !stopReason() && now() < until) {
               await sleep(Math.min(25, until - now()));
               state = await trustedLocatorRead(loc, inspect, value);
             }
@@ -156,19 +172,19 @@ export function createFillFields({ check, runSteps, backgroundClick = guardedCli
           if (!state.connected) throw new FieldError('stale ref; read the page');
           if (state.readonly && state.kind !== 'combo') throw new FieldError('readonly picker; use browser_act on its choices');
           const prior = await trustedLocatorRead(loc, inspectElement);
-          if (stopped) throw new FieldError(stopped);
+          if (stopReason()) throw new FieldError(stopped);
           const send = async (action, kind = 'type', locator = loc, modifier) => {
             checkPause();
             assertPageResponsive(tab);
-            if (stopped) throw new FieldError(stopped);
+            if (stopReason()) throw new FieldError(stopped);
             if (tab.state.actionPending) throw new FieldError('an earlier input is still pending; wait before filling');
             const element = await trustedLocatorRead(locator, inspectElement);
-            if (stopped) throw new FieldError(stopped);
+            if (stopReason()) throw new FieldError(stopped);
             const target = { ...element, element, prior, tab, page, ref, locator, state: tab.state, do: kind };
             if (tab.state.actionPending) throw new FieldError('an earlier input is still pending; wait before filling');
             const trusted = isV3Context(ctx);
             if (trusted) await ctx.prepareTarget(target);
-            if (stopped) { if (trusted) await ctx.releaseTarget(target); throw new FieldError(stopped); }
+            if (stopReason()) { if (trusted) await ctx.releaseTarget(target); throw new FieldError(stopped); }
             if (tab.state.actionPending) { if (trusted) await ctx.releaseTarget(target); throw new FieldError('an earlier input is still pending; wait before filling'); }
             if (kind === 'click' && (target.element.submit || prior.submit)) {
               if (trusted) await ctx.releaseTarget(target);
@@ -177,7 +193,7 @@ export function createFillFields({ check, runSteps, backgroundClick = guardedCli
               // retains pending input through its settle. Never pre-consume here.
               sent = true;
               const result = await runSteps(tab, [{ do: 'click', ref }], ctx, { pauseCheck, ...onAction ? { onAction } : {} });
-              paused ||= result?.paused === true;
+              observeAction(result);
               if (!Array.isArray(result?.lines)) throw said('guarded submit result unavailable; field may have changed; read before retrying; use the engine browser path if needed');
               sent = !result.lines.some(line => /: not run:/.test(line));
               if (actionFailed(result)) throw new FieldError('submit stopped; read the page before retrying');
@@ -188,7 +204,7 @@ export function createFillFields({ check, runSteps, backgroundClick = guardedCli
               const perform = async (extra = {}, verifySeal) => {
                 checkPause();
                 assertPageResponsive(tab);
-                if (stopped) throw new FieldError(stopped);
+                if (stopReason()) throw new FieldError(stopped);
                 if (tab.state.actionPending) throw new FieldError('an earlier input is still pending; wait before filling');
                 target.verifySeal = verifySeal;
                 // Private page inspection may await, so repeat both fences after
@@ -198,7 +214,7 @@ export function createFillFields({ check, runSteps, backgroundClick = guardedCli
                 catch (error) { throw new FieldError(error.message); }
                 checkPause();
                 assertPageResponsive(tab);
-                if (stopped) throw new FieldError(stopped);
+                if (stopReason()) throw new FieldError(stopped);
                 if (tab.state.actionPending) throw new FieldError('an earlier input is still pending; wait before filling');
                 tab.state.actionPending = pending;
                 if (trusted && modifier) ctx.beginInput(target);
@@ -220,7 +236,7 @@ export function createFillFields({ check, runSteps, backgroundClick = guardedCli
           if (state.kind === 'file') {
             if (!Array.isArray(value) || !value.length) throw new FieldError('file fields need browser_act upload with user-named paths');
             const result = await runSteps(tab, [{ do: 'upload', ref, paths: value }], ctx, { pauseCheck, ...onAction ? { onAction } : {} });
-            paused ||= result?.paused === true;
+            observeAction(result);
             sent = !result?.lines?.some(line => /: not run:/.test(line));
             if (actionFailed(result)) throw new FieldError('upload stopped; read the page');
           } else if (state.kind === 'check' || state.kind === 'custom' && typeof value === 'boolean' && state.checked !== null) {
@@ -237,7 +253,7 @@ export function createFillFields({ check, runSteps, backgroundClick = guardedCli
               } else await send(checked => state.kind === 'custom' || state.type === '' ? checked.click(options) : checked.setChecked(value, options),
                 state.kind === 'custom' || state.type === '' ? 'click' : value ? 'check' : 'uncheck');
             }
-            if (!stopped && (await trustedLocatorRead(loc, inspect, value)).checked !== value) throw new FieldError('checked state did not match; read the page');
+            if (!stopReason() && (await trustedLocatorRead(loc, inspect, value)).checked !== value) throw new FieldError('checked state did not match; read the page');
           } else if (state.kind === 'select') {
             const wanted = Array.isArray(value) ? value : [value];
             if (!wanted.every(v => typeof v === 'string') || !state.multiple && wanted.length !== 1 || new Set(wanted).size !== wanted.length)
@@ -248,7 +264,7 @@ export function createFillFields({ check, runSteps, backgroundClick = guardedCli
               return matches[0].value;
             });
             await send(checked => checked.selectOption(selected.map(value => ({ value })), options), 'select');
-            if (!stopped) {
+            if (!stopReason()) {
               const after = await trustedLocatorRead(loc, inspect, value), actual = after.options.filter(o => o.selected).map(o => o.value);
               if (actual.length !== selected.length || selected.some(v => !actual.includes(v))) throw new FieldError('selection did not match; read the select');
             }
@@ -269,7 +285,7 @@ export function createFillFields({ check, runSteps, backgroundClick = guardedCli
             const matches = (actual, selected) => actual.length === rows.length && actual.every((row, i) =>
               row.label === rows[i].label && row.selected === selected[i] && row.disabled === rows[i].disabled);
             let selected = rows.map(row => row.selected);
-            for (let i = 0; i < rows.length && !stopped; i++) {
+            for (let i = 0; i < rows.length && !stopReason(); i++) {
               if (selected[i] === wanted[i]) continue;
               if (!matches(rowsOf(await trustedLocatorRead(loc, inspect, value)), selected)) throw new FieldError('list changed; read it before continuing');
               // Let the page's handler update its own state. Writing aria-selected would bypass frameworks.
@@ -277,12 +293,12 @@ export function createFillFields({ check, runSteps, backgroundClick = guardedCli
               const modifier = process.platform === 'darwin' ? 'Meta' : 'Control';
               await send((checked, target, extra) => checked.click({ ...options, ...extra,
                 modifiers: [...new Set([...(extra.modifiers ?? []), modifier])] }), 'click', choice, modifier);
-              if (stopped) break;
+              if (stopReason()) break;
               await sleep(60);
               selected = selected.map((was, j) => j === i ? wanted[i] : was);
               if (!matches(rowsOf(await trustedLocatorRead(loc, inspect, value)), selected)) throw said('selection did not match; read the list before retrying');
             }
-            if (stopped) throw said('selection unconfirmed after a page boundary; read the list');
+            if (stopReason()) throw said('selection unconfirmed after a page boundary; read the list');
           } else if (state.kind === 'listbox' || state.kind === 'combo') {
             if (typeof value !== 'string') throw new FieldError(state.kind + ' needs the option text');
             const combo = state.kind === 'combo';
@@ -318,16 +334,16 @@ export function createFillFields({ check, runSteps, backgroundClick = guardedCli
                   if (visible) {
                     if (await candidate.count() !== 1) throw new FieldError('ambiguous option; read the list');
                     await send(checked => checked.click(options), 'click', candidate);
-                    if (!stopped && !(await trustedLocatorRead(loc, inspect, value)).matched) throw new FieldError('combobox value did not match; read the field');
+                    if (!stopReason() && !(await trustedLocatorRead(loc, inspect, value)).matched) throw new FieldError('combobox value did not match; read the field');
                     rows[i].status = 'set'; rows[i].note = 'chose "' + value.slice(0, 80) + '"'; continue;
                   }
                 } finally { await handle?.dispose(); }
               }
-              for (let a = 0; a < attempts.length && !stopped; a++) {
+              for (let a = 0; a < attempts.length && !stopReason(); a++) {
                 if (a > 0) await enter(attempts[a]);
                 // Typing filters the list a moment later. Wait until the rows stop changing.
                 let before, quiet = 0;
-                for (let waited = 0; waited < 1500 && quiet < 4 && !stopped; waited += 60) {
+                for (let waited = 0; waited < 1500 && quiet < 4 && !stopReason(); waited += 60) {
                   const list = await readList(), signature = list ? list.rows.map(row => row.t).join('|') : null;
                   quiet = signature !== null && signature === before ? quiet + 1 : 0; before = signature; if (quiet < 4) await sleep(60);
                 }
@@ -337,7 +353,7 @@ export function createFillFields({ check, runSteps, backgroundClick = guardedCli
                 if (result && result.status !== 'none') break;
               }
               // A search that found nothing leaves the field holding what was asked for, not the last shorter query.
-              if (result?.status !== 'found' && attempts.length > 1 && !stopped) await enter(attempts[0]);
+              if (result?.status !== 'found' && attempts.length > 1 && !stopReason()) await enter(attempts[0]);
               if (!result) throw said('the combobox opened no option list; the field holds the typed text. Read the page');
             } else result = await search();
             if (result.status !== 'found') throw said(describeMiss(result, value) + (combo ? '; the field holds the text typed while searching' : ''));
@@ -345,7 +361,7 @@ export function createFillFields({ check, runSteps, backgroundClick = guardedCli
             if (!element) throw said('the list changed while choosing; read it and try again');
             try { await send(checked => checked.click(options), 'click', element); }
             finally { await element.dispose().catch(() => {}); }
-            if (!stopped) {
+            if (!stopReason()) {
               await sleep(60);
               if (combo) {
                 const shown = (await trustedLocatorRead(inner ?? loc, inspect, value)).current ?? '', want = normalize(result.text), have = normalize(shown);
@@ -379,16 +395,17 @@ export function createFillFields({ check, runSteps, backgroundClick = guardedCli
             } else {
               if (count > 1000) throw new FieldError('range has too many steps; use browser_act keys');
               await send(checked => checked.press('Home', options), 'press');
-              for (let j = 0; j < count && !stopped; j++) await send(checked => checked.press('ArrowRight', options), 'press');
+              for (let j = 0; j < count && !stopReason(); j++) await send(checked => checked.press('ArrowRight', options), 'press');
+              if (stopReason()) throw said('range value unconfirmed after a page boundary; read the field');
             }
-            if (!stopped && (await trustedLocatorRead(loc, inspect, wanted)).number !== wanted) throw new FieldError('range value did not match; read the field');
+            if (!stopReason() && (await trustedLocatorRead(loc, inspect, wanted)).number !== wanted) throw new FieldError('range value did not match; read the field');
           } else if (state.kind === 'reorder') {
             const names = await loc.evaluate(order, undefined, options);
             if (!Array.isArray(value) || value.length !== names.length || !names.length || names.length > 100 ||
                 new Set(names).size !== names.length || new Set(value).size !== value.length || value.some(v => !names.includes(v)))
               throw new FieldError('reorder needs a complete permutation of distinct row names');
             const children = loc.locator(':scope > li');
-            for (let j = 0; j < value.length && !stopped; j++) {
+            for (let j = 0; j < value.length && !stopReason(); j++) {
               const current = await loc.evaluate(order, undefined, options), from = current.indexOf(value[j]);
               if (from < 0 || current.length !== names.length) throw new FieldError('list changed; read it before continuing');
               if (from !== j) {
@@ -396,7 +413,7 @@ export function createFillFields({ check, runSteps, backgroundClick = guardedCli
                 else await send(() => children.nth(from).dragTo(children.nth(j), options), 'drag');
               }
             }
-            if (!stopped && JSON.stringify(await loc.evaluate(order, undefined, options)) !== JSON.stringify(value)) throw new FieldError('order did not match; read the list');
+            if (!stopReason() && JSON.stringify(await loc.evaluate(order, undefined, options)) !== JSON.stringify(value)) throw new FieldError('order did not match; read the list');
           } else if (state.kind === 'color') {
             if (typeof value !== 'string' || !/^#[0-9a-f]{6}$/i.test(value)) throw new FieldError('color needs a six-digit hex value');
             await send(checked => checked.evaluate((el, color) => {
@@ -404,12 +421,12 @@ export function createFillFields({ check, runSteps, backgroundClick = guardedCli
               Object.getOwnPropertyDescriptor(view.HTMLInputElement.prototype, 'value').set.call(el, color);
               for (const type of ['input', 'change']) el.dispatchEvent(new view.Event(type, { bubbles: true }));
             }, value, options));
-            if (!stopped && !(await trustedLocatorRead(loc, inspect, value.toLowerCase())).matched) throw new FieldError('color did not match; read the field');
+            if (!stopReason() && !(await trustedLocatorRead(loc, inspect, value.toLowerCase())).matched) throw new FieldError('color did not match; read the field');
           } else if (state.kind === 'text') {
             if (!['string', 'number'].includes(typeof value)) throw new FieldError('text fields need a string or number');
             if (state.tag === 'input' && /[\r\n]/.test(String(value))) throw new FieldError(lineBreakRefusal);
             await send(checked => checked.fill(String(value), options));
-            if (!stopped && !(await trustedLocatorRead(loc, inspect, value)).matched) rows[i].note = 'value was formatted or changed by the page; read it if exact text matters';
+            if (!stopReason() && !(await trustedLocatorRead(loc, inspect, value)).matched) rows[i].note = 'value was formatted or changed by the page; read it if exact text matters';
           } else throw new FieldError('unsupported field kind; use browser_act');
           rows[i].status = 'set';
         } catch (error) {
@@ -421,15 +438,15 @@ export function createFillFields({ check, runSteps, backgroundClick = guardedCli
           stopped ||= 'field failed';
         }
       }
-      if (submit !== undefined && !stopped && rows.every(row => row.status === 'set')) {
+      if (submit !== undefined && !stopReason() && rows.every(row => row.status === 'set')) {
         try {
           checkPause();
           const result = await runSteps(tab, [{ do: 'click', ref: submit }], ctx, { pauseCheck, ...onAction ? { onAction } : {} });
-          paused ||= result?.paused === true;
+          observeAction(result);
           submitted = { ...result, status: actionFailed(result) ? 'failed' : tab.state.submitUnconfirmed ? 'unconfirmed' : 'done' };
         } catch (error) { paused ||= error.paused === true; submitted = { status: 'failed', reason: error.paused || /^[A-Z_]+$/.test(error.message) ? error.message : 'submit stopped; read the page before retrying' }; }
       }
-      return { rows, submitted, ...(paused ? { paused: true } : {}), ...(stopped ? { stopped } : {}) };
+      return { rows, submitted, ...(paused ? { paused: true } : {}), ...(stopReason() ? { stopped } : {}) };
     } finally { for (const [name, fn] of Object.entries(handlers)) page.off(name, fn); }
   };
 }
