@@ -57,6 +57,22 @@ async function beginOwnedWarm(h) {
   h.send({ method: 'notifications/initialized' }); await tick();
   return h.sent.find(m => m.params?.arguments?.title === 'Prepare sleight REPL');
 }
+test('a stats begin leaves the docs fixture reply byte-identical, even with private metadata', async t => {
+  const replies = [];
+  for (const frame of [false, true]) {
+    const h = harness(t, { warmRepl: true });
+    if (frame) h.send({ id: 'stats', method: 'tools/call', params: { name: 'turn_ended',
+      arguments: { sleight_stats_begin: 'turn-1' }, _meta: { privateFrame: true } } });
+    const warm = await beginOwnedWarm(h);
+    h.reply(warm.id, [text(ownedDocs), text('[sleight:guard-ready]\n')]); await tick();
+    h.call(1, 'await cua.getApp("Example")'); h.reply(1, [text('ordinary output')]); await tick();
+    const reply = result(h, 1);
+    const delivered = reply.content.find(c => c.text?.startsWith('## Computer Use\n'));
+    assert.equal(ownedDocs.length - delivered.text.length, 201);
+    replies.push(Buffer.from(JSON.stringify(reply)));
+  }
+  assert.deepEqual(replies[1], replies[0]);
+});
 test('only the isolated app-free warmup projects the known native fence, once', async t => {
   const h = harness(t, { warmRepl: true });
   const warm = await beginOwnedWarm(h);

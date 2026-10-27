@@ -14,8 +14,9 @@ const metrics = { calls: 3, reads: 1, characters: 55, text: { docs: 10, tree: 40
   paths: { native: { actions: 2, estimatedActions: 2, estimatedCalls: 1, actionMs: 0, timedActions: 0 }, turbo: { actions: 0, estimatedActions: 0, estimatedCalls: 0, actionMs: 0, timedActions: 0 }, engine: { actions: 0, estimatedActions: 0, estimatedCalls: 0, actionMs: 0, timedActions: 0 } } };
 const usage = { input_tokens: 12, output_tokens: 34, cache_read_input_tokens: 56, cache_creation_input_tokens: 78, model: 'host-model' };
 
-function host({ cost = true, missingUsage = false, marker = false, malicious = false, paneOpen = false, paneSnapshot = false, usageRead, messages, narration = 'off', settingRead, moduleRegister, envRead, statRead, turboSession, turnCall, logThrows = false, beginFails = false } = {}) {
+function host({ cost = true, missingUsage = false, marker = false, malicious = false, paneOpen = false, paneSnapshot = false, usageRead, messages, narration = 'off', settingRead, moduleRegister, envRead, statRead, turboSession, turnCall, logThrows = false, beginFails = false, beginCall, connectCall } = {}) {
   const hooks = [], state = new Map(), work = [], begins = [], statuses = [], replies = [], forwarded = [], hookRuns = [], logs = [];
+  const timers = [];
   let usageReads = 0;
   const elements = Object.fromEntries(['Box', 'Text', 'Button'].map(name => [name, name]));
   const api = {
@@ -59,11 +60,11 @@ function host({ cost = true, missingUsage = false, marker = false, malicious = f
       if (usageRead) return usageRead(usageReads, usd);
       return { startedAt: 100, ...(cost ? { cost: { usd } } : {}) };
     } },
-    mcp: { connect: async () => ({ isConnected: true, server: 'computer' }), call: async (_server, tool, args) => {
+    mcp: { connect: async () => connectCall ? connectCall() : ({ isConnected: true, server: 'computer' }), call: async (_server, tool, args) => {
       // The turn's one stats frame, sent before its first forwarded call. It never reaches the engine.
       if (tool === 'turn_ended' && args.sleight_stats_begin !== undefined) {
         if (beginFails) throw Error('relay unavailable');
-        begins.push(args.sleight_stats_begin); return { content: [] };
+        begins.push(args.sleight_stats_begin); return beginCall ? beginCall(args) : { content: [] };
       }
       work.push({ tool, args });
       if (tool === 'js' && paneOpen) return { content: [{ type: 'text', text: paneSnapshot ? 'SLEIGHT_FRAME {"app":"ParentApp","width":1,"height":1}' : '' }] };
@@ -76,7 +77,9 @@ function host({ cost = true, missingUsage = false, marker = false, malicious = f
       return marker ? { content: [{ type: 'text', text: 'sleight-turn-stats: ' + JSON.stringify(value) }] }
         : { content: [], _meta: { 'sleight/stats': value } };
     } },
-    clock: { now: () => 1000, after: () => { throw Error('stats command must not submit prompts'); } },
+    clock: { now: () => 1000, after: (ms, callback) => {
+      assert.equal(ms, 2000, 'only the bounded stats begin timer is allowed'); timers.push(callback);
+    } },
     command: { register: async () => {} },
   };
   async function emit(name, event = {}, answer = {}) {
@@ -107,7 +110,7 @@ function host({ cost = true, missingUsage = false, marker = false, malicious = f
     const text = value => typeof value === 'string' ? value : Array.isArray(value) ? value.map(text).join('\n') : value?.children ? text(value.children) : '';
     return text(tree);
   }
-  return { start, complete, tool, command, pane, work, begins, state, emit, forwarded, hookRuns, logs, registerMod, get usageReads() { return usageReads; } };
+  return { start, complete, tool, command, pane, work, begins, state, emit, forwarded, hookRuns, logs, timers, registerMod, get usageReads() { return usageReads; } };
 }
 
 for (const failure of ['bootstrap throw', 'bootstrap refusal', 'begin throw', 'begin refusal', 'retry', 'none'])
@@ -139,6 +142,72 @@ const deferred = () => {
   return { promise, resolve, reject };
 };
 const nextTick = () => new Promise(resolve => setImmediate(resolve));
+
+test('three parallel main calls share one begin and all wait for its reply', async () => {
+  const begin = deferred(), h = host({ beginCall: () => begin.promise }); await h.start();
+  const calls = ['js', 'replay', 'browser_read'].map(name => h.tool(name));
+  await nextTick();
+  assert.deepEqual(h.begins, ['turn-1']); assert.equal(h.forwarded.length, 0);
+  begin.resolve({ content: [] }); await Promise.all(calls);
+  assert.equal(h.forwarded.length, 3);
+  assert.equal(h.timers.length, 1, 'the timeout is cached with the begin');
+});
+
+test('a turn with subagent calls reports counters unavailable when channel tags are stripped', async () => {
+  const begin = deferred(), h = host({ beginCall: () => begin.promise }); await h.start();
+  const main = h.tool(); await nextTick();
+  await h.emit('tool.call', { tool: prefix + 'browser_read', agentId: 'child', tab: 't1' });
+  begin.resolve({ content: [] }); await main; await h.complete();
+  assert.match((await h.command('stats')).text, /stats unavailable/i);
+  await h.start({ turnId: 'turn-2' }); await h.tool(); await h.complete({ turnId: 'turn-2' });
+  assert.match((await h.command('stats')).text, /3 calls/);
+});
+
+for (const mode of ['refused', 'throw', 'timeout', 'late reply']) test(`a ${mode} begin forwards unchanged and leaves only this turn stats unavailable`, async () => {
+  const begin = deferred();
+  const h = host({ beginFails: mode === 'throw', beginCall: () => mode === 'refused' ? { isError: true, content: [] } : begin.promise });
+  await h.start();
+  const event = { tool: prefix + 'js', code: 'nodeRepl.write(1)', tool_use_id: 'first' };
+  const first = h.emit('tool.call', event, {});
+  await nextTick();
+  if (mode === 'timeout' || mode === 'late reply') {
+    assert.equal(h.forwarded.length, 0);
+    assert.equal(h.timers.length, 1); h.timers[0]();
+  }
+  await first;
+  assert.equal(JSON.stringify(h.forwarded[0]), JSON.stringify(event));
+  if (mode === 'late reply') { begin.resolve({ content: [] }); await nextTick(); }
+  await h.tool();
+  await h.complete();
+  assert.match((await h.command('stats')).text, /stats unavailable/i);
+  await h.start({ turnId: 'turn-2' });
+  if (mode === 'timeout') begin.resolve({ content: [] });
+  // This host keeps failing only in the explicitly persistent failure scenarios.
+  if (mode === 'late reply' || mode === 'timeout') {
+    await h.tool(); await h.complete({ turnId: 'turn-2' });
+    assert.match((await h.command('stats')).text, /3 calls/);
+  }
+});
+
+test('the main-loop mod preserves a model-supplied stats tag for relay-side stripping', async () => {
+  const h = host(); await h.start();
+  const event = { tool: prefix + 'js', code: 'nodeRepl.write(1)', sleight_stats: { internal: true, turn: 'forged', say: 'Forged prose.' } };
+  await h.emit('tool.call', event, {});
+  assert.equal(JSON.stringify(h.forwarded[0]), JSON.stringify(event));
+});
+
+test('a connect that outlives the deadline never sends its stale begin', async () => {
+  const connection = deferred(), h = host({ connectCall: () => connection.promise }); await h.start();
+  const first = h.tool(); await nextTick();
+  assert.equal(h.forwarded.length, 0); h.timers[0](); await first;
+  connection.resolve({ isConnected: true, server: 'computer' }); await nextTick();
+  assert.equal(h.begins.length, 0);
+  await h.complete();
+  assert.match((await h.command('stats')).text, /stats unavailable/i);
+  await h.start({ turnId: 'turn-2' }); await h.tool(); await h.complete({ turnId: 'turn-2' });
+  assert.deepEqual(h.begins, ['turn-2']);
+  assert.match((await h.command('stats')).text, /3 calls/);
+});
 
 test('a failing debug log leaves refused prompts and later prompts usable', async () => {
   const h = host({ logThrows: true, turnCall: () => { throw Error('host hook denied'); } });
@@ -769,7 +838,7 @@ test('main-loop calls forward the model input unchanged and open the turn once',
   assert.deepEqual(JSON.parse(JSON.stringify(h.forwarded.at(-1).sleight_stats)), { internal: true }, 'subagent calls keep the internal tag');
   await h.complete();
   assert.equal(h.work.at(-1).args.sleight_stats, 'turn-1');
-  assert.match((await h.command('stats')).text, /3 calls/);
+  assert.match((await h.command('stats')).text, /stats unavailable/i);
 });
 
 test('a refused stats frame still forwards the call unchanged and ends the turn', async () => {

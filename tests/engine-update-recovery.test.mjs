@@ -102,6 +102,19 @@ test('a pipe error during an update reconnects and keeps preapproved grants', as
   assert.equal(h.replies.filter(msg => msg.id === 2).length, 1);
 });
 
+test('an engine reconnect keeps the mod stats window open until collection', async t => {
+  const h = fixture(t);
+  h.send({ id: 'begin', method: 'tools/call', params: { name: 'turn_ended', arguments: { sleight_stats_begin: 'host-turn' } } });
+  h.call(1, 'nodeRepl.write(1)'); h.reply(1, { content: [{ type: 'text', text: 'one' }] });
+  h.replace(); h.call(2, 'nodeRepl.write(2)'); await flush();
+  assert.equal(h.starts, 1);
+  h.reply(2, { content: [{ type: 'text', text: 'two' }] });
+  h.call(3, 'nodeRepl.write(3)'); h.reply(3, { content: [{ type: 'text', text: 'three' }] });
+  h.send({ id: 'end', method: 'tools/call', params: { name: 'turn_ended', arguments: { hook_event_name: 'Stop', sleight_stats: 'host-turn' } } });
+  await flush();
+  assert.equal(h.replies.find(msg => msg.id === 'end').result._meta['sleight/stats'].calls, 3);
+});
+
 for (const handle of ['app', '$app']) for (const proactive of [false, true]) for (const fail of [false, true]) test(`reconnected ${handle} keeps the stale-number guard (${proactive ? 'version change' : 'pipe error'}, ${fail ? 'changed' : 'same'} row)`, async t => {
   const h = fixture(t, { relay: { inputLease: { acquire: () => 'owned', grant: () => undefined, renew() {}, close() {} } } });
   h.call(1, `let ${handle} = await cua.getApp("Example")`); h.reply(1);

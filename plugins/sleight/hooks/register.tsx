@@ -31,7 +31,7 @@ const replaying = atom({ plugin: 'sleight', key: 'replaying' } as const, false)
 const receipt = atom({ plugin: 'sleight', key: 'receipt' } as const, null as { path?: string; review?: string; unavailable?: boolean } | null)
 const stats = atom({ plugin: 'sleight', key: 'stats' } as const, null as TurnSummary | null)
 
-type StatsTurn = { id: string; used: boolean; forwarded: number; begun?: Promise<unknown>; baseline?: Awaited<ReturnType<typeof hostCost>>; stoppedStats: ReturnType<typeof statsFromReply>; stopping?: Promise<string | undefined> }
+type StatsTurn = { id: string; used: boolean; forwarded: number; begun?: Promise<unknown>; statsUnavailable?: boolean; baseline?: Awaited<ReturnType<typeof hostCost>>; stoppedStats: ReturnType<typeof statsFromReply>; stopping?: Promise<string | undefined> }
 
 async function hostCost($: any) {
   try { return costSnapshot(await $.session.usage()) } catch { return null }
@@ -275,8 +275,9 @@ async function replayCurrent($: any, state: ModState, file: string) {
 async function endEngineTurn($: any, state: ModState, event: 'Stop' | 'Interrupt', checked = false, completed?: TurnSummary, owner?: StatsTurn) {
   try {
     const ended = await call($, 'turn_ended', { hook_event_name: event, ...(checked ? { sleight_stop: true } : {}), ...(owner?.used && (completed || checked) ? { sleight_stats: owner.id } : {}) })
-    if (checked && owner) owner.stoppedStats = statsFromReply(ended)
-    if (completed) await storeStats($, state, { ...completed, stats: statsFromReply(ended) }, owner)
+    const collected = owner?.statsUnavailable ? null : statsFromReply(ended)
+    if (checked && owner) owner.stoppedStats = collected
+    if (completed) await storeStats($, state, { ...completed, stats: collected }, owner)
     let latest = (ended as { _meta?: { 'sleight/receipt'?: { path?: string; review?: string; unavailable?: boolean } } })._meta?.['sleight/receipt']
     // The installed host's $.mcp.call keeps content but drops _meta. The relay supplies JSON
     // in one fixed marker so paths with spaces and multi-line reviews don't need a prose parser.
@@ -389,7 +390,7 @@ function guardEnvelope(e: any) {
 // The main loop forwards the model's input as sent: in auto mode a hook-rewritten input sets the
 // allow rule aside and Claude Code's local classifier judges each call (about 0.6 s, 2.1.289).
 // The relay counts an untagged call toward the turn forward() opened. Subagent and own calls keep
-// the private internal tag (removed by the relay before forwarding), as does a narration line.
+// the private internal tag, as does a narration line. The relay strips model-channel tags before use.
 function counted<T extends { agentId?: string; sleight_say?: string }>(e: T, owner: StatsTurn | undefined) {
   const sleight_say = e.sleight_say
   const event = { ...e }; delete event.sleight_say
@@ -398,19 +399,39 @@ function counted<T extends { agentId?: string; sleight_say?: string }>(e: T, own
   return sleight_say ? { ...event, sleight_stats: say } : event
 }
 
+async function beginStats($: any, owner: StatsTurn) {
+  let settled = false
+  const accepted = await new Promise<boolean>(resolve => {
+    const finish = (ok: boolean) => { if (!settled) { settled = true; resolve(ok) } }
+    $.clock.after(2000, () => finish(false))
+    // A connect that finishes after the deadline must never send a stale begin on a later turn.
+    ;(async () => {
+      const conn = await $.mcp.connect(SERVER)
+      if (settled || !conn.isConnected) { finish(false); return }
+      const reply = await $.mcp.call(conn.server, 'turn_ended', { sleight_stats_begin: owner.id })
+      finish(!reply.isError)
+    })().catch(() => finish(false))
+  })
+  owner.statsUnavailable ||= !accepted
+}
+
 // File scope: the host's static validator follows $ only into functions declared at the top of the file.
 async function forward<T extends { agentId?: string }, R>($: any, state: ModState, e: T, owner: StatsTurn | undefined, next: (event: T) => Promise<R>) {
   const main = e.agentId === undefined ? owner : undefined
   // Subagents need not raise turn.start. Their first call holds the pane's
   // replay/refresh fence until their completion or the lead's next completion.
-  if (e.agentId !== undefined) state.runningAgents.add(e.agentId)
+  if (e.agentId !== undefined) {
+    state.runningAgents.add(e.agentId)
+    // The relay strips model-channel tags, including our child exclusion. Never label mixed counters main-only.
+    if (owner) owner.statsUnavailable = true
+  }
   // A call may be interrupted before next returns. Stop must collect it already.
   if (main) { main.forwarded++; main.used = true }
   // One frame per turn, before its first call, names the turn the relay attributes untagged calls to.
   // Parallel calls wait on the same frame. A refused or failed frame leaves this turn's stats
   // unavailable; the call itself goes on.
   if (main) {
-    main.begun ??= call($, 'turn_ended', { sleight_stats_begin: main.id }).catch(() => undefined)
+    main.begun ??= beginStats($, main).catch(() => { main.statsUnavailable = true })
     await main.begun
   }
   const ran = await next(counted(e, owner))

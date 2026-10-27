@@ -1113,10 +1113,7 @@ export function createRelay({
     // again before the first drag (3/3 textedit-drag runs, 2026-10-08). sleight's descriptions
     // are short, so all but the internal turn_ended load up front, local tools included.
     .map(t => promptTool(t, prompt))
-    // The host validates rewritten calls too. Admit only this private optional object,
-    // which the mod overwrites and the relay removes before any tool executes.
-    .map(t => modHost() && STATS_TOOLS.has(t.name) && t.inputSchema?.type === 'object' && t.inputSchema.additionalProperties === false ? { ...t,
-      inputSchema: { ...t.inputSchema, properties: { ...t.inputSchema.properties, sleight_stats: { type: 'object' } } } } : t)
+    // Private stats transport is never advertised in the model's tool schemas.
     .map(t => (t.name !== TURN_END_TOOL && t.name !== TURN_START_TOOL ? { ...t, _meta: { ...t._meta, 'anthropic/alwaysLoad': true } } : t)) });
   let startup = startupCache?.bind({
     send: msg => toClient(msg), forward: msg => clientLine(JSON.stringify(msg), true),
@@ -1146,7 +1143,7 @@ export function createRelay({
         // This transport never reaches the engine, nor does its title select the exclusion.
         if (msg.params?.name !== TURN_END_TOOL && msg.params?.arguments) delete msg.params.arguments.sleight_stats;
         // An untagged call is the model's own, on the turn the mod opened. Internal calls never count.
-        const id = statsId(tag?.turn) ?? (tag?.internal === true ? undefined : statsOpen);
+        const id = tag?.internal === true ? undefined : statsOpen;
         if (!modHost() || !id || tag?.internal === true || closedStats.has(id) ||
             !STATS_TOOLS.has(msg.params?.name)) return;
         if (!turnStats.has(id)) {
@@ -3498,7 +3495,6 @@ export function createRelay({
     if (read) completenessCalls.set(carryId, read);
     turnId = randomUUID();
     turnUsed = false;
-    statsOpen = undefined;
     spaceNoted.clear();
   }
 
@@ -3512,6 +3508,11 @@ export function createRelay({
       serverIn.write(line + '\n');
       return;
     }
+    // Claude Code supplies toolUseId for model calls, including rewritten subagent/narration calls.
+    // Those inputs cannot supply private stats or narration. Own mod calls use its MCP channel.
+    if (!startupReady && msg.method === 'tools/call' && msg.params?.name !== TURN_END_TOOL && msg.params?.arguments &&
+        (!modHost() || Object.hasOwn(msg.params._meta ?? {}, 'claudecode/toolUseId')))
+      delete msg.params.arguments.sleight_stats;
     // Remove private narration before startup caching, tracing, journals and all execution paths.
     if (!startupReady && msg.method === 'tools/call' && msg.params?.arguments) {
       const raw = msg.params.arguments.sleight_stats?.say;
@@ -3525,6 +3526,17 @@ export function createRelay({
     }
     if (pauseBlocked(msg)) { callNarration.delete(msg.id); pauseReply(msg); return; }
     if (msg.method === 'initialize') codexClient = codexTurnClient(msg.params?.clientInfo);
+    // Open the host stats window before documentation ownership sees any private-frame metadata.
+    // Main-loop input stays as sent, avoiding Claude Code's per-call classifier for rewritten input.
+    if (msg.method === 'tools/call' && msg.params?.name === TURN_END_TOOL && Object.hasOwn(msg.params.arguments ?? {}, 'sleight_stats_begin')) {
+      const id = statsId(msg.params.arguments.sleight_stats_begin);
+      const accepted = modHost() && !disposed && msg.id !== undefined && id !== undefined &&
+        Object.keys(msg.params.arguments).length === 1 && !closedStats.has(id);
+      statsOpen = accepted ? id : undefined;
+      if (msg.id !== undefined && !disposed && !clientOut.destroyed && !clientOut.writableEnded)
+        clientOut.write(JSON.stringify({ jsonrpc: '2.0', id: msg.id, result: { isError: !accepted, content: [] } }) + '\n');
+      return;
+    }
     if (msg.method === 'tools/call') {
       if (docOrigin.owns(msg.id)) {
         docOrigin.invalidate();
@@ -3602,19 +3614,6 @@ export function createRelay({
         }
         reply({ isError: false, content: [{ type: 'text', text: JSON.stringify({ sleightRemote: { turboBound, ...(context ? { context } : {}) } }) }] });
       })().catch(refuse);
-      return;
-    }
-    // The mod opens a main-loop stats turn once, before its first forwarded call, so the model's own
-    // input stays as sent. In auto mode Claude Code sets the allow rule aside for a hook-rewritten
-    // input and asks its local classifier per call (about 0.6 s each, 2.1.289; PF4). Host-protected
-    // own hook call: it never reaches journals, tracing or the engine.
-    if (msg.method === 'tools/call' && msg.params?.name === TURN_END_TOOL && Object.hasOwn(msg.params.arguments ?? {}, 'sleight_stats_begin')) {
-      const id = statsId(msg.params.arguments.sleight_stats_begin);
-      const accepted = modHost() && !disposed && msg.id !== undefined && id !== undefined &&
-        Object.keys(msg.params.arguments).length === 1 && !closedStats.has(id);
-      if (accepted) statsOpen = id;
-      if (!disposed && !clientOut.destroyed && !clientOut.writableEnded)
-        clientOut.write(JSON.stringify({ jsonrpc: '2.0', id: msg.id, result: { isError: !accepted, content: [] } }) + '\n');
       return;
     }
     if (modHost() && msg.method === 'tools/call' && msg.params?.name === TURN_END_TOOL) promptOrigin = undefined;
