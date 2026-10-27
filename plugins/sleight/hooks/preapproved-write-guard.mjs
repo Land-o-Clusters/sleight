@@ -204,6 +204,7 @@ const LAUNCHER_COMMANDS = [['turbo', statusOnly, 'turbo.json'], ['hand', statusO
 // redirection, heredoc, subshell, xargs, parallel or eval anywhere in it. Any other spelling is refused, except read-only
 // tools (grep, cat, git log) that can't run anything. The guard doesn't try to read what the shell would make of it.
 const LAUNCHER_NAME = /(?<![\w.-])(?:sleight-mcp|launch\.mjs)(?![\w.-])|(?:^|[^\w.-])\.sleight-shim-v1(?![\w.-])|\/\.local\/bin\/sleight(?![\w./:-])/;
+const launcherText = text => LAUNCHER_NAME.test(text) || /(?<![\w./-])sleight(?![\w./:-])/.test(text);
 const SUBCOMMAND = /(?<![\w-])(?:hand|turbo|permissions|cursor|menu|link|unlink)(?![\w.-])/; // not turbo.json or hand.json
 const INPUT_RUNNERS = String.raw`(?<![\w-])(?:\w*args|parallel|eval|source)(?![\w-])`;
 const EXPANDS = String.raw`[$` + '`' + String.raw`*?[\]{}]`;
@@ -325,16 +326,16 @@ function runsSubcommand(segment) {
   if (segment[index].text.split('/').at(-1) === 'node') { index++; while (segment[index]?.text.startsWith('--')) index++; }
   return launcher(segment[index]?.text.split('/').at(-1) ?? '') && segment[index + 1]?.text === 'runs';
 }
-// The short product name is executable only in command position. Hard launcher filenames retain the conservative
-// whole-text rule, including copies and aliases. Interpreter code is inspected separately from ordinary arguments.
+// Literal launcher words share the conservative segment check, including command positions behind keywords and wrappers.
+// The short product name in print/read arguments is data. Hard filenames keep their whole-text copy/alias check.
+// Interpreter code is inspected separately from ordinary arguments.
 function segmentNamesLauncher(segment, depth = 0) {
   if (depth > 8) return true;
-  if (segment.some(word => !word.operator && LAUNCHER_NAME.test(word.text))) return true;
-  let { index } = commandWord(segment);
-  if (index === undefined) return false;
+  const { index } = commandWord(segment);
+  if (index === undefined) return segment.some(word => !word.operator && LAUNCHER_NAME.test(word.text));
   const plain = segment.map(word => word.text), name = plain[index].split('/').at(-1);
-  if (name === 'sleight') return true;
-  if (SHELLS.has(name)) {
+  const hardName = segment.some(word => !word.operator && LAUNCHER_NAME.test(word.text));
+  if (!hardName && SHELLS.has(name)) {
     const script = shellScript(plain, index);
     if (typeof script !== 'string') return false;
     const segments = [[]];
@@ -344,13 +345,12 @@ function segmentNamesLauncher(segment, depth = 0) {
     }
     return segments.some(segment => segmentNamesLauncher(segment, depth + 1));
   }
-  if (name === 'node') { index++; while (plain[index]?.startsWith('--')) index++; if (plain[index]?.split('/').at(-1) === 'sleight') return true; }
-  if (/^\w*args$|^parallel$/.test(name)) return plain.slice(index + 1).some(word => word === 'sleight');
+  if (name === 'node') { let at = index + 1; while (plain[at]?.startsWith('--')) at++; if (launcher(plain[at]?.split('/').at(-1) ?? '')) return true; }
   // -c/-e source is code, unlike commit messages, path operands and node --test arguments.
-  if ((SHELLS.has(name) || INTERPRETERS.test(name)) && plain.slice(index + 1).some(word => /^-(?:[a-zA-Z]*[ceE]|-eval)(?:=|$)/.test(word))) {
-    return plain.slice(index + 1).some(word => /(?<![\w./-])sleight(?![\w./:-])/.test(word));
-  }
-  return false;
+  const code = INTERPRETERS.test(name) && plain.slice(index + 1).some(word => /^-(?:[a-zA-Z]*[ceE]|-eval)(?:=|$)/.test(word));
+  const dataArguments = readTool(segment) || ['echo', 'printf', 'git', 'gh', 'npm'].includes(name) || INTERPRETERS.test(name) && !code;
+  return segment.some((word, i) => !word.operator &&
+    (dataArguments && i !== index ? LAUNCHER_NAME.test(word.text) : launcherText(i === index ? name : word.text)));
 }
 function launcherRefused(command, depth = 0) {
   if (depth > 8) return true;

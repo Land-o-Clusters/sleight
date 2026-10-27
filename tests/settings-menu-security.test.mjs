@@ -65,3 +65,19 @@ for (const command of ['ln -s ~/.local/bin/sleight /tmp/zz && /tmp/zz hand off',
   'cp ~/.local/bin/sleight /tmp/s; /tmp/s hand off']) {
   test(`managed short-path alias refuses ${command}`, async () => assert.equal(await target(command), PROTECTED.launcher));
 }
+// Both launcher names use the same command-position check, including opaque wrappers. Never execute these strings.
+for (const form of [
+  'if true; then CMD menu; fi', 'while true; do CMD hand on; done',
+  'for x in 1; do CMD menu; done', 'if false; then true; else CMD link; fi',
+  'true && CMD menu', 'false || CMD menu', 'true; CMD menu', 'printf x | CMD menu',
+  'watch CMD menu', 'watch -n 2 CMD menu', 'watch "CMD menu"',
+  'script -q /dev/null CMD menu', 'script -q -c "CMD menu" /dev/null',
+  'setsid sh -c "CMD menu"',
+  'setsid CMD menu', 'arch -arm64 CMD menu', 'doas CMD menu',
+  'tmux new-session -d CMD menu', 'screen -dm CMD menu',
+]) {
+  for (const name of ['sleight', 'sleight-mcp']) {
+    const command = form.replace('CMD', name);
+    test(`shared launcher position refuses ${command}`, async () => assert.equal(await target(command), PROTECTED.launcher));
+  }
+}

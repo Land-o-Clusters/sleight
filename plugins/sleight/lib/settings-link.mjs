@@ -92,8 +92,25 @@ export function managedShim(home = userInfo().homedir) {
     return text.split('\n')[1] === marker && typeof recorded === 'string' && path.isAbsolute(recorded) && path.normalize(recorded) === recorded;
   } catch { return false; }
 }
-export const settingsDoctorLine = (home = userInfo().homedir, env = process.env) =>
-  `Settings: ${managedShim(home) && (env.PATH ?? '').split(':').includes(path.join(home, '.local/bin')) ? 'sleight menu' : 'sleight-mcp menu'} opens the menu without a session.`;
+export function settingsDoctorLine(home = userInfo().homedir, env = process.env) {
+  const file = path.join(home, '.local/bin/sleight'), managed = managedShim(home), lines = [];
+  const present = file => { try { fs.lstatSync(file); return true; } catch { return false; } };
+  if (!managed && [path.join(home, '.local/bin', shimName), path.join(privateFolder(home), receiptName)].some(present)) {
+    lines.push('PROBLEM   the managed shim or its hash receipt failed verification. Relink from the installed launcher in your terminal.');
+  }
+  // Inspect PATH in shell order without running any candidate. Empty and relative entries use the current directory.
+  let first;
+  for (const folder of (env.PATH ?? '').split(path.delimiter)) {
+    const candidate = path.resolve(folder, 'sleight');
+    try {
+      if (!fs.statSync(candidate).isFile()) continue;
+      fs.accessSync(candidate, fs.constants.X_OK); first = candidate; break;
+    } catch {}
+  }
+  if (first && first !== file) lines.push('PROBLEM   the first sleight on PATH shadows the managed link. Use the installed launcher in your terminal.');
+  lines.push(`Settings: ${managed && first === file ? 'sleight menu' : 'sleight-mcp menu'} opens the menu without a session.`);
+  return lines.join('\n');
+}
 function askPerson(question) {
   return new Promise(resolve => {
     const rl = createInterface({ input: process.stdin, output: process.stdout });

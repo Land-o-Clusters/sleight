@@ -314,3 +314,81 @@ test('a receipt-authenticated shim stays managed when a plugin update changes it
   await linkCommand('unlink', [], { ...f, out: () => {} });
   assert.equal(fs.existsSync(target), false);
 });
+
+test('doctor reports a changed shim hash as a PROBLEM without executing it', async t => {
+  const f = fixture(t);
+  await linkCommand('link', [], { ...f, ask: async () => true, out: () => {} });
+  const env = { PATH: path.join(f.home, '.local/bin') };
+  assert.doesNotMatch(settingsDoctorLine(f.home, env), /PROBLEM/);
+  fs.appendFileSync(path.join(f.home, '.local/bin/.sleight-shim-v1'), '# changed bytes\n');
+  const line = settingsDoctorLine(f.home, env);
+  assert.match(line, /^PROBLEM\s+.*shim.*(?:hash|receipt)/m);
+  assert.match(line, /Settings: sleight-mcp menu/);
+});
+
+test('doctor reports PATH shadowing and suggests the installed launcher', async t => {
+  const f = fixture(t);
+  await linkCommand('link', [], { ...f, ask: async () => true, out: () => {} });
+  const bin = path.join(f.home, '.local/bin'), earlier = path.join(f.home, 'bin');
+  fs.mkdirSync(earlier);
+  const shadow = path.join(earlier, 'sleight');
+  fs.writeFileSync(shadow, '#!/bin/sh\nexit 99\n', { mode: 0o700 });
+  const line = settingsDoctorLine(f.home, { PATH: `${earlier}:${bin}` });
+  assert.match(line, /^PROBLEM\s+.*PATH.*(?:shadow|managed)/m);
+  assert.match(line, /Settings: sleight-mcp menu/);
+  assert.doesNotMatch(settingsDoctorLine(f.home, { PATH: `${bin}:${earlier}` }), /PROBLEM/);
+  fs.chmodSync(shadow, 0o600);
+  assert.match(settingsDoctorLine(f.home, { PATH: `${earlier}:${bin}` }), /Settings: sleight menu/);
+  fs.unlinkSync(shadow); fs.mkdirSync(shadow);
+  assert.match(settingsDoctorLine(f.home, { PATH: `${earlier}:${bin}` }), /Settings: sleight menu/);
+});
+
+test('session retries lock registration after a transient failure without a new menu frame', { skip: macCommandSkip('xcrun') }, t => {
+  const dir = root(t), swift = path.join(dir, 'main.swift'), bin = path.join(dir, 'retry-test');
+  const lock = source.match(/\/\/ BEGIN MENU INSTANCE\n([\s\S]*?)\/\/ END MENU INSTANCE/)[1];
+  const plan = source.match(/struct SettingsMenuPlan \{[\s\S]*?\n\}/)[0];
+  // Run the production polling block with a private fixture path and inert item/application stubs.
+  const poll = source.slice(source.indexOf('        let owns = controlRetiring ? false : menuInstance.claim('),
+    source.indexOf('        if settingsMenu && !settingsReady {'))
+    .replaceAll('menuInstance.claim(standalone:', 'menuInstance.claim(file, standalone:')
+    .replaceAll('self.menuInstance.claim(file,', 'self.menuInstance.claim(self.file,');
+  fs.writeFileSync(swift, 'import Foundation\nimport Darwin\n' + lock + plan + `
+enum NSApp { static func terminate(_ value: Any?) { preconditionFailure("a session must stay alive") } }
+final class Item { var isVisible = false }
+final class Poll {
+    let file: String
+    let menuInstance = MenuInstance(), item = Item()
+    var menuRetry: Timer?
+    var controlRetiring = false
+    let settingsMenu = false
+    init(_ file: String) { self.file = file }
+    func check() {
+        let plan = SettingsMenuPlan(menuOnly: settingsMenu)
+${poll}
+    }
+}
+let file = CommandLine.arguments[1]
+let sessionFile = (file as NSString).deletingLastPathComponent + "/menu-session.lock"
+let held = open(sessionFile, O_RDWR | O_CREAT, mode_t(0o600))
+precondition(held >= 0 && flock(held, LOCK_EX | LOCK_NB) == 0)
+let poll = Poll(file)
+poll.check()
+precondition(poll.item.isVisible && poll.menuInstance.reason == "held-lock")
+close(held)
+RunLoop.current.run(until: Date(timeIntervalSinceNow: 1.2))
+if poll.menuInstance.reason != nil {
+    FileHandle.standardError.write(Data("next check must register the session\\n".utf8)); exit(1)
+}
+let standalone = MenuInstance()
+precondition(!standalone.claim(file) && standalone.reason == "session-present")
+precondition(poll.item.isVisible)
+precondition(poll.menuRetry == nil, "successful registration stops polling")
+print("retries=1 pause-preserved=1")
+`);
+  const built = spawnSync('/usr/bin/xcrun', ['swiftc', '-module-cache-path', swiftModuleCache(), swift, '-o', bin], { encoding: 'utf8' });
+  assert.equal(built.status, 0, built.stderr);
+  const bank = path.join(dir, 'private'); fs.mkdirSync(bank, { mode: 0o700 });
+  const result = spawnSync(bin, [path.join(bank, 'menu-presence.lock')], { encoding: 'utf8', timeout: 10000 });
+  assert.equal(result.status, 0, result.stderr);
+  assert.equal(result.stdout.trim(), 'retries=1 pause-preserved=1');
+});

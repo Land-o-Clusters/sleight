@@ -1679,14 +1679,16 @@ final class ConsentHost: NSObject, NSApplicationDelegate, NSMenuDelegate {
         menu.delegate = self
         item.menu = menu
         // Session presence is registered at launch, even before the first hand/status frame. Its menu never depends on a
-        // successful lock. The standalone polls only while it owns a menu, then exits when a session is present.
+        // successful lock. A failed session registration retries; the standalone polls until a session is present.
         let owns = controlRetiring ? false : menuInstance.claim(standalone: settingsMenu)
         item.isVisible = plan.visible(retiring: controlRetiring, owns: owns)
         menuRetry?.invalidate(); menuRetry = nil
-        if settingsMenu && item.isVisible {
+        if !controlRetiring && (settingsMenu && item.isVisible || !settingsMenu && menuInstance.reason != nil) {
             let timer = Timer(timeInterval: 1, repeats: true) { [weak self] _ in
                 guard let self = self else { return }
-                if !self.menuInstance.claim(standalone: true) { self.item.isVisible = false; NSApp.terminate(nil) }
+                let owns = self.menuInstance.claim(standalone: self.settingsMenu)
+                if self.settingsMenu && !owns { self.item.isVisible = false; NSApp.terminate(nil) }
+                else if !self.settingsMenu && self.menuInstance.reason == nil { self.menuRetry?.invalidate(); self.menuRetry = nil }
             }
             menuRetry = timer; RunLoop.main.add(timer, forMode: .common)
         }

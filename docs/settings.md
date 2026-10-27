@@ -299,6 +299,12 @@ answer yes. The link points to a private `.sleight-shim-v1` file beside it. Setu
 The command finds Claude Code's current `sleight@sleight` install each time, so it follows plugin updates. If that record
 is missing, it tries the install that created it. `sleight unlink` removes only a link and shim made by sleight.
 
+Claude's guards refuse direct writes by name to `~/.local/bin/sleight`, its `.sleight-shim-v1` file and
+`~/Library/Application Support/sleight/settings-link.json`, while globs, hard-link tools and aliases can evade the name check.
+The PATH folder is user-writable, so a process with your shell can rewrite or shadow the command just as it can `git`
+or a shell startup file.
+Doctor reports hash mismatches as tamper evidence, and changes that widen access still need Touch ID or your account password.
+
 ### Menu without a session
 
 Run `sleight menu` after linking, or `"<installPath>/bin/sleight-mcp" menu`. On first use it prints that it is compiling
@@ -392,12 +398,11 @@ overwrites it. Claude's own file edits and shell commands can't write the file o
 - `sleight-mcp turbo status` prints whether turbo is on, the browser, its profile folder and whether
   remote debugging is on (the profile's `DevToolsActivePort` file exists while the browser runs with it).
 - `sleight-mcp turbo off` writes the opt-out. Turbo stays off until you run `turbo on`.
-- sleight's glove sits in the menu bar when turbo is connected, paused or waiting for cleanup, or when a request waits
-  for you. The menu shows the state and browser beside a coloured dot, the host the session runs in with its version (as
+- sleight's glove stays in the menu bar for any session with a host, including when Ghost Hand is off.
+  The menu shows the state and browser beside a coloured dot, the host the session runs in with its version (as
   the MCP client introduced itself, and never a model, since no host reports one), how the payment check is set, Pause (or how a pause
   ends), Disconnect, Never Act on the site turbo last worked on, Turn Turbo Off…, Settings & Help… and the version. Turn Turbo Off asks once, then writes the same
-  opt-out as `turbo off`, and every session's turbo stops within a minute. With turbo disconnected and nothing waiting,
-  the icon is hidden unless the ghost hand keeps it. When turbo connects, the glove's dabs flow into place (0.8 s).
+  opt-out as `turbo off`, and every session's turbo stops within a minute. When turbo connects, the glove's dabs flow into place (0.8 s).
 - `SLEIGHT_TURBO=0` in the MCP server's environment keeps that one server on the engine path without touching the file.
   It can only turn turbo off. The Firefox and Safari benchmark arms set it.
 - `sleight-mcp turbo on` turns turbo on. `--browser chrome` or `--browser helium` picks the browser.
@@ -423,8 +428,8 @@ The host compiles in the background on its first use after you enable it. That s
 - `sleight-mcp hand on` writes `enabled: true` to `~/Library/Application Support/sleight/hand.json`. A saved on setting
   keeps working. You can also edit that file yourself (`version: 1`, a boolean `enabled`, mode `0600`).
   Start a new sleight session if it started with the hand off. `sleight-mcp hand off` hides the hand in running sessions at once.
-- The glove's menu has a Ghost Hand row with a checkmark, which writes the same setting. The glove is in the menu bar
-  while turbo is in use or while the hand is on, for the host's lifetime. Without turbo its menu lists
+- The glove's menu has a Ghost Hand row with a checkmark, which writes the same setting. The glove stays in the menu bar
+  for the session host's lifetime, including when the hand is off. Without turbo its menu lists
   the Ghost Hand row, [Permissions](#permissions), the [usage row](#stats) when the action log is on, Cursor, Settings & Help
   and the version. Cursor offers the rings, glove, installed characters and imports from your Codex pets.
 - `sleight-mcp hand capture hidden|visible` sets whether captures show the hand. `hidden`, the default, keeps it out of
