@@ -403,7 +403,7 @@ export async function runCheck(id, ctx) {
       skip('10 minute covered live sleep', 'Wall-clock covered sleep is outside this seven-step pass. The 604 s runtime dump ran.', { liveSeconds: 0, dumpSeconds: 604 }, false, covered);
     } else if (id === 'lines') {
       host.send(options(true, true));
-      const actions = [[0, f.aim(), 'start'], [8000, f.status('done', { ok: true }), 'first-click'], [11000, f.status('error'), 'error'],
+      const actions = [[0, f.aim(), 'start'], [8400, f.status('done', { ok: true }), 'first-click'], [11400, f.status('error'), 'error'],
         [14000, f.act(), null], [14001, f.status('done', { ok: true }), null], [17000, f.status('done'), 'done']];
       const began = Date.now(), expected = { start: 'Ready to begin.', 'first-click': 'First step done.', error: 'That needs a look.', done: 'All done.' };
       for (const [at, frame, name] of actions) {
