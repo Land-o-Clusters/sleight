@@ -1,13 +1,16 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { EventEmitter } from 'node:events';
+import { PassThrough } from 'node:stream';
 import { copyFileSync, mkdirSync, mkdtempSync, symlinkSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { registerTemp } from '../scripts/temp-leftovers.mjs';
 import { createProtocol, createSession } from '../bench/turbo/v3-server.mjs';
-import { serveV3Worker } from '../plugins/sleight/lib/direct-browser/worker.mjs';
+import { createV3Bridge, serveV3Worker } from '../plugins/sleight/lib/direct-browser/worker.mjs';
+import { prepareInstalledStartup, remoteApprovalOptions } from '../plugins/sleight/lib/launch.mjs';
+import { createRelay } from '../plugins/sleight/lib/relay.mjs';
 import { createToolDispatcher } from '../plugins/sleight/lib/direct-browser/tools.mjs';
 import { createHandoffWaiter } from '../plugins/sleight/lib/direct-browser/handoff.mjs';
 import { benchUi } from '../bench/turbo/v3-worker.mjs';
@@ -68,6 +71,66 @@ async function fixture(t, readPresence, create = createSession) {
 
 const handoff = { jsonrpc: '2.0', id: 1, method: 'tools/call',
   params: { name: 'browser_tabs', arguments: { do: 'handoff', tab: 't1', wait: true } } };
+
+// Run the same fake worker and real dispatcher through the installed relay path.
+const productSession = origin => async ({ forkWorker, runMetadata, taskMessage }) => {
+  const bridge = await createV3Bridge({}, { readConfig: () => ({}), acceptPackage: () => ({ current: () => true }), forkWorker });
+  const prepared = await prepareInstalledStartup(() => bridge);
+  const [clientIn, clientOut, serverIn, serverOut] = Array.from({ length: 4 }, () => new PassThrough());
+  const pending = new Map(); let serial = 0, closed;
+  clientOut.on('data', bytes => {
+    for (const line of bytes.toString().trim().split('\n')) {
+      const message = JSON.parse(line), finish = pending.get(message.id);
+      if (finish) { pending.delete(message.id); finish(message.result); }
+    }
+  });
+  const relay = createRelay({ ...prepared, clientIn, clientOut, serverIn, serverOut, changeReview: false,
+    ...remoteApprovalOptions({ SLEIGHT_REMOTE_APPROVALS: '0' }, runMetadata) });
+  const call = (name, args) => new Promise(resolve => {
+    const id = ++serial; pending.set(id, resolve);
+    clientIn.write(JSON.stringify({ id, method: 'tools/call', params: { name, arguments: args } }) + '\n');
+  });
+  const bootstrap = await call('turn_ended', { sleight_turbo: { event: 'bootstrap' } });
+  const envelope = JSON.parse(bootstrap.content[0].text).sleightTurbo;
+  const begin = await call('turn_ended', { sleight_turbo: { ...envelope, event: 'begin', turn: 'benchturn', text: taskMessage, origin, turbo: true } });
+  assert.equal(begin.isError, false, JSON.stringify(begin));
+  assert.equal(JSON.parse(begin.content[0].text).sleightRemote.turboBound, true);
+  return { call: async input => {
+    const result = await call(input.name, input.arguments);
+    return { text: result.content.map(item => item.text ?? '').join('\n'), isError: result.isError === true };
+  }, delivered: () => true, close: () => closed ??= (async () => {
+    relay.dispose(); await bridge.detach();
+    for (const stream of [clientIn, clientOut, serverIn, serverOut]) stream.destroy();
+  })() };
+};
+
+for (const origin of ['composer', 'bridge']) for (const [name, read, waiting] of [
+  ['locked', async () => ({ locked: true, idleSeconds: 0 }), false],
+  ['idle', async () => ({ locked: false, idleSeconds: 120 }), false],
+  ['present', async () => ({ locked: false, idleSeconds: 119 }), true],
+  ['failed', async () => { throw Error('metadata unavailable'); }, true],
+  ['missing', async () => undefined, true],
+  ['stalled', () => new Promise(() => {}), true],
+]) test(`product browser handoff with remote approvals off reads ${name} presence, origin=${origin}`, async t => {
+  const f = await fixture(t, read, productSession(origin));
+  if (name === 'stalled') t.mock.timers.enable({ apis: ['setTimeout'] });
+  let settled = false;
+  const pending = f.protocol.message(handoff).then(() => { settled = true; });
+  await tick();
+  assert.equal(f.metadataReads, 1);
+  if (name === 'stalled') {
+    t.mock.timers.tick(1499); await tick();
+    assert.equal(f.requests.some(frame => frame.method === 'call'), false);
+    t.mock.timers.tick(1); await tick();
+  }
+  assert.ok(f.requests.some(frame => frame.method === 'call'), JSON.stringify({ requests: f.requests, replies: f.replies }));
+  assert.equal(f.requests.find(frame => frame.method === 'call').params.handoffPresent, waiting);
+  assert.equal(settled, !waiting);
+  if (!waiting) assert.match(f.replies[0].result.content[0].text, /Tabs kept for the user/);
+  assert.equal(f.pageReads, 0);
+  f.cancel(); await pending;
+  assert.equal(f.kept, true);
+});
 
 for (const presence of [{ locked: false, idleSeconds: 18000 }, { locked: false, idleSeconds: 120 }, { locked: true, idleSeconds: 0 }])
 test(`bench server returns kept tabs without waiting when away: ${JSON.stringify(presence)}`, async t => {
@@ -143,20 +206,25 @@ test('bench server bounds a stalled presence read at 1500 ms and keeps waiting',
   assert.match(f.replies[0].result.content[0].text, /Handoff not resumed; tabs kept for the user/);
 });
 
-test('bench server preserves the remote-approvals opt-out as a waiting handoff', async t => {
+for (const [state, waiting] of [
+  [{ locked: true, idleSeconds: 0 }, false],
+  [{ locked: false, idleSeconds: 120 }, false],
+  [{ locked: false, idleSeconds: 119 }, true],
+]) test(`bench handoff reads presence with remote approvals off: ${JSON.stringify(state)}`, async t => {
   const saved = process.env.SLEIGHT_REMOTE_APPROVALS;
   process.env.SLEIGHT_REMOTE_APPROVALS = '0';
   t.after(() => {
     if (saved === undefined) delete process.env.SLEIGHT_REMOTE_APPROVALS;
     else process.env.SLEIGHT_REMOTE_APPROVALS = saved;
   });
-  const f = await fixture(t, () => assert.fail('opt-out must not read presence'));
+  const f = await fixture(t, async () => state);
   let settled = false;
   const pending = f.protocol.message(handoff).then(() => { settled = true; });
   await tick();
-  assert.equal(f.metadataReads, 0);
-  assert.equal(f.requests.find(frame => frame.method === 'call').params.handoffPresent, true);
-  assert.equal(settled, false);
+  assert.equal(f.metadataReads, 1);
+  assert.equal(f.requests.find(frame => frame.method === 'call').params.handoffPresent, waiting);
+  assert.equal(settled, !waiting);
+  if (!waiting) assert.match(f.replies[0].result.content[0].text, /Tabs kept for the user/);
   f.cancel(); await pending;
 });
 

@@ -883,6 +883,13 @@ export async function callLocalTool(name, args, approve, runLocal = runScript, r
   return text(`${result.error}${hint}`, true);
 }
 
+export function remoteApprovalOptions(env = process.env, run = runScript) {
+  const reader = createRemoteApprovals({ run });
+  // Handoffs still read presence when every approval card waits at the Mac.
+  return { presence: reader.presence,
+    remoteApprovals: env.SLEIGHT_REMOTE_APPROVALS === '0' ? undefined : reader };
+}
+
 // SLEIGHT_APPROVAL_PROMPT=dialog or client picks how approvals reach the user;
 // Otherwise the relay selects the dialog when initialize advertises no form support.
 export function approvalOptions(env = process.env, dialog = askWithDialog) {
@@ -1183,8 +1190,7 @@ export async function run({ leaseDirectory, inspectInput: inspectStoppedInput, h
   relay = createRelay({
     directBrowser, turboUnavailable: prepared.turboUnavailable,
     directHost: prepared.directHost,
-    // SLEIGHT_REMOTE_APPROVALS=0 keeps every card waiting at the Mac, as in 1.4.2 (tests and the A/B switch).
-    remoteApprovals: process.env.SLEIGHT_REMOTE_APPROVALS === '0' ? undefined : createRemoteApprovals({ run: runScript }),
+    ...remoteApprovalOptions(),
     startupCache: createStartupCache({ identity: startupIdentity(activeServer, join(LIB, '..')) }),
     browserChoice: browserSelection.choice,
     backendChanged: () => browserSelection.changed(),

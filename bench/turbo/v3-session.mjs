@@ -8,7 +8,6 @@ import { workerSwitches } from '../replay/switches.mjs';
 
 const runProductMetadata = async (...args) => (await import('../../plugins/sleight/lib/launch.mjs')).runScript(...args);
 async function readHandoffPresence(run) {
-  if (process.env.SLEIGHT_REMOTE_APPROVALS === '0') return true;
   let timer;
   try {
     // Use the relay's reader and policy, including its 1500 ms read budget.

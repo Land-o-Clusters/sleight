@@ -7,6 +7,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { createRelay } from '../plugins/sleight/lib/relay.mjs';
 import { InputLease } from '../plugins/sleight/lib/input-lease.mjs';
+import { remoteApprovalOptions } from '../plugins/sleight/lib/launch.mjs';
 
 const rpc = (id, name, args = {}) => ({ jsonrpc: '2.0', id, method: 'tools/call', params: { name, arguments: args } });
 const result = (id, title = 'Login', appId = 'com.example.Reader') => ({ jsonrpc: '2.0', id,
@@ -117,6 +118,39 @@ test('present native handoff still waits for Continue with a fake presence signa
   assert.match(fresh.params.arguments.code, /cua.getApp/);
   f.reply(result(fresh.id, 'Receipt INV-42')); await tick();
   assert.equal(f.received.find(row => row.id === 'handoff').result.isError, false);
+});
+
+for (const [name, read, waiting] of [
+  ['locked', async () => ({ locked: true, idleSeconds: 0 }), false],
+  ['idle', async () => ({ locked: false, idleSeconds: 120 }), false],
+  ['present', async () => ({ locked: false, idleSeconds: 119 }), true],
+  ['missing', async () => undefined, true],
+  ['failed', async () => { throw Error('metadata unavailable'); }, true],
+  ['stalled', () => new Promise(() => {}), true],
+]) test(`native handoff with remote approvals off reads ${name} presence`, async t => {
+  let reads = 0;
+  const options = remoteApprovalOptions({ SLEIGHT_REMOTE_APPROVALS: '0' }, async (script, request) => {
+    assert.equal(script, 'remote-approvals.js');
+    assert.deepEqual(request, { operation: 'presence' });
+    reads++; return read();
+  });
+  assert.equal(options.remoteApprovals, undefined);
+  const f = await fixture(t, options);
+  if (name === 'stalled') t.mock.timers.enable({ apis: ['setTimeout'] });
+  f.send(rpc('handoff', 'app_handoff')); await tick();
+  assert.equal(reads, 1);
+  if (name === 'stalled') {
+    t.mock.timers.tick(1499); await tick();
+    assert.equal(f.cards.length, 0);
+    t.mock.timers.tick(1); await tick();
+  }
+  assert.equal(f.cards.length, 1);
+  assert.equal(f.received.some(row => row.id === 'handoff'), !waiting);
+  if (!waiting) assert.match(JSON.stringify(f.received.find(row => row.id === 'handoff')), /App kept for the user/);
+  assert.equal(f.outbound.filter(row => row.params?.name === 'js').length, 1, 'handoff never reads sign-in content');
+  f.answer('cancel'); await tick();
+  assert.equal(f.received.filter(row => row.id === 'handoff').length, 1);
+  assert.equal(f.inputLease.owned.size, 0);
 });
 
 for (const mode of ['cancel', 'expiry', 'turn-end', 'engine-end', 'host-cancel'])

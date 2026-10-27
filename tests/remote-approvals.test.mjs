@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import { PassThrough } from 'node:stream';
 import { parseTypedApps, isPresent, predictApps, upfrontAsk, remoteApprovalNotice, physicalApprovalNotice } from '../plugins/sleight/lib/remote-approvals.mjs';
 import { createRelay } from '../plugins/sleight/lib/relay.mjs';
+import { remoteApprovalOptions } from '../plugins/sleight/lib/launch.mjs';
 
 const apps = [
   { id: 'com.apple.TextEdit', name: 'TextEdit', names: ['TextEdit'] },
@@ -63,6 +64,23 @@ async function user(h, text, origin = 'bridge', id = 1) {
   h.call({ id, method: 'tools/call', params: { name: 'turn_ended', arguments: { sleight_turbo: { ...envelope, event: 'begin', turn: 'user-' + id, text, origin, turbo: false } } } });
   await tick(); return envelope;
 }
+
+for (const origin of ['composer', 'bridge']) for (const panel of [false, true])
+test(`remote approvals off keeps approvals physical for ${origin}, panel=${panel}`, async t => {
+  let reads = 0, asks = 0;
+  const options = remoteApprovalOptions({ SLEIGHT_REMOTE_APPROVALS: '0' }, async () => {
+    reads++; return { locked: true, idleSeconds: 999 };
+  });
+  const h = harness(t, { ...options, ask: panel ? () => { asks++; return new Promise(() => {}); } : undefined });
+  await user(h, 'allow TextEdit', origin);
+  h.call({ id: 10, method: 'tools/call', params: { name: 'js', arguments: { code: 'await cua.getApp("TextEdit")' } } });
+  h.engine(card('physical')); await tick(); await tick();
+  assert.equal(reads, 0, 'approval paths must not use the handoff presence reader');
+  assert.equal(asks, panel ? 1 : 0);
+  assert.equal(h.server.some(row => row.id === 'physical'), false, 'typed permission and away state grant no approval');
+  assert.equal(h.client.some(row => row.id === 10), false, 'approval still waits at the Mac');
+  if (!panel) assert.ok(h.client.some(row => row.id === 'physical' && row.method === 'elicitation/create'));
+});
 
 test('accepted mod begin emits only origin, never prompt text or the binding envelope', async t => {
   const traces = [];

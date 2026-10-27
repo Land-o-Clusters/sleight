@@ -731,6 +731,7 @@ export function createRelay({
   turboUnavailable,
   directHost,
   remoteApprovals,
+  presence = () => remoteApprovals?.presence?.(),
   // Whether sleight's mod runs in this host (Claude Code). Only the mod can call turn_ended for the model, end a turn
   // after a used one only, and bind a turbo turn to the user's message. Elsewhere (Codex, Cursor) turn_ended stays hidden
   // from the model as the engine marks it, turbo's tools are left out, and a turn sleight sat out ends here.
@@ -981,12 +982,13 @@ export function createRelay({
   let promptOrigin;
   let catalogSettled = false;
   let remoteCatalog = { apps: [], defaults: {} };
-  const remoteRead = async operation => {
+  const metadataRead = async read => {
     let timer;
-    try { return await Promise.race([Promise.resolve().then(() => remoteApprovals?.[operation]?.()),
+    try { return await Promise.race([Promise.resolve().then(read),
       new Promise(resolve => { timer = setTimeout(resolve, 1500); timer.unref?.(); })]); }
     catch { return undefined; } finally { clearTimeout(timer); }
   };
+  const remoteRead = operation => metadataRead(() => remoteApprovals?.[operation]?.());
   // One background scan per relay session. A caller's timeout never cancels the shared scan.
   const catalogReady = Promise.resolve().then(() => remoteApprovals?.catalog?.()).then(catalog => {
     if (Array.isArray(catalog?.apps)) remoteCatalog = catalog;
@@ -1010,6 +1012,7 @@ export function createRelay({
   }
   catalogReady.then(() => { catalogSettled = true; applyTyped(); });
   const remotePresent = async () => promptOrigin !== 'bridge' && isPresent(await remoteRead('presence'));
+  const handoffPresent = async () => isPresent(await metadataRead(presence));
   const appIdentity = app => remoteCatalog.apps?.find(a => a.id === app) ?? resolveApp(app, remoteCatalog.apps);
 
   let clientHost; // the menu bar's host line, from initialize's clientInfo (host-label.mjs)
@@ -1912,7 +1915,7 @@ export function createRelay({
     callDetails.set(msg.id, 'native sign-in handoff'); clearTimeout(idleTimer); refreshHeartbeat();
     let ui, waiter, returned = false, present = true;
     try {
-      present = await remotePresent();
+      present = await handoffPresent();
       if (!current()) throw Error('Handoff not resumed; app kept for the user.');
       ui = await handoffUi();
       if (!current()) throw Error('Handoff not resumed; app kept for the user.');
@@ -4434,7 +4437,7 @@ export function createRelay({
       const generation = stopGeneration, handoffTurn = turnId;
       const presenceCheck = waitingHandoff ? {} : undefined;
       if (presenceCheck) handoffPresencePending = presenceCheck;
-      const called = waitingHandoff ? remotePresent().then(present => {
+      const called = waitingHandoff ? handoffPresent().then(present => {
         if (closing || disposed || generation !== stopGeneration || handoffTurn !== turnId) throw Error('SESSION_ENDED');
         return directBrowser.call(directCall, { handoffPresent: present });
       }) : directBrowser.call(directCall);
