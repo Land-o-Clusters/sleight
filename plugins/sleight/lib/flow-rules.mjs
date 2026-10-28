@@ -91,6 +91,21 @@ export function loadFlowRules(env = process.env, { cwd = process.cwd(), discover
 // A small tokenizer, deliberately narrower than a JavaScript interpreter.
 export const codeInspectionRefusal = /* notice */ 'sleight: cannot inspect JavaScript. Use direct calls with literal arguments.';
 export const invalidTokens = ts => ts.some(t => !t.string && t.v === '<invalid>');
+function regexpEnd(code, start) {
+  let i = start + 1, bracket = false;
+  while (i < code.length) {
+    const ch = code[i++];
+    if (isLineTerminator(ch)) return -1;
+    if (ch === '\\') { if (isLineTerminator(code[i])) return -1; i++; }
+    else if (ch === '[') bracket = true;
+    else if (ch === ']') bracket = false;
+    else if (ch === '/' && !bracket) {
+      while (i < code.length && /[a-z]/i.test(code[i])) i++;
+      return i;
+    }
+  }
+  return -1;
+}
 export function tokens(code) {
   const out = [], parens = [];
   const invalid = () => [...out, { v: '<invalid>' }];
@@ -102,20 +117,18 @@ export function tokens(code) {
     if (code.startsWith('/*', i)) { const end = code.indexOf('*/', i + 2); if (end < 0) return invalid(); i = end + 2; continue; }
     const previous = out.at(-1), control = afterControl;
     afterControl = false;
-    if (c === '/' && (control || !previous || !previous.string && !['.', '#'].includes(out.at(-2)?.v) &&
-        ['=', '(', ',', ':', 'return', '[', '!', ';', '{', '&', '|', '?', '>', 'throw', 'case', 'yield', 'await', 'else', 'do'].includes(previous.v))) {
-      i++; let bracket = false, closed = false;
-      while (i < code.length) {
-        const ch = code[i++];
-        if (isLineTerminator(ch)) return invalid();
-        if (ch === '\\') { if (isLineTerminator(code[i])) return invalid(); i++; }
-        else if (ch === '[') bracket = true;
-        else if (ch === ']') bracket = false;
-        else if (ch === '/' && !bracket) { closed = true; break; }
+    if (c === '/') {
+      // A closing brace may end a block or an expression. If a complete regex
+      // is possible, the two lexical readings differ; neither is safe to guess.
+      const ambiguous = previous?.v === '}' && !previous.string;
+      const regex = control || !previous || !previous.string && !['.', '#'].includes(out.at(-2)?.v) &&
+        ['=', '(', ',', ':', 'return', '[', '!', ';', '{', '&', '|', '?', '>', 'throw', 'case', 'yield', 'await', 'else', 'do',
+          'typeof', 'void', 'in', 'new', 'delete', 'instanceof', 'extends', 'default'].includes(previous.v);
+      if (ambiguous || regex) {
+        const end = regexpEnd(code, i);
+        if (ambiguous ? end >= 0 : end < 0) return invalid();
+        if (regex) { i = end; out.push({ v: '<regexp>' }); continue; }
       }
-      if (!closed) return invalid();
-      while (/[a-z]/i.test(code[i] ?? '') && i < code.length) i++;
-      out.push({ v: '<regexp>' }); continue;
     }
     if (c === '"' || c === "'" || c === '`') {
       const quote = c; let value = ''; let dynamic = false; i++;
