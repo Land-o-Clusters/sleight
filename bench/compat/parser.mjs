@@ -1,6 +1,15 @@
 import { ENGINE_PARSE_OPTIONS } from '../../plugins/sleight/lib/code-ast.mjs';
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
+import { fileURLToPath } from 'node:url';
+import { NODE_REPL_REL } from '../../plugins/sleight/lib/setup.mjs';
 
 export const ENGINE_MERIYAH_VERSION = '7.0.0';
+
+export function checkInstalledCellParser({ app = process.env.SLEIGHT_CHATGPT_APP || '/Applications/ChatGPT.app', readFile = readFileSync } = {}) {
+  try { return checkCellParser(readFile(join(app, NODE_REPL_REL)).toString('latin1')); }
+  catch { return { id: 'cell-parser', status: 'fail', reason: 'node_repl cell parser is unreadable' }; }
+}
 
 // Only inspect strings in node_repl. Never run or persist engine source.
 // Diagnostic token/comment callbacks do not alter the parsed AST.
@@ -25,4 +34,10 @@ export function checkCellParser(binary) {
   return { id: 'cell-parser', status: pass ? 'pass' : 'fail',
     reason: pass ? 'Meriyah 7.0.0 and both cell parser option blocks match' : 'node_repl cell parser banner or option blocks changed',
     ...(pass ? { version: ENGINE_MERIYAH_VERSION, options: ENGINE_PARSE_OPTIONS, blocks: blocks.length } : {}) };
+}
+
+if (process.argv[1] === fileURLToPath(import.meta.url)) {
+  const result = checkInstalledCellParser();
+  console.log(JSON.stringify(result));
+  process.exitCode = result.status === 'pass' ? 0 : 1;
 }

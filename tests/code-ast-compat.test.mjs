@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { checkCellParser } from '../bench/compat/parser.mjs';
+import { checkCellParser, checkInstalledCellParser } from '../bench/compat/parser.mjs';
 
 // Synthetic contract fixture, not engine source.
 const block = 'parseModule(code, {next:true,module:true,ranges:true,loc:false,disableWebCompat:true,onToken:diagnosticTokens,onComment(_kind,_value,start,end){ diagnosticComments.push({start,end}); }})';
@@ -10,6 +10,17 @@ test('parser contract reports version and exact options without engine source', 
   assert.equal(check.status, 'pass'); assert.equal(check.version, '7.0.0'); assert.equal(check.blocks, 2);
   assert.deepEqual(check.options, { next: true, module: true, ranges: true, loc: false, disableWebCompat: true });
   assert.ok(!JSON.stringify(check).includes('diagnosticComments'));
+});
+test('installed parser check reads the pinned binary and fails closed if unreadable', () => {
+  let path;
+  assert.equal(checkInstalledCellParser({ app: '/fixture/ChatGPT.app', readFile: file => {
+    path = file; return Buffer.from(binary);
+  } }).status, 'pass');
+  assert.ok(path.startsWith('/fixture/ChatGPT.app/'));
+  assert.ok(path.endsWith('/node_repl'));
+  assert.deepEqual(checkInstalledCellParser({ readFile: () => { throw Error('PRIVATE'); } }), {
+    id: 'cell-parser', status: 'fail', reason: 'node_repl cell parser is unreadable',
+  });
 });
 for (const [name, mutation] of [
   ['new version', binary.replace('7.0.0', '7.1.0')],

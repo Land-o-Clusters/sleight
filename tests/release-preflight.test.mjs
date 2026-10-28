@@ -13,6 +13,7 @@ const head = 'a'.repeat(40), base = 'b'.repeat(40);
 const identity = { home: '/home/private-fixture', username: 'private-fixture' };
 const tap = '# tests 2\n# suites 0\n# pass 2\n# fail 0\n# cancelled 0\n# skipped 0\n# todo 0\n';
 const ok = stdout => ({ status: 0, stdout, collected: true });
+const parserReceipt = JSON.stringify({ id: 'cell-parser', status: 'pass', version: '7.0.0' });
 
 // A6 calls the real A5 checkout and receipt producer; replace only process execution.
 function processBoundary(root, overrides = {}) {
@@ -21,6 +22,7 @@ function processBoundary(root, overrides = {}) {
   const execute = async (command, args, options) => {
     calls.push({ command, args, options });
     if (command === process.execPath && args[0] === 'bench/results-hub.mjs') return ok('');
+    if (command === process.execPath && args[0] === 'bench/compat/parser.mjs') return ok(parserReceipt);
     if (command === process.execPath && args[0] === 'scripts/release-history-scan.mjs') {
       return ok('Release history scan: 0 added line(s) contain private identity data.\n');
     }
@@ -67,7 +69,7 @@ function fixture(overrides = {}) {
     if (overrides[request.step]) return overrides[request.step](request);
     if (request.step === 'linux') return reviewed(request);
     return { status: 0, stdout: { head, base, tag: head, status: '', sources: '', ancestor: '',
-      history: 'Release history scan: 0 added line(s) contain private identity data.\n' }[request.step] };
+      'cell-parser': parserReceipt, history: 'Release history scan: 0 added line(s) contain private identity data.\n' }[request.step] };
   };
   files.set('private-terms.json', '["Private Fixture Name"]');
   const options = { root, mode: 'release', tag: 'v1.4.1', identity, runner, privateTerms: ['Private Fixture Name'],
@@ -98,7 +100,7 @@ test('actual release checks all manifests, tag, history and Linux, then rechecks
   assert.equal(result.ok, true);
   assert.equal(result.releaseReady, true);
   assert.equal(result.head, head);
-  assert.deepEqual(steps(calls), ['status', 'head', 'status', 'head', 'tag', 'base', 'ancestor', 'sources', 'hub', 'history', 'linux', 'status', 'head', 'tag']);
+  assert.deepEqual(steps(calls), ['status', 'head', 'status', 'head', 'tag', 'base', 'ancestor', 'sources', 'cell-parser', 'hub', 'history', 'linux', 'status', 'head', 'tag']);
   assert.equal(calls.find(c => c.step === 'history').range, `${base}..${head}`);
 });
 
@@ -110,6 +112,22 @@ test('candidate check never queries or claims a tag and still requires Linux', a
   assert.equal(result.mode, 'candidate');
   assert.equal(steps(calls).includes('tag'), false);
   assert.ok(steps(calls).includes('linux'));
+});
+
+test('parser incompatibility or an invalid receipt stops release before the hub and Linux', async () => {
+  for (const response of [
+    { status: 1, stdout: JSON.stringify({ id: 'cell-parser', status: 'fail' }) },
+    { status: 0, stdout: JSON.stringify({ id: 'cell-parser', status: 'fail' }) },
+    { status: 0, stdout: '{}' }, { status: 0, stdout: 'not JSON' },
+  ]) {
+    const { options, calls } = fixture({ 'cell-parser': () => response });
+    const result = await preflight(options);
+    assert.equal(result.ok, false);
+    assert.equal(result.releaseReady, false);
+    assert.equal(result.failures[0].check, 'cell-parser');
+    assert.equal(steps(calls).at(-1), 'cell-parser');
+    assert.equal(steps(calls).includes('linux'), false);
+  }
 });
 
 test('every plugin manifest version is mandatory and must agree', async () => {
@@ -213,7 +231,7 @@ test('missing or malformed source files fail with fixed locations, never excepti
 });
 
 test('each command failure stops all subsequent execution and preserves its exit status', async () => {
-  for (const step of ['status', 'head', 'tag', 'base', 'ancestor', 'sources', 'hub', 'history', 'linux']) {
+  for (const step of ['status', 'head', 'tag', 'base', 'ancestor', 'sources', 'cell-parser', 'hub', 'history', 'linux']) {
     const { options, calls } = fixture({ [step]: () => ({ status: 17, stdout: identity.home, stderr: identity.username }) });
     const result = await preflight(options);
     assert.equal(result.ok, false, step);
@@ -379,7 +397,7 @@ test('reviewed runner owns fixed Git/history argv and throwaway config cleanup',
     return { status: 0, stdout: '' };
   } });
   for (const request of [{ step: 'status' }, { step: 'head' }, { step: 'tag', tag: 'v1.4.1' },
-    { step: 'base', ref: 'origin/main' }, { step: 'ancestor', base, head }, { step: 'sources' }, { step: 'hub' },
+    { step: 'base', ref: 'origin/main' }, { step: 'ancestor', base, head }, { step: 'sources' }, { step: 'cell-parser' }, { step: 'hub' },
     { step: 'history', range: `${base}..${head}` }]) await runner(request);
   for (const { command, args, options } of calls) {
     assert.equal(options.cwd, '/fixture');
@@ -396,7 +414,8 @@ test('reviewed runner owns fixed Git/history argv and throwaway config cleanup',
     ['rev-parse', '--verify', 'refs/tags/v1.4.1^{commit}'],
     ['rev-parse', '--verify', 'origin/main^{commit}'],
     ['merge-base', '--is-ancestor', base, head],
-    ['ls-files', '--error-unmatch', '--', 'scripts/release-history-scan.mjs', 'scripts/linux-preflight.mjs', 'bench/results-hub.mjs'],
+    ['ls-files', '--error-unmatch', '--', 'scripts/release-history-scan.mjs', 'scripts/linux-preflight.mjs', 'bench/results-hub.mjs', 'bench/compat/parser.mjs'],
+    ['bench/compat/parser.mjs'],
     ['bench/results-hub.mjs', '--check'],
     ['scripts/release-history-scan.mjs', `${base}..${head}`],
   ]);
@@ -534,6 +553,7 @@ async function colimaFixture(t, overrides = {}) {
     f.files.set(`scripts/${name}.mjs`, '// tracked fixture source\n');
   }
   f.files.set('bench/results-hub.mjs', '// tracked fixture source\n');
+  f.files.set('bench/compat/parser.mjs', '// tracked fixture source\n');
   const env = { PATH: process.env.PATH, HOME: termsBank, GIT_CONFIG_GLOBAL: '/dev/null', GIT_CONFIG_NOSYSTEM: '1' };
   const git = async args => {
     const result = await runOwnedCommand('/usr/bin/git', args, { cwd: root, env });
@@ -551,6 +571,7 @@ async function colimaFixture(t, overrides = {}) {
     }
     if (command === process.execPath) {
       if (originalArgs[0] === 'bench/results-hub.mjs') return ok('');
+      if (originalArgs[0] === 'bench/compat/parser.mjs') return ok(parserReceipt);
       assert.equal(originalArgs[0], 'scripts/release-history-scan.mjs');
       return ok('Release history scan: 0 added line(s) contain private identity data.\n');
     }
@@ -628,7 +649,7 @@ test('explicit Docker runtime keeps the original fixed source gate and Docker ro
   const { options, boundary } = fixture();
   const runner = createReviewedRunner(options.root, { execute: boundary.execute, linuxRuntime: 'docker' });
   await runner({ step: 'sources' });
-  assert.deepEqual(boundary.calls[0].args, ['ls-files', '--error-unmatch', '--', 'scripts/release-history-scan.mjs', 'scripts/linux-preflight.mjs', 'bench/results-hub.mjs']);
+  assert.deepEqual(boundary.calls[0].args, ['ls-files', '--error-unmatch', '--', 'scripts/release-history-scan.mjs', 'scripts/linux-preflight.mjs', 'bench/results-hub.mjs', 'bench/compat/parser.mjs']);
   assert.equal((await runner({ step: 'linux', head })).status, 0);
   assert.equal(boundary.calls.some(call => call.command === 'colima'), false);
 });
@@ -640,7 +661,7 @@ test('A6 Colima CLI owns actual producers, requires tracked helper and rechecks 
   assert.equal(result.ok, true); assert.equal(result.releaseReady, false); assert.equal(result.linux.commit, f.commit);
   assert.equal(output.join('').includes(f.root), false);
   const sources = f.calls.find(call => call.args[0] === 'ls-files' && call.args.includes('--error-unmatch'));
-  assert.deepEqual(sources.args, ['ls-files', '--error-unmatch', '--', 'scripts/release-history-scan.mjs', 'scripts/linux-preflight.mjs', 'bench/results-hub.mjs', 'scripts/linux-preflight-colima.mjs']);
+  assert.deepEqual(sources.args, ['ls-files', '--error-unmatch', '--', 'scripts/release-history-scan.mjs', 'scripts/linux-preflight.mjs', 'bench/results-hub.mjs', 'bench/compat/parser.mjs', 'scripts/linux-preflight-colima.mjs']);
   assert.ok(f.calls.some(call => call.command === 'colima' && call.args[0] === 'delete'));
   assert.deepEqual(f.calls.slice(-2).map(call => call.args), [
     ['status', '--porcelain=v1', '--untracked-files=all'], ['rev-parse', '--verify', 'HEAD^{commit}'],

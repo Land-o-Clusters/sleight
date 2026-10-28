@@ -8,14 +8,39 @@ export const UNKNOWN = Symbol('unknown literal');
 const require = createRequire(import.meta.url);
 let parser;
 
-export function parseCell(code) {
-  if (typeof code !== 'string') throw new TypeError('cell source must be a string');
+function loadParser() {
   parser ??= require('../vendor/meriyah/dist/meriyah.min.mjs');
-  try { return { ast: parser.parseModule(code, ENGINE_PARSE_OPTIONS), error: null }; }
-  catch (error) {
+  return parser;
+}
+
+export function parserDoctorLine() {
+  try {
+    const loaded = loadParser();
+    if (typeof loaded.parseModule !== 'function') throw new TypeError();
+    return `cell parser: loaded Meriyah ${loaded.version}; Node ${process.version}`;
+  } catch {
+    return `PROBLEM cell parser: unavailable; Node ${process.version}. Use Node 22.12+ with synchronous ESM loading.`;
+  }
+}
+
+const safeReason = reason => reason.replace(/[\p{Cc}\p{Cf}\p{Zl}\p{Zp}]/gu, '').slice(0, 200);
+
+export function parseCell(code) {
+  let loaded = false;
+  try {
+    const cellParser = loadParser();
+    loaded = true;
+    if (typeof code !== 'string') throw new TypeError('cell source must be a string');
+    return { ast: cellParser.parseModule(code, ENGINE_PARSE_OPTIONS), error: null };
+  } catch (error) {
     // No stack, source excerpt or caller string is added to the upstream reason.
-    if (!(error instanceof SyntaxError) || typeof error.description !== 'string') throw error;
-    return { ast: null, error: { line: error.loc.start.line, column: error.loc.start.column, reason: error.description } };
+    const syntax = error instanceof SyntaxError && typeof error.description === 'string';
+    const line = syntax && Number.isInteger(error.loc?.start?.line) ? error.loc.start.line : 0;
+    const column = syntax && Number.isInteger(error.loc?.start?.column) ? error.loc.start.column : 0;
+    let reason = syntax ? error.description : loaded ? 'cannot parse this cell'
+      : `cannot parse this cell: parser unavailable on Node ${process.version}. Use Node 22.12+ with synchronous ESM loading.`;
+    if (syntax && code.includes('\r') && /unterminated string/i.test(reason)) reason += '. Escape literal CR as \\r.';
+    return { ast: null, error: { line, column, reason: safeReason(reason) } };
   }
 }
 
@@ -61,6 +86,18 @@ export function memberCall(node) {
     computed: Boolean(callee.computed), optional, args: node.arguments };
 }
 
+// Every possible invocation, including nested functions and unevaluated branches.
+// Computed, indirect, constructor and tag calls need a consumer's unknown policy.
+export function callInventory(ast) {
+  const calls = [];
+  for (const node of walk(ast)) {
+    if (!['CallExpression', 'NewExpression', 'TaggedTemplateExpression'].includes(node.type)) continue;
+    const call = memberCall(node);
+    calls.push(call && !call.computed ? { node, kind: 'member', ...call } : { node, kind: 'unknown' });
+  }
+  return calls;
+}
+
 // Only data literals. In particular, do not evaluate constant-looking expressions,
 // spread, getters, identifiers, regexes, tagged templates or interpolations.
 export function literalValue(node) {
@@ -97,6 +134,8 @@ export function literalValue(node) {
       if (!['string', 'number'].includes(typeof key) || value === UNKNOWN) return UNKNOWN;
       entries.push([String(key), value]);
     }
+    // This is a data snapshot, not object evaluation: __proto__ stays an own key
+    // and never changes the result's prototype. Consumers must not treat it as code.
     return Object.fromEntries(entries);
   }
   return UNKNOWN;
@@ -111,12 +150,31 @@ function rootName(node) {
 }
 
 // Top-level binding hints for later consumers. No function aliases, scope analysis
-// or control-flow proof is implied. Unknown top-level assignments clear hints.
+// or control-flow proof is implied. Any assignment anywhere clears that name,
+// including inside functions that might run later. Shadowed names are conservative.
 export function handleBindings(ast, previous = new Map()) {
   const bindings = new Map(previous);
+  const assigned = new Set();
+  function targets(pattern) {
+    if (!pattern) return;
+    if (pattern.type === 'Identifier') assigned.add(pattern.name);
+    else if (pattern.type === 'RestElement') targets(pattern.argument);
+    else if (pattern.type === 'AssignmentPattern') targets(pattern.left);
+    else if (pattern.type === 'ArrayPattern') pattern.elements.forEach(targets);
+    else if (pattern.type === 'ObjectPattern') pattern.properties.forEach(property =>
+      targets(property.type === 'RestElement' ? property.argument : property.value));
+    else if (pattern.type === 'VariableDeclaration') pattern.declarations.forEach(declaration => targets(declaration.id));
+  }
+  for (const node of walk(ast)) {
+    if (node.type === 'AssignmentExpression') targets(node.left);
+    else if (node.type === 'UpdateExpression') targets(node.argument);
+    else if (['ForInStatement', 'ForOfStatement'].includes(node.type)) targets(node.left);
+    else if (node.type === 'VariableDeclarator' && node.id.type !== 'Identifier') targets(node.id);
+  }
+  for (const name of assigned) bindings.delete(name);
   const locatorFactories = new Set(['getByRole', 'getByText', 'getByLabel', 'getByPlaceholder', 'getByTestId', 'locator', 'frameLocator', 'filter', 'first', 'last', 'nth', 'and', 'or']);
   function bind(name, source) {
-    if (!name) return;
+    if (!name || assigned.has(name)) return;
     const node = source?.type === 'AwaitExpression' ? source.argument : source;
     let hint;
     if (node?.type === 'Identifier' && /^__sleightOpenedApp\d+$/.test(node.name)) hint = { kind: 'app', source: node.name };
@@ -139,10 +197,6 @@ export function handleBindings(ast, previous = new Map()) {
   for (const statement of ast.body) {
     if (statement.type === 'VariableDeclaration') for (const declaration of statement.declarations)
       bind(declaration.id.type === 'Identifier' ? declaration.id.name : undefined, declaration.init);
-    else if (statement.type === 'ExpressionStatement' && statement.expression.type === 'AssignmentExpression') {
-      const assignment = statement.expression;
-      if (assignment.left.type === 'Identifier') bind(assignment.left.name, assignment.operator === '=' ? assignment.right : undefined);
-    }
   }
   return bindings;
 }
