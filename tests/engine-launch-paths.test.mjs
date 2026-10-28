@@ -1,9 +1,10 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { engineLaunchPaths } from '../plugins/sleight/lib/launch.mjs';
+import { trackTemp } from '../scripts/temp-leftovers.mjs';
 
 const SCRIPT = '/Applications/ChatGPT.app/Contents/Resources/cua_node/lib/node_modules/@oai/cua-repl/bin/cua-repl.mjs';
-const HOOK = '/Users/x/.codex/plugins/cache/openai-bundled/unified-computer-use/26.1023.50603/require-browser-access.mjs';
+const HOOK = '/codex-home/.codex/plugins/cache/openai-bundled/unified-computer-use/26.1023.50603/require-browser-access.mjs';
 
 test('the script is args[0] in engines before 26.1023', () => {
   assert.deepEqual(engineLaunchPaths([SCRIPT]), { script: SCRIPT, others: [], optionFiles: [] });
@@ -38,7 +39,7 @@ test('doctor checks the script and the --import hook of an engine that starts wi
   const { tmpdir } = await import('node:os');
   const { pathToFileURL } = await import('node:url');
   const { doctor } = await import('../plugins/sleight/lib/launch.mjs');
-  const home = mkdtempSync(join(tmpdir(), 'sleight-ec1-'));
+  const home = trackTemp(mkdtempSync(join(tmpdir(), 'sleight-ec1-')));
   try {
     const dir = join(home, 'plugins', 'cache', 'openai-bundled', 'unified-computer-use', '26.1023.50603');
     mkdirSync(dir, { recursive: true });
