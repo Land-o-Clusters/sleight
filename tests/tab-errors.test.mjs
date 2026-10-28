@@ -473,7 +473,8 @@ test('incomplete source is refused before an engine error can follow it', t => {
     assert.equal(sent.length, 0);
     assert.equal(output.length, 1);
     assert.equal(output[0].result.isError, true);
-    assert.match(output[0].result.content[0].text, /cannot inspect JavaScript|JS \[\d+:\d+\]:/);
+    assert.match(output[0].result.content[0].text, code.includes('unterminated')
+      ? /^JS \[1:\d+\]: Unterminated string literal$/ : /^JS \[1:\d+\]: Unterminated regular expression$/);
   }
 });
 
