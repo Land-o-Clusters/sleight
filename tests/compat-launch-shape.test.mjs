@@ -6,6 +6,7 @@ import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { execFileSync } from 'node:child_process';
 import * as compat from '../bench/compat.mjs';
+import { trackTemp } from '../scripts/temp-leftovers.mjs';
 
 // Representative lines from the bundled Node's --help, including aliases and optional values.
 const HELP = `Usage: node [options] [ script.js ] [arguments]
@@ -30,7 +31,7 @@ NODE_OPTIONS                 options for Node.js
 `;
 
 function fixture(t) {
-  const root = mkdtempSync(join(tmpdir(), 'sleight-launch-shape-'));
+  const root = trackTemp(mkdtempSync(join(tmpdir(), 'sleight-launch-shape-')));
   t.after(() => rmSync(root, { recursive: true, force: true }));
   const configDir = join(root, 'plugins/cache/openai-bundled/unified-computer-use/26.1023.50603');
   mkdirSync(configDir, { recursive: true });
