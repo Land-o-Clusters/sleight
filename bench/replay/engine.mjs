@@ -1,6 +1,7 @@
 import { performance } from 'node:perf_hooks';
 import { divergence, refreshCode, resultText, TargetMapper, comparisonResult, normalized, replayResultStop } from './mapping.mjs';
 import { assertReplayArguments } from './allowlist.mjs';
+import { replayDocumentation, taskResult } from './documentation.mjs';
 export { parseEnv } from './switches.mjs';
 
 export function untilAbort(signal, operation) {
@@ -14,8 +15,8 @@ export function untilAbort(signal, operation) {
   });
 }
 
-export async function replayCalls(calls, { call, mapper = new TargetMapper(), signal, beforeCall = () => {}, record = () => {}, comparison = 'recording' } = {}) {
-  if (!['recording', 'switches'].includes(comparison)) throw Error('Unknown replay comparison');
+export async function replayCalls(calls, { call, mapper = new TargetMapper(), signal, beforeCall = () => {}, record = () => {}, comparison = 'recording', documentation = replayDocumentation() } = {}) {
+  if (!['recording', 'switches', 'worktrees'].includes(comparison)) throw Error('Unknown replay comparison');
   const rows = [];
   let verdict = 'pass', reason;
   for (const [index, original] of calls.entries()) {
@@ -25,7 +26,7 @@ export async function replayCalls(calls, { call, mapper = new TargetMapper(), si
       await untilAbort(signal, beforeCall);
       assertReplayArguments(original.arguments);
       if (comparison === 'switches') {
-        const stop = replayResultStop(original.result);
+        const stop = replayResultStop(original.result, documentation);
         if (stop) throw Error(stop);
       }
       try { args = mapper.arguments(original.arguments); }
@@ -40,7 +41,7 @@ export async function replayCalls(calls, { call, mapper = new TargetMapper(), si
         const fresh = await untilAbort(signal, () => call(original.server, native ? 'js' : 'browser_read', refresh));
         mappingMs = performance.now() - start;
         record({ event: 'mapping-read', index, arguments: refresh, result: fresh, ms: mappingMs });
-        if (fresh.isError || comparison === 'switches' && replayResultStop(fresh)) throw Error('Target refresh failed');
+        if (fresh.isError || comparison !== 'recording' && replayResultStop(fresh, documentation)) throw Error('Target refresh failed');
         mapper.after = resultText(fresh);
         mapper.refresh(mapper.after, original.arguments);
         args = mapper.arguments(original.arguments);
@@ -49,18 +50,22 @@ export async function replayCalls(calls, { call, mapper = new TargetMapper(), si
       const start = performance.now();
       try { result = await untilAbort(signal, () => call(original.server, original.name, args)); }
       finally { toolMs = performance.now() - start; }
-      if (comparison === 'switches') {
-        const stop = replayResultStop(result);
+      if (comparison !== 'recording') {
+        const stop = replayResultStop(result, documentation);
         if (stop) throw Error(stop);
       }
       mapper.observe(resultText(original.result), resultText(result), original.arguments, original);
       const recorded = normalized(resultText(original.result), mapper, true, original.arguments.tab), fresh = normalized(resultText(result), mapper);
       if (recorded !== fresh) recordingTextDifference = { recorded, replay: fresh };
-      reason = divergence(original.result, result, mapper, original.arguments, { comparison });
+      // Worktree campaigns compare the live arms below, never old engine output.
+      if (comparison === 'worktrees') {
+        const task = taskResult(result, documentation);
+        reason = divergence(task, task, new TargetMapper(), {}, { comparison: 'switches' });
+      } else reason = divergence(original.result, result, mapper, original.arguments, { comparison, documentation });
     } catch (error) { reason = error.message; }
     const row = { index, id: original.id, server: original.server, name: original.name, arguments: args,
       recordedArguments: original.arguments, expected: original.result, result, toolMs, mappingMs, startedAt, finishedAt: new Date().toISOString(),
-      comparisonResult: result && comparisonResult(result, mapper),
+      comparisonResult: result && comparisonResult(result, mapper, documentation),
       ...(recordingTextDifference ? { recordingTextDifference } : {}),
       verdict: reason ? 'diverge' : 'pass', ...(reason ? { reason } : {}) };
     rows.push(row); record({ event: 'call', ...row });

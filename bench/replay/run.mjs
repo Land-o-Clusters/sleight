@@ -13,6 +13,7 @@ import { windowReceipts, isNativeSelection } from './frames.mjs';
 import { prepareReplay } from './fixtures.mjs';
 import { campaignEvidence } from './checks.mjs';
 import { createReplayRecorder } from './evidence.mjs';
+import { engineIteration } from './engine-identity.mjs';
 
 const repo = fileURLToPath(new URL('../..', import.meta.url));
 export function options(argv) {
@@ -199,7 +200,7 @@ export async function main(argv = process.argv.slice(2)) {
   // --plan shares the exact no-launch fixture validation used by live iterations.
   const preview = prepareReplay(recording, join(tmpdir(), 'sleight-replay-plan', 'fixture'));
   const roles = comparisonRoles(variants, check, comparingBuilds);
-  const comparison = opts.compare !== undefined ? 'switches' : 'recording';
+  const comparison = comparingBuilds ? 'worktrees' : opts.compare !== undefined ? 'switches' : 'recording';
   const plan = { source: recording.transcript, transcriptSHA256: recording.transcriptSHA256, kind: recording.kind, task: recording.task, calls: recording.calls.length,
     windowFrames: recording.calls.flatMap((call, index) => isNativeSelection(call) ? windowReceipts(resultText(call.result)).filter(row => row.frame).map(row => ({ index, ...row })) : []),
     nativeFixture: preview.native && { nonce: preview.native.ctx.nonce, suite: preview.native.suite, oldDir: preview.native.oldDir },
@@ -245,15 +246,20 @@ export async function main(argv = process.argv.slice(2)) {
       // From setup until cleanup proves otherwise, the lock belongs to this iteration.
       cleanupConfirmed = false;
       let result;
-      try { result = await liveIteration(recording, { env: step.env, dir, signal: iteration.signal, abort: iteration.abort, beforeCall: iteration.beforeCall, record, worktree: step.build?.worktree, prepared, comparison }); }
-      finally { iteration.dispose(); }
+      try {
+        result = await engineIteration(() => liveIteration(recording, { env: step.env, dir, signal: iteration.signal, abort: iteration.abort,
+          beforeCall: iteration.beforeCall, record, worktree: step.build?.worktree, prepared, comparison }), { previous: runs.map(run => run.engine) });
+      } catch (error) {
+        result = { verdict: 'diverge', reason: error.message, calls: [], totalToolMs: 0, cleanupConfirmed: error.cleanupConfirmed === true, engine: error.engine };
+        failure = error.message;
+      } finally { iteration.dispose(); }
       cleanupConfirmed = result.cleanupConfirmed;
       if (check) result.check = assertCheck(check, { ...result, env: step.env }, dir);
       const row = { ...step, ...result }; runs.push(row);
       writeFileSync(join(dir, 'result.json'), JSON.stringify(row, null, 2), { mode: 0o600 });
       console.log(`${step.variant} #${step.iteration}: ${row.verdict}, ${row.calls.length}/${recording.calls.length} calls, ${row.totalToolMs.toFixed(1)} tool ms${row.reason ? ` (${row.reason})` : ''}`);
       if (row.check) console.log(`${check.id}: ${row.check.verdict}${row.check.reason ? ` (${row.check.reason})` : ''}${row.check.failures ? ` (${row.check.failures.join('; ')})` : ''}`);
-      if (!cleanupConfirmed) break;
+      if (!cleanupConfirmed || row.engine.reason || failure) break;
     }
   } catch (error) {
     failure = error.message;

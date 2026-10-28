@@ -1,7 +1,8 @@
 import { readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { resultText } from './mapping.mjs';
+import { resultText, replayResultStop, windowDifference } from './mapping.mjs';
 import { median } from './engine.mjs';
+import { campaignEngine } from './engine-identity.mjs';
 
 const selected = (spec, row) => (!spec.tool || row.name === spec.tool) &&
   (!spec.argumentPattern || new RegExp(spec.argumentPattern, 'i').test(JSON.stringify(row.recordedArguments)));
@@ -13,13 +14,30 @@ function resultDiff(A, B, path = '$') {
   return [{ path, A, B }];
 }
 
+function compareResults(A, B) {
+  // A changed or missing document is reported separately even when only one arm's
+  // copy authenticates. This classification cannot turn a mismatch into a pass.
+  const header = item => item?.type === 'text' ? item.text.split('\n', 1)[0] : undefined;
+  const headers = new Set([...(A?.content ?? []), ...(B?.content ?? [])].filter(item => item.documentation).map(header));
+  const isDoc = item => item.documentation || headers.has(header(item));
+  const task = result => result && { ...result, content: (result.content ?? []).filter(item => !isDoc(item)) };
+  const docs = result => (result?.content ?? []).filter(isDoc).map(item => ({ type: item.type, text: item.text }));
+  const taskA = task(A), taskB = task(B), changes = resultDiff(taskA, taskB);
+  const documentationChanges = resultDiff(docs(A), docs(B));
+  const reason = A && B && (replayResultStop(taskA) ?? replayResultStop(taskB) ?? windowDifference(resultText(taskA), resultText(taskB)));
+  return { A, B, changes, ...(headers.size ? { documentation: { verdict: documentationChanges.length ? 'changed' : 'equal', changes: documentationChanges } } : {}),
+    ...(reason ? { reason } : documentationChanges.length ? { reason: 'engine documentation text changed' } : {}),
+    verdict: A === undefined || B === undefined ? 'missing' : reason || changes.length ? 'changed' : documentationChanges.length ? 'docs-differ' : 'equal' };
+}
+
 export function campaignEvidence(runs, spec, roles = {}) {
+  const engine = campaignEngine(runs);
   const comparisons = [...new Set(runs.map(r => r.iteration))].flatMap(iteration => {
     const a = runs.find(r => r.iteration === iteration && r.variant === 'A'), b = runs.find(r => r.iteration === iteration && r.variant === 'B');
     if (!roles.baseline) return [];
     const calls = Array.from({ length: Math.max(a?.calls.length ?? 0, b?.calls.length ?? 0) }, (_, index) => {
       const A = a?.calls[index]?.comparisonResult, B = b?.calls[index]?.comparisonResult;
-      return { index, A, B, changes: resultDiff(A, B), verdict: A === undefined || B === undefined ? 'missing' : JSON.stringify(A) === JSON.stringify(B) ? 'equal' : 'changed' };
+      return { index, ...compareResults(A, B) };
     });
     return [{ iteration, calls, complete: Boolean(a && b) }];
   });
@@ -41,9 +59,13 @@ export function campaignEvidence(runs, spec, roles = {}) {
   if (verdict === 'pass' && (spec && (candidate.some(r => r.check?.verdict !== 'pass') || baseline.some(r => !['pass', 'fail'].includes(r.check?.verdict))) ||
       timing.some(row => row.verdict !== 'pass') || roles.baseline && (candidate.length !== baseline.length || comparisons.some(pair => !pair.complete)) ||
       spec && runs.some(r => !r.calls.some(row => selected(spec, row) && row.result)))) verdict = 'check-incomplete';
-  if (comparisons.some(pair => pair.calls.some(row => row.verdict === 'missing' || row.verdict === 'changed' &&
+  if (comparisons.some(pair => pair.calls.some(row => row.verdict === 'missing' || row.reason && row.reason !== 'engine documentation text changed' || row.verdict === 'changed' &&
       (!spec || !runs.filter(r => r.iteration === pair.iteration).every(r => selected(spec, r.calls[row.index])))))) verdict = 'diverge';
-  return { verdict, roles, comparisons, timing };
+  const docsChanged = comparisons.some(pair => pair.calls.some(row => row.documentation?.verdict === 'changed'));
+  if (verdict === 'pass' && docsChanged) verdict = 'docs-differ';
+  if (engine.verdict === 'refuse') verdict = 'diverge';
+  return { verdict, roles, comparisons, timing, engine,
+    ...(engine.reason ? { reason: engine.reason } : docsChanged ? { reason: 'engine documentation text changed' } : {}) };
 }
 
 function dragOrder(events) {
