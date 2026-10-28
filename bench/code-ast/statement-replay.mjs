@@ -1,14 +1,16 @@
 // Offline PS3 replay. Import consumers only; never import bench/run.mjs or evaluate caller code.
 import { execFileSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
-import { readFileSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { homedir } from 'node:os';
+import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { gzipSync } from 'node:zlib';
 import { readCorpus } from './corpus.mjs';
-import * as text from '../../plugins/sleight/lib/text-save.mjs';
-import * as menu from '../../plugins/sleight/lib/menu-continuation.mjs';
-import * as tab from '../../plugins/sleight/lib/tab-probe.mjs';
-import { parseCell, memberCall } from '../../plugins/sleight/lib/code-ast.mjs';
+import { parseCell } from '../../plugins/sleight/lib/code-ast.mjs';
+import { compareRecord } from './statement-compare.mjs';
+import { justifyResult } from './statement-oracle.mjs';
+import { sources as frozenSources } from '../../tests/fixtures/statement-legacy/index.mjs';
 
 export const BASE = 'c4175f7917fadb10bce86d02d7672df416105aa8';
 const root = new URL('../../', import.meta.url);
@@ -40,62 +42,25 @@ export async function legacyConsumers() {
   return { text, menu, tab, sources };
 }
 
-function menuResult(consumer, code) {
-  const plan = consumer.splitMenuActions(code);
-  if (!plan) return null;
-  return {
-    actions: plan.actions.map(({ start, end, handle, selector }) => ({ start, end, handle, selector })),
-    remainders: plan.actions.slice(1).map(action => code.slice(action.start).trim()),
-    notes: plan.actions.map((_, index) => consumer.stopNote({ windowStop: true, index }, plan)),
-  };
-}
-const semanticMenu = result => result && { ...result, actions: result.actions.map(({ handle, selector }) => ({ handle, selector })) };
-const same = (a, b) => JSON.stringify(a) === JSON.stringify(b);
-const safe = result => result == null ? null : { sha256: hash(result), bytes: Buffer.byteLength(JSON.stringify(result)) };
-
-export function compareRecord(code, old) {
-  const before = { statements: old.text.statementSpans(code)?.spans ?? null, textSave: old.text.splitTextSave(code) ?? null,
-    menu: menuResult(old.menu, code), tab: old.tab.nativeTabPlan(old.menu.splitMenuActions(code)) };
-  const after = { statements: text.statementSpans(code)?.spans ?? null, textSave: text.splitTextSave(code) ?? null,
-    menu: menuResult(menu, code), tab: tab.nativeTabPlan(menu.splitMenuActions(code)) };
-  const differences = [];
-  for (const consumer of Object.keys(before)) {
-    if (same(before[consumer], after[consumer])) continue;
-    let reason = 'unclassified';
-    if (consumer === 'statements') reason = 'engine-statement-ranges';
-    if (consumer === 'menu' && same(semanticMenu(before.menu), semanticMenu(after.menu))) reason = 'engine-action-ranges';
-    if (consumer === 'menu' && !before.menu && after.menu) {
-      // Prove the old refusal is solely its missing awaited-observation shape:
-      // removing only those outer awaits must make the original consumer accept.
-      let equivalent = code, removed = 0;
-      for (const statement of [...parseCell(code).ast.body].reverse()) {
-        const expression = statement.type === 'ExpressionStatement' && statement.expression;
-        const call = expression?.type === 'AwaitExpression' && memberCall(expression.argument);
-        if (call && !call.computed && !call.optional && call.receiver.type === 'Identifier' && call.receiver.name === 'nodeRepl' &&
-            ['write', 'emitImage'].includes(call.method)) {
-          equivalent = equivalent.slice(0, expression.range[0]) + equivalent.slice(expression.range[0] + 5);
-          removed++;
-        }
-      }
-      if (removed && old.menu.splitMenuActions(equivalent)) reason = 'awaited-observation-tail';
-    }
-    differences.push({ consumer, reason, old: safe(before[consumer]), new: safe(after[consumer]),
-      oldAccepted: before[consumer] !== null && before[consumer] !== false,
-      newAccepted: after[consumer] !== null && after[consumer] !== false });
-  }
-  return { differences, before, after };
-}
-
 async function main() {
   const corpus = await readCorpus(), old = await legacyConsumers();
-  const rows = [], counts = {}, accepted = {};
+  for (const [path, expected] of Object.entries(frozenSources)) if (old.sources[path] !== expected) throw Error('legacy fixture differs: ' + path);
+  const rows = [], counts = {}, accepted = {}, oracleChecks = {}, newAccepts = {};
   for (const [index, record] of corpus.records.entries()) {
     if (parseCell(record.code).error) throw Error('corpus contains engine-refused source at record ' + index);
     const result = compareRecord(record.code, old);
     for (const consumer of Object.keys(result.before)) {
       const count = accepted[consumer] ??= { old: 0, new: 0, changed: 0, lost: 0 };
       if (result.before[consumer] !== null && result.before[consumer] !== false) count.old++;
-      if (result.after[consumer] !== null && result.after[consumer] !== false) count.new++;
+      if (result.after[consumer] !== null && result.after[consumer] !== false) {
+        count.new++;
+        oracleChecks[consumer] = (oracleChecks[consumer] ?? 0) + 1;
+        if (result.before[consumer] === null || result.before[consumer] === false) newAccepts[consumer] = (newAccepts[consumer] ?? 0) + 1;
+        const value = consumer === 'statements' ? { spans: result.after.statements } :
+          consumer === 'tab' ? { plan: result.after.menu } : result.after[consumer];
+        const reason = justifyResult(record.code, consumer, value);
+        if (reason) throw Error(`TypeScript cannot justify corpus record ${index} ${consumer}: ${reason}`);
+      }
       else if (result.before[consumer] !== null && result.before[consumer] !== false) count.lost++;
     }
     for (const difference of result.differences) {
@@ -109,16 +74,26 @@ async function main() {
   }
   const outputs = rows.map(row => JSON.stringify(row)).join('\n') + (rows.length ? '\n' : '');
   const archive = gzipSync(outputs);
-  writeFileSync(new URL('statement-differences.jsonl.gz', import.meta.url), archive);
+  const evidenceDirectory = join(homedir(), 'Projects/sleight-wt/ledger/vc/ps3-evidence');
+  const archivePath = join(evidenceDirectory, 'statement-differences.jsonl.gz');
+  mkdirSync(evidenceDirectory, { recursive: true });
+  if (existsSync(archivePath) && !readFileSync(archivePath).equals(archive)) throw Error('existing statement evidence differs; preserve it');
+  if (!existsSync(archivePath)) writeFileSync(archivePath, archive);
   const sources = { ...old.sources };
   for (const path of ['plugins/sleight/lib/text-save.mjs', 'plugins/sleight/lib/menu-continuation.mjs', 'plugins/sleight/lib/tab-probe.mjs',
-    'plugins/sleight/lib/code-ast.mjs', 'bench/code-ast/statement-replay.mjs', 'bench/code-ast/corpus.mjs'])
+    'plugins/sleight/lib/code-ast.mjs', 'bench/code-ast/statement-replay.mjs', 'bench/code-ast/statement-compare.mjs',
+    'bench/code-ast/statement-oracle.mjs', 'bench/code-ast/corpus.mjs'])
     sources['new:' + path] = hash(readFileSync(new URL(path, root), 'utf8'));
   const summary = { base: BASE, corpus: corpus.counts, before: corpus.before, manifest: corpus.manifest,
     accepted, differences: rows.length, reasons: counts, regressions: Object.values(accepted).reduce((sum, entry) => sum + entry.lost, 0), unclassified: rows.filter(row => row.reason === 'unclassified').length,
     differencesSha256: hash(outputs), archiveSha256: createHash('sha256').update(archive).digest('hex'),
-    archiveBytes: archive.length, uncompressedBytes: Buffer.byteLength(outputs), sources };
+    archiveBytes: archive.length, uncompressedBytes: Buffer.byteLength(outputs), oracleChecks, newAccepts, sources };
   writeFileSync(new URL('statement-results.json', import.meta.url), JSON.stringify(summary, null, 2) + '\n');
+  const resultsUrl = new URL('results.json', import.meta.url);
+  const results = JSON.parse(readFileSync(resultsUrl));
+  results.statementDifferences = { file: '~/Projects/sleight-wt/ledger/vc/ps3-evidence/statement-differences.jsonl.gz',
+    records: rows.length, bytes: archive.length, sha256: summary.archiveSha256, uncompressedSha256: hash(outputs) };
+  writeFileSync(resultsUrl, JSON.stringify(results, null, 2) + '\n');
   console.log(JSON.stringify(summary, null, 2));
   if (!corpus.records.length || corpus.counts.malformed || summary.unclassified || summary.regressions) process.exitCode = 1;
 }

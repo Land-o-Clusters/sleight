@@ -1,9 +1,9 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { legacyConsumers, compareRecord } from '../bench/code-ast/statement-replay.mjs';
+import { compareRecord } from '../bench/code-ast/statement-compare.mjs';
+import { legacyConsumers as old } from './fixtures/statement-legacy/index.mjs';
 import { parseCell } from '../plugins/sleight/lib/code-ast.mjs';
 
-const old = await legacyConsumers();
 const head = 'await app.click("File"); await app.click("Save"); ';
 
 test('safe legacy trailing values and quoted selectors retain their allow/refuse decisions', () => {

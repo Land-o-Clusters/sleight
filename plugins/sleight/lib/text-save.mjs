@@ -12,6 +12,10 @@ export function statementSpans(code) {
 }
 
 export function splitTextSave(code) {
+  try { return textSave(code); } catch { return undefined; }
+}
+
+function textSave(code) {
   const split = statementSpans(code);
   if (!split) return;
   const written = new Set();
@@ -19,7 +23,8 @@ export function splitTextSave(code) {
   for (const node of split.nodes) {
     if (node.type === 'EmptyStatement') continue;
     let expression = node.type === 'ExpressionStatement' ? node.expression : undefined;
-    if (node.type === 'VariableDeclaration' && node.declarations.length === 1 && node.declarations[0].id.type === 'Identifier')
+    if (node.type === 'VariableDeclaration' && ['const', 'let', 'var'].includes(node.kind) &&
+        node.declarations.length === 1 && node.declarations[0].id.type === 'Identifier')
       expression = node.declarations[0].init;
     const call = expression?.type === 'AwaitExpression' ? memberCall(expression.argument) : null;
     const opaque = call && [...walk(expression)].some(part => part.regex || part.type === 'TemplateLiteral' && part.expressions.length);

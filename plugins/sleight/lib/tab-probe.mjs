@@ -8,6 +8,10 @@ import { memberCall, literalValue } from './code-ast.mjs';
 
 // Only an awaited Cmd+T, literal URL, Return chain. The splitter already excludes intervening reads and other handles.
 export function nativeTabPlan(plan) {
+  try { return tabPlan(plan); } catch { return undefined; }
+}
+
+function tabPlan(plan) {
   if (plan?.actions?.length !== 3 || plan.actions[0].selector?.kind !== 'key' ||
       !/^(?:super|cmd|command|meta)\+t$/i.test(plan.actions[0].selector.value) ||
       plan.actions[2].selector?.kind !== 'key' || !/^(?:return|enter)$/i.test(plan.actions[2].selector.value)) return false;

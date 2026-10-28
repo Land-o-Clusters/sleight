@@ -14,24 +14,36 @@ const directCall = node => {
 };
 const onHandle = (call, handle) => call && isName(call.receiver) && call.receiver.name === handle;
 const integer = node => node?.type === 'Literal' && Number.isInteger(node.value) && node.value >= 0;
-const string = node => typeof literalValue(node) === 'string';
+const string = node => node?.type === 'Literal' && typeof node.value === 'string' ||
+  node?.type === 'TemplateLiteral' && typeof literalValue(node) === 'string';
 const propertyName = node => isName(node) ? node.name : literalValue(node);
 // Preserve the old data-expression grammar, including holes and subtraction.
 // Computed object keys must themselves be data. Calls, spread and getters refuse.
 function literalArgument(node) {
-  if (string(node) || integer(node)) return true;
-  if (node?.type === 'Literal') return node.value === null || typeof node.value === 'boolean';
-  if (node?.type === 'UnaryExpression') return node.operator === '-' && literalArgument(node.argument);
-  if (node?.type === 'BinaryExpression') return node.operator === '-' && literalArgument(node.left) && literalArgument(node.right);
-  if (node?.type === 'ArrayExpression') return node.elements.every(element => element === null || literalArgument(element));
-  if (node?.type === 'ObjectExpression') return node.properties.every(property =>
-    property.type === 'Property' && property.kind === 'init' && !property.method && !property.shorthand &&
-    (property.computed ? literalArgument(property.key) : isName(property.key) || string(property.key) || integer(property.key)) && literalArgument(property.value));
-  return false;
+  const pending = [node];
+  while (pending.length) {
+    const value = pending.pop();
+    if (string(value) || integer(value)) continue;
+    if (value?.type === 'Literal' && (value.value === null || typeof value.value === 'boolean')) continue;
+    if (value?.type === 'UnaryExpression' && value.operator === '-') { pending.push(value.argument); continue; }
+    if (value?.type === 'BinaryExpression' && value.operator === '-') { pending.push(value.left, value.right); continue; }
+    if (value?.type === 'ArrayExpression') {
+      for (const element of value.elements) if (element !== null) pending.push(element);
+      continue;
+    }
+    if (value?.type !== 'ObjectExpression') return false;
+    for (const property of value.properties) {
+      if (property.type !== 'Property' || property.kind !== 'init' || property.method || property.shorthand) return false;
+      if (property.computed) pending.push(property.key);
+      else if (!isName(property.key) && !string(property.key) && !integer(property.key)) return false;
+      pending.push(property.value);
+    }
+  }
+  return true;
 }
 const literalArgs = args => args.every(literalArgument);
 const binding = node => {
-  if (node.type === 'VariableDeclaration' && node.declarations.length === 1) {
+  if (node.type === 'VariableDeclaration' && ['const', 'let', 'var'].includes(node.kind) && node.declarations.length === 1) {
     const declaration = node.declarations[0];
     if (isName(declaration.id)) return { name: declaration.id.name, value: declaration.init };
   }
@@ -64,17 +76,24 @@ const writeLiteral = node => string(node) || integer(node) || node?.type === 'Un
 // An AST allowlist: this handle's getAXState, an earlier bound read, or literal text/number,
 // followed only by named properties and the existing string/regex read methods.
 function writeArgument(node, handle, names) {
-  if (writeLiteral(node)) return true;
-  if (isName(node)) return names.has(node.name) && !forbidden.has(node.name);
-  if (node?.type === 'MemberExpression') return !node.computed && !node.optional && isName(node.property) &&
-    !forbidden.has(node.property.name) && node.property.name !== 'getAXState' && writeArgument(node.object, handle, names);
-  if (node?.type !== 'CallExpression') return false;
-  const call = directCall(node);
-  if (!call) return false;
-  if (onHandle(call, handle) && call.method === 'getAXState') return literalArgs(call.args);
-  if (!writeArgument(call.receiver, handle, names)) return false;
-  if (STRING_READS.has(call.method)) return call.args.every(writeLiteral);
-  return CALLBACK_READS.has(call.method) && call.args.length === 1 && arrowRegexTest(call.args[0]) !== null;
+  // Bound repeated receiver inspection as well as avoiding the JS call stack.
+  for (let depth = 0; depth < 1024; depth++) {
+    if (writeLiteral(node)) return true;
+    if (isName(node)) return names.has(node.name) && !forbidden.has(node.name);
+    if (node?.type === 'MemberExpression') {
+      if (node.computed || node.optional || !isName(node.property) ||
+          forbidden.has(node.property.name) || node.property.name === 'getAXState') return false;
+      node = node.object; continue;
+    }
+    if (node?.type !== 'CallExpression') return false;
+    const call = directCall(node);
+    if (!call) return false;
+    if (onHandle(call, handle) && call.method === 'getAXState') return literalArgs(call.args);
+    if (STRING_READS.has(call.method) ? !call.args.every(writeLiteral)
+      : !CALLBACK_READS.has(call.method) || call.args.length !== 1 || arrowRegexTest(call.args[0]) === null) return false;
+    node = call.receiver;
+  }
+  return false;
 }
 
 // Returns the name a trailing read binds, '' when it binds none, or undefined on refusal.
@@ -116,6 +135,10 @@ function actionSelector(call) {
 
 // Only standalone awaited inputs on one handle. Reads can follow, but never precede another input.
 export function splitMenuActions(code, { alias = name => /^__sleightOpenedApp\d+$/.test(name) } = {}) {
+  try { return menuActions(code, alias); } catch { return undefined; }
+}
+
+function menuActions(code, alias) {
   if (typeof code !== 'string' || code.length > 65536) return;
   const split = statementSpans(code);
   if (!split) return;
@@ -679,7 +702,8 @@ export function stopNote(receipt, plan, earlier = 0, { content, seen, uniqueSeen
 }
 const count = n => `${n} action${n === 1 ? '' : 's'}`;
 const actionName = plan => action => {
-  const method = memberCall(action.node)?.method ?? 'unknown action', { kind, value } = action.selector ?? {};
+  const name = memberCall(action.node)?.method;
+  const method = typeof name === 'string' ? name : 'unknown action', { kind, value } = action.selector ?? {};
   const shown = kind === 'number' || kind === 'id' && value.length <= 40 || kind === 'key' && NAMED_KEY.test(value);
   return shown ? `${method} ${kind === 'id' ? `id ${JSON.stringify(value)}` : kind === 'key' ? JSON.stringify(value) : value}` : method;
 };
