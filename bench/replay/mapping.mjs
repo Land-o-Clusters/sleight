@@ -380,17 +380,17 @@ export function replayResultStop(result, documentation) {
   return null;
 }
 
-export function windowDifference(before, after, mapper = new TargetMapper()) {
+export function windowDifference(before, after, mapper = new TargetMapper(), { ordered = false } = {}) {
   const headers = text => [...text.replace(/\r\n/g, '\n').matchAll(/^Window: "[^\n]+", App: [^\n]+$/gm)].map(m => m[0]);
-  const sameMultiset = (a, b) => JSON.stringify(a.sort()) === JSON.stringify(b.sort());
+  const sameWindows = (a, b) => JSON.stringify(ordered ? a : a.sort()) === JSON.stringify(ordered ? b : b.sort());
   const a = headers(before), b = headers(after);
-  if (!sameMultiset(a.map(header => mapper.replaceStrings(header)), b))
+  if (!sameWindows(a.map(header => mapper.replaceStrings(header)), b))
     return 'native window or app changed';
   const x = windowReceipts(before), y = windowReceipts(after);
   const targets = (rows, recorded) => rows.map(({ target }) => JSON.stringify([
     target.appId, recorded ? mapper.replaceStrings(target.title) : target.title,
   ]));
-  if (!sameMultiset(targets(x, true), targets(y, false))) return 'native window or app changed';
+  if (!sameWindows(targets(x, true), targets(y, false))) return 'native window or app changed';
   return null;
 }
 

@@ -71,8 +71,9 @@ export function replayServers(servers, worktree = repo) {
   return specs;
 }
 
-export async function clientsFor({ servers, policy, env, turbo, gateWindow }, switches, dir, record, worktree) {
+export async function clientsFor({ servers, policy, env, turbo, gateWindow }, switches, dir, record, worktree, { beforeLaunch, connect } = {}) {
   const { probeClient } = await import('../double-keys-client.mjs');
+  connect ??= probeClient;
   const { answerElicitation, guardReason } = await import('../codex-sleight-proxy.mjs');
   const host = Object.fromEntries(['HOME', 'USER', 'PATH', 'TMPDIR', 'LANG', 'TERM'].flatMap(k => process.env[k] ? [[k, process.env[k]]] : []));
   const engineEnv = replayEngineEnvironment();
@@ -97,10 +98,14 @@ export async function clientsFor({ servers, policy, env, turbo, gateWindow }, sw
     if (errors.length) throw Object.assign(Error(errors.join('; ')), { cleanupConfirmed: !unconfirmed, cleanupUnconfirmed: unconfirmed });
   };
   try {
-    for (const [name, spec] of Object.entries(specs)) {
+    const children = Object.entries(specs).map(([name, spec]) => {
       if (!['plugin:sleight:computer', 'sleight-turbo'].includes(name)) throw Error(`Unsupported server ${name}`);
-      const client = await probeClient({ ...spec, args: spec.args ?? [], inheritEnvironment: false, env: { ...base, ...spec.env,
-        ...switches, ...engineEnv, CLAUDE_CONFIG_DIR: base.CLAUDE_CONFIG_DIR, SLEIGHT_TRACE: dir, SLEIGHT_HAND: '0', SLEIGHT_APPROVAL_PROMPT: 'client' } }, {
+      return [name, { ...spec, args: spec.args ?? [], inheritEnvironment: false, env: { ...base, ...spec.env,
+        ...switches, ...engineEnv, CLAUDE_CONFIG_DIR: base.CLAUDE_CONFIG_DIR, SLEIGHT_TRACE: dir, SLEIGHT_HAND: '0', SLEIGHT_APPROVAL_PROMPT: 'client' } }];
+    });
+    await beforeLaunch?.(children.find(([name]) => name === 'plugin:sleight:computer')[1].env);
+    for (const [name, child] of children) {
+      const client = await connect(child, {
         relay: false, label: name, timeoutMs: 120000,
         record: entry => { record({ event: 'mcp', server: name, ...entry }); if (entry.event === 'engine-close') exits.set(name, entry); },
         approve: async params => {
@@ -129,12 +134,12 @@ export async function clientsFor({ servers, policy, env, turbo, gateWindow }, sw
   } catch (error) { await close(); throw error; }
 }
 
-export async function liveIteration(recording, { env, dir, signal, abort, beforeCall, record, worktree = repo, prepared, comparison = 'recording' }) {
+export async function liveIteration(recording, { env, dir, signal, abort, beforeCall, beforeLaunch, record, worktree = repo, prepared, comparison = 'recording' }) {
   const { withNative, withRace } = await import('./fixtures.mjs');
   prepared ??= prepareReplay(recording, join(dir, 'fixture'));
   const { mapper } = prepared;
   const drive = async config => {
-    const clients = await clientsFor(config, env, dir, record, worktree);
+    const clients = await clientsFor(config, env, dir, record, worktree, { beforeLaunch });
     let result;
     try { result = await replayCalls(recording.calls, { mapper, call: clients.call, signal, beforeCall, record, comparison }); }
     catch (error) {
@@ -251,9 +256,9 @@ export async function main(argv = process.argv.slice(2), {
       cleanupConfirmed = false;
       let result;
       try {
-        result = await engineIteration(() => runIteration(recording, { env: step.env, dir, signal: iteration.signal, abort: iteration.abort,
-          beforeCall: iteration.beforeCall, record, worktree: step.build?.worktree, prepared, comparison }), {
-          previous: runs.map(run => run.engine), read: () => readEngine({ worktree: step.build?.worktree ?? repo }),
+        result = await engineIteration(beforeLaunch => runIteration(recording, { env: step.env, dir, signal: iteration.signal, abort: iteration.abort,
+          beforeCall: iteration.beforeCall, beforeLaunch, record, worktree: step.build?.worktree, prepared, comparison }), {
+          deferred: true, previous: runs.map(run => run.engine), read: env => readEngine({ env, worktree: step.build?.worktree ?? repo }),
         });
       } catch (error) {
         // A server-close error can attest server collection alone, not fixture teardown.

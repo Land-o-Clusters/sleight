@@ -14,7 +14,7 @@ function resultDiff(A, B, path = '$') {
   return [{ path, A, B }];
 }
 
-function compareResults(A, B) {
+function compareResults(A, B, orderedWindows = false) {
   // A changed or missing document is reported separately even when only one arm's
   // copy authenticates. This classification cannot turn a mismatch into a pass.
   const header = item => item?.type === 'text' ? item.text.split('\n', 1)[0] : undefined;
@@ -24,7 +24,8 @@ function compareResults(A, B) {
   const docs = result => (result?.content ?? []).filter(isDoc).map(item => ({ type: item.type, text: item.text }));
   const taskA = task(A), taskB = task(B), changes = resultDiff(taskA, taskB);
   const documentationChanges = resultDiff(docs(A), docs(B));
-  const reason = A && B && (replayResultStop(taskA) ?? replayResultStop(taskB) ?? windowDifference(resultText(taskA), resultText(taskB)));
+  const reason = A && B && (replayResultStop(taskA) ?? replayResultStop(taskB) ??
+    windowDifference(resultText(taskA), resultText(taskB), undefined, { ordered: orderedWindows }));
   return { A, B, changes, ...(headers.size ? { documentation: { verdict: documentationChanges.length ? 'changed' : 'equal', changes: documentationChanges } } : {}),
     ...(reason ? { reason } : documentationChanges.length ? { reason: 'engine documentation text changed' } : {}),
     verdict: A === undefined || B === undefined ? 'missing' : reason || changes.length ? 'changed' : documentationChanges.length ? 'docs-differ' : 'equal' };
@@ -37,7 +38,8 @@ export function campaignEvidence(runs, spec, roles = {}) {
     if (!roles.baseline) return [];
     const calls = Array.from({ length: Math.max(a?.calls.length ?? 0, b?.calls.length ?? 0) }, (_, index) => {
       const A = a?.calls[index]?.comparisonResult, B = b?.calls[index]?.comparisonResult;
-      return { index, ...compareResults(A, B) };
+      const selectedBySpec = Boolean(spec && a?.calls[index] && b?.calls[index] && [a, b].every(run => selected(spec, run.calls[index])));
+      return { index, ...compareResults(A, B, selectedBySpec) };
     });
     return [{ iteration, calls, complete: Boolean(a && b) }];
   });
