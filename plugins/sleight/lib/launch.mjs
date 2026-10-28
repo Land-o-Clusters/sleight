@@ -135,7 +135,7 @@ export function resolveServer(env = process.env) {
 
 // Node options that take their value as the next argument. Engine 26.1023.50603 starts its server
 // with `--import file:///…/require-browser-access.mjs` before the script, so the script isn't args[0].
-const NODE_VALUE_FLAGS = new Set(['--import', '--require', '-r', '--loader', '--experimental-loader', '--env-file',
+export const NODE_VALUE_FLAGS = new Set(['--import', '--require', '-r', '--loader', '--experimental-loader', '--env-file',
   '--conditions', '-C', '--input-type', '--title', '--redirect-warnings', '--diagnostic-dir', '--report-dir']);
 // A malformed file URL stays as typed, so the existence check that follows fails closed.
 const asPath = arg => { if (!arg.startsWith('file:')) return arg; try { return fileURLToPath(arg); } catch { return arg; } };
