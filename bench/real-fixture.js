@@ -869,13 +869,14 @@ function closeOwnedWindow(window, request, app, api) {
 // A retained Finder window may navigate within the fixture bank. Its path
 // confirms location; the separate creation receipt establishes ownership.
 function finderFixtureWindow(window, request, api) {
-  var document = api.text(window, 'AXDocument') || api.text(window, 'AXURL');
-  if (document) {
-    var current = api.path(document), root = api.path(request.fixtureRoot || request.target);
-    return !!current && !!root && (current === root || current.indexOf(root + '/') === 0);
+  var document = api.text(window, 'AXDocument'), url = api.text(window, 'AXURL');
+  if (document || url) {
+    var current = api.path(document || url), root = api.path(request.fixtureRoot || request.target);
+    return !!current && !!root && (current === root || current.indexOf(root + '/') === 0) &&
+      (!document || api.path(document) === current) && (!url || api.path(url) === current);
   }
   var title = api.text(window, 'AXTitle');
-  if (title === request.token) return true;
+  if (finderNavigationLocation(window, request, api).matched) return true;
   var receipt = finderRoleLedger(request.finderOwnership, api);
   return title === 'Recents' && Array.isArray(receipt.documentless) && receipt.documentless.filter(function (entry) {
     return entry && entry.title === title && api.equal(entry.reference, window);
@@ -889,13 +890,15 @@ function bindFinderWindowNumber(window, request, app, api) {
   return number;
 }
 
-// Setup requires the exact target, not a title-only or bank-descendant match.
-// The benchmark task may navigate within the bank later; cleanup has its own
-// location rule. This predicate never establishes ownership by itself.
+// A unique fixture basename proves documentless Finder navigation on macOS 27.
+// Every exposed location must still resolve to the exact target. The task may
+// navigate within the bank later; creation ownership is checked separately.
 function finderNavigationLocation(window, request, api) {
   var target = api.path(request.target), title = request.target.slice(request.target.lastIndexOf('/') + 1);
   var location = { title: api.text(window, 'AXTitle'), document: api.text(window, 'AXDocument'), url: api.text(window, 'AXURL') };
-  var matched = !!target && !!title && location.title === title && !!(location.document || location.url) &&
+  var root = api.path(request.fixtureRoot), unique = /^[^/]+-[0-9a-f]{16}$/.test(title) && request.token === title &&
+    !!root && !!target && target.indexOf(root + '/') === 0;
+  var matched = !!target && !!title && location.title === title && (!!(location.document || location.url) || unique) &&
     (!location.document || api.path(location.document) === target) && (!location.url || api.path(location.url) === target);
   return { matched: matched, location: location };
 }
@@ -1108,7 +1111,9 @@ function runFinderSetupProbe(request, free) {
   try {
     if (request.ownerAway !== true || request.bundle !== 'com.apple.finder' ||
         !/^\/private\/tmp\/sleight-finder-probe-[A-Za-z0-9]+$/.test(request.fixtureRoot || '') ||
-        request.target !== request.fixtureRoot + '/Finder-probe' || request.control !== request.fixtureRoot + '/control.json' ||
+        typeof request.target !== 'string' || request.target.indexOf(request.fixtureRoot + '/Finder-probe-') !== 0 ||
+        !/^[0-9a-f]{16}$/.test(request.target.slice((request.fixtureRoot + '/Finder-probe-').length)) ||
+        request.control !== request.fixtureRoot + '/control.json' ||
         request.stopOnLiveHold !== true || !$.AXIsProcessTrusted()) throw new Error('Invalid Finder probe request');
     function application() {
       var values = $.NSRunningApplication.runningApplicationsWithBundleIdentifier('com.apple.finder');
@@ -1139,7 +1144,8 @@ function runFinderSetupProbe(request, free) {
       } };
     var api = nativeAX({ bundle: 'com.apple.finder', setup: true }, clock);
     clock.check();
-    return JSON.stringify(finderSetupProbe(Object.assign({}, request, { mode: 'folder', token: 'Finder-probe' }), api.app(target), api, clock));
+    return JSON.stringify(finderSetupProbe(Object.assign({}, request, { mode: 'folder',
+      token: request.target.slice(request.target.lastIndexOf('/') + 1) }), api.app(target), api, clock));
   } catch (error) {
     if (debugFailure) debugFailure('probe host', error);
     throw error;

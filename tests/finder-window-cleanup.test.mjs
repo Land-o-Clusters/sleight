@@ -6,19 +6,19 @@ import { runInNewContext } from 'node:vm';
 function fixture() {
   const source = { ObjC: { import() {} } };
   runInNewContext(readFileSync(new URL('../bench/real-fixture.js', import.meta.url), 'utf8'), source);
-  const request = { bundle: 'com.apple.finder', mode: 'folder', target: '/scratch/sleight-bench/run/Files-12345678',
-    fixtureRoot: '/scratch/sleight-bench', token: 'Files-12345678' };
+  const request = { bundle: 'com.apple.finder', mode: 'folder', target: '/scratch/sleight-bench/run/Files-12345678-0123456789abcdef',
+    fixtureRoot: '/scratch/sleight-bench', token: 'Files-12345678-0123456789abcdef' };
   const windows = [
-    { title: 'Files-12345678', document: 'file:///scratch/sleight-bench/run/Files-12345678' },
-    { title: 'Created', document: 'file:///scratch/sleight-bench/run/Files-12345678/Created' },
+    { title: 'Files-12345678-0123456789abcdef', document: 'file:///scratch/sleight-bench/run/Files-12345678-0123456789abcdef' },
+    { title: 'Created', document: 'file:///scratch/sleight-bench/run/Files-12345678-0123456789abcdef/Created' },
     { title: 'sleight-bench', document: 'file:///scratch/sleight-bench' },
-    { title: 'Files-12345678', document: '' },
+    { title: 'Files-12345678-0123456789abcdef', document: '' },
     { title: 'sleight-bench', document: 'file:///owner/sleight-bench' },
     { title: 'sleight-bench', document: '' },
-    { title: 'Files-12345678', document: 'file:///scratch/sleight-bench-other/Files-12345678' },
-    { title: 'Files-12345678', document: 'file:///scratch/sleight-bench/run/Files-12345678' },
+    { title: 'Files-12345678-0123456789abcdef', document: 'file:///scratch/sleight-bench-other/Files-12345678-0123456789abcdef' },
+    { title: 'Files-12345678-0123456789abcdef', document: 'file:///scratch/sleight-bench/run/Files-12345678-0123456789abcdef' },
     { title: 'sleight-bench', document: 'file:///scratch/sleight-bench' },
-    { title: 'Files-12345678', document: '' },
+    { title: 'Files-12345678-0123456789abcdef', document: '' },
   ];
   for (const window of windows) window.role = 'AXWindow';
   request.finderOwnership = { schema: 'finder-role-baseline-v1',
@@ -98,10 +98,18 @@ test('Finder cleanup recognizes AXURL metadata when AXDocument is absent', () =>
   assert.equal(baseline.closed, undefined, 'AXURL location alone must not authorize a close');
 });
 
+for (const conflict of ['document', 'url']) test(`Finder cleanup refuses a conflicting ${conflict} even with a matching unique title`, () => {
+  const f = fixture();
+  f.windows[0].url = f.windows[0].document;
+  f.windows[0][conflict] = 'file:///owner/private';
+  assert.throws(() => f.close(), /identity changed/);
+  assert.deepEqual(f.closed, []);
+});
+
 for (const metadata of ['document', 'url']) test(`Finder cleanup rechecks ${metadata === 'url' ? 'AXURL' : 'AXDocument'} identity at the AX press boundary`, () => {
   const f = fixture();
   if (metadata === 'url') { f.windows[0].url = f.windows[0].document; f.windows[0].document = ''; }
-  f.api.closeButton = (w, validate) => { w[metadata] = 'file:///owner/Files-12345678'; validate(); assert.fail('pressed changed window'); };
+  f.api.closeButton = (w, validate) => { w[metadata] = 'file:///owner/Files-12345678-0123456789abcdef'; validate(); assert.fail('pressed changed window'); };
   assert.throws(() => f.close(), /identity changed/);
   assert.equal(f.closed.length, 0);
 });
@@ -140,10 +148,10 @@ test('Finder cleanup refuses a retained reference that belongs to the baseline',
   assert.deepEqual(f.closed, []);
 });
 
-for (const document of ['file:///owner/Files-12345678', 'file:///scratch/sleight-bench-other/Files-12345678', ''])
+for (const document of ['file:///owner/Files-12345678-0123456789abcdef', 'file:///scratch/sleight-bench-other/Files-12345678-0123456789abcdef', ''])
   test(`Finder creation ownership still requires fixture location (${document || 'wrong title without a path'})`, () => {
     const f = fixture();
-    Object.assign(f.windows[0], { document, title: document ? 'Files-12345678' : 'sleight-bench' });
+    Object.assign(f.windows[0], { document, title: document ? 'Files-12345678-0123456789abcdef' : 'sleight-bench' });
     assert.throws(() => f.close(), /identity changed/);
     assert.deepEqual(f.closed, []);
   });

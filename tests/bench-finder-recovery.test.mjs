@@ -701,8 +701,10 @@ function finderRun(change = () => {}) {
   };
   s.nativeAX = () => api;
   s.closeOwnedWindow = (owned, _request, app) => { assert.equal(owned, window); assert.equal(app.pid, 43); calls.push('close'); };
-  change({ s, api, previous, window, sheet, calls, old, successor });
-  const run = () => s.run([JSON.stringify({ app: 'Finder', bundle: 'com.apple.finder', mode: 'folder', control: 'fake', target: '/fixture/Collections-1', token: 'Collections-1' })]);
+  const request = { app: 'Finder', bundle: 'com.apple.finder', mode: 'folder', control: 'fake',
+    fixtureRoot: '/fixture', target: '/fixture/Collections-1', token: 'Collections-1' };
+  change({ s, api, previous, window, sheet, calls, old, successor, request });
+  const run = () => s.run([JSON.stringify(request)]);
   return { run, events, calls };
 }
 
@@ -817,6 +819,25 @@ test('production Finder readiness refuses a number change during location reads'
   });
   assert.throws(run, /Finder fixture identity changed/);
   assert.equal(events.some(event => event.stage === 'ready'), false);
+});
+
+for (const [name, document, url, passes] of [
+  ['absent metadata', '', '', true],
+  ['missing attributes', undefined, undefined, true],
+  ['exact document', '/fixture/Collections-1-0123456789abcdef', '', true],
+  ['exact URL', '', '/fixture/Collections-1-0123456789abcdef', true],
+  ['conflicting document', '/owner/private', '', false],
+  ['conflicting URL', '', '/owner/private', false],
+  ['matching document and conflicting URL', '/fixture/Collections-1-0123456789abcdef', '/owner/private', false],
+  ['matching URL and conflicting document', '/owner/private', '/fixture/Collections-1-0123456789abcdef', false],
+]) test(`production readiness checks a unique title with ${name}`, () => {
+  const { run, events } = finderRun(({ api, request }) => {
+    request.token = 'Collections-1-0123456789abcdef'; request.target = '/fixture/' + request.token;
+    api.text = (_window, attr) => attr === 'AXDocument' ? document : attr === 'AXURL' ? url : request.token;
+  });
+  if (passes) run();
+  else assert.throws(run, /Finder fixture navigation unconfirmed/);
+  assert.equal(events.some(event => event.stage === 'ready'), passes);
 });
 
 test('setup refusal after New Window keeps cleanup unconfirmed and never adopts or closes an owner window', () => {

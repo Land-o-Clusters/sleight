@@ -980,7 +980,7 @@ test(`native probe preserves process identity through navigation (drift=${drift}
   f.native.AXUIElementPerformAction = (element, name) => {
     const code = action(element, name);
     if (element.AXRole === 'AXButton' && element.AXTitle === 'Go') {
-      f.window.AXDocument = root + '/Finder-probe'; f.window.AXTitle = 'Finder-probe';
+      f.window.AXDocument = root + '/Finder-probe-0123456789abcdef'; f.window.AXTitle = 'Finder-probe-0123456789abcdef';
       if (drift === 'pid') target.processIdentifier = 43;
       if (drift === 'start') birth = '2.000000';
       if (drift === 'bundle') target.bundleIdentifier = 'com.example.other';
@@ -989,7 +989,7 @@ test(`native probe preserves process identity through navigation (drift=${drift}
     return code;
   };
   const result = JSON.parse(f.source.runFinderSetupProbe({ bundle: 'com.apple.finder', ownerAway: true, stopOnLiveHold: true,
-    fixtureRoot: root, target: root + '/Finder-probe', control: root + '/control.json' }, () => {}));
+    fixtureRoot: root, target: root + '/Finder-probe-0123456789abcdef', control: root + '/control.json' }, () => {}));
   assert.equal(result.passed, !drift, JSON.stringify(result));
   assert.equal(result.cleanupConfirmed, !drift);
   assert.equal(f.present(), false);

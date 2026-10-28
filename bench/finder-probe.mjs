@@ -1,4 +1,5 @@
 import { existsSync, mkdirSync, mkdtempSync, renameSync, writeFileSync } from 'node:fs';
+import { randomBytes } from 'node:crypto';
 import { join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { acquireLiveLock } from './live-lock.mjs';
@@ -42,7 +43,7 @@ export async function runFinderProbe({ dryRun = false, ownerAway = false, debug 
       step = 'fixture directory';
       check();
       dir = mkdtempSync(join(deps.tempRoot ?? '/private/tmp', 'sleight-finder-probe-'));
-      const target = join(dir, 'Finder-probe');
+      const target = join(dir, `Finder-probe-${randomBytes(8).toString('hex')}`);
       mkdirSync(target, { mode: 0o700 });
       writeControl();
       signal?.addEventListener('abort', cancel, { once: true });

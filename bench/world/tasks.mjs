@@ -129,7 +129,7 @@ function checkTree(ctx) {
 
 function finderTask(id, open) {
   const prepare = ctx => {
-    ctx.folder = join(ctx.dir, `Files-${ctx.nonce}`); mkdirSync(ctx.folder, { recursive: true });
+    ctx.folder = join(ctx.dir, `Files-${ctx.nonce}-${randomBytes(8).toString('hex')}`); mkdirSync(ctx.folder, { mode: 0o700 });
     const text = `File ${ctx.nonce}\n`; writeFileSync(join(ctx.folder, 'alpha.txt'), text);
     if (id === 'finder-move') mkdirSync(join(ctx.folder, 'Archive'));
     ctx.expectedTree = id === 'finder-rename' ? { 'renamed.txt': text } : id === 'finder-move'

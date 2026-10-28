@@ -36,6 +36,27 @@ test('the overall deadline can fire after successful navigation but before its f
   assert.deepEqual(f.app.AXWindows, [f.owner]);
 });
 
+for (const metadata of ['absent', 'document elsewhere', 'URL elsewhere']) test(`native Finder transaction checks a unique title with ${metadata}`, () => {
+  const f = fixture({ measuredSheet: true }), emit = f.clock.emit;
+  f.request.token = 'target-0123456789abcdef'; f.request.target = '/fixture/' + f.request.token;
+  f.clock.emit = event => {
+    emit(event);
+    if (event.stage === 'finder-folder-submitted') {
+      f.window.AXTitle = f.request.token;
+      delete f.window.AXDocument; delete f.window.AXURL;
+      if (metadata === 'document elsewhere') f.window.AXDocument = '/owner/private';
+      if (metadata === 'URL elsewhere') f.window.AXURL = '/owner/private';
+    }
+  };
+  const result = f.probe(), passes = metadata === 'absent';
+  assert.equal(result.passed, passes, JSON.stringify(result));
+  assert.equal(result.navigationConfirmed === true, passes);
+  assert.equal(result.cleanupConfirmed, passes);
+  assert.ok(f.app.AXWindows.includes(f.owner));
+  if (passes) assert.deepEqual(f.app.AXWindows, [f.owner]);
+  else assert.equal(result.failure.failureReason, 'navigation-unconfirmed');
+});
+
 for (const owners of [0, 1, 3]) test(`desktop reference churn never authorizes an action with ${owners} owner windows`, () => {
   const f = fixture({ measuredSheet: true });
   const baseline = Array.from({ length: owners }, () => ({ AXRole: 'AXWindow', AXSubrole: 'AXStandardWindow' }));

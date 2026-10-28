@@ -12,7 +12,7 @@ function fixture({ owners = 1, failure, extra = false } = {}) {
   const desktop = { role: 'AXScrollArea' }, replacement = { role: 'AXScrollArea' };
   const ownerWindows = Array.from({ length: owners }, () => ({ role: 'AXWindow' }));
   const owned = { role: 'AXWindow', document: '', url: '', title: 'Recents', number: 71 }, unrecorded = { role: 'AXWindow' };
-  const request = { bundle: 'com.apple.finder', mode: 'folder', target: '/fixture/Finder-probe', fixtureRoot: '/fixture', token: 'Finder-probe' };
+  const request = { bundle: 'com.apple.finder', mode: 'folder', target: '/fixture/Finder-probe-0123456789abcdef', fixtureRoot: '/fixture', token: 'Finder-probe-0123456789abcdef' };
   let current = [desktop, ...ownerWindows], time = 0;
   const closed = [], events = [];
   const api = {
@@ -26,7 +26,7 @@ function fixture({ owners = 1, failure, extra = false } = {}) {
     finderFolderGuard: (_app, w) => { if (failure === 'early' && w) throw new Error('Finder folder window lost focus'); },
     menu: (_app, _name, _titles, validate) => validate(), folderSheet: () => ({}),
     submitFolder: (_w, _sheet, target, validate) => {
-      validate(); owned.document = failure === 'location' ? '/owner/private' : target; owned.title = 'Finder-probe';
+      validate(); owned.document = failure === 'location' ? '/owner/private' : target; owned.title = 'Finder-probe-0123456789abcdef';
       if (extra) current.push(unrecorded);
     },
     dialog: () => [], wait() {}, emit: event => events.push(event),
@@ -44,7 +44,7 @@ for (const owners of [0, 1]) test(`setup probe records desktop equality and pres
   assert.deepEqual(result.snapshots.map(row => row.phase), ['before-new', 'after-new', 'after-navigation', 'after-cleanup']);
   assert.deepEqual(result.snapshots.map(row => row.desktopReferenceEquality), [[[true]], [[false]], [[false]], [[false]]]);
   assert.deepEqual(result.snapshots[1].createdWindow, { document: '', url: '', title: 'Recents' });
-  assert.equal(result.snapshots[2].createdWindow.document, '/fixture/Finder-probe');
+  assert.equal(result.snapshots[2].createdWindow.document, '/fixture/Finder-probe-0123456789abcdef');
   assert.ok(result.snapshots.every(row => row.ownerWindowsEqual && row.ownerWindowCount === owners));
   assert.deepEqual(result.snapshots[0].roles, ['AXScrollArea', ...Array(owners).fill('AXWindow')]);
   assert.deepEqual(result.snapshots[1].roles, ['AXScrollArea', ...Array(owners + 1).fill('AXWindow')]);
@@ -70,17 +70,18 @@ test('setup probe fails closed when its retained window navigates outside the fi
 });
 
 for (const [name, state, passed] of [
-  ['title only on a window without location attributes', { document: '' }, false],
-  ['both location attributes', { url: '/fixture/Finder-probe' }, true],
-  ['URL without document', { document: '', url: '/fixture/Finder-probe' }, true],
+  ['title only on a window without location attributes', { document: '' }, true],
+  ['missing location attributes', { document: undefined, url: undefined }, true],
+  ['both location attributes', { url: '/fixture/Finder-probe-0123456789abcdef' }, true],
+  ['URL without document', { document: '', url: '/fixture/Finder-probe-0123456789abcdef' }, true],
   ['a different title', { title: 'Other folder' }, false],
   ['the old Recents title', { title: 'Recents' }, false],
   ['a document at the bank root', { document: '/fixture' }, false],
   ['a document in a sibling folder', { document: '/fixture/Other' }, false],
-  ['a document below the target', { document: '/fixture/Finder-probe/Other' }, false],
+  ['a document below the target', { document: '/fixture/Finder-probe-0123456789abcdef/Other' }, false],
   ['a conflicting URL', { url: '/owner/private' }, false],
-  ['the same folder name outside the bank', { document: '/owner/Finder-probe' }, false],
-  ['a conflicting document', { document: '/owner/private', url: '/fixture/Finder-probe' }, false],
+  ['the same folder name outside the bank', { document: '/owner/Finder-probe-0123456789abcdef' }, false],
+  ['a conflicting document', { document: '/owner/private', url: '/fixture/Finder-probe-0123456789abcdef' }, false],
   ['a different window number', { number: 72 }, false],
   ['a missing window number', { number: null }, false],
 ]) test(`navigation checks ${name} independently of the retained window`, () => {
@@ -90,6 +91,28 @@ for (const [name, state, passed] of [
   assert.equal(result.passed, passed, JSON.stringify(result));
   assert.equal(result.navigationConfirmed === true, passed);
   if (!passed) assert.equal(result.failure.failureReason, 'number' in state ? 'fixture-identity-changed' : 'navigation-unconfirmed');
+  if (passed) assert.equal(result.cleanupConfirmed, true);
+});
+
+for (const [name, change] of [
+  ['a non-unique name', request => { request.target = '/fixture/Finder-probe'; request.token = 'Finder-probe'; }],
+  ['less than 64 bits', request => { request.target = '/fixture/Finder-probe-0123456789abcde'; request.token = 'Finder-probe-0123456789abcde'; }],
+  ['a target outside its fixture root', request => { request.fixtureRoot = '/other-bank'; }],
+  ['the fixture root itself', request => { request.fixtureRoot = request.target; }],
+  ['a root with a shared prefix', request => { request.fixtureRoot = '/fixtur'; }],
+  ['a mismatched token', request => { request.token = 'other'; }],
+]) test(`a documentless title cannot prove ${name}`, () => {
+  const f = fixture(), submit = f.api.submitFolder;
+  change(f.request);
+  f.api.submitFolder = (...args) => {
+    submit(...args); f.owned.document = ''; f.owned.url = '';
+    f.owned.title = f.request.target.split('/').at(-1);
+  };
+  const result = f.run();
+  assert.equal(result.passed, false);
+  assert.equal(result.failure.failureReason, 'navigation-unconfirmed');
+  assert.equal(result.cleanupConfirmed, false);
+  assert.deepEqual(f.closed, []);
 });
 
 test('navigation refuses a replacement AX window with the same number and location', () => {
@@ -106,7 +129,7 @@ test('navigation rechecks the window number after reading the folder metadata', 
   const f = fixture(), text = f.api.text;
   f.api.text = (window, attribute) => {
     const value = text(window, attribute);
-    if (attribute === 'AXDocument' && value === '/fixture/Finder-probe') window.number = 72;
+    if (attribute === 'AXDocument' && value === '/fixture/Finder-probe-0123456789abcdef') window.number = 72;
     return value;
   };
   const result = f.run();
@@ -162,6 +185,7 @@ for (const confirmed of [false, true]) test(`probe runner ${confirmed ? 'release
       assert.equal(request.mode, 'finder-probe');
       assert.equal(request.ownerAway, true);
       assert.equal(request.stopOnLiveHold, true);
+      assert.match(request.target.slice(request.fixtureRoot.length), /^\/Finder-probe-[0-9a-f]{16}$/);
       assert.equal(options.signal, undefined, 'cancellation is delivered through the control file for host cleanup');
       return { groupClean: true, exit: { code: 0 }, stdout: JSON.stringify({ probe: 'finder-setup', passed: confirmed, cleanupConfirmed: confirmed }) };
     },
@@ -224,9 +248,18 @@ test('native probe route uses one existing Finder incarnation without a launch o
   f.source.ensureFinderAX = () => assert.fail('probe must never enter Finder restart recovery');
   const root = ['', 'private', 'tmp', 'sleight-finder-probe-OFFLINE'].join('/');
   const result = JSON.parse(f.source.runFinderSetupProbe({ bundle: 'com.apple.finder', ownerAway: true, stopOnLiveHold: true,
-    fixtureRoot: root, target: root + '/Finder-probe', control: root + '/control.json' }, () => {}));
+    fixtureRoot: root, target: root + '/Finder-probe-0123456789abcdef', control: root + '/control.json' }, () => {}));
   assert.equal(result.passed, true);
   assert.deepEqual(f.closed, [f.owned]);
+});
+
+for (const suffix of ['', '/Finder-probe', '/Finder-probe-0123456789abcde',
+  '/Finder-probe-0123456789abcdef/Other', '/Other-0123456789abcdef', '/../Finder-probe-0123456789abcdef'])
+test(`native probe refuses an invalid target suffix ${JSON.stringify(suffix)} before app access`, () => {
+  const f = fixture(), root = ['', 'private', 'tmp', 'sleight-finder-probe-OFFLINE'].join('/');
+  f.source.$ = new Proxy({}, { get: () => assert.fail('invalid target must not contact a native API') });
+  assert.throws(() => f.source.runFinderSetupProbe({ bundle: 'com.apple.finder', ownerAway: true, stopOnLiveHold: true,
+    fixtureRoot: root, target: root + suffix, control: root + '/control.json' }, () => {}), /Invalid Finder probe request/);
 });
 
 for (const when of ['before-release', 'after-release']) test(`receipt failure ${when} reports the actual synthetic lock state`, async t => {
@@ -354,7 +387,7 @@ for (const debug of [false, true]) test(`native probe writes raw failure only to
   f.source.nativeAX = () => f.api;
   const root = ['', 'private', 'tmp', 'sleight-finder-probe-OFFLINE'].join('/');
   const stdout = f.source.runFinderSetupProbe({ bundle: 'com.apple.finder', ownerAway: true, stopOnLiveHold: true,
-    debug, fixtureRoot: root, target: root + '/Finder-probe', control: root + '/control.json' }, () => {});
+    debug, fixtureRoot: root, target: root + '/Finder-probe-0123456789abcdef', control: root + '/control.json' }, () => {});
   const result = JSON.parse(stdout);
   assert.equal(result.panel.commandAttempted, false);
   assert.equal(result.cleanupConfirmed, true);
