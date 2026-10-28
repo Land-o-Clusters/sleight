@@ -1380,7 +1380,7 @@ export async function run({ leaseDirectory, inspectInput: inspectStoppedInput, h
     if (stopping) return;
     stopping = true;
     cardContext?.onClose();
-    const cardClosed = paymentCard.close?.();
+    const cardClosed = paymentCard?.close?.();
     trace?.('stop-entry', { signal });
     // Begin the deadline before draining, not after an unanswered call.
     const deadline = setTimeout(() => terminateEngine(signal), 3000);
