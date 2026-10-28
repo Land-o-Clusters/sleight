@@ -1878,7 +1878,7 @@ The arms that use the engine ran on different engine versions: sleight on 26.101
 
 ### Firefox, sleight rounds `firefox-sleight-b3-r*`
 
-2026-10-18 to 2026-10-19, Firefox 157.0.1, 29 rounds and 297 runs. sleight has the lowest expected time on 10 of 12 tasks.
+2026-10-18 to 2026-10-19, Firefox 157.0.1, 29 rounds and 297 runs. sleight completed 11 of 12 tasks. sleight has the lowest expected time on 10 of 12 tasks.
 
 Each cell is expected seconds, then passes/runs.
 
@@ -2149,7 +2149,7 @@ The arms that use the engine ran on different engine versions: sleight on 26.100
 
 ### Firefox, sleight rounds `firefox-sleight-b7-r*`
 
-2026-10-18 to 2026-10-19, Firefox 157.0.1, 29 rounds and 297 runs. sleight has the lowest expected time on 8 of 12 tasks.
+2026-10-18 to 2026-10-19, Firefox 157.0.1, 29 rounds and 297 runs. sleight completed 10 of 12 tasks. sleight has the lowest expected time on 8 of 12 tasks.
 
 Each cell is expected seconds, then passes/runs.
 

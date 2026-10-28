@@ -90,7 +90,7 @@ The arms that use the engine ran on one engine version, 26.1023.50603. A version
 
 ## Chrome, Haiku 5.5, 8 held-out tasks (newest)
 
-2026-10-28, 16:58 to 17:53 UTC, Chrome 156.0.8078.48, 44 rounds and 56 runs. sleight turbo has the lowest expected time on 3 of 8 tasks.
+2026-10-28, 16:58 to 17:53 UTC, Chrome 156.0.8078.48, 44 rounds and 56 runs. sleight turbo completed 6 of 8 tasks. sleight turbo has the lowest expected time on 3 of 8 tasks.
 
 FowlBrowser ran its defaults. Chrome used the benchmark profile and Helium a fresh profile. These are sleight's own tasks. Earlier benchmark runs informed its skill and tool wording.
 
@@ -462,7 +462,7 @@ Rounds left out, with the recorded reason:
 
 ### Chrome, sleight rounds `chrome-sleight-turbo-r*`
 
-2026-10-18 to 2026-10-19, Chrome 155.0.8059.80, 8 rounds and 94 runs. sleight turbo has the lowest expected time on 6 of 13 tasks.
+2026-10-18 to 2026-10-19, Chrome 155.0.8059.80, 8 rounds and 94 runs. sleight turbo completed 12 of 13 tasks. sleight turbo has the lowest expected time on 6 of 13 tasks.
 
 Each cell is expected seconds, then passes/runs.
 
@@ -556,7 +556,7 @@ The arms that use the engine ran on one engine version, 26.1007.71326. A version
 
 ### Chrome, sleight rounds `chrome-sleight-turbo-b4-r*`
 
-2026-10-18 to 2026-10-19, Chrome 155.0.8059.80, 8 rounds and 94 runs. sleight turbo has the lowest expected time on 11 of 13 tasks.
+2026-10-18 to 2026-10-19, Chrome 155.0.8059.80, 8 rounds and 94 runs. sleight turbo completed 12 of 13 tasks. sleight turbo has the lowest expected time on 11 of 13 tasks.
 
 Each cell is expected seconds, then passes/runs.
 
@@ -877,7 +877,7 @@ The arms that use the engine ran on one engine version, 26.1013.40934. A version
 
 ### Helium, sleight rounds `helium-sleight-turbo-r*`
 
-2026-10-18 to 2026-10-19, Helium 0.19.4.1, 12 rounds and 98 runs. sleight turbo has the lowest expected time on 9 of 13 tasks.
+2026-10-18 to 2026-10-19, Helium 0.19.4.1, 12 rounds and 98 runs. sleight turbo completed 12 of 13 tasks. sleight turbo has the lowest expected time on 9 of 13 tasks.
 
 Each cell is expected seconds, then passes/runs.
 
@@ -968,7 +968,7 @@ The arms that use the engine ran on one engine version, 26.1007.71326. A version
 
 ### Helium, sleight rounds `helium-sleight-turbo-b4-r*`
 
-2026-10-18 to 2026-10-19, Helium 0.19.4.1, 12 rounds and 98 runs. sleight turbo has the lowest expected time on 11 of 13 tasks.
+2026-10-18 to 2026-10-19, Helium 0.19.4.1, 12 rounds and 98 runs. sleight turbo completed 12 of 13 tasks. sleight turbo has the lowest expected time on 11 of 13 tasks.
 
 Each cell is expected seconds, then passes/runs.
 

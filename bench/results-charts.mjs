@@ -140,7 +140,12 @@ export function modelLine(study, arms = study.arms) {
   return `Models: ${[...byModel].map(([model, names]) => `${model} (${joinAnd(names)})`).join(', ')}. Effort: ${effortText(study, arms)}.`;
 }
 
-const wordingLine = study => `${armName(study.me)} has the lowest expected time on ${fastestCount(study, study.me)} of ${study.tasks.length} tasks.`;
+export const completedTasks = (study, arm = study.me) => study.tasks.filter(task => study.cells.some(c => c.task === task && c.arm === arm && c.passes > 0)).length;
+export const completionLine = study => {
+  const n = completedTasks(study);
+  return n < study.tasks.length ? `${armName(study.me)} completed ${n} of ${study.tasks.length} tasks. ` : '';
+};
+const wordingLine = study => `${completionLine(study)}${armName(study.me)} has the lowest expected time on ${fastestCount(study, study.me)} of ${study.tasks.length} tasks.`;
 
 export function haikuCheckoutDisclosure(all) {
   const studies = all['browser-turbo'].race.studies.filter(s => s.latest && s.rematch && s.model === 'haiku' && s.suite === 'core');
@@ -186,8 +191,7 @@ export function chartCaption(id, all) {
     return `${head}${against}${rest}.`;
   }
   const same = (study.sameModel ?? []).map(pair => ` The same-model rows put ${armName(pair.hosted)} against ${armName(pair.base)}, with the wording "${pair.wording}".`).join('');
-  return `${familyTitle(chart)}, ${study.date}. Expected seconds per task for ${joinAnd(study.arms.map(armName))}. ${armName(study.me)} has the lowest expected time on ` +
-    `${fastestCount(study, study.me)} of ${study.tasks.length} tasks.${same}` +
+  return `${familyTitle(chart)}, ${study.date}. Expected seconds per task for ${joinAnd(study.arms.map(armName))}. ${wordingLine(study)}${same}` +
     (study.rematch && study.model === 'haiku' && study.suite === 'core' ? ` ${haikuCheckoutDisclosure(all)}` : '');
 }
 
@@ -411,7 +415,7 @@ function overviewChart(id, all) {
     y += 4;
     const checkout = study.rematch && study.model === 'haiku' && study.suite === 'core'
       ? study.runs.filter(r => r.arm === 'fowlbrowser' && r.task === 'form-checkout') : [];
-    const notes = [`lowest expected time on ${fastestCount(study, study.me)} of ${study.tasks.length}`, panelEngine(study, rows.map(([arm]) => arm)),
+    const notes = [`${completionLine(study)}lowest expected time on ${fastestCount(study, study.me)} of ${study.tasks.length}`, panelEngine(study, rows.map(([arm]) => arm)),
       ...(checkout.length ? [`FowlBrowser paid on ${checkout.filter(r => !r.passed && r.problem?.includes('paid without a stated amount')).length}/${checkout.length} unpriced checkouts, and expected time includes those failures.`] : [])];
     for (const note of notes) for (const line of wrap(note, pw)) { els.push(text(0, y + 13, line, { cls: 'm' })); y += 17; }
     return { els, h: y };

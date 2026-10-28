@@ -30,7 +30,7 @@ const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const BENCH = join(ROOT, 'docs', 'benchmarks');
 // The charts come from bench/results-charts.mjs. Until that file exists the pages render without charts, and an error inside it
 // still stops the render.
-const NO_CHARTS = { CHARTS: [], renderCharts: () => ({}), chartCaption: () => '', chartBlock: () => '', haikuCheckoutDisclosure: () => '' };
+const NO_CHARTS = { CHARTS: [], renderCharts: () => ({}), chartCaption: () => '', chartBlock: () => '', haikuCheckoutDisclosure: () => '', completionLine: () => '' };
 const charts = existsSync(join(ROOT, 'bench/results-charts.mjs')) ? await import('./results-charts.mjs') : NO_CHARTS;
 const readJson = file => JSON.parse(readFileSync(file, 'utf8'));
 const tryJson = file => { try { return readJson(file); } catch { return undefined; } };
@@ -883,7 +883,7 @@ function armTable(study, { builds = false, scriptEffort = null } = {}) {
   const table = mdTable(head, [...study.arms, ...(study.hosted ?? [])].map(arm => [armName(arm), study.models?.[arm]?.length ? study.models[arm].map(code).join(', ') : 'not recorded',
     effortOf(arm).join(', ') || 'not recorded', study.versions?.[arm]?.join(', ') || 'not recorded',
     ...(engines ? [engineText(study.engines[arm], arm)] : []),
-    ...(builds ? [study.builds?.[arm]?.map(code).join(', ') || 'not recorded'] : [])]));
+    ...(builds ? [study.builds?.[arm]?.map(b => publicBuild(b)).join(', ') || 'not recorded'] : [])]));
   return engines ? `${table}\n\n${engineNote(study.engines, study.engineMix)} ${ENGINE_NOTE}` : table;
 }
 const ENGINE_NOTE = 'A version is "recorded" when the runner read it and "inferred" from the timeline in `bench/engine-versions.json` otherwise, and ' +
@@ -965,7 +965,7 @@ const pageHead = (current, title) => `${renderNav(current)}\n\n# ${title}\n`;
 function renderClaimPage(all, id, { intro }) {
   const data = all[id], study = data.studies[0], fam = family(id);
   const out = [pageHead(fam.page, fam.title)];
-  out.push(`${intro} sleight has the lowest expected time on ${study.verdict.lowest.length} of ${study.tasks.length} tasks.\n`);
+  out.push(`${intro} ${charts.completionLine(study)}sleight has the lowest expected time on ${study.verdict.lowest.length} of ${study.tasks.length} tasks.\n`);
   const chart = chartFor(all, `family-${id}`);
   if (chart) out.push(chart);
   out.push('Each cell is expected seconds, then passes/runs.\n');
@@ -1018,7 +1018,7 @@ function gradersNote(study) {
 // the spread folded.
 function raceStudySection(all, study, level, chartId) {
   const out = [`${level} ${study.title}${study.latest ? ' (newest)' : ''}\n`];
-  out.push(`${study.date}, ${cap(study.browser)} ${study.browserVersion.join(', ')}, ${study.rounds.length} rounds and ${study.runs.length} runs. ${armName(study.me)} has the lowest expected time on ${study.verdict.fastest[study.me].length} of ${study.tasks.length} tasks.\n`);
+  out.push(`${study.date}, ${cap(study.browser)} ${study.browserVersion.join(', ')}, ${study.rounds.length} rounds and ${study.runs.length} runs. ${charts.completionLine(study)}${armName(study.me)} has the lowest expected time on ${study.verdict.fastest[study.me].length} of ${study.tasks.length} tasks.\n`);
   const summary = study.latest && study.family === 'browser-race';
   if (summary) out.push(`${raceResult(study)}.\n`);
   if (unopposedTotal(study)) out.push(`${summary ? 'The competitors each have' : 'sleight is the only arm with a total: every competitor has'} a task with no pass. There is no competing complete-suite time.\n`);
@@ -1245,10 +1245,28 @@ export function compareTasks(study) {
 const pct = value => (value == null ? DASH : `${value > 0 ? '+' : ''}${(Math.round(value * 1000) / 10).toFixed(1)}%`);
 const bankKind = kind => (kind === 'remeasure' ? 're-measure' : 'validation');
 
+// This experiment commit is absent from the public release line. Keep its raw provenance in the data, not in prose.
+const publicBuild = build => build === 'cf342b59' ? 'the 1.5.0 harness with the 1.4.2 plugin tree' : code(build);
+
+export function releaseTaskSlowdowns(data, bankId = 'validation-150f-rel3') {
+  const group = id => ({ 'cc-haiku': 'Held-out controls Haiku', 'as3-safari': 'Additional page tasks Safari',
+    'as3-firefox': 'Additional page tasks Firefox' })[id] ?? id.split('-').map(cap).join(' ');
+  const rows = data.studies.filter(s => s.bank === bankId).flatMap(s => compareTasks(s).map(row => ({ ...row, group: group(s.group) })));
+  const slower = rows.filter(row => row.delta >= 0.24).map(row =>
+    [row.group, code(row.task), `+${(row.delta * 100).toFixed(2)}%`, row.a.runs, row.b.runs]);
+  const rounded = rows.filter(row => row.delta != null && row.delta < 0.24 && Math.round(row.delta * 100) === 24)
+    .map(row => `${row.group} ${code(row.task)} was +${(row.delta * 100).toFixed(2)}% slower, rounded to 24% (${row.a.runs} A runs, ${row.b.runs} B runs).`);
+  const noPass = rows.filter(row => row.b && !row.b.passes).map(row =>
+    [row.group, code(row.task), `${row.a?.passes ?? 0}/${row.a?.runs ?? 0}`, `${row.b.passes}/${row.b.runs}`]);
+  return ['Individual expected times at least 24% slower against 1.4.2:',
+    mdTable(['Group', 'Task', 'Change', 'A runs', 'B runs'], slower), ...rounded,
+    ...(noPass.length ? ['Tasks with no B pass:', mdTable(['Group', 'Task', 'A passes/runs', 'B passes/runs'], noPass)] : [])].join('\n\n');
+}
+
 const bankLabel = id => ({ 'validation-150f-rel3': 'Final release A/B', 'validation-150f-rel2': 'Earlier release A/B' })[id] ?? id;
 const groupLabel = id => ({ 'as3-safari': 'additional page tasks, Safari', 'as3-firefox': 'additional page tasks, Firefox' })[id] ?? id;
 const previousRelease = bank => bank.id === 'validation-150f-rel3'
-  ? ' against 1.4.2 (build A cf342b59, the p160 harness with the 1.4.2 plugin tree)' : '';
+  ? ' against 1.4.2 (the 1.5.0 harness with the 1.4.2 plugin tree)' : '';
 
 function validationHeadline(data) {
   const release = data.banks.filter(bank => bank.release).sort((a, b) => (a.date ?? '').localeCompare(b.date ?? '')).at(-1);
@@ -1268,7 +1286,7 @@ function bankSection(data, bank) {
   const studies = data.studies.filter(study => study.bank === bank.id);
   const out = [`## ${bankLabel(bank.id)}\n`];
   const facts = [`${bankKind(bank.kind)} bank`, bank.date, bank.engine ? `ChatGPT engine ${code(bank.engine)}` : null,
-    bank.aBuild ? `build A ${code(bank.aBuild)}` : null, bank.bBuild ? `build B ${code(bank.bBuild)}` : null].filter(Boolean);
+    bank.aBuild ? `build A ${publicBuild(bank.aBuild)}` : null, bank.bBuild ? `build B ${publicBuild(bank.bBuild)}` : null].filter(Boolean);
   out.push(`${upFirst(facts.join(', '))}.${bank.kind === 'remeasure' ? ` Its gate ${bank.passed ? 'passed' : 'did not pass'}.` : ''}` +
     `${bank.complete ? '' : ' The bank is not complete.'}\n`);
   if (bank.release) {
@@ -1279,7 +1297,7 @@ function bankSection(data, bank) {
     out.push(mdTable(['Group', 'Aborted A attempts', 'Aborted B attempts'], Object.entries(r.aborted).map(([kind, n]) => [groupLabel(kind), n.A, n.B])) + '\n');
     if (r.errors.length) out.push('Recorded gate errors: ' + r.errors.map(code).join('; ') + '.\n');
     if (r.taskExclusions.length) out.push(mdTable(['Excluded task', 'Groups', 'Sides', 'Reason'], r.taskExclusions.map(e => [e.task, e.kinds.join(', '), e.sides.join(', '), e.reason.replace(/; fix FX1 in progress$/, '')])) + '\n');
-    if (bank.id === 'validation-150f-rel3') out.push('The release passed the group limits while Safari (+10.57%), Chrome Opus (+5.14%) and Firefox (+2.74%) are slower.\n\nIndividual expected times were 24 to 35% slower for Chrome Haiku `inject-mail` (+23.94%, rounded to 24%), Chrome Opus `form-checkout` (+24.03%) and `form-settings-helium` (+25.41%), Firefox `inject-mail` (+24.35%), Safari `form-checkout` (+32.06%), `inject-mail` (+26.26%) and `mdn` (+31.26%), and the held-out Firefox controls `cc-list-pop-up-firefox` (+31.67%) and `cc-dropdown-slow-firefox` (+34.89%).\n');
+    if (bank.id === 'validation-150f-rel3') out.push('The release passed the group limits while Safari (+10.57%), Chrome Opus (+5.14%) and Firefox (+2.74%) are slower.\n\n' + releaseTaskSlowdowns(data, bank.id) + '\n');
     if (bank.id === 'validation-150f-rel3') out.push('Both sides ran fresh in the final release A/B. Finder setup failed twice at a 5 s sheet timeout, and the steps resumed. Holds for another project stopped steps mid-run. Aborted attempts were retained and rerun. `cc-list-native` was absent from the schedule. Both Finder tasks were included with no task exclusions.\n');
     if (bank.id === 'validation-150f-rel2') out.push('This is the older engine record. `cc-list-native` was absent from both sides of the schedule. Finder setup failures also excluded rename and create-folder on both sides. The gate was blocked by the native comparable-task floor.\n');
   }
@@ -1385,11 +1403,11 @@ function raceResult(study) {
 function resultSummary(id, data) {
   if (id === 'native-claim' || id === 'app-claim') {
     const s = data.studies[0];
-    return `Lowest expected time on ${s.verdict.lowest.length} of ${s.tasks.length} tasks. Total ${f1(s.verdict.totals[s.me])} s.`;
+    return `${charts.completionLine(s)}Lowest expected time on ${s.verdict.lowest.length} of ${s.tasks.length} tasks. Total ${f1(s.verdict.totals[s.me])} s.`;
   }
   if (id === 'browser-race' || id === 'browser-turbo') {
     const studies = id === 'browser-turbo' ? data.race.studies : data.studies;
-    return studies.filter(s => s.latest).map(s => `${cap(s.browser)}${s.model ? ` ${cap(s.model)} ${s.suite}` : ''}: ${id === 'browser-race' ? raceResult(s) : `lowest expected time on ${s.verdict.lowest.length} of ${s.tasks.length} tasks. ${s.verdict.totals[s.me] == null ? 'A task without a pass prevents a total' : `Total ${f1(s.verdict.totals[s.me])} s`}`}.`).join(' ');
+    return studies.filter(s => s.latest).map(s => `${cap(s.browser)}${s.model ? ` ${cap(s.model)} ${s.suite}` : ''}: ${id === 'browser-race' ? raceResult(s) : `${charts.completionLine(s)}${charts.completionLine(s) ? 'Lowest' : 'lowest'} expected time on ${s.verdict.lowest.length} of ${s.tasks.length} tasks. ${s.verdict.totals[s.me] == null ? 'A task without a pass prevents a total' : `Total ${f1(s.verdict.totals[s.me])} s`}`}.`).join(' ');
   }
   return upFirst(headlineFor(id, data)) + '.';
 }
@@ -1410,11 +1428,11 @@ function headlineFor(id, data) {
       const models = sortedUniq(rematch.filter(s => s.suite === 'core').map(s => s.model));
       const core = models.map(model => `on ${cap(model)} 5.5, lowest expected times in ` + rematch.filter(s => s.suite === 'core' && s.model === model).map(s =>
         `${cap(s.browser)} ${s.verdict.fastest[s.me].length}/${s.tasks.length} (sleight ${time(s.verdict.totals[s.me])}, FowlBrowser ${time(s.verdict.totals.fowlbrowser)})`).join(' and '));
-      const held = rematch.filter(s => s.suite === 'held-out').map(s => `The ${cap(s.model)} held-out set has lowest expected times on ${s.verdict.fastest[s.me].length}/${s.tasks.length} tasks for sleight and ${s.verdict.fastest.fowlbrowser.length}/${s.tasks.length} for FowlBrowser. ${s.arms.every(a => s.verdict.totals[a] == null) ? 'Neither arm has a complete-suite total' : 'Totals are on the results page'}`);
+      const held = rematch.filter(s => s.suite === 'held-out').map(s => `In the ${cap(s.model)} held-out set, sleight completed ${charts.completedTasks(s)} of ${s.tasks.length} tasks, with the lowest expected time on ${s.verdict.fastest[s.me].length} of ${s.tasks.length}. FowlBrowser completed ${charts.completedTasks(s, 'fowlbrowser')} of ${s.tasks.length} tasks, with the lowest expected time on ${s.verdict.fastest.fowlbrowser.length} of ${s.tasks.length}. ${s.arms.every(a => s.verdict.totals[a] == null) ? 'Neither arm has a complete-suite total' : 'Totals are on the results page'}`);
       const pending = rematch.filter(s => s.verdict.topUps.length).map(s => `${cap(s.browser)} ${cap(s.model)}`);
       return [core[0], ...core.slice(1).map(upFirst), charts.haikuCheckoutDisclosure({ 'browser-turbo': data }).replace(/\.$/, ''), ...held, ...(pending.length ? [`Five-run top-ups still owed for ${pending.join(', ')}`] : []), upFirst(engine)].join('. ');
     }
-    const race = data.race.studies.filter(s => s.latest).map(s => `In ${cap(s.browser)}${s.model ? ` on ${cap(s.model)} 5.5 (${s.suite})` : ''}, the lowest expected time on ${s.verdict.fastest[s.me].length} of ${s.tasks.length} tasks and ${s.verdict.totals[s.me] == null ? 'no total (a task has no pass)' : `a total of ${f1(s.verdict.totals[s.me])} s`} against FowlBrowser's ${s.verdict.totals.fowlbrowser == null ? 'no total (a task has no pass)' : `${f1(s.verdict.totals.fowlbrowser)} s`} (${code(s.label)}, ${s.date?.slice(0, 10)})`);
+    const race = data.race.studies.filter(s => s.latest).map(s => `In ${cap(s.browser)}${s.model ? ` on ${cap(s.model)} 5.5 (${s.suite})` : ''}, ${charts.completionLine(s)}Lowest expected time on ${s.verdict.fastest[s.me].length} of ${s.tasks.length} tasks and ${s.verdict.totals[s.me] == null ? 'no total (a task has no pass)' : `a total of ${f1(s.verdict.totals[s.me])} s`} against FowlBrowser's ${s.verdict.totals.fowlbrowser == null ? 'no total (a task has no pass)' : `${f1(s.verdict.totals.fowlbrowser)} s`} (${code(s.label)}, ${s.date?.slice(0, 10)})`);
     return lowFirst(race.join('. ')) + `. ${data.gates.length} gate studies. ${upFirst(engine)}`;
   }
   if (id === 'ab-tests') return `${data.studies.length} studies with run data. The catalog has ${data.catalog.length} benchmark write-ups and includes studies without structured run data`;
@@ -1694,12 +1712,18 @@ export function main(argv = process.argv.slice(2)) {
   const files = render(all);
   const readmeFile = join(ROOT, 'README.md');
   const readme = argv.includes('--hub-only') ? null : renderReadme({ ...all, 'engine-compat': readJson(join(out, 'data/engine-compat.json')) });
+  const releaseDocs = argv.includes('--hub-only') ? [] : ['CHANGELOG.md', 'docs/releases/1.5.0.md'].map(name => {
+    const file = join(ROOT, name), before = readFileSync(file, 'utf8');
+    return { name, file, before, after: spliceReadme(before, { 'release-slowdowns': releaseTaskSlowdowns(all.validation) }) };
+  });
   if (argv.includes('--check')) {
     const changed = Object.entries(files).filter(([name, text]) => !existsSync(join(out, name)) || readFileSync(join(out, name), 'utf8') !== text).map(([name]) => name);
     for (const name of changed) console.log(`would change ${name}`);
     const readmeStale = readme !== null && readFileSync(readmeFile, 'utf8') !== readme;
     if (readmeStale) console.log('would change README.md (the repo README\'s hub blocks)');
-    process.exitCode = changed.length || readmeStale ? 1 : 0;
+    const staleDocs = releaseDocs.filter(doc => doc.before !== doc.after);
+    for (const doc of staleDocs) console.log(`would change ${doc.name} (release slowdown summary)`);
+    process.exitCode = changed.length || readmeStale || staleDocs.length ? 1 : 0;
     return;
   }
   for (const [name, text] of Object.entries(files)) {
@@ -1707,6 +1731,7 @@ export function main(argv = process.argv.slice(2)) {
     writeFileSync(join(out, name), text);
   }
   if (readme !== null && readFileSync(readmeFile, 'utf8') !== readme) writeFileSync(readmeFile, readme);
+  for (const doc of releaseDocs) if (doc.before !== doc.after) writeFileSync(doc.file, doc.after);
   for (const note of notes) console.log(note);
   console.log(`wrote ${Object.keys(files).length} files to ${relative(ROOT, out) || '.'}${readme !== null ? ' and the README.md blocks' : ''}`);
 }

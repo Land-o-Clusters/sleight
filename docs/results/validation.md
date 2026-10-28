@@ -11,7 +11,7 @@
 
 These banks compare two builds of sleight on the same tasks, build A (an earlier build, usually the last release) against build B (the build under test). No other tool is in these tables, and they never count toward a claim. A mark means build B has a higher expected time than build A, or a lower pass rate. It is not a significance test.
 
-RELEASE PASS: final release A/B against 1.4.2 (build A cf342b59, the p160 harness with the 1.4.2 plugin tree), 8 of 8 groups within their time and pass-loss limits (2026-10-28, 06:10 to 14:04 UTC, engine 26.1023.50603 build 22391). 3 scored banks, including the older engine records.
+RELEASE PASS: final release A/B against 1.4.2 (the 1.5.0 harness with the 1.4.2 plugin tree), 8 of 8 groups within their time and pass-loss limits (2026-10-28, 06:10 to 14:04 UTC, engine 26.1023.50603 build 22391). 3 scored banks, including the older engine records.
 
 <details><summary>Method</summary>
 
@@ -24,9 +24,9 @@ RELEASE PASS: final release A/B against 1.4.2 (build A cf342b59, the p160 harnes
 
 ## Final release A/B
 
-Validation bank, 2026-10-28, 06:10 to 14:04 UTC, ChatGPT engine `26.1023.50603 build 22391`, build A `cf342b59`, build B `e679ed7e`.
+Validation bank, 2026-10-28, 06:10 to 14:04 UTC, ChatGPT engine `26.1023.50603 build 22391`, build A the 1.5.0 harness with the 1.4.2 plugin tree, build B `e679ed7e`.
 
-RELEASE PASS against 1.4.2 (build A cf342b59, the p160 harness with the 1.4.2 plugin tree) (recorded exit 0). Passing lower-median totals include only tasks with a pass on both sides. Expected-time marks below use a different statistic.
+RELEASE PASS against 1.4.2 (the 1.5.0 harness with the 1.4.2 plugin tree) (recorded exit 0). Passing lower-median totals include only tasks with a pass on both sides. Expected-time marks below use a different statistic.
 
 | Group | Passing lower-median total A (s) | B (s) | Change | Limit | Comparable tasks | Passes A | Passes B |
 | --- | --- | --- | --- | --- | --- | --- | --- |
@@ -52,7 +52,33 @@ RELEASE PASS against 1.4.2 (build A cf342b59, the p160 harness with the 1.4.2 pl
 
 The release passed the group limits while Safari (+10.57%), Chrome Opus (+5.14%) and Firefox (+2.74%) are slower.
 
-Individual expected times were 24 to 35% slower for Chrome Haiku `inject-mail` (+23.94%, rounded to 24%), Chrome Opus `form-checkout` (+24.03%) and `form-settings-helium` (+25.41%), Firefox `inject-mail` (+24.35%), Safari `form-checkout` (+32.06%), `inject-mail` (+26.26%) and `mdn` (+31.26%), and the held-out Firefox controls `cc-list-pop-up-firefox` (+31.67%) and `cc-dropdown-slow-firefox` (+34.89%).
+Individual expected times at least 24% slower against 1.4.2:
+
+| Group | Task | Change | A runs | B runs |
+| --- | --- | --- | --- | --- |
+| Held-out controls Haiku | `cc-list-pop-up-firefox` | +31.67% | 3 | 3 |
+| Held-out controls Haiku | `cc-dropdown-slow-firefox` | +34.89% | 3 | 3 |
+| Chrome Opus | `form-checkout` | +24.03% | 1 | 1 |
+| Chrome Opus | `form-settings-helium` | +25.41% | 1 | 1 |
+| Chrome Opus | `demoid` | +74.34% | 1 | 1 |
+| Chrome Opus | `inject-order` | +113.61% | 1 | 1 |
+| Firefox Haiku | `inject-order` | +40.00% | 3 | 3 |
+| Firefox Haiku | `inject-mail` | +24.35% | 3 | 3 |
+| Native Haiku | `textedit-insert-line` | +51.49% | 3 | 3 |
+| Native Haiku | `textedit-edit` | +53.27% | 3 | 3 |
+| Safari Haiku | `form-checkout` | +32.06% | 3 | 3 |
+| Safari Haiku | `inject-order` | +36.96% | 3 | 3 |
+| Safari Haiku | `inject-mail` | +26.26% | 3 | 3 |
+| Safari Haiku | `mdn` | +31.26% | 3 | 3 |
+
+Chrome Haiku `inject-mail` was +23.94% slower, rounded to 24% (5 A runs, 5 B runs).
+
+Tasks with no B pass:
+
+| Group | Task | A passes/runs | B passes/runs |
+| --- | --- | --- | --- |
+| Chrome Opus | `inject-mail` | 1/1 | 0/1 |
+| Firefox Haiku | `form-settings-helium` | 0/3 | 0/3 |
 
 Both sides ran fresh in the final release A/B. Finder setup failed twice at a 5 s sheet timeout, and the steps resumed. Holds for another project stopped steps mid-run. Aborted attempts were retained and rerun. `cc-list-native` was absent from the schedule. Both Finder tasks were included with no task exclusions.
 
@@ -84,7 +110,7 @@ Build A rounds: `as3-firefox-A-r1`, `as3-firefox-A-r2`, `as3-firefox-A-r3`. Buil
 | Arm | Model ids in the runs | Effort | Versions recorded | Build |
 | --- | --- | --- | --- | --- |
 | build B (new) | `claude-haiku-5-5` | high | not recorded | `e679ed7e` |
-| build A (earlier) | `claude-haiku-5-5` | high | not recorded | `cf342b59` |
+| build A (earlier) | `claude-haiku-5-5` | high | not recorded | the 1.5.0 harness with the 1.4.2 plugin tree |
 
 Passing runs, median [fastest to slowest]:
 
@@ -115,7 +141,7 @@ Build A rounds: `as3-safari-A-r1-ab`, `as3-safari-A-r1-ba`, `as3-safari-A-r2`, `
 | Arm | Model ids in the runs | Effort | Versions recorded | Build |
 | --- | --- | --- | --- | --- |
 | build B (new) | `claude-haiku-5-5` | high | not recorded | `e679ed7e` |
-| build A (earlier) | `claude-haiku-5-5` | high | not recorded | `cf342b59` |
+| build A (earlier) | `claude-haiku-5-5` | high | not recorded | the 1.5.0 harness with the 1.4.2 plugin tree |
 
 Passing runs, median [fastest to slowest]:
 
@@ -155,7 +181,7 @@ Build A rounds: `cc-list-firefox-A-r1`, `cc-list-safari-A-r1`, `cc-new-tab-firef
 | Arm | Model ids in the runs | Effort | Versions recorded | Build |
 | --- | --- | --- | --- | --- |
 | build B (new) | `claude-haiku-5-5` | high | not recorded | `e679ed7e` |
-| build A (earlier) | `claude-haiku-5-5` | high | not recorded | `cf342b59` |
+| build A (earlier) | `claude-haiku-5-5` | high | not recorded | the 1.5.0 harness with the 1.4.2 plugin tree |
 
 Passing runs, median [fastest to slowest]:
 
@@ -203,7 +229,7 @@ Build A rounds: `chrome-A-r1`, `chrome-A-r2`, `chrome-A-r3`, `chrome-A-r4`, `chr
 | Arm | Model ids in the runs | Effort | Versions recorded | Build |
 | --- | --- | --- | --- | --- |
 | build B (new) | `claude-haiku-5-5` | high | not recorded | `e679ed7e` |
-| build A (earlier) | `claude-haiku-5-5` | high | not recorded | `cf342b59` |
+| build A (earlier) | `claude-haiku-5-5` | high | not recorded | the 1.5.0 harness with the 1.4.2 plugin tree |
 
 Passing runs, median [fastest to slowest]:
 
@@ -250,7 +276,7 @@ Build A rounds: `opus-A-r1`. Build B rounds: `opus-B-r1`.
 | Arm | Model ids in the runs | Effort | Versions recorded | Build |
 | --- | --- | --- | --- | --- |
 | build B (new) | `claude-opus-5-5` | high | not recorded | `e679ed7e` |
-| build A (earlier) | `claude-opus-5-5` | high | not recorded | `cf342b59` |
+| build A (earlier) | `claude-opus-5-5` | high | not recorded | the 1.5.0 harness with the 1.4.2 plugin tree |
 
 Passing runs, median [fastest to slowest]:
 
@@ -302,7 +328,7 @@ Build A rounds: `race-firefox-A-r1`, `race-firefox-A-r2`, `race-firefox-A-r3`. B
 | Arm | Model ids in the runs | Effort | Versions recorded | Build |
 | --- | --- | --- | --- | --- |
 | build B (new) | `claude-haiku-5-5` | high | not recorded | `e679ed7e` |
-| build A (earlier) | `claude-haiku-5-5` | high | not recorded | `cf342b59` |
+| build A (earlier) | `claude-haiku-5-5` | high | not recorded | the 1.5.0 harness with the 1.4.2 plugin tree |
 
 Passing runs, median [fastest to slowest]:
 
@@ -356,7 +382,7 @@ Build A rounds: `native-A-r1-ab`, `native-A-r1-ba`, `native-A-r1`, `native-A-r2`
 | Arm | Model ids in the runs | Effort | Versions recorded | Build |
 | --- | --- | --- | --- | --- |
 | build B (new) | `claude-haiku-5-5` | high | not recorded | `e679ed7e` |
-| build A (earlier) | `claude-haiku-5-5` | high | not recorded | `cf342b59` |
+| build A (earlier) | `claude-haiku-5-5` | high | not recorded | the 1.5.0 harness with the 1.4.2 plugin tree |
 
 Passing runs, median [fastest to slowest]:
 
@@ -414,7 +440,7 @@ Build A rounds: `race-safari-A-r1`, `race-safari-A-r2`, `race-safari-A-r3`. Buil
 | Arm | Model ids in the runs | Effort | Versions recorded | Build |
 | --- | --- | --- | --- | --- |
 | build B (new) | `claude-haiku-5-5` | high | not recorded | `e679ed7e` |
-| build A (earlier) | `claude-haiku-5-5` | high | not recorded | `cf342b59` |
+| build A (earlier) | `claude-haiku-5-5` | high | not recorded | the 1.5.0 harness with the 1.4.2 plugin tree |
 
 Passing runs, median [fastest to slowest]:
 
