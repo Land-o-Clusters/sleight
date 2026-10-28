@@ -133,8 +133,15 @@ export async function liveIteration(recording, { env, dir, signal, abort, before
   const { mapper } = prepared;
   const drive = async config => {
     const clients = await clientsFor(config, env, dir, record, worktree);
-    try { return await replayCalls(recording.calls, { mapper, call: clients.call, signal, beforeCall, record, comparison }); }
-    finally { await clients.close(); }
+    let result;
+    try { result = await replayCalls(recording.calls, { mapper, call: clients.call, signal, beforeCall, record, comparison }); }
+    catch (error) {
+      // A replay failure stays the reason; a close failure after it is added, never put in its place.
+      await clients.close().catch(closeError => { error.message += `; ${closeError.message}`; Object.assign(error, { cleanupUnconfirmed: closeError.cleanupUnconfirmed }); });
+      throw error;
+    }
+    await clients.close();
+    return result;
   };
   const fixture = await (recording.kind === 'race' ? withRace : withNative)(recording,
     { dir: join(dir, 'fixture'), repo: worktree, mapper, signal, abort, beforeCall, drive, env, prepared });
