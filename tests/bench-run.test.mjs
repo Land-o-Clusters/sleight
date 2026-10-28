@@ -4,6 +4,7 @@ const MAC_USERS = ['', 'Users', ''].join('/');
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
+import { trackTemp } from '../scripts/temp-leftovers.mjs';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { runInNewContext } from 'node:vm';
@@ -136,7 +137,7 @@ async function runner({ hygieneResult = { leftWindows: [], errors: [] }, hygiene
   }
   const calls = [], saved = [], envs = [], tailScopes = [], directories = [], hubRefreshes = [];
   const logs = [], driverOptions = [], codexRuns = [], files = new Map(), commands = [], codexConfigs = [], contexts = [];
-  const temp = mkdtempSync(join(tmpdir(), 'bench-run-test-'));
+  const temp = trackTemp(mkdtempSync(join(tmpdir(), 'bench-run-test-')));
   const lockPath = join(temp, 'live.lock'), holdPath = join(temp, 'sleight-hold');
   let preflightDone = false, calculatorObservations = 0, engineReadCount = 0;
   const source = readFileSync(new URL('../bench/run.mjs', import.meta.url), 'utf8')
@@ -631,7 +632,7 @@ for (const arm of ['sleight', 'codex', 'lcu', 'cua', 'peekaboo', 'claude-cu', 'm
 });
 
 for (const arm of ['sleight', 'lcu', 'cua', 'peekaboo']) test(`${arm} world dry plan matches the live driver flags`, async () => {
-  const dry = await runner({ suite: 'world', arm, dryRun: true });
+  const dry = await runner({ suite: 'world', arm, dryRun: true, extraArgs: ['--owner-away'] });
   const live = await runner({ suite: 'world', arm, drive: true, extraArgs: ['--owner-away'] });
   assert.equal(dry.error, undefined);
   assert.equal(live.error, undefined);
@@ -826,6 +827,52 @@ test('generic default comparisons use the guarded lifecycle for every arm and pr
   assert.ok(result.tailScopes.every(scope => scope.ownedOnly));
   assert.ok(result.calls.filter(Array.isArray).filter(call => call[0] === 'driver').every(args => args.includes('--disallowedTools')));
 });
+
+for (const ownerAway of [true, false]) test(`world native handoff allowlist with owner ${ownerAway ? 'away' : 'present'} keeps the deny hook`, async () => {
+  const task = { id: 'fixture', app: 'Safari', ownerPresent: !ownerAway };
+  const result = await runner({ suite: 'world', arm: 'sleight', drive: true, tasks: [task],
+    extraArgs: [ownerAway ? '--owner-away' : '--owner-present', '--tasks', task.id] });
+  assert.equal(result.error, undefined);
+  const commands = result.calls.filter(call => Array.isArray(call) && call[0] === 'driver');
+  assert.equal(commands.length, 3);
+  const handoff = 'mcp__plugin_sleight_computer__app_handoff';
+  for (const args of commands) {
+    const allowed = args[args.indexOf('--allowedTools') + 1].split(',');
+    assert.deepEqual(allowed, [
+      'mcp__plugin_sleight_computer__js',
+      'mcp__plugin_sleight_computer__js_reset',
+      'mcp__plugin_sleight_computer__drag',
+      'mcp__plugin_sleight_computer__hover',
+      'mcp__plugin_sleight_computer__menu_bar',
+      'mcp__plugin_sleight_computer__notifications',
+      'mcp__plugin_sleight_computer__select_window',
+      'mcp__plugin_sleight_computer__open_file',
+      ...(ownerAway ? [handoff] : []),
+    ]);
+    const settings = result.files.get(args[args.indexOf('--settings') + 1]);
+    assert.match(settings.hooks.PermissionRequest[0].hooks[0].command, /deny-approval\.mjs/);
+    assert.ok(!JSON.stringify(settings.hooks.PreToolUse ?? []).includes('deny-approval.mjs'));
+  }
+});
+
+for (const [suite, cleanArms] of [['default', false], ['real', false], ['real', true]]) {
+  for (const ownerAway of [true, false]) test(`${suite}${cleanArms ? ' clean' : ''} handoff allowlist with owner ${ownerAway ? 'away' : 'present'} retains the base tools`, async () => {
+    const result = await runner({ suite, cleanArms, drive: true, extraArgs: [ownerAway ? '--owner-away' : '--owner-present'] });
+    assert.equal(result.error, undefined);
+    const commands = result.calls.filter(call => Array.isArray(call) && call[0] === 'driver');
+    assert.equal(commands.length, 3);
+    for (const args of commands) assert.deepEqual(args[args.indexOf('--allowedTools') + 1].split(','), [
+      'mcp__plugin_sleight_computer__js',
+      'mcp__plugin_sleight_computer__js_reset',
+      'mcp__plugin_sleight_computer__drag',
+      'mcp__plugin_sleight_computer__hover',
+      'mcp__plugin_sleight_computer__menu_bar',
+      'mcp__plugin_sleight_computer__notifications',
+      'mcp__plugin_sleight_computer__select_window',
+      'mcp__plugin_sleight_computer__open_file',
+    ]);
+  });
+}
 
 test('generic comparisons isolate MCP while allowing the sleight mod connection', async () => {
   const result = await runner({ suite: 'default', arm: 'sleight,mcp:rival', drive: true, outcome: { passed: true } });
