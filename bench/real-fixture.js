@@ -925,7 +925,7 @@ function closeFinderFixtureWindows(owned, request, app, api) {
 // One setup and cleanup, using the production creation ledger in one AX host.
 // Only the newly retained window's title and location enter this probe receipt.
 function finderSetupProbe(request, app, api, clock) {
-  var owned, baseline, fileMenu = api.fileMenu;
+  var owned, windowNumber, baseline, fileMenu = api.fileMenu;
   var result = { probe: 'finder-setup', passed: false, snapshots: [], cleanupConfirmed: false };
   var phase = 'setup', originals = {};
   // Diagnostics stay on the local stderr channel. Never attach errors or
@@ -960,21 +960,38 @@ function finderSetupProbe(request, app, api, clock) {
   api.fileMenu = function (target, titles, validate, refuse, tracked) {
     return fileMenu.call(api, target, titles, function () { validate(); snapshot('before-new'); }, refuse, tracked);
   };
+  function stableWindow() {
+    clock.check();
+    var current = finderRoleInventory(app, api, request.finderOwnership, 'validate');
+    if (current.filter(function (entry) { return entry.role === 'AXWindow' && api.equal(entry.reference, owned); }).length !== 1 ||
+        api.windowNumber(owned, app) !== windowNumber) throw new Error('Finder fixture identity changed');
+  }
   try {
     openFinderFolder(request, app, null, api, clock, function (window) {
       owned = window;
+      windowNumber = api.windowNumber(window, app);
+      if (!(windowNumber > 0) || Math.floor(windowNumber) !== windowNumber) throw new Error('Finder fixture identity changed');
       snapshot('after-new', window);
     });
-    var deadline = clock.now() + 5000, document, path, root = api.path(request.fixtureRoot);
+    // Ownership survives navigation. Location metadata does not: a new Recents
+    // window becomes the exact requested folder, never merely another bank path.
+    var deadline = clock.now() + 5000, location, navigated = false, target = api.path(request.target);
+    var title = request.target.slice(request.target.lastIndexOf('/') + 1);
     do {
-      clock.check();
-      finderRoleInventory(app, api, request.finderOwnership, 'validate');
-      document = api.text(owned, 'AXDocument') || api.text(owned, 'AXURL');
-      path = document && api.path(document);
-      if (root && path && (path === root || path.indexOf(root + '/') === 0)) break;
+      stableWindow();
+      location = { title: api.text(owned, 'AXTitle'), document: api.text(owned, 'AXDocument'), url: api.text(owned, 'AXURL') };
+      // Either location attribute can be unsupported, but a title alone cannot
+      // distinguish the target from another folder with the same name.
+      navigated = !!target && !!title && location.title === title && !!(location.document || location.url) &&
+        (!location.document || api.path(location.document) === target) && (!location.url || api.path(location.url) === target);
+      stableWindow();
+      if (navigated) break;
       clock.wait(100);
     } while (clock.now() < deadline);
-    if (!root || !path || !(path === root || path.indexOf(root + '/') === 0)) throw new Error('Finder fixture identity changed');
+    if (!navigated) {
+      if (clock.debugFailure) clock.debugFailure('navigation metadata', new Error(JSON.stringify(location)));
+      throw new Error('Finder fixture identity changed');
+    }
     snapshot('after-navigation', owned);
     result.navigationConfirmed = true;
   } catch (error) {
@@ -1011,22 +1028,26 @@ function finderSetupProbe(request, app, api, clock) {
   return result;
 }
 
-function finderProbeDebug(step, error, write) {
+function finderProbeDebug(step, error, write, tolerated) {
   function field(name) {
     try { return String(error && error[name] || 'unavailable'); }
     catch (_) { return 'unavailable'; }
   }
   // A failed diagnostic must not replace the original failure or block cleanup.
-  try { write('[finder-probe debug] step=' + step + '\nmessage: ' + field('message') + '\nstack: ' + field('stack') + '\n'); }
+  try {
+    if (tolerated) write('[finder-probe debug] tolerated step=' + step + ' code=' + field('code') + ' attribute=' + field('attribute') + '\n');
+    else write('[finder-probe debug] step=' + step + '\nmessage: ' + field('message') + '\nstack: ' + field('stack') + '\n');
+  }
   catch (_) {}
 }
 
 function runFinderSetupProbe(request, free) {
-  var debugFailure = request.debug === true ? function (step, error) {
+  function diagnostic(tolerated) { return request.debug === true ? function (step, error) {
     finderProbeDebug(step, error, function (message) {
       $.NSFileHandle.fileHandleWithStandardError.writeData($(message).dataUsingEncoding($.NSUTF8StringEncoding));
-    });
-  } : null;
+    }, tolerated);
+  } : null; }
+  var debugFailure = diagnostic(false), debugTolerated = diagnostic(true);
   try {
     if (request.ownerAway !== true || request.bundle !== 'com.apple.finder' ||
         !/^\/private\/tmp\/sleight-finder-probe-[A-Za-z0-9]+$/.test(request.fixtureRoot || '') ||
@@ -1040,7 +1061,8 @@ function runFinderSetupProbe(request, free) {
     var target = application(), pid = runningPid(target), birth = finderProcessBirth(pid);
     if (!(pid > 0) || !finderBirthParts(birth)) throw new Error('Finder probe process identity unavailable');
     var cleanup = false, deadline = Date.now() + 20000;
-    var clock = { emit: function () {}, debugFailure: debugFailure, now: function () { return Date.now(); }, wait: function (ms) { waitForLaunch(ms / 1000); },
+    var clock = { emit: function () {}, debugFailure: debugFailure, debugTolerated: debugTolerated,
+      now: function () { return Date.now(); }, wait: function (ms) { waitForLaunch(ms / 1000); },
       beginCleanup: function () { cleanup = true; deadline = Date.now() + 10000; },
       check: function () {
         free();
@@ -1422,7 +1444,7 @@ function recoverFixtureApplications(request, api, clock) {
 }
 
 function nativeAX(state, clock) {
-  var placementBound = false, retainedWindows = [], discardedWindows = [], unsupportedTitle = {};
+  var placementBound = false, retainedWindows = [], discardedWindows = [], unsupportedTitle = {}, finderCandidate = null;
   function roleValueDiagnostic(object) {
     var diagnostic = { roleNativeType: 'unavailable', roleNativeWindowEqual: 'unavailable', roleDeepWindowEqual: 'unavailable' };
     try { if (!object || (object.isNil && object.isNil())) return diagnostic; }
@@ -1476,7 +1498,13 @@ function nativeAX(state, clock) {
     };
     var checked = function () {
       try { return operation(); }
-      catch (error) { if (clock && clock.debugFailure) clock.debugFailure('AX read ' + attribute, error); throw error; }
+      catch (error) {
+        // A candidate read is classified by its caller after it proves this is
+        // a vanished child. Parent and app reads still report failures here.
+        if (!(error.code === -25202 && finderCandidate && equal(element, finderCandidate)) && clock && clock.debugFailure)
+          clock.debugFailure('AX read ' + attribute, error);
+        throw error;
+      }
     };
     if (state && (state.cleanup || state.observation)) return cleanupRead(checked, state, clock);
     return state && state.officeWaiting ? checked() : setupRead(checked, state, clock);
@@ -1721,6 +1749,8 @@ function nativeAX(state, clock) {
     var inventories = [children(receipt.window, 'AXSheets'), children(receipt.window),
       children(receipt.app), api.windows(receipt.app)].map(function (nodes, inventory) {
       return nodes.filter(function (panel) {
+        var previous = finderCandidate;
+        finderCandidate = !equal(panel, receipt.window) && !equal(panel, receipt.app) ? panel : null;
         try {
           if (inventory > 0 && text(panel, 'AXRole') !== 'AXSheet') return false;
           if (inventory > 1 && !equal(read(panel, 'AXParent'), receipt.window)) return false;
@@ -1728,9 +1758,12 @@ function nativeAX(state, clock) {
           return true;
         } catch (error) {
           // A candidate can vanish between inventory and attribute reads.
-          if (error.code === -25202 && !equal(panel, receipt.window) && !equal(panel, receipt.app)) return false;
+          if (error.code === -25202 && finderCandidate) {
+            if (clock && clock.debugTolerated) clock.debugTolerated('AX read ' + error.attribute, error);
+            return false;
+          }
           throw error;
-        }
+        } finally { finderCandidate = previous; }
       });
     });
     // Each inventory must contain at most one sheet. Do not deduplicate distinct
@@ -1902,8 +1935,16 @@ function nativeAX(state, clock) {
       // Even an invalid retained panel cannot excuse a failed parent/app read.
       var nodes = receipt ? children(receipt.window, 'AXSheets').concat(children(receipt.window),
         this.windows(receipt.app), children(receipt.app)) : [];
+      var previous = finderCandidate;
+      finderCandidate = receipt && !equal(panel, receipt.window) && !equal(panel, receipt.app) ? panel : null;
       try { if (!text(panel, 'AXRole')) return false; }
-      catch (error) { if (error.code === -25202) return false; throw error; }
+      catch (error) {
+        if (error.code === -25202) {
+          if (clock && clock.debugTolerated) clock.debugTolerated('AX read ' + error.attribute, error);
+          return false;
+        }
+        throw error;
+      } finally { finderCandidate = previous; }
       if (!receipt) return true;
       var focused = this.focused(receipt.app);
       if (focused) nodes.push(focused);

@@ -11,16 +11,16 @@ function fixture({ owners = 1, failure, extra = false } = {}) {
   runInNewContext(readFileSync(new URL('../bench/real-fixture.js', import.meta.url), 'utf8'), source);
   const desktop = { role: 'AXScrollArea' }, replacement = { role: 'AXScrollArea' };
   const ownerWindows = Array.from({ length: owners }, () => ({ role: 'AXWindow' }));
-  const owned = { role: 'AXWindow', document: '', title: 'Recents' }, unrecorded = { role: 'AXWindow' };
+  const owned = { role: 'AXWindow', document: '', url: '', title: 'Recents', number: 71 }, unrecorded = { role: 'AXWindow' };
   const request = { bundle: 'com.apple.finder', mode: 'folder', target: '/fixture/Finder-probe', fixtureRoot: '/fixture', token: 'Finder-probe' };
   let current = [desktop, ...ownerWindows], time = 0;
   const closed = [], events = [];
   const api = {
     windows: () => [...current], finderRole: w => w.role, equal: (a, b) => !!a && a === b,
-    exists: w => current.includes(w), path: value => value,
+    exists: w => current.includes(w), path: value => value, windowNumber: w => w.number,
     text: (w, attribute) => {
       assert.equal(w, owned, 'never read existing owner window titles or documents');
-      return attribute === 'AXDocument' ? w.document : attribute === 'AXTitle' ? w.title : '';
+      return attribute === 'AXDocument' ? w.document : attribute === 'AXTitle' ? w.title : w.url;
     },
     fileMenu: (_app, _titles, validate) => { validate(); current = [replacement, ...ownerWindows, owned]; },
     finderFolderGuard: (_app, w) => { if (failure === 'early' && w) throw new Error('Finder folder window lost focus'); },
@@ -67,6 +67,61 @@ test('setup probe fails closed when its retained window navigates outside the fi
   assert.equal(result.cleanupConfirmed, false);
   assert.equal(result.cleanupFailure.failureReason, 'fixture-location-mismatch');
   assert.deepEqual(f.closed, []);
+});
+
+for (const [name, state, passed] of [
+  ['title only on a window without location attributes', { document: '' }, false],
+  ['both location attributes', { url: '/fixture/Finder-probe' }, true],
+  ['URL without document', { document: '', url: '/fixture/Finder-probe' }, true],
+  ['a different title', { title: 'Other folder' }, false],
+  ['the old Recents title', { title: 'Recents' }, false],
+  ['a document at the bank root', { document: '/fixture' }, false],
+  ['a document in a sibling folder', { document: '/fixture/Other' }, false],
+  ['a document below the target', { document: '/fixture/Finder-probe/Other' }, false],
+  ['a conflicting URL', { url: '/owner/private' }, false],
+  ['the same folder name outside the bank', { document: '/owner/Finder-probe' }, false],
+  ['a conflicting document', { document: '/owner/private', url: '/fixture/Finder-probe' }, false],
+  ['a different window number', { number: 72 }, false],
+  ['a missing window number', { number: null }, false],
+]) test(`navigation checks ${name} independently of the retained window`, () => {
+  const f = fixture(), submit = f.api.submitFolder;
+  f.api.submitFolder = (...args) => { submit(...args); Object.assign(f.owned, state); };
+  const result = f.run();
+  assert.equal(result.passed, passed, JSON.stringify(result));
+  assert.equal(result.navigationConfirmed === true, passed);
+  if (!passed) assert.equal(result.failure.failureReason, 'fixture-identity-changed');
+});
+
+test('navigation refuses a replacement AX window with the same number and location', () => {
+  const f = fixture(), submit = f.api.submitFolder, windows = f.api.windows;
+  let navigated = false;
+  f.api.submitFolder = (...args) => { submit(...args); navigated = true; };
+  f.api.windows = () => windows().map(w => navigated && w === f.owned ? { ...w } : w);
+  const result = f.run();
+  assert.equal(result.passed, false);
+  assert.equal(result.navigationConfirmed, undefined);
+});
+
+test('navigation rechecks the window number after reading the folder metadata', () => {
+  const f = fixture(), text = f.api.text;
+  f.api.text = (window, attribute) => {
+    const value = text(window, attribute);
+    if (attribute === 'AXDocument' && value === '/fixture/Finder-probe') window.number = 72;
+    return value;
+  };
+  const result = f.run();
+  assert.equal(result.passed, false);
+  assert.equal(result.navigationConfirmed, undefined);
+  assert.equal(result.failure.failureReason, 'fixture-identity-changed');
+});
+
+test('rejected navigation metadata is available only in local debug output', () => {
+  const f = fixture({ failure: 'location' }), diagnostics = [];
+  f.clock.debugFailure = (step, error) => f.source.finderProbeDebug(step, error, text => diagnostics.push(text));
+  const result = f.run();
+  assert.equal(result.passed, false);
+  assert.ok(diagnostics.some(text => text.includes('step=navigation metadata') && text.includes('/owner/private')));
+  assert.doesNotMatch(JSON.stringify([result, f.events]), /owner\/private/);
 });
 
 test('setup probe records an extra owner window and closes only its created reference', () => {

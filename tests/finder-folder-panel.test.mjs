@@ -10,10 +10,10 @@ function fixture({ role = 'AXWindow', subrole = 'AXDialog', parent = 'window', f
   identifier, inputRole = 'AXTextField', button = true, cancelNoop = false, fieldCancel = false, escapeNoop = false,
   measuredSheet = false, closeNoop = false, delayedSheet = false } = {}) {
   if (measuredSheet) { role = 'AXSheet'; subrole = undefined; identifier = 'GoToWindow'; button = false; }
-  const source = { ObjC: { import() {}, unwrap: v => v, castRefToObject: v => v }, Ref: () => [] };
+  const source = { ObjC: { import() {}, unwrap: v => v, deepUnwrap: v => v, castRefToObject: v => v }, Ref: () => [] };
   runInNewContext(readFileSync(new URL('../bench/real-fixture.js', import.meta.url), 'utf8'), source);
   const owner = { AXRole: 'AXWindow', AXSubrole: 'AXStandardWindow' };
-  const window = { AXRole: 'AXWindow', AXSubrole: 'AXStandardWindow', AXTitle: 'Recents', AXCloseButton: {} };
+  const window = { AXRole: 'AXWindow', AXSubrole: 'AXStandardWindow', AXTitle: 'Recents', AXWindowNumber: 71, AXCloseButton: {} };
   const app = { AXRole: 'AXApplication', AXWindows: [owner], AXChildren: [], AXFocusedWindow: owner };
   const field = { AXRole: inputRole, AXIdentifier: 'PathTextField' }, go = { AXRole: 'AXButton', AXTitle: 'Go' };
   const close = { AXRole: 'AXButton', AXIdentifier: 'CloseButton', AXDescription: 'Close', AXTitle: '' };
@@ -56,6 +56,7 @@ function fixture({ role = 'AXWindow', subrole = 'AXDialog', parent = 'window', f
     CFEqual: (a, b) => a === b,
     AXUIElementGetPid: (_window, ref) => { ref[0] = 42; return 0; },
     AXUIElementCreateApplication: () => app, AXUIElementSetMessagingTimeout() {},
+    CGWindowListCopyWindowInfo: () => [{ kCGWindowOwnerPID: 42, kCGWindowLayer: 0, kCGWindowNumber: 71 }],
     AXUIElementCopyAttributeValue: (element, name, output) => {
       hook(element, name);
       // The poll just missed the async sheet, but the following guard sees it.
@@ -74,7 +75,7 @@ function fixture({ role = 'AXWindow', subrole = 'AXDialog', parent = 'window', f
       if (element === field && action === 'AXCancel') { if (fieldCancel) dismiss(); return fieldCancel ? 0 : -25206; }
       if (element === cancel && !cancelNoop) dismiss();
       if (element === close && !closeNoop) dismiss();
-      if (element === go) { window.AXDocument = '/fixture/target'; dismiss(); }
+      if (element === go) { window.AXDocument = '/fixture/target'; window.AXTitle = 'target'; dismiss(); }
       if (element === window.AXCloseButton) { app.AXWindows = app.AXWindows.filter(w => w !== window); window.gone = true; }
       return 0;
     },
@@ -86,7 +87,7 @@ function fixture({ role = 'AXWindow', subrole = 'AXDialog', parent = 'window', f
       assert.equal(pid, 42); assert.equal(event.flags, 0); keys.push([event.key, event.down]);
       if (!event.down) return;
       if (event.key === 36) assert.equal(request.finderOwnership.documentless.length, 0);
-      if (event.key === 36) { window.AXDocument = '/fixture/target'; dismiss(); }
+      if (event.key === 36) { window.AXDocument = '/fixture/target'; window.AXTitle = 'target'; dismiss(); }
       if (event.key === 53 && !escapeNoop) dismiss();
     },
   });
@@ -262,6 +263,9 @@ for (const inventory of ['AXSheets', 'AXChildren', 'app-children', 'app-windows'
   for (const attribute of ['AXRole', 'AXParent', 'AXIdentifier']) {
     test(`dismissal skips a ${inventory} child invalidated while reading ${attribute}`, () => {
       const f = retainedPanel();
+      const diagnostics = [];
+      f.clock.debugFailure = (step, error) => f.source.finderProbeDebug(step, error, text => diagnostics.push(text));
+      f.clock.debugTolerated = (step, error) => f.source.finderProbeDebug(step, error, text => diagnostics.push(text), true);
       f.dismiss(); delete f.panel.gone;
       if (inventory === 'app-children') f.app.AXChildren = [f.panel];
       else if (inventory === 'app-windows') f.app.AXWindows.push(f.panel);
@@ -274,6 +278,8 @@ for (const inventory of ['AXSheets', 'AXChildren', 'app-children', 'app-windows'
       };
       assert.equal(f.api.finderPanelExists(f.panel), false);
       assert.ok(invalidations > 0);
+      assert.ok(diagnostics.some(text => text.includes('tolerated') && text.includes('attribute=' + attribute)));
+      assert.ok(diagnostics.every(text => !text.includes('AX fixture read failed: -25202')));
     });
   }
 }
@@ -1042,7 +1048,8 @@ test('setup probe records panel metadata and excludes its AXWindow from owner wi
   assert.equal(result.snapshots.every(row => row.ownerWindowsEqual), true);
 });
 
-test('native probe clock supports production menu action receipts before its first snapshot', () => {
+for (const drift of [null, 'pid', 'start', 'bundle', 'terminated'])
+test(`native probe preserves process identity through navigation (drift=${drift})`, () => {
   const f = fixture(), target = { processIdentifier: 42, bundleIdentifier: 'com.apple.finder' };
   Object.assign(f.native, {
     AXIsProcessTrusted: () => true,
@@ -1050,7 +1057,8 @@ test('native probe clock supports production menu action receipts before its fir
     NSData: { dataWithContentsOfFile: () => ({ isNil: () => false }) },
     NSString: { alloc: { initWithDataEncoding: () => '{"cancelled":false}' } },
   });
-  f.source.finderProcessBirth = () => '1.000000';
+  let birth = '1.000000';
+  f.source.finderProcessBirth = () => birth;
   const nativeAX = f.source.nativeAX;
   f.source.nativeAX = (state, clock) => {
     assert.equal(typeof clock.emit, 'function');
@@ -1061,13 +1069,38 @@ test('native probe clock supports production menu action receipts before its fir
   const action = f.native.AXUIElementPerformAction;
   f.native.AXUIElementPerformAction = (element, name) => {
     const code = action(element, name);
-    if (element.AXRole === 'AXButton' && element.AXTitle === 'Go') f.window.AXDocument = root + '/Finder-probe';
+    if (element.AXRole === 'AXButton' && element.AXTitle === 'Go') {
+      f.window.AXDocument = root + '/Finder-probe'; f.window.AXTitle = 'Finder-probe';
+      if (drift === 'pid') target.processIdentifier = 43;
+      if (drift === 'start') birth = '2.000000';
+      if (drift === 'bundle') target.bundleIdentifier = 'com.example.other';
+      if (drift === 'terminated') target.isTerminated = true;
+    }
     return code;
   };
   const result = JSON.parse(f.source.runFinderSetupProbe({ bundle: 'com.apple.finder', ownerAway: true, stopOnLiveHold: true,
     fixtureRoot: root, target: root + '/Finder-probe', control: root + '/control.json' }, () => {}));
-  assert.equal(result.passed, true, JSON.stringify(result));
-  assert.equal(result.cleanupConfirmed, true);
+  assert.equal(result.passed, !drift, JSON.stringify(result));
+  assert.equal(result.cleanupConfirmed, !drift);
   assert.equal(f.present(), false);
-  assert.deepEqual(f.app.AXWindows, [f.owner]);
+  if (drift) {
+    assert.equal(result.failure.failureReason, 'unclassified');
+    assert.ok(f.app.AXWindows.includes(f.window));
+    assert.equal(f.actions.some(([target]) => target === f.window.AXCloseButton), false);
+  } else assert.deepEqual(f.app.AXWindows, [f.owner]);
+});
+
+test('debug marks a vanished candidate as tolerated while invalid parent reads remain failures', () => {
+  const f = fixture({ measuredSheet: true }), diagnostics = [];
+  const write = text => diagnostics.push(text);
+  f.clock.debugFailure = (step, error) => f.source.finderProbeDebug(step, error, write);
+  f.clock.debugTolerated = (step, error) => f.source.finderProbeDebug(step, error, write, true);
+  assert.equal(f.open(), f.window);
+  f.window.AXChildren = [{ gone: true }];
+  assert.equal(f.api.finderPanelExists(f.panel), false);
+  assert.ok(diagnostics.some(text => /tolerated.*code=-25202.*AXRole/.test(text)), diagnostics.join('\n'));
+  assert.ok(diagnostics.every(text => !text.includes('AX fixture read failed: -25202')), diagnostics.join('\n'));
+  f.app.gone = true;
+  assert.throws(() => f.api.finderPanelExists(f.panel), /read failed: -25202/);
+  assert.ok(diagnostics.some(text => text.includes('AX fixture read failed: -25202')));
 });
