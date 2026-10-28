@@ -1,3 +1,4 @@
+import { lineCommentEnd, isLineTerminator } from './code-line-terminators.mjs';
 // Like the A3R5 check, ignore literal text. Keep offsets, regex character classes and
 // template expressions so a quoted action cannot hide a later write or become one.
 function tokens(code) {
@@ -8,7 +9,7 @@ function tokens(code) {
     while (i < code.length) {
       const at = i, c = code[i];
       if (/\s/.test(c)) { i++; continue; }
-      if (code.startsWith('//', i)) { const end = code.indexOf('\n', i); i = end < 0 ? code.length : end; continue; }
+      if (code.startsWith('//', i)) { i = lineCommentEnd(code, i); continue; }
       if (code.startsWith('/*', i)) { const end = code.indexOf('*/', i + 2); i = end < 0 ? code.length : end + 2; continue; }
       if (c === '}' && interpolation && braces === 0) { i++; return; }
       if (c === '{') braces++;
@@ -25,7 +26,11 @@ function tokens(code) {
       if (c === '"' || c === "'") {
         i++; let value = '';
         while (i < code.length && code[i] !== c) {
-          if (code[i] === '\\') { i++; value += code[i++] ?? ''; }
+          if (code[i] === '\\') {
+            const escaped = code[++i]; i++;
+            if (escaped === '\r' && code[i] === '\n') i++;
+            if (!isLineTerminator(escaped)) value += escaped ?? '';
+          }
           else value += code[i++];
         }
         i++; push(value, at, true); continue;
@@ -35,6 +40,7 @@ function tokens(code) {
         i++; let bracket = false;
         while (i < code.length) {
           const ch = code[i++];
+          if (isLineTerminator(ch)) break;
           if (ch === '\\') i++;
           else if (ch === '[') bracket = true;
           else if (ch === ']') bracket = false;
@@ -125,7 +131,7 @@ export function withoutPageCallbacks(code) {
   const masked = code.split('');
   for (const [start, end] of ranges) {
     if (end > code.length || end <= start) continue;
-    for (let i = start; i < end; i++) if (masked[i] !== '\n' && masked[i] !== '\r') masked[i] = ' ';
+    for (let i = start; i < end; i++) if (!isLineTerminator(masked[i])) masked[i] = ' ';
   }
   return masked.join('');
 }

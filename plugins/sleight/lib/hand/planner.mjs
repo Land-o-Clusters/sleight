@@ -1,3 +1,4 @@
+import { lineCommentEnd } from '../code-line-terminators.mjs';
 // The ghost hand's frames for one admitted js call: where and when the hand shows each action, in
 // global screen points with a top-left origin (kCGWindowBounds and AX frames). Pure: the relay's hand
 // session (relay-hand.mjs) gathers the geometry with locate.js beside the engine call and never awaits it.
@@ -74,7 +75,7 @@ function skipQuoted(code, i) {
     }
     return code.length;
   }
-  if (c === '/' && code[i + 1] === '/') { const end = code.indexOf('\n', i); return end < 0 ? code.length : end; }
+  if (c === '/' && code[i + 1] === '/') { return lineCommentEnd(code, i); }
   if (c === '/' && code[i + 1] === '*') { const end = code.indexOf('*/', i + 2); return end < 0 ? code.length : end + 2; }
   return i;
 }

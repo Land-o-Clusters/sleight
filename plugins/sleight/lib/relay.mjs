@@ -1,3 +1,4 @@
+import { unsupportedCodeLines } from './code-line-terminators.mjs';
 import { parseTypedApps, isPresent, predictApps, upfrontAsk, remoteApprovalNotice, physicalApprovalNotice, resolveApp } from './remote-approvals.mjs';
 import { turboFirstRules } from './turbo-first-rules.mjs';
 // A stdio relay between Claude Code and the computer-use server.
@@ -145,7 +146,7 @@ import { rootWindowId, popupWindows } from './popup-window.mjs';
 export function nativeGetStateCode(code, isNative = () => false, isBrowser = () => false) {
   if (typeof code !== 'string' || !code.includes('getState')) return code;
   // Same-length mask, so text typed into a document ("see app.getState()") is never rewritten.
-  const masked = code.replace(/\/\*[\s\S]*?\*\/|\/\/[^\n]*|"(?:\\.|[^"\\])*"|'(?:\\.|[^'\\])*'|`(?:\\.|[^`\\])*`/g, v => ' '.repeat(v.length));
+  const masked = code.replace(/\/\*[\s\S]*?\*\/|\/\/[^\n\r\u2028\u2029]*|"(?:\\[\s\S]|[^"\\])*"|'(?:\\[\s\S]|[^'\\])*'|`(?:\\[\s\S]|[^`\\])*`/g, v => ' '.repeat(v.length));
   const bound = new Set(), other = new Set();
   for (const m of masked.matchAll(/(?<![\w$.])([A-Za-z_$][\w$]*)\s*=(?![=>])\s*(await\s+cua\s*\.\s*getApp\s*\()?/g)) (m[2] ? bound : other).add(m[1]);
   let out = '', last = 0;
@@ -167,7 +168,7 @@ export function finalReturnCode(code) {
     catch { return false; }
   };
   if (!valid(code)) return code;
-  const trivia = '(?:\\s|//[^\\n]*(?:\\n|$)|/\\*[\\s\\S]*?\\*/)*';
+  const trivia = '(?:\\s|//[^\\n\\r\\u2028\\u2029]*(?:\\r\\n|[\\n\\r\\u2028\\u2029]|$)|/\\*[\\s\\S]*?\\*/)*';
   const returns = [...code.matchAll(/(?<![\w$])return(?![\w$])/g)];
   if (returns.length > 128) return code;
   for (const match of returns) {
@@ -202,7 +203,7 @@ const UNAWAITED_CALL = new RegExp(String.raw`(?:^|[;{}\n])\s*((?:(?:const|let|va
 
 function unawaitedCall(code) {
   code = withoutPageCallbacks(code);
-  const bare = code.replace(/"(?:[^"\\\n]|\\.)*"|'(?:[^'\\\n]|\\.)*'|`(?:[^`\\]|\\.)*`/g, literal => literal.replace(/[^\r\n]/g, ' '));
+  const bare = code.replace(/"(?:[^"\\\n]|\\[\s\S])*"|'(?:[^'\\\n]|\\[\s\S])*'|`(?:[^`\\]|\\[\s\S])*`/g, literal => literal.replace(/[^\r\n]/g, ' '));
   for (const m of bare.matchAll(UNAWAITED_CALL)) {
     let end = m.index + m[0].length - 1, chained = false;
     for (;;) {
@@ -225,8 +226,8 @@ function unawaitedCall(code) {
 
 // `require(` outside strings and comments. The engine's REPL has none: 3 of 20 textedit-save runs spent a
 // turn on `require('fs')` checking a save the result had confirmed (Fable study, 2026-10-17).
-const codeOnly = code => String(code).replace(/\/\*[\s\S]*?\*\/|\/\/[^\n]*/g, ' ')
-  .replace(/"(?:[^"\\\n]|\\.)*"|'(?:[^'\\\n]|\\.)*'|`(?:[^`\\]|\\.)*`/g, '""');
+const codeOnly = code => String(code).replace(/\/\*[\s\S]*?\*\/|\/\/[^\n\r\u2028\u2029]*/g, ' ')
+  .replace(/"(?:[^"\\\n]|\\[\s\S])*"|'(?:[^'\\\n]|\\[\s\S])*'|`(?:[^`\\]|\\[\s\S])*`/g, '""');
 export function usesRequire(code) {
   return /(?<![\w$.])require\s*\(/.test(codeOnly(code));
 }
@@ -360,7 +361,7 @@ function resultTrees(content) {
 const isMenuTree = tree => menuRoot(tree) || OPEN_MENU.test(tree);
 const WINDOW_ROOT = /^0 (?:(?:standard|floating|system|dialog) window|window|sheet|dialog)\b/m;
 export const menuWindowKey = window => window && JSON.stringify([window.title, window.app]);
-const commentless = code => String(code ?? '').replace(/\/\*[\s\S]*?\*\/|\/\/[^\n]*/g, ' ');
+const commentless = code => String(code ?? '').replace(/\/\*[\s\S]*?\*\/|\/\/[^\n\r\u2028\u2029]*/g, ' ');
 
 // textedit-save (2026-10-17, transcript lines 22-36): the Cancel the menu note advised closed the menu, but the
 // result printed the acquisition's menu tree above the window's, and Claude doubted it and sent Escape and a
@@ -466,8 +467,8 @@ export function guardActions(code) {
   return [...code.matchAll(/\.(click|drag|scroll|selectText|setValue|performSecondaryAction|paste|pressKey|typeText)\s*\(/g)].map(m => m[1]);
 }
 // A call's leading `let h = await cua.getApp("X")`, and the same without the declaration.
-const DECLARED_ACQUISITION = /^\s*((?:let|const|var)\s+[A-Za-z_$][\w$]*\s*=\s*await\s+cua\.getApp\(\s*("(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*')\s*\)\s*;?)/;
-const ASSIGNED_ACQUISITION = /^\s*((?:(?:let|const|var)\s+)?[A-Za-z_$][\w$]*\s*=\s*await\s+cua\.getApp\(\s*("(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*')\s*\)\s*;?)/;
+const DECLARED_ACQUISITION = /^\s*((?:let|const|var)\s+[A-Za-z_$][\w$]*\s*=\s*await\s+cua\.getApp\(\s*("(?:[^"\\]|\\[\s\S])*"|'(?:[^'\\]|\\[\s\S])*')\s*\)\s*;?)/;
+const ASSIGNED_ACQUISITION = /^\s*((?:(?:let|const|var)\s+)?[A-Za-z_$][\w$]*\s*=\s*await\s+cua\.getApp\(\s*("(?:[^"\\]|\\[\s\S])*"|'(?:[^'\\]|\\[\s\S])*')\s*\)\s*;?)/;
 // A name an engine method is called on: the handles a call uses. METHOD_CALL counts every such call whatever its receiver, so a
 // call on a receiver HANDLE_CALL can't name (`apps[0].click(`, `h?.click(`) shows as more method calls than handles.
 const HANDLE_CALL = new RegExp(String.raw`\b([A-Za-z_$][\w$]*)\s*\.\s*(?:${HANDLE_METHODS})\s*\(`, 'g');
@@ -599,7 +600,7 @@ function chromeSwipe(app, size, target, direction, distance = 1) {
 function chromeScrollCode(code, tree, size, handles) {
   if (typeof code !== 'string' || !chromeOnlyTree(tree) || !size?.every(n => Number.isFinite(n) && n > 0)) return code;
   // Skip quoted text and comments; only known native handles on this observed window can swipe.
-  return code.replace(/"(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*'|`(?:[^`\\]|\\.)*`|\/\/[^\n]*|\/\*[\s\S]*?\*\/|\b([A-Za-z_$][\w$]*)\.scroll\s*\(/g,
+  return code.replace(/"(?:[^"\\]|\\[\s\S])*"|'(?:[^'\\]|\\[\s\S])*'|`(?:[^`\\]|\\[\s\S])*`|\/\/[^\n\r\u2028\u2029]*|\/\*[\s\S]*?\*\/|\b([A-Za-z_$][\w$]*)\.scroll\s*\(/g,
     (match, handle) => handles.has(handle) ? `(${chromeSwipe.toString()}).bind(null, ${handle}, ${JSON.stringify(size)})(` : match);
 }
 
@@ -1390,7 +1391,7 @@ export function createRelay({
   const reconnectNotes = new Set(), updateRetries = new Set(), engineBindings = new Map();
   // Session approvals are keyed by the app argument the engine was given, so a handle is reacquired with
   // its original string argument (a name stays a name); the bundle ID is the fallback.
-  const ORIGIN_LITERAL = /^(?:"(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*')$/;
+  const ORIGIN_LITERAL = /^(?:"(?:[^"\\]|\\[\s\S])*"|'(?:[^'\\]|\\[\s\S])*')$/;
   function rememberEngineBindings() {
     for (const [handle, target] of handleBundles) {
       if (!target?.appId || !/^[A-Za-z_$][\w$]*$/.test(handle)) continue;
@@ -1706,7 +1707,7 @@ export function createRelay({
     code = code.trim();
     const read = isLeaseRead(code);
     if (read && isInventoryRead(code)) return { read, key: 'helper inventory', probe: code };
-    const literal = String.raw`("(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*'|\{\s*(?:windowId|"windowId")\s*:\s*\d+\s*\})`;
+    const literal = String.raw`("(?:[^"\\]|\\[\s\S])*"|'(?:[^'\\]|\\[\s\S])*'|\{\s*(?:windowId|"windowId")\s*:\s*\d+\s*\})`;
     const acquisition = code.match(new RegExp(String.raw`^(?:(?:(?:let|const|var)\s+)?([A-Za-z_$][\w$]*)\s*=\s*)?await\s+cua\.getApp\(\s*${literal}\s*\)\s*;?$`));
     if (read && acquisition) {
       const selector = acquisition[2], key = helperSelector(selector);
@@ -2406,7 +2407,7 @@ export function createRelay({
         // An app id the code compares against (`a.id === "org.example.app"`) names the app as well as getApp does.
         // Without either, a session that already read getState is sent to getApp: sending getState again
         // acquired nothing in the Firefox race round (form-travel, 2026-10-17).
-        const named = code.match(/cua\.getApp\(\s*("(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*')\s*\)/)?.[1] ??
+        const named = code.match(/cua\.getApp\(\s*("(?:[^"\\]|\\[\s\S])*"|'(?:[^'\\]|\\[\s\S])*')\s*\)/)?.[1] ??
           code.match(/\.id\s*===?\s*("[A-Za-z][\w-]*(?:\.[\w-]+)+"|'[A-Za-z][\w-]*(?:\.[\w-]+)+')/)?.[1];
         // The app the call names, or the one its handle holds, comes before the last app any call read (GA1).
         const handleApp = [...new Set([...codeOnly(code).matchAll(HANDLE_CALL)].map(m => handleBundles.get(m[1])?.appId))];
@@ -3706,6 +3707,12 @@ export function createRelay({
       msg.params.arguments = { ...rest, code: command };
     }
     if (jsArgs && typeof msg.params.arguments?.code === 'string') {
+      if (unsupportedCodeLines(msg.params.arguments.code)) {
+        finishedCall(msg.id);
+        toClient({ jsonrpc: '2.0', id: msg.id, result: { isError: true, content: [{ type: 'text',
+          text: promptNotice('Unsupported line terminator. Use LF source lines.', prompt) }] } });
+        return;
+      }
       // With or without the input lease: after `const app`, a suggested `let app = …` is a redeclaration error.
       if (/(?:^|[;\n])\s*const\s+app\s*=/.test(msg.params.arguments.code)) constApp = true;
       msg.params.arguments.code = finalReturnCode(msg.params.arguments.code);
@@ -3977,7 +3984,7 @@ export function createRelay({
     const action = compactor.beginAction(code), saveRead = action?.save && !action.before && !action.mixedSave;
     if (!inputLease && !saveRead) return false;
     const prefix = selectedWindow
-      ? /^\s*((?:(?:(?:let|const|var)\s+)?[A-Za-z_$][\w$]*\s*=\s*)?await\s+cua\.getApp\(\s*(?:"(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*'|\{\s*(?:windowId|"windowId")\s*:\s*\d+\s*\})\s*\)\s*;?)/
+      ? /^\s*((?:(?:(?:let|const|var)\s+)?[A-Za-z_$][\w$]*\s*=\s*)?await\s+cua\.getApp\(\s*(?:"(?:[^"\\]|\\[\s\S])*"|'(?:[^'\\]|\\[\s\S])*'|\{\s*(?:windowId|"windowId")\s*:\s*\d+\s*\})\s*\)\s*;?)/
       : (leaseWindow?.appId || !recoveryKnown || !lastConfirmedWindow ? DECLARED_ACQUISITION : ASSIGNED_ACQUISITION);
     // With the lease dropped and a recovery target kept, `app = await cua.getApp("Google Chrome")` is an acquisition too.
     // Recovery used to replace it with a getApp of the last app (GA1, 2026-10-18: Helium launched).
@@ -5849,7 +5856,7 @@ export function createRelay({
         // would send the next action to an app this call moved off, or launch it (GA1). The next refusal names the app
         // this call acquired. The same app again keeps its target: only its window is unknown.
         const acquired = reachesGetApp(jsCode)
-          ? [...String(jsCode).matchAll(/\bcua\.getApp\(\s*("(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*')\s*\)/g)].map(m => m[1]) : undefined;
+          ? [...String(jsCode).matchAll(/\bcua\.getApp\(\s*("(?:[^"\\]|\\[\s\S])*"|'(?:[^'\\]|\\[\s\S])*')\s*\)/g)].map(m => m[1]) : undefined;
         const same = literal => [lastConfirmedWindow.appId, lastConfirmedWindow.app].some(name =>
           typeof name === 'string' && name.toLowerCase() === literal.slice(1, -1).toLowerCase());
         if (closedLast || acquired && (!acquired.length || !acquired.every(same))) {

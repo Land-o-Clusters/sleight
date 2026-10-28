@@ -1,6 +1,6 @@
 import { Script } from 'node:vm';
 
-const TRIVIA = '(?:\\s|//[^\\n]*(?:\\n|$)|/\\*[\\s\\S]*?\\*/)*';
+const TRIVIA = '(?:\\s|//[^\\n\\r\\u2028\\u2029]*(?:\\r\\n|[\\n\\r\\u2028\\u2029]|$)|/\\*[\\s\\S]*?\\*/)*';
 const FINAL_SEMI = new RegExp(';' + TRIVIA + '$');
 const EMPTY = /^(?:JavaScript code completed with no output\.?|\([\w]+ completed with no output\))$/;
 const NOTE = 'sleight: this call completed and the kernel is running. A bare value at the end prints nothing. Wrap the value in nodeRepl.write(...).';
@@ -40,7 +40,7 @@ export function noOutputNotice(code, content) {
 function pure(expression) {
   // Templates, regexes, calls and writes keep their original behavior in this A/B.
   if (expression.includes('`')) return false;
-  const source = expression.replace(/"(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*'|\/\/[^\n]*|\/\*[\s\S]*?\*\//g, '0');
+  const source = expression.replace(/"(?:[^"\\]|\\[\s\S])*"|'(?:[^'\\]|\\[\s\S])*'|\/\/[^\n\r\u2028\u2029]*|\/\*[\s\S]*?\*\//g, '0');
   if (!/^[\w$\s.[\]()?:,+*%<>&|!~^-]+$/.test(source) ||
       /\b(?:await|new|delete|yield|function|class|import|super|this)\b|\+\+|--/.test(source)) return false;
   return !/[\w$)\]]\s*(?:\?\.)?\s*\(/.test(source);

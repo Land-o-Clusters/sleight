@@ -35,7 +35,7 @@ const MAX_LINES = 3000; // above this, the line diff costs more than it saves
 const MAX_SHARE = 0.6; // a diff longer than this share of the tree is sent whole
 const ELEMENT = /^(\t*)(\d+) (.*)$/;
 const FILTERED_MARK = '[sleight:filtered-read]';
-const maskCode = code => code.replace(/\/\*[\s\S]*?\*\/|\/\/[^\n]*|"(?:\\.|[^"\\])*"|'(?:\\.|[^'\\])*'|`(?:\\.|[^`\\])*`/g,
+const maskCode = code => code.replace(/\/\*[\s\S]*?\*\/|\/\/[^\n\r\u2028\u2029]*|"(?:\\[\s\S]|[^"\\])*"|'(?:\\[\s\S]|[^'\\])*'|`(?:\\[\s\S]|[^`\\])*`/g,
   value => ' '.repeat(value.length));
 
 // Recognize the common read/filter/write shape without changing bindings or evaluating twice.
@@ -46,7 +46,7 @@ export function filteredReadCode(code, mark = FILTERED_MARK) {
   const final = finalExpression(code);
   if (!final) return code;
   const write = /^(await\s+)?(nodeRepl\.write|console\.log)\s*\(([\s\S]*)\)$/.exec(final.expression);
-  const expression = write ? write[3].replace(/,(?:\s|\/\/[^\n]*(?:\n|$)|\/\*[\s\S]*?\*\/)*$/, '') : final.expression;
+  const expression = write ? write[3].replace(/,(?:\s|\/\/[^\n\r\u2028\u2029]*(?:\r\n|[\n\r\u2028\u2029]|$)|\/\*[\s\S]*?\*\/)*$/, '') : final.expression;
   // A computed property accepts one assignment expression, not a comma list or spread arguments.
   if (write ? !finalExpression(`({[\n${expression}\n]: 0})`) : !bareValue(expression)) return code;
   // A bare read or read variable keeps its ordinary diff; so does autoprint's own wrapper (SLEIGHT_AUTOPRINT=1).
@@ -164,7 +164,7 @@ const locatorMatches = (locator, body) => locator.bare !== undefined ? hasLabel(
 // advisory, like the window headers themselves; computed methods and aliases are not receipts.
 function actionKind(code, before) {
   if (typeof code !== 'string') return undefined;
-  const masked = code.replace(/\/\*[\s\S]*?\*\/|\/\/[^\n]*|"(?:\\.|[^"\\])*"|'(?:\\.|[^'\\])*'|`(?:\\.|[^`\\])*`/g,
+  const masked = code.replace(/\/\*[\s\S]*?\*\/|\/\/[^\n\r\u2028\u2029]*|"(?:\\[\s\S]|[^"\\])*"|'(?:\\[\s\S]|[^'\\])*'|`(?:\\[\s\S]|[^`\\])*`/g,
     value => ' '.repeat(value.length));
   const calls = [...masked.matchAll(/\.\s*(click|setValue|selectText|performSecondaryAction|scroll|drag|pressKey|typeText|paste)\s*\(/g)];
   if (!calls.length) return undefined;

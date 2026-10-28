@@ -1,3 +1,4 @@
+import { unsupportedCodeLines } from './code-line-terminators.mjs';
 import { randomUUID } from 'node:crypto';
 import { tokens } from './flow-rules.mjs';
 import { statementSpans } from './text-save.mjs';
@@ -38,7 +39,7 @@ const STRING_READS = new Set(['split', 'slice', 'join', 'trim']), CALLBACK_READS
 // becomes a string of the same length (offsets still name the original code), then a <callback> token that only
 // these reads accept.
 const CALLBACK = '\u0000regex-test';
-const maskCallbacks = code => code.replace(/"(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*'|`(?:[^`\\]|\\.)*`|\/\/[^\n]*|\/\*[\s\S]*?\*\/|\(\s*([A-Za-z_$][\w$]*)\s*=>\s*\/(?:[^/\\[\n]|\\.|\[(?:[^\]\\\n]|\\.)*\])+\/[dgimsuy]*\s*\.\s*test\s*\(\s*\1\s*\)\s*\)/g,
+const maskCallbacks = code => code.replace(/"(?:[^"\\]|\\[\s\S])*"|'(?:[^'\\]|\\[\s\S])*'|`(?:[^`\\]|\\[\s\S])*`|\/\/[^\n\r\u2028\u2029]*|\/\*[\s\S]*?\*\/|\(\s*([A-Za-z_$][\w$]*)\s*=>\s*\/(?:[^/\\[\n\r\u2028\u2029]|\\[^\n\r\u2028\u2029]|\[(?:[^\]\\\n\r\u2028\u2029]|\\[^\n\r\u2028\u2029])*\])+\/[dgimsuy]*\s*\.\s*test\s*\(\s*\1\s*\)\s*\)/g,
   (match, name) => name === undefined || match.length - 4 < CALLBACK.length ? match : '("' + CALLBACK.padEnd(match.length - 4) + '")');
 const lex = text => tokens(text).map(t => t.string && t.v.trimEnd() === CALLBACK ? { v: '<callback>' } : t);
 const isNumber = t => !!t && !t.string && /^\d+$/.test(t.v);
@@ -106,7 +107,7 @@ function trailingRead(ts, handle, names) {
 // The call may start by acquiring that handle and end by reading it (textedit-calculator,
 // 2026-10-17: both shapes stopped on their own menu click, about 8 to 10 s a run).
 export function splitMenuActions(code, { alias = name => /^__sleightOpenedApp\d+$/.test(name) } = {}) {
-  if (typeof code !== 'string' || code.length > 65536) return;
+  if (typeof code !== 'string' || code.length > 65536 || unsupportedCodeLines(code)) return;
   const masked = maskCallbacks(code), split = statementSpans(masked);
   if (!split) return;
   const actions = [];

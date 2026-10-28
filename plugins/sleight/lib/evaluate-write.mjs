@@ -1,3 +1,4 @@
+import { lineCommentEnd, isLineTerminator } from './code-line-terminators.mjs';
 import { EVALUATE_ACTION } from './tab-errors.mjs';
 
 const setters = { value: 'fill', checked: 'check', innerHTML: 'read', textContent: 'read', className: 'read',
@@ -18,7 +19,7 @@ function tokens(code) {
     while (i < code.length) {
       const at = i, c = code[i];
       if (/\s/.test(c)) { i++; continue; }
-      if (code.startsWith('//', i)) { const end = code.indexOf('\n', i); i = end < 0 ? code.length : end; continue; }
+      if (code.startsWith('//', i)) { i = lineCommentEnd(code, i); continue; }
       if (code.startsWith('/*', i)) { const end = code.indexOf('*/', i + 2); i = end < 0 ? code.length : end + 2; continue; }
       if (c === '}' && interpolation && braces === 0) { i++; return; }
       if (c === '{') braces++;
@@ -35,7 +36,11 @@ function tokens(code) {
       if (c === '"' || c === "'") {
         i++; let value = '';
         while (i < code.length && code[i] !== c) {
-          if (code[i] === '\\') { i++; value += code[i++] ?? ''; }
+          if (code[i] === '\\') {
+            const escaped = code[++i]; i++;
+            if (escaped === '\r' && code[i] === '\n') i++;
+            if (!isLineTerminator(escaped)) value += escaped ?? '';
+          }
           else value += code[i++];
         }
         i++; push(value, at, true); continue;
@@ -44,6 +49,7 @@ function tokens(code) {
         i++; let bracket = false;
         while (i < code.length) {
           const ch = code[i++];
+          if (isLineTerminator(ch)) break;
           if (ch === '\\') i++;
           else if (ch === '[') bracket = true;
           else if (ch === ']') bracket = false;

@@ -1,10 +1,12 @@
+import { unsupportedCodeLines } from './code-line-terminators.mjs';
 import { tokens } from './flow-rules.mjs';
 import { verifyWindowIdentity } from './window-identity.mjs';
 
 // Like FowlBrowser's batched action tools, keep one caller result across the native settle.
 // A bounded splitter for standalone awaited statements, not a JavaScript interpreter.
 export function statementSpans(code) {
-  const mask = code.replace(/"(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*'|`(?:[^`\\]|\\.)*`|\/\/[^\n]*|\/\*[\s\S]*?\*\//g,
+  if (unsupportedCodeLines(code)) return;
+  const mask = code.replace(/"(?:[^"\\]|\\[\s\S])*"|'(?:[^'\\]|\\[\s\S])*'|`(?:[^`\\]|\\[\s\S])*`|\/\/[^\n\r\u2028\u2029]*|\/\*[\s\S]*?\*\//g,
     value => value.replace(/[^\n]/g, ' '));
   const spans = [];
   let start = 0, depth = 0;

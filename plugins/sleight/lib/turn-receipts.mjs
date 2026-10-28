@@ -1,3 +1,4 @@
+import { lineCommentEnd, isLineTerminator } from './code-line-terminators.mjs';
 // Keep references on the call path. All parsing, comparison, redaction and disk I/O happen at turn end.
 import { randomUUID, createHash } from 'node:crypto';
 import { execFileSync } from 'node:child_process';
@@ -32,7 +33,7 @@ function lex(code) {
   while (i < code.length) {
     const start = i, ch = code[i];
     if (ch === '/' && code[i + 1] === '/') {
-      while (i < code.length && code[i] !== '\n') i++;
+      i = lineCommentEnd(code, i);
     } else if (ch === '/' && code[i + 1] === '*') {
       i = code.indexOf('*/', i + 2); i = i < 0 ? code.length : i + 2;
     } else if (ch === '/' && (!mask.trimEnd() || /[=(:,!&|?{};\[]$/.test(mask.trimEnd()) || /\b(?:return|throw|case)$/.test(mask.trimEnd()))) {
@@ -40,6 +41,7 @@ function lex(code) {
       let bracket = false;
       while (i < code.length) {
         if (code[i] === '\\') { i += 2; continue; }
+        if (isLineTerminator(code[i])) break;
         if (code[i] === '[') bracket = true;
         if (code[i] === ']') bracket = false;
         if (code[i++] === '/' && !bracket) break;
@@ -50,8 +52,14 @@ function lex(code) {
       let value = '', known = true;
       while (i < code.length && code[i] !== ch) {
         if (ch === '`' && code[i] === '$' && code[i + 1] === '{') known = false;
-        if (code[i] !== '\\') { value += code[i++]; continue; }
+        if (code[i] !== '\\') {
+          if (ch === '`' && code[i] === '\r') { i++; if (code[i] === '\n') i++; value += '\n'; }
+          else value += code[i++];
+          continue;
+        }
         const next = code[++i]; i++;
+        if (isLineTerminator(next)) { if (next === '\r' && code[i] === '\n') i++; continue; }
+
         if (next === 'u' || next === 'x') {
           const braces = next === 'u' && code[i] === '{';
           const end = braces ? code.indexOf('}', i) : i + (next === 'u' ? 4 : 2);

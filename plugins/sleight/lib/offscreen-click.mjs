@@ -6,7 +6,7 @@ import { promptNotice } from './prompt-notice.mjs';
 
 const ELEMENT = /^(\t*)(\d+) (.*)$/;
 const CONTAINER = /^(list|table|outline|browser|collection|grid)(?= |,|$)/;
-const mask = code => code.replace(/\/\*[\s\S]*?\*\/|\/\/[^\n]*|"(?:\\.|[^"\\])*"|'(?:\\.|[^'\\])*'|`(?:\\.|[^`\\])*`/g,
+const mask = code => code.replace(/\/\*[\s\S]*?\*\/|\/\/[^\n\r\u2028\u2029]*|"(?:\\[\s\S]|[^"\\])*"|'(?:\\[\s\S]|[^'\\])*'|`(?:\\[\s\S]|[^`\\])*`/g,
   value => ' '.repeat(value.length));
 // What the helper's request line may carry: app-health reads at most 4096 bytes per line.
 const LINE_CHARS = 60, REQUEST_CHARS = 3200;

@@ -1,3 +1,4 @@
+import { lineCommentEnd, isLineTerminator } from './code-line-terminators.mjs';
 // What each native action did, from sleight's own read before it and the read after it (SLEIGHT_OUTCOMES=1),
 // and the opt-in JSON Lines action log (SLEIGHT_ACTION_LOG). Only structure, roles, names and the acted-on
 // control's own value line count; typed text, secure values and document text never leave the engine's tree.
@@ -260,14 +261,14 @@ function codeOnly(code) {
   for (let i = 0; i < code.length;) {
     const c = code[i], next = code[i + 1];
     let end = i + 1;
-    if (c === '/' && next === '/') { end = code.indexOf('\n', i); if (end < 0) end = code.length; }
+    if (c === '/' && next === '/') { end = lineCommentEnd(code, i); }
     else if (c === '/' && next === '*') { end = code.indexOf('*/', i + 2); end = end < 0 ? code.length : end + 2; }
     else if (c === '"' || c === "'" || c === '`' || c === '/' && (!last || /[(,=:[!&|?{};+\-*%<>~^]/.test(last) || /\b(?:return|typeof|case|do|else|in|of|void|yield|await)$/.test(out.trimEnd()))) {
       let klass = false;
       for (end = i + 1; end < code.length; end++) {
         const d = code[end];
         if (d === '\\') { end++; continue; }
-        if (c === '/' && d === '\n') break;
+        if (c === '/' && isLineTerminator(d)) break;
         if (c === '/' && d === '[') klass = true;
         else if (c === '/' && d === ']') klass = false;
         else if (d === c && !klass) { end++; break; }

@@ -1,3 +1,4 @@
+import { lineCommentEnd, isLineTerminator } from './code-line-terminators.mjs';
 // Literal inspection is a mistake guard. Never evaluate the caller's code here.
 import { existsSync, readFileSync, realpathSync } from 'node:fs';
 import { homedir } from 'node:os';
@@ -94,11 +95,11 @@ export function tokens(code) {
   while (i < code.length) {
     const c = code[i];
     if (/\s/.test(c)) { i++; continue; }
-    if (code.startsWith('//', i)) { i = code.indexOf('\n', i); if (i < 0) break; continue; }
+    if (code.startsWith('//', i)) { i = lineCommentEnd(code, i); continue; }
     if (code.startsWith('/*', i)) { const end = code.indexOf('*/', i + 2); i = end < 0 ? code.length : end + 2; continue; }
     if (c === '/' && (!out.length || ['=', '(', ',', ':', 'return', '[', '!'].includes(out.at(-1).v))) {
       i++; let bracket = false;
-      while (i < code.length) { const ch = code[i++]; if (ch === '\\') i++; else if (ch === '[') bracket = true; else if (ch === ']') bracket = false; else if (ch === '/' && !bracket) break; }
+      while (i < code.length) { const ch = code[i++]; if (isLineTerminator(ch)) break; if (ch === '\\') i++; else if (ch === '[') bracket = true; else if (ch === ']') bracket = false; else if (ch === '/' && !bracket) break; }
       while (/[a-z]/i.test(code[i] ?? '') && i < code.length) i++;
       out.push({ v: '<regexp>' }); continue;
     }
@@ -107,10 +108,15 @@ export function tokens(code) {
       while (i < code.length && code[i] !== quote) {
         const ch = code[i++];
         if (quote === '`' && ch === '$' && code[i] === '{') dynamic = true;
-        if (ch !== '\\') { value += ch; continue; }
+        if (ch !== '\\') {
+          if (quote !== '`' && (ch === '\n' || ch === '\r')) return [{ v: '<invalid>' }];
+          if (quote === '`' && ch === '\r') { if (code[i] === '\n') i++; value += '\n'; }
+          else value += ch;
+          continue;
+        }
         const esc = code[i++];
         const simple = { n: '\n', r: '\r', t: '\t', b: '\b', f: '\f', v: '\v', '0': '\0' };
-        if (esc === '\n') continue;
+        if (isLineTerminator(esc) && esc !== '\r') continue;
         if (esc === '\r') { if (code[i] === '\n') i++; continue; }
         if (esc === 'x' || esc === 'u') {
           const brace = esc === 'u' && code[i] === '{'; if (brace) i++;
@@ -119,6 +125,7 @@ export function tokens(code) {
           i += raw.length + (brace ? 1 : 0);
         } else value += simple[esc] ?? esc ?? '';
       }
+      if (code[i] !== quote) return [{ v: '<invalid>' }];
       i++; out.push(dynamic ? { v: '<template>' } : { v: value, string: true }); continue;
     }
     const word = /^[\w$]+/.exec(code.slice(i));
