@@ -91,7 +91,7 @@ test('setup CG identity maps AX bounds without a title and refuses ambiguous or 
   delete f.window.AXWindowNumber;
   f.api.frame = () => ({ x: 10, y: 20, width: 400, height: 300 });
   let cg = [{ kCGWindowOwnerPID: 42, kCGWindowLayer: 0, kCGWindowNumber: 100,
-    kCGWindowBounds: { X: 10, Y: 20, Width: 400, Height: 300 } }];
+    kCGWindowIsOnscreen: true, kCGWindowBounds: { X: 10, Y: 20, Width: 400, Height: 300 } }];
   f.native.CGWindowListCopyWindowInfo = () => cg;
   assert.equal(f.api.windowNumber(f.window, f.app), 100);
   cg.push({ ...cg[0], kCGWindowNumber: 102 });

@@ -1,4 +1,5 @@
 import { lstatSync, mkdirSync, readFileSync, readdirSync, writeFileSync } from 'node:fs';
+import { randomBytes } from 'node:crypto';
 import { basename, join } from 'node:path';
 import { acquireFixture } from '../real-run.mjs';
 import { openFixture, closeFixtures, webBrowsers } from '../real-fixture.mjs';
@@ -42,7 +43,7 @@ function browserTask(row, launchBrowser) {
 const content = (ctx, row) => `Collection ${ctx.nonce} ${ctx.cc.token}\n${row.name}\n`;
 function prepareNative(ctx) {
   ctx.cc = createCCFixture('list', ctx);
-  ctx.folder = join(ctx.dir, `Collections-${ctx.nonce}`);
+  ctx.folder = join(ctx.dir, `Collections-${ctx.nonce}-${randomBytes(8).toString('hex')}`);
   mkdirSync(ctx.folder, { mode: 0o700 });
   for (const row of ctx.cc.rows) writeFileSync(join(ctx.folder, row.file), content(ctx, row), { flag: 'wx', mode: 0o600 });
 }

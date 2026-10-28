@@ -372,7 +372,7 @@ function nativeFolderTrial(clockChanges = {}) {
       output[0] = Array.isArray(value) ? { count: value.length, objectAtIndex: i => value[i] } : value;
       return 0;
     },
-    AXUIElementSetAttributeValue: (el, name, value) => { writes.push([el, name, value]); return 0; },
+    AXUIElementSetAttributeValue: (el, name, value) => { writes.push([el, name, value]); el[name] = value; return 0; },
     AXUIElementPerformAction: (el, action) => { presses.push([el, action]); return 0; },
   });
   s.$ = native; s.Ref = () => []; s.ObjC.castRefToObject = v => v;
@@ -695,12 +695,16 @@ function finderRun(change = () => {}) {
     dialog: () => [], fileMenu: () => { navigated = true; calls.push('new-window'); },
     menu: () => calls.push('go-menu'), folderSheet: () => sheet, submitFolder: () => calls.push('submit'),
     windows: () => navigated ? [previous, window] : [previous], exists: () => true, finderRole: () => 'AXWindow', finderFolderGuard() {},
-    equal: (a, b) => a === b, text: () => '', readiness: () => ({}), matches: () => true, wait: () => { time += 100; },
+    equal: (a, b) => a === b, windowNumber: () => 71, path: value => value,
+    text: (_w, name) => name === 'AXDocument' ? '/fixture/Collections-1' : name === 'AXTitle' ? 'Collections-1' : '',
+    readiness: () => ({}), matches: () => true, wait: () => { time += 100; },
   };
   s.nativeAX = () => api;
   s.closeOwnedWindow = (owned, _request, app) => { assert.equal(owned, window); assert.equal(app.pid, 43); calls.push('close'); };
-  change({ s, api, previous, window, sheet, calls, old, successor });
-  const run = () => s.run([JSON.stringify({ app: 'Finder', bundle: 'com.apple.finder', mode: 'folder', control: 'fake', target: '/fixture/Collections-1', token: 'Collections-1' })]);
+  const request = { app: 'Finder', bundle: 'com.apple.finder', mode: 'folder', control: 'fake',
+    fixtureRoot: '/fixture', target: '/fixture/Collections-1', token: 'Collections-1' };
+  change({ s, api, previous, window, sheet, calls, old, successor, request });
+  const run = () => s.run([JSON.stringify(request)]);
   return { run, events, calls };
 }
 
@@ -789,6 +793,53 @@ test('JXA Finder setup and cleanup work with kernel births when AppKit launch da
   assert.equal(calls.at(-1), 'close');
 });
 
+for (const [name, document, url, title] of [
+  ['title only', '', '', 'Collections-1'],
+  ['bank descendant', '/fixture/Collections-1/Archive', '', 'Collections-1'],
+  ['same name elsewhere', '/owner/Collections-1', '', 'Collections-1'],
+  ['conflicting URL', '/fixture/Collections-1', '/owner/Collections-1', 'Collections-1'],
+  ['stale title', '/fixture/Collections-1', '', 'Recents'],
+]) test(`production Finder readiness refuses ${name} even when the old matcher accepts it`, () => {
+  const { run, events } = finderRun(({ api }) => {
+    api.text = (_window, attr) => attr === 'AXDocument' ? document : attr === 'AXURL' ? url : attr === 'AXTitle' ? title : '';
+    api.matches = () => true;
+  });
+  assert.throws(run, /Finder fixture navigation unconfirmed/);
+  assert.equal(events.some(event => event.stage === 'ready'), false);
+  assert.equal(events.find(event => event.stage === 'setup-failure').finderFailure.failureReason, 'navigation-unconfirmed');
+});
+
+test('production Finder readiness refuses a number change during location reads', () => {
+  const { run, events } = finderRun(({ api }) => {
+    let number = 71, submitted = false;
+    api.windowNumber = () => number;
+    api.submitFolder = () => { submitted = true; };
+    const text = api.text;
+    api.text = (...args) => { if (submitted && args[1] === 'AXDocument') number = 72; return text(...args); };
+  });
+  assert.throws(run, /Finder fixture identity changed/);
+  assert.equal(events.some(event => event.stage === 'ready'), false);
+});
+
+for (const [name, document, url, passes] of [
+  ['absent metadata', '', '', true],
+  ['missing attributes', undefined, undefined, true],
+  ['exact document', '/fixture/Collections-1-0123456789abcdef', '', true],
+  ['exact URL', '', '/fixture/Collections-1-0123456789abcdef', true],
+  ['conflicting document', '/owner/private', '', false],
+  ['conflicting URL', '', '/owner/private', false],
+  ['matching document and conflicting URL', '/fixture/Collections-1-0123456789abcdef', '/owner/private', false],
+  ['matching URL and conflicting document', '/owner/private', '/fixture/Collections-1-0123456789abcdef', false],
+]) test(`production readiness checks a unique title with ${name}`, () => {
+  const { run, events } = finderRun(({ api, request }) => {
+    request.token = 'Collections-1-0123456789abcdef'; request.target = '/fixture/' + request.token;
+    api.text = (_window, attr) => attr === 'AXDocument' ? document : attr === 'AXURL' ? url : request.token;
+  });
+  if (passes) run();
+  else assert.throws(run, /Finder fixture navigation unconfirmed/);
+  assert.equal(events.some(event => event.stage === 'ready'), passes);
+});
+
 test('setup refusal after New Window keeps cleanup unconfirmed and never adopts or closes an owner window', () => {
   const { run, events, calls } = finderRun(({ api, previous, s }) => {
     api.fileMenu = () => {};
@@ -819,6 +870,7 @@ test('setup refusal before New Window can confirm nothing created', () => {
 test('setup refusal after retaining a new window leaves its unrelated folder and owner windows untouched', () => {
   const { run, events } = finderRun(({ api, window }) => {
     api.menu = () => { throw new Error('Finder folder window lost focus'); };
+    api.text = (_window, attribute) => attribute === 'AXDocument' ? '/owner/unrelated' : '';
     api.matches = w => { assert.equal(w, window); return false; };
     api.closeButton = () => assert.fail('no close before folder identity is confirmed');
   });

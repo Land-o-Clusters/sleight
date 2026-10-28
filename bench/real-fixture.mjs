@@ -13,13 +13,14 @@ const script = fileURLToPath(new URL('./real-fixture.js', import.meta.url));
 // Titles, paths, dialog text and raw helper output never enter this schema.
 const finderEnums = {
   stage: ['identified', 'identified-process', 'armed', 'ready', 'closed', 'setup-failure', 'untouched', 'action', 'retry',
-    'finder-relaunch', 'finder-recovered', 'finder-window-retained', 'finder-folder-submitted', 'finder-failure', 'finder-baseline-changed', 'finder-cleanup', 'menu-items', 'menu-cancel', 'readiness'],
+    'finder-relaunch', 'finder-recovered', 'finder-window-retained', 'finder-folder-submitted', 'finder-failure', 'finder-baseline-changed', 'finder-cleanup', 'finder-panel-retained', 'finder-panel-cleanup', 'menu-items', 'menu-cancel', 'readiness'],
   app: ['Finder'], bundle: ['com.apple.finder'], observedBundle: ['com.apple.finder'],
   cleanup: ['nothing created', 'closed retained fixture', 'unconfirmed'],
   setupCase: ['already-running', 'cold-launch'], attribute: ['AXWindows', 'AXRole', 'AXValue', 'AXFocusedWindow'],
   reason: ['three AXWindows timeouts', 'malformed-list', 'missing-element', 'failed-self-identity', 'non-window-or-stale', 'duplicate-identity'],
   identityReason: ['target-unavailable', 'bundle-mismatch', 'pid-invalid', 'start-unavailable', 'pid-changed', 'start-changed', 'terminated'],
   role: ['AXWindow', 'AXSheet', 'AXDialog', 'AXGroup', 'AXButton'], phase: ['pre-press', 'poll', 'validate', 'cleanup', 'observation'],
+  panelRole: ['AXWindow', 'AXSheet'], panelSubrole: ['', 'AXUnknown', 'AXDialog', 'AXSystemDialog', 'AXStandardWindow'],
   missingRole: ['AXWindow'],
   roleReadCode: [0, -25212, -25202, 'other'], roleState: ['nil', 'empty', 'known-nonwindow', 'other-string', 'nonstring'],
   roleKnown: ['AXApplication', 'AXSystemWide', 'AXWindow', 'AXSheet', 'AXDrawer', 'AXDialog', 'AXGroup', 'AXButton', 'AXScrollArea', 'AXUnknown'],
@@ -30,7 +31,10 @@ const finderEnums = {
     'window-vanished', 'window-focus-lost', 'window-focus-changed', 'focused-ancestry-unconfirmed', 'menu-unavailable',
     'menu-item-unavailable', 'ax-read-failed', 'ax-press-failed', 'ax-write-failed', 'opening-interrupted', 'retained-reference-unavailable',
     'fixture-location-mismatch', 'fixture-ownership-unconfirmed', 'extra-window-unconfirmed', 'fixture-identity-changed',
-    'fixture-still-open', 'dialog-present', 'menu-cancel-target-unconfirmed', 'menu-cancel-failed', 'cancellation-app-identity-lost'],
+    'fixture-still-open', 'dialog-present', 'menu-cancel-target-unconfirmed', 'menu-cancel-failed', 'cancellation-app-identity-lost',
+    'foreign-folder-panel', 'folder-panel-unconfirmed', 'folder-panel-submit-unconfirmed', 'folder-panel-identity-changed', 'folder-panel-controls-ambiguous',
+    'folder-panel-search-limit', 'folder-panel-cancel-unavailable', 'folder-panel-cancel-failed',
+    'folder-panel-cleanup-unconfirmed', 'folder-panel-keyboard-unconfirmed', 'folder-path-unconfirmed', 'navigation-unconfirmed', 'probe-deadline'],
   errorName: ['unavailable', 'other', 'Error', 'TypeError', 'RangeError', 'ReferenceError', 'SyntaxError', 'URIError', 'EvalError',
     'NSInvalidArgumentException', 'NSRangeException', 'NSInternalInconsistencyException', 'NSUnknownKeyException', 'NSGenericException'],
   errorCode: ['unavailable', 'other', 0, -25200, -25201, -25202, -25203, -25204, -25205, -25206, -25207, -25208, -25209,
@@ -41,7 +45,7 @@ const finderNumbers = new Set(['pid', 'fromPid', 'toPid', 'startedAtMs', 'fromSt
   'processStartedAtMs', 'code', 'count', 'index', 'duplicateIndex', 'axCode', 'waitMs', 'totalWaitMs', 'elapsedMs', 'enabled']);
 const finderCounts = new Set(['baselineCount', 'currentCount', 'missingIndex', 'scrollAreasBaseline', 'scrollAreasMatched']);
 const finderFlags = new Set(['running', 'launched', 'fresh', 'actionTaken', 'referenceExported', 'originalExitConfirmed', 'appAbsent',
-  'windowCleanupConfirmed', 'helperCollectionConfirmed', 'menuCancelled', 'finished', 'titleMatches', 'appQuit', 'stop']);
+  'windowCleanupConfirmed', 'helperCollectionConfirmed', 'menuCancelled', 'finished', 'titleMatches', 'appQuit', 'stop', 'panelParentConfirmed', 'panelDismissed']);
 const finderObjects = new Set(['finderRelaunch', 'finderRecovery', 'finderAXError', 'finderFailure', 'finderCleanupFailure',
   'finderMenuCleanupFailure', 'finderBaselineChange', 'readiness', 'appDialog', 'diagnostic']);
 const finderLists = new Set(['menuCommands', 'retries', 'cleanupRetries', 'observationRetries']);

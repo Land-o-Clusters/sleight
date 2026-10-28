@@ -20,6 +20,15 @@ const guards = [
   ['New Finder fixture window unconfirmed', 'new-window-unconfirmed'],
   ['New Finder fixture window identity changed', 'new-window-identity-changed'],
   ['Foreign Finder dialog; folder setup refused', 'foreign-dialog'],
+  ['Foreign Finder Go to Folder panel; setup refused', 'foreign-folder-panel'],
+  ['Finder Go to Folder sheet unconfirmed', 'folder-panel-unconfirmed'],
+  ['Finder Go to Folder sheet still open after submission', 'folder-panel-submit-unconfirmed'],
+  ['Finder folder sheet identity changed', 'folder-panel-identity-changed'],
+  ['Finder folder sheet controls ambiguous', 'folder-panel-controls-ambiguous'],
+  ['Finder folder sheet exceeds bounded search', 'folder-panel-search-limit'],
+  ['Finder folder sheet cancellation unavailable', 'folder-panel-cancel-unavailable'],
+  ['Finder folder sheet cleanup unconfirmed', 'folder-panel-cleanup-unconfirmed'],
+  ['Finder folder keyboard target unconfirmed', 'folder-panel-keyboard-unconfirmed'],
   ['Finder folder window vanished', 'window-vanished'],
   ['Finder folder window lost focus', 'window-focus-lost'],
   ['Finder folder focus changed during validation', 'window-focus-changed'],
@@ -52,8 +61,20 @@ test('typed inventory and AX errors export only recognized metadata', () => {
     { failureReason: 'inventory-unconfirmed', errorName: 'Error', errorCode: 'unavailable' });
   assert.deepEqual(classify({ message: 'AX fixture press failed: -25204', name: 'Error' }),
     { failureReason: 'ax-press-failed', errorName: 'Error', errorCode: -25204 });
+  const cancel = classify({ message: 'Finder folder sheet cancellation failed: -25204', name: 'Error' });
+  assert.deepEqual(cancel, { failureReason: 'folder-panel-cancel-failed', errorName: 'Error', errorCode: -25204 });
+  assert.deepEqual(finderDiagnostic({ finderCleanupFailure: cancel }), { finderCleanupFailure: cancel });
   assert.deepEqual(classify({ message: 'private native error', name: 'NSInvalidArgumentException', code: -25202, attribute: 'AXRole' }),
     { failureReason: 'ax-read-failed', errorName: 'NSInvalidArgumentException', errorCode: -25202 });
+});
+
+test('panel receipts keep fixed roles and flags without exporting identifiers or panel text', () => {
+  assert.deepEqual(finderDiagnostic({ stage: 'finder-panel-retained', panelRole: 'AXSheet', panelSubrole: 'AXStandardWindow',
+    panelParentConfirmed: true, referenceExported: false, identifier: 'owner-private', title: 'owner-private', reference: {} }),
+  { stage: 'finder-panel-retained', panelRole: 'AXSheet', panelSubrole: 'AXStandardWindow', panelParentConfirmed: true, referenceExported: false });
+  assert.deepEqual(finderDiagnostic({ stage: 'finder-panel-cleanup', panelDismissed: true }),
+    { stage: 'finder-panel-cleanup', panelDismissed: true });
+  assert.deepEqual(finderDiagnostic({ panelRole: 'owner-private', panelSubrole: 'owner-private' }), {});
 });
 
 test('unknown native metadata and arbitrary messages never pass through', () => {
