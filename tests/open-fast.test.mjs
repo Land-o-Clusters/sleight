@@ -1,3 +1,4 @@
+import { fixtureDocumentation } from './helpers/canonical-docs.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { mkdtempSync, writeFileSync, rmSync, readFileSync, utimesSync } from 'node:fs';
@@ -313,7 +314,7 @@ test('reopenDocument runs the background open and records it for the mtime check
   assert.ok(openedFiles.get(JSON.stringify([appId, args.path])) > 0);
 });
 
-async function lazyOpen(t, windows, { reopenFails = false } = {}) {
+async function lazyOpen(t, windows, { reopenFails = false, documentationTrust } = {}) {
   const clientIn = new PassThrough(), clientOut = new PassThrough(), serverIn = new PassThrough(), serverOut = new PassThrough();
   const received = [], reads = [], events = [], file = '/tmp/note.txt';
   clientOut.on('data', bytes => received.push(...bytes.toString().trim().split('\n').map(JSON.parse)));
@@ -326,7 +327,7 @@ async function lazyOpen(t, windows, { reopenFails = false } = {}) {
       serverOut.write(JSON.stringify({ jsonrpc: '2.0', id: msg.id, result }) + '\n');
     }
   });
-  const relay = createRelay({ clientIn, clientOut, serverIn, serverOut, changeReview: false, openFast: true,
+  const relay = createRelay({ clientIn, clientOut, serverIn, serverOut, changeReview: false, openFast: true, documentationTrust,
     ask: async () => 'accept',
     inputLease: { acquire: () => 'lease', renew() {}, release() {}, close() {} },
     localTools: { tools: [{ name: 'open_file' }], target: async () => ({ appId, app }),
@@ -383,7 +384,7 @@ for (const combined of [false, true]) for (const repeated of [false, true]) {
       : [...docs, { type: 'text', text: shows('other.txt') }];
     const h = await lazyOpen(t, [{ content: first },
       { content: [...(repeated ? docs : []), { type: 'text', text: shows('note.txt') }] },
-      { content: [{ type: 'text', text: '4' }] }]);
+      { content: [{ type: 'text', text: '4' }] }], { documentationTrust: fixtureDocumentation(docs.map(c => c.text)) });
     assert.equal(h.reads.length, 2);
     assert.ok(h.reply.content.some(c => /Window handle:/.test(c.text ?? '')));
     assert.ok(h.reply.content.some(c => c.text?.includes(shows('note.txt'))));

@@ -5,6 +5,7 @@
 // the engine's Linux- and Windows-only paragraphs, and if the result is still too big it moves the browser
 // API reference to the start of the next result. Safety and confirmation sections never move.
 import { trimBrowserResults } from './browser-read-cap.mjs';
+import { createDocumentationTrust } from './canonical-documentation.mjs';
 
 export const RESULT_LIMIT = 45000;
 export const GROK_RESULT_LIMIT = 20000;
@@ -155,7 +156,8 @@ function trimResultTrees(content, limit, force = false) {
 }
 
 export function createResultBudget({ platform = process.platform, limit = RESULT_LIMIT, fullDocs = process.env.SLEIGHT_ENGINE_DOCS === 'full',
-  leanDocs = process.env.SLEIGHT_ENGINE_DOCS === 'lean', minDocs = process.env.SLEIGHT_ENGINE_DOCS === 'min' } = {}) {
+  leanDocs = process.env.SLEIGHT_ENGINE_DOCS === 'lean', minDocs = process.env.SLEIGHT_ENGINE_DOCS === 'min',
+  documentationTrust = createDocumentationTrust(), validateDocumentation = true, trustedDocumentation = documentationTrust.trusted } = {}) {
   let pending = null;
   let browserFirst, nativeDocs, nativeDelivered = false;
   const requests = new Map();
@@ -165,44 +167,50 @@ export function createResultBudget({ platform = process.platform, limit = RESULT
       requests.set(id, { browser, reference: NATIVE_REFERENCE.test(code) || requestsFullDocumentation(code) });
     },
     finish(id) { requests.delete(id); },
+    retry(content) {
+      if (content.some(c => trustedDocumentation(c) && c.type === 'text' && GENERAL_DOCS.test(c.text))) nativeDelivered = false;
+    },
     code(code) {
+      if (nativeDocs && !trustedDocumentation(nativeDocs)) { nativeDocs = undefined; nativeDelivered = false; }
       if (!nativeDocs || !NATIVE_REFERENCE.test(code)) return code;
-      return `globalThis.sleight ??= {}; globalThis.sleight.nativeDocumentation = async () => ${JSON.stringify(nativeDocs)};\n` + code;
+      return `globalThis.sleight ??= {}; globalThis.sleight.nativeDocumentation = async () => ${JSON.stringify(nativeDocs.text)};\n` + code;
     },
     apply(content, { id, native = false } = {}) {
-      let out = content.map((c) => (platform === 'darwin' && c.type === 'text' && GENERAL_DOCS.test(c.text)
+      if (nativeDocs && !trustedDocumentation(nativeDocs)) { nativeDocs = undefined; nativeDelivered = false; }
+      if (pending && !trustedDocumentation(pending)) pending = null;
+      let out = (validateDocumentation ? content.map(documentationTrust.mark) : content).map((c) => (platform === 'darwin' && c.type === 'text' && GENERAL_DOCS.test(c.text)
         ? { ...c, text: dropOtherPlatforms(c.text) } : c));
       if (browserFirst && !fullDocs) {
         const request = requests.get(id);
         const nativeCall = request && (native || !request.browser) && !request.reference;
-        if (nativeCall && !nativeDelivered && nativeDocs && !out.some(c => c.type === 'text' && GENERAL_DOCS.test(c.text))) {
-          out = [{ type: 'text', text: nativeDocs }, ...out];
+        if (nativeCall && !nativeDelivered && nativeDocs && !out.some(c => trustedDocumentation(c) && c.type === 'text' && GENERAL_DOCS.test(c.text))) {
+          out = [nativeDocs, ...out];
         }
         const deliver = (nativeCall && !nativeDelivered) || request?.reference;
         out = out.map(c => {
-          if (c.type !== 'text' || !GENERAL_DOCS.test(c.text)) return c;
+          if (!trustedDocumentation(c) || c.type !== 'text' || !GENERAL_DOCS.test(c.text)) return c;
           const policy = c.text.indexOf(POLICY);
           if (policy < 0) return c;
-          nativeDocs = c.text;
+          nativeDocs = c;
           if (deliver) { nativeDelivered = true; return c; }
           return { ...c, text: (nativeDelivered ? '' : NATIVE_NOTICE + '\n') + c.text.slice(policy + 1) };
         });
-        if (request?.reference && nativeDocs && out.some(c => c.type === 'text' && c.text.includes(nativeDocs))) nativeDelivered = true;
+        if (request?.reference && nativeDocs && out.some(c => c.type === 'text' && c.text.includes(nativeDocs.text))) nativeDelivered = true;
       }
       if (!fullDocs) out = out.map((c) => (c.type === 'text' && BROWSER_DOCS.test(c.text) && c.text.includes(REFERENCE)
         ? { ...c, text: minDocs || leanDocs ? leanReference(c.text, minDocs) : trimReference(c.text) } : c));
-      if (pending) { out = [{ type: 'text', text: pending }, ...out]; pending = null; }
+      if (pending) { out = [pending, ...out]; pending = null; }
       // Spend the tree's rows before delaying reference text; policy and caller prose stay whole.
       // With no reference to delay, the trees are all there is to give.
-      const deferrable = out.some(c => c.type === 'text' && BROWSER_DOCS.test(c.text) && c.text.includes(REFERENCE));
+      const deferrable = out.some(c => trustedDocumentation(c) && c.type === 'text' && BROWSER_DOCS.test(c.text) && c.text.includes(REFERENCE));
       out = trimResultTrees(trimBrowserResults(out, '', { limit, countDocs: true }), limit, !deferrable);
       if (size(out) <= limit) return out;
       out = out.map((c) => {
-        if (pending || c.type !== 'text' || !BROWSER_DOCS.test(c.text)) return c;
+        if (pending || !trustedDocumentation(c) || c.type !== 'text' || !BROWSER_DOCS.test(c.text)) return c;
         const at = c.text.indexOf(REFERENCE);
         if (at < 0) return c;
-        pending = c.text.slice(at + 1);
-        return { ...c, text: `${c.text.slice(0, at)}\n\nsleight: the browser API reference (${pending.length} characters) follows at the start of your next result, to keep this one under Claude Code's size limit. Until then, use only the methods named above.` };
+        pending = { ...c, text: c.text.slice(at + 1) };
+        return { ...c, text: `${c.text.slice(0, at)}\n\nsleight: the browser API reference (${pending.text.length} characters) follows at the start of your next result, to keep this one under Claude Code's size limit. Until then, use only the methods named above.` };
       });
       return trimResultTrees(trimBrowserResults(out, '', { limit, countDocs: true }), limit, true);
     },

@@ -1,3 +1,4 @@
+import { fixtureDocumentation } from './helpers/canonical-docs.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createContext, runInContext } from 'node:vm';
@@ -128,7 +129,7 @@ function relayFixture(t, options = {}) {
   const clientIn = new PassThrough(), clientOut = new PassThrough(), serverIn = new PassThrough(), serverOut = new PassThrough();
   const sent = [], received = [];
   for (const [stream, out] of [[serverIn, sent], [clientOut, received]]) stream.on('data', bytes => out.push(...bytes.toString().trim().split('\n').map(JSON.parse)));
-  const relay = createRelay({ clientIn, clientOut, serverIn, serverOut, warmRepl: true, browserChoice: choice,
+  const relay = createRelay({ documentationTrust: fixtureDocumentation('# Browser safety\nKeep approval and ownership checks.'), clientIn, clientOut, serverIn, serverOut, warmRepl: true, browserChoice: choice,
     changeReview: false, firstCallRules: '', ...options });
   t.after(() => relay.close());
   const send = msg => clientIn.write(JSON.stringify(msg) + '\n');
@@ -246,7 +247,7 @@ function restartingFixture(t, collected = true) {
     current = { serverIn, serverOut }; return current;
   }
   clientOut.on('data', bytes => received.push(...bytes.toString().trim().split('\n').map(JSON.parse)));
-  const relay = createRelay({ clientIn, clientOut, ...fresh(), warmRepl: true, browserChoice: choice,
+  const relay = createRelay({ documentationTrust: fixtureDocumentation('# Browser safety\nKeep approval and ownership checks.'), clientIn, clientOut, ...fresh(), warmRepl: true, browserChoice: choice,
     changeReview: false, firstCallRules: '', stopEngine: async () => ({ collected }), restartEngine: async () => fresh(),
     inspectInput: async () => ({ ok: true }), ask: async message => { asked.push(message); return 'accept'; } });
   t.after(() => relay.close());

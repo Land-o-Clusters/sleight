@@ -1,3 +1,4 @@
+import { fixtureDocumentation } from './helpers/canonical-docs.mjs';
 // Constructed macOS paths are synthetic validation and redaction data, never allocation roots.
 const MAC_TMP = ['', 'private', 'tmp'].join('/');
 import test from 'node:test';
@@ -20,7 +21,7 @@ function harness(t, options = {}) {
   serverIn.on('data', data => sent.push(...data.toString().trim().split('\n').map(JSON.parse)));
   clientOut.on('data', data => received.push(...data.toString().trim().split('\n').map(JSON.parse)));
   const relay = createRelay({ clientIn, clientOut, serverIn, serverOut, inputLease: false, changeReview: false, openShot: false,
-    firstCallRules: rules, trace: (kind, detail) => traces.push({ kind, detail }),
+    documentationTrust: fixtureDocumentation(docs, ownedDocs, '# Other Browser APIs\nBrowser reference.', '# Browser Safety\nKeep user tabs.'), firstCallRules: rules, trace: (kind, detail) => traces.push({ kind, detail }),
     localTools: { tools: [{ name: 'open_file' }], call: async () => ({ content: [text('Opened note.txt.')],
       _meta: { 'sleight/openedApp': 'org.example.editor' } }) }, ...options });
   t.after(() => { relay.dispose(); for (const stream of [clientIn, clientOut, serverIn, serverOut]) stream.destroy(); });
@@ -98,7 +99,7 @@ for (const duration of [0, 1.25]) test(`owned warmup accepts the observed timing
 test('owned warmup compacts the observed Notes format while preserving its complete suffix', async t => {
   const notes = '\n## Notes\n\nLiteral note: `a  b`.\n  Preserve indentation and Unicode: café.\n\n';
   const full = ownedDocs.replace('\n# Computer Use Confirmations Policy', notes + '\n# Computer Use Confirmations Policy');
-  const h = harness(t, { warmRepl: true }); const warm = await beginOwnedWarm(h);
+  const h = harness(t, { warmRepl: true, documentationTrust: fixtureDocumentation(full) }); const warm = await beginOwnedWarm(h);
   h.reply(warm.id, [text(full), text('[sleight:guard-ready]\n')], false, { 'codex/nodeReplExecutionDurationMs': 0 }); await tick();
   h.call(1, 'await cua.getApp("Example")'); h.reply(1, [text('ordinary output')]); await tick();
   const delivered = result(h, 1).content.find(c => c.text?.startsWith('## Computer Use\n')).text;
@@ -201,10 +202,10 @@ test('owned documentation preserves the ordinary policy rewrites byte for byte',
     readFileSync(new URL('fixtures/engine-confirmations-policy.txt', import.meta.url), 'utf8');
   const policy = value => value.slice(value.indexOf('# Computer Use Confirmations Policy'));
   for (const confirmPayments of ['always', 'requested', 'never']) for (const rs of ['0', '1']) {
-    const baseline = harness(t, { confirmPayments, rs });
+    const baseline = harness(t, { confirmPayments, rs, documentationTrust: fixtureDocumentation(full) });
     baseline.call(1, 'await cua.getApp("Example")'); baseline.reply(1, [text(full)]);
     const expected = result(baseline, 1).content.find(c => c.text?.startsWith('## Computer Use\n')).text;
-    const h = harness(t, { warmRepl: true, confirmPayments, rs }); const warm = await beginOwnedWarm(h);
+    const h = harness(t, { warmRepl: true, confirmPayments, rs, documentationTrust: fixtureDocumentation(full) }); const warm = await beginOwnedWarm(h);
     h.reply(warm.id, [text(full)]); await tick();
     h.call(1, 'await cua.getApp("Example")'); h.reply(1, [text('output')]); await tick();
     const delivered = result(h, 1).content.find(c => c.text?.startsWith('## Computer Use\n')).text;
@@ -653,8 +654,8 @@ test('tab-cleanup refusal is model-visible and delivers held docs once', async t
 });
 
 for (const rs of ['0', '1']) for (const kind of ['browser', 'native']) test(`held docs share the result budget with a ${kind} tree, RS=${rs}`, async t => {
-  const h = harness(t, { rs });
   const largeDocs = docs.replace('Native API reference.', 'Native API reference. ' + 'reference '.repeat(3700));
+  const h = harness(t, { rs, documentationTrust: fixtureDocumentation(largeDocs) });
   await h.open(1, [text(largeDocs), text(tree)]);
   const header = kind === 'browser' ? 'Browser tab: 1, Title: "Page", URL: "https://example.test".\n0 AXWebArea Page' : tree;
   const page = header + '\n' + Array.from({ length: 300 }, (_, i) => `\t${i + 20} text ${'x'.repeat(100)}`).join('\n');
