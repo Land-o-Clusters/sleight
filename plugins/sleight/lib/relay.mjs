@@ -3737,8 +3737,13 @@ export function createRelay({
     }
     if (jsArgs && typeof msg.params.arguments?.code === 'string') {
       // Keep the existing top-level return repair before parsing the engine cell.
-      const cell = finalReturnCode(msg.params.arguments.code);
-      const { error } = parseCell(cell);
+      let cell, error;
+      try {
+        cell = finalReturnCode(msg.params.arguments.code);
+        ({ error } = parseCell(cell));
+      } catch {
+        error = { line: 0, column: 0, reason: 'cannot parse this cell' };
+      }
       if (error) {
         finishedCall(msg.id);
         toClient({ jsonrpc: '2.0', id: msg.id, result: { isError: true, content: [{ type: 'text',

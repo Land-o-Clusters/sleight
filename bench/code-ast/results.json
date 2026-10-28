@@ -431,7 +431,7 @@
     ]
   },
   "fuzzDisagreements": {
-    "file": "fuzz-disagreements.jsonl.gz",
+    "file": "~/Projects/sleight-wt/ledger/vc/ca1-evidence/fuzz-disagreements.jsonl.gz",
     "records": 118682,
     "bytes": 2213974,
     "sha256": "c3ad55c89b198471089a63c34a95698af7e5fa2d4bfbef5413002049eb1d4f37",

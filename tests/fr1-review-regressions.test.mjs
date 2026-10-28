@@ -80,7 +80,8 @@ test('relay refuses incomplete inspection before a prefix can dispatch through e
   assert.equal(replies.length, 4);
   for (const reply of replies) {
     assert.equal(reply.result.isError, true);
-    assert.match(reply.result.content[0].text, /Flow rules:|cannot inspect JavaScript|JS \[\d+:\d+\]:/i);
+    assert.match(reply.result.content[0].text, reply.id % 2
+      ? /cannot inspect JavaScript/i : /^JS \[1:\d+\]: Unterminated string literal$/);
     assert.doesNotMatch(reply.result.content[0].text, /SECRET|unterminated/);
   }
 });

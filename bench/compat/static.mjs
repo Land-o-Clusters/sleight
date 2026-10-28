@@ -113,8 +113,6 @@ export function analyzeBundle(app) {
     const absent = LAUNCH_STRINGS.filter(name => !launch.includes(name));
     results.push(absent.length ? result('launch-env', 'fail', `cua-repl's launcher no longer mentions ${absent.join(', ')}`) : result('launch-env', 'pass'));
   }
-
-
   const coreDoc = read(app, BUNDLE.coreDoc);
   const policy = existsSync(join(app, BUNDLE.policy)) ? read(app, BUNDLE.policy) : '';
   // The engine sends both files in one first result, so the headings are checked across both.
