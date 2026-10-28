@@ -36,6 +36,13 @@
 - With the action log on, turbo remembers generic controls per origin: 3 calls and 1,362 ms on a scripted second run, against 5 and 3,560 ms.
 - `SLEIGHT_COMPLETENESS=1` and `SLEIGHT_OUTCOMES=1` add read-scope and unverified-effect notes.
 
+### Engine
+
+- ChatGPT's engine 26.1023.50603 starts its server with `--import <file URL>` before the script. The doctor, setup and
+  an engine restart now find the script past node's options. 1.4.2's doctor and setup report `MISSING server script:
+  --import` on that engine. By reading the code (not run live), a 1.4.2 session that was running when the engine updated
+  fails each later call while it reconnects, until Claude Code restarts sleight.
+
 ### Benchmark and harness
 
 - FowlBrowser pin 6a12d60 with five local jobs, an offline Cursor arm, a mail-to-Numbers task and `--agent-seconds` scoring.
