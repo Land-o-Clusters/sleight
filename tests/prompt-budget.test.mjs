@@ -34,7 +34,7 @@ const skillPath = new URL('../plugins/sleight/skills/drive-mac-apps/SKILL.md', i
 // SM1R counts the new conditional managed-PATH refusal label (+54 characters).
 // HO1 pins the shortened default and lean handoff descriptions.
 // KT1 adds one fixed 40-character pending-tab notice (+43 inventoried characters).
-const leanRatio = 32921 / 45857;
+const leanRatio = 32965 / 45869;
 const leanSkill = () => skillRules(skillPath, { SLEIGHT_PROMPT: 'lean' });
 
 test('hook guard refusals join the pinned notice inventory', { skip }, () => {
@@ -126,8 +126,7 @@ for (const env of [{}, { SLEIGHT_PROMPT: 'lean' }, { SLEIGHT_LEAN_CALLS: '1' }, 
     h.call(1, 'let app = await cua.getApp("Editor")');
     const first = h.reply(1, '## Computer Use\nNative reference.\nWindow: "Draft", App: Editor');
     for (const passage of baseline.skillSafety) assert.ok(first.includes(passage), passage);
-    if (env.SLEIGHT_PROMPT !== 'lean')
-      assert.ok(first.includes('`typeText(text)` and `pressKey(key)` take no element. `click(target)` first.'));
+    assert.match(first, /`app\.typeText\(text\)`.*`app\.pressKey\(key\)`.*no (?:element|index)/);
     assert.match(first, /Top-level `await`, no `return`/);
     assert.match(first, /Write text with `nodeRepl\.write\(\.\.\.\)`/);
     assert.doesNotMatch(first, /sleight\.fillForm|sleight\.dragTo|downloadMedia|tab\.getJsDialog/);
@@ -371,6 +370,8 @@ test('the offline budget command measures all sources and stays about 30 percent
   assert.ok(report.rows.some(row => row.source === 'tool descriptions'));
   assert.ok(report.rows.some(row => row.source === 'shared notices'));
   assert.ok(report.total.lean.characters <= report.total.default.characters * leanRatio, JSON.stringify(report.total));
+  assert.ok(report.total.default.characters <= 45912);
+  assert.ok(report.total.lean.characters <= 32976);
 });
 
 test('the delivered default js prompt stays pinned within Claude Code’s description budget', () => {
@@ -486,8 +487,8 @@ for (const mode of [undefined, '0']) test(`MT browser descriptions stay pinned i
   for (const prompt of [undefined, 'lean']) {
     const combined = skillRules(skillPath, { SLEIGHT_PROMPT: prompt }).length + descriptions.length;
     // HO1 pins the combined skill and description sizes in both MT variants.
-    assert.equal(combined, mode === '0' ? (prompt === 'lean' ? 5977 : 9609)
-      : (prompt === 'lean' ? 5898 : 9530));
+    assert.equal(combined, mode === '0' ? (prompt === 'lean' ? 6031 : 9629)
+      : (prompt === 'lean' ? 5952 : 9550));
   }
   assert.ok(JSON.stringify(tools).length < 8000);
   for (const tool of tools) assert.ok(tool.description.length <= 2048, tool.name);
@@ -503,10 +504,10 @@ test('PF3 keeps every 1.5.0 input schema and pins both first and full turbo guid
   assert.equal(hash(turboFirstRules(full)), baseline.browserFirstRules);
   const measured = budget.budget({}).conditional.turboFirst.default;
   assert.equal(measured.catalog.characters, 6081);
-  assert.equal(measured.rules.characters, 4937);
-  assert.equal(measured.deferredCharacters, 3273);
-  assert.equal(measured.combined.characters, 11019);
-  assert.equal(Buffer.byteLength(JSON.stringify(browserTools('bbench')) + '\n' + turboFirstRules(full)), 11019);
+  assert.equal(measured.rules.characters, 4945);
+  assert.equal(measured.deferredCharacters, 3285);
+  assert.equal(measured.combined.characters, 11027);
+  assert.equal(Buffer.byteLength(JSON.stringify(browserTools('bbench')) + '\n' + turboFirstRules(full)), 11027);
   // This counts the browser catalog + skill, not host framing, native tools or Haiku tokens.
   assert.ok(measured.combined.characters <= 11736, 'below the same df27db01 surface');
   assert.ok(measured.combined.characters < 14166, 'below p160 a3706679');

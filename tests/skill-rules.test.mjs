@@ -17,9 +17,14 @@ test('the shipped skill becomes the first-call rules without its front matter', 
 });
 
 test('native text and keys name no element, and a click focuses the target first', () => {
-  for (const env of [{}, { SLEIGHT_LEAN_CALLS: '1' }]) {
-    assert.ok(skillRules(undefined, env).includes('`typeText(text)` and `pressKey(key)` take no element. `click(target)` first.'));
+  for (const env of [{}, { SLEIGHT_LEAN_CALLS: '1' }, { SLEIGHT_PROMPT: 'lean' }]) {
+    const rules = skillRules(undefined, env);
+    assert.match(rules, /`app\.typeText\(text\)`.*`app\.pressKey\(key\)`.*no (?:element|index)/);
+    if (!env.SLEIGHT_PROMPT) assert.match(rules, /`click\(target\)` first\./);
+    assert.match(rules, /Tab-handle input.*first argument.*element index or `null`/);
+    assert.doesNotMatch(rules, /`typeText\(text\)` and `pressKey\(key\)` take no element/);
   }
+  assert.match(skillRules(undefined, {}), /Copy numbers as digits\./);
 });
 
 test('a missing or empty skill gives no rules', t => {
@@ -197,13 +202,13 @@ test('p143 skill sources stay pinned outside RS2, screenshot guidance and the co
   const start = source.indexOf(SCREENSHOT_GUIDANCE_START), end = source.indexOf(SCREENSHOT_GUIDANCE_END);
   assert.ok(start >= 0 && end > start);
   const restored = requestedSubmitRules(source.slice(0, start) + source.slice(end + SCREENSHOT_GUIDANCE_END.length + 2), { SLEIGHT_RS: '0' });
-  assert.equal(hash(restored), '3ff39885237ce2f123d69a6c7488960638a91c513cde1b5cfd30218acea3d842');
-  assert.equal(hash(requestedSubmitRules(readFileSync(new URL('../plugins/sleight/skills/drive-mac-apps/SKILL.lean.md', import.meta.url), 'utf8').replace(cookiePolicy + '\n\n', ''), { SLEIGHT_RS: '0', SLEIGHT_PROMPT: 'lean' })), '19468c3ae1b61ef9c4f5cd616417e23824bdaad768c1edf1a10ee4cf5a32db7f');
+  assert.equal(hash(restored), 'c68a06fb27c2c6ab3ed8c1b5f6ea56b15bcda3400630621eef29a24cc86e9923');
+  assert.equal(hash(requestedSubmitRules(readFileSync(new URL('../plugins/sleight/skills/drive-mac-apps/SKILL.lean.md', import.meta.url), 'utf8').replace(cookiePolicy + '\n\n', ''), { SLEIGHT_RS: '0', SLEIGHT_PROMPT: 'lean' })), '127d6113b0279e0dc2a1a72a8dd0a0e76d31142d2339319546d93cd4362bbbc9');
 });
 
 test('both RS settings preserve the original submit safety passage and skill budgets byte for byte', () => {
-  for (const [prompt, limit, hash] of [[undefined, 1066, 'a67b92398bfe0f542845873c3281fdaea25c5b268fa5c2d3fad751d3ac2ab495'],
-    ['lean', 519, 'b053d95a0e3be121434f8df43f18efabb33043efeda3aa035fbb1b329acfd515']]) {
+  for (const [prompt, limit, hash] of [[undefined, 1066, 'a602547edfafe7517599165b0e42cb815e1bb40c7703f047cdc37094f4f53a0a'],
+    ['lean', 519, '6ded1220a419672a682c20e47a1510fe78ecd2af497e59543356cd517b5ce934']]) {
     const env = { SLEIGHT_PROMPT: prompt };
     const on = skillRules(undefined, env), off = skillRules(undefined, { ...env, SLEIGHT_RS: '0' });
     assert.match(on, /Submit in that call only when the user asked(?: for that submit)? and the engine's confirmation policy\s+doesn't require confirming it\. Otherwise stop before the final click\./);

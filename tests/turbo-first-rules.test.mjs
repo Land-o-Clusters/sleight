@@ -39,7 +39,7 @@ test('turbo browser guidance reads before retrying an unknown submit outcome', (
 
 test('turbo projection keeps native argument shapes and all three sign-in routes eager', () => {
   const first = turboFirstRules(skillRules(undefined, {}));
-  assert.ok(first.includes('`typeText(text)` and `pressKey(key)` take no element. `click(target)` first.'));
+  assert.ok(first.includes('`app.typeText(text)` and `app.pressKey(key)` take no element. `click(target)` first.'));
   assert.match(first, /turbo tabs `handoff wait:true`; non-browser app `app_handoff`; `js` browsers stop and tell user; otherwise stop/);
   assert.match(first, /Never request passwords\/codes\. Updates\/permissions\/first-run: stop\./);
 });

@@ -128,7 +128,7 @@ test('open rules keep every safety passage and drop what an open already did', (
     assert.doesNotMatch(short, /select_window|tap coordinates|coordinates by screenshot multiplier|--doctor|trigger hover|Selected text:|Rows, text selected|Reorder rows/);
     assert.doesNotMatch(short, /\n\n\n|## [^\n]*\n\n## /);
     if (!env.SLEIGHT_PROMPT) {
-      assert.match(short, /`typeText\(text\)` and `pressKey\(key\)` take no element\. `click\(target\)` first\./);
+      assert.match(short, /`app\.typeText\(text\)` and `app\.pressKey\(key\)` take no element\. `click\(target\)` first\./);
       assert.doesNotMatch(short, /List exceeds visible rows/);
       assert.match(short, /End on the action\./);
       assert.match(short, /app\.paste\("text"\)/);

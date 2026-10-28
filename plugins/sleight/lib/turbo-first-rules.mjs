@@ -5,7 +5,7 @@ import { createHash } from 'node:crypto';
 // disappear just because somebody put it under one of these headings.
 const deferred = new Set([
   '151b160e6b4b039b66f2b47f4c23bb11a2148947deedc757c4f87d905109b584', // Calls
-  'e11c3476471507ee0e89876859f28acc7b87c7ded972af39794b3560a639af88', // Text, menus and files
+  '0458b87f8018ab04732234ba12e65fd0c4817b2733826d03a787d076a13f2534', // Text, menus and files
   'ba184d9791115f85aa2a3ad080e8229033b768fc025d3ad2fe9cc9d67ccd4b3f', // Other tools, retain clipboard and guard rules below
 ]);
 const nativeIntro = '`mcp__plugin_sleight_computer__js` runs persistent JavaScript with `cua`. `js_reset` restarts it.\n'

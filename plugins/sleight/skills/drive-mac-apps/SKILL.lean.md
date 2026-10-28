@@ -19,6 +19,7 @@ Submit in that call only when the user asked and the engine's confirmation polic
 
 Browser: `setValue` address bar, Return in one call, new tab URLs too.
 Top-level `await`, no `return`. Write text with `nodeRepl.write(...)`.
+`app.typeText(text)`/`app.pressKey(key)`: no element.
 In a form, fill every independent visible field in one call. Put autocomplete last. `setValue` fields. Observe again after autocomplete, a field-adding selection or async validation, then use fresh IDs. Stop at a required confirmation.
 Long list: `await app.pickFromList(<list number>, "<whole row text>")`. Skip scroll loops.
 

@@ -13,7 +13,7 @@ Top-level `await`, no `return`. Write text with `nodeRepl.write(...)`.
 Never create or edit `~/Library/Application Support/sleight/preapproved.json`; only the user writes
 it. If an app isn't approved, ask the user, or stop when a headless run refuses it.
 
-`typeText(text)` and `pressKey(key)` take no element. `click(target)` first.
+`app.typeText(text)` and `app.pressKey(key)` take no element. `click(target)` first.
 
 ## Calls
 
@@ -48,7 +48,7 @@ it. If an app isn't approved, ask the user, or stop when a headless run refuses 
   call: `await app.click({ label: "<menu>" }); await app.click({ label: "<item>" })`.
 - Acquire a document that's already open. Don't reopen it.
 - Open a file with `open_file`, not the app's Open panel, which can bring the app to the front.
-- Use digits.
+- Copy numbers as digits.
 - Move files with Copy, then the menu's Move item, not Cut or a drag.
 - In a Save panel, send Go to Folder, the folder, Return, the name and the final Return in one call,
   such as `await app.pressKey("super+shift+g"); await app.typeText("<folder>"); await app.pressKey("Return"); await app.setValue({ id: "saveAsNameTextField" }, "<name>"); await app.pressKey("Return")`.
