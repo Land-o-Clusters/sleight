@@ -1,4 +1,6 @@
-import { tokens, invalidTokens, codeInspectionRefusal } from './flow-rules.mjs';
+import { codeInspectionRefusal } from './flow-rules.mjs';
+import { literalValue, UNKNOWN } from './code-ast.mjs';
+import { inspectCalls } from './call-inspection.mjs';
 import { spawn } from 'node:child_process';
 import { mkdirSync, chmodSync } from 'node:fs';
 import { homedir } from 'node:os';
@@ -383,17 +385,21 @@ export function createClipboardSession(io) {
 }
 
 export function clipboardActions(code) {
-  const ts = tokens(code), actions = [];
-  if (invalidTokens(ts)) throw new Error(codeInspectionRefusal);
-  for (let i = 0; i < ts.length; i++) {
-    if (!['pressKey', 'paste'].includes(ts[i].v)) continue;
-    const bracket = ts[i].string && ts[i - 1]?.v === '[' && ts[i + 1]?.v === ']';
-    if (!bracket && ts[i - 1]?.v !== '.') continue;
-    const open = i + (bracket ? 2 : 1);
-    if (ts[open]?.v !== '(') continue;
-    if (ts[i].v === 'paste') actions.push('paste');
-    else if (ts[open + 1]?.string && [')', ','].includes(ts[open + 2]?.v)) {
-      const parts = ts[open + 1].v.toLowerCase().split('+');
+  const { calls, error } = inspectCalls(code), actions = [];
+  if (error) throw new Error(codeInspectionRefusal);
+  for (const { call } of calls) {
+    if (call.method === UNKNOWN) {
+      Object.defineProperty(actions, 'unknown', { value: (actions.unknown ?? 0) + 1, configurable: true });
+      continue; // The runtime permit checks the resolved method and shortcut.
+    }
+    if (call.method === 'paste') actions.push('paste');
+    else if (call.method === 'pressKey') {
+      const key = literalValue(call.args[0]);
+      // UNKNOWN keys have no literal plan. installClipboardPermit refuses a
+      // computed clipboard shortcut before input, while ordinary keys pass.
+      if (key === UNKNOWN) Object.defineProperty(actions, 'unknown', { value: (actions.unknown ?? 0) + 1, configurable: true });
+      if (typeof key !== 'string') continue;
+      const parts = key.toLowerCase().split('+');
       if (parts.some(p => ['super', 'cmd', 'command', 'meta'].includes(p)) && ['c', 'x', 'v'].includes(parts.at(-1))) actions.push(parts.at(-1));
     }
   }

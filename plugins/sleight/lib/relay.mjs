@@ -1,5 +1,7 @@
 import { unsupportedCodeLines } from './code-line-terminators.mjs';
 import { parseCell } from './code-ast.mjs';
+import { dispatchInspection, sameGuardedCalls } from './dispatched-calls.mjs';
+import { codeInspectionRefusal } from './flow-rules.mjs';
 import { parseTypedApps, isPresent, predictApps, upfrontAsk, remoteApprovalNotice, physicalApprovalNotice, resolveApp } from './remote-approvals.mjs';
 import { turboFirstRules } from './turbo-first-rules.mjs';
 // A stdio relay between Claude Code and the computer-use server.
@@ -2324,6 +2326,17 @@ export function createRelay({
     }, 5000);
     leaseTimer.unref?.();
   }
+  function inspectionStop(msg) {
+    const id = msg.id;
+    documentCalls.delete(id); changeCalls.delete(id); jsCalls.delete(id); syntaxOrigins.delete(id); browserCalls.delete(id);
+    spaceChecks.delete(id); preHealth.delete(id); nativeChecked.delete(id); focusedChecked.delete(id); restartRetries.delete(id);
+    flowCalls.delete(id); helperReads.delete(id); remapNotes.delete(id); requireNotes.delete(id); preapprovalNotes.delete(id);
+    menuCalls.delete(id); menuAdmissions.delete(id); menuForwards.delete(id); nativeCopies.delete(id);
+    callSeqs.delete(id); callStarts.delete(id); resultCalls.delete(id); guardCalls.delete(id); filterMarks.delete(id);
+    outcomeCalls.delete(id); completenessCalls.delete(id);
+    finishedCall(id);
+    toClient({ jsonrpc: '2.0', id, result: { isError: true, content: [{ type: 'text', text: codeInspectionRefusal }] } });
+  }
   function finishedCall(id) {
     callNarration.delete(id);
     statsExcluded.delete(id);
@@ -3732,6 +3745,10 @@ export function createRelay({
           text: `JS [${error.line}:${error.column}]: ${error.reason}` }] } });
         return;
       }
+      if (cell !== msg.params.arguments.code && !sameGuardedCalls('async function __sleightInspect() {\n' + msg.params.arguments.code + '\n}', cell)) {
+        inspectionStop(msg);
+        return;
+      }
       if (unsupportedCodeLines(msg.params.arguments.code)) {
         finishedCall(msg.id);
         toClient({ jsonrpc: '2.0', id: msg.id, result: { isError: true, content: [{ type: 'text',
@@ -3742,6 +3759,10 @@ export function createRelay({
       if (/(?:^|[;\n])\s*const\s+app\s*=/.test(msg.params.arguments.code)) constApp = true;
       msg.params.arguments.code = cell;
       const fixed = nativeGetStateCode(msg.params.arguments.code, id => nativeHandles.has(id), id => browserHandles.has(id));
+      if (fixed !== cell && !sameGuardedCalls(cell, fixed)) {
+        inspectionStop(msg);
+        return;
+      }
       if (fixed !== msg.params.arguments.code) { msg.params.arguments.code = fixed; trace('getstate-rewritten', { id: msg.id }); }
       if (leanFirst && !requestsFullDocumentation(msg.params.arguments.code) &&
           /\bcua\s*\.\s*getApp\s*\(/.test(codeOnly(msg.params.arguments.code))) nativeAcquisitions.add(msg.id);
@@ -4057,6 +4078,10 @@ export function createRelay({
       }
     }
     if (!rest) return false;
+    if (!sameGuardedCalls(code, recovered || saveBaseline ? rest : acquire + ';\n' + rest)) {
+      inspectionStop(msg);
+      return true;
+    }
     // Split even for the app the lease holds: the guard's setup refers to `app` before a `let app`
     // in the same script, which throws (2/3 simulator-form runs, 2026-10-08).
     const prefixId = `sleight-acquire-${nextInternalId++}`;
@@ -4623,6 +4648,7 @@ export function createRelay({
     }
     let retryClient = structuredClone(msg);
     let originalCode = msg.params?.arguments?.code;
+    const inspectedCode = originalCode;
     if (typeof originalCode === 'string') {
       for (const native of nativeBindings(originalCode, nativeHandles)) {
         browserHandles.delete(native); nativeHandles.add(native);
@@ -4669,7 +4695,7 @@ export function createRelay({
       invalidateDiagnostics(); helperHandles.clear(); helperControls.clear(); helperActive = undefined; docsShown = false;
     }
     if (msg.method === 'tools/call' && msg.params?.name === 'js' && msg.id !== undefined) jsCalls.set(msg.id, originalCode ?? '');
-    let flowPlan, clipboardAction;
+    let flowPlan, clipboardAction, dispatchCheck;
     if (clipboard && msg.method === 'tools/call' && ['js', 'js_reset'].includes(msg.params?.name) && clipboard.pending) {
       clipboardStop(msg, /* notice */ 'Clipboard: wait for the pending clipboard action, then retry.'); return;
     }
@@ -4949,6 +4975,7 @@ export function createRelay({
         changeCalls.set(msg.id, { read, safe, entry, window: lastWindow, expected: documentKey(lastWindow), target: leaseWindow ?? lastWindow,
           observe: !browser && (!read || (!isInventoryRead(originalCode) && /cua\.getApp\(|\.(?:getAXState|getAXStateAndScreenshot)\(/.test(originalCode))) });
         if (typeof originalCode === 'string') {
+          dispatchCheck = dispatchInspection(inspectedCode);
           const setup = { reuseSetup: guardReady, acknowledge: true, prompt, ...outcomeSetup, ...(kernelEpoch ? { kernel: kernelEpoch } : {}) };
           const modes = guardMode?.split(',').map(mode => mode.trim()) ?? [], careful = modes.includes('careful');
           const target = documentMode ? observedDocument : inputLease ? leaseWindow : lastWindow;
@@ -4956,11 +4983,11 @@ export function createRelay({
             ? promptNotice('Input lease stopped this action: window or URL changed. Read the intended window again before acting.', prompt)
             : promptNotice('Change review stopped this action: window or URL changed. Read the intended window with one standalone cua.getApp call before editing.', prompt);
           if (browser) {
-            msg.params.arguments.code = guardedCode(selectedBrowserCode(browserRecovery.code(originalCode), browserChoice, `${sessionId}:${turnId}`), target, reason,
+            msg.params.arguments.code = dispatchCheck.wrap(dispatchCheck.mark(selectedBrowserCode(browserRecovery.code(originalCode), browserChoice, `${sessionId}:${turnId}`)), code => guardedCode(code, target, reason,
               inputLease && leaseCalls.get(msg.id)?.key ? inputLease.grant(leaseCalls.get(msg.id).key) : undefined,
               { ...setup, timing: guardTiming, careful, fileOnly: changeReview, browserCandidate: true,
                 skipAppWrap: browserHandles.has('app') || browser.handles.includes('app'),
-                nativeDenied: nativeDenied ?? promptNotice(NATIVE_DENIED, prompt) });
+                nativeDenied: nativeDenied ?? promptNotice(NATIVE_DENIED, prompt) }));
           } else if (read) {
             let code = originalCode;
             if (healthPlan && !helperProbes.has(msg.id) && helperFullReads.has(healthPlan.key)) {
@@ -4972,7 +4999,7 @@ export function createRelay({
               }
               healthPlan.fullVisible = true;
             }
-            msg.params.arguments.code = readCode(code, setup);
+            msg.params.arguments.code = dispatchCheck.wrap(dispatchCheck.mark(code), value => readCode(value, setup));
           }
           else if (documentMode || inputLease || (changeReview && target)) {
             const seenWindow = numberWindow(originalCode, target), numbers = literalNumbers(originalCode);
@@ -4993,7 +5020,7 @@ export function createRelay({
               request: { ...msg, params: { ...msg.params, arguments: { ...msg.params.arguments, code: originalCode } } } });
             const handBindingMark = hand ? filteredReadMark() : undefined;
             if (handBindingMark) handBindingMarks.set(msg.id, handBindingMark);
-            const filterMark = filteredReadMark(), filteredCode = filteredReadCode(swipeCode, filterMark);
+            const filterMark = filteredReadMark(), filteredCode = dispatchCheck.mark(filteredReadCode(swipeCode, filterMark));
             const typingAction = compactor.beginAction(originalCode);
             const typedTarget = typingAction?.typedTarget;
             const receiptTyping = typingReceiptCall(originalCode) && !!typingReceiptTarget(typingAction);
@@ -5018,7 +5045,7 @@ export function createRelay({
                 ? tabProbe?.begin(msg.id, { ...target, windowNumber: tabAdmission.baseline.windowNumber, nativeIdentity: tabAdmission.baseline },
                   Date.now() - Math.max(0, clock() - tabAdmission.sampledAt), 'new-tab') : undefined;
             if (probe?.mode === 'new-tab') tabLandings.set(msg.id, { landing: tabAdmission.plan.actions[0].handle });
-            msg.params.arguments.code = guardedCode(filteredCode, menuBaseline ?? closeWindow, reason,
+            msg.params.arguments.code = dispatchCheck.wrap(filteredCode, code => guardedCode(code, menuBaseline ?? closeWindow, reason,
               inputLease ? inputLease.grant(leaseCalls.get(msg.id)?.key) : undefined,
               { ...setup, dp1: closeReadSkip, handBindingMark, guardStopMark: stopMark, resultMark: typedTarget ? filterMark : undefined, ...(outcomeMark ? { outcomeMark } : {}), timing: guardTiming, careful: careful || documentMode || !!menuBaseline, fileOnly: changeReview && !documentMode, cancelOnly: changeReview && !documentMode && safe,
                 firstOff: !careful && !documentMode && !changeReview,
@@ -5034,24 +5061,24 @@ export function createRelay({
                 // The lines Claude last saw for the numbers it acts on, so the first action stops when
                 // the window renumbered between Claude's read and this call.
                 seenLines, seenParents: compactor.seenParents(seenWindow, numbers), literals: numbers, literalOrder: literalElements(originalCode),
-                uniqueSeen, payment: paymentMessages.guard(confirmPayments) });
+                uniqueSeen, payment: paymentMessages.guard(confirmPayments) }));
             if (receiptTyping) msg.params.arguments.code += typingReceiptCode(filterMark);
-          } else msg.params.arguments.code = swipeCode;
+          } else msg.params.arguments.code = dispatchCheck.mark(swipeCode);
           if (msg.params.arguments.code !== originalCode) guardCalls.set(msg.id, guardGeneration);
           const restore = restoreEngineBindings(originalCode);
-          if (restore) msg.params.arguments.code = readCode(restore, { prompt, ...outcomeSetup }) + '\n' + msg.params.arguments.code;
-          if (clipboard) msg.params.arguments.code = clipboardCode(msg.params.arguments.code, clipboardAction);
-          msg.params.arguments.code = fillFormCode(msg.params.arguments.code);
-          msg.params.arguments.code = dragToCode(msg.params.arguments.code);
-          msg.params.arguments.code = reorderCode(msg.params.arguments.code);
-          msg.params.arguments.code = pickFromListCode(msg.params.arguments.code, completeness);
-          if (browser) msg.params.arguments.code = browserStale.code(msg.params.arguments.code, originalCode, prompt);
-          const tabCode = tabCleanupCode(browser ? backgroundLinksCode(msg.params.arguments.code) : msg.params.arguments.code);
+          if (restore) msg.params.arguments.code = dispatchCheck.rewrite(msg.params.arguments.code, code => readCode(restore, { prompt, ...outcomeSetup }) + '\n' + code);
+          if (clipboard) msg.params.arguments.code = dispatchCheck.rewrite(msg.params.arguments.code, code => clipboardCode(code, clipboardAction));
+          msg.params.arguments.code = dispatchCheck.rewrite(msg.params.arguments.code, fillFormCode);
+          msg.params.arguments.code = dispatchCheck.rewrite(msg.params.arguments.code, dragToCode);
+          msg.params.arguments.code = dispatchCheck.rewrite(msg.params.arguments.code, reorderCode);
+          msg.params.arguments.code = dispatchCheck.rewrite(msg.params.arguments.code, code => pickFromListCode(code, completeness));
+          if (browser) msg.params.arguments.code = dispatchCheck.rewrite(msg.params.arguments.code, code => browserStale.code(code, originalCode, prompt));
+          const tabCode = dispatchCheck.rewrite(msg.params.arguments.code, code => tabCleanupCode(browser ? backgroundLinksCode(code) : code));
           if (/\bcua\.createBrowserTab\s*\(|\.tabs\.new\s*\(/.test(originalCode)) tabsMayNeedCleanup = true;
-          msg.params.arguments.code = tabReuseCode(tabCode, msg.id);
-          if (browser) msg.params.arguments.code = browserAliasesCode(msg.params.arguments.code);
+          msg.params.arguments.code = dispatchCheck.rewrite(tabCode, code => tabReuseCode(code, msg.id));
+          if (browser) msg.params.arguments.code = dispatchCheck.rewrite(msg.params.arguments.code, browserAliasesCode);
           if (browser || /\bagent\.browsers\.get\s*\(/.test(originalCode))
-            msg.params.arguments.code = clickResults.code(msg.params.arguments.code);
+            msg.params.arguments.code = dispatchCheck.rewrite(msg.params.arguments.code, code => clickResults.code(code));
         }
       }
       if (browser) browserCalls.set(msg.id, browser);
@@ -5061,11 +5088,15 @@ export function createRelay({
         const shotHandle = openShots.get(msg.id);
         if (shotHandle) msg.params.arguments.code += `;\ntry { await ${shotHandle}.getScreenshot(); } catch {}`;
         resultBudget.request(msg.id, { browser: !!browser, code: originalCode });
-        if (typeof msg.params.arguments?.code === 'string') msg.params.arguments.code = resultBudget.code(msg.params.arguments.code);
+        if (typeof msg.params.arguments?.code === 'string') msg.params.arguments.code = dispatchCheck ? dispatchCheck.rewrite(msg.params.arguments.code, code => resultBudget.code(code)) : resultBudget.code(msg.params.arguments.code);
       }
       if (name === 'js' && typeof msg.params.arguments?.code === 'string') {
-        msg.params.arguments.code = browserWarmupUseCode(msg.params.arguments.code,
-          { browserChoice, scope: `${sessionId}:${turnId}`, token: browserWarmToken, confirmed: browserWarmConfirmed });
+        msg.params.arguments.code = dispatchCheck ? dispatchCheck.rewrite(msg.params.arguments.code, code => browserWarmupUseCode(code,
+          { browserChoice, scope: `${sessionId}:${turnId}`, token: browserWarmToken, confirmed: browserWarmConfirmed })) : msg.params.arguments.code;
+      }
+      if (dispatchCheck && !dispatchCheck.verify(msg.params.arguments.code)) {
+        inspectionStop(msg);
+        return;
       }
       msg.params._meta = { ...msg.params._meta, [META_KEY]: turnMeta() };
       turnUsed = true;

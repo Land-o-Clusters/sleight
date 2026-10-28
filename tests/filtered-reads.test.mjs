@@ -312,7 +312,9 @@ test('hidden rows do not become the baseline or authorize old numeric input', as
   const action = await h.call('await app.click(1);');
   assert.deepEqual(h.actions, [/* Row 0 disappeared, so 1 must not click Row 1. */]);
   assert.equal(action.isError, true);
-  assert.match(output(action), /Row 100/, 'the refusal shows a fresh full tree');
+  // CA2 refuses a changed literal before the runtime guard can read.
+  assert.match(output(action), /cannot inspect JavaScript/);
+  assert.match(output(await h.call('await app.getAXState();')), /Row 100/, 'an explicit read shows the fresh full tree');
 });
 
 test('the next normal read shows changes hidden by a filtered read', async t => {

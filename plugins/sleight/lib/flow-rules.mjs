@@ -1,3 +1,5 @@
+import { parseCell, walk, memberCall, literalValue, handleBindings, UNKNOWN } from './code-ast.mjs';
+import { receiverRoot } from './call-inspection.mjs';
 import { lineCommentEnd, isLineTerminator } from './code-line-terminators.mjs';
 // Literal inspection is a mistake guard. Never evaluate the caller's code here.
 import { existsSync, readFileSync, realpathSync } from 'node:fs';
@@ -168,60 +170,74 @@ export function tokens(code) {
   return out;
 }
 
-function calls(code, handles, fallback, browsers) {
-  const ts = tokens(code); const inputs = []; let readTarget = fallback;
-  if (invalidTokens(ts)) return { inputs, unknown: true };
-  for (let i = 0; i < ts.length; i++) {
-    if (ts[i].v === '=' && !ts[i - 1]?.string) {
-      const source = i + (ts[i + 1]?.v === 'await' ? 2 : 1);
-      const end = ts.findIndex((t, index) => index > source && t.v === ';');
-      const expression = ts.slice(source, end < 0 ? ts.length : end);
-      const factories = ['getByRole', 'getByText', 'getByLabel', 'getByPlaceholder', 'getByTestId', 'locator', 'frameLocator', 'filter', 'first', 'last', 'nth', 'and', 'or', 'new', 'get'];
-      if (handles.get(ts[source]?.v)?.app === 'browser' && ts[source + 1]?.v === '.' &&
-          expression.some((t, index) => !t.string && factories.includes(t.v) && expression[index + 1]?.v === '(')) {
-        handles.set(ts[i - 1].v, handles.get(ts[source].v));
+export function calls(code, handles, fallback, browsers) {
+  const { ast, error } = parseCell(code), inputs = [], unknownInputs = [];
+  let readTarget = fallback;
+  if (error) return { inputs, unknown: true, unknownInputs };
+  const methods = new Set(['typeText', 'paste', 'setValue', 'pressKey', 'fill', 'type', 'pressSequentially', 'press', 'goto', 'createBrowserTab', 'back', 'forward', 'reload']);
+  const previous = new Map([...handles].map(([name, value]) => [name, { kind: value.app === 'browser' ? 'browser' : 'app', app: value.app }]));
+  for (const statement of ast.body) {
+    const hints = handleBindings({ body: [statement] }, previous);
+    // Bindings are hints, not execution. Keep shared browser targets so a
+    // navigation invalidates aliases, as it does on the old literal path.
+    for (const node of walk(statement)) {
+      const assignment = node.type === 'VariableDeclarator' ? { left: node.id, right: node.init, operator: '=' }
+        : node.type === 'AssignmentExpression' ? node : undefined;
+      if (assignment?.left.type === 'Identifier') {
+        const name = assignment.left.name, hint = hints.get(name);
+        if (hint?.kind === 'app') handles.set(name, hint.source ? handles.get(hint.source) ?? fallback ?? target(undefined, undefined, browsers) : target(hint.app, undefined, browsers));
+        else if (hint) handles.set(name, handles.get(hint.root) ?? target('browser', undefined, browsers));
+        else if (assignment.operator === '=' && assignment.right?.type === 'Identifier' && handles.has(assignment.right.name)) handles.set(name, handles.get(assignment.right.name));
+        else handles.delete(name);
       }
+      if (node.type !== 'CallExpression') continue;
+      const call = memberCall(node);
+      if (!call) continue;
+      const root = receiverRoot(call.receiver);
+      if (handles.has(root)) readTarget = handles.get(root);
+      if (['getApp', 'getBrowser', 'getTab', 'createBrowserTab'].includes(call.method)) {
+        const value = literalValue(call.args[0]);
+        const binding = [...hints].find(([, hint]) => hint.range && hint.range[0] <= node.range[0] && hint.range[1] >= node.range[1]);
+        readTarget = (binding && handles.get(binding[0])) ?? (call.method === 'getApp'
+          ? target(typeof value === 'string' ? value : undefined, undefined, browsers) : target('browser', undefined, browsers));
+      }
+      if (call.method === UNKNOWN) { unknownInputs.push({ method: UNKNOWN, target: { ...(handles.get(root) ?? fallback) } }); continue; }
+      if (!methods.has(call.method)) continue;
+      const method = call.method;
+      const factory = memberCall(call.receiver);
+      const directApp = factory?.receiver.type === 'Identifier' && factory.receiver.name === 'cua' && factory.method === 'getApp';
+      const appValue = directApp && literalValue(factory.args[0]);
+      const destination = method === 'createBrowserTab' ? target('browser', undefined, browsers)
+        : directApp ? target(typeof appValue === 'string' ? appValue : undefined, undefined, browsers) : handles.get(root) ?? fallback;
+      if (destination?.app === 'browser') readTarget = destination;
+      const values = call.args.map(literalValue);
+      let value = method === 'createBrowserTab' || method === 'setValue' ? values[1]
+        : typeof values[0] === 'string' ? values[0] : values[1] ?? values[0];
+      if (value === UNKNOWN) {
+        unknownInputs.push({ method, target: { ...destination } });
+        // Preserve the conservative literal-fragment check for concatenations.
+        // The complete runtime value is still unknown and is never evaluated.
+        const argument = method === 'createBrowserTab' || method === 'setValue' ? call.args[1]
+          : values[0] === UNKNOWN ? call.args[0] : call.args[1];
+        const fragments = node => {
+          const literal = literalValue(node);
+          if (typeof literal === 'string') return [literal];
+          return node?.type === 'BinaryExpression' && node.operator === '+' ? [...fragments(node.left), ...fragments(node.right)] : [];
+        };
+        const known = fragments(argument);
+        if (known.length) value = known.join('');
+      }
+      const navigation = ['goto', 'createBrowserTab', 'back', 'forward', 'reload'].includes(method);
+      const urlNavigation = ['goto', 'createBrowserTab'].includes(method);
+      if (typeof value === 'string' && (!navigation || urlNavigation)) inputs.push({ method,
+        target: urlNavigation ? { ...target(destination?.app, value, browsers), observed: false } : { ...destination }, value });
+      else if (value !== UNKNOWN && (!navigation || urlNavigation)) unknownInputs.push({ method, target: { ...destination } });
+      if (navigation && destination) { destination.host = null; destination.observed = false; }
     }
-    if (!ts[i].string && handles.has(ts[i].v) && ts[i + 1]?.v === '.') readTarget = handles.get(ts[i].v);
-    if (['getApp', 'getBrowser', 'getTab', 'createBrowserTab'].includes(ts[i].v) && ts[i + 1]?.v === '(' && (ts[i].v !== 'getApp' || ts[i + 2]?.string)) {
-      const app = ts[i].v === 'getApp' ? ts[i + 2].v : 'browser'; readTarget = target(app, undefined, browsers);
-      // Find the receiver assigned to this acquisition, without executing it.
-      const start = Math.max(ts.slice(0, i).findLastIndex(t => t.v === ';') + 1, 0);
-      const eq = ts.slice(start, i).findIndex(t => t.v === '=');
-      if (eq > 0) handles.set(ts[start + eq - 1].v, readTarget);
-    }
-    const method = ts[i].v;
-    if (!['typeText', 'paste', 'setValue', 'pressKey', 'fill', 'type', 'pressSequentially', 'press', 'goto', 'createBrowserTab', 'back', 'forward', 'reload'].includes(method)) continue;
-    const bracket = ts[i].string && ts[i - 1]?.v === '[' && ts[i + 1]?.v === ']';
-    if (!bracket && ts[i - 1]?.v !== '.') continue;
-    const receiver = ts[i - 2]?.v;
-    const start = Math.max(ts.slice(0, i).findLastIndex(t => t.v === ';') + 1, 0);
-    const root = ts.slice(start, i).find(t => handles.get(t.v)?.app === 'browser')?.v;
-    // A new tab is always the browser, however the method was named (`cua.createBrowserTab(` or
-    // `cua["createBrowserTab"](`, where the token after the name is `]`, not `(`).
-    const destination = method === 'createBrowserTab' ? target('browser', undefined, browsers) : handles.get(root ?? receiver) ?? fallback;
-    if (destination?.app === 'browser') readTarget = destination;
-    const open = i + (bracket ? 2 : 1);
-    if (ts[open]?.v !== '(') continue;
-    const args = [[]]; let depth = 0; let j = open + 1;
-    for (; j < ts.length; j++) {
-      const t = ts[j];
-      if (!t.string && t.v === ')' && depth === 0) break;
-      if (!t.string && t.v === ',' && depth === 0) { args.push([]); continue; }
-      if (!t.string && ['(', '[', '{'].includes(t.v)) depth++;
-      if (!t.string && [')', ']', '}'].includes(t.v)) depth--;
-      args.at(-1).push(t);
-    }
-    const arg = method === 'createBrowserTab' ? args[1] : method === 'setValue' ? args[1] : (args[0]?.[0]?.string ? args[0] : args[1] ?? args[0]);
-    const literals = (arg ?? []).filter(t => t.string).map(t => t.v);
-    const navigation = ['goto', 'createBrowserTab', 'back', 'forward', 'reload'].includes(method);
-    const urlNavigation = ['goto', 'createBrowserTab'].includes(method);
-    if (literals.length && (!navigation || urlNavigation)) inputs.push({ method, target: urlNavigation ? { ...target(destination?.app, literals.join(''), browsers), observed: false }
-      : { ...destination }, value: literals.join('') });
-    if (navigation && destination) { destination.host = null; destination.observed = false; }
-    i = j;
+    previous.clear();
+    for (const [name, value] of handles) previous.set(name, { kind: value.app === 'browser' ? 'browser' : 'app', app: value.app });
   }
-  return { inputs, readApp: readTarget?.app, readTarget };
+  return { inputs, unknownInputs, readApp: readTarget?.app, readTarget };
 }
 
 function keyText(value) {
@@ -334,7 +350,7 @@ export class FlowRules {
         if (hit) violations.set(JSON.stringify([rule.id, app]), { rule: rule.id, app: destination?.app ?? 'unknown app', ...(source ? { source } : {}) });
       }
     }
-    return { violations: [...violations.values()], handles, tails, readApp: parsed.readApp, readTarget: parsed.readTarget };
+    return { violations: [...violations.values()], handles, tails, readApp: parsed.readApp, readTarget: parsed.readTarget, unknownInputs: parsed.unknownInputs ?? [] };
   }
   forward(plan) { this.handles = plan.handles; this.tails = plan.tails; this.revision++; }
   observe(result, plan) {

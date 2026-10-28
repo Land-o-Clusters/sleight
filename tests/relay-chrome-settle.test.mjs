@@ -108,7 +108,9 @@ test('a chrome-only read with no action skips the settle wait', async () => {
   assert.equal(h.toServer.filter(m => String(m.id).startsWith('sleight-chrome-settle-')).length, 0);
 });
 
-test('chrome-only scrolls become proportional content swipes on the observed handle', async () => {
+// CA2 requires the dispatched callee and literal data to match inspection. The
+// historical scroll-to-swipe substitution changes both and must now refuse.
+test('chrome-only scroll-to-swipe substitutions refuse before engine dispatch', async () => {
   const png = Buffer.alloc(33);
   png.writeUInt32BE(0x89504e47, 0); png.writeUInt32BE(0x0d0a1a0a, 4);
   png.writeUInt32BE(400, 16); png.writeUInt32BE(1000, 20);
@@ -116,26 +118,14 @@ test('chrome-only scrolls become proportional content swipes on the observed han
   js(h, 1, 'let app = await cua.getApp("Stream")'); await settle();
   h.fromServer({ jsonrpc: '2.0', id: 1, result: { content: [
     { type: 'text', text: IPHONE.replaceAll('iPhone Mirroring', 'Stream') }, image(png.toString('base64'))] } }); await settle();
-  for (const [id, direction, distance, from, to] of [
-    [2, 'down', '0.5', [200, 687.5], [200, 362.5]],
-    [3, 'up', '1', [200, 200], [200, 850]],
-    [4, 'left', '0.5', [135, 525], [265, 525]],
-    [5, 'right', '{ pixels: 100 }', [250, 525], [150, 525]],
-  ]) {
+  for (const [id, direction, distance] of [[2, 'down', '0.5'], [3, 'up', '1'],
+    [4, 'left', '0.5'], [5, 'right', '{ pixels: 100 }'], [6, 'constructor', '0.5']]) {
     js(h, id, `await app.scroll([200, 500], ${JSON.stringify(direction)}, ${distance})`); await settle();
-    const calls = [];
-    await runInNewContext(`(async () => { ${h.toServer.find(m => m.id === id).params.arguments.code} })()`, {
-      app: { drag: async (...args) => calls.push(['drag', ...args]), scroll: async (...args) => calls.push(['scroll', ...args]) },
-    });
-    assert.deepEqual(JSON.parse(JSON.stringify(calls)), [['drag', from, to]]);
+    assert.equal(h.toServer.some(message => message.id === id), false);
+    const reply = h.toClient.find(message => message.id === id).result;
+    assert.equal(reply.isError, true);
+    assert.match(reply.content[0].text, /cannot inspect JavaScript/);
   }
-  js(h, 6, 'await app.scroll([200, 500], "constructor", 0.5)'); await settle();
-  const calls = [];
-  await runInNewContext(`(async () => { ${h.toServer.find(m => m.id === 6).params.arguments.code} })()`, {
-    app: { drag: async () => assert.fail('invalid direction must retain engine validation'),
-      scroll: async (...args) => calls.push(args) },
-  });
-  assert.deepEqual(JSON.parse(JSON.stringify(calls)), [[[200, 500], 'constructor', 0.5]]);
 });
 
 test('normal trees, other handles and text mentioning scroll keep the original behavior', async () => {
@@ -153,7 +143,7 @@ test('normal trees, other handles and text mentioning scroll keep the original b
   }
 });
 
-test('a rewritten swipe still stops at the window guard before dragging a changed window', async t => {
+test('a guarded swipe substitution refuses before a window read or drag', async t => {
   const png = Buffer.alloc(33);
   png.writeUInt32BE(0x89504e47, 0); png.writeUInt32BE(0x0d0a1a0a, 4);
   png.writeUInt32BE(400, 16); png.writeUInt32BE(1000, 20);
@@ -172,8 +162,7 @@ test('a rewritten swipe still stops at the window guard before dragging a change
   h.fromServer({ jsonrpc: '2.0', id: 1, result: { content: [{ type: 'text', text: IPHONE }, image(png.toString('base64'))],
     _meta: { 'codex/toolSurface': { app: { appId: 'com.example.stream', kind: 'appId' }, kind: 'computerUse' } } } }); await settle();
   js(h, 2, 'await app.scroll([200, 500], "down", 0.5)'); await settle();
-  const code = h.toServer.find(m => m.id === 2).params.arguments.code;
-  state = 'Window: "Other", App: iPhone Mirroring.\n0 standard window Other';
-  await assert.rejects(run(code), /window or URL changed/);
+  assert.equal(h.toServer.some(message => message.id === 2), false);
+  assert.match(h.toClient.find(message => message.id === 2).result.content[0].text, /cannot inspect JavaScript/);
   assert.equal(dragged, 0);
 });
