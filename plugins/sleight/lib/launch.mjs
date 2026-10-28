@@ -137,21 +137,32 @@ export function resolveServer(env = process.env) {
 // with `--import file:///…/require-browser-access.mjs` before the script, so the script isn't args[0].
 const NODE_VALUE_FLAGS = new Set(['--import', '--require', '-r', '--loader', '--experimental-loader', '--env-file',
   '--conditions', '-C', '--input-type', '--title', '--redirect-warnings', '--diagnostic-dir', '--report-dir']);
-const asPath = arg => arg.startsWith('file:') ? (() => { try { return fileURLToPath(arg); } catch { return undefined; } })() : arg;
+// A malformed file URL stays as typed, so the existence check that follows fails closed.
+const asPath = arg => { if (!arg.startsWith('file:')) return arg; try { return fileURLToPath(arg); } catch { return arg; } };
+// An option value names a file when it is a file URL, an absolute path or a ./ or ../ path. A bare package
+// name (`--import tsx`) is node's to resolve.
+const namesFile = value => value.startsWith('file:') || isAbsolute(value) || /^\.\.?\//.test(value);
 
 // The files an engine launch names: its script (the first argument that is neither an option nor an option's
-// value) and every other absolute path or file URL, including the values of options such as --import.
+// value), the files its options name (separate or `--opt=value`), and every later absolute path or file URL.
+// `others` holds both kinds; `optionFiles` only the files options name, which must exist before a launch.
 export function engineLaunchPaths(args) {
   let script, takesValue = false;
-  const others = [];
+  const others = [], optionFiles = [];
+  const optionValue = value => { if (namesFile(value)) { const path = asPath(value); others.push(path); optionFiles.push(path); } };
   for (const arg of args) {
-    const path = typeof arg === 'string' ? asPath(arg) : undefined;
-    if (takesValue) { takesValue = false; if (path && isAbsolute(path)) others.push(path); continue; }
-    if (typeof arg === 'string' && arg.startsWith('-')) { takesValue = NODE_VALUE_FLAGS.has(arg); continue; }
-    if (script === undefined) { script = path ?? arg; continue; }
-    if (path && isAbsolute(path)) others.push(path);
+    if (typeof arg !== 'string') continue;
+    if (takesValue) { takesValue = false; optionValue(arg); continue; }
+    if (arg.startsWith('-')) {
+      const eq = arg.indexOf('=');
+      if (eq > 0) { if (NODE_VALUE_FLAGS.has(arg.slice(0, eq))) optionValue(arg.slice(eq + 1)); }
+      else takesValue = NODE_VALUE_FLAGS.has(arg);
+      continue;
+    }
+    if (script === undefined) { script = asPath(arg); continue; }
+    if (arg.startsWith('file:') || isAbsolute(arg)) others.push(asPath(arg));
   }
-  return { script, others };
+  return { script, others, optionFiles };
 }
 
 export function selectSurfaces(server, env = process.env, options) {
@@ -244,9 +255,11 @@ export async function doctor({ env = process.env, log = console.log, app = proce
   const s = resolveServer(env);
   if (s.error) { log(`sleight: ${s.error}`); return 1; }
   await probeSurfaces(s, env);
+  const launchPaths = engineLaunchPaths(s.args);
   const checks = [
     ['node', s.command],
-    ['server script', engineLaunchPaths(s.args).script],
+    ['server script', launchPaths.script],
+    ...launchPaths.optionFiles.map(path => ['server file', path]),
     ['node_repl', s.env.CUA_REPL_NODE_REPL_PATH],
     ['computer-use helper', s.env.SKY_CUA_SERVICE_PATH],
   ];
