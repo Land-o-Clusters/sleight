@@ -46,25 +46,46 @@ test('malformed literal stops the whole batch before acquisition or an earlier v
   assert.match(f.received.at(-1).result.content[0].text, /nothing was sent/);
 });
 
-for (const options of ['{ button: "right" }', '{ "button": "right" }', '{ button: side }',
-  '{ button: "left", mouseButton: "right" }']) {
-  test(`native click rejects the ignored button option before the whole batch: ${options}`, t => {
+const buttonMistakes = [
+  ...['left', 'right', 'middle', 'l', 'r', 'm'].map(button => [
+    { button }, `sleight: use {mouseButton:"${button}"}, not button; nothing sent`,
+  ]),
+  [{ button: 'unknown-button' }, 'sleight: use mouseButton, not button; nothing sent'],
+  [{ button: 'right"}; injected()' }, 'sleight: use mouseButton, not button; nothing sent'],
+  [{ button: 1 }, 'sleight: use mouseButton, not button; nothing sent'],
+  [{ button: null }, 'sleight: use mouseButton, not button; nothing sent'],
+  [{ button: ['left'] }, 'sleight: use mouseButton, not button; nothing sent'],
+  [{ button: { toString: 'left' } }, 'sleight: use mouseButton, not button; nothing sent'],
+  [{ button: 'left', mouseButton: 'right' }, 'sleight: use {mouseButton:"left"}, not button; nothing sent'],
+];
+
+for (const [options, expected] of buttonMistakes) {
+  test(`native click rejects the ignored button option before the whole batch: ${JSON.stringify(options)}`, t => {
     const f = fixture(t);
-    f.call(`let editor = await cua.getApp("Fixture Editor"); await editor.pressKey("Return"); await editor.click([40, 20], ${options});`);
+    f.call(`let editor = await cua.getApp("Fixture Editor"); await editor.pressKey("Return"); await editor.click([40, 20], ${JSON.stringify(options)});`);
     assert.equal(f.sent.length, 0);
     const reply = f.received.at(-1).result;
     assert.equal(reply.isError, true);
-    assert.equal(reply.content[0].text, 'sleight: click(target,{mouseButton:"right"}); nothing sent.');
+    assert.equal(reply.content[0].text, expected + '.');
+  });
+
+  test(`computed native button option ${JSON.stringify(options)} refuses before a lease, read or click`, async () => {
+    const sent = [];
+    const raw = { getAXState: async () => { sent.push('read'); return tree; }, click: async () => sent.push('click') };
+    const realm = { app: raw, options, cua: { getApp: async () => raw }, nodeRepl: { write() {} } };
+    const lease = { path: 'unused-lease', token: 'fixture' };
+    await assert.rejects(runInNewContext(`(async () => { ${guardedCode('await app.click([40, 20], options);', window, undefined, lease)} })()`, realm,
+      { importModuleDynamically() { sent.push('lease'); throw new Error('unexpected lease access'); } }),
+    { message: expected + ' for this action.' });
+    assert.deepEqual(sent, []);
   });
 }
 
-test('computed native button option refuses before a read or click and gives the right-click form', async () => {
-  const sent = [];
-  const raw = { getAXState: async () => { sent.push('read'); return tree; }, click: async () => sent.push('click') };
-  const realm = { app: raw, options: { button: 'right' }, cua: { getApp: async () => raw }, nodeRepl: { write() {} } };
-  await assert.rejects(runInNewContext(`(async () => { ${guardedCode('await app.click([40, 20], options);', window)} })()`, realm),
-    { message: 'sleight: click(target,{mouseButton:"right"}); nothing sent for this action.' });
-  assert.deepEqual(sent, []);
+test('unknown native button expression gets a value-free rename before acquisition', t => {
+  const f = fixture(t);
+  f.call('let editor = await cua.getApp("Fixture Editor"); await editor.click([40, 20], { button: side });');
+  assert.equal(f.sent.length, 0);
+  assert.equal(f.received.at(-1).result.content[0].text, 'sleight: use mouseButton, not button; nothing sent.');
 });
 
 test('WD6c alias of an acquired app gets the native signature', t => {

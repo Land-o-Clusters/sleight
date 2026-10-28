@@ -790,7 +790,7 @@ test('with both switches off the guard code is the base build\'s, byte for byte'
   // PF2 adds the bounded list-focus recovery click. Restoring the pre-PF2 picker reproduces the previous pins.
   // AS2 embeds the button-option refusal. Removing that addition reproduces the prior pins.
   const current = nativeArgumentError.toString();
-  const previous = current.replace(/      if \(known\(b\) && b != null && typeof b === 'object' && 'button' in b\) \{\n        return \/\* notice \*\/ 'sleight: click\(target,\{mouseButton:"right"\}\); nothing sent';\n      \}\n/, '');
+  const previous = current.replace(/      if \(known\(b\) && b != null && typeof b === 'object' && 'button' in b\) \{\n[\s\S]*?\n      \}\n/, '');
   assert.notEqual(current, previous);
   const restore = code => code.replace(current, previous);
   assert.deepEqual({
@@ -805,7 +805,7 @@ test('with both switches off the guard code is the base build\'s, byte for byte'
     reuse: hash(guardedCode('await app.click(1);', window, undefined, undefined, { reuseSetup: true, acknowledge: true })),
     read: hash(readCode('void 0;', { acknowledge: true })),
     repl: hash(replSetupCode()),
-  }, { guarded: 'fff7ea57e7462a51', guardedLean: '7d4ee857690d221b', reuse: 'b824edb3aa6dc2c4', read: 'f43939fbffa74525', repl: 'f43939fbffa74525' });
+  }, { guarded: 'b253c86530e5c966', guardedLean: 'b16b88c656ba2827', reuse: 'b824edb3aa6dc2c4', read: '017bdf2c3c2b9bbd', repl: '017bdf2c3c2b9bbd' });
 });
 
 test('DP1 off preserves the pre-DP1 guard, read and REPL bytes', () => {
@@ -821,8 +821,8 @@ test('DP1 off preserves the pre-DP1 guard, read and REPL bytes', () => {
       repl: replSetupCode(),
     };
     assert.deepEqual(Object.fromEntries(Object.entries(codes).map(([key, code]) => [key, hash(code)])), {
-      guarded: 'fff7ea57e7462a51', guardedLean: '7d4ee857690d221b', reuse: 'b824edb3aa6dc2c4',
-      read: '1d5e89d325c08055', repl: '1d5e89d325c08055',
+      guarded: 'b253c86530e5c966', guardedLean: 'b16b88c656ba2827', reuse: 'b824edb3aa6dc2c4',
+      read: '9a215377d422467a', repl: '9a215377d422467a',
     });
     for (const code of Object.values(codes)) assert.doesNotMatch(code, /closedLast|beforeRead|state\.dp1|state\.closeRead|\[sleight:dp1\]/);
   } finally {

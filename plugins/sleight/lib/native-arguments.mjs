@@ -27,7 +27,8 @@ export function nativeArgumentError(name, args, unknown = Symbol()) {
       break;
     case 'click':
       if (known(b) && b != null && typeof b === 'object' && 'button' in b) {
-        return /* notice */ 'sleight: click(target,{mouseButton:"right"}); nothing sent';
+        const button = ['left', 'right', 'middle', 'l', 'r', 'm'].find(value => value === b.button);
+        return /* notice */ 'sleight: use ' + (button ? '{mouseButton:"' + button + '"}' : 'mouseButton') + ', not button; nothing sent';
       }
       signature = 'click(target: number | Vec2, options?: ClickOptions)';
       valid = args.length >= 1 && target(a) && options(b, {
