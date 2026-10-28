@@ -54,7 +54,7 @@
     "plugins/sleight/lib/menu-continuation.mjs": "7d1a8c550766dbe96049e42b465c41b3900a326cc442bc3457b31ba3018d6bec",
     "plugins/sleight/lib/tab-probe.mjs": "a6a205af375e0d1a4f167905e8c21a21050eafa77b0581265a4e476c49105a92",
     "new:plugins/sleight/lib/text-save.mjs": "b7d96de8b2d6b050c05d52efe2ad5c4c6177f4869060e50ac1686f8ffedd063b",
-    "new:plugins/sleight/lib/menu-continuation.mjs": "e59025212fdb0c000cdbdc9c0acab157da7470fde265fedd159388517577390b",
+    "new:plugins/sleight/lib/menu-continuation.mjs": "e544db44eae9eaa0fe84bea6f6146abba8d20066bc86d4ddfb89d8f587c9c579",
     "new:plugins/sleight/lib/tab-probe.mjs": "d8a6a877b86bd656fff05f4a3370187f0cdcb3921f7a0556536967af5c378e21",
     "new:plugins/sleight/lib/code-ast.mjs": "5f90fcb89a4ad8cb6dbc9435f26f62c8a54304f42218ec419b5bd3b2917dc3b1",
     "new:bench/code-ast/statement-replay.mjs": "ef3f7002920f9ff1d973e7ba6f08c9dc8621a59285ea3aea5c690603d03f7e9e",

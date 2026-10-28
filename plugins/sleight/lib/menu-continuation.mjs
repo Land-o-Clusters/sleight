@@ -16,15 +16,17 @@ const onHandle = (call, handle) => call && isName(call.receiver) && call.receive
 const integer = node => node?.type === 'Literal' && Number.isInteger(node.value) && node.value >= 0;
 const string = node => typeof literalValue(node) === 'string';
 const propertyName = node => isName(node) ? node.name : literalValue(node);
-// Preserve the data-only argument subset, excluding spread, holes, getters and computed keys.
+// Preserve the old data-expression grammar, including holes and subtraction.
+// Computed object keys must themselves be data. Calls, spread and getters refuse.
 function literalArgument(node) {
   if (string(node) || integer(node)) return true;
   if (node?.type === 'Literal') return node.value === null || typeof node.value === 'boolean';
-  if (node?.type === 'UnaryExpression') return node.operator === '-' && integer(node.argument);
-  if (node?.type === 'ArrayExpression') return node.elements.every(literalArgument);
+  if (node?.type === 'UnaryExpression') return node.operator === '-' && literalArgument(node.argument);
+  if (node?.type === 'BinaryExpression') return node.operator === '-' && literalArgument(node.left) && literalArgument(node.right);
+  if (node?.type === 'ArrayExpression') return node.elements.every(element => element === null || literalArgument(element));
   if (node?.type === 'ObjectExpression') return node.properties.every(property =>
-    property.type === 'Property' && property.kind === 'init' && !property.method && !property.shorthand && !property.computed &&
-    (isName(property.key) || string(property.key) || integer(property.key)) && literalArgument(property.value));
+    property.type === 'Property' && property.kind === 'init' && !property.method && !property.shorthand &&
+    (property.computed ? literalArgument(property.key) : isName(property.key) || string(property.key) || integer(property.key)) && literalArgument(property.value));
   return false;
 }
 const literalArgs = args => args.every(literalArgument);

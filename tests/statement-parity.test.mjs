@@ -22,7 +22,10 @@ test('safe legacy trailing values and quoted selectors retain their allow/refuse
 test('legacy action, argument and read families retain semantic outputs', () => {
   const bodies = ['click(3)', 'click([20,40])', 'click({id:"ok"})', 'pressKey("Return")', 'typeText("data")',
     'setValue(2, "value")', 'scroll("down", 2, {pixels: 12})', 'drag([1,2], [3,4])', 'paste("text")',
-    'selectText("x")', 'performSecondaryAction(3)', 'click({id: "x", extra: [true, false, null, -1]})'];
+    'selectText("x")', 'performSecondaryAction(3)', 'click({id: "x", extra: [true, false, null, -1]})',
+    'click([,1])', 'scroll("down", 2, {values: [,1]})',
+    'click(-true)', 'click(- -"2")', 'click(1-2)', 'scroll("down", 2, {offset: -"2"})',
+    'click({["id"]:"x"})', 'click({[["x"]]:1})'];
   const tails = ['', 'await app.getAXState();', 'let s = await app.getAXState({disableDiffing:true}); s',
     'const s = await app.getAXState(); nodeRepl.write(s.split("\\n").filter(l => /a|b/i.test(l)).slice(0, -4).join("\\n"));',
     'const s = await app.getAXState(); nodeRepl.write(s.trim().length);',
