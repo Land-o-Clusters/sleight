@@ -34,7 +34,7 @@ const finderEnums = {
     'fixture-still-open', 'dialog-present', 'menu-cancel-target-unconfirmed', 'menu-cancel-failed', 'cancellation-app-identity-lost',
     'foreign-folder-panel', 'folder-panel-unconfirmed', 'folder-panel-submit-unconfirmed', 'folder-panel-identity-changed', 'folder-panel-controls-ambiguous',
     'folder-panel-search-limit', 'folder-panel-cancel-unavailable', 'folder-panel-cancel-failed',
-    'folder-panel-cleanup-unconfirmed', 'folder-panel-keyboard-unconfirmed'],
+    'folder-panel-cleanup-unconfirmed', 'folder-panel-keyboard-unconfirmed', 'folder-path-unconfirmed', 'navigation-unconfirmed', 'probe-deadline'],
   errorName: ['unavailable', 'other', 'Error', 'TypeError', 'RangeError', 'ReferenceError', 'SyntaxError', 'URIError', 'EvalError',
     'NSInvalidArgumentException', 'NSRangeException', 'NSInternalInconsistencyException', 'NSUnknownKeyException', 'NSGenericException'],
   errorCode: ['unavailable', 'other', 0, -25200, -25201, -25202, -25203, -25204, -25205, -25206, -25207, -25208, -25209,

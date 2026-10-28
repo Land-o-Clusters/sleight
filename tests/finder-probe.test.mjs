@@ -89,7 +89,7 @@ for (const [name, state, passed] of [
   const result = f.run();
   assert.equal(result.passed, passed, JSON.stringify(result));
   assert.equal(result.navigationConfirmed === true, passed);
-  if (!passed) assert.equal(result.failure.failureReason, 'fixture-identity-changed');
+  if (!passed) assert.equal(result.failure.failureReason, 'number' in state ? 'fixture-identity-changed' : 'navigation-unconfirmed');
 });
 
 test('navigation refuses a replacement AX window with the same number and location', () => {
