@@ -121,7 +121,7 @@ for (const boundary of ['event creation', 'final focus check']) test(`a path cha
   assert.ok(f.keys.every(([key]) => key !== 36));
 });
 
-test('Return consumed by a suggestion without dismissal fails once and retains the cleanup boundary', () => {
+test('Return consumed by a suggestion fails once, cancels its panel and closes its bound window', () => {
   const f = fixture({ measuredSheet: true }), post = f.native.CGEventPostToPid;
   f.native.CGEventPostToPid = (pid, event) => {
     if (event.key === 36) { f.keys.push([event.key, event.down]); return; }
@@ -129,14 +129,14 @@ test('Return consumed by a suggestion without dismissal fails once and retains t
   };
   const result = f.probe();
   assert.equal(result.failure.failureReason, 'folder-panel-submit-unconfirmed');
-  assert.equal(result.cleanupConfirmed, false, 'unknown navigation cannot revive Recents cleanup');
+  assert.equal(result.cleanupConfirmed, true, 'creation ownership survives unconfirmed navigation');
   assert.equal(f.keys.filter(([key, down]) => key === 36 && down).length, 1);
   assert.equal(f.present(), false, 'only the owned panel is cancelled');
   assert.ok(f.app.AXWindows.includes(f.owner));
-  assert.ok(f.app.AXWindows.includes(f.window));
+  assert.equal(f.app.AXWindows.includes(f.window), false);
 });
 
-test('sheet disappearance without navigation is classified and cannot close an unproved location', () => {
+test('sheet disappearance without navigation fails setup and closes only its bound window', () => {
   const f = fixture({ measuredSheet: true }), post = f.native.CGEventPostToPid;
   const outcomes = [];
   f.clock.debugStep = (name, outcome) => { if (name === 'cleanup') outcomes.push(outcome); };
@@ -146,9 +146,25 @@ test('sheet disappearance without navigation is classified and cannot close an u
   };
   const result = f.probe();
   assert.equal(result.failure.failureReason, 'navigation-unconfirmed');
-  assert.equal(result.cleanupConfirmed, false);
-  assert.ok(f.app.AXWindows.includes(f.window));
-  assert.deepEqual(outcomes, ['start', 'unconfirmed']);
+  assert.equal(result.navigationConfirmed, undefined);
+  assert.equal(result.cleanupConfirmed, true);
+  assert.deepEqual(f.app.AXWindows, [f.owner]);
+  assert.deepEqual(outcomes, ['start', 'ok']);
+});
+
+for (const title of ['Archive', 'Created', 'Recents', 'Desktop']) test(`native cleanup closes its documentless bound ${title} window and preserves its owner window`, () => {
+  const f = fixture({ measuredSheet: true });
+  f.clock.beginCleanup = () => {
+    f.window.AXTitle = title;
+    delete f.window.AXDocument;
+    delete f.window.AXURL;
+  };
+  const result = f.probe();
+  assert.equal(result.passed, true, JSON.stringify(result));
+  assert.equal(result.navigationConfirmed, true);
+  assert.equal(result.cleanupConfirmed, true);
+  assert.deepEqual(f.app.AXWindows, [f.owner]);
+  assert.ok(result.snapshots.every(row => row.ownerWindowsEqual));
 });
 
 test('delayed location metadata is observed without another Return or a second window', () => {

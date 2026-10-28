@@ -111,8 +111,9 @@ for (const [name, change] of [
   const result = f.run();
   assert.equal(result.passed, false);
   assert.equal(result.failure.failureReason, 'navigation-unconfirmed');
-  assert.equal(result.cleanupConfirmed, false);
-  assert.deepEqual(f.closed, []);
+  assert.equal(result.navigationConfirmed, undefined);
+  assert.equal(result.cleanupConfirmed, true, 'creation ownership permits closing despite unconfirmed navigation');
+  assert.deepEqual(f.closed, [f.owned]);
 });
 
 test('navigation refuses a replacement AX window with the same number and location', () => {

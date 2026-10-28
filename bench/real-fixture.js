@@ -756,7 +756,7 @@ function recoverSetup(window, request, api, app, failure) {
   }
   if (request.bundle === 'com.apple.finder' && request.mode === 'folder') {
     cancelFinderFolderPanel(window, request, app, api);
-    if (api.exists(window) && !finderFixtureWindow(window, request, api)) {
+    if (api.exists(window) && !finderFixtureWindow(window, request, api, app)) {
       if (failure) Object.assign(failure, finderMissingFailure('fixture-location-mismatch'));
       return 'unconfirmed';
     }
@@ -866,18 +866,25 @@ function closeOwnedWindow(window, request, app, api) {
   }
 }
 
-// A retained Finder window may navigate within the fixture bank. Its path
-// confirms location; the separate creation receipt establishes ownership.
-function finderFixtureWindow(window, request, api) {
+// A retained Finder window may navigate after setup. Exposed paths must stay
+// within the fixture bank. Without metadata, the creation receipt and bound
+// window number permit cleanup regardless of the window's current title.
+function finderFixtureWindow(window, request, api, app) {
   var document = api.text(window, 'AXDocument'), url = api.text(window, 'AXURL');
   if (document || url) {
     var current = api.path(document || url), root = api.path(request.fixtureRoot || request.target);
     return !!current && !!root && (current === root || current.indexOf(root + '/') === 0) &&
       (!document || api.path(document) === current) && (!url || api.path(url) === current);
   }
+  var receipt = finderRoleLedger(request.finderOwnership, api);
+  if (receipt.windowNumber !== undefined) {
+    return receipt.windowNumber > 0 && Math.floor(receipt.windowNumber) === receipt.windowNumber &&
+      receipt.created.some(function (item) { return api.equal(item, window); }) &&
+      api.windowNumber(window, app) === receipt.windowNumber;
+  }
+  // Recovery before window-number binding retains the setup location checks.
   var title = api.text(window, 'AXTitle');
   if (finderNavigationLocation(window, request, api).matched) return true;
-  var receipt = finderRoleLedger(request.finderOwnership, api);
   return title === 'Recents' && Array.isArray(receipt.documentless) && receipt.documentless.filter(function (entry) {
     return entry && entry.title === title && api.equal(entry.reference, window);
   }).length === 1;
@@ -965,7 +972,7 @@ function closeFinderFixtureWindows(owned, request, app, api) {
     if (api.finderFolderGuard) api.finderFolderGuard(app, null, null);
     if (api.dialog(app, window, Object.assign({}, request, { refuseDialogs: true })).length)
       throw new Error('Finder dialog present; fixture cleanup refused');
-    if (!listed(window) || contains(baseline, window) || !finderFixtureWindow(window, request, api))
+    if (!listed(window) || !contains(receipt.created, window) || contains(baseline, window) || !finderFixtureWindow(window, request, api, app))
       throw new Error('Finder fixture identity changed');
     if (receipt.windowNumber !== undefined && api.windowNumber(window, app) !== receipt.windowNumber)
       throw new Error('Finder fixture identity changed');

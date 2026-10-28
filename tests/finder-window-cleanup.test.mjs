@@ -36,6 +36,75 @@ function fixture() {
     close() { return source.closeOwnedWindow(windows[0], request, app, api); } };
 }
 
+function boundFixture(title) {
+  const f = fixture(), owned = f.windows[0];
+  Object.assign(owned, { title, document: '', number: 71 });
+  Object.assign(f.request.finderOwnership, { created: [owned], windowNumber: 71 });
+  f.api.windowNumber = window => window.number;
+  f.api.exists = window => f.api.windows().includes(window);
+  return f;
+}
+
+for (const title of ['Archive', 'Created', 'Recents', 'Desktop']) {
+  for (const recovery of [false, true]) test(`Finder ${recovery ? 'recovery' : 'cleanup'} closes a bound documentless owned window titled ${title}`, () => {
+    const f = boundFixture(title), owned = f.windows[0];
+    if (recovery) assert.equal(f.source.recoverSetup(owned, f.request, f.api, f.app, {}), 'closed retained fixture');
+    else f.close();
+    assert.deepEqual(f.closed, [owned]);
+    assert.deepEqual(f.api.windows(), f.windows.slice(1), 'every unrecorded window stays open');
+  });
+}
+
+for (const title of ['Archive', 'Created', 'Recents', 'Desktop']) {
+  test(`Finder cleanup preserves a documentless unrecorded window titled ${title} with the bound number`, () => {
+    const f = boundFixture(title), unrecorded = { ...f.windows[0] };
+    f.windows.push(unrecorded);
+    f.close();
+    assert.deepEqual(f.closed, [f.windows[0]]);
+    assert.ok(f.api.windows().includes(unrecorded));
+  });
+}
+
+for (const mutation of ['unrecorded', 'baseline', 'wrong-number', 'missing-number', 'missing-binding', 'zero-binding', 'fractional-binding']) {
+  test(`Finder cleanup refuses a documentless window with ${mutation} ownership`, () => {
+    const f = boundFixture('Archive');
+    if (mutation === 'unrecorded') f.request.finderOwnership.created = [];
+    if (mutation === 'baseline') f.request.finderOwnership.baseline.push({ reference: f.windows[0], role: 'AXWindow' });
+    if (mutation === 'wrong-number') f.windows[0].number = 72;
+    if (mutation === 'missing-number') delete f.windows[0].number;
+    if (mutation === 'missing-binding') delete f.request.finderOwnership.windowNumber;
+    if (mutation === 'zero-binding') f.request.finderOwnership.windowNumber = f.windows[0].number = 0;
+    if (mutation === 'fractional-binding') f.request.finderOwnership.windowNumber = f.windows[0].number = 71.5;
+    assert.throws(() => f.close(), /ownership unconfirmed|identity changed/);
+    assert.deepEqual(f.closed, []);
+  });
+}
+
+for (const metadata of ['document', 'url']) {
+  test(`Finder cleanup refuses foreign ${metadata} on a bound window after navigation`, () => {
+    const f = boundFixture('Archive');
+    f.windows[0][metadata] = 'file:///owner/Archive';
+    assert.throws(() => f.close(), /identity changed/);
+    assert.deepEqual(f.closed, []);
+  });
+}
+
+for (const mutation of ['creation-receipt', 'bound-number', 'foreign-document', 'foreign-url']) {
+  test(`Finder cleanup rechecks documentless ownership at the close boundary after ${mutation} changes`, () => {
+    const f = boundFixture('Created');
+    f.api.closeButton = (window, validate) => {
+      if (mutation === 'creation-receipt') f.request.finderOwnership.created = [];
+      if (mutation === 'bound-number') window.number = 72;
+      if (mutation === 'foreign-document') window.document = 'file:///owner/Created';
+      if (mutation === 'foreign-url') window.url = 'file:///owner/Created';
+      validate();
+      assert.fail('pressed changed window');
+    };
+    assert.throws(() => f.close(), /identity changed/);
+    assert.deepEqual(f.closed, []);
+  });
+}
+
 test('Finder cleanup closes windows with creation receipts and preserves baseline windows at matching fixture paths', () => {
   const f = fixture();
   assert.equal(typeof f.source.closeFinderFixtureWindows, 'function', 'Finder enumeration cleanup is missing');
