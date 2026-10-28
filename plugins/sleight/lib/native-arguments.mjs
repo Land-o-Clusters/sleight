@@ -26,6 +26,9 @@ export function nativeArgumentError(name, args, unknown = Symbol()) {
       valid = args.length >= 1 && string(a);
       break;
     case 'click':
+      if (known(b) && b != null && typeof b === 'object' && 'button' in b) {
+        return /* notice */ 'sleight: use mouseButton; nothing was sent';
+      }
       signature = 'click(target: number | Vec2, options?: ClickOptions)';
       valid = args.length >= 1 && target(a) && options(b, {
         key: string, durationMs: number, clickCount: number, mouseButton: string,

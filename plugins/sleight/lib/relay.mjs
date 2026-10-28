@@ -3480,7 +3480,7 @@ export function createRelay({
             ...(!state.isError ? [{ type: 'text', text: promptNotice((pictured ? 'sleight: screenshot added, the tree has no document text. ' : '') +
               `Window handle: \`${handle}\`` + (!confirmed ? '.' : constApp ? ', already acquired. Use it in place of `app`.'
                 : `, already acquired, but \`app\` isn't set: start the next call with \`let app = ${handle};\`.`) +
-              (handleApi && confirmed ? '\n' + "It has the engine's app API: click, doubleClick, rightClick, pressKey, typeText, paste, setValue, selectText, scroll, performSecondaryAction, getAXState, getScreenshot, getAXStateAndScreenshot." : ''), prompt) }] : [])] };
+              (handleApi && confirmed ? '\n' + "It has the engine's app API: click, pressKey, typeText, paste, setValue, selectText, scroll, performSecondaryAction, getAXState, getScreenshot, getAXStateAndScreenshot." : ''), prompt) }] : [])] };
           if (pictured) recordScreenshot(combined.content);
           const response = { jsonrpc: '2.0', id: msg.id, result: combined };
           reportPreapprovals(response); toClient(response);
@@ -5531,7 +5531,7 @@ export function createRelay({
     errorNoted.add(msg);
     if (firstPass && jsCode !== undefined && (msg.error || msg.result?.isError)) {
       const text = msg.error?.message ?? (msg.result.content ?? []).filter(c => c.type === 'text').map(c => c.text).join('\n');
-      const missing = /^(?:Error: )?TypeError: ([A-Za-z_$][\w$]*)\.([A-Za-z_$][\w$]*) is not a function\b/m.exec(text);
+      const missing = /^(?:Error: )?(?:TypeError: )?([A-Za-z_$][\w$]*)\.([A-Za-z_$][\w$]*) is not a function\b/m.exec(text);
       if (missing && !browserHandles.has(missing[1]) && (missing[1] === 'app' || nativeHandles.has(missing[1]))) {
         const advice = promptNotice('Native API names: getAXState, getScreenshot, getAXStateAndScreenshot, click, drag, scroll, selectText, setValue, performSecondaryAction, paste, pressKey, typeText, waitFor. Use the documented arguments; waitFor polls the window for an element or text.', prompt);
         if (msg.error) msg.error.message += '\n' + advice;

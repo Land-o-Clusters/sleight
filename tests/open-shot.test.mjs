@@ -139,9 +139,9 @@ const textlessNote = /the document area exposes no text values/;
 const all = h => h.result.content.map(c => c.text ?? '').join('\n');
 
 test('DP3 names the acquired handle API in both prompt forms and preserves the off result', async t => {
-  const api = "It has the engine's app API: click, doubleClick, rightClick, pressKey, typeText, paste, setValue, selectText, scroll, performSecondaryAction, getAXState, getScreenshot, getAXStateAndScreenshot.";
+  const api = "It has the engine's app API: click, pressKey, typeText, paste, setValue, selectText, scroll, performSecondaryAction, getAXState, getScreenshot, getAXStateAndScreenshot.";
   for (const prompt of [undefined, 'lean']) {
-    const expected = prompt === 'lean' ? api.replace("It has the engine's app API: ", 'App API: ') : api;
+    const expected = prompt === 'lean' ? api.replace("It has the engine's app API: ", 'App API: ').replaceAll(', ', ',') : api;
     const off = await open(t, { prompt, handleApi: false });
     const on = await open(t, { prompt });
     assert.doesNotMatch(all(off), /engine's app API/);

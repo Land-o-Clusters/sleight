@@ -19,6 +19,7 @@ import { createRelay } from '../plugins/sleight/lib/relay.mjs';
 import { InputLease } from '../plugins/sleight/lib/input-lease.mjs';
 import { outcomeOptions } from '../plugins/sleight/lib/launch.mjs';
 import { promptNotice } from '../plugins/sleight/lib/prompt-notice.mjs';
+import { nativeArgumentError } from '../plugins/sleight/lib/native-arguments.mjs';
 
 const dir = trackTemp(mkdtempSync(join(tmpdir(), 'sleight-outcomes-')));
 after(() => removeTemp(dir));
@@ -787,13 +788,24 @@ test('with both switches off the guard code is the base build\'s, byte for byte'
   // PL1b restricts nested keyboard focus and click provenance. Substituting the original picker reproduces the PL1 pins.
   // PL1c checks direct rows and stops when focus disappears after keys. Restoring the PL1b picker reproduces its pins.
   // PF2 adds the bounded list-focus recovery click. Restoring the pre-PF2 picker reproduces the previous pins.
+  // AS2 embeds the button-option refusal. Removing that addition reproduces the prior pins.
+  const current = nativeArgumentError.toString();
+  const previous = current.replace(/      if \(known\(b\) && b != null && typeof b === 'object' && 'button' in b\) \{\n        return \/\* notice \*\/ 'sleight: use mouseButton; nothing was sent';\n      \}\n/, '');
+  assert.notEqual(current, previous);
+  const restore = code => code.replace(current, previous);
+  assert.deepEqual({
+    guarded: hash(restore(guardedCode('await app.click(1);', window))),
+    guardedLean: hash(restore(guardedCode('await app.click(1);', window, undefined, undefined, { prompt: 'lean' }))),
+    read: hash(restore(readCode('void 0;', { acknowledge: true }))),
+    repl: hash(restore(replSetupCode())),
+  }, { guarded: '75ddffb71fa5b5e4', guardedLean: '396defb39a4665f7', read: '72e105e76c044da6', repl: '72e105e76c044da6' });
   assert.deepEqual({
     guarded: hash(guardedCode('await app.click(1);', window)),
     guardedLean: hash(guardedCode('await app.click(1);', window, undefined, undefined, { prompt: 'lean' })),
     reuse: hash(guardedCode('await app.click(1);', window, undefined, undefined, { reuseSetup: true, acknowledge: true })),
     read: hash(readCode('void 0;', { acknowledge: true })),
     repl: hash(replSetupCode()),
-  }, { guarded: '75ddffb71fa5b5e4', guardedLean: '396defb39a4665f7', reuse: 'b824edb3aa6dc2c4', read: '72e105e76c044da6', repl: '72e105e76c044da6' });
+  }, { guarded: '8686481ee7e373cc', guardedLean: 'eb72aa78b709cc08', reuse: 'b824edb3aa6dc2c4', read: '4427cefeb67014a0', repl: '4427cefeb67014a0' });
 });
 
 test('DP1 off preserves the pre-DP1 guard, read and REPL bytes', () => {
@@ -809,8 +821,8 @@ test('DP1 off preserves the pre-DP1 guard, read and REPL bytes', () => {
       repl: replSetupCode(),
     };
     assert.deepEqual(Object.fromEntries(Object.entries(codes).map(([key, code]) => [key, hash(code)])), {
-      guarded: '75ddffb71fa5b5e4', guardedLean: '396defb39a4665f7', reuse: 'b824edb3aa6dc2c4',
-      read: '75f023828daff4eb', repl: '75f023828daff4eb',
+      guarded: '8686481ee7e373cc', guardedLean: 'eb72aa78b709cc08', reuse: 'b824edb3aa6dc2c4',
+      read: 'fcfad7be21b12b88', repl: 'fcfad7be21b12b88',
     });
     for (const code of Object.values(codes)) assert.doesNotMatch(code, /closedLast|beforeRead|state\.dp1|state\.closeRead|\[sleight:dp1\]/);
   } finally {
