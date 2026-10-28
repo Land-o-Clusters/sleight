@@ -1,3 +1,4 @@
+import { fixtureDocumentation } from './helpers/canonical-docs.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { PassThrough } from 'node:stream';
@@ -21,7 +22,7 @@ function relayClient(t, options, mode, opens) {
   t.after(() => rmSync(directory, { recursive: true, force: true }));
   const inputLease = new InputLease({ directory, holder: 'offline documentation probe' });
   const clientIn = new PassThrough(), clientOut = new PassThrough(), serverIn = new PassThrough(), serverOut = new PassThrough();
-  const relay = createRelay({ clientIn, clientOut, serverIn, serverOut,
+  const relay = createRelay({ documentationTrust: fixtureDocumentation(docs), clientIn, clientOut, serverIn, serverOut,
     inputLease, changeReview: false,
     warmRepl: true, warmEngine: false, openShot: false });
   const pending = new Map(); let id = 1, initialized;

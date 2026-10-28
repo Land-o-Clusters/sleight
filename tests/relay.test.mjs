@@ -1,3 +1,4 @@
+import { fixtureDocumentation } from './helpers/canonical-docs.mjs';
 import { test, after } from 'node:test';
 import assert from 'node:assert/strict';
 import { PassThrough } from 'node:stream';
@@ -55,7 +56,7 @@ function harness(options = {}) {
 const tick = () => new Promise(r => setImmediate(r));
 
 test('browser-first routing defers native docs and a later native call receives them once', () => {
-  const h=harness({changeReview:false});
+  const h=harness({changeReview:false, documentationTrust: fixtureDocumentation('## Computer Use\n\nNative API reference.\n\n# Computer Use Confirmations Policy\nKeep this confirmation policy.')});
   const docs='## Computer Use\n\nNative API reference.\n\n# Computer Use Confirmations Policy\nKeep this confirmation policy.';
   const browser='# Other Browser APIs\n\n# Browser Safety\nKeep browser safety.';
   const call=(id,code)=>h.fromClient({id,method:'tools/call',params:{name:'js',arguments:{code}}});
@@ -2543,7 +2544,7 @@ test('Debugger unattached never replays actions, mixed calls or successful calle
 
 test('a retried debugger read retains the first reply browser safety documentation', async t => {
   t.mock.timers.enable({ apis: ['setTimeout'] });
-  const h = harness({ changeReview: false });
+  const h = harness({ changeReview: false, documentationTrust: fixtureDocumentation('## Computer Use\nKeep confirmation policy.\n# Other Browser APIs\n# Browser Safety\nKeep user tabs.') });
   helperRead(h, 1, 'await tab.getAXState()'); await tick();
   const docs = '## Computer Use\nKeep confirmation policy.\n# Other Browser APIs\n# Browser Safety\nKeep user tabs.';
   helperReply(h, 1, 'Error: Debugger unattached\n' + docs); await tick();

@@ -140,3 +140,21 @@ for (const [mode, app, code, message] of [
     assert.doesNotMatch(lines.join('\n'), /restart ChatGPT|PRIVATE WINDOW TITLE|PRIVATE CONTENT/);
   });
 }
+
+for (const fails of [false, true]) test(`doctor reports installed documentation validation, failure=${fails}`, async () => {
+  const lines = [], calls = [];
+  const empty = () => [];
+  // Missing server config ends doctor before any helper probe. Every host section
+  // is stubbed, so this checks only the offline bundle diagnostic.
+  const code = await doctor({
+    documentation: options => { calls.push(options); if (fails) throw Error('unknown bundle format'); },
+    env: { CODEX_HOME: '/no-such-di1r3-home', SLEIGHT_CHATGPT_APP: '/fixture/ChatGPT.app' },
+    log: line => lines.push(line), turbo: empty, hand: empty, permissions: empty,
+    settings: empty, codex: empty, cursor: empty, grok: empty, grokbot: empty,
+  });
+  assert.equal(code, 1, 'missing server config refuses the live read');
+  assert.deepEqual(calls, [{ app: '/fixture/ChatGPT.app' }]);
+  const output = lines.join('\n');
+  assert.match(output, fails ? /engine docs couldn't be validated and are not being promoted/ : /engine docs validated against the installed bundle/);
+  assert.doesNotMatch(output, fails ? /engine docs validated/ : /engine docs couldn't/);
+});

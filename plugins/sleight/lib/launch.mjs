@@ -46,6 +46,7 @@ import { browserDefinitions } from './direct-browser/browsers.mjs';
 import { createGrantAudit } from './preapproved-audit.mjs';
 import { ALLOW_FORBIDDEN_COMMAND, forbiddenTargetsAllowed, matchBlockedApp } from './blocked-apps.mjs';
 import { SELECT_WINDOW_TOOL, selectWindow } from './select-window.mjs';
+import { loadInstalledDocumentation } from './canonical-documentation.mjs';
 import { probeHelper, staleHelperJobs } from './helper-health.mjs';
 import { replayBridge } from './replay.mjs';
 import { serverFromChatGPTApp, setup } from './setup.mjs';
@@ -207,7 +208,7 @@ async function permissionsDoctorSection() {
   catch (err) { return ['permissions', `PROBLEM   could not read the permissions (${err.message})`]; }
 }
 
-export async function doctor({ env = process.env, log = console.log, app = process.argv.includes('--doctor') ? process.argv[process.argv.indexOf('--doctor') + 1] : undefined, timeoutMs = 5000, startupTimeoutMs = 10000, launchctlList = listLaunchdJobs, forbiddenTargets = readForbiddenTargets, preapprovedIO, auditDirectory, turbo = turboDoctorLines, hand = handDoctorSection, permissions = permissionsDoctorSection, settings = async () => [(await import('./settings-link.mjs')).settingsDoctorLine(undefined, env)], codex = codexDoctor, cursor = cursorDoctor, grok = grokDoctor, grokbot = grokbotDoctor } = {}) {
+export async function doctor({ documentation = loadInstalledDocumentation, env = process.env, log = console.log, app = process.argv.includes('--doctor') ? process.argv[process.argv.indexOf('--doctor') + 1] : undefined, timeoutMs = 5000, startupTimeoutMs = 10000, launchctlList = listLaunchdJobs, forbiddenTargets = readForbiddenTargets, preapprovedIO, auditDirectory, turbo = turboDoctorLines, hand = handDoctorSection, permissions = permissionsDoctorSection, settings = async () => [(await import('./settings-link.mjs')).settingsDoctorLine(undefined, env)], codex = codexDoctor, cursor = cursorDoctor, grok = grokDoctor, grokbot = grokbotDoctor } = {}) {
   if (app !== undefined && (typeof app !== 'string' || !app.trim() || app.startsWith('-'))) {
     log('usage: sleight-mcp --doctor [running app name or bundle ID]'); return 1;
   }
@@ -220,6 +221,12 @@ export async function doctor({ env = process.env, log = console.log, app = proce
   for (const line of cursor()) log(line);
   for (const line of grok(env)) log(line);
   for (const line of await grokbot()) log(line);
+  try {
+    documentation({ app: env.SLEIGHT_CHATGPT_APP || '/Applications/ChatGPT.app' });
+    log('engine docs validated against the installed bundle');
+  } catch {
+    log("WARNING: engine docs couldn't be validated and are not being promoted. Documentation deferral, replay and deduplication are unavailable until the bundle is readable and the engine restarts.");
+  }
   const s = resolveServer(env);
   if (s.error) { log(`sleight: ${s.error}`); return 1; }
   await probeSurfaces(s, env);

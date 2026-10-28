@@ -1,3 +1,4 @@
+import { fixtureDocumentation } from './helpers/canonical-docs.mjs';
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { fileURLToPath } from 'node:url';
@@ -84,7 +85,7 @@ function grokRelay(t, { clientInfo = grokInfo, ...options } = {}) {
   const clientIn = new PassThrough(), clientOut = new PassThrough(), serverIn = new PassThrough(), serverOut = new PassThrough();
   const sent = [], received = [];
   for (const [stream, records] of [[serverIn, sent], [clientOut, received]]) stream.on('data', data => records.push(...data.toString().trim().split('\n').map(JSON.parse)));
-  const relay = createRelay({ clientIn, clientOut, serverIn, serverOut, inputLease: false, changeReview: false, ...options });
+  const relay = createRelay({ documentationTrust: fixtureDocumentation('## Computer Use\nNative reference.\n\n' + readFileSync(new URL('fixtures/engine-confirmations-policy.txt', import.meta.url), 'utf8').trimEnd()), clientIn, clientOut, serverIn, serverOut, inputLease: false, changeReview: false, ...options });
   t.after(() => { relay.dispose(); for (const s of [clientIn, clientOut, serverIn, serverOut]) s.destroy(); });
   const client = msg => clientIn.write(JSON.stringify({ jsonrpc: '2.0', ...msg }) + '\n');
   const engine = msg => serverOut.write(JSON.stringify({ jsonrpc: '2.0', ...msg }) + '\n');

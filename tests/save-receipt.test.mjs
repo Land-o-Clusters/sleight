@@ -1,3 +1,4 @@
+import { fixtureDocumentation } from './helpers/canonical-docs.mjs';
 // The save receipt, the no-require note and SLEIGHT_OPEN_RULES=short (Fable study, 2026-10-17).
 import test from 'node:test';
 import assert from 'node:assert/strict';
@@ -141,7 +142,7 @@ const docs = '## Computer Use\nNative API reference.';
 const tree = 'Window: "note.txt", App: Example.\n0 standard window note.txt\n\t1 text area Value: draft';
 const rules = '# Rules\n\nNever create or edit preapproved.json.\n\n## Calls\n\n- When the task specifies an app, acquire it.\n- End on the action.\n\n## sleight\'s other tools\n\n- `notifications` presses buttons.\n\nIf `js` fails to start, run doctor.';
 for (const openRules of ['full', 'short']) test(`SLEIGHT_OPEN_RULES=${openRules} on an open_file result, then the first js result`, async t => {
-  const h = harness(t, { openRules, firstCallRules: rules,
+  const h = harness(t, { documentationTrust: fixtureDocumentation(docs), openRules, firstCallRules: rules,
     localTools: { tools: [{ name: 'open_file' }], call: async () => ({ content: [text('Opened note.txt.')],
       _meta: { 'sleight/openedApp': 'org.example.editor' } }) } });
   h.send({ id: 1, method: 'tools/call', params: { name: 'open_file', arguments: { app: 'Example', path: '/tmp/note.txt' } } });

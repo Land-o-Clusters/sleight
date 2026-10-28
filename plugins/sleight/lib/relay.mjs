@@ -108,6 +108,7 @@ import { typedTextReceipt, typingReceiptCall, typingReceiptCode, withoutTypingRe
 import { createBrowserStaleGuard } from './browser-stale.mjs';
 import { literalElements } from './literal-elements.mjs';
 import { createResultBudget, requestsFullDocumentation, grokResult } from './result-budget.mjs';
+import { createDocumentationTrust } from './canonical-documentation.mjs';
 import { forbiddenTargetWarning, isForbiddenSettingsWindow, refusalNotice, refusedApp } from './blocked-apps.mjs';
 import { OWN_HOST_LINE, AUTH_DIALOG_LINE, isOwnHost, ownLine, mentionsOwnHost, namesOwnHost as appNamesOwnHost, getAppTargets, ownHostPid as isOwnHostPid } from './own-host.mjs';
 import { clipboardCode, clipboardPlan, clipboardActions, createClipboardSession, createNativeClipboardIO } from './clipboard.mjs';
@@ -729,6 +730,7 @@ function internalTurnEnd(tool, keepHidden = false) {
 const STATS_TOOLS = new Set(['js', 'replay', 'browser_open', 'browser_read', 'browser_act', 'browser_fill']);
 
 export function createRelay({
+  documentationTrust,
   directBrowser,
   turboUnavailable,
   directHost,
@@ -1082,7 +1084,13 @@ export function createRelay({
   const completenessCalls = new Map();
   let compactor = createReadCompactor({ leanCalls, prompt, compactAcquisition, compactReacquire, screenshotReads: textlessHint, readHints, routeSteering, undoReceipts, outcomes, actionNumbers: workflowDocs });
   const browserStale = createBrowserStaleGuard();
-  let resultBudget = createResultBudget();
+  let traceFailed = false;
+  documentationTrust ??= createDocumentationTrust({ onFailure: () => trace('engine-documentation-unvalidated', {
+    message: "Engine docs couldn't be validated and are not being promoted.",
+  }) });
+  // Validate the original engine bytes before policy, size or reference transforms.
+  const heldDocumentation = documentationTrust.trusted;
+  let resultBudget = createResultBudget({ documentationTrust, validateDocumentation: false });
   const docOrigin = documentationOrigin();
   let documentationClientMeta = {};
   const documentationContext = () => stableJson([engineEpoch, kernelEpoch, engineContext, documentationClientMeta,
@@ -1202,7 +1210,6 @@ export function createRelay({
   // Apps this session drove (names and bundle IDs), and turn_ended calls whose reply should say
   // when one of them holds a keyboard filter tap: the mod shows that to the user.
   const drivenApps = new Set(), turnEnds = new Set(), tapWarned = new Set();
-  let traceFailed = false;
   function trace(direction, msg) {
     if (traceFailed) {
       if (direction === 'preapproved-app') throw new Error('preapproval trace unavailable');
@@ -1351,6 +1358,7 @@ export function createRelay({
       detachServer();
       serverIn = engine.serverIn; serverOut = engine.serverOut;
       engineEpoch++;
+      documentationTrust.refresh();
       docOrigin.invalidate();
       engineCalls.clear();
       bindServer();
@@ -1512,10 +1520,10 @@ export function createRelay({
         abortWarm = () => {};
         if (expired) {
           docOrigin.invalidate();
-          internalRequests.set(id, reply => replWarmup.retainDocs(reply));
+          internalRequests.set(id, reply => replWarmup.retainDocs({ ...reply, result: { ...reply.result, content: engineDocs(reply.result?.content) } }));
           forgetGuard();
         }
-        resolve(reply);
+        resolve({ ...reply, ...(reply.result ? { result: { ...reply.result, content: engineDocs(reply.result.content) } } : {}) });
         // The engine can drain native work before replying to a cell, even without await.
         // Keep inventory out of the guard cell and out of the held client's wait.
         // A client call already in flight pays the native start itself. An engine that runs cells
@@ -1563,10 +1571,14 @@ export function createRelay({
   let undeliveredGuidance = [];
   const engineDocs = (content = [], embedded = false) => content.flatMap(item => {
     if (item.type !== 'text') return [];
-    const start = item.text.search(/^(?:## Computer Use|# Other Browser APIs|# Computer Use Confirmations Policy|# Browser Safety|# API Reference)\n/m);
-    if (start < 0 || start > 0 && !embedded) return [];
-    const text = item.text.slice(start), at = text.search(/^Window: /m);
-    return [{ ...item, text: at < 0 ? text : text.slice(0, at) }];
+    if (heldDocumentation(item)) return [item];
+    // A retry error can prefix an otherwise complete canonical document. Retain
+    // only the exact document, never the error prefix or a heading-shaped suffix.
+    if (embedded) for (const match of item.text.matchAll(/^#{1,2} /gm)) {
+      const docs = documentationTrust.mark({ ...item, text: item.text.slice(match.index) });
+      if (heldDocumentation(docs)) return [docs];
+    }
+    return [];
   });
   const retainEngineDocs = content => {
     for (const docs of engineDocs(content)) if (!deferredEngineDocs.some(c => c.text === docs.text)) deferredEngineDocs.push(docs);
@@ -2755,8 +2767,9 @@ export function createRelay({
       updateRetries.delete(msg.id); reconnectNotes.delete(msg.id);
     }
     if (clientOut.writableEnded || clientOut.destroyed) {
-      const guidance = (msg.result?.content ?? []).filter(item => ruleBlocks.trusted(item) || engineDocs([item], true).length).map(docOrigin.full);
+      const guidance = (msg.result?.content ?? []).filter(item => ruleBlocks.trusted(item) || heldDocumentation(item)).map(docOrigin.full);
       ruleBlocks.retry(guidance);
+      resultBudget.retry(guidance);
       for (const item of guidance) if (!undeliveredGuidance.some(c => c.text === item.text)) undeliveredGuidance.push(item);
       if (msg.method === undefined) { resultBudget.finish(msg.id); fullDocumentationCalls.delete(msg.id); }
       trace('client-output-closed', { id: msg.id }); return;
@@ -2793,11 +2806,9 @@ export function createRelay({
       msg.result.content = msg.result.content.flatMap(item => {
         if (item.type !== 'text') return [item];
         if (!item.text.trim()) return [];
-        if (clientJsDelivered || !/^(?:## Computer Use|# Other Browser APIs|# Computer Use Confirmations Policy|# Browser Safety|# API Reference)\n/.test(item.text)) return [item];
-        const at = item.text.search(/^Window: /m);
-        const docs = { ...item, text: at < 0 ? item.text : item.text.slice(0, at) };
-        if (!deferredEngineDocs.some(c => c.text === docs.text)) deferredEngineDocs.push(docs);
-        return at < 0 ? [] : [{ ...item, text: item.text.slice(at) }];
+        if (clientJsDelivered || !heldDocumentation(item)) return [item];
+        if (!deferredEngineDocs.some(c => c.text === item.text)) deferredEngineDocs.push(item);
+        return [];
       });
     }
     if (modelVisible && deferredEngineDocs.length &&
@@ -2805,8 +2816,9 @@ export function createRelay({
       if (msg.error) msg = { jsonrpc: msg.jsonrpc, id: msg.id, result: { isError: true,
         content: [{ type: 'text', text: msg.error.message }] } };
       if (Array.isArray(msg.result?.content)) {
-        const texts = msg.result.content.filter(item => item.type === 'text').map(item => item.text);
-        msg.result.content = [...deferredEngineDocs.filter(item => !texts.some(text => text.startsWith(item.text.trimEnd()))), ...msg.result.content];
+        const texts = msg.result.content.filter(heldDocumentation).map(item => item.text);
+        msg.result.content = [...deferredEngineDocs.filter(item => !texts.some(text => text.startsWith(item.text.trimEnd())))
+          .filter(heldDocumentation), ...msg.result.content];
         deferredEngineDocs = [];
       }
     }
@@ -2817,7 +2829,7 @@ export function createRelay({
     let documentationDelivery;
     if (modelVisible && Array.isArray(msg.result?.content)) {
       if (undeliveredGuidance.length) {
-        msg.result.content = [...undeliveredGuidance, ...msg.result.content];
+        msg.result.content = [...undeliveredGuidance.filter(item => ruleBlocks.trusted(item) || heldDocumentation(item)), ...msg.result.content];
         undeliveredGuidance = [];
       }
       msg = { ...msg, result: { ...msg.result, content: resultBudget.apply(aliasNotices(dropRepeatedText(msg.result.content)),
@@ -2835,8 +2847,9 @@ export function createRelay({
       // Replay only guidance, never an image or action output. It already passed the docs and rule
       // transforms, whose once-per-session state advanced before the final serialized cap.
       msg.result = grokResult(msg.result, () => {
-        const guidance = msg.result.content.filter(item => ruleBlocks.trusted(item) || engineDocs([item], true).length).map(docOrigin.full);
+        const guidance = msg.result.content.filter(item => ruleBlocks.trusted(item) || heldDocumentation(item)).map(docOrigin.full);
         ruleBlocks.retry(guidance);
+        resultBudget.retry(guidance);
         for (const item of guidance) if (!undeliveredGuidance.some(c => c.text === item.text)) undeliveredGuidance.push(item);
         return guidance;
       });
@@ -2869,7 +2882,7 @@ export function createRelay({
     trace('to-client', msg);
     if (msg.method === undefined && msg.id !== undefined) onClientReply(msg);
     const retainedGuidance = modelVisible && Array.isArray(msg.result?.content)
-      ? msg.result.content.filter(item => ruleBlocks.trusted(item) || engineDocs([item], true).length) : [];
+      ? msg.result.content.filter(item => ruleBlocks.trusted(item) || heldDocumentation(item)) : [];
     const runImages = msg.method === undefined && !msg.error && !msg.result?.isError
       ? msg.result?.content?.filter(item => item?.type === 'image') : undefined;
     const runDetail = runScreenshotDetails.get(runImages?.at(-1)) ?? { source: 'native' };
@@ -2879,9 +2892,10 @@ export function createRelay({
       // Every replacement, cap, split and helper-probe return is above this boundary. Never record a failed write or refusal.
       if (!error && deliveredImages?.length) try { cursor?.screenshot?.(deliveredImages, runDetail); } catch {}
       const missing = docOrigin.settle(documentationDelivery, msg.result, error);
-      if (error) ruleBlocks.retry(retainedGuidance);
+      if (error) { ruleBlocks.retry(retainedGuidance); resultBudget.retry(retainedGuidance); }
       for (const item of [...missing, ...(error ? retainedGuidance : [])]) {
         const full = docOrigin.full(item);
+        if (!ruleBlocks.trusted(full) && !heldDocumentation(full)) continue;
         if (!undeliveredGuidance.some(c => c.text === full.text)) undeliveredGuidance.push(full);
       }
       if (!error && !disposed && !closing) afterWrite?.(msg);
@@ -4480,7 +4494,7 @@ export function createRelay({
       onInitialize(msg.params?.clientInfo);
       clientHost = hostLabel(msg.params?.clientInfo);
       grokClient = isGrokClient(msg.params?.clientInfo);
-      if (grokClient) resultBudget = createResultBudget({ limit: 16000 });
+      if (grokClient) resultBudget = createResultBudget({ limit: 16000, documentationTrust, validateDocumentation: false });
       if (typeof msg.params?.clientInfo?.name === 'string') clientName = msg.params.clientInfo.name.slice(0, 64);
       const capabilities = msg.params?.capabilities ?? {};
       const elicitation = capabilities.elicitation;
@@ -5160,6 +5174,7 @@ export function createRelay({
       clientOut.write(line + '\n');
       return;
     }
+    if (Array.isArray(msg.result?.content)) msg.result.content = msg.result.content.flatMap(documentationTrust.split);
     if (msg.method === undefined) {
       engineCalls.delete(msg.id);
       const unbound = remoteUnboundNotices.get(msg.id); remoteUnboundNotices.delete(msg.id);
@@ -5191,7 +5206,7 @@ export function createRelay({
     if (retriedHelperStart(msg)) return;
     if (msg.method === undefined && debuggerDocs.has(msg.id)) {
       if (msg.error) msg = { jsonrpc: msg.jsonrpc, id: msg.id, result: { isError: true, content: [{ type: 'text', text: msg.error.message }] } };
-      if (msg.result) msg.result.content = [...debuggerDocs.get(msg.id), ...(msg.result.content ?? [])];
+      if (msg.result) msg.result.content = [...debuggerDocs.get(msg.id).filter(heldDocumentation), ...(msg.result.content ?? [])];
       debuggerDocs.delete(msg.id);
     }
     if (staleHelperCheck && msg.method === undefined && msg.result?.isError &&
@@ -5227,6 +5242,7 @@ export function createRelay({
     if (msg.method === undefined && nativePauseCuts.delete(msg.id) && msg.result) {
       msg.result = { ...msg.result, content: [...msg.result.content ?? [], { type: 'text', text: NATIVE_PAUSE_CUT_NOTE }] };
     }
+    if (docOrigin.owns(msg.id) && msg.result?.content?.some(item => item.type === 'text' && !heldDocumentation(item) && !/^\[sleight:guard-ready\]\n?$/.test(item.text))) docOrigin.invalidate();
     docOrigin.reply(msg, documentationContext());
     if (msg.method === 'elicitation/create' || msg.error || msg.result?.isError) docOrigin.invalidate();
     // A completed warmup ID remains private, including duplicate engine replies.
@@ -5564,7 +5580,10 @@ export function createRelay({
     }
     const emptyNote = !msg.error && !msg.result?.isError && noOutputNotice(jsCode, msg.result?.content);
     if (emptyNote) msg.result.content.push({ type: 'text', text: promptNotice(emptyNote, prompt) });
-    if (jsCode !== undefined) replWarmup.attach(msg);
+    if (jsCode !== undefined) {
+      replWarmup.docs = replWarmup.docs.filter(heldDocumentation);
+      replWarmup.attach(msg);
+    }
     if (jsCode !== undefined) browserRecovery.observe(jsCode, msg);
     if (pendingBrowser && !msg.result?._meta?.['codex/toolSurface']?.app?.appId &&
         msg.result?.isError && Array.isArray(msg.result.content)) {
@@ -5580,10 +5599,16 @@ export function createRelay({
           const text = (reply.result?.content ?? []).filter(c => c.type === 'text').map(c => c.text).join('\n');
           const opened = parseOpenedPayload(text, original.id);
           const lastText = engineLastText >= 0 ? engineLastText : original.result.content.findLastIndex(c => c.type === 'text');
-          original.result.content = original.result.content.map((c, i) => {
-            if (c.type !== 'text') return c;
+          original.result.content = original.result.content.flatMap((c, i) => {
+            if (c.type !== 'text') return [c];
             const text = rewritten(c.text);
-            return { ...c, text: i === lastText ? openedTabNote(text, { code, opened }) : text };
+            if (i === lastText && heldDocumentation(c)) {
+              // The URL is caller data. Keep the note outside the validated item
+              // so delivery retries retain only the engine documentation.
+              const note = openedTabNote('', { code, opened }).trimStart();
+              return [{ ...c, text }, ...(note ? [{ type: 'text', text: note }] : [])];
+            }
+            return [{ ...c, text: i === lastText ? openedTabNote(text, { code, opened }) : text }];
           });
           observeServerMessage(original);
         };

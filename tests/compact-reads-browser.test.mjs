@@ -1,3 +1,4 @@
+import { fixtureDocumentation } from './helpers/canonical-docs.mjs';
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { createReadCompactor } from '../plugins/sleight/lib/compact-reads.mjs';
@@ -66,7 +67,7 @@ test('browser compaction keeps safety docs and leaves reference deferral to the 
   assert.ok(out[1].text === content[1].text, 'the compactor leaves every engine docs character intact');
   assert.equal(out[0], content[0], 'confirmation policy is preserved');
   assert.equal(out[3], content[3], 'skill is preserved');
-  const budget = createResultBudget();
+  const budget = createResultBudget({ documentationTrust: fixtureDocumentation(content[0].text, content[1].text) });
   const first = budget.apply(out);
   // Engine docs now have their own budget; they cannot consume every visible tree row.
   assert.match(out[2].text, /\t1 text /);
@@ -185,10 +186,10 @@ test('the final result budget also counts mandatory docs when capping a page', (
   const content = [{ type: 'text', text: '## Computer Use\n' + 'p'.repeat(16000) },
     { type: 'text', text: safety + reference }, { type: 'text', text: tree(4606, 43) },
     { type: 'text', text: 'caller text\n' + 'c'.repeat(5300) }];
-  const budget = createResultBudget();
+  const budget = createResultBudget({ documentationTrust: fixtureDocumentation(content[0].text, content[1].text) });
   const out = budget.apply(createReadCompactor().process(content));
   assert.ok(out.reduce((sum, item) => sum + item.text.length, 0) <= 45000);
-  assert.deepEqual(out[0], content[0]);
+  assert.deepEqual(JSON.parse(JSON.stringify(out[0])), content[0]);
   assert.ok(out[1].text.startsWith(safety));
   assert.equal(out[3], content[3]);
   assert.match(out[2].text, /\t1 text /);
