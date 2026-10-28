@@ -2,6 +2,7 @@ import { performance } from 'node:perf_hooks';
 import { divergence, refreshCode, resultText, TargetMapper, comparisonResult, normalized, replayResultStop } from './mapping.mjs';
 import { assertReplayArguments } from './allowlist.mjs';
 import { replayDocumentation, taskResult } from './documentation.mjs';
+import { matchingMedia } from './images.mjs';
 export { parseEnv } from './switches.mjs';
 
 export function untilAbort(signal, operation) {
@@ -60,7 +61,9 @@ export async function replayCalls(calls, { call, mapper = new TargetMapper(), si
       // Worktree campaigns compare the live arms below, never old engine output.
       if (comparison === 'worktrees') {
         const task = taskResult(result, documentation);
-        reason = divergence(task, task, new TargetMapper(), {}, { comparison: 'switches' });
+        // Validate fresh media here. Window identity compares A with B in campaignEvidence.
+        const media = (task.content ?? []).filter(block => block.type !== 'text'), text = resultText(task);
+        if (!matchingMedia(media, media, text, text, new TargetMapper())) reason = 'non-text evidence changed; visual interpretation required';
       } else reason = divergence(original.result, result, mapper, original.arguments, { comparison, documentation });
     } catch (error) { reason = error.message; }
     const row = { index, id: original.id, server: original.server, name: original.name, arguments: args,

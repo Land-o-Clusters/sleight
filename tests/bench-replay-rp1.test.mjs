@@ -1,15 +1,20 @@
 import test, { describe } from 'node:test';
 import assert from 'node:assert/strict';
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { packageSkip } from './requirements.mjs';
 import { fixtureDocumentation } from './helpers/canonical-docs.mjs';
-import { readReplayEngine, engineDifference, engineIteration, campaignEngine } from '../bench/replay/engine-identity.mjs';
+import { readReplayEngine, engineDifference, engineIteration, campaignEngine, replayEngineEnvironment } from '../bench/replay/engine-identity.mjs';
 
-const engine = (build = '50603', version = '26.1023') => ({ version, build, at: '2026-10-28T05:30:00.000Z' });
+const resolved = { version: '26.1023.50603', command: '/fixture/engine/node', configPath: '/fixture/engine/.mcp.json' };
+const engine = (build = '50603', version = '26.1023') => ({ version, build, resolved: { ...resolved }, at: '2026-10-28T05:30:00.000Z' });
 const passed = () => ({ verdict: 'pass', calls: [], totalToolMs: 0, cleanupConfirmed: true });
 
 test('engine identity reads the app version and build from the two plist keys', () => {
   const keys = [];
   const identity = readReplayEngine({ read: key => { keys.push(key); return key === 'CFBundleVersion' ? '50603' : '26.1023'; },
+    resolve: () => resolved,
     now: () => new Date('2026-10-28T05:30:00Z') });
   assert.deepEqual(keys, ['CFBundleShortVersionString', 'CFBundleVersion']);
   assert.equal(identity.version, '26.1023');
@@ -19,7 +24,7 @@ test('engine identity reads the app version and build from the two plist keys', 
 });
 
 test('an unreadable plist cannot verify an engine build', () => {
-  const identity = readReplayEngine({ read: () => { throw Error('fixture read failure'); } });
+  const identity = readReplayEngine({ read: () => { throw Error('fixture read failure'); }, resolve: () => resolved });
   assert.match(engineDifference([identity]), /unverified/);
   assert.match(engineDifference([engine(), { ...engine(), build: '' }]), /unverified/);
 });
@@ -33,7 +38,7 @@ test('iteration engine reads bracket the operation and survive result JSON seria
   assert.equal(result.verdict, 'pass');
   assert.equal(result.engine.changed, false);
   assert.deepEqual(JSON.parse(JSON.stringify(result)).engine, { start: engine(), end: engine(), changed: false });
-  assert.deepEqual(campaignEngine([result]), { verdict: 'pass', version: '26.1023', build: '50603' });
+  assert.deepEqual(campaignEngine([result]), { verdict: 'pass', version: '26.1023', build: '50603', resolved });
 });
 
 test('an engine build change between iterations refuses the next operation', async () => {
@@ -73,8 +78,53 @@ test('transport exceptions retain both engine observations', async () => {
   });
 });
 
+test('identity uses the newest launcher cache version and reads the overridden app plist', t => {
+  const root = mkdtempSync(join(tmpdir(), 'sleight-rp1-engine-'));
+  t.after(() => rmSync(root, { recursive: true, force: true }));
+  const cache = join(root, 'plugins/cache/openai-bundled/unified-computer-use');
+  for (const version of ['26.9.1', '26.10.1']) {
+    const dir = join(cache, version);
+    mkdirSync(dir, { recursive: true });
+    writeFileSync(join(dir, '.mcp.json'), JSON.stringify({ mcpServers: { cua_repl: {
+      command: join(dir, 'node'), args: ['--import', join(dir, 'hook.mjs'), join(dir, 'repl.mjs')],
+    } } }));
+  }
+  const app = join(root, 'Alternate ChatGPT.app'), paths = [];
+  const identity = readReplayEngine({ env: { CODEX_HOME: root, SLEIGHT_CHATGPT_APP: app },
+    read: (key, path) => { paths.push(path); return key === 'CFBundleVersion' ? '50603' : '26.1023'; } });
+  assert.deepEqual(identity.resolved, { version: '26.10.1', command: join(cache, '26.10.1/node'), configPath: join(cache, '26.10.1/.mcp.json') });
+  assert.deepEqual(paths, [join(app, 'Contents/Info.plist'), join(app, 'Contents/Info.plist')]);
+  assert.equal(identity.source, paths[0]);
+  assert.equal(engineDifference([identity]), null);
+});
+
+test('a resolver failure or incomplete resolved identity refuses the engine', () => {
+  const identity = readReplayEngine({ read: () => 'fixture', resolve: () => ({ error: 'fixture resolver failure' }) });
+  assert.match(engineDifference([identity]), /unverified/);
+  for (const partial of [undefined, {}, { ...resolved, version: 'bundle' }, { ...resolved, command: '' }])
+    assert.match(engineDifference([{ ...engine(), resolved: partial }]), /unverified/);
+});
+
+test('launcher resolution inputs preserve runtime overrides and exclude unrelated environment values', () => {
+  assert.deepEqual(replayEngineEnvironment({ CODEX_HOME: '/fixture/codex', SLEIGHT_CHATGPT_APP: '/fixture/ChatGPT.app', OTHER: 'ignored' }),
+    { CODEX_HOME: '/fixture/codex', SLEIGHT_CHATGPT_APP: '/fixture/ChatGPT.app' });
+  assert.ok(replayEngineEnvironment({}).CODEX_HOME.endsWith('/.codex'));
+  assert.equal(replayEngineEnvironment({}).SLEIGHT_CHATGPT_APP, '/Applications/ChatGPT.app');
+});
+
+for (const field of ['version', 'command']) test(`resolved ${field} changes refuse despite an unchanged app plist`, async () => {
+  const first = await engineIteration(passed, { read: () => engine() });
+  const changed = { ...engine(), resolved: { ...resolved, [field]: `${resolved[field]}-changed` } };
+  const next = await engineIteration(() => assert.fail('mixed engine launched'), { previous: [first.engine], read: () => changed });
+  assert.match(next.engine.reason, /resolved engine version or command changed/);
+  assert.equal(next.verdict, 'diverge');
+  assert.equal(next.cleanupConfirmed, true);
+  assert.equal(campaignEngine([first, next]).verdict, 'refuse');
+});
+
 describe('worktree replay fixtures', { skip: packageSkip('typescript') }, async () => {
   const { replayCalls } = await import('../bench/replay/engine.mjs');
+  const { main } = await import('../bench/replay/run.mjs');
   const { campaignEvidence } = await import('../bench/replay/checks.mjs');
   const { parseRecording } = await import('../bench/replay/recording.mjs');
   const { replayResultStop, comparisonResult, TargetMapper } = await import('../bench/replay/mapping.mjs');
@@ -200,6 +250,112 @@ describe('worktree replay fixtures', { skip: packageSkip('typescript') }, async 
       assert.equal(evidence.comparisons[0].calls[0].reason, 'native window or app changed');
     }
   });
+
+  test('a text result without a Window header passes when A and B agree', async () => {
+    const calls = [{ server: 'plugin:sleight:computer', name: 'js', arguments: { code: 'nodeRepl.write("fixture")' }, result: result('old recording') }];
+    const listing = 'Windows:\n[17] Fixture (com.apple.TextEdit)';
+    const a = await arm('A', { calls, responses: [result(listing)] });
+    const b = await arm('B', { calls, responses: [result(listing)] });
+    assert.equal(a.verdict, 'pass', a.reason);
+    assert.equal(campaignEvidence([a, b], undefined, roles).verdict, 'pass');
+    const changed = await arm('B', { calls, responses: [result(listing.replace('Fixture', 'Other'))] });
+    assert.equal(campaignEvidence([a, changed], undefined, roles).verdict, 'diverge');
+  });
+
+  test('an iteration does not compare ambiguous window receipts against itself', async () => {
+    const calls = [{ server: 'plugin:sleight:computer', name: 'js', arguments: { code: 'nodeRepl.write("fixture")' }, result: result('old recording') }];
+    const listing = ['Fixture', 'Second'].map((title, i) => JSON.stringify({ target: { appId: 'com.apple.TextEdit', title },
+      identity: { windowNumber: i + 17 } })).join('\n');
+    const a = await arm('A', { calls, responses: [result(listing)] });
+    const b = await arm('B', { calls, responses: [result(listing)] });
+    assert.equal(a.verdict, 'pass', a.reason);
+    assert.equal(b.verdict, 'pass', b.reason);
+  });
+
+  test('worktree replay continues when a recorded failure now succeeds', async () => {
+    const calls = [{ server: 'plugin:sleight:computer', name: 'js', arguments: { code: 'nodeRepl.write("fixture")' },
+      result: { ...result('Error: old fixture failure'), isError: true } }];
+    const a = await arm('A', { calls, responses: [result('fixture succeeded')] });
+    const b = await arm('B', { calls, responses: [result('fixture succeeded')] });
+    assert.equal(campaignEvidence([a, b], undefined, roles).verdict, 'pass');
+    const strict = await replayCalls(calls, { comparison: 'switches', call: () => assert.fail('recorded stop launched') });
+    assert.equal(strict.verdict, 'diverge');
+  });
+
+  // The CLI campaign runs its real plan, schedule, engine checks and evidence writes.
+  // All host operations below are replaced with fixtures, including the lock and observer.
+  async function campaign(t, overrides = {}) {
+    const root = mkdtempSync(join(tmpdir(), 'sleight-rp1-main-'));
+    t.after(() => rmSync(root, { recursive: true, force: true }));
+    const source = join(root, 'recording'); mkdirSync(source);
+    const path = join(root, 'sleight-bench/recorded/fixture/1234abcd.txt');
+    writeFileSync(join(source, 'run.json'), JSON.stringify({ task: 'textedit-save' }));
+    writeFileSync(join(source, 'transcript.jsonl'), [
+      { message: { content: [{ type: 'tool_use', id: '1', name: 'mcp__plugin_sleight_computer__open_file', input: { app: 'TextEdit', path } }] } },
+      { message: { content: [{ type: 'tool_result', tool_use_id: '1', content: [text('old opened')] }] } },
+    ].map(JSON.stringify).join('\n'));
+    let unlocks = 0, launches = 0;
+    const out = join(root, 'out'), exitCode = process.exitCode;
+    t.mock.method(console, 'log', () => {}); t.mock.method(console, 'error', () => {});
+    const dependencies = { identifyBuild: (worktree, label) => ({ worktree, label, commit: 'fixture', trackedDirty: false, trackedDiffSHA256: 'fixture' }),
+      hold: () => false, permissionCheck: async () => false, acquireLock: async () => async () => { unlocks++; }, readEngine: () => engine(),
+      iteration: async (recording, { comparison, prepared }) => ({ ...await replayCalls(recording.calls, {
+        comparison, mapper: prepared.mapper, documentation: documentation(), call: async () => result('fresh opened'),
+      }), cleanupConfirmed: true }), ...overrides };
+    const iterate = dependencies.iteration;
+    dependencies.iteration = (...args) => { launches++; assert.equal(args[1].comparison, 'worktrees'); return iterate(...args); };
+    let runs;
+    try {
+      runs = await main([source, '--old-worktree', join(root, 'old'), '--new-worktree', join(root, 'new'),
+        '--owner-away', '--repeat', '2', '--out', out], dependencies);
+      return { runs, launches, unlocks, exitCode: process.exitCode,
+        summary: JSON.parse(readFileSync(join(out, 'summary.json'), 'utf8')),
+        rows: runs.map((row, i) => JSON.parse(readFileSync(join(out, `${i + 1}-${row.variant}/result.json`), 'utf8'))) };
+    } finally { process.exitCode = exitCode; }
+  }
+
+  test('main refuses differing resolved engines, writes both rows and stops before later arms', async t => {
+    let reads = 0;
+    const outcome = await campaign(t, { readEngine: () => {
+      const identity = engine();
+      if (++reads > 2) identity.resolved.version = '26.1024.1';
+      return identity;
+    } });
+    assert.equal(outcome.launches, 1);
+    assert.equal(outcome.runs.length, 2);
+    assert.deepEqual(outcome.runs.map(row => row.variant), ['A', 'B']);
+    assert.match(outcome.rows[1].engine.reason, /resolved engine version or command changed/);
+    assert.equal(outcome.summary.engine.verdict, 'refuse');
+    assert.equal(outcome.summary.cleanupConfirmed, true);
+    assert.equal(outcome.summary.verdict, 'diverge');
+    assert.equal(outcome.exitCode, 1);
+    assert.equal(outcome.unlocks, 1);
+  });
+
+  test('main stops on an engine reason after cleanup within the first iteration', async t => {
+    let reads = 0;
+    const outcome = await campaign(t, { readEngine: () => engine(++reads === 1 ? '50603' : '50604') });
+    assert.equal(outcome.launches, 1);
+    assert.equal(outcome.rows.length, 1);
+    assert.match(outcome.rows[0].engine.reason, /engine build changed/);
+    assert.equal(outcome.summary.engine.verdict, 'refuse');
+    assert.equal(outcome.unlocks, 1);
+  });
+
+  for (const flags of [{}, { cleanupConfirmed: true }, { cleanupConfirmed: true, cleanupUnconfirmed: true }])
+    test(`main retains the lock and error row on an iteration exception (${JSON.stringify(flags)})`, async t => {
+      const outcome = await campaign(t, { iteration: async () => { throw Object.assign(Error('fixture iteration failed'), flags); } });
+      assert.equal(outcome.launches, 1);
+      assert.equal(outcome.rows.length, 1);
+      assert.equal(outcome.rows[0].reason, 'fixture iteration failed');
+      assert.equal(outcome.rows[0].cleanupConfirmed, false);
+      assert.deepEqual(outcome.rows[0].engine, { start: engine(), end: engine(), changed: false });
+      assert.equal(outcome.summary.cleanupConfirmed, false);
+      assert.equal(outcome.summary.failure, 'fixture iteration failed');
+      assert.equal(outcome.summary.verdict, 'diverge');
+      assert.equal(outcome.exitCode, 1);
+      assert.equal(outcome.unlocks, 0);
+    });
 
   test('mixed engine builds refuse an otherwise equal A/B campaign and summary', async () => {
     const a = await arm('A'), b = await arm('B');
