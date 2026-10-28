@@ -234,10 +234,10 @@ test('RPC error messages also lose const warnings and retain the cause', t => {
   assert.doesNotMatch(out.error.message, /declared with const/);
 });
 
-for (const method of ['check', 'wait']) for (const rpc of [false, true]) {
-  test(`a nonexistent native ${method} lists native API names, RPC=${rpc}`, t => {
+for (const method of ['check', 'wait', 'rightClick']) for (const rpc of [false, true]) for (const prefix of ['', 'Error: ', 'TypeError: ', 'Error: TypeError: ']) {
+  test(`a nonexistent native ${method} lists native API names, RPC=${rpc}, prefix=${prefix}`, t => {
     const h = harness(t); h.call(1, `await app.${method}()`);
-    const message = `TypeError: app.${method} is not a function`;
+    const message = `${prefix}app.${method} is not a function`;
     if (rpc) h.error(1, message); else h.reply(1, [text(message)], true);
     const out = h.received.find(m => m.id === 1), messageOut = out.error?.message ?? body(out.result);
     assert.ok(messageOut.includes(message));
@@ -246,18 +246,32 @@ for (const method of ['check', 'wait']) for (const rpc of [false, true]) {
   });
 }
 
-test('a native alias gets API advice but browser and arbitrary object failures do not', t => {
+for (const prompt of [undefined, 'lean']) test(`open_file advertises only captured engine methods, prompt=${prompt}`, async t => {
+  const h = harness(t, { prompt });
+  const out = body(await h.open());
+  const advertised = /(?:It has the engine's app API|App API): ([^.]+)\./.exec(out);
+  assert.ok(advertised, out);
+  // This is the saved native engine interface, not a list derived from the notice under test.
+  const api = readFileSync(new URL('fixtures/engine-api-26.1007.71326.ts', import.meta.url), 'utf8');
+  const target = api.slice(api.indexOf('interface Target'), api.indexOf('type AppInfo'));
+  const app = api.slice(api.indexOf('interface App extends Target'), api.indexOf('type BrowserInfo'));
+  const methods = new Set([...`${target}\n${app}`.matchAll(/^\s+(\w+)\(/gm)].map(match => match[1]));
+  for (const method of advertised[1].split(/,\s*/)) assert.ok(methods.has(method), `unsupported advertised method: ${method}`);
+  assert.match(out, /Window handle: `__sleightOpenedApp\d+`/);
+});
+
+for (const prefix of ['', 'Error: ', 'TypeError: ', 'Error: TypeError: ']) test(`native API advice keeps handle and error boundaries, prefix=${prefix}`, t => {
   const h = harness(t);
   h.call(1, 'let editor = await cua.getApp("Example")'); h.reply(1, [text(tree)]);
-  h.call(2, 'await editor.wait()'); h.reply(2, [text('TypeError: editor.wait is not a function')], true);
+  h.call(2, 'await editor.wait()'); h.reply(2, [text(`${prefix}editor.wait is not a function`)], true);
   assert.match(body(result(h, 2)), /Native API names:/);
   h.call(3, 'let app = await cua.getTab("1")'); h.reply(3, [text('tab')], false, { 'codex/toolSurface': { kind: 'browserUse' } });
-  h.call(4, 'await app.check()'); h.reply(4, [text('TypeError: app.check is not a function')], true);
+  h.call(4, 'await app.check()'); h.reply(4, [text(`${prefix}app.check is not a function`)], true);
   assert.doesNotMatch(body(result(h, 4)), /Native API names:/);
-  h.call(5, 'await data.wait()'); h.reply(5, [text('TypeError: data.wait is not a function')], true);
+  h.call(5, 'await data.wait()'); h.reply(5, [text(`${prefix}data.wait is not a function`)], true);
   assert.doesNotMatch(body(result(h, 5)), /Native API names:/);
   h.call(6, 'nodeRepl.write("TypeError: editor.wait is not a function")');
-  h.reply(6, [text('TypeError: editor.wait is not a function')]);
+  h.reply(6, [text(`${prefix}editor.wait is not a function`)]);
   assert.doesNotMatch(body(result(h, 6)), /Native API names:/);
 });
 

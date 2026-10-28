@@ -35,12 +35,22 @@ function literal(node) {
     ts.isPropertyAssignment(p) && !ts.isComputedPropertyName(p.name) && literal(p.initializer));
 }
 // Supplement saved artifacts with drag and prohibited replacement patterns.
-export function dragMethodAudit(transcript) {
+export function dragMethodAudit(transcript, { diagnostics = false } = {}) {
   const audit = { drag: false, replacement: false, complete: true }, pending = new Map(), apps = new Set();
+  const issues = [];
+  let issuesOmitted = 0, transcriptLine = 0;
+  // Opt-in offsets identify the unproved expression without copying document text or tool arguments.
+  const incomplete = (code, node, file) => {
+    audit.complete = false;
+    if (!diagnostics) return;
+    if (issues.length >= 64) { issuesOmitted++; return; }
+    issues.push({ code, call: calls, transcriptLine,
+      ...(node ? { start: node.getStart(file), end: node.getEnd() } : {}) });
+  };
   let calls = 0, engine = true, openedHandle = false;
   const inspect = (name, input, success, content) => {
     calls++;
-    if (!input || typeof input !== 'object' || Array.isArray(input)) { audit.complete = false; return; }
+    if (!input || typeof input !== 'object' || Array.isArray(input)) { incomplete('invalid-input'); return; }
     // Sleight's preflight never sent this request to the engine. Failed engine calls still need inspection.
     if (refusedBeforeExecution(name, success, content)) return;
     const tool = name.split('__').at(-1);
@@ -50,15 +60,15 @@ export function dragMethodAudit(transcript) {
       const match = typeof last?.text === 'string' && openedNotice.exec(last.text);
       if (match) { apps.add(match[1]); openedHandle = true; }
     }
-    if (tool === 'replay') audit.complete = false;
+    if (tool === 'replay') incomplete('replay');
     if (tool === 'blocked_app' && input.op === 'type') audit.replacement = true;
     if (typeof input.code === 'string') {
       const file = ts.createSourceFile('tool.js', input.code, ts.ScriptTarget.Latest, true, ts.ScriptKind.JS);
-      if (file.parseDiagnostics.length) audit.complete = false;
+      if (file.parseDiagnostics.length) incomplete('invalid-code');
       if (!success) apps.clear();
       const bind = (name, value, deferred) => {
         if (!ts.isIdentifier(name)) { apps.clear(); return; }
-        if (name.text === 'cua') { engine = false; apps.clear(); audit.complete = false; }
+        if (name.text === 'cua') { engine = false; apps.clear(); incomplete('engine-rebound', name, file); }
         const call = value && ts.isAwaitExpression(value) ? value.expression : undefined;
         const acquired = call && ts.isCallExpression(call) && ts.isPropertyAccessExpression(call.expression) &&
           ts.isIdentifier(call.expression.expression) && call.expression.expression.text === 'cua' &&
@@ -110,7 +120,7 @@ export function dragMethodAudit(transcript) {
         if (ts.isVariableDeclaration(node)) bind(node.name, node.initializer, deferred);
         if (ts.isBinaryExpression(node) && node.operatorToken.kind >= ts.SyntaxKind.FirstAssignment && node.operatorToken.kind <= ts.SyntaxKind.LastAssignment) {
           if (ts.isIdentifier(node.left)) bind(node.left, node.operatorToken.kind === ts.SyntaxKind.EqualsToken ? node.right : undefined, deferred);
-          else { apps.clear(); audit.complete = false; }
+          else { apps.clear(); incomplete('property-assignment', node, file); }
         }
         if (ts.isCallExpression(node)) {
           const expr = node.expression, method = ts.isPropertyAccessExpression(expr) ? expr.name.text :
@@ -120,10 +130,10 @@ export function dragMethodAudit(transcript) {
           const read = sleight && openedHandle && receiver && (node.flags & ts.NodeFlags.OptionalChain) && optionalReads.has(method) &&
             node.arguments.every(arg => literal(arg) && !cutOrPaste(arg.getText(file)));
           const known = ts.isPropertyAccessExpression(expr) ? methods.has(method) || writers.test(method) || read || ['nodeRepl.write', 'nodeRepl.emitImage'].includes(expr.getText(file)) : ts.isIdentifier(expr) && builtins.has(expr.text);
-          if (!known || indirect.test(method)) audit.complete = false;
+          if (!known || indirect.test(method)) incomplete(indirect.test(method) ? 'indirect-call' : 'unknown-call', node, file);
           if (writers.test(method)) audit.replacement = true;
           if (/^(pressKey|press|keypress|keyPress)$/.test(method)) {
-            if (!node.arguments.length || !node.arguments.every(literal)) audit.complete = false;
+            if (!node.arguments.length || !node.arguments.every(literal)) incomplete('dynamic-key', node, file);
             if (node.arguments.some(arg => cutOrPaste(arg.getText(file)))) audit.replacement = true;
           }
           if (method === 'drag' && !deferred && !(node.flags & ts.NodeFlags.OptionalChain) &&
@@ -141,12 +151,14 @@ export function dragMethodAudit(transcript) {
       // A refused drag moved nothing and typed nothing, so it neither proves nor spoils the method (WD1, 2026-10-17).
       if (/^(drag|mouse_drag|drag_and_drop)$/.test(action)) { if (success) audit.drag = true; }
       else if (writers.test(action) || writeAction.test(action)) audit.replacement = true;
-      else if (!ordinaryTools.has(tool) && !/^(?:click|double_click|mouse_move|move|scroll|press|keypress|key|hotkey|screenshot|see|read|list|get|focus|select|menu)(?:$|[_\s.-])/i.test(action)) audit.complete = false;
+      else if (!ordinaryTools.has(tool) && !/^(?:click|double_click|mouse_move|move|scroll|press|keypress|key|hotkey|screenshot|see|read|list|get|focus|select|menu)(?:$|[_\s.-])/i.test(action)) incomplete('unknown-action');
       if (cutOrPaste(JSON.stringify(input))) audit.replacement = true;
     }
   };
-  for (const line of String(transcript ?? '').split('\n').filter(Boolean)) {
-    let event; try { event = JSON.parse(line); } catch { audit.complete = false; continue; }
+  for (const [index, line] of String(transcript ?? '').split('\n').entries()) {
+    if (!line) continue;
+    transcriptLine = index + 1;
+    let event; try { event = JSON.parse(line); } catch { incomplete('invalid-json'); continue; }
     if (event.type === 'item.completed' && event.item?.type === 'mcp_tool_call') {
       const item = event.item;
       let input = item.arguments === undefined ? {} : item.arguments;
@@ -155,16 +167,19 @@ export function dragMethodAudit(transcript) {
       inspect(name, input, item.status !== 'failed' && !!item.result && item.result.isError !== true && !item.error, item.result?.content);
     }
     for (const item of event.message?.content ?? []) {
-      if (item.type === 'tool_use') pending.set(item.id, item);
+      if (item.type === 'tool_use') pending.set(item.id, { item, line: index + 1 });
       if (item.type === 'tool_result') {
-        const request = pending.get(item.tool_use_id);
-        if (!request) { audit.complete = false; continue; }
+        const entry = pending.get(item.tool_use_id);
+        if (!entry) { transcriptLine = index + 1; incomplete('unmatched-result'); continue; }
+        const request = entry.item;
+        transcriptLine = entry.line;
         pending.delete(item.tool_use_id);
         inspect(request.name, request.input, item.is_error !== true && event.tool_use_result?.isError !== true,
           item.content ?? event.tool_use_result?.content);
       }
     }
   }
-  if (!calls || pending.size) audit.complete = false;
-  return audit;
+  if (!calls) incomplete('no-calls');
+  for (const entry of pending.values()) { transcriptLine = entry.line; incomplete('pending-call'); }
+  return diagnostics ? { ...audit, issues, issuesOmitted } : audit;
 }

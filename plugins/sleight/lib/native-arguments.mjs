@@ -26,6 +26,10 @@ export function nativeArgumentError(name, args, unknown = Symbol()) {
       valid = args.length >= 1 && string(a);
       break;
     case 'click':
+      if (known(b) && b != null && typeof b === 'object' && 'button' in b) {
+        const button = ['left', 'right', 'middle', 'l', 'r', 'm'].find(value => value === b.button);
+        return /* notice */ 'sleight: use ' + (button ? '{mouseButton:"' + button + '"}' : 'mouseButton') + ', not button; nothing sent';
+      }
       signature = 'click(target: number | Vec2, options?: ClickOptions)';
       valid = args.length >= 1 && target(a) && options(b, {
         key: string, durationMs: number, clickCount: number, mouseButton: string,

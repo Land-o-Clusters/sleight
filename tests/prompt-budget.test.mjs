@@ -34,7 +34,8 @@ const skillPath = new URL('../plugins/sleight/skills/drive-mac-apps/SKILL.md', i
 // SM1R counts the new conditional managed-PATH refusal label (+54 characters).
 // HO1 pins the shortened default and lean handoff descriptions.
 // KT1 adds one fixed 40-character pending-tab notice (+43 inventoried characters).
-const leanRatio = 32921 / 45857;
+// AS2R2 counts the value-preserving button rename in both variants.
+const leanRatio = 32961 / 45907;
 const leanSkill = () => skillRules(skillPath, { SLEIGHT_PROMPT: 'lean' });
 
 test('hook guard refusals join the pinned notice inventory', { skip }, () => {
@@ -368,6 +369,8 @@ test('the offline budget command measures all sources and stays about 30 percent
   assert.ok(report.rows.some(row => row.source === 'relay notices'));
   assert.ok(report.rows.some(row => row.source === 'tool descriptions'));
   assert.ok(report.rows.some(row => row.source === 'shared notices'));
+  assert.ok(report.total.default.characters <= 45912, JSON.stringify(report.total));
+  assert.ok(report.total.lean.characters <= 32976, JSON.stringify(report.total));
   assert.ok(report.total.lean.characters <= report.total.default.characters * leanRatio, JSON.stringify(report.total));
 });
 
