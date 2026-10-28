@@ -4,8 +4,12 @@ import { runInNewContext } from 'node:vm';
 
 export function fixture({ role = 'AXWindow', subrole = 'AXDialog', parent = 'window', fail, cancelCode = 0,
   identifier, inputRole = 'AXTextField', button = true, cancelNoop = false, fieldCancel = false, escapeNoop = false,
-  measuredSheet = false, closeNoop = false, delayedSheet = false, sourceText } = {}) {
+  measuredSheet = false, measuredPanel = false, closeNoop = false, delayedSheet = false, sourceText,
+  submitCloseAfterMs = 0 } = {}) {
   if (measuredSheet) { role = 'AXSheet'; subrole = undefined; identifier = 'GoToWindow'; button = false; }
+  // macOS 27 also exposes GoToWindow as a standalone AXWindow, with itself
+  // as AXWindow and the app as AXParent. It is absent from the owner's AXSheets.
+  if (measuredPanel) { role = 'AXWindow'; subrole = 'AXDialog'; identifier = 'GoToWindow'; parent = 'self'; button = false; }
   const source = { ObjC: { import() {}, unwrap: v => v, deepUnwrap: v => v, castRefToObject: v => v }, Ref: () => [] };
   runInNewContext(sourceText ?? readFileSync(new URL('../../bench/real-fixture.js', import.meta.url), 'utf8'), source);
   const owner = { AXRole: 'AXWindow', AXSubrole: 'AXStandardWindow' };
@@ -32,8 +36,8 @@ export function fixture({ role = 'AXWindow', subrole = 'AXDialog', parent = 'win
   const top = (name, item) => ({ AXRole: 'AXMenuBarItem', AXTitle: name,
     AXChildren: [{ AXRole: 'AXMenu', AXChildren: [item] }] });
   app.AXMenuBar = { AXChildren: [top('File', newItem), top('Go', goItem)] };
-  const actions = [], events = [], writes = [], keys = [];
-  let time = 0, retained, pendingSheet = false, hook = () => {};
+  const actions = [], events = [], writes = [], keys = [], waits = [];
+  let time = 0, retained, pendingSheet = false, submittedAt = null, submissionClosed = false, hook = () => {};
   const present = () => !panel.gone && app.AXChildren.includes(panel);
   const show = () => {
     app.AXChildren.push(panel);
@@ -46,6 +50,16 @@ export function fixture({ role = 'AXWindow', subrole = 'AXDialog', parent = 'win
     app.AXWindows = app.AXWindows.filter(w => w !== panel); window.AXSheets = [];
     window.AXChildren = [];
     app.AXFocusedWindow = window; app.AXFocusedUIElement = window;
+  };
+  const advance = ms => {
+    time += ms;
+    if (submittedAt !== null && time - submittedAt >= submitCloseAfterMs && !submissionClosed) {
+      submissionClosed = true; dismiss();
+    }
+  };
+  const submitted = () => {
+    window.AXDocument = '/fixture/target'; window.AXTitle = 'target'; submittedAt = time;
+    advance(0);
   };
   const native = v => v;
   Object.assign(native, {
@@ -76,11 +90,11 @@ export function fixture({ role = 'AXWindow', subrole = 'AXDialog', parent = 'win
       if (element === field && action === 'AXCancel') { if (fieldCancel) dismiss(); return fieldCancel ? 0 : -25206; }
       if (element === cancel && !cancelNoop) dismiss();
       if (element === close && !closeNoop) dismiss();
-      if (element === go) { window.AXDocument = '/fixture/target'; window.AXTitle = 'target'; dismiss(); }
+      if (element === go) submitted();
       if (element === window.AXCloseButton) { app.AXWindows = app.AXWindows.filter(w => w !== window); window.gone = true; }
       return 0;
     },
-    NSThread: { sleepForTimeInterval() { time += 100; } },
+    NSThread: { sleepForTimeInterval(seconds) { advance(seconds * 1000); } },
     // CGEventRef is a C reference, without an Objective-C isNil method.
     CGEventCreateKeyboardEvent: (_source, key, down) => ({ key, down }),
     CGEventSetFlags: (event, flags) => { assert.equal(flags, 0); event.flags = flags; },
@@ -88,12 +102,12 @@ export function fixture({ role = 'AXWindow', subrole = 'AXDialog', parent = 'win
       assert.equal(pid, 42); assert.equal(event.flags, 0); keys.push([event.key, event.down]);
       if (!event.down) return;
       if (event.key === 36) assert.equal(request.finderOwnership.documentless.length, 0);
-      if (event.key === 36) { window.AXDocument = '/fixture/target'; window.AXTitle = 'target'; dismiss(); }
+      if (event.key === 36) submitted();
       if (event.key === 53 && !escapeNoop) dismiss();
     },
   });
   source.$ = native;
-  const clock = { check() {}, now: () => time, wait: ms => { time += ms; }, emit(event) {
+  const clock = { check() {}, now: () => time, wait: ms => { waits.push(ms); advance(ms); }, emit(event) {
     events.push(event);
     if (fail === 'retention-receipt' && event.stage === 'finder-panel-retained') throw new Error('receipt failure');
   } };
@@ -109,7 +123,8 @@ export function fixture({ role = 'AXWindow', subrole = 'AXDialog', parent = 'win
   const submit = api.submitFolder;
   if (fail === 'before-write') api.submitFolder = () => { throw new Error('setup failure before navigation'); };
   if (fail === 'controls') panel.AXChildren = [];
-  return { source, api, app, owner, window, panel, request, actions, events, writes, keys, show, dismiss, present, native, clock, goItem, newItem, field, cancel, close,
+  return { source, api, app, owner, window, panel, request, actions, events, writes, keys, waits, advance,
+    get submittedAt() { return submittedAt; }, show, dismiss, present, native, clock, goItem, newItem, field, cancel, close,
     setHook: fn => { hook = fn; }, submit: () => submit.call(api, window, panel, request.target),
     open: () => source.openFinderFolder(request, app, owner, api, clock, w => { retained = w; }),
     recover: () => source.recoverSetup(retained, request, api, app, {}),
