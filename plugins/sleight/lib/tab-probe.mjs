@@ -4,7 +4,7 @@ import { constants, openSync, closeSync, fstatSync, readdirSync, statSync, renam
 import { join } from 'node:path';
 import { verifyWindowIdentity } from './window-identity.mjs';
 import { tabFocusRefusal } from './menu-continuation.mjs';
-import { tokens } from './flow-rules.mjs';
+import { tokens, invalidTokens } from './flow-rules.mjs';
 
 // Only an awaited Cmd+T, literal URL, Return chain. The splitter already excludes intervening reads and other handles.
 export function nativeTabPlan(plan) {
@@ -12,6 +12,7 @@ export function nativeTabPlan(plan) {
       !/^(?:super|cmd|command|meta)\+t$/i.test(plan.actions[0].selector.value) ||
       plan.actions[2].selector?.kind !== 'key' || !/^(?:return|enter)$/i.test(plan.actions[2].selector.value)) return false;
   const action = plan.actions[1], ts = tokens(plan.code.slice(action.start, action.end)).filter(t => t.v !== ';');
+  if (invalidTokens(ts)) return false;
   return ts.length === 7 && ts[3]?.v === 'typeText' && !ts[3].string && ts[5]?.string === true &&
     /^https?:\/\/[^\s\u0000-\u001f]+$/i.test(ts[5].v);
 }

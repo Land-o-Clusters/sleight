@@ -3710,7 +3710,7 @@ export function createRelay({
       if (unsupportedCodeLines(msg.params.arguments.code)) {
         finishedCall(msg.id);
         toClient({ jsonrpc: '2.0', id: msg.id, result: { isError: true, content: [{ type: 'text',
-          text: promptNotice('Unsupported line terminator. Use LF source lines.', prompt) }] } });
+          text: promptNotice('Raw CR/U+2028/U+2029 outside strings/templates, or ambiguous literal syntax (regex/division, <!--/-->, or deep nesting). Use LF source lines. In strings/templates, use \\r, \\u2028 or \\u2029 escapes, or split the ambiguous expression into a separate call.', prompt) }] } });
         return;
       }
       // With or without the input lease: after `const app`, a suggested `let app = …` is a redeclaration error.

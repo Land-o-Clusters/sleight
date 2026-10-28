@@ -125,7 +125,7 @@ for (const [name, end] of ends) {
       await new Promise(resolve => setImmediate(resolve));
       assert.equal(sent.length, 0);
       assert.equal(received.length, 4);
-      for (const reply of received) { assert.equal(reply.result.isError, true); assert.match(reply.result.content[0].text, /Unsupported line terminator/); }
+      for (const reply of received) { assert.equal(reply.result.isError, true); assert.match(reply.result.content[0].text, /Raw CR\/U\+2028\/U\+2029/); }
     }
     const safe = 'nodeRepl.write(`before' + end + 'after`)';
     call(safe);

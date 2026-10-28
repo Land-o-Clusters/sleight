@@ -4,7 +4,7 @@
 export function promptNotice(text, prompt) {
   if (prompt !== 'lean') return text;
   return text
-    .replace('Unsupported line terminator. Use LF source lines.', 'Use LF source lines.')
+    .replace('Raw CR/U+2028/U+2029 outside strings/templates, or ambiguous literal syntax (regex/division, <!--/-->, or deep nesting). Use LF source lines. In strings/templates, use \\r, \\u2028 or \\u2029 escapes, or split the ambiguous expression into a separate call.', 'CR/U+2028/U+2029 outside literals or ambiguous inside (regex/division, <!--/-->, nesting). Use LF lines; escape literal terminators.')
     .replace('app_handoff needs a confirmed native app read with an input lease. Browser and document-scoped surfaces must stop for the user.', 'app_handoff needs a leased native app read. Browser/document-scoped: stop for user.')
     .replace('another call is pending or this session is stopped.', 'Call pending or session stopped.')
     .replace('handoff pending; the user must finish in the app.', 'handoff pending; wait for user.')

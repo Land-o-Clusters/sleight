@@ -450,14 +450,30 @@ test('a tokenizer would hide a real click; raw text still names the action', t =
   for (const code of [
     'const f = () => /x/; await tab.click(1)',
     '/[\'"]/; await tab.click(1)',
-    'const s = "x"; / 2; await tab.click(1)',
     'obj.return / 2; await tab.click(1)',
-    'const s = "unterminated; await tab.click(1)',
   ]) {
     assert.equal(isTabBinding(code), false, code);
     const out = reply(t, 'Debugger unattached', true, code).content[0].text;
     assert.match(out, /input may already have been sent/, code);
     assert.doesNotMatch(out, /no input was sent/);
+  }
+});
+
+test('incomplete source is refused before an engine error can follow it', t => {
+  for (const code of ['const s = "x"; / 2; await tab.click(1)',
+    'const s = "unterminated; await tab.click(1)']) {
+    assert.equal(isTabBinding(code), false);
+    const clientIn = new PassThrough(), clientOut = new PassThrough(), serverIn = new PassThrough(), serverOut = new PassThrough();
+    const sent = [], output = [];
+    serverIn.on('data', bytes => sent.push(bytes));
+    clientOut.on('data', bytes => output.push(JSON.parse(bytes)));
+    const relay = createRelay({ clientIn, clientOut, serverIn, serverOut, changeReview: false });
+    t.after(() => { relay.dispose(); for (const stream of [clientIn, clientOut, serverIn, serverOut]) stream.destroy(); });
+    clientIn.write(JSON.stringify({ id: 1, method: 'tools/call', params: { name: 'js', arguments: { code } } }) + '\n');
+    assert.equal(sent.length, 0);
+    assert.equal(output.length, 1);
+    assert.equal(output[0].result.isError, true);
+    assert.match(output[0].result.content[0].text, /cannot inspect JavaScript/);
   }
 });
 

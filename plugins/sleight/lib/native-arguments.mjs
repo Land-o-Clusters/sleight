@@ -1,4 +1,4 @@
-import { tokens } from './flow-rules.mjs';
+import { tokens, invalidTokens, codeInspectionRefusal } from './flow-rules.mjs';
 
 // Also injected into the app proxy. Keep this function self-contained.
 export function nativeArgumentError(name, args, unknown = Symbol()) {
@@ -93,6 +93,7 @@ function literal(ts) {
 // This is a literal mistake check, not an interpreter. The runtime proxy checks computed values.
 export function nativeArgumentsProblem(code, nativeHandles = new Set(), browserHandles = new Set()) {
   const ts = tokens(code), native = new Set(['app', ...nativeHandles]);
+  if (invalidTokens(ts)) return codeInspectionRefusal;
   for (const handle of browserHandles) native.delete(handle);
   for (let i = 0; i < ts.length; i++) {
     if (ts[i].string) continue;

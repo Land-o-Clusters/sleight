@@ -71,7 +71,7 @@ function privateToken(token) {
 // read/pointer calls. Computed members, aliases, templates, escapes and unknown calls fail closed.
 function narrationCodeSafe(code) {
   if (/\b(?:typeText|paste|setValue|pressKey)\b|[`\\]/.test(code)) return false;
-  const plain = code.replace(/\/\*[\s\S]*?(?:\*\/|$)|\/\/[^\n]*|"(?:\\.|[^"\\])*"|'(?:\\.|[^'\\])*'/g,
+  const plain = code.replace(/\/\*[\s\S]*?(?:\*\/|$)|\/\/[^\n\r\u2028\u2029]*|"(?:\\.|[^"\\])*"|'(?:\\.|[^'\\])*'/g,
     token => token.startsWith('/') ? ' ' : '""');
   if (/[$\w)\]]\s*(?:\?\.)?\s*\[|\//.test(plain)) return false;
   const methods = new Set(['getApp', 'getState', 'getTab', 'getAXState', 'getAXStateAndScreenshot', 'click', 'doubleClick', 'rightClick', 'scroll', 'drag', 'selectText']);
@@ -101,7 +101,7 @@ function nativeTracker() {
     'selectText', 'typeText', 'setValue', 'paste', 'pressKey']);
   function accept(code) {
     if (typeof code !== 'string' || code.length > 16384 || /[`\\]/.test(code)) { known.clear(); return false; }
-    const plain = code.replace(/\/\*[\s\S]*?(?:\*\/|$)|\/\/[^\n]*|"(?:\\.|[^"\\])*"|'(?:\\.|[^'\\])*'/g, t => t.startsWith('/') ? ' ' : '""');
+    const plain = code.replace(/\/\*[\s\S]*?(?:\*\/|$)|\/\/[^\n\r\u2028\u2029]*|"(?:\\.|[^"\\])*"|'(?:\\.|[^'\\])*'/g, t => t.startsWith('/') ? ' ' : '""');
     const acquisitions = [...plain.matchAll(/\b(?:let|const|var)\s+(\w+)\s*=\s*await\s+cua\s*\.\s*getApp\s*\(/g)];
     const rest = plain.replace(/\b(?:let|const|var)\s+\w+\s*=\s*await\s+cua\s*\.\s*getApp\s*\(/g, 'cua.getApp(');
     if (/=(?!=)|=>|[$\w)\]]\s*(?:\?\.)?\s*\[|\//.test(rest)) { known.clear(); return false; }
