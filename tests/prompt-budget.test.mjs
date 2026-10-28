@@ -126,6 +126,8 @@ for (const env of [{}, { SLEIGHT_PROMPT: 'lean' }, { SLEIGHT_LEAN_CALLS: '1' }, 
     h.call(1, 'let app = await cua.getApp("Editor")');
     const first = h.reply(1, '## Computer Use\nNative reference.\nWindow: "Draft", App: Editor');
     for (const passage of baseline.skillSafety) assert.ok(first.includes(passage), passage);
+    if (env.SLEIGHT_PROMPT !== 'lean')
+      assert.ok(first.includes('`typeText(text)` and `pressKey(key)` take no element. `click(target)` first.'));
     assert.match(first, /Top-level `await`, no `return`/);
     assert.match(first, /Write text with `nodeRepl\.write\(\.\.\.\)`/);
     assert.doesNotMatch(first, /sleight\.fillForm|sleight\.dragTo|downloadMedia|tab\.getJsDialog/);
@@ -484,8 +486,8 @@ for (const mode of [undefined, '0']) test(`MT browser descriptions stay pinned i
   for (const prompt of [undefined, 'lean']) {
     const combined = skillRules(skillPath, { SLEIGHT_PROMPT: prompt }).length + descriptions.length;
     // HO1 pins the combined skill and description sizes in both MT variants.
-    assert.equal(combined, mode === '0' ? (prompt === 'lean' ? 5987 : 9614)
-      : (prompt === 'lean' ? 5908 : 9535));
+    assert.equal(combined, mode === '0' ? (prompt === 'lean' ? 5977 : 9609)
+      : (prompt === 'lean' ? 5898 : 9530));
   }
   assert.ok(JSON.stringify(tools).length < 8000);
   for (const tool of tools) assert.ok(tool.description.length <= 2048, tool.name);
@@ -501,10 +503,10 @@ test('PF3 keeps every 1.5.0 input schema and pins both first and full turbo guid
   assert.equal(hash(turboFirstRules(full)), baseline.browserFirstRules);
   const measured = budget.budget({}).conditional.turboFirst.default;
   assert.equal(measured.catalog.characters, 6081);
-  assert.equal(measured.rules.characters, 4938);
-  assert.equal(measured.deferredCharacters, 3389);
-  assert.equal(measured.combined.characters, 11020);
-  assert.equal(Buffer.byteLength(JSON.stringify(browserTools('bbench')) + '\n' + turboFirstRules(full)), 11020);
+  assert.equal(measured.rules.characters, 4937);
+  assert.equal(measured.deferredCharacters, 3273);
+  assert.equal(measured.combined.characters, 11019);
+  assert.equal(Buffer.byteLength(JSON.stringify(browserTools('bbench')) + '\n' + turboFirstRules(full)), 11019);
   // This counts the browser catalog + skill, not host framing, native tools or Haiku tokens.
   assert.ok(measured.combined.characters <= 11736, 'below the same df27db01 surface');
   assert.ok(measured.combined.characters < 14166, 'below p160 a3706679');

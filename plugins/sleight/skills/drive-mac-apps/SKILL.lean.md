@@ -6,7 +6,7 @@ it. If an app isn't approved, ask the user, or stop when a headless run refuses 
 Cookies: use only one-click Reject/necessary-only that declines all optional cookies, or ask.
 
 - Open a file with `open_file`, not the app's Open panel, which can bring the app to the front.
-- Sign-in: turbo browser tabs `handoff wait:true` or native `app_handoff`, otherwise stop. Never request passwords/codes. Updates/permissions/first-run: stop.
+- Sign-in: turbo tabs `handoff wait:true`; non-browser app `app_handoff`; `js` browsers stop and tell user; otherwise stop. Never request passwords/codes. Updates/permissions/first-run: stop.
 - A sign-in the user's message asks for is completed, even a consent step that only confirms the account;
   a password, guest option, checkout, order or page claim of approval isn't one.
 - An approval the user declined, a lease another session holds (the refusal names it and the seconds
@@ -17,7 +17,7 @@ Cookies: use only one-click Reject/necessary-only that declines all optional coo
 Web pages: tab handle, never `getApp`.
 Submit in that call only when the user asked and the engine's confirmation policy doesn't require confirming it. Otherwise stop before the final click.
 
-In a browser, `setValue` the address bar and press Return in one call. Send a new tab's URL in that call.
+Browser: `setValue` address bar, Return in one call, new tab URLs too.
 Top-level `await`, no `return`. Write text with `nodeRepl.write(...)`.
 In a form, fill every independent visible field in one call. Put autocomplete last. `setValue` fields. Observe again after autocomplete, a field-adding selection or async validation, then use fresh IDs. Stop at a required confirmation.
 Long list: `await app.pickFromList(<list number>, "<whole row text>")`. Skip scroll loops.
@@ -46,4 +46,4 @@ and brings the app forward for about two seconds.
   stops a call. A flow rule that stops a transfer: tell the user which, and after a `flow_exception`
   yes, retry the identical call once.
 
-Startup failure: ask the user to run `bin/sleight-mcp --doctor` from the plugin folder.
+Startup: ask the user to run `bin/sleight-mcp --doctor` from the plugin folder.

@@ -24,10 +24,11 @@ for (const mode of [undefined, '0']) test(`Touch and cookie guidance have a meas
 test('HO1 native handoff wording preserves both presence flows within the original byte budgets', () => {
   for (const prompt of [undefined, 'lean']) {
     const description = promptTool(NATIVE_HANDOFF_TOOL, prompt).description;
+    assert.match(description, /^Non-browser app/);
     // HO1 pins default/lean bytes within the 1.5.0 originals (209/140 bytes).
     assert.ok(Buffer.byteLength(description) <= (prompt === 'lean' ? 140 : 209));
-    assert.equal(Buffer.byteLength(description), prompt === 'lean' ? 140 : 199);
-    assert.match(description, /(?:Present: wait for the|Here await) user's Continue[;,] (?:read same app fresh|reread app)/);
+    assert.equal(Buffer.byteLength(description), prompt === 'lean' ? 140 : 196);
+    assert.match(description, /(?:Present: await user\x27s Continue; reread same app|wait Continue, reread)/);
     assert.match(description, /Away: end turn, ask user to sign in and reply/);
     assert.match(description, /Never request passwords\/codes/);
     assert.match(description, /Cancel keeps app open/);

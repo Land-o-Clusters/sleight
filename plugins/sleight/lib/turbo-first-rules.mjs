@@ -4,8 +4,8 @@ import { createHash } from 'node:crypto';
 // An edited section stays whole until reviewed again, so a new safety line cannot
 // disappear just because somebody put it under one of these headings.
 const deferred = new Set([
-  'aa20057c10892ce008c1290444f150471d84ba82040d2403bfb2118aa349eed2', // Calls
-  'ec248c19403511227d74c7dc7c6984a116d2a400434d0a6395da8ed77aa25c5b', // Text, menus and files
+  '151b160e6b4b039b66f2b47f4c23bb11a2148947deedc757c4f87d905109b584', // Calls
+  'e11c3476471507ee0e89876859f28acc7b87c7ded972af39794b3560a639af88', // Text, menus and files
   'ba184d9791115f85aa2a3ad080e8229033b768fc025d3ad2fe9cc9d67ccd4b3f', // Other tools, retain clipboard and guard rules below
 ]);
 const nativeIntro = '`mcp__plugin_sleight_computer__js` runs persistent JavaScript with `cua`. `js_reset` restarts it.\n'
