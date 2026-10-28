@@ -484,7 +484,8 @@ export async function runRealGate({ args, repo = repoRoot, mcpRoot, runner, task
     }
   } catch (error) {
     if (existsSync(plan.out)) {
-      writeFileSync(join(plan.out, 'failure.json'), JSON.stringify({ error: error.message, completed: rows.length }));
+      writeFileSync(join(plan.out, 'failure.json'), JSON.stringify({ error: error.message, completed: rows.length,
+        ...(typeof error.cdpMethod === 'string' ? { cdpMethod: error.cdpMethod } : {}) }));
       markHarnessFailure(plan.out, rows, plan.arms.length);
     }
     throw error;
