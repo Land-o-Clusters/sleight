@@ -1,5 +1,5 @@
-import { parseCell, walk, memberCall, literalValue, handleBindings, UNKNOWN } from './code-ast.mjs';
-import { receiverRoot } from './call-inspection.mjs';
+import { parseCell, walk, memberCall, literalValue, handleBindings, callInventory, invalidHandleNames, UNKNOWN } from './code-ast.mjs';
+import { receiverRoot, unsafeHandleUse } from './call-inspection.mjs';
 import { lineCommentEnd, isLineTerminator } from './code-line-terminators.mjs';
 // Literal inspection is a mistake guard. Never evaluate the caller's code here.
 import { existsSync, readFileSync, realpathSync } from 'node:fs';
@@ -170,11 +170,17 @@ export function tokens(code) {
   return out;
 }
 
-export function calls(code, handles, fallback, browsers) {
+export function calls(code, handles, fallback, browsers, { trustedFunctions = new Set() } = {}) {
   const { ast, error } = parseCell(code), inputs = [], unknownInputs = [];
   let readTarget = fallback;
   if (error) return { inputs, unknown: true, unknownInputs };
   const methods = new Set(['typeText', 'paste', 'setValue', 'pressKey', 'fill', 'type', 'pressSequentially', 'press', 'goto', 'createBrowserTab', 'back', 'forward', 'reload']);
+  const invalid = invalidHandleNames(ast);
+  for (const name of invalid) handles.delete(name);
+  const indirect = callInventory(ast).filter(entry => entry.kind === 'unknown' && !memberCall(entry.node) &&
+    ![...walk(entry.node.callee)].some(part => part.type === 'FunctionExpression' &&
+      trustedFunctions.has(code.slice(part.range[0], part.range[1]))));
+  const unsafe = unsafeHandleUse(ast, new Set(['app', ...handles.keys()]));
   const previous = new Map([...handles].map(([name, value]) => [name, { kind: value.app === 'browser' ? 'browser' : 'app', app: value.app }]));
   for (const statement of ast.body) {
     const hints = handleBindings({ body: [statement] }, previous);
@@ -185,6 +191,7 @@ export function calls(code, handles, fallback, browsers) {
         : node.type === 'AssignmentExpression' ? node : undefined;
       if (assignment?.left.type === 'Identifier') {
         const name = assignment.left.name, hint = hints.get(name);
+        if (invalid.has(name)) { handles.delete(name); continue; }
         if (hint?.kind === 'app') handles.set(name, hint.source ? handles.get(hint.source) ?? fallback ?? target(undefined, undefined, browsers) : target(hint.app, undefined, browsers));
         else if (hint) handles.set(name, handles.get(hint.root) ?? target('browser', undefined, browsers));
         else if (assignment.operator === '=' && assignment.right?.type === 'Identifier' && handles.has(assignment.right.name)) handles.set(name, handles.get(assignment.right.name));
@@ -201,29 +208,27 @@ export function calls(code, handles, fallback, browsers) {
         readTarget = (binding && handles.get(binding[0])) ?? (call.method === 'getApp'
           ? target(typeof value === 'string' ? value : undefined, undefined, browsers) : target('browser', undefined, browsers));
       }
-      if (call.method === UNKNOWN) { unknownInputs.push({ method: UNKNOWN, target: { ...(handles.get(root) ?? fallback) } }); continue; }
+      if (call.method === UNKNOWN) { unknownInputs.push({ method: UNKNOWN, target: { ...(handles.get(root) ?? (!invalid.has(root) && root === 'app' ? fallback : undefined)) } }); continue; }
       if (!methods.has(call.method)) continue;
       const method = call.method;
       const factory = memberCall(call.receiver);
       const directApp = factory?.receiver.type === 'Identifier' && factory.receiver.name === 'cua' && factory.method === 'getApp';
       const appValue = directApp && literalValue(factory.args[0]);
       const destination = method === 'createBrowserTab' ? target('browser', undefined, browsers)
-        : directApp ? target(typeof appValue === 'string' ? appValue : undefined, undefined, browsers) : handles.get(root) ?? fallback;
+        : directApp ? target(typeof appValue === 'string' ? appValue : undefined, undefined, browsers) : handles.get(root) ?? (!invalid.has(root) && root === 'app' ? fallback : undefined);
       if (destination?.app === 'browser') readTarget = destination;
       const values = call.args.map(literalValue);
       let value = method === 'createBrowserTab' || method === 'setValue' ? values[1]
         : typeof values[0] === 'string' ? values[0] : values[1] ?? values[0];
       if (value === UNKNOWN) {
-        unknownInputs.push({ method, target: { ...destination } });
+        unknownInputs.push({ method, target: ['goto', 'createBrowserTab'].includes(method)
+          ? target(destination?.app, undefined, browsers) : { ...destination } });
         // Preserve the conservative literal-fragment check for concatenations.
         // The complete runtime value is still unknown and is never evaluated.
         const argument = method === 'createBrowserTab' || method === 'setValue' ? call.args[1]
           : values[0] === UNKNOWN ? call.args[0] : call.args[1];
-        const fragments = node => {
-          const literal = literalValue(node);
-          if (typeof literal === 'string') return [literal];
-          return node?.type === 'BinaryExpression' && node.operator === '+' ? [...fragments(node.left), ...fragments(node.right)] : [];
-        };
+        const fragments = node => [...walk(node)].sort((a,b) => a.range[0]-b.range[0]).flatMap(part => part.type === 'Literal' && typeof part.value === 'string'
+          ? [part.value] : part.type === 'TemplateElement' ? [part.value.cooked ?? part.value.raw] : []);
         const known = fragments(argument);
         if (known.length) value = known.join('');
       }
@@ -237,7 +242,7 @@ export function calls(code, handles, fallback, browsers) {
     previous.clear();
     for (const [name, value] of handles) previous.set(name, { kind: value.app === 'browser' ? 'browser' : 'app', app: value.app });
   }
-  return { inputs, unknownInputs, readApp: readTarget?.app, readTarget };
+  return { inputs, unknownInputs, unknown: unsafe || indirect.length > 0 || unknownInputs.some(input => input.method === UNKNOWN), readApp: readTarget?.app, readTarget };
 }
 
 function keyText(value) {
@@ -308,7 +313,7 @@ export class FlowRules {
       return wildcard ? context.host.endsWith('.' + host) : context.host === host;
     });
   }
-  analyze(name, args = {}, window) {
+  analyze(name, args = {}, window, inspection = {}) {
     const copies = new Map();
     const fallback = window ? target(window.app, window.url, this.browsers) : undefined;
     const current = value => value?.app === 'browser' ? value : this.windows.get(this.canonical(value?.app)) ??
@@ -319,8 +324,13 @@ export class FlowRules {
     }));
     const tails = new Map(this.tails);
     const localTarget = current(target(args.app, undefined, this.browsers));
-    const parsed = name === 'js' ? calls(args.code ?? '', handles, fallback, this.browsers) : { inputs: strings(Object.fromEntries(Object.entries(args).filter(([k]) => !['app', 'op'].includes(k)))).map(value => ({ target: localTarget, value, method: 'argument' })), readApp: args.app, readTarget: localTarget };
+    const parsed = name === 'js' ? calls(args.code ?? '', handles, fallback, this.browsers, inspection) : { inputs: strings(Object.fromEntries(Object.entries(args).filter(([k]) => !['app', 'op'].includes(k)))).map(value => ({ target: localTarget, value, method: 'argument' })), readApp: args.app, readTarget: localTarget };
     const violations = new Map(parsed.unknown ? this.rules.map(rule => [rule.id, { rule: rule.id, app: 'unknown app' }]) : []);
+    for (const input of parsed.unknownInputs ?? []) for (const rule of this.rules) {
+      if (rule.kind === 'source' && (!input.target?.app || this.matches(input.target, rule.destinations, { unknown: true })) &&
+          !(input.target?.app && rule.except && this.matches(input.target, rule.except, { exception: true })))
+        violations.set(rule.id, { rule: rule.id, app: input.target?.app ?? 'unknown app' });
+    }
     for (const input of parsed.inputs) {
       const destination = input.target;
       const app = this.canonical(destination?.app);
@@ -347,7 +357,7 @@ export class FlowRules {
           if ([...values].some(v => value.includes(v) || combined.slice(Math.max(0, previous.length - v.length + 1)).includes(v))) { source = rule.sources.some(isSite) && from.host ? `site:${from.host}` : this.canonical(from.app); return true; }
           return false;
         });
-        if (hit) violations.set(JSON.stringify([rule.id, app]), { rule: rule.id, app: destination?.app ?? 'unknown app', ...(source ? { source } : {}) });
+        if (hit) violations.set(rule.id, { rule: rule.id, app: destination?.app ?? 'unknown app', ...(source ? { source } : {}) });
       }
     }
     return { violations: [...violations.values()], handles, tails, readApp: parsed.readApp, readTarget: parsed.readTarget, unknownInputs: parsed.unknownInputs ?? [] };

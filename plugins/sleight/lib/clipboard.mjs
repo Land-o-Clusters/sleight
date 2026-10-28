@@ -1,6 +1,6 @@
 import { codeInspectionRefusal } from './flow-rules.mjs';
 import { literalValue, UNKNOWN } from './code-ast.mjs';
-import { inspectCalls } from './call-inspection.mjs';
+import { inspectCalls, unsafeHandleUse } from './call-inspection.mjs';
 import { spawn } from 'node:child_process';
 import { mkdirSync, chmodSync } from 'node:fs';
 import { homedir } from 'node:os';
@@ -385,9 +385,10 @@ export function createClipboardSession(io) {
 }
 
 export function clipboardActions(code) {
-  const { calls, error } = inspectCalls(code), actions = [];
-  if (error) throw new Error(codeInspectionRefusal);
+  const { ast, calls, error } = inspectCalls(code), actions = [];
+  if (error || unsafeHandleUse(ast)) throw new Error(codeInspectionRefusal);
   for (const { call } of calls) {
+    if (!call) continue;
     if (call.method === UNKNOWN) {
       Object.defineProperty(actions, 'unknown', { value: (actions.unknown ?? 0) + 1, configurable: true });
       continue; // The runtime permit checks the resolved method and shortcut.

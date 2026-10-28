@@ -1,0 +1,324 @@
+{
+  "base": "422356a22d296dc43e61ef3f92bdd5c77c78f4ad",
+  "ca1rMerge": "38625020ceecbc3ea7affe4ff049564b205ebf9f",
+  "corpus": {
+    "manifest": "752ca473d5e60dfad185524f2650d5d6714d6e627ea30db79ac403df2b87e962",
+    "counts": {
+      "flow": {
+        "compared": 5371,
+        "differences": 1007
+      },
+      "native": {
+        "compared": 5371,
+        "differences": 35
+      },
+      "elements": {
+        "compared": 5371,
+        "differences": 10
+      },
+      "clipboard": {
+        "compared": 5371,
+        "differences": 10
+      }
+    },
+    "regressions": 0,
+    "reasons": {
+      "indirect invocation inventory now feeds the unknown-destination rule policy": 65,
+      "opened-app binding hints added; existing inputs and read target are identical": 741,
+      "window-number acquisition clears only the guessed read-app identity": 4,
+      "unproved or invalidated handle hints removed; existing inputs and read target are identical": 11,
+      "assigned, shadowed or unbound handles widen only their destinations to unknown; literal inputs are unchanged": 186,
+      "opened-app binding exposes a specific malformed native argument list": 25,
+      "detached handle methods now refuse before native dispatch": 10,
+      "detached handle methods now refuse instead of returning a misleading empty inventory": 20
+    }
+  },
+  "qualification": {
+    "jobs": [
+      {
+        "label": "differential differential.mjs seed=3",
+        "tested": 3000000,
+        "nodeAccepted": 2436443,
+        "meriyahAccepted": 2359804,
+        "bothRefuse": 543691,
+        "falseRefusal": 96505,
+        "meriyahOnly": 19866,
+        "failOpen": 0,
+        "falsePositive": 0,
+        "consumerFailures": 0,
+        "oracleCalls": 3484517,
+        "legacyInventoryMiss": 440582,
+        "legacyAdmissionRefusal": 1094188
+      },
+      {
+        "label": "reviewers reviewer/fuzz.mjs seed=1",
+        "tested": 500000,
+        "nodeAccepted": 16573,
+        "meriyahAccepted": 16138,
+        "bothRefuse": 483243,
+        "falseRefusal": 619,
+        "meriyahOnly": 184,
+        "failOpen": 0,
+        "falsePositive": 0,
+        "consumerFailures": 0,
+        "oracleCalls": 12281,
+        "legacyInventoryMiss": 63,
+        "legacyAdmissionRefusal": 517
+      },
+      {
+        "label": "reviewers reviewer/fuzz.mjs seed=2",
+        "tested": 500000,
+        "nodeAccepted": 14885,
+        "meriyahAccepted": 14510,
+        "bothRefuse": 484972,
+        "falseRefusal": 518,
+        "meriyahOnly": 143,
+        "failOpen": 0,
+        "falsePositive": 0,
+        "consumerFailures": 0,
+        "oracleCalls": 10808,
+        "legacyInventoryMiss": 48,
+        "legacyAdmissionRefusal": 438
+      },
+      {
+        "label": "reviewers reviewer/fuzz2.mjs seed=1",
+        "tested": 500000,
+        "nodeAccepted": 17701,
+        "meriyahAccepted": 17624,
+        "bothRefuse": 482113,
+        "falseRefusal": 263,
+        "meriyahOnly": 186,
+        "failOpen": 0,
+        "falsePositive": 0,
+        "consumerFailures": 0,
+        "oracleCalls": 13031,
+        "legacyInventoryMiss": 62,
+        "legacyAdmissionRefusal": 531
+      },
+      {
+        "label": "reviewers reviewer/fuzz2.mjs seed=2",
+        "tested": 500000,
+        "nodeAccepted": 15509,
+        "meriyahAccepted": 15410,
+        "bothRefuse": 484343,
+        "falseRefusal": 247,
+        "meriyahOnly": 148,
+        "failOpen": 0,
+        "falsePositive": 0,
+        "consumerFailures": 0,
+        "oracleCalls": 11140,
+        "legacyInventoryMiss": 50,
+        "legacyAdmissionRefusal": 474
+      },
+      {
+        "label": "shaped corpus-shaped.mjs seed=151",
+        "tested": 100000,
+        "nodeAccepted": 100000,
+        "meriyahAccepted": 100000,
+        "bothRefuse": 0,
+        "falseRefusal": 0,
+        "meriyahOnly": 0,
+        "failOpen": 0,
+        "falsePositive": 0,
+        "consumerFailures": 0,
+        "oracleCalls": 241567,
+        "legacyInventoryMiss": 18652,
+        "legacyAdmissionRefusal": 49976
+      }
+    ],
+    "ca1GeneratorCases": 5100000,
+    "adversarialCases": 100000,
+    "totalCases": 5200000,
+    "failOpen": 0,
+    "falsePositive": 0,
+    "consumerFailures": 0,
+    "V8Accepted": 2601111,
+    "engineGrammarAccepted": 2523486,
+    "V8AcceptedEngineGrammarRefused": 98152,
+    "engineGrammarOnly": 20527,
+    "adversarial": {
+      "generated": 100000,
+      "accepted": 100000,
+      "explicitRefusals": 55558,
+      "consumerChecks": 400000,
+      "dispatchChecks": 200000,
+      "failures": 0,
+      "families": {
+        "direct": 5556,
+        "computed": 5556,
+        "assigned alias": 5556,
+        "conditional handle": 5556,
+        "alias": 5556,
+        "destructure": 5556,
+        "call": 5556,
+        "apply": 5556,
+        "indirect": 5556,
+        "tag": 5556,
+        "constructor": 5555,
+        "getter": 5555,
+        "shadow": 5555,
+        "catch": 5555,
+        "ternary": 5555,
+        "await": 5555,
+        "String": 5555,
+        "join": 5555
+      },
+      "manifest": "49c97ca5ea5485f4bb214f037ddb8a620542b0b149153c815868b70cdaec989c"
+    },
+    "callerProgramsExecuted": 0
+  },
+  "validation": {
+    "focusedSelection": {
+      "tests": 4711,
+      "passed": 4694,
+      "failed": 0,
+      "skipped": 17,
+      "exit": 0
+    },
+    "finalCallSets": {
+      "tests": 87,
+      "passed": 87,
+      "failed": 0,
+      "exit": 0
+    },
+    "evidenceAfterCounterCleanup": {
+      "tests": 15,
+      "passed": 14,
+      "failed": 0,
+      "skipped": 1,
+      "exit": 0
+    },
+    "counterCleanupSmoke": {
+      "cases": 3000,
+      "failOpen": 0,
+      "consumerFailures": 0,
+      "exit": 0
+    }
+  },
+  "latency": {
+    "manifest": "752ca473d5e60dfad185524f2650d5d6714d6e627ea30db79ac403df2b87e962",
+    "records": 5371,
+    "verified": 5293,
+    "refused": 78,
+    "refusalReasons": {
+      "sleight: invalid native arguments. Engine App.pressKey(key: string, options?: PressKeyOptions); nothing was sent.": 32,
+      "sleight: cannot inspect JavaScript. Use direct calls with literal arguments.": 10,
+      "sleight: use {mouseButton:\"right\"}, not button; nothing sent.": 16,
+      "sleight: use mouseButton, not button; nothing sent.": 1,
+      "sleight: invalid native arguments. Engine App.typeText(text: string); nothing was sent.": 18,
+      "sleight: invalid native arguments. Engine App.click(target: number | Vec2, options?: ClickOptions); nothing was sent.": 1
+    },
+    "legacyP50Ms": 0.0072920000000067375,
+    "legacyP99Ms": 0.0395410000000993,
+    "currentP50Ms": 0.201958999999988,
+    "currentP99Ms": 0.8080409999997755,
+    "addedP50Ms": 0.19624899999985246,
+    "addedP99Ms": 0.7780829999996968,
+    "coldGuardMs": 20.520792000000256,
+    "loadBefore": [
+      6.427734375,
+      5.1962890625,
+      6.783203125
+    ],
+    "loadAfter": [
+      6.427734375,
+      5.1962890625,
+      6.783203125
+    ],
+    "conditions": "Shared Mac; static inspection plus warm native guard construction and final dispatched-source verification. First cold guard reported separately. No live engine latency or IPC is measured.",
+    "pass": true
+  },
+  "bytes": {
+    "runtimeModules": 16,
+    "runtimeBeforeMergedCA1R": 592474,
+    "runtimeAfter": 602906,
+    "runtimeDelta": 10432,
+    "facade": 12926,
+    "vendor": 134305,
+    "facadePlusVendor": 147231
+  },
+  "evidenceCounterCleanup": {
+    "note": "The nonuniform auxiliary assertion total was removed after qualification. Case counts and failure predicates are unchanged. Partitioning tests and the 3000-case smoke passed after cleanup.",
+    "qualificationHarnessHashes": {
+      "bench/code-ast/oracle.mjs": "e0bc4d754a9eec7dcd7ebc20086f3fb37aa4db99b2f49db679785b719f5e862e",
+      "bench/code-ast/consumer-oracle.mjs": "48f5d51bd0135b4606253610b884934991139ed23d633d8b8dec571b6b14d8f7"
+    }
+  },
+  "sourceHashes": {
+    "bench/code-ast/batch.mjs": "471062f42e7c0a05220ed3f2b5ac2227dfb2590024d2ed0da8dd3537595a6e43",
+    "bench/code-ast/call-set-fuzz-results.json": "1b93d56bb71a331a1ecb54d0a26d4e9b04f0e8cd88691aadea6a4b4c35b749a2",
+    "bench/code-ast/call-set-fuzz.mjs": "b8bbd8e42ef7adb1d93188c9122837b7b2a2f69044facdaa3539e8fb55a53b94",
+    "bench/code-ast/consumer-classifier.mjs": "15dcdaea2b6a11105d738b548f7f51d40706341f20f2d22db2e15872473322eb",
+    "bench/code-ast/consumer-differences.json": "05d288ca51f894b6a4d362844cf25fa433dce8cb076ffd369276de9c40e1eb0e",
+    "bench/code-ast/consumer-latency-results.json": "3c1d950a91460ad3c3b819a3f7eb4815185f891de747f748ac491aaf693e0abe",
+    "bench/code-ast/consumer-latency.mjs": "a30c69bd452be577a04019755a6f7ad25cca46fe3fda2517e7ea16627ddbe814",
+    "bench/code-ast/consumer-oracle.mjs": "d53cd7f8560da7d304945c3e42db0e13a69e56ad16a4241117d76b00b84e1c20",
+    "bench/code-ast/consumers.mjs": "08d8e9696f7aba2e5bc467d717ddeaafcff9dcf19b59974d641c2d60e80f3710",
+    "bench/code-ast/corpus-shaped.mjs": "aca09c9f7cbfbe8771eafcc8046edfdf41cd83f4643bf52a8c46d401ed2333aa",
+    "bench/code-ast/corpus.mjs": "66480031fc997c35656a14941349f7f139fc6224747b5858ce668d63aa690e4e",
+    "bench/code-ast/differential.mjs": "b4fadbef9176900ad5916f68144293a17adc87f4c176a141647d34cd0603ff06",
+    "bench/code-ast/oracle.mjs": "c586f6a421ed080f8d33004fcaaa6035b50c707a2e89e5d5d12624eec71e8e35",
+    "bench/code-ast/reviewer/fuzz.mjs": "d5673b5bffcb3a414ff9559e1356f961baec8cbc697ac65511e1abeb9028f3ac",
+    "bench/code-ast/reviewer/fuzz2.mjs": "3b0b94bc53512a5ca0f61f38ea5a77785a4a4673fa25e20ff3858facaaee2878",
+    "bench/code-ast/validate-ca2.sh": "1a9079c2c91cf2583e4ad90d4ddf78ec826f69ae67f73b2e2164f8d5ff7c7aa3",
+    "plugins/sleight/lib/browser-aliases.mjs": "fddd9ad7c55efdfce1d05819f12ccb9bca425365efef17d3916eab77309c3d2b",
+    "plugins/sleight/lib/browser-tab-cleanup.mjs": "1c47fab2266456c46e5bdbb507994d5b78bbea1f4744a8033380d457e0d99a99",
+    "plugins/sleight/lib/call-inspection.mjs": "962a457dfe2bae51ac974028abbb4d569a468fb879c24444c841317367774bec",
+    "plugins/sleight/lib/clipboard.mjs": "9b3ce973a5571c6e52cc0dd3514310c9669a9e031a778441fd202c639be07c1f",
+    "plugins/sleight/lib/code-ast.mjs": "64018f9b1ce230b18e59dc3f8a981160037dc0854096095955274630df93099d",
+    "plugins/sleight/lib/dispatched-calls.mjs": "6fa9030f422241af0b0dbb06afe5de97a82b68754385f2a8fae4921bb6129893",
+    "plugins/sleight/lib/document-scope.mjs": "76ffb0b6c799713b809790cfebf878f684d14762b0932a9ca427e62f14d00adf",
+    "plugins/sleight/lib/drag-to.mjs": "af71b33be329ce9f5722c04da9041a95605b66e55b6591a73db6cf5fe7530794",
+    "plugins/sleight/lib/fill-form.mjs": "e4fbca36912b7ab0f766b7fb6ba1b609cccdab941c30ccc55a140e222d336dcd",
+    "plugins/sleight/lib/flow-rules.mjs": "8d48285c304530d4d6ecde1602df162312c549568d16ac02def8423c390aafcb",
+    "plugins/sleight/lib/literal-elements.mjs": "24086ecc7e7a8b22f19e0232e87e7fd6deefb7c92153c7f66d159db88ded2c41",
+    "plugins/sleight/lib/native-arguments.mjs": "1bdd5efdce34c90e902e4a2ad081c7b152262ef34b7e5dc9d43d66be8c986310",
+    "plugins/sleight/lib/pick-from-list.mjs": "4a5d785f6d920a391e1c2aaeb251d6351c366e6348e58d6d65b59a06f876446d",
+    "plugins/sleight/lib/relay.mjs": "b1f6840db890adcf4198729c820049f5f45ba147cc57ab60ed9da2fe5cf1c4cc",
+    "plugins/sleight/lib/reorder.mjs": "c094bed0c836fe94b4c11a5e3d85aed45536676eb5da3a03989ec333e87a5dd6",
+    "plugins/sleight/lib/tab-click-result.mjs": "f75b7e9b16267c6b288938c433700239eab0556ee106d6d58a14b11905c754a0",
+    "plugins/sleight/lib/tab-reuse.mjs": "2f390ed2670741b0a9d971952e98d09b4e50cbfd051222d53c527b4e597017ec",
+    "plugins/sleight/vendor/meriyah/dist/meriyah.min.mjs": "d29a5ff8e5fbdb8cb0617a721891fb1d3fb107883dc6f4ee9bda5b32896edf50",
+    "tests/browser-call.test.mjs": "ef13f5d87296a592b0d6c92868640c1e4528c379003760eb8a84b48461a24626",
+    "tests/call-set-ast.test.mjs": "2854f057c68ffcc86ebedfa26e1acca0591887badba506a934f606b522760ef9",
+    "tests/compact-reads.test.mjs": "caa69564c5a68508f9d59e95bbaff1fcef37d6016d156dae4e59276b6c105160",
+    "tests/consumer-classifier.test.mjs": "8066a1cc1a042947c387df18d44e111673fdb6a5eb697d646f4dbe1ebe87e62c",
+    "tests/filtered-reads.test.mjs": "207567a276869ea7cbccf0fd754a3a62f51b460cb49c7a7a2f019e63e7d1011d",
+    "tests/fixtures/prompt-default.json": "bd1700398d1521721d30c4c6a97ab25e9787bce7c029818a307588d3aa7748ee",
+    "tests/flow-rules.test.mjs": "352984884383213639469e928193342271513fbc0afe7ea9b53e00b0e703a40d",
+    "tests/fr1-review-regressions.test.mjs": "f9052a70ca30756ae7a5aeb91de54b1908f7dbd86d42467e079241e33e88ae4f",
+    "tests/fr2-tokenizer.test.mjs": "a3b694b6310dd39c6b146a3cf2f722a4077fd81c4d007cf937acf9135988e48e",
+    "tests/fr3-review-regressions.test.mjs": "1f557c7bf8edc78176ea3bb713f0b86b013338d07f2e4b9a6fbb40c1e2cb29af",
+    "tests/id-shapes.test.mjs": "96cd9a9eb722c225e8eb62d96dca75cb28ab26167c07daaf3bc1e64507bb7ad8",
+    "tests/relay-chrome-settle.test.mjs": "2fcfec1df7eb9b29ab1a12607efdc13e59ba1fbe8c0030b7b70b1d4cc756c4b5"
+  },
+  "qualificationRuntimeHashes": {
+    "plugins/sleight/lib/browser-aliases.mjs": "fddd9ad7c55efdfce1d05819f12ccb9bca425365efef17d3916eab77309c3d2b",
+    "plugins/sleight/lib/browser-tab-cleanup.mjs": "1c47fab2266456c46e5bdbb507994d5b78bbea1f4744a8033380d457e0d99a99",
+    "plugins/sleight/lib/call-inspection.mjs": "962a457dfe2bae51ac974028abbb4d569a468fb879c24444c841317367774bec",
+    "plugins/sleight/lib/clipboard.mjs": "9b3ce973a5571c6e52cc0dd3514310c9669a9e031a778441fd202c639be07c1f",
+    "plugins/sleight/lib/code-ast.mjs": "64018f9b1ce230b18e59dc3f8a981160037dc0854096095955274630df93099d",
+    "plugins/sleight/lib/dispatched-calls.mjs": "6fa9030f422241af0b0dbb06afe5de97a82b68754385f2a8fae4921bb6129893",
+    "plugins/sleight/lib/document-scope.mjs": "76ffb0b6c799713b809790cfebf878f684d14762b0932a9ca427e62f14d00adf",
+    "plugins/sleight/lib/drag-to.mjs": "af71b33be329ce9f5722c04da9041a95605b66e55b6591a73db6cf5fe7530794",
+    "plugins/sleight/lib/fill-form.mjs": "e4fbca36912b7ab0f766b7fb6ba1b609cccdab941c30ccc55a140e222d336dcd",
+    "plugins/sleight/lib/flow-rules.mjs": "9f6babe64622fa2952db642b1c3ba9e79fed86f2934a1e3aa0fcc2e27c7cb033",
+    "plugins/sleight/lib/literal-elements.mjs": "24086ecc7e7a8b22f19e0232e87e7fd6deefb7c92153c7f66d159db88ded2c41",
+    "plugins/sleight/lib/native-arguments.mjs": "1bdd5efdce34c90e902e4a2ad081c7b152262ef34b7e5dc9d43d66be8c986310",
+    "plugins/sleight/lib/pick-from-list.mjs": "4a5d785f6d920a391e1c2aaeb251d6351c366e6348e58d6d65b59a06f876446d",
+    "plugins/sleight/lib/relay.mjs": "b1f6840db890adcf4198729c820049f5f45ba147cc57ab60ed9da2fe5cf1c4cc",
+    "plugins/sleight/lib/reorder.mjs": "c094bed0c836fe94b4c11a5e3d85aed45536676eb5da3a03989ec333e87a5dd6",
+    "plugins/sleight/lib/tab-click-result.mjs": "f75b7e9b16267c6b288938c433700239eab0556ee106d6d58a14b11905c754a0",
+    "plugins/sleight/lib/tab-reuse.mjs": "2f390ed2670741b0a9d971952e98d09b4e50cbfd051222d53c527b4e597017ec"
+  },
+  "postQualificationFocusedFixes": {
+    "file": "plugins/sleight/lib/flow-rules.mjs",
+    "change": "Preserve known source-rule exceptions for unknown values and clear observed-site identity for unknown navigation URLs.",
+    "focusedTests": 121,
+    "passed": 121,
+    "failed": 0,
+    "exit": 0,
+    "corpusComparisons": 21484,
+    "corpusRegressions": 0
+  }
+}

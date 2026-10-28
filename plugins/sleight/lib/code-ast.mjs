@@ -25,7 +25,30 @@ export function parserDoctorLine() {
 
 const safeReason = reason => reason.replace(/[\p{Cc}\p{Cf}\p{Zl}\p{Zp}]/gu, '').slice(0, 200);
 
+// Bounded source cache shares immutable syntax trees between request consumers.
+// Each distinct rewritten cell has its own entry; no source is evaluated.
+const cells = new Map();
+let cellBytes = 0, activeCells;
+export function withCellCache(run) {
+  const previous = activeCells;
+  activeCells ??= new Map();
+  try { return run(); } finally { activeCells = previous; }
+}
+export function clearCellCache() { cells.clear(); cellBytes = 0; }
 export function parseCell(code) {
+  if (activeCells?.has(code)) return activeCells.get(code);
+  if (cells.has(code)) { const result = cells.get(code); activeCells?.set(code, result); return result; }
+  const result = parseUncachedCell(code);
+  activeCells?.set(code, result);
+  if (typeof code === 'string' && code.length <= 262144) {
+    while (cells.size >= 32 || cellBytes + code.length > 524288) {
+      const first = cells.keys().next().value; cellBytes -= first.length; cells.delete(first);
+    }
+    cells.set(code, result); cellBytes += code.length;
+  }
+  return result;
+}
+function parseUncachedCell(code) {
   let loaded = false;
   try {
     const cellParser = loadParser();
@@ -154,8 +177,7 @@ function rootName(node) {
 // Top-level binding hints for later consumers. No function aliases, scope analysis
 // or control-flow proof is implied. Any assignment anywhere clears that name,
 // including inside functions that might run later. Shadowed names are conservative.
-export function handleBindings(ast, previous = new Map()) {
-  const bindings = new Map(previous);
+export function invalidHandleNames(ast) {
   const assigned = new Set();
   function targets(pattern) {
     if (!pattern) return;
@@ -172,7 +194,19 @@ export function handleBindings(ast, previous = new Map()) {
     else if (node.type === 'UpdateExpression') targets(node.argument);
     else if (['ForInStatement', 'ForOfStatement'].includes(node.type)) targets(node.left);
     else if (node.type === 'VariableDeclarator' && node.id.type !== 'Identifier') targets(node.id);
+    else if (['FunctionDeclaration', 'FunctionExpression', 'ArrowFunctionExpression'].includes(node.type)) node.params.forEach(targets);
+    else if (node.type === 'CatchClause') targets(node.param);
+    if (['FunctionDeclaration', 'FunctionExpression', 'ClassDeclaration', 'ClassExpression'].includes(node.type)) targets(node.id);
   }
+  const top = new Set(ast.body.flatMap(statement => statement.type === 'VariableDeclaration' ? statement.declarations : []));
+  for (const node of walk(ast)) {
+    if (node.type === 'VariableDeclarator' && !top.has(node)) targets(node.id);
+  }
+  return assigned;
+}
+
+export function handleBindings(ast, previous = new Map()) {
+  const bindings = new Map(previous), assigned = invalidHandleNames(ast);
   for (const name of assigned) bindings.delete(name);
   const locatorFactories = new Set(['getByRole', 'getByText', 'getByLabel', 'getByPlaceholder', 'getByTestId', 'locator', 'frameLocator', 'filter', 'first', 'last', 'nth', 'and', 'or']);
   function bind(name, source) {

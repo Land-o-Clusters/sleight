@@ -3,6 +3,7 @@
 import * as vm from 'node:vm';
 import { createHash } from 'node:crypto';
 import ts from 'typescript';
+import { checkConsumers } from './consumer-oracle.mjs';
 import { parseCell, walk, memberCall, literalValue, UNKNOWN } from '../../plugins/sleight/lib/code-ast.mjs';
 import { tokens, invalidTokens } from '../../plugins/sleight/lib/flow-rules.mjs';
 import { unsupportedCodeLines } from '../../plugins/sleight/lib/code-line-terminators.mjs';
@@ -104,7 +105,7 @@ const missing = (expected, visible) => {
 export function oracle({ label = 'code-ast', caseOffset = 0, reportFailure = entry => console.log(JSON.stringify(entry)) } = {}) {
   if (typeof vm.SourceTextModule !== 'function') throw new Error('code-ast oracle needs --experimental-vm-modules');
   const counts = { label, tested: 0, nodeAccepted: 0, meriyahAccepted: 0, bothRefuse: 0, falseRefusal: 0, meriyahOnly: 0,
-    failOpen: 0, falsePositive: 0, oracleCalls: 0, legacyInventoryMiss: 0, legacyAdmissionRefusal: 0 };
+    failOpen: 0, falsePositive: 0, consumerFailures: 0, oracleCalls: 0, legacyInventoryMiss: 0, legacyAdmissionRefusal: 0 };
   function check(code, wrapper = 'async function f()') {
     counts.tested++;
     const source = wrapper ? `${wrapper}{${code}\n}` : code;
@@ -123,6 +124,12 @@ export function oracle({ label = 'code-ast', caseOffset = 0, reportFailure = ent
     if (!nodeAccepted && meriyahAccepted) counts.meriyahOnly++;
     const expected = nodeAccepted ? typescriptCalls(source) : [];
     const visible = meriyahAccepted ? astCalls(parsed.ast) : [];
+    if (process.env.CA2_CONSUMERS === '1' && meriyahAccepted) {
+      const checked = checkConsumers(source, parsed.ast, nodeAccepted ? expected : typescriptCalls(source));
+      counts.consumerFailures += checked.problems.length;
+      if (checked.problems.length) reportFailure({ label, case: caseOffset + counts.tested, problems: checked.problems,
+        sha256: createHash('sha256').update(source).digest('hex') });
+    }
     const legacy = legacyCalls(source);
     counts.oracleCalls += expected.length;
     const failOpen = nodeAccepted && meriyahAccepted && missing(expected, visible);
@@ -139,7 +146,7 @@ export function oracle({ label = 'code-ast', caseOffset = 0, reportFailure = ent
   }
   function finish() {
     console.log(JSON.stringify(counts));
-    if (counts.failOpen || counts.falseRefusal || counts.falsePositive) process.exitCode = 1;
+    if (counts.failOpen || counts.consumerFailures || (process.env.CA2_CONSUMERS !== '1' && counts.falseRefusal) || counts.falsePositive) process.exitCode = 1;
     return counts;
   }
   return { counts, check, finish };

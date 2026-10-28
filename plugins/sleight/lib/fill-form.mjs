@@ -155,7 +155,7 @@ export async function fillForm(tab, fields) {
   return `Filled ${filled} of ${fields.length} fields.` + (notes.length ? '\n' + notes.join('\n') : '');
 }
 
-export function fillFormCode(code) {
-  if (!/\bsleight\s*\.\s*fillForm\s*\(/.test(code)) return code;
+export function fillFormCode(code, force = false) {
+  if (!force && !/\bsleight\s*\.\s*fillForm\s*\(/.test(code)) return code;
   return `globalThis.sleight ??= {}; globalThis.sleight.fillForm = (${fillForm.toString()});\n${code}`;
 }

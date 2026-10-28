@@ -1,0 +1,33 @@
+{
+  "manifest": "752ca473d5e60dfad185524f2650d5d6714d6e627ea30db79ac403df2b87e962",
+  "records": 5371,
+  "verified": 5293,
+  "refused": 78,
+  "refusalReasons": {
+    "sleight: invalid native arguments. Engine App.pressKey(key: string, options?: PressKeyOptions); nothing was sent.": 32,
+    "sleight: cannot inspect JavaScript. Use direct calls with literal arguments.": 10,
+    "sleight: use {mouseButton:\"right\"}, not button; nothing sent.": 16,
+    "sleight: use mouseButton, not button; nothing sent.": 1,
+    "sleight: invalid native arguments. Engine App.typeText(text: string); nothing was sent.": 18,
+    "sleight: invalid native arguments. Engine App.click(target: number | Vec2, options?: ClickOptions); nothing was sent.": 1
+  },
+  "legacyP50Ms": 0.0072920000000067375,
+  "legacyP99Ms": 0.0395410000000993,
+  "currentP50Ms": 0.201958999999988,
+  "currentP99Ms": 0.8080409999997755,
+  "addedP50Ms": 0.19624899999985246,
+  "addedP99Ms": 0.7780829999996968,
+  "coldGuardMs": 20.520792000000256,
+  "loadBefore": [
+    6.427734375,
+    5.1962890625,
+    6.783203125
+  ],
+  "loadAfter": [
+    6.427734375,
+    5.1962890625,
+    6.783203125
+  ],
+  "conditions": "Shared Mac; static inspection plus warm native guard construction and final dispatched-source verification. First cold guard reported separately. No live engine latency or IPC is measured.",
+  "pass": true
+}

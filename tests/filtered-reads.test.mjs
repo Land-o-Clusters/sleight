@@ -153,6 +153,10 @@ for (const code of [
   test('excluded final values preserve the normal tree: ' + code, async t => {
     const h = await engine(t);
     const result = await h.call(code);
+    if (code.includes('const act = app.click')) {
+      assert.equal(result.isError, true); assert.equal(output(result), 'sleight: cannot inspect JavaScript. Use direct calls with literal arguments.');
+      assert.deepEqual(h.actions, []); return;
+    }
     assert.match(output(result), /standard window|no change since|lines changed since/);
     if (code.includes('fixture failure')) {
       assert.equal(result.isError, true);
@@ -258,6 +262,10 @@ for (const suffix of ['await app.click(1);', 'const act = app.click; await act(1
     const h = await engine(t);
     const result = await h.call('const state = await app.getAXState(); ' + suffix +
       ' nodeRepl.write(state.split("\\n").filter(line => line.includes("Row 7")));');
+    if (suffix.includes('const act = app.click')) {
+      assert.equal(result.isError, true); assert.equal(output(result), 'sleight: cannot inspect JavaScript. Use direct calls with literal arguments.');
+      assert.deepEqual(h.actions, []); return;
+    }
     assert.equal(result.isError, false);
     assert.match(output(result), /standard window/);
     assert.match(output(result), /Row 99/);
@@ -312,9 +320,7 @@ test('hidden rows do not become the baseline or authorize old numeric input', as
   const action = await h.call('await app.click(1);');
   assert.deepEqual(h.actions, [/* Row 0 disappeared, so 1 must not click Row 1. */]);
   assert.equal(action.isError, true);
-  // CA2 refuses a changed literal before the runtime guard can read.
-  assert.match(output(action), /cannot inspect JavaScript/);
-  assert.match(output(await h.call('await app.getAXState();')), /Row 100/, 'an explicit read shows the fresh full tree');
+  assert.match(output(action), /Row 100/, 'the refusal shows a fresh full tree');
 });
 
 test('the next normal read shows changes hidden by a filtered read', async t => {

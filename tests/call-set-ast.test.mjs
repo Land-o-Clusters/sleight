@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { PassThrough } from 'node:stream';
-import { parseCell, UNKNOWN } from '../plugins/sleight/lib/code-ast.mjs';
+import { parseCell, withCellCache, UNKNOWN } from '../plugins/sleight/lib/code-ast.mjs';
 import { calls, FlowRules } from '../plugins/sleight/lib/flow-rules.mjs';
 import { nativeArgumentsProblem } from '../plugins/sleight/lib/native-arguments.mjs';
 import { literalElements } from '../plugins/sleight/lib/literal-elements.mjs';
@@ -26,7 +26,7 @@ for (const code of ['`${await app.typeText("SECRET")}`', 'if (a) {} /[/*]/.test(
 }
 test('flow records non-literal arguments as unknown without inventing literal data', () => {
   const result = calls('app.typeText(value); app.setValue(1, `SECRET${value}`)', new Map(), { app: 'Fixture' });
-  assert.equal(result.inputs.length, 0);
+  assert.deepEqual(result.inputs.map(input => input.value), ['SECRET']);
   assert.equal(result.unknownInputs.length, 2);
   assert.equal(calls('app[method]("SECRET")', new Map()).unknownInputs[0].method, UNKNOWN);
 });
@@ -133,5 +133,86 @@ test('relay dispatch preserves caller input through the actual wrappers', t => {
   t.after(() => { relay.dispose(); streams.forEach(stream => stream.destroy()); });
   clientIn.write(JSON.stringify({ id: 1, method: 'tools/call', params: { name: 'js', arguments: { code: 'await app.typeText("one"); return await app.getState();' } } }) + '\n');
   assert.equal(sent.length, 1, JSON.stringify(replies));
+  assert.match(sent[0].params.arguments.code, /app\.typeText\("one"\)/);
   assert.match(sent[0].params.arguments.code, /getAXState/);
+  assert.equal(replies.length, 0);
+});
+
+for (const change of [
+  'if (x) { a = await cua.getApp("Mail") }',
+  'function f(a) { a.typeText("SECRET") }',
+  'const f = ({a}) => a.typeText("SECRET")',
+  'try {} catch(a) { a.typeText("SECRET") }',
+  'if(x) { let a = await cua.getApp("Mail"); }',
+  '({a} = other)', '[a] = other',
+]) test('shadowed, assigned and destructured handles cannot retain an exception: ' + change, () => {
+  const rules = new FlowRules({ version: 1, rules: [{ id: 'mail', kind: 'pattern', pattern: 'SECRET', destinations: ['Mail'], except: ['Notes'] }] });
+  const plan = rules.analyze('js', { code: 'let a = await cua.getApp("Notes"); ' + change + '; a.typeText("SECRET")' }, {app:'Notes'});
+  assert.ok(plan.violations.some(v => v.rule === 'mail'));
+  assert.equal(plan.handles.has('a'), false);
+});
+for (const value of ['flag ? "SECRET" : ""', 'await f("SECRET")', 'String("SECRET")', '["SE", "CRET"].join("")', '`SE${value}CRET`', '`SE${"CR"}ET`'])
+  test('unknown value subtree reaches pattern rules: ' + value, () => {
+    assert.equal(flow().analyze('js', {code: 'await app.typeText(' + value + ')'}, {app:'Fixture'}).violations.length, 1);
+  });
+for (const code of ['const t = app.typeText; t("SECRET")', 'let app=await cua.getApp("Notes"); if(x)app=await cua.getApp("Mail"); const o={t:app.typeText}; o.t("SECRET")',
+  'const c=cua; const a=await c.getApp("Mail"); const o={t:a.typeText}; o.t("SECRET")', 'let h; h=app; const o={}; o.t=h.typeText; o.t("SECRET")',
+  'const h=flag?app:other; const o={}; o.t=h.typeText; o.t("SECRET")',
+  'const h={app}; const o={}; o.t=h.app.typeText; o.t("SECRET")', 'const o={}; o.t=app.typeText; o.t("SECRET")',
+  'const o={t:flag?app.typeText:other}; o.t("SECRET")', 'const t=globalThis.app.typeText; t("SECRET")', 'const h = app; const t = h.typeText; t("SECRET")', 'const {typeText:t} = app; t("SECRET")',
+  'app.typeText.call(app, "SECRET")', 'app.typeText.apply(app, ["SECRET"])', '(0,app.typeText)("SECRET")',
+  'app.typeText`SECRET`', 'new app.typeText("SECRET")', 'const x = {get value(){return app.typeText}}; x.value("SECRET")'])
+  test('detached or indirect guarded methods refuse before dispatch: ' + code, () => {
+    assert.equal(nativeArgumentsProblem(code), 'sleight: cannot inspect JavaScript. Use direct calls with literal arguments.');
+    assert.throws(() => clipboardActions(code), /cannot inspect JavaScript/);
+    assert.throws(() => literalElements(code), /cannot inspect JavaScript/);
+    assert.ok(flow().analyze('js', {code}, {app:'Fixture'}).violations.length);
+  });
+for (const code of ['(0,f)("SECRET")', 'tag`SECRET`', 'new f("SECRET")', 'import("module")'])
+  test('non-member inventory feeds flow unknown policy: ' + code, () => {
+    assert.ok(flow().analyze('js', {code}, {app:'Fixture'}).violations.length);
+    assert.equal(calls(code, new Map(), {app:'Fixture'}).unknown, true);
+  });
+test('rewrites cannot derive trusted additions from caller literals', () => {
+  const source = '"app.click(7)";';
+  const check = dispatchInspection(source);
+  let output = check.mark(source);
+  output = check.rewrite(output, code => (code.includes('"app.click(7)"') ? 'app.click(7);' : '') + code);
+  assert.equal(check.verify(output), false);
+});
+
+test('all consumers reuse one immutable syntax tree for a cell', () => {
+  const source = 'await app.click(7);';
+  const first = parseCell(source);
+  calls(source, new Map()); nativeArgumentsProblem(source); literalElements(source); clipboardActions(source);
+  assert.equal(parseCell(source), first);
+  assert.equal(parseCell(source).ast, first.ast);
+});
+
+test('unbound destinations cannot inherit the last window app exception', () => {
+  const rules=new FlowRules({version:1,rules:[{id:'mail',kind:'pattern',pattern:'SECRET',destinations:['Mail'],except:['Notes']}]});
+  assert.equal(rules.analyze('js',{code:'await other.typeText("SECRET")'},{app:'Notes'}).violations.length,1);
+});
+
+test('request-scoped AST reuse covers cells larger than the cross-request cache', () => {
+  const source='['+'0,'.repeat(140000)+'0]; await app.click(7);';
+  withCellCache(()=>{
+    const first=parseCell(source);
+    assert.equal(first.error,null);
+    for(let i=0;i<40;i++)parseCell('void '+i);
+    assert.equal(parseCell(source),first);
+    withCellCache(()=>assert.equal(parseCell(source).ast,first.ast));
+  });
+});
+
+test('all four request consumers handle an array beyond the former spread limit', () => {
+  const source='const pad=['+'0,'.repeat(140000)+'0]; await app.typeText("SECRET"); await app.click(7); await app.pressKey("super+c");';
+  withCellCache(()=>{
+    assert.equal(flow().analyze('js',{code:source},{app:'Fixture'}).violations.length,1);
+    assert.equal(nativeArgumentsProblem(source),undefined);
+    assert.deepEqual(literalElements(source),[7]);
+    assert.deepEqual(clipboardActions(source),['c']);
+    const check=dispatchInspection(source);
+    assert.equal(check.verify(check.mark(source)),true);
+  });
 });

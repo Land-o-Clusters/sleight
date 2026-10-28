@@ -119,7 +119,7 @@ export async function dragTo(tab, from, to) {
     moved: after === null ? null : source.index !== after || parentChanged, ...(note ? { note } : {}) };
 }
 
-export function dragToCode(code) {
-  if (!/\bsleight\s*\.\s*dragTo\s*\(/.test(code)) return code;
+export function dragToCode(code, force = false) {
+  if (!force && !/\bsleight\s*\.\s*dragTo\s*\(/.test(code)) return code;
   return `globalThis.sleight ??= {}; globalThis.sleight.dragTo = (${dragTo.toString()});\n${code}`;
 }

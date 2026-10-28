@@ -114,7 +114,7 @@ test('windows that never renumber are never restricted', () => {
   assert.equal(c.staleIndex({ title: 'a.txt', app: 'TextEdit', url: 'file:///tmp/a.txt' }, 'app.click(n)'), undefined);
 });
 
-test('CA2 refuses a stale-number substitution, refuses unseen numbers, and forwards a current one', async t => {
+test('the relay remaps a stale number Claude saw, refuses one it never saw, and forwards a current one', async t => {
   const { PassThrough } = await import('node:stream');
   const { mkdtempSync, rmSync } = await import('node:fs');
   const { tmpdir } = await import('node:os');
@@ -138,11 +138,11 @@ test('CA2 refuses a stale-number substitution, refuses unseen numbers, and forwa
   js(1, 'let app = await cua.getApp("com.apple.TextEdit")'); await settle(); reply(1, page(60)); await settle();
   js(2, 'await app.click(5)'); await settle(); reply(2, GUARD_MARK + grown); await settle();
   assert.match(toClient.find(m => m.id === 2).result.content[0].text, /59 other elements have new numbers/);
-  // A line substitution changes the literal argument, so CA2 refuses before
-  // dispatch instead of treating the rewritten source as the inspected source.
+  // Claude saw Story 8 as 10; it is 11 now. The click goes out naming Story 8 by its line.
   js(3, 'await app.click(10)'); await settle();
-  assert.equal(toServer.some(m => m.id === 3), false);
-  assert.match(toClient.find(m => m.id === 3).result.content[0].text, /cannot inspect JavaScript/);
+  assert.match(toServer.find(m => m.id === 3).params.arguments.code, /app\.click\(\{"line":"link Story 8"\}\)/);
+  reply(3, GUARD_MARK + grown); await settle();
+  assert.match(JSON.stringify(toClient.find(m => m.id === 3)), /10 was found by its line \\"link Story 8\\"/);
   // A number Claude never saw for an element is still refused.
   js(5, 'await app.click(99)'); await settle();
   assert.match(toClient.find(m => m.id === 5).result.content[0].text, /Input lease: element 99 may be stale/);

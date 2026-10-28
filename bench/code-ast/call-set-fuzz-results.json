@@ -1,11 +1,29 @@
 {
-  "seed": 20261028,
-  "generated": 10000,
-  "accepted": 10000,
-  "engineRefused": 0,
-  "consumerChecks": 60000,
-  "dispatchChecks": 30000,
-  "regressions": 0,
-  "manifest": "e69032b99f3dcc182ed46c33b0b521eef8acb0842b80921556e7d982c11d0d62",
-  "uniquePrograms": 6932
+  "generated": 100000,
+  "accepted": 100000,
+  "explicitRefusals": 55558,
+  "consumerChecks": 400000,
+  "dispatchChecks": 200000,
+  "failures": 0,
+  "families": {
+    "direct": 5556,
+    "computed": 5556,
+    "assigned alias": 5556,
+    "conditional handle": 5556,
+    "alias": 5556,
+    "destructure": 5556,
+    "call": 5556,
+    "apply": 5556,
+    "indirect": 5556,
+    "tag": 5556,
+    "constructor": 5555,
+    "getter": 5555,
+    "shadow": 5555,
+    "catch": 5555,
+    "ternary": 5555,
+    "await": 5555,
+    "String": 5555,
+    "join": 5555
+  },
+  "manifest": "49c97ca5ea5485f4bb214f037ddb8a620542b0b149153c815868b70cdaec989c"
 }

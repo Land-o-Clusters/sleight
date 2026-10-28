@@ -9,6 +9,7 @@ import * as oldElements from './legacy-ca2/literal-elements.mjs';
 import * as newElements from '../../plugins/sleight/lib/literal-elements.mjs';
 import * as oldClipboard from './legacy-ca2/clipboard.mjs';
 import * as newClipboard from '../../plugins/sleight/lib/clipboard.mjs';
+import { classify } from './consumer-classifier.mjs';
 import { parseCell } from '../../plugins/sleight/lib/code-ast.mjs';
 
 const pairs = {
@@ -27,25 +28,6 @@ export function consumerOutput(name, consumer, code) {
   } catch (error) { return { refused: error.message }; }
 }
 const digest = value => createHash('sha256').update(JSON.stringify(value)).digest('hex');
-function classify(name, code, before, after) {
-  if (name === 'native' && before === null && typeof after === 'string' && code.includes('__sleightOpenedApp'))
-    return { verdict: 'old path wrong', reason: after.includes('mouseButton') ? 'opened-app alias hid a button option mistake'
-      : after.includes('App.pressKey') ? 'opened-app alias hid invalid native pressKey arguments'
-        : 'opened-app alias hid an invalid native click target' };
-  if (name === 'flow') {
-    const withoutHandles = ({ handles, ...result }) => result;
-    if (code.includes('__sleightOpenedApp') && JSON.stringify(withoutHandles(before)) === JSON.stringify(withoutHandles(after)))
-      return { verdict: 'old path wrong', reason: 'opened-app alias was absent from binding hints; current inputs and read target are identical' };
-    if (/getApp\(\s*\{\s*windowId:/.test(code))
-      return { verdict: 'old path wrong', reason: 'window-id acquisition has an unknown app; old path attributed it to the fallback or a prior acquisition' };
-    if (code.includes('.catch('))
-      return { verdict: 'old path wrong', reason: 'catch can replace the acquired handle; its result is deliberately not an app binding' };
-    if (code.includes('.getScreenshot('))
-      return { verdict: 'old path wrong', reason: 'screenshot result was incorrectly recorded as an app handle' };
-  }
-  return { verdict: 'regression', reason: 'unclassified output difference requires review' };
-}
-
 const corpus = await readCorpus(), differences = [], diagnostics = [], counts = {}, reasons = {};
 let regressions = 0;
 for (const [name, consumers] of Object.entries(pairs)) {

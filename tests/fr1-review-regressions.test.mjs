@@ -1,6 +1,5 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { parseCell } from '../plugins/sleight/lib/code-ast.mjs';
 import { tokens, FlowRules } from '../plugins/sleight/lib/flow-rules.mjs';
 import { clipboardActions } from '../plugins/sleight/lib/clipboard.mjs';
 import { literalElements } from '../plugins/sleight/lib/literal-elements.mjs';
@@ -43,7 +42,7 @@ for (const suffix of ['"unterminated', '"raw\nline"', '`${"`"}`', '/* unterminat
     assert.equal(ts[0].v, 'await');
     assert.equal(ts.at(-1).v, '<invalid>');
     assert.equal(flow().analyze('js', { code }, { app: 'Fixture' }).violations.length, 1);
-    if (parseCell(code).error) {
+    if (suffix !== '`${"`"}`') {
       assert.throws(() => clipboardActions(code), /cannot inspect JavaScript/i);
       assert.throws(() => literalElements(code), /cannot inspect JavaScript/i);
       assert.match(nativeArgumentsProblem(code), /cannot inspect JavaScript/i);
@@ -81,7 +80,7 @@ test('relay refuses incomplete inspection before a prefix can dispatch through e
   for (const reply of replies) {
     assert.equal(reply.result.isError, true);
     assert.match(reply.result.content[0].text, reply.id % 2
-      ? /cannot inspect JavaScript/i : /^JS \[1:\d+\]: Unterminated string literal$/);
+      ? /^Flow rules: rule 'secret' stopped a transfer to unknown app\. Stop\. Ask the user with flow_exception for one identical retry; never work around the rule\.$/ : /^JS \[1:\d+\]: Unterminated string literal$/);
     assert.doesNotMatch(reply.result.content[0].text, /SECRET|unterminated/);
   }
 });
@@ -117,7 +116,7 @@ test('division stays executable and regex contents never invent actions', () => 
   assert.deepEqual(literalElements(code), [7]);
   for (const name of ['if', 'return', 'throw', 'await', 'case', 'yield', 'else', 'do']) {
     const operand = `const value = obj.${name} / app.click(7) / count;`;
-    if (parseCell(operand).error) assert.throws(() => literalElements(operand), /cannot inspect/);
+    if (name === 'await') assert.throws(() => literalElements(operand), {message:'sleight: cannot inspect JavaScript. Use direct calls with literal arguments.'});
     else assert.deepEqual(literalElements(operand), [7], name);
     assert.deepEqual(literalElements(`const value = obj.${name}(x) / app.click(7) / count;`), [7], name);
   }

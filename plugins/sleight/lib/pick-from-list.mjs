@@ -170,8 +170,8 @@ function selectedPickFromList(tab, list, text, opts = {}) {
   return (process.env.SLEIGHT_COMPLETENESS === '1' ? withPickerCompleteness(pickFromList, locateList) : pickFromList)(tab, list, text, opts);
 }
 
-export function pickFromListCode(code, completeness = process.env.SLEIGHT_COMPLETENESS === '1') {
-  if (!/\bsleight\s*\.\s*pickFromList\s*\(/.test(code)) return code;
+export function pickFromListCode(code, completeness = process.env.SLEIGHT_COMPLETENESS === '1', force = false) {
+  if (!force && !/\bsleight\s*\.\s*pickFromList\s*\(/.test(code)) return code;
   const picker = completeness ? `(${withPickerCompleteness.toString()})((${pickFromList.toString()}), locateList)` : `(${pickFromList.toString()})`;
   return `globalThis.sleight ??= {}; globalThis.sleight.pickFromList = ((locateList) => ${picker})(${locateList.toString()});\n${code}`;
 }

@@ -200,8 +200,8 @@ function installClickResults(cua, agent, snapshots, isDiffTree) {
   attach(cua, agent, snapshots);
 }
 
-export function clickResultCode(code, snapshots = {}) {
-  return /\.(?:click|press|pressKey)\s*\(|\bcua\.(?:getTab|createBrowserTab|getBrowser)\s*\(|\bagent\.browsers\.get\s*\(/.test(code)
+export function clickResultCode(code, snapshots = {}, force = false) {
+  return force || /\.(?:click|press|pressKey)\s*\(|\bcua\.(?:getTab|createBrowserTab|getBrowser)\s*\(|\bagent\.browsers\.get\s*\(/.test(code)
     ? `(${installClickResults.toString()})(typeof cua === 'undefined' ? undefined : cua, typeof agent === 'undefined' ? undefined : agent, ${JSON.stringify(snapshots)}, (${isDiffTree.toString()}));\n${code}` : code;
 }
 
@@ -218,5 +218,5 @@ export class TabClickResults {
       while (this.trees.size > 20) this.trees.delete(this.trees.keys().next().value);
     }
   }
-  code(code) { return clickResultCode(code, Object.fromEntries(this.trees)); }
+  code(code, force = false) { return clickResultCode(code, Object.fromEntries(this.trees), force); }
 }

@@ -117,8 +117,8 @@ function installAliases(cua) {
   }
 }
 
-export function browserAliasesCode(code) {
-  const drag = /\.\s*dragTo\b/.test(code) && !/\bsleight\s*\.\s*dragTo\s*\(/.test(code)
+export function browserAliasesCode(code, force = false) {
+  const drag = force || /\.\s*dragTo\b/.test(code) && !/\bsleight\s*\.\s*dragTo\s*\(/.test(code)
     ? `globalThis.sleight ??= {}; globalThis.sleight.dragTo ??= (${dragTo.toString()});\n` : '';
   return `${drag}try { (${installAliases.toString()})(cua); } catch {}\n${code}`;
 }

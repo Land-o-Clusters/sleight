@@ -1,4 +1,4 @@
-import { parseCell, walk, memberCall, literalValue, UNKNOWN } from './code-ast.mjs';
+import { parseCell, walk, memberCall, literalValue, UNKNOWN, callInventory } from './code-ast.mjs';
 
 // Native acquisitions determine flow destinations. Browser discovery factories
 // are read-only helpers; createBrowserTab remains guarded as navigation.
@@ -19,19 +19,27 @@ function data(value) {
   return [typeof value, typeof value === 'number' ? Object.is(value, -0) ? '-0' : String(value) : value];
 }
 
-export function guardedCalls(ast, within = () => true) {
+const inventories = new WeakMap();
+export function guardedCalls(ast, within) {
+  if (!within && inventories.has(ast)) return inventories.get(ast);
+  const full = !within;
+  within ??= () => true;
   const records = [];
-  for (const node of walk(ast)) {
-    if (node.type !== 'CallExpression' || !within(node)) continue;
+  for (const entry of callInventory(ast)) {
+    const node = entry.node;
+    if (!within(node)) continue;
     const call = memberCall(node);
-    if (!call || call.method !== UNKNOWN && !guarded.has(call.method)) continue;
+    if (!call) continue; // Unknown invocations are governed by the consumer policies.
+    if (call.method !== UNKNOWN && !guarded.has(call.method)) continue;
     records.push(JSON.stringify({ receiver: shape(call.receiver), method: call.method === UNKNOWN ? shape(node.callee) : call.method,
       computed: call.computed, optional: call.optional, args: call.args.map(arg => {
         const value = literalValue(arg);
         return value === UNKNOWN ? ['unknown', shape(arg)] : ['literal', data(value)];
       }) }));
   }
-  return records.sort();
+  records.sort();
+  if (full) inventories.set(ast, records);
+  return records;
 }
 
 export function sameGuardedCalls(inspected, dispatched) {
@@ -55,23 +63,26 @@ export function dispatchInspection(inspected) {
       if (!baseline.error) trusted.push(...guardedCalls(baseline.ast));
       return transform(code);
     },
-    rewrite(input, transform) {
+    rewrite(input, transform, additions) {
       const output = transform(input);
       if (output === input) return output;
-      const at = output.indexOf(input);
-      // A replacement inside the previous cell receives no allowance. Its
-      // complete call multiset must stay unchanged, or verification refuses it.
-      if (at >= 0 && at === output.lastIndexOf(input)) {
-        const parsed = parseCell(output);
-        if (!parsed.error) trusted.push(...guardedCalls(parsed.ast,
-          node => node.range[1] <= at || node.range[0] >= at + input.length));
-      }
+      const baseline = parseCell(additions ?? transform('void 0;'));
+      if (baseline.error) valid = false;
+      else trusted.push(...guardedCalls(baseline.ast));
       return output;
     },
     verify(dispatched) {
       const after = parseCell(dispatched);
-      return valid && marked && !after.error &&
-        JSON.stringify([...expected, ...trusted].sort()) === JSON.stringify(guardedCalls(after.ast));
+      if (!valid || !marked || after.error) return false;
+      const remaining = new Map();
+      for (const key of guardedCalls(after.ast)) remaining.set(key, (remaining.get(key) ?? 0) + 1);
+      for (const key of expected) {
+        if (!remaining.get(key)) return false;
+        remaining.set(key, remaining.get(key) - 1);
+      }
+      const allowed = new Map();
+      for (const key of trusted) allowed.set(key, (allowed.get(key) ?? 0) + 1);
+      return [...remaining].every(([key, count]) => count <= (allowed.get(key) ?? 0));
     },
   };
 }

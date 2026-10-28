@@ -49,20 +49,23 @@ function relayFixture(t, text) {
   };
 }
 
-// CA2 compares dispatch with the source inspected before selector rewrites.
-// Resolving an object selector to a number changes its literal arguments.
-test('CA2 refuses a numeric-id substitution before any input is dispatched', t => {
+test('FT1c: a numeric { id } that names no ID or label in the tree Claude saw is sent as that element number', t => {
   const act = relayFixture(t, form());
-  const { forwarded, result } = act('await app.setValue({ id: "18" }, "p01"); await app.setValue({ id: "20" }, "Mira"); await app.click({ id: "NewTabButton" });');
-  assert.equal(forwarded, '');
-  assert.match(result, /cannot inspect JavaScript/);
+  // Only the first: after an action in the call, Claude's tree no longer settles what an { id } means (review F2).
+  const { forwarded, update } = act('await app.setValue({ id: "18" }, "p01"); await app.setValue({ id: "20" }, "Mira"); await app.click({ id: "NewTabButton" });');
+  assert.match(forwarded, /await app\.setValue\(18, "p01"\); await app\.setValue\(\{ id: "20" \}, "Mira"\); await app\.click\(\{ id: "NewTabButton" \}\);/);
+  assert.doesNotMatch(forwarded, /setValue\(\{ id: "18" \}/);
+  // The number then gets the ordinary checks: what Claude saw for it, and whether its line was unique.
+  assert.deepEqual(update.literals, [18]);
+  assert.deepEqual(update.seenLines, { 18: 'text field (settable) Reference code' });
 });
 
 test('FT1c: a numeric { id } with two readings, an unseen number or other keys is left for the guard', t => {
   const act = relayFixture(t, withDay);
   for (const code of ['await app.click({ id: "18" });', 'await app.click({ id: "99" });', 'await app.click({ id: "22", label: "Email" });']) {
-    const { forwarded } = act(code);
-    assert.ok(forwarded.includes(code), code);
+    const { forwarded, result } = act(code);
+    if (code.includes('app[m]')) { assert.equal(forwarded, ''); assert.match(result, /cannot inspect JavaScript/); }
+    else assert.ok(forwarded.includes(code), code);
   }
 });
 
@@ -103,23 +106,24 @@ test('FT1c: a label-shaped { id } that a field and its text carry goes to the fi
 
 // Review F2: an earlier action in the call can open a window whose element has ID "18" (a date picker), so the tree
 // Claude saw no longer settles what { id: "18" } means. A rewrite is reported with the element it went to.
-test('CA2 leaves unchanged selectors alone and refuses a literal-changing substitution', t => {
+test('FT1c review: no rewrite after an earlier action or in a loop, and every rewrite is named in the result', t => {
   const act = relayFixture(t, form());
   for (const code of ['await app.click(24); await app.click({ id: "18" });', 'await app.pressKey("Tab"); await app.setValue({ id: "18" }, "x");',
     'for (const n of [1, 2]) await app.click({ id: "18" });']) {
-    const { forwarded } = act(code);
-    assert.ok(forwarded.includes(code), code);
+    const { forwarded, result } = act(code);
+    if (code.includes('app[m]')) { assert.equal(forwarded, ''); assert.match(result, /cannot inspect JavaScript/); }
+    else assert.ok(forwarded.includes(code), code);
   }
   const { forwarded, result } = act('await app.setValue({ id: "18" }, "p01"); await app.click(38);');
-  assert.equal(forwarded, '');
-  assert.match(result, /cannot inspect JavaScript/);
+  assert.match(forwarded, /await app\.setValue\(18, "p01"\); await app\.click\(38\);/);
+  assert.match(result, /sleight: \{ id: "18" \} was sent as element 18, text field \(settable\) Reference code\./);
 });
 
 // Review F3: a leading zero would reach the engine as an octal literal (010 is 8 in sloppy mode).
-test('CA2 refuses a leading-zero id substitution and keeps an unchanged label selector', t => {
-  const { forwarded, result } = relayFixture(t, form())('await app.setValue({ id: "018" }, "p01");');
-  assert.equal(forwarded, '');
-  assert.match(result, /cannot inspect JavaScript/);
+test('FT1c review: a numeric { id } with leading zeros is sent in decimal, or left alone when a label matches either form', t => {
+  const { forwarded } = relayFixture(t, form())('await app.setValue({ id: "018" }, "p01");');
+  assert.match(forwarded, /await app\.setValue\(18, "p01"\);/);
+  assert.doesNotMatch(forwarded, /setValue\(018/);
   const labeled = relayFixture(t, form(['\t\t\t\t\t\t\t47 button 18']))('await app.click({ id: "018" });');
   assert.ok(labeled.forwarded.includes('await app.click({ id: "018" });'));
 });
@@ -127,7 +131,7 @@ test('CA2 refuses a leading-zero id substitution and keeps an unchanged label se
 // Re-review: an action of any spelling before the { id }, or an { id } that can run more than once or later (a callback,
 // a function or arrow body, recursion), leaves Claude's tree unable to settle it. Only a top-level statement with nothing
 // but reads before it is rewritten.
-test('CA2 refuses computed native methods and literal-changing id rewrites', t => {
+test('FT1c re-review: only a top-level { id } with only reads before it is rewritten', t => {
   const act = relayFixture(t, form());
   for (const code of [
     'await app["click"](24); await app.click({ id: "18" });',
@@ -146,17 +150,13 @@ test('CA2 refuses computed native methods and literal-changing id rewrites', t =
     'await app.click(24).then(() => app.click({ id: "18" }));',
   ]) {
     const { forwarded, result } = act(code);
-    // CA2 refuses an unknown computed native method before runtime dispatch.
-    if (code.includes('app[m]')) {
-      assert.equal(forwarded, '');
-      assert.match(result, /cannot inspect JavaScript/);
-    } else assert.ok(forwarded.includes(code), code);
+    if (code.includes('app[m]')) { assert.equal(forwarded, ''); assert.match(result, /cannot inspect JavaScript/); }
+    else assert.ok(forwarded.includes(code), code);
   }
   for (const code of ['const s = await app.getAXState(); await app.setValue({ id: "18" }, "p01");',
     'if (true) await app.setValue({ id: "18" }, "p01");']) {
-    const { forwarded, result } = act(code);
-    assert.equal(forwarded, '', code);
-    assert.match(result, /cannot inspect JavaScript/);
+    const { forwarded } = act(code);
+    assert.match(forwarded, /setValue\(18, "p01"\)/, code);
   }
 });
 

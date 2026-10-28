@@ -13,6 +13,7 @@ const jobs = mode === 'differential' ? [{ file: 'differential.mjs', seed: 3, cou
   : null;
 if (!jobs) throw new Error('expected differential, shaped or reviewers');
 const gate = join(homedir(), 'Projects/sleight-wt/ledger/vc/night/fuzz-may-run');
+const testGate = join(homedir(), 'Projects/sleight-wt/ledger/vc/night/lanes-may-test');
 const wait = ms => new Promise(resolve => setTimeout(resolve, ms));
 let held = false;
 for (const job of jobs) {
@@ -20,7 +21,7 @@ for (const job of jobs) {
   let completed = 0;
   const variants = Array(15).fill(0);
   for (let offset = 0; offset < job.count; offset += 25000) {
-    while (!existsSync(gate) || existsSync('/tmp/sleight-hold')) await wait(60000);
+    while (!existsSync(gate) || !existsSync(testGate) || existsSync('/tmp/sleight-hold')) await wait(60000);
     const count = Math.min(25000, job.count - offset);
     const args = job.file === 'corpus-shaped.mjs' ? [count, offset]
       : job.file === 'differential.mjs' ? [job.seed, count, offset]
@@ -32,7 +33,7 @@ for (const job of jobs) {
       const entry = JSON.parse(line);
       if (entry.generatedByVariant) entry.generatedByVariant.forEach((value, index) => { variants[index] += value; });
       else if (entry.tested !== undefined) summary = entry;
-      else if (entry.case !== undefined) console.log(line);
+      else if (entry.case !== undefined && (entry.failOpen || entry.falsePositive || entry.problems)) console.log(line);
     }
     if (![0, 1].includes(child.status) || !summary || summary.tested !== count * job.wrappers) {
       console.error(`incomplete batch ${job.file} offset=${offset}: exit=${child.status}, error=${child.error?.code ?? 'none'}`);

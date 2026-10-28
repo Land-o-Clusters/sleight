@@ -1,6 +1,6 @@
 import { codeInspectionRefusal } from './flow-rules.mjs';
 import { parseCell, walk, memberCall, handleBindings, UNKNOWN } from './code-ast.mjs';
-import { argumentValue } from './call-inspection.mjs';
+import { argumentValue, unsafeHandleUse } from './call-inspection.mjs';
 
 // Also injected into the app proxy. Keep this function self-contained.
 export function nativeArgumentError(name, args, unknown = Symbol()) {
@@ -61,6 +61,7 @@ export function nativeArgumentsProblem(code, nativeHandles = new Set(), browserH
   if (error) return codeInspectionRefusal;
   const native = new Set(['app', ...nativeHandles]);
   for (const handle of browserHandles) native.delete(handle);
+  if (unsafeHandleUse(ast, new Set([...native, ...browserHandles]))) return codeInspectionRefusal;
   for (const statement of ast.body) {
     const hints = handleBindings({ body: [statement] });
     for (const [name, hint] of hints) {

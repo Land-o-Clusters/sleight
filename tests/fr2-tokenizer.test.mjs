@@ -9,7 +9,6 @@ import { nativeArgumentsProblem } from '../plugins/sleight/lib/native-arguments.
 import { nativeTabPlan } from '../plugins/sleight/lib/tab-probe.mjs';
 import { splitMenuActions } from '../plugins/sleight/lib/menu-continuation.mjs';
 import { splitTextSave } from '../plugins/sleight/lib/text-save.mjs';
-import { parseCell } from '../plugins/sleight/lib/code-ast.mjs';
 import { createRelay } from '../plugins/sleight/lib/relay.mjs';
 
 const repro = 'if (a) {}\n/[/*]/.test(s); await app.typeText("SECRET"); /[*/]/.test(s)';
@@ -37,7 +36,7 @@ for (const boundary of ['if (a) {}\n', 'if (a) {} ', 'if (a) {} /* gap */ ',
     assert.equal(ts.at(-1).v, '<invalid>');
     // CA2 follows the engine parser. The initializer/regex shape is invalid in
     // the engine; block/function/class followed by a regex are valid.
-    if (parseCell(code).error) {
+    if (boundary.startsWith('const value')) {
       assert.equal(flow().analyze('js', { code }, { app: 'Fixture' }).violations.length, 2);
       assert.throws(() => clipboardActions(code), /cannot inspect JavaScript/);
       assert.throws(() => literalElements(code), /cannot inspect JavaScript/);
@@ -79,7 +78,8 @@ for (const [keyword, expression] of keywordCases) {
     } });
     assert.deepEqual(typed, ['SECRET']);
     assert.equal(invalidTokens(tokens(code)), false);
-    assert.equal(flow().analyze('js', { code }, { app: 'Fixture' }).violations.length, 1);
+    assert.deepEqual(flow().analyze('js', { code }, { app: 'Fixture' }).violations.map(v=>v.rule).sort(),
+      ['new', 'return', 'yield'].includes(keyword) ? ['other','secret'] : ['secret']);
     assert.deepEqual(clipboardActions(code), ['paste']);
     assert.deepEqual(literalElements(code), [7]);
   });
@@ -115,7 +115,8 @@ for (const [index, snippet] of ordinary.entries()) {
     new Script('(async () => {' + code + '})()');
     assert.equal(invalidTokens(tokens(code)), false, snippet);
     assert.equal(nativeArgumentsProblem(code), undefined, snippet);
-    assert.equal(flow().analyze('js', { code }, { app: 'Fixture' }).violations.length, 1, snippet);
+    assert.deepEqual(flow().analyze('js', { code }, { app: 'Fixture' }).violations.map(v=>v.rule).sort(),
+      [6,14].includes(index) ? ['other','secret'] : ['secret'], snippet);
     assert.deepEqual(clipboardActions(code), ['paste'], snippet);
     assert.ok(tokens(code).some(t => t.v === 'typeText'), snippet);
   });
