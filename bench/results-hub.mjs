@@ -30,7 +30,7 @@ const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const BENCH = join(ROOT, 'docs', 'benchmarks');
 // The charts come from bench/results-charts.mjs. Until that file exists the pages render without charts, and an error inside it
 // still stops the render.
-const NO_CHARTS = { CHARTS: [], renderCharts: () => ({}), chartCaption: () => '', chartBlock: () => '' };
+const NO_CHARTS = { CHARTS: [], renderCharts: () => ({}), chartCaption: () => '', chartBlock: () => '', haikuCheckoutDisclosure: () => '', completionLine: () => '' };
 const charts = existsSync(join(ROOT, 'bench/results-charts.mjs')) ? await import('./results-charts.mjs') : NO_CHARTS;
 const readJson = file => JSON.parse(readFileSync(file, 'utf8'));
 const tryJson = file => { try { return readJson(file); } catch { return undefined; } };
@@ -247,16 +247,16 @@ function roundFacts(dir) {
   };
 }
 
-export function collectRace({ raceDir, browsers, family, title, timeline = loadTimeline(), excludeCovered = false }) {
+export function collectRace({ raceDir, browsers, family, title, timeline = loadTimeline(), excludeCovered = false, listedRounds, transform = (_round, loaded) => loaded }) {
   // Folder names pick the candidates; a round's own browser.json decides where it is scored, as in race-score.mjs.
-  const listed = listRaceRounds(raceDir).filter(round => browsers.includes(round.browser));
+  const listed = (listedRounds ?? listRaceRounds(raceDir)).filter(round => browsers.includes(round.browser));
   const marked = listed.filter(round => !round.done && existsSync(join(round.dir, 'harness-failure.json')));
   const inProgress = listed.filter(round => !round.done && !marked.includes(round)).map(round => round.name);
   // Published numbers use the answer patterns saved with each run; the current task file's patterns are scored beside them.
   const graders = currentAnswerGraders();
   const loaded = listed.filter(round => round.done).map(round => {
-    const saved = loadRound(round.dir, { timeline });
-    return { ...round, loaded: saved, current: { ...loadRound(round.dir, { timeline, graders }), excluded: saved.excluded }, facts: roundFacts(round.dir) };
+    const saved = transform(round, loadRound(round.dir, { timeline }));
+    return { ...round, loaded: saved, current: { ...transform(round, loadRound(round.dir, { timeline, graders })), excluded: saved.excluded }, facts: roundFacts(round.dir) };
   });
   const excludedRounds = [...loaded.filter(round => round.loaded.excluded).map(round => ({ round: round.name, reason: scrub(round.loaded.excluded) })),
     ...marked.map(round => ({ round: round.name, reason: scrub(tryJson(join(round.dir, 'harness-failure.json'))?.reason ?? 'marked as a harness failure') }))]
@@ -323,6 +323,74 @@ export function collectRace({ raceDir, browsers, family, title, timeline = loadT
   // The newest complete set per browser leads its page.
   for (const study of studies) study.latest = !studies.some(other => other.browser === study.browser && other !== study && (other.started ?? '') > (study.started ?? ''));
   return { family, title, source: { race: [].concat(raceDir).map(tilde).join(', '), browsers }, inProgress, excludedRounds, partial, cover, minRuns: 3, studies };
+}
+
+// The rematch is a separate population for each model and suite. Repeated round names across its banks must never pool.
+// LR2's reviewed offline report is data: do not import a runner or change the saved LR1 grades in the evidence bank.
+export function collectRematch({ banks, regrade, timeline = loadTimeline() }) {
+  const corrected = new Map();
+  for (const line of String(regrade ?? '').split('\n')) {
+    const fields = line.split(' | ');
+    if (fields.length === 7 && fields[5] === '->') {
+      const key = `${fields[0]}/${fields[1]}`;
+      if (corrected.has(key)) throw Error(`Duplicate LR1 regrade: ${key}`);
+      corrected.set(key, fields[6]);
+    }
+  }
+  const out = { studies: [], inProgress: [], excludedRounds: [], partial: [] };
+  for (const { dir, model } of banks.filter(bank => isDir(bank.dir))) {
+    const core = listRaceRounds(dir);
+    const held = subdirs(dir).filter(p => /^whole-.+-r\d+$/.test(basename(p))).map(p => ({
+      name: basename(p), dir: p, browser: 'chrome', label: basename(p).match(/^whole-(.+)-r\d+$/)[1], done: existsSync(join(p, 'results.json')),
+    }));
+    for (const folder of ['jobs', 'jobs-topup']) for (const fixture of subdirs(join(dir, folder))) {
+      const p = join(fixture, 'round');
+      if (!isDir(p)) continue;
+      const arm = tryJson(join(p, 'results.json'))?.[0]?.surface;
+      if (!arm) continue;
+      held.push({ name: `${folder}/${basename(fixture)}/round`, dir: p, browser: 'chrome', label: arm, done: true });
+    }
+    for (const [suite, rounds] of [['core', core], ['held-out', held]]) {
+      if (!rounds.length) continue;
+      const transform = (round, loaded) => {
+        if (!round.name.startsWith('whole-')) return loaded;
+        return { ...loaded, rows: loaded.rows.map(row => {
+          const grade = corrected.get(`${round.name}/${row.task}`);
+          if (!grade) throw Error(`Missing LR1 regrade for ${round.name}/${row.task}`);
+          const problems = [...(grade === 'ok' ? [] : [grade.replace(/^FAIL: /, '')]),
+            ...(row.successfulCalls >= 1 ? [] : ['no successful browser tool call'])];
+          return { ...row, passed: problems.length === 0, problems };
+        }) };
+      };
+      const race = collectRace({ raceDir: dir, browsers: ['chrome', 'helium'], family: 'browser-turbo', title: 'FowlBrowser rematch',
+        listedRounds: rounds, transform, timeline });
+      for (const study of race.studies) {
+        study.id = `fw1-e51c52a-${model}-${study.browser}-${suite}`;
+        study.title = `${cap(study.browser)}, ${cap(model)} 5.5, ${suite === 'core' ? `${study.tasks.length} core tasks` : `${study.tasks.length} held-out tasks`}`;
+        Object.assign(study, { rematch: true, model, suite, label: `fw1-e51c52a-${model}-${suite}` });
+        study.harnessBuilds = study.builds;
+        // 4275bedb changes only the rematch harness pin on the measured e679ed7e product build.
+        study.builds = { ...study.builds, 'sleight-turbo': study.builds['sleight-turbo'].map(b => b === '4275bedb' ? 'e679ed7e' : b) };
+        study.competitorBuilds = sortedUniq(rounds.map(r => roundFacts(r.dir).fowlbrowser));
+        const whole = study.runs.filter(r => ['dm-first-message', 'mail-first-invoice', 'endless-feed-honesty'].includes(r.task));
+        if (whole.length) study.regrade = { commit: '64550de9', method: 'Offline regrade, saved final result with JSON extraction',
+          arms: Object.fromEntries(study.arms.map(arm => [arm, { runs: whole.filter(r => r.arm === arm).length, passes: whole.filter(r => r.arm === arm && r.passed).length }])) };
+        study.notes = [
+          'FowlBrowser ran its defaults. Chrome used the benchmark profile and Helium a fresh profile. These are sleight\'s own tasks. Earlier benchmark runs informed its skill and tool wording.',
+          suite === 'core' ? 'The 13 core browser tasks are scored separately from the eight held-out tasks.' :
+            `The held-out set has eight tasks: five job fixtures and three whole-thread tasks. Whole-thread answers use the offline regrade (64550de9), ${Object.entries(study.regrade?.arms ?? {}).map(([arm, count]) => `${armName(arm)} ${count.passes}/${count.runs}`).join(', ')}, after the harness appended a RESULT instruction to JSON-only prompts. The saved grades are unchanged.`,
+          ...(suite === 'held-out' ? ['Both arms failed job-motion. FowlBrowser answered yellow/teal/purple. The strict grader requires amber/teal/violet.'] : []),
+        ];
+      }
+      out.studies.push(...race.studies);
+      out.inProgress.push(...race.inProgress.map(name => `${basename(dir)}/${name}`));
+      out.excludedRounds.push(...race.excludedRounds.map(row => ({ ...row, round: `${basename(dir)}/${row.round}`, rematch: true })));
+      out.partial.push(...race.partial.map(row => ({ ...row, model, suite, rematch: true })));
+    }
+    for (const p of subdirs(join(dir, 'aborted'))) out.excludedRounds.push({ round: `${basename(dir)}/aborted/${basename(p)}`, rematch: true, reason: 'hold-stopped partial attempt; the completed rerun is scored' });
+    for (const p of subdirs(dir).filter(p => /^jobs\.aborted/.test(basename(p)))) out.excludedRounds.push({ round: `${basename(dir)}/${basename(p)}`, rematch: true, reason: 'hold-stopped partial jobs matrix; the complete matrix is scored' });
+  }
+  return out;
 }
 
 // Which answer patterns the study's numbers used: the ones saved with each run. Tasks whose patterns in the current task file differ
@@ -602,6 +670,10 @@ const bankSource = dir => (resolve(dir).startsWith(homedir() + '/') ? tilde(dir)
 // A folder is a bank when its plan.json has the shape one of the two runners writes. `result` is null while it has no score or
 // comparison file yet (an aborted attempt, or a run in progress).
 export function readBank(dir) {
+  const release = tryJson(join(dir, 'final-verdict.json')), schedule = tryJson(join(dir, 'schedule.json'));
+  if (release?.identity?.builds && Array.isArray(release.verdicts) && Array.isArray(schedule)) {
+    return { id: scrub(basename(dir)), dir, kind: 'validation', format: 'release150', file: 'final-verdict.json', result: release, schedule };
+  }
   const plan = tryJson(join(dir, 'plan.json'));
   if (!plan || typeof plan !== 'object') return null;
   const id = scrub(basename(dir));
@@ -639,6 +711,63 @@ export function rowsFromCell(cell, task, arm, file) {
 
 export const BUILD_A = 'build-A', BUILD_B = 'build-B';
 
+function collectReleaseBank(bank) {
+  const release = bank.result, arms = [BUILD_B, BUILD_A], builds = release.identity.builds;
+  const engine = (release.engines ?? []).map(e => `${e.version}${e.build ? ` build ${e.build}` : ''}`).join(', ');
+  const date = dateRange(release.identity.startedAt, release.at), studies = [];
+  for (const verdict of release.verdicts) {
+    const runs = [], models = { [BUILD_A]: [], [BUILD_B]: [] }, roundIds = { [BUILD_A]: [], [BUILD_B]: [] }, effort = [];
+    const tasks = verdict.tasks.map(row => row.task);
+    for (const step of bank.schedule.filter(s => s.kind === verdict.kind)) {
+      const receipt = tryJson(join(bank.dir, `${step.id}.receipt.json`));
+      const expectedTasks = step.tasks.split(',').filter(task => tasks.includes(task));
+      if (!expectedTasks.length) continue;
+      if (!receipt || receipt.outcome === 'excluded') throw Error(`${bank.id}/${step.id}: missing scheduled receipt`);
+      if (receipt.rc !== 0) throw Error(`${bank.id}/${step.id}: no completed receipt`);
+      if (receipt.id !== step.id || receipt.kind !== step.kind || receipt.side !== step.side || receipt.build && receipt.build !== builds[step.side]) throw Error(`${bank.id}/${step.id}: receipt identity mismatch`);
+      const arm = step.side === 'A' ? BUILD_A : BUILD_B;
+      // The receipt's absolute root can be from another Mac. Only its result basename is used under this bank.
+      const path = join(bank.dir, basename(receipt.result));
+      const browser = !['native-haiku', 'cc-haiku'].includes(step.kind);
+      let rows;
+      if (browser) {
+        const round = loadRound(path);
+        if (round.excluded) throw Error(`${bank.id}/${step.id}: ${round.excluded}`);
+        rows = round.rows;
+        models[arm].push(...roundFacts(path).models);
+      } else {
+        const raw = readJson(path);
+        rows = raw.results.filter(row => row.arm === 'sleight').map(row => ({ ...row, passed: !!(row.passed || row.cleanupContained && row.taskPassed) }));
+        models[arm].push(...rows.flatMap(row => row.models ?? (raw.model ? [raw.model] : [])));
+      }
+      if (expectedTasks.some(task => rows.filter(row => row.task === task).length !== 1)) throw Error(`${bank.id}/${step.id}: missing or duplicate scheduled task`);
+      const flag = (receipt.command ?? []).indexOf('--effort');
+      if (flag >= 0) effort.push(receipt.command[flag + 1]);
+      roundIds[arm].push(step.id);
+      for (const row of rows.filter(row => tasks.includes(row.task))) runs.push({
+        task: row.task, arm, round: step.id, run: row.run ?? null, seconds: round1(row.seconds), passed: row.passed,
+        problem: row.passed ? null : scrub(row.reason ?? row.problems?.join('; ') ?? 'failed').slice(0, 200), file: scrub(basename(path)),
+      });
+    }
+    const { cells } = cellsFor(runs, tasks, arms, BUILD_B);
+    if (runs.filter(r => r.arm === BUILD_A && r.passed).length !== verdict.passA || runs.filter(r => r.arm === BUILD_B && r.passed).length !== verdict.passB) throw Error(`${bank.id}/${verdict.kind}: task pass counts disagree with the frozen verdict`);
+    const comparable = tasks.filter(task => arms.every(arm => cells.some(c => c.task === task && c.arm === arm && c.passes > 0)));
+    if (comparable.length !== verdict.comparable) throw Error(`${bank.id}/${verdict.kind}: comparable tasks disagree with the frozen verdict`);
+    for (const [arm, total] of [[BUILD_A, verdict.aTotal], [BUILD_B, verdict.bTotal]]) {
+      const sum = comparable.reduce((n, task) => n + cells.find(c => c.task === task && c.arm === arm).median, 0);
+      if (Number.isFinite(total) && Math.abs(sum - total) > .001 * Math.max(1, tasks.length)) throw Error(`${bank.id}/${verdict.kind}: passing median total disagrees with the frozen verdict`);
+    }
+    studies.push({ id: `${bank.id}-${verdict.kind}`, family: 'validation', bank: bank.id, kind: 'validation', group: verdict.kind,
+      title: `${bankLabel(bank.id)}, ${groupLabel(verdict.kind)}`, date, engine, browser: verdict.kind.startsWith('chrome') ? 'chrome' : verdict.kind.includes('safari') ? 'safari' : verdict.kind.includes('firefox') ? 'firefox' : null,
+      me: BUILD_B, arms, tasks, models: Object.fromEntries(arms.map(a => [a, sortedUniq(models[a])])), effort: sortedUniq(effort),
+      builds: { [BUILD_A]: [shaOf(builds.A)], [BUILD_B]: [shaOf(builds.B)] }, roundIds, aRounds: roundIds[BUILD_A].length, runs, cells });
+  }
+  const frozen = { passed: release.pass, exitCode: release.exitCode, verdicts: release.verdicts, aborted: release.aborted ?? {},
+    excluded: release.excluded ?? [], taskExclusions: (release.taskExclusions ?? []).map(e => ({ task: e.task, kinds: e.kinds, sides: e.sides, reason: scrub(e.reason).replace(/; fix FX1 in progress$/, '') })), errors: (release.errors ?? []).map(scrub) };
+  return { record: { id: bank.id, kind: 'validation', source: bankSource(bank.dir), file: bank.file, complete: true, passed: release.pass,
+    date, aBuild: shaOf(builds.A), bBuild: shaOf(builds.B), engine, groups: studies.length, incomplete: [], release: frozen }, studies };
+}
+
 function bankStudy(bank, group, tables, extra) {
   const { plan } = bank, arms = [BUILD_B, BUILD_A];
   const tasks = (group.tasks ?? []).filter(task => tables.A?.[task] || tables.B?.[task]);
@@ -660,6 +789,7 @@ function bankStudy(bank, group, tables, extra) {
 }
 
 export function collectBank(bank) {
+  if (bank.format === 'release150') return collectReleaseBank(bank);
   const { plan, result } = bank, record = { id: bank.id, kind: bank.kind, source: bankSource(bank.dir), file: bank.file };
   const span = logSpan(join(bank.dir, bank.kind === 'remeasure' ? 'remeasure.log' : 'validate-140.log'));
   if (!result) return { record: { ...record, complete: false, engine: plan.engine ? scrub(plan.engine) : null, planned: plan.groups.length, pending: true }, studies: [] };
@@ -753,7 +883,7 @@ function armTable(study, { builds = false, scriptEffort = null } = {}) {
   const table = mdTable(head, [...study.arms, ...(study.hosted ?? [])].map(arm => [armName(arm), study.models?.[arm]?.length ? study.models[arm].map(code).join(', ') : 'not recorded',
     effortOf(arm).join(', ') || 'not recorded', study.versions?.[arm]?.join(', ') || 'not recorded',
     ...(engines ? [engineText(study.engines[arm], arm)] : []),
-    ...(builds ? [study.builds?.[arm]?.map(code).join(', ') || 'not recorded'] : [])]));
+    ...(builds ? [study.builds?.[arm]?.map(b => publicBuild(b)).join(', ') || 'not recorded'] : [])]));
   return engines ? `${table}\n\n${engineNote(study.engines, study.engineMix)} ${ENGINE_NOTE}` : table;
 }
 const ENGINE_NOTE = 'A version is "recorded" when the runner read it and "inferred" from the timeline in `bench/engine-versions.json` otherwise, and ' +
@@ -835,7 +965,7 @@ const pageHead = (current, title) => `${renderNav(current)}\n\n# ${title}\n`;
 function renderClaimPage(all, id, { intro }) {
   const data = all[id], study = data.studies[0], fam = family(id);
   const out = [pageHead(fam.page, fam.title)];
-  out.push(`${intro} The scorer's wording is "${study.verdict.wording}". sleight has the lowest expected time on ${study.verdict.lowest.length} of ${study.tasks.length} tasks.\n`);
+  out.push(`${intro} ${charts.completionLine(study)}sleight has the lowest expected time on ${study.verdict.lowest.length} of ${study.tasks.length} tasks.\n`);
   const chart = chartFor(all, `family-${id}`);
   if (chart) out.push(chart);
   out.push('Each cell is expected seconds, then passes/runs.\n');
@@ -868,6 +998,7 @@ function renderClaimPage(all, id, { intro }) {
 
 // Data collected before the hub recorded answer patterns (2026-10-19) has no graders field and renders as before.
 function gradersNote(study) {
+  if (study.regrade) return 'Whole-thread answers use the offline regrade described above. Job fixtures retain their saved grades, including both job-motion failures.';
   const g = study.graders;
   if (!g) return null;
   if (!g.differ.length) return `Answers were checked with the patterns saved with each run, the same as the current ${code(g.file)}.`;
@@ -887,11 +1018,13 @@ function gradersNote(study) {
 // the spread folded.
 function raceStudySection(all, study, level, chartId) {
   const out = [`${level} ${study.title}${study.latest ? ' (newest)' : ''}\n`];
-  out.push(`${study.date}, ${cap(study.browser)} ${study.browserVersion.join(', ')}, ${study.rounds.length} rounds and ${study.runs.length} runs. The scorer's wording is "${study.verdict.wording}".\n`);
+  out.push(`${study.date}, ${cap(study.browser)} ${study.browserVersion.join(', ')}, ${study.rounds.length} rounds and ${study.runs.length} runs. ${charts.completionLine(study)}${armName(study.me)} has the lowest expected time on ${study.verdict.fastest[study.me].length} of ${study.tasks.length} tasks.\n`);
   const summary = study.latest && study.family === 'browser-race';
   if (summary) out.push(`${raceResult(study)}.\n`);
   if (unopposedTotal(study)) out.push(`${summary ? 'The competitors each have' : 'sleight is the only arm with a total: every competitor has'} a task with no pass. There is no competing complete-suite time.\n`);
-  const chart = study.latest && chartId ? chartFor(all, chartId) : null;
+  if (study.notes) out.push(...study.notes.map(note => note + '\n'));
+  if (study.competitorBuilds?.length) out.push(`FowlBrowser build ${study.competitorBuilds.map(code).join(', ')}. sleight's recorded harness build: ${(study.harnessBuilds?.[study.me] ?? []).map(code).join(', ')}.\n`);
+  const chart = study.latest && chartId && (!study.rematch || study.model === 'haiku' && study.suite === 'core') ? chartFor(all, chartId) : null;
   if (chart) out.push(chart);
   out.push('Each cell is expected seconds, then passes/runs.\n');
   out.push(taskMatrix(study) + '\n');
@@ -983,7 +1116,7 @@ const GATE_SCORING = 'A gate run passes under the published scoring rules (LAWS)
 function renderTurboPage(all, id) {
   const data = all[id], fam = family(id);
   const out = [pageHead(fam.page, fam.title)];
-  out.push('Turbo is sleight\'s own browser path for Chrome and Helium. The real-window race runs FowlBrowser and turbo in the tester\'s Chrome and Helium benchmark profiles. Earlier gate rounds, before production turbo, raced FowlBrowser on FowlBrowser\'s own 13-task runner.\n');
+  out.push('Turbo is sleight\'s own browser path for Chrome and Helium. The newest rematch runs FowlBrowser and turbo on 13 core browser tasks, with eight held-out tasks scored separately. Haiku and Opus have separate results. Earlier gate rounds, before production turbo, raced FowlBrowser on FowlBrowser\'s own 13-task runner.\n');
   const sets = raceSets(all, data.race.studies, data.race.source.browsers, 'family-browser-turbo');
   out.push(...sets.newest);
   out.push(details('Method, and the rounds and sets left out', [list([raceGrading(data.race), SCORING, LAWS_RULES, RACE_SETS, RACE_EFFORT]), leftOutTables(data.race)].join('\n\n')));
@@ -1112,7 +1245,33 @@ export function compareTasks(study) {
 const pct = value => (value == null ? DASH : `${value > 0 ? '+' : ''}${(Math.round(value * 1000) / 10).toFixed(1)}%`);
 const bankKind = kind => (kind === 'remeasure' ? 're-measure' : 'validation');
 
+// This experiment commit is absent from the public release line. Keep its raw provenance in the data, not in prose.
+const publicBuild = build => build === 'cf342b59' ? 'the 1.5.0 harness with the 1.4.2 plugin tree' : code(build);
+
+export function releaseTaskSlowdowns(data, bankId = 'validation-150f-rel3') {
+  const group = id => ({ 'cc-haiku': 'Held-out controls Haiku', 'as3-safari': 'Additional page tasks Safari',
+    'as3-firefox': 'Additional page tasks Firefox' })[id] ?? id.split('-').map(cap).join(' ');
+  const rows = data.studies.filter(s => s.bank === bankId).flatMap(s => compareTasks(s).map(row => ({ ...row, group: group(s.group) })));
+  const slower = rows.filter(row => row.delta >= 0.24).map(row =>
+    [row.group, code(row.task), `+${(row.delta * 100).toFixed(2)}%`, row.a.runs, row.b.runs]);
+  const rounded = rows.filter(row => row.delta != null && row.delta < 0.24 && Math.round(row.delta * 100) === 24)
+    .map(row => `${row.group} ${code(row.task)} was +${(row.delta * 100).toFixed(2)}% slower, rounded to 24% (${row.a.runs} A runs, ${row.b.runs} B runs).`);
+  const noPass = rows.filter(row => row.b && !row.b.passes).map(row =>
+    [row.group, code(row.task), `${row.a?.passes ?? 0}/${row.a?.runs ?? 0}`, `${row.b.passes}/${row.b.runs}`]);
+  return ['Individual expected times at least 24% slower against 1.4.2:',
+    mdTable(['Group', 'Task', 'Change', 'A runs', 'B runs'], slower), ...rounded,
+    ...(noPass.length ? ['Tasks with no B pass:', mdTable(['Group', 'Task', 'A passes/runs', 'B passes/runs'], noPass)] : [])].join('\n\n');
+}
+
+const bankLabel = id => ({ 'validation-150f-rel3': 'Final release A/B', 'validation-150f-rel2': 'Earlier release A/B' })[id] ?? id;
+const groupLabel = id => ({ 'as3-safari': 'additional page tasks, Safari', 'as3-firefox': 'additional page tasks, Firefox' })[id] ?? id;
+const previousRelease = bank => bank.id === 'validation-150f-rel3'
+  ? ' against 1.4.2 (the 1.5.0 harness with the 1.4.2 plugin tree)' : '';
+
 function validationHeadline(data) {
+  const release = data.banks.filter(bank => bank.release).sort((a, b) => (a.date ?? '').localeCompare(b.date ?? '')).at(-1);
+  if (release) return `${release.passed ? 'RELEASE PASS' : 'RELEASE BLOCKED'}: ${lowFirst(bankLabel(release.id))}${previousRelease(release)}, ${release.release.verdicts.filter(v => !v.regressed).length} of ${release.release.verdicts.length} groups within their time and pass-loss limits ` +
+    `(${release.date}, engine ${release.engine}). ${data.banks.filter(b => !b.pending).length} scored banks, including the older engine records`;
   const scored = data.banks.filter(bank => !bank.pending), unscored = data.banks.length - scored.length;
   if (!scored.length) return 'No validation bank has a score yet';
   const rows = data.studies.flatMap(compareTasks);
@@ -1125,15 +1284,27 @@ function validationHeadline(data) {
 
 function bankSection(data, bank) {
   const studies = data.studies.filter(study => study.bank === bank.id);
-  const out = [`## ${bank.id}\n`];
+  const out = [`## ${bankLabel(bank.id)}\n`];
   const facts = [`${bankKind(bank.kind)} bank`, bank.date, bank.engine ? `ChatGPT engine ${code(bank.engine)}` : null,
-    bank.aBuild ? `build A ${code(bank.aBuild)}` : null, bank.bBuild ? `build B ${code(bank.bBuild)}` : null].filter(Boolean);
+    bank.aBuild ? `build A ${publicBuild(bank.aBuild)}` : null, bank.bBuild ? `build B ${publicBuild(bank.bBuild)}` : null].filter(Boolean);
   out.push(`${upFirst(facts.join(', '))}.${bank.kind === 'remeasure' ? ` Its gate ${bank.passed ? 'passed' : 'did not pass'}.` : ''}` +
     `${bank.complete ? '' : ' The bank is not complete.'}\n`);
+  if (bank.release) {
+    const r = bank.release;
+    out.push(`${bank.passed ? 'RELEASE PASS' : 'RELEASE BLOCKED'}${previousRelease(bank)} (recorded exit ${r.exitCode}). Passing lower-median totals include only tasks with a pass on both sides. Expected-time marks below use a different statistic.\n`);
+    out.push(mdTable(['Group', 'Passing lower-median total A (s)', 'B (s)', 'Change', 'Limit', 'Comparable tasks', 'Passes A', 'Passes B'], r.verdicts.map(v =>
+      [groupLabel(v.kind), f1(v.aTotal), f1(v.bTotal), pct(v.slowdown), pct(v.limit), v.comparable, v.passA, v.passB])) + '\n');
+    out.push(mdTable(['Group', 'Aborted A attempts', 'Aborted B attempts'], Object.entries(r.aborted).map(([kind, n]) => [groupLabel(kind), n.A, n.B])) + '\n');
+    if (r.errors.length) out.push('Recorded gate errors: ' + r.errors.map(code).join('; ') + '.\n');
+    if (r.taskExclusions.length) out.push(mdTable(['Excluded task', 'Groups', 'Sides', 'Reason'], r.taskExclusions.map(e => [e.task, e.kinds.join(', '), e.sides.join(', '), e.reason.replace(/; fix FX1 in progress$/, '')])) + '\n');
+    if (bank.id === 'validation-150f-rel3') out.push('The release passed the group limits while Safari (+10.57%), Chrome Opus (+5.14%) and Firefox (+2.74%) are slower.\n\n' + releaseTaskSlowdowns(data, bank.id) + '\n');
+    if (bank.id === 'validation-150f-rel3') out.push('Both sides ran fresh in the final release A/B. Finder setup failed twice at a 5 s sheet timeout, and the steps resumed. Holds for another project stopped steps mid-run. Aborted attempts were retained and rerun. `cc-list-native` was absent from the schedule. Both Finder tasks were included with no task exclusions.\n');
+    if (bank.id === 'validation-150f-rel2') out.push('This is the older engine record. `cc-list-native` was absent from both sides of the schedule. Finder setup failures also excluded rename and create-folder on both sides. The gate was blocked by the native comparable-task floor.\n');
+  }
   if (!studies.length) { out.push(`No group in this bank has a complete score${bank.pending ? ' (the bank has no score file)' : ''}.\n`); return out.join('\n'); }
   out.push(mdTable(['Group', 'Browser', 'Tasks', 'Build B marked on', 'Passes A', 'Passes B'], studies.map(study => {
     const rows = compareTasks(study), runs = arm => study.runs.filter(run => run.arm === arm);
-    return [code(study.group), study.browser ?? DASH, study.tasks.length, `${rows.filter(row => row.marked).length} of ${rows.length}`,
+    return [code(groupLabel(study.group)), study.browser ?? DASH, study.tasks.length, `${rows.filter(row => row.marked).length} of ${rows.length}`,
       `${runs(BUILD_A).filter(r => r.passed).length}/${runs(BUILD_A).length}`, `${runs(BUILD_B).filter(r => r.passed).length}/${runs(BUILD_B).length}`];
   })) + '\n');
   if (bank.incomplete?.length) {
@@ -1142,11 +1313,13 @@ function bankSection(data, bank) {
   for (const study of studies) {
     const rows = compareTasks(study);
     const mark = row => (!row.marked ? 'no' : row.slower && row.lowerRate ? 'slower and lower pass rate' : row.slower ? 'slower' : 'lower pass rate');
-    out.push(details(`${study.group}: ${rows.filter(row => row.marked).length} of ${rows.length} tasks marked`, [
-      `Each cell is expected seconds, then passes/runs. Build A had ${study.aRounds || 'no'} round${study.aRounds === 1 ? '' : 's'}${study.models[BUILD_B] ? ` on ${study.models[BUILD_B].map(code).join(', ')}` : ''}.`,
+    out.push(details(`${groupLabel(study.group)}: ${rows.filter(row => row.marked).length} of ${rows.length} tasks marked`, [
+      `Each cell is expected seconds, then passes/runs. Build A had ${study.aRounds || 'no'} ${study.roundIds ? 'recorded step' : 'round'}${study.aRounds === 1 ? '' : 's'}${study.models[BUILD_B] ? ` on ${study.models[BUILD_B].map(code).join(', ')}` : ''}.`,
+      ...(study.roundIds ? [`Build A rounds: ${study.roundIds[BUILD_A].map(code).join(', ')}. Build B rounds: ${study.roundIds[BUILD_B].map(code).join(', ')}.`] : []),
       mdTable(['Task', 'Build A', 'Build B', 'Change in expected time', 'Marked'], rows.map(row => [code(row.task), cellText(row.a), cellText(row.b), pct(row.delta), mark(row)])),
       armTable(study, { builds: true }),
       'Passing runs, median [fastest to slowest]:\n\n' + spreadTable(study),
+      ...(study.roundIds && failureRows(study).length ? ['Failed runs:\n\n' + mdTable(['Task', 'Arm', 'Round', 's', 'Problems'], failureRows(study))] : []),
     ].join('\n\n')));
   }
   return out.join('\n');
@@ -1166,7 +1339,7 @@ export function renderValidationPage(all, id) {
     'The re-measure runner (`bench/validation/remeasure.mjs`) runs 3 rounds of the final build against the stored build A rounds. Its gate needs build B to have no higher expected time and no lower pass rate on every selected task.',
     'A score file keeps each run\'s seconds and whether it passed, and not the failure reason. Each bank\'s folder keeps the receipts and logs.',
   ])));
-  const banks = data.banks.filter(bank => !bank.pending);
+  const banks = data.banks.filter(bank => !bank.pending).sort((a, b) => (b.date ?? '').localeCompare(a.date ?? '') || b.id.localeCompare(a.id));
   if (!banks.length) out.push('No bank has a score yet.\n');
   for (const bank of banks) out.push(bankSection(data, bank));
   const pending = data.banks.filter(bank => bank.pending);
@@ -1230,11 +1403,11 @@ function raceResult(study) {
 function resultSummary(id, data) {
   if (id === 'native-claim' || id === 'app-claim') {
     const s = data.studies[0];
-    return `Lowest expected time on ${s.verdict.lowest.length} of ${s.tasks.length} tasks. Total ${f1(s.verdict.totals[s.me])} s.`;
+    return `${charts.completionLine(s)}Lowest expected time on ${s.verdict.lowest.length} of ${s.tasks.length} tasks. Total ${f1(s.verdict.totals[s.me])} s.`;
   }
   if (id === 'browser-race' || id === 'browser-turbo') {
     const studies = id === 'browser-turbo' ? data.race.studies : data.studies;
-    return studies.filter(s => s.latest).map(s => `${cap(s.browser)}: ${id === 'browser-race' ? raceResult(s) : `lowest expected time on ${s.verdict.lowest.length} of ${s.tasks.length} tasks, total ${f1(s.verdict.totals[s.me])} s`}.`).join(' ');
+    return studies.filter(s => s.latest).map(s => `${cap(s.browser)}${s.model ? ` ${cap(s.model)} ${s.suite}` : ''}: ${id === 'browser-race' ? raceResult(s) : `${charts.completionLine(s)}${charts.completionLine(s) ? 'Lowest' : 'lowest'} expected time on ${s.verdict.lowest.length} of ${s.tasks.length} tasks. ${s.verdict.totals[s.me] == null ? 'A task without a pass prevents a total' : `Total ${f1(s.verdict.totals[s.me])} s`}`}.`).join(' ');
   }
   return upFirst(headlineFor(id, data)) + '.';
 }
@@ -1249,7 +1422,17 @@ function headlineFor(id, data) {
     return lowFirst(data.studies.filter(s => s.latest).map(s => `In ${cap(s.browser)} ${raceResult(s)} (${code(s.label)}, ${s.date.slice(0, 10)})`).join('. ') || 'No complete set') + `. ${upFirst(engine)}`;
   }
   if (id === 'browser-turbo') {
-    const race = data.race.studies.filter(s => s.latest).map(s => `In ${cap(s.browser)}, the lowest expected time on ${s.verdict.fastest[s.me].length} of ${s.tasks.length} and ${s.verdict.totals[s.me] == null ? 'no total (a task has no pass)' : `a total of ${f1(s.verdict.totals[s.me])} s`} against FowlBrowser's ${f1(s.verdict.totals.fowlbrowser)} s (${code(s.label)})`);
+    const rematch = data.race.studies.filter(s => s.latest && s.rematch);
+    if (rematch.length) {
+      const time = value => value == null ? 'without a total' : `${f1(value)} s`;
+      const models = sortedUniq(rematch.filter(s => s.suite === 'core').map(s => s.model));
+      const core = models.map(model => `on ${cap(model)} 5.5, lowest expected times in ` + rematch.filter(s => s.suite === 'core' && s.model === model).map(s =>
+        `${cap(s.browser)} ${s.verdict.fastest[s.me].length}/${s.tasks.length} (sleight ${time(s.verdict.totals[s.me])}, FowlBrowser ${time(s.verdict.totals.fowlbrowser)})`).join(' and '));
+      const held = rematch.filter(s => s.suite === 'held-out').map(s => `In the ${cap(s.model)} held-out set, sleight completed ${charts.completedTasks(s)} of ${s.tasks.length} tasks, with the lowest expected time on ${s.verdict.fastest[s.me].length} of ${s.tasks.length}. FowlBrowser completed ${charts.completedTasks(s, 'fowlbrowser')} of ${s.tasks.length} tasks, with the lowest expected time on ${s.verdict.fastest.fowlbrowser.length} of ${s.tasks.length}. ${s.arms.every(a => s.verdict.totals[a] == null) ? 'Neither arm has a complete-suite total' : 'Totals are on the results page'}`);
+      const pending = rematch.filter(s => s.verdict.topUps.length).map(s => `${cap(s.browser)} ${cap(s.model)}`);
+      return [core[0], ...core.slice(1).map(upFirst), charts.haikuCheckoutDisclosure({ 'browser-turbo': data }).replace(/\.$/, ''), ...held, ...(pending.length ? [`Five-run top-ups still owed for ${pending.join(', ')}`] : []), upFirst(engine)].join('. ');
+    }
+    const race = data.race.studies.filter(s => s.latest).map(s => `In ${cap(s.browser)}${s.model ? ` on ${cap(s.model)} 5.5 (${s.suite})` : ''}, ${charts.completionLine(s)}Lowest expected time on ${s.verdict.fastest[s.me].length} of ${s.tasks.length} tasks and ${s.verdict.totals[s.me] == null ? 'no total (a task has no pass)' : `a total of ${f1(s.verdict.totals[s.me])} s`} against FowlBrowser's ${s.verdict.totals.fowlbrowser == null ? 'no total (a task has no pass)' : `${f1(s.verdict.totals.fowlbrowser)} s`} (${code(s.label)}, ${s.date?.slice(0, 10)})`);
     return lowFirst(race.join('. ')) + `. ${data.gates.length} gate studies. ${upFirst(engine)}`;
   }
   if (id === 'ab-tests') return `${data.studies.length} studies with run data. The catalog has ${data.catalog.length} benchmark write-ups and includes studies without structured run data`;
@@ -1278,7 +1461,7 @@ function renderIndex(all) {
     'The full rules are in [LAWS](../status/LAWS.md), and the tasks and harnesses in [benchmark.md](../benchmark.md).',
   ]) + '\n');
   out.push(details('Rebuild', '```sh\nnode bench/results-hub.mjs                # collect from the raw folders this Mac has, then render\nnode bench/results-hub.mjs --render-only  # render from docs/results/data only\nnode bench/results-hub.mjs --check        # exit 1 if a page, data file or README block would change\n```\n\n' +
-    'The raw claim, race and validation folders live outside the repo, in `~/Projects/sleight-wt/app-claim`, `~/Projects/sleight-wt/race-1017` and the banks under `~/Projects/sleight-wt` (any folder with a validation or re-measure `plan.json`). On a Mac without them, the generator keeps the data files already here. `--wt <dir>` points it at another copy. The benchmark runners run the collect and render once after a successful pass (`bench/hub-refresh.mjs`), and `--no-hub` or `SLEIGHT_NO_HUB=1` stops that.'));
+    'The raw claim, race and validation folders live outside the repo, in `~/Projects/sleight-wt/app-claim`, `~/Projects/sleight-wt/race-1017` and the banks under `~/Projects/sleight-wt` (any folder with a validation or re-measure `plan.json`). The FowlBrowser rematch banks are `~/Library/Caches/sleight-bench/evidence/fw1-e51c52a-haiku` and `fw1-e51c52a-opus`. Whole-thread corrections come from the tracked [regrade data](data/whole-thread-regrade.txt). On a Mac without the raw folders, the generator keeps the data files already here. `--wt <dir>` points it at another worktrees root and looks for rematch banks in its `evidence/` folder. The benchmark runners run the collect and render once after a successful pass (`bench/hub-refresh.mjs`), and `--no-hub` or `SLEIGHT_NO_HUB=1` stops that.'));
   out.push(engineFooter(FAMILIES.flatMap(fam => headlineStudies(fam.id, all[fam.id]))) + '\n');
   return out.join('\n');
 }
@@ -1287,7 +1470,7 @@ function renderIndex(all) {
 // The repo README's generated blocks. Each sits between <!-- hub:<name> --> and <!-- /hub:<name> -->, and nothing outside the
 // markers is touched.
 
-export const README_BLOCKS = ['claim', 'headline', 'benchmarks'];
+export const README_BLOCKS = ['claim', 'turbo', 'release', 'headline', 'benchmarks'];
 const README_BASE = 'docs/results/';
 
 // Pure: returns text with each named block's contents replaced. A block whose markers are missing is left alone, and a marker
@@ -1334,7 +1517,7 @@ function nativeClaimContext(all) {
   ].join('\n\n');
 }
 
-// The three blocks, from the same data as the hub landing.
+// The README blocks, from the same data as the hub landing.
 export function readmeBlocks(all) {
   const study = all['native-claim'].studies[0], v = study.verdict;
   const next = study.arms.filter(arm => arm !== study.me && v.totals[arm] != null).sort((a, b) => v.totals[a] - v.totals[b])[0];
@@ -1346,7 +1529,9 @@ export function readmeBlocks(all) {
   ].join('\n');
   const block = id => charts.chartBlock(id, all, { base: README_BASE }).trim();
   const lines = FAMILIES.map(fam => `- [${fam.title}](${README_BASE}${fam.page}): ${headlineFor(fam.id, all[fam.id]).replace(/\]\((?!https?:)/g, `](${README_BASE}`)}.`);
-  return { claim, headline: block('headline-native'), benchmarks: [lines.join('\n'), block('overview')].filter(Boolean).join('\n\n') };
+  return { claim, turbo: `[Turbo results](${README_BASE}browser-turbo.md): ${headlineFor('browser-turbo', all['browser-turbo'])}.\n\n${block('family-browser-turbo-chrome')}`,
+    release: `[Release A/B](${README_BASE}validation.md): ${validationHeadline(all.validation)}.`,
+    headline: block('headline-native'), benchmarks: [lines.join('\n'), block('overview')].filter(Boolean).join('\n\n') };
 }
 
 // ---------------------------------------------------------------------------------------------------------------------------
@@ -1428,6 +1613,32 @@ export function collect({ wt, out, excludeCovered = false, banks: extraBanks = [
     all['browser-turbo'] = { ...kept, gates: gates.filter(s => s.family === 'browser-turbo') };
     notes.push('race: raw folder missing, kept the race data');
   }
+  const evidence = resolve(wt) === join(homedir(), 'Projects/sleight-wt') ? join(homedir(), 'Library/Caches/sleight-bench/evidence') : join(wt, 'evidence');
+  const rematchBanks = ['haiku', 'opus'].map(model => ({ dir: join(evidence, `fw1-e51c52a-${model}`), model })).filter(b => isDir(b.dir));
+  if (rematchBanks.length) {
+    const regradeFile = join(ROOT, 'docs/results/data/whole-thread-regrade.txt');
+    const rematch = collectRematch({ banks: rematchBanks, regrade: existsSync(regradeFile) ? readFileSync(regradeFile, 'utf8') : '', timeline });
+    const race = all['browser-turbo'].race;
+    const fresh = new Set(rematch.studies.map(s => s.id)), browsers = new Set(rematch.studies.filter(s => s.suite === 'core').map(s => s.browser));
+    const history = race.studies.filter(s => !fresh.has(s.id)).map(s => ({ ...s, latest: browsers.has(s.browser) ? false : s.latest }));
+    all['browser-turbo'].race = { ...race, studies: [...rematch.studies, ...history],
+      source: { ...race.source, race: uniq([...race.source.race.split(', '), ...rematchBanks.map(b => tilde(b.dir))]).join(', ') },
+      inProgress: [...race.inProgress.filter(r => !r.startsWith('fw1-')), ...rematch.inProgress],
+      partial: [...race.partial.filter(r => !r.rematch), ...rematch.partial], excludedRounds: [...race.excludedRounds.filter(r => !r.rematch), ...rematch.excludedRounds] };
+  } else {
+    // A Mac that has the historical race folders but not the rematch must still retain the published rematch data.
+    const previous = keep('browser-turbo')?.race;
+    const retained = previous?.studies.filter(s => s.rematch) ?? [];
+    if (retained.length) {
+      const race = all['browser-turbo'].race, ids = new Set(retained.map(s => s.id));
+      const browsers = new Set(retained.filter(s => s.latest && s.suite === 'core').map(s => s.browser));
+      race.studies = [...retained, ...race.studies.filter(s => !ids.has(s.id)).map(s => ({ ...s, latest: browsers.has(s.browser) ? false : s.latest }))];
+      race.source = { ...race.source, race: uniq([...race.source.race.split(', '), ...previous.source.race.split(', ')]).join(', ') };
+      race.excludedRounds = [...race.excludedRounds.filter(r => !r.rematch), ...previous.excludedRounds.filter(r => r.rematch)];
+      race.partial = [...race.partial.filter(r => !r.rematch), ...previous.partial.filter(r => r.rematch)];
+      race.inProgress = uniq([...race.inProgress, ...previous.inProgress.filter(r => r.startsWith('fw1-'))]);
+    }
+  }
   const catalog = writeUpCatalog();
   const releases = collectReleases({ timeline });
   const coveredWriteUps = sortedUniq([...gates.map(s => s.writeUp), ...releases.files.map(f => f.writeUp)]);
@@ -1501,12 +1712,18 @@ export function main(argv = process.argv.slice(2)) {
   const files = render(all);
   const readmeFile = join(ROOT, 'README.md');
   const readme = argv.includes('--hub-only') ? null : renderReadme({ ...all, 'engine-compat': readJson(join(out, 'data/engine-compat.json')) });
+  const releaseDocs = argv.includes('--hub-only') ? [] : ['CHANGELOG.md', 'docs/releases/1.5.0.md'].map(name => {
+    const file = join(ROOT, name), before = readFileSync(file, 'utf8');
+    return { name, file, before, after: spliceReadme(before, { 'release-slowdowns': releaseTaskSlowdowns(all.validation) }) };
+  });
   if (argv.includes('--check')) {
     const changed = Object.entries(files).filter(([name, text]) => !existsSync(join(out, name)) || readFileSync(join(out, name), 'utf8') !== text).map(([name]) => name);
     for (const name of changed) console.log(`would change ${name}`);
     const readmeStale = readme !== null && readFileSync(readmeFile, 'utf8') !== readme;
     if (readmeStale) console.log('would change README.md (the repo README\'s hub blocks)');
-    process.exitCode = changed.length || readmeStale ? 1 : 0;
+    const staleDocs = releaseDocs.filter(doc => doc.before !== doc.after);
+    for (const doc of staleDocs) console.log(`would change ${doc.name} (release slowdown summary)`);
+    process.exitCode = changed.length || readmeStale || staleDocs.length ? 1 : 0;
     return;
   }
   for (const [name, text] of Object.entries(files)) {
@@ -1514,6 +1731,7 @@ export function main(argv = process.argv.slice(2)) {
     writeFileSync(join(out, name), text);
   }
   if (readme !== null && readFileSync(readmeFile, 'utf8') !== readme) writeFileSync(readmeFile, readme);
+  for (const doc of releaseDocs) if (doc.before !== doc.after) writeFileSync(doc.file, doc.after);
   for (const note of notes) console.log(note);
   console.log(`wrote ${Object.keys(files).length} files to ${relative(ROOT, out) || '.'}${readme !== null ? ' and the README.md blocks' : ''}`);
 }

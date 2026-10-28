@@ -1,0 +1,19 @@
+round | task | arm | agent seconds | recorded outcome (JSON) | regrade | corrected outcome
+whole-fowlbrowser-r1 | dm-first-message | fowlbrowser | 34.398 | {"ok":false,"cell":"FAIL: answer must be JSON","problems":["answer must be JSON"]} | -> | ok
+whole-fowlbrowser-r1 | endless-feed-honesty | fowlbrowser | 76.231 | {"ok":false,"cell":"FAIL: answer must be JSON","problems":["answer must be JSON"]} | -> | FAIL: whole-thread answer or completeness mismatch
+whole-fowlbrowser-r1 | mail-first-invoice | fowlbrowser | 54.519 | {"ok":false,"cell":"FAIL: answer must be JSON","problems":["answer must be JSON"]} | -> | ok
+whole-fowlbrowser-r2 | dm-first-message | fowlbrowser | 55.124 | {"ok":false,"cell":"FAIL: answer must be JSON","problems":["answer must be JSON"]} | -> | ok
+whole-fowlbrowser-r2 | endless-feed-honesty | fowlbrowser | 86.943 | {"ok":false,"cell":"FAIL: answer must be JSON","problems":["answer must be JSON"]} | -> | FAIL: whole-thread answer or completeness mismatch
+whole-fowlbrowser-r2 | mail-first-invoice | fowlbrowser | 54.22 | {"ok":false,"cell":"FAIL: answer must be JSON","problems":["answer must be JSON"]} | -> | ok
+whole-fowlbrowser-r3 | dm-first-message | fowlbrowser | 65.867 | {"ok":false,"cell":"FAIL: answer must be JSON","problems":["answer must be JSON"]} | -> | FAIL: whole-thread answer or completeness mismatch
+whole-fowlbrowser-r3 | endless-feed-honesty | fowlbrowser | 89.828 | {"ok":false,"cell":"FAIL: answer must be JSON","problems":["answer must be JSON"]} | -> | FAIL: whole-thread answer or completeness mismatch
+whole-fowlbrowser-r3 | mail-first-invoice | fowlbrowser | 48.395 | {"ok":false,"cell":"FAIL: answer must be JSON","problems":["answer must be JSON"]} | -> | ok
+whole-sleight-turbo-r1 | dm-first-message | sleight-turbo | 34.497 | {"ok":false,"cell":"FAIL: answer must be JSON","problems":["answer must be JSON"]} | -> | ok
+whole-sleight-turbo-r1 | endless-feed-honesty | sleight-turbo | 41.484 | {"ok":false,"cell":"FAIL: answer must be JSON","problems":["answer must be JSON"]} | -> | FAIL: whole-thread answer or completeness mismatch
+whole-sleight-turbo-r1 | mail-first-invoice | sleight-turbo | 40.231 | {"ok":false,"cell":"FAIL: answer must be JSON","problems":["answer must be JSON"]} | -> | ok
+whole-sleight-turbo-r2 | dm-first-message | sleight-turbo | 43.801 | {"ok":false,"cell":"FAIL: answer must be JSON","problems":["answer must be JSON"]} | -> | FAIL: whole-thread answer or completeness mismatch
+whole-sleight-turbo-r2 | endless-feed-honesty | sleight-turbo | 56.474 | {"ok":false,"cell":"FAIL: answer must be JSON","problems":["answer must be JSON"]} | -> | ok
+whole-sleight-turbo-r2 | mail-first-invoice | sleight-turbo | 45.587 | {"ok":false,"cell":"FAIL: answer must be JSON","problems":["answer must be JSON"]} | -> | FAIL: whole-thread answer or completeness mismatch
+whole-sleight-turbo-r3 | dm-first-message | sleight-turbo | 36.424 | {"ok":false,"cell":"FAIL: answer must be JSON","problems":["answer must be JSON"]} | -> | FAIL: whole-thread answer or completeness mismatch
+whole-sleight-turbo-r3 | endless-feed-honesty | sleight-turbo | 71.815 | {"ok":false,"cell":"FAIL: answer must be JSON","problems":["answer must be JSON"]} | -> | ok
+whole-sleight-turbo-r3 | mail-first-invoice | sleight-turbo | 58.175 | {"ok":false,"cell":"FAIL: answer must be JSON","problems":["answer must be JSON"]} | -> | ok

@@ -1,6 +1,6 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 1312" width="900" height="1312" role="img" aria-labelledby="title desc">
 <title id="title">Native claim: expected seconds per task</title>
-<desc id="desc">Native claim, 2026-10-17 to 2026-10-18. Expected seconds per task for sleight, LCU, Codex, Cua, Peekaboo and Claude computer use. sleight has the lowest expected time on 8 of 9 tasks. The scorer's wording is &quot;fastest&quot;.</desc>
+<desc id="desc">Native claim, 2026-10-17 to 2026-10-18. Expected seconds per task for sleight, LCU, Codex, Cua, Peekaboo and Claude computer use. sleight has the lowest expected time on 8 of 9 tasks.</desc>
 <style>
 .bg{fill:#FBF8F1}
 text{font-family:-apple-system,"Segoe UI",Helvetica,Arial,sans-serif;font-size:13px;fill:#141A26}
@@ -216,7 +216,7 @@ text{font-family:-apple-system,"Segoe UI",Helvetica,Arial,sans-serif;font-size:1
 <text x="183.3" y="1201" class="m">Claude computer use</text>
 <path class="sl" d="M341.5 1191h57.5a4 4 0 0 1 4 4v4a4 4 0 0 1 -4 4h-57.5z"/>
 <text x="409.1" y="1201" data-task="excel-edit" data-arm="claude-cu" data-kind="cell" data-section="main">47.9 (5/5)</text>
-<text x="24" y="1234" class="m">The scorer's wording is &quot;fastest&quot;. sleight has the lowest expected time on 8 of 9 tasks.</text>
+<text x="24" y="1234" class="m">sleight has the lowest expected time on 8 of 9 tasks.</text>
 <text x="24" y="1252" class="m">ChatGPT engine for sleight and Codex: 26.1007.71326 (2026-10-17 to 2026-10-18, inferred). Dates are UTC.</text>
 <text x="24" y="1270" class="m">Models: claude-haiku-5-5 (sleight, LCU, Cua, Peekaboo and Claude computer use), gpt-6-luna (Codex). Effort:</text>
 <text x="24" y="1288" class="m">high.</text>

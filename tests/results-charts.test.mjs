@@ -204,3 +204,14 @@ test('a family without a complete set gets a chart that says so', () => {
   assert.match(chartCaption('overview', all), /Firefox, engine path has no complete set yet\./);
   for (const [name, svg] of Object.entries(files)) wellFormed(svg, name);
 });
+
+
+test('Haiku comparison captions disclose paid checkout failures without an unqualified speed claim', () => {
+  const all = committed();
+  for (const id of ['overview', 'family-browser-turbo-chrome', 'family-browser-turbo-helium']) {
+    const caption = chartCaption(id, all);
+    assert.match(caption, /FowlBrowser paid on the unpriced checkout in 1 of 3 Chrome and 2 of 3 Helium Haiku runs/);
+    assert.match(caption, /expected time includes those failures/);
+    assert.doesNotMatch(caption, /The scorer's wording is "fastest"/);
+  }
+});

@@ -6,7 +6,7 @@ Turbo needs Chrome's debugging consent, which Safari and Firefox lack, so sleigh
 
 ## Safari, sleight rounds `safari-sleight-fs2on-r*` (newest)
 
-2026-10-18 to 2026-10-19, Safari 27.0.1, 33 rounds and 299 runs. The scorer's wording is "completed every task, fastest on 12 of 12".
+2026-10-18 to 2026-10-19, Safari 27.0.1, 33 rounds and 299 runs. sleight has the lowest expected time on 12 of 12 tasks.
 
 sleight has completed every task and is fastest on 12 of 12 tasks. It is the only arm with a total (682.3 s).
 
@@ -14,10 +14,10 @@ The competitors each have a task with no pass. There is no competing complete-su
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="charts/family-browser-race-safari-dark.svg">
-  <img src="charts/family-browser-race-safari-light.svg" width="900" alt="Safari, the engine path against Codex, LCU, Cua and Peekaboo, 2026-10-18 to 2026-10-19. Expected seconds per task for sleight, Codex, codex-sol, Cua, LCU and Peekaboo. sleight has the lowest expected time on 12 of 12 tasks. The scorer's wording is &quot;completed every task, fastest on 12 of 12&quot;. The same-model rows put sleight inside Codex against Codex, with the wording &quot;completed every task, fastest on 9 of 12&quot;. The same-model rows put codex-sleight-sol against codex-sol, with the wording &quot;completed 11 of 12 tasks, fastest on 4 of 12 (LAWS has no wording for a missed task)&quot;.">
+  <img src="charts/family-browser-race-safari-light.svg" width="900" alt="Safari, the engine path against Codex, LCU, Cua and Peekaboo, 2026-10-18 to 2026-10-19. Expected seconds per task for sleight, Codex, codex-sol, Cua, LCU and Peekaboo. sleight has the lowest expected time on 12 of 12 tasks. The same-model rows put sleight inside Codex against Codex, with the wording &quot;completed every task, fastest on 9 of 12&quot;. The same-model rows put codex-sleight-sol against codex-sol, with the wording &quot;completed 11 of 12 tasks, fastest on 4 of 12 (LAWS has no wording for a missed task)&quot;.">
 </picture>
 
-<sub>Safari, the engine path against Codex, LCU, Cua and Peekaboo, 2026-10-18 to 2026-10-19. Expected seconds per task for sleight, Codex, codex-sol, Cua, LCU and Peekaboo. sleight has the lowest expected time on 12 of 12 tasks. The scorer's wording is "completed every task, fastest on 12 of 12". The same-model rows put sleight inside Codex against Codex, with the wording "completed every task, fastest on 9 of 12". The same-model rows put codex-sleight-sol against codex-sol, with the wording "completed 11 of 12 tasks, fastest on 4 of 12 (LAWS has no wording for a missed task)".</sub>
+<sub>Safari, the engine path against Codex, LCU, Cua and Peekaboo, 2026-10-18 to 2026-10-19. Expected seconds per task for sleight, Codex, codex-sol, Cua, LCU and Peekaboo. sleight has the lowest expected time on 12 of 12 tasks. The same-model rows put sleight inside Codex against Codex, with the wording "completed every task, fastest on 9 of 12". The same-model rows put codex-sleight-sol against codex-sol, with the wording "completed 11 of 12 tasks, fastest on 4 of 12 (LAWS has no wording for a missed task)".</sub>
 
 Each cell is expected seconds, then passes/runs.
 
@@ -274,16 +274,16 @@ The arms that use the engine ran on different engine versions: sleight on 26.101
 
 ## Firefox, sleight rounds `firefox-sleight-fs2on-r*` (newest)
 
-2026-10-18 to 2026-10-19, Firefox 157.0.1, 29 rounds and 297 runs. The scorer's wording is "completed every task, fastest on 12 of 12".
+2026-10-18 to 2026-10-19, Firefox 157.0.1, 29 rounds and 297 runs. sleight has the lowest expected time on 12 of 12 tasks.
 
 sleight has completed every task and is fastest on 12 of 12 tasks. Its total is 455.0 s.
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="charts/family-browser-race-firefox-dark.svg">
-  <img src="charts/family-browser-race-firefox-light.svg" width="900" alt="Firefox, the engine path against Codex, LCU, Cua and Peekaboo, 2026-10-18 to 2026-10-19. Expected seconds per task for sleight, Codex, codex-sol, Cua, LCU and Peekaboo. sleight has the lowest expected time on 12 of 12 tasks. The scorer's wording is &quot;completed every task, fastest on 12 of 12&quot;. The same-model rows put sleight inside Codex against Codex, with the wording &quot;completed every task, fastest on 8 of 12&quot;. The same-model rows put codex-sleight-sol against codex-sol, with the wording &quot;completed 10 of 12 tasks, fastest on 7 of 12 (LAWS has no wording for a missed task)&quot;.">
+  <img src="charts/family-browser-race-firefox-light.svg" width="900" alt="Firefox, the engine path against Codex, LCU, Cua and Peekaboo, 2026-10-18 to 2026-10-19. Expected seconds per task for sleight, Codex, codex-sol, Cua, LCU and Peekaboo. sleight has the lowest expected time on 12 of 12 tasks. The same-model rows put sleight inside Codex against Codex, with the wording &quot;completed every task, fastest on 8 of 12&quot;. The same-model rows put codex-sleight-sol against codex-sol, with the wording &quot;completed 10 of 12 tasks, fastest on 7 of 12 (LAWS has no wording for a missed task)&quot;.">
 </picture>
 
-<sub>Firefox, the engine path against Codex, LCU, Cua and Peekaboo, 2026-10-18 to 2026-10-19. Expected seconds per task for sleight, Codex, codex-sol, Cua, LCU and Peekaboo. sleight has the lowest expected time on 12 of 12 tasks. The scorer's wording is "completed every task, fastest on 12 of 12". The same-model rows put sleight inside Codex against Codex, with the wording "completed every task, fastest on 8 of 12". The same-model rows put codex-sleight-sol against codex-sol, with the wording "completed 10 of 12 tasks, fastest on 7 of 12 (LAWS has no wording for a missed task)".</sub>
+<sub>Firefox, the engine path against Codex, LCU, Cua and Peekaboo, 2026-10-18 to 2026-10-19. Expected seconds per task for sleight, Codex, codex-sol, Cua, LCU and Peekaboo. sleight has the lowest expected time on 12 of 12 tasks. The same-model rows put sleight inside Codex against Codex, with the wording "completed every task, fastest on 8 of 12". The same-model rows put codex-sleight-sol against codex-sol, with the wording "completed 10 of 12 tasks, fastest on 7 of 12 (LAWS has no wording for a missed task)".</sub>
 
 Each cell is expected seconds, then passes/runs.
 
@@ -562,7 +562,7 @@ Rounds left out, with the recorded reason:
 
 ### Safari, sleight rounds `safari-sleight-r*`
 
-2026-10-18 to 2026-10-19, Safari 27.0.1, 34 rounds and 299 runs. The scorer's wording is "completed every task, fastest on 10 of 12".
+2026-10-18 to 2026-10-19, Safari 27.0.1, 34 rounds and 299 runs. sleight has the lowest expected time on 10 of 12 tasks.
 
 sleight is the only arm with a total: every competitor has a task with no pass. There is no competing complete-suite time.
 
@@ -828,7 +828,7 @@ The arms that use the engine ran on different engine versions: sleight on 26.100
 
 ### Safari, sleight rounds `safari-sleight-b10-r*`
 
-2026-10-18 to 2026-10-19, Safari 27.0.1, 35 rounds and 305 runs. The scorer's wording is "completed every task, fastest on 11 of 12".
+2026-10-18 to 2026-10-19, Safari 27.0.1, 35 rounds and 305 runs. sleight has the lowest expected time on 11 of 12 tasks.
 
 sleight is the only arm with a total: every competitor has a task with no pass. There is no competing complete-suite time.
 
@@ -1083,7 +1083,7 @@ The arms that use the engine ran on different engine versions: sleight on 26.101
 
 ### Safari, sleight rounds `safari-sleight-fs2off-r*`
 
-2026-10-18 to 2026-10-19, Safari 27.0.1, 33 rounds and 299 runs. The scorer's wording is "completed every task, fastest on 11 of 12".
+2026-10-18 to 2026-10-19, Safari 27.0.1, 33 rounds and 299 runs. sleight has the lowest expected time on 11 of 12 tasks.
 
 sleight is the only arm with a total: every competitor has a task with no pass. There is no competing complete-suite time.
 
@@ -1341,7 +1341,7 @@ The arms that use the engine ran on different engine versions: sleight on 26.101
 
 ### Firefox, sleight rounds `firefox-sleight-r*`
 
-2026-10-18 to 2026-10-19, Firefox 157.0.1, 29 rounds and 297 runs. The scorer's wording is "completed every task, fastest on 4 of 12".
+2026-10-18 to 2026-10-19, Firefox 157.0.1, 29 rounds and 297 runs. sleight has the lowest expected time on 4 of 12 tasks.
 
 Each cell is expected seconds, then passes/runs.
 
@@ -1629,7 +1629,7 @@ The arms that use the engine ran on different engine versions: sleight on 26.100
 
 ### Firefox, sleight rounds `firefox-sleight-b10-r*`
 
-2026-10-18 to 2026-10-19, Firefox 157.0.1, 31 rounds and 303 runs. The scorer's wording is "completed every task, fastest on 11 of 12".
+2026-10-18 to 2026-10-19, Firefox 157.0.1, 31 rounds and 303 runs. sleight has the lowest expected time on 11 of 12 tasks.
 
 Each cell is expected seconds, then passes/runs.
 
@@ -1878,7 +1878,7 @@ The arms that use the engine ran on different engine versions: sleight on 26.101
 
 ### Firefox, sleight rounds `firefox-sleight-b3-r*`
 
-2026-10-18 to 2026-10-19, Firefox 157.0.1, 29 rounds and 297 runs. The scorer's wording is "completed 11 of 12 tasks, fastest on 10 of 12 (LAWS has no wording for a missed task)".
+2026-10-18 to 2026-10-19, Firefox 157.0.1, 29 rounds and 297 runs. sleight completed 11 of 12 tasks. sleight has the lowest expected time on 10 of 12 tasks.
 
 Each cell is expected seconds, then passes/runs.
 
@@ -2149,7 +2149,7 @@ The arms that use the engine ran on different engine versions: sleight on 26.100
 
 ### Firefox, sleight rounds `firefox-sleight-b7-r*`
 
-2026-10-18 to 2026-10-19, Firefox 157.0.1, 29 rounds and 297 runs. The scorer's wording is "completed 10 of 12 tasks, fastest on 8 of 12 (LAWS has no wording for a missed task)".
+2026-10-18 to 2026-10-19, Firefox 157.0.1, 29 rounds and 297 runs. sleight completed 10 of 12 tasks. sleight has the lowest expected time on 8 of 12 tasks.
 
 Each cell is expected seconds, then passes/runs.
 
@@ -2416,7 +2416,7 @@ The arms that use the engine ran on different engine versions: sleight on 26.101
 
 ### Firefox, sleight rounds `firefox-sleight-fs2off-r*`
 
-2026-10-18 to 2026-10-19, Firefox 157.0.1, 29 rounds and 297 runs. The scorer's wording is "completed every task, fastest on 11 of 12".
+2026-10-18 to 2026-10-19, Firefox 157.0.1, 29 rounds and 297 runs. sleight has the lowest expected time on 11 of 12 tasks.
 
 Each cell is expected seconds, then passes/runs.
 

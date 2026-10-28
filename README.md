@@ -58,24 +58,32 @@ sleight drives native apps, including Electron apps such as VS Code, Slack and S
 
 Turbo drives Chrome and Helium directly. It is on by default after you enable Chrome's one-time debugging switch. The browser asks you to allow each connection ([setup](INSTALL.md#computer-use)).
 
-In the [turbo race](docs/results/browser-turbo.md), Chrome had the lowest expected time on 12 of 13 tasks, 296.8 s total against FowlBrowser's 447.8 s (2026-10-18 to 2026-10-19). Helium had the lowest expected time on 10 of 13, 264.1 s total against 343.6 s (2026-10-18 to 2026-10-19).
+<!-- hub:turbo -->
+[Turbo results](docs/results/browser-turbo.md): on Haiku 5.5, lowest expected times in Chrome 12/13 (sleight 256.1 s, FowlBrowser 399.2 s) and Helium 12/13 (sleight 258.2 s, FowlBrowser 434.0 s). On Opus 5.5, lowest expected times in Chrome 12/13 (sleight 232.6 s, FowlBrowser without a total) and Helium 12/13 (sleight 219.8 s, FowlBrowser without a total). FowlBrowser paid on the unpriced checkout in 1 of 3 Chrome and 2 of 3 Helium Haiku runs, and its expected time includes those failures. In the Haiku held-out set, sleight completed 6 of 8 tasks, with the lowest expected time on 3 of 8. FowlBrowser completed 6 of 8 tasks, with the lowest expected time on 4 of 8. Neither arm has a complete-suite total. Engine 26.1023.50603, 2026-10-28.
 
-<picture><source media="(prefers-color-scheme: dark)" srcset="docs/results/img/family-browser-turbo-chrome-dark.svg"><img src="docs/results/img/family-browser-turbo-chrome-light.svg" width="900" alt="Chrome turbo against FowlBrowser, 2026-10-18 to 2026-10-19: expected seconds per task, with sleight lowest on 12 of 13."></picture>
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/results/img/family-browser-turbo-chrome-dark.svg">
+  <img src="docs/results/img/family-browser-turbo-chrome-light.svg" width="900" alt="Chrome, turbo against FowlBrowser, 2026-10-28, 15:19 to 17:43 UTC. Expected seconds per task for sleight turbo and FowlBrowser. sleight turbo has the lowest expected time on 12 of 13 tasks. FowlBrowser paid on the unpriced checkout in 1 of 3 Chrome and 2 of 3 Helium Haiku runs, and its expected time includes those failures.">
+</picture>
+
+<sub>Chrome, turbo against FowlBrowser, 2026-10-28, 15:19 to 17:43 UTC. Expected seconds per task for sleight turbo and FowlBrowser. sleight turbo has the lowest expected time on 12 of 13 tasks. FowlBrowser paid on the unpriced checkout in 1 of 3 Chrome and 2 of 3 Helium Haiku runs, and its expected time includes those failures.</sub>
+<!-- /hub:turbo -->
 
 From the installed plugin folder, you run `./bin/sleight-mcp turbo on` (Chrome first, then Helium), `./bin/sleight-mcp turbo on --browser helium` to choose Helium, or `./bin/sleight-mcp turbo off` to opt out until you turn it on again ([settings](docs/settings.md#turbo)).
 
-## New in 1.4.0
+## New in 1.5.0
 
-- Text drags move between windows, repair spacing and keep empty final lines. Opened-file handles keep their document window. sleight refuses formatted cross-window moves.
-- sleight rejects malformed native arguments before the engine sends input and reports the correct signature. It handles shutdown while the engine loads.
-- Turbo fills multi-selects and accepts modifier clicks on safe targets. Shorter replies explain field values, batch boundaries and viewport markers.
-- Requested sign-ups count as confirmed when your message names the username or email and password ([limits](docs/settings.md#requested-sign-ups)).
-- Opt-in [local stats](docs/settings.md#stats) report action times and reads saved.
-- Grok CLI adds direct MCP (10 tools in its 1.0.13 handshake). Cursor adds a plugin, with install not yet run. Grok Bot adds the local shell route as a preview: one live Calculator read passed, and its approvals wait in the menu bar glove.
-- Protected consent buttons require physical input ([accessibility limits](docs/known-problems.md#protected-consent-input)). Chrome and Helium turbo is on by default after Chrome's debugging consent.
-- The ghost hand is off by default: textedit-drag took 31 to 37 s with it, 23 to 26 s without (3 runs a side, [details](docs/known-problems.md)).
+- Turbo reads include screenshots, motion frames, whole threads, PDFs and structured tables. Paste and download steps work on observed controls and links.
+- Sign-in handoffs keep the page for the person and resume after Continue. Away calls return a pending result promptly.
+- The optional agent cursor has a branded ring, character styles and click-to-pause controls. Its open protocol supports other renderers, and imports explain missing animations and fallbacks.
+- Optional narration uses Claude's existing prose and local system voices. Private run recordings support local replay. Screenshots can contain sensitive content.
+- Native source inspection refuses ambiguous syntax. Deferred engine documentation retains its provenance so caller output cannot become trusted instructions.
 
-Release validation for 1.4.1 (2026-10-22, Haiku 5.5 at high effort, engine 26.1016.51333): the full check passed (12,770 tests), and 1.4.1 ran against 1.4.0 on sleight's own tasks. In Chrome both passed all 13 tasks 3 times, at 218.9 s total expected time against 213.0 s. On 8 native held-out tasks, run on the same harness, 1.4.1's mean total was 501.7 s (7 runs) against 1.4.0's 515.8 s (3 runs). One Opus 5.5 round passed all 13 Chrome tasks in 237.3 s. The 1.4.1 benchmark harness makes native tasks slower than 1.4.0's harness, measured but not yet explained ([known problems](docs/known-problems.md#native-harness-in-141)).
+[All changes](CHANGELOG.md#150-unreleased) · [Release notes draft](docs/releases/1.5.0.md)
+
+<!-- hub:release -->
+[Release A/B](docs/results/validation.md): RELEASE PASS: final release A/B against 1.4.2 (the 1.5.0 harness with the 1.4.2 plugin tree), 8 of 8 groups within their time and pass-loss limits (2026-10-28, 06:10 to 14:04 UTC, engine 26.1023.50603 build 22391). 3 scored banks, including the older engine records.
+<!-- /hub:release -->
 
 <!-- hub:headline -->
 <picture>
@@ -91,18 +99,18 @@ Release validation for 1.4.1 (2026-10-22, Haiku 5.5 at high effort, engine 26.10
 <!-- hub:benchmarks -->
 - [Native claim](docs/results/native-claim.md): "fastest", sleight's total expected time 251.2 s over 9 tasks (197 runs, 2026-10-17 to 2026-10-18). Engine 26.1007.71326, 2026-10-17 to 2026-10-18.
 - [App claim](docs/results/app-claim.md): "fastest", sleight's total expected time 56.8 s over 3 tasks (60 runs, 2026-10-18, 02:39 to 03:16 UTC). Engine 26.1007.71326, 2026-10-18.
-- [Chrome and Helium: turbo against FowlBrowser](docs/results/browser-turbo.md): in Chrome, the lowest expected time on 12 of 13 and a total of 296.8 s against FowlBrowser's 447.8 s (`sleight-turbo-rel131`). In Helium, the lowest expected time on 10 of 13 and a total of 264.1 s against FowlBrowser's 343.6 s (`sleight-turbo-rel130`). 14 gate studies. Engine 26.1013.40934, 2026-10-19.
+- [Chrome and Helium: turbo against FowlBrowser](docs/results/browser-turbo.md): on Haiku 5.5, lowest expected times in Chrome 12/13 (sleight 256.1 s, FowlBrowser 399.2 s) and Helium 12/13 (sleight 258.2 s, FowlBrowser 434.0 s). On Opus 5.5, lowest expected times in Chrome 12/13 (sleight 232.6 s, FowlBrowser without a total) and Helium 12/13 (sleight 219.8 s, FowlBrowser without a total). FowlBrowser paid on the unpriced checkout in 1 of 3 Chrome and 2 of 3 Helium Haiku runs, and its expected time includes those failures. In the Haiku held-out set, sleight completed 6 of 8 tasks, with the lowest expected time on 3 of 8. FowlBrowser completed 6 of 8 tasks, with the lowest expected time on 4 of 8. Neither arm has a complete-suite total. Engine 26.1023.50603, 2026-10-28.
 - [Safari and Firefox: the engine path against Codex, LCU, Cua and Peekaboo](docs/results/browser-race.md): in Safari sleight has completed every task and is fastest on 12 of 12 tasks. It is the only arm with a total (682.3 s) (`sleight-fs2on`, 2026-10-18). In Firefox sleight has completed every task and is fastest on 12 of 12 tasks. Its total is 455.0 s (`sleight-fs2on`, 2026-10-18). Engine 26.1007.71326, 2026-10-18 and engine 26.1013.40934, 2026-10-19.
 - [Experiments](docs/results/ab-tests.md): 17 studies with run data. The catalog has 96 benchmark write-ups and includes studies without structured run data.
-- [Validation: build A against build B](docs/results/validation.md): 1 scored bank: 1 validation, 0 re-measure. 6 more have no score file. 21 A/B groups in all. Build B has a higher expected time or a lower pass rate than build A on 37 of 72 task comparisons. Newest scored bank: validation-140-final (2026-10-20).
+- [Validation: build A against build B](docs/results/validation.md): RELEASE PASS: final release A/B against 1.4.2 (the 1.5.0 harness with the 1.4.2 plugin tree), 8 of 8 groups within their time and pass-loss limits (2026-10-28, 06:10 to 14:04 UTC, engine 26.1023.50603 build 22391). 3 scored banks, including the older engine records.
 - [Release passes and the earlier head-to-heads](docs/results/release-passes.md): 7 release passes (2026-10-05 to 2026-10-09), 115 results files in all.
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="docs/results/img/overview-dark.svg">
-  <img src="docs/results/img/overview-light.svg" width="900" alt="Total expected seconds of sleight against the next-best arm with a total, in the newest complete set of each benchmark. Native apps, 251.2 s against Claude computer use at 453.9 s. VS Code, Slack, Spotify, 56.8 s against LCU at 101.3 s. Chrome, turbo, 296.8 s against FowlBrowser at 447.8 s. Helium, turbo, 264.1 s against FowlBrowser at 343.6 s. Safari, engine path, 682.3 s, and no other arm has a total. Firefox, engine path, 455.0 s against Cua at 2541.4 s.">
+  <img src="docs/results/img/overview-light.svg" width="900" alt="Total expected seconds of sleight against the next-best arm with a total, in the newest complete set of each benchmark. Native apps, 251.2 s against Claude computer use at 453.9 s. VS Code, Slack, Spotify, 56.8 s against LCU at 101.3 s. Chrome, turbo, 256.1 s against FowlBrowser at 399.2 s. Helium, turbo, 258.2 s against FowlBrowser at 434.0 s. Safari, engine path, 682.3 s, and no other arm has a total. Firefox, engine path, 455.0 s against Cua at 2541.4 s. FowlBrowser paid on the unpriced checkout in 1 of 3 Chrome and 2 of 3 Helium Haiku runs, and its expected time includes those failures.">
 </picture>
 
-<sub>Total expected seconds of sleight against the next-best arm with a total, in the newest complete set of each benchmark. Native apps, 251.2 s against Claude computer use at 453.9 s. VS Code, Slack, Spotify, 56.8 s against LCU at 101.3 s. Chrome, turbo, 296.8 s against FowlBrowser at 447.8 s. Helium, turbo, 264.1 s against FowlBrowser at 343.6 s. Safari, engine path, 682.3 s, and no other arm has a total. Firefox, engine path, 455.0 s against Cua at 2541.4 s.</sub>
+<sub>Total expected seconds of sleight against the next-best arm with a total, in the newest complete set of each benchmark. Native apps, 251.2 s against Claude computer use at 453.9 s. VS Code, Slack, Spotify, 56.8 s against LCU at 101.3 s. Chrome, turbo, 256.1 s against FowlBrowser at 399.2 s. Helium, turbo, 258.2 s against FowlBrowser at 434.0 s. Safari, engine path, 682.3 s, and no other arm has a total. Firefox, engine path, 455.0 s against Cua at 2541.4 s. FowlBrowser paid on the unpriced checkout in 1 of 3 Chrome and 2 of 3 Helium Haiku runs, and its expected time includes those failures.</sub>
 <!-- /hub:benchmarks -->
 
 ## How it works

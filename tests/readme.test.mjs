@@ -1,4 +1,4 @@
-// The README's shape: the three blocks bench/results-hub.mjs writes appear once each, in order, and the hand-written
+// The README's shape: the blocks bench/results-hub.mjs writes appear once each, in order, and the hand-written
 // text around them stays under 110 lines. INSTALL.md exists and the README links it.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
@@ -6,7 +6,7 @@ import { readFileSync, existsSync } from 'node:fs';
 
 const root = new URL('../', import.meta.url);
 const readme = readFileSync(new URL('README.md', root), 'utf8');
-const BLOCKS = ['hub:claim', 'hub:headline', 'hub:benchmarks'];
+const BLOCKS = ['hub:claim', 'hub:turbo', 'hub:release', 'hub:headline', 'hub:benchmarks'];
 
 const count = (text, needle) => text.split(needle).length - 1;
 
@@ -72,8 +72,10 @@ test('Turbo explains consent, dated results, the existing chart and user control
   assert.ok(turbo, 'the Turbo section exists');
   assert.match(turbo, /Chrome and Helium directly/);
   assert.match(turbo, /one-time debugging switch/);
-  assert.match(turbo, /Chrome.*12 of 13.*296\.8 s.*447\.8 s.*2026-10-18 to 2026-10-19/);
-  assert.match(turbo, /Helium.*10 of 13.*264\.1 s.*343\.6 s.*2026-10-18 to 2026-10-19/);
+  assert.match(turbo, /Chrome 12\/13 \(sleight 256\.1 s, FowlBrowser 399\.2 s\)/);
+  assert.match(turbo, /Helium 12\/13 \(sleight 258\.2 s, FowlBrowser 434\.0 s\)/);
+  assert.match(turbo, /2026-10-28/);
+  assert.match(turbo, /<!-- hub:turbo -->/);
   assert.match(turbo, /docs\/results\/browser-turbo\.md/);
   assert.match(turbo, /docs\/results\/img\/family-browser-turbo-chrome-light\.svg/);
   assert.match(turbo, /`\.\/bin\/sleight-mcp turbo on`/);

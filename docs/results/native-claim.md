@@ -2,14 +2,14 @@
 
 # Native claim
 
-The claim suite runs 9 native tasks in Calculator, TextEdit, Finder, Preview, Word and Excel, one task per skill. sleight competes against LCU, Codex, Cua, Peekaboo and Claude's own computer use in real windows with the tester away. The suite is sleight's own, its skill and tool wording were tuned on the runs of textedit-calculator, preview-read, excel-edit, word-edit, finder-move, textedit-save and textedit-drag (not calculator-click or calculator-menu), and the competitors ran their defaults. The scorer's wording is "fastest". sleight has the lowest expected time on 8 of 9 tasks.
+The claim suite runs 9 native tasks in Calculator, TextEdit, Finder, Preview, Word and Excel, one task per skill. sleight competes against LCU, Codex, Cua, Peekaboo and Claude's own computer use in real windows with the tester away. The suite is sleight's own, its skill and tool wording were tuned on the runs of textedit-calculator, preview-read, excel-edit, word-edit, finder-move, textedit-save and textedit-drag (not calculator-click or calculator-menu), and the competitors ran their defaults. sleight has the lowest expected time on 8 of 9 tasks.
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="charts/family-native-claim-dark.svg">
-  <img src="charts/family-native-claim-light.svg" width="900" alt="Native claim, 2026-10-17 to 2026-10-18. Expected seconds per task for sleight, LCU, Codex, Cua, Peekaboo and Claude computer use. sleight has the lowest expected time on 8 of 9 tasks. The scorer's wording is &quot;fastest&quot;.">
+  <img src="charts/family-native-claim-light.svg" width="900" alt="Native claim, 2026-10-17 to 2026-10-18. Expected seconds per task for sleight, LCU, Codex, Cua, Peekaboo and Claude computer use. sleight has the lowest expected time on 8 of 9 tasks.">
 </picture>
 
-<sub>Native claim, 2026-10-17 to 2026-10-18. Expected seconds per task for sleight, LCU, Codex, Cua, Peekaboo and Claude computer use. sleight has the lowest expected time on 8 of 9 tasks. The scorer's wording is "fastest".</sub>
+<sub>Native claim, 2026-10-17 to 2026-10-18. Expected seconds per task for sleight, LCU, Codex, Cua, Peekaboo and Claude computer use. sleight has the lowest expected time on 8 of 9 tasks.</sub>
 
 Each cell is expected seconds, then passes/runs.
 

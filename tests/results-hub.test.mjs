@@ -11,9 +11,9 @@ import { claim, score } from '../bench/claim-score.mjs';
 import { engineMix, summarizeEngines } from '../bench/engine-version.mjs';
 import { chartCaption } from '../bench/results-charts.mjs';
 import {
-  BUILD_A, BUILD_B, FAMILIES, NAV, README_BLOCKS, cellText, cellsFor, collectBank, collectJsonAbs, collectRace, collectReleases, collectRunnerStudies, collectValidation,
+  BUILD_A, BUILD_B, FAMILIES, NAV, README_BLOCKS, cellText, cellsFor, collectBank, collectJsonAbs, collectRace, collectRematch, collectReleases, collectRunnerStudies, collectValidation,
   compareTasks, dateRange, exploreData, findBanks, listRaceRounds, lossRule, parseRunnerReport, ownerPass, publicVoice, raceDirs, readBank, readmeBlocks, render, renderNav,
-  releaseFreshness, renderNavHtml, renderReadme, rowsFromCell, scoreClaimDir, scrub, scrubPaths, spliceReadme, taskMatrix, variantOf,
+  releaseFreshness, releaseTaskSlowdowns, renderNavHtml, renderReadme, rowsFromCell, scoreClaimDir, scrub, scrubPaths, spliceReadme, taskMatrix, variantOf,
 } from '../bench/results-hub.mjs';
 
 const ROOT = new URL('..', import.meta.url).pathname;
@@ -784,4 +784,194 @@ test('race folders are the dated race-MMDD folders, and a round name found twice
   assert.deepEqual(rounds.map(r => [r.name, r.dir.slice(wt.length + 1), r.done]), [['chrome-a-r1', 'race-1017/chrome-a-r1', false], ['safari-b-r1', 'race-1022/safari-b-r1', true]]);
   assert.deepEqual(listRaceRounds(join(wt, 'race-1017')).map(r => r.name), ['chrome-a-r1']);
   assert.deepEqual(listRaceRounds(join(wt, 'missing')), []);
+});
+
+test('release schedule banks retain the frozen gate and every successful receipt, including failed task runs', t => {
+  const wt = mkdtempSync(join(tmpdir(), 'hub-release150-'));
+  t.after(() => rmSync(wt, { recursive: true, force: true }));
+  const dir = join(wt, 'validation-150f-rel3'); mkdirSync(dir);
+  const put = (name, value) => writeFileSync(join(dir, name), JSON.stringify(value));
+  const identity = { startedAt: '2026-10-28T06:00:00Z', builds: { A: 'a'.repeat(40), B: 'b'.repeat(40) } };
+  const steps = [];
+  for (const side of ['A', 'B']) for (const n of [1, 2, 3]) {
+    const id = `native-${side}-r${n}`; steps.push({ id, side, kind: 'native-haiku', tasks: 'one,two' });
+    put(`${id}.receipt.json`, { id, side, kind: 'native-haiku', rc: 0, result: `/old/bank/${id}.json`, command: ['--model', 'claude-haiku-5-5', '--effort', 'high'] });
+    put(`${id}.json`, { model: 'claude-haiku-5-5', results: [
+      { arm: 'sleight', task: 'one', seconds: n + 10, passed: true, models: ['claude-haiku-5-5'] },
+      { arm: 'sleight', task: 'two', seconds: 30, passed: n === 1, reason: 'wrong result', models: ['claude-haiku-5-5'] },
+    ] });
+  }
+  put('schedule.json', steps); put('queue-identity.json', identity);
+  put('final-verdict.json', { at: '2026-10-28T14:04:00Z', identity, engines: [{ version: '26.1023.50603', build: '22391' }],
+    pass: true, exitCode: 0, errors: [], aborted: { 'native-haiku': { A: 1, B: 2 } }, taskExclusions: [],
+    verdicts: [{ kind: 'native-haiku', passA: 4, passB: 4, comparable: 2, aTotal: 42, bTotal: 42, slowdown: 0, limit: .2, regressed: false,
+      tasks: [{ task: 'one' }, { task: 'two' }] }] });
+  const bank = readBank(dir);
+  assert.ok(bank, 'schedule banks are discovered without plan.json');
+  const { record, studies: [s] } = collectBank(bank);
+  assert.equal(record.passed, true); assert.equal(record.engine, '26.1023.50603 build 22391');
+  assert.equal(record.release.verdicts[0].aTotal, 42);
+  assert.deepEqual(record.release.aborted['native-haiku'], { A: 1, B: 2 });
+  assert.equal(s.runs.length, 12); assert.equal(s.runs.filter(r => !r.passed).length, 4);
+  assert.deepEqual(s.models[BUILD_A], ['claude-haiku-5-5']);
+  assert.deepEqual(s.roundIds[BUILD_A], ['native-A-r1', 'native-A-r2', 'native-A-r3']);
+  assert.equal(s.cells.find(c => c.arm === BUILD_B && c.task === 'two').passes, 1);
+  const all = { ...committed(), validation: { family: 'validation', banks: [record], studies: [s] } };
+  assert.match(readmeBlocks(all).benchmarks, /RELEASE PASS.*1 of 1 groups/);
+  assert.match(render(all)['validation.md'], /Passing lower-median total/);
+  // Dropping a failed attempt leaves pass counts and passing medians unchanged, but must not improve expected time.
+  put('native-A-r3.json', { model: 'claude-haiku-5-5', results: [
+    { arm: 'sleight', task: 'one', seconds: 13, passed: true, models: ['claude-haiku-5-5'] },
+  ] });
+  assert.throws(() => collectBank(readBank(dir)), /missing or duplicate scheduled task/);
+});
+
+test('rematch banks keep models, core tasks and held-out tasks apart and apply the offline regrade without scoring aborted rounds', t => {
+  const dir = mkdtempSync(join(tmpdir(), 'hub-rematch-'));
+  t.after(() => rmSync(dir, { recursive: true, force: true }));
+  const make = (base, name, arm, task, n, model = 'claude-haiku-5-5') => {
+    const out = join(base, name); mkdirSync(out, { recursive: true });
+    writeFileSync(join(out, 'browser.json'), JSON.stringify({ browser: 'chrome', version: '155' }));
+    writeFileSync(join(out, 'commits.json'), JSON.stringify({ build: { commit: '4'.repeat(40) }, fowlbrowser: { commit: 'e51c52a' + '0'.repeat(33) } }));
+    writeFileSync(join(out, 'results.json'), JSON.stringify([{ task: { name: task, browser: 'chrome' }, surface: arm, wallMs: n * 1000,
+      successfulBrowserCalls: 1, site: { lines: [] }, run: { started: Date.parse('2026-10-28T15:00:00Z'), result: { modelUsage: { [model]: {} }, result: 'RESULT: fixture' } },
+      outcome: { ok: task !== 'dm-first-message', problems: task === 'dm-first-message' ? ['answer must be JSON'] : [] } }]));
+  };
+  const banks = [];
+  for (const model of ['haiku', 'opus']) {
+    const base = join(dir, `fw1-e51c52a-${model}`); mkdirSync(base); banks.push({ dir: base, model });
+    for (const arm of ['sleight-turbo', 'fowlbrowser']) for (const n of [1, 2, 3]) {
+      make(base, `chrome-${arm}-r${n}`, arm, 'mdn', n + 10, `claude-${model}-5-5`);
+      if (model === 'haiku') make(base, `whole-${arm}-r${n}`, arm, 'dm-first-message', n + 20);
+    }
+    make(join(base, 'aborted'), 'chrome-sleight-turbo-r3', 'sleight-turbo', 'mdn', 999);
+  }
+  make(banks[0].dir, 'chrome-sleight-turbo-r4', 'sleight-turbo', 'mdn', 14);
+  const regrade = ['sleight-turbo', 'fowlbrowser'].flatMap(arm => [1, 2, 3].map(n =>
+    `whole-${arm}-r${n} | dm-first-message | ${arm} | 20 | {"ok":false} | -> | ${n === 3 ? 'FAIL: wrong answer' : 'ok'}`)).join('\n');
+  const result = collectRematch({ banks, regrade });
+  const core = result.studies.filter(s => s.suite === 'core');
+  assert.equal(core.length, 2); assert.equal(result.studies.filter(s => s.suite === 'held-out').length, 1);
+  assert.ok(core.every(s => s.tasks.length === 1 && s.tasks[0] === 'mdn'));
+  const haiku = core.find(s => s.model === 'haiku'), opus = core.find(s => s.model === 'opus');
+  assert.equal(haiku.runs.filter(r => r.arm === 'sleight-turbo').length, 4);
+  assert.equal(opus.runs.length, 6);
+  assert.ok(result.studies.every(s => s.runs.every(r => r.seconds < 999)));
+  const held = result.studies.find(s => s.suite === 'held-out');
+  assert.equal(held.runs.filter(r => r.passed).length, 4);
+  assert.ok(held.cells.every(c => c.passes === 2));
+  assert.deepEqual(haiku.models['sleight-turbo'], ['claude-haiku-5-5']);
+  assert.deepEqual(opus.models.fowlbrowser, ['claude-opus-5-5']);
+  assert.equal(result.excludedRounds.length, 2, 'both aborted attempts remain disclosed');
+  assert.throws(() => collectRematch({ banks, regrade: '' }), /regrade/i);
+});
+
+test('published rematch keeps the corrected result and its eight held-out tasks outside each 13-task core', () => {
+  const race = committed()['browser-turbo'].race;
+  const newest = race.studies.filter(s => s.rematch);
+  assert.equal(newest.filter(s => s.suite === 'core').length, 4);
+  for (const s of newest.filter(s => s.suite === 'core')) {
+    assert.equal(s.tasks.length, 13);
+    assert.ok(s.models[s.me].every(model => model === `claude-${s.model}-5-5`));
+    assert.ok(s.models.fowlbrowser.every(model => model === `claude-${s.model}-5-5`));
+    assert.ok(!s.tasks.some(task => task.startsWith('job-') || task === 'dm-first-message'));
+  }
+  const held = newest.find(s => s.suite === 'held-out');
+  assert.equal(held.tasks.length, 8);
+  for (const arm of held.arms) {
+    assert.deepEqual(held.regrade.arms[arm], { runs: 9, passes: 5 });
+    assert.equal(held.cells.find(c => c.arm === arm && c.task === 'job-motion').passes, 0);
+  }
+  assert.ok(race.excludedRounds.some(r => /opus\/aborted\//.test(r.round)));
+  const release = committed().validation.banks.find(b => b.id === 'validation-150f-rel3');
+  assert.equal(release.passed, true);
+  assert.equal(release.groups, 8);
+  assert.equal(release.bBuild, 'e679ed7e');
+  assert.ok(committed().validation.banks.some(b => b.id === 'validation-150f-rel2' && b.engine.startsWith('26.1021.31345')));
+});
+
+
+test('release summaries disclose paid checkout failures and name the previous release', () => {
+  const all = committed(), blocks = readmeBlocks(all), files = render(all);
+  for (const text of [blocks.turbo, blocks.benchmarks, files['browser-turbo.md']]) {
+    assert.match(text, /FowlBrowser paid on the unpriced checkout in 1 of 3 Chrome and 2 of 3 Helium Haiku runs/);
+    assert.match(text, /expected time includes those failures/);
+  }
+  for (const text of [blocks.release, files['validation.md']]) {
+    assert.match(text, /against 1\.4\.2 \(the 1\.5\.0 harness with the 1\.4\.2 plugin tree\)/);
+    assert.doesNotMatch(text, /\bp\d{3,}\b|\bcf342b59\b/);
+  }
+  const internalLabels = /\b(?:[A-Z]{2,}-?\d+[A-Z]?|rel\d+|p\d{3,})\b/;
+  assert.doesNotMatch(files['browser-turbo.md'], /The scorer's wording is "fastest"/);
+  // Recorded round identifiers retain their source names inside code spans.
+  for (const file of ['browser-turbo.md', 'validation.md']) assert.doesNotMatch(files[file].replace(/`[^`]*`/g, ''), internalLabels);
+});
+
+test('tracked whole-thread regrades reproduce all 18 corrected rematch answers', () => {
+  const text = readFileSync(join(OUT, 'data/whole-thread-regrade.txt'), 'utf8');
+  const [header, ...lines] = text.trim().split('\n');
+  assert.match(header, /round \| task \| arm \| agent seconds \| recorded outcome \(JSON\) \| regrade \| corrected outcome/);
+  assert.doesNotMatch(text, /\[object Object\]/);
+  assert.equal(lines.length, 18);
+  const held = committed()['browser-turbo'].race.studies.find(s => s.rematch && s.suite === 'held-out');
+  const counts = Object.fromEntries(held.arms.map(arm => [arm, { runs: 0, passes: 0 }]));
+  for (const line of lines) {
+    const [round, task, arm, seconds, saved, arrow, verdict] = line.split(' | ');
+    assert.ok(Number(seconds) > 0);
+    assert.equal(typeof JSON.parse(saved).ok, 'boolean');
+    assert.equal(arrow, '->');
+    const run = held.runs.find(r => r.round === round && r.task === task && r.arm === arm);
+    assert.ok(run, `${round}/${task}`);
+    // The report prints agentSeconds. The hub keeps wallMs, so only the grade crosses this boundary.
+    assert.equal(run.passed, verdict === 'ok');
+    counts[arm].runs++;
+    counts[arm].passes += verdict === 'ok' ? 1 : 0;
+  }
+  assert.deepEqual(counts, held.regrade.arms);
+});
+
+test('release slowdown summary includes large deltas, run counts and tasks without a B pass', () => {
+  const text = render(committed())['validation.md'];
+  for (const fact of [
+    '| Chrome Opus | `inject-order` | +113.61% | 1 | 1 |',
+    '| Chrome Opus | `demoid` | +74.34% | 1 | 1 |',
+    '| Native Haiku | `textedit-edit` | +53.27% | 3 | 3 |',
+    '| Native Haiku | `textedit-insert-line` | +51.49% | 3 | 3 |',
+    '| Firefox Haiku | `inject-order` | +40.00% | 3 | 3 |',
+    '| Safari Haiku | `inject-order` | +36.96% | 3 | 3 |',
+    '| Chrome Opus | `inject-mail` | 1/1 | 0/1 |',
+    '| Firefox Haiku | `form-settings-helium` | 0/3 | 0/3 |',
+  ]) assert.ok(text.includes(fact), fact);
+});
+
+test('release slowdown summary follows changed validation cells at the 24 percent boundary', () => {
+  const all = committed();
+  const study = all.validation.studies.find(s => s.bank === 'validation-150f-rel3' && s.group === 'chrome-opus');
+  const a = study.cells.find(c => c.task === 'demoid' && c.arm === BUILD_A);
+  const b = study.cells.find(c => c.task === 'demoid' && c.arm === BUILD_B);
+  a.expected = 100; b.expected = 124; a.runs = 2; b.runs = 7;
+  assert.ok(render(all)['validation.md'].includes('| Chrome Opus | `demoid` | +24.00% | 2 | 7 |'));
+  b.expected = 123.4;
+  const summary = releaseTaskSlowdowns(all.validation);
+  assert.ok(!summary.includes('`demoid`'));
+});
+
+test('release documents and validation page share the generated slowdown summary', () => {
+  const all = committed(), text = releaseTaskSlowdowns(all.validation);
+  assert.ok(render(all)['validation.md'].includes(text));
+  for (const name of ['CHANGELOG.md', 'docs/releases/1.5.0.md']) {
+    const doc = readFileSync(join(ROOT, name), 'utf8');
+    assert.equal(spliceReadme(doc, { 'release-slowdowns': text }), doc, `${name} slowdown summary is stale`);
+    assert.ok(doc.includes(text));
+  }
+});
+
+test('incomplete studies keep completed task counts beside their lowest expected time', () => {
+  const all = committed(), files = render(all);
+  const held = all['browser-turbo'].race.studies.find(s => s.rematch && s.suite === 'held-out');
+  const completed = held.cells.filter(c => c.arm === held.me && c.passes > 0).length;
+  assert.ok(completed < held.tasks.length);
+  assert.match(files['browser-turbo.md'], new RegExp(`completed ${completed} of ${held.tasks.length} tasks\\. sleight turbo has the lowest expected time on 3 of 8 tasks`));
+  for (const text of [readmeBlocks(all).turbo, files['README.md'], files['index.html']])
+    assert.match(text, new RegExp(`completed ${completed} of ${held.tasks.length} tasks`));
 });
