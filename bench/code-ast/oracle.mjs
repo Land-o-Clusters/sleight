@@ -101,7 +101,7 @@ const missing = (expected, visible) => {
   return [...a].some(([key, count]) => count > (b.get(key) ?? 0));
 };
 
-export function oracle({ label = 'code-ast', reportFailure = entry => console.log(JSON.stringify(entry)) } = {}) {
+export function oracle({ label = 'code-ast', caseOffset = 0, reportFailure = entry => console.log(JSON.stringify(entry)) } = {}) {
   if (typeof vm.SourceTextModule !== 'function') throw new Error('code-ast oracle needs --experimental-vm-modules');
   const counts = { label, tested: 0, nodeAccepted: 0, meriyahAccepted: 0, bothRefuse: 0, falseRefusal: 0, meriyahOnly: 0,
     failOpen: 0, falsePositive: 0, oracleCalls: 0, legacyInventoryMiss: 0, legacyAdmissionRefusal: 0 };
@@ -133,7 +133,7 @@ export function oracle({ label = 'code-ast', reportFailure = entry => console.lo
     // This is the benchmark's deliberately small token adapter, not a finding
     // that every production consumer missed the call.
     if (nodeAccepted && !legacy.refused && missing(expected, legacy.calls)) counts.legacyInventoryMiss++;
-    if (nodeAccepted !== meriyahAccepted || failOpen || falsePositive) reportFailure({ label, case: counts.tested,
+    if (nodeAccepted !== meriyahAccepted || failOpen || falsePositive) reportFailure({ label, case: caseOffset + counts.tested,
       sha256: createHash('sha256').update(code).digest('hex'), nodeAccepted, meriyahAccepted, failOpen, falsePositive, error: parsed.error });
     return { nodeAccepted, meriyahAccepted, expected, visible, legacy, ast: parsed.ast };
   }

@@ -1,11 +1,11 @@
 // FR3 structured generator, all three wrappers per case; no generated code executes.
 import { oracle } from './oracle.mjs';
-const seed = Number(process.argv[2] ?? 3), count = Number(process.argv[3] ?? 1000000);
-if (!Number.isSafeInteger(seed) || !Number.isSafeInteger(count) || count < 1) throw new Error('expected seed and positive count');
+const seed = Number(process.argv[2] ?? 3), count = Number(process.argv[3] ?? 1000000), offset = Number(process.argv[4] ?? 0);
+if (!Number.isSafeInteger(seed) || !Number.isSafeInteger(count) || count < 1 || !Number.isSafeInteger(offset) || offset < 0) throw new Error('expected seed and positive count');
 let state = seed >>> 0;
 const random = () => (state = (state * 1664525 + 1013904223) >>> 0) / 2 ** 32;
 const pick = items => items[Math.floor(random() * items.length)];
-const run = oracle({ label: `structured seed=${seed}` });
+const run = oracle({ label: `structured seed=${seed}`, caseOffset: offset * 3 });
 const payload = 'app.typeText("PAYLOAD")';
 const regex = ['/\'/','/[/*]/','/[*/]/','/x/g','/[\\/]/','/a\\/b/','/}/','/`/'];
 const gap = [' ', '\n', '\r', '\u2028', '\u2029', '/*gap*/', '/*\ngap*/', '//gap\n'];
@@ -17,10 +17,10 @@ const numbers = ['1.', '1.e3', '1.e+3', '1.e-3', '.5', '.5e2', '1.5e-2', '1_000.
 const spreadWords = ['typeof', 'await', 'yield', 'void', 'new'];
 const template = expression => '`${' + expression + '}`';
 const generated = Array(15).fill(0);
-for (let n = 0; n < count; n++) {
+for (let n = 0; n < count + offset; n++) {
   const r = pick(regex), sep = pick(gap), word = pick(keywords), op = pick(operators);
   const variant = Math.floor(random() * generated.length);
-  generated[variant]++;
+  if (n >= offset) generated[variant]++;
   let code;
   switch (variant) {
     case 0: code = `${pick(boundaries)}${pick(['\n', '\r', '\u2028', '\u2029', '/*\n*/'])}${r}.test(s); ${payload}; ${r}.test(s)`; break;
@@ -45,6 +45,7 @@ for (let n = 0; n < count; n++) {
     case 13: code = template(pick([payload, `(${payload}, ${payload})`, `f(${payload})`, `cua.getApp("Fixture"), ${payload}`])) + `; ${payload};`; break;
     case 14: code = template(pick([template(payload), `f(${template(payload)})`, template(`(${payload}, ${template(payload)})`)])) + `; ${payload};`; break;
   }
+  if (n < offset) continue;
   for (const wrapper of ['async function f()', 'function f()', 'function* f()']) run.check(code, wrapper);
   if ((n + 1) % 100000 === 0) console.log(JSON.stringify({ progress: n + 1, failOpen: run.counts.failOpen }));
 }

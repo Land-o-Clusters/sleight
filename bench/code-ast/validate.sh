@@ -22,7 +22,7 @@ case "${1:-tests}" in
     for file in tests/{flow-rules,fr2-tokenizer,fr3-tokenizer,fr3-review-regressions,code-line-terminators,native-arguments,text-save,menu-continuation,clipboard}.test.mjs; do
       if [ -f "$file" ]; then files+=("$file"); fi
     done
-    run_node --test --test-concurrency=1 "${files[@]}" tests/temp-leftovers.test.mjs tests/compat-contract.test.mjs
+    run_node --test --test-concurrency=1 "${files[@]}" tests/temp-leftovers.test.mjs tests/compat-contract.test.mjs tests/code-ast-batch.test.mjs
     ;;
   notices)
     run_node --input-type=module - <<'JS'
@@ -37,8 +37,8 @@ console.log(fixture.notices);
 JS
     ;;
   corpus) run_node bench/code-ast/replay.mjs ;;
-  differential) wait_fuzz; run_node bench/code-ast/differential.mjs 3 1000000 ;;
-  shaped) wait_fuzz; run_node bench/code-ast/corpus-shaped.mjs 100000 ;;
+  differential) wait_fuzz; run_node bench/code-ast/batch.mjs differential ;;
+  shaped) wait_fuzz; run_node bench/code-ast/batch.mjs shaped ;;
   cases)
     status=0
     for file in bench/code-ast/reviewer/m{1,2,3,4,5,6,7}.mjs; do run_node "$file" || status=1; done
@@ -46,12 +46,7 @@ JS
     ;;
   reviewers)
     wait_fuzz
-    status=0
-    for file in bench/code-ast/reviewer/{fuzz,fuzz2}.mjs; do
-      run_node "$file" 1 500000 || status=1
-      run_node "$file" 2 500000 html || status=1
-    done
-    exit "$status"
+    run_node bench/code-ast/batch.mjs reviewers
     ;;
   measure) run_node bench/code-ast/measure.mjs ;;
   compat) run_node bench/compat-static.mjs --app /Applications/ChatGPT.app ;;
