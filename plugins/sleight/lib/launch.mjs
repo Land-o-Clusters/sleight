@@ -133,6 +133,27 @@ export function resolveServer(env = process.env) {
   return { version, configPath, command: server.command, args: server.args || [], env: serverEnv };
 }
 
+// Node options that take their value as the next argument. Engine 26.1023.50603 starts its server
+// with `--import file:///…/require-browser-access.mjs` before the script, so the script isn't args[0].
+const NODE_VALUE_FLAGS = new Set(['--import', '--require', '-r', '--loader', '--experimental-loader', '--env-file',
+  '--conditions', '-C', '--input-type', '--title', '--redirect-warnings', '--diagnostic-dir', '--report-dir']);
+const asPath = arg => arg.startsWith('file:') ? (() => { try { return fileURLToPath(arg); } catch { return undefined; } })() : arg;
+
+// The files an engine launch names: its script (the first argument that is neither an option nor an option's
+// value) and every other absolute path or file URL, including the values of options such as --import.
+export function engineLaunchPaths(args) {
+  let script, takesValue = false;
+  const others = [];
+  for (const arg of args) {
+    const path = typeof arg === 'string' ? asPath(arg) : undefined;
+    if (takesValue) { takesValue = false; if (path && isAbsolute(path)) others.push(path); continue; }
+    if (typeof arg === 'string' && arg.startsWith('-')) { takesValue = NODE_VALUE_FLAGS.has(arg); continue; }
+    if (script === undefined) { script = path ?? arg; continue; }
+    if (path && isAbsolute(path)) others.push(path);
+  }
+  return { script, others };
+}
+
 export function selectSurfaces(server, env = process.env, options) {
   if (env.SLEIGHT_SURFACES) {
     server.env.CUA_REPL_ENABLED_SURFACES = env.SLEIGHT_SURFACES;
@@ -225,7 +246,7 @@ export async function doctor({ env = process.env, log = console.log, app = proce
   await probeSurfaces(s, env);
   const checks = [
     ['node', s.command],
-    ['server script', s.args[0]],
+    ['server script', engineLaunchPaths(s.args).script],
     ['node_repl', s.env.CUA_REPL_NODE_REPL_PATH],
     ['computer-use helper', s.env.SKY_CUA_SERVICE_PATH],
   ];
@@ -1119,8 +1140,8 @@ export async function run({ leaseDirectory, inspectInput: inspectStoppedInput, h
     if (!Array.isArray(latest.args) || !latest.args.length || latest.args.some(arg => typeof arg !== 'string')) {
       throw new Error('Engine launch arguments are invalid.');
     }
-    const paths = [['runtime', latest.command], ['script', latest.args[0]],
-      ...latest.args.slice(1).filter(isAbsolute).map(path => ['argument', path])];
+    const { script, others } = engineLaunchPaths(latest.args);
+    const paths = [['runtime', latest.command], ['script', script], ...others.map(path => ['argument', path])];
     for (const [label, path] of paths) {
       if (typeof path !== 'string' || !existsSync(path)) throw new Error(`server ${label} missing: ${path}`);
     }
