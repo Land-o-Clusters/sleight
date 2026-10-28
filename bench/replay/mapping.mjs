@@ -329,7 +329,8 @@ export function normalized(text, mapper = new TargetMapper(), recorded = false, 
   return text.replace(/^(\+ )?(\s*)\d+ (?=[a-z])/gm, '$1$2# ')
     .replace(/\[ref=(?:f\d+)?[es]\d+\]/g, '[ref=#]')
     .replace(/\b(element|index) (\d+)\b/g, (_, label, id) => `${label} ${ids.get(Number(id)) ?? id}`)
-    .replace(/(\b(?:pid|windowNumber)"?\s*[:=]\s*)\d+/g, '$1<runtime-id>')
+    .replace(/(\b(?:pid|windowNumber)"?\s*[:=]\s*)\d+/g,
+      (_, prefix) => prefix + (prefix.includes('"') ? '"<runtime-id>"' : '<runtime-id>'))
     .trim();
 }
 
@@ -381,12 +382,15 @@ export function replayResultStop(result, documentation) {
 
 export function windowDifference(before, after, mapper = new TargetMapper()) {
   const headers = text => [...text.replace(/\r\n/g, '\n').matchAll(/^Window: "[^\n]+", App: [^\n]+$/gm)].map(m => m[0]);
+  const sameMultiset = (a, b) => JSON.stringify(a.sort()) === JSON.stringify(b.sort());
   const a = headers(before), b = headers(after);
-  if ((a.length || b.length) && (a.length !== 1 || b.length !== 1 || mapper.replaceStrings(a[0]) !== b[0]))
+  if (!sameMultiset(a.map(header => mapper.replaceStrings(header)), b))
     return 'native window or app changed';
   const x = windowReceipts(before), y = windowReceipts(after);
-  if ((x.length || y.length) && (x.length !== 1 || y.length !== 1 || x[0].target.appId !== y[0].target.appId ||
-      mapper.replaceStrings(x[0].target.title) !== y[0].target.title)) return 'native window or app changed';
+  const targets = (rows, recorded) => rows.map(({ target }) => JSON.stringify([
+    target.appId, recorded ? mapper.replaceStrings(target.title) : target.title,
+  ]));
+  if (!sameMultiset(targets(x, true), targets(y, false))) return 'native window or app changed';
   return null;
 }
 

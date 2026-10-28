@@ -252,7 +252,9 @@ export async function main(argv = process.argv.slice(2), {
       let result;
       try {
         result = await engineIteration(() => runIteration(recording, { env: step.env, dir, signal: iteration.signal, abort: iteration.abort,
-          beforeCall: iteration.beforeCall, record, worktree: step.build?.worktree, prepared, comparison }), { previous: runs.map(run => run.engine), read: readEngine });
+          beforeCall: iteration.beforeCall, record, worktree: step.build?.worktree, prepared, comparison }), {
+          previous: runs.map(run => run.engine), read: () => readEngine({ worktree: step.build?.worktree ?? repo }),
+        });
       } catch (error) {
         // A server-close error can attest server collection alone, not fixture teardown.
         result = { verdict: 'diverge', reason: error.message, calls: [], totalToolMs: 0, cleanupConfirmed: false, engine: error.engine };
