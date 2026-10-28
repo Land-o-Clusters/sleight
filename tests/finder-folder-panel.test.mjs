@@ -115,6 +115,24 @@ function fixture({ role = 'AXWindow', subrole = 'AXDialog', parent = 'window', f
     probe: () => source.finderSetupProbe(request, app, api, clock) };
 }
 
+test('Finder setup probe waits for CG bounds on its retained new window before navigation and cleanup', () => {
+  const f = fixture({ measuredSheet: true });
+  delete f.window.AXWindowNumber;
+  f.window.testFrame = { x: 10, y: 20, width: 400, height: 300 };
+  let polls = 0;
+  f.native.CGWindowListCopyWindowInfo = () => ++polls <= 2 ? [] : [{ kCGWindowOwnerPID: 42,
+    kCGWindowLayer: 0, kCGWindowNumber: 71, kCGWindowIsOnscreen: true,
+    kCGWindowBounds: { X: 10, Y: 20, Width: 400, Height: 300 } }];
+  const result = f.probe();
+  assert.equal(result.passed, true, JSON.stringify(result));
+  assert.equal(result.navigationConfirmed, true);
+  assert.equal(result.cleanupConfirmed, true);
+  const phases = Array.from(result.snapshots, row => row.phase);
+  assert.deepEqual(phases.slice(-3), ['after-new', 'after-navigation', 'after-cleanup']);
+  assert.ok(phases.length > 3 && phases.slice(0, -3).every(phase => phase === 'before-new'));
+  assert.deepEqual(f.app.AXWindows, [f.owner]);
+});
+
 for (const delayedSheet of [false, true]) test(`measured macOS 27 sheet submits its focused PathTextField (delayed=${delayedSheet})`, () => {
   const f = fixture({ measuredSheet: true, delayedSheet });
   assert.equal(f.open(), f.window);

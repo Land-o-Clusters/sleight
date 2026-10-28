@@ -1668,33 +1668,72 @@ function nativeAX(state, clock) {
     for (var index = 0; index < Number(values.count); index++) if (equal(values.objectAtIndex(index), window)) return true;
     return false;
   }
-  function cgWindows(pid) {
+  function cgWindows(pid, includeOtherLayers) {
     if (clock && clock.check) clock.check();
     var raw = $.CGWindowListCopyWindowInfo($.kCGWindowListOptionAll, $.kCGNullWindowID);
     if (!raw || raw.isNil && raw.isNil()) throw new Error('Fixture CG window inventory unavailable');
     return ObjC.deepUnwrap(ObjC.castRefToObject(raw)).filter(function (window) {
-      return Number(window.kCGWindowOwnerPID) === pid && Number(window.kCGWindowLayer) === 0;
+      return Number(window.kCGWindowOwnerPID) === pid && (includeOtherLayers || Number(window.kCGWindowLayer) === 0);
     });
   }
   function windowNumber(window, app) {
     var pid = Ref();
     if (Number($.AXUIElementGetPid(app, pid)) !== 0) throw new Error('Fixture window process unavailable');
-    var windows = cgWindows(Number(pid[0])), direct = read(window, 'AXWindowNumber');
-    if (direct && Number(ObjC.unwrap(direct)) > 0) {
-      windows = windows.filter(function (info) { return Number(info.kCGWindowNumber) === Number(ObjC.unwrap(direct)); });
-    } else {
-      var frame = api.frame(window);
-      if (!frame) return null;
-      var bounds = [frame.x, frame.y, frame.width, frame.height];
-      if (!bounds.every(function (value) { return isFinite(value); })) return null;
-      windows = windows.filter(function (info) {
-        return ['X', 'Y', 'Width', 'Height'].every(function (key, index) {
-          return info.kCGWindowBounds && Math.abs(Number(info.kCGWindowBounds[key]) - bounds[index]) < 0.5;
-        });
-      });
+    var now = clock && clock.now ? clock.now : Date.now, deadline = now() + 1000;
+    var candidates = [], windows = [], direct = null, frame = null;
+    function sameWindow() {
+      return children(app, 'AXWindows').filter(function (item) { return equal(item, window); }).length === 1 &&
+        text(window, 'AXRole') === 'AXWindow';
     }
-    var number = windows.length === 1 ? Number(windows[0].kCGWindowNumber) : null;
-    return number > 0 && number === Math.floor(number) ? number : null;
+    // Finder can expose an AX window before WindowServer publishes its final
+    // bounds. Retry only this retained reference, within both time and poll caps.
+    for (var attempt = 0; attempt < 11; attempt++) {
+      if (attempt && (now() > deadline || !sameWindow())) break;
+      candidates = cgWindows(Number(pid[0]), true);
+      direct = read(window, 'AXWindowNumber');
+      frame = null;
+      if (direct && Number(ObjC.unwrap(direct)) > 0) {
+        windows = candidates.filter(function (info) {
+          return Number(info.kCGWindowLayer) === 0 && Number(info.kCGWindowNumber) === Number(ObjC.unwrap(direct));
+        });
+      } else {
+        frame = api.frame(window);
+        var bounds = frame && [frame.x, frame.y, frame.width, frame.height];
+        windows = candidates.filter(function (info) {
+          return bounds && bounds.every(function (value) { return typeof value === 'number' && isFinite(value); }) &&
+            Number(info.kCGWindowLayer) === 0 && Number(info.kCGWindowIsOnscreen) === 1 &&
+            ['X', 'Y', 'Width', 'Height'].every(function (key, index) {
+              return info.kCGWindowBounds && info.kCGWindowBounds[key] != null &&
+                Math.abs(Number(info.kCGWindowBounds[key]) - bounds[index]) < 0.5;
+            });
+        });
+      }
+      var number = windows.length === 1 ? Number(windows[0].kCGWindowNumber) : null;
+      if (number > 0 && number === Math.floor(number) && (!attempt || sameWindow())) return number;
+      if (attempt === 10 || now() >= deadline || !sameWindow()) break;
+      var delay = Math.min(100, deadline - now());
+      if (delay <= 0) break;
+      if (clock && clock.wait) clock.wait(delay);
+      else $.NSThread.sleepForTimeInterval(delay / 1000);
+    }
+    if (clock && clock.debugFailure) {
+      // Diagnostics never contain titles, paths or unfiltered CG dictionaries.
+      // Failure to read diagnostic geometry must not replace the original stop.
+      try {
+        if (!frame) frame = api.frame(window);
+      } catch (_) {}
+      function numeric(value) { return value != null && isFinite(Number(value)) ? Number(value) : null; }
+      var geometry = frame && { x: numeric(frame.x), y: numeric(frame.y), width: numeric(frame.width), height: numeric(frame.height) };
+      try {
+        clock.debugFailure('window number inputs', new Error(JSON.stringify({ axWindowNumberPresent: direct != null,
+          axFrame: geometry, cgCandidateCount: candidates.length, cgCandidates: candidates.map(function (info) {
+            var raw = info.kCGWindowBounds;
+            return { layer: numeric(info.kCGWindowLayer), onscreen: info.kCGWindowIsOnscreen == null ? null : Number(info.kCGWindowIsOnscreen) === 1,
+              bounds: raw ? { X: numeric(raw.X), Y: numeric(raw.Y), Width: numeric(raw.Width), Height: numeric(raw.Height) } : null };
+          }), matchCount: windows.length })));
+      } catch (_) {}
+    }
+    return null;
   }
   function retain(window, request, app, receipt) {
     var expected = request.target && request.target[0] === '/' ? path(request.target) : null;
