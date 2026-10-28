@@ -228,7 +228,7 @@ test('debug steps contain timing and outcomes without altering receipts or event
   const waits = f.events.filter(event => event.finderFolderWait);
   assert.equal(waits.length, 1);
   assert.equal(waits[0].stage, 'finder-folder-dismiss');
-  assert.equal(waits[0].finderFolderWait.reason, 'closed');
+  assert.equal(waits[0].finderFolderWait.waitReason, 'closed');
   assert.ok(waits[0].finderFolderWait.elapsedMs > 0);
   const otherFields = f.events.map(({ finderFolderWait, ...event }) => event);
   assert.doesNotMatch(JSON.stringify([result, otherFields]), /elapsedMs|outcome|folder-path-write|folder-return/);

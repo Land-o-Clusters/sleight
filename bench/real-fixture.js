@@ -332,6 +332,10 @@ function finderRoleInventory(app, api, receipt, phase) {
         throw new Error('Finder folder sheet identity changed');
       return;
     }
+    // A second GoToWindow is foreign even if the retained panel just closed.
+    // Never count it as another candidate for the fixture window.
+    if (panel && panel.reference && api.text(item, 'AXIdentifier') === 'GoToWindow')
+      throw new Error('Foreign Finder Go to Folder panel; setup refused');
     var detail = {}, role = api.finderRole ? api.finderRole(item, detail) : null;
     if (['AXWindow', 'AXScrollArea'].indexOf(role) === -1)
       throw windowInventoryError(message, 'non-window-or-stale', windows.length, index, detail);
@@ -361,7 +365,7 @@ function finderStep(clock, name, operation, confirmed) {
 // the reporting deadline; the 15 s recovery cap is provisional, pending live
 // close-time samples. Recovery only reads, never resubmits or dismisses.
 function waitForFinderFolderDismiss(window, sheet, app, api, clock, validateWindow) {
-  var started = clock.now(), deadlineMs = 5000, hardCapMs = 15000, reason = 'error';
+  var started = clock.now(), deadlineMs = 5000, hardCapMs = 15000, waitReason = 'error';
   try {
     while (true) {
       clock.check();
@@ -379,18 +383,21 @@ function waitForFinderFolderDismiss(window, sheet, app, api, clock, validateWind
       }
       validateWindow();
       var elapsed = Math.max(0, clock.now() - started);
-      if (!present) { reason = 'closed'; return; }
+      if (!present) { waitReason = 'closed'; return; }
       if (elapsed >= hardCapMs) {
-        reason = 'deadline';
+        waitReason = 'deadline';
         throw new Error('Finder Go to Folder sheet still open after submission');
       }
       clock.wait(Math.min(100, hardCapMs - elapsed));
     }
   } finally {
-    var elapsedMs = Math.max(0, clock.now() - started);
-    if (clock.emit) clock.emit({ stage: 'finder-folder-dismiss', finderFolderWait: {
-      reason: reason, elapsedMs: elapsedMs, deadlineMs: deadlineMs, hardCapMs: hardCapMs, late: elapsedMs > deadlineMs
-    } });
+    // Diagnostics cannot change success or replace the original wait failure.
+    try {
+      var elapsedMs = Math.max(0, clock.now() - started);
+      if (clock.emit) clock.emit({ stage: 'finder-folder-dismiss', finderFolderWait: {
+        waitReason: waitReason, elapsedMs: elapsedMs, deadlineMs: deadlineMs, hardCapMs: hardCapMs, late: elapsedMs > deadlineMs
+      } });
+    } catch (_) {}
   }
 }
 

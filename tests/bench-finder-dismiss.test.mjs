@@ -28,7 +28,7 @@ for (const measuredSheet of [false, true]) for (const closeAt of [0, 100, 4900, 
     assert.equal(f.run(), f.window);
     assert.equal(f.clock.now(), closeAt);
     assert.deepEqual(JSON.parse(JSON.stringify(f.events.find(event => event.finderFolderWait))), { stage: 'finder-folder-dismiss', finderFolderWait: {
-      reason: 'closed', elapsedMs: closeAt, deadlineMs: 5000, hardCapMs: 15000, late: closeAt > 5000,
+      waitReason: 'closed', elapsedMs: closeAt, deadlineMs: 5000, hardCapMs: 15000, late: closeAt > 5000,
     } });
     singleSubmit(f);
     if (!measuredSheet) {
@@ -45,21 +45,27 @@ test('owned sheet still present at the hard cap fails with a timing receipt and 
   const f = finderAX({ closeAt: Infinity });
   assert.throws(f.run, /sheet still open after submission/);
   assert.equal(f.clock.now(), 15000);
-  assert.equal(f.events.at(-1).finderFolderWait.reason, 'deadline');
+  assert.equal(f.events.at(-1).finderFolderWait.waitReason, 'deadline');
   assert.equal(f.events.at(-1).finderFolderWait.elapsedMs, 15000);
   singleSubmit(f);
 });
 
-for (const at of [200, 5200]) for (const change of ['focus', 'parent', 'replacement', 'foreign-dialog', 'window', 'baseline', 'role', 'identifier']) {
-  test(`${change} change at ${at} ms stops the wait without input`, () => {
-    const f = finderAX({ closeAt: 12000, onCheck(f) {
-      if (f.clock.now() < at) return;
+for (const measuredSheet of [false, true]) for (const at of [200, 5200])
+for (const change of ['focus', 'parent', 'replacement', 'foreign-dialog', 'window', 'baseline', 'role', 'identifier']) {
+  test(`${measuredSheet ? 'AXSheet' : 'AXWindow'} ${change} change at ${at} ms stops the wait without input`, () => {
+    let changed = false;
+    const f = finderAX({ measuredSheet, closeAt: 12000, onCheck(f) {
+      if (changed || f.clock.now() < at) return;
+      changed = true;
       if (change === 'focus') f.app.AXFocusedWindow = f.owner;
       if (change === 'parent') f.panel.AXParent = f.owner;
       if (change === 'replacement') {
-        const replacement = { ...f.panel };
+        // AXSheet references may be re-vended with the same bound geometry.
+        // This replacement is foreign because its parent no longer matches.
+        const replacement = { ...f.panel, ...(measuredSheet ? { AXParent: f.owner } : {}) };
         f.app.AXWindows = f.app.AXWindows.map(w => w === f.panel ? replacement : w);
         f.app.AXChildren = [replacement]; f.app.AXFocusedWindow = replacement;
+        if (measuredSheet) f.window.AXSheets = [replacement];
       }
       if (change === 'foreign-dialog') f.owner.AXSheets = [{ AXRole: 'AXSheet', AXParent: f.owner }];
       if (change === 'window') f.app.AXWindows = [f.owner];
@@ -69,7 +75,80 @@ for (const at of [200, 5200]) for (const change of ['focus', 'parent', 'replacem
     } });
     assert.throws(f.run, /focus|identity|Foreign|inventory|vanished/);
     assert.equal(f.clock.now(), at);
-    assert.equal(f.events.at(-1).finderFolderWait.reason, 'error');
+    assert.equal(f.events.at(-1).finderFolderWait.waitReason, 'error');
+    singleSubmit(f);
+  });
+}
+
+for (const at of [200, 5200]) for (const dimension of ['x', 'y', 'width', 'height', 'number']) {
+  test(`AXSheet ${dimension} drift at ${at} ms stops the wait without input`, () => {
+    let changed = false;
+    const f = finderAX({ measuredSheet: true, closeAt: 12000, onCheck(f) {
+      if (changed || f.clock.now() < at) return;
+      changed = true;
+      if (dimension === 'number') f.panel.AXWindowNumber = 72;
+      else f.panel.testFrame[dimension] += 4;
+    } });
+    assert.throws(f.run, /sheet identity changed/);
+    assert.equal(f.clock.now(), at);
+    assert.equal(f.events.at(-1).finderFolderWait.waitReason, 'error');
+    singleSubmit(f);
+  });
+}
+
+for (const at of [200, 5200]) for (const inventory of ['sheets', 'window-children', 'app-children', 'windows']) {
+  test(`a second AXSheet in ${inventory} at ${at} ms is refused without input`, () => {
+    let added = false;
+    const f = finderAX({ measuredSheet: true, closeAt: 12000, onCheck(f) {
+      if (added || f.clock.now() < at) return;
+      added = true;
+      const second = { ...f.panel, testFrame: { ...f.panel.testFrame } };
+      if (inventory === 'sheets') f.window.AXSheets = [f.panel, second];
+      if (inventory === 'window-children') f.window.AXChildren = [f.panel, second];
+      if (inventory === 'app-children') f.app.AXChildren = [f.panel, second];
+      if (inventory === 'windows') f.app.AXWindows.push(f.panel, second);
+    } });
+    assert.throws(f.run, /sheet identity changed/);
+    assert.equal(f.clock.now(), at);
+    assert.equal(f.events.at(-1).finderFolderWait.waitReason, 'error');
+    singleSubmit(f);
+  });
+}
+
+test('the wait follows a re-vended AXSheet with its bound geometry until dismissal', () => {
+  let replaced = false;
+  const f = finderAX({ measuredSheet: true, closeAt: 6200, onCheck(f) {
+    if (replaced || f.clock.now() < 5200) return;
+    replaced = true;
+    const replacement = { ...f.panel, testFrame: { ...f.panel.testFrame } };
+    f.window.AXSheets = [replacement]; f.window.AXChildren = [replacement];
+    f.app.AXChildren = [replacement]; f.field.AXParent = replacement;
+    f.panel.gone = true;
+  } });
+  assert.equal(f.run(), f.window);
+  assert.equal(replaced, true);
+  assert.equal(f.clock.now(), 6200);
+  assert.equal(f.events.find(event => event.finderFolderWait).finderFolderWait.waitReason, 'closed');
+  singleSubmit(f);
+});
+
+for (const measuredSheet of [false, true]) for (const outcome of ['closed', 'error', 'deadline']) {
+  test(`a throwing wait receipt cannot mask AX${measuredSheet ? 'Sheet' : 'Window'} ${outcome}`, () => {
+    const original = new Error('original wait failure');
+    const f = finderAX({ measuredSheet, closeAt: outcome === 'closed' ? 6200 : Infinity, onCheck(f) {
+      if (outcome === 'error' && f.clock.now() >= 5200) throw original;
+    } });
+    const emit = f.clock.emit;
+    let attempts = 0;
+    f.clock.emit = event => {
+      if (event.stage === 'finder-folder-dismiss') { attempts++; throw new Error('receipt failure'); }
+      emit(event);
+    };
+    if (outcome === 'closed') assert.equal(f.run(), f.window);
+    else if (outcome === 'error') assert.throws(f.run, error => error === original);
+    else assert.throws(f.run, /sheet still open after submission/);
+    assert.equal(attempts, 1);
+    assert.equal(f.clock.now(), outcome === 'closed' ? 6200 : outcome === 'error' ? 5200 : 15000);
     singleSubmit(f);
   });
 }
@@ -78,15 +157,25 @@ test('cancellation during the recovery wait is immediate and measured', () => {
   const f = finderAX({ closeAt: 12000, onCheck(f) { if (f.clock.now() >= 5200) throw new Error('cancelled'); } });
   assert.throws(f.run, /cancelled/);
   assert.equal(f.clock.now(), 5200);
-  assert.equal(f.events.at(-1).finderFolderWait.reason, 'error');
+  assert.equal(f.events.at(-1).finderFolderWait.waitReason, 'error');
   singleSubmit(f);
 });
 
 test('timing receipt passes the Finder privacy filter without paths or titles', () => {
-  const receipt = { reason: 'closed', elapsedMs: 6300, deadlineMs: 5000, hardCapMs: 15000, late: true };
+  const receipt = { waitReason: 'closed', elapsedMs: 6300, deadlineMs: 5000, hardCapMs: 15000, late: true };
   assert.deepEqual(finderDiagnostic({ stage: 'finder-folder-dismiss', finderFolderWait: {
     ...receipt, target: '/owner/private', title: 'owner title', reference: { id: 'private' },
   } }), { stage: 'finder-folder-dismiss', finderFolderWait: receipt });
+});
+
+test('wait reasons do not widen the relaunch reason enum', () => {
+  for (const waitReason of ['closed', 'deadline', 'error']) {
+    assert.deepEqual(finderDiagnostic({ finderFolderWait: { waitReason }, finderRelaunch: { reason: waitReason } }),
+      { finderFolderWait: { waitReason }, finderRelaunch: {} });
+  }
+  assert.deepEqual(finderDiagnostic({ finderFolderWait: { waitReason: 'private-title' },
+    finderRelaunch: { reason: 'three AXWindows timeouts' } }),
+  { finderFolderWait: {}, finderRelaunch: { reason: 'three AXWindows timeouts' } });
 });
 
 test('folder setup submits once and recovers a twelve-second owned-sheet close', () => {
@@ -109,7 +198,7 @@ test('a close during the identity guard is revalidated without a second submit',
   };
   f.run();
   assert.equal(raced, true);
-  assert.equal(f.events.find(event => event.finderFolderWait).finderFolderWait.reason, 'closed');
+  assert.equal(f.events.find(event => event.finderFolderWait).finderFolderWait.waitReason, 'closed');
   singleSubmit(f);
 });
 
@@ -118,7 +207,24 @@ test('a foreign dialog appearing as the owned sheet closes is refused', () => {
     if (f.clock.now() >= 6200) f.owner.AXSheets = [{ AXRole: 'AXSheet', AXParent: f.owner }];
   } });
   assert.throws(f.run, /Foreign Finder dialog/);
-  assert.equal(f.events.at(-1).finderFolderWait.reason, 'error');
+  assert.equal(f.events.at(-1).finderFolderWait.waitReason, 'error');
+  assert.equal(f.clock.now(), 6200);
+  singleSubmit(f);
+});
+
+test('a second GoToWindow AXWindow appearing as the owned panel closes is refused as foreign', () => {
+  let second;
+  const f = finderAX({ closeAt: 6200, onCheck(f) {
+    if (second || f.clock.now() < 6200) return;
+    second = { AXRole: 'AXWindow', AXSubrole: 'AXDialog', AXIdentifier: 'GoToWindow', AXParent: f.app };
+    second.AXWindow = second;
+    f.app.AXWindows.push(second); f.app.AXChildren = [second];
+    f.app.AXFocusedWindow = second; f.app.AXFocusedUIElement = second;
+  } });
+  assert.throws(f.run, /Foreign Finder Go to Folder panel/);
+  assert.equal(f.present(), false);
+  assert.equal(f.app.AXWindows.includes(second), true);
+  assert.equal(f.events.at(-1).finderFolderWait.waitReason, 'error');
   assert.equal(f.clock.now(), 6200);
   singleSubmit(f);
 });
@@ -132,7 +238,7 @@ test('an AX read error during recovery is reported without being treated as a cl
     return readPanel.apply(this, args);
   };
   assert.throws(f.run, error => error === failure);
-  assert.equal(f.events.at(-1).finderFolderWait.reason, 'error');
+  assert.equal(f.events.at(-1).finderFolderWait.waitReason, 'error');
   assert.equal(f.clock.now(), 5300);
   singleSubmit(f);
 });
@@ -152,7 +258,7 @@ for (const failure of [false, true]) test(`timing survives helper collection on 
   const dir = trackTemp(mkdtempSync(join(tmpdir(), 'sleight-finder-dismiss-')));
   t.after(() => rmSync(dir, { recursive: true, force: true }));
   const ctx = { dir, lockPath: join(dir, 'synthetic-lock') };
-  const timing = { reason: failure ? 'deadline' : 'closed', elapsedMs: failure ? 15000 : 6200,
+  const timing = { waitReason: failure ? 'deadline' : 'closed', elapsedMs: failure ? 15000 : 6200,
     deadlineMs: 5000, hardCapMs: 15000, late: true };
   const operation = openFixture(ctx, { app: 'Finder', bundle: 'com.apple.finder', mode: 'folder' }, {
     helper: async () => ({ command: 'fake', args: [] }),
