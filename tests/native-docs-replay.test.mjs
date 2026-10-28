@@ -1,6 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { replayNativeDocs } from '../bench/native-docs-replay.mjs';
+import { fixtureDocumentation } from './helpers/canonical-docs.mjs';
 
 const docs='## Computer Use\n\n'+'Native reference. '.repeat(100)+'\n# Computer Use Confirmations Policy\nAsk first.';
 const browser='# Other Browser APIs\n\n# Browser Safety\nKeep user tabs.';
@@ -9,7 +10,8 @@ const reply=(id,content)=>({type:'user',message:{content:[{type:'tool_result',to
 
 test('offline native-doc replay reports saved characters and checks complete safety sections',()=>{
   const events=[call('one','let b = await cua.getBrowser({id:"iab"});'),reply('one',[{type:'text',text:docs},{type:'text',text:browser}])];
-  const result=replayNativeDocs(events);
+  // DI1: only the engine's own documents are deferred, so the synthetic bundle declares them.
+  const result=replayNativeDocs(events,{documentationTrust:fixtureDocumentation(docs,browser)});
   assert.equal(result.calls,1); assert.equal(result.nativeBlocks,1); assert.ok(result.savedChars>1000);
   assert.equal(result.policyChecks,1); assert.equal(result.policyPreserved,true);
   assert.equal(result.browserSafetyChecks,1); assert.equal(result.browserSafetyPreserved,true);

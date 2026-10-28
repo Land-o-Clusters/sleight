@@ -13,9 +13,11 @@ const section = (text, heading) => {
   return heading + (end < 0 ? rest : rest.slice(0, end));
 };
 
-export function replayNativeDocs(events) {
-  const before = createResultBudget({ platform: 'darwin', fullDocs: false, leanDocs: false, minDocs: false });
-  const after = createResultBudget({ platform: 'darwin', fullDocs: false, leanDocs: false, minDocs: false });
+// `budget` passes options to both budgets, such as a test's declared documentation trust. By default the
+// installed engine's bundled docs decide which items are canonical, as in production.
+export function replayNativeDocs(events, budget = {}) {
+  const before = createResultBudget({ platform: 'darwin', fullDocs: false, leanDocs: false, minDocs: false, ...budget });
+  const after = createResultBudget({ platform: 'darwin', fullDocs: false, leanDocs: false, minDocs: false, ...budget });
   const pending = new Map(), seen = new Set(), browsers = new Set(), natives = new Set();
   const result = { calls: 0, nativeBlocks: 0, beforeChars: 0, afterChars: 0, policyChecks: 0, browserSafetyChecks: 0,
     policyPreserved: true, browserSafetyPreserved: true, firstBrowser: null };
