@@ -357,6 +357,43 @@ function finderStep(clock, name, operation, confirmed) {
   catch (error) { report('failed'); throw error; }
 }
 
+// Measure from submit returning to an observed panel close. Five seconds is
+// the reporting deadline; the 15 s recovery cap is provisional, pending live
+// close-time samples. Recovery only reads, never resubmits or dismisses.
+function waitForFinderFolderDismiss(window, sheet, app, api, clock, validateWindow) {
+  var started = clock.now(), deadlineMs = 5000, hardCapMs = 15000, reason = 'error';
+  try {
+    while (true) {
+      clock.check();
+      validateWindow();
+      // Use the receipt-bound presence check, including AXWindow panels and
+      // geometry-bound sheets whose AX references Finder may re-vend.
+      var present = api.finderPanelExists(sheet);
+      try { api.finderFolderGuard(app, window, present ? sheet : null); }
+      catch (error) {
+        // A panel may close during the guard. Accept only this identity race,
+        // after a second absence read and a full guard with no panel allowed.
+        if (!present || error.message !== 'Finder folder sheet identity changed' || api.finderPanelExists(sheet)) throw error;
+        present = false;
+        api.finderFolderGuard(app, window, null);
+      }
+      validateWindow();
+      var elapsed = Math.max(0, clock.now() - started);
+      if (!present) { reason = 'closed'; return; }
+      if (elapsed >= hardCapMs) {
+        reason = 'deadline';
+        throw new Error('Finder Go to Folder sheet still open after submission');
+      }
+      clock.wait(Math.min(100, hardCapMs - elapsed));
+    }
+  } finally {
+    var elapsedMs = Math.max(0, clock.now() - started);
+    if (clock.emit) clock.emit({ stage: 'finder-folder-dismiss', finderFolderWait: {
+      reason: reason, elapsedMs: elapsedMs, deadlineMs: deadlineMs, hardCapMs: hardCapMs, late: elapsedMs > deadlineMs
+    } });
+  }
+}
+
 // LaunchServices cannot address the window we own. Use one explicit new-window
 // command and navigate only its retained AX reference. Location and action
 // completion are separate observations; neither grants window ownership.
@@ -379,17 +416,19 @@ function openFinderFolder(request, app, previous, api, clock, retain) {
     api.finderFolderGuard(app, null, null);
     if (candidates('pre-press').length) throw new Error('Finder window appeared before New Finder Window');
   }
-  function validate() {
+  function validateWindow() {
     clock.check();
     var fresh = candidates('validate');
     if (fresh.length !== 1 || !api.equal(fresh[0], window)) throw new Error('New Finder fixture window identity changed');
+    if (request.finderOwnership.windowNumber !== undefined && api.windowNumber(window, app) !== request.finderOwnership.windowNumber)
+      throw new Error('Finder fixture identity changed');
+  }
+  function validate() {
+    validateWindow();
     var panelReceipt = request.finderOwnership.folderPanel;
     api.finderFolderGuard(app, window, sheet, panelReceipt);
     if (!sheet && panelReceipt && panelReceipt.reference) sheet = panelReceipt.reference;
-    fresh = candidates('validate');
-    if (fresh.length !== 1 || !api.equal(fresh[0], window)) throw new Error('New Finder fixture window identity changed');
-    if (request.finderOwnership.windowNumber !== undefined && api.windowNumber(window, app) !== request.finderOwnership.windowNumber)
-      throw new Error('Finder fixture identity changed');
+    validateWindow();
   }
   try {
   unopened();
@@ -446,16 +485,7 @@ function openFinderFolder(request, app, previous, api, clock, retain) {
     api.submitFolder(window, sheet, request.target, validate, function () { request.finderOwnership.documentless = []; });
   });
   finderStep(clock, 'folder-dismiss', function () {
-    if (api.finderPanelExists) {
-      var deadline = clock.now() + 5000;
-      while (api.finderPanelExists(sheet)) {
-        clock.check();
-        if (clock.now() >= deadline) throw new Error('Finder Go to Folder sheet still open after submission');
-        api.finderFolderGuard(app, window, sheet);
-        clock.wait(100);
-      }
-      api.finderFolderGuard(app, window, null);
-    }
+    if (api.finderPanelExists) waitForFinderFolderDismiss(window, sheet, app, api, clock, validateWindow);
   });
   if (clock.emit) clock.emit({ stage: 'finder-folder-submitted', target: request.target });
   return window;
