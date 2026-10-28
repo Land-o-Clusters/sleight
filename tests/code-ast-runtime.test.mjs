@@ -190,3 +190,18 @@ test('literal __proto__ is an own data field with an unchanged prototype', () =>
   assert.equal(Object.getPrototypeOf(value), Object.prototype);
   assert.deepEqual(Object.getOwnPropertyDescriptor(value, '__proto__'), { value: 'x', writable: true, enumerable: true, configurable: true });
 });
+
+test('callInventory lists dynamic import and super calls as unknown', () => {
+  const calls = callInventory(astOf('const m = await import("x"); class A extends B { constructor() { super(); super.m(1); } }'));
+  const kinds = calls.map(c => `${c.node.type}:${c.kind}`);
+  assert.ok(kinds.includes('ImportExpression:unknown'), kinds.join(','));
+  assert.equal(calls.filter(c => c.node.type === 'CallExpression').length, 2);
+  assert.ok(calls.filter(c => c.node.type === 'CallExpression').every(c => c.kind === 'unknown'), kinds.join(','));
+});
+
+test('walk handles a 200,000-element array without a RangeError', () => {
+  const code = `const a = [${Array.from({ length: 200000 }, () => '0').join(',')}]; app.click(1);`;
+  const calls = callInventory(astOf(code));
+  assert.equal(calls.length, 1);
+  assert.equal(calls[0].kind, 'member');
+});

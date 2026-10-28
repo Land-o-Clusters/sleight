@@ -54,7 +54,8 @@ export function* walk(ast) {
     yield node;
     const children = [];
     for (const value of Object.values(node)) {
-      if (Array.isArray(value)) children.push(...value.filter(child => child && typeof child.type === 'string'));
+      // A loop, not push(...array): spreading a very large body throws RangeError.
+      if (Array.isArray(value)) { for (const child of value) if (child && typeof child.type === 'string') children.push(child); }
       else if (value && typeof value.type === 'string') children.push(value);
     }
     for (let i = children.length - 1; i >= 0; i--) pending.push(children[i]);
@@ -91,8 +92,9 @@ export function memberCall(node) {
 export function callInventory(ast) {
   const calls = [];
   for (const node of walk(ast)) {
+    if (node.type === 'ImportExpression') { calls.push({ node, kind: 'unknown' }); continue; }
     if (!['CallExpression', 'NewExpression', 'TaggedTemplateExpression'].includes(node.type)) continue;
-    const call = memberCall(node);
+    const call = node.callee?.type === 'Super' || node.callee?.object?.type === 'Super' ? null : memberCall(node);
     calls.push(call && !call.computed ? { node, kind: 'member', ...call } : { node, kind: 'unknown' });
   }
   return calls;
