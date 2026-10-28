@@ -1112,6 +1112,8 @@ compaction, so it cannot isolate wording alone. That A/B has not run live.
 
 ## Benchmark environment
 
+- A CDP `No target with given id found` from any call other than `Target.closeTarget` during the reset still ends the browser round.
+
 - Finder fixture recovery can close a documentless Recents window when its creation receipt recorded that same default
   title and the window is still listed outside the baseline with no dialog. Other documentless titles stay unconfirmed and
   keep the live lock. The live Finder probe hasn't qualified this recovery path yet.

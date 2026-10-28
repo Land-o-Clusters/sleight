@@ -399,15 +399,18 @@ export async function realBrowserCommands(browser, { Socket = globalThis.WebSock
   return {
     on(listener) { listeners.add(listener); return () => listeners.delete(listener); },
     async send(method, params = {}) {
-      if (socket.readyState !== 1) throw Error('BENCH_BROWSER_CONNECTION_CLOSED');
       const id = ++serial;
       let timer;
       try {
+        if (socket.readyState !== 1) throw Error('BENCH_BROWSER_CONNECTION_CLOSED');
         return await new Promise((resolve, reject) => {
           pending.set(id, { resolve, reject });
           timer = setTimeout(() => reject(Error('BENCH_BROWSER_COMMAND_TIMEOUT')), timeoutMs);
           socket.send(JSON.stringify({ id, method, params }));
         });
+      } catch (error) {
+        // Keep the caller's method, never its target or page parameters.
+        throw Object.assign(new Error(error.message, { cause: error }), { cdpMethod: method });
       } finally { clearTimeout(timer); pending.delete(id); }
     },
     async close() {
