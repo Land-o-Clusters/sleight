@@ -5,6 +5,7 @@ import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'nod
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { packageSkip } from './requirements.mjs';
+import { trackTemp } from '../scripts/temp-leftovers.mjs';
 import { fixtureDocumentation } from './helpers/canonical-docs.mjs';
 import { readReplayEngine, engineDifference, engineIteration, campaignEngine, replayEngineEnvironment } from '../bench/replay/engine-identity.mjs';
 
@@ -81,7 +82,7 @@ test('transport exceptions retain both engine observations', async () => {
 });
 
 test('identity uses the newest launcher cache version and reads the overridden app plist', async t => {
-  const root = mkdtempSync(join(tmpdir(), 'sleight-rp1-engine-'));
+  const root = trackTemp(mkdtempSync(join(tmpdir(), 'sleight-rp1-engine-')));
   t.after(() => rmSync(root, { recursive: true, force: true }));
   const cache = join(root, 'plugins/cache/openai-bundled/unified-computer-use');
   for (const version of ['26.9.1', '26.10.1']) {
@@ -111,7 +112,7 @@ test('a resolver failure or incomplete resolved identity refuses the engine', as
 });
 
 test('a missing arm launcher refuses identity instead of using the harness launcher', async t => {
-  const worktree = mkdtempSync(join(tmpdir(), 'sleight-rp1-no-launcher-'));
+  const worktree = trackTemp(mkdtempSync(join(tmpdir(), 'sleight-rp1-no-launcher-')));
   t.after(() => rmSync(worktree, { recursive: true, force: true }));
   const identity = await readReplayEngine({ worktree, read: () => 'fixture' });
   assert.equal(identity.error, 'Cannot resolve computer-use server identity');
@@ -361,7 +362,7 @@ describe('worktree replay fixtures', { skip: packageSkip('typescript') }, async 
   });
 
   test('identity receives the exact merged computer-child env before any connection', async t => {
-    const root = mkdtempSync(join(tmpdir(), 'sleight-rp1-env-'));
+    const root = trackTemp(mkdtempSync(join(tmpdir(), 'sleight-rp1-env-')));
     t.after(() => rmSync(root, { recursive: true, force: true }));
     const seen = [], events = [];
     let observed;
@@ -398,7 +399,7 @@ describe('worktree replay fixtures', { skip: packageSkip('typescript') }, async 
   });
 
   test('a changed engine refuses both clients before connecting and retains closing identity', async t => {
-    const root = mkdtempSync(join(tmpdir(), 'sleight-rp1-preflight-'));
+    const root = trackTemp(mkdtempSync(join(tmpdir(), 'sleight-rp1-preflight-')));
     t.after(() => rmSync(root, { recursive: true, force: true }));
     const changed = { ...engine(), resolved: { ...resolved, args: ['changed.mjs'] } };
     const result = await engineIteration(async beforeLaunch => {
@@ -445,7 +446,7 @@ describe('worktree replay fixtures', { skip: packageSkip('typescript') }, async 
   // The CLI campaign runs its real plan, schedule, engine checks and evidence writes.
   // All host operations below are replaced with fixtures, including the lock and observer.
   async function campaign(t, overrides = {}, servers = { old: resolved, new: resolved }) {
-    const root = mkdtempSync(join(tmpdir(), 'sleight-rp1-main-'));
+    const root = trackTemp(mkdtempSync(join(tmpdir(), 'sleight-rp1-main-')));
     t.after(() => rmSync(root, { recursive: true, force: true }));
     const source = join(root, 'recording'); mkdirSync(source);
     for (const [arm, server] of Object.entries(servers)) {
