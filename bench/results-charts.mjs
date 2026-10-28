@@ -140,7 +140,18 @@ export function modelLine(study, arms = study.arms) {
   return `Models: ${[...byModel].map(([model, names]) => `${model} (${joinAnd(names)})`).join(', ')}. Effort: ${effortText(study, arms)}.`;
 }
 
-const wordingLine = study => `The scorer's wording is "${study.verdict.wording}". ${armName(study.me)} has the lowest expected time on ${fastestCount(study, study.me)} of ${study.tasks.length} tasks.`;
+const wordingLine = study => `${armName(study.me)} has the lowest expected time on ${fastestCount(study, study.me)} of ${study.tasks.length} tasks.`;
+
+export function haikuCheckoutDisclosure(all) {
+  const studies = all['browser-turbo'].race.studies.filter(s => s.latest && s.rematch && s.model === 'haiku' && s.suite === 'core');
+  const counts = ['chrome', 'helium'].map(browser => {
+    const study = studies.find(s => s.browser === browser);
+    const runs = study?.runs.filter(r => r.arm === 'fowlbrowser' && r.task === 'form-checkout') ?? [];
+    const paid = runs.filter(r => !r.passed && r.problem?.includes('paid without a stated amount')).length;
+    return runs.length ? `${paid} of ${runs.length} ${browser === 'chrome' ? 'Chrome' : 'Helium'}` : null;
+  }).filter(Boolean);
+  return counts.length ? `FowlBrowser paid on the unpriced checkout in ${counts.join(' and ')} Haiku runs, and its expected time includes those failures.` : '';
+}
 
 // ---------------------------------------------------------------------------------------------------------------------------
 // Captions.
@@ -160,7 +171,7 @@ export function chartCaption(id, all) {
       const head = mine === null ? `${panel.label}, ${armName(study.me)} has no total because it never passed a task` : `${panel.label}, ${f1(mine)} s`;
       return best ? `${head} against ${armName(best)} at ${f1(total(study, best))} s.` : `${head}, and no other arm has a total.`;
     });
-    return `Total expected seconds of sleight against the next-best arm with a total, in the newest complete set of each benchmark. ${bits.join(' ')}`;
+    return `Total expected seconds of sleight against the next-best arm with a total, in the newest complete set of each benchmark. ${bits.join(' ')} ${haikuCheckoutDisclosure(all)}`.trim();
   }
   const study = studyFor(all, chart.family, chart.browser);
   if (!study) return `${familyTitle(chart)}: no complete set yet.`;
@@ -176,7 +187,8 @@ export function chartCaption(id, all) {
   }
   const same = (study.sameModel ?? []).map(pair => ` The same-model rows put ${armName(pair.hosted)} against ${armName(pair.base)}, with the wording "${pair.wording}".`).join('');
   return `${familyTitle(chart)}, ${study.date}. Expected seconds per task for ${joinAnd(study.arms.map(armName))}. ${armName(study.me)} has the lowest expected time on ` +
-    `${fastestCount(study, study.me)} of ${study.tasks.length} tasks. The scorer's wording is "${study.verdict.wording}".${same}`;
+    `${fastestCount(study, study.me)} of ${study.tasks.length} tasks.${same}` +
+    (study.rematch && study.model === 'haiku' && study.suite === 'core' ? ` ${haikuCheckoutDisclosure(all)}` : '');
 }
 
 const escXml = text => String(text).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
@@ -397,7 +409,10 @@ function overviewChart(id, all) {
     }
     if (!best) { els.push(text(0, y + 13, 'no other arm has a total', { cls: 'm' })); y += 18; }
     y += 4;
-    const notes = [`lowest expected time on ${fastestCount(study, study.me)} of ${study.tasks.length}`, panelEngine(study, rows.map(([arm]) => arm))];
+    const checkout = study.rematch && study.model === 'haiku' && study.suite === 'core'
+      ? study.runs.filter(r => r.arm === 'fowlbrowser' && r.task === 'form-checkout') : [];
+    const notes = [`lowest expected time on ${fastestCount(study, study.me)} of ${study.tasks.length}`, panelEngine(study, rows.map(([arm]) => arm)),
+      ...(checkout.length ? [`FowlBrowser paid on ${checkout.filter(r => !r.passed && r.problem?.includes('paid without a stated amount')).length}/${checkout.length} unpriced checkouts, and expected time includes those failures.`] : [])];
     for (const note of notes) for (const line of wrap(note, pw)) { els.push(text(0, y + 13, line, { cls: 'm' })); y += 17; }
     return { els, h: y };
   });

@@ -1,6 +1,6 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 846" width="900" height="846" role="img" aria-labelledby="title desc">
 <title id="title">Helium, turbo against FowlBrowser: expected seconds per task</title>
-<desc id="desc">Helium, turbo against FowlBrowser, 2026-10-28, 15:30 to 17:47 UTC. Expected seconds per task for sleight turbo and FowlBrowser. sleight turbo has the lowest expected time on 12 of 13 tasks. The scorer's wording is &quot;fastest&quot;.</desc>
+<desc id="desc">Helium, turbo against FowlBrowser, 2026-10-28, 15:30 to 17:47 UTC. Expected seconds per task for sleight turbo and FowlBrowser. sleight turbo has the lowest expected time on 12 of 13 tasks. FowlBrowser paid on the unpriced checkout in 1 of 3 Chrome and 2 of 3 Helium Haiku runs, and its expected time includes those failures.</desc>
 <style>
 .bg{fill:#FBF8F1}
 text{font-family:-apple-system,"Segoe UI",Helvetica,Arial,sans-serif;font-size:13px;fill:#141A26}
@@ -144,7 +144,7 @@ text{font-family:-apple-system,"Segoe UI",Helvetica,Arial,sans-serif;font-size:1
 <text x="190.8" y="753" class="m">FowlBrowser</text>
 <path class="ot" d="M303.8 743h474.2a4 4 0 0 1 4 4v4a4 4 0 0 1 -4 4h-474.2z"/>
 <text x="788.1" y="753" data-task="mdn" data-arm="fowlbrowser" data-kind="cell" data-section="main">6.7 (3/3)</text>
-<text x="24" y="786" class="m">The scorer's wording is &quot;fastest&quot;. sleight turbo has the lowest expected time on 12 of 13 tasks.</text>
+<text x="24" y="786" class="m">sleight turbo has the lowest expected time on 12 of 13 tasks.</text>
 <text x="24" y="804" class="m">ChatGPT engine for sleight turbo: 26.1023.50603 (2026-10-28, recorded). Dates are UTC.</text>
 <text x="24" y="822" class="m">Models: claude-haiku-5-5 (sleight turbo and FowlBrowser). Effort: high, from the race scripts' flag.</text>
 </svg>

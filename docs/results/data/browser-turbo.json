@@ -2528,12 +2528,12 @@
     "competitorBuilds": ["e51c52a1"],
     "regrade": {
      "commit": "64550de9",
-     "method": "LR2 offline report, saved final result with JSON extraction",
+     "method": "Offline regrade, saved final result with JSON extraction",
      "arms": {"sleight-turbo":{"runs":9,"passes":5},"fowlbrowser":{"runs":9,"passes":5}}
     },
     "notes": [
      "FowlBrowser ran its defaults. Chrome used the benchmark profile and Helium a fresh profile. These are sleight's own tasks. Earlier benchmark runs informed its skill and tool wording.",
-     "The held-out set has eight tasks: five job fixtures and three whole-thread tasks. LR1 uses the LR2 offline regrade (64550de9), sleight turbo 5/9, FowlBrowser 5/9, after the harness appended a RESULT instruction to JSON-only prompts. The saved grades are unchanged.",
+     "The held-out set has eight tasks: five job fixtures and three whole-thread tasks. Whole-thread answers use the offline regrade (64550de9), sleight turbo 5/9, FowlBrowser 5/9, after the harness appended a RESULT instruction to JSON-only prompts. The saved grades are unchanged.",
      "Both arms failed job-motion. FowlBrowser answered yellow/teal/purple. The strict grader requires amber/teal/violet."
     ]
    },

@@ -30,7 +30,7 @@ const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const BENCH = join(ROOT, 'docs', 'benchmarks');
 // The charts come from bench/results-charts.mjs. Until that file exists the pages render without charts, and an error inside it
 // still stops the render.
-const NO_CHARTS = { CHARTS: [], renderCharts: () => ({}), chartCaption: () => '', chartBlock: () => '' };
+const NO_CHARTS = { CHARTS: [], renderCharts: () => ({}), chartCaption: () => '', chartBlock: () => '', haikuCheckoutDisclosure: () => '' };
 const charts = existsSync(join(ROOT, 'bench/results-charts.mjs')) ? await import('./results-charts.mjs') : NO_CHARTS;
 const readJson = file => JSON.parse(readFileSync(file, 'utf8'));
 const tryJson = file => { try { return readJson(file); } catch { return undefined; } };
@@ -373,12 +373,12 @@ export function collectRematch({ banks, regrade, timeline = loadTimeline() }) {
         study.builds = { ...study.builds, 'sleight-turbo': study.builds['sleight-turbo'].map(b => b === '4275bedb' ? 'e679ed7e' : b) };
         study.competitorBuilds = sortedUniq(rounds.map(r => roundFacts(r.dir).fowlbrowser));
         const whole = study.runs.filter(r => ['dm-first-message', 'mail-first-invoice', 'endless-feed-honesty'].includes(r.task));
-        if (whole.length) study.regrade = { commit: '64550de9', method: 'LR2 offline report, saved final result with JSON extraction',
+        if (whole.length) study.regrade = { commit: '64550de9', method: 'Offline regrade, saved final result with JSON extraction',
           arms: Object.fromEntries(study.arms.map(arm => [arm, { runs: whole.filter(r => r.arm === arm).length, passes: whole.filter(r => r.arm === arm && r.passed).length }])) };
         study.notes = [
           'FowlBrowser ran its defaults. Chrome used the benchmark profile and Helium a fresh profile. These are sleight\'s own tasks. Earlier benchmark runs informed its skill and tool wording.',
           suite === 'core' ? 'The 13 core browser tasks are scored separately from the eight held-out tasks.' :
-            `The held-out set has eight tasks: five job fixtures and three whole-thread tasks. LR1 uses the LR2 offline regrade (64550de9), ${Object.entries(study.regrade?.arms ?? {}).map(([arm, count]) => `${armName(arm)} ${count.passes}/${count.runs}`).join(', ')}, after the harness appended a RESULT instruction to JSON-only prompts. The saved grades are unchanged.`,
+            `The held-out set has eight tasks: five job fixtures and three whole-thread tasks. Whole-thread answers use the offline regrade (64550de9), ${Object.entries(study.regrade?.arms ?? {}).map(([arm, count]) => `${armName(arm)} ${count.passes}/${count.runs}`).join(', ')}, after the harness appended a RESULT instruction to JSON-only prompts. The saved grades are unchanged.`,
           ...(suite === 'held-out' ? ['Both arms failed job-motion. FowlBrowser answered yellow/teal/purple. The strict grader requires amber/teal/violet.'] : []),
         ];
       }
@@ -758,12 +758,12 @@ function collectReleaseBank(bank) {
       if (Number.isFinite(total) && Math.abs(sum - total) > .001 * Math.max(1, tasks.length)) throw Error(`${bank.id}/${verdict.kind}: passing median total disagrees with the frozen verdict`);
     }
     studies.push({ id: `${bank.id}-${verdict.kind}`, family: 'validation', bank: bank.id, kind: 'validation', group: verdict.kind,
-      title: `${bank.id}, ${verdict.kind}`, date, engine, browser: verdict.kind.startsWith('chrome') ? 'chrome' : verdict.kind.includes('safari') ? 'safari' : verdict.kind.includes('firefox') ? 'firefox' : null,
+      title: `${bankLabel(bank.id)}, ${groupLabel(verdict.kind)}`, date, engine, browser: verdict.kind.startsWith('chrome') ? 'chrome' : verdict.kind.includes('safari') ? 'safari' : verdict.kind.includes('firefox') ? 'firefox' : null,
       me: BUILD_B, arms, tasks, models: Object.fromEntries(arms.map(a => [a, sortedUniq(models[a])])), effort: sortedUniq(effort),
       builds: { [BUILD_A]: [shaOf(builds.A)], [BUILD_B]: [shaOf(builds.B)] }, roundIds, aRounds: roundIds[BUILD_A].length, runs, cells });
   }
   const frozen = { passed: release.pass, exitCode: release.exitCode, verdicts: release.verdicts, aborted: release.aborted ?? {},
-    excluded: release.excluded ?? [], taskExclusions: (release.taskExclusions ?? []).map(e => ({ task: e.task, kinds: e.kinds, sides: e.sides, reason: scrub(e.reason) })), errors: (release.errors ?? []).map(scrub) };
+    excluded: release.excluded ?? [], taskExclusions: (release.taskExclusions ?? []).map(e => ({ task: e.task, kinds: e.kinds, sides: e.sides, reason: scrub(e.reason).replace(/; fix FX1 in progress$/, '') })), errors: (release.errors ?? []).map(scrub) };
   return { record: { id: bank.id, kind: 'validation', source: bankSource(bank.dir), file: bank.file, complete: true, passed: release.pass,
     date, aBuild: shaOf(builds.A), bBuild: shaOf(builds.B), engine, groups: studies.length, incomplete: [], release: frozen }, studies };
 }
@@ -965,7 +965,7 @@ const pageHead = (current, title) => `${renderNav(current)}\n\n# ${title}\n`;
 function renderClaimPage(all, id, { intro }) {
   const data = all[id], study = data.studies[0], fam = family(id);
   const out = [pageHead(fam.page, fam.title)];
-  out.push(`${intro} The scorer's wording is "${study.verdict.wording}". sleight has the lowest expected time on ${study.verdict.lowest.length} of ${study.tasks.length} tasks.\n`);
+  out.push(`${intro} sleight has the lowest expected time on ${study.verdict.lowest.length} of ${study.tasks.length} tasks.\n`);
   const chart = chartFor(all, `family-${id}`);
   if (chart) out.push(chart);
   out.push('Each cell is expected seconds, then passes/runs.\n');
@@ -998,7 +998,7 @@ function renderClaimPage(all, id, { intro }) {
 
 // Data collected before the hub recorded answer patterns (2026-10-19) has no graders field and renders as before.
 function gradersNote(study) {
-  if (study.regrade) return 'Whole-thread answers use the LR2 regrade described above. Job fixtures retain their saved grades, including both job-motion failures.';
+  if (study.regrade) return 'Whole-thread answers use the offline regrade described above. Job fixtures retain their saved grades, including both job-motion failures.';
   const g = study.graders;
   if (!g) return null;
   if (!g.differ.length) return `Answers were checked with the patterns saved with each run, the same as the current ${code(g.file)}.`;
@@ -1018,7 +1018,7 @@ function gradersNote(study) {
 // the spread folded.
 function raceStudySection(all, study, level, chartId) {
   const out = [`${level} ${study.title}${study.latest ? ' (newest)' : ''}\n`];
-  out.push(`${study.date}, ${cap(study.browser)} ${study.browserVersion.join(', ')}, ${study.rounds.length} rounds and ${study.runs.length} runs. The scorer's wording is "${study.verdict.wording}".\n`);
+  out.push(`${study.date}, ${cap(study.browser)} ${study.browserVersion.join(', ')}, ${study.rounds.length} rounds and ${study.runs.length} runs. ${armName(study.me)} has the lowest expected time on ${study.verdict.fastest[study.me].length} of ${study.tasks.length} tasks.\n`);
   const summary = study.latest && study.family === 'browser-race';
   if (summary) out.push(`${raceResult(study)}.\n`);
   if (unopposedTotal(study)) out.push(`${summary ? 'The competitors each have' : 'sleight is the only arm with a total: every competitor has'} a task with no pass. There is no competing complete-suite time.\n`);
@@ -1245,9 +1245,14 @@ export function compareTasks(study) {
 const pct = value => (value == null ? DASH : `${value > 0 ? '+' : ''}${(Math.round(value * 1000) / 10).toFixed(1)}%`);
 const bankKind = kind => (kind === 'remeasure' ? 're-measure' : 'validation');
 
+const bankLabel = id => ({ 'validation-150f-rel3': 'Final release A/B', 'validation-150f-rel2': 'Earlier release A/B' })[id] ?? id;
+const groupLabel = id => ({ 'as3-safari': 'additional page tasks, Safari', 'as3-firefox': 'additional page tasks, Firefox' })[id] ?? id;
+const previousRelease = bank => bank.id === 'validation-150f-rel3'
+  ? ' against 1.4.2 (build A cf342b59, the p160 harness with the 1.4.2 plugin tree)' : '';
+
 function validationHeadline(data) {
   const release = data.banks.filter(bank => bank.release).sort((a, b) => (a.date ?? '').localeCompare(b.date ?? '')).at(-1);
-  if (release) return `${release.passed ? 'RELEASE PASS' : 'RELEASE BLOCKED'}: ${release.id}, ${release.release.verdicts.filter(v => !v.regressed).length} of ${release.release.verdicts.length} groups within their time and pass-loss limits ` +
+  if (release) return `${release.passed ? 'RELEASE PASS' : 'RELEASE BLOCKED'}: ${lowFirst(bankLabel(release.id))}${previousRelease(release)}, ${release.release.verdicts.filter(v => !v.regressed).length} of ${release.release.verdicts.length} groups within their time and pass-loss limits ` +
     `(${release.date}, engine ${release.engine}). ${data.banks.filter(b => !b.pending).length} scored banks, including the older engine records`;
   const scored = data.banks.filter(bank => !bank.pending), unscored = data.banks.length - scored.length;
   if (!scored.length) return 'No validation bank has a score yet';
@@ -1261,26 +1266,27 @@ function validationHeadline(data) {
 
 function bankSection(data, bank) {
   const studies = data.studies.filter(study => study.bank === bank.id);
-  const out = [`## ${bank.id}\n`];
+  const out = [`## ${bankLabel(bank.id)}\n`];
   const facts = [`${bankKind(bank.kind)} bank`, bank.date, bank.engine ? `ChatGPT engine ${code(bank.engine)}` : null,
     bank.aBuild ? `build A ${code(bank.aBuild)}` : null, bank.bBuild ? `build B ${code(bank.bBuild)}` : null].filter(Boolean);
   out.push(`${upFirst(facts.join(', '))}.${bank.kind === 'remeasure' ? ` Its gate ${bank.passed ? 'passed' : 'did not pass'}.` : ''}` +
     `${bank.complete ? '' : ' The bank is not complete.'}\n`);
   if (bank.release) {
     const r = bank.release;
-    out.push(`${bank.passed ? 'RELEASE PASS' : 'RELEASE BLOCKED'} (recorded exit ${r.exitCode}). Passing lower-median totals include only tasks with a pass on both sides. Expected-time marks below use a different statistic.\n`);
+    out.push(`${bank.passed ? 'RELEASE PASS' : 'RELEASE BLOCKED'}${previousRelease(bank)} (recorded exit ${r.exitCode}). Passing lower-median totals include only tasks with a pass on both sides. Expected-time marks below use a different statistic.\n`);
     out.push(mdTable(['Group', 'Passing lower-median total A (s)', 'B (s)', 'Change', 'Limit', 'Comparable tasks', 'Passes A', 'Passes B'], r.verdicts.map(v =>
-      [v.kind, f1(v.aTotal), f1(v.bTotal), pct(v.slowdown), pct(v.limit), v.comparable, v.passA, v.passB])) + '\n');
-    out.push(mdTable(['Group', 'Aborted A attempts', 'Aborted B attempts'], Object.entries(r.aborted).map(([kind, n]) => [kind, n.A, n.B])) + '\n');
+      [groupLabel(v.kind), f1(v.aTotal), f1(v.bTotal), pct(v.slowdown), pct(v.limit), v.comparable, v.passA, v.passB])) + '\n');
+    out.push(mdTable(['Group', 'Aborted A attempts', 'Aborted B attempts'], Object.entries(r.aborted).map(([kind, n]) => [groupLabel(kind), n.A, n.B])) + '\n');
     if (r.errors.length) out.push('Recorded gate errors: ' + r.errors.map(code).join('; ') + '.\n');
-    if (r.taskExclusions.length) out.push(mdTable(['Excluded task', 'Groups', 'Sides', 'Reason'], r.taskExclusions.map(e => [e.task, e.kinds.join(', '), e.sides.join(', '), e.reason])) + '\n');
-    if (bank.id === 'validation-150f-rel3') out.push('Both sides ran fresh in rel3. Finder setup failed twice at a 5 s sheet timeout (FX4), and the steps resumed. Puddle holds stopped steps mid-run (HB1). Aborted attempts were retained and rerun. `cc-list-native` was absent from the schedule.\n');
-    if (bank.id === 'validation-150f-rel2') out.push('This is the older engine record. `cc-list-native` was excluded on both sides. Finder setup failures also excluded rename and create-folder on both sides. The gate was blocked by the native comparable-task floor.\n');
+    if (r.taskExclusions.length) out.push(mdTable(['Excluded task', 'Groups', 'Sides', 'Reason'], r.taskExclusions.map(e => [e.task, e.kinds.join(', '), e.sides.join(', '), e.reason.replace(/; fix FX1 in progress$/, '')])) + '\n');
+    if (bank.id === 'validation-150f-rel3') out.push('The release passed the group limits while Safari (+10.57%), Chrome Opus (+5.14%) and Firefox (+2.74%) are slower.\n\nIndividual expected times were 24 to 35% slower for Chrome Haiku `inject-mail` (+23.94%, rounded to 24%), Chrome Opus `form-checkout` (+24.03%) and `form-settings-helium` (+25.41%), Firefox `inject-mail` (+24.35%), Safari `form-checkout` (+32.06%), `inject-mail` (+26.26%) and `mdn` (+31.26%), and the held-out Firefox controls `cc-list-pop-up-firefox` (+31.67%) and `cc-dropdown-slow-firefox` (+34.89%).\n');
+    if (bank.id === 'validation-150f-rel3') out.push('Both sides ran fresh in the final release A/B. Finder setup failed twice at a 5 s sheet timeout, and the steps resumed. Holds for another project stopped steps mid-run. Aborted attempts were retained and rerun. `cc-list-native` was absent from the schedule. Both Finder tasks were included with no task exclusions.\n');
+    if (bank.id === 'validation-150f-rel2') out.push('This is the older engine record. `cc-list-native` was absent from both sides of the schedule. Finder setup failures also excluded rename and create-folder on both sides. The gate was blocked by the native comparable-task floor.\n');
   }
   if (!studies.length) { out.push(`No group in this bank has a complete score${bank.pending ? ' (the bank has no score file)' : ''}.\n`); return out.join('\n'); }
   out.push(mdTable(['Group', 'Browser', 'Tasks', 'Build B marked on', 'Passes A', 'Passes B'], studies.map(study => {
     const rows = compareTasks(study), runs = arm => study.runs.filter(run => run.arm === arm);
-    return [code(study.group), study.browser ?? DASH, study.tasks.length, `${rows.filter(row => row.marked).length} of ${rows.length}`,
+    return [code(groupLabel(study.group)), study.browser ?? DASH, study.tasks.length, `${rows.filter(row => row.marked).length} of ${rows.length}`,
       `${runs(BUILD_A).filter(r => r.passed).length}/${runs(BUILD_A).length}`, `${runs(BUILD_B).filter(r => r.passed).length}/${runs(BUILD_B).length}`];
   })) + '\n');
   if (bank.incomplete?.length) {
@@ -1289,7 +1295,7 @@ function bankSection(data, bank) {
   for (const study of studies) {
     const rows = compareTasks(study);
     const mark = row => (!row.marked ? 'no' : row.slower && row.lowerRate ? 'slower and lower pass rate' : row.slower ? 'slower' : 'lower pass rate');
-    out.push(details(`${study.group}: ${rows.filter(row => row.marked).length} of ${rows.length} tasks marked`, [
+    out.push(details(`${groupLabel(study.group)}: ${rows.filter(row => row.marked).length} of ${rows.length} tasks marked`, [
       `Each cell is expected seconds, then passes/runs. Build A had ${study.aRounds || 'no'} ${study.roundIds ? 'recorded step' : 'round'}${study.aRounds === 1 ? '' : 's'}${study.models[BUILD_B] ? ` on ${study.models[BUILD_B].map(code).join(', ')}` : ''}.`,
       ...(study.roundIds ? [`Build A rounds: ${study.roundIds[BUILD_A].map(code).join(', ')}. Build B rounds: ${study.roundIds[BUILD_B].map(code).join(', ')}.`] : []),
       mdTable(['Task', 'Build A', 'Build B', 'Change in expected time', 'Marked'], rows.map(row => [code(row.task), cellText(row.a), cellText(row.b), pct(row.delta), mark(row)])),
@@ -1406,7 +1412,7 @@ function headlineFor(id, data) {
         `${cap(s.browser)} ${s.verdict.fastest[s.me].length}/${s.tasks.length} (sleight ${time(s.verdict.totals[s.me])}, FowlBrowser ${time(s.verdict.totals.fowlbrowser)})`).join(' and '));
       const held = rematch.filter(s => s.suite === 'held-out').map(s => `The ${cap(s.model)} held-out set has lowest expected times on ${s.verdict.fastest[s.me].length}/${s.tasks.length} tasks for sleight and ${s.verdict.fastest.fowlbrowser.length}/${s.tasks.length} for FowlBrowser. ${s.arms.every(a => s.verdict.totals[a] == null) ? 'Neither arm has a complete-suite total' : 'Totals are on the results page'}`);
       const pending = rematch.filter(s => s.verdict.topUps.length).map(s => `${cap(s.browser)} ${cap(s.model)}`);
-      return [core[0], ...core.slice(1).map(upFirst), ...held, ...(pending.length ? [`Five-run top-ups still owed for ${pending.join(', ')}`] : []), upFirst(engine)].join('. ');
+      return [core[0], ...core.slice(1).map(upFirst), charts.haikuCheckoutDisclosure({ 'browser-turbo': data }).replace(/\.$/, ''), ...held, ...(pending.length ? [`Five-run top-ups still owed for ${pending.join(', ')}`] : []), upFirst(engine)].join('. ');
     }
     const race = data.race.studies.filter(s => s.latest).map(s => `In ${cap(s.browser)}${s.model ? ` on ${cap(s.model)} 5.5 (${s.suite})` : ''}, the lowest expected time on ${s.verdict.fastest[s.me].length} of ${s.tasks.length} tasks and ${s.verdict.totals[s.me] == null ? 'no total (a task has no pass)' : `a total of ${f1(s.verdict.totals[s.me])} s`} against FowlBrowser's ${s.verdict.totals.fowlbrowser == null ? 'no total (a task has no pass)' : `${f1(s.verdict.totals.fowlbrowser)} s`} (${code(s.label)}, ${s.date?.slice(0, 10)})`);
     return lowFirst(race.join('. ')) + `. ${data.gates.length} gate studies. ${upFirst(engine)}`;
@@ -1437,7 +1443,7 @@ function renderIndex(all) {
     'The full rules are in [LAWS](../status/LAWS.md), and the tasks and harnesses in [benchmark.md](../benchmark.md).',
   ]) + '\n');
   out.push(details('Rebuild', '```sh\nnode bench/results-hub.mjs                # collect from the raw folders this Mac has, then render\nnode bench/results-hub.mjs --render-only  # render from docs/results/data only\nnode bench/results-hub.mjs --check        # exit 1 if a page, data file or README block would change\n```\n\n' +
-    'The raw claim, race and validation folders live outside the repo, in `~/Projects/sleight-wt/app-claim`, `~/Projects/sleight-wt/race-1017` and the banks under `~/Projects/sleight-wt` (any folder with a validation or re-measure `plan.json`). The FowlBrowser rematch banks are `~/Library/Caches/sleight-bench/evidence/fw1-e51c52a-haiku` and `fw1-e51c52a-opus`. LR1 corrections come from `~/Projects/sleight-wt/ledger/p160/night/fw-lr1-regrade.txt`. On a Mac without the raw folders, the generator keeps the data files already here. `--wt <dir>` points it at another worktrees root and looks for rematch banks in its `evidence/` folder and the LR1 report under its `ledger/` folder. The benchmark runners run the collect and render once after a successful pass (`bench/hub-refresh.mjs`), and `--no-hub` or `SLEIGHT_NO_HUB=1` stops that.'));
+    'The raw claim, race and validation folders live outside the repo, in `~/Projects/sleight-wt/app-claim`, `~/Projects/sleight-wt/race-1017` and the banks under `~/Projects/sleight-wt` (any folder with a validation or re-measure `plan.json`). The FowlBrowser rematch banks are `~/Library/Caches/sleight-bench/evidence/fw1-e51c52a-haiku` and `fw1-e51c52a-opus`. Whole-thread corrections come from the tracked [regrade data](data/whole-thread-regrade.txt). On a Mac without the raw folders, the generator keeps the data files already here. `--wt <dir>` points it at another worktrees root and looks for rematch banks in its `evidence/` folder. The benchmark runners run the collect and render once after a successful pass (`bench/hub-refresh.mjs`), and `--no-hub` or `SLEIGHT_NO_HUB=1` stops that.'));
   out.push(engineFooter(FAMILIES.flatMap(fam => headlineStudies(fam.id, all[fam.id]))) + '\n');
   return out.join('\n');
 }
@@ -1592,7 +1598,7 @@ export function collect({ wt, out, excludeCovered = false, banks: extraBanks = [
   const evidence = resolve(wt) === join(homedir(), 'Projects/sleight-wt') ? join(homedir(), 'Library/Caches/sleight-bench/evidence') : join(wt, 'evidence');
   const rematchBanks = ['haiku', 'opus'].map(model => ({ dir: join(evidence, `fw1-e51c52a-${model}`), model })).filter(b => isDir(b.dir));
   if (rematchBanks.length) {
-    const regradeFile = join(wt, 'ledger/p160/night/fw-lr1-regrade.txt');
+    const regradeFile = join(ROOT, 'docs/results/data/whole-thread-regrade.txt');
     const rematch = collectRematch({ banks: rematchBanks, regrade: existsSync(regradeFile) ? readFileSync(regradeFile, 'utf8') : '', timeline });
     const race = all['browser-turbo'].race;
     const fresh = new Set(rematch.studies.map(s => s.id)), browsers = new Set(rematch.studies.filter(s => s.suite === 'core').map(s => s.browser));

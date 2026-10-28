@@ -1,6 +1,6 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 3136" width="900" height="3136" role="img" aria-labelledby="title desc">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 3118" width="900" height="3118" role="img" aria-labelledby="title desc">
 <title id="title">Safari, the engine path against Codex, LCU, Cua and Peekaboo: expected seconds per task</title>
-<desc id="desc">Safari, the engine path against Codex, LCU, Cua and Peekaboo, 2026-10-18 to 2026-10-19. Expected seconds per task for sleight, Codex, codex-sol, Cua, LCU and Peekaboo. sleight has the lowest expected time on 12 of 12 tasks. The scorer's wording is &quot;completed every task, fastest on 12 of 12&quot;. The same-model rows put sleight inside Codex against Codex, with the wording &quot;completed every task, fastest on 9 of 12&quot;. The same-model rows put codex-sleight-sol against codex-sol, with the wording &quot;completed 11 of 12 tasks, fastest on 4 of 12 (LAWS has no wording for a missed task)&quot;.</desc>
+<desc id="desc">Safari, the engine path against Codex, LCU, Cua and Peekaboo, 2026-10-18 to 2026-10-19. Expected seconds per task for sleight, Codex, codex-sol, Cua, LCU and Peekaboo. sleight has the lowest expected time on 12 of 12 tasks. The same-model rows put sleight inside Codex against Codex, with the wording &quot;completed every task, fastest on 9 of 12&quot;. The same-model rows put codex-sleight-sol against codex-sol, with the wording &quot;completed 11 of 12 tasks, fastest on 4 of 12 (LAWS has no wording for a missed task)&quot;.</desc>
 <style>
 .bg{fill:#FBF8F1}
 text{font-family:-apple-system,"Segoe UI",Helvetica,Arial,sans-serif;font-size:13px;fill:#141A26}
@@ -16,7 +16,7 @@ text{font-family:-apple-system,"Segoe UI",Helvetica,Arial,sans-serif;font-size:1
 .hsl{stroke:#7A879A}
 </style>
 <defs><pattern id="h-me" width="6" height="6" patternUnits="userSpaceOnUse" patternTransform="rotate(45)"><line class="hme" x1="1" y1="0" x2="1" y2="6" stroke-width="2"/></pattern><pattern id="h-ot" width="6" height="6" patternUnits="userSpaceOnUse" patternTransform="rotate(45)"><line class="hot" x1="1" y1="0" x2="1" y2="6" stroke-width="2"/></pattern><pattern id="h-sl" width="6" height="6" patternUnits="userSpaceOnUse" patternTransform="rotate(45)"><line class="hsl" x1="1" y1="0" x2="1" y2="6" stroke-width="2"/></pattern></defs>
-<rect class="bg" width="900" height="3136" rx="12"/>
+<rect class="bg" width="900" height="3118" rx="12"/>
 <text x="24" y="34" class="t">Safari, the engine path against Codex, LCU, Cua and Peekaboo: expected seconds per task</text>
 <text x="24" y="54" class="m">2026-10-18 to 2026-10-19. Set sleight-fs2on. Each label is expected seconds, then passes/runs. Each task</text>
 <text x="24" y="72" class="m">has its own scale, and shorter bars are faster.</text>
@@ -505,15 +505,14 @@ text{font-family:-apple-system,"Segoe UI",Helvetica,Arial,sans-serif;font-size:1
 <text x="190.8" y="2899" class="m">codex-sol</text>
 <path class="ot" d="M356.6 2889h402.9a4 4 0 0 1 4 4v4a4 4 0 0 1 -4 4h-402.9z"/>
 <text x="769.5" y="2899" data-task="mdn" data-arm="codex-sol" data-kind="cell" data-section="same">26.4 (3/3)</text>
-<text x="24" y="2932" class="m">The scorer's wording is &quot;completed every task, fastest on 12 of 12&quot;. sleight has the lowest expected time on 12</text>
-<text x="24" y="2950" class="m">of 12 tasks.</text>
-<text x="24" y="2968" class="m">Same model: the scorer's wording for sleight inside Codex against Codex is &quot;completed every task, fastest on 9</text>
-<text x="24" y="2986" class="m">of 12&quot;.</text>
-<text x="24" y="3004" class="m">Same model: the scorer's wording for codex-sleight-sol against codex-sol is &quot;completed 11 of 12 tasks, fastest</text>
-<text x="24" y="3022" class="m">on 4 of 12 (LAWS has no wording for a missed task)&quot;.</text>
-<text x="24" y="3040" class="m">ChatGPT engine for sleight, Codex, codex-sol, sleight inside Codex and codex-sleight-sol: 26.1007.71326</text>
-<text x="24" y="3058" class="m">(2026-10-18, inferred) and 26.1013.40934 (2026-10-19, 109 of 151 recorded). Dates are UTC.</text>
-<text x="24" y="3076" class="m">Models: claude-haiku-5-5 (sleight, Cua, LCU and Peekaboo), gpt-6-luna (Codex and sleight inside Codex),</text>
-<text x="24" y="3094" class="m">gpt-6.1-sol (codex-sol and codex-sleight-sol). Effort: high as recorded for Codex, codex-sol, sleight inside</text>
-<text x="24" y="3112" class="m">Codex and codex-sleight-sol, and high from the race scripts' flag for the others.</text>
+<text x="24" y="2932" class="m">sleight has the lowest expected time on 12 of 12 tasks.</text>
+<text x="24" y="2950" class="m">Same model: the scorer's wording for sleight inside Codex against Codex is &quot;completed every task, fastest on 9</text>
+<text x="24" y="2968" class="m">of 12&quot;.</text>
+<text x="24" y="2986" class="m">Same model: the scorer's wording for codex-sleight-sol against codex-sol is &quot;completed 11 of 12 tasks, fastest</text>
+<text x="24" y="3004" class="m">on 4 of 12 (LAWS has no wording for a missed task)&quot;.</text>
+<text x="24" y="3022" class="m">ChatGPT engine for sleight, Codex, codex-sol, sleight inside Codex and codex-sleight-sol: 26.1007.71326</text>
+<text x="24" y="3040" class="m">(2026-10-18, inferred) and 26.1013.40934 (2026-10-19, 109 of 151 recorded). Dates are UTC.</text>
+<text x="24" y="3058" class="m">Models: claude-haiku-5-5 (sleight, Cua, LCU and Peekaboo), gpt-6-luna (Codex and sleight inside Codex),</text>
+<text x="24" y="3076" class="m">gpt-6.1-sol (codex-sol and codex-sleight-sol). Effort: high as recorded for Codex, codex-sol, sleight inside</text>
+<text x="24" y="3094" class="m">Codex and codex-sleight-sol, and high from the race scripts' flag for the others.</text>
 </svg>

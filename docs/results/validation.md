@@ -11,7 +11,7 @@
 
 These banks compare two builds of sleight on the same tasks, build A (an earlier build, usually the last release) against build B (the build under test). No other tool is in these tables, and they never count toward a claim. A mark means build B has a higher expected time than build A, or a lower pass rate. It is not a significance test.
 
-RELEASE PASS: validation-150f-rel3, 8 of 8 groups within their time and pass-loss limits (2026-10-28, 06:10 to 14:04 UTC, engine 26.1023.50603 build 22391). 3 scored banks, including the older engine records.
+RELEASE PASS: final release A/B against 1.4.2 (build A cf342b59, the p160 harness with the 1.4.2 plugin tree), 8 of 8 groups within their time and pass-loss limits (2026-10-28, 06:10 to 14:04 UTC, engine 26.1023.50603 build 22391). 3 scored banks, including the older engine records.
 
 <details><summary>Method</summary>
 
@@ -22,40 +22,44 @@ RELEASE PASS: validation-150f-rel3, 8 of 8 groups within their time and pass-los
 
 </details>
 
-## validation-150f-rel3
+## Final release A/B
 
 Validation bank, 2026-10-28, 06:10 to 14:04 UTC, ChatGPT engine `26.1023.50603 build 22391`, build A `cf342b59`, build B `e679ed7e`.
 
-RELEASE PASS (recorded exit 0). Passing lower-median totals include only tasks with a pass on both sides. Expected-time marks below use a different statistic.
+RELEASE PASS against 1.4.2 (build A cf342b59, the p160 harness with the 1.4.2 plugin tree) (recorded exit 0). Passing lower-median totals include only tasks with a pass on both sides. Expected-time marks below use a different statistic.
 
 | Group | Passing lower-median total A (s) | B (s) | Change | Limit | Comparable tasks | Passes A | Passes B |
 | --- | --- | --- | --- | --- | --- | --- | --- |
 | chrome-haiku | 237.6 | 225.8 | -5.0% | +8.0% | 13 | 65 | 65 |
 | native-haiku | 252.9 | 239.4 | -5.3% | +20.0% | 8 | 23 | 27 |
 | cc-haiku | 239.0 | 233.9 | -2.1% | +20.0% | 14 | 42 | 42 |
-| as3-safari | 131.9 | 130.9 | -0.7% | +20.0% | 5 | 15 | 15 |
+| additional page tasks, Safari | 131.9 | 130.9 | -0.7% | +20.0% | 5 | 15 | 15 |
 | chrome-opus | 219.0 | 230.2 | +5.1% | +20.0% | 12 | 13 | 12 |
 | safari-haiku | 292.4 | 323.3 | +10.6% | +20.0% | 10 | 30 | 33 |
 | firefox-haiku | 360.8 | 370.7 | +2.7% | +8.0% | 11 | 33 | 33 |
-| as3-firefox | 112.3 | 107.1 | -4.6% | +8.0% | 5 | 15 | 15 |
+| additional page tasks, Firefox | 112.3 | 107.1 | -4.6% | +8.0% | 5 | 15 | 15 |
 
 | Group | Aborted A attempts | Aborted B attempts |
 | --- | --- | --- |
 | chrome-haiku | 1 | 0 |
 | native-haiku | 1 | 1 |
 | cc-haiku | 1 | 5 |
-| as3-safari | 0 | 0 |
+| additional page tasks, Safari | 0 | 0 |
 | chrome-opus | 0 | 0 |
 | safari-haiku | 0 | 0 |
 | firefox-haiku | 0 | 0 |
-| as3-firefox | 0 | 0 |
+| additional page tasks, Firefox | 0 | 0 |
 
-Both sides ran fresh in rel3. Finder setup failed twice at a 5 s sheet timeout (FX4), and the steps resumed. Puddle holds stopped steps mid-run (HB1). Aborted attempts were retained and rerun. `cc-list-native` was absent from the schedule.
+The release passed the group limits while Safari (+10.57%), Chrome Opus (+5.14%) and Firefox (+2.74%) are slower.
+
+Individual expected times were 24 to 35% slower for Chrome Haiku `inject-mail` (+23.94%, rounded to 24%), Chrome Opus `form-checkout` (+24.03%) and `form-settings-helium` (+25.41%), Firefox `inject-mail` (+24.35%), Safari `form-checkout` (+32.06%), `inject-mail` (+26.26%) and `mdn` (+31.26%), and the held-out Firefox controls `cc-list-pop-up-firefox` (+31.67%) and `cc-dropdown-slow-firefox` (+34.89%).
+
+Both sides ran fresh in the final release A/B. Finder setup failed twice at a 5 s sheet timeout, and the steps resumed. Holds for another project stopped steps mid-run. Aborted attempts were retained and rerun. `cc-list-native` was absent from the schedule. Both Finder tasks were included with no task exclusions.
 
 | Group | Browser | Tasks | Build B marked on | Passes A | Passes B |
 | --- | --- | --- | --- | --- | --- |
-| `as3-firefox` | firefox | 5 | 0 of 5 | 15/15 | 15/15 |
-| `as3-safari` | safari | 5 | 3 of 5 | 15/15 | 15/15 |
+| `additional page tasks, Firefox` | firefox | 5 | 0 of 5 | 15/15 | 15/15 |
+| `additional page tasks, Safari` | safari | 5 | 3 of 5 | 15/15 | 15/15 |
 | `cc-haiku` | n/a | 14 | 7 of 14 | 42/42 | 42/42 |
 | `chrome-haiku` | chrome | 13 | 5 of 13 | 65/65 | 65/65 |
 | `chrome-opus` | chrome | 13 | 9 of 13 | 13/13 | 12/13 |
@@ -63,7 +67,7 @@ Both sides ran fresh in rel3. Finder setup failed twice at a 5 s sheet timeout (
 | `native-haiku` | n/a | 10 | 4 of 10 | 23/30 | 27/30 |
 | `safari-haiku` | safari | 12 | 6 of 12 | 30/36 | 33/36 |
 
-<details><summary>as3-firefox: 0 of 5 tasks marked</summary>
+<details><summary>additional page tasks, Firefox: 0 of 5 tasks marked</summary>
 
 Each cell is expected seconds, then passes/runs. Build A had 3 recorded steps on `claude-haiku-5-5`.
 
@@ -94,7 +98,7 @@ Passing runs, median [fastest to slowest]:
 
 </details>
 
-<details><summary>as3-safari: 3 of 5 tasks marked</summary>
+<details><summary>additional page tasks, Safari: 3 of 5 tasks marked</summary>
 
 Each cell is expected seconds, then passes/runs. Build A had 4 recorded steps on `claude-haiku-5-5`.
 
@@ -445,7 +449,7 @@ Failed runs:
 
 </details>
 
-## validation-150f-rel2
+## Earlier release A/B
 
 Validation bank, 2026-10-27 to 2026-10-28, ChatGPT engine `26.1021.31345 build 21828`, build A `674b7c14`, build B `ee37e737`.
 
@@ -456,36 +460,36 @@ RELEASE BLOCKED (recorded exit 2). Passing lower-median totals include only task
 | chrome-haiku | 216.1 | 225.2 | +4.2% | +8.0% | 13 | 65 | 64 |
 | native-haiku | 406.0 | 343.8 | -15.3% | +20.0% | 7 | 19 | 21 |
 | cc-haiku | 218.9 | 208.9 | -4.6% | +20.0% | 14 | 42 | 42 |
-| as3-safari | 120.6 | 121.6 | +0.8% | +20.0% | 5 | 15 | 15 |
+| additional page tasks, Safari | 120.6 | 121.6 | +0.8% | +20.0% | 5 | 15 | 15 |
 | chrome-opus | 238.3 | 272.3 | +14.3% | +20.0% | 13 | 13 | 13 |
 | safari-haiku | 565.2 | 632.8 | +12.0% | +20.0% | 12 | 34 | 34 |
 | firefox-haiku | 403.2 | 420.4 | +4.2% | +8.0% | 12 | 36 | 36 |
-| as3-firefox | 110.4 | 107.8 | -2.4% | +8.0% | 5 | 15 | 15 |
+| additional page tasks, Firefox | 110.4 | 107.8 | -2.4% | +8.0% | 5 | 15 | 15 |
 
 | Group | Aborted A attempts | Aborted B attempts |
 | --- | --- | --- |
 | chrome-haiku | 0 | 1 |
 | native-haiku | 2 | 0 |
 | cc-haiku | 0 | 0 |
-| as3-safari | 0 | 0 |
+| additional page tasks, Safari | 0 | 0 |
 | chrome-opus | 0 | 0 |
 | safari-haiku | 0 | 0 |
 | firefox-haiku | 0 | 0 |
-| as3-firefox | 0 | 0 |
+| additional page tasks, Firefox | 0 | 0 |
 
 Recorded gate errors: `native-haiku: only 7 comparable tasks, need 8; unscorable`.
 
 | Excluded task | Groups | Sides | Reason |
 | --- | --- | --- | --- |
-| finder-rename | native-haiku | A, B | Finder fixture Go to Folder setup fails on this Mac (macOS 27.0.1); recorded at native-A-r1; fix FX1 in progress |
-| finder-create-folder | native-haiku | A, B | Finder fixture Go to Folder setup fails on this Mac (macOS 27.0.1); recorded at native-A-r1; fix FX1 in progress |
+| finder-rename | native-haiku | A, B | Finder fixture Go to Folder setup fails on this Mac (macOS 27.0.1); recorded at native-A-r1 |
+| finder-create-folder | native-haiku | A, B | Finder fixture Go to Folder setup fails on this Mac (macOS 27.0.1); recorded at native-A-r1 |
 
-This is the older engine record. `cc-list-native` was excluded on both sides. Finder setup failures also excluded rename and create-folder on both sides. The gate was blocked by the native comparable-task floor.
+This is the older engine record. `cc-list-native` was absent from both sides of the schedule. Finder setup failures also excluded rename and create-folder on both sides. The gate was blocked by the native comparable-task floor.
 
 | Group | Browser | Tasks | Build B marked on | Passes A | Passes B |
 | --- | --- | --- | --- | --- | --- |
-| `as3-firefox` | firefox | 5 | 3 of 5 | 15/15 | 15/15 |
-| `as3-safari` | safari | 5 | 3 of 5 | 15/15 | 15/15 |
+| `additional page tasks, Firefox` | firefox | 5 | 3 of 5 | 15/15 | 15/15 |
+| `additional page tasks, Safari` | safari | 5 | 3 of 5 | 15/15 | 15/15 |
 | `cc-haiku` | n/a | 14 | 6 of 14 | 42/42 | 42/42 |
 | `chrome-haiku` | chrome | 13 | 8 of 13 | 65/65 | 64/65 |
 | `chrome-opus` | chrome | 13 | 11 of 13 | 13/13 | 13/13 |
@@ -493,7 +497,7 @@ This is the older engine record. `cc-list-native` was excluded on both sides. Fi
 | `native-haiku` | n/a | 8 | 3 of 8 | 19/24 | 21/24 |
 | `safari-haiku` | safari | 12 | 5 of 12 | 34/36 | 34/36 |
 
-<details><summary>as3-firefox: 3 of 5 tasks marked</summary>
+<details><summary>additional page tasks, Firefox: 3 of 5 tasks marked</summary>
 
 Each cell is expected seconds, then passes/runs. Build A had 3 recorded steps on `claude-haiku-5-5`.
 
@@ -524,7 +528,7 @@ Passing runs, median [fastest to slowest]:
 
 </details>
 
-<details><summary>as3-safari: 3 of 5 tasks marked</summary>
+<details><summary>additional page tasks, Safari: 3 of 5 tasks marked</summary>
 
 Each cell is expected seconds, then passes/runs. Build A had 4 recorded steps on `claude-haiku-5-5`.
 
@@ -859,8 +863,8 @@ Validation bank, 2026-10-20, 12:11 to 18:11 UTC, ChatGPT engine `26.1013.40934`,
 
 | Group | Browser | Tasks | Build B marked on | Passes A | Passes B |
 | --- | --- | --- | --- | --- | --- |
-| `as3-firefox` | firefox | 5 | 3 of 5 | 15/15 | 15/15 |
-| `as3-safari` | safari | 5 | 3 of 5 | 15/15 | 15/15 |
+| `additional page tasks, Firefox` | firefox | 5 | 3 of 5 | 15/15 | 15/15 |
+| `additional page tasks, Safari` | safari | 5 | 3 of 5 | 15/15 | 15/15 |
 | `cc-calendar-ambiguous-firefox` | n/a | 1 | 1 of 1 | 3/3 | 3/3 |
 | `cc-calendar-ambiguous-safari` | n/a | 1 | 0 of 1 | 3/3 | 3/3 |
 | `cc-calendar-firefox` | n/a | 1 | 1 of 1 | 3/3 | 3/3 |
@@ -887,7 +891,7 @@ Groups left out of the comparison:
 | --- | --- | --- |
 | `release-opus` | deferred | `DEFERRED release-opus: comparison awaits completion with --only-groups release-opus` |
 
-<details><summary>as3-firefox: 3 of 5 tasks marked</summary>
+<details><summary>additional page tasks, Firefox: 3 of 5 tasks marked</summary>
 
 Each cell is expected seconds, then passes/runs. Build A had 3 rounds on `claude-haiku-5-5`.
 
@@ -916,7 +920,7 @@ Passing runs, median [fastest to slowest]:
 
 </details>
 
-<details><summary>as3-safari: 3 of 5 tasks marked</summary>
+<details><summary>additional page tasks, Safari: 3 of 5 tasks marked</summary>
 
 Each cell is expected seconds, then passes/runs. Build A had 3 rounds on `claude-haiku-5-5`.
 

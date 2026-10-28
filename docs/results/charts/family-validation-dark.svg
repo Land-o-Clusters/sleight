@@ -209,7 +209,7 @@ text{font-family:-apple-system,"Segoe UI",Helvetica,Arial,sans-serif;font-size:1
 <line class="g" x1="234" y1="1771" x2="726" y2="1771"/>
 <path class="ot" d="M234 1758h488a4 4 0 0 1 4 4v6a4 4 0 0 1 -4 4h-488z"/>
 <text x="736" y="1769" data-study="validation-140-final-release-haiku" data-arm="build-A" data-kind="pass-rate">100.0% (65/65)</text>
-<text x="24" y="1805" class="b">validation-150f-rel2, as3-firefox</text>
+<text x="24" y="1805" class="b">Earlier release A/B, additional page tasks, Firefox</text>
 <text x="24" y="1824" class="m">build-B</text>
 <line class="g" x1="234" y1="1826" x2="726" y2="1826"/>
 <path class="me" d="M234 1813h488a4 4 0 0 1 4 4v6a4 4 0 0 1 -4 4h-488z"/>
@@ -218,7 +218,7 @@ text{font-family:-apple-system,"Segoe UI",Helvetica,Arial,sans-serif;font-size:1
 <line class="g" x1="234" y1="1851" x2="726" y2="1851"/>
 <path class="ot" d="M234 1838h488a4 4 0 0 1 4 4v6a4 4 0 0 1 -4 4h-488z"/>
 <text x="736" y="1849" data-study="validation-150f-rel2-as3-firefox" data-arm="build-A" data-kind="pass-rate">100.0% (15/15)</text>
-<text x="24" y="1885" class="b">validation-150f-rel2, as3-safari</text>
+<text x="24" y="1885" class="b">Earlier release A/B, additional page tasks, Safari</text>
 <text x="24" y="1904" class="m">build-B</text>
 <line class="g" x1="234" y1="1906" x2="726" y2="1906"/>
 <path class="me" d="M234 1893h488a4 4 0 0 1 4 4v6a4 4 0 0 1 -4 4h-488z"/>
@@ -227,7 +227,7 @@ text{font-family:-apple-system,"Segoe UI",Helvetica,Arial,sans-serif;font-size:1
 <line class="g" x1="234" y1="1931" x2="726" y2="1931"/>
 <path class="ot" d="M234 1918h488a4 4 0 0 1 4 4v6a4 4 0 0 1 -4 4h-488z"/>
 <text x="736" y="1929" data-study="validation-150f-rel2-as3-safari" data-arm="build-A" data-kind="pass-rate">100.0% (15/15)</text>
-<text x="24" y="1965" class="b">validation-150f-rel2, cc-haiku</text>
+<text x="24" y="1965" class="b">Earlier release A/B, cc-haiku</text>
 <text x="24" y="1984" class="m">build-B</text>
 <line class="g" x1="234" y1="1986" x2="726" y2="1986"/>
 <path class="me" d="M234 1973h488a4 4 0 0 1 4 4v6a4 4 0 0 1 -4 4h-488z"/>
@@ -236,7 +236,7 @@ text{font-family:-apple-system,"Segoe UI",Helvetica,Arial,sans-serif;font-size:1
 <line class="g" x1="234" y1="2011" x2="726" y2="2011"/>
 <path class="ot" d="M234 1998h488a4 4 0 0 1 4 4v6a4 4 0 0 1 -4 4h-488z"/>
 <text x="736" y="2009" data-study="validation-150f-rel2-cc-haiku" data-arm="build-A" data-kind="pass-rate">100.0% (42/42)</text>
-<text x="24" y="2045" class="b">validation-150f-rel2, chrome-haiku</text>
+<text x="24" y="2045" class="b">Earlier release A/B, chrome-haiku</text>
 <text x="24" y="2064" class="m">build-B</text>
 <line class="g" x1="234" y1="2066" x2="726" y2="2066"/>
 <path class="me" d="M234 2053h480.4a4 4 0 0 1 4 4v6a4 4 0 0 1 -4 4h-480.4z"/>
@@ -245,7 +245,7 @@ text{font-family:-apple-system,"Segoe UI",Helvetica,Arial,sans-serif;font-size:1
 <line class="g" x1="234" y1="2091" x2="726" y2="2091"/>
 <path class="ot" d="M234 2078h488a4 4 0 0 1 4 4v6a4 4 0 0 1 -4 4h-488z"/>
 <text x="736" y="2089" data-study="validation-150f-rel2-chrome-haiku" data-arm="build-A" data-kind="pass-rate">100.0% (65/65)</text>
-<text x="24" y="2125" class="b">validation-150f-rel2, chrome-opus</text>
+<text x="24" y="2125" class="b">Earlier release A/B, chrome-opus</text>
 <text x="24" y="2144" class="m">build-B</text>
 <line class="g" x1="234" y1="2146" x2="726" y2="2146"/>
 <path class="me" d="M234 2133h488a4 4 0 0 1 4 4v6a4 4 0 0 1 -4 4h-488z"/>
@@ -254,7 +254,7 @@ text{font-family:-apple-system,"Segoe UI",Helvetica,Arial,sans-serif;font-size:1
 <line class="g" x1="234" y1="2171" x2="726" y2="2171"/>
 <path class="ot" d="M234 2158h488a4 4 0 0 1 4 4v6a4 4 0 0 1 -4 4h-488z"/>
 <text x="736" y="2169" data-study="validation-150f-rel2-chrome-opus" data-arm="build-A" data-kind="pass-rate">100.0% (13/13)</text>
-<text x="24" y="2205" class="b">validation-150f-rel2, firefox-haiku</text>
+<text x="24" y="2205" class="b">Earlier release A/B, firefox-haiku</text>
 <text x="24" y="2224" class="m">build-B</text>
 <line class="g" x1="234" y1="2226" x2="726" y2="2226"/>
 <path class="me" d="M234 2213h488a4 4 0 0 1 4 4v6a4 4 0 0 1 -4 4h-488z"/>
@@ -263,7 +263,7 @@ text{font-family:-apple-system,"Segoe UI",Helvetica,Arial,sans-serif;font-size:1
 <line class="g" x1="234" y1="2251" x2="726" y2="2251"/>
 <path class="ot" d="M234 2238h488a4 4 0 0 1 4 4v6a4 4 0 0 1 -4 4h-488z"/>
 <text x="736" y="2249" data-study="validation-150f-rel2-firefox-haiku" data-arm="build-A" data-kind="pass-rate">100.0% (36/36)</text>
-<text x="24" y="2285" class="b">validation-150f-rel2, native-haiku</text>
+<text x="24" y="2285" class="b">Earlier release A/B, native-haiku</text>
 <text x="24" y="2304" class="m">build-B</text>
 <line class="g" x1="234" y1="2306" x2="726" y2="2306"/>
 <path class="me" d="M234 2293h426.5a4 4 0 0 1 4 4v6a4 4 0 0 1 -4 4h-426.5z"/>
@@ -272,7 +272,7 @@ text{font-family:-apple-system,"Segoe UI",Helvetica,Arial,sans-serif;font-size:1
 <line class="g" x1="234" y1="2331" x2="726" y2="2331"/>
 <path class="ot" d="M234 2318h385.5a4 4 0 0 1 4 4v6a4 4 0 0 1 -4 4h-385.5z"/>
 <text x="736" y="2329" data-study="validation-150f-rel2-native-haiku" data-arm="build-A" data-kind="pass-rate">79.2% (19/24)</text>
-<text x="24" y="2365" class="b">validation-150f-rel2, safari-haiku</text>
+<text x="24" y="2365" class="b">Earlier release A/B, safari-haiku</text>
 <text x="24" y="2384" class="m">build-B</text>
 <line class="g" x1="234" y1="2386" x2="726" y2="2386"/>
 <path class="me" d="M234 2373h460.7a4 4 0 0 1 4 4v6a4 4 0 0 1 -4 4h-460.7z"/>
@@ -281,7 +281,7 @@ text{font-family:-apple-system,"Segoe UI",Helvetica,Arial,sans-serif;font-size:1
 <line class="g" x1="234" y1="2411" x2="726" y2="2411"/>
 <path class="ot" d="M234 2398h460.7a4 4 0 0 1 4 4v6a4 4 0 0 1 -4 4h-460.7z"/>
 <text x="736" y="2409" data-study="validation-150f-rel2-safari-haiku" data-arm="build-A" data-kind="pass-rate">94.4% (34/36)</text>
-<text x="24" y="2445" class="b">validation-150f-rel3, as3-firefox</text>
+<text x="24" y="2445" class="b">Final release A/B, additional page tasks, Firefox</text>
 <text x="24" y="2464" class="m">build-B</text>
 <line class="g" x1="234" y1="2466" x2="726" y2="2466"/>
 <path class="me" d="M234 2453h488a4 4 0 0 1 4 4v6a4 4 0 0 1 -4 4h-488z"/>
@@ -290,7 +290,7 @@ text{font-family:-apple-system,"Segoe UI",Helvetica,Arial,sans-serif;font-size:1
 <line class="g" x1="234" y1="2491" x2="726" y2="2491"/>
 <path class="ot" d="M234 2478h488a4 4 0 0 1 4 4v6a4 4 0 0 1 -4 4h-488z"/>
 <text x="736" y="2489" data-study="validation-150f-rel3-as3-firefox" data-arm="build-A" data-kind="pass-rate">100.0% (15/15)</text>
-<text x="24" y="2525" class="b">validation-150f-rel3, as3-safari</text>
+<text x="24" y="2525" class="b">Final release A/B, additional page tasks, Safari</text>
 <text x="24" y="2544" class="m">build-B</text>
 <line class="g" x1="234" y1="2546" x2="726" y2="2546"/>
 <path class="me" d="M234 2533h488a4 4 0 0 1 4 4v6a4 4 0 0 1 -4 4h-488z"/>
@@ -299,7 +299,7 @@ text{font-family:-apple-system,"Segoe UI",Helvetica,Arial,sans-serif;font-size:1
 <line class="g" x1="234" y1="2571" x2="726" y2="2571"/>
 <path class="ot" d="M234 2558h488a4 4 0 0 1 4 4v6a4 4 0 0 1 -4 4h-488z"/>
 <text x="736" y="2569" data-study="validation-150f-rel3-as3-safari" data-arm="build-A" data-kind="pass-rate">100.0% (15/15)</text>
-<text x="24" y="2605" class="b">validation-150f-rel3, cc-haiku</text>
+<text x="24" y="2605" class="b">Final release A/B, cc-haiku</text>
 <text x="24" y="2624" class="m">build-B</text>
 <line class="g" x1="234" y1="2626" x2="726" y2="2626"/>
 <path class="me" d="M234 2613h488a4 4 0 0 1 4 4v6a4 4 0 0 1 -4 4h-488z"/>
@@ -308,7 +308,7 @@ text{font-family:-apple-system,"Segoe UI",Helvetica,Arial,sans-serif;font-size:1
 <line class="g" x1="234" y1="2651" x2="726" y2="2651"/>
 <path class="ot" d="M234 2638h488a4 4 0 0 1 4 4v6a4 4 0 0 1 -4 4h-488z"/>
 <text x="736" y="2649" data-study="validation-150f-rel3-cc-haiku" data-arm="build-A" data-kind="pass-rate">100.0% (42/42)</text>
-<text x="24" y="2685" class="b">validation-150f-rel3, chrome-haiku</text>
+<text x="24" y="2685" class="b">Final release A/B, chrome-haiku</text>
 <text x="24" y="2704" class="m">build-B</text>
 <line class="g" x1="234" y1="2706" x2="726" y2="2706"/>
 <path class="me" d="M234 2693h488a4 4 0 0 1 4 4v6a4 4 0 0 1 -4 4h-488z"/>
@@ -317,7 +317,7 @@ text{font-family:-apple-system,"Segoe UI",Helvetica,Arial,sans-serif;font-size:1
 <line class="g" x1="234" y1="2731" x2="726" y2="2731"/>
 <path class="ot" d="M234 2718h488a4 4 0 0 1 4 4v6a4 4 0 0 1 -4 4h-488z"/>
 <text x="736" y="2729" data-study="validation-150f-rel3-chrome-haiku" data-arm="build-A" data-kind="pass-rate">100.0% (65/65)</text>
-<text x="24" y="2765" class="b">validation-150f-rel3, chrome-opus</text>
+<text x="24" y="2765" class="b">Final release A/B, chrome-opus</text>
 <text x="24" y="2784" class="m">build-B</text>
 <line class="g" x1="234" y1="2786" x2="726" y2="2786"/>
 <path class="me" d="M234 2773h450.2a4 4 0 0 1 4 4v6a4 4 0 0 1 -4 4h-450.2z"/>
@@ -326,7 +326,7 @@ text{font-family:-apple-system,"Segoe UI",Helvetica,Arial,sans-serif;font-size:1
 <line class="g" x1="234" y1="2811" x2="726" y2="2811"/>
 <path class="ot" d="M234 2798h488a4 4 0 0 1 4 4v6a4 4 0 0 1 -4 4h-488z"/>
 <text x="736" y="2809" data-study="validation-150f-rel3-chrome-opus" data-arm="build-A" data-kind="pass-rate">100.0% (13/13)</text>
-<text x="24" y="2845" class="b">validation-150f-rel3, firefox-haiku</text>
+<text x="24" y="2845" class="b">Final release A/B, firefox-haiku</text>
 <text x="24" y="2864" class="m">build-B</text>
 <line class="g" x1="234" y1="2866" x2="726" y2="2866"/>
 <path class="me" d="M234 2853h447a4 4 0 0 1 4 4v6a4 4 0 0 1 -4 4h-447z"/>
@@ -335,7 +335,7 @@ text{font-family:-apple-system,"Segoe UI",Helvetica,Arial,sans-serif;font-size:1
 <line class="g" x1="234" y1="2891" x2="726" y2="2891"/>
 <path class="ot" d="M234 2878h447a4 4 0 0 1 4 4v6a4 4 0 0 1 -4 4h-447z"/>
 <text x="736" y="2889" data-study="validation-150f-rel3-firefox-haiku" data-arm="build-A" data-kind="pass-rate">91.7% (33/36)</text>
-<text x="24" y="2925" class="b">validation-150f-rel3, native-haiku</text>
+<text x="24" y="2925" class="b">Final release A/B, native-haiku</text>
 <text x="24" y="2944" class="m">build-B</text>
 <line class="g" x1="234" y1="2946" x2="726" y2="2946"/>
 <path class="me" d="M234 2933h438.8a4 4 0 0 1 4 4v6a4 4 0 0 1 -4 4h-438.8z"/>
@@ -344,7 +344,7 @@ text{font-family:-apple-system,"Segoe UI",Helvetica,Arial,sans-serif;font-size:1
 <line class="g" x1="234" y1="2971" x2="726" y2="2971"/>
 <path class="ot" d="M234 2958h373.2a4 4 0 0 1 4 4v6a4 4 0 0 1 -4 4h-373.2z"/>
 <text x="736" y="2969" data-study="validation-150f-rel3-native-haiku" data-arm="build-A" data-kind="pass-rate">76.7% (23/30)</text>
-<text x="24" y="3005" class="b">validation-150f-rel3, safari-haiku</text>
+<text x="24" y="3005" class="b">Final release A/B, safari-haiku</text>
 <text x="24" y="3024" class="m">build-B</text>
 <line class="g" x1="234" y1="3026" x2="726" y2="3026"/>
 <path class="me" d="M234 3013h447a4 4 0 0 1 4 4v6a4 4 0 0 1 -4 4h-447z"/>

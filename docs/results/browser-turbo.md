@@ -6,7 +6,7 @@ Turbo is sleight's own browser path for Chrome and Helium. The newest rematch ru
 
 ## Chrome, Haiku 5.5, 13 core tasks (newest)
 
-2026-10-28, 15:19 to 17:43 UTC, Chrome 156.0.8078.48, 10 rounds and 86 runs. The scorer's wording is "fastest".
+2026-10-28, 15:19 to 17:43 UTC, Chrome 156.0.8078.48, 10 rounds and 86 runs. sleight turbo has the lowest expected time on 12 of 13 tasks.
 
 FowlBrowser ran its defaults. Chrome used the benchmark profile and Helium a fresh profile. These are sleight's own tasks. Earlier benchmark runs informed its skill and tool wording.
 
@@ -16,10 +16,10 @@ FowlBrowser build `e51c52a1`. sleight's recorded harness build: `4275bedb`.
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="charts/family-browser-turbo-chrome-dark.svg">
-  <img src="charts/family-browser-turbo-chrome-light.svg" width="900" alt="Chrome, turbo against FowlBrowser, 2026-10-28, 15:19 to 17:43 UTC. Expected seconds per task for sleight turbo and FowlBrowser. sleight turbo has the lowest expected time on 12 of 13 tasks. The scorer's wording is &quot;fastest&quot;.">
+  <img src="charts/family-browser-turbo-chrome-light.svg" width="900" alt="Chrome, turbo against FowlBrowser, 2026-10-28, 15:19 to 17:43 UTC. Expected seconds per task for sleight turbo and FowlBrowser. sleight turbo has the lowest expected time on 12 of 13 tasks. FowlBrowser paid on the unpriced checkout in 1 of 3 Chrome and 2 of 3 Helium Haiku runs, and its expected time includes those failures.">
 </picture>
 
-<sub>Chrome, turbo against FowlBrowser, 2026-10-28, 15:19 to 17:43 UTC. Expected seconds per task for sleight turbo and FowlBrowser. sleight turbo has the lowest expected time on 12 of 13 tasks. The scorer's wording is "fastest".</sub>
+<sub>Chrome, turbo against FowlBrowser, 2026-10-28, 15:19 to 17:43 UTC. Expected seconds per task for sleight turbo and FowlBrowser. sleight turbo has the lowest expected time on 12 of 13 tasks. FowlBrowser paid on the unpriced checkout in 1 of 3 Chrome and 2 of 3 Helium Haiku runs, and its expected time includes those failures.</sub>
 
 Each cell is expected seconds, then passes/runs.
 
@@ -90,11 +90,11 @@ The arms that use the engine ran on one engine version, 26.1023.50603. A version
 
 ## Chrome, Haiku 5.5, 8 held-out tasks (newest)
 
-2026-10-28, 16:58 to 17:53 UTC, Chrome 156.0.8078.48, 44 rounds and 56 runs. The scorer's wording is "completed 6 of 8 tasks, fastest on 3 of 8 (LAWS has no wording for a missed task)".
+2026-10-28, 16:58 to 17:53 UTC, Chrome 156.0.8078.48, 44 rounds and 56 runs. sleight turbo has the lowest expected time on 3 of 8 tasks.
 
 FowlBrowser ran its defaults. Chrome used the benchmark profile and Helium a fresh profile. These are sleight's own tasks. Earlier benchmark runs informed its skill and tool wording.
 
-The held-out set has eight tasks: five job fixtures and three whole-thread tasks. LR1 uses the LR2 offline regrade (64550de9), sleight turbo 5/9, FowlBrowser 5/9, after the harness appended a RESULT instruction to JSON-only prompts. The saved grades are unchanged.
+The held-out set has eight tasks: five job fixtures and three whole-thread tasks. Whole-thread answers use the offline regrade (64550de9), sleight turbo 5/9, FowlBrowser 5/9, after the harness appended a RESULT instruction to JSON-only prompts. The saved grades are unchanged.
 
 Both arms failed job-motion. FowlBrowser answered yellow/teal/purple. The strict grader requires amber/teal/violet.
 
@@ -115,7 +115,7 @@ Each cell is expected seconds, then passes/runs.
 | Lowest expected time on | 3 of 8 | 4 of 8 |
 | Total expected s | no total (a task has no pass) | no total (a task has no pass) |
 
-Whole-thread answers use the LR2 regrade described above. Job fixtures retain their saved grades, including both job-motion failures.
+Whole-thread answers use the offline regrade described above. Job fixtures retain their saved grades, including both job-motion failures.
 
 By the loss rule, sleight turbo lost 4 of 8 tasks.
 
@@ -178,7 +178,7 @@ The arms that use the engine ran on one engine version, 26.1023.50603. A version
 
 ## Chrome, Opus 5.5, 13 core tasks (newest)
 
-2026-10-28, 17:54 to 20:21 UTC, Chrome 156.0.8078.48, 10 rounds and 82 runs. The scorer's wording is "fastest".
+2026-10-28, 17:54 to 20:21 UTC, Chrome 156.0.8078.48, 10 rounds and 82 runs. sleight turbo has the lowest expected time on 12 of 13 tasks.
 
 sleight is the only arm with a total: every competitor has a task with no pass. There is no competing complete-suite time.
 
@@ -259,7 +259,7 @@ The arms that use the engine ran on one engine version, 26.1023.50603. A version
 
 ## Helium, Haiku 5.5, 13 core tasks (newest)
 
-2026-10-28, 15:30 to 17:47 UTC, Helium 0.20.1.1, 10 rounds and 98 runs. The scorer's wording is "fastest".
+2026-10-28, 15:30 to 17:47 UTC, Helium 0.20.1.1, 10 rounds and 98 runs. sleight turbo has the lowest expected time on 12 of 13 tasks.
 
 FowlBrowser ran its defaults. Chrome used the benchmark profile and Helium a fresh profile. These are sleight's own tasks. Earlier benchmark runs informed its skill and tool wording.
 
@@ -269,10 +269,10 @@ FowlBrowser build `e51c52a1`. sleight's recorded harness build: `4275bedb`.
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="charts/family-browser-turbo-helium-dark.svg">
-  <img src="charts/family-browser-turbo-helium-light.svg" width="900" alt="Helium, turbo against FowlBrowser, 2026-10-28, 15:30 to 17:47 UTC. Expected seconds per task for sleight turbo and FowlBrowser. sleight turbo has the lowest expected time on 12 of 13 tasks. The scorer's wording is &quot;fastest&quot;.">
+  <img src="charts/family-browser-turbo-helium-light.svg" width="900" alt="Helium, turbo against FowlBrowser, 2026-10-28, 15:30 to 17:47 UTC. Expected seconds per task for sleight turbo and FowlBrowser. sleight turbo has the lowest expected time on 12 of 13 tasks. FowlBrowser paid on the unpriced checkout in 1 of 3 Chrome and 2 of 3 Helium Haiku runs, and its expected time includes those failures.">
 </picture>
 
-<sub>Helium, turbo against FowlBrowser, 2026-10-28, 15:30 to 17:47 UTC. Expected seconds per task for sleight turbo and FowlBrowser. sleight turbo has the lowest expected time on 12 of 13 tasks. The scorer's wording is "fastest".</sub>
+<sub>Helium, turbo against FowlBrowser, 2026-10-28, 15:30 to 17:47 UTC. Expected seconds per task for sleight turbo and FowlBrowser. sleight turbo has the lowest expected time on 12 of 13 tasks. FowlBrowser paid on the unpriced checkout in 1 of 3 Chrome and 2 of 3 Helium Haiku runs, and its expected time includes those failures.</sub>
 
 Each cell is expected seconds, then passes/runs.
 
@@ -346,7 +346,7 @@ The arms that use the engine ran on one engine version, 26.1023.50603. A version
 
 ## Helium, Opus 5.5, 13 core tasks (newest)
 
-2026-10-28, 18:05 to 20:23 UTC, Helium 0.20.1.1, 10 rounds and 86 runs. The scorer's wording is "fastest".
+2026-10-28, 18:05 to 20:23 UTC, Helium 0.20.1.1, 10 rounds and 86 runs. sleight turbo has the lowest expected time on 12 of 13 tasks.
 
 sleight is the only arm with a total: every competitor has a task with no pass. There is no competing complete-suite time.
 
@@ -462,7 +462,7 @@ Rounds left out, with the recorded reason:
 
 ### Chrome, sleight rounds `chrome-sleight-turbo-r*`
 
-2026-10-18 to 2026-10-19, Chrome 155.0.8059.80, 8 rounds and 94 runs. The scorer's wording is "completed 12 of 13 tasks, fastest on 6 of 13 (LAWS has no wording for a missed task)".
+2026-10-18 to 2026-10-19, Chrome 155.0.8059.80, 8 rounds and 94 runs. sleight turbo has the lowest expected time on 6 of 13 tasks.
 
 Each cell is expected seconds, then passes/runs.
 
@@ -556,7 +556,7 @@ The arms that use the engine ran on one engine version, 26.1007.71326. A version
 
 ### Chrome, sleight rounds `chrome-sleight-turbo-b4-r*`
 
-2026-10-18 to 2026-10-19, Chrome 155.0.8059.80, 8 rounds and 94 runs. The scorer's wording is "completed 12 of 13 tasks, fastest on 11 of 13 (LAWS has no wording for a missed task)".
+2026-10-18 to 2026-10-19, Chrome 155.0.8059.80, 8 rounds and 94 runs. sleight turbo has the lowest expected time on 11 of 13 tasks.
 
 Each cell is expected seconds, then passes/runs.
 
@@ -641,7 +641,7 @@ The arms that use the engine ran on one engine version, 26.1007.71326. A version
 
 ### Chrome, sleight rounds `chrome-sleight-turbo-b5-r*`
 
-2026-10-18 to 2026-10-19, Chrome 155.0.8059.80, 8 rounds and 94 runs. The scorer's wording is "completed every task, fastest on 12 of 13".
+2026-10-18 to 2026-10-19, Chrome 155.0.8059.80, 8 rounds and 94 runs. sleight turbo has the lowest expected time on 12 of 13 tasks.
 
 Each cell is expected seconds, then passes/runs.
 
@@ -722,7 +722,7 @@ The arms that use the engine ran on one engine version, 26.1007.71326. A version
 
 ### Chrome, sleight rounds `chrome-sleight-turbo-rel130-r*`
 
-2026-10-18 to 2026-10-19, Chrome 155.0.8059.80, 10 rounds and 110 runs. The scorer's wording is "fastest".
+2026-10-18 to 2026-10-19, Chrome 155.0.8059.80, 10 rounds and 110 runs. sleight turbo has the lowest expected time on 10 of 13 tasks.
 
 Each cell is expected seconds, then passes/runs.
 
@@ -797,7 +797,7 @@ The arms that use the engine ran on one engine version, 26.1013.40934. A version
 
 ### Chrome, sleight rounds `chrome-sleight-turbo-rel131-r*`
 
-2026-10-18 to 2026-10-19, Chrome 155.0.8059.80, 10 rounds and 120 runs. The scorer's wording is "completed every task, fastest on 12 of 13".
+2026-10-18 to 2026-10-19, Chrome 155.0.8059.80, 10 rounds and 120 runs. sleight turbo has the lowest expected time on 12 of 13 tasks.
 
 Each cell is expected seconds, then passes/runs.
 
@@ -877,7 +877,7 @@ The arms that use the engine ran on one engine version, 26.1013.40934. A version
 
 ### Helium, sleight rounds `helium-sleight-turbo-r*`
 
-2026-10-18 to 2026-10-19, Helium 0.19.4.1, 12 rounds and 98 runs. The scorer's wording is "completed 12 of 13 tasks, fastest on 9 of 13 (LAWS has no wording for a missed task)".
+2026-10-18 to 2026-10-19, Helium 0.19.4.1, 12 rounds and 98 runs. sleight turbo has the lowest expected time on 9 of 13 tasks.
 
 Each cell is expected seconds, then passes/runs.
 
@@ -968,7 +968,7 @@ The arms that use the engine ran on one engine version, 26.1007.71326. A version
 
 ### Helium, sleight rounds `helium-sleight-turbo-b4-r*`
 
-2026-10-18 to 2026-10-19, Helium 0.19.4.1, 12 rounds and 98 runs. The scorer's wording is "completed 12 of 13 tasks, fastest on 11 of 13 (LAWS has no wording for a missed task)".
+2026-10-18 to 2026-10-19, Helium 0.19.4.1, 12 rounds and 98 runs. sleight turbo has the lowest expected time on 11 of 13 tasks.
 
 Each cell is expected seconds, then passes/runs.
 
@@ -1056,7 +1056,7 @@ The arms that use the engine ran on one engine version, 26.1007.71326. A version
 
 ### Helium, sleight rounds `helium-sleight-turbo-b5-r*`
 
-2026-10-18 to 2026-10-19, Helium 0.19.4.1, 12 rounds and 98 runs. The scorer's wording is "completed every task, fastest on 11 of 13".
+2026-10-18 to 2026-10-19, Helium 0.19.4.1, 12 rounds and 98 runs. sleight turbo has the lowest expected time on 11 of 13 tasks.
 
 Each cell is expected seconds, then passes/runs.
 
@@ -1141,7 +1141,7 @@ The arms that use the engine ran on one engine version, 26.1007.71326. A version
 
 ### Helium, sleight rounds `helium-sleight-turbo-rel130-r*`
 
-2026-10-18 to 2026-10-19, Helium 0.19.4.1, 14 rounds and 124 runs. The scorer's wording is "fastest".
+2026-10-18 to 2026-10-19, Helium 0.19.4.1, 14 rounds and 124 runs. sleight turbo has the lowest expected time on 10 of 13 tasks.
 
 Each cell is expected seconds, then passes/runs.
 

@@ -889,3 +889,35 @@ test('published rematch keeps the corrected LR1 result and its eight held-out ta
   assert.equal(release.bBuild, 'e679ed7e');
   assert.ok(committed().validation.banks.some(b => b.id === 'validation-150f-rel2' && b.engine.startsWith('26.1021.31345')));
 });
+
+
+test('release summaries disclose paid checkout failures and name the previous release', () => {
+  const all = committed(), blocks = readmeBlocks(all), files = render(all);
+  for (const text of [blocks.turbo, blocks.benchmarks, files['browser-turbo.md']]) {
+    assert.match(text, /FowlBrowser paid on the unpriced checkout in 1 of 3 Chrome and 2 of 3 Helium Haiku runs/);
+    assert.match(text, /expected time includes those failures/);
+  }
+  for (const text of [blocks.release, files['validation.md']]) {
+    assert.match(text, /against 1\.4\.2 \(build A `?cf342b59`?, the p160 harness with the 1\.4\.2 plugin tree\)/);
+  }
+  assert.doesNotMatch(files['browser-turbo.md'], /The scorer's wording is "fastest"|\bLR[12]\b/);
+  assert.doesNotMatch(files['validation.md'], /\b(?:FX4|HB1|Puddle|rel2|rel3|AS-3)\b/);
+});
+
+test('tracked whole-thread regrades reproduce all 18 corrected rematch answers', () => {
+  const lines = readFileSync(join(OUT, 'data/whole-thread-regrade.txt'), 'utf8').trim().split('\n');
+  assert.equal(lines.length, 18);
+  const held = committed()['browser-turbo'].race.studies.find(s => s.rematch && s.suite === 'held-out');
+  const counts = Object.fromEntries(held.arms.map(arm => [arm, { runs: 0, passes: 0 }]));
+  for (const line of lines) {
+    const [round, task, arm, , , arrow, verdict] = line.split(' | ');
+    assert.equal(arrow, '->');
+    const run = held.runs.find(r => r.round === round && r.task === task && r.arm === arm);
+    assert.ok(run, `${round}/${task}`);
+    // The report prints agentSeconds. The hub keeps wallMs, so only the grade crosses this boundary.
+    assert.equal(run.passed, verdict === 'ok');
+    counts[arm].runs++;
+    counts[arm].passes += verdict === 'ok' ? 1 : 0;
+  }
+  assert.deepEqual(counts, held.regrade.arms);
+});

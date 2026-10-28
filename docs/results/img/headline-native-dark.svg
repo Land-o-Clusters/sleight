@@ -57,7 +57,7 @@ text{font-family:-apple-system,"Segoe UI",Helvetica,Arial,sans-serif;font-size:1
 <text x="24" y="334.5">Peekaboo</text>
 <rect class="sl" fill-opacity="0.16" x="183.3" y="318" width="22" height="24"/><rect fill="url(#h-sl)" x="183.3" y="318" width="22" height="24"/>
 <text x="213.3" y="334.5" class="m" data-arm="peekaboo" data-kind="total">no total: never passed textedit-save, textedit-drag and 3 more</text>
-<text x="24" y="402" class="m">The scorer's wording is &quot;fastest&quot;. sleight has the lowest expected time on 8 of 9 tasks.</text>
+<text x="24" y="402" class="m">sleight has the lowest expected time on 8 of 9 tasks.</text>
 <text x="24" y="420" class="m">ChatGPT engine for sleight and Codex: 26.1007.71326 (2026-10-17 to 2026-10-18, inferred). Dates are UTC.</text>
 <text x="24" y="438" class="m">Models: claude-haiku-5-5 (sleight, LCU, Cua, Peekaboo and Claude computer use), gpt-6-luna (Codex). Effort:</text>
 <text x="24" y="456" class="m">high.</text>
