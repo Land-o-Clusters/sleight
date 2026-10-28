@@ -96,7 +96,7 @@ FowlBrowser ran its defaults. Chrome used the benchmark profile and Helium a fre
 
 The held-out set has eight tasks: five job fixtures and three whole-thread tasks. Whole-thread answers use the offline regrade (64550de9), sleight turbo 5/9, FowlBrowser 5/9, after the harness appended a RESULT instruction to JSON-only prompts. The saved grades are unchanged.
 
-Job motion was regraded with a fixed color-synonym table applied to every arm: sleight turbo 0/3, FowlBrowser 2/3. Phase order must match exactly. Missing phases still fail. The saved evidence is unchanged.
+Job motion was regraded with a fixed color-synonym table applied to every arm: sleight turbo 0/3, FowlBrowser 2/3. The strict grade was 0/3 for both arms. The synonym table was written after those results were seen. Only "yellow" and "purple" changed any recorded row. Phase order must match exactly. Missing phases still fail. The saved evidence is unchanged.
 
 | Phase | Fixture sRGB | Accepted names |
 | --- | --- | --- |

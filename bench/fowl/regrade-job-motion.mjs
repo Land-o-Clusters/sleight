@@ -1,7 +1,8 @@
 // Offline only. Read saved job rounds, print JSON, and never rewrite evidence.
 import { createHash } from 'node:crypto';
 import { existsSync, readFileSync, readdirSync } from 'node:fs';
-import { join, resolve } from 'node:path';
+import { homedir } from 'node:os';
+import { isAbsolute, join, relative, resolve, sep } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { gradeJob, jobColors } from '../world/job-fixtures.mjs';
 
@@ -52,7 +53,9 @@ export function regradeJobMotionBank(bank) {
         answer: row.run?.result?.result ?? null });
     }
   }
-  return { bank: resolve(bank), status: rows.length ? 'regraded' : 'no recorded job-motion rounds',
+  const absolute = resolve(bank), fromHome = relative(homedir(), absolute);
+  const homeRelative = fromHome !== '..' && !fromHome.startsWith(`..${sep}`) && !isAbsolute(fromHome);
+  return { bank: homeRelative ? (fromHome ? `~/${fromHome}` : '~') : absolute, status: rows.length ? 'regraded' : 'no recorded job-motion rounds',
     evidenceSha256: digest.digest('hex'), colors: jobColors, totals, rows };
 }
 

@@ -1,8 +1,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtempSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
-import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { existsSync, mkdtempSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { homedir, tmpdir } from 'node:os';
+import { join, relative } from 'node:path';
 import { Readable } from 'node:stream';
 import { registerTemp } from '../scripts/temp-leftovers.mjs';
 import { gradeJob, jobColors, createJobFixture, jobHandler } from '../bench/world/job-fixtures.mjs';
@@ -46,7 +46,12 @@ test('JM1 normalizes only name case and surrounding whitespace', () => {
   for (const answer of [['yellow', 'purple', 'teal'], ['yellow', 'yellow', 'purple'], ['yellow', 'teal'],
     ['yellow', 'teal', 'purple', 'gray'], ['yellow', null, 'purple'], null, 'yellow/teal/purple',
     ['yellow', 'green', 'purple'], ['yellow', 'cyan', 'purple'], ['yellowish', 'teal', 'purple'],
-    ['yellow', 'teal', 'lavender'], ['#ffbf26', 'teal', 'purple'], ['yellow', 'teal', {}]]) {
+    ['yellow', 'teal', 'lavender'], ['#ffbf26', 'teal', 'purple'], ['yellow', 'teal', {}],
+    ['not amber', 'teal', 'purple'], ['yellowish-green', 'teal', 'purple'],
+    ['yellow', 'blue green', 'purple'], ['yellow', 'bluegreen', 'purple'],
+    ['yellow', '#138d86', 'purple'], ['yellow', 'teal', '#8753d8'],
+    ['rgb(255, 191, 38)', 'teal', 'purple'], ['yellow', 'rgb(19, 141, 134)', 'purple'],
+    ['yellow', 'teal', 'rgb(135, 83, 216)']]) {
     assert.deepEqual(gradeJob(input(answer)).problems, ['JOB_ANSWER_MISMATCH']);
   }
   const extra = input(); extra.answer = JSON.stringify({ phases, extra: true });
@@ -70,6 +75,19 @@ test('JM1 leaves the dark badge answer contract exact', () => {
 });
 
 function bank(t) { return registerTemp(t, mkdtempSync(join(tmpdir(), 'sleight-jm1-'))); }
+test('JM1 regrade serializes a home-relative path without needing a bank', () => {
+  assert.equal(regradeJobMotionBank(join(homedir(), 'missing-jm1-bank')).bank, '~/missing-jm1-bank');
+  assert.equal(regradeJobMotionBank(homedir()).bank, '~');
+});
+test('JM1 regrade reproduces the committed JSON bytes when the evidence banks are present', t => {
+  const file = new URL('../docs/results/data/job-motion-regrade.json', import.meta.url);
+  const committed = readFileSync(file, 'utf8');
+  const banks = JSON.parse(committed).map(report => join(homedir(), report.bank.slice(2)));
+  if (!banks.every(existsSync)) return t.skip('recorded evidence banks are absent');
+  const actual = banks.map(regradeJobMotionBank);
+  assert.deepEqual(actual.map(report => report.bank), banks.map(root => `~/${relative(homedir(), root)}`));
+  assert.equal(JSON.stringify(actual, null, 2) + '\n', committed);
+});
 function save(root, arm, repetition, value = input(['yellow', 'teal', 'purple']), problems = ['JOB_ANSWER_MISMATCH'], group = 'jobs') {
   const dir = join(root, group, `fixtures-2026-10-28T17-16-42-265Z-${repetition}-${arm}-job-motion`, 'round');
   mkdirSync(dir, { recursive: true });

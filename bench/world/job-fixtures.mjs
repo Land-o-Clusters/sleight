@@ -142,7 +142,7 @@ function validEvent(event) {
   if (event.kind === 'media') return [event.width, event.height].every(n => Number.isInteger(n) && n > 0 && n <= 10000) && ['light', 'dark'].includes(event.scheme) && typeof event.reduced === 'boolean';
   if (event.kind === 'drag') return typeof event.card === 'string' && event.card.length < 100 && event.from === 'Queue' && event.to === 'Review' && Number.isInteger(event.points) && event.points >= 3 && event.points <= 10000;
   if (event.kind === 'kanban') return typeof event.card === 'string' && event.card.length < 100 && ['Queue', 'Review', 'Other'].includes(event.column);
-  return typeof event.reduced === 'boolean' && Array.isArray(event.phases) && event.phases.length <= 3 && event.phases.every(color => ['amber', 'teal', 'violet'].includes(color));
+  return typeof event.reduced === 'boolean' && Array.isArray(event.phases) && event.phases.length <= 3 && event.phases.every(color => Object.keys(jobColors).includes(color));
 }
 
 export function jobHandler(fixture, origin) {

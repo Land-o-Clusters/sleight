@@ -16,14 +16,17 @@
 // --hub-only leaves the root README alone, including during --check. Release preflight always checks it too.
 // The runners run collect and render once after a successful pass through bench/hub-refresh.mjs (--no-hub or SLEIGHT_NO_HUB=1 stops it).
 import { execFileSync } from 'node:child_process';
+import { createHash } from 'node:crypto';
 import { existsSync, mkdirSync, readFileSync, readdirSync, statSync, writeFileSync } from 'node:fs';
 import { homedir, userInfo } from 'node:os';
 import { basename, dirname, join, relative, resolve } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
+import { isDeepStrictEqual } from 'node:util';
 import { claim, excluded, regradeFor, score, warnings } from './claim-score.mjs';
 import { coveredRows, loadRound, markCover, scoreRounds } from './fowl/race-score.mjs';
 import { ANSWER_GRADER_FILE, currentAnswerGraders } from './fowl/real-gate-grade.mjs';
 import { jobColors } from './world/job-fixtures.mjs';
+import { regradeJobMotionBank } from './fowl/regrade-job-motion.mjs';
 import { dayRange, engineMix, engineNote, engineText, loadTimeline, passRowEngine, summarizeEngines, usesEngine } from './engine-version.mjs';
 import { buildPage, loadResults, perArm, renderHtml as renderReleaseHtml, renderMarkdown as renderReleaseMarkdown } from './results-page.mjs';
 
@@ -328,7 +331,46 @@ export function collectRace({ raceDir, browsers, family, title, timeline = loadT
 
 // The rematch is a separate population for each model and suite. Repeated round names across its banks must never pool.
 // LR2's reviewed offline report is data: do not import a runner or change the saved LR1 grades in the evidence bank.
+const JOB_MOTION_PINS = {
+  '~/Library/Caches/sleight-bench/evidence/fw1-e51c52a-haiku': {
+    evidenceSha256: '5b50b40c86ab2e002ccaa7cdd741a8353780be8773e1e584443c35060d149b04',
+    reportSha256: '8224b96a4c5a1ed435b990bd30e5817f2c6cf51de6153943fdb49d4cd535fdcb',
+  },
+  '~/Library/Caches/sleight-bench/evidence/fw1-e51c52a-opus': {
+    evidenceSha256: 'e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855',
+    reportSha256: 'c3b20d75f078c381707ca13f11bebe3ba7f3d8313e52b916e5a0337fd9bc29e7',
+  },
+};
+
+export function verifyJobMotionRegrade(reports, banks = reports.map(report => ({ dir: report.bank.replace(/^~(?=\/|$)/, homedir()) }))) {
+  const seen = new Set();
+  for (const report of reports) {
+    const name = basename(report.bank);
+    if (seen.has(name)) throw Error(`Duplicate job-motion regrade: ${name}`);
+    seen.add(name);
+    if (!isDeepStrictEqual(report.colors, jobColors)) throw Error('Job-motion regrade color table differs from the fixture');
+    const bank = banks.find(bank => basename(bank.dir) === name && isDir(bank.dir));
+    if (bank) {
+      if (!isDeepStrictEqual(report, regradeJobMotionBank(bank.dir))) throw Error(`Job-motion regrade differs from saved bank: ${name}`);
+    } else {
+      const pin = JOB_MOTION_PINS[report.bank];
+      const digest = createHash('sha256').update(JSON.stringify(report)).digest('hex');
+      if (!pin || report.evidenceSha256 !== pin.evidenceSha256 || digest !== pin.reportSha256)
+        throw Error(`Job-motion regrade differs from pinned digest: ${name}`);
+    }
+  }
+  for (const bank of banks.filter(bank => isDir(bank.dir))) {
+    if (!seen.has(basename(bank.dir)) && regradeJobMotionBank(bank.dir).rows.length)
+      throw Error(`Missing job-motion regrade: ${basename(bank.dir)}`);
+  }
+  for (const name of Object.keys(JOB_MOTION_PINS)) {
+    if (!seen.has(basename(name)))
+      throw Error(`Missing job-motion regrade: ${basename(name)}`);
+  }
+}
+
 export function collectRematch({ banks, regrade, jobMotionRegrade = readJson(join(ROOT, 'docs/results/data/job-motion-regrade.json')), timeline = loadTimeline() }) {
+  verifyJobMotionRegrade(jobMotionRegrade, banks);
   const motion = new Map();
   for (const bank of jobMotionRegrade) {
     if (JSON.stringify(bank.colors) !== JSON.stringify(jobColors)) throw Error('Job-motion regrade color table differs from the fixture');
@@ -403,7 +445,7 @@ export function collectRematch({ banks, regrade, jobMotionRegrade = readJson(joi
           'FowlBrowser ran its defaults. Chrome used the benchmark profile and Helium a fresh profile. These are sleight\'s own tasks. Earlier benchmark runs informed its skill and tool wording.',
           suite === 'core' ? 'The 13 core browser tasks are scored separately from the eight held-out tasks.' :
             `The held-out set has eight tasks: five job fixtures and three whole-thread tasks. Whole-thread answers use the offline regrade (64550de9), ${Object.entries(study.regrade?.arms ?? {}).map(([arm, count]) => `${armName(arm)} ${count.passes}/${count.runs}`).join(', ')}, after the harness appended a RESULT instruction to JSON-only prompts. The saved grades are unchanged.`,
-          ...(motionRuns.length ? [`Job motion was regraded with a fixed color-synonym table applied to every arm: ${Object.entries(study.jobMotionRegrade.arms).map(([arm, count]) => `${armName(arm)} ${count.passes}/${count.runs}`).join(', ')}. Phase order must match exactly. Missing phases still fail. The saved evidence is unchanged.`] : []),
+          ...(motionRuns.length ? [`Job motion was regraded with a fixed color-synonym table applied to every arm: ${Object.entries(study.jobMotionRegrade.arms).map(([arm, count]) => `${armName(arm)} ${count.passes}/${count.runs}`).join(', ')}. The strict grade was 0/3 for both arms. The synonym table was written after those results were seen. Only "yellow" and "purple" changed any recorded row. Phase order must match exactly. Missing phases still fail. The saved evidence is unchanged.`] : []),
         ];
       }
       out.studies.push(...race.studies);
@@ -1640,6 +1682,7 @@ export function collect({ wt, out, excludeCovered = false, banks: extraBanks = [
   }
   const evidence = resolve(wt) === join(homedir(), 'Projects/sleight-wt') ? join(homedir(), 'Library/Caches/sleight-bench/evidence') : join(wt, 'evidence');
   const rematchBanks = ['haiku', 'opus'].map(model => ({ dir: join(evidence, `fw1-e51c52a-${model}`), model })).filter(b => isDir(b.dir));
+  verifyJobMotionRegrade(readJson(join(ROOT, 'docs/results/data/job-motion-regrade.json')), rematchBanks);
   if (rematchBanks.length) {
     const regradeFile = join(ROOT, 'docs/results/data/whole-thread-regrade.txt');
     const rematch = collectRematch({ banks: rematchBanks, regrade: existsSync(regradeFile) ? readFileSync(regradeFile, 'utf8') : '', timeline });
@@ -1732,6 +1775,7 @@ export function main(argv = process.argv.slice(2)) {
   const out = resolve(ROOT, argValue(argv, '--out') ?? 'docs/results');
   let all, notes = [];
   if (argv.includes('--render-only')) {
+    verifyJobMotionRegrade(readJson(join(ROOT, 'docs/results/data/job-motion-regrade.json')));
     all = Object.fromEntries(FAMILIES.map(f => [f.id, readJson(join(out, 'data', `${f.id}.json`))]));
   } else ({ all, notes } = collect({ wt, out, excludeCovered: argv.includes('--exclude-covered'), banks: argValues(argv, '--bank') }));
   const files = render(all);
