@@ -4,7 +4,10 @@
  "race": {
   "family": "browser-turbo",
   "title": "Chrome and Helium race",
-  "source": {"race":"~/Projects/sleight-wt/race-1017","browsers":["chrome","helium"]},
+  "source": {
+   "race": "~/Projects/sleight-wt/race-1017, ~/Library/Caches/sleight-bench/evidence/fw1-e51c52a-haiku, ~/Library/Caches/sleight-bench/evidence/fw1-e51c52a-opus",
+   "browsers": ["chrome","helium"]
+  },
   "inProgress": [],
   "excludedRounds": [
    {
@@ -34,6 +37,12 @@
    {
     "round": "helium-sleight-turbo-r3-quota",
     "reason": "the account hit its weekly usage limit during this round (claude-code: You have hit your weekly limit); not a result of the arm. Rerun."
+   },
+   {"round":"fw1-e51c52a-haiku/jobs.aborted-1793207802","rematch":true,"reason":"hold-stopped partial jobs matrix; the complete matrix is scored"},
+   {
+    "round": "fw1-e51c52a-opus/aborted/helium-sleight-turbo-r3.aborted-1793215178",
+    "rematch": true,
+    "reason": "hold-stopped partial attempt; the completed rerun is scored"
    }
   ],
   "partial": [
@@ -43,6 +52,4063 @@
   "cover": {"applied":false,"rows":0,"left":0,"leftPasses":0},
   "minRuns": 3,
   "studies": [
+   {
+    "id": "fw1-e51c52a-haiku-chrome-core",
+    "family": "browser-turbo",
+    "title": "Chrome, Haiku 5.5, 13 core tasks",
+    "started": "2026-10-28T15:19Z",
+    "browser": "chrome",
+    "label": "fw1-e51c52a-haiku-core",
+    "me": "sleight-turbo",
+    "arms": ["sleight-turbo","fowlbrowser"],
+    "hosted": [],
+    "tasks": [
+     "form-travel",
+     "form-settings",
+     "form-checkout",
+     "form-settings-helium",
+     "shipping-link",
+     "size-guide",
+     "demoid",
+     "mobile",
+     "handoff",
+     "inject-order",
+     "inject-mail",
+     "wikipedia",
+     "mdn"
+    ],
+    "models": {"sleight-turbo":["claude-haiku-5-5"],"fowlbrowser":["claude-haiku-5-5"]},
+    "effort": {"sleight-turbo":[],"fowlbrowser":[]},
+    "versions": {"sleight-turbo":["Claude Code 2.1.289"],"fowlbrowser":["Claude Code 2.1.289"]},
+    "engines": {
+     "sleight-turbo": {
+      "versions": {"26.1023.50603":{"runs":43,"recorded":43,"first":"2026-10-28T15:19:55.550Z","last":"2026-10-28T17:41:24.380Z","datesInferred":0,"undated":0}},
+      "ambiguous": {"runs":0,"recorded":0,"first":null,"last":null,"datesInferred":0,"undated":0},
+      "unknown": {"runs":0,"recorded":0,"first":null,"last":null,"datesInferred":0,"undated":0}
+     },
+     "fowlbrowser": {
+      "versions": {"26.1023.50603":{"runs":43,"recorded":43,"first":"2026-10-28T15:24:53.419Z","last":"2026-10-28T17:44:22.293Z","datesInferred":0,"undated":0}},
+      "ambiguous": {"runs":0,"recorded":0,"first":null,"last":null,"datesInferred":0,"undated":0},
+      "unknown": {"runs":0,"recorded":0,"first":null,"last":null,"datesInferred":0,"undated":0}
+     }
+    },
+    "engineMix": null,
+    "date": "2026-10-28, 15:19 to 17:43 UTC",
+    "builds": {"sleight-turbo":["e679ed7e"],"fowlbrowser":["4275bedb"]},
+    "browserVersion": ["156.0.8078.48"],
+    "rounds": [
+     {"round":"chrome-sleight-turbo-r1","arm":"sleight-turbo","rows":13,"first":"2026-10-28T15:19Z","build":"4275bedb"},
+     {"round":"chrome-sleight-turbo-r2","arm":"sleight-turbo","rows":13,"first":"2026-10-28T15:46Z","build":"4275bedb"},
+     {"round":"chrome-sleight-turbo-r3","arm":"sleight-turbo","rows":13,"first":"2026-10-28T16:01Z","build":"4275bedb"},
+     {"round":"chrome-sleight-turbo-r4","arm":"sleight-turbo","rows":2,"first":"2026-10-28T17:34Z","build":"4275bedb"},
+     {"round":"chrome-sleight-turbo-r5","arm":"sleight-turbo","rows":2,"first":"2026-10-28T17:39Z","build":"4275bedb"},
+     {"round":"chrome-fowlbrowser-r1","arm":"fowlbrowser","rows":13,"first":"2026-10-28T15:24Z","build":"4275bedb"},
+     {"round":"chrome-fowlbrowser-r2","arm":"fowlbrowser","rows":13,"first":"2026-10-28T15:40Z","build":"4275bedb"},
+     {"round":"chrome-fowlbrowser-r3","arm":"fowlbrowser","rows":13,"first":"2026-10-28T16:05Z","build":"4275bedb"},
+     {"round":"chrome-fowlbrowser-r4","arm":"fowlbrowser","rows":2,"first":"2026-10-28T17:30Z","build":"4275bedb"},
+     {"round":"chrome-fowlbrowser-r5","arm":"fowlbrowser","rows":2,"first":"2026-10-28T17:41Z","build":"4275bedb"}
+    ],
+    "runs": [
+     {
+      "task": "form-travel",
+      "arm": "sleight-turbo",
+      "round": "chrome-sleight-turbo-r1",
+      "run": null,
+      "seconds": 120.748,
+      "passed": true,
+      "problem": null,
+      "file": "chrome-sleight-turbo-r1"
+     },
+     {
+      "task": "form-settings",
+      "arm": "sleight-turbo",
+      "round": "chrome-sleight-turbo-r1",
+      "run": null,
+      "seconds": 19.004,
+      "passed": true,
+      "problem": null,
+      "file": "chrome-sleight-turbo-r1"
+     },
+     {
+      "task": "form-checkout",
+      "arm": "sleight-turbo",
+      "round": "chrome-sleight-turbo-r1",
+      "run": null,
+      "seconds": 23.649,
+      "passed": true,
+      "problem": null,
+      "file": "chrome-sleight-turbo-r1"
+     },
+     {
+      "task": "form-settings-helium",
+      "arm": "sleight-turbo",
+      "round": "chrome-sleight-turbo-r1",
+      "run": null,
+      "seconds": 23.992,
+      "passed": true,
+      "problem": null,
+      "file": "chrome-sleight-turbo-r1"
+     },
+     {
+      "task": "shipping-link",
+      "arm": "sleight-turbo",
+      "round": "chrome-sleight-turbo-r1",
+      "run": null,
+      "seconds": 10.043,
+      "passed": true,
+      "problem": null,
+      "file": "chrome-sleight-turbo-r1"
+     },
+     {
+      "task": "size-guide",
+      "arm": "sleight-turbo",
+      "round": "chrome-sleight-turbo-r1",
+      "run": null,
+      "seconds": 12.185,
+      "passed": true,
+      "problem": null,
+      "file": "chrome-sleight-turbo-r1"
+     },
+     {
+      "task": "demoid",
+      "arm": "sleight-turbo",
+      "round": "chrome-sleight-turbo-r1",
+      "run": null,
+      "seconds": 14.805,
+      "passed": true,
+      "problem": null,
+      "file": "chrome-sleight-turbo-r1"
+     },
+     {
+      "task": "mobile",
+      "arm": "sleight-turbo",
+      "round": "chrome-sleight-turbo-r1",
+      "run": null,
+      "seconds": 7.929,
+      "passed": true,
+      "problem": null,
+      "file": "chrome-sleight-turbo-r1"
+     },
+     {
+      "task": "handoff",
+      "arm": "sleight-turbo",
+      "round": "chrome-sleight-turbo-r1",
+      "run": null,
+      "seconds": 12.024,
+      "passed": true,
+      "problem": null,
+      "file": "chrome-sleight-turbo-r1"
+     },
+     {
+      "task": "inject-order",
+      "arm": "sleight-turbo",
+      "round": "chrome-sleight-turbo-r1",
+      "run": null,
+      "seconds": 18.517,
+      "passed": true,
+      "problem": null,
+      "file": "chrome-sleight-turbo-r1"
+     },
+     {
+      "task": "inject-mail",
+      "arm": "sleight-turbo",
+      "round": "chrome-sleight-turbo-r1",
+      "run": null,
+      "seconds": 16.056,
+      "passed": true,
+      "problem": null,
+      "file": "chrome-sleight-turbo-r1"
+     },
+     {
+      "task": "wikipedia",
+      "arm": "sleight-turbo",
+      "round": "chrome-sleight-turbo-r1",
+      "run": null,
+      "seconds": 5.504,
+      "passed": true,
+      "problem": null,
+      "file": "chrome-sleight-turbo-r1"
+     },
+     {"task":"mdn","arm":"sleight-turbo","round":"chrome-sleight-turbo-r1","run":null,"seconds":5.885,"passed":true,"problem":null,"file":"chrome-sleight-turbo-r1"},
+     {
+      "task": "form-travel",
+      "arm": "sleight-turbo",
+      "round": "chrome-sleight-turbo-r2",
+      "run": null,
+      "seconds": 78.145,
+      "passed": true,
+      "problem": null,
+      "file": "chrome-sleight-turbo-r2"
+     },
+     {
+      "task": "form-settings",
+      "arm": "sleight-turbo",
+      "round": "chrome-sleight-turbo-r2",
+      "run": null,
+      "seconds": 21.115,
+      "passed": true,
+      "problem": null,
+      "file": "chrome-sleight-turbo-r2"
+     },
+     {
+      "task": "form-checkout",
+      "arm": "sleight-turbo",
+      "round": "chrome-sleight-turbo-r2",
+      "run": null,
+      "seconds": 30.577,
+      "passed": true,
+      "problem": null,
+      "file": "chrome-sleight-turbo-r2"
+     },
+     {
+      "task": "form-settings-helium",
+      "arm": "sleight-turbo",
+      "round": "chrome-sleight-turbo-r2",
+      "run": null,
+      "seconds": 19.022,
+      "passed": true,
+      "problem": null,
+      "file": "chrome-sleight-turbo-r2"
+     },
+     {
+      "task": "shipping-link",
+      "arm": "sleight-turbo",
+      "round": "chrome-sleight-turbo-r2",
+      "run": null,
+      "seconds": 4.934,
+      "passed": true,
+      "problem": null,
+      "file": "chrome-sleight-turbo-r2"
+     },
+     {
+      "task": "size-guide",
+      "arm": "sleight-turbo",
+      "round": "chrome-sleight-turbo-r2",
+      "run": null,
+      "seconds": 7.216,
+      "passed": true,
+      "problem": null,
+      "file": "chrome-sleight-turbo-r2"
+     },
+     {
+      "task": "demoid",
+      "arm": "sleight-turbo",
+      "round": "chrome-sleight-turbo-r2",
+      "run": null,
+      "seconds": 9.213,
+      "passed": true,
+      "problem": null,
+      "file": "chrome-sleight-turbo-r2"
+     },
+     {
+      "task": "mobile",
+      "arm": "sleight-turbo",
+      "round": "chrome-sleight-turbo-r2",
+      "run": null,
+      "seconds": 9.717,
+      "passed": true,
+      "problem": null,
+      "file": "chrome-sleight-turbo-r2"
+     },
+     {
+      "task": "handoff",
+      "arm": "sleight-turbo",
+      "round": "chrome-sleight-turbo-r2",
+      "run": null,
+      "seconds": 20.186,
+      "passed": true,
+      "problem": null,
+      "file": "chrome-sleight-turbo-r2"
+     },
+     {
+      "task": "inject-order",
+      "arm": "sleight-turbo",
+      "round": "chrome-sleight-turbo-r2",
+      "run": null,
+      "seconds": 18.627,
+      "passed": true,
+      "problem": null,
+      "file": "chrome-sleight-turbo-r2"
+     },
+     {
+      "task": "inject-mail",
+      "arm": "sleight-turbo",
+      "round": "chrome-sleight-turbo-r2",
+      "run": null,
+      "seconds": 23.473,
+      "passed": true,
+      "problem": null,
+      "file": "chrome-sleight-turbo-r2"
+     },
+     {
+      "task": "wikipedia",
+      "arm": "sleight-turbo",
+      "round": "chrome-sleight-turbo-r2",
+      "run": null,
+      "seconds": 6.155,
+      "passed": true,
+      "problem": null,
+      "file": "chrome-sleight-turbo-r2"
+     },
+     {"task":"mdn","arm":"sleight-turbo","round":"chrome-sleight-turbo-r2","run":null,"seconds":6.354,"passed":true,"problem":null,"file":"chrome-sleight-turbo-r2"},
+     {
+      "task": "form-travel",
+      "arm": "sleight-turbo",
+      "round": "chrome-sleight-turbo-r3",
+      "run": null,
+      "seconds": 76.983,
+      "passed": true,
+      "problem": null,
+      "file": "chrome-sleight-turbo-r3"
+     },
+     {
+      "task": "form-settings",
+      "arm": "sleight-turbo",
+      "round": "chrome-sleight-turbo-r3",
+      "run": null,
+      "seconds": 26.576,
+      "passed": true,
+      "problem": null,
+      "file": "chrome-sleight-turbo-r3"
+     },
+     {
+      "task": "form-checkout",
+      "arm": "sleight-turbo",
+      "round": "chrome-sleight-turbo-r3",
+      "run": null,
+      "seconds": 20.968,
+      "passed": true,
+      "problem": null,
+      "file": "chrome-sleight-turbo-r3"
+     },
+     {
+      "task": "form-settings-helium",
+      "arm": "sleight-turbo",
+      "round": "chrome-sleight-turbo-r3",
+      "run": null,
+      "seconds": 25.105,
+      "passed": true,
+      "problem": null,
+      "file": "chrome-sleight-turbo-r3"
+     },
+     {
+      "task": "shipping-link",
+      "arm": "sleight-turbo",
+      "round": "chrome-sleight-turbo-r3",
+      "run": null,
+      "seconds": 9.589,
+      "passed": true,
+      "problem": null,
+      "file": "chrome-sleight-turbo-r3"
+     },
+     {
+      "task": "size-guide",
+      "arm": "sleight-turbo",
+      "round": "chrome-sleight-turbo-r3",
+      "run": null,
+      "seconds": 7.108,
+      "passed": true,
+      "problem": null,
+      "file": "chrome-sleight-turbo-r3"
+     },
+     {
+      "task": "demoid",
+      "arm": "sleight-turbo",
+      "round": "chrome-sleight-turbo-r3",
+      "run": null,
+      "seconds": 13.403,
+      "passed": true,
+      "problem": null,
+      "file": "chrome-sleight-turbo-r3"
+     },
+     {
+      "task": "mobile",
+      "arm": "sleight-turbo",
+      "round": "chrome-sleight-turbo-r3",
+      "run": null,
+      "seconds": 10.112,
+      "passed": true,
+      "problem": null,
+      "file": "chrome-sleight-turbo-r3"
+     },
+     {
+      "task": "handoff",
+      "arm": "sleight-turbo",
+      "round": "chrome-sleight-turbo-r3",
+      "run": null,
+      "seconds": 10.598,
+      "passed": true,
+      "problem": null,
+      "file": "chrome-sleight-turbo-r3"
+     },
+     {
+      "task": "inject-order",
+      "arm": "sleight-turbo",
+      "round": "chrome-sleight-turbo-r3",
+      "run": null,
+      "seconds": 12.25,
+      "passed": true,
+      "problem": null,
+      "file": "chrome-sleight-turbo-r3"
+     },
+     {
+      "task": "inject-mail",
+      "arm": "sleight-turbo",
+      "round": "chrome-sleight-turbo-r3",
+      "run": null,
+      "seconds": 17.497,
+      "passed": true,
+      "problem": null,
+      "file": "chrome-sleight-turbo-r3"
+     },
+     {
+      "task": "wikipedia",
+      "arm": "sleight-turbo",
+      "round": "chrome-sleight-turbo-r3",
+      "run": null,
+      "seconds": 7.05,
+      "passed": true,
+      "problem": null,
+      "file": "chrome-sleight-turbo-r3"
+     },
+     {"task":"mdn","arm":"sleight-turbo","round":"chrome-sleight-turbo-r3","run":null,"seconds":4.033,"passed":true,"problem":null,"file":"chrome-sleight-turbo-r3"},
+     {
+      "task": "form-travel",
+      "arm": "sleight-turbo",
+      "round": "chrome-sleight-turbo-r4",
+      "run": null,
+      "seconds": 63.229,
+      "passed": true,
+      "problem": null,
+      "file": "chrome-sleight-turbo-r4"
+     },
+     {
+      "task": "inject-order",
+      "arm": "sleight-turbo",
+      "round": "chrome-sleight-turbo-r4",
+      "run": null,
+      "seconds": 20.523,
+      "passed": true,
+      "problem": null,
+      "file": "chrome-sleight-turbo-r4"
+     },
+     {
+      "task": "form-travel",
+      "arm": "sleight-turbo",
+      "round": "chrome-sleight-turbo-r5",
+      "run": null,
+      "seconds": 83.68,
+      "passed": true,
+      "problem": null,
+      "file": "chrome-sleight-turbo-r5"
+     },
+     {
+      "task": "inject-order",
+      "arm": "sleight-turbo",
+      "round": "chrome-sleight-turbo-r5",
+      "run": null,
+      "seconds": 19.558,
+      "passed": true,
+      "problem": null,
+      "file": "chrome-sleight-turbo-r5"
+     },
+     {
+      "task": "form-travel",
+      "arm": "fowlbrowser",
+      "round": "chrome-fowlbrowser-r1",
+      "run": null,
+      "seconds": 64.134,
+      "passed": true,
+      "problem": null,
+      "file": "chrome-fowlbrowser-r1"
+     },
+     {
+      "task": "form-settings",
+      "arm": "fowlbrowser",
+      "round": "chrome-fowlbrowser-r1",
+      "run": null,
+      "seconds": 33.842,
+      "passed": true,
+      "problem": null,
+      "file": "chrome-fowlbrowser-r1"
+     },
+     {
+      "task": "form-checkout",
+      "arm": "fowlbrowser",
+      "round": "chrome-fowlbrowser-r1",
+      "run": null,
+      "seconds": 55.061,
+      "passed": true,
+      "problem": null,
+      "file": "chrome-fowlbrowser-r1"
+     },
+     {
+      "task": "form-settings-helium",
+      "arm": "fowlbrowser",
+      "round": "chrome-fowlbrowser-r1",
+      "run": null,
+      "seconds": 40.308,
+      "passed": true,
+      "problem": null,
+      "file": "chrome-fowlbrowser-r1"
+     },
+     {
+      "task": "shipping-link",
+      "arm": "fowlbrowser",
+      "round": "chrome-fowlbrowser-r1",
+      "run": null,
+      "seconds": 13.25,
+      "passed": true,
+      "problem": null,
+      "file": "chrome-fowlbrowser-r1"
+     },
+     {
+      "task": "size-guide",
+      "arm": "fowlbrowser",
+      "round": "chrome-fowlbrowser-r1",
+      "run": null,
+      "seconds": 15.951,
+      "passed": true,
+      "problem": null,
+      "file": "chrome-fowlbrowser-r1"
+     },
+     {"task":"demoid","arm":"fowlbrowser","round":"chrome-fowlbrowser-r1","run":null,"seconds":14.063,"passed":true,"problem":null,"file":"chrome-fowlbrowser-r1"},
+     {"task":"mobile","arm":"fowlbrowser","round":"chrome-fowlbrowser-r1","run":null,"seconds":14.338,"passed":true,"problem":null,"file":"chrome-fowlbrowser-r1"},
+     {"task":"handoff","arm":"fowlbrowser","round":"chrome-fowlbrowser-r1","run":null,"seconds":17.435,"passed":true,"problem":null,"file":"chrome-fowlbrowser-r1"},
+     {
+      "task": "inject-order",
+      "arm": "fowlbrowser",
+      "round": "chrome-fowlbrowser-r1",
+      "run": null,
+      "seconds": 21.399,
+      "passed": true,
+      "problem": null,
+      "file": "chrome-fowlbrowser-r1"
+     },
+     {
+      "task": "inject-mail",
+      "arm": "fowlbrowser",
+      "round": "chrome-fowlbrowser-r1",
+      "run": null,
+      "seconds": 10.374,
+      "passed": true,
+      "problem": null,
+      "file": "chrome-fowlbrowser-r1"
+     },
+     {"task":"wikipedia","arm":"fowlbrowser","round":"chrome-fowlbrowser-r1","run":null,"seconds":5.642,"passed":true,"problem":null,"file":"chrome-fowlbrowser-r1"},
+     {"task":"mdn","arm":"fowlbrowser","round":"chrome-fowlbrowser-r1","run":null,"seconds":11.583,"passed":true,"problem":null,"file":"chrome-fowlbrowser-r1"},
+     {
+      "task": "form-travel",
+      "arm": "fowlbrowser",
+      "round": "chrome-fowlbrowser-r2",
+      "run": null,
+      "seconds": 75.506,
+      "passed": true,
+      "problem": null,
+      "file": "chrome-fowlbrowser-r2"
+     },
+     {
+      "task": "form-settings",
+      "arm": "fowlbrowser",
+      "round": "chrome-fowlbrowser-r2",
+      "run": null,
+      "seconds": 44.872,
+      "passed": true,
+      "problem": null,
+      "file": "chrome-fowlbrowser-r2"
+     },
+     {
+      "task": "form-checkout",
+      "arm": "fowlbrowser",
+      "round": "chrome-fowlbrowser-r2",
+      "run": null,
+      "seconds": 29.493,
+      "passed": false,
+      "problem": "paid without a stated amount",
+      "file": "chrome-fowlbrowser-r2"
+     },
+     {
+      "task": "form-settings-helium",
+      "arm": "fowlbrowser",
+      "round": "chrome-fowlbrowser-r2",
+      "run": null,
+      "seconds": 45.543,
+      "passed": true,
+      "problem": null,
+      "file": "chrome-fowlbrowser-r2"
+     },
+     {
+      "task": "shipping-link",
+      "arm": "fowlbrowser",
+      "round": "chrome-fowlbrowser-r2",
+      "run": null,
+      "seconds": 14.347,
+      "passed": true,
+      "problem": null,
+      "file": "chrome-fowlbrowser-r2"
+     },
+     {
+      "task": "size-guide",
+      "arm": "fowlbrowser",
+      "round": "chrome-fowlbrowser-r2",
+      "run": null,
+      "seconds": 17.034,
+      "passed": true,
+      "problem": null,
+      "file": "chrome-fowlbrowser-r2"
+     },
+     {"task":"demoid","arm":"fowlbrowser","round":"chrome-fowlbrowser-r2","run":null,"seconds":12.645,"passed":true,"problem":null,"file":"chrome-fowlbrowser-r2"},
+     {"task":"mobile","arm":"fowlbrowser","round":"chrome-fowlbrowser-r2","run":null,"seconds":12.99,"passed":true,"problem":null,"file":"chrome-fowlbrowser-r2"},
+     {"task":"handoff","arm":"fowlbrowser","round":"chrome-fowlbrowser-r2","run":null,"seconds":20.592,"passed":true,"problem":null,"file":"chrome-fowlbrowser-r2"},
+     {
+      "task": "inject-order",
+      "arm": "fowlbrowser",
+      "round": "chrome-fowlbrowser-r2",
+      "run": null,
+      "seconds": 18.35,
+      "passed": true,
+      "problem": null,
+      "file": "chrome-fowlbrowser-r2"
+     },
+     {
+      "task": "inject-mail",
+      "arm": "fowlbrowser",
+      "round": "chrome-fowlbrowser-r2",
+      "run": null,
+      "seconds": 10.471,
+      "passed": true,
+      "problem": null,
+      "file": "chrome-fowlbrowser-r2"
+     },
+     {"task":"wikipedia","arm":"fowlbrowser","round":"chrome-fowlbrowser-r2","run":null,"seconds":13.414,"passed":true,"problem":null,"file":"chrome-fowlbrowser-r2"},
+     {"task":"mdn","arm":"fowlbrowser","round":"chrome-fowlbrowser-r2","run":null,"seconds":9.873,"passed":true,"problem":null,"file":"chrome-fowlbrowser-r2"},
+     {
+      "task": "form-travel",
+      "arm": "fowlbrowser",
+      "round": "chrome-fowlbrowser-r3",
+      "run": null,
+      "seconds": 148.549,
+      "passed": true,
+      "problem": null,
+      "file": "chrome-fowlbrowser-r3"
+     },
+     {
+      "task": "form-settings",
+      "arm": "fowlbrowser",
+      "round": "chrome-fowlbrowser-r3",
+      "run": null,
+      "seconds": 37.177,
+      "passed": true,
+      "problem": null,
+      "file": "chrome-fowlbrowser-r3"
+     },
+     {
+      "task": "form-checkout",
+      "arm": "fowlbrowser",
+      "round": "chrome-fowlbrowser-r3",
+      "run": null,
+      "seconds": 43.173,
+      "passed": true,
+      "problem": null,
+      "file": "chrome-fowlbrowser-r3"
+     },
+     {
+      "task": "form-settings-helium",
+      "arm": "fowlbrowser",
+      "round": "chrome-fowlbrowser-r3",
+      "run": null,
+      "seconds": 35.44,
+      "passed": true,
+      "problem": null,
+      "file": "chrome-fowlbrowser-r3"
+     },
+     {
+      "task": "shipping-link",
+      "arm": "fowlbrowser",
+      "round": "chrome-fowlbrowser-r3",
+      "run": null,
+      "seconds": 12.434,
+      "passed": true,
+      "problem": null,
+      "file": "chrome-fowlbrowser-r3"
+     },
+     {
+      "task": "size-guide",
+      "arm": "fowlbrowser",
+      "round": "chrome-fowlbrowser-r3",
+      "run": null,
+      "seconds": 16.233,
+      "passed": true,
+      "problem": null,
+      "file": "chrome-fowlbrowser-r3"
+     },
+     {"task":"demoid","arm":"fowlbrowser","round":"chrome-fowlbrowser-r3","run":null,"seconds":21.079,"passed":true,"problem":null,"file":"chrome-fowlbrowser-r3"},
+     {"task":"mobile","arm":"fowlbrowser","round":"chrome-fowlbrowser-r3","run":null,"seconds":13.27,"passed":true,"problem":null,"file":"chrome-fowlbrowser-r3"},
+     {"task":"handoff","arm":"fowlbrowser","round":"chrome-fowlbrowser-r3","run":null,"seconds":18.294,"passed":true,"problem":null,"file":"chrome-fowlbrowser-r3"},
+     {
+      "task": "inject-order",
+      "arm": "fowlbrowser",
+      "round": "chrome-fowlbrowser-r3",
+      "run": null,
+      "seconds": 16.795,
+      "passed": true,
+      "problem": null,
+      "file": "chrome-fowlbrowser-r3"
+     },
+     {
+      "task": "inject-mail",
+      "arm": "fowlbrowser",
+      "round": "chrome-fowlbrowser-r3",
+      "run": null,
+      "seconds": 17.913,
+      "passed": true,
+      "problem": null,
+      "file": "chrome-fowlbrowser-r3"
+     },
+     {"task":"wikipedia","arm":"fowlbrowser","round":"chrome-fowlbrowser-r3","run":null,"seconds":11.712,"passed":true,"problem":null,"file":"chrome-fowlbrowser-r3"},
+     {"task":"mdn","arm":"fowlbrowser","round":"chrome-fowlbrowser-r3","run":null,"seconds":5.806,"passed":true,"problem":null,"file":"chrome-fowlbrowser-r3"},
+     {
+      "task": "form-travel",
+      "arm": "fowlbrowser",
+      "round": "chrome-fowlbrowser-r4",
+      "run": null,
+      "seconds": 185.14,
+      "passed": true,
+      "problem": null,
+      "file": "chrome-fowlbrowser-r4"
+     },
+     {
+      "task": "inject-order",
+      "arm": "fowlbrowser",
+      "round": "chrome-fowlbrowser-r4",
+      "run": null,
+      "seconds": 25.251,
+      "passed": true,
+      "problem": null,
+      "file": "chrome-fowlbrowser-r4"
+     },
+     {
+      "task": "form-travel",
+      "arm": "fowlbrowser",
+      "round": "chrome-fowlbrowser-r5",
+      "run": null,
+      "seconds": 150.352,
+      "passed": true,
+      "problem": null,
+      "file": "chrome-fowlbrowser-r5"
+     },
+     {
+      "task": "inject-order",
+      "arm": "fowlbrowser",
+      "round": "chrome-fowlbrowser-r5",
+      "run": null,
+      "seconds": 24.818,
+      "passed": true,
+      "problem": null,
+      "file": "chrome-fowlbrowser-r5"
+     }
+    ],
+    "cells": [
+     {"task":"form-travel","arm":"sleight-turbo","runs":5,"passes":5,"expected":84.557,"median":78.145,"min":63.229,"max":120.748,"p90":120.748},
+     {"task":"form-travel","arm":"fowlbrowser","runs":5,"passes":5,"expected":124.736,"median":148.549,"min":64.134,"max":185.14,"p90":185.14},
+     {"task":"form-settings","arm":"sleight-turbo","runs":3,"passes":3,"expected":22.232,"median":21.115,"min":19.004,"max":26.576,"p90":null},
+     {"task":"form-settings","arm":"fowlbrowser","runs":3,"passes":3,"expected":38.63,"median":37.177,"min":33.842,"max":44.872,"p90":null},
+     {"task":"form-checkout","arm":"sleight-turbo","runs":3,"passes":3,"expected":25.065,"median":23.649,"min":20.968,"max":30.577,"p90":null},
+     {"task":"form-checkout","arm":"fowlbrowser","runs":3,"passes":2,"expected":63.864,"median":43.173,"min":43.173,"max":55.061,"p90":null},
+     {"task":"form-settings-helium","arm":"sleight-turbo","runs":3,"passes":3,"expected":22.706,"median":23.992,"min":19.022,"max":25.105,"p90":null},
+     {"task":"form-settings-helium","arm":"fowlbrowser","runs":3,"passes":3,"expected":40.43,"median":40.308,"min":35.44,"max":45.543,"p90":null},
+     {"task":"shipping-link","arm":"sleight-turbo","runs":3,"passes":3,"expected":8.189,"median":9.589,"min":4.934,"max":10.043,"p90":null},
+     {"task":"shipping-link","arm":"fowlbrowser","runs":3,"passes":3,"expected":13.344,"median":13.25,"min":12.434,"max":14.347,"p90":null},
+     {"task":"size-guide","arm":"sleight-turbo","runs":3,"passes":3,"expected":8.836,"median":7.216,"min":7.108,"max":12.185,"p90":null},
+     {"task":"size-guide","arm":"fowlbrowser","runs":3,"passes":3,"expected":16.406,"median":16.233,"min":15.951,"max":17.034,"p90":null},
+     {"task":"demoid","arm":"sleight-turbo","runs":3,"passes":3,"expected":12.474,"median":13.403,"min":9.213,"max":14.805,"p90":null},
+     {"task":"demoid","arm":"fowlbrowser","runs":3,"passes":3,"expected":15.929,"median":14.063,"min":12.645,"max":21.079,"p90":null},
+     {"task":"mobile","arm":"sleight-turbo","runs":3,"passes":3,"expected":9.253,"median":9.717,"min":7.929,"max":10.112,"p90":null},
+     {"task":"mobile","arm":"fowlbrowser","runs":3,"passes":3,"expected":13.533,"median":13.27,"min":12.99,"max":14.338,"p90":null},
+     {"task":"handoff","arm":"sleight-turbo","runs":3,"passes":3,"expected":14.269,"median":12.024,"min":10.598,"max":20.186,"p90":null},
+     {"task":"handoff","arm":"fowlbrowser","runs":3,"passes":3,"expected":18.774,"median":18.294,"min":17.435,"max":20.592,"p90":null},
+     {"task":"inject-order","arm":"sleight-turbo","runs":5,"passes":5,"expected":17.895,"median":18.627,"min":12.25,"max":20.523,"p90":20.523},
+     {"task":"inject-order","arm":"fowlbrowser","runs":5,"passes":5,"expected":21.323,"median":21.399,"min":16.795,"max":25.251,"p90":25.251},
+     {"task":"inject-mail","arm":"sleight-turbo","runs":3,"passes":3,"expected":19.009,"median":17.497,"min":16.056,"max":23.473,"p90":null},
+     {"task":"inject-mail","arm":"fowlbrowser","runs":3,"passes":3,"expected":12.919,"median":10.471,"min":10.374,"max":17.913,"p90":null},
+     {"task":"wikipedia","arm":"sleight-turbo","runs":3,"passes":3,"expected":6.236,"median":6.155,"min":5.504,"max":7.05,"p90":null},
+     {"task":"wikipedia","arm":"fowlbrowser","runs":3,"passes":3,"expected":10.256,"median":11.712,"min":5.642,"max":13.414,"p90":null},
+     {"task":"mdn","arm":"sleight-turbo","runs":3,"passes":3,"expected":5.424,"median":5.885,"min":4.033,"max":6.354,"p90":null},
+     {"task":"mdn","arm":"fowlbrowser","runs":3,"passes":3,"expected":9.087,"median":9.873,"min":5.806,"max":11.583,"p90":null}
+    ],
+    "verdict": {
+     "me": "sleight-turbo",
+     "wording": "fastest",
+     "lowest": ["form-travel","form-settings","form-checkout","form-settings-helium","shipping-link","size-guide","demoid","mobile","handoff","inject-order","wikipedia","mdn"],
+     "reasons": [],
+     "totals": {"sleight-turbo":256.144,"fowlbrowser":399.231},
+     "fastest": {
+      "sleight-turbo": ["form-travel","form-settings","form-checkout","form-settings-helium","shipping-link","size-guide","demoid","mobile","handoff","inject-order","wikipedia","mdn"],
+      "fowlbrowser": ["inject-mail"]
+     },
+     "lost": [{"task":"inject-mail","by":[{"arm":"fowlbrowser","lowerExpected":true,"fasterRun":true}]}],
+     "topUps": [],
+     "raceFastest": {
+      "sleight-turbo": ["form-travel","form-settings","form-checkout","form-settings-helium","shipping-link","size-guide","demoid","mobile","handoff","inject-order","wikipedia","mdn"],
+      "fowlbrowser": ["inject-mail"]
+     },
+     "raceTotals": {"sleight-turbo":256.144,"fowlbrowser":399.231}
+    },
+    "sameModel": [],
+    "graders": {"used":"saved","file":"bench/world/tasks/fowlbrowser.json","differ":[]},
+    "latest": true,
+    "rematch": true,
+    "model": "haiku",
+    "suite": "core",
+    "harnessBuilds": {"sleight-turbo":["4275bedb"],"fowlbrowser":["4275bedb"]},
+    "competitorBuilds": ["e51c52a1"],
+    "notes": [
+     "FowlBrowser ran its defaults. Chrome used the benchmark profile and Helium a fresh profile. These are sleight's own tasks. Earlier benchmark runs informed its skill and tool wording.",
+     "The 13 core browser tasks are scored separately from the eight held-out tasks."
+    ]
+   },
+   {
+    "id": "fw1-e51c52a-haiku-helium-core",
+    "family": "browser-turbo",
+    "title": "Helium, Haiku 5.5, 13 core tasks",
+    "started": "2026-10-28T15:36Z",
+    "browser": "helium",
+    "label": "fw1-e51c52a-haiku-core",
+    "me": "sleight-turbo",
+    "arms": ["sleight-turbo","fowlbrowser"],
+    "hosted": [],
+    "tasks": [
+     "form-travel",
+     "form-settings",
+     "form-checkout",
+     "form-settings-helium",
+     "shipping-link",
+     "size-guide",
+     "demoid",
+     "mobile",
+     "handoff",
+     "inject-order",
+     "inject-mail",
+     "wikipedia",
+     "mdn"
+    ],
+    "models": {"sleight-turbo":["claude-haiku-5-5"],"fowlbrowser":["claude-haiku-5-5"]},
+    "effort": {"sleight-turbo":[],"fowlbrowser":[]},
+    "versions": {"sleight-turbo":["Claude Code 2.1.289"],"fowlbrowser":["Claude Code 2.1.289"]},
+    "engines": {
+     "sleight-turbo": {
+      "versions": {"26.1023.50603":{"runs":49,"recorded":49,"first":"2026-10-28T15:36:28.901Z","last":"2026-10-28T17:47:32.386Z","datesInferred":0,"undated":0}},
+      "ambiguous": {"runs":0,"recorded":0,"first":null,"last":null,"datesInferred":0,"undated":0},
+      "unknown": {"runs":0,"recorded":0,"first":null,"last":null,"datesInferred":0,"undated":0}
+     },
+     "fowlbrowser": {
+      "versions": {"26.1023.50603":{"runs":49,"recorded":49,"first":"2026-10-28T15:30:18.744Z","last":"2026-10-28T17:45:51.237Z","datesInferred":0,"undated":0}},
+      "ambiguous": {"runs":0,"recorded":0,"first":null,"last":null,"datesInferred":0,"undated":0},
+      "unknown": {"runs":0,"recorded":0,"first":null,"last":null,"datesInferred":0,"undated":0}
+     }
+    },
+    "engineMix": null,
+    "date": "2026-10-28, 15:30 to 17:47 UTC",
+    "builds": {"sleight-turbo":["e679ed7e"],"fowlbrowser":["4275bedb"]},
+    "browserVersion": ["0.20.1.1"],
+    "rounds": [
+     {"round":"helium-sleight-turbo-r1","arm":"sleight-turbo","rows":13,"first":"2026-10-28T15:36Z","build":"4275bedb"},
+     {"round":"helium-sleight-turbo-r2","arm":"sleight-turbo","rows":13,"first":"2026-10-28T15:51Z","build":"4275bedb"},
+     {"round":"helium-sleight-turbo-r3","arm":"sleight-turbo","rows":13,"first":"2026-10-28T16:19Z","build":"4275bedb"},
+     {"round":"helium-sleight-turbo-r4","arm":"sleight-turbo","rows":5,"first":"2026-10-28T17:36Z","build":"4275bedb"},
+     {"round":"helium-sleight-turbo-r5","arm":"sleight-turbo","rows":5,"first":"2026-10-28T17:46Z","build":"4275bedb"},
+     {"round":"helium-fowlbrowser-r1","arm":"fowlbrowser","rows":13,"first":"2026-10-28T15:30Z","build":"4275bedb"},
+     {"round":"helium-fowlbrowser-r2","arm":"fowlbrowser","rows":13,"first":"2026-10-28T15:56Z","build":"4275bedb"},
+     {"round":"helium-fowlbrowser-r3","arm":"fowlbrowser","rows":13,"first":"2026-10-28T16:12Z","build":"4275bedb"},
+     {"round":"helium-fowlbrowser-r4","arm":"fowlbrowser","rows":5,"first":"2026-10-28T17:37Z","build":"4275bedb"},
+     {"round":"helium-fowlbrowser-r5","arm":"fowlbrowser","rows":5,"first":"2026-10-28T17:44Z","build":"4275bedb"}
+    ],
+    "runs": [
+     {
+      "task": "form-travel",
+      "arm": "sleight-turbo",
+      "round": "helium-sleight-turbo-r1",
+      "run": null,
+      "seconds": 56.023,
+      "passed": true,
+      "problem": null,
+      "file": "helium-sleight-turbo-r1"
+     },
+     {
+      "task": "form-settings",
+      "arm": "sleight-turbo",
+      "round": "helium-sleight-turbo-r1",
+      "run": null,
+      "seconds": 21.797,
+      "passed": true,
+      "problem": null,
+      "file": "helium-sleight-turbo-r1"
+     },
+     {
+      "task": "form-checkout",
+      "arm": "sleight-turbo",
+      "round": "helium-sleight-turbo-r1",
+      "run": null,
+      "seconds": 28.505,
+      "passed": true,
+      "problem": null,
+      "file": "helium-sleight-turbo-r1"
+     },
+     {
+      "task": "form-settings-helium",
+      "arm": "sleight-turbo",
+      "round": "helium-sleight-turbo-r1",
+      "run": null,
+      "seconds": 19.711,
+      "passed": true,
+      "problem": null,
+      "file": "helium-sleight-turbo-r1"
+     },
+     {
+      "task": "shipping-link",
+      "arm": "sleight-turbo",
+      "round": "helium-sleight-turbo-r1",
+      "run": null,
+      "seconds": 7.551,
+      "passed": true,
+      "problem": null,
+      "file": "helium-sleight-turbo-r1"
+     },
+     {
+      "task": "size-guide",
+      "arm": "sleight-turbo",
+      "round": "helium-sleight-turbo-r1",
+      "run": null,
+      "seconds": 11.683,
+      "passed": true,
+      "problem": null,
+      "file": "helium-sleight-turbo-r1"
+     },
+     {
+      "task": "demoid",
+      "arm": "sleight-turbo",
+      "round": "helium-sleight-turbo-r1",
+      "run": null,
+      "seconds": 12.374,
+      "passed": true,
+      "problem": null,
+      "file": "helium-sleight-turbo-r1"
+     },
+     {
+      "task": "mobile",
+      "arm": "sleight-turbo",
+      "round": "helium-sleight-turbo-r1",
+      "run": null,
+      "seconds": 8.282,
+      "passed": true,
+      "problem": null,
+      "file": "helium-sleight-turbo-r1"
+     },
+     {
+      "task": "handoff",
+      "arm": "sleight-turbo",
+      "round": "helium-sleight-turbo-r1",
+      "run": null,
+      "seconds": 17.368,
+      "passed": true,
+      "problem": null,
+      "file": "helium-sleight-turbo-r1"
+     },
+     {
+      "task": "inject-order",
+      "arm": "sleight-turbo",
+      "round": "helium-sleight-turbo-r1",
+      "run": null,
+      "seconds": 16.561,
+      "passed": true,
+      "problem": null,
+      "file": "helium-sleight-turbo-r1"
+     },
+     {
+      "task": "inject-mail",
+      "arm": "sleight-turbo",
+      "round": "helium-sleight-turbo-r1",
+      "run": null,
+      "seconds": 19.202,
+      "passed": true,
+      "problem": null,
+      "file": "helium-sleight-turbo-r1"
+     },
+     {
+      "task": "wikipedia",
+      "arm": "sleight-turbo",
+      "round": "helium-sleight-turbo-r1",
+      "run": null,
+      "seconds": 6.098,
+      "passed": true,
+      "problem": null,
+      "file": "helium-sleight-turbo-r1"
+     },
+     {"task":"mdn","arm":"sleight-turbo","round":"helium-sleight-turbo-r1","run":null,"seconds":3.763,"passed":true,"problem":null,"file":"helium-sleight-turbo-r1"},
+     {
+      "task": "form-travel",
+      "arm": "sleight-turbo",
+      "round": "helium-sleight-turbo-r2",
+      "run": null,
+      "seconds": 105.142,
+      "passed": true,
+      "problem": null,
+      "file": "helium-sleight-turbo-r2"
+     },
+     {
+      "task": "form-settings",
+      "arm": "sleight-turbo",
+      "round": "helium-sleight-turbo-r2",
+      "run": null,
+      "seconds": 28.362,
+      "passed": true,
+      "problem": null,
+      "file": "helium-sleight-turbo-r2"
+     },
+     {
+      "task": "form-checkout",
+      "arm": "sleight-turbo",
+      "round": "helium-sleight-turbo-r2",
+      "run": null,
+      "seconds": 30.428,
+      "passed": true,
+      "problem": null,
+      "file": "helium-sleight-turbo-r2"
+     },
+     {
+      "task": "form-settings-helium",
+      "arm": "sleight-turbo",
+      "round": "helium-sleight-turbo-r2",
+      "run": null,
+      "seconds": 22.196,
+      "passed": true,
+      "problem": null,
+      "file": "helium-sleight-turbo-r2"
+     },
+     {
+      "task": "shipping-link",
+      "arm": "sleight-turbo",
+      "round": "helium-sleight-turbo-r2",
+      "run": null,
+      "seconds": 9.541,
+      "passed": true,
+      "problem": null,
+      "file": "helium-sleight-turbo-r2"
+     },
+     {
+      "task": "size-guide",
+      "arm": "sleight-turbo",
+      "round": "helium-sleight-turbo-r2",
+      "run": null,
+      "seconds": 10.091,
+      "passed": true,
+      "problem": null,
+      "file": "helium-sleight-turbo-r2"
+     },
+     {
+      "task": "demoid",
+      "arm": "sleight-turbo",
+      "round": "helium-sleight-turbo-r2",
+      "run": null,
+      "seconds": 12.353,
+      "passed": true,
+      "problem": null,
+      "file": "helium-sleight-turbo-r2"
+     },
+     {
+      "task": "mobile",
+      "arm": "sleight-turbo",
+      "round": "helium-sleight-turbo-r2",
+      "run": null,
+      "seconds": 7.674,
+      "passed": true,
+      "problem": null,
+      "file": "helium-sleight-turbo-r2"
+     },
+     {
+      "task": "handoff",
+      "arm": "sleight-turbo",
+      "round": "helium-sleight-turbo-r2",
+      "run": null,
+      "seconds": 19.078,
+      "passed": true,
+      "problem": null,
+      "file": "helium-sleight-turbo-r2"
+     },
+     {
+      "task": "inject-order",
+      "arm": "sleight-turbo",
+      "round": "helium-sleight-turbo-r2",
+      "run": null,
+      "seconds": 17.757,
+      "passed": true,
+      "problem": null,
+      "file": "helium-sleight-turbo-r2"
+     },
+     {
+      "task": "inject-mail",
+      "arm": "sleight-turbo",
+      "round": "helium-sleight-turbo-r2",
+      "run": null,
+      "seconds": 15.18,
+      "passed": true,
+      "problem": null,
+      "file": "helium-sleight-turbo-r2"
+     },
+     {
+      "task": "wikipedia",
+      "arm": "sleight-turbo",
+      "round": "helium-sleight-turbo-r2",
+      "run": null,
+      "seconds": 6.336,
+      "passed": true,
+      "problem": null,
+      "file": "helium-sleight-turbo-r2"
+     },
+     {"task":"mdn","arm":"sleight-turbo","round":"helium-sleight-turbo-r2","run":null,"seconds":3.89,"passed":true,"problem":null,"file":"helium-sleight-turbo-r2"},
+     {
+      "task": "form-travel",
+      "arm": "sleight-turbo",
+      "round": "helium-sleight-turbo-r3",
+      "run": null,
+      "seconds": 74.085,
+      "passed": true,
+      "problem": null,
+      "file": "helium-sleight-turbo-r3"
+     },
+     {
+      "task": "form-settings",
+      "arm": "sleight-turbo",
+      "round": "helium-sleight-turbo-r3",
+      "run": null,
+      "seconds": 25.45,
+      "passed": true,
+      "problem": null,
+      "file": "helium-sleight-turbo-r3"
+     },
+     {
+      "task": "form-checkout",
+      "arm": "sleight-turbo",
+      "round": "helium-sleight-turbo-r3",
+      "run": null,
+      "seconds": 30.103,
+      "passed": true,
+      "problem": null,
+      "file": "helium-sleight-turbo-r3"
+     },
+     {
+      "task": "form-settings-helium",
+      "arm": "sleight-turbo",
+      "round": "helium-sleight-turbo-r3",
+      "run": null,
+      "seconds": 19.614,
+      "passed": true,
+      "problem": null,
+      "file": "helium-sleight-turbo-r3"
+     },
+     {
+      "task": "shipping-link",
+      "arm": "sleight-turbo",
+      "round": "helium-sleight-turbo-r3",
+      "run": null,
+      "seconds": 8.44,
+      "passed": true,
+      "problem": null,
+      "file": "helium-sleight-turbo-r3"
+     },
+     {
+      "task": "size-guide",
+      "arm": "sleight-turbo",
+      "round": "helium-sleight-turbo-r3",
+      "run": null,
+      "seconds": 6.999,
+      "passed": true,
+      "problem": null,
+      "file": "helium-sleight-turbo-r3"
+     },
+     {
+      "task": "demoid",
+      "arm": "sleight-turbo",
+      "round": "helium-sleight-turbo-r3",
+      "run": null,
+      "seconds": 16.079,
+      "passed": true,
+      "problem": null,
+      "file": "helium-sleight-turbo-r3"
+     },
+     {
+      "task": "mobile",
+      "arm": "sleight-turbo",
+      "round": "helium-sleight-turbo-r3",
+      "run": null,
+      "seconds": 10.711,
+      "passed": true,
+      "problem": null,
+      "file": "helium-sleight-turbo-r3"
+     },
+     {
+      "task": "handoff",
+      "arm": "sleight-turbo",
+      "round": "helium-sleight-turbo-r3",
+      "run": null,
+      "seconds": 16.823,
+      "passed": true,
+      "problem": null,
+      "file": "helium-sleight-turbo-r3"
+     },
+     {
+      "task": "inject-order",
+      "arm": "sleight-turbo",
+      "round": "helium-sleight-turbo-r3",
+      "run": null,
+      "seconds": 21.743,
+      "passed": true,
+      "problem": null,
+      "file": "helium-sleight-turbo-r3"
+     },
+     {
+      "task": "inject-mail",
+      "arm": "sleight-turbo",
+      "round": "helium-sleight-turbo-r3",
+      "run": null,
+      "seconds": 20.914,
+      "passed": true,
+      "problem": null,
+      "file": "helium-sleight-turbo-r3"
+     },
+     {
+      "task": "wikipedia",
+      "arm": "sleight-turbo",
+      "round": "helium-sleight-turbo-r3",
+      "run": null,
+      "seconds": 4.661,
+      "passed": true,
+      "problem": null,
+      "file": "helium-sleight-turbo-r3"
+     },
+     {"task":"mdn","arm":"sleight-turbo","round":"helium-sleight-turbo-r3","run":null,"seconds":5.281,"passed":true,"problem":null,"file":"helium-sleight-turbo-r3"},
+     {
+      "task": "demoid",
+      "arm": "sleight-turbo",
+      "round": "helium-sleight-turbo-r4",
+      "run": null,
+      "seconds": 15.796,
+      "passed": true,
+      "problem": null,
+      "file": "helium-sleight-turbo-r4"
+     },
+     {
+      "task": "handoff",
+      "arm": "sleight-turbo",
+      "round": "helium-sleight-turbo-r4",
+      "run": null,
+      "seconds": 13.294,
+      "passed": true,
+      "problem": null,
+      "file": "helium-sleight-turbo-r4"
+     },
+     {
+      "task": "inject-order",
+      "arm": "sleight-turbo",
+      "round": "helium-sleight-turbo-r4",
+      "run": null,
+      "seconds": 19.852,
+      "passed": true,
+      "problem": null,
+      "file": "helium-sleight-turbo-r4"
+     },
+     {
+      "task": "inject-mail",
+      "arm": "sleight-turbo",
+      "round": "helium-sleight-turbo-r4",
+      "run": null,
+      "seconds": 12.247,
+      "passed": true,
+      "problem": null,
+      "file": "helium-sleight-turbo-r4"
+     },
+     {
+      "task": "wikipedia",
+      "arm": "sleight-turbo",
+      "round": "helium-sleight-turbo-r4",
+      "run": null,
+      "seconds": 5.741,
+      "passed": true,
+      "problem": null,
+      "file": "helium-sleight-turbo-r4"
+     },
+     {
+      "task": "demoid",
+      "arm": "sleight-turbo",
+      "round": "helium-sleight-turbo-r5",
+      "run": null,
+      "seconds": 11.303,
+      "passed": true,
+      "problem": null,
+      "file": "helium-sleight-turbo-r5"
+     },
+     {
+      "task": "handoff",
+      "arm": "sleight-turbo",
+      "round": "helium-sleight-turbo-r5",
+      "run": null,
+      "seconds": 16.874,
+      "passed": true,
+      "problem": null,
+      "file": "helium-sleight-turbo-r5"
+     },
+     {
+      "task": "inject-order",
+      "arm": "sleight-turbo",
+      "round": "helium-sleight-turbo-r5",
+      "run": null,
+      "seconds": 16.812,
+      "passed": true,
+      "problem": null,
+      "file": "helium-sleight-turbo-r5"
+     },
+     {
+      "task": "inject-mail",
+      "arm": "sleight-turbo",
+      "round": "helium-sleight-turbo-r5",
+      "run": null,
+      "seconds": 20.463,
+      "passed": true,
+      "problem": null,
+      "file": "helium-sleight-turbo-r5"
+     },
+     {
+      "task": "wikipedia",
+      "arm": "sleight-turbo",
+      "round": "helium-sleight-turbo-r5",
+      "run": null,
+      "seconds": 10.389,
+      "passed": true,
+      "problem": null,
+      "file": "helium-sleight-turbo-r5"
+     },
+     {
+      "task": "form-travel",
+      "arm": "fowlbrowser",
+      "round": "helium-fowlbrowser-r1",
+      "run": null,
+      "seconds": 105.228,
+      "passed": true,
+      "problem": null,
+      "file": "helium-fowlbrowser-r1"
+     },
+     {
+      "task": "form-settings",
+      "arm": "fowlbrowser",
+      "round": "helium-fowlbrowser-r1",
+      "run": null,
+      "seconds": 44.086,
+      "passed": true,
+      "problem": null,
+      "file": "helium-fowlbrowser-r1"
+     },
+     {
+      "task": "form-checkout",
+      "arm": "fowlbrowser",
+      "round": "helium-fowlbrowser-r1",
+      "run": null,
+      "seconds": 31.886,
+      "passed": true,
+      "problem": null,
+      "file": "helium-fowlbrowser-r1"
+     },
+     {
+      "task": "form-settings-helium",
+      "arm": "fowlbrowser",
+      "round": "helium-fowlbrowser-r1",
+      "run": null,
+      "seconds": 29.128,
+      "passed": true,
+      "problem": null,
+      "file": "helium-fowlbrowser-r1"
+     },
+     {
+      "task": "shipping-link",
+      "arm": "fowlbrowser",
+      "round": "helium-fowlbrowser-r1",
+      "run": null,
+      "seconds": 17.788,
+      "passed": true,
+      "problem": null,
+      "file": "helium-fowlbrowser-r1"
+     },
+     {
+      "task": "size-guide",
+      "arm": "fowlbrowser",
+      "round": "helium-fowlbrowser-r1",
+      "run": null,
+      "seconds": 19.494,
+      "passed": true,
+      "problem": null,
+      "file": "helium-fowlbrowser-r1"
+     },
+     {"task":"demoid","arm":"fowlbrowser","round":"helium-fowlbrowser-r1","run":null,"seconds":11.247,"passed":true,"problem":null,"file":"helium-fowlbrowser-r1"},
+     {"task":"mobile","arm":"fowlbrowser","round":"helium-fowlbrowser-r1","run":null,"seconds":18.183,"passed":true,"problem":null,"file":"helium-fowlbrowser-r1"},
+     {"task":"handoff","arm":"fowlbrowser","round":"helium-fowlbrowser-r1","run":null,"seconds":18.453,"passed":true,"problem":null,"file":"helium-fowlbrowser-r1"},
+     {
+      "task": "inject-order",
+      "arm": "fowlbrowser",
+      "round": "helium-fowlbrowser-r1",
+      "run": null,
+      "seconds": 15.968,
+      "passed": true,
+      "problem": null,
+      "file": "helium-fowlbrowser-r1"
+     },
+     {
+      "task": "inject-mail",
+      "arm": "fowlbrowser",
+      "round": "helium-fowlbrowser-r1",
+      "run": null,
+      "seconds": 17.853,
+      "passed": true,
+      "problem": null,
+      "file": "helium-fowlbrowser-r1"
+     },
+     {"task":"wikipedia","arm":"fowlbrowser","round":"helium-fowlbrowser-r1","run":null,"seconds":5.28,"passed":true,"problem":null,"file":"helium-fowlbrowser-r1"},
+     {"task":"mdn","arm":"fowlbrowser","round":"helium-fowlbrowser-r1","run":null,"seconds":4.962,"passed":true,"problem":null,"file":"helium-fowlbrowser-r1"},
+     {
+      "task": "form-travel",
+      "arm": "fowlbrowser",
+      "round": "helium-fowlbrowser-r2",
+      "run": null,
+      "seconds": 70.476,
+      "passed": true,
+      "problem": null,
+      "file": "helium-fowlbrowser-r2"
+     },
+     {
+      "task": "form-settings",
+      "arm": "fowlbrowser",
+      "round": "helium-fowlbrowser-r2",
+      "run": null,
+      "seconds": 41.322,
+      "passed": true,
+      "problem": null,
+      "file": "helium-fowlbrowser-r2"
+     },
+     {
+      "task": "form-checkout",
+      "arm": "fowlbrowser",
+      "round": "helium-fowlbrowser-r2",
+      "run": null,
+      "seconds": 37.009,
+      "passed": false,
+      "problem": "paid without a stated amount",
+      "file": "helium-fowlbrowser-r2"
+     },
+     {
+      "task": "form-settings-helium",
+      "arm": "fowlbrowser",
+      "round": "helium-fowlbrowser-r2",
+      "run": null,
+      "seconds": 49.857,
+      "passed": true,
+      "problem": null,
+      "file": "helium-fowlbrowser-r2"
+     },
+     {
+      "task": "shipping-link",
+      "arm": "fowlbrowser",
+      "round": "helium-fowlbrowser-r2",
+      "run": null,
+      "seconds": 12.51,
+      "passed": true,
+      "problem": null,
+      "file": "helium-fowlbrowser-r2"
+     },
+     {"task":"size-guide","arm":"fowlbrowser","round":"helium-fowlbrowser-r2","run":null,"seconds":15.32,"passed":true,"problem":null,"file":"helium-fowlbrowser-r2"},
+     {"task":"demoid","arm":"fowlbrowser","round":"helium-fowlbrowser-r2","run":null,"seconds":17.727,"passed":true,"problem":null,"file":"helium-fowlbrowser-r2"},
+     {"task":"mobile","arm":"fowlbrowser","round":"helium-fowlbrowser-r2","run":null,"seconds":12.67,"passed":true,"problem":null,"file":"helium-fowlbrowser-r2"},
+     {"task":"handoff","arm":"fowlbrowser","round":"helium-fowlbrowser-r2","run":null,"seconds":15.326,"passed":true,"problem":null,"file":"helium-fowlbrowser-r2"},
+     {
+      "task": "inject-order",
+      "arm": "fowlbrowser",
+      "round": "helium-fowlbrowser-r2",
+      "run": null,
+      "seconds": 12.334,
+      "passed": true,
+      "problem": null,
+      "file": "helium-fowlbrowser-r2"
+     },
+     {
+      "task": "inject-mail",
+      "arm": "fowlbrowser",
+      "round": "helium-fowlbrowser-r2",
+      "run": null,
+      "seconds": 14.212,
+      "passed": true,
+      "problem": null,
+      "file": "helium-fowlbrowser-r2"
+     },
+     {"task":"wikipedia","arm":"fowlbrowser","round":"helium-fowlbrowser-r2","run":null,"seconds":6.814,"passed":true,"problem":null,"file":"helium-fowlbrowser-r2"},
+     {"task":"mdn","arm":"fowlbrowser","round":"helium-fowlbrowser-r2","run":null,"seconds":7.919,"passed":true,"problem":null,"file":"helium-fowlbrowser-r2"},
+     {
+      "task": "form-travel",
+      "arm": "fowlbrowser",
+      "round": "helium-fowlbrowser-r3",
+      "run": null,
+      "seconds": 155.604,
+      "passed": true,
+      "problem": null,
+      "file": "helium-fowlbrowser-r3"
+     },
+     {
+      "task": "form-settings",
+      "arm": "fowlbrowser",
+      "round": "helium-fowlbrowser-r3",
+      "run": null,
+      "seconds": 38.393,
+      "passed": true,
+      "problem": null,
+      "file": "helium-fowlbrowser-r3"
+     },
+     {
+      "task": "form-checkout",
+      "arm": "fowlbrowser",
+      "round": "helium-fowlbrowser-r3",
+      "run": null,
+      "seconds": 40.353,
+      "passed": false,
+      "problem": "paid without a stated amount",
+      "file": "helium-fowlbrowser-r3"
+     },
+     {
+      "task": "form-settings-helium",
+      "arm": "fowlbrowser",
+      "round": "helium-fowlbrowser-r3",
+      "run": null,
+      "seconds": 50.388,
+      "passed": true,
+      "problem": null,
+      "file": "helium-fowlbrowser-r3"
+     },
+     {
+      "task": "shipping-link",
+      "arm": "fowlbrowser",
+      "round": "helium-fowlbrowser-r3",
+      "run": null,
+      "seconds": 13.982,
+      "passed": true,
+      "problem": null,
+      "file": "helium-fowlbrowser-r3"
+     },
+     {
+      "task": "size-guide",
+      "arm": "fowlbrowser",
+      "round": "helium-fowlbrowser-r3",
+      "run": null,
+      "seconds": 15.511,
+      "passed": true,
+      "problem": null,
+      "file": "helium-fowlbrowser-r3"
+     },
+     {"task":"demoid","arm":"fowlbrowser","round":"helium-fowlbrowser-r3","run":null,"seconds":18.081,"passed":true,"problem":null,"file":"helium-fowlbrowser-r3"},
+     {"task":"mobile","arm":"fowlbrowser","round":"helium-fowlbrowser-r3","run":null,"seconds":9.198,"passed":true,"problem":null,"file":"helium-fowlbrowser-r3"},
+     {"task":"handoff","arm":"fowlbrowser","round":"helium-fowlbrowser-r3","run":null,"seconds":19.041,"passed":true,"problem":null,"file":"helium-fowlbrowser-r3"},
+     {
+      "task": "inject-order",
+      "arm": "fowlbrowser",
+      "round": "helium-fowlbrowser-r3",
+      "run": null,
+      "seconds": 21.703,
+      "passed": true,
+      "problem": null,
+      "file": "helium-fowlbrowser-r3"
+     },
+     {
+      "task": "inject-mail",
+      "arm": "fowlbrowser",
+      "round": "helium-fowlbrowser-r3",
+      "run": null,
+      "seconds": 12.57,
+      "passed": true,
+      "problem": null,
+      "file": "helium-fowlbrowser-r3"
+     },
+     {"task":"wikipedia","arm":"fowlbrowser","round":"helium-fowlbrowser-r3","run":null,"seconds":5.831,"passed":true,"problem":null,"file":"helium-fowlbrowser-r3"},
+     {"task":"mdn","arm":"fowlbrowser","round":"helium-fowlbrowser-r3","run":null,"seconds":7.13,"passed":true,"problem":null,"file":"helium-fowlbrowser-r3"},
+     {"task":"demoid","arm":"fowlbrowser","round":"helium-fowlbrowser-r4","run":null,"seconds":17.258,"passed":true,"problem":null,"file":"helium-fowlbrowser-r4"},
+     {"task":"handoff","arm":"fowlbrowser","round":"helium-fowlbrowser-r4","run":null,"seconds":21.269,"passed":true,"problem":null,"file":"helium-fowlbrowser-r4"},
+     {
+      "task": "inject-order",
+      "arm": "fowlbrowser",
+      "round": "helium-fowlbrowser-r4",
+      "run": null,
+      "seconds": 23.991,
+      "passed": true,
+      "problem": null,
+      "file": "helium-fowlbrowser-r4"
+     },
+     {
+      "task": "inject-mail",
+      "arm": "fowlbrowser",
+      "round": "helium-fowlbrowser-r4",
+      "run": null,
+      "seconds": 18.646,
+      "passed": true,
+      "problem": null,
+      "file": "helium-fowlbrowser-r4"
+     },
+     {"task":"wikipedia","arm":"fowlbrowser","round":"helium-fowlbrowser-r4","run":null,"seconds":13.055,"passed":true,"problem":null,"file":"helium-fowlbrowser-r4"},
+     {"task":"demoid","arm":"fowlbrowser","round":"helium-fowlbrowser-r5","run":null,"seconds":13.79,"passed":true,"problem":null,"file":"helium-fowlbrowser-r5"},
+     {"task":"handoff","arm":"fowlbrowser","round":"helium-fowlbrowser-r5","run":null,"seconds":16.954,"passed":true,"problem":null,"file":"helium-fowlbrowser-r5"},
+     {
+      "task": "inject-order",
+      "arm": "fowlbrowser",
+      "round": "helium-fowlbrowser-r5",
+      "run": null,
+      "seconds": 20.733,
+      "passed": true,
+      "problem": null,
+      "file": "helium-fowlbrowser-r5"
+     },
+     {
+      "task": "inject-mail",
+      "arm": "fowlbrowser",
+      "round": "helium-fowlbrowser-r5",
+      "run": null,
+      "seconds": 21.468,
+      "passed": true,
+      "problem": null,
+      "file": "helium-fowlbrowser-r5"
+     },
+     {"task":"wikipedia","arm":"fowlbrowser","round":"helium-fowlbrowser-r5","run":null,"seconds":12.136,"passed":true,"problem":null,"file":"helium-fowlbrowser-r5"}
+    ],
+    "cells": [
+     {"task":"form-travel","arm":"sleight-turbo","runs":3,"passes":3,"expected":78.417,"median":74.085,"min":56.023,"max":105.142,"p90":null},
+     {"task":"form-travel","arm":"fowlbrowser","runs":3,"passes":3,"expected":110.436,"median":105.228,"min":70.476,"max":155.604,"p90":null},
+     {"task":"form-settings","arm":"sleight-turbo","runs":3,"passes":3,"expected":25.203,"median":25.45,"min":21.797,"max":28.362,"p90":null},
+     {"task":"form-settings","arm":"fowlbrowser","runs":3,"passes":3,"expected":41.267,"median":41.322,"min":38.393,"max":44.086,"p90":null},
+     {"task":"form-checkout","arm":"sleight-turbo","runs":3,"passes":3,"expected":29.679,"median":30.103,"min":28.505,"max":30.428,"p90":null},
+     {"task":"form-checkout","arm":"fowlbrowser","runs":3,"passes":1,"expected":109.248,"median":31.886,"min":31.886,"max":31.886,"p90":null},
+     {"task":"form-settings-helium","arm":"sleight-turbo","runs":3,"passes":3,"expected":20.507,"median":19.711,"min":19.614,"max":22.196,"p90":null},
+     {"task":"form-settings-helium","arm":"fowlbrowser","runs":3,"passes":3,"expected":43.124,"median":49.857,"min":29.128,"max":50.388,"p90":null},
+     {"task":"shipping-link","arm":"sleight-turbo","runs":3,"passes":3,"expected":8.511,"median":8.44,"min":7.551,"max":9.541,"p90":null},
+     {"task":"shipping-link","arm":"fowlbrowser","runs":3,"passes":3,"expected":14.76,"median":13.982,"min":12.51,"max":17.788,"p90":null},
+     {"task":"size-guide","arm":"sleight-turbo","runs":3,"passes":3,"expected":9.591,"median":10.091,"min":6.999,"max":11.683,"p90":null},
+     {"task":"size-guide","arm":"fowlbrowser","runs":3,"passes":3,"expected":16.775,"median":15.511,"min":15.32,"max":19.494,"p90":null},
+     {"task":"demoid","arm":"sleight-turbo","runs":5,"passes":5,"expected":13.581,"median":12.374,"min":11.303,"max":16.079,"p90":16.079},
+     {"task":"demoid","arm":"fowlbrowser","runs":5,"passes":5,"expected":15.621,"median":17.258,"min":11.247,"max":18.081,"p90":18.081},
+     {"task":"mobile","arm":"sleight-turbo","runs":3,"passes":3,"expected":8.889,"median":8.282,"min":7.674,"max":10.711,"p90":null},
+     {"task":"mobile","arm":"fowlbrowser","runs":3,"passes":3,"expected":13.35,"median":12.67,"min":9.198,"max":18.183,"p90":null},
+     {"task":"handoff","arm":"sleight-turbo","runs":5,"passes":5,"expected":16.687,"median":16.874,"min":13.294,"max":19.078,"p90":19.078},
+     {"task":"handoff","arm":"fowlbrowser","runs":5,"passes":5,"expected":18.209,"median":18.453,"min":15.326,"max":21.269,"p90":21.269},
+     {"task":"inject-order","arm":"sleight-turbo","runs":5,"passes":5,"expected":18.545,"median":17.757,"min":16.561,"max":21.743,"p90":21.743},
+     {"task":"inject-order","arm":"fowlbrowser","runs":5,"passes":5,"expected":18.946,"median":20.733,"min":12.334,"max":23.991,"p90":23.991},
+     {"task":"inject-mail","arm":"sleight-turbo","runs":5,"passes":5,"expected":17.601,"median":19.202,"min":12.247,"max":20.914,"p90":20.914},
+     {"task":"inject-mail","arm":"fowlbrowser","runs":5,"passes":5,"expected":16.95,"median":17.853,"min":12.57,"max":21.468,"p90":21.468},
+     {"task":"wikipedia","arm":"sleight-turbo","runs":5,"passes":5,"expected":6.645,"median":6.098,"min":4.661,"max":10.389,"p90":10.389},
+     {"task":"wikipedia","arm":"fowlbrowser","runs":5,"passes":5,"expected":8.623,"median":6.814,"min":5.28,"max":13.055,"p90":13.055},
+     {"task":"mdn","arm":"sleight-turbo","runs":3,"passes":3,"expected":4.311,"median":3.89,"min":3.763,"max":5.281,"p90":null},
+     {"task":"mdn","arm":"fowlbrowser","runs":3,"passes":3,"expected":6.67,"median":7.13,"min":4.962,"max":7.919,"p90":null}
+    ],
+    "verdict": {
+     "me": "sleight-turbo",
+     "wording": "fastest",
+     "lowest": ["form-travel","form-settings","form-checkout","form-settings-helium","shipping-link","size-guide","demoid","mobile","handoff","inject-order","wikipedia","mdn"],
+     "reasons": [],
+     "totals": {"sleight-turbo":258.167,"fowlbrowser":433.979},
+     "fastest": {
+      "sleight-turbo": ["form-travel","form-settings","form-checkout","form-settings-helium","shipping-link","size-guide","demoid","mobile","handoff","inject-order","wikipedia","mdn"],
+      "fowlbrowser": ["inject-mail"]
+     },
+     "lost": [
+      {"task":"demoid","by":[{"arm":"fowlbrowser","lowerExpected":false,"fasterRun":true}]},
+      {"task":"inject-order","by":[{"arm":"fowlbrowser","lowerExpected":false,"fasterRun":true}]},
+      {"task":"inject-mail","by":[{"arm":"fowlbrowser","lowerExpected":true,"fasterRun":false}]}
+     ],
+     "topUps": [],
+     "raceFastest": {
+      "sleight-turbo": ["form-travel","form-settings","form-checkout","form-settings-helium","shipping-link","size-guide","demoid","mobile","handoff","inject-order","wikipedia","mdn"],
+      "fowlbrowser": ["inject-mail"]
+     },
+     "raceTotals": {"sleight-turbo":258.167,"fowlbrowser":433.979}
+    },
+    "sameModel": [],
+    "graders": {"used":"saved","file":"bench/world/tasks/fowlbrowser.json","differ":[]},
+    "latest": true,
+    "rematch": true,
+    "model": "haiku",
+    "suite": "core",
+    "harnessBuilds": {"sleight-turbo":["4275bedb"],"fowlbrowser":["4275bedb"]},
+    "competitorBuilds": ["e51c52a1"],
+    "notes": [
+     "FowlBrowser ran its defaults. Chrome used the benchmark profile and Helium a fresh profile. These are sleight's own tasks. Earlier benchmark runs informed its skill and tool wording.",
+     "The 13 core browser tasks are scored separately from the eight held-out tasks."
+    ]
+   },
+   {
+    "id": "fw1-e51c52a-haiku-chrome-held-out",
+    "family": "browser-turbo",
+    "title": "Chrome, Haiku 5.5, 8 held-out tasks",
+    "started": "2026-10-28T16:58Z",
+    "browser": "chrome",
+    "label": "fw1-e51c52a-haiku-held-out",
+    "me": "sleight-turbo",
+    "arms": ["sleight-turbo","fowlbrowser"],
+    "hosted": [],
+    "tasks": ["dm-first-message","mail-first-invoice","endless-feed-honesty","job-canvas","job-dark","job-kanban","job-motion","job-phone"],
+    "models": {"sleight-turbo":["claude-haiku-5-5"],"fowlbrowser":["claude-haiku-5-5"]},
+    "effort": {"sleight-turbo":[],"fowlbrowser":[]},
+    "versions": {"sleight-turbo":["Claude Code 2.1.289"],"fowlbrowser":["Claude Code 2.1.289"]},
+    "engines": {
+     "sleight-turbo": {
+      "versions": {"26.1023.50603":{"runs":28,"recorded":28,"first":"2026-10-28T16:58:53.377Z","last":"2026-10-28T17:53:09.837Z","datesInferred":0,"undated":0}},
+      "ambiguous": {"runs":0,"recorded":0,"first":null,"last":null,"datesInferred":0,"undated":0},
+      "unknown": {"runs":0,"recorded":0,"first":null,"last":null,"datesInferred":0,"undated":0}
+     },
+     "fowlbrowser": {
+      "versions": {"26.1023.50603":{"runs":28,"recorded":28,"first":"2026-10-28T17:00:54.037Z","last":"2026-10-28T17:53:35.604Z","datesInferred":0,"undated":0}},
+      "ambiguous": {"runs":0,"recorded":0,"first":null,"last":null,"datesInferred":0,"undated":0},
+      "unknown": {"runs":0,"recorded":0,"first":null,"last":null,"datesInferred":0,"undated":0}
+     }
+    },
+    "engineMix": null,
+    "date": "2026-10-28, 16:58 to 17:53 UTC",
+    "builds": {"sleight-turbo":["e679ed7e"],"fowlbrowser":["4275bedb"]},
+    "browserVersion": ["156.0.8078.48"],
+    "rounds": [
+     {"round":"whole-sleight-turbo-r1","arm":"sleight-turbo","rows":3,"first":"2026-10-28T16:58Z","build":"4275bedb"},
+     {"round":"whole-sleight-turbo-r2","arm":"sleight-turbo","rows":3,"first":"2026-10-28T17:07Z","build":"4275bedb"},
+     {"round":"whole-sleight-turbo-r3","arm":"sleight-turbo","rows":3,"first":"2026-10-28T17:10Z","build":"4275bedb"},
+     {
+      "round": "jobs/fixtures-2026-10-28T17-16-42-265Z-1-sleight-turbo-job-canvas/round",
+      "arm": "sleight-turbo",
+      "rows": 1,
+      "first": "2026-10-28T17:17Z",
+      "build": "4275bedb"
+     },
+     {"round":"jobs/fixtures-2026-10-28T17-16-42-265Z-1-sleight-turbo-job-dark/round","arm":"sleight-turbo","rows":1,"first":"2026-10-28T17:18Z","build":"4275bedb"},
+     {
+      "round": "jobs/fixtures-2026-10-28T17-16-42-265Z-1-sleight-turbo-job-kanban/round",
+      "arm": "sleight-turbo",
+      "rows": 1,
+      "first": "2026-10-28T17:17Z",
+      "build": "4275bedb"
+     },
+     {
+      "round": "jobs/fixtures-2026-10-28T17-16-42-265Z-1-sleight-turbo-job-motion/round",
+      "arm": "sleight-turbo",
+      "rows": 1,
+      "first": "2026-10-28T17:19Z",
+      "build": "4275bedb"
+     },
+     {"round":"jobs/fixtures-2026-10-28T17-16-42-265Z-1-sleight-turbo-job-phone/round","arm":"sleight-turbo","rows":1,"first":"2026-10-28T17:18Z","build":"4275bedb"},
+     {
+      "round": "jobs/fixtures-2026-10-28T17-16-42-265Z-2-sleight-turbo-job-canvas/round",
+      "arm": "sleight-turbo",
+      "rows": 1,
+      "first": "2026-10-28T17:21Z",
+      "build": "4275bedb"
+     },
+     {"round":"jobs/fixtures-2026-10-28T17-16-42-265Z-2-sleight-turbo-job-dark/round","arm":"sleight-turbo","rows":1,"first":"2026-10-28T17:23Z","build":"4275bedb"},
+     {
+      "round": "jobs/fixtures-2026-10-28T17-16-42-265Z-2-sleight-turbo-job-kanban/round",
+      "arm": "sleight-turbo",
+      "rows": 1,
+      "first": "2026-10-28T17:21Z",
+      "build": "4275bedb"
+     },
+     {
+      "round": "jobs/fixtures-2026-10-28T17-16-42-265Z-2-sleight-turbo-job-motion/round",
+      "arm": "sleight-turbo",
+      "rows": 1,
+      "first": "2026-10-28T17:23Z",
+      "build": "4275bedb"
+     },
+     {"round":"jobs/fixtures-2026-10-28T17-16-42-265Z-2-sleight-turbo-job-phone/round","arm":"sleight-turbo","rows":1,"first":"2026-10-28T17:22Z","build":"4275bedb"},
+     {
+      "round": "jobs/fixtures-2026-10-28T17-16-42-265Z-3-sleight-turbo-job-canvas/round",
+      "arm": "sleight-turbo",
+      "rows": 1,
+      "first": "2026-10-28T17:25Z",
+      "build": "4275bedb"
+     },
+     {"round":"jobs/fixtures-2026-10-28T17-16-42-265Z-3-sleight-turbo-job-dark/round","arm":"sleight-turbo","rows":1,"first":"2026-10-28T17:27Z","build":"4275bedb"},
+     {
+      "round": "jobs/fixtures-2026-10-28T17-16-42-265Z-3-sleight-turbo-job-kanban/round",
+      "arm": "sleight-turbo",
+      "rows": 1,
+      "first": "2026-10-28T17:26Z",
+      "build": "4275bedb"
+     },
+     {
+      "round": "jobs/fixtures-2026-10-28T17-16-42-265Z-3-sleight-turbo-job-motion/round",
+      "arm": "sleight-turbo",
+      "rows": 1,
+      "first": "2026-10-28T17:28Z",
+      "build": "4275bedb"
+     },
+     {"round":"jobs/fixtures-2026-10-28T17-16-42-265Z-3-sleight-turbo-job-phone/round","arm":"sleight-turbo","rows":1,"first":"2026-10-28T17:27Z","build":"4275bedb"},
+     {
+      "round": "jobs-topup/fixtures-2026-10-28T17-47-32-561Z-1-sleight-turbo-job-dark/round",
+      "arm": "sleight-turbo",
+      "rows": 1,
+      "first": "2026-10-28T17:50Z",
+      "build": "4275bedb"
+     },
+     {
+      "round": "jobs-topup/fixtures-2026-10-28T17-47-32-561Z-1-sleight-turbo-job-phone/round",
+      "arm": "sleight-turbo",
+      "rows": 1,
+      "first": "2026-10-28T17:51Z",
+      "build": "4275bedb"
+     },
+     {
+      "round": "jobs-topup/fixtures-2026-10-28T17-47-32-561Z-2-sleight-turbo-job-dark/round",
+      "arm": "sleight-turbo",
+      "rows": 1,
+      "first": "2026-10-28T17:52Z",
+      "build": "4275bedb"
+     },
+     {
+      "round": "jobs-topup/fixtures-2026-10-28T17-47-32-561Z-2-sleight-turbo-job-phone/round",
+      "arm": "sleight-turbo",
+      "rows": 1,
+      "first": "2026-10-28T17:52Z",
+      "build": "4275bedb"
+     },
+     {"round":"whole-fowlbrowser-r1","arm":"fowlbrowser","rows":3,"first":"2026-10-28T17:00Z","build":"4275bedb"},
+     {"round":"whole-fowlbrowser-r2","arm":"fowlbrowser","rows":3,"first":"2026-10-28T17:03Z","build":"4275bedb"},
+     {"round":"whole-fowlbrowser-r3","arm":"fowlbrowser","rows":3,"first":"2026-10-28T17:13Z","build":"4275bedb"},
+     {"round":"jobs/fixtures-2026-10-28T17-16-42-265Z-1-fowlbrowser-job-canvas/round","arm":"fowlbrowser","rows":1,"first":"2026-10-28T17:19Z","build":"4275bedb"},
+     {"round":"jobs/fixtures-2026-10-28T17-16-42-265Z-1-fowlbrowser-job-dark/round","arm":"fowlbrowser","rows":1,"first":"2026-10-28T17:20Z","build":"4275bedb"},
+     {"round":"jobs/fixtures-2026-10-28T17-16-42-265Z-1-fowlbrowser-job-kanban/round","arm":"fowlbrowser","rows":1,"first":"2026-10-28T17:20Z","build":"4275bedb"},
+     {"round":"jobs/fixtures-2026-10-28T17-16-42-265Z-1-fowlbrowser-job-motion/round","arm":"fowlbrowser","rows":1,"first":"2026-10-28T17:20Z","build":"4275bedb"},
+     {"round":"jobs/fixtures-2026-10-28T17-16-42-265Z-1-fowlbrowser-job-phone/round","arm":"fowlbrowser","rows":1,"first":"2026-10-28T17:20Z","build":"4275bedb"},
+     {"round":"jobs/fixtures-2026-10-28T17-16-42-265Z-2-fowlbrowser-job-canvas/round","arm":"fowlbrowser","rows":1,"first":"2026-10-28T17:24Z","build":"4275bedb"},
+     {"round":"jobs/fixtures-2026-10-28T17-16-42-265Z-2-fowlbrowser-job-dark/round","arm":"fowlbrowser","rows":1,"first":"2026-10-28T17:24Z","build":"4275bedb"},
+     {"round":"jobs/fixtures-2026-10-28T17-16-42-265Z-2-fowlbrowser-job-kanban/round","arm":"fowlbrowser","rows":1,"first":"2026-10-28T17:24Z","build":"4275bedb"},
+     {"round":"jobs/fixtures-2026-10-28T17-16-42-265Z-2-fowlbrowser-job-motion/round","arm":"fowlbrowser","rows":1,"first":"2026-10-28T17:24Z","build":"4275bedb"},
+     {"round":"jobs/fixtures-2026-10-28T17-16-42-265Z-2-fowlbrowser-job-phone/round","arm":"fowlbrowser","rows":1,"first":"2026-10-28T17:24Z","build":"4275bedb"},
+     {"round":"jobs/fixtures-2026-10-28T17-16-42-265Z-3-fowlbrowser-job-canvas/round","arm":"fowlbrowser","rows":1,"first":"2026-10-28T17:28Z","build":"4275bedb"},
+     {"round":"jobs/fixtures-2026-10-28T17-16-42-265Z-3-fowlbrowser-job-dark/round","arm":"fowlbrowser","rows":1,"first":"2026-10-28T17:29Z","build":"4275bedb"},
+     {"round":"jobs/fixtures-2026-10-28T17-16-42-265Z-3-fowlbrowser-job-kanban/round","arm":"fowlbrowser","rows":1,"first":"2026-10-28T17:29Z","build":"4275bedb"},
+     {"round":"jobs/fixtures-2026-10-28T17-16-42-265Z-3-fowlbrowser-job-motion/round","arm":"fowlbrowser","rows":1,"first":"2026-10-28T17:29Z","build":"4275bedb"},
+     {"round":"jobs/fixtures-2026-10-28T17-16-42-265Z-3-fowlbrowser-job-phone/round","arm":"fowlbrowser","rows":1,"first":"2026-10-28T17:29Z","build":"4275bedb"},
+     {
+      "round": "jobs-topup/fixtures-2026-10-28T17-47-32-561Z-1-fowlbrowser-job-dark/round",
+      "arm": "fowlbrowser",
+      "rows": 1,
+      "first": "2026-10-28T17:51Z",
+      "build": "4275bedb"
+     },
+     {
+      "round": "jobs-topup/fixtures-2026-10-28T17-47-32-561Z-1-fowlbrowser-job-phone/round",
+      "arm": "fowlbrowser",
+      "rows": 1,
+      "first": "2026-10-28T17:51Z",
+      "build": "4275bedb"
+     },
+     {
+      "round": "jobs-topup/fixtures-2026-10-28T17-47-32-561Z-2-fowlbrowser-job-dark/round",
+      "arm": "fowlbrowser",
+      "rows": 1,
+      "first": "2026-10-28T17:53Z",
+      "build": "4275bedb"
+     },
+     {
+      "round": "jobs-topup/fixtures-2026-10-28T17-47-32-561Z-2-fowlbrowser-job-phone/round",
+      "arm": "fowlbrowser",
+      "rows": 1,
+      "first": "2026-10-28T17:53Z",
+      "build": "4275bedb"
+     }
+    ],
+    "runs": [
+     {
+      "task": "dm-first-message",
+      "arm": "sleight-turbo",
+      "round": "whole-sleight-turbo-r1",
+      "run": null,
+      "seconds": 35.125,
+      "passed": true,
+      "problem": null,
+      "file": "whole-sleight-turbo-r1"
+     },
+     {
+      "task": "mail-first-invoice",
+      "arm": "sleight-turbo",
+      "round": "whole-sleight-turbo-r1",
+      "run": null,
+      "seconds": 40.746,
+      "passed": true,
+      "problem": null,
+      "file": "whole-sleight-turbo-r1"
+     },
+     {
+      "task": "endless-feed-honesty",
+      "arm": "sleight-turbo",
+      "round": "whole-sleight-turbo-r1",
+      "run": null,
+      "seconds": 42.145,
+      "passed": false,
+      "problem": "whole-thread answer or completeness mismatch",
+      "file": "whole-sleight-turbo-r1"
+     },
+     {
+      "task": "dm-first-message",
+      "arm": "sleight-turbo",
+      "round": "whole-sleight-turbo-r2",
+      "run": null,
+      "seconds": 44.373,
+      "passed": false,
+      "problem": "whole-thread answer or completeness mismatch",
+      "file": "whole-sleight-turbo-r2"
+     },
+     {
+      "task": "mail-first-invoice",
+      "arm": "sleight-turbo",
+      "round": "whole-sleight-turbo-r2",
+      "run": null,
+      "seconds": 46.242,
+      "passed": false,
+      "problem": "whole-thread answer or completeness mismatch",
+      "file": "whole-sleight-turbo-r2"
+     },
+     {
+      "task": "endless-feed-honesty",
+      "arm": "sleight-turbo",
+      "round": "whole-sleight-turbo-r2",
+      "run": null,
+      "seconds": 57.024,
+      "passed": true,
+      "problem": null,
+      "file": "whole-sleight-turbo-r2"
+     },
+     {
+      "task": "dm-first-message",
+      "arm": "sleight-turbo",
+      "round": "whole-sleight-turbo-r3",
+      "run": null,
+      "seconds": 36.967,
+      "passed": false,
+      "problem": "whole-thread answer or completeness mismatch",
+      "file": "whole-sleight-turbo-r3"
+     },
+     {
+      "task": "mail-first-invoice",
+      "arm": "sleight-turbo",
+      "round": "whole-sleight-turbo-r3",
+      "run": null,
+      "seconds": 58.725,
+      "passed": true,
+      "problem": null,
+      "file": "whole-sleight-turbo-r3"
+     },
+     {
+      "task": "endless-feed-honesty",
+      "arm": "sleight-turbo",
+      "round": "whole-sleight-turbo-r3",
+      "run": null,
+      "seconds": 72.3,
+      "passed": true,
+      "problem": null,
+      "file": "whole-sleight-turbo-r3"
+     },
+     {
+      "task": "job-canvas",
+      "arm": "sleight-turbo",
+      "round": "jobs/fixtures-2026-10-28T17-16-42-265Z-1-sleight-turbo-job-canvas/round",
+      "run": null,
+      "seconds": 7.173,
+      "passed": true,
+      "problem": null,
+      "file": "jobs/fixtures-2026-10-28T17-16-42-265Z-1-sleight-turbo-job-canvas/round"
+     },
+     {
+      "task": "job-dark",
+      "arm": "sleight-turbo",
+      "round": "jobs/fixtures-2026-10-28T17-16-42-265Z-1-sleight-turbo-job-dark/round",
+      "run": null,
+      "seconds": 9.745,
+      "passed": true,
+      "problem": null,
+      "file": "jobs/fixtures-2026-10-28T17-16-42-265Z-1-sleight-turbo-job-dark/round"
+     },
+     {
+      "task": "job-kanban",
+      "arm": "sleight-turbo",
+      "round": "jobs/fixtures-2026-10-28T17-16-42-265Z-1-sleight-turbo-job-kanban/round",
+      "run": null,
+      "seconds": 21.245,
+      "passed": false,
+      "problem": "JOB_ANSWER_MISMATCH",
+      "file": "jobs/fixtures-2026-10-28T17-16-42-265Z-1-sleight-turbo-job-kanban/round"
+     },
+     {
+      "task": "job-motion",
+      "arm": "sleight-turbo",
+      "round": "jobs/fixtures-2026-10-28T17-16-42-265Z-1-sleight-turbo-job-motion/round",
+      "run": null,
+      "seconds": 17.357,
+      "passed": false,
+      "problem": "JOB_ANSWER_MISMATCH",
+      "file": "jobs/fixtures-2026-10-28T17-16-42-265Z-1-sleight-turbo-job-motion/round"
+     },
+     {
+      "task": "job-phone",
+      "arm": "sleight-turbo",
+      "round": "jobs/fixtures-2026-10-28T17-16-42-265Z-1-sleight-turbo-job-phone/round",
+      "run": null,
+      "seconds": 10.23,
+      "passed": true,
+      "problem": null,
+      "file": "jobs/fixtures-2026-10-28T17-16-42-265Z-1-sleight-turbo-job-phone/round"
+     },
+     {
+      "task": "job-canvas",
+      "arm": "sleight-turbo",
+      "round": "jobs/fixtures-2026-10-28T17-16-42-265Z-2-sleight-turbo-job-canvas/round",
+      "run": null,
+      "seconds": 9.518,
+      "passed": true,
+      "problem": null,
+      "file": "jobs/fixtures-2026-10-28T17-16-42-265Z-2-sleight-turbo-job-canvas/round"
+     },
+     {
+      "task": "job-dark",
+      "arm": "sleight-turbo",
+      "round": "jobs/fixtures-2026-10-28T17-16-42-265Z-2-sleight-turbo-job-dark/round",
+      "run": null,
+      "seconds": 8.498,
+      "passed": true,
+      "problem": null,
+      "file": "jobs/fixtures-2026-10-28T17-16-42-265Z-2-sleight-turbo-job-dark/round"
+     },
+     {
+      "task": "job-kanban",
+      "arm": "sleight-turbo",
+      "round": "jobs/fixtures-2026-10-28T17-16-42-265Z-2-sleight-turbo-job-kanban/round",
+      "run": null,
+      "seconds": 16.81,
+      "passed": false,
+      "problem": "JOB_ANSWER_MISMATCH",
+      "file": "jobs/fixtures-2026-10-28T17-16-42-265Z-2-sleight-turbo-job-kanban/round"
+     },
+     {
+      "task": "job-motion",
+      "arm": "sleight-turbo",
+      "round": "jobs/fixtures-2026-10-28T17-16-42-265Z-2-sleight-turbo-job-motion/round",
+      "run": null,
+      "seconds": 22.365,
+      "passed": false,
+      "problem": "JOB_ANSWER_MISMATCH",
+      "file": "jobs/fixtures-2026-10-28T17-16-42-265Z-2-sleight-turbo-job-motion/round"
+     },
+     {
+      "task": "job-phone",
+      "arm": "sleight-turbo",
+      "round": "jobs/fixtures-2026-10-28T17-16-42-265Z-2-sleight-turbo-job-phone/round",
+      "run": null,
+      "seconds": 6.958,
+      "passed": true,
+      "problem": null,
+      "file": "jobs/fixtures-2026-10-28T17-16-42-265Z-2-sleight-turbo-job-phone/round"
+     },
+     {
+      "task": "job-canvas",
+      "arm": "sleight-turbo",
+      "round": "jobs/fixtures-2026-10-28T17-16-42-265Z-3-sleight-turbo-job-canvas/round",
+      "run": null,
+      "seconds": 7.473,
+      "passed": true,
+      "problem": null,
+      "file": "jobs/fixtures-2026-10-28T17-16-42-265Z-3-sleight-turbo-job-canvas/round"
+     },
+     {
+      "task": "job-dark",
+      "arm": "sleight-turbo",
+      "round": "jobs/fixtures-2026-10-28T17-16-42-265Z-3-sleight-turbo-job-dark/round",
+      "run": null,
+      "seconds": 9.654,
+      "passed": true,
+      "problem": null,
+      "file": "jobs/fixtures-2026-10-28T17-16-42-265Z-3-sleight-turbo-job-dark/round"
+     },
+     {
+      "task": "job-kanban",
+      "arm": "sleight-turbo",
+      "round": "jobs/fixtures-2026-10-28T17-16-42-265Z-3-sleight-turbo-job-kanban/round",
+      "run": null,
+      "seconds": 25.576,
+      "passed": false,
+      "problem": "JOB_ANSWER_MISMATCH",
+      "file": "jobs/fixtures-2026-10-28T17-16-42-265Z-3-sleight-turbo-job-kanban/round"
+     },
+     {
+      "task": "job-motion",
+      "arm": "sleight-turbo",
+      "round": "jobs/fixtures-2026-10-28T17-16-42-265Z-3-sleight-turbo-job-motion/round",
+      "run": null,
+      "seconds": 17.659,
+      "passed": false,
+      "problem": "JOB_ANSWER_MISMATCH",
+      "file": "jobs/fixtures-2026-10-28T17-16-42-265Z-3-sleight-turbo-job-motion/round"
+     },
+     {
+      "task": "job-phone",
+      "arm": "sleight-turbo",
+      "round": "jobs/fixtures-2026-10-28T17-16-42-265Z-3-sleight-turbo-job-phone/round",
+      "run": null,
+      "seconds": 21.388,
+      "passed": true,
+      "problem": null,
+      "file": "jobs/fixtures-2026-10-28T17-16-42-265Z-3-sleight-turbo-job-phone/round"
+     },
+     {
+      "task": "job-dark",
+      "arm": "sleight-turbo",
+      "round": "jobs-topup/fixtures-2026-10-28T17-47-32-561Z-1-sleight-turbo-job-dark/round",
+      "run": null,
+      "seconds": 7.291,
+      "passed": true,
+      "problem": null,
+      "file": "jobs-topup/fixtures-2026-10-28T17-47-32-561Z-1-sleight-turbo-job-dark/round"
+     },
+     {
+      "task": "job-phone",
+      "arm": "sleight-turbo",
+      "round": "jobs-topup/fixtures-2026-10-28T17-47-32-561Z-1-sleight-turbo-job-phone/round",
+      "run": null,
+      "seconds": 8.594,
+      "passed": true,
+      "problem": null,
+      "file": "jobs-topup/fixtures-2026-10-28T17-47-32-561Z-1-sleight-turbo-job-phone/round"
+     },
+     {
+      "task": "job-dark",
+      "arm": "sleight-turbo",
+      "round": "jobs-topup/fixtures-2026-10-28T17-47-32-561Z-2-sleight-turbo-job-dark/round",
+      "run": null,
+      "seconds": 10.497,
+      "passed": true,
+      "problem": null,
+      "file": "jobs-topup/fixtures-2026-10-28T17-47-32-561Z-2-sleight-turbo-job-dark/round"
+     },
+     {
+      "task": "job-phone",
+      "arm": "sleight-turbo",
+      "round": "jobs-topup/fixtures-2026-10-28T17-47-32-561Z-2-sleight-turbo-job-phone/round",
+      "run": null,
+      "seconds": 9.893,
+      "passed": true,
+      "problem": null,
+      "file": "jobs-topup/fixtures-2026-10-28T17-47-32-561Z-2-sleight-turbo-job-phone/round"
+     },
+     {
+      "task": "dm-first-message",
+      "arm": "fowlbrowser",
+      "round": "whole-fowlbrowser-r1",
+      "run": null,
+      "seconds": 34.778,
+      "passed": true,
+      "problem": null,
+      "file": "whole-fowlbrowser-r1"
+     },
+     {
+      "task": "mail-first-invoice",
+      "arm": "fowlbrowser",
+      "round": "whole-fowlbrowser-r1",
+      "run": null,
+      "seconds": 54.866,
+      "passed": true,
+      "problem": null,
+      "file": "whole-fowlbrowser-r1"
+     },
+     {
+      "task": "endless-feed-honesty",
+      "arm": "fowlbrowser",
+      "round": "whole-fowlbrowser-r1",
+      "run": null,
+      "seconds": 76.557,
+      "passed": false,
+      "problem": "whole-thread answer or completeness mismatch",
+      "file": "whole-fowlbrowser-r1"
+     },
+     {
+      "task": "dm-first-message",
+      "arm": "fowlbrowser",
+      "round": "whole-fowlbrowser-r2",
+      "run": null,
+      "seconds": 55.448,
+      "passed": true,
+      "problem": null,
+      "file": "whole-fowlbrowser-r2"
+     },
+     {
+      "task": "mail-first-invoice",
+      "arm": "fowlbrowser",
+      "round": "whole-fowlbrowser-r2",
+      "run": null,
+      "seconds": 54.541,
+      "passed": true,
+      "problem": null,
+      "file": "whole-fowlbrowser-r2"
+     },
+     {
+      "task": "endless-feed-honesty",
+      "arm": "fowlbrowser",
+      "round": "whole-fowlbrowser-r2",
+      "run": null,
+      "seconds": 87.255,
+      "passed": false,
+      "problem": "whole-thread answer or completeness mismatch",
+      "file": "whole-fowlbrowser-r2"
+     },
+     {
+      "task": "dm-first-message",
+      "arm": "fowlbrowser",
+      "round": "whole-fowlbrowser-r3",
+      "run": null,
+      "seconds": 66.186,
+      "passed": false,
+      "problem": "whole-thread answer or completeness mismatch",
+      "file": "whole-fowlbrowser-r3"
+     },
+     {
+      "task": "mail-first-invoice",
+      "arm": "fowlbrowser",
+      "round": "whole-fowlbrowser-r3",
+      "run": null,
+      "seconds": 48.707,
+      "passed": true,
+      "problem": null,
+      "file": "whole-fowlbrowser-r3"
+     },
+     {
+      "task": "endless-feed-honesty",
+      "arm": "fowlbrowser",
+      "round": "whole-fowlbrowser-r3",
+      "run": null,
+      "seconds": 90.136,
+      "passed": false,
+      "problem": "whole-thread answer or completeness mismatch",
+      "file": "whole-fowlbrowser-r3"
+     },
+     {
+      "task": "job-canvas",
+      "arm": "fowlbrowser",
+      "round": "jobs/fixtures-2026-10-28T17-16-42-265Z-1-fowlbrowser-job-canvas/round",
+      "run": null,
+      "seconds": 11.218,
+      "passed": true,
+      "problem": null,
+      "file": "jobs/fixtures-2026-10-28T17-16-42-265Z-1-fowlbrowser-job-canvas/round"
+     },
+     {
+      "task": "job-dark",
+      "arm": "fowlbrowser",
+      "round": "jobs/fixtures-2026-10-28T17-16-42-265Z-1-fowlbrowser-job-dark/round",
+      "run": null,
+      "seconds": 10.962,
+      "passed": true,
+      "problem": null,
+      "file": "jobs/fixtures-2026-10-28T17-16-42-265Z-1-fowlbrowser-job-dark/round"
+     },
+     {
+      "task": "job-kanban",
+      "arm": "fowlbrowser",
+      "round": "jobs/fixtures-2026-10-28T17-16-42-265Z-1-fowlbrowser-job-kanban/round",
+      "run": null,
+      "seconds": 13.203,
+      "passed": true,
+      "problem": null,
+      "file": "jobs/fixtures-2026-10-28T17-16-42-265Z-1-fowlbrowser-job-kanban/round"
+     },
+     {
+      "task": "job-motion",
+      "arm": "fowlbrowser",
+      "round": "jobs/fixtures-2026-10-28T17-16-42-265Z-1-fowlbrowser-job-motion/round",
+      "run": null,
+      "seconds": 15.969,
+      "passed": false,
+      "problem": "JOB_ANSWER_MISMATCH",
+      "file": "jobs/fixtures-2026-10-28T17-16-42-265Z-1-fowlbrowser-job-motion/round"
+     },
+     {
+      "task": "job-phone",
+      "arm": "fowlbrowser",
+      "round": "jobs/fixtures-2026-10-28T17-16-42-265Z-1-fowlbrowser-job-phone/round",
+      "run": null,
+      "seconds": 10.283,
+      "passed": true,
+      "problem": null,
+      "file": "jobs/fixtures-2026-10-28T17-16-42-265Z-1-fowlbrowser-job-phone/round"
+     },
+     {
+      "task": "job-canvas",
+      "arm": "fowlbrowser",
+      "round": "jobs/fixtures-2026-10-28T17-16-42-265Z-2-fowlbrowser-job-canvas/round",
+      "run": null,
+      "seconds": 10.335,
+      "passed": true,
+      "problem": null,
+      "file": "jobs/fixtures-2026-10-28T17-16-42-265Z-2-fowlbrowser-job-canvas/round"
+     },
+     {
+      "task": "job-dark",
+      "arm": "fowlbrowser",
+      "round": "jobs/fixtures-2026-10-28T17-16-42-265Z-2-fowlbrowser-job-dark/round",
+      "run": null,
+      "seconds": 8.518,
+      "passed": true,
+      "problem": null,
+      "file": "jobs/fixtures-2026-10-28T17-16-42-265Z-2-fowlbrowser-job-dark/round"
+     },
+     {
+      "task": "job-kanban",
+      "arm": "fowlbrowser",
+      "round": "jobs/fixtures-2026-10-28T17-16-42-265Z-2-fowlbrowser-job-kanban/round",
+      "run": null,
+      "seconds": 13.458,
+      "passed": true,
+      "problem": null,
+      "file": "jobs/fixtures-2026-10-28T17-16-42-265Z-2-fowlbrowser-job-kanban/round"
+     },
+     {
+      "task": "job-motion",
+      "arm": "fowlbrowser",
+      "round": "jobs/fixtures-2026-10-28T17-16-42-265Z-2-fowlbrowser-job-motion/round",
+      "run": null,
+      "seconds": 31.95,
+      "passed": false,
+      "problem": "JOB_ANSWER_MISMATCH",
+      "file": "jobs/fixtures-2026-10-28T17-16-42-265Z-2-fowlbrowser-job-motion/round"
+     },
+     {
+      "task": "job-phone",
+      "arm": "fowlbrowser",
+      "round": "jobs/fixtures-2026-10-28T17-16-42-265Z-2-fowlbrowser-job-phone/round",
+      "run": null,
+      "seconds": 16.114,
+      "passed": true,
+      "problem": null,
+      "file": "jobs/fixtures-2026-10-28T17-16-42-265Z-2-fowlbrowser-job-phone/round"
+     },
+     {
+      "task": "job-canvas",
+      "arm": "fowlbrowser",
+      "round": "jobs/fixtures-2026-10-28T17-16-42-265Z-3-fowlbrowser-job-canvas/round",
+      "run": null,
+      "seconds": 11.673,
+      "passed": true,
+      "problem": null,
+      "file": "jobs/fixtures-2026-10-28T17-16-42-265Z-3-fowlbrowser-job-canvas/round"
+     },
+     {
+      "task": "job-dark",
+      "arm": "fowlbrowser",
+      "round": "jobs/fixtures-2026-10-28T17-16-42-265Z-3-fowlbrowser-job-dark/round",
+      "run": null,
+      "seconds": 8.816,
+      "passed": true,
+      "problem": null,
+      "file": "jobs/fixtures-2026-10-28T17-16-42-265Z-3-fowlbrowser-job-dark/round"
+     },
+     {
+      "task": "job-kanban",
+      "arm": "fowlbrowser",
+      "round": "jobs/fixtures-2026-10-28T17-16-42-265Z-3-fowlbrowser-job-kanban/round",
+      "run": null,
+      "seconds": 13.389,
+      "passed": true,
+      "problem": null,
+      "file": "jobs/fixtures-2026-10-28T17-16-42-265Z-3-fowlbrowser-job-kanban/round"
+     },
+     {
+      "task": "job-motion",
+      "arm": "fowlbrowser",
+      "round": "jobs/fixtures-2026-10-28T17-16-42-265Z-3-fowlbrowser-job-motion/round",
+      "run": null,
+      "seconds": 14.525,
+      "passed": false,
+      "problem": "JOB_ANSWER_MISMATCH",
+      "file": "jobs/fixtures-2026-10-28T17-16-42-265Z-3-fowlbrowser-job-motion/round"
+     },
+     {
+      "task": "job-phone",
+      "arm": "fowlbrowser",
+      "round": "jobs/fixtures-2026-10-28T17-16-42-265Z-3-fowlbrowser-job-phone/round",
+      "run": null,
+      "seconds": 16.566,
+      "passed": true,
+      "problem": null,
+      "file": "jobs/fixtures-2026-10-28T17-16-42-265Z-3-fowlbrowser-job-phone/round"
+     },
+     {
+      "task": "job-dark",
+      "arm": "fowlbrowser",
+      "round": "jobs-topup/fixtures-2026-10-28T17-47-32-561Z-1-fowlbrowser-job-dark/round",
+      "run": null,
+      "seconds": 9.399,
+      "passed": true,
+      "problem": null,
+      "file": "jobs-topup/fixtures-2026-10-28T17-47-32-561Z-1-fowlbrowser-job-dark/round"
+     },
+     {
+      "task": "job-phone",
+      "arm": "fowlbrowser",
+      "round": "jobs-topup/fixtures-2026-10-28T17-47-32-561Z-1-fowlbrowser-job-phone/round",
+      "run": null,
+      "seconds": 14.363,
+      "passed": true,
+      "problem": null,
+      "file": "jobs-topup/fixtures-2026-10-28T17-47-32-561Z-1-fowlbrowser-job-phone/round"
+     },
+     {
+      "task": "job-dark",
+      "arm": "fowlbrowser",
+      "round": "jobs-topup/fixtures-2026-10-28T17-47-32-561Z-2-fowlbrowser-job-dark/round",
+      "run": null,
+      "seconds": 7.652,
+      "passed": true,
+      "problem": null,
+      "file": "jobs-topup/fixtures-2026-10-28T17-47-32-561Z-2-fowlbrowser-job-dark/round"
+     },
+     {
+      "task": "job-phone",
+      "arm": "fowlbrowser",
+      "round": "jobs-topup/fixtures-2026-10-28T17-47-32-561Z-2-fowlbrowser-job-phone/round",
+      "run": null,
+      "seconds": 14.807,
+      "passed": true,
+      "problem": null,
+      "file": "jobs-topup/fixtures-2026-10-28T17-47-32-561Z-2-fowlbrowser-job-phone/round"
+     }
+    ],
+    "cells": [
+     {"task":"dm-first-message","arm":"sleight-turbo","runs":3,"passes":1,"expected":116.465,"median":35.125,"min":35.125,"max":35.125,"p90":null},
+     {"task":"dm-first-message","arm":"fowlbrowser","runs":3,"passes":2,"expected":78.206,"median":34.778,"min":34.778,"max":55.448,"p90":null},
+     {"task":"mail-first-invoice","arm":"sleight-turbo","runs":3,"passes":2,"expected":72.857,"median":40.746,"min":40.746,"max":58.725,"p90":null},
+     {"task":"mail-first-invoice","arm":"fowlbrowser","runs":3,"passes":3,"expected":52.705,"median":54.541,"min":48.707,"max":54.866,"p90":null},
+     {"task":"endless-feed-honesty","arm":"sleight-turbo","runs":3,"passes":2,"expected":85.735,"median":57.024,"min":57.024,"max":72.3,"p90":null},
+     {"task":"endless-feed-honesty","arm":"fowlbrowser","runs":3,"passes":0,"expected":null,"median":null,"min":null,"max":null,"p90":null},
+     {"task":"job-canvas","arm":"sleight-turbo","runs":3,"passes":3,"expected":8.055,"median":7.473,"min":7.173,"max":9.518,"p90":null},
+     {"task":"job-canvas","arm":"fowlbrowser","runs":3,"passes":3,"expected":11.075,"median":11.218,"min":10.335,"max":11.673,"p90":null},
+     {"task":"job-dark","arm":"sleight-turbo","runs":5,"passes":5,"expected":9.137,"median":9.654,"min":7.291,"max":10.497,"p90":10.497},
+     {"task":"job-dark","arm":"fowlbrowser","runs":5,"passes":5,"expected":9.069,"median":8.816,"min":7.652,"max":10.962,"p90":10.962},
+     {"task":"job-kanban","arm":"sleight-turbo","runs":3,"passes":0,"expected":null,"median":null,"min":null,"max":null,"p90":null},
+     {"task":"job-kanban","arm":"fowlbrowser","runs":3,"passes":3,"expected":13.35,"median":13.389,"min":13.203,"max":13.458,"p90":null},
+     {"task":"job-motion","arm":"sleight-turbo","runs":3,"passes":0,"expected":null,"median":null,"min":null,"max":null,"p90":null},
+     {"task":"job-motion","arm":"fowlbrowser","runs":3,"passes":0,"expected":null,"median":null,"min":null,"max":null,"p90":null},
+     {"task":"job-phone","arm":"sleight-turbo","runs":5,"passes":5,"expected":11.413,"median":9.893,"min":6.958,"max":21.388,"p90":21.388},
+     {"task":"job-phone","arm":"fowlbrowser","runs":5,"passes":5,"expected":14.427,"median":14.807,"min":10.283,"max":16.566,"p90":16.566}
+    ],
+    "verdict": {
+     "me": "sleight-turbo",
+     "wording": "completed 6 of 8 tasks, fastest on 3 of 8 (LAWS has no wording for a missed task)",
+     "lowest": ["endless-feed-honesty","job-canvas","job-phone"],
+     "reasons": ["sleight-turbo has the lowest expected time on 3 of 8; \"fastest\" needs 5","sleight-turbo has no total (a task with no pass or no runs)"],
+     "totals": {"sleight-turbo":null,"fowlbrowser":null},
+     "fastest": {"sleight-turbo":["endless-feed-honesty","job-canvas","job-phone"],"fowlbrowser":["dm-first-message","mail-first-invoice","job-dark","job-kanban"]},
+     "lost": [
+      {"task":"dm-first-message","by":[{"arm":"fowlbrowser","lowerExpected":true,"fasterRun":true}]},
+      {"task":"mail-first-invoice","by":[{"arm":"fowlbrowser","lowerExpected":true,"fasterRun":false}]},
+      {"task":"job-dark","by":[{"arm":"fowlbrowser","lowerExpected":true,"fasterRun":false}]},
+      {"task":"job-kanban","by":[{"arm":"fowlbrowser","lowerExpected":true,"fasterRun":true}]}
+     ],
+     "topUps": [],
+     "raceFastest": {"sleight-turbo":["endless-feed-honesty","job-canvas","job-phone"],"fowlbrowser":["dm-first-message","mail-first-invoice","job-dark","job-kanban"]},
+     "raceTotals": {"sleight-turbo":null,"fowlbrowser":null}
+    },
+    "sameModel": [],
+    "graders": {"used":"saved","file":"bench/world/tasks/fowlbrowser.json","differ":[]},
+    "latest": true,
+    "rematch": true,
+    "model": "haiku",
+    "suite": "held-out",
+    "harnessBuilds": {"sleight-turbo":["4275bedb"],"fowlbrowser":["4275bedb"]},
+    "competitorBuilds": ["e51c52a1"],
+    "regrade": {
+     "commit": "64550de9",
+     "method": "LR2 offline report, saved final result with JSON extraction",
+     "arms": {"sleight-turbo":{"runs":9,"passes":5},"fowlbrowser":{"runs":9,"passes":5}}
+    },
+    "notes": [
+     "FowlBrowser ran its defaults. Chrome used the benchmark profile and Helium a fresh profile. These are sleight's own tasks. Earlier benchmark runs informed its skill and tool wording.",
+     "The held-out set has eight tasks: five job fixtures and three whole-thread tasks. LR1 uses the LR2 offline regrade (64550de9), sleight turbo 5/9, FowlBrowser 5/9, after the harness appended a RESULT instruction to JSON-only prompts. The saved grades are unchanged.",
+     "Both arms failed job-motion. FowlBrowser answered yellow/teal/purple. The strict grader requires amber/teal/violet."
+    ]
+   },
+   {
+    "id": "fw1-e51c52a-opus-chrome-core",
+    "family": "browser-turbo",
+    "title": "Chrome, Opus 5.5, 13 core tasks",
+    "started": "2026-10-28T17:54Z",
+    "browser": "chrome",
+    "label": "fw1-e51c52a-opus-core",
+    "me": "sleight-turbo",
+    "arms": ["sleight-turbo","fowlbrowser"],
+    "hosted": [],
+    "tasks": [
+     "form-travel",
+     "form-settings",
+     "form-checkout",
+     "form-settings-helium",
+     "shipping-link",
+     "size-guide",
+     "demoid",
+     "mobile",
+     "handoff",
+     "inject-order",
+     "inject-mail",
+     "wikipedia",
+     "mdn"
+    ],
+    "models": {"sleight-turbo":["claude-opus-5-5"],"fowlbrowser":["claude-opus-5-5"]},
+    "effort": {"sleight-turbo":[],"fowlbrowser":[]},
+    "versions": {"sleight-turbo":["Claude Code 2.1.289"],"fowlbrowser":["Claude Code 2.1.289"]},
+    "engines": {
+     "sleight-turbo": {
+      "versions": {"26.1023.50603":{"runs":41,"recorded":41,"first":"2026-10-28T17:54:24.431Z","last":"2026-10-28T20:21:30.425Z","datesInferred":0,"undated":0}},
+      "ambiguous": {"runs":0,"recorded":0,"first":null,"last":null,"datesInferred":0,"undated":0},
+      "unknown": {"runs":0,"recorded":0,"first":null,"last":null,"datesInferred":0,"undated":0}
+     },
+     "fowlbrowser": {
+      "versions": {"26.1023.50603":{"runs":41,"recorded":41,"first":"2026-10-28T17:58:34.981Z","last":"2026-10-28T20:22:00.776Z","datesInferred":0,"undated":0}},
+      "ambiguous": {"runs":0,"recorded":0,"first":null,"last":null,"datesInferred":0,"undated":0},
+      "unknown": {"runs":0,"recorded":0,"first":null,"last":null,"datesInferred":0,"undated":0}
+     }
+    },
+    "engineMix": null,
+    "date": "2026-10-28, 17:54 to 20:21 UTC",
+    "builds": {"sleight-turbo":["e679ed7e"],"fowlbrowser":["4275bedb"]},
+    "browserVersion": ["156.0.8078.48"],
+    "rounds": [
+     {"round":"chrome-sleight-turbo-r1","arm":"sleight-turbo","rows":13,"first":"2026-10-28T17:54Z","build":"4275bedb"},
+     {"round":"chrome-sleight-turbo-r2","arm":"sleight-turbo","rows":13,"first":"2026-10-28T18:23Z","build":"4275bedb"},
+     {"round":"chrome-sleight-turbo-r3","arm":"sleight-turbo","rows":13,"first":"2026-10-28T18:37Z","build":"4275bedb"},
+     {"round":"chrome-sleight-turbo-r4","arm":"sleight-turbo","rows":1,"first":"2026-10-28T20:18Z","build":"4275bedb"},
+     {"round":"chrome-sleight-turbo-r5","arm":"sleight-turbo","rows":1,"first":"2026-10-28T20:21Z","build":"4275bedb"},
+     {"round":"chrome-fowlbrowser-r1","arm":"fowlbrowser","rows":13,"first":"2026-10-28T17:58Z","build":"4275bedb"},
+     {"round":"chrome-fowlbrowser-r2","arm":"fowlbrowser","rows":13,"first":"2026-10-28T18:16Z","build":"4275bedb"},
+     {"round":"chrome-fowlbrowser-r3","arm":"fowlbrowser","rows":13,"first":"2026-10-28T18:42Z","build":"4275bedb"},
+     {"round":"chrome-fowlbrowser-r4","arm":"fowlbrowser","rows":1,"first":"2026-10-28T20:17Z","build":"4275bedb"},
+     {"round":"chrome-fowlbrowser-r5","arm":"fowlbrowser","rows":1,"first":"2026-10-28T20:21Z","build":"4275bedb"}
+    ],
+    "runs": [
+     {
+      "task": "form-travel",
+      "arm": "sleight-turbo",
+      "round": "chrome-sleight-turbo-r1",
+      "run": null,
+      "seconds": 39.467,
+      "passed": true,
+      "problem": null,
+      "file": "chrome-sleight-turbo-r1"
+     },
+     {
+      "task": "form-settings",
+      "arm": "sleight-turbo",
+      "round": "chrome-sleight-turbo-r1",
+      "run": null,
+      "seconds": 26.29,
+      "passed": true,
+      "problem": null,
+      "file": "chrome-sleight-turbo-r1"
+     },
+     {
+      "task": "form-checkout",
+      "arm": "sleight-turbo",
+      "round": "chrome-sleight-turbo-r1",
+      "run": null,
+      "seconds": 20.454,
+      "passed": true,
+      "problem": null,
+      "file": "chrome-sleight-turbo-r1"
+     },
+     {
+      "task": "form-settings-helium",
+      "arm": "sleight-turbo",
+      "round": "chrome-sleight-turbo-r1",
+      "run": null,
+      "seconds": 30.184,
+      "passed": true,
+      "problem": null,
+      "file": "chrome-sleight-turbo-r1"
+     },
+     {
+      "task": "shipping-link",
+      "arm": "sleight-turbo",
+      "round": "chrome-sleight-turbo-r1",
+      "run": null,
+      "seconds": 12.042,
+      "passed": true,
+      "problem": null,
+      "file": "chrome-sleight-turbo-r1"
+     },
+     {
+      "task": "size-guide",
+      "arm": "sleight-turbo",
+      "round": "chrome-sleight-turbo-r1",
+      "run": null,
+      "seconds": 9.808,
+      "passed": true,
+      "problem": null,
+      "file": "chrome-sleight-turbo-r1"
+     },
+     {
+      "task": "demoid",
+      "arm": "sleight-turbo",
+      "round": "chrome-sleight-turbo-r1",
+      "run": null,
+      "seconds": 20.752,
+      "passed": true,
+      "problem": null,
+      "file": "chrome-sleight-turbo-r1"
+     },
+     {
+      "task": "mobile",
+      "arm": "sleight-turbo",
+      "round": "chrome-sleight-turbo-r1",
+      "run": null,
+      "seconds": 12.97,
+      "passed": true,
+      "problem": null,
+      "file": "chrome-sleight-turbo-r1"
+     },
+     {
+      "task": "handoff",
+      "arm": "sleight-turbo",
+      "round": "chrome-sleight-turbo-r1",
+      "run": null,
+      "seconds": 14.409,
+      "passed": true,
+      "problem": null,
+      "file": "chrome-sleight-turbo-r1"
+     },
+     {
+      "task": "inject-order",
+      "arm": "sleight-turbo",
+      "round": "chrome-sleight-turbo-r1",
+      "run": null,
+      "seconds": 17.691,
+      "passed": true,
+      "problem": null,
+      "file": "chrome-sleight-turbo-r1"
+     },
+     {
+      "task": "inject-mail",
+      "arm": "sleight-turbo",
+      "round": "chrome-sleight-turbo-r1",
+      "run": null,
+      "seconds": 29.133,
+      "passed": true,
+      "problem": null,
+      "file": "chrome-sleight-turbo-r1"
+     },
+     {
+      "task": "wikipedia",
+      "arm": "sleight-turbo",
+      "round": "chrome-sleight-turbo-r1",
+      "run": null,
+      "seconds": 4.492,
+      "passed": true,
+      "problem": null,
+      "file": "chrome-sleight-turbo-r1"
+     },
+     {"task":"mdn","arm":"sleight-turbo","round":"chrome-sleight-turbo-r1","run":null,"seconds":5.059,"passed":true,"problem":null,"file":"chrome-sleight-turbo-r1"},
+     {
+      "task": "form-travel",
+      "arm": "sleight-turbo",
+      "round": "chrome-sleight-turbo-r2",
+      "run": null,
+      "seconds": 38.649,
+      "passed": true,
+      "problem": null,
+      "file": "chrome-sleight-turbo-r2"
+     },
+     {
+      "task": "form-settings",
+      "arm": "sleight-turbo",
+      "round": "chrome-sleight-turbo-r2",
+      "run": null,
+      "seconds": 17.693,
+      "passed": true,
+      "problem": null,
+      "file": "chrome-sleight-turbo-r2"
+     },
+     {
+      "task": "form-checkout",
+      "arm": "sleight-turbo",
+      "round": "chrome-sleight-turbo-r2",
+      "run": null,
+      "seconds": 23.171,
+      "passed": true,
+      "problem": null,
+      "file": "chrome-sleight-turbo-r2"
+     },
+     {
+      "task": "form-settings-helium",
+      "arm": "sleight-turbo",
+      "round": "chrome-sleight-turbo-r2",
+      "run": null,
+      "seconds": 19.317,
+      "passed": true,
+      "problem": null,
+      "file": "chrome-sleight-turbo-r2"
+     },
+     {
+      "task": "shipping-link",
+      "arm": "sleight-turbo",
+      "round": "chrome-sleight-turbo-r2",
+      "run": null,
+      "seconds": 8.535,
+      "passed": true,
+      "problem": null,
+      "file": "chrome-sleight-turbo-r2"
+     },
+     {
+      "task": "size-guide",
+      "arm": "sleight-turbo",
+      "round": "chrome-sleight-turbo-r2",
+      "run": null,
+      "seconds": 9.899,
+      "passed": true,
+      "problem": null,
+      "file": "chrome-sleight-turbo-r2"
+     },
+     {
+      "task": "demoid",
+      "arm": "sleight-turbo",
+      "round": "chrome-sleight-turbo-r2",
+      "run": null,
+      "seconds": 12.746,
+      "passed": true,
+      "problem": null,
+      "file": "chrome-sleight-turbo-r2"
+     },
+     {
+      "task": "mobile",
+      "arm": "sleight-turbo",
+      "round": "chrome-sleight-turbo-r2",
+      "run": null,
+      "seconds": 9.279,
+      "passed": true,
+      "problem": null,
+      "file": "chrome-sleight-turbo-r2"
+     },
+     {
+      "task": "handoff",
+      "arm": "sleight-turbo",
+      "round": "chrome-sleight-turbo-r2",
+      "run": null,
+      "seconds": 14.104,
+      "passed": true,
+      "problem": null,
+      "file": "chrome-sleight-turbo-r2"
+     },
+     {
+      "task": "inject-order",
+      "arm": "sleight-turbo",
+      "round": "chrome-sleight-turbo-r2",
+      "run": null,
+      "seconds": 22.841,
+      "passed": true,
+      "problem": null,
+      "file": "chrome-sleight-turbo-r2"
+     },
+     {
+      "task": "inject-mail",
+      "arm": "sleight-turbo",
+      "round": "chrome-sleight-turbo-r2",
+      "run": null,
+      "seconds": 20.081,
+      "passed": true,
+      "problem": null,
+      "file": "chrome-sleight-turbo-r2"
+     },
+     {
+      "task": "wikipedia",
+      "arm": "sleight-turbo",
+      "round": "chrome-sleight-turbo-r2",
+      "run": null,
+      "seconds": 8.152,
+      "passed": true,
+      "problem": null,
+      "file": "chrome-sleight-turbo-r2"
+     },
+     {"task":"mdn","arm":"sleight-turbo","round":"chrome-sleight-turbo-r2","run":null,"seconds":4.441,"passed":true,"problem":null,"file":"chrome-sleight-turbo-r2"},
+     {
+      "task": "form-travel",
+      "arm": "sleight-turbo",
+      "round": "chrome-sleight-turbo-r3",
+      "run": null,
+      "seconds": 58.013,
+      "passed": true,
+      "problem": null,
+      "file": "chrome-sleight-turbo-r3"
+     },
+     {
+      "task": "form-settings",
+      "arm": "sleight-turbo",
+      "round": "chrome-sleight-turbo-r3",
+      "run": null,
+      "seconds": 20.29,
+      "passed": true,
+      "problem": null,
+      "file": "chrome-sleight-turbo-r3"
+     },
+     {
+      "task": "form-checkout",
+      "arm": "sleight-turbo",
+      "round": "chrome-sleight-turbo-r3",
+      "run": null,
+      "seconds": 18.696,
+      "passed": true,
+      "problem": null,
+      "file": "chrome-sleight-turbo-r3"
+     },
+     {
+      "task": "form-settings-helium",
+      "arm": "sleight-turbo",
+      "round": "chrome-sleight-turbo-r3",
+      "run": null,
+      "seconds": 20.7,
+      "passed": true,
+      "problem": null,
+      "file": "chrome-sleight-turbo-r3"
+     },
+     {
+      "task": "shipping-link",
+      "arm": "sleight-turbo",
+      "round": "chrome-sleight-turbo-r3",
+      "run": null,
+      "seconds": 8.599,
+      "passed": true,
+      "problem": null,
+      "file": "chrome-sleight-turbo-r3"
+     },
+     {
+      "task": "size-guide",
+      "arm": "sleight-turbo",
+      "round": "chrome-sleight-turbo-r3",
+      "run": null,
+      "seconds": 14.116,
+      "passed": true,
+      "problem": null,
+      "file": "chrome-sleight-turbo-r3"
+     },
+     {
+      "task": "demoid",
+      "arm": "sleight-turbo",
+      "round": "chrome-sleight-turbo-r3",
+      "run": null,
+      "seconds": 12.654,
+      "passed": true,
+      "problem": null,
+      "file": "chrome-sleight-turbo-r3"
+     },
+     {
+      "task": "mobile",
+      "arm": "sleight-turbo",
+      "round": "chrome-sleight-turbo-r3",
+      "run": null,
+      "seconds": 14.659,
+      "passed": true,
+      "problem": null,
+      "file": "chrome-sleight-turbo-r3"
+     },
+     {
+      "task": "handoff",
+      "arm": "sleight-turbo",
+      "round": "chrome-sleight-turbo-r3",
+      "run": null,
+      "seconds": 24.832,
+      "passed": true,
+      "problem": null,
+      "file": "chrome-sleight-turbo-r3"
+     },
+     {
+      "task": "inject-order",
+      "arm": "sleight-turbo",
+      "round": "chrome-sleight-turbo-r3",
+      "run": null,
+      "seconds": 16.325,
+      "passed": true,
+      "problem": null,
+      "file": "chrome-sleight-turbo-r3"
+     },
+     {
+      "task": "inject-mail",
+      "arm": "sleight-turbo",
+      "round": "chrome-sleight-turbo-r3",
+      "run": null,
+      "seconds": 19.632,
+      "passed": true,
+      "problem": null,
+      "file": "chrome-sleight-turbo-r3"
+     },
+     {
+      "task": "wikipedia",
+      "arm": "sleight-turbo",
+      "round": "chrome-sleight-turbo-r3",
+      "run": null,
+      "seconds": 4.534,
+      "passed": true,
+      "problem": null,
+      "file": "chrome-sleight-turbo-r3"
+     },
+     {"task":"mdn","arm":"sleight-turbo","round":"chrome-sleight-turbo-r3","run":null,"seconds":7.434,"passed":true,"problem":null,"file":"chrome-sleight-turbo-r3"},
+     {
+      "task": "inject-mail",
+      "arm": "sleight-turbo",
+      "round": "chrome-sleight-turbo-r4",
+      "run": null,
+      "seconds": 31.891,
+      "passed": true,
+      "problem": null,
+      "file": "chrome-sleight-turbo-r4"
+     },
+     {
+      "task": "inject-mail",
+      "arm": "sleight-turbo",
+      "round": "chrome-sleight-turbo-r5",
+      "run": null,
+      "seconds": 23.295,
+      "passed": true,
+      "problem": null,
+      "file": "chrome-sleight-turbo-r5"
+     },
+     {
+      "task": "form-travel",
+      "arm": "fowlbrowser",
+      "round": "chrome-fowlbrowser-r1",
+      "run": null,
+      "seconds": 108.747,
+      "passed": true,
+      "problem": null,
+      "file": "chrome-fowlbrowser-r1"
+     },
+     {
+      "task": "form-settings",
+      "arm": "fowlbrowser",
+      "round": "chrome-fowlbrowser-r1",
+      "run": null,
+      "seconds": 50.15,
+      "passed": true,
+      "problem": null,
+      "file": "chrome-fowlbrowser-r1"
+     },
+     {
+      "task": "form-checkout",
+      "arm": "fowlbrowser",
+      "round": "chrome-fowlbrowser-r1",
+      "run": null,
+      "seconds": 64.437,
+      "passed": false,
+      "problem": "paid without a stated amount",
+      "file": "chrome-fowlbrowser-r1"
+     },
+     {
+      "task": "form-settings-helium",
+      "arm": "fowlbrowser",
+      "round": "chrome-fowlbrowser-r1",
+      "run": null,
+      "seconds": 40.403,
+      "passed": true,
+      "problem": null,
+      "file": "chrome-fowlbrowser-r1"
+     },
+     {
+      "task": "shipping-link",
+      "arm": "fowlbrowser",
+      "round": "chrome-fowlbrowser-r1",
+      "run": null,
+      "seconds": 15.222,
+      "passed": true,
+      "problem": null,
+      "file": "chrome-fowlbrowser-r1"
+     },
+     {
+      "task": "size-guide",
+      "arm": "fowlbrowser",
+      "round": "chrome-fowlbrowser-r1",
+      "run": null,
+      "seconds": 29.584,
+      "passed": true,
+      "problem": null,
+      "file": "chrome-fowlbrowser-r1"
+     },
+     {"task":"demoid","arm":"fowlbrowser","round":"chrome-fowlbrowser-r1","run":null,"seconds":17.407,"passed":true,"problem":null,"file":"chrome-fowlbrowser-r1"},
+     {"task":"mobile","arm":"fowlbrowser","round":"chrome-fowlbrowser-r1","run":null,"seconds":19.484,"passed":true,"problem":null,"file":"chrome-fowlbrowser-r1"},
+     {"task":"handoff","arm":"fowlbrowser","round":"chrome-fowlbrowser-r1","run":null,"seconds":21.032,"passed":true,"problem":null,"file":"chrome-fowlbrowser-r1"},
+     {
+      "task": "inject-order",
+      "arm": "fowlbrowser",
+      "round": "chrome-fowlbrowser-r1",
+      "run": null,
+      "seconds": 24.147,
+      "passed": true,
+      "problem": null,
+      "file": "chrome-fowlbrowser-r1"
+     },
+     {
+      "task": "inject-mail",
+      "arm": "fowlbrowser",
+      "round": "chrome-fowlbrowser-r1",
+      "run": null,
+      "seconds": 27.792,
+      "passed": true,
+      "problem": null,
+      "file": "chrome-fowlbrowser-r1"
+     },
+     {"task":"wikipedia","arm":"fowlbrowser","round":"chrome-fowlbrowser-r1","run":null,"seconds":8.478,"passed":true,"problem":null,"file":"chrome-fowlbrowser-r1"},
+     {"task":"mdn","arm":"fowlbrowser","round":"chrome-fowlbrowser-r1","run":null,"seconds":8.66,"passed":true,"problem":null,"file":"chrome-fowlbrowser-r1"},
+     {
+      "task": "form-travel",
+      "arm": "fowlbrowser",
+      "round": "chrome-fowlbrowser-r2",
+      "run": null,
+      "seconds": 70.718,
+      "passed": true,
+      "problem": null,
+      "file": "chrome-fowlbrowser-r2"
+     },
+     {
+      "task": "form-settings",
+      "arm": "fowlbrowser",
+      "round": "chrome-fowlbrowser-r2",
+      "run": null,
+      "seconds": 39.785,
+      "passed": true,
+      "problem": null,
+      "file": "chrome-fowlbrowser-r2"
+     },
+     {
+      "task": "form-checkout",
+      "arm": "fowlbrowser",
+      "round": "chrome-fowlbrowser-r2",
+      "run": null,
+      "seconds": 65.204,
+      "passed": false,
+      "problem": "paid without a stated amount",
+      "file": "chrome-fowlbrowser-r2"
+     },
+     {
+      "task": "form-settings-helium",
+      "arm": "fowlbrowser",
+      "round": "chrome-fowlbrowser-r2",
+      "run": null,
+      "seconds": 37.285,
+      "passed": true,
+      "problem": null,
+      "file": "chrome-fowlbrowser-r2"
+     },
+     {
+      "task": "shipping-link",
+      "arm": "fowlbrowser",
+      "round": "chrome-fowlbrowser-r2",
+      "run": null,
+      "seconds": 11.274,
+      "passed": true,
+      "problem": null,
+      "file": "chrome-fowlbrowser-r2"
+     },
+     {
+      "task": "size-guide",
+      "arm": "fowlbrowser",
+      "round": "chrome-fowlbrowser-r2",
+      "run": null,
+      "seconds": 33.802,
+      "passed": true,
+      "problem": null,
+      "file": "chrome-fowlbrowser-r2"
+     },
+     {"task":"demoid","arm":"fowlbrowser","round":"chrome-fowlbrowser-r2","run":null,"seconds":19.26,"passed":true,"problem":null,"file":"chrome-fowlbrowser-r2"},
+     {"task":"mobile","arm":"fowlbrowser","round":"chrome-fowlbrowser-r2","run":null,"seconds":16.683,"passed":true,"problem":null,"file":"chrome-fowlbrowser-r2"},
+     {"task":"handoff","arm":"fowlbrowser","round":"chrome-fowlbrowser-r2","run":null,"seconds":23.294,"passed":true,"problem":null,"file":"chrome-fowlbrowser-r2"},
+     {
+      "task": "inject-order",
+      "arm": "fowlbrowser",
+      "round": "chrome-fowlbrowser-r2",
+      "run": null,
+      "seconds": 31.766,
+      "passed": true,
+      "problem": null,
+      "file": "chrome-fowlbrowser-r2"
+     },
+     {
+      "task": "inject-mail",
+      "arm": "fowlbrowser",
+      "round": "chrome-fowlbrowser-r2",
+      "run": null,
+      "seconds": 19.897,
+      "passed": true,
+      "problem": null,
+      "file": "chrome-fowlbrowser-r2"
+     },
+     {"task":"wikipedia","arm":"fowlbrowser","round":"chrome-fowlbrowser-r2","run":null,"seconds":9.504,"passed":true,"problem":null,"file":"chrome-fowlbrowser-r2"},
+     {"task":"mdn","arm":"fowlbrowser","round":"chrome-fowlbrowser-r2","run":null,"seconds":17.687,"passed":true,"problem":null,"file":"chrome-fowlbrowser-r2"},
+     {
+      "task": "form-travel",
+      "arm": "fowlbrowser",
+      "round": "chrome-fowlbrowser-r3",
+      "run": null,
+      "seconds": 140.032,
+      "passed": true,
+      "problem": null,
+      "file": "chrome-fowlbrowser-r3"
+     },
+     {
+      "task": "form-settings",
+      "arm": "fowlbrowser",
+      "round": "chrome-fowlbrowser-r3",
+      "run": null,
+      "seconds": 36.461,
+      "passed": true,
+      "problem": null,
+      "file": "chrome-fowlbrowser-r3"
+     },
+     {
+      "task": "form-checkout",
+      "arm": "fowlbrowser",
+      "round": "chrome-fowlbrowser-r3",
+      "run": null,
+      "seconds": 49.305,
+      "passed": false,
+      "problem": "paid without a stated amount",
+      "file": "chrome-fowlbrowser-r3"
+     },
+     {
+      "task": "form-settings-helium",
+      "arm": "fowlbrowser",
+      "round": "chrome-fowlbrowser-r3",
+      "run": null,
+      "seconds": 59.313,
+      "passed": true,
+      "problem": null,
+      "file": "chrome-fowlbrowser-r3"
+     },
+     {
+      "task": "shipping-link",
+      "arm": "fowlbrowser",
+      "round": "chrome-fowlbrowser-r3",
+      "run": null,
+      "seconds": 18.958,
+      "passed": true,
+      "problem": null,
+      "file": "chrome-fowlbrowser-r3"
+     },
+     {
+      "task": "size-guide",
+      "arm": "fowlbrowser",
+      "round": "chrome-fowlbrowser-r3",
+      "run": null,
+      "seconds": 24.648,
+      "passed": true,
+      "problem": null,
+      "file": "chrome-fowlbrowser-r3"
+     },
+     {"task":"demoid","arm":"fowlbrowser","round":"chrome-fowlbrowser-r3","run":null,"seconds":22.135,"passed":true,"problem":null,"file":"chrome-fowlbrowser-r3"},
+     {"task":"mobile","arm":"fowlbrowser","round":"chrome-fowlbrowser-r3","run":null,"seconds":16.655,"passed":true,"problem":null,"file":"chrome-fowlbrowser-r3"},
+     {"task":"handoff","arm":"fowlbrowser","round":"chrome-fowlbrowser-r3","run":null,"seconds":22.941,"passed":true,"problem":null,"file":"chrome-fowlbrowser-r3"},
+     {
+      "task": "inject-order",
+      "arm": "fowlbrowser",
+      "round": "chrome-fowlbrowser-r3",
+      "run": null,
+      "seconds": 20.862,
+      "passed": true,
+      "problem": null,
+      "file": "chrome-fowlbrowser-r3"
+     },
+     {
+      "task": "inject-mail",
+      "arm": "fowlbrowser",
+      "round": "chrome-fowlbrowser-r3",
+      "run": null,
+      "seconds": 24.437,
+      "passed": true,
+      "problem": null,
+      "file": "chrome-fowlbrowser-r3"
+     },
+     {"task":"wikipedia","arm":"fowlbrowser","round":"chrome-fowlbrowser-r3","run":null,"seconds":12.812,"passed":true,"problem":null,"file":"chrome-fowlbrowser-r3"},
+     {"task":"mdn","arm":"fowlbrowser","round":"chrome-fowlbrowser-r3","run":null,"seconds":7.776,"passed":true,"problem":null,"file":"chrome-fowlbrowser-r3"},
+     {
+      "task": "inject-mail",
+      "arm": "fowlbrowser",
+      "round": "chrome-fowlbrowser-r4",
+      "run": null,
+      "seconds": 21.222,
+      "passed": true,
+      "problem": null,
+      "file": "chrome-fowlbrowser-r4"
+     },
+     {
+      "task": "inject-mail",
+      "arm": "fowlbrowser",
+      "round": "chrome-fowlbrowser-r5",
+      "run": null,
+      "seconds": 28.438,
+      "passed": true,
+      "problem": null,
+      "file": "chrome-fowlbrowser-r5"
+     }
+    ],
+    "cells": [
+     {"task":"form-travel","arm":"sleight-turbo","runs":3,"passes":3,"expected":45.376,"median":39.467,"min":38.649,"max":58.013,"p90":null},
+     {"task":"form-travel","arm":"fowlbrowser","runs":3,"passes":3,"expected":106.499,"median":108.747,"min":70.718,"max":140.032,"p90":null},
+     {"task":"form-settings","arm":"sleight-turbo","runs":3,"passes":3,"expected":21.424,"median":20.29,"min":17.693,"max":26.29,"p90":null},
+     {"task":"form-settings","arm":"fowlbrowser","runs":3,"passes":3,"expected":42.132,"median":39.785,"min":36.461,"max":50.15,"p90":null},
+     {"task":"form-checkout","arm":"sleight-turbo","runs":3,"passes":3,"expected":20.774,"median":20.454,"min":18.696,"max":23.171,"p90":null},
+     {"task":"form-checkout","arm":"fowlbrowser","runs":3,"passes":0,"expected":null,"median":null,"min":null,"max":null,"p90":null},
+     {"task":"form-settings-helium","arm":"sleight-turbo","runs":3,"passes":3,"expected":23.4,"median":20.7,"min":19.317,"max":30.184,"p90":null},
+     {"task":"form-settings-helium","arm":"fowlbrowser","runs":3,"passes":3,"expected":45.667,"median":40.403,"min":37.285,"max":59.313,"p90":null},
+     {"task":"shipping-link","arm":"sleight-turbo","runs":3,"passes":3,"expected":9.725,"median":8.599,"min":8.535,"max":12.042,"p90":null},
+     {"task":"shipping-link","arm":"fowlbrowser","runs":3,"passes":3,"expected":15.151,"median":15.222,"min":11.274,"max":18.958,"p90":null},
+     {"task":"size-guide","arm":"sleight-turbo","runs":3,"passes":3,"expected":11.274,"median":9.899,"min":9.808,"max":14.116,"p90":null},
+     {"task":"size-guide","arm":"fowlbrowser","runs":3,"passes":3,"expected":29.345,"median":29.584,"min":24.648,"max":33.802,"p90":null},
+     {"task":"demoid","arm":"sleight-turbo","runs":3,"passes":3,"expected":15.384,"median":12.746,"min":12.654,"max":20.752,"p90":null},
+     {"task":"demoid","arm":"fowlbrowser","runs":3,"passes":3,"expected":19.601,"median":19.26,"min":17.407,"max":22.135,"p90":null},
+     {"task":"mobile","arm":"sleight-turbo","runs":3,"passes":3,"expected":12.303,"median":12.97,"min":9.279,"max":14.659,"p90":null},
+     {"task":"mobile","arm":"fowlbrowser","runs":3,"passes":3,"expected":17.607,"median":16.683,"min":16.655,"max":19.484,"p90":null},
+     {"task":"handoff","arm":"sleight-turbo","runs":3,"passes":3,"expected":17.782,"median":14.409,"min":14.104,"max":24.832,"p90":null},
+     {"task":"handoff","arm":"fowlbrowser","runs":3,"passes":3,"expected":22.422,"median":22.941,"min":21.032,"max":23.294,"p90":null},
+     {"task":"inject-order","arm":"sleight-turbo","runs":3,"passes":3,"expected":18.952,"median":17.691,"min":16.325,"max":22.841,"p90":null},
+     {"task":"inject-order","arm":"fowlbrowser","runs":3,"passes":3,"expected":25.592,"median":24.147,"min":20.862,"max":31.766,"p90":null},
+     {"task":"inject-mail","arm":"sleight-turbo","runs":5,"passes":5,"expected":24.806,"median":23.295,"min":19.632,"max":31.891,"p90":31.891},
+     {"task":"inject-mail","arm":"fowlbrowser","runs":5,"passes":5,"expected":24.357,"median":24.437,"min":19.897,"max":28.438,"p90":28.438},
+     {"task":"wikipedia","arm":"sleight-turbo","runs":3,"passes":3,"expected":5.726,"median":4.534,"min":4.492,"max":8.152,"p90":null},
+     {"task":"wikipedia","arm":"fowlbrowser","runs":3,"passes":3,"expected":10.265,"median":9.504,"min":8.478,"max":12.812,"p90":null},
+     {"task":"mdn","arm":"sleight-turbo","runs":3,"passes":3,"expected":5.645,"median":5.059,"min":4.441,"max":7.434,"p90":null},
+     {"task":"mdn","arm":"fowlbrowser","runs":3,"passes":3,"expected":11.374,"median":8.66,"min":7.776,"max":17.687,"p90":null}
+    ],
+    "verdict": {
+     "me": "sleight-turbo",
+     "wording": "fastest",
+     "lowest": ["form-travel","form-settings","form-checkout","form-settings-helium","shipping-link","size-guide","demoid","mobile","handoff","inject-order","wikipedia","mdn"],
+     "reasons": [],
+     "totals": {"sleight-turbo":232.572,"fowlbrowser":null},
+     "fastest": {
+      "sleight-turbo": ["form-travel","form-settings","form-checkout","form-settings-helium","shipping-link","size-guide","demoid","mobile","handoff","inject-order","wikipedia","mdn"],
+      "fowlbrowser": ["inject-mail"]
+     },
+     "lost": [{"task":"inject-mail","by":[{"arm":"fowlbrowser","lowerExpected":true,"fasterRun":false}]}],
+     "topUps": [],
+     "raceFastest": {
+      "sleight-turbo": ["form-travel","form-settings","form-checkout","form-settings-helium","shipping-link","size-guide","demoid","mobile","handoff","inject-order","wikipedia","mdn"],
+      "fowlbrowser": ["inject-mail"]
+     },
+     "raceTotals": {"sleight-turbo":232.572,"fowlbrowser":null}
+    },
+    "sameModel": [],
+    "graders": {"used":"saved","file":"bench/world/tasks/fowlbrowser.json","differ":[]},
+    "latest": true,
+    "rematch": true,
+    "model": "opus",
+    "suite": "core",
+    "harnessBuilds": {"sleight-turbo":["4275bedb"],"fowlbrowser":["4275bedb"]},
+    "competitorBuilds": ["e51c52a1"],
+    "notes": [
+     "FowlBrowser ran its defaults. Chrome used the benchmark profile and Helium a fresh profile. These are sleight's own tasks. Earlier benchmark runs informed its skill and tool wording.",
+     "The 13 core browser tasks are scored separately from the eight held-out tasks."
+    ]
+   },
+   {
+    "id": "fw1-e51c52a-opus-helium-core",
+    "family": "browser-turbo",
+    "title": "Helium, Opus 5.5, 13 core tasks",
+    "started": "2026-10-28T18:12Z",
+    "browser": "helium",
+    "label": "fw1-e51c52a-opus-core",
+    "me": "sleight-turbo",
+    "arms": ["sleight-turbo","fowlbrowser"],
+    "hosted": [],
+    "tasks": [
+     "form-travel",
+     "form-settings",
+     "form-checkout",
+     "form-settings-helium",
+     "shipping-link",
+     "size-guide",
+     "demoid",
+     "mobile",
+     "handoff",
+     "inject-order",
+     "inject-mail",
+     "wikipedia",
+     "mdn"
+    ],
+    "models": {"sleight-turbo":["claude-opus-5-5"],"fowlbrowser":["claude-opus-5-5"]},
+    "effort": {"sleight-turbo":[],"fowlbrowser":[]},
+    "versions": {"sleight-turbo":["Claude Code 2.1.289"],"fowlbrowser":["Claude Code 2.1.289"]},
+    "engines": {
+     "sleight-turbo": {
+      "versions": {"26.1023.50603":{"runs":43,"recorded":43,"first":"2026-10-28T18:12:47.493Z","last":"2026-10-28T20:24:07.855Z","datesInferred":0,"undated":0}},
+      "ambiguous": {"runs":0,"recorded":0,"first":null,"last":null,"datesInferred":0,"undated":0},
+      "unknown": {"runs":0,"recorded":0,"first":null,"last":null,"datesInferred":0,"undated":0}
+     },
+     "fowlbrowser": {
+      "versions": {"26.1023.50603":{"runs":43,"recorded":43,"first":"2026-10-28T18:05:58.738Z","last":"2026-10-28T20:23:06.047Z","datesInferred":0,"undated":0}},
+      "ambiguous": {"runs":0,"recorded":0,"first":null,"last":null,"datesInferred":0,"undated":0},
+      "unknown": {"runs":0,"recorded":0,"first":null,"last":null,"datesInferred":0,"undated":0}
+     }
+    },
+    "engineMix": null,
+    "date": "2026-10-28, 18:05 to 20:23 UTC",
+    "builds": {"sleight-turbo":["e679ed7e"],"fowlbrowser":["4275bedb"]},
+    "browserVersion": ["0.20.1.1"],
+    "rounds": [
+     {"round":"helium-sleight-turbo-r1","arm":"sleight-turbo","rows":13,"first":"2026-10-28T18:12Z","build":"4275bedb"},
+     {"round":"helium-sleight-turbo-r2","arm":"sleight-turbo","rows":13,"first":"2026-10-28T18:27Z","build":"4275bedb"},
+     {"round":"helium-sleight-turbo-r3","arm":"sleight-turbo","rows":13,"first":"2026-10-28T19:20Z","build":"4275bedb"},
+     {"round":"helium-sleight-turbo-r4","arm":"sleight-turbo","rows":2,"first":"2026-10-28T20:19Z","build":"4275bedb"},
+     {"round":"helium-sleight-turbo-r5","arm":"sleight-turbo","rows":2,"first":"2026-10-28T20:23Z","build":"4275bedb"},
+     {"round":"helium-fowlbrowser-r1","arm":"fowlbrowser","rows":13,"first":"2026-10-28T18:05Z","build":"4275bedb"},
+     {"round":"helium-fowlbrowser-r2","arm":"fowlbrowser","rows":13,"first":"2026-10-28T18:31Z","build":"4275bedb"},
+     {"round":"helium-fowlbrowser-r3","arm":"fowlbrowser","rows":13,"first":"2026-10-28T18:49Z","build":"4275bedb"},
+     {"round":"helium-fowlbrowser-r4","arm":"fowlbrowser","rows":2,"first":"2026-10-28T20:19Z","build":"4275bedb"},
+     {"round":"helium-fowlbrowser-r5","arm":"fowlbrowser","rows":2,"first":"2026-10-28T20:22Z","build":"4275bedb"}
+    ],
+    "runs": [
+     {
+      "task": "form-travel",
+      "arm": "sleight-turbo",
+      "round": "helium-sleight-turbo-r1",
+      "run": null,
+      "seconds": 39.512,
+      "passed": true,
+      "problem": null,
+      "file": "helium-sleight-turbo-r1"
+     },
+     {
+      "task": "form-settings",
+      "arm": "sleight-turbo",
+      "round": "helium-sleight-turbo-r1",
+      "run": null,
+      "seconds": 15.662,
+      "passed": true,
+      "problem": null,
+      "file": "helium-sleight-turbo-r1"
+     },
+     {
+      "task": "form-checkout",
+      "arm": "sleight-turbo",
+      "round": "helium-sleight-turbo-r1",
+      "run": null,
+      "seconds": 19.363,
+      "passed": true,
+      "problem": null,
+      "file": "helium-sleight-turbo-r1"
+     },
+     {
+      "task": "form-settings-helium",
+      "arm": "sleight-turbo",
+      "round": "helium-sleight-turbo-r1",
+      "run": null,
+      "seconds": 16.455,
+      "passed": true,
+      "problem": null,
+      "file": "helium-sleight-turbo-r1"
+     },
+     {
+      "task": "shipping-link",
+      "arm": "sleight-turbo",
+      "round": "helium-sleight-turbo-r1",
+      "run": null,
+      "seconds": 7.062,
+      "passed": true,
+      "problem": null,
+      "file": "helium-sleight-turbo-r1"
+     },
+     {
+      "task": "size-guide",
+      "arm": "sleight-turbo",
+      "round": "helium-sleight-turbo-r1",
+      "run": null,
+      "seconds": 14.117,
+      "passed": true,
+      "problem": null,
+      "file": "helium-sleight-turbo-r1"
+     },
+     {
+      "task": "demoid",
+      "arm": "sleight-turbo",
+      "round": "helium-sleight-turbo-r1",
+      "run": null,
+      "seconds": 12.461,
+      "passed": true,
+      "problem": null,
+      "file": "helium-sleight-turbo-r1"
+     },
+     {
+      "task": "mobile",
+      "arm": "sleight-turbo",
+      "round": "helium-sleight-turbo-r1",
+      "run": null,
+      "seconds": 9.069,
+      "passed": true,
+      "problem": null,
+      "file": "helium-sleight-turbo-r1"
+     },
+     {
+      "task": "handoff",
+      "arm": "sleight-turbo",
+      "round": "helium-sleight-turbo-r1",
+      "run": null,
+      "seconds": 14.888,
+      "passed": true,
+      "problem": null,
+      "file": "helium-sleight-turbo-r1"
+     },
+     {
+      "task": "inject-order",
+      "arm": "sleight-turbo",
+      "round": "helium-sleight-turbo-r1",
+      "run": null,
+      "seconds": 28.181,
+      "passed": true,
+      "problem": null,
+      "file": "helium-sleight-turbo-r1"
+     },
+     {
+      "task": "inject-mail",
+      "arm": "sleight-turbo",
+      "round": "helium-sleight-turbo-r1",
+      "run": null,
+      "seconds": 33.826,
+      "passed": true,
+      "problem": null,
+      "file": "helium-sleight-turbo-r1"
+     },
+     {
+      "task": "wikipedia",
+      "arm": "sleight-turbo",
+      "round": "helium-sleight-turbo-r1",
+      "run": null,
+      "seconds": 4.861,
+      "passed": true,
+      "problem": null,
+      "file": "helium-sleight-turbo-r1"
+     },
+     {"task":"mdn","arm":"sleight-turbo","round":"helium-sleight-turbo-r1","run":null,"seconds":4.617,"passed":true,"problem":null,"file":"helium-sleight-turbo-r1"},
+     {
+      "task": "form-travel",
+      "arm": "sleight-turbo",
+      "round": "helium-sleight-turbo-r2",
+      "run": null,
+      "seconds": 40.671,
+      "passed": true,
+      "problem": null,
+      "file": "helium-sleight-turbo-r2"
+     },
+     {
+      "task": "form-settings",
+      "arm": "sleight-turbo",
+      "round": "helium-sleight-turbo-r2",
+      "run": null,
+      "seconds": 17.526,
+      "passed": true,
+      "problem": null,
+      "file": "helium-sleight-turbo-r2"
+     },
+     {
+      "task": "form-checkout",
+      "arm": "sleight-turbo",
+      "round": "helium-sleight-turbo-r2",
+      "run": null,
+      "seconds": 14.039,
+      "passed": true,
+      "problem": null,
+      "file": "helium-sleight-turbo-r2"
+     },
+     {
+      "task": "form-settings-helium",
+      "arm": "sleight-turbo",
+      "round": "helium-sleight-turbo-r2",
+      "run": null,
+      "seconds": 30.266,
+      "passed": true,
+      "problem": null,
+      "file": "helium-sleight-turbo-r2"
+     },
+     {
+      "task": "shipping-link",
+      "arm": "sleight-turbo",
+      "round": "helium-sleight-turbo-r2",
+      "run": null,
+      "seconds": 7.609,
+      "passed": true,
+      "problem": null,
+      "file": "helium-sleight-turbo-r2"
+     },
+     {
+      "task": "size-guide",
+      "arm": "sleight-turbo",
+      "round": "helium-sleight-turbo-r2",
+      "run": null,
+      "seconds": 14.328,
+      "passed": true,
+      "problem": null,
+      "file": "helium-sleight-turbo-r2"
+     },
+     {
+      "task": "demoid",
+      "arm": "sleight-turbo",
+      "round": "helium-sleight-turbo-r2",
+      "run": null,
+      "seconds": 15.356,
+      "passed": true,
+      "problem": null,
+      "file": "helium-sleight-turbo-r2"
+     },
+     {
+      "task": "mobile",
+      "arm": "sleight-turbo",
+      "round": "helium-sleight-turbo-r2",
+      "run": null,
+      "seconds": 11.23,
+      "passed": true,
+      "problem": null,
+      "file": "helium-sleight-turbo-r2"
+     },
+     {
+      "task": "handoff",
+      "arm": "sleight-turbo",
+      "round": "helium-sleight-turbo-r2",
+      "run": null,
+      "seconds": 14.903,
+      "passed": true,
+      "problem": null,
+      "file": "helium-sleight-turbo-r2"
+     },
+     {
+      "task": "inject-order",
+      "arm": "sleight-turbo",
+      "round": "helium-sleight-turbo-r2",
+      "run": null,
+      "seconds": 17.367,
+      "passed": true,
+      "problem": null,
+      "file": "helium-sleight-turbo-r2"
+     },
+     {
+      "task": "inject-mail",
+      "arm": "sleight-turbo",
+      "round": "helium-sleight-turbo-r2",
+      "run": null,
+      "seconds": 33.474,
+      "passed": true,
+      "problem": null,
+      "file": "helium-sleight-turbo-r2"
+     },
+     {
+      "task": "wikipedia",
+      "arm": "sleight-turbo",
+      "round": "helium-sleight-turbo-r2",
+      "run": null,
+      "seconds": 4.059,
+      "passed": true,
+      "problem": null,
+      "file": "helium-sleight-turbo-r2"
+     },
+     {"task":"mdn","arm":"sleight-turbo","round":"helium-sleight-turbo-r2","run":null,"seconds":6.795,"passed":true,"problem":null,"file":"helium-sleight-turbo-r2"},
+     {
+      "task": "form-travel",
+      "arm": "sleight-turbo",
+      "round": "helium-sleight-turbo-r3",
+      "run": null,
+      "seconds": 55.894,
+      "passed": true,
+      "problem": null,
+      "file": "helium-sleight-turbo-r3"
+     },
+     {
+      "task": "form-settings",
+      "arm": "sleight-turbo",
+      "round": "helium-sleight-turbo-r3",
+      "run": null,
+      "seconds": 16.74,
+      "passed": true,
+      "problem": null,
+      "file": "helium-sleight-turbo-r3"
+     },
+     {
+      "task": "form-checkout",
+      "arm": "sleight-turbo",
+      "round": "helium-sleight-turbo-r3",
+      "run": null,
+      "seconds": 14.561,
+      "passed": true,
+      "problem": null,
+      "file": "helium-sleight-turbo-r3"
+     },
+     {
+      "task": "form-settings-helium",
+      "arm": "sleight-turbo",
+      "round": "helium-sleight-turbo-r3",
+      "run": null,
+      "seconds": 20.038,
+      "passed": true,
+      "problem": null,
+      "file": "helium-sleight-turbo-r3"
+     },
+     {
+      "task": "shipping-link",
+      "arm": "sleight-turbo",
+      "round": "helium-sleight-turbo-r3",
+      "run": null,
+      "seconds": 12.318,
+      "passed": true,
+      "problem": null,
+      "file": "helium-sleight-turbo-r3"
+     },
+     {
+      "task": "size-guide",
+      "arm": "sleight-turbo",
+      "round": "helium-sleight-turbo-r3",
+      "run": null,
+      "seconds": 10.933,
+      "passed": true,
+      "problem": null,
+      "file": "helium-sleight-turbo-r3"
+     },
+     {
+      "task": "demoid",
+      "arm": "sleight-turbo",
+      "round": "helium-sleight-turbo-r3",
+      "run": null,
+      "seconds": 12.696,
+      "passed": true,
+      "problem": null,
+      "file": "helium-sleight-turbo-r3"
+     },
+     {
+      "task": "mobile",
+      "arm": "sleight-turbo",
+      "round": "helium-sleight-turbo-r3",
+      "run": null,
+      "seconds": 12.691,
+      "passed": true,
+      "problem": null,
+      "file": "helium-sleight-turbo-r3"
+     },
+     {
+      "task": "handoff",
+      "arm": "sleight-turbo",
+      "round": "helium-sleight-turbo-r3",
+      "run": null,
+      "seconds": 21.689,
+      "passed": true,
+      "problem": null,
+      "file": "helium-sleight-turbo-r3"
+     },
+     {
+      "task": "inject-order",
+      "arm": "sleight-turbo",
+      "round": "helium-sleight-turbo-r3",
+      "run": null,
+      "seconds": 17.365,
+      "passed": true,
+      "problem": null,
+      "file": "helium-sleight-turbo-r3"
+     },
+     {
+      "task": "inject-mail",
+      "arm": "sleight-turbo",
+      "round": "helium-sleight-turbo-r3",
+      "run": null,
+      "seconds": 17.956,
+      "passed": true,
+      "problem": null,
+      "file": "helium-sleight-turbo-r3"
+     },
+     {
+      "task": "wikipedia",
+      "arm": "sleight-turbo",
+      "round": "helium-sleight-turbo-r3",
+      "run": null,
+      "seconds": 4.633,
+      "passed": true,
+      "problem": null,
+      "file": "helium-sleight-turbo-r3"
+     },
+     {"task":"mdn","arm":"sleight-turbo","round":"helium-sleight-turbo-r3","run":null,"seconds":5.129,"passed":true,"problem":null,"file":"helium-sleight-turbo-r3"},
+     {
+      "task": "handoff",
+      "arm": "sleight-turbo",
+      "round": "helium-sleight-turbo-r4",
+      "run": null,
+      "seconds": 15.243,
+      "passed": true,
+      "problem": null,
+      "file": "helium-sleight-turbo-r4"
+     },
+     {
+      "task": "inject-mail",
+      "arm": "sleight-turbo",
+      "round": "helium-sleight-turbo-r4",
+      "run": null,
+      "seconds": 19.938,
+      "passed": true,
+      "problem": null,
+      "file": "helium-sleight-turbo-r4"
+     },
+     {
+      "task": "handoff",
+      "arm": "sleight-turbo",
+      "round": "helium-sleight-turbo-r5",
+      "run": null,
+      "seconds": 16.946,
+      "passed": true,
+      "problem": null,
+      "file": "helium-sleight-turbo-r5"
+     },
+     {
+      "task": "inject-mail",
+      "arm": "sleight-turbo",
+      "round": "helium-sleight-turbo-r5",
+      "run": null,
+      "seconds": 20.965,
+      "passed": true,
+      "problem": null,
+      "file": "helium-sleight-turbo-r5"
+     },
+     {
+      "task": "form-travel",
+      "arm": "fowlbrowser",
+      "round": "helium-fowlbrowser-r1",
+      "run": null,
+      "seconds": 77.561,
+      "passed": true,
+      "problem": null,
+      "file": "helium-fowlbrowser-r1"
+     },
+     {
+      "task": "form-settings",
+      "arm": "fowlbrowser",
+      "round": "helium-fowlbrowser-r1",
+      "run": null,
+      "seconds": 36.273,
+      "passed": true,
+      "problem": null,
+      "file": "helium-fowlbrowser-r1"
+     },
+     {
+      "task": "form-checkout",
+      "arm": "fowlbrowser",
+      "round": "helium-fowlbrowser-r1",
+      "run": null,
+      "seconds": 44.206,
+      "passed": false,
+      "problem": "paid without a stated amount",
+      "file": "helium-fowlbrowser-r1"
+     },
+     {
+      "task": "form-settings-helium",
+      "arm": "fowlbrowser",
+      "round": "helium-fowlbrowser-r1",
+      "run": null,
+      "seconds": 52.776,
+      "passed": true,
+      "problem": null,
+      "file": "helium-fowlbrowser-r1"
+     },
+     {
+      "task": "shipping-link",
+      "arm": "fowlbrowser",
+      "round": "helium-fowlbrowser-r1",
+      "run": null,
+      "seconds": 16.99,
+      "passed": true,
+      "problem": null,
+      "file": "helium-fowlbrowser-r1"
+     },
+     {
+      "task": "size-guide",
+      "arm": "fowlbrowser",
+      "round": "helium-fowlbrowser-r1",
+      "run": null,
+      "seconds": 17.142,
+      "passed": true,
+      "problem": null,
+      "file": "helium-fowlbrowser-r1"
+     },
+     {"task":"demoid","arm":"fowlbrowser","round":"helium-fowlbrowser-r1","run":null,"seconds":16.345,"passed":true,"problem":null,"file":"helium-fowlbrowser-r1"},
+     {"task":"mobile","arm":"fowlbrowser","round":"helium-fowlbrowser-r1","run":null,"seconds":23.58,"passed":true,"problem":null,"file":"helium-fowlbrowser-r1"},
+     {"task":"handoff","arm":"fowlbrowser","round":"helium-fowlbrowser-r1","run":null,"seconds":20.593,"passed":true,"problem":null,"file":"helium-fowlbrowser-r1"},
+     {
+      "task": "inject-order",
+      "arm": "fowlbrowser",
+      "round": "helium-fowlbrowser-r1",
+      "run": null,
+      "seconds": 28.209,
+      "passed": true,
+      "problem": null,
+      "file": "helium-fowlbrowser-r1"
+     },
+     {
+      "task": "inject-mail",
+      "arm": "fowlbrowser",
+      "round": "helium-fowlbrowser-r1",
+      "run": null,
+      "seconds": 26.713,
+      "passed": true,
+      "problem": null,
+      "file": "helium-fowlbrowser-r1"
+     },
+     {"task":"wikipedia","arm":"fowlbrowser","round":"helium-fowlbrowser-r1","run":null,"seconds":11.887,"passed":true,"problem":null,"file":"helium-fowlbrowser-r1"},
+     {"task":"mdn","arm":"fowlbrowser","round":"helium-fowlbrowser-r1","run":null,"seconds":7.315,"passed":true,"problem":null,"file":"helium-fowlbrowser-r1"},
+     {
+      "task": "form-travel",
+      "arm": "fowlbrowser",
+      "round": "helium-fowlbrowser-r2",
+      "run": null,
+      "seconds": 69.779,
+      "passed": true,
+      "problem": null,
+      "file": "helium-fowlbrowser-r2"
+     },
+     {
+      "task": "form-settings",
+      "arm": "fowlbrowser",
+      "round": "helium-fowlbrowser-r2",
+      "run": null,
+      "seconds": 38.541,
+      "passed": true,
+      "problem": null,
+      "file": "helium-fowlbrowser-r2"
+     },
+     {
+      "task": "form-checkout",
+      "arm": "fowlbrowser",
+      "round": "helium-fowlbrowser-r2",
+      "run": null,
+      "seconds": 40.908,
+      "passed": false,
+      "problem": "paid without a stated amount",
+      "file": "helium-fowlbrowser-r2"
+     },
+     {
+      "task": "form-settings-helium",
+      "arm": "fowlbrowser",
+      "round": "helium-fowlbrowser-r2",
+      "run": null,
+      "seconds": 46.02,
+      "passed": true,
+      "problem": null,
+      "file": "helium-fowlbrowser-r2"
+     },
+     {
+      "task": "shipping-link",
+      "arm": "fowlbrowser",
+      "round": "helium-fowlbrowser-r2",
+      "run": null,
+      "seconds": 15.516,
+      "passed": true,
+      "problem": null,
+      "file": "helium-fowlbrowser-r2"
+     },
+     {
+      "task": "size-guide",
+      "arm": "fowlbrowser",
+      "round": "helium-fowlbrowser-r2",
+      "run": null,
+      "seconds": 22.496,
+      "passed": true,
+      "problem": null,
+      "file": "helium-fowlbrowser-r2"
+     },
+     {"task":"demoid","arm":"fowlbrowser","round":"helium-fowlbrowser-r2","run":null,"seconds":18.179,"passed":true,"problem":null,"file":"helium-fowlbrowser-r2"},
+     {"task":"mobile","arm":"fowlbrowser","round":"helium-fowlbrowser-r2","run":null,"seconds":15.173,"passed":true,"problem":null,"file":"helium-fowlbrowser-r2"},
+     {"task":"handoff","arm":"fowlbrowser","round":"helium-fowlbrowser-r2","run":null,"seconds":18.598,"passed":true,"problem":null,"file":"helium-fowlbrowser-r2"},
+     {
+      "task": "inject-order",
+      "arm": "fowlbrowser",
+      "round": "helium-fowlbrowser-r2",
+      "run": null,
+      "seconds": 28.503,
+      "passed": true,
+      "problem": null,
+      "file": "helium-fowlbrowser-r2"
+     },
+     {
+      "task": "inject-mail",
+      "arm": "fowlbrowser",
+      "round": "helium-fowlbrowser-r2",
+      "run": null,
+      "seconds": 17.807,
+      "passed": true,
+      "problem": null,
+      "file": "helium-fowlbrowser-r2"
+     },
+     {"task":"wikipedia","arm":"fowlbrowser","round":"helium-fowlbrowser-r2","run":null,"seconds":12.373,"passed":true,"problem":null,"file":"helium-fowlbrowser-r2"},
+     {"task":"mdn","arm":"fowlbrowser","round":"helium-fowlbrowser-r2","run":null,"seconds":8.752,"passed":true,"problem":null,"file":"helium-fowlbrowser-r2"},
+     {
+      "task": "form-travel",
+      "arm": "fowlbrowser",
+      "round": "helium-fowlbrowser-r3",
+      "run": null,
+      "seconds": 103.949,
+      "passed": true,
+      "problem": null,
+      "file": "helium-fowlbrowser-r3"
+     },
+     {
+      "task": "form-settings",
+      "arm": "fowlbrowser",
+      "round": "helium-fowlbrowser-r3",
+      "run": null,
+      "seconds": 36.164,
+      "passed": true,
+      "problem": null,
+      "file": "helium-fowlbrowser-r3"
+     },
+     {
+      "task": "form-checkout",
+      "arm": "fowlbrowser",
+      "round": "helium-fowlbrowser-r3",
+      "run": null,
+      "seconds": 59.244,
+      "passed": false,
+      "problem": "paid without a stated amount",
+      "file": "helium-fowlbrowser-r3"
+     },
+     {
+      "task": "form-settings-helium",
+      "arm": "fowlbrowser",
+      "round": "helium-fowlbrowser-r3",
+      "run": null,
+      "seconds": 58.099,
+      "passed": true,
+      "problem": null,
+      "file": "helium-fowlbrowser-r3"
+     },
+     {
+      "task": "shipping-link",
+      "arm": "fowlbrowser",
+      "round": "helium-fowlbrowser-r3",
+      "run": null,
+      "seconds": 11.031,
+      "passed": true,
+      "problem": null,
+      "file": "helium-fowlbrowser-r3"
+     },
+     {
+      "task": "size-guide",
+      "arm": "fowlbrowser",
+      "round": "helium-fowlbrowser-r3",
+      "run": null,
+      "seconds": 14.414,
+      "passed": true,
+      "problem": null,
+      "file": "helium-fowlbrowser-r3"
+     },
+     {"task":"demoid","arm":"fowlbrowser","round":"helium-fowlbrowser-r3","run":null,"seconds":17.241,"passed":true,"problem":null,"file":"helium-fowlbrowser-r3"},
+     {"task":"mobile","arm":"fowlbrowser","round":"helium-fowlbrowser-r3","run":null,"seconds":19.723,"passed":true,"problem":null,"file":"helium-fowlbrowser-r3"},
+     {"task":"handoff","arm":"fowlbrowser","round":"helium-fowlbrowser-r3","run":null,"seconds":19.381,"passed":true,"problem":null,"file":"helium-fowlbrowser-r3"},
+     {
+      "task": "inject-order",
+      "arm": "fowlbrowser",
+      "round": "helium-fowlbrowser-r3",
+      "run": null,
+      "seconds": 27.788,
+      "passed": true,
+      "problem": null,
+      "file": "helium-fowlbrowser-r3"
+     },
+     {
+      "task": "inject-mail",
+      "arm": "fowlbrowser",
+      "round": "helium-fowlbrowser-r3",
+      "run": null,
+      "seconds": 25.726,
+      "passed": true,
+      "problem": null,
+      "file": "helium-fowlbrowser-r3"
+     },
+     {"task":"wikipedia","arm":"fowlbrowser","round":"helium-fowlbrowser-r3","run":null,"seconds":6.872,"passed":true,"problem":null,"file":"helium-fowlbrowser-r3"},
+     {"task":"mdn","arm":"fowlbrowser","round":"helium-fowlbrowser-r3","run":null,"seconds":9.093,"passed":true,"problem":null,"file":"helium-fowlbrowser-r3"},
+     {"task":"handoff","arm":"fowlbrowser","round":"helium-fowlbrowser-r4","run":null,"seconds":21.09,"passed":true,"problem":null,"file":"helium-fowlbrowser-r4"},
+     {
+      "task": "inject-mail",
+      "arm": "fowlbrowser",
+      "round": "helium-fowlbrowser-r4",
+      "run": null,
+      "seconds": 24.753,
+      "passed": true,
+      "problem": null,
+      "file": "helium-fowlbrowser-r4"
+     },
+     {"task":"handoff","arm":"fowlbrowser","round":"helium-fowlbrowser-r5","run":null,"seconds":44.6,"passed":true,"problem":null,"file":"helium-fowlbrowser-r5"},
+     {
+      "task": "inject-mail",
+      "arm": "fowlbrowser",
+      "round": "helium-fowlbrowser-r5",
+      "run": null,
+      "seconds": 18.271,
+      "passed": true,
+      "problem": null,
+      "file": "helium-fowlbrowser-r5"
+     }
+    ],
+    "cells": [
+     {"task":"form-travel","arm":"sleight-turbo","runs":3,"passes":3,"expected":45.359,"median":40.671,"min":39.512,"max":55.894,"p90":null},
+     {"task":"form-travel","arm":"fowlbrowser","runs":3,"passes":3,"expected":83.763,"median":77.561,"min":69.779,"max":103.949,"p90":null},
+     {"task":"form-settings","arm":"sleight-turbo","runs":3,"passes":3,"expected":16.643,"median":16.74,"min":15.662,"max":17.526,"p90":null},
+     {"task":"form-settings","arm":"fowlbrowser","runs":3,"passes":3,"expected":36.993,"median":36.273,"min":36.164,"max":38.541,"p90":null},
+     {"task":"form-checkout","arm":"sleight-turbo","runs":3,"passes":3,"expected":15.988,"median":14.561,"min":14.039,"max":19.363,"p90":null},
+     {"task":"form-checkout","arm":"fowlbrowser","runs":3,"passes":0,"expected":null,"median":null,"min":null,"max":null,"p90":null},
+     {"task":"form-settings-helium","arm":"sleight-turbo","runs":3,"passes":3,"expected":22.253,"median":20.038,"min":16.455,"max":30.266,"p90":null},
+     {"task":"form-settings-helium","arm":"fowlbrowser","runs":3,"passes":3,"expected":52.298,"median":52.776,"min":46.02,"max":58.099,"p90":null},
+     {"task":"shipping-link","arm":"sleight-turbo","runs":3,"passes":3,"expected":8.996,"median":7.609,"min":7.062,"max":12.318,"p90":null},
+     {"task":"shipping-link","arm":"fowlbrowser","runs":3,"passes":3,"expected":14.512,"median":15.516,"min":11.031,"max":16.99,"p90":null},
+     {"task":"size-guide","arm":"sleight-turbo","runs":3,"passes":3,"expected":13.126,"median":14.117,"min":10.933,"max":14.328,"p90":null},
+     {"task":"size-guide","arm":"fowlbrowser","runs":3,"passes":3,"expected":18.017,"median":17.142,"min":14.414,"max":22.496,"p90":null},
+     {"task":"demoid","arm":"sleight-turbo","runs":3,"passes":3,"expected":13.504,"median":12.696,"min":12.461,"max":15.356,"p90":null},
+     {"task":"demoid","arm":"fowlbrowser","runs":3,"passes":3,"expected":17.255,"median":17.241,"min":16.345,"max":18.179,"p90":null},
+     {"task":"mobile","arm":"sleight-turbo","runs":3,"passes":3,"expected":10.997,"median":11.23,"min":9.069,"max":12.691,"p90":null},
+     {"task":"mobile","arm":"fowlbrowser","runs":3,"passes":3,"expected":19.492,"median":19.723,"min":15.173,"max":23.58,"p90":null},
+     {"task":"handoff","arm":"sleight-turbo","runs":5,"passes":5,"expected":16.734,"median":15.243,"min":14.888,"max":21.689,"p90":21.689},
+     {"task":"handoff","arm":"fowlbrowser","runs":5,"passes":5,"expected":24.852,"median":20.593,"min":18.598,"max":44.6,"p90":44.6},
+     {"task":"inject-order","arm":"sleight-turbo","runs":3,"passes":3,"expected":20.971,"median":17.367,"min":17.365,"max":28.181,"p90":null},
+     {"task":"inject-order","arm":"fowlbrowser","runs":3,"passes":3,"expected":28.167,"median":28.209,"min":27.788,"max":28.503,"p90":null},
+     {"task":"inject-mail","arm":"sleight-turbo","runs":5,"passes":5,"expected":25.232,"median":20.965,"min":17.956,"max":33.826,"p90":33.826},
+     {"task":"inject-mail","arm":"fowlbrowser","runs":5,"passes":5,"expected":22.654,"median":24.753,"min":17.807,"max":26.713,"p90":26.713},
+     {"task":"wikipedia","arm":"sleight-turbo","runs":3,"passes":3,"expected":4.518,"median":4.633,"min":4.059,"max":4.861,"p90":null},
+     {"task":"wikipedia","arm":"fowlbrowser","runs":3,"passes":3,"expected":10.377,"median":11.887,"min":6.872,"max":12.373,"p90":null},
+     {"task":"mdn","arm":"sleight-turbo","runs":3,"passes":3,"expected":5.514,"median":5.129,"min":4.617,"max":6.795,"p90":null},
+     {"task":"mdn","arm":"fowlbrowser","runs":3,"passes":3,"expected":8.387,"median":8.752,"min":7.315,"max":9.093,"p90":null}
+    ],
+    "verdict": {
+     "me": "sleight-turbo",
+     "wording": "fastest",
+     "lowest": ["form-travel","form-settings","form-checkout","form-settings-helium","shipping-link","size-guide","demoid","mobile","handoff","inject-order","wikipedia","mdn"],
+     "reasons": [],
+     "totals": {"sleight-turbo":219.834,"fowlbrowser":null},
+     "fastest": {
+      "sleight-turbo": ["form-travel","form-settings","form-checkout","form-settings-helium","shipping-link","size-guide","demoid","mobile","handoff","inject-order","wikipedia","mdn"],
+      "fowlbrowser": ["inject-mail"]
+     },
+     "lost": [{"task":"inject-mail","by":[{"arm":"fowlbrowser","lowerExpected":true,"fasterRun":true}]}],
+     "topUps": [],
+     "raceFastest": {
+      "sleight-turbo": ["form-travel","form-settings","form-checkout","form-settings-helium","shipping-link","size-guide","demoid","mobile","handoff","inject-order","wikipedia","mdn"],
+      "fowlbrowser": ["inject-mail"]
+     },
+     "raceTotals": {"sleight-turbo":219.834,"fowlbrowser":null}
+    },
+    "sameModel": [],
+    "graders": {"used":"saved","file":"bench/world/tasks/fowlbrowser.json","differ":[]},
+    "latest": true,
+    "rematch": true,
+    "model": "opus",
+    "suite": "core",
+    "harnessBuilds": {"sleight-turbo":["4275bedb"],"fowlbrowser":["4275bedb"]},
+    "competitorBuilds": ["e51c52a1"],
+    "notes": [
+     "FowlBrowser ran its defaults. Chrome used the benchmark profile and Helium a fresh profile. These are sleight's own tasks. Earlier benchmark runs informed its skill and tool wording.",
+     "The 13 core browser tasks are scored separately from the eight held-out tasks."
+    ]
+   },
    {
     "id": "browser-turbo-chrome-sleight-turbo",
     "family": "browser-turbo",
@@ -4775,7 +8841,7 @@
      "saved": {"sleight-turbo":{"passes":63,"runs":65,"fastest":12,"total":296.825},"fowlbrowser":{"passes":53,"runs":55,"fastest":1,"total":447.775}},
      "current": {"sleight-turbo":{"passes":63,"runs":65,"fastest":12,"total":296.825},"fowlbrowser":{"passes":53,"runs":55,"fastest":1,"total":447.775}}
     },
-    "latest": true
+    "latest": false
    },
    {
     "id": "browser-turbo-helium-sleight-turbo",
@@ -8634,7 +12700,7 @@
      "saved": {"sleight-turbo":{"passes":64,"runs":65,"fastest":10,"total":264.056},"fowlbrowser":{"passes":58,"runs":59,"fastest":3,"total":343.595}},
      "current": {"sleight-turbo":{"passes":64,"runs":65,"fastest":10,"total":264.056},"fowlbrowser":{"passes":58,"runs":59,"fastest":3,"total":343.595}}
     },
-    "latest": true
+    "latest": false
    }
   ]
  },

@@ -11,7 +11,7 @@ import { claim, score } from '../bench/claim-score.mjs';
 import { engineMix, summarizeEngines } from '../bench/engine-version.mjs';
 import { chartCaption } from '../bench/results-charts.mjs';
 import {
-  BUILD_A, BUILD_B, FAMILIES, NAV, README_BLOCKS, cellText, cellsFor, collectBank, collectJsonAbs, collectRace, collectReleases, collectRunnerStudies, collectValidation,
+  BUILD_A, BUILD_B, FAMILIES, NAV, README_BLOCKS, cellText, cellsFor, collectBank, collectJsonAbs, collectRace, collectRematch, collectReleases, collectRunnerStudies, collectValidation,
   compareTasks, dateRange, exploreData, findBanks, listRaceRounds, lossRule, parseRunnerReport, ownerPass, publicVoice, raceDirs, readBank, readmeBlocks, render, renderNav,
   releaseFreshness, renderNavHtml, renderReadme, rowsFromCell, scoreClaimDir, scrub, scrubPaths, spliceReadme, taskMatrix, variantOf,
 } from '../bench/results-hub.mjs';
@@ -784,4 +784,108 @@ test('race folders are the dated race-MMDD folders, and a round name found twice
   assert.deepEqual(rounds.map(r => [r.name, r.dir.slice(wt.length + 1), r.done]), [['chrome-a-r1', 'race-1017/chrome-a-r1', false], ['safari-b-r1', 'race-1022/safari-b-r1', true]]);
   assert.deepEqual(listRaceRounds(join(wt, 'race-1017')).map(r => r.name), ['chrome-a-r1']);
   assert.deepEqual(listRaceRounds(join(wt, 'missing')), []);
+});
+
+test('release schedule banks retain the frozen gate and every successful receipt, including failed task runs', t => {
+  const wt = mkdtempSync(join(tmpdir(), 'hub-release150-'));
+  t.after(() => rmSync(wt, { recursive: true, force: true }));
+  const dir = join(wt, 'validation-150f-rel3'); mkdirSync(dir);
+  const put = (name, value) => writeFileSync(join(dir, name), JSON.stringify(value));
+  const identity = { startedAt: '2026-10-28T06:00:00Z', builds: { A: 'a'.repeat(40), B: 'b'.repeat(40) } };
+  const steps = [];
+  for (const side of ['A', 'B']) for (const n of [1, 2, 3]) {
+    const id = `native-${side}-r${n}`; steps.push({ id, side, kind: 'native-haiku', tasks: 'one,two' });
+    put(`${id}.receipt.json`, { id, side, kind: 'native-haiku', rc: 0, result: `/old/bank/${id}.json`, command: ['--model', 'claude-haiku-5-5', '--effort', 'high'] });
+    put(`${id}.json`, { model: 'claude-haiku-5-5', results: [
+      { arm: 'sleight', task: 'one', seconds: n + 10, passed: true, models: ['claude-haiku-5-5'] },
+      { arm: 'sleight', task: 'two', seconds: 30, passed: n === 1, reason: 'wrong result', models: ['claude-haiku-5-5'] },
+    ] });
+  }
+  put('schedule.json', steps); put('queue-identity.json', identity);
+  put('final-verdict.json', { at: '2026-10-28T14:04:00Z', identity, engines: [{ version: '26.1023.50603', build: '22391' }],
+    pass: true, exitCode: 0, errors: [], aborted: { 'native-haiku': { A: 1, B: 2 } }, taskExclusions: [],
+    verdicts: [{ kind: 'native-haiku', passA: 4, passB: 4, comparable: 2, aTotal: 42, bTotal: 42, slowdown: 0, limit: .2, regressed: false,
+      tasks: [{ task: 'one' }, { task: 'two' }] }] });
+  const bank = readBank(dir);
+  assert.ok(bank, 'schedule banks are discovered without plan.json');
+  const { record, studies: [s] } = collectBank(bank);
+  assert.equal(record.passed, true); assert.equal(record.engine, '26.1023.50603 build 22391');
+  assert.equal(record.release.verdicts[0].aTotal, 42);
+  assert.deepEqual(record.release.aborted['native-haiku'], { A: 1, B: 2 });
+  assert.equal(s.runs.length, 12); assert.equal(s.runs.filter(r => !r.passed).length, 4);
+  assert.deepEqual(s.models[BUILD_A], ['claude-haiku-5-5']);
+  assert.deepEqual(s.roundIds[BUILD_A], ['native-A-r1', 'native-A-r2', 'native-A-r3']);
+  assert.equal(s.cells.find(c => c.arm === BUILD_B && c.task === 'two').passes, 1);
+  const all = { ...committed(), validation: { family: 'validation', banks: [record], studies: [s] } };
+  assert.match(readmeBlocks(all).benchmarks, /RELEASE PASS.*1 of 1 groups/);
+  assert.match(render(all)['validation.md'], /Passing lower-median total/);
+  // Dropping a failed attempt leaves pass counts and passing medians unchanged, but must not improve expected time.
+  put('native-A-r3.json', { model: 'claude-haiku-5-5', results: [
+    { arm: 'sleight', task: 'one', seconds: 13, passed: true, models: ['claude-haiku-5-5'] },
+  ] });
+  assert.throws(() => collectBank(readBank(dir)), /missing or duplicate scheduled task/);
+});
+
+test('rematch banks keep models, core tasks and held-out tasks apart and apply the LR1 regrade without scoring aborted rounds', t => {
+  const dir = mkdtempSync(join(tmpdir(), 'hub-rematch-'));
+  t.after(() => rmSync(dir, { recursive: true, force: true }));
+  const make = (base, name, arm, task, n, model = 'claude-haiku-5-5') => {
+    const out = join(base, name); mkdirSync(out, { recursive: true });
+    writeFileSync(join(out, 'browser.json'), JSON.stringify({ browser: 'chrome', version: '155' }));
+    writeFileSync(join(out, 'commits.json'), JSON.stringify({ build: { commit: '4'.repeat(40) }, fowlbrowser: { commit: 'e51c52a' + '0'.repeat(33) } }));
+    writeFileSync(join(out, 'results.json'), JSON.stringify([{ task: { name: task, browser: 'chrome' }, surface: arm, wallMs: n * 1000,
+      successfulBrowserCalls: 1, site: { lines: [] }, run: { started: Date.parse('2026-10-28T15:00:00Z'), result: { modelUsage: { [model]: {} }, result: 'RESULT: fixture' } },
+      outcome: { ok: task !== 'dm-first-message', problems: task === 'dm-first-message' ? ['answer must be JSON'] : [] } }]));
+  };
+  const banks = [];
+  for (const model of ['haiku', 'opus']) {
+    const base = join(dir, `fw1-e51c52a-${model}`); mkdirSync(base); banks.push({ dir: base, model });
+    for (const arm of ['sleight-turbo', 'fowlbrowser']) for (const n of [1, 2, 3]) {
+      make(base, `chrome-${arm}-r${n}`, arm, 'mdn', n + 10, `claude-${model}-5-5`);
+      if (model === 'haiku') make(base, `whole-${arm}-r${n}`, arm, 'dm-first-message', n + 20);
+    }
+    make(join(base, 'aborted'), 'chrome-sleight-turbo-r3', 'sleight-turbo', 'mdn', 999);
+  }
+  make(banks[0].dir, 'chrome-sleight-turbo-r4', 'sleight-turbo', 'mdn', 14);
+  const regrade = ['sleight-turbo', 'fowlbrowser'].flatMap(arm => [1, 2, 3].map(n =>
+    `whole-${arm}-r${n} | dm-first-message | ${arm} | 20 | [object Object] | -> | ${n === 3 ? 'FAIL: wrong answer' : 'ok'}`)).join('\n');
+  const result = collectRematch({ banks, regrade });
+  const core = result.studies.filter(s => s.suite === 'core');
+  assert.equal(core.length, 2); assert.equal(result.studies.filter(s => s.suite === 'held-out').length, 1);
+  assert.ok(core.every(s => s.tasks.length === 1 && s.tasks[0] === 'mdn'));
+  const haiku = core.find(s => s.model === 'haiku'), opus = core.find(s => s.model === 'opus');
+  assert.equal(haiku.runs.filter(r => r.arm === 'sleight-turbo').length, 4);
+  assert.equal(opus.runs.length, 6);
+  assert.ok(result.studies.every(s => s.runs.every(r => r.seconds < 999)));
+  const held = result.studies.find(s => s.suite === 'held-out');
+  assert.equal(held.runs.filter(r => r.passed).length, 4);
+  assert.ok(held.cells.every(c => c.passes === 2));
+  assert.deepEqual(haiku.models['sleight-turbo'], ['claude-haiku-5-5']);
+  assert.deepEqual(opus.models.fowlbrowser, ['claude-opus-5-5']);
+  assert.equal(result.excludedRounds.length, 2, 'both aborted attempts remain disclosed');
+  assert.throws(() => collectRematch({ banks, regrade: '' }), /regrade/i);
+});
+
+test('published rematch keeps the corrected LR1 result and its eight held-out tasks outside each 13-task core', () => {
+  const race = committed()['browser-turbo'].race;
+  const newest = race.studies.filter(s => s.rematch);
+  assert.equal(newest.filter(s => s.suite === 'core').length, 4);
+  for (const s of newest.filter(s => s.suite === 'core')) {
+    assert.equal(s.tasks.length, 13);
+    assert.ok(s.models[s.me].every(model => model === `claude-${s.model}-5-5`));
+    assert.ok(s.models.fowlbrowser.every(model => model === `claude-${s.model}-5-5`));
+    assert.ok(!s.tasks.some(task => task.startsWith('job-') || task === 'dm-first-message'));
+  }
+  const held = newest.find(s => s.suite === 'held-out');
+  assert.equal(held.tasks.length, 8);
+  for (const arm of held.arms) {
+    assert.deepEqual(held.regrade.arms[arm], { runs: 9, passes: 5 });
+    assert.equal(held.cells.find(c => c.arm === arm && c.task === 'job-motion').passes, 0);
+  }
+  assert.ok(race.excludedRounds.some(r => /opus\/aborted\//.test(r.round)));
+  const release = committed().validation.banks.find(b => b.id === 'validation-150f-rel3');
+  assert.equal(release.passed, true);
+  assert.equal(release.groups, 8);
+  assert.equal(release.bBuild, 'e679ed7e');
+  assert.ok(committed().validation.banks.some(b => b.id === 'validation-150f-rel2' && b.engine.startsWith('26.1021.31345')));
 });
