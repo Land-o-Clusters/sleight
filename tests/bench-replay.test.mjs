@@ -376,6 +376,7 @@ test('worktree comparison plans alternate the same recording across two identifi
     try {
       const plan = await main([dir, '--plan', '--old-worktree', builds[0], '--new-worktree', builds[1], '--repeat', '2']);
       assert.equal(plan.mode, 'worktrees');
+      assert.equal(plan.comparison, 'worktrees');
       assert.deepEqual(plan.schedule.map(s => [s.variant, s.build.label]), [['A', 'old'], ['B', 'new'], ['A', 'old'], ['B', 'new']]);
       assert.ok(plan.schedule.every(s => /^[a-f0-9]{40}$/.test(s.build.commit)));
       assert.deepEqual(plan.schedule.slice(0, 2).map(s => s.build.worktree), builds.map(p => realpathSync(p)));

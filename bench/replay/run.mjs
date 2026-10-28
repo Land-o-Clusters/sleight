@@ -13,6 +13,7 @@ import { windowReceipts, isNativeSelection } from './frames.mjs';
 import { prepareReplay } from './fixtures.mjs';
 import { campaignEvidence } from './checks.mjs';
 import { createReplayRecorder } from './evidence.mjs';
+import { engineIteration, readReplayEngine, replayEngineEnvironment } from './engine-identity.mjs';
 
 const repo = fileURLToPath(new URL('../..', import.meta.url));
 export function options(argv) {
@@ -70,10 +71,12 @@ export function replayServers(servers, worktree = repo) {
   return specs;
 }
 
-export async function clientsFor({ servers, policy, env, turbo, gateWindow }, switches, dir, record, worktree) {
+export async function clientsFor({ servers, policy, env, turbo, gateWindow }, switches, dir, record, worktree, { beforeLaunch, connect } = {}) {
   const { probeClient } = await import('../double-keys-client.mjs');
+  connect ??= probeClient;
   const { answerElicitation, guardReason } = await import('../codex-sleight-proxy.mjs');
   const host = Object.fromEntries(['HOME', 'USER', 'PATH', 'TMPDIR', 'LANG', 'TERM'].flatMap(k => process.env[k] ? [[k, process.env[k]]] : []));
+  const engineEnv = replayEngineEnvironment();
   const base = { ...host, ...env, ...switches, CLAUDE_CONFIG_DIR: mkdtempSync(join(tmpdir(), 'lane-claude-')),
     SLEIGHT_HAND: '0', SLEIGHT_APPROVAL_PROMPT: 'client', SLEIGHT_TRACE: dir, SLEIGHT_TRACE_CODE: '1', SLEIGHT_REPLAY_ENV: JSON.stringify(switches) };
   // Arm environments can carry a reused Claude config. Only our private config reaches children.
@@ -95,10 +98,14 @@ export async function clientsFor({ servers, policy, env, turbo, gateWindow }, sw
     if (errors.length) throw Object.assign(Error(errors.join('; ')), { cleanupConfirmed: !unconfirmed, cleanupUnconfirmed: unconfirmed });
   };
   try {
-    for (const [name, spec] of Object.entries(specs)) {
+    const children = Object.entries(specs).map(([name, spec]) => {
       if (!['plugin:sleight:computer', 'sleight-turbo'].includes(name)) throw Error(`Unsupported server ${name}`);
-      const client = await probeClient({ ...spec, args: spec.args ?? [], inheritEnvironment: false, env: { ...base, ...spec.env,
-        ...switches, CLAUDE_CONFIG_DIR: base.CLAUDE_CONFIG_DIR, SLEIGHT_TRACE: dir, SLEIGHT_HAND: '0', SLEIGHT_APPROVAL_PROMPT: 'client' } }, {
+      return [name, { ...spec, args: spec.args ?? [], inheritEnvironment: false, env: { ...base, ...spec.env,
+        ...switches, ...engineEnv, CLAUDE_CONFIG_DIR: base.CLAUDE_CONFIG_DIR, SLEIGHT_TRACE: dir, SLEIGHT_HAND: '0', SLEIGHT_APPROVAL_PROMPT: 'client' } }];
+    });
+    await beforeLaunch?.(children.find(([name]) => name === 'plugin:sleight:computer')[1].env);
+    for (const [name, child] of children) {
+      const client = await connect(child, {
         relay: false, label: name, timeoutMs: 120000,
         record: entry => { record({ event: 'mcp', server: name, ...entry }); if (entry.event === 'engine-close') exits.set(name, entry); },
         approve: async params => {
@@ -127,12 +134,12 @@ export async function clientsFor({ servers, policy, env, turbo, gateWindow }, sw
   } catch (error) { await close(); throw error; }
 }
 
-export async function liveIteration(recording, { env, dir, signal, abort, beforeCall, record, worktree = repo, prepared, comparison = 'recording' }) {
+export async function liveIteration(recording, { env, dir, signal, abort, beforeCall, beforeLaunch, record, worktree = repo, prepared, comparison = 'recording' }) {
   const { withNative, withRace } = await import('./fixtures.mjs');
   prepared ??= prepareReplay(recording, join(dir, 'fixture'));
   const { mapper } = prepared;
   const drive = async config => {
-    const clients = await clientsFor(config, env, dir, record, worktree);
+    const clients = await clientsFor(config, env, dir, record, worktree, { beforeLaunch });
     let result;
     try { result = await replayCalls(recording.calls, { mapper, call: clients.call, signal, beforeCall, record, comparison }); }
     catch (error) {
@@ -173,7 +180,10 @@ export function comparisonRoles(variants, check, comparingBuilds) {
   return { candidate, baseline };
 }
 
-export async function main(argv = process.argv.slice(2)) {
+export async function main(argv = process.argv.slice(2), {
+  iteration: runIteration = liveIteration, readEngine = readReplayEngine, identifyBuild = buildIdentity,
+  acquireLock, permissionCheck, hold = () => existsSync('/tmp/sleight-hold'),
+} = {}) {
   const opts = options(argv);
   if (opts.help) {
     console.log('node bench/replay/run.mjs TASK_FOLDER | RESULTS.json --task ID [--arm ARM --run N --evidence DIR]\n' +
@@ -191,15 +201,15 @@ export async function main(argv = process.argv.slice(2)) {
   const env = parseEnv(opts.env ?? (check?.switch ? `${check.switch}=1` : ''));
   const comparingBuilds = opts['old-worktree'] !== undefined;
   const variants = comparingBuilds ? [
-    { variant: 'A', env, build: buildIdentity(opts['old-worktree'], 'old') },
-    { variant: 'B', env, build: buildIdentity(opts['new-worktree'], 'new') },
+    { variant: 'A', env, build: identifyBuild(opts['old-worktree'], 'old') },
+    { variant: 'B', env, build: identifyBuild(opts['new-worktree'], 'new') },
   ] : [{ variant: 'A', env }, ...(opts.compare !== undefined ? [{ variant: 'B', env: parseEnv(opts.compare) }] : [])];
   if (comparingBuilds && variants[0].build.worktree === variants[1].build.worktree) throw Error('Comparison requires distinct worktrees');
   const order = schedule(opts.repeat, variants);
   // --plan shares the exact no-launch fixture validation used by live iterations.
   const preview = prepareReplay(recording, join(tmpdir(), 'sleight-replay-plan', 'fixture'));
   const roles = comparisonRoles(variants, check, comparingBuilds);
-  const comparison = opts.compare !== undefined ? 'switches' : 'recording';
+  const comparison = comparingBuilds ? 'worktrees' : opts.compare !== undefined ? 'switches' : 'recording';
   const plan = { source: recording.transcript, transcriptSHA256: recording.transcriptSHA256, kind: recording.kind, task: recording.task, calls: recording.calls.length,
     windowFrames: recording.calls.flatMap((call, index) => isNativeSelection(call) ? windowReceipts(resultText(call.result)).filter(row => row.frame).map(row => ({ index, ...row })) : []),
     nativeFixture: preview.native && { nonce: preview.native.ctx.nonce, suite: preview.native.suite, oldDir: preview.native.oldDir },
@@ -212,21 +222,21 @@ export async function main(argv = process.argv.slice(2)) {
   const { acquireLiveLock } = await import('../live-lock.mjs');
   const { observePermission } = await import('../real-permission.mjs');
   const { assertCheck } = await import('./checks.mjs');
-  const controller = replayControl(), abort = () => controller.abort(Error('Replay interrupted'));
+  const controller = replayControl({ hold }), abort = () => controller.abort(Error('Replay interrupted'));
   const { beforeCall } = controller;
   await beforeCall();
   let out = opts.out ? resolve(opts.out) : mkdtempSync(join(tmpdir(), 'sleight-replay-'));
   if (opts.out) mkdirSync(out, { mode: 0o700 });
   out = realpathSync(out);
-  const unlock = await acquireLiveLock();
+  const unlock = await (acquireLock ?? acquireLiveLock)();
   let cleanupConfirmed = true, monitor, observing, failure;
   const runs = []; let assessment;
   for (const sig of ['SIGINT', 'SIGTERM', 'SIGHUP']) process.on(sig, abort);
   try {
     writeFileSync(join(out, 'plan.json'), JSON.stringify(plan, null, 2), { mode: 0o600 });
     const observe = async () => {
-      if (existsSync('/tmp/sleight-hold')) abort();
-      try { if (await observePermission()) controller.abort(Error('macOS permission prompt; replay stopped')); }
+      if (hold()) abort();
+      try { if (await (permissionCheck ?? observePermission)()) controller.abort(Error('macOS permission prompt; replay stopped')); }
       catch (error) { controller.abort(error); }
     };
     await observe(); controller.signal.throwIfAborted();
@@ -236,24 +246,32 @@ export async function main(argv = process.argv.slice(2)) {
       const dir = join(out, `${runs.length + 1}-${step.variant}`); mkdirSync(dir, { mode: 0o700 });
       const record = createReplayRecorder(dir);
       if (step.build) {
-        const current = buildIdentity(step.build.worktree, step.build.label);
+        const current = identifyBuild(step.build.worktree, step.build.label);
         if (current.commit !== step.build.commit || current.trackedDirty !== step.build.trackedDirty || current.trackedDiffSHA256 !== step.build.trackedDiffSHA256)
           throw Error(`Build identity changed: ${step.build.label}`);
       }
       const prepared = prepareReplay(recording, join(dir, 'fixture'));
-      const iteration = replayControl({ parent: controller.signal, deadlineMs: opts['deadline-ms'] });
+      const iteration = replayControl({ parent: controller.signal, deadlineMs: opts['deadline-ms'], hold });
       // From setup until cleanup proves otherwise, the lock belongs to this iteration.
       cleanupConfirmed = false;
       let result;
-      try { result = await liveIteration(recording, { env: step.env, dir, signal: iteration.signal, abort: iteration.abort, beforeCall: iteration.beforeCall, record, worktree: step.build?.worktree, prepared, comparison }); }
-      finally { iteration.dispose(); }
+      try {
+        result = await engineIteration(beforeLaunch => runIteration(recording, { env: step.env, dir, signal: iteration.signal, abort: iteration.abort,
+          beforeCall: iteration.beforeCall, beforeLaunch, record, worktree: step.build?.worktree, prepared, comparison }), {
+          deferred: true, previous: runs.map(run => run.engine), read: env => readEngine({ env, worktree: step.build?.worktree ?? repo }),
+        });
+      } catch (error) {
+        // A server-close error can attest server collection alone, not fixture teardown.
+        result = { verdict: 'diverge', reason: error.message, calls: [], totalToolMs: 0, cleanupConfirmed: false, engine: error.engine };
+        failure = error.message;
+      } finally { iteration.dispose(); }
       cleanupConfirmed = result.cleanupConfirmed;
       if (check) result.check = assertCheck(check, { ...result, env: step.env }, dir);
       const row = { ...step, ...result }; runs.push(row);
       writeFileSync(join(dir, 'result.json'), JSON.stringify(row, null, 2), { mode: 0o600 });
       console.log(`${step.variant} #${step.iteration}: ${row.verdict}, ${row.calls.length}/${recording.calls.length} calls, ${row.totalToolMs.toFixed(1)} tool ms${row.reason ? ` (${row.reason})` : ''}`);
       if (row.check) console.log(`${check.id}: ${row.check.verdict}${row.check.reason ? ` (${row.check.reason})` : ''}${row.check.failures ? ` (${row.check.failures.join('; ')})` : ''}`);
-      if (!cleanupConfirmed) break;
+      if (!cleanupConfirmed || row.engine?.reason || failure) break;
     }
   } catch (error) {
     failure = error.message;

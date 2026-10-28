@@ -1,6 +1,7 @@
 import ts from 'typescript';
 import { FrameMapper, windowReceipts, isNativeSelection } from './frames.mjs';
 import { imageShape, matchingMedia } from './images.mjs';
+import { resultItems, taskResult } from './documentation.mjs';
 
 export const resultText = result => (result?.content ?? []).filter(b => b.type === 'text').map(b => b.text).join('\n');
 
@@ -328,7 +329,8 @@ export function normalized(text, mapper = new TargetMapper(), recorded = false, 
   return text.replace(/^(\+ )?(\s*)\d+ (?=[a-z])/gm, '$1$2# ')
     .replace(/\[ref=(?:f\d+)?[es]\d+\]/g, '[ref=#]')
     .replace(/\b(element|index) (\d+)\b/g, (_, label, id) => `${label} ${ids.get(Number(id)) ?? id}`)
-    .replace(/(\b(?:pid|windowNumber)"?\s*[:=]\s*)\d+/g, '$1<runtime-id>')
+    .replace(/(\b(?:pid|windowNumber)"?\s*[:=]\s*)\d+/g,
+      (_, prefix) => prefix + (prefix.includes('"') ? '"<runtime-id>"' : '<runtime-id>'))
     .trim();
 }
 
@@ -350,22 +352,27 @@ export function refreshCode(args) {
 }
 
 // Give both arms the recording's handles before comparing their observable results.
-export function comparisonResult(result, mapper) {
+export function comparisonResult(result, mapper, documentation) {
   const reverse = new TargetMapper();
   for (const [before, after] of mapper.strings) reverse.addString(after, before.replace(/^\/private(?=\/(?:var|tmp)\/)/, ''));
   for (const [before, after] of mapper.handles) reverse.handles.set(after, before);
   for (const [key, id] of mapper.identities) reverse.identities.set(`${key.split(':')[0]}:${id}`, Number(key.split(':')[1]));
   return { isError: Boolean(result.isError),
-    content: (result.content ?? []).map(block => block.type === 'text' ? { ...block, text: normalized(block.text, reverse, true) }
-      : block.type === 'image' ? imageShape(block) ?? { type: 'image', dimensions: 'unknown' } : block),
+    content: resultItems(result, documentation).map(block => {
+      if (documentation?.trusted(block)) return { type: 'text', text: block.text, documentation: true };
+      // The comparison marker belongs to the harness, never incoming MCP data.
+      const { documentation: ignored, ...item } = block;
+      return item.type === 'text' ? { ...item, text: normalized(item.text, reverse, true) }
+        : item.type === 'image' ? imageShape(item) ?? { type: 'image', dimensions: 'unknown' } : item;
+    }),
     structuredContent: JSON.parse(normalized(JSON.stringify(result.structuredContent ?? result.structured_content ?? null), reverse, true)) };
 }
 
 const approvalGate = /sleight stopped this payment|payment (?:confirmation|approval) (?:blocked|required)|confirmation required through the trusted consent UI|Replay approval declined|^\s*(?:approval declined|permission denied|not approved)\s*$|The user (?:didn't allow|did not allow|did not approve)|Computer Use was not approved|permission request[^\n]*(?:denied|dismissed)|waiting for (?:a |the )?(?:payment |confirmation )?card/im;
 
 // Result status and explicit stop messages are barriers even when both arms return them.
-export function replayResultStop(result) {
-  const text = resultText(result);
+export function replayResultStop(result, documentation) {
+  const text = resultText(taskResult(result, documentation));
   if (approvalGate.test(text)) return 'confirmation or approval gate';
   if (!result || result.isError || result.error) return 'recording or replay error';
   if (/^\s*(?:[\w.]*Error:|Error\b|(?:Read or input|Input|Action|Call) refused\b|sleight stopped this call\b|Computer Use is not allowed\b|[^\n]*\bnot run:)/im.test(text))
@@ -373,30 +380,33 @@ export function replayResultStop(result) {
   return null;
 }
 
-function windowDifference(before, after, mapper) {
+export function windowDifference(before, after, mapper = new TargetMapper(), { ordered = false } = {}) {
   const headers = text => [...text.replace(/\r\n/g, '\n').matchAll(/^Window: "[^\n]+", App: [^\n]+$/gm)].map(m => m[0]);
+  const sameWindows = (a, b) => JSON.stringify(ordered ? a : a.sort()) === JSON.stringify(ordered ? b : b.sort());
   const a = headers(before), b = headers(after);
-  if ((a.length || b.length) && (a.length !== 1 || b.length !== 1 || mapper.replaceStrings(a[0]) !== b[0]))
+  if (!sameWindows(a.map(header => mapper.replaceStrings(header)), b))
     return 'native window or app changed';
   const x = windowReceipts(before), y = windowReceipts(after);
-  if ((x.length || y.length) && (x.length !== 1 || y.length !== 1 || x[0].target.appId !== y[0].target.appId ||
-      mapper.replaceStrings(x[0].target.title) !== y[0].target.title)) return 'native window or app changed';
+  const targets = (rows, recorded) => rows.map(({ target }) => JSON.stringify([
+    target.appId, recorded ? mapper.replaceStrings(target.title) : target.title,
+  ]));
+  if (!sameWindows(targets(x, true), targets(y, false))) return 'native window or app changed';
   return null;
 }
 
-export function divergence(expected, actual, mapper = new TargetMapper(), args = {}, { comparison = 'recording' } = {}) {
-  const text = resultText(actual);
+export function divergence(expected, actual, mapper = new TargetMapper(), args = {}, { comparison = 'recording', documentation } = {}) {
+  const expectedText = resultText(taskResult(expected, documentation)), text = resultText(taskResult(actual, documentation));
   if (comparison === 'switches') {
-    const stop = replayResultStop(expected) ?? replayResultStop(actual) ?? windowDifference(resultText(expected), text, mapper);
+    const stop = replayResultStop(expected, documentation) ?? replayResultStop(actual, documentation) ?? windowDifference(expectedText, text, mapper);
     if (stop) return stop;
   }
   if (approvalGate.test(text)) return 'confirmation or approval gate';
   if (Boolean(expected?.isError) !== Boolean(actual?.isError)) return 'success/error changed';
   const expectedMedia = (expected?.content ?? []).filter(b => b.type !== 'text');
   const actualMedia = (actual?.content ?? []).filter(b => b.type !== 'text');
-  if (!matchingMedia(expectedMedia, actualMedia, resultText(expected), text, mapper)) return 'non-text evidence changed; visual interpretation required';
+  if (!matchingMedia(expectedMedia, actualMedia, expectedText, text, mapper)) return 'non-text evidence changed; visual interpretation required';
   const a = expected?.structuredContent ?? expected?.structured_content, b = actual?.structuredContent ?? actual?.structured_content;
   if (normalized(JSON.stringify(a ?? null), mapper, true, args.tab) !== normalized(JSON.stringify(b ?? null), mapper)) return 'structured result changed';
-  if (comparison !== 'switches' && normalized(resultText(expected), mapper, true, tabHeaders(resultText(expected))[0]?.[1] ?? args.tab) !== normalized(text, mapper)) return 'observable text changed';
+  if (comparison !== 'switches' && normalized(resultText(expected), mapper, true, tabHeaders(resultText(expected))[0]?.[1] ?? args.tab) !== normalized(resultText(actual), mapper)) return 'observable text changed';
   return null;
 }
