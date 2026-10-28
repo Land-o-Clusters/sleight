@@ -241,8 +241,9 @@ function requireNote(refused, saved, prompt) {
 
 // The skill's rules for an open_file result under SLEIGHT_OPEN_RULES=short: without what open_file already
 // did (acquiring, choosing a window, opening a document), tap coordinates, the drag, hover and banner tools,
-// and the doctor line. Every safety passage stays word for word, and a heading left empty goes too.
-const OPEN_DROPS = /^(?:- When the task specifies an app|- After renumbering|- If acquisition returns an empty tree|- Among windows|- A window other than the one getApp shows|- Multiply tap coordinates|- Acquire a document that's already open|- Reorder rows or move selected text|- Engine events don't trigger hover|(?:- )?In a browser, |- `notifications` presses|Rows, text selected in |If `js` fails to start|Startup failure: )/;
+// the list-picker recipe, and the doctor line. Full rules arrive on the next js result.
+// Every safety passage stays word for word, and a heading left empty goes too.
+const OPEN_DROPS = /^(?:- When the task specifies an app|- After renumbering|- If acquisition returns an empty tree|- After an empty acquisition tree|- Among windows|- A window other than the one getApp shows|- Other window than getApp shows|- Multiply tap coordinates|- Multiply coordinates by screenshot multiplier|- List exceeds visible rows|- Acquire a document that's already open|- Reorder rows or move selected text|- Engine events don't trigger hover|(?:- )?In a browser, |(?:- )?Browser: `setValue` address bar|- `notifications` presses|Rows, text selected in |If `js` fails to start|Startup(?: failure)?: )/;
 export function openFileRules(rules) {
   if (typeof rules !== 'string') return rules;
   const blocks = [];
@@ -496,7 +497,7 @@ export function batchingDescription(description, variant = true, prompt, windows
 const NATIVE_DENIED = /* lean notice */ 'Native access stopped: use the handle returned by cua.getApp directly, after a standalone native app read. No native lease for this browser call.';
 // SLEIGHT_PROMPT=lean descriptions of the tools sleight adds. Each tool keeps its default text.
 const LEAN_TOOL_DESCRIPTIONS = {
-  app_handoff: "Here await user's Continue; reread app. Away: end turn, ask user to sign in and reply. Never request passwords/codes. Cancel keeps app open.",
+  app_handoff: "Non-browser app: wait Continue, reread. Away: end turn, ask user to sign in and reply. Never request passwords/codes. Cancel keeps app open.",
   document_scope: 'Ask the user to approve the last observed document or window for this session, after a js call with only let app = await cua.getApp("App") (or { windowId: 123 }). Actions need an approved matching Window and URL; window changes stop them. A mistake guard, not isolation from arbitrary JavaScript.',
   review_changes: 'Shows this session\'s saved-file changes. Before editing, read the window with a standalone cua.getApp call. op "list": each touched document\'s diff or size/date summary; op "review": the user picks Keep, Undo or Later per document. Only the user can decide. Undo restores the session backup, refusing if the file changed after the last agent action; unsaved buffers aren\'t restored. Backups end with the session.',
   flow_exception: 'Ask the user to allow, once, the exact call a flow rule last stopped. No decision arguments. Retry the identical call after approval; never work around a refusal.',

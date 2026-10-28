@@ -34,8 +34,8 @@ const skillPath = new URL('../plugins/sleight/skills/drive-mac-apps/SKILL.md', i
 // SM1R counts the new conditional managed-PATH refusal label (+54 characters).
 // HO1 pins the shortened default and lean handoff descriptions.
 // KT1 adds one fixed 40-character pending-tab notice (+43 inventoried characters).
-// AS2R2 counts the value-preserving button rename in both variants.
-const leanRatio = 32961 / 45907;
+// INT5 measures the combined AS2R2 and RS1AR inventory.
+const leanRatio = 32967 / 45904;
 const leanSkill = () => skillRules(skillPath, { SLEIGHT_PROMPT: 'lean' });
 
 test('hook guard refusals join the pinned notice inventory', { skip }, () => {
@@ -127,6 +127,7 @@ for (const env of [{}, { SLEIGHT_PROMPT: 'lean' }, { SLEIGHT_LEAN_CALLS: '1' }, 
     h.call(1, 'let app = await cua.getApp("Editor")');
     const first = h.reply(1, '## Computer Use\nNative reference.\nWindow: "Draft", App: Editor');
     for (const passage of baseline.skillSafety) assert.ok(first.includes(passage), passage);
+    assert.match(first, /`app\.typeText\(text\)`.*`app\.pressKey\(key\)`.*no (?:element|index)/);
     assert.match(first, /Top-level `await`, no `return`/);
     assert.match(first, /Write text with `nodeRepl\.write\(\.\.\.\)`/);
     assert.doesNotMatch(first, /sleight\.fillForm|sleight\.dragTo|downloadMedia|tab\.getJsDialog/);
@@ -227,7 +228,7 @@ test('both skill variants explain browser routing and script input within their 
     assert.match(skill, /Tab-handle input.*first argument.*element index or `null`/);
     assert.match(skill, /[Ff]ill every (?:independent )?(?:field you already see|visible field) in one call/);
     assert.match(skill, /nodeRepl\.write\(await sleight\.fillForm\(tab,/);
-    assert.match(skill, /takes each field by label or locator \(an index needs a stable ID in the tree\)/);
+    assert.match(skill, /by label or locator \(an index needs a stable ID in the tree\)/);
     if (!env.SLEIGHT_PROMPT) assert.match(skill, /nodeRepl\.write\(await sleight\.pickFromList\(tab, list, "Portland"\)\)/);
     else assert.doesNotMatch(skill, /sleight\.pickFromList/);
     assert.match(skill, /[Rr]ead once at the end/);
@@ -487,8 +488,8 @@ for (const mode of [undefined, '0']) test(`MT browser descriptions stay pinned i
   for (const prompt of [undefined, 'lean']) {
     const combined = skillRules(skillPath, { SLEIGHT_PROMPT: prompt }).length + descriptions.length;
     // HO1 pins the combined skill and description sizes in both MT variants.
-    assert.equal(combined, mode === '0' ? (prompt === 'lean' ? 5987 : 9614)
-      : (prompt === 'lean' ? 5908 : 9535));
+    assert.equal(combined, mode === '0' ? (prompt === 'lean' ? 6000 : 9621)
+      : (prompt === 'lean' ? 5921 : 9542));
   }
   assert.ok(JSON.stringify(tools).length < 8000);
   for (const tool of tools) assert.ok(tool.description.length <= 2048, tool.name);
@@ -504,10 +505,10 @@ test('PF3 keeps every 1.5.0 input schema and pins both first and full turbo guid
   assert.equal(hash(turboFirstRules(full)), baseline.browserFirstRules);
   const measured = budget.budget({}).conditional.turboFirst.default;
   assert.equal(measured.catalog.characters, 6081);
-  assert.equal(measured.rules.characters, 4938);
-  assert.equal(measured.deferredCharacters, 3389);
-  assert.equal(measured.combined.characters, 11020);
-  assert.equal(Buffer.byteLength(JSON.stringify(browserTools('bbench')) + '\n' + turboFirstRules(full)), 11020);
+  assert.equal(measured.rules.characters, 4937);
+  assert.equal(measured.deferredCharacters, 3285);
+  assert.equal(measured.combined.characters, 11019);
+  assert.equal(Buffer.byteLength(JSON.stringify(browserTools('bbench')) + '\n' + turboFirstRules(full)), 11019);
   // This counts the browser catalog + skill, not host framing, native tools or Haiku tokens.
   assert.ok(measured.combined.characters <= 11736, 'below the same df27db01 surface');
   assert.ok(measured.combined.characters < 14166, 'below p160 a3706679');

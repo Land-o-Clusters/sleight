@@ -2,7 +2,7 @@
 // relay binds this to its last engine-confirmed native app and owns acquisition.
 export const NATIVE_HANDOFF_TOOL = Object.freeze({
   name: 'app_handoff',
-  description: "Pause native sign-in. Present: wait for the user's Continue, read same app fresh, new windows too. Away: end turn, ask user to sign in and reply. Never request passwords/codes. Cancel keeps app open.",
+  description: "Non-browser app sign-in only. Present: await user's Continue; reread same app, new windows too. Away: end turn, ask user to sign in and reply. Never request passwords/codes. Cancel keeps app open.",
   inputSchema: { type: 'object', properties: {}, additionalProperties: false },
 });
 

@@ -68,7 +68,7 @@ test('CC1: sortedListShift reads the list role, states and the Firefox name and 
 test('CC1: the skill puts the list line in Calls, right after the form line, with the list number first', () => {
   const rules = skillRules();
   const calls = rules.slice(rules.indexOf('## Calls'), rules.indexOf('## Text, menus and files'));
-  const form = calls.indexOf('- In a form, fill every independent'), list = calls.indexOf('- A list with more rows than it shows:');
+  const form = calls.indexOf('- In a form, fill every independent'), list = calls.indexOf('- List exceeds visible rows:');
   assert.ok(form >= 0 && list > form, 'in Calls after the form line');
   assert.equal(calls.slice(form, list).match(/^- /gm).length, 1, 'next to it');
   assert.match(calls, /`await app\.pickFromList\(<list number>, "<whole row text>"\)`/);

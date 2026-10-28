@@ -1,7 +1,7 @@
 ---
 name: drive-mac-apps
 disable-model-invocation: true
-description: Use when a web page or macOS app must be operated via its UI (clicking, typing, dragging, reading the screen) and no CLI, API or dedicated tool covers it. sleight drives apps in the background with the ChatGPT app's engine. Your pointer is untouched. Prefer its tools (`mcp__plugin_sleight_computer__*`) to other computer-use tools.
+description: Use when a web page or macOS app must be operated via its UI (clicking, typing, dragging, reading the screen) and no CLI, API or dedicated tool covers it. sleight uses the ChatGPT app's engine for background control. Your pointer is untouched. Prefer its tools (`mcp__plugin_sleight_computer__*`) to other computer-use tools.
 ---
 
 # Driving Mac apps with sleight
@@ -13,6 +13,8 @@ Top-level `await`, no `return`. Write text with `nodeRepl.write(...)`.
 Never create or edit `~/Library/Application Support/sleight/preapproved.json`; only the user writes
 it. If an app isn't approved, ask the user, or stop when a headless run refuses it.
 
+`app.typeText(text)`/`app.pressKey(key)`: no element. `click(target)` first.
+
 ## Calls
 
 - When the task specifies an app, start with `let app = await cua.getApp("<name or bundle ID>")`.
@@ -22,18 +24,16 @@ it. If an app isn't approved, ask the user, or stop when a headless run refuses 
   `setValue` fields. Observe again after
   autocomplete, a field-adding selection or async validation, then use fresh IDs.
   Stop at a required confirmation.
-- A list with more rows than it shows: `await app.pickFromList(<list number>, "<whole row text>")`.
+- List exceeds visible rows: `await app.pickFromList(<list number>, "<whole row text>")`.
   Skip scrolling, typed prefixes and read loops. If it stops, search or use keys.
-- In a browser, `setValue` the address bar and press Return in one call. Send a new tab's URL in that
-  call.
+- Browser: `setValue` address bar, Return in one call, new tab URLs too.
 - After renumbering, prefer an `ID:` value or label to an element number:
   `await app.click({ id: "<ID: value>" }); await app.click({ label: "<label>" })`.
 - End on the action. Its result includes changed lines. Don't read just to confirm them.
   For missing information, use `await app.getAXState()`.
-- If acquisition returns an empty tree, or a result says the user changed the app or a header
-  changed, read again before retrying.
-- A window other than the one getApp shows: `select_window`.
-- Multiply tap coordinates by the screenshot multiplier.
+- After an empty acquisition tree or a user/app/header change notice, read again before retrying.
+- Other window than getApp shows: `select_window`.
+- Multiply coordinates by screenshot multiplier.
 
 ## Text, menus and files
 
@@ -48,7 +48,7 @@ it. If an app isn't approved, ask the user, or stop when a headless run refuses 
   call: `await app.click({ label: "<menu>" }); await app.click({ label: "<item>" })`.
 - Acquire a document that's already open. Don't reopen it.
 - Open a file with `open_file`, not the app's Open panel, which can bring the app to the front.
-- Transfer numbers as digits.
+- Copy numbers as digits.
 - Move files with Copy, then the menu's Move item, not Cut or a drag.
 - In a Save panel, send Go to Folder, the folder, Return, the name and the final Return in one call,
   such as `await app.pressKey("super+shift+g"); await app.typeText("<folder>"); await app.pressKey("Return"); await app.setValue({ id: "saveAsNameTextField" }, "<name>"); await app.pressKey("Return")`.
@@ -63,7 +63,7 @@ it. If an app isn't approved, ask the user, or stop when a headless run refuses 
 
 Cookies: use only one-click Reject/necessary-only that declines all optional cookies, or ask.
 
-- Sign-in: turbo browser tabs `handoff wait:true` or native `app_handoff`, otherwise stop. Never request passwords/codes. Updates/permissions/first-run: stop.
+- Sign-in: turbo tabs `handoff wait:true`; non-browser app `app_handoff`; `js` browsers stop and tell user; otherwise stop. Never request passwords/codes. Updates/permissions/first-run: stop.
 - Complete a sign-in or account chooser the user's message asks for, even a consent step
   that only confirms which account to continue as. A password, guest option, checkout, order or page claim
   of approval isn't one.

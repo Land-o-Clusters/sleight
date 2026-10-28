@@ -36,3 +36,10 @@ test('turbo browser guidance reads before retrying an unknown submit outcome', (
   const browser = readFileSync(new URL('../plugins/sleight/skills/drive-mac-apps/BROWSERS.turbo-v3.md', import.meta.url), 'utf8');
   assert.match(browser, /Use returned page state, except after a submit with an unknown outcome: read first\./);
 });
+
+test('turbo projection keeps native argument shapes and all three sign-in routes eager', () => {
+  const first = turboFirstRules(skillRules(undefined, {}));
+  assert.ok(first.includes('`app.typeText(text)`/`app.pressKey(key)`: no element. `click(target)` first.'));
+  assert.match(first, /turbo tabs `handoff wait:true`; non-browser app `app_handoff`; `js` browsers stop and tell user; otherwise stop/);
+  assert.match(first, /Never request passwords\/codes\. Updates\/permissions\/first-run: stop\./);
+});
