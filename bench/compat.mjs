@@ -4,6 +4,7 @@
 //
 //   npm run compat                       engine checks only: no app, no window, about 20 s
 //   npm run compat -- --owner-away       also the live checks: Calculator and a Safari page, about 2 min
+//   node bench/compat.mjs --launch-shape  read launch config and file metadata, run only the runtime's --help
 //   node bench/compat.mjs --watch        what scripts/watch.sh runs daily: acts only when the engine version changes
 //   node bench/compat.mjs --publish [--static-log FILE]...   merge the logs into docs/results/engine-compat.md
 //
@@ -16,7 +17,7 @@ import { execFile, execFileSync } from 'node:child_process';
 import { randomBytes } from 'node:crypto';
 import { appendFileSync, existsSync, mkdirSync, mkdtempSync, readFileSync, renameSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { homedir, tmpdir, userInfo } from 'node:os';
-import { dirname, join, resolve } from 'node:path';
+import { dirname, isAbsolute, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { promisify } from 'node:util';
 import { DOCS_CODE, engineDocsText } from '../scripts/engine-docs.mjs';
@@ -40,6 +41,68 @@ const readOr = (path, fallback) => { try { return readFileSync(path, 'utf8').tri
 export function verdictOf(steps) {
   if (steps.some(s => s.status === 'fail')) return 'fail';
   return steps.some(s => s.status === 'error') ? 'error' : 'pass';
+}
+
+// Help comes from the resolved Node executable, never from the configured engine args or environment.
+// Keep every alias: for example --loader, --experimental-loader=... both consume a value.
+function nodeOptionArities(help) {
+  const options = new Map();
+  const section = help.split(/^Options:[ \t]*\r?$/m)[1]?.split(/^Environment variables:/m)[0];
+  if (!section) return options;
+  for (const line of section.split('\n')) {
+    const spec = /^ {2}(-[^\s,]+(?:, -[^\s,]+)*)(?:\s|$)/.exec(line)?.[1];
+    if (!spec) continue;
+    const names = [...spec.matchAll(/(?:^|, )(-{1,2}[\w-]+)/g)].map(match => match[1]);
+    const takesValue = /(?<!\[)=/.test(spec) || /--print \[\.\.\.\]/.test(line);
+    // This help row groups two distinct switches rather than aliases: only --experimental-config-file
+    // has a value. Optional inspector/FIPS values use [=...] and do not consume the next argument.
+    for (const name of names) options.set(name, name === '--experimental-default-config-file' ? false : takesValue);
+  }
+  return options;
+}
+
+// This check never starts the engine or reads script contents. Non-path values are placeholders so a title,
+// inline program or future credential argument cannot end up in a local report.
+export async function launchShapeCheck({ env = process.env, resolve: findServer, server, nodeHelp, run = execute } = {}) {
+  const { engineLaunchPaths, NODE_VALUE_FLAGS, resolveServer } = await import('../plugins/sleight/lib/launch.mjs');
+  const result = { id: 'launch-shape', status: 'fail' };
+  const checked = reason => ({ version: server?.version, result: { ...result, reason } });
+  try { server ??= (findServer ?? resolveServer)(env); }
+  catch { return checked('could not resolve the installed engine'); }
+  if (!server || server.error) return checked('could not resolve the installed engine');
+  const args = server.args;
+  if (!Array.isArray(args) || args.some(arg => typeof arg !== 'string' || !arg)) return checked('launch args must be nonempty strings');
+  const paths = engineLaunchPaths(args);
+  const pathValue = value => value.startsWith('file:') || isAbsolute(value) || /^\.\.?\//.test(value);
+  const valueShape = value => pathValue(value) ? value.replaceAll(homedir(), '~') : '<value>';
+  result.shape = args.map(arg => {
+    if (!arg.startsWith('-')) return valueShape(arg);
+    const eq = arg.indexOf('=');
+    return eq < 0 ? arg : `${arg.slice(0, eq)}=${valueShape(arg.slice(eq + 1))}`;
+  });
+  try {
+    nodeHelp ??= (await run(server.command, ['--help'], { env: {}, timeout: 10000, maxBuffer: 1 << 20 })).stdout;
+  } catch { return checked('could not read the Node runtime option help'); }
+  const arities = nodeOptionArities(String(nodeHelp));
+  if (!arities.has('--import') || !arities.has('--require')) return checked('could not parse the Node runtime option help');
+  result.nodeValueOptions = [...arities].filter(([, takesValue]) => takesValue).map(([name]) => name).sort();
+  for (let i = 0; i < args.length; i++) {
+    const arg = args[i];
+    if (!arg.startsWith('-')) continue;
+    const name = arg.split('=')[0], inline = arg.includes('=');
+    if (!arities.has(name)) return checked(`unknown option arity: ${name}`);
+    if (arities.get(name) !== NODE_VALUE_FLAGS.has(name)) return checked(`launch parser does not consume the Node option consistently: ${name}`);
+    if (arities.get(name) && (!inline && (!args[i + 1] || args[i + 1].startsWith('-')) || inline && arg.endsWith('='))) {
+      return checked(`missing option value: ${name}`);
+    }
+    if (arities.get(name) && !inline) i++;
+  }
+  const isFile = path => { try { return Boolean(path) && statSync(path).isFile(); } catch { return false; } };
+  if (!isFile(paths.script)) return checked('missing server script file');
+  const missing = paths.optionFiles.filter(path => !isFile(path));
+  if (missing.length) return checked(`${missing.length} missing option file${missing.length === 1 ? '' : 's'}`);
+  result.status = 'pass';
+  return checked(`${args.length} launch arguments, ${paths.optionFiles.length} option file${paths.optionFiles.length === 1 ? '' : 's'}`);
 }
 
 export async function runDoctor(launcher, env, run = execute) {
@@ -130,7 +193,7 @@ export function busy({ holdPath = '/tmp/sleight-hold', lockPath = '/tmp/sleight-
   return undefined;
 }
 
-export async function engineTier({ launcher = LAUNCHER, env = process.env, logs = logsDir(), doctor, resolve: resolveServer, select, open = openClient, run = execute,
+export async function engineTier({ launcher = LAUNCHER, env = process.env, logs = logsDir(), doctor, resolve: resolveServer, select, open = openClient, run = execute, nodeHelp,
   holdPath, lockPath } = {}) {
   const waiting = busy({ holdPath, lockPath });
   if (waiting) return { version: doctor?.version, pending: waiting, steps: [step('engine', 'pending', waiting)] };
@@ -140,6 +203,9 @@ export async function engineTier({ launcher = LAUNCHER, env = process.env, logs 
   resolveServer ??= (await import('../plugins/sleight/lib/launch.mjs')).resolveServer;
   const server = resolveServer(env);
   if (server.error) return { version: ran.version, steps: [...steps, step('engine-session', 'fail', 'no engine to start', server.error)] };
+  const launch = await launchShapeCheck({ server, env, nodeHelp, run });
+  steps.push(launch.result);
+  if (launch.result.status !== 'pass') return { version: ran.version, steps };
   const surfaces = await launcherSurfaces(server, env, select);
   const raw = await rawEngineChecks(server, env, { open });
   const bootstrap = await documentationBootstrapChecks(server, env, { open });
@@ -322,8 +388,11 @@ export async function runWatch({ env = process.env, logs = logsDir(), force = fa
     const previous = readOr(statePath, undefined);
     const doctor = await runDoctor(deps.launcher ?? LAUNCHER, env, deps.run);
     if (doctor.result.status !== 'pass') {
-      const report = makeReport({ version: doctor.version, steps: [doctor.result], source: 'watch', tier: 'engine', env });
+      // A launch change may be why doctor failed. Preserve its shape even before the session checks can run.
+      const launch = await launchShapeCheck({ env, resolve: deps.resolve, nodeHelp: deps.nodeHelp, run: deps.run });
+      const report = makeReport({ version: doctor.version ?? launch.version, steps: [doctor.result, launch.result], source: 'watch', tier: 'engine', env });
       record(logs, report);
+      log(`launch-shape: ${launch.result.status}; ${JSON.stringify(launch.result)}`);
       log(`doctor FAILED: ${doctor.result.reason}`);
       await tell(`Doctor failed: the ChatGPT computer-use engine is missing or broken. See ${join(logs, 'watch.log')}`);
       return 1;
@@ -355,6 +424,9 @@ export async function runWatch({ env = process.env, logs = logsDir(), force = fa
     const reportPath = join(logs, `compat-${version}-${report.checkedAt.replace(/[:.]/g, '-')}.json`);
     writeFileSync(reportPath, JSON.stringify(report, null, 2) + '\n');
     log(`${tier} checks on engine ${version}: ${report.verdict}, live ${report.live}; report ${reportPath}`);
+    for (const check of steps.filter(s => ['launch-shape', 'api-docs'].includes(s.id))) {
+      log(`${check.id}: ${check.status}; ${JSON.stringify(check)}`);
+    }
     // An "error" (the check couldn't run) keeps the old version, so tomorrow's run tries again.
     if (tier !== 'live' && report.verdict !== 'error') atomic(statePath, version + '\n');
     const failed = report.steps.find(s => ['fail', 'error'].includes(s.status));
@@ -421,6 +493,15 @@ function option(argv, name) {
 }
 
 export async function main(argv = process.argv.slice(2)) {
+  if (argv.includes('--launch-shape')) {
+    const launch = await launchShapeCheck();
+    const report = makeReport({ version: launch.version, steps: [launch.result], source: 'manual', tier: 'launch-shape' });
+    const reportPath = option(argv, 'report');
+    if (reportPath) writeFileSync(resolve(reportPath), JSON.stringify(report, null, 2) + '\n');
+    console.log(summary(report));
+    console.log(`  shape: ${JSON.stringify(launch.result.shape ?? [])}`);
+    return report.verdict === 'pass' ? 0 : 1;
+  }
   if (argv.includes('--publish')) {
     const staticLogs = argv.flatMap((arg, i) => (arg === '--static-log' && argv[i + 1] ? [resolve(argv[i + 1])] : []));
     console.log(`published ${publish({ staticLogs })} entries to docs/results/engine-compat.md`);

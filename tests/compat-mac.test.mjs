@@ -223,6 +223,10 @@ test('watch: unchanged versions only log, a new version records and notifies, fa
   assert.equal(readFileSync(join(logs, 'compat-accepted'), 'utf8'), '1.0\n');
   assert.match(notes[0], /updated to 1\.0\. sleight passed the compatibility check \(live checks not run\)/);
   assert.equal(lastRecord(logs, '1.0').verdict, 'pass');
+  const watchLog = readFileSync(join(logs, 'watch.log'), 'utf8');
+  assert.match(watchLog, /launch-shape: pass/);
+  assert.match(watchLog, /api-docs: pass/);
+  assert.equal(lastRecord(logs, '1.0').steps.find(s => s.id === 'launch-shape').status, 'pass');
   assert.equal(await runWatch({ env, logs, deps: deps('1.0') }), 0);
   assert.match(readFileSync(join(logs, 'watch.log'), 'utf8'), /doctor ok, engine 1\.0 unchanged/);
   assert.equal(notes.length, 1);
