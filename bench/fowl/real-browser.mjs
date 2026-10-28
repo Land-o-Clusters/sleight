@@ -448,14 +448,21 @@ export async function watchNavigations(browser, { connect = realBrowserCommands 
 export async function resetRealBrowser(browser, { connect = realBrowserCommands, timeoutMs = 5000 } = {}) {
   if (['firefox', 'safari'].includes(browser.browser)) return browser.reset();
   const connection = await connect(browser);
+  const closeTarget = async targetId => {
+    try {
+      if (!(await connection.send('Target.closeTarget', { targetId })).success) throw Error('BENCH_BROWSER_RESET_FAILED');
+    } catch (error) {
+      // An old tab can disappear after inventory, including while Chrome handles this call.
+      // Only closing an old tab is idempotent here. The final inventory still has to prove reset.
+      if (error.message !== 'No target with given id found') throw error;
+    }
+  };
   try {
     const previous = (await connection.send('Target.getTargets')).targetInfos.filter(target => target.type === 'page');
     const { targetId } = await connection.send('Target.createTarget', { url: browser.args.at(-1) });
     if (typeof targetId !== 'string' || !targetId || previous.some(target => target.targetId === targetId)) throw Error('BENCH_BROWSER_RESET_FAILED');
     // Create first so closing the last old tab cannot exit the owned browser.
-    for (const target of previous) {
-      if (!(await connection.send('Target.closeTarget', { targetId: target.targetId })).success) throw Error('BENCH_BROWSER_RESET_FAILED');
-    }
+    for (const target of previous) await closeTarget(target.targetId);
     await connection.send('Target.activateTarget', { targetId });
     const deadline = Date.now() + timeoutMs;
     for (;;) {
@@ -463,8 +470,8 @@ export async function resetRealBrowser(browser, { connect = realBrowserCommands,
       if (targets.length === 1 && targets[0].targetId === targetId && targets[0].title === browser.marker) return inventory(browser, targets);
       if (Date.now() >= deadline) throw Error('BENCH_BROWSER_RESET_FAILED');
       for (const target of targets.filter(target => target.targetId !== targetId)) {
-        if (Date.now() >= deadline || typeof target.targetId !== 'string' || !target.targetId ||
-            !(await connection.send('Target.closeTarget', { targetId: target.targetId })).success) throw Error('BENCH_BROWSER_RESET_FAILED');
+        if (Date.now() >= deadline || typeof target.targetId !== 'string' || !target.targetId) throw Error('BENCH_BROWSER_RESET_FAILED');
+        await closeTarget(target.targetId);
       }
       await new Promise(resolve => setTimeout(resolve, 25));
     }
