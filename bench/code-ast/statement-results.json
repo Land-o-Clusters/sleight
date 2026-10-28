@@ -1,0 +1,63 @@
+{
+  "base": "c4175f7917fadb10bce86d02d7672df416105aa8",
+  "corpus": {
+    "claudeFiles": 233,
+    "codexFiles": 324,
+    "claude": 1576,
+    "codex": 3795,
+    "malformed": 0
+  },
+  "before": "2026-10-28T07:28:00Z",
+  "manifest": "752ca473d5e60dfad185524f2650d5d6714d6e627ea30db79ac403df2b87e962",
+  "accepted": {
+    "statements": {
+      "old": 5371,
+      "new": 5371,
+      "changed": 5305,
+      "lost": 0
+    },
+    "textSave": {
+      "old": 3,
+      "new": 3,
+      "changed": 0,
+      "lost": 0
+    },
+    "menu": {
+      "old": 1322,
+      "new": 1330,
+      "changed": 1009,
+      "lost": 0
+    },
+    "tab": {
+      "old": 97,
+      "new": 97,
+      "changed": 0,
+      "lost": 0
+    }
+  },
+  "differences": 6314,
+  "reasons": {
+    "statements:engine-statement-ranges": 5305,
+    "menu:engine-action-ranges": 1001,
+    "menu:awaited-observation-tail": 8
+  },
+  "regressions": 0,
+  "unclassified": 0,
+  "differencesSha256": "57d300e3286d355d0120b46f4c0326037783b666f30a53488a56d9d1c7423404",
+  "archiveSha256": "4f9a56441a3a161458fa804eb42a57f88201cbc966203f0ac37da44aa1b9edf9",
+  "archiveBytes": 617139,
+  "uncompressedBytes": 3400090,
+  "sources": {
+    "plugins/sleight/lib/text-save.mjs": "170c229f051f80acbd0c8b810d14167bebe84ba0b3cb938e61be5f6785342648",
+    "plugins/sleight/lib/code-line-terminators.mjs": "21bff7cc38c27aa86cd7b63158dab45e71e5057beda5b2427c6f34459591f8fe",
+    "plugins/sleight/lib/flow-rules.mjs": "c6b2f899cb1236d5b6072d6bddddbd2f39959c872af88c770c92743c418fa0db",
+    "plugins/sleight/lib/menu-continuation.mjs": "7d1a8c550766dbe96049e42b465c41b3900a326cc442bc3457b31ba3018d6bec",
+    "plugins/sleight/lib/tab-probe.mjs": "a6a205af375e0d1a4f167905e8c21a21050eafa77b0581265a4e476c49105a92",
+    "new:plugins/sleight/lib/text-save.mjs": "b7d96de8b2d6b050c05d52efe2ad5c4c6177f4869060e50ac1686f8ffedd063b",
+    "new:plugins/sleight/lib/menu-continuation.mjs": "e59025212fdb0c000cdbdc9c0acab157da7470fde265fedd159388517577390b",
+    "new:plugins/sleight/lib/tab-probe.mjs": "d8a6a877b86bd656fff05f4a3370187f0cdcb3921f7a0556536967af5c378e21",
+    "new:plugins/sleight/lib/code-ast.mjs": "5f90fcb89a4ad8cb6dbc9435f26f62c8a54304f42218ec419b5bd3b2917dc3b1",
+    "new:bench/code-ast/statement-replay.mjs": "ef3f7002920f9ff1d973e7ba6f08c9dc8621a59285ea3aea5c690603d03f7e9e",
+    "new:bench/code-ast/corpus.mjs": "66480031fc997c35656a14941349f7f139fc6224747b5858ce668d63aa690e4e"
+  }
+}

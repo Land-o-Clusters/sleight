@@ -29,7 +29,7 @@ test('the LF-only phantom-comment repro executes a call and inspection refuses i
 
 for (const boundary of ['if (a) {}\n', 'if (a) {} ', 'if (a) {} /* gap */ ',
   'const value = {}\n', 'function read() {}\n', 'class Value {}\n']) {
-  test(`ambiguous brace slash preserves the prefix and all six consumers refuse: ${boundary.trim()}`, () => {
+  test(`legacy brace ambiguity refuses token consumers while statement splitting follows module validity: ${boundary.trim()}`, () => {
     const prefix = 'await app.click(7); ', suffix = boundary + '/[/*]/.test(s); await app.paste(); /[*/]/.test(s)';
     const code = prefix + suffix, ts = tokens(code);
     assert.deepEqual(ts.slice(0, 8).map(t => t.v), ['await', 'app', '.', 'click', '(', '7', ')', ';']);
@@ -39,7 +39,13 @@ for (const boundary of ['if (a) {}\n', 'if (a) {} ', 'if (a) {} /* gap */ ',
     assert.throws(() => literalElements(code), /cannot inspect JavaScript/);
     assert.match(nativeArgumentsProblem(code), /cannot inspect JavaScript/);
     assert.equal(splitMenuActions('await app.click(1); await app.click(2); ' + suffix), undefined);
-    assert.equal(splitTextSave(suffix + '; await app.setValue(1, "safe"); await app.pressKey("super+s")'), undefined);
+    const saveCode = suffix + '; await app.setValue(1, "safe"); await app.pressKey("super+s")';
+    // An ungrouped object initializer continues as division and is invalid here.
+    // The other five boundaries start a regex statement in the engine's grammar.
+    if (boundary.startsWith('const value')) assert.equal(splitTextSave(saveCode), undefined);
+    else assert.deepEqual(splitTextSave(saveCode), {
+      handle: 'app', head: suffix + '; await app.setValue(1, "safe");', tail: 'await app.pressKey("super+s")',
+    });
     assert.equal(nativeTabPlan({ code, actions: [
       { selector: { kind: 'key', value: 'super+t' } }, { start: 0, end: code.length },
       { selector: { kind: 'key', value: 'Return' } },

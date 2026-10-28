@@ -37,7 +37,7 @@ for (const suffix of ["const ok = text && /'/.test(text);",
 
 for (const suffix of ['"unterminated', '"raw\nline"', '`${"`"}`', '/* unterminated',
   'const r = /unterminated', 'const r = /[\r]/']) {
-  test(`an incomplete scan preserves its prefix and every consumer fails closed: ${JSON.stringify(suffix)}`, () => {
+  test(`an incomplete legacy scan preserves its prefix and statement splitting follows module validity: ${JSON.stringify(suffix)}`, () => {
     const code = prefix + suffix, ts = tokens(code);
     assert.equal(ts[0].v, 'await');
     assert.equal(ts.at(-1).v, '<invalid>');
@@ -46,7 +46,11 @@ for (const suffix of ['"unterminated', '"raw\nline"', '`${"`"}`', '/* unterminat
     assert.throws(() => literalElements(code), /cannot inspect JavaScript/i);
     assert.match(nativeArgumentsProblem(code), /cannot inspect JavaScript/i);
     assert.equal(splitMenuActions('await app.click(1); await app.click(2); ' + suffix), undefined);
-    assert.equal(splitTextSave(suffix + '; await app.setValue(1, "safe"); await app.pressKey("super+s")'), undefined);
+    const saveCode = suffix + '; await app.setValue(1, "safe"); await app.pressKey("super+s")';
+    if (suffix === '`${"`"}`') assert.deepEqual(splitTextSave(saveCode), {
+      handle: 'app', head: suffix + '; await app.setValue(1, "safe");', tail: 'await app.pressKey("super+s")',
+    });
+    else assert.equal(splitTextSave(saveCode), undefined);
     const planCode = 'await app.typeText("https://example.test"); ' + suffix;
     assert.equal(nativeTabPlan({ code: planCode, actions: [
       { selector: { kind: 'key', value: 'super+t' } },
@@ -117,7 +121,9 @@ test('division stays executable and regex contents never invent actions', () => 
     assert.equal(flow().analyze('js', { code: suffix }, { app: 'Fixture' }).violations.length, 0);
   }
   assert.deepEqual(clipboardActions('nodeRepl.write("<invalid>")'), []);
-  assert.equal(splitTextSave('const r = /\';/; await app.setValue(1, "safe"); await app.pressKey("super+s");'), undefined);
+  assert.deepEqual(splitTextSave('const r = /\';/; await app.setValue(1, "safe"); await app.pressKey("super+s");'), {
+    handle: 'app', head: 'const r = /\';/; await app.setValue(1, "safe");', tail: 'await app.pressKey("super+s");',
+  });
 });
 
 test('private and Unicode members remain division operands', async () => {
