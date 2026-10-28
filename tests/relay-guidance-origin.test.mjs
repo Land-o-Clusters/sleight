@@ -277,3 +277,41 @@ test('policy normalization cannot authenticate an originally noncanonical docume
   h.call(2); h.reply(2, [text('clean next')]); await tick();
   assert.doesNotMatch(JSON.stringify(h.result(2)), /Native reference|Confirmations Policy/);
 });
+
+for (const path of ['delivered', 'write failure', 'closed output'])
+  test(`opened-tab URL stays outside held documentation after ${path}`, async t => {
+    const docs = '# Selected Browser\nDI1_OPENED_REFERENCE';
+    const trust = fixtureDocumentation(docs);
+    const h = harness(t, { documentationTrust: trust });
+    h.call(1, 'await cua.createBrowserTab("1", "https://example.test/DI1_URL_PAYLOAD"); tab.evaluate()');
+    h.reply(1, [text('TypeError: tab.evaluate is not a function'), text(docs)], true);
+    await tick();
+    const probe = h.sent.find(m => String(m.id).startsWith('sleight-opened-tabs-'));
+    assert.ok(probe, 'the failed create reads its call-scoped opened-tab record');
+    if (path === 'write failure') h.fail(1);
+    if (path === 'closed output') h.block(true);
+    h.reply(probe.id, [text(JSON.stringify([{ id: '123', browser: '1', call: '1', url: 'https://example.test/DI1_URL_PAYLOAD' }]))]);
+    await tick();
+    h.block(false);
+    if (path === 'delivered') {
+      const content = h.result(1).content;
+      assert.equal(content.find(c => c.text?.startsWith('# Selected Browser')).text, docs);
+      assert.match(content.find(c => c.text?.startsWith('This call opened tab')).text, /DI1_URL_PAYLOAD/);
+    } else assert.equal(h.result(1), undefined);
+    h.call(2); h.reply(2, [text('clean next result')]); await tick();
+    assert.doesNotMatch(JSON.stringify(h.result(2)), /DI1_URL_PAYLOAD|This call opened tab/);
+    if (path !== 'delivered') assert.equal(h.result(2).content.filter(c => c.text === docs).length, 1);
+    h.call(3); h.reply(3, [text('clean later result')]); await tick();
+    assert.doesNotMatch(JSON.stringify(h.result(3)), /DI1_OPENED_REFERENCE|DI1_URL_PAYLOAD/);
+  });
+
+test('bundle validation failure emits a trace line at relay construction', t => {
+  const previous = process.env.SLEIGHT_CHATGPT_APP;
+  process.env.SLEIGHT_CHATGPT_APP = '/no-such-di1r3-engine.app';
+  t.after(() => { if (previous === undefined) delete process.env.SLEIGHT_CHATGPT_APP; else process.env.SLEIGHT_CHATGPT_APP = previous; });
+  const records = [];
+  harness(t, { documentationTrust: undefined, trace: (event, data) => records.push({ event, data }) });
+  assert.deepEqual(records.filter(r => r.event === 'engine-documentation-unvalidated'), [{
+    event: 'engine-documentation-unvalidated', data: { message: "Engine docs couldn't be validated and are not being promoted." },
+  }]);
+});

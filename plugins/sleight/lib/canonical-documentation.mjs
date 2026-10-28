@@ -2,9 +2,13 @@ import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { MODULES_REL } from './setup.mjs';
 
-// These IDs are data inside documentation, never prose or JavaScript. In particular,
-// quotes, escapes, whitespace, newlines and Unicode are not browser ID characters.
-const BROWSER_ID = /^[A-Za-z0-9_-]{1,128}$/;
+// The installed browser-service discovery counter starts at 1 and emits
+// String(counter++). Dot is the sole literal override. Refuse aliases such as iab:
+// get_browser_documentation resolves them to the allocated numeric ID first.
+const BROWSER_ID_SOURCE = '(?:dot|[1-9][0-9]{0,15})';
+const BROWSER_ID = new RegExp(`^${BROWSER_ID_SOURCE}$`);
+const validBrowserId = id => BROWSER_ID.test(id) && (id === 'dot' || Number.isSafeInteger(Number(id)));
+const LENGTH_MARGIN = 1024;
 const VALIDATED = Symbol('canonical engine documentation');
 const escape = text => text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
@@ -28,7 +32,7 @@ export function loadInstalledDocumentation({ app = process.env.SLEIGHT_CHATGPT_A
   const texts = [policy, other];
   for (const [index, core] of cores.entries()) for (const base of [core, ...(coreNames[index].startsWith('core-cua-repl') ? [`${core}\n${policy}`] : [])]) texts.push(base, `${base}\n${audio}`);
   const browser = loadBrowserDocumentation(modules, read);
-  return { texts, coreNames, matches: text => browser(text) || text.startsWith(other + '\n\n') && browser(text.slice(other.length + 2)) };
+  return { texts, coreNames, maxLength: Math.max(...texts.map(t => t.length), other.length + 2 + browser.maxLength) + LENGTH_MARGIN, matches: text => browser(text) || text.startsWith(other + '\n\n') && browser(text.slice(other.length + 2)) };
 }
 
 // Browser documentation is rendered from the installed manifest. All prose and API
@@ -49,15 +53,28 @@ function loadBrowserDocumentation(modules, read) {
   const manifest = JSON.parse(read(join(directory, 'documents.json'), 'utf8'));
   const documents = new Map(manifest.map(entry => [entry.name, read(join(directory, `${entry.name}.md`), 'utf8')]));
   const cache = new Map();
-  return text => {
+  // Bound every variable part by the installed manifest. Including every guidance
+  // entry and capability is an upper bound even when their conditions conflict.
+  const guidanceLength = manifest.filter(e => e.mode === 'included' && !['confirmations', 'tab-claiming-chrome', 'tab-mentions-iab'].includes(e.name))
+    .reduce((n, e) => n + documents.get(e.name).length + 2, 0);
+  const lookupLength = manifest.filter(e => e.mode === 'lookup').reduce((n, e) => n + e.name.length + e.description.length + 8, 0);
+  const capabilityLength = [...capabilities].reduce((n, [id, description]) => n + 2 * (id.length * 2 + description.length + 100), 0);
+  const maxLength = Math.max(0, ...[...names].map(n => n.length)) + binding.length + guidanceLength + lookupLength + capabilityLength +
+    Math.max(...['iab', 'extension', 'cdp', 'mcpapps'].map(type => renderReference(api, type, new Set()).length)) + 512;
+  const matches = text => {
+    if (typeof text !== 'string' || text.length > maxLength) return false;
     const match = /^# Selected Browser\n- Name: ([^\n]+)\n- Type: (iab|extension|cdp|mcpapps)\n- ID: ([^\n]+)\n/.exec(text);
-    if (!match || !names.has(match[1]) || !BROWSER_ID.test(match[3])) return false;
+    if (!match || !names.has(match[1]) || !validBrowserId(match[3])) return false;
     const [, name, type, id] = match;
-    const section = /\n\n# Additional Capabilities\n([\s\S]*?)\n\n# API Reference\n/.exec(text);
-    if (!section) return false;
+    const marker = '\n\n# Additional Capabilities\n';
+    const start = text.indexOf(marker);
+    if (start < 0) return false;
+    const end = text.indexOf('\n\n# API Reference\n', start + marker.length);
+    if (end < 0) return false;
+    const section = text.slice(start + marker.length, end);
     const caps = { browser: [], tab: [] };
     let group;
-    for (const line of section[1].split('\n')) {
+    for (const line of section.split('\n')) {
       if (line === '## Browser Capabilities') group = 'browser';
       else if (line === '## Tab Capabilities') group = 'tab';
       else if (line.startsWith('- `')) {
@@ -90,6 +107,7 @@ function loadBrowserDocumentation(modules, read) {
     }
     return text === expected.replace('- ID: {browser-id}\n', `- ID: ${id}\n`);
   };
+  return Object.assign(matches, { maxLength });
 }
 
 function renderReference(api, type, disabled) {
@@ -110,36 +128,46 @@ function renderReference(api, type, disabled) {
   return lines.join('\n').trim() + '\n';
 }
 
-export function createDocumentationTrust({ load = loadInstalledDocumentation } = {}) {
-  let token, texts, patterns, matches;
+export function createDocumentationTrust({ load = loadInstalledDocumentation, onFailure = () => {} } = {}) {
+  let token, texts, patterns, matches, maxLength;
   const refresh = () => {
-    token = {}; texts = new Set(); patterns = []; matches = undefined;
+    token = {}; texts = new Set(); patterns = []; matches = undefined; maxLength = 0;
     try {
       const loaded = load();
       texts = new Set(loaded.texts);
+      maxLength = loaded.maxLength ?? Math.max(0, ...[...texts, ...(loaded.browserTemplates ?? [])].map(t => t.length)) + LENGTH_MARGIN;
       patterns = (loaded.browserTemplates ?? []).map(template => {
         const parts = template.split('{browser-id}');
         if (parts.length !== 2) throw Error('Invalid browser ID slot');
-        return new RegExp(`^${escape(parts[0])}([A-Za-z0-9_-]{1,128})${escape(parts[1])}$`);
+        return new RegExp(`^${escape(parts[0])}(${BROWSER_ID_SOURCE})${escape(parts[1])}$`);
       });
       matches = loaded.matches;
-    } catch { texts = new Set(); patterns = []; matches = undefined; }
+    } catch {
+      texts = new Set(); patterns = []; matches = undefined; maxLength = 0;
+      try { onFailure(); } catch { /* Diagnostics must not prevent fail-closed startup. */ }
+    }
   };
   refresh();
   const canonical = text => {
-    try { return typeof text === 'string' && (texts.has(text) || patterns.some(p => p.exec(text)?.[0].length === text.length) || matches?.(text) === true); }
+    if (typeof text !== 'string' || text.length > maxLength) return false;
+    try {
+      return texts.has(text) || patterns.some(p => {
+        const m = p.exec(text);
+        return m?.[0].length === text.length && validBrowserId(m[1]);
+      }) || matches?.(text) === true;
+    }
     catch { return false; }
   };
   const trusted = item => item?.type === 'text' && item[VALIDATED] === token;
   const mark = item => trusted(item) || item?.type !== 'text' || !canonical(item.text) ? item : { type: 'text', text: item.text, [VALIDATED]: token };
   const split = item => {
     const whole = mark(item);
-    if (trusted(whole) || item?.type !== 'text' || !/^(?:## Computer Use|# Other Browser APIs|# Computer Use Confirmations Policy|# Browser Safety|# API Reference|# Selected Browser)\n/.test(item.text)) return [whole];
+    if (trusted(whole) || item?.type !== 'text' || typeof item.text !== 'string' || !['## Computer Use', '# Other Browser APIs', '# Computer Use Confirmations Policy', '# Browser Safety', '# API Reference', '# Selected Browser'].some(h => item.text?.startsWith(h + '\n'))) return [whole];
     // Some adapters join a documentation item and an AX state with a newline.
     // Authenticate the complete prefix; the state never inherits its token.
     let boundaries = 0;
-    for (const match of item.text.matchAll(/^Window: /gm)) {
-      if (++boundaries > 8 || match.index > 256000) break;
+    for (const match of item.text.slice(0, maxLength + 8).matchAll(/^Window: /gm)) {
+      if (++boundaries > 8 || match.index > maxLength + 2) break;
       const prefix = item.text.slice(0, match.index);
       for (const text of [prefix, prefix.slice(0, -1), prefix.slice(0, -2)]) {
         if (!canonical(text)) continue;

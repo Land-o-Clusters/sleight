@@ -728,7 +728,7 @@ function internalTurnEnd(tool, keepHidden = false) {
 const STATS_TOOLS = new Set(['js', 'replay', 'browser_open', 'browser_read', 'browser_act', 'browser_fill']);
 
 export function createRelay({
-  documentationTrust = createDocumentationTrust(),
+  documentationTrust,
   directBrowser,
   turboUnavailable,
   directHost,
@@ -1082,6 +1082,10 @@ export function createRelay({
   const completenessCalls = new Map();
   let compactor = createReadCompactor({ leanCalls, prompt, compactAcquisition, compactReacquire, screenshotReads: textlessHint, readHints, routeSteering, undoReceipts, outcomes, actionNumbers: workflowDocs });
   const browserStale = createBrowserStaleGuard();
+  let traceFailed = false;
+  documentationTrust ??= createDocumentationTrust({ onFailure: () => trace('engine-documentation-unvalidated', {
+    message: "Engine docs couldn't be validated and are not being promoted.",
+  }) });
   // Validate the original engine bytes before policy, size or reference transforms.
   const heldDocumentation = documentationTrust.trusted;
   let resultBudget = createResultBudget({ documentationTrust, validateDocumentation: false });
@@ -1204,7 +1208,6 @@ export function createRelay({
   // Apps this session drove (names and bundle IDs), and turn_ended calls whose reply should say
   // when one of them holds a keyboard filter tap: the mod shows that to the user.
   const drivenApps = new Set(), turnEnds = new Set(), tapWarned = new Set();
-  let traceFailed = false;
   function trace(direction, msg) {
     if (traceFailed) {
       if (direction === 'preapproved-app') throw new Error('preapproval trace unavailable');
@@ -5588,10 +5591,16 @@ export function createRelay({
           const text = (reply.result?.content ?? []).filter(c => c.type === 'text').map(c => c.text).join('\n');
           const opened = parseOpenedPayload(text, original.id);
           const lastText = engineLastText >= 0 ? engineLastText : original.result.content.findLastIndex(c => c.type === 'text');
-          original.result.content = original.result.content.map((c, i) => {
-            if (c.type !== 'text') return c;
+          original.result.content = original.result.content.flatMap((c, i) => {
+            if (c.type !== 'text') return [c];
             const text = rewritten(c.text);
-            return { ...c, text: i === lastText ? openedTabNote(text, { code, opened }) : text };
+            if (i === lastText && heldDocumentation(c)) {
+              // The URL is caller data. Keep the note outside the validated item
+              // so delivery retries retain only the engine documentation.
+              const note = openedTabNote('', { code, opened }).trimStart();
+              return [{ ...c, text }, ...(note ? [{ type: 'text', text: note }] : [])];
+            }
+            return [{ ...c, text: i === lastText ? openedTabNote(text, { code, opened }) : text }];
           });
           observeServerMessage(original);
         };
