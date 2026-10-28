@@ -54,17 +54,16 @@ for (const options of ['{ button: "right" }', '{ "button": "right" }', '{ button
     assert.equal(f.sent.length, 0);
     const reply = f.received.at(-1).result;
     assert.equal(reply.isError, true);
-    assert.match(reply.content[0].text, /mouseButton/);
-    assert.match(reply.content[0].text, /nothing was sent/);
+    assert.equal(reply.content[0].text, 'sleight: click(target,{mouseButton:"right"}); nothing sent.');
   });
 }
 
-test('computed native button option refuses before a read or click and names mouseButton', async () => {
+test('computed native button option refuses before a read or click and gives the right-click form', async () => {
   const sent = [];
   const raw = { getAXState: async () => { sent.push('read'); return tree; }, click: async () => sent.push('click') };
   const realm = { app: raw, options: { button: 'right' }, cua: { getApp: async () => raw }, nodeRepl: { write() {} } };
   await assert.rejects(runInNewContext(`(async () => { ${guardedCode('await app.click([40, 20], options);', window)} })()`, realm),
-    /mouseButton.*nothing was sent/);
+    { message: 'sleight: click(target,{mouseButton:"right"}); nothing sent for this action.' });
   assert.deepEqual(sent, []);
 });
 

@@ -234,7 +234,7 @@ test('RPC error messages also lose const warnings and retain the cause', t => {
   assert.doesNotMatch(out.error.message, /declared with const/);
 });
 
-for (const method of ['check', 'wait', 'rightClick']) for (const rpc of [false, true]) for (const prefix of ['', 'TypeError: ', 'Error: TypeError: ']) {
+for (const method of ['check', 'wait', 'rightClick']) for (const rpc of [false, true]) for (const prefix of ['', 'Error: ', 'TypeError: ', 'Error: TypeError: ']) {
   test(`a nonexistent native ${method} lists native API names, RPC=${rpc}, prefix=${prefix}`, t => {
     const h = harness(t); h.call(1, `await app.${method}()`);
     const message = `${prefix}app.${method} is not a function`;
@@ -260,7 +260,7 @@ for (const prompt of [undefined, 'lean']) test(`open_file advertises only captur
   assert.match(out, /Window handle: `__sleightOpenedApp\d+`/);
 });
 
-for (const prefix of ['', 'TypeError: ', 'Error: TypeError: ']) test(`native API advice keeps handle and error boundaries, prefix=${prefix}`, t => {
+for (const prefix of ['', 'Error: ', 'TypeError: ', 'Error: TypeError: ']) test(`native API advice keeps handle and error boundaries, prefix=${prefix}`, t => {
   const h = harness(t);
   h.call(1, 'let editor = await cua.getApp("Example")'); h.reply(1, [text(tree)]);
   h.call(2, 'await editor.wait()'); h.reply(2, [text(`${prefix}editor.wait is not a function`)], true);
