@@ -1,0 +1,295 @@
+{
+  "phase": "fuzz pending dedicated gate",
+  "baseCommit": "e679ed7eed3413f35daf434b31d47e80c2a321b5",
+  "sourceHashes": {
+    "plugins/sleight/lib/code-ast.mjs": "5f90fcb89a4ad8cb6dbc9435f26f62c8a54304f42218ec419b5bd3b2917dc3b1",
+    "plugins/sleight/lib/relay.mjs": "e551bd0e3b485e2947391ed43b3dcdb9c3e7d66eff6612e1d1467573fe1b990b",
+    "plugins/sleight/vendor/meriyah/dist/meriyah.min.mjs": "d29a5ff8e5fbdb8cb0617a721891fb1d3fb107883dc6f4ee9bda5b32896edf50",
+    "bench/code-ast/oracle.mjs": "4721dc9d3f16f8d99581b7f428e88d05c96492267230deffe9a5e1b8ff5319d0",
+    "bench/code-ast/differential.mjs": "c4d3a65adba3236f7b5a19321ef321f78ef768ef83eac9b6526b7a4b77fa36cc",
+    "bench/code-ast/corpus-shaped.mjs": "485ce98b9b87dcf29b8810c758b42a7b3681fc0376d99ac2915dc42a79e167c4"
+  },
+  "corpusSummary": {
+    "corpus": {
+      "claudeFiles": 233,
+      "codexFiles": 324,
+      "claude": 1576,
+      "codex": 3795,
+      "malformed": 0
+    },
+    "before": "2026-10-28T07:28:00Z",
+    "manifest": "752ca473d5e60dfad185524f2650d5d6714d6e627ea30db79ac403df2b87e962",
+    "differences": 1707,
+    "oldAccepted": 5371,
+    "oldAcceptedNewRefused": 0,
+    "oldRefusedNewAccepted": 0
+  },
+  "corpusOracle": {
+    "label": "recorded corpus",
+    "tested": 5371,
+    "nodeAccepted": 5371,
+    "meriyahAccepted": 5371,
+    "bothRefuse": 0,
+    "falseRefusal": 0,
+    "meriyahOnly": 0,
+    "failOpen": 0,
+    "falsePositive": 0,
+    "oracleCalls": 14566,
+    "legacyInventoryMiss": 1631,
+    "legacyAdmissionRefusal": 0
+  },
+  "reviewerCases": [
+    {
+      "label": "reviewer m1.mjs",
+      "tested": 13,
+      "nodeAccepted": 10,
+      "meriyahAccepted": 10,
+      "bothRefuse": 3,
+      "falseRefusal": 0,
+      "meriyahOnly": 0,
+      "failOpen": 0,
+      "falsePositive": 0,
+      "oracleCalls": 10,
+      "legacyInventoryMiss": 0,
+      "legacyAdmissionRefusal": 6
+    },
+    {
+      "label": "reviewer m2.mjs",
+      "tested": 5,
+      "nodeAccepted": 0,
+      "meriyahAccepted": 0,
+      "bothRefuse": 5,
+      "falseRefusal": 0,
+      "meriyahOnly": 0,
+      "failOpen": 0,
+      "falsePositive": 0,
+      "oracleCalls": 0,
+      "legacyInventoryMiss": 0,
+      "legacyAdmissionRefusal": 0
+    },
+    {
+      "label": "reviewer m3.mjs",
+      "tested": 6,
+      "nodeAccepted": 5,
+      "meriyahAccepted": 5,
+      "bothRefuse": 1,
+      "falseRefusal": 0,
+      "meriyahOnly": 0,
+      "failOpen": 0,
+      "falsePositive": 0,
+      "oracleCalls": 5,
+      "legacyInventoryMiss": 4,
+      "legacyAdmissionRefusal": 0
+    },
+    {
+      "label": "reviewer m4.mjs",
+      "tested": 10,
+      "nodeAccepted": 8,
+      "meriyahAccepted": 8,
+      "bothRefuse": 2,
+      "falseRefusal": 0,
+      "meriyahOnly": 0,
+      "failOpen": 0,
+      "falsePositive": 0,
+      "oracleCalls": 7,
+      "legacyInventoryMiss": 2,
+      "legacyAdmissionRefusal": 2
+    },
+    {
+      "label": "reviewer m5.mjs",
+      "tested": 3,
+      "nodeAccepted": 3,
+      "meriyahAccepted": 3,
+      "bothRefuse": 0,
+      "falseRefusal": 0,
+      "meriyahOnly": 0,
+      "failOpen": 0,
+      "falsePositive": 0,
+      "oracleCalls": 7,
+      "legacyInventoryMiss": 3,
+      "legacyAdmissionRefusal": 0
+    },
+    {
+      "label": "reviewer m6.mjs",
+      "tested": 8,
+      "nodeAccepted": 8,
+      "meriyahAccepted": 5,
+      "bothRefuse": 0,
+      "falseRefusal": 3,
+      "meriyahOnly": 0,
+      "failOpen": 0,
+      "falsePositive": 0,
+      "oracleCalls": 8,
+      "legacyInventoryMiss": 7,
+      "legacyAdmissionRefusal": 0
+    },
+    {
+      "label": "reviewer m7.mjs",
+      "tested": 11,
+      "nodeAccepted": 11,
+      "meriyahAccepted": 11,
+      "bothRefuse": 0,
+      "falseRefusal": 0,
+      "meriyahOnly": 0,
+      "failOpen": 0,
+      "falsePositive": 0,
+      "oracleCalls": 11,
+      "legacyInventoryMiss": 0,
+      "legacyAdmissionRefusal": 2
+    }
+  ],
+  "reviewerDisagreements": [
+    {
+      "label": "reviewer m6.mjs",
+      "case": 1,
+      "sha256": "33eeedd81d68167d19b45ae6dc25fd048991795218c02abce6e6746906cb1178",
+      "nodeAccepted": true,
+      "meriyahAccepted": false,
+      "failOpen": false,
+      "falsePositive": false,
+      "error": {
+        "line": 3,
+        "column": 0,
+        "reason": "Unexpected token: '/'"
+      }
+    },
+    {
+      "label": "reviewer m6.mjs",
+      "case": 2,
+      "sha256": "abc77bae08dde011a96e08b981f863477539e79e182b9193049c70004248f351",
+      "nodeAccepted": true,
+      "meriyahAccepted": false,
+      "failOpen": false,
+      "falsePositive": false,
+      "error": {
+        "line": 3,
+        "column": 0,
+        "reason": "Unexpected token: '/'"
+      }
+    },
+    {
+      "label": "reviewer m6.mjs",
+      "case": 5,
+      "sha256": "720f3ca7dd7eed759f531c86522795662e92a523c6ec79b9869b216e778eb86e",
+      "nodeAccepted": true,
+      "meriyahAccepted": false,
+      "failOpen": false,
+      "falsePositive": false,
+      "error": {
+        "line": 3,
+        "column": 0,
+        "reason": "Unexpected token: '/'"
+      }
+    }
+  ],
+  "measurements": {
+    "counts": {
+      "claudeFiles": 233,
+      "codexFiles": 324,
+      "claude": 1576,
+      "codex": 3795,
+      "malformed": 0
+    },
+    "manifest": "752ca473d5e60dfad185524f2650d5d6714d6e627ea30db79ac403df2b87e962",
+    "corpusRefused": 0,
+    "samples": 5371,
+    "coldLoadMedianMs": 3.1658125000000013,
+    "warmLoadMedianMs": 0.230853999999999,
+    "coldLoadSamplesMs": [
+      3.310125000000003,
+      4.902624999999999,
+      3.8988329999999998,
+      2.5127919999999992,
+      3.909540999999999,
+      2.5987910000000003,
+      2.5884169999999997,
+      3.7240409999999997,
+      3.0214999999999996,
+      2.802125
+    ],
+    "warmLoadSamplesMs": [
+      0.23187499999999872,
+      0.11549999999999727,
+      0.10012499999999847,
+      0.6562920000000005,
+      0.2530409999999996,
+      0.2298329999999993,
+      0.2557079999999985,
+      0.3954159999999973,
+      0.12945900000000066,
+      0.08045800000000014
+    ],
+    "coldRssDeltaMedian": 4087808,
+    "parserRssDelta": 851968,
+    "parseP50Ms": 0.002124999999978172,
+    "parseP99Ms": 0.05025000000000546,
+    "vendor": {
+      "bytes": 134305,
+      "allocated": 139264
+    },
+    "facade": {
+      "bytes": 8283,
+      "allocated": 12288
+    },
+    "totalBytes": 142588,
+    "loadBefore": [
+      9.6845703125,
+      5.75,
+      4.958984375
+    ],
+    "loadAfter": [
+      10.59033203125,
+      6.0029296875,
+      5.052734375
+    ],
+    "conditions": "Shared Mac, under load; no quiet-window guarantee. Cold means fresh process/module, with OS file cache retained. Warm means cached ESM namespace loading in one warmed process.",
+    "bars": {
+      "coldLoad": true,
+      "warmLoad": true,
+      "parseP99": true,
+      "disk": true
+    }
+  },
+  "fuzz": null,
+  "focusedTests": {
+    "command": "bash bench/code-ast/validate.sh tests",
+    "exit": 0,
+    "total": 4547,
+    "passed": 4537,
+    "failed": 0,
+    "skipped": 10
+  },
+  "compat": {
+    "checkedAt": "2026-10-28T20:40:44.532Z",
+    "source": "static",
+    "appVersion": "26.1023.50603",
+    "engineVersion": "26.1022.1001641",
+    "sleight": "e679ed7e",
+    "verdict": "fail",
+    "steps": [
+      {
+        "id": "bundle-layout",
+        "status": "fail",
+        "reason": "missing coreDoc"
+      },
+      {
+        "id": "tool-schema",
+        "status": "pass"
+      },
+      {
+        "id": "cell-parser",
+        "status": "pass",
+        "reason": "Meriyah 7.0.0 and both cell parser option blocks match",
+        "version": "7.0.0",
+        "options": {
+          "next": true,
+          "module": true,
+          "ranges": true,
+          "loc": false,
+          "disableWebCompat": true
+        },
+        "blocks": 2
+      }
+    ]
+  }
+}

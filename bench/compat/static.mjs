@@ -8,6 +8,7 @@ import { HELPER_REL, MODULES_REL, NODE_REL, NODE_REPL_REL, REPL_REL } from '../.
 import { engineJsVariant } from '../../plugins/sleight/lib/tool-description.mjs';
 import { API_MEMBERS, CUA_METHODS, checkApiContract, checkPolicyRewrite, checkWorkflowRewrite, jsDescriptionResult } from './contract.mjs';
 import { checkDocumentationFormat } from './documentation.mjs';
+import { checkCellParser } from './parser.mjs';
 
 const OAI = join(MODULES_REL, '@oai');
 export const BUNDLE = {
@@ -84,6 +85,12 @@ export function analyzeBundle(app) {
   // The helper's version is what `sleight-mcp --doctor` prints as "Codex computer-use <version>".
   const engineVersion = existsSync(join(app, BUNDLE.helperInfo)) ? safeVersion(plistString(read(app, BUNDLE.helperInfo), 'CFBundleShortVersionString')) : undefined;
   results.push(missing.length ? result('bundle-layout', 'fail', `missing ${missing.join(', ')}`) : result('bundle-layout', 'pass'));
+  if (!missing.includes('nodeRepl')) {
+    const binary = readFileSync(join(app, BUNDLE.nodeRepl)).toString('latin1');
+    const absent = NODE_REPL_STRINGS.filter(name => !binary.includes(name));
+    results.push(absent.length ? result('tool-schema', 'fail', `node_repl no longer contains ${absent.join(', ')}`) : result('tool-schema', 'pass'));
+    results.push(checkCellParser(binary));
+  }
   if (missing.includes('plugin') || missing.includes('coreDoc') || missing.includes('tinysky')) {
     return { appVersion, engineVersion, results, fingerprint: undefined };
   }
@@ -106,11 +113,7 @@ export function analyzeBundle(app) {
     const absent = LAUNCH_STRINGS.filter(name => !launch.includes(name));
     results.push(absent.length ? result('launch-env', 'fail', `cua-repl's launcher no longer mentions ${absent.join(', ')}`) : result('launch-env', 'pass'));
   }
-  if (!missing.includes('nodeRepl')) {
-    const binary = readFileSync(join(app, BUNDLE.nodeRepl)).toString('latin1');
-    const absent = NODE_REPL_STRINGS.filter(name => !binary.includes(name));
-    results.push(absent.length ? result('tool-schema', 'fail', `node_repl no longer contains ${absent.join(', ')}`) : result('tool-schema', 'pass'));
-  }
+
 
   const coreDoc = read(app, BUNDLE.coreDoc);
   const policy = existsSync(join(app, BUNDLE.policy)) ? read(app, BUNDLE.policy) : '';
@@ -142,6 +145,7 @@ export function analyzeBundle(app) {
 
   // One hash over everything checked, so a later run can say whether any of it changed without keeping engine text.
   const hash = createHash('sha256');
+  hash.update(JSON.stringify(results.find(item => item.id === 'cell-parser') ?? null)).update('\0');
   for (const text of [coreDoc, policy, ...Object.values(descriptions).map(text => text ?? ''), macApp, ...scripts]) hash.update(text).update('\0');
   return { appVersion, engineVersion, results, fingerprint: hash.digest('hex') };
 }

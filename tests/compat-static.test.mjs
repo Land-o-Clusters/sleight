@@ -26,7 +26,8 @@ function bundle(root, { app = '26.1013.40934', engine = '26.1013.1001501', drop 
   put(BUNDLE.appInfo, plist(app));
   put(BUNDLE.helperInfo, plist(engine));
   put(BUNDLE.node, 'binary');
-  put(BUNDLE.nodeRepl, 'x\0codetimeout_msserver_instructions\0js_reset\0turn_ended\0hook_event_name\0x-codex-turn-metadatasession_idturn_id\0MCP elicitation request cancelled');
+  const cellParser = 'parseModule(code, {next:true,module:true,ranges:true,loc:false,disableWebCompat:true,onToken:diagnosticTokens,onComment(_kind,_value,start,end){ diagnosticComments.push({start,end}); }})';
+  put(BUNDLE.nodeRepl, 'x\0codetimeout_msserver_instructions\0js_reset\0turn_ended\0hook_event_name\0x-codex-turn-metadatasession_idturn_id\0MCP elicitation request cancelled\0Meriyah v7.0.0\0' + cellParser + '\0' + cellParser);
   put(BUNDLE.replBin, 'import "@oai/cua-repl";');
   put(BUNDLE.launch, 'const _=i.env.CUA_REPL_NODE_REPL_PATH,c=i.env.CUA_REPL_ENABLED_SURFACES;tools:{js:{},js_reset:{}};NODE_REPL_TOOL_OVERRIDES:1');
   put(BUNDLE.coreDoc, `## Computer Use\n\nControl apps.\n\n## API\n\n\`\`\`typescript\n${fixture('engine-api-26.1007.71326.ts')}\`\`\`\n\n## Notes\n\nNotes.\n`);
@@ -97,7 +98,8 @@ test('a changed js description or policy warns; a bundle without the engine stop
   assert.equal(results['js-description'], 'warn');
   assert.equal(results['policy-rewrite'], 'warn');
   const bare = analyzeBundle(bundle(join(root, 'bare'), { drop: [BUNDLE.coreDoc] }));
-  assert.equal(bare.results.length, 1);
+  assert.deepEqual(bare.results.map(item => item.id), ['bundle-layout', 'tool-schema', 'cell-parser']);
+  assert.equal(bare.results.find(item => item.id === 'cell-parser').status, 'pass');
   assert.equal(bare.fingerprint, undefined);
 });
 

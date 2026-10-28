@@ -24,6 +24,11 @@ IP addresses in selectors stop startup. Existing app selectors, `browser` and `*
 
 ## Relay checks
 
+Every `js` cell first passes Meriyah 7.0.0 with the engine's module parser options.
+A syntax error refuses the cell with its line, column and parser reason.
+The parser loads on the first `js` call. Literal checks retain the existing
+tokenizer and its conservative refusals during the AST migration.
+
 Before forwarding `js`, the relay scans literal arguments to `typeText`, `paste`,
 `setValue` and `pressKey`, including literal bracket method names and escapes.
 Constant templates and adjacent literal pieces are checked. Simple key sequences

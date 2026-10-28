@@ -72,7 +72,7 @@ test('relay refuses incomplete inspection before a prefix can dispatch through e
   assert.equal(replies.length, 4);
   for (const reply of replies) {
     assert.equal(reply.result.isError, true);
-    assert.match(reply.result.content[0].text, /cannot inspect JavaScript/i);
+    assert.match(reply.result.content[0].text, /cannot inspect JavaScript|JS \[\d+:\d+\]:/i);
     assert.doesNotMatch(reply.result.content[0].text, /SECRET|unterminated/);
   }
 });
@@ -98,7 +98,7 @@ test('line refusal explains literal plus slash ambiguity without echoing caller 
     const text = reply.result.content[0].text;
     assert.equal(reply.result.isError, true);
     assert.match(text, /outside strings\/templates/);
-    assert.match(text, /ambiguous literal syntax \(regex\/division, <!--\/-->, or deep nesting\)/);
+    assert.match(text, /ambiguous regex\/division, <!--\/--> or deep nesting/);
     assert.doesNotMatch(text, /SECRET|VALUE|Save/);
   }
 });

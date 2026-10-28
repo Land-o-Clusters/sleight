@@ -1,4 +1,5 @@
 import { unsupportedCodeLines } from './code-line-terminators.mjs';
+import { parseCell } from './code-ast.mjs';
 import { parseTypedApps, isPresent, predictApps, upfrontAsk, remoteApprovalNotice, physicalApprovalNotice, resolveApp } from './remote-approvals.mjs';
 import { turboFirstRules } from './turbo-first-rules.mjs';
 // A stdio relay between Claude Code and the computer-use server.
@@ -3722,15 +3723,24 @@ export function createRelay({
       msg.params.arguments = { ...rest, code: command };
     }
     if (jsArgs && typeof msg.params.arguments?.code === 'string') {
+      // Keep the existing top-level return repair before parsing the engine cell.
+      const cell = finalReturnCode(msg.params.arguments.code);
+      const { error } = parseCell(cell);
+      if (error) {
+        finishedCall(msg.id);
+        toClient({ jsonrpc: '2.0', id: msg.id, result: { isError: true, content: [{ type: 'text',
+          text: `JS [${error.line}:${error.column}]: ${error.reason}` }] } });
+        return;
+      }
       if (unsupportedCodeLines(msg.params.arguments.code)) {
         finishedCall(msg.id);
         toClient({ jsonrpc: '2.0', id: msg.id, result: { isError: true, content: [{ type: 'text',
-          text: promptNotice('Raw CR/U+2028/U+2029 outside strings/templates, or ambiguous literal syntax (regex/division, <!--/-->, or deep nesting). Use LF source lines. In strings/templates, use \\r, \\u2028 or \\u2029 escapes, or split the ambiguous expression into a separate call.', prompt) }] } });
+          text: promptNotice('Raw CR/U+2028/U+2029 outside strings/templates, or ambiguous regex/division, <!--/--> or deep nesting. Use LF source. Escape literal CR/U+2028/U+2029 as \\r/\\u2028/\\u2029. Split ambiguous expressions into separate calls.', prompt) }] } });
         return;
       }
       // With or without the input lease: after `const app`, a suggested `let app = …` is a redeclaration error.
       if (/(?:^|[;\n])\s*const\s+app\s*=/.test(msg.params.arguments.code)) constApp = true;
-      msg.params.arguments.code = finalReturnCode(msg.params.arguments.code);
+      msg.params.arguments.code = cell;
       const fixed = nativeGetStateCode(msg.params.arguments.code, id => nativeHandles.has(id), id => browserHandles.has(id));
       if (fixed !== msg.params.arguments.code) { msg.params.arguments.code = fixed; trace('getstate-rewritten', { id: msg.id }); }
       if (leanFirst && !requestsFullDocumentation(msg.params.arguments.code) &&

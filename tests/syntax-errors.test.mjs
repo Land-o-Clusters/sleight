@@ -55,13 +55,14 @@ test('the relay adds one mapped line to a failed reply, keeps the raw error, and
   clientOut.on('data', data => replies.push(...data.toString().trim().split('\n').map(JSON.parse)));
   const relay = createRelay({ clientIn, clientOut, serverIn, serverOut, changeReview: false });
   try {
-    const code = 'const a = 1;\nconst b = ;';
+    // The admitted caller source is valid; the fake engine reports a later error.
+    const code = 'const a = 1;\nconst b = 2;';
     clientIn.write(JSON.stringify({ id: 1, method: 'tools/call', params: { name: 'js', arguments: { code } } }) + '\n');
     assert.equal(requests.length, 1);
     // The fake engine follows the measured convention: 1-based line, 0-based column, in the transmitted code.
     const sent = requests[0].params.arguments.code, start = sent.indexOf(code);
     assert.ok(start >= 0);
-    const line = sent.slice(0, start).split('\n').length + 1, column = code.split('\n')[1].indexOf(';');
+    const line = sent.slice(0, start).split('\n').length + 1, column = 10;
     const raw = `[${line}:${column}-${line}:${column + 1}]: Unexpected token: ';'`;
     serverOut.write(JSON.stringify({ id: 1, result: { isError: true, content: [{ type: 'text', text: raw }] } }) + '\n');
     assert.equal(requests.length, 1);
@@ -82,7 +83,7 @@ test('a JSON-RPC error carries the mapped line in its message, in both prompt va
     clientOut.on('data', data => replies.push(...data.toString().trim().split('\n').map(JSON.parse)));
     const relay = createRelay({ clientIn, clientOut, serverIn, serverOut, changeReview: false, prompt });
     try {
-      const code = 'const a = 1;\nconst b = ;';
+      const code = 'const a = 1;\nconst b = 2;';
       clientIn.write(JSON.stringify({ id: 1, method: 'tools/call', params: { name: 'js', arguments: { code } } }) + '\n');
       const sent = requests[0].params.arguments.code, start = sent.indexOf(code);
       const line = sent.slice(0, start).split('\n').length + 1;

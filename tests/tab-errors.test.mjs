@@ -424,7 +424,7 @@ test('regex literal quotes cannot hide actions from debugger error advice', t =>
 });
 
 test('division and replace slashes are not regex starts, so those reads stay reads', t => {
-  for (const code of [".replace(/\\s+/g,' ')", 'a/2 + b/2', 'done/total*100',
+  for (const code of ["state.replace(/\\s+/g,' ')", 'a/2 + b/2', 'done/total*100',
     'await tab.getAXState(); a/2 + b/2', 'const r = /hello/; await tab.getAXState()']) {
     assert.equal(isTabBinding(code), true, code);
     const out = reply(t, 'Debugger unattached', true, code).content[0].text;
@@ -473,7 +473,7 @@ test('incomplete source is refused before an engine error can follow it', t => {
     assert.equal(sent.length, 0);
     assert.equal(output.length, 1);
     assert.equal(output[0].result.isError, true);
-    assert.match(output[0].result.content[0].text, /cannot inspect JavaScript/);
+    assert.match(output[0].result.content[0].text, /cannot inspect JavaScript|JS \[\d+:\d+\]:/);
   }
 });
 
