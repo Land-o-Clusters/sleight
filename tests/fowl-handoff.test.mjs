@@ -207,6 +207,8 @@ test('fowl+sleight setup loads FowlBrowser for tabs and computer-only sleight fo
   assert.equal(setup.mcpServers['plugin:sleight:computer'].env.SLEIGHT_SURFACES, 'computer');
   assert.match(setup.allowed, /mcp__fowlbrowser/);
   assert.match(setup.allowed, /mcp__plugin_sleight_computer__js/);
+  assert.ok(setup.allowed.split(',').includes('mcp__plugin_sleight_computer__app_handoff'));
+  assert.ok(!setup.allowed.split(',').includes('mcp__plugin_sleight_computer'));
   assert.match(setup.promptPrefix, /FowlBrowser/);
   assert.match(setup.promptPrefix, /plugin_sleight_computer__js/);
   assert.equal(setup.pluginDir, join(root, 'plugins/sleight'));

@@ -4,6 +4,7 @@ const MAC_USERS = ['', 'Users', ''].join('/');
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
+import { trackTemp } from '../scripts/temp-leftovers.mjs';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { runInNewContext } from 'node:vm';
@@ -136,7 +137,7 @@ async function runner({ hygieneResult = { leftWindows: [], errors: [] }, hygiene
   }
   const calls = [], saved = [], envs = [], tailScopes = [], directories = [], hubRefreshes = [];
   const logs = [], driverOptions = [], codexRuns = [], files = new Map(), commands = [], codexConfigs = [], contexts = [];
-  const temp = mkdtempSync(join(tmpdir(), 'bench-run-test-'));
+  const temp = trackTemp(mkdtempSync(join(tmpdir(), 'bench-run-test-')));
   const lockPath = join(temp, 'live.lock'), holdPath = join(temp, 'sleight-hold');
   let preflightDone = false, calculatorObservations = 0, engineReadCount = 0;
   const source = readFileSync(new URL('../bench/run.mjs', import.meta.url), 'utf8')
@@ -825,6 +826,24 @@ test('generic default comparisons use the guarded lifecycle for every arm and pr
   assert.equal(result.exitCode, 1);
   assert.ok(result.tailScopes.every(scope => scope.ownedOnly));
   assert.ok(result.calls.filter(Array.isArray).filter(call => call[0] === 'driver').every(args => args.includes('--disallowedTools')));
+});
+
+test('world native handoffs bypass permission requests while unlisted tools keep the deny hook', async () => {
+  const result = await runner({ suite: 'world', arm: 'sleight', drive: true, extraArgs: ['--owner-away'] });
+  assert.equal(result.error, undefined);
+  const commands = result.calls.filter(call => Array.isArray(call) && call[0] === 'driver');
+  assert.equal(commands.length, 3);
+  const handoff = 'mcp__plugin_sleight_computer__app_handoff';
+  for (const args of commands) {
+    const allowed = args[args.indexOf('--allowedTools') + 1].split(',');
+    assert.ok(allowed.includes(handoff), 'exact allowedTools entry avoids PermissionRequest and its deny hook');
+    assert.ok(!allowed.includes('mcp__plugin_sleight_computer'), 'unlisted plugin tools still request permission');
+    const disallowed = args.includes('--disallowedTools') ? args[args.indexOf('--disallowedTools') + 1].split(',') : [];
+    assert.ok(!disallowed.some(tool => handoff.startsWith(tool)), 'no disallowed entry overrides the handoff grant');
+    const settings = result.files.get(args[args.indexOf('--settings') + 1]);
+    assert.match(settings.hooks.PermissionRequest[0].hooks[0].command, /deny-approval\.mjs/);
+    assert.ok(!JSON.stringify(settings.hooks.PreToolUse ?? []).includes('deny-approval.mjs'));
+  }
 });
 
 test('generic comparisons isolate MCP while allowing the sleight mod connection', async () => {

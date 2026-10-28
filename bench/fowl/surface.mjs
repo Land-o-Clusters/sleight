@@ -16,7 +16,7 @@ export function fowlSleightSetup({ dir, mcpRoot, sleightRepo, label, remote = nu
         env: { SLEIGHT_SURFACES: 'computer', SLEIGHT_HAND: '0' },
       },
     },
-    allowed: 'mcp__fowlbrowser,mcp__plugin_sleight_computer__js,mcp__plugin_sleight_computer__js_reset,mcp__plugin_sleight_computer__open_file',
+    allowed: 'mcp__fowlbrowser,mcp__plugin_sleight_computer__js,mcp__plugin_sleight_computer__js_reset,mcp__plugin_sleight_computer__open_file,mcp__plugin_sleight_computer__app_handoff',
     promptPrefix: 'Use FowlBrowser (mcp__fowlbrowser) for the web page. When the task needs a Mac app, use mcp__plugin_sleight_computer__js.\n\n',
     pluginDir: path.join(sleightRepo, 'plugins/sleight'),
   };
