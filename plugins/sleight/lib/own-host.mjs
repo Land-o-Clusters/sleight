@@ -49,7 +49,7 @@ export function namesOwnHost(app, pidCheck = ownHostPid) {
 const LITERAL = String.raw`"(?:[^"\\]|\\[\s\S])*"|'(?:[^'\\]|\\[\s\S])*'|\x60(?:[^\x60\\$]|\\[\s\S]|\$(?!\{))*\x60`;
 const PLAIN = new RegExp(String.raw`\s*((?:${LITERAL})(?:\s*\+\s*(?:${LITERAL}))*|\d+)\s*\)`, 'y');
 const GET_APP = String.raw`\bcua\s*(?:(?:\?\.|\.)\s*getApp\b|(?:\?\.\s*)?\[\s*(["'\x60])getApp\1\s*\])`;
-const decode = body => body.replace(/\\(?:x([0-9a-fA-F]{2})|u\{([0-9a-fA-F]{1,6})\}|u([0-9a-fA-F]{4})|(\r\n|[\n\r])|([\s\S]))/g,
+const decode = body => body.replace(/\\(?:x([0-9a-fA-F]{2})|u\{([0-9a-fA-F]{1,6})\}|u([0-9a-fA-F]{4})|(\r\n|[\n\r\u2028\u2029])|([\s\S]))/g,
   (_, x, braced, u, line, other) => {
     if (x || braced || u) { try { return String.fromCodePoint(parseInt(x ?? braced ?? u, 16)); } catch { return ''; } }
     if (line) return '';

@@ -2,7 +2,7 @@ import { isLeaseRead } from './input-lease.mjs';
 
 // Retry admission is narrower than browser routing: unknown JavaScript may have acted.
 export function isBrowserRead(code) {
-  const source = code.replace(/"(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*'|\/\/[^\n]*|\/\*[\s\S]*?\*\//g,
+  const source = code.replace(/"(?:[^"\\]|\\[\s\S])*"|'(?:[^'\\]|\\[\s\S])*'|\/\/[^\n\r\u2028\u2029]*|\/\*[\s\S]*?\*\//g,
     value => value.startsWith('/') ? ' ' : '""');
   if (source.includes('`')) return false;
   const names = new Set();

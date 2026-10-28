@@ -1,5 +1,6 @@
+import { unsupportedCodeLines } from './code-line-terminators.mjs';
 import { randomUUID } from 'node:crypto';
-import { tokens } from './flow-rules.mjs';
+import { tokens, invalidTokens } from './flow-rules.mjs';
 import { statementSpans } from './text-save.mjs';
 import { GUARD_END, GUARD_MARK, documentKey, elementLines, hasIdentifier, hasLabel, sameElement, windowFromText } from './document-scope.mjs';
 import { verifyWindowIdentity } from './window-identity.mjs';
@@ -34,11 +35,11 @@ const forbidden = new Set(['await', 'cua', 'nodeRepl', 'import', 'require', 'eva
   '__proto__', 'prototype', 'then', 'catch', 'finally', 'call', 'apply', 'bind', '<template>', '<regexp>', ...ACTIONS]);
 const READS = new Set(['getAXState', 'getScreenshot', 'getAXStateAndScreenshot']);
 const STRING_READS = new Set(['split', 'slice', 'join', 'trim']), CALLBACK_READS = new Set(['filter', 'find', 'some']);
-// tokens() can't lex a regular expression after =>, so a callback that only tests one, l => /Undo|Page/i.test(l),
-// becomes a string of the same length (offsets still name the original code), then a <callback> token that only
-// these reads accept.
+// A callback that only tests one regex, l => /Undo|Page/i.test(l), becomes a string
+// of the same length (offsets still name the original code), then a <callback>
+// token that only these reads accept.
 const CALLBACK = '\u0000regex-test';
-const maskCallbacks = code => code.replace(/"(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*'|`(?:[^`\\]|\\.)*`|\/\/[^\n]*|\/\*[\s\S]*?\*\/|\(\s*([A-Za-z_$][\w$]*)\s*=>\s*\/(?:[^/\\[\n]|\\.|\[(?:[^\]\\\n]|\\.)*\])+\/[dgimsuy]*\s*\.\s*test\s*\(\s*\1\s*\)\s*\)/g,
+const maskCallbacks = code => code.replace(/"(?:[^"\\]|\\[\s\S])*"|'(?:[^'\\]|\\[\s\S])*'|`(?:[^`\\]|\\[\s\S])*`|\/\/[^\n\r\u2028\u2029]*|\/\*[\s\S]*?\*\/|\(\s*([A-Za-z_$][\w$]*)\s*=>\s*\/(?:[^/\\[\n\r\u2028\u2029]|\\[^\n\r\u2028\u2029]|\[(?:[^\]\\\n\r\u2028\u2029]|\\[^\n\r\u2028\u2029])*\])+\/[dgimsuy]*\s*\.\s*test\s*\(\s*\1\s*\)\s*\)/g,
   (match, name) => name === undefined || match.length - 4 < CALLBACK.length ? match : '("' + CALLBACK.padEnd(match.length - 4) + '")');
 const lex = text => tokens(text).map(t => t.string && t.v.trimEnd() === CALLBACK ? { v: '<callback>' } : t);
 const isNumber = t => !!t && !t.string && /^\d+$/.test(t.v);
@@ -111,7 +112,7 @@ function trailingRead(ts, handle, names) {
 // The call may start by acquiring that handle and end by reading it (textedit-calculator,
 // 2026-10-17: both shapes stopped on their own menu click, about 8 to 10 s a run).
 export function splitMenuActions(code, { alias = name => /^__sleightOpenedApp\d+$/.test(name) } = {}) {
-  if (typeof code !== 'string' || code.length > 65536) return;
+  if (typeof code !== 'string' || code.length > 65536 || unsupportedCodeLines(code)) return;
   const masked = maskCallbacks(code), split = statementSpans(masked);
   if (!split) return;
   const actions = [];
@@ -119,6 +120,7 @@ export function splitMenuActions(code, { alias = name => /^__sleightOpenedApp\d+
   const names = new Set();
   for (const [start, end] of split.spans) {
     const ts = lex(masked.slice(start, end));
+    if (invalidTokens(ts)) return;
     if (ts.at(-1)?.v === ';') ts.pop();
     if (!ts.length) continue;
     statements++;
@@ -688,7 +690,8 @@ export function stopNote(receipt, plan, earlier = 0, { content, seen, uniqueSeen
 }
 const count = n => `${n} action${n === 1 ? '' : 's'}`;
 const actionName = plan => action => {
-  const method = tokens(plan.code.slice(action.start, action.end))[3]?.v, { kind, value } = action.selector ?? {};
+  const ts = tokens(plan.code.slice(action.start, action.end));
+  const method = invalidTokens(ts) ? 'unknown action' : ts[3]?.v, { kind, value } = action.selector ?? {};
   const shown = kind === 'number' || kind === 'id' && value.length <= 40 || kind === 'key' && NAMED_KEY.test(value);
   return shown ? `${method} ${kind === 'id' ? `id ${JSON.stringify(value)}` : kind === 'key' ? JSON.stringify(value) : value}` : method;
 };

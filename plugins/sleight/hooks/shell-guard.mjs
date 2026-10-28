@@ -1,3 +1,4 @@
+import { lineCommentEnd, isLineTerminator } from '../lib/code-line-terminators.mjs';
 // A literal-command guard, not a shell sandbox. Never evaluate shell text or
 // inspect scripts on disk. Opaque programs remain subject to the host's policy.
 export const shellGuardReason = "sleight's shell guard for this turn blocked a launch that could take focus. Use browser_open for a background tab or sleight tools for apps. Headless browser runs are allowed. Set SLEIGHT_SHELL_GUARD=0 to turn this guard off.";
@@ -18,7 +19,7 @@ function payloadTokens(source, language) {
     const start = i, c = source[i];
     if (/\s/.test(c)) { i++; continue; }
     if (c === '#' || ['node', 'nodejs', 'swift'].includes(language) && source.startsWith('//', i)) {
-      while (i < source.length && source[i] !== '\n') i++;
+      i = lineCommentEnd(source, i);
       continue;
     }
     if (source.startsWith('/*', i)) {
@@ -66,6 +67,7 @@ function launcherStringDenied(command, depth = 0) {
   const launcher = /^(?:open|osascript|xdg-open|x-www-browser)$/i;
   // An escaped quote around a shell -c body still delimits a literal command.
   const parsed = lex(command.replace(/\\(["'])/g, '$1'), false, false);
+  if (parsed.unsafeLines) return true;
   return segments(parsed.tokens).some(({ words }) => {
     let i = 0;
     while (/^[A-Za-z_]\w*=/.test(words[i] ?? '')) i++;
@@ -101,7 +103,7 @@ function launcherPayloadDenied(payload, language = '') {
     }
   }
   const boundary = i => i >= tokens.length || text(i) === ';' ||
-    i > 0 && payload.slice(tokens[i - 1].end, tokens[i].start).includes('\n');
+    i > 0 && /[\n\r\u2028\u2029]/.test(payload.slice(tokens[i - 1].end, tokens[i].start));
   const endOf = start => {
     let i = start;
     for (; i < tokens.length && (i === start || !boundary(i)); i++) {
@@ -202,7 +204,7 @@ function lex(source, expansionOnly = false, extractHeredocs = true, stopAtParen 
   const pending = [], heredocs = [];
   // This lexer only certifies a subset of shell grammar. Arithmetic, test and
   // let contexts cannot certify a heredoc. The caller scans their full source.
-  let uncertain = depth > 12;
+  let uncertain = depth > 12, unsafeLines = false;
   extractHeredocs &&= !uncertain;
   let text = '', active = false, quote = '', quoted = false, awaitingHeredoc, parens = 0, i = 0;
   const flush = () => {
@@ -218,6 +220,9 @@ function lex(source, expansionOnly = false, extractHeredocs = true, stopAtParen 
   };
   for (; i < source.length && depth <= 12; i++) {
     const c = source[i];
+    // These bytes are not shell separators. Refuse structural ambiguity instead
+    // of splitting an argument and accidentally certifying a headless flag.
+    if (!quote && c !== '\n' && isLineTerminator(c)) unsafeLines = true;
     if (!expansionOnly && !quote && ['((', '[[', '$[', '$(('].some(start => source.startsWith(start, i))) {
       uncertain = true; extractHeredocs = false;
     }
@@ -249,8 +254,11 @@ function lex(source, expansionOnly = false, extractHeredocs = true, stopAtParen 
     } else if (quote) {
       if (c === quote) quote = ''; else text += c;
     } else if (!expansionOnly && (c === "'" || c === '"')) { quote = c; quoted = true; active = true; }
-    else if (!expansionOnly && c === '#' && !active) { while (i + 1 < source.length && source[i + 1] !== '\n') i++; }
-    else if (c === '\n' || ';&|()'.includes(c) || '{}'.includes(c) && !active && /^[\s;]?$/.test(source[i + 1] ?? '')) {
+    else if (!expansionOnly && c === '#' && !active) {
+      const end = source.indexOf('\n', i);
+      unsafeLines ||= /[\r\u2028\u2029]/.test(source.slice(i, end < 0 ? source.length : end));
+      i = end < 0 ? source.length : end - 1;
+    } else if (c === '\n' || ';&|()'.includes(c) || '{}'.includes(c) && !active && /^[\s;]?$/.test(source[i + 1] ?? '')) {
       flush();
       if (c === ')' && stopAtParen && parens === 0) break;
       if (c === '(') parens++;
@@ -297,7 +305,7 @@ function lex(source, expansionOnly = false, extractHeredocs = true, stopAtParen 
   }
   flush();
   if (quote || awaitingHeredoc || pending.length) uncertain = true;
-  return { tokens, substitutions, heredocs, uncertain, end: i };
+  return { tokens, substitutions, heredocs, uncertain, unsafeLines, end: i };
 }
 
 function deniedCommand(words, depth, stdinSource, heredocs = [], consumerOnly = false) {
@@ -439,6 +447,7 @@ function hasCodeConsumer(parsed, depth, kind = true) {
 }
 
 function scanParsed(parsed, depth, inheritedHeredocs, allowData) {
+  if (parsed.unsafeLines) return true;
   if (parsed.substitutions.some(sub => deniedSource(sub.body, depth + 1, [], allowData))) return true;
   const stdinSource = /\b(?:import\s+webbrowser|from\s+webbrowser\s+import)\b/.test(
     [...parsed.tokens, ...inheritedHeredocs].map(token => token.text ?? token.body ?? '').join('\n'));
@@ -464,7 +473,7 @@ function scanParsed(parsed, depth, inheritedHeredocs, allowData) {
 // Here-strings and process substitutions may produce code for another command
 // in the pipeline. Inspect their literal words too, including echo/printf data.
 function streamInputDenied(parsed, depth, shellInput = true, language = '') {
-  if (depth > 12) return true;
+  if (depth > 12 || parsed.unsafeLines) return true;
   const words = parsed.tokens.filter(token => token.text !== undefined).map(token => token.text);
   return words.some((word, i) => launcherPayloadDenied(word, language) || shellInput &&
     (deniedCommand(words.slice(i), depth + 1, false) || /\s/.test(word) && deniedSource(word, depth + 1, [], false))) ||
@@ -474,6 +483,7 @@ function streamInputDenied(parsed, depth, shellInput = true, language = '') {
 function deniedSource(source, depth = 0, inheritedHeredocs = [], allowData = true) {
   if (depth > 12) return true;
   const parsed = lex(source, false, allowData);
+  if (parsed.unsafeLines) return true;
   const consumer = hasCodeConsumer(parsed, depth);
   const shellConsumer = hasCodeConsumer(parsed, depth, 'shell');
   const commands = segments(parsed.tokens);

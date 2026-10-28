@@ -1,3 +1,4 @@
+import { lineCommentEnd } from './code-line-terminators.mjs';
 import { browserReply } from './browser-call.mjs';
 
 // Keep positions while masking strings and comments. Ambiguous syntax is left
@@ -13,7 +14,7 @@ export function sourceOf(code) {
         else if (code[i] === quote) break;
       }
     } else if (code.startsWith('//', i)) {
-      while (i < code.length && code[i] !== '\n') i++;
+      i = lineCommentEnd(code, i);
     } else if (code.startsWith('/*', i)) {
       i = code.indexOf('*/', i + 2);
       if (i < 0) return null;

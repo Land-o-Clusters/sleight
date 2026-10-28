@@ -3,7 +3,7 @@ import { GUARD_MARK, GUARD_END } from './document-scope.mjs';
 // Advisory eligibility only. Counts come from the guard's completed runtime calls, never
 // from counting source literals (a loop or a variable need not match the source text).
 export function typingReceiptCall(code = '') {
-  const masked = code.replace(/\/\*[\s\S]*?\*\/|\/\/[^\n]*|"(?:\\.|[^"\\])*"|'(?:\\.|[^'\\])*'|`(?:\\.|[^`\\])*`/g,
+  const masked = code.replace(/\/\*[\s\S]*?\*\/|\/\/[^\n\r\u2028\u2029]*|"(?:\\[\s\S]|[^"\\])*"|'(?:\\[\s\S]|[^'\\])*'|`(?:\\[\s\S]|[^`\\])*`/g,
     value => ' '.repeat(value.length));
   const inputs = [...masked.matchAll(/\b([A-Za-z_$][\w$]*)\s*\.\s*(typeText|paste|click|pressKey|setValue|selectText|performSecondaryAction|scroll|drag)\s*\(/g)];
   return inputs.length > 0 && inputs.every(call => ['typeText', 'paste'].includes(call[2])) &&

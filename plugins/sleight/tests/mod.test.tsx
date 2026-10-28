@@ -24,6 +24,24 @@ function expectSnapshot(calls: McpCall[], app: string) {
 }
 
 describe('sleight mod', () => {
+  for (const end of ['\n', '\r', '\u2028', '\u2029']) test(`shell guard sees interpreter code after ${JSON.stringify(end)} comments`, async ($, on) => {
+    let ran = 0
+    mock.env(on, { HOME: '/fixture/home' })
+    on('tool.call', async () => { ran++; return { result: {} } as never })
+    on('mcp.connect', async (_$, e) => ({ value: { isConnected: true, server: e.server } }) as never)
+    on('mcp.call', async () => ({ value: { content: [] } }) as never)
+    await $.tool.call({ tool: 'mcp__plugin_sleight_computer__browser_read', tab: 'fixture' } as never)
+    ran = 0
+    for (const command of [
+      `node -e "// c${end}require('child_process').execSync('open -a Safari')"`,
+      `python3 -c "# c${end}import os; os.system('open -a Safari')"`,
+    ]) {
+      const result = await $.tool.call({ tool: 'Bash', command } as never)
+      expect(result.deny).toMatch(/shell guard/)
+    }
+    expect(ran).toBe(0)
+  })
+
   test('a promptless teammate turn keeps its shell fence and ends through the mod dispatcher', async ($, on) => {
     const ended: Record<string, unknown>[] = []
     mock.env(on, { HOME: '/fixture/home' })

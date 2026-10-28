@@ -13,7 +13,7 @@ const nativeApi = /\bcua\s*(?:\?\.|\.)\s*(?:getApp|computer|listApps|listWindows
 function sourceOf(code) {
   code = code.replace(/\bcua\s*\[\s*["'](getApp|computer|listApps|listWindows|getState)["']\s*\]/g, 'cua.$1');
   // Strings become "" and comments a space, so a comment can't hide what precedes a bracket.
-  return code.replace(/"(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*'|`(?:[^`\\]|\\.)*`|\/\/[^\n]*|\/\*[\s\S]*?\*\//g, match => {
+  return code.replace(/"(?:[^"\\]|\\[\s\S])*"|'(?:[^'\\]|\\[\s\S])*'|`(?:[^`\\]|\\[\s\S])*`|\/\/[^\n\r\u2028\u2029]*|\/\*[\s\S]*?\*\//g, match => {
     if (match.startsWith('/')) return ' ';
     if (match.startsWith('`')) return [...match.matchAll(/\$\{([\s\S]*?)\}/g)].map(m => sourceOf(m[1])).join(' ');
     return '""';

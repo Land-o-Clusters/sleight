@@ -1,4 +1,4 @@
-import { tokens } from './flow-rules.mjs';
+import { tokens, invalidTokens, codeInspectionRefusal } from './flow-rules.mjs';
 import { spawn } from 'node:child_process';
 import { mkdirSync, chmodSync } from 'node:fs';
 import { homedir } from 'node:os';
@@ -384,6 +384,7 @@ export function createClipboardSession(io) {
 
 export function clipboardActions(code) {
   const ts = tokens(code), actions = [];
+  if (invalidTokens(ts)) throw new Error(codeInspectionRefusal);
   for (let i = 0; i < ts.length; i++) {
     if (!['pressKey', 'paste'].includes(ts[i].v)) continue;
     const bracket = ts[i].string && ts[i - 1]?.v === '[' && ts[i + 1]?.v === ']';

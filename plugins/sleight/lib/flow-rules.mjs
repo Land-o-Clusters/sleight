@@ -1,3 +1,4 @@
+import { lineCommentEnd, isLineTerminator } from './code-line-terminators.mjs';
 // Literal inspection is a mistake guard. Never evaluate the caller's code here.
 import { existsSync, readFileSync, realpathSync } from 'node:fs';
 import { homedir } from 'node:os';
@@ -88,17 +89,31 @@ export function loadFlowRules(env = process.env, { cwd = process.cwd(), discover
 }
 
 // A small tokenizer, deliberately narrower than a JavaScript interpreter.
+export const codeInspectionRefusal = /* notice */ 'sleight: cannot inspect JavaScript. Use direct calls with literal arguments.';
+export const invalidTokens = ts => ts.some(t => !t.string && t.v === '<invalid>');
 export function tokens(code) {
-  const out = [];
-  let i = 0;
+  const out = [], parens = [];
+  const invalid = () => [...out, { v: '<invalid>' }];
+  let i = 0, afterControl = false;
   while (i < code.length) {
     const c = code[i];
     if (/\s/.test(c)) { i++; continue; }
-    if (code.startsWith('//', i)) { i = code.indexOf('\n', i); if (i < 0) break; continue; }
-    if (code.startsWith('/*', i)) { const end = code.indexOf('*/', i + 2); i = end < 0 ? code.length : end + 2; continue; }
-    if (c === '/' && (!out.length || ['=', '(', ',', ':', 'return', '[', '!'].includes(out.at(-1).v))) {
-      i++; let bracket = false;
-      while (i < code.length) { const ch = code[i++]; if (ch === '\\') i++; else if (ch === '[') bracket = true; else if (ch === ']') bracket = false; else if (ch === '/' && !bracket) break; }
+    if (code.startsWith('//', i)) { i = lineCommentEnd(code, i); continue; }
+    if (code.startsWith('/*', i)) { const end = code.indexOf('*/', i + 2); if (end < 0) return invalid(); i = end + 2; continue; }
+    const previous = out.at(-1), control = afterControl;
+    afterControl = false;
+    if (c === '/' && (control || !previous || !previous.string && !['.', '#'].includes(out.at(-2)?.v) &&
+        ['=', '(', ',', ':', 'return', '[', '!', ';', '{', '&', '|', '?', '>', 'throw', 'case', 'yield', 'await', 'else', 'do'].includes(previous.v))) {
+      i++; let bracket = false, closed = false;
+      while (i < code.length) {
+        const ch = code[i++];
+        if (isLineTerminator(ch)) return invalid();
+        if (ch === '\\') { if (isLineTerminator(code[i])) return invalid(); i++; }
+        else if (ch === '[') bracket = true;
+        else if (ch === ']') bracket = false;
+        else if (ch === '/' && !bracket) { closed = true; break; }
+      }
+      if (!closed) return invalid();
       while (/[a-z]/i.test(code[i] ?? '') && i < code.length) i++;
       out.push({ v: '<regexp>' }); continue;
     }
@@ -107,10 +122,15 @@ export function tokens(code) {
       while (i < code.length && code[i] !== quote) {
         const ch = code[i++];
         if (quote === '`' && ch === '$' && code[i] === '{') dynamic = true;
-        if (ch !== '\\') { value += ch; continue; }
+        if (ch !== '\\') {
+          if (quote !== '`' && (ch === '\n' || ch === '\r')) return invalid();
+          if (quote === '`' && ch === '\r') { if (code[i] === '\n') i++; value += '\n'; }
+          else value += ch;
+          continue;
+        }
         const esc = code[i++];
         const simple = { n: '\n', r: '\r', t: '\t', b: '\b', f: '\f', v: '\v', '0': '\0' };
-        if (esc === '\n') continue;
+        if (isLineTerminator(esc) && esc !== '\r') continue;
         if (esc === '\r') { if (code[i] === '\n') i++; continue; }
         if (esc === 'x' || esc === 'u') {
           const brace = esc === 'u' && code[i] === '{'; if (brace) i++;
@@ -119,17 +139,25 @@ export function tokens(code) {
           i += raw.length + (brace ? 1 : 0);
         } else value += simple[esc] ?? esc ?? '';
       }
+      if (code[i] !== quote) return invalid();
       i++; out.push(dynamic ? { v: '<template>' } : { v: value, string: true }); continue;
     }
-    const word = /^[\w$]+/.exec(code.slice(i));
+    // Escaped identifiers need a full parser; never reinterpret their suffix as a keyword.
+    if (c === '\\') return invalid();
+    const word = /^[\p{ID_Continue}$\u200c\u200d]+/u.exec(code.slice(i));
     if (word) { out.push({ v: word[0] }); i += word[0].length; }
-    else { out.push({ v: c }); i++; }
+    else {
+      if (c === '(') parens.push(!previous?.string && !['.', '#'].includes(out.at(-2)?.v) && ['if', 'while', 'for', 'with', 'switch', 'catch'].includes(previous?.v));
+      if (c === ')') afterControl = parens.pop() === true;
+      out.push({ v: c }); i++;
+    }
   }
   return out;
 }
 
 function calls(code, handles, fallback, browsers) {
   const ts = tokens(code); const inputs = []; let readTarget = fallback;
+  if (invalidTokens(ts)) return { inputs, unknown: true };
   for (let i = 0; i < ts.length; i++) {
     if (ts[i].v === '=' && !ts[i - 1]?.string) {
       const source = i + (ts[i + 1]?.v === 'await' ? 2 : 1);
@@ -263,7 +291,7 @@ export class FlowRules {
     const tails = new Map(this.tails);
     const localTarget = current(target(args.app, undefined, this.browsers));
     const parsed = name === 'js' ? calls(args.code ?? '', handles, fallback, this.browsers) : { inputs: strings(Object.fromEntries(Object.entries(args).filter(([k]) => !['app', 'op'].includes(k)))).map(value => ({ target: localTarget, value, method: 'argument' })), readApp: args.app, readTarget: localTarget };
-    const violations = new Map();
+    const violations = new Map(parsed.unknown ? this.rules.map(rule => [rule.id, { rule: rule.id, app: 'unknown app' }]) : []);
     for (const input of parsed.inputs) {
       const destination = input.target;
       const app = this.canonical(destination?.app);
