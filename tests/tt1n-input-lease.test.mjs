@@ -20,13 +20,14 @@ const tick = () => new Promise(resolve => setTimeout(resolve, 1));
 // the engine realm: only the relay's injected read-only identity helper can observe it.
 // errorFirst: the real engine's order, the exception as the first content item ahead of what the call wrote.
 async function fixture(t, { initial, base = document, after = menu, nativeChange, identity, afterItem = after, actionOutput = false,
-  retryFirst, beforeRetry, onAction, onRead, errorFirst = false, windows = [{ title: 'report.txt' }], engineMs, landingRead, ...options } = {}) {
+  retryFirst, beforeRetry, onAction, onRead, errorFirst = false, windows = [{ title: 'report.txt' }], engineMs, landingRead, screenshot, ...options } = {}) {
   let text = base, writes = [];
-  const clicks = [], keys = [], values = [], typed = [], sent = [], received = [];
+  const clicks = [], keys = [], values = [], typed = [], sent = [], received = [], images = [];
   let identityChecks = 0;
   const native = { windowNumber: 22, hidIdleSeconds: 1000, status: 'ok' };
   // onAction(name, argument, text) returns the window an action leaves, for a scripted sequence.
-  const raw = { getAXState: async () => { onRead?.(); return text; }, getAXStateAndScreenshot: async () => { onRead?.(); return { state: text }; }, click: async number => {
+  const raw = { getAXState: async () => { onRead?.(); return text; }, getAXStateAndScreenshot: async () => { onRead?.(); return { state: text, screenshot }; },
+    getScreenshot: async () => screenshot, click: async number => {
     clicks.push(number); text = onAction ? onAction('click', number, text) : clicks.length === 1 ? after : afterItem;
     if (actionOutput) writes.push('clicked:' + number);
     if (nativeChange === 'window') native.windowNumber = 23;
@@ -41,7 +42,7 @@ async function fixture(t, { initial, base = document, after = menu, nativeChange
   typeText: async value => { typed.push(value); if (onAction) text = onAction('typeText', value, text); } };
   const context = createContext({ setTimeout, cua: { getApp: async () => raw, listApps: async () => [
     { id: 'org.test.editor', windows }
-  ] }, nodeRepl: { write: value => writes.push(String(value)) } });
+  ] }, nodeRepl: { write: value => writes.push(String(value)), emitImage: async value => images.push(value) } });
   const streams = Array.from({ length: 4 }, () => new PassThrough());
   const [clientIn, clientOut, serverIn, serverOut] = streams;
   const directory = registerTemp(t, trackTemp(mkdtempSync(join(tmpdir(), 'sleight-tt1n-'))));
@@ -89,7 +90,7 @@ async function fixture(t, { initial, base = document, after = menu, nativeChange
   await call('await cua.getApp("Fixture Editor");');
   // The setup read's process probe doesn't count.
   sent.length = received.length = 0; cursor = 0; text = initial ?? base; identityChecks = 0;
-  return { clicks, keys, values, typed, native, sent, received, relay, call, send: msg => clientIn.write(JSON.stringify(msg) + '\n'), identityChecks: () => identityChecks, setText: value => { text = value; } };
+  return { clicks, keys, values, typed, native, sent, received, images, relay, call, send: msg => clientIn.write(JSON.stringify(msg) + '\n'), identityChecks: () => identityChecks, setText: value => { text = value; } };
 }
 
 const navigation = 'Window: "Parent", App: Fixture Editor.\n0 standard window Parent, URL: file:///tmp/Parent\n\t2 row Child, ID: child\n\t3 button Other';
@@ -1703,6 +1704,51 @@ test('CK3: the real relay certifies Cmd+T before its first changed-window read',
   assert.deepEqual(h.continued, [], 'no stopped engine call needs a continuation');
   assert.equal(h.sent.length, 1);
   assert.equal(reads, 1, 'the final engine read remains');
+});
+
+// The recorded Firefox B r1 shape, with a fixture URL. Only the OS and engine are replaced; the relay, guard and lease run.
+const screenshotTabCall = 'await app.pressKey("super+t");\nawait app.typeText("https://example.test/arrival");\n' +
+  'await app.pressKey("Return");\nnodeRepl.emitImage(await app.getScreenshot());';
+async function screenshotTabFixture(t, { ck3 = true, changed = {} } = {}) {
+  let opened = false;
+  const retitled = newTab.replaceAll('New Tab', 'Mozilla Firefox');
+  return tabFixture(t, { ck3, screenshot: 'offline-image',
+    onAction: (name, arg, text) => {
+      if (name === 'pressKey' && arg === 'super+t') opened = true;
+      return tabScript(retitled)(name, arg, text);
+    }, identity: (expected, native) => ({ ...expected, ...native, title: opened ? 'Mozilla Firefox' : 'Marker', url: null,
+      matches: 1, headerMatches: 1, epoch: 'helper', window: 1, pid: 123, processStart: 1,
+      windowSubrole: 'AXStandardWindow', focus: fieldFocus, chrome: ckChrome(opened), ...(opened ? changed : {}) }) });
+}
+
+for (const ck3 of [true, false]) test(`RS1e: a retitling new-tab batch with a trailing screenshot completes in one client call (CK3 ${ck3})`, async t => {
+  const h = await screenshotTabFixture(t, { ck3 });
+  const result = await h.call(screenshotTabCall);
+  assert.notEqual(result.isError, true, JSON.stringify(result));
+  assert.deepEqual(h.keys, ['super+t', 'Return']);
+  assert.deepEqual(h.typed, ['https://example.test/arrival']);
+  assert.deepEqual(h.images, ['offline-image', 'offline-image']);
+  assert.equal(h.received.length, 1);
+  assert.equal(h.sent.length, ck3 ? 1 : 2);
+  assert.deepEqual(h.refusals, []);
+  if (ck3) {
+    assert.deepEqual(h.continued, []);
+    assert.equal(h.traces.filter(trace => trace.direction === 'tab-probe' && trace.reason === 'address-field').length, 2);
+  } else assert.deepEqual(h.continued, ['tab']);
+});
+
+for (const [name, changed] of [
+  ['window number', { windowNumber: 23 }], ['process', { pid: 456 }], ['process start', { processStart: 2 }],
+  ['helper epoch', { epoch: 'replacement' }], ['app', { appId: 'org.test.other' }],
+  ['HID input', { hidIdleSeconds: 0 }], ['ambiguous header', { matches: 2, headerMatches: 2 }],
+  ['secure focus', { focus: { ...fieldFocus, subrole: 'AXSecureTextField' } }],
+  ['sheet', { focus: { ...fieldFocus, sheets: 1 } }],
+  ['page focus', { focus: { ...fieldFocus, inPage: true } }],
+]) test(`RS1e: a trailing screenshot preserves the stop when ${name} changes after Cmd+T`, async t => {
+  const h = await screenshotTabFixture(t, { changed });
+  stoppedAtTab(h, await h.call(screenshotTabCall));
+  assert.deepEqual(h.images, []);
+  assert.deepEqual(h.continued, []);
 });
 
 test('CK3: a certified chain still performs the existing landing read on a lagging page tree', async t => {

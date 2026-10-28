@@ -89,6 +89,11 @@ function writeArgument(ts, handle, names) {
 // The call's value may be one of the write's expressions too ("done", or the read filtered).
 function trailingRead(ts, handle, names) {
   if (ts.length === 1) return isName(ts[0]) && !forbidden.has(ts[0].v) || ts[0].string || isNumber(ts[0]) ? '' : undefined;
+  // An emitted screenshot of this handle is an observation after the inputs, not another action.
+  if (ts[0]?.v === 'nodeRepl' && punct(ts[1], '.') && ts[2]?.v === 'emitImage' && punct(ts[3], '(') &&
+      ts[4]?.v === 'await' && ts[5]?.v === handle && punct(ts[6], '.') && ts[7]?.v === 'getScreenshot' &&
+      punct(ts[8], '(') && punct(ts.at(-2), ')') && punct(ts.at(-1), ')') &&
+      !ts.slice(0, 9).some(t => t.string) && literalArgs(ts.slice(9, -2))) return '';
   if (ts[0]?.v === 'nodeRepl' && ts[1]?.v === '.' && ts[2]?.v === 'write' && ts[3]?.v === '(' && ts.at(-1)?.v === ')' &&
       !ts.slice(0, 4).some(t => t.string)) return writeArgument(ts.slice(4, -1), handle, names) ? '' : undefined;
   if (writeArgument(ts, handle, names)) return '';

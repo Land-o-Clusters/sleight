@@ -157,6 +157,34 @@ test('LA1R: trailing writes of the handle\'s reads still split', () => {
   }
 });
 
+// RS1e: Firefox B r1 ended its three inputs with this screenshot emission. A and Safari B had no such tail.
+test('RS1e: a trailing screenshot emission preserves the three new-tab action spans', () => {
+  const head = 'await app.pressKey("super+t");\nawait app.typeText("https://example.test/arrival");\nawait app.pressKey("Return");\n';
+  for (const tail of ['nodeRepl.emitImage(await app.getScreenshot());',
+    'nodeRepl.emitImage(await app.getScreenshot({ emit: false }));']) {
+    const plan = splitMenuActions(head + tail);
+    assert.ok(plan, tail);
+    assert.equal(plan.actions.length, 3);
+    assert.equal(plan.code.slice(plan.actions[1].start).trimStart(), head.slice(head.indexOf('await app.typeText')) + tail);
+  }
+});
+
+test('RS1e: screenshot tails never admit other handles, input, or executable arguments', () => {
+  const head = 'await app.pressKey("super+t"); await app.typeText("https://example.test"); await app.pressKey("Return"); ';
+  for (const tail of [
+    'nodeRepl.emitImage(await other.getScreenshot());',
+    'nodeRepl.emitImage(await app.click(3));',
+    'nodeRepl.emitImage(await app.getScreenshot(next()));',
+    'nodeRepl.emitImage(await app.getScreenshot({ emit: app.click(3) }));',
+    'nodeRepl.emitImage(await app.getScreenshot(), await app.click(3));',
+    'nodeRepl.emitImage(await app.getScreenshot().then(next));',
+    'nodeRepl.emitImage(app.getScreenshot());',
+    'nodeRepl.emitImage(await app["getScreenshot"]());',
+    'nodeRepl.emitImage(await app.getScreenshot()); await app.click(3);',
+    'await app.pressKey("super+t"); nodeRepl.emitImage(await app.getScreenshot()); await app.typeText("x");',
+  ]) assert.equal(splitMenuActions(head + tail), undefined, tail);
+});
+
 // DR1: the calls that clicked OK on Word's Replace All alert in word-edit (2026-10-17), paths scrubbed.
 const dialogShapes = [
   ['const a = __sleightOpenedApp3; await a.click({ id: "action-button--998" }); await a.pressKey("super+End"); await a.pressKey("Return"); await a.click({ label: "Table" }); const s = await a.getAXState({ disableDiffing: true }); s.split("\\n").filter(l => /Insert|Table|menu|Page 1 content|Keep this/i.test(l)).slice(0, 40).join("\\n")', 'a', 4],
