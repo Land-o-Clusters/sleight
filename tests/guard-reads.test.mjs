@@ -1332,7 +1332,9 @@ test('lp1 review: a resend to a new number is the click pickFromList sees', asyn
     const first = shifted ? 4 : 3;
     selected = names[number - first];
   } });
-  const result = await f.run('await app.click(1); await app.click(4); return await app.pickFromList("Delta");', { bind: true });
+  // Use a module cell, matching the engine grammar that literalElements parses.
+  await f.run('await app.click(1); await app.click(4); globalThis.pickResult = await app.pickFromList("Delta");', { bind: true });
+  const result = f.context.pickResult;
   assert.equal(result.clicked, true, JSON.stringify(result));
   assert.deepEqual(f.calls.filter(c => c[0] === 'click').map(c => c[1]), [1, 4, 5, 7]);
   assert.equal(selected, 'Delta');

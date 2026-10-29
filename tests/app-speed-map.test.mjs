@@ -20,7 +20,7 @@ function closed(values) {
     return t[key];
   } });
 }
-function runtime({ badCleanup = false, badRead = false, held = false, ownerPresent = false, relayTest, folder = false, canvas = false } = {}) {
+function runtime({ badCleanup = false, badRead = false, unavailableTree = false, held = false, ownerPresent = false, relayTest, folder = false, canvas = false } = {}) {
   const calls = [], outputs = []; let time = 0, active = 0, peak = 0;
   const directory = relayTest && mkdtempSync(join(tmpdir(), 'sleight-am1-relay-'));
   if (directory) relayTest.after(() => removeTemp(directory));
@@ -32,6 +32,7 @@ function runtime({ badCleanup = false, badRead = false, held = false, ownerPrese
       const app = closed({ getAXState: async options => {
         assert.deepEqual(JSON.parse(JSON.stringify(options)), { disableDiffing: true, emit: false });
         if (badRead) throw Error('private account content must not be published');
+        if (unavailableTree) return null;
         if (canvas) return 'Window: "AM1-fixture", App: Fixture.\n0 standard window\n\t1 scroll area\n\t\t2 button\n\t3 text entry area Value: AM1-fixture\n\t4 layout area';
         return folder ? 'Window: "AM1-fixture", App: Fixture.\n0 standard window\n\t1 scroll area\n\t\t2 outline Sidebar\n\t3 scroll area\n\t\t4 row\n\t\t\t5 text Value: AM1-row.txt' :
           'Window: "AM1-fixture", App: Fixture.\n0 standard window\n\t1 scroll area\n\t\t2 static text AM1-fixture';
@@ -119,6 +120,16 @@ test('read metrics use supported engine methods and return only numbers, not tre
   const result = await readMetrics(app, { marker: 'AM1-fixture' });
   assert.equal(result.nodes, 3); assert.equal(result.scrollTarget, 1);
   assert.equal(result.chars, 100); assert.doesNotMatch(JSON.stringify(result), /private|AM1-fixture/);
+});
+test('serialized metrics keep unavailable reads as failures when copying text', async () => {
+  const report = await runSpeedMap(speedPlan({ ids: ['textedit'], runs: 1 }), runtime({ unavailableTree: true }));
+  assert.ok(report.rows.length > 0);
+  for (const row of report.rows) {
+    assert.equal(row.status, 'failed');
+    assert.equal(row.failure, 'TREE_UNAVAILABLE');
+    assert.equal(row.nodes, null);
+    assert.equal(row.chars, null);
+  }
 });
 test('ambiguous scroll areas refuse input; a mismatched fixture refuses the read', async () => {
   const app = closed({ getAXState: async () => 'Window: "AM1-fixture", App: Fixture.\n0 standard window\n\t1 scroll area\n\t2 scroll area' });

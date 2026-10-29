@@ -63,8 +63,9 @@ test('FT1c: a numeric { id } that names no ID or label in the tree Claude saw is
 test('FT1c: a numeric { id } with two readings, an unseen number or other keys is left for the guard', t => {
   const act = relayFixture(t, withDay);
   for (const code of ['await app.click({ id: "18" });', 'await app.click({ id: "99" });', 'await app.click({ id: "22", label: "Email" });']) {
-    const { forwarded } = act(code);
-    assert.ok(forwarded.includes(code), code);
+    const { forwarded, result } = act(code);
+    if (code.includes('app[m]')) { assert.equal(forwarded, ''); assert.match(result, /cannot inspect JavaScript/); }
+    else assert.ok(forwarded.includes(code), code);
   }
 });
 
@@ -109,8 +110,9 @@ test('FT1c review: no rewrite after an earlier action or in a loop, and every re
   const act = relayFixture(t, form());
   for (const code of ['await app.click(24); await app.click({ id: "18" });', 'await app.pressKey("Tab"); await app.setValue({ id: "18" }, "x");',
     'for (const n of [1, 2]) await app.click({ id: "18" });']) {
-    const { forwarded } = act(code);
-    assert.ok(forwarded.includes(code), code);
+    const { forwarded, result } = act(code);
+    if (code.includes('app[m]')) { assert.equal(forwarded, ''); assert.match(result, /cannot inspect JavaScript/); }
+    else assert.ok(forwarded.includes(code), code);
   }
   const { forwarded, result } = act('await app.setValue({ id: "18" }, "p01"); await app.click(38);');
   assert.match(forwarded, /await app\.setValue\(18, "p01"\); await app\.click\(38\);/);
@@ -147,8 +149,9 @@ test('FT1c re-review: only a top-level { id } with only reads before it is rewri
     '(async () => { await app.click({ id: "18" }); })();',
     'await app.click(24).then(() => app.click({ id: "18" }));',
   ]) {
-    const { forwarded } = act(code);
-    assert.ok(forwarded.includes(code), code);
+    const { forwarded, result } = act(code);
+    if (code.includes('app[m]')) { assert.equal(forwarded, ''); assert.match(result, /cannot inspect JavaScript/); }
+    else assert.ok(forwarded.includes(code), code);
   }
   for (const code of ['const s = await app.getAXState(); await app.setValue({ id: "18" }, "p01");',
     'if (true) await app.setValue({ id: "18" }, "p01");']) {

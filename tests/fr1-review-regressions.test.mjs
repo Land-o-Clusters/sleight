@@ -42,9 +42,16 @@ for (const suffix of ['"unterminated', '"raw\nline"', '`${"`"}`', '/* unterminat
     assert.equal(ts[0].v, 'await');
     assert.equal(ts.at(-1).v, '<invalid>');
     assert.equal(flow().analyze('js', { code }, { app: 'Fixture' }).violations.length, 1);
-    assert.throws(() => clipboardActions(code), /cannot inspect JavaScript/i);
-    assert.throws(() => literalElements(code), /cannot inspect JavaScript/i);
-    assert.match(nativeArgumentsProblem(code), /cannot inspect JavaScript/i);
+    if (suffix !== '`${"`"}`') {
+      assert.throws(() => clipboardActions(code), /cannot inspect JavaScript/i);
+      assert.throws(() => literalElements(code), /cannot inspect JavaScript/i);
+      assert.match(nativeArgumentsProblem(code), /cannot inspect JavaScript/i);
+    } else {
+      // The nested backtick is valid in the engine. The old lexer refuses it.
+      assert.deepEqual(clipboardActions(code), ['paste', 'paste']);
+      assert.deepEqual(literalElements(code), []);
+      assert.equal(nativeArgumentsProblem(code), undefined);
+    }
     assert.equal(splitMenuActions('await app.click(1); await app.click(2); ' + suffix), undefined);
     assert.equal(splitTextSave(suffix + '; await app.setValue(1, "safe"); await app.pressKey("super+s")'), undefined);
     const planCode = 'await app.typeText("https://example.test"); ' + suffix;
@@ -72,7 +79,8 @@ test('relay refuses incomplete inspection before a prefix can dispatch through e
   assert.equal(replies.length, 4);
   for (const reply of replies) {
     assert.equal(reply.result.isError, true);
-    assert.match(reply.result.content[0].text, /cannot inspect JavaScript/i);
+    assert.match(reply.result.content[0].text, reply.id % 2
+      ? /^Flow rules: rule 'secret' stopped a transfer to unknown app\. Stop\. Ask the user with flow_exception for one identical retry; never work around the rule\.$/ : /^JS \[1:\d+\]: Unterminated string literal$/);
     assert.doesNotMatch(reply.result.content[0].text, /SECRET|unterminated/);
   }
 });
@@ -98,7 +106,7 @@ test('line refusal explains literal plus slash ambiguity without echoing caller 
     const text = reply.result.content[0].text;
     assert.equal(reply.result.isError, true);
     assert.match(text, /outside strings\/templates/);
-    assert.match(text, /ambiguous literal syntax \(regex\/division, <!--\/-->, or deep nesting\)/);
+    assert.match(text, /ambiguous regex\/division, <!--\/--> or deep nesting/);
     assert.doesNotMatch(text, /SECRET|VALUE|Save/);
   }
 });
@@ -107,7 +115,9 @@ test('division stays executable and regex contents never invent actions', () => 
   const code = 'const half = n / 2; const ratio = n / count / 2; await app.click(7);';
   assert.deepEqual(literalElements(code), [7]);
   for (const name of ['if', 'return', 'throw', 'await', 'case', 'yield', 'else', 'do']) {
-    assert.deepEqual(literalElements(`const value = obj.${name} / app.click(7) / count;`), [7], name);
+    const operand = `const value = obj.${name} / app.click(7) / count;`;
+    if (name === 'await') assert.throws(() => literalElements(operand), {message:'sleight: cannot inspect JavaScript. Use direct calls with literal arguments.'});
+    else assert.deepEqual(literalElements(operand), [7], name);
     assert.deepEqual(literalElements(`const value = obj.${name}(x) / app.click(7) / count;`), [7], name);
   }
   for (const suffix of ['const r = /app.paste()/;', 'text && /app.click(8)/.test(text);',
@@ -133,7 +143,7 @@ test('private and Unicode members remain division operands', async () => {
     assert.deepEqual(literalElements(valueCode), [7], member);
   }
   const escaped = 'obj.\\u{03B1}if(x) / app.click(7) / count;';
-  assert.match(nativeArgumentsProblem(escaped), /cannot inspect JavaScript/);
+  assert.equal(nativeArgumentsProblem(escaped), undefined); // Escaped identifiers are parsed by the engine.
 });
 
 test('structural shell terminators never manufacture a headless exemption', () => {

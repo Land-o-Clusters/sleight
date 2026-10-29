@@ -1,0 +1,532 @@
+{
+  "phase": "code and validation delivered; study zero-V8-refusal claim not met",
+  "baseCommit": "e679ed7eed3413f35daf434b31d47e80c2a321b5",
+  "sourceHashes": {
+    "plugins/sleight/lib/code-ast.mjs": "5f90fcb89a4ad8cb6dbc9435f26f62c8a54304f42218ec419b5bd3b2917dc3b1",
+    "plugins/sleight/lib/relay.mjs": "e551bd0e3b485e2947391ed43b3dcdb9c3e7d66eff6612e1d1467573fe1b990b",
+    "plugins/sleight/vendor/meriyah/dist/meriyah.min.mjs": "d29a5ff8e5fbdb8cb0617a721891fb1d3fb107883dc6f4ee9bda5b32896edf50",
+    "bench/code-ast/oracle.mjs": "979db765fddb19aa53e536a0697e39564edb8d6ac6c80c65fda173eff5d7f5df",
+    "bench/code-ast/differential.mjs": "b4fadbef9176900ad5916f68144293a17adc87f4c176a141647d34cd0603ff06",
+    "bench/code-ast/corpus-shaped.mjs": "aca09c9f7cbfbe8771eafcc8046edfdf41cd83f4643bf52a8c46d401ed2333aa",
+    "bench/code-ast/measure.mjs": "c73ab7be742c5c864789f9cc74219cbceedd2b42fe86260ab18f0df3638420a1",
+    "bench/code-ast/corpus.mjs": "66480031fc997c35656a14941349f7f139fc6224747b5858ce668d63aa690e4e",
+    "bench/code-ast/batch.mjs": "1ac5b973e37e428c0bd6cdf832797e6723334c458661361e11ebc2a002346fcb",
+    "bench/code-ast/replay.mjs": "f7618e46fa9739011f228487c25fa8c1796f1138b2a9b4980319813ddcb56d73",
+    "bench/code-ast/reviewer/fuzz2.mjs": "3b0b94bc53512a5ca0f61f38ea5a77785a4a4673fa25e20ff3858facaaee2878",
+    "bench/code-ast/reviewer/m1.mjs": "7643a75aa6e8bacc7e2da837c859c4c5d53ed06c8e4527f89bc5ad81bd1f3aab",
+    "bench/code-ast/reviewer/h.mjs": "1d10858b994768066f87459025e0346b88b5fdcad5a6fef3fd433e119cfe8c0d",
+    "bench/code-ast/reviewer/fuzz.mjs": "d5673b5bffcb3a414ff9559e1356f961baec8cbc697ac65511e1abeb9028f3ac",
+    "bench/code-ast/reviewer/m2.mjs": "8e09b0d8e0f184b6ad28862f48dbaa272facd4990327acb568bb067f62077dee",
+    "bench/code-ast/reviewer/m3.mjs": "ab6d49c336f77867f1d1304a79a9a6f01b3f3061a6c5c724178f3aae1c9a8dfb",
+    "bench/code-ast/reviewer/m7.mjs": "514e5830766005b6ea3766bbe4fcf746e4cf63a59f84a0c50c00ebc43701e51d",
+    "bench/code-ast/reviewer/m6.mjs": "409c0b625883ee087d928fdd3b7a4b4e05612bda04b04a8959d50a054c6ba2f8",
+    "bench/code-ast/reviewer/m4.mjs": "ce0fec112414d6a7694914e636c65caba0cf2bb8b6024bdb3817e82f35408127",
+    "bench/code-ast/reviewer/m5.mjs": "d3d2fd1a5306558ff62629a7cf08ff7fe7a859599299c2052b0f2f5f9a3b6f0c"
+  },
+  "corpusSummary": {
+    "corpus": {
+      "claudeFiles": 233,
+      "codexFiles": 324,
+      "claude": 1576,
+      "codex": 3795,
+      "malformed": 0
+    },
+    "before": "2026-10-28T07:28:00Z",
+    "manifest": "752ca473d5e60dfad185524f2650d5d6714d6e627ea30db79ac403df2b87e962",
+    "differences": 1707,
+    "oldAccepted": 5371,
+    "oldAcceptedNewRefused": 0,
+    "oldRefusedNewAccepted": 0
+  },
+  "corpusOracle": {
+    "label": "recorded corpus",
+    "tested": 5371,
+    "nodeAccepted": 5371,
+    "meriyahAccepted": 5371,
+    "bothRefuse": 0,
+    "falseRefusal": 0,
+    "meriyahOnly": 0,
+    "failOpen": 0,
+    "falsePositive": 0,
+    "oracleCalls": 14566,
+    "legacyInventoryMiss": 1631,
+    "legacyAdmissionRefusal": 0
+  },
+  "reviewerCases": [
+    {
+      "label": "reviewer m1.mjs",
+      "tested": 13,
+      "nodeAccepted": 10,
+      "meriyahAccepted": 10,
+      "bothRefuse": 3,
+      "falseRefusal": 0,
+      "meriyahOnly": 0,
+      "failOpen": 0,
+      "falsePositive": 0,
+      "oracleCalls": 10,
+      "legacyInventoryMiss": 0,
+      "legacyAdmissionRefusal": 6
+    },
+    {
+      "label": "reviewer m2.mjs",
+      "tested": 5,
+      "nodeAccepted": 0,
+      "meriyahAccepted": 0,
+      "bothRefuse": 5,
+      "falseRefusal": 0,
+      "meriyahOnly": 0,
+      "failOpen": 0,
+      "falsePositive": 0,
+      "oracleCalls": 0,
+      "legacyInventoryMiss": 0,
+      "legacyAdmissionRefusal": 0
+    },
+    {
+      "label": "reviewer m3.mjs",
+      "tested": 6,
+      "nodeAccepted": 5,
+      "meriyahAccepted": 5,
+      "bothRefuse": 1,
+      "falseRefusal": 0,
+      "meriyahOnly": 0,
+      "failOpen": 0,
+      "falsePositive": 0,
+      "oracleCalls": 5,
+      "legacyInventoryMiss": 4,
+      "legacyAdmissionRefusal": 0
+    },
+    {
+      "label": "reviewer m4.mjs",
+      "tested": 10,
+      "nodeAccepted": 8,
+      "meriyahAccepted": 8,
+      "bothRefuse": 2,
+      "falseRefusal": 0,
+      "meriyahOnly": 0,
+      "failOpen": 0,
+      "falsePositive": 0,
+      "oracleCalls": 7,
+      "legacyInventoryMiss": 2,
+      "legacyAdmissionRefusal": 2
+    },
+    {
+      "label": "reviewer m5.mjs",
+      "tested": 3,
+      "nodeAccepted": 3,
+      "meriyahAccepted": 3,
+      "bothRefuse": 0,
+      "falseRefusal": 0,
+      "meriyahOnly": 0,
+      "failOpen": 0,
+      "falsePositive": 0,
+      "oracleCalls": 7,
+      "legacyInventoryMiss": 3,
+      "legacyAdmissionRefusal": 0
+    },
+    {
+      "label": "reviewer m6.mjs",
+      "tested": 8,
+      "nodeAccepted": 8,
+      "meriyahAccepted": 5,
+      "bothRefuse": 0,
+      "falseRefusal": 3,
+      "meriyahOnly": 0,
+      "failOpen": 0,
+      "falsePositive": 0,
+      "oracleCalls": 8,
+      "legacyInventoryMiss": 7,
+      "legacyAdmissionRefusal": 0
+    },
+    {
+      "label": "reviewer m7.mjs",
+      "tested": 11,
+      "nodeAccepted": 11,
+      "meriyahAccepted": 11,
+      "bothRefuse": 0,
+      "falseRefusal": 0,
+      "meriyahOnly": 0,
+      "failOpen": 0,
+      "falsePositive": 0,
+      "oracleCalls": 11,
+      "legacyInventoryMiss": 0,
+      "legacyAdmissionRefusal": 2
+    }
+  ],
+  "reviewerDisagreements": [
+    {
+      "label": "reviewer m6.mjs",
+      "case": 1,
+      "sha256": "33eeedd81d68167d19b45ae6dc25fd048991795218c02abce6e6746906cb1178",
+      "nodeAccepted": true,
+      "meriyahAccepted": false,
+      "failOpen": false,
+      "falsePositive": false,
+      "error": {
+        "line": 3,
+        "column": 0,
+        "reason": "Unexpected token: '/'"
+      }
+    },
+    {
+      "label": "reviewer m6.mjs",
+      "case": 2,
+      "sha256": "abc77bae08dde011a96e08b981f863477539e79e182b9193049c70004248f351",
+      "nodeAccepted": true,
+      "meriyahAccepted": false,
+      "failOpen": false,
+      "falsePositive": false,
+      "error": {
+        "line": 3,
+        "column": 0,
+        "reason": "Unexpected token: '/'"
+      }
+    },
+    {
+      "label": "reviewer m6.mjs",
+      "case": 5,
+      "sha256": "720f3ca7dd7eed759f531c86522795662e92a523c6ec79b9869b216e778eb86e",
+      "nodeAccepted": true,
+      "meriyahAccepted": false,
+      "failOpen": false,
+      "falsePositive": false,
+      "error": {
+        "line": 3,
+        "column": 0,
+        "reason": "Unexpected token: '/'"
+      }
+    }
+  ],
+  "measurements": {
+    "counts": {
+      "claudeFiles": 233,
+      "codexFiles": 324,
+      "claude": 1576,
+      "codex": 3795,
+      "malformed": 0
+    },
+    "manifest": "752ca473d5e60dfad185524f2650d5d6714d6e627ea30db79ac403df2b87e962",
+    "corpusRefused": 0,
+    "samples": 5371,
+    "coldLoadMedianMs": 3.1658125000000013,
+    "warmLoadMedianMs": 0.230853999999999,
+    "coldLoadSamplesMs": [
+      3.310125000000003,
+      4.902624999999999,
+      3.8988329999999998,
+      2.5127919999999992,
+      3.909540999999999,
+      2.5987910000000003,
+      2.5884169999999997,
+      3.7240409999999997,
+      3.0214999999999996,
+      2.802125
+    ],
+    "warmLoadSamplesMs": [
+      0.23187499999999872,
+      0.11549999999999727,
+      0.10012499999999847,
+      0.6562920000000005,
+      0.2530409999999996,
+      0.2298329999999993,
+      0.2557079999999985,
+      0.3954159999999973,
+      0.12945900000000066,
+      0.08045800000000014
+    ],
+    "coldRssDeltaMedian": 4087808,
+    "parserRssDelta": 851968,
+    "parseP50Ms": 0.002124999999978172,
+    "parseP99Ms": 0.05025000000000546,
+    "vendor": {
+      "bytes": 134305,
+      "allocated": 139264
+    },
+    "facade": {
+      "bytes": 8283,
+      "allocated": 12288
+    },
+    "totalBytes": 142588,
+    "loadBefore": [
+      9.6845703125,
+      5.75,
+      4.958984375
+    ],
+    "loadAfter": [
+      10.59033203125,
+      6.0029296875,
+      5.052734375
+    ],
+    "conditions": "Shared Mac, under load; no quiet-window guarantee. Cold means fresh process/module, with OS file cache retained. Warm means cached ESM namespace loading in one warmed process.",
+    "bars": {
+      "coldLoad": true,
+      "warmLoad": true,
+      "parseP99": true,
+      "disk": true
+    }
+  },
+  "fuzz": {
+    "jobs": [
+      {
+        "label": "differential differential.mjs seed=3",
+        "tested": 3000000,
+        "nodeAccepted": 2436443,
+        "meriyahAccepted": 2359804,
+        "bothRefuse": 543691,
+        "falseRefusal": 96505,
+        "meriyahOnly": 19866,
+        "failOpen": 0,
+        "falsePositive": 0,
+        "oracleCalls": 3484517,
+        "legacyInventoryMiss": 440582,
+        "legacyAdmissionRefusal": 1094188
+      },
+      {
+        "label": "reviewers reviewer/fuzz.mjs seed=1",
+        "tested": 500000,
+        "nodeAccepted": 16573,
+        "meriyahAccepted": 16138,
+        "bothRefuse": 483243,
+        "falseRefusal": 619,
+        "meriyahOnly": 184,
+        "failOpen": 0,
+        "falsePositive": 0,
+        "oracleCalls": 12281,
+        "legacyInventoryMiss": 63,
+        "legacyAdmissionRefusal": 517
+      },
+      {
+        "label": "reviewers reviewer/fuzz.mjs seed=2",
+        "tested": 500000,
+        "nodeAccepted": 14885,
+        "meriyahAccepted": 14510,
+        "bothRefuse": 484972,
+        "falseRefusal": 518,
+        "meriyahOnly": 143,
+        "failOpen": 0,
+        "falsePositive": 0,
+        "oracleCalls": 10808,
+        "legacyInventoryMiss": 48,
+        "legacyAdmissionRefusal": 438
+      },
+      {
+        "label": "reviewers reviewer/fuzz2.mjs seed=1",
+        "tested": 500000,
+        "nodeAccepted": 17701,
+        "meriyahAccepted": 17624,
+        "bothRefuse": 482113,
+        "falseRefusal": 263,
+        "meriyahOnly": 186,
+        "failOpen": 0,
+        "falsePositive": 0,
+        "oracleCalls": 13031,
+        "legacyInventoryMiss": 62,
+        "legacyAdmissionRefusal": 531
+      },
+      {
+        "label": "reviewers reviewer/fuzz2.mjs seed=2",
+        "tested": 500000,
+        "nodeAccepted": 15509,
+        "meriyahAccepted": 15410,
+        "bothRefuse": 484343,
+        "falseRefusal": 247,
+        "meriyahOnly": 148,
+        "failOpen": 0,
+        "falsePositive": 0,
+        "oracleCalls": 11140,
+        "legacyInventoryMiss": 50,
+        "legacyAdmissionRefusal": 474
+      },
+      {
+        "label": "shaped corpus-shaped.mjs seed=151",
+        "tested": 100000,
+        "nodeAccepted": 100000,
+        "meriyahAccepted": 100000,
+        "bothRefuse": 0,
+        "falseRefusal": 0,
+        "meriyahOnly": 0,
+        "failOpen": 0,
+        "falsePositive": 0,
+        "oracleCalls": 241567,
+        "legacyInventoryMiss": 18652,
+        "legacyAdmissionRefusal": 49976
+      }
+    ],
+    "exits": {
+      "differential": 1,
+      "reviewers": 1,
+      "shaped": 0
+    },
+    "totals": {
+      "tested": 5100000,
+      "nodeAccepted": 2601111,
+      "meriyahAccepted": 2523486,
+      "bothRefuse": 2478362,
+      "falseRefusal": 98152,
+      "meriyahOnly": 20527,
+      "failOpen": 0,
+      "falsePositive": 0,
+      "oracleCalls": 3773344,
+      "legacyInventoryMiss": 459457,
+      "legacyAdmissionRefusal": 1146124
+    },
+    "batching": {
+      "generatedProgramsPerProcess": 25000,
+      "maxOldSpaceMiB": 512,
+      "sequenceRegressionTests": 6,
+      "sequenceRegressionExit": 0
+    },
+    "abortedAttempt": {
+      "exit": 134,
+      "reason": "main-context SourceTextModule retention reached the 4 GB V8 heap limit",
+      "lastCompletedGeneratedProgress": 900000,
+      "excludedFromTotals": true
+    }
+  },
+  "focusedTests": {
+    "command": "bash bench/code-ast/validate.sh tests",
+    "exit": 0,
+    "total": 4547,
+    "passed": 4537,
+    "failed": 0,
+    "skipped": 10,
+    "batchRegression": {
+      "command": "node --experimental-vm-modules --test tests/code-ast-batch.test.mjs tests/code-ast.test.mjs tests/code-ast-compat.test.mjs tests/code-ast-oracle.test.mjs",
+      "total": 80,
+      "passed": 80,
+      "failed": 0,
+      "exit": 0
+    }
+  },
+  "compat": {
+    "checkedAt": "2026-10-28T20:40:44.532Z",
+    "source": "static",
+    "appVersion": "26.1023.50603",
+    "engineVersion": "26.1022.1001641",
+    "sleight": "e679ed7e",
+    "verdict": "fail",
+    "steps": [
+      {
+        "id": "bundle-layout",
+        "status": "fail",
+        "reason": "missing coreDoc"
+      },
+      {
+        "id": "tool-schema",
+        "status": "pass"
+      },
+      {
+        "id": "cell-parser",
+        "status": "pass",
+        "reason": "Meriyah 7.0.0 and both cell parser option blocks match",
+        "version": "7.0.0",
+        "options": {
+          "next": true,
+          "module": true,
+          "ranges": true,
+          "loc": false,
+          "disableWebCompat": true
+        },
+        "blocks": 2
+      }
+    ]
+  },
+  "fuzzDisagreements": {
+    "file": "~/Projects/sleight-wt/ledger/vc/ca1-evidence/fuzz-disagreements.jsonl.gz",
+    "records": 118682,
+    "bytes": 2213974,
+    "sha256": "c3ad55c89b198471089a63c34a95698af7e5fa2d4bfbef5413002049eb1d4f37",
+    "format": "one record per disagreement, including repeats; sourceSet, producer label, global case ordinal and source SHA-256; structured wrapper order is async function, function, generator function",
+    "byReason": [
+      {
+        "sourceSet": "minimized",
+        "kind": "falseRefusal",
+        "reason": "Unexpected token: '/'",
+        "count": 3
+      },
+      {
+        "sourceSet": "reviewers",
+        "kind": "falseRefusal",
+        "reason": "'for-of' loop head declarations can not have an initializer",
+        "count": 13
+      },
+      {
+        "sourceSet": "reviewers",
+        "kind": "falseRefusal",
+        "reason": "Block body arrows can not be immediately accessed without a group",
+        "count": 27
+      },
+      {
+        "sourceSet": "reviewers",
+        "kind": "falseRefusal",
+        "reason": "Invalid increment/decrement operand",
+        "count": 753
+      },
+      {
+        "sourceSet": "reviewers",
+        "kind": "falseRefusal",
+        "reason": "Invalid left-hand side in assignment",
+        "count": 487
+      },
+      {
+        "sourceSet": "reviewers",
+        "kind": "falseRefusal",
+        "reason": "Unexpected token: '/'",
+        "count": 291
+      },
+      {
+        "sourceSet": "reviewers",
+        "kind": "falseRefusal",
+        "reason": "Unexpected token: '/='",
+        "count": 42
+      },
+      {
+        "sourceSet": "reviewers",
+        "kind": "falseRefusal",
+        "reason": "Unexpected token: ']'",
+        "count": 34
+      },
+      {
+        "sourceSet": "reviewers",
+        "kind": "meriyahOnly",
+        "reason": "V8 refusal",
+        "count": 661
+      },
+      {
+        "sourceSet": "structured",
+        "kind": "falseRefusal",
+        "reason": "Expected ';'",
+        "count": 25086
+      },
+      {
+        "sourceSet": "structured",
+        "kind": "falseRefusal",
+        "reason": "Unexpected token: '/'",
+        "count": 60726
+      },
+      {
+        "sourceSet": "structured",
+        "kind": "falseRefusal",
+        "reason": "Unexpected token: 'number'",
+        "count": 1806
+      },
+      {
+        "sourceSet": "structured",
+        "kind": "falseRefusal",
+        "reason": "Unexpected token: 'regular expression'",
+        "count": 636
+      },
+      {
+        "sourceSet": "structured",
+        "kind": "falseRefusal",
+        "reason": "for await (... of ...) is only valid in async functions and async generators",
+        "count": 8251
+      },
+      {
+        "sourceSet": "structured",
+        "kind": "meriyahOnly",
+        "reason": "V8 refusal",
+        "count": 19866
+      }
+    ]
+  }
+}

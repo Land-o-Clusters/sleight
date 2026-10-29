@@ -236,7 +236,7 @@ test('a stale probe payload from an earlier call is ignored', t => {
   h.serverOut.write(JSON.stringify({ jsonrpc: '2.0', id: firstProbe.id, result: { content: [{ type: 'text', text: JSON.stringify([{ id: '9', url: 'https://form.test/nine', browser: 'b', call: '9' }]) }] } }) + '\n');
   assert.match(h.replies.at(-1).result.content[0].text, /This call opened tab 9/);
   h.clientIn.write(JSON.stringify({ jsonrpc: '2.0', id: 10, method: 'tools/call', params: { name: 'js', arguments: {
-    code: 'const tab = await cua.createBrowserTab("b", "https://form.test/ten"); not valid js',
+    code: 'const tab = await cua.createBrowserTab("b", "https://form.test/ten"); missing()',
   } } }) + '\n');
   h.serverOut.write(JSON.stringify({ jsonrpc: '2.0', id: 10, result: { isError: true, content: [{ type: 'text', text: 'SyntaxError: unexpected token' }] } }) + '\n');
   const secondProbe = [...h.sent].reverse().find(m => String(m.id).startsWith('sleight-opened-tabs-') && m.id !== firstProbe.id);

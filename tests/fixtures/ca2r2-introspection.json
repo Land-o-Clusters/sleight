@@ -1,0 +1,72 @@
+[
+  {
+    "arm": "claude",
+    "file": "2026-10-27T01-54-50-034Z/sleight-textedit-drag-1/transcript.jsonl",
+    "line": 12,
+    "sha256": "d5eca04fb69411e3c70d8365011741c99b5376ea3218ccc46c8f43e4c2b5fe3b",
+    "code": "let app = __sleightOpenedApp2;\nnodeRepl.write(String(app.selectText).slice(0, 800));\nnodeRepl.write(String(app.doubleClick).slice(0, 500));"
+  },
+  {
+    "arm": "claude",
+    "file": "2026-10-27T01-55-21-821Z/sleight-textedit-drag-1/transcript.jsonl",
+    "line": 14,
+    "sha256": "c55d0500b01cf4186850d2d99684c74a5f6d9e45da167d2f66f6acb7dd2b3bea",
+    "code": "let app = __sleightOpenedApp2;\nnodeRepl.write(String(app.selectText).slice(0, 600));\nnodeRepl.write(String(app.doubleClick).slice(0, 600));"
+  },
+  {
+    "arm": "claude",
+    "file": "2026-10-27T02-03-58-122Z/sleight-textedit-drag-1/transcript.jsonl",
+    "line": 13,
+    "sha256": "0f800623d88fbfe78024991edefdef60d706d59f4874076b99d35159697f72b9",
+    "code": "let app = __sleightOpenedApp2;\nnodeRepl.write(String(app.selectText).slice(0, 800));\nnodeRepl.write(String(app.doubleClick).slice(0, 400));"
+  },
+  {
+    "arm": "claude",
+    "file": "2026-10-27T10-58-51-869Z/sleight-textedit-notes-table-1/transcript.jsonl",
+    "line": 145,
+    "sha256": "6a5a1d819badfaaf51456d86fedab13d7e8c07f063a1225dc965b72ad0f7fdb1",
+    "code": "nodeRepl.write(String(__sleightOpenedApp2.paste).slice(0, 800));\nnodeRepl.write(\"\\n---\\n\");\nnodeRepl.write(Object.keys(__sleightOpenedApp2).join(\", \"));"
+  },
+  {
+    "arm": "claude",
+    "file": "2026-10-27T22-45-12-105Z/sleight-textedit-window-drag-1/transcript.jsonl",
+    "line": 21,
+    "sha256": "8b0e94f64590a20cdd74ce3e48f4c8124cf9f2f548f5237fabd3eca2be554e8a",
+    "code": "let src = __sleightOpenedApp2; let tgt = __sleightOpenedApp5;\nnodeRepl.write(String(src.selectText).slice(0, 1500));\nnodeRepl.write(\"\\n---\\n\");\nnodeRepl.write(String(src.getAXState).slice(0, 300));\nnodeRepl.write(\"\\n---keys:\" + Object.keys(src).join(\",\"));\n"
+  },
+  {
+    "arm": "claude",
+    "file": "2026-10-27T23-52-18-827Z/sleight-textedit-window-drag-1/transcript.jsonl",
+    "line": 6,
+    "sha256": "d7f6a633becbe452dd9e3f5b4f1eef961f7332fc48cc6d6087187a876f78f693",
+    "code": "let app = await cua.getApp(\"TextEdit\");\napp.state ? app.state : app"
+  },
+  {
+    "arm": "claude",
+    "file": "2026-10-28T01-44-38-642Z/sleight-textedit-two-windows-1/transcript.jsonl",
+    "line": 16,
+    "sha256": "b7ed3160916ab969eda5f012202eef14f2708f401b2e7e451653d48cbacac247",
+    "code": "let app = __sleightOpenedApp2; typeof app.setValue === 'function' ? app.setValue.toString() : Object.keys(app)"
+  },
+  {
+    "arm": "claude",
+    "file": "2026-10-28T01-44-38-642Z/sleight-textedit-window-drag-1/transcript.jsonl",
+    "line": 18,
+    "sha256": "dd88bf6ef46ded547c8ff38a4fb7fcf1e412930dcb594789fc7359a1ea89ced5",
+    "code": "let app = __sleightOpenedApp2;\nString(app.selectText).slice(0, 600)"
+  },
+  {
+    "arm": "claude",
+    "file": "2026-10-28T06-32-09-777Z/sleight-textedit-two-windows-1/transcript.jsonl",
+    "line": 15,
+    "sha256": "68e5624d27887003f8e5ec553ad5bfca78570832f71b09ad205341b20773ac1c",
+    "code": "let app = __sleightOpenedApp2; String(app.setValue).slice(0, 500)"
+  },
+  {
+    "arm": "claude",
+    "file": "2026-10-28T07-20-26-258Z/sleight-textedit-window-drag-1/transcript.jsonl",
+    "line": 16,
+    "sha256": "be055c47b965447eeb5e80b4cbaea25517aecd439964e6e0a7ac7cdfb5a3cbff",
+    "code": "let app = __sleightOpenedApp2;\nString(app.selectText) + \"\\n----\\n\" + String(app.pressKey) + \"\\n----\\n\" + String(app.getAXState)"
+  }
+]

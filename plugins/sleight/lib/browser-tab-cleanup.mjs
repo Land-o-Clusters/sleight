@@ -123,7 +123,7 @@ function installTabCleanup(cua) {
   } };
 }
 
-export function tabCleanupCode(code) {
-  return /\bcua\.(?:createBrowserTab|getBrowser)\s*\(|\.tabs\.new\s*\(/.test(code)
+export function tabCleanupCode(code, force = false) {
+  return force || /\bcua\.(?:createBrowserTab|getBrowser)\s*\(|\.tabs\.new\s*\(/.test(code)
     ? `(${installTabCleanup.toString()})(cua);\n${code}` : code;
 }

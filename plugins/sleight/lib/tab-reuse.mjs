@@ -131,8 +131,8 @@ function installOpenedTabs(cua) {
   };
 }
 
-export function tabReuseCode(code, callId = '') {
-  if (!CREATED.test(code)) return code;
+export function tabReuseCode(code, callId = '', force = false) {
+  if (!force && !CREATED.test(code)) return code;
   return `(${installOpenedTabs.toString()})(cua);\n` +
     `globalThis.__sleightOpenedCall = ${JSON.stringify(String(callId))};\n` +
     'globalThis.__sleightOpenedThisCall && (globalThis.__sleightOpenedThisCall.length = 0);\n' +

@@ -136,6 +136,13 @@ export async function preflight({ root = process.cwd(), mode = 'release', tag, v
   if (base === null) return result;
   if (!shaPattern.test(base)) { fail('base', 'invalid-commit'); return result; }
   if (await run('ancestor', { base, head }) === null || await run('sources') === null) return result;
+  const parser = await run('cell-parser');
+  if (parser === null) return result;
+  try {
+    const checked = JSON.parse(parser);
+    if (checked.id !== 'cell-parser' || checked.status !== 'pass') throw Error();
+    result.cellParser = checked;
+  } catch { fail('cell-parser', 'invalid-parser-receipt'); return result; }
   // The benchmark hub's pages, charts, explore.html and the README's generated blocks must match the data files they come from.
   // Collect available raw results, then render in memory and compare with the committed tree. Missing external banks keep saved data.
   let hub;
@@ -186,7 +193,9 @@ export function createReviewedRunner(root, { execute = runOwnedCommand, signal, 
         if (!shaPattern.test(request.base ?? '') || !shaPattern.test(request.head ?? '')) throw Error('Invalid commits');
         args = ['merge-base', '--is-ancestor', request.base, request.head]; break;
       case 'hub': command = process.execPath; args = ['bench/results-hub.mjs', '--check']; timeout = 120_000; break;
+      case 'cell-parser': command = process.execPath; args = ['bench/compat/parser.mjs']; break;
       case 'sources': args = ['ls-files', '--error-unmatch', '--', 'scripts/release-history-scan.mjs', 'scripts/linux-preflight.mjs', 'bench/results-hub.mjs',
+        'bench/compat/parser.mjs',
         ...(linuxRuntime === 'colima' ? ['scripts/linux-preflight-colima.mjs'] : [])]; break;
       case 'history':
         if (!/^(?:[a-f0-9]{40}|[a-f0-9]{64})\.\.(?:[a-f0-9]{40}|[a-f0-9]{64})$/.test(request.range ?? '')) throw Error('Invalid range');

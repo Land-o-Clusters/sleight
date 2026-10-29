@@ -1,4 +1,6 @@
-import { tokens, invalidTokens, codeInspectionRefusal } from './flow-rules.mjs';
+import { codeInspectionRefusal } from './flow-rules.mjs';
+import { parseCell, walk, memberCall, handleBindings, UNKNOWN } from './code-ast.mjs';
+import { argumentValue, unsafeHandleUse, unsafeHandleRefusal } from './call-inspection.mjs';
 
 // Also injected into the app proxy. Keep this function self-contained.
 export function nativeArgumentError(name, args, unknown = Symbol()) {
@@ -53,73 +55,46 @@ export function nativeArgumentError(name, args, unknown = Symbol()) {
   return valid ? undefined : 'sleight: invalid native arguments. Engine App.' + signature + '; nothing was sent';
 }
 
-const unknown = Symbol('expression');
-const opening = new Map([['(', ')'], ['[', ']'], ['{', '}']]);
-function parts(ts) {
-  const result = [], stack = [];
-  let start = 0;
-  for (let i = 0; i < ts.length; i++) {
-    if (ts[i].string) continue;
-    const v = ts[i].v;
-    if (opening.has(v)) stack.push(opening.get(v));
-    else if ([')', ']', '}'].includes(v)) { if (stack.pop() !== v) return; }
-    else if (v === ',' && !stack.length) { result.push(ts.slice(start, i)); start = i + 1; }
-  }
-  if (stack.length) return;
-  if (start < ts.length) result.push(ts.slice(start));
-  return result;
-}
-
-// Read only literals, including partially known arrays/options. Expressions stay unknown.
-function literal(ts) {
-  if (!ts.length) return undefined;
-  if (ts.length === 1) {
-    if (ts[0].string) return ts[0].v;
-    if (ts[0].v === 'null') return null;
-    if (ts[0].v === 'undefined') return undefined;
-    if (ts[0].v === 'true' || ts[0].v === 'false') return ts[0].v === 'true';
-  }
-  const numeric = ts.map(t => t.v).join('');
-  if (/^-?(?:\d+(?:\.\d*)?|\.\d+)(?:e[+-]?\d+)?$/i.test(numeric)) return Number(numeric);
-  const first = ts[0]?.v;
-  if (ts[0]?.string || !['[', '{'].includes(first) || ts.at(-1)?.v !== opening.get(first)) return unknown;
-  const entries = parts(ts.slice(1, -1));
-  if (!entries || entries.some(entry => entry.slice(0, 3).map(t => t.v).join('') === '...')) return unknown;
-  if (first === '[') return entries.map(literal);
-  const value = Object.create(null);
-  for (const entry of entries) {
-    if (entry[1]?.v !== ':' || !entry[0]?.v) return unknown;
-    value[entry[0].v] = literal(entry.slice(2));
-  }
-  return value;
-}
-
 // This is a literal mistake check, not an interpreter. The runtime proxy checks computed values.
-export function nativeArgumentsProblem(code, nativeHandles = new Set(), browserHandles = new Set()) {
-  const ts = tokens(code), native = new Set(['app', ...nativeHandles]);
-  if (invalidTokens(ts)) return codeInspectionRefusal;
+export function nativeArgumentsProblem(code, nativeHandles = new Set(), browserHandles = new Set(), inspection = {}) {
+  const { ast, error } = parseCell(code);
+  if (error) return codeInspectionRefusal;
+  const native = new Set(['app', ...nativeHandles]);
   for (const handle of browserHandles) native.delete(handle);
-  for (let i = 0; i < ts.length; i++) {
-    if (ts[i].string) continue;
-    if (ts[i + 1]?.v === '=' && ts[i + 2]?.v !== '=' && /^[A-Za-z_$][\w$]*$/.test(ts[i].v)) {
-      const at = i + (ts[i + 2]?.v === 'await' ? 3 : 2);
-      const app = ts[at]?.v === 'cua' && ts[at + 1]?.v === '.' && ts[at + 2]?.v === 'getApp';
-      if (app || native.has(ts[at]?.v)) native.add(ts[i].v);
-      else native.delete(ts[i].v);
+  const unsafe = unsafeHandleUse(ast, new Set([...native, ...browserHandles]), { code, ...inspection });
+  if (unsafe) return unsafeHandleRefusal(unsafe);
+  for (const statement of ast.body) {
+    const hints = handleBindings({ body: [statement] });
+    for (const [name, hint] of hints) {
+      if (hint.kind === 'app') native.add(name);
+      else native.delete(name);
     }
-    if (!native.has(ts[i].v) || ts[i - 1]?.v === '.' || ts[i + 1]?.v !== '.' || ts[i + 3]?.v !== '(') continue;
-    const name = ts[i + 2].v;
-    if (!['pressKey', 'click', 'selectText', 'typeText', 'scroll', 'drag'].includes(name)) continue;
-    let end = i + 4, depth = 1;
-    for (; end < ts.length; end++) {
-      if (ts[end].string) continue;
-      if (ts[end].v === '(') depth++;
-      if (ts[end].v === ')' && --depth === 0) break;
+    for (const node of walk(statement)) {
+      const assignment = node.type === 'VariableDeclarator' ? { left: node.id, right: node.init, operator: '=' }
+        : node.type === 'AssignmentExpression' ? node : undefined;
+      if (assignment?.left.type === 'Identifier') {
+        const name = assignment.left.name, source = assignment.right;
+        if (!hints.has(name)) {
+          const acquisition = memberCall(source);
+          if (assignment.operator === '=' && acquisition?.receiver.type === 'Identifier' && acquisition.receiver.name === 'cua' && acquisition.method === 'getApp') native.add(name);
+          else if (assignment.operator === '=' && source?.type === 'Identifier' && native.has(source.name)) native.add(name);
+          else native.delete(name);
+        }
+      }
+      if (node.type !== 'CallExpression') continue;
+      const call = memberCall(node);
+      if (!call) continue;
+      const factory = memberCall(call.receiver);
+      const acquired = factory?.receiver.type === 'Identifier' && factory.receiver.name === 'cua' && factory.method === 'getApp';
+      if (!acquired && (call.receiver.type !== 'Identifier' || !native.has(call.receiver.name))) continue;
+      // A computed name cannot be checked against a signature. Refuse it rather
+      // than silently omitting a possible native action from inspection.
+      if (call.method === UNKNOWN) return codeInspectionRefusal;
+      if (!['pressKey', 'click', 'selectText', 'typeText', 'scroll', 'drag'].includes(call.method)) continue;
+      // A spread has unknown arity. The runtime proxy validates the actual list.
+      if (call.args.some(arg => arg.type === 'SpreadElement')) continue;
+      const problem = nativeArgumentError(call.method, call.args.map(argumentValue), UNKNOWN);
+      if (problem) return problem + '.';
     }
-    if (depth) continue;
-    const entries = parts(ts.slice(i + 4, end));
-    if (!entries || entries.some(entry => entry.slice(0, 3).map(t => t.v).join('') === '...')) continue;
-    const problem = nativeArgumentError(name, entries.map(literal), unknown);
-    if (problem) return problem + '.';
   }
 }

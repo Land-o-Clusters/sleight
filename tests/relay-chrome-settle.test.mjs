@@ -1,6 +1,7 @@
 import { test, after } from 'node:test';
 import assert from 'node:assert/strict';
 import { PassThrough } from 'node:stream';
+import { FlowRules } from '../plugins/sleight/lib/flow-rules.mjs';
 import { createRelay, chromeOnlyTree } from '../plugins/sleight/lib/relay.mjs';
 import { createContext, runInContext, runInNewContext } from 'node:vm';
 import { InputLease } from '../plugins/sleight/lib/input-lease.mjs';
@@ -112,7 +113,10 @@ test('chrome-only scrolls become proportional content swipes on the observed han
   const png = Buffer.alloc(33);
   png.writeUInt32BE(0x89504e47, 0); png.writeUInt32BE(0x0d0a1a0a, 4);
   png.writeUInt32BE(400, 16); png.writeUInt32BE(1000, 20);
-  const h = harness();
+  const flowRules = new FlowRules({version:1,rules:[{id:'secret',kind:'pattern',pattern:'SECRET',destinations:['*']}]});
+  const planned=[];
+  const hand={admit(id,{code}){planned.push({id,code});},result(){},approval(){},answered(){},close(){}};
+  const h = harness({flowRules,hand});
   js(h, 1, 'let app = await cua.getApp("Stream")'); await settle();
   h.fromServer({ jsonrpc: '2.0', id: 1, result: { content: [
     { type: 'text', text: IPHONE.replaceAll('iPhone Mirroring', 'Stream') }, image(png.toString('base64'))] } }); await settle();
@@ -124,10 +128,13 @@ test('chrome-only scrolls become proportional content swipes on the observed han
   ]) {
     js(h, id, `await app.scroll([200, 500], ${JSON.stringify(direction)}, ${distance})`); await settle();
     const calls = [];
+    assert.ok(h.toServer.find(m=>m.id===id), JSON.stringify(h.toClient));
+    assert.equal(planned.find(item=>item.id===id)?.code, `await app.scroll([200, 500], ${JSON.stringify(direction)}, ${distance})`);
     await runInNewContext(`(async () => { ${h.toServer.find(m => m.id === id).params.arguments.code} })()`, {
       app: { drag: async (...args) => calls.push(['drag', ...args]), scroll: async (...args) => calls.push(['scroll', ...args]) },
     });
     assert.deepEqual(JSON.parse(JSON.stringify(calls)), [['drag', from, to]]);
+    h.fromServer({jsonrpc:'2.0',id,result:{content:[{type:'text',text:IPHONE.replaceAll('iPhone Mirroring','Stream')}]}}); await settle();
   }
   js(h, 6, 'await app.scroll([200, 500], "constructor", 0.5)'); await settle();
   const calls = [];
@@ -136,6 +143,7 @@ test('chrome-only scrolls become proportional content swipes on the observed han
       scroll: async (...args) => calls.push(args) },
   });
   assert.deepEqual(JSON.parse(JSON.stringify(calls)), [[[200, 500], 'constructor', 0.5]]);
+  assert.equal(flowRules.handles.get('app')?.app, 'Stream');
 });
 
 test('normal trees, other handles and text mentioning scroll keep the original behavior', async () => {

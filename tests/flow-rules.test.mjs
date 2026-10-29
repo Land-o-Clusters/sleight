@@ -357,3 +357,16 @@ test('a new tab goes to the browser in the bracket form too, whatever window was
     assert.deepEqual(flow.analyze('js', { code }).violations.map(v => v.app), ['browser'], code);
   }
 });
+
+test('unknown values retain a proved app exception but never an invalidated one', () => {
+  const flow = rules({id:'contacts',kind:'source',sources:['Contacts'],destinations:['*'],except:['Notes']});
+  assert.equal(flow.analyze('js',{code:'let app=await cua.getApp("Notes"); await app.typeText(value)'}).violations.length,0);
+  assert.equal(flow.analyze('js',{code:'let app=await cua.getApp("Mail"); await app.typeText(value)'}).violations.length,1);
+  assert.equal(flow.analyze('js',{code:'let app=await cua.getApp("Notes"); if(x)app=await cua.getApp("Mail"); await app.typeText(value)'}).violations.length,1);
+});
+test('an unknown navigation URL cannot reuse the current observed site exception', () => {
+  const flow=rules({id:'contacts',kind:'source',sources:['Contacts'],destinations:['*'],except:['site:public.test']});
+  read(flow,'let tab=await cua.getTab("1")',tabResult('public.test'));
+  assert.equal(flow.analyze('js',{code:'await tab.typeText(value)'}).violations.length,0);
+  assert.equal(flow.analyze('js',{code:'await tab.goto(nextUrl)'}).violations.length,1);
+});

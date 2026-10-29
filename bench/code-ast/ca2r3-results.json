@@ -1,0 +1,89 @@
+{
+  "base": "d1d7f17ee969d35bfc629e72a03639a79b4234b0",
+  "branch": "codex/ca2",
+  "tests": {
+    "command": "bash bench/code-ast/validate-ca2.sh tests",
+    "tests": 4958,
+    "pass": 4941,
+    "fail": 0,
+    "skipped": 17,
+    "cancelled": 0,
+    "exit": 0
+  },
+  "reviewCases": 131,
+  "consumerReplay": {
+    "manifest": "752ca473d5e60dfad185524f2650d5d6714d6e627ea30db79ac403df2b87e962",
+    "corpus": {
+      "claudeFiles": 233,
+      "codexFiles": 324,
+      "claude": 1576,
+      "codex": 3795,
+      "malformed": 0
+    },
+    "counts": {
+      "flow": {
+        "compared": 5371,
+        "differences": 1005
+      },
+      "native": {
+        "compared": 5371,
+        "differences": 26
+      },
+      "elements": {
+        "compared": 5371,
+        "differences": 1
+      },
+      "clipboard": {
+        "compared": 5371,
+        "differences": 1
+      }
+    },
+    "regressions": 0,
+    "reasons": {
+      "indirect invocation inventory now feeds the unknown-destination rule policy": 63,
+      "opened-app binding hints added; existing inputs and read target are identical": 741,
+      "window-number acquisition clears only the guessed read-app identity": 4,
+      "unproved or invalidated handle hints removed; existing inputs and read target are identical": 11,
+      "assigned, shadowed or unbound handles widen only their destinations to unknown; literal inputs are unchanged": 186,
+      "opened-app binding exposes a specific malformed native argument list": 25,
+      "unsafe handle use now refuses before native dispatch": 1,
+      "unsafe handle use now refuses instead of returning a misleading empty inventory": 2
+    },
+    "unknownDiagnostics": 57,
+    "comparisons": 21484,
+    "exit": 0,
+    "command": "bash bench/code-ast/validate-ca2.sh corpus"
+  },
+  "gatedQualification": {
+    "reviewers": "owed, fuzz-may-run absent",
+    "shaped": "owed, fuzz-may-run absent",
+    "fuzz": "owed, fuzz-may-run absent"
+  },
+  "runtimeBytes": {
+    "before": 41950,
+    "after": 45110,
+    "delta": 3160,
+    "files": 2
+  },
+  "reviewFileBytes": 5220,
+  "prompt": {
+    "noticesHash": "14e93218d5889a0d4063e695bbdcea17e1aa852dc6d42285e793033ee233be90",
+    "defaultCharacters": 46282,
+    "leanCharacters": 33216,
+    "deltaFromCA2R2": -46
+  },
+  "liveActions": 0,
+  "sourceHashes": {
+    "plugins/sleight/lib/call-inspection.mjs": "96ce3701d9388bba2d3e4110377a73673fd0eead8ae3e139d7a60d375b36c9aa",
+    "plugins/sleight/lib/flow-rules.mjs": "a2c1cdb3cedf5999a285e317a74c7fe0506c12da4876fd7e78a339bf120a3812",
+    "tests/browser-call.test.mjs": "409c5e694c07b242f0eb5c0ae719d913f885e613948c1cbab00a1595a1769886",
+    "tests/ca2r2-review.test.mjs": "440aaa614ba38f67049e4f871f2b78f2362effb56d2fca1954ff25589f713e53",
+    "tests/ca2r3-review.test.mjs": "d23b04badcf0db656e33c8b179103d2e3437c7d52f51014432a813472fc80a44",
+    "tests/call-set-ast.test.mjs": "6bf24b22558149dd0d6956b5220d6f23c09f9644e06f1f286301b188b13dd1f1",
+    "tests/filtered-reads.test.mjs": "1f641cea7069c3783381e700df92ae112cd26ab1451c72eba4ef7d9790fb7690",
+    "tests/fixtures/prompt-default.json": "239f1f8ec1b2f389f27b49a06d1cc7472697af72511c07bc13242ae403ad3ed2",
+    "tests/fr2-tokenizer.test.mjs": "836b3182e70d8e86218547f24cf1992458e50a1014805d23a9175d8b2ecd7c30",
+    "tests/prompt-budget.test.mjs": "6868232337a465138bbf7ef73d1646a5f95d1f1c779cb40542712b8cd4df8c1b",
+    "bench/code-ast/consumer-differences.json": "7d452447539228e98432a35d8a1e97aafc36233b9330d54cf96d9e603c032897"
+  }
+}

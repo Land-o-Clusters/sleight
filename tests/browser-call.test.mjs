@@ -103,10 +103,15 @@ for (const [binding, names] of [
   ['const { editor } = { editor: app }', ['editor']],
   ['const { getApp: acquire } = cua; const editor = await acquire("X")', ['editor']],
 ]) {
-  test(`native bindings retain their lease route: ${binding}`, t => {
+  test(`native bindings retain their lease route or refuse before binding: ${binding}`, t => {
     const h = runtime(t);
     h.call(1, 'app = await cua.getApp("Editor")'); h.reply(1, { content: [] });
     h.call(2, binding);
+    if (binding.startsWith('const [') || binding.startsWith('const { editor }')) {
+      assert.equal(h.sent.some(msg => msg.id === 2), false);
+      assert.match(h.received.find(msg => msg.id === 2).result.content[0].text, /Use direct calls with literal arguments\. \((?:all\(handle\)|ObjectPattern handle destructuring)\)/);
+      return;
+    }
     if (h.sent.some(msg => msg.id === 2)) h.reply(2, { content: [] });
     for (const [i, name] of names.entries()) {
       h.call(3 + i, `await ${name}.click(1)`);
@@ -156,6 +161,11 @@ for (const code of refusedTabCalls) {
     h.call(1, 'let tab = await cua.getTab("1")');
     h.reply(1, { content: [], _meta: { 'codex/toolSurface': { kind: 'browserUse' } } });
     h.call(2, code);
+    if (code.includes('Object.getPrototypeOf')) {
+      assert.equal(h.sent.find(msg => msg.id === 2), undefined);
+      assert.match(h.received.find(msg => msg.id === 2).result.content[0].text, /Use direct calls with literal arguments\. \(getPrototypeOf\(handle\)\)/);
+      return;
+    }
     assert.ok(h.sent.find(msg => msg.id === 2), JSON.stringify(h.received));
     assert.equal(h.lease.owned.size, 0);
   });
@@ -290,6 +300,11 @@ for (const [index, code] of [...bypasses, ...missed].entries()) {
     runInContext('var k = "constructor"; var nativeAction = () => app.typeText("blocked"); JSON.nativeAction = nativeAction; var clipboard = app;', h.context);
     h.call(3, code + '; await app.typeText("blocked")');
     const forwarded = h.sent.find(msg => msg.id === 3);
+    if ([9,10,16,17,18].includes(index)) {
+      assert.equal(forwarded, undefined);
+      assert.match(h.received.find(msg=>msg.id===3).result.content[0].text, /cannot inspect JavaScript\. Use direct calls with literal arguments\. \(.+\)/);
+      assert.deepEqual(Array.from(h.context.writes), []); return;
+    }
     assert.ok(forwarded, JSON.stringify(h.received));
     await assert.rejects(h.run(forwarded.params.arguments.code), /window or URL changed/);
     assert.deepEqual(Array.from(h.context.writes), [], 'native input never happens');

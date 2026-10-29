@@ -54,8 +54,8 @@ export async function reorder(tab, list, order, drag = dragTo) {
   return { before, after, moves, verified: same(after, order) };
 }
 
-export function reorderCode(code) {
-  if (!/\bsleight\s*\.\s*reorder\s*\(/.test(code)) return code;
+export function reorderCode(code, force = false) {
+  if (!force && !/\bsleight\s*\.\s*reorder\s*\(/.test(code)) return code;
   return `globalThis.sleight ??= {}; globalThis.sleight.dragTo = (${dragTo.toString()});\n` +
     `globalThis.sleight.reorder = ((dragTo, locateList) => (${reorder.toString()}))(globalThis.sleight.dragTo, ${locateList.toString()});\n${code}`;
 }

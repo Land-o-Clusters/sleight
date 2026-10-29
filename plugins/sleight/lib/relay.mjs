@@ -1,4 +1,7 @@
 import { unsupportedCodeLines } from './code-line-terminators.mjs';
+import { parseCell, withCellCache } from './code-ast.mjs';
+import { dispatchInspection, sameGuardedCalls } from './dispatched-calls.mjs';
+import { codeInspectionRefusal } from './flow-rules.mjs';
 import { parseTypedApps, isPresent, predictApps, upfrontAsk, remoteApprovalNotice, physicalApprovalNotice, resolveApp } from './remote-approvals.mjs';
 import { turboFirstRules } from './turbo-first-rules.mjs';
 // A stdio relay between Claude Code and the computer-use server.
@@ -588,15 +591,15 @@ export function chromeOnlyTree(text) {
   return true;
 }
 
-function chromeSwipe(app, size, target, direction, distance = 1) {
+function chromeSwipe(__sleightSwipeApp, size, target, direction, distance = 1) {
   const axis = { up: 1, u: 1, down: 1, d: 1, left: 0, l: 0, right: 0, r: 0 }[direction];
   const amount = typeof distance === 'number' ? distance : distance?.pixels;
-  if (![0, 1].includes(axis) || !Number.isFinite(amount) || amount <= 0) return app.scroll(target, direction, distance);
+  if (![0, 1].includes(axis) || !Number.isFinite(amount) || amount <= 0) return __sleightSwipeApp.scroll(target, direction, distance);
   const span = Math.min(size[axis] * 0.65, typeof distance === 'number' ? amount * size[axis] * 0.65 : amount);
   const sign = ['up', 'u', 'left', 'l'].includes(direction) ? 1 : -1;
   const from = [size[0] * 0.5, size[1] * 0.525], to = [...from];
   from[axis] -= sign * span / 2; to[axis] += sign * span / 2;
-  return app.drag(from, to);
+  return __sleightSwipeApp.drag(from, to);
 }
 
 function chromeScrollCode(code, tree, size, handles) {
@@ -605,6 +608,8 @@ function chromeScrollCode(code, tree, size, handles) {
   return code.replace(/"(?:[^"\\]|\\[\s\S])*"|'(?:[^'\\]|\\[\s\S])*'|`(?:[^`\\]|\\[\s\S])*`|\/\/[^\n\r\u2028\u2029]*|\/\*[\s\S]*?\*\/|\b([A-Za-z_$][\w$]*)\.scroll\s*\(/g,
     (match, handle) => handles.has(handle) ? `(${chromeSwipe.toString()}).bind(null, ${handle}, ${JSON.stringify(size)})(` : match);
 }
+
+const swipeInspection = { trustedFunctions: new Set([chromeSwipe.toString()]) };
 
 export function lastImageData(content) {
   return (content ?? []).filter(c => c?.type === 'image' && typeof c.data === 'string').at(-1)?.data;
@@ -2323,6 +2328,17 @@ export function createRelay({
     }, 5000);
     leaseTimer.unref?.();
   }
+  function inspectionStop(msg) {
+    const id = msg.id;
+    documentCalls.delete(id); changeCalls.delete(id); jsCalls.delete(id); syntaxOrigins.delete(id); browserCalls.delete(id);
+    spaceChecks.delete(id); preHealth.delete(id); nativeChecked.delete(id); focusedChecked.delete(id); restartRetries.delete(id);
+    flowCalls.delete(id); helperReads.delete(id); remapNotes.delete(id); requireNotes.delete(id); preapprovalNotes.delete(id);
+    menuCalls.delete(id); menuAdmissions.delete(id); menuForwards.delete(id); nativeCopies.delete(id);
+    callSeqs.delete(id); callStarts.delete(id); resultCalls.delete(id); guardCalls.delete(id); filterMarks.delete(id);
+    outcomeCalls.delete(id); completenessCalls.delete(id);
+    finishedCall(id);
+    toClient({ jsonrpc: '2.0', id, result: { isError: true, content: [{ type: 'text', text: codeInspectionRefusal }] } });
+  }
   function finishedCall(id) {
     callNarration.delete(id);
     statsExcluded.delete(id);
@@ -3533,7 +3549,8 @@ export function createRelay({
   }
 
   lines(clientIn, clientLine);
-  function clientLine(line, startupReady = false) {
+  function clientLine(line, startupReady = false) { return withCellCache(() => inspectClientLine(line, startupReady)); }
+  function inspectClientLine(line, startupReady = false) {
     let msg;
     try {
       msg = JSON.parse(line);
@@ -3722,16 +3739,38 @@ export function createRelay({
       msg.params.arguments = { ...rest, code: command };
     }
     if (jsArgs && typeof msg.params.arguments?.code === 'string') {
+      // Keep the existing top-level return repair before parsing the engine cell.
+      let cell, error;
+      try {
+        cell = finalReturnCode(msg.params.arguments.code);
+        ({ error } = parseCell(cell));
+      } catch {
+        error = { line: 0, column: 0, reason: 'cannot parse this cell' };
+      }
+      if (error) {
+        finishedCall(msg.id);
+        toClient({ jsonrpc: '2.0', id: msg.id, result: { isError: true, content: [{ type: 'text',
+          text: `JS [${error.line}:${error.column}]: ${error.reason}` }] } });
+        return;
+      }
+      if (cell !== msg.params.arguments.code && !sameGuardedCalls('async function __sleightInspect() {\n' + msg.params.arguments.code + '\n}', cell)) {
+        inspectionStop(msg);
+        return;
+      }
       if (unsupportedCodeLines(msg.params.arguments.code)) {
         finishedCall(msg.id);
         toClient({ jsonrpc: '2.0', id: msg.id, result: { isError: true, content: [{ type: 'text',
-          text: promptNotice('Raw CR/U+2028/U+2029 outside strings/templates, or ambiguous literal syntax (regex/division, <!--/-->, or deep nesting). Use LF source lines. In strings/templates, use \\r, \\u2028 or \\u2029 escapes, or split the ambiguous expression into a separate call.', prompt) }] } });
+          text: promptNotice('Raw CR/U+2028/U+2029 outside strings/templates, or ambiguous regex/division, <!--/--> or deep nesting. Use LF source. Escape literal CR/U+2028/U+2029 as \\r/\\u2028/\\u2029. Split ambiguous expressions into separate calls.', prompt) }] } });
         return;
       }
       // With or without the input lease: after `const app`, a suggested `let app = …` is a redeclaration error.
       if (/(?:^|[;\n])\s*const\s+app\s*=/.test(msg.params.arguments.code)) constApp = true;
-      msg.params.arguments.code = finalReturnCode(msg.params.arguments.code);
+      msg.params.arguments.code = cell;
       const fixed = nativeGetStateCode(msg.params.arguments.code, id => nativeHandles.has(id), id => browserHandles.has(id));
+      if (fixed !== cell && !sameGuardedCalls(cell, fixed)) {
+        inspectionStop(msg);
+        return;
+      }
       if (fixed !== msg.params.arguments.code) { msg.params.arguments.code = fixed; trace('getstate-rewritten', { id: msg.id }); }
       if (leanFirst && !requestsFullDocumentation(msg.params.arguments.code) &&
           /\bcua\s*\.\s*getApp\s*\(/.test(codeOnly(msg.params.arguments.code))) nativeAcquisitions.add(msg.id);
@@ -4047,6 +4086,10 @@ export function createRelay({
       }
     }
     if (!rest) return false;
+    if (!sameGuardedCalls(code, recovered || saveBaseline ? rest : acquire + ';\n' + rest)) {
+      inspectionStop(msg);
+      return true;
+    }
     // Split even for the app the lease holds: the guard's setup refers to `app` before a `let app`
     // in the same script, which throws (2/3 simulator-form runs, 2026-10-08).
     const prefixId = `sleight-acquire-${nextInternalId++}`;
@@ -4395,7 +4438,8 @@ export function createRelay({
     })().catch(() => {}).finally(() => observeServerMessage(msg));
     return true;
   }
-  function handleClient(msg) {
+  function handleClient(msg) { return withCellCache(() => inspectClient(msg)); }
+  function inspectClient(msg) {
     if (pauseBlocked(msg)) { pauseReply(msg); return; }
     if (msg.result?.action === 'accept' && (pause.paused || pausedCalls.size)) {
       for (const id of pausedCalls) nativePauseCuts.add(id);
@@ -4612,7 +4656,8 @@ export function createRelay({
       msg.params.arguments.code = autoPrintCode(msg.params.arguments.code, process.env.SLEIGHT_AUTOPRINT === '1');
     }
     let retryClient = structuredClone(msg);
-    let originalCode = msg.params?.arguments?.code;
+    let originalCode = msg.params?.arguments?.code, policyCode = originalCode;
+
     if (typeof originalCode === 'string') {
       for (const native of nativeBindings(originalCode, nativeHandles)) {
         browserHandles.delete(native); nativeHandles.add(native);
@@ -4659,12 +4704,12 @@ export function createRelay({
       invalidateDiagnostics(); helperHandles.clear(); helperControls.clear(); helperActive = undefined; docsShown = false;
     }
     if (msg.method === 'tools/call' && msg.params?.name === 'js' && msg.id !== undefined) jsCalls.set(msg.id, originalCode ?? '');
-    let flowPlan, clipboardAction;
+    let flowPlan, clipboardAction, dispatchCheck;
     if (clipboard && msg.method === 'tools/call' && ['js', 'js_reset'].includes(msg.params?.name) && clipboard.pending) {
       clipboardStop(msg, /* notice */ 'Clipboard: wait for the pending clipboard action, then retry.'); return;
     }
     if (clipboard && msg.method === 'tools/call' && msg.params?.name === 'js' && typeof originalCode === 'string') {
-      try { clipboardAction = clipboardPlan(originalCode); }
+      try { clipboardPlan(originalCode); }
       catch (error) { clipboardStop(msg, error.message); return; }
     }
     // A failed action without await, with more code after it, can end the engine's session and
@@ -4685,11 +4730,48 @@ export function createRelay({
       }
       requireNotes.set(msg.id, requireNote(false, saveReceipted, prompt));
     }
+    if (inputLease && msg.method === 'tools/call' && msg.params?.name === 'js' && typeof msg.params.arguments?.code === 'string' && !browserPlan(msg.params.arguments.code)) {
+      if (numberedHandles(msg.params.arguments.code).length > 1) {
+        leaseStop(msg, promptNotice('send numbered actions on one handle per call. Read that window before acting.', prompt)); return;
+      }
+      const ids = compactor.numberIds(numberWindow(msg.params.arguments.code, leaseWindow), msg.params.arguments.code);
+      if (ids) {
+        msg = { ...msg, params: { ...msg.params, arguments: { ...msg.params.arguments, code: ids.code } } };
+        for (const sent of ids.sent) {
+          const line = sent.line.length > 60 ? sent.line.slice(0, 57) + '...' : sent.line;
+          remapNotes.set(msg.id, (remapNotes.has(msg.id) ? remapNotes.get(msg.id) + '\n' : '') + `sleight: { id: "${sent.id}" } was sent as element ${sent.number}, ${line}.`);
+        }
+        trace('id-numbers', { id: msg.id, numbers: ids.sent.map(s => s.number) });
+      }
+      const stale = compactor.remapStale(numberWindow(msg.params.arguments.code, leaseWindow), msg.params.arguments.code);
+      if (stale) {
+        msg = { ...msg, params: { ...msg.params, arguments: { ...msg.params.arguments, code: stale.code } } };
+        remapNotes.set(msg.id, (remapNotes.has(msg.id) ? remapNotes.get(msg.id) + '\n' : '') + 'sleight: numbers in this window changed since you saw them, so ' +
+          stale.remapped.map(r => `${r.number} was found by its line ${JSON.stringify(r.line)}`).join(', ') + promptNotice('. Use the numbers in this result from now on.', prompt));
+        trace('stale-remapped', { id: msg.id, numbers: stale.remapped.map(r => r.number) });
+      }
+    }
+    // Inspect the actual caller cell after relay-owned selector and swipe lowering.
+    if (msg.method === 'tools/call' && msg.params?.name === 'js' && typeof msg.params.arguments?.code === 'string') {
+      const code = msg.params.arguments.code;
+      const key = lastWindow && (helperAliases.get(lastWindow.app.toLowerCase()) ?? lastWindow.app.toLowerCase());
+      policyCode = !browser && !isLeaseRead(code) ? chromeScrollCode(code, lastWindowText,
+        screenshots.get(lastWindow?.app.toLowerCase())?.byTitle[lastWindow?.title],
+        new Set([...helperHandles].filter(([, plan]) => plan.key === key).map(([handle]) => handle))) : code;
+      originalCode = msg.params.arguments.code;
+      const problem = nativeArgumentsProblem(policyCode, nativeHandles, browserHandles, swipeInspection);
+      if (problem) { finishedCall(msg.id); toClient({ jsonrpc: '2.0', id: msg.id, result: { isError: true,
+        content: [{ type: 'text', text: problem }] } }); return; }
+    }
+    if (clipboard && msg.method === 'tools/call' && msg.params?.name === 'js' && typeof originalCode === 'string') {
+      try { clipboardAction = clipboardPlan(policyCode, swipeInspection); }
+      catch (error) { clipboardStop(msg, error.message); return; }
+    }
     if (openedFlowPlans.has(msg.id) || openedWindowCalls.has(msg.id)) flowPlan = openedFlowPlans.get(msg.id);
     else if (!openedWindowReads.has(msg.id) && flowRules && msg.method === 'tools/call' && ['js', 'drag', 'menu_bar'].includes(msg.params?.name)) {
       if (running.size || localRunning.size || documentAsking || reviewing) { flowStop(msg, 'wait for the pending call or prompt'); return; }
       if (msg.id === undefined || (msg.params.name === 'js' && typeof originalCode !== 'string')) { flowStop(msg, 'a request id and JavaScript code are required'); return; }
-      flowPlan = flowRules.analyze(msg.params.name, msg.params.arguments, lastWindow);
+      flowPlan = flowRules.analyze(msg.params.name, msg.params.name === 'js' ? { ...msg.params.arguments, code: policyCode } : msg.params.arguments, lastWindow, swipeInspection);
       const print = fingerprint(msg);
       const permitted = flowPermit?.fingerprint === print && flowPermit.revision === flowRules.revision ||
         engineOpenAllowed.has(msg.id) && engineOpenAllowed.get(msg.id) === print;
@@ -4770,27 +4852,6 @@ export function createRelay({
         finishedCall(msg.id); leaseStop(msg, error.message);
       });
       return;
-    }
-    if (inputLease && msg.method === 'tools/call' && msg.params?.name === 'js' && typeof msg.params.arguments?.code === 'string' && !browserPlan(msg.params.arguments.code)) {
-      if (numberedHandles(msg.params.arguments.code).length > 1) {
-        leaseStop(msg, promptNotice('send numbered actions on one handle per call. Read that window before acting.', prompt)); return;
-      }
-      const ids = compactor.numberIds(numberWindow(msg.params.arguments.code, leaseWindow), msg.params.arguments.code);
-      if (ids) {
-        msg = { ...msg, params: { ...msg.params, arguments: { ...msg.params.arguments, code: ids.code } } };
-        for (const sent of ids.sent) {
-          const line = sent.line.length > 60 ? sent.line.slice(0, 57) + '...' : sent.line;
-          remapNotes.set(msg.id, (remapNotes.has(msg.id) ? remapNotes.get(msg.id) + '\n' : '') + `sleight: { id: "${sent.id}" } was sent as element ${sent.number}, ${line}.`);
-        }
-        trace('id-numbers', { id: msg.id, numbers: ids.sent.map(s => s.number) });
-      }
-      const stale = compactor.remapStale(numberWindow(msg.params.arguments.code, leaseWindow), msg.params.arguments.code);
-      if (stale) {
-        msg = { ...msg, params: { ...msg.params, arguments: { ...msg.params.arguments, code: stale.code } } };
-        remapNotes.set(msg.id, (remapNotes.has(msg.id) ? remapNotes.get(msg.id) + '\n' : '') + 'sleight: numbers in this window changed since you saw them, so ' +
-          stale.remapped.map(r => `${r.number} was found by its line ${JSON.stringify(r.line)}`).join(', ') + promptNotice('. Use the numbers in this result from now on.', prompt));
-        trace('stale-remapped', { id: msg.id, numbers: stale.remapped.map(r => r.number) });
-      }
     }
     originalCode = msg.params?.arguments?.code;
     retryClient = structuredClone(msg);
@@ -4899,13 +4960,10 @@ export function createRelay({
         return;
       }
       if (name === 'js') {
-        const copies = !clipboard && typeof originalCode === 'string' ? clipboardActions(originalCode) : [];
+        const copies = !clipboard && typeof originalCode === 'string' ? clipboardActions(policyCode, swipeInspection) : [];
         if (copies.includes('c') || copies.includes('x')) nativeCopies.set(msg.id, copies.includes('x'));
         const read = typeof originalCode === 'string' && isLeaseRead(originalCode);
-        const key = lastWindow && (helperAliases.get(lastWindow.app.toLowerCase()) ?? lastWindow.app.toLowerCase());
-        const swipeCode = !browser && !read ? chromeScrollCode(originalCode, lastWindowText,
-          screenshots.get(lastWindow?.app.toLowerCase())?.byTitle[lastWindow?.title],
-          new Set([...helperHandles].filter(([, plan]) => plan.key === key).map(([handle]) => handle))) : originalCode;
+        const swipeCode = policyCode;
         const safe = read || (typeof originalCode === 'string' && isChangeCancel(originalCode, lastWindowText));
         let entry, nativeDenied = leaseCalls.get(msg.id)?.nativeDenied;
         try {
@@ -4939,6 +4997,7 @@ export function createRelay({
         changeCalls.set(msg.id, { read, safe, entry, window: lastWindow, expected: documentKey(lastWindow), target: leaseWindow ?? lastWindow,
           observe: !browser && (!read || (!isInventoryRead(originalCode) && /cua\.getApp\(|\.(?:getAXState|getAXStateAndScreenshot)\(/.test(originalCode))) });
         if (typeof originalCode === 'string') {
+          dispatchCheck = dispatchInspection(swipeCode);
           const setup = { reuseSetup: guardReady, acknowledge: true, prompt, ...outcomeSetup, ...(kernelEpoch ? { kernel: kernelEpoch } : {}) };
           const modes = guardMode?.split(',').map(mode => mode.trim()) ?? [], careful = modes.includes('careful');
           const target = documentMode ? observedDocument : inputLease ? leaseWindow : lastWindow;
@@ -4946,11 +5005,11 @@ export function createRelay({
             ? promptNotice('Input lease stopped this action: window or URL changed. Read the intended window again before acting.', prompt)
             : promptNotice('Change review stopped this action: window or URL changed. Read the intended window with one standalone cua.getApp call before editing.', prompt);
           if (browser) {
-            msg.params.arguments.code = guardedCode(selectedBrowserCode(browserRecovery.code(originalCode), browserChoice, `${sessionId}:${turnId}`), target, reason,
+            msg.params.arguments.code = dispatchCheck.wrap(dispatchCheck.mark(selectedBrowserCode(browserRecovery.code(originalCode), browserChoice, `${sessionId}:${turnId}`)), code => guardedCode(code, target, reason,
               inputLease && leaseCalls.get(msg.id)?.key ? inputLease.grant(leaseCalls.get(msg.id).key) : undefined,
               { ...setup, timing: guardTiming, careful, fileOnly: changeReview, browserCandidate: true,
                 skipAppWrap: browserHandles.has('app') || browser.handles.includes('app'),
-                nativeDenied: nativeDenied ?? promptNotice(NATIVE_DENIED, prompt) });
+                nativeDenied: nativeDenied ?? promptNotice(NATIVE_DENIED, prompt) }));
           } else if (read) {
             let code = originalCode;
             if (healthPlan && !helperProbes.has(msg.id) && helperFullReads.has(healthPlan.key)) {
@@ -4962,7 +5021,7 @@ export function createRelay({
               }
               healthPlan.fullVisible = true;
             }
-            msg.params.arguments.code = readCode(code, setup);
+            msg.params.arguments.code = dispatchCheck.wrap(dispatchCheck.mark(code), value => readCode(value, setup));
           }
           else if (documentMode || inputLease || (changeReview && target)) {
             const seenWindow = numberWindow(originalCode, target), numbers = literalNumbers(originalCode);
@@ -4983,7 +5042,7 @@ export function createRelay({
               request: { ...msg, params: { ...msg.params, arguments: { ...msg.params.arguments, code: originalCode } } } });
             const handBindingMark = hand ? filteredReadMark() : undefined;
             if (handBindingMark) handBindingMarks.set(msg.id, handBindingMark);
-            const filterMark = filteredReadMark(), filteredCode = filteredReadCode(swipeCode, filterMark);
+            const filterMark = filteredReadMark(), filteredCode = dispatchCheck.mark(filteredReadCode(swipeCode, filterMark));
             const typingAction = compactor.beginAction(originalCode);
             const typedTarget = typingAction?.typedTarget;
             const receiptTyping = typingReceiptCall(originalCode) && !!typingReceiptTarget(typingAction);
@@ -5008,7 +5067,7 @@ export function createRelay({
                 ? tabProbe?.begin(msg.id, { ...target, windowNumber: tabAdmission.baseline.windowNumber, nativeIdentity: tabAdmission.baseline },
                   Date.now() - Math.max(0, clock() - tabAdmission.sampledAt), 'new-tab') : undefined;
             if (probe?.mode === 'new-tab') tabLandings.set(msg.id, { landing: tabAdmission.plan.actions[0].handle });
-            msg.params.arguments.code = guardedCode(filteredCode, menuBaseline ?? closeWindow, reason,
+            msg.params.arguments.code = dispatchCheck.wrap(filteredCode, code => guardedCode(code, menuBaseline ?? closeWindow, reason,
               inputLease ? inputLease.grant(leaseCalls.get(msg.id)?.key) : undefined,
               { ...setup, dp1: closeReadSkip, handBindingMark, guardStopMark: stopMark, resultMark: typedTarget ? filterMark : undefined, ...(outcomeMark ? { outcomeMark } : {}), timing: guardTiming, careful: careful || documentMode || !!menuBaseline, fileOnly: changeReview && !documentMode, cancelOnly: changeReview && !documentMode && safe,
                 firstOff: !careful && !documentMode && !changeReview,
@@ -5023,25 +5082,25 @@ export function createRelay({
                 ...(close ? { closeRead: { path: close.path } } : {}),
                 // The lines Claude last saw for the numbers it acts on, so the first action stops when
                 // the window renumbered between Claude's read and this call.
-                seenLines, seenParents: compactor.seenParents(seenWindow, numbers), literals: numbers, literalOrder: literalElements(originalCode),
-                uniqueSeen, payment: paymentMessages.guard(confirmPayments) });
+                seenLines, seenParents: compactor.seenParents(seenWindow, numbers), literals: numbers, literalOrder: literalElements(swipeCode, swipeInspection),
+                uniqueSeen, payment: paymentMessages.guard(confirmPayments) }));
             if (receiptTyping) msg.params.arguments.code += typingReceiptCode(filterMark);
-          } else msg.params.arguments.code = swipeCode;
+          } else msg.params.arguments.code = dispatchCheck.mark(swipeCode);
           if (msg.params.arguments.code !== originalCode) guardCalls.set(msg.id, guardGeneration);
           const restore = restoreEngineBindings(originalCode);
-          if (restore) msg.params.arguments.code = readCode(restore, { prompt, ...outcomeSetup }) + '\n' + msg.params.arguments.code;
-          if (clipboard) msg.params.arguments.code = clipboardCode(msg.params.arguments.code, clipboardAction);
-          msg.params.arguments.code = fillFormCode(msg.params.arguments.code);
-          msg.params.arguments.code = dragToCode(msg.params.arguments.code);
-          msg.params.arguments.code = reorderCode(msg.params.arguments.code);
-          msg.params.arguments.code = pickFromListCode(msg.params.arguments.code, completeness);
-          if (browser) msg.params.arguments.code = browserStale.code(msg.params.arguments.code, originalCode, prompt);
-          const tabCode = tabCleanupCode(browser ? backgroundLinksCode(msg.params.arguments.code) : msg.params.arguments.code);
+          if (restore) msg.params.arguments.code = dispatchCheck.rewrite(msg.params.arguments.code, code => readCode(restore, { prompt, ...outcomeSetup }) + '\n' + code);
+          if (clipboard) msg.params.arguments.code = dispatchCheck.rewrite(msg.params.arguments.code, code => clipboardCode(code, clipboardAction));
+          msg.params.arguments.code = dispatchCheck.rewrite(msg.params.arguments.code, fillFormCode, fillFormCode('void 0;', true));
+          msg.params.arguments.code = dispatchCheck.rewrite(msg.params.arguments.code, dragToCode, dragToCode('void 0;', true));
+          msg.params.arguments.code = dispatchCheck.rewrite(msg.params.arguments.code, reorderCode, reorderCode('void 0;', true));
+          msg.params.arguments.code = dispatchCheck.rewrite(msg.params.arguments.code, code => pickFromListCode(code, completeness), pickFromListCode('void 0;', completeness, true));
+          if (browser) msg.params.arguments.code = dispatchCheck.rewrite(msg.params.arguments.code, code => browserStale.code(code, originalCode, prompt));
+          const tabCode = dispatchCheck.rewrite(msg.params.arguments.code, code => tabCleanupCode(browser ? backgroundLinksCode(code) : code), tabCleanupCode(browser ? backgroundLinksCode('void 0;') : 'void 0;', true));
           if (/\bcua\.createBrowserTab\s*\(|\.tabs\.new\s*\(/.test(originalCode)) tabsMayNeedCleanup = true;
-          msg.params.arguments.code = tabReuseCode(tabCode, msg.id);
-          if (browser) msg.params.arguments.code = browserAliasesCode(msg.params.arguments.code);
+          msg.params.arguments.code = dispatchCheck.rewrite(tabCode, code => tabReuseCode(code, msg.id), tabReuseCode('void 0;', msg.id, true));
+          if (browser) msg.params.arguments.code = dispatchCheck.rewrite(msg.params.arguments.code, browserAliasesCode, browserAliasesCode('void 0;', true));
           if (browser || /\bagent\.browsers\.get\s*\(/.test(originalCode))
-            msg.params.arguments.code = clickResults.code(msg.params.arguments.code);
+            msg.params.arguments.code = dispatchCheck.rewrite(msg.params.arguments.code, code => clickResults.code(code), clickResults.code('void 0;', true));
         }
       }
       if (browser) browserCalls.set(msg.id, browser);
@@ -5051,11 +5110,15 @@ export function createRelay({
         const shotHandle = openShots.get(msg.id);
         if (shotHandle) msg.params.arguments.code += `;\ntry { await ${shotHandle}.getScreenshot(); } catch {}`;
         resultBudget.request(msg.id, { browser: !!browser, code: originalCode });
-        if (typeof msg.params.arguments?.code === 'string') msg.params.arguments.code = resultBudget.code(msg.params.arguments.code);
+        if (typeof msg.params.arguments?.code === 'string') msg.params.arguments.code = dispatchCheck ? dispatchCheck.rewrite(msg.params.arguments.code, code => resultBudget.code(code)) : resultBudget.code(msg.params.arguments.code);
       }
       if (name === 'js' && typeof msg.params.arguments?.code === 'string') {
-        msg.params.arguments.code = browserWarmupUseCode(msg.params.arguments.code,
-          { browserChoice, scope: `${sessionId}:${turnId}`, token: browserWarmToken, confirmed: browserWarmConfirmed });
+        msg.params.arguments.code = dispatchCheck.rewrite(msg.params.arguments.code, code => browserWarmupUseCode(code,
+          { browserChoice, scope: `${sessionId}:${turnId}`, token: browserWarmToken, confirmed: browserWarmConfirmed }));
+      }
+      if (dispatchCheck && !dispatchCheck.verify(msg.params.arguments.code)) {
+        inspectionStop(msg);
+        return;
       }
       msg.params._meta = { ...msg.params._meta, [META_KEY]: turnMeta() };
       turnUsed = true;

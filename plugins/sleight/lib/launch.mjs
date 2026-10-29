@@ -60,6 +60,7 @@ import { hostLabel, hostName } from './host-label.mjs';
 import { createPaymentCard } from './payment-card.mjs';
 import { codexTurnClient } from './codex-turn.mjs';
 import { doctorVersionLine } from './version.mjs';
+import { parserDoctorLine } from './code-ast.mjs';
 import { isMainModule } from './main-module.mjs';
 import { recoverNativeClipboard } from './clipboard.mjs';
 
@@ -281,6 +282,7 @@ export async function doctor({ documentation = loadInstalledDocumentation, env =
     log(`${found ? 'ok     ' : 'MISSING'}   ${label}: ${path ?? '(not set)'}`);
   }
   if (!ok) { log(`Run ${setupCommand()} to install the helper and grant its permissions.`); return 1; }
+  log(parserDoctorLine());
   let preapproved, grantAudit;
   if (app !== undefined) {
     try {

@@ -1,5 +1,20 @@
 # Third-party notices
 
+## Meriyah 7.0.0
+
+Copyright (c) 2019 and later, KFlash and others. Licensed under the ISC License.
+The unmodified npm registry distribution supplies these files in `vendor/meriyah/`:
+
+| File | Bytes | SHA-256 |
+| --- | ---: | --- |
+| `dist/meriyah.min.mjs` | 133,545 | `d29a5ff8e5fbdb8cb0617a721891fb1d3fb107883dc6f4ee9bda5b32896edf50` |
+| `LICENSE.md` | 760 | `e9a5df5a6ae5cd51ca430715f4c62fb5424946e8da07b7caa058a1ba0582a848` |
+
+Total: 134,305 bytes. The [full license](vendor/meriyah/LICENSE.md) is retained.
+The registry tarball integrity is
+`sha512-eM23BVAsVhOxLEKckm3DopvcEze2o1leYO11xIkYqeeJgaNbzfGS00y7BUp/KeQPcTzXx0cGJRD2V7BYEZnDcg==`.
+No files from the ChatGPT app are included.
+
 ## Playwright core 1.64.0
 
 Copyright (c) Microsoft Corporation. Licensed under Apache License 2.0.

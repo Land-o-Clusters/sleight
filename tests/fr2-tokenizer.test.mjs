@@ -17,27 +17,36 @@ const flow = () => new FlowRules({ version: 1, rules: [
   { id: 'other', kind: 'pattern', pattern: 'OTHER', destinations: ['Fixture'] },
 ] });
 
-test('the LF-only phantom-comment repro executes a call and inspection refuses it', async () => {
+test('the LF-only phantom-comment repro executes a call and AST inspection finds it', async () => {
   const typed = [];
   await runInNewContext('(async () => {' + repro + '})()', {
     a: true, s: '/', app: { typeText: async value => typed.push(value) },
   });
   assert.deepEqual(typed, ['SECRET']);
   assert.equal(invalidTokens(tokens(repro)), true);
-  assert.equal(flow().analyze('js', { code: repro }, { app: 'Fixture' }).violations.length, 2);
+  assert.equal(flow().analyze('js', { code: repro }, { app: 'Fixture' }).violations.length, 1);
 });
 
 for (const boundary of ['if (a) {}\n', 'if (a) {} ', 'if (a) {} /* gap */ ',
   'const value = {}\n', 'function read() {}\n', 'class Value {}\n']) {
-  test(`ambiguous brace slash preserves the prefix and all six consumers refuse: ${boundary.trim()}`, () => {
+  test(`brace slash keeps the legacy refusal while AST consumers follow the engine: ${boundary.trim()}`, () => {
     const prefix = 'await app.click(7); ', suffix = boundary + '/[/*]/.test(s); await app.paste(); /[*/]/.test(s)';
     const code = prefix + suffix, ts = tokens(code);
     assert.deepEqual(ts.slice(0, 8).map(t => t.v), ['await', 'app', '.', 'click', '(', '7', ')', ';']);
     assert.equal(ts.at(-1).v, '<invalid>');
-    assert.equal(flow().analyze('js', { code }, { app: 'Fixture' }).violations.length, 2);
-    assert.throws(() => clipboardActions(code), /cannot inspect JavaScript/);
-    assert.throws(() => literalElements(code), /cannot inspect JavaScript/);
-    assert.match(nativeArgumentsProblem(code), /cannot inspect JavaScript/);
+    // CA2 follows the engine parser. The initializer/regex shape is invalid in
+    // the engine; block/function/class followed by a regex are valid.
+    if (boundary.startsWith('const value')) {
+      assert.equal(flow().analyze('js', { code }, { app: 'Fixture' }).violations.length, 2);
+      assert.throws(() => clipboardActions(code), /cannot inspect JavaScript/);
+      assert.throws(() => literalElements(code), /cannot inspect JavaScript/);
+      assert.match(nativeArgumentsProblem(code), /cannot inspect JavaScript/);
+    } else {
+      assert.equal(flow().analyze('js', { code }, { app: 'Fixture' }).violations.length, 0);
+      assert.deepEqual(clipboardActions(code), ['paste']);
+      assert.deepEqual(literalElements(code), [7]);
+      assert.equal(nativeArgumentsProblem(code), undefined);
+    }
     assert.equal(splitMenuActions('await app.click(1); await app.click(2); ' + suffix), undefined);
     assert.equal(splitTextSave(suffix + '; await app.setValue(1, "safe"); await app.pressKey("super+s")'), undefined);
     assert.equal(nativeTabPlan({ code, actions: [
@@ -69,7 +78,15 @@ for (const [keyword, expression] of keywordCases) {
     } });
     assert.deepEqual(typed, ['SECRET']);
     assert.equal(invalidTokens(tokens(code)), false);
-    assert.equal(flow().analyze('js', { code }, { app: 'Fixture' }).violations.length, 1);
+    if (['new', 'instanceof', 'extends'].includes(keyword)) {
+      assert.deepEqual(flow().analyze('js', { code }, { app: 'Fixture' }).violations.map(v => v.rule).sort(), ['other', 'secret']);
+      assert.match(nativeArgumentsProblem(code), /cannot inspect JavaScript.*\(\.constructor\)/);
+      assert.throws(() => clipboardActions(code), /cannot inspect JavaScript/);
+      assert.throws(() => literalElements(code), /cannot inspect JavaScript/);
+      return;
+    }
+    assert.deepEqual(flow().analyze('js', { code }, { app: 'Fixture' }).violations.map(v=>v.rule).sort(),
+      ['return', 'yield'].includes(keyword) ? ['other','secret'] : ['secret']);
     assert.deepEqual(clipboardActions(code), ['paste']);
     assert.deepEqual(literalElements(code), [7]);
   });
@@ -105,7 +122,8 @@ for (const [index, snippet] of ordinary.entries()) {
     new Script('(async () => {' + code + '})()');
     assert.equal(invalidTokens(tokens(code)), false, snippet);
     assert.equal(nativeArgumentsProblem(code), undefined, snippet);
-    assert.equal(flow().analyze('js', { code }, { app: 'Fixture' }).violations.length, 1, snippet);
+    assert.deepEqual(flow().analyze('js', { code }, { app: 'Fixture' }).violations.map(v=>v.rule).sort(),
+      [6,14].includes(index) ? ['other','secret'] : ['secret'], snippet);
     assert.deepEqual(clipboardActions(code), ['paste'], snippet);
     assert.ok(tokens(code).some(t => t.v === 'typeText'), snippet);
   });
@@ -144,12 +162,12 @@ test('brace ambiguity checks respect escapes, classes, comments and line boundar
   assert.equal(invalidTokens(tokens('const ratio = ({}) / 2 / 3;')), false);
 });
 
-test('relay refuses the ambiguous repro before dispatch through either code alias', async t => {
+test('relay flow rules refuse the literal secret through either code alias after AST admission', async t => {
   const streams = Array.from({ length: 4 }, () => new PassThrough());
   const [clientIn, clientOut, serverIn, serverOut] = streams, sent = [], replies = [];
   serverIn.on('data', bytes => sent.push(JSON.parse(bytes)));
   clientOut.on('data', bytes => replies.push(JSON.parse(bytes)));
-  const relay = createRelay({ clientIn, clientOut, serverIn, serverOut, changeReview: false });
+  const relay = createRelay({ clientIn, clientOut, serverIn, serverOut, changeReview: false, flowRules: flow() });
   t.after(() => { relay.dispose(); streams.forEach(s => s.destroy()); });
   let id = 0;
   for (const key of ['code', 'command']) for (const code of [repro,
@@ -161,7 +179,7 @@ test('relay refuses the ambiguous repro before dispatch through either code alia
   assert.equal(replies.length, 4);
   for (const reply of replies) {
     assert.equal(reply.result.isError, true);
-    assert.match(reply.result.content[0].text, /cannot inspect JavaScript/);
+    assert.match(reply.result.content[0].text, /flow/i);
     assert.doesNotMatch(reply.result.content[0].text, /SECRET/);
   }
 });
