@@ -1,45 +1,43 @@
-import { tokens, invalidTokens } from './flow-rules.mjs';
+import { parseCell, walk, memberCall } from './code-ast.mjs';
 
 export const WRITE_CODE_BYTES = 8192;
 const INPUTS = new Set(['setValue', 'typeText', 'pressKey', 'paste', 'click', 'doubleClick', 'rightClick', 'drag',
   'scroll', 'selectText', 'performAction', 'performSecondaryAction', 'press']);
 // Conservative presence check, including bracket access, aliases, call/apply and optional calls.
 export const hasWrite = code => {
-  if (/\b(?:setValue|typeText|pressKey|paste|click|doubleClick|rightClick|drag|scroll|selectText|performAction|performSecondaryAction|press)\b/.test(code ?? '')) return true;
-  if (!/\\/.test(code ?? '')) return false;
-  const ts = tokens(code ?? '');
-  return invalidTokens(ts) || ts.some(t => INPUTS.has(t.v));
+  const { ast, error } = parseCell(code ?? '');
+  if (error) return true;
+  for (const node of walk(ast)) {
+    if (node.type === 'Identifier' && INPUTS.has(node.name) || node.type === 'Literal' && INPUTS.has(node.value)) return true;
+  }
+  return false;
 };
 
 // All source literals are masked, including values assigned to variables before a write. This also
 // covers unknown focus and a write that lands in a sensitive field other than its requested target.
-// Never parse/evaluate code to retrieve a typed value for tracing.
+// Inspect syntax ranges only; never evaluate code to retrieve a typed value.
 export function writeCodeTrace(code) {
-  const ts = tokens(code, { positions: true });
-  if (invalidTokens(ts)) return { code: '[unparseable code redacted]', bytes: Buffer.byteLength(code), truncated: true };
-  let clean = '', end = 0;
-  for (let i = 0; i < ts.length; i++) {
-    const t = ts[i];
-    const gap = code.slice(end, t.start);
-    clean += /\S/.test(gap) ? '/* redacted comment */' : gap;
-    // Encoders can take variables or expressions; mask the whole argument list without evaluation.
-    if (['String', 'Buffer'].includes(t.v) && ts[i + 1]?.v === '.' &&
-        ts[i + 2]?.v === (t.v === 'String' ? 'fromCharCode' : 'from') && ts[i + 3]?.v === '(') {
-      let depth = 1, j = i + 4;
-      for (; j < ts.length && depth; j++) if (!ts[j].string) {
-        if (ts[j].v === '(') depth++;
-        else if (ts[j].v === ')') depth--;
-      }
-      if (depth) return { code: '[unparseable code redacted]', bytes: Buffer.byteLength(code), truncated: true };
-      clean += code.slice(t.start, ts[i + 3].end) + '"<redacted>")';
-      end = ts[j - 1].end; i = j - 1; continue;
+  const { ast, comments, error } = parseCell(code);
+  if (error) return { code: '[unparseable code redacted]', bytes: Buffer.byteLength(code), truncated: true };
+  const ranges = comments.map(comment => ({ range: comment.range, text: '/* redacted comment */' }));
+  for (const node of walk(ast)) {
+    if (node.type === 'Literal' || node.type === 'TemplateLiteral') ranges.push({ range: node.range, text: '"<redacted>"' });
+    const call = memberCall(node);
+    if (call?.receiver.type === 'Identifier' &&
+        (call.receiver.name === 'String' && call.method === 'fromCharCode' || call.receiver.name === 'Buffer' && call.method === 'from')) {
+      // Encoders can consume identifiers too. Mask the entire argument span.
+      if (call.args.length) ranges.push({ range: [call.args[0].range[0], call.args.at(-1).range[1]], text: '"<redacted>"' });
     }
-    clean += t.string || ['<template>', '<regexp>', 'true', 'false', 'null'].includes(t.v) || /^\d/.test(t.v)
-      ? '"<redacted>"' : code.slice(t.start, t.end);
-    end = t.end;
   }
-  const gap = code.slice(end);
-  clean += /\S/.test(gap) ? '/* redacted comment */' : gap;
+  // Outer ranges win, so template expressions and encoder arguments cannot leak.
+  ranges.sort((a, b) => a.range[0] - b.range[0] || b.range[1] - a.range[1]);
+  let clean = '', end = 0;
+  for (const { range: [start, stop], text } of ranges) {
+    if (start < end) continue;
+    clean += code.slice(end, start) + text;
+    end = stop;
+  }
+  clean += code.slice(end);
   const bytes = Buffer.byteLength(clean), truncated = bytes > WRITE_CODE_BYTES;
   // Retain both ends: generated guards can precede the caller's actual actions by many KB.
   if (truncated) {

@@ -1,5 +1,5 @@
 // Compare only trees the relay already has. No reads, input, focus changes or repair.
-import { tokens, invalidTokens } from './flow-rules.mjs';
+import { parseCell, walk, memberCall } from './code-ast.mjs';
 import { createHash } from 'node:crypto';
 import { documentKey, windowFromText, hasIdentifier, hasLabel } from './document-scope.mjs';
 
@@ -38,43 +38,51 @@ export function writeFields(text) {
 
 // Literal calls only. Unknown expressions, loops and indirect calls cannot establish a write's effect.
 export function fieldWrites(code, before) {
-  const ts = tokens(code ?? '');
-  if (invalidTokens(ts) || ts.some((t, i) => !t.string && (['for', 'while', 'do', 'function', 'if', 'switch', 'class', '<template>'].includes(t.v) ||
-      t.v === '=' && ts[i + 1]?.v === '>'))) return [];
-  if (!ts.some((t, i) => !t.string && ['setValue', 'typeText'].includes(t.v) && ts[i - 1]?.v === '.' && ts[i + 1]?.v === '(')) return [];
+  const { ast, error } = parseCell(code ?? '');
+  if (error) return [];
+  const nodes = [...walk(ast)];
+  const refuses = new Set(['ForStatement', 'ForInStatement', 'ForOfStatement', 'WhileStatement', 'DoWhileStatement',
+    'FunctionDeclaration', 'FunctionExpression', 'ArrowFunctionExpression', 'IfStatement', 'SwitchStatement',
+    'ClassDeclaration', 'ClassExpression']);
+  if (nodes.some(node => refuses.has(node.type) || node.type === 'TemplateLiteral' && node.expressions.length)) return [];
+  // Preserve the direct, literal-call scope of effect attribution. Nested arguments
+  // of a member call cannot establish an independent observed action here.
+  const calls = [];
+  let end = -1;
+  for (const node of nodes) {
+    if (node.type !== 'CallExpression' || node.range[0] < end) continue;
+    const call = memberCall(node);
+    if (!call || call.computed || call.optional) continue;
+    calls.push(call); end = node.range[1];
+  }
+  if (!calls.some(call => ['setValue', 'typeText'].includes(call.method))) return [];
   const fields = writeFields(before), writes = [], aims = new Map();
   let actionIndex = 0;
   const inputs = new Set(['click', 'doubleClick', 'rightClick', 'setValue', 'typeText', 'paste', 'pressKey', 'scroll', 'drag',
     'selectText', 'performSecondaryAction', 'performAction', 'press']);
-  // Only engine handles advance the guard's counter. Calls such as helper.click() do not.
-  const handles = new Set(ts.flatMap((t, i) => !t.string && ['setValue', 'typeText', 'getAXState', 'getScreenshot', 'getAXStateAndScreenshot'].includes(t.v) &&
-    ts[i - 1]?.v === '.' && ts[i + 1]?.v === '(' ? [ts[i - 2]?.v] : []));
-  const literal = arg => arg?.length === 1 && arg[0].string ? arg[0].v : undefined;
+  const handleOf = call => call.receiver.type === 'Identifier' ? call.receiver.name : undefined;
+  const handles = new Set(calls.filter(call => ['setValue', 'typeText', 'getAXState', 'getScreenshot', 'getAXStateAndScreenshot'].includes(call.method))
+    .map(handleOf).filter(Boolean));
+  // Static templates remain string literals for compatibility with SB3.
+  const literal = arg => arg?.type === 'Literal' && typeof arg.value === 'string' ? arg.value
+    : arg?.type === 'TemplateLiteral' && !arg.expressions.length ? arg.quasis[0].value.cooked : undefined;
   const resolve = arg => {
-    if (arg?.length === 1 && !arg[0].string && /^\d+$/.test(arg[0].v)) return fields.filter(f => f.number === Number(arg[0].v));
-    if (arg?.length === 1 && arg[0].string) return fields.filter(f => hasLabel(f.body, arg[0].v) || hasIdentifier(f.body, arg[0].v));
-    if (arg?.[0]?.v !== '{' || arg.at(-1)?.v !== '}') return [];
+    if (arg?.type === 'Literal' && typeof arg.value === 'number' && /^\d+$/.test(code.slice(...arg.range)))
+      return fields.filter(f => f.number === arg.value);
+    const text = literal(arg);
+    if (typeof text === 'string') return fields.filter(f => hasLabel(f.body, text) || hasIdentifier(f.body, text));
+    if (arg?.type !== 'ObjectExpression') return [];
     const pairs = [];
-    for (let j = 1; j < arg.length - 1; j += 4) {
-      if (!['id', 'label'].includes(arg[j]?.v) || arg[j + 1]?.v !== ':' || !arg[j + 2]?.string ||
-          ![',', '}'].includes(arg[j + 3]?.v)) return [];
-      pairs.push([arg[j].v, arg[j + 2].v]);
+    for (const prop of arg.properties) {
+      const key = prop.key?.type === 'Identifier' ? prop.key.name : literal(prop.key), value = literal(prop.value);
+      if (prop.type !== 'Property' || prop.computed || prop.method || prop.kind !== 'init' ||
+          !['id', 'label'].includes(key) || typeof value !== 'string') return [];
+      pairs.push([key, value]);
     }
     return pairs.length ? fields.filter(f => pairs.every(([k, v]) => k === 'id' ? hasIdentifier(f.body, v) : hasLabel(f.body, v))) : [];
   };
-  for (let i = 0; i < ts.length - 3; i++) {
-    if (ts[i].v !== '.' || ts[i + 2]?.v !== '(' || ts[i + 1].string) continue;
-    const handle = ts[i - 1]?.v, method = ts[i + 1].v, args = [[]];
-    let depth = 0, j = i + 3;
-    for (; j < ts.length; j++) {
-      const t = ts[j];
-      if (!t.string && t.v === ')' && depth === 0) break;
-      if (!t.string && t.v === ',' && depth === 0) { args.push([]); continue; }
-      if (!t.string && ['(', '[', '{'].includes(t.v)) depth++;
-      if (!t.string && [')', ']', '}'].includes(t.v)) depth--;
-      args.at(-1).push(t);
-    }
-    if (j === ts.length) return [];
+  for (const call of calls) {
+    const handle = handleOf(call), { method, args } = call;
     const index = inputs.has(method) && handles.has(handle) ? actionIndex++ : undefined;
     if (method === 'click') { const matches = resolve(args[0]); aims.set(handle, matches.length === 1 ? matches[0] : undefined); }
     else if (method === 'setValue' || method === 'typeText') {
@@ -83,7 +91,6 @@ export function fieldWrites(code, before) {
       if (matches.length === 1 && typeof value === 'string' && value.length) writes.push({ method, index, target: matches[0], value });
     } else if (!(method === 'pressKey' && /^(?:super|cmd|command|ctrl|control)\+a$/i.test(literal(args[0]) ?? '')) &&
         !['getAXState', 'getScreenshot', 'getAXStateAndScreenshot'].includes(method)) aims.delete(handle);
-    i = j;
   }
   return writes;
 }

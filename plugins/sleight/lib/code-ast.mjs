@@ -54,7 +54,9 @@ function parseUncachedCell(code) {
     const cellParser = loadParser();
     loaded = true;
     if (typeof code !== 'string') throw new TypeError('cell source must be a string');
-    return { ast: cellParser.parseModule(code, ENGINE_PARSE_OPTIONS), error: null };
+    const comments = [];
+    const ast = cellParser.parseModule(code, { ...ENGINE_PARSE_OPTIONS, onComment: comments });
+    return { ast, comments, error: null };
   } catch (error) {
     // No stack, source excerpt or caller string is added to the upstream reason.
     const syntax = error instanceof SyntaxError && typeof error.description === 'string';
