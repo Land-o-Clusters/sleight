@@ -101,7 +101,16 @@ Tasks with no B pass:
 <!-- /hub:release-slowdowns -->
 
 - The [FowlBrowser rematch](docs/results/browser-turbo.md), dated 2026-10-28, compares sleight build `e679ed7e` (harness `4275bedb`) against FowlBrowser `e51c52a`. On `claude-haiku-5-5`, turbo had the lowest expected time on 12/13 core tasks in Chrome (256.1 vs 399.2 s total) and 12/13 in Helium (258.2 vs 434.0 s). FowlBrowser paid on the unpriced checkout in 1 of 3 Chrome and 2 of 3 Helium Haiku runs, and its expected time includes those failures. On `claude-opus-5-5`, it had the lowest expected time on 12/13 in each browser, with totals of 232.6 s in Chrome and 219.8 s in Helium. FowlBrowser has no Opus total because it paid on all 3 unpriced checkouts in each browser. Both models ran at high effort, with competitor defaults. Turbo used engine `26.1023.50603` build `22391`.
-- The rematch's 8 held-out tasks are separate from the 13 core tasks. Haiku turbo completed 6 of 8 tasks, with the lowest expected time on 3 of 8. FowlBrowser completed 6 of 8 tasks, with the lowest expected time on 4 of 8. The whole-thread regrade gives 5/9 for each arm. Turbo failed job-kanban 0/3 against FowlBrowser's 3/3. Both arms failed job-motion 0/3. FowlBrowser used yellow/teal/purple where the grader required amber/teal/violet. The hub includes every failure, median and range, with p90 only at 5 or more runs.
+- The rematch's 8 held-out tasks are separate from the 13 core tasks. Haiku turbo completed 6 of 8 tasks, with the lowest expected time on 3 of 8. FowlBrowser completed 7 of 8 tasks, with the lowest expected time on 5 of 8. The whole-thread regrade gives 5/9 for each arm. Turbo failed job-kanban 0/3 against FowlBrowser's 3/3. Job motion was regraded with a fixed color-synonym table applied to every arm: FowlBrowser Haiku changed from 0/3 to 2/3. sleight turbo remained 0/3. The strict grade was 0/3 for both arms. The synonym table was written after those results were seen. Only "yellow" and "purple" changed any recorded row. Missing phases still fail. The hub includes every failure, median and range, with p90 only at 5 or more runs.
+
+Job-motion color synonyms, fixed from the fixture sRGB fills and applied to every arm:
+
+| Phase | Fixture sRGB | Accepted names |
+| --- | --- | --- |
+| amber | `#ffbf26` | amber, yellow, gold, orange |
+| teal | `#138d86` | teal, turquoise, blue-green |
+| violet | `#8753d8` | violet, purple |
+
 - Live feature checks in installed Chrome 155 and Helium (2026-10-25) passed 12 of 14 features in each browser after fixes for viewport reset, PDF tab reads and a redirect to `mailto:`. Page watch and turn stats were not checked live.
 
 ## 1.4.3 (2026-10-28)

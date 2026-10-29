@@ -16,13 +16,17 @@
 // --hub-only leaves the root README alone, including during --check. Release preflight always checks it too.
 // The runners run collect and render once after a successful pass through bench/hub-refresh.mjs (--no-hub or SLEIGHT_NO_HUB=1 stops it).
 import { execFileSync } from 'node:child_process';
+import { createHash } from 'node:crypto';
 import { existsSync, mkdirSync, readFileSync, readdirSync, statSync, writeFileSync } from 'node:fs';
 import { homedir, userInfo } from 'node:os';
 import { basename, dirname, join, relative, resolve } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
+import { isDeepStrictEqual } from 'node:util';
 import { claim, excluded, regradeFor, score, warnings } from './claim-score.mjs';
 import { coveredRows, loadRound, markCover, scoreRounds } from './fowl/race-score.mjs';
 import { ANSWER_GRADER_FILE, currentAnswerGraders } from './fowl/real-gate-grade.mjs';
+import { jobColors } from './world/job-fixtures.mjs';
+import { regradeJobMotionBank } from './fowl/regrade-job-motion.mjs';
 import { dayRange, engineMix, engineNote, engineText, loadTimeline, passRowEngine, summarizeEngines, usesEngine } from './engine-version.mjs';
 import { buildPage, loadResults, perArm, renderHtml as renderReleaseHtml, renderMarkdown as renderReleaseMarkdown } from './results-page.mjs';
 
@@ -327,7 +331,57 @@ export function collectRace({ raceDir, browsers, family, title, timeline = loadT
 
 // The rematch is a separate population for each model and suite. Repeated round names across its banks must never pool.
 // LR2's reviewed offline report is data: do not import a runner or change the saved LR1 grades in the evidence bank.
-export function collectRematch({ banks, regrade, timeline = loadTimeline() }) {
+const JOB_MOTION_PINS = {
+  '~/Library/Caches/sleight-bench/evidence/fw1-e51c52a-haiku': {
+    evidenceSha256: '5b50b40c86ab2e002ccaa7cdd741a8353780be8773e1e584443c35060d149b04',
+    reportSha256: '8224b96a4c5a1ed435b990bd30e5817f2c6cf51de6153943fdb49d4cd535fdcb',
+  },
+  '~/Library/Caches/sleight-bench/evidence/fw1-e51c52a-opus': {
+    evidenceSha256: 'e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855',
+    reportSha256: 'c3b20d75f078c381707ca13f11bebe3ba7f3d8313e52b916e5a0337fd9bc29e7',
+  },
+};
+
+export function verifyJobMotionRegrade(reports, banks = reports.map(report => ({ dir: report.bank.replace(/^~(?=\/|$)/, homedir()) }))) {
+  const seen = new Set();
+  for (const report of reports) {
+    const name = basename(report.bank);
+    if (seen.has(name)) throw Error(`Duplicate job-motion regrade: ${name}`);
+    seen.add(name);
+    if (!isDeepStrictEqual(report.colors, jobColors)) throw Error('Job-motion regrade color table differs from the fixture');
+    const bank = banks.find(bank => basename(bank.dir) === name && isDir(bank.dir));
+    if (bank) {
+      if (!isDeepStrictEqual(report, regradeJobMotionBank(bank.dir))) throw Error(`Job-motion regrade differs from saved bank: ${name}`);
+    } else {
+      const pin = JOB_MOTION_PINS[report.bank];
+      const digest = createHash('sha256').update(JSON.stringify(report)).digest('hex');
+      if (!pin || report.evidenceSha256 !== pin.evidenceSha256 || digest !== pin.reportSha256)
+        throw Error(`Job-motion regrade differs from pinned digest: ${name}`);
+    }
+  }
+  for (const bank of banks.filter(bank => isDir(bank.dir))) {
+    if (!seen.has(basename(bank.dir)) && regradeJobMotionBank(bank.dir).rows.length)
+      throw Error(`Missing job-motion regrade: ${basename(bank.dir)}`);
+  }
+  for (const name of Object.keys(JOB_MOTION_PINS)) {
+    if (!seen.has(basename(name)))
+      throw Error(`Missing job-motion regrade: ${basename(name)}`);
+  }
+}
+
+export function collectRematch({ banks, regrade, jobMotionRegrade = readJson(join(ROOT, 'docs/results/data/job-motion-regrade.json')), timeline = loadTimeline() }) {
+  verifyJobMotionRegrade(jobMotionRegrade, banks);
+  const motion = new Map();
+  for (const bank of jobMotionRegrade) {
+    if (JSON.stringify(bank.colors) !== JSON.stringify(jobColors)) throw Error('Job-motion regrade color table differs from the fixture');
+    for (const row of bank.rows) {
+      const key = `${basename(bank.bank)}/${row.round}/round/${row.arm}`;
+      if (motion.has(key)) throw Error(`Duplicate job-motion regrade: ${key}`);
+      if (typeof row.after !== 'boolean' || !Array.isArray(row.afterProblems) || row.after !== (row.afterProblems.length === 0))
+        throw Error(`Invalid job-motion regrade: ${key}`);
+      motion.set(key, row);
+    }
+  }
   const corrected = new Map();
   for (const line of String(regrade ?? '').split('\n')) {
     const fields = line.split(' | ');
@@ -353,6 +407,15 @@ export function collectRematch({ banks, regrade, timeline = loadTimeline() }) {
     for (const [suite, rounds] of [['core', core], ['held-out', held]]) {
       if (!rounds.length) continue;
       const transform = (round, loaded) => {
+        if (loaded.rows.some(row => row.task === 'job-motion')) return { ...loaded, rows: loaded.rows.map(row => {
+          if (row.task !== 'job-motion') return row;
+          const key = `${basename(dir)}/${round.name}/${row.arm}`, grade = motion.get(key);
+          if (!grade) throw Error(`Missing job-motion regrade: ${key}`);
+          if (grade.wallMs / 1000 !== row.seconds || grade.before !== row.recordedOk)
+            throw Error(`Job-motion regrade does not match saved row: ${key}`);
+          const problems = uniq([...row.problems.filter(p => p !== 'JOB_ANSWER_MISMATCH'), ...grade.afterProblems]);
+          return { ...row, passed: problems.length === 0, problems };
+        }) };
         if (!round.name.startsWith('whole-')) return loaded;
         return { ...loaded, rows: loaded.rows.map(row => {
           const grade = corrected.get(`${round.name}/${row.task}`);
@@ -375,11 +438,14 @@ export function collectRematch({ banks, regrade, timeline = loadTimeline() }) {
         const whole = study.runs.filter(r => ['dm-first-message', 'mail-first-invoice', 'endless-feed-honesty'].includes(r.task));
         if (whole.length) study.regrade = { commit: '64550de9', method: 'Offline regrade, saved final result with JSON extraction',
           arms: Object.fromEntries(study.arms.map(arm => [arm, { runs: whole.filter(r => r.arm === arm).length, passes: whole.filter(r => r.arm === arm && r.passed).length }])) };
+        const motionRuns = study.runs.filter(r => r.task === 'job-motion');
+        if (motionRuns.length) study.jobMotionRegrade = { colors: jobColors,
+          arms: Object.fromEntries(study.arms.map(arm => [arm, { runs: motionRuns.filter(r => r.arm === arm).length, passes: motionRuns.filter(r => r.arm === arm && r.passed).length }])) };
         study.notes = [
           'FowlBrowser ran its defaults. Chrome used the benchmark profile and Helium a fresh profile. These are sleight\'s own tasks. Earlier benchmark runs informed its skill and tool wording.',
           suite === 'core' ? 'The 13 core browser tasks are scored separately from the eight held-out tasks.' :
             `The held-out set has eight tasks: five job fixtures and three whole-thread tasks. Whole-thread answers use the offline regrade (64550de9), ${Object.entries(study.regrade?.arms ?? {}).map(([arm, count]) => `${armName(arm)} ${count.passes}/${count.runs}`).join(', ')}, after the harness appended a RESULT instruction to JSON-only prompts. The saved grades are unchanged.`,
-          ...(suite === 'held-out' ? ['Both arms failed job-motion. FowlBrowser answered yellow/teal/purple. The strict grader requires amber/teal/violet.'] : []),
+          ...(motionRuns.length ? [`Job motion was regraded with a fixed color-synonym table applied to every arm: ${Object.entries(study.jobMotionRegrade.arms).map(([arm, count]) => `${armName(arm)} ${count.passes}/${count.runs}`).join(', ')}. The strict grade was 0/3 for both arms. The synonym table was written after those results were seen. Only "yellow" and "purple" changed any recorded row. Phase order must match exactly. Missing phases still fail. The saved evidence is unchanged.`] : []),
         ];
       }
       out.studies.push(...race.studies);
@@ -998,7 +1064,7 @@ function renderClaimPage(all, id, { intro }) {
 
 // Data collected before the hub recorded answer patterns (2026-10-19) has no graders field and renders as before.
 function gradersNote(study) {
-  if (study.regrade) return 'Whole-thread answers use the offline regrade described above. Job fixtures retain their saved grades, including both job-motion failures.';
+  if (study.regrade) return 'Whole-thread answers use the offline regrade described above. Job motion uses the fixed color-synonym table applied to every arm. Other job fixtures retain their saved grades.';
   const g = study.graders;
   if (!g) return null;
   if (!g.differ.length) return `Answers were checked with the patterns saved with each run, the same as the current ${code(g.file)}.`;
@@ -1023,6 +1089,7 @@ function raceStudySection(all, study, level, chartId) {
   if (summary) out.push(`${raceResult(study)}.\n`);
   if (unopposedTotal(study)) out.push(`${summary ? 'The competitors each have' : 'sleight is the only arm with a total: every competitor has'} a task with no pass. There is no competing complete-suite time.\n`);
   if (study.notes) out.push(...study.notes.map(note => note + '\n'));
+  if (study.jobMotionRegrade) out.push(mdTable(['Phase', 'Fixture sRGB', 'Accepted names'], Object.entries(study.jobMotionRegrade.colors).map(([phase, color]) => [phase, code(color.hex), color.names.join(', ')])) + '\n');
   if (study.competitorBuilds?.length) out.push(`FowlBrowser build ${study.competitorBuilds.map(code).join(', ')}. sleight's recorded harness build: ${(study.harnessBuilds?.[study.me] ?? []).map(code).join(', ')}.\n`);
   const chart = study.latest && chartId && (!study.rematch || study.model === 'haiku' && study.suite === 'core') ? chartFor(all, chartId) : null;
   if (chart) out.push(chart);
@@ -1461,7 +1528,7 @@ function renderIndex(all) {
     'The full rules are in [LAWS](../status/LAWS.md), and the tasks and harnesses in [benchmark.md](../benchmark.md).',
   ]) + '\n');
   out.push(details('Rebuild', '```sh\nnode bench/results-hub.mjs                # collect from the raw folders this Mac has, then render\nnode bench/results-hub.mjs --render-only  # render from docs/results/data only\nnode bench/results-hub.mjs --check        # exit 1 if a page, data file or README block would change\n```\n\n' +
-    'The raw claim, race and validation folders live outside the repo, in `~/Projects/sleight-wt/app-claim`, `~/Projects/sleight-wt/race-1017` and the banks under `~/Projects/sleight-wt` (any folder with a validation or re-measure `plan.json`). The FowlBrowser rematch banks are `~/Library/Caches/sleight-bench/evidence/fw1-e51c52a-haiku` and `fw1-e51c52a-opus`. Whole-thread corrections come from the tracked [regrade data](data/whole-thread-regrade.txt). On a Mac without the raw folders, the generator keeps the data files already here. `--wt <dir>` points it at another worktrees root and looks for rematch banks in its `evidence/` folder. The benchmark runners run the collect and render once after a successful pass (`bench/hub-refresh.mjs`), and `--no-hub` or `SLEIGHT_NO_HUB=1` stops that.'));
+    'The raw claim, race and validation folders live outside the repo, in `~/Projects/sleight-wt/app-claim`, `~/Projects/sleight-wt/race-1017` and the banks under `~/Projects/sleight-wt` (any folder with a validation or re-measure `plan.json`). The FowlBrowser rematch banks are `~/Library/Caches/sleight-bench/evidence/fw1-e51c52a-haiku` and `fw1-e51c52a-opus`. Whole-thread corrections come from the tracked [regrade data](data/whole-thread-regrade.txt). Job-motion corrections use the tracked [color-synonym regrade](data/job-motion-regrade.json). On a Mac without the raw folders, the generator keeps the data files already here. `--wt <dir>` points it at another worktrees root and looks for rematch banks in its `evidence/` folder. The benchmark runners run the collect and render once after a successful pass (`bench/hub-refresh.mjs`), and `--no-hub` or `SLEIGHT_NO_HUB=1` stops that.'));
   out.push(engineFooter(FAMILIES.flatMap(fam => headlineStudies(fam.id, all[fam.id]))) + '\n');
   return out.join('\n');
 }
@@ -1615,6 +1682,7 @@ export function collect({ wt, out, excludeCovered = false, banks: extraBanks = [
   }
   const evidence = resolve(wt) === join(homedir(), 'Projects/sleight-wt') ? join(homedir(), 'Library/Caches/sleight-bench/evidence') : join(wt, 'evidence');
   const rematchBanks = ['haiku', 'opus'].map(model => ({ dir: join(evidence, `fw1-e51c52a-${model}`), model })).filter(b => isDir(b.dir));
+  verifyJobMotionRegrade(readJson(join(ROOT, 'docs/results/data/job-motion-regrade.json')), rematchBanks);
   if (rematchBanks.length) {
     const regradeFile = join(ROOT, 'docs/results/data/whole-thread-regrade.txt');
     const rematch = collectRematch({ banks: rematchBanks, regrade: existsSync(regradeFile) ? readFileSync(regradeFile, 'utf8') : '', timeline });
@@ -1707,6 +1775,7 @@ export function main(argv = process.argv.slice(2)) {
   const out = resolve(ROOT, argValue(argv, '--out') ?? 'docs/results');
   let all, notes = [];
   if (argv.includes('--render-only')) {
+    verifyJobMotionRegrade(readJson(join(ROOT, 'docs/results/data/job-motion-regrade.json')));
     all = Object.fromEntries(FAMILIES.map(f => [f.id, readJson(join(out, 'data', `${f.id}.json`))]));
   } else ({ all, notes } = collect({ wt, out, excludeCovered: argv.includes('--exclude-covered'), banks: argValues(argv, '--bank') }));
   const files = render(all);

@@ -1,0 +1,229 @@
+[
+  {
+    "bank": "~/Library/Caches/sleight-bench/evidence/fw1-e51c52a-haiku",
+    "status": "regraded",
+    "evidenceSha256": "5b50b40c86ab2e002ccaa7cdd741a8353780be8773e1e584443c35060d149b04",
+    "colors": {
+      "amber": {
+        "hex": "#ffbf26",
+        "names": [
+          "amber",
+          "yellow",
+          "gold",
+          "orange"
+        ]
+      },
+      "teal": {
+        "hex": "#138d86",
+        "names": [
+          "teal",
+          "turquoise",
+          "blue-green"
+        ]
+      },
+      "violet": {
+        "hex": "#8753d8",
+        "names": [
+          "violet",
+          "purple"
+        ]
+      }
+    },
+    "totals": {
+      "fowlbrowser": {
+        "before": 0,
+        "after": 2,
+        "total": 3,
+        "unverified": 0
+      },
+      "sleight-turbo": {
+        "before": 0,
+        "after": 0,
+        "total": 3,
+        "unverified": 0
+      }
+    },
+    "rows": [
+      {
+        "round": "jobs/fixtures-2026-10-28T17-16-42-265Z-1-fowlbrowser-job-motion",
+        "arm": "fowlbrowser",
+        "repetition": 1,
+        "wallMs": 15969,
+        "before": false,
+        "after": true,
+        "beforeProblems": [
+          "JOB_ANSWER_MISMATCH"
+        ],
+        "afterProblems": [],
+        "expected": {
+          "phases": [
+            "amber",
+            "teal",
+            "violet"
+          ]
+        },
+        "expectedSource": "saved canonical fixture motion event",
+        "answer": "The animation ran through three colored phases before settling on gray, and the page text changed from \"Ready\" to \"Finished\".\n\n```json\n{\"phases\": [\"yellow\", \"teal\", \"purple\"]}\n```\n\nRESULT: {\"phases\": [\"yellow\", \"teal\", \"purple\"]}"
+      },
+      {
+        "round": "jobs/fixtures-2026-10-28T17-16-42-265Z-1-sleight-turbo-job-motion",
+        "arm": "sleight-turbo",
+        "repetition": 1,
+        "wallMs": 17357,
+        "before": false,
+        "after": false,
+        "beforeProblems": [
+          "JOB_ANSWER_MISMATCH"
+        ],
+        "afterProblems": [
+          "JOB_ANSWER_MISMATCH"
+        ],
+        "expected": {
+          "phases": [
+            "amber",
+            "teal",
+            "violet"
+          ]
+        },
+        "expectedSource": "saved canonical fixture motion event",
+        "answer": "I could not get all three phases. The animation finished before I could capture the middle color, and I didn't press Play again because you asked for a single press.\n\n- **Captured:** the first frame after Play was yellow, and the final frame was gray. The page status changed from \"Ready\" to \"Finished.\"\n- **Missing:** the middle phase. The page's console log was empty, so there was no other source for the sequence.\n\nThe fixture tab (`tqehciixix`) is still open. To finish the check, you could either allow one more Play press with a shorter capture interval, or tell me whether a slower capture method is acceptable.\n\nRESULT: {\"phases\": [\"yellow\", null, null]}"
+      },
+      {
+        "round": "jobs/fixtures-2026-10-28T17-16-42-265Z-2-fowlbrowser-job-motion",
+        "arm": "fowlbrowser",
+        "repetition": 2,
+        "wallMs": 31950,
+        "before": false,
+        "after": false,
+        "beforeProblems": [
+          "JOB_ANSWER_MISMATCH"
+        ],
+        "afterProblems": [
+          "JOB_ANSWER_MISMATCH"
+        ],
+        "expected": {
+          "phases": [
+            "amber",
+            "teal",
+            "violet"
+          ]
+        },
+        "expectedSource": "saved canonical fixture motion event",
+        "answer": "I could only confirm two of the three phases. The sampled frames showed amber (`#ffbf26`) at the start, then teal (`#138d86`), then the gray `#777` final frame. The sampling was about 300 ms apart, and the page's own code shows a middle step at `translateX(140px)` that none of my frames caught. The page's Play handler runs only once per load, so I can't replay it without pressing Play again, and you asked for a single press. The phase list comes from a server POST whose response isn't visible to me, so I couldn't read the missing color from the page either.\n\nIf you're willing to let me reload and press Play one more time with finer frame sampling, I can capture the middle phase. The tab is still open in the \"🧪 job-motion\" group.\n\nPartial result: amber, then teal, with the third color unknown.\n\nRESULT: {\"phases\":[\"amber\",\"teal\",null]}"
+      },
+      {
+        "round": "jobs/fixtures-2026-10-28T17-16-42-265Z-2-sleight-turbo-job-motion",
+        "arm": "sleight-turbo",
+        "repetition": 2,
+        "wallMs": 22365,
+        "before": false,
+        "after": false,
+        "beforeProblems": [
+          "JOB_ANSWER_MISMATCH"
+        ],
+        "afterProblems": [
+          "JOB_ANSWER_MISMATCH"
+        ],
+        "expected": {
+          "phases": [
+            "amber",
+            "teal",
+            "violet"
+          ]
+        },
+        "expectedSource": "saved canonical fixture motion event",
+        "answer": "I pressed Play once, but I could not capture the three phases, so I can't report them.\n\n- The first capture right after the click showed a yellow square with the status still at \"Ready\".\n- By my next capture the status read \"Finished\" and the square was gray. The middle color was never captured.\n- The frame-by-frame option that would have caught the run was refused because the browser tool did not treat my request as a motion request.\n- Pressing Play again to retry would break your \"press Play once\" instruction, so I stopped.\n\nIf you want the full sequence, I can reload the page and press Play one more time with frame capture. That would be a second press, so please confirm first.\n\nRESULT: {\"phases\": null}"
+      },
+      {
+        "round": "jobs/fixtures-2026-10-28T17-16-42-265Z-3-fowlbrowser-job-motion",
+        "arm": "fowlbrowser",
+        "repetition": 3,
+        "wallMs": 14525,
+        "before": false,
+        "after": true,
+        "beforeProblems": [
+          "JOB_ANSWER_MISMATCH"
+        ],
+        "afterProblems": [],
+        "expected": {
+          "phases": [
+            "violet",
+            "amber",
+            "teal"
+          ]
+        },
+        "expectedSource": "saved canonical fixture motion event",
+        "answer": "The animation ran through purple, then amber, then teal, and ended on a gray \"Finished\" frame, which is not counted as a phase.\n\n```json\n{\"phases\": [\"purple\", \"amber\", \"teal\"]}\n```\n\nRESULT: {\"phases\": [\"purple\", \"amber\", \"teal\"]}"
+      },
+      {
+        "round": "jobs/fixtures-2026-10-28T17-16-42-265Z-3-sleight-turbo-job-motion",
+        "arm": "sleight-turbo",
+        "repetition": 3,
+        "wallMs": 17659,
+        "before": false,
+        "after": false,
+        "beforeProblems": [
+          "JOB_ANSWER_MISMATCH"
+        ],
+        "afterProblems": [
+          "JOB_ANSWER_MISMATCH"
+        ],
+        "expected": {
+          "phases": [
+            "violet",
+            "amber",
+            "teal"
+          ]
+        },
+        "expectedSource": "saved canonical fixture motion event",
+        "answer": "I could only capture part of the sequence, so I can't report all three colors yet.\n\n- The first screenshot, taken about 300 ms after Play, showed yellow mid-run.\n- The final frame is gray, which the fixture says is not a phase.\n- The middle color, and the third phase color if there is one, were missed.\n\nThe fixture's `browser_act` frame capture was refused because your message doesn't count as a motion request for the tool. The animation has now finished. Pressing Play again would break your \"press Play once\" instruction, so I haven't done that.\n\nTo finish, you can either allow frame capture for this run, or tell me to press Play again for a second attempt.\n\nRESULT: {\"phases\": [\"yellow\", \"unknown\", \"unknown\"]}"
+      }
+    ]
+  },
+  {
+    "bank": "~/Library/Caches/sleight-bench/evidence/fw1-e51c52a-opus",
+    "status": "no recorded job-motion rounds",
+    "evidenceSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "colors": {
+      "amber": {
+        "hex": "#ffbf26",
+        "names": [
+          "amber",
+          "yellow",
+          "gold",
+          "orange"
+        ]
+      },
+      "teal": {
+        "hex": "#138d86",
+        "names": [
+          "teal",
+          "turquoise",
+          "blue-green"
+        ]
+      },
+      "violet": {
+        "hex": "#8753d8",
+        "names": [
+          "violet",
+          "purple"
+        ]
+      }
+    },
+    "totals": {
+      "fowlbrowser": {
+        "before": 0,
+        "after": 0,
+        "total": 0,
+        "unverified": 0
+      },
+      "sleight-turbo": {
+        "before": 0,
+        "after": 0,
+        "total": 0,
+        "unverified": 0
+      }
+    },
+    "rows": []
+  }
+]

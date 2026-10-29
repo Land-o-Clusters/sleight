@@ -96,7 +96,13 @@ FowlBrowser ran its defaults. Chrome used the benchmark profile and Helium a fre
 
 The held-out set has eight tasks: five job fixtures and three whole-thread tasks. Whole-thread answers use the offline regrade (64550de9), sleight turbo 5/9, FowlBrowser 5/9, after the harness appended a RESULT instruction to JSON-only prompts. The saved grades are unchanged.
 
-Both arms failed job-motion. FowlBrowser answered yellow/teal/purple. The strict grader requires amber/teal/violet.
+Job motion was regraded with a fixed color-synonym table applied to every arm: sleight turbo 0/3, FowlBrowser 2/3. The strict grade was 0/3 for both arms. The synonym table was written after those results were seen. Only "yellow" and "purple" changed any recorded row. Phase order must match exactly. Missing phases still fail. The saved evidence is unchanged.
+
+| Phase | Fixture sRGB | Accepted names |
+| --- | --- | --- |
+| amber | `#ffbf26` | amber, yellow, gold, orange |
+| teal | `#138d86` | teal, turquoise, blue-green |
+| violet | `#8753d8` | violet, purple |
 
 FowlBrowser build `e51c52a1`. sleight's recorded harness build: `4275bedb`.
 
@@ -110,14 +116,14 @@ Each cell is expected seconds, then passes/runs.
 | `job-canvas` | 8.1 (3/3) | 11.1 (3/3) |
 | `job-dark` | 9.1 (5/5) | 9.1 (5/5) |
 | `job-kanban` | no pass (0/3) | 13.4 (3/3) |
-| `job-motion` | no pass (0/3) | no pass (0/3) |
+| `job-motion` | no pass (0/3) | 31.2 (2/3) |
 | `job-phone` | 11.4 (5/5) | 14.4 (5/5) |
-| Lowest expected time on | 3 of 8 | 4 of 8 |
+| Lowest expected time on | 3 of 8 | 5 of 8 |
 | Total expected s | no total (a task has no pass) | no total (a task has no pass) |
 
-Whole-thread answers use the offline regrade described above. Job fixtures retain their saved grades, including both job-motion failures.
+Whole-thread answers use the offline regrade described above. Job motion uses the fixed color-synonym table applied to every arm. Other job fixtures retain their saved grades.
 
-By the loss rule, sleight turbo lost 4 of 8 tasks.
+By the loss rule, sleight turbo lost 5 of 8 tasks.
 
 | Task | Arm ahead | How |
 | --- | --- | --- |
@@ -125,6 +131,7 @@ By the loss rule, sleight turbo lost 4 of 8 tasks.
 | `mail-first-invoice` | FowlBrowser | lower expected time |
 | `job-dark` | FowlBrowser | lower expected time |
 | `job-kanban` | FowlBrowser | lower expected time and a faster passing run |
+| `job-motion` | FowlBrowser | lower expected time and a faster passing run |
 
 No pair within 20% of sleight turbo is short of 5 runs.
 
@@ -141,7 +148,7 @@ The arms that use the engine ran on one engine version, 26.1023.50603. A version
 
 </details>
 
-<details><summary>Spread of passing runs and the 17 failed runs</summary>
+<details><summary>Spread of passing runs and the 15 failed runs</summary>
 
 | Task | sleight turbo | FowlBrowser |
 | --- | --- | --- |
@@ -151,7 +158,7 @@ The arms that use the engine ran on one engine version, 26.1023.50603. A version
 | `job-canvas` | 7.5 [7.2 to 9.5] | 11.2 [10.3 to 11.7] |
 | `job-dark` | 9.7 [7.3 to 10.5], p90 10.5 | 8.8 [7.7 to 11.0], p90 11.0 |
 | `job-kanban` | no passes | 13.4 [13.2 to 13.5] |
-| `job-motion` | no passes | no passes |
+| `job-motion` | no passes | 14.5 [14.5 to 16.0] |
 | `job-phone` | 9.9 [7.0 to 21.4], p90 21.4 | 14.8 [10.3 to 16.6], p90 16.6 |
 
 | Task | Arm | Round | s | Problems |
@@ -170,9 +177,7 @@ The arms that use the engine ran on one engine version, 26.1023.50603. A version
 | `endless-feed-honesty` | FowlBrowser | `whole-fowlbrowser-r2` | 87.3 | `whole-thread answer or completeness mismatch` |
 | `dm-first-message` | FowlBrowser | `whole-fowlbrowser-r3` | 66.2 | `whole-thread answer or completeness mismatch` |
 | `endless-feed-honesty` | FowlBrowser | `whole-fowlbrowser-r3` | 90.1 | `whole-thread answer or completeness mismatch` |
-| `job-motion` | FowlBrowser | `jobs/fixtures-2026-10-28T17-16-42-265Z-1-fowlbrowser-job-motion/round` | 16.0 | `JOB_ANSWER_MISMATCH` |
 | `job-motion` | FowlBrowser | `jobs/fixtures-2026-10-28T17-16-42-265Z-2-fowlbrowser-job-motion/round` | 32.0 | `JOB_ANSWER_MISMATCH` |
-| `job-motion` | FowlBrowser | `jobs/fixtures-2026-10-28T17-16-42-265Z-3-fowlbrowser-job-motion/round` | 14.5 | `JOB_ANSWER_MISMATCH` |
 
 </details>
 

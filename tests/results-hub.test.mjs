@@ -10,10 +10,12 @@ import vm from 'node:vm';
 import { claim, score } from '../bench/claim-score.mjs';
 import { engineMix, summarizeEngines } from '../bench/engine-version.mjs';
 import { chartCaption } from '../bench/results-charts.mjs';
+import { jobColors } from '../bench/world/job-fixtures.mjs';
+import { regradeJobMotionBank } from '../bench/fowl/regrade-job-motion.mjs';
 import {
   BUILD_A, BUILD_B, FAMILIES, NAV, README_BLOCKS, cellText, cellsFor, collectBank, collectJsonAbs, collectRace, collectRematch, collectReleases, collectRunnerStudies, collectValidation,
   compareTasks, dateRange, exploreData, findBanks, listRaceRounds, lossRule, parseRunnerReport, ownerPass, publicVoice, raceDirs, readBank, readmeBlocks, render, renderNav,
-  releaseFreshness, releaseTaskSlowdowns, renderNavHtml, renderReadme, rowsFromCell, scoreClaimDir, scrub, scrubPaths, spliceReadme, taskMatrix, variantOf,
+  releaseFreshness, releaseTaskSlowdowns, renderNavHtml, renderReadme, rowsFromCell, scoreClaimDir, scrub, scrubPaths, spliceReadme, taskMatrix, variantOf, verifyJobMotionRegrade,
 } from '../bench/results-hub.mjs';
 
 const ROOT = new URL('..', import.meta.url).pathname;
@@ -835,7 +837,7 @@ test('rematch banks keep models, core tasks and held-out tasks apart and apply t
     writeFileSync(join(out, 'commits.json'), JSON.stringify({ build: { commit: '4'.repeat(40) }, fowlbrowser: { commit: 'e51c52a' + '0'.repeat(33) } }));
     writeFileSync(join(out, 'results.json'), JSON.stringify([{ task: { name: task, browser: 'chrome' }, surface: arm, wallMs: n * 1000,
       successfulBrowserCalls: 1, site: { lines: [] }, run: { started: Date.parse('2026-10-28T15:00:00Z'), result: { modelUsage: { [model]: {} }, result: 'RESULT: fixture' } },
-      outcome: { ok: task !== 'dm-first-message', problems: task === 'dm-first-message' ? ['answer must be JSON'] : [] } }]));
+      outcome: { ok: !['dm-first-message', 'job-motion'].includes(task), problems: task === 'dm-first-message' ? ['answer must be JSON'] : task === 'job-motion' ? ['JOB_ANSWER_MISMATCH'] : [] } }]));
   };
   const banks = [];
   for (const model of ['haiku', 'opus']) {
@@ -849,7 +851,26 @@ test('rematch banks keep models, core tasks and held-out tasks apart and apply t
   make(banks[0].dir, 'chrome-sleight-turbo-r4', 'sleight-turbo', 'mdn', 14);
   const regrade = ['sleight-turbo', 'fowlbrowser'].flatMap(arm => [1, 2, 3].map(n =>
     `whole-${arm}-r${n} | dm-first-message | ${arm} | 20 | {"ok":false} | -> | ${n === 3 ? 'FAIL: wrong answer' : 'ok'}`)).join('\n');
-  const result = collectRematch({ banks, regrade });
+  for (const arm of ['sleight-turbo', 'fowlbrowser']) for (const n of [1, 2, 3]) {
+    const round = `jobs/fixtures-motion-${n}-${arm}-job-motion`;
+    make(banks[0].dir, `${round}/round`, arm, 'job-motion', n + 30);
+    const after = arm === 'fowlbrowser' && n !== 2;
+    const file = join(banks[0].dir, round, 'round/results.json'), saved = readJson(file)[0];
+    saved.task.worldFixture = 'job-motion';
+    saved.site = { kind: 'job-motion', views: [''], events: [{ kind: 'motion', phases: ['amber', 'teal', 'violet'], reduced: false }] };
+    saved.run.exitCode = 0;
+    saved.run.result.result = JSON.stringify({ phases: after ? ['yellow', 'teal', 'purple'] : ['amber', 'teal', null] });
+    writeFileSync(file, JSON.stringify([saved]));
+  }
+  const jobMotionRegrade = banks.map(bank => regradeJobMotionBank(bank.dir));
+  const rows = jobMotionRegrade[0].rows;
+  const collect = (motion = jobMotionRegrade) => collectRematch({ banks, regrade, jobMotionRegrade: motion });
+  const result = collect();
+  const edited = structuredClone(jobMotionRegrade);
+  const failed = edited[0].rows.find(row => !row.after);
+  failed.after = true;
+  failed.afterProblems = [];
+  assert.throws(() => collect(edited), /differs from saved bank/);
   const core = result.studies.filter(s => s.suite === 'core');
   assert.equal(core.length, 2); assert.equal(result.studies.filter(s => s.suite === 'held-out').length, 1);
   assert.ok(core.every(s => s.tasks.length === 1 && s.tasks[0] === 'mdn'));
@@ -858,12 +879,25 @@ test('rematch banks keep models, core tasks and held-out tasks apart and apply t
   assert.equal(opus.runs.length, 6);
   assert.ok(result.studies.every(s => s.runs.every(r => r.seconds < 999)));
   const held = result.studies.find(s => s.suite === 'held-out');
-  assert.equal(held.runs.filter(r => r.passed).length, 4);
-  assert.ok(held.cells.every(c => c.passes === 2));
+  assert.equal(held.runs.filter(r => r.passed).length, 6);
+  assert.ok(held.cells.filter(c => c.task === 'dm-first-message').every(c => c.passes === 2));
+  assert.equal(held.cells.find(c => c.task === 'job-motion' && c.arm === 'fowlbrowser').passes, 2);
+  assert.equal(held.cells.find(c => c.task === 'job-motion' && c.arm === 'sleight-turbo').passes, 0);
+  assert.equal(held.cells.find(c => c.task === 'job-motion' && c.arm === 'fowlbrowser').expected, 48);
   assert.deepEqual(haiku.models['sleight-turbo'], ['claude-haiku-5-5']);
   assert.deepEqual(opus.models.fowlbrowser, ['claude-opus-5-5']);
   assert.equal(result.excludedRounds.length, 2, 'both aborted attempts remain disclosed');
-  assert.throws(() => collectRematch({ banks, regrade: '' }), /regrade/i);
+  assert.throws(() => collectRematch({ banks, regrade: '', jobMotionRegrade }), /regrade/i);
+  assert.throws(() => collect([]), /Missing job-motion regrade/);
+  assert.throws(() => collect([...jobMotionRegrade, ...jobMotionRegrade]), /Duplicate job-motion regrade/);
+  assert.throws(() => collect([{ ...jobMotionRegrade[0], colors: {} }]), /color table/);
+  assert.throws(() => collect([{ ...jobMotionRegrade[0], rows: rows.map(r => ({ ...r, wallMs: 1 })) }]), /differs from saved bank/);
+  const file = join(banks[0].dir, `${rows.find(r => r.after).round}/round/results.json`);
+  const saved = readJson(file); saved[0].outcome.problems.push('fixture reset failed');
+  writeFileSync(file, JSON.stringify(saved));
+  assert.throws(() => collect(), /differs from saved bank/);
+  jobMotionRegrade[0] = regradeJobMotionBank(banks[0].dir);
+  assert.equal(collect().studies.find(s => s.suite === 'held-out').cells.find(c => c.task === 'job-motion' && c.arm === 'fowlbrowser').passes, 1, 'non-answer failures survive the regrade');
 });
 
 test('published rematch keeps the corrected result and its eight held-out tasks outside each 13-task core', () => {
@@ -880,7 +914,7 @@ test('published rematch keeps the corrected result and its eight held-out tasks 
   assert.equal(held.tasks.length, 8);
   for (const arm of held.arms) {
     assert.deepEqual(held.regrade.arms[arm], { runs: 9, passes: 5 });
-    assert.equal(held.cells.find(c => c.arm === arm && c.task === 'job-motion').passes, 0);
+    assert.equal(held.cells.find(c => c.arm === arm && c.task === 'job-motion').passes, arm === 'fowlbrowser' ? 2 : 0);
   }
   assert.ok(race.excludedRounds.some(r => /opus\/aborted\//.test(r.round)));
   const release = committed().validation.banks.find(b => b.id === 'validation-150f-rel3');
@@ -928,6 +962,49 @@ test('tracked whole-thread regrades reproduce all 18 corrected rematch answers',
     counts[arm].passes += verdict === 'ok' ? 1 : 0;
   }
   assert.deepEqual(counts, held.regrade.arms);
+});
+
+test('tracked job-motion regrade reproduces six rows and publishes one color table for every arm', () => {
+  const banks = readJson(join(OUT, 'data/job-motion-regrade.json'));
+  const held = committed()['browser-turbo'].race.studies.find(s => s.rematch && s.suite === 'held-out');
+  const counts = Object.fromEntries(held.arms.map(arm => [arm, { runs: 0, passes: 0 }]));
+  assert.equal(banks.length, 2);
+  assert.equal(banks[1].rows.length, 0, 'Opus has no job-motion rounds');
+  assert.equal(banks[0].rows.length, 6);
+  for (const bank of banks) assert.deepEqual(bank.colors, jobColors);
+  for (const row of banks[0].rows) {
+    const run = held.runs.find(r => r.round === `${row.round}/round` && r.task === 'job-motion' && r.arm === row.arm);
+    assert.ok(run, row.round);
+    assert.equal(run.seconds, row.wallMs / 1000);
+    assert.equal(run.passed, row.after);
+    counts[row.arm].runs++;
+    counts[row.arm].passes += Number(row.after);
+  }
+  assert.deepEqual(counts, held.jobMotionRegrade.arms);
+  assert.deepEqual(counts, { 'sleight-turbo': { runs: 3, passes: 0 }, fowlbrowser: { runs: 3, passes: 2 } });
+  const files = render(committed());
+  for (const text of [files['browser-turbo.md'], readFileSync(join(ROOT, 'CHANGELOG.md'), 'utf8'), readFileSync(join(ROOT, 'docs/releases/1.5.0.md'), 'utf8')]) {
+    assert.match(text, /fixed color-synonym table applied to every arm/);
+    assert.match(text, /The strict grade was 0\/3 for both arms\. The synonym table was written after those results were seen\. Only "yellow" and "purple" changed any recorded row\./);
+    assert.doesNotMatch(text, /Both arms failed job-motion|strict grader requires amber/);
+    for (const [name, color] of Object.entries(jobColors)) assert.ok(text.includes(`| ${name} | \`${color.hex}\` | ${color.names.join(', ')} |`));
+  }
+  assert.match(readmeBlocks(committed()).turbo, /FowlBrowser completed 7 of 8 tasks/);
+});
+
+test('job-motion bankless verification rejects edits to the evidence digest, verdicts, totals and bank list', () => {
+  const reports = readJson(join(OUT, 'data/job-motion-regrade.json'));
+  assert.doesNotThrow(() => verifyJobMotionRegrade(reports, []));
+  for (const edit of [
+    reports => { reports[0].evidenceSha256 = '0'.repeat(64); },
+    reports => { reports[0].rows[0].after = !reports[0].rows[0].after; },
+    reports => { reports[0].totals.fowlbrowser.after++; },
+  ]) {
+    const edited = structuredClone(reports); edit(edited);
+    assert.throws(() => verifyJobMotionRegrade(edited, []), /pinned digest/);
+  }
+  assert.throws(() => verifyJobMotionRegrade(reports.slice(1), []), /Missing job-motion regrade/);
+  assert.throws(() => verifyJobMotionRegrade([], []), /Missing job-motion regrade/);
 });
 
 test('release slowdown summary includes large deltas, run counts and tasks without a B pass', () => {

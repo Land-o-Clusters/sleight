@@ -4,6 +4,20 @@ import { isDeepStrictEqual } from 'node:util';
 import { deflateSync } from 'node:zlib';
 
 export const jobKinds = ['job-canvas', 'job-kanban', 'job-phone', 'job-dark', 'job-motion'];
+// Fixed motion-answer vocabulary, shared by every arm. Names describe the actual
+// sRGB fills: warm yellow-orange, dark blue-green, and violet-purple respectively.
+// Only case and surrounding whitespace are normalized; phase order stays exact.
+export const jobColors = Object.freeze({
+  amber: Object.freeze({ hex: '#ffbf26', names: Object.freeze(['amber', 'yellow', 'gold', 'orange']) }), // RGB 255,191,38
+  teal: Object.freeze({ hex: '#138d86', names: Object.freeze(['teal', 'turquoise', 'blue-green']) }), // RGB 19,141,134
+  violet: Object.freeze({ hex: '#8753d8', names: Object.freeze(['violet', 'purple']) }), // RGB 135,83,216
+});
+const palette = Object.fromEntries(Object.entries(jobColors).map(([name, color]) => [name, color.hex]));
+function motionColor(value) {
+  if (typeof value !== 'string') return value;
+  const name = value.trim().toLowerCase();
+  return Object.keys(jobColors).find(key => jobColors[key].names.includes(name)) ?? value;
+}
 const esc = value => String(value).replace(/[&<>"']/g, char => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[char]));
 const instructions = {
   'job-canvas': 'Read the six-digit routing code in the routing slip image. Return JSON with code as a string.',
@@ -16,7 +30,7 @@ const instructions = {
 export function createJobFixture(kind, { nonce, seed = randomBytes(24).toString('hex') } = {}) {
   if (!jobKinds.includes(kind) || !/^[A-Za-z0-9_-]{1,80}$/.test(nonce ?? '')) throw Error('invalid local job fixture');
   const number = parseInt(createHash('sha256').update(seed).digest('hex').slice(0, 8), 16);
-  const colors = ['amber', 'teal', 'violet'];
+  const colors = Object.keys(jobColors);
   const phases = colors.map((_, index) => colors[(index + number % 3) % 3]);
   const phoneSpacer = (number % 2 === 0 ? 240 : 850) + number % 120;
   const expected = {
@@ -96,12 +110,12 @@ function render(fixture) {
   if (kind === 'job-phone') content = '<h1>Cabin visit</h1><p>Check the booking action on a phone without scrolling.</p><div class="spacer"></div><button id="reserve" type="button">Reserve</button>';
   if (kind === 'job-dark') {
     content = '<h1>Night palette</h1><p>Read the circular badge color in dark mode.</p><canvas id="badge" width="280" height="180" aria-label="Theme badge image"></canvas>';
-    const color = { amber: '#ffbf26', teal: '#138d86', violet: '#8753d8' }[expected.badge];
+    const color = palette[expected.badge];
     script = `const scheme=matchMedia('(prefers-color-scheme: dark)');function paint(){const c=document.querySelector('canvas').getContext('2d');c.clearRect(0,0,280,180);c.fillStyle=scheme.matches?'${color}':'#138d86';c.beginPath();c.arc(140,90,60,0,2*Math.PI);c.fill();}scheme.addEventListener('change',e=>{if(e.isTrusted)paint();});paint();`;
   }
   if (kind === 'job-motion') {
     content = '<h1>Signal preview</h1><button id="play" type="button">Play</button><div id="signal" role="img" aria-label="Animated signal"></div><p id="status">Ready</p>';
-    script = `const palette={amber:'#ffbf26',teal:'#138d86',violet:'#8753d8'},signal=document.querySelector('#signal');let played=false;
+    script = `const palette=${JSON.stringify(palette)},signal=document.querySelector('#signal');let played=false;
       document.querySelector('#play').onclick=async e=>{if(!e.isTrusted||played)return;played=true;
         if(matchMedia('(prefers-reduced-motion: reduce)').matches){document.querySelector('#status').textContent='Reduced motion unavailable';return;}
         try{const response=await fetch('/${nonce}/phases',{method:'POST'});if(!response.ok)throw Error('phases unavailable');const phases=await response.json(),seen=[];let index=0;
@@ -128,7 +142,7 @@ function validEvent(event) {
   if (event.kind === 'media') return [event.width, event.height].every(n => Number.isInteger(n) && n > 0 && n <= 10000) && ['light', 'dark'].includes(event.scheme) && typeof event.reduced === 'boolean';
   if (event.kind === 'drag') return typeof event.card === 'string' && event.card.length < 100 && event.from === 'Queue' && event.to === 'Review' && Number.isInteger(event.points) && event.points >= 3 && event.points <= 10000;
   if (event.kind === 'kanban') return typeof event.card === 'string' && event.card.length < 100 && ['Queue', 'Review', 'Other'].includes(event.column);
-  return typeof event.reduced === 'boolean' && Array.isArray(event.phases) && event.phases.length <= 3 && event.phases.every(color => ['amber', 'teal', 'violet'].includes(color));
+  return typeof event.reduced === 'boolean' && Array.isArray(event.phases) && event.phases.length <= 3 && event.phases.every(color => Object.keys(jobColors).includes(color));
 }
 
 export function jobHandler(fixture, origin) {
@@ -168,6 +182,7 @@ export function gradeJob({ task, site, answer, expected }) {
     const text = String(answer ?? ''), line = text.split('\n').filter(row => /^RESULT:/.test(row)).at(-1);
     let value;
     try { value = JSON.parse(line ? line.slice(7).trim() : text.trim()); } catch { problem = 'JOB_ANSWER_NOT_JSON'; }
+    if (task.worldFixture === 'job-motion' && Array.isArray(value?.phases)) value = { ...value, phases: value.phases.map(motionColor) };
     if (!problem && !isDeepStrictEqual(value, expected)) problem = 'JOB_ANSWER_MISMATCH';
     const events = site.events.filter(validEvent);
     if (!problem && task.worldFixture === 'job-kanban' && (!events.some(e => e.kind === 'drag' && e.card === expected.card) || !isDeepStrictEqual(site.kanban, expected))) problem = 'JOB_DRAG_NOT_PROVED';
