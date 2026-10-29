@@ -82,7 +82,7 @@ export function auditTranscript(source, { onCall = () => {} } = {}) {
         result.correctWrites += correct.length;
         if (correct.length === writes.length) { result.correctCalls++; result.correctCallFlags += effects.length; }
         result.correctFlags += correct.filter(w => effects.some(e => e.requested === w.target.number && e.method === w.method)).length;
-        result.flags.push(...effects.map(({ method, requested, received }) => ({ call: result.calls, method, requested, received })));
+        result.flags.push(...effects.map(({ method, requested, received, isError }) => ({ call: result.calls, method, requested, received, isError })));
       } else result.skippedWrites += writes.length;
     }
     previous = call.overlap ? undefined : after;
@@ -124,12 +124,20 @@ export function auditBank(root) {
 
 export function verifyBankReports(reports) {
   if (reports.length !== 2 || reports.some(r => !r.correctWrites || r.correctFlags !== 0 || r.correctCallFlags !== 0)) throw Error('Correct-write control audit failed');
-  const rel3 = reports.find(r => r.bank === 'validation-150f-rel3');
-  for (const [transcript, call] of [['race-safari-B-r1/form-checkout/events.jsonl', 6],
-    ['race-safari-B-r3/form-checkout/events.jsonl', 9], ['race-safari-B-r3/form-checkout/events.jsonl', 11]]) {
-    if (!rel3?.flags.some(f => f.transcript === transcript && f.call === call && f.requested === 26 && f.received === 53))
-      throw Error('A recorded SB1 wrong-field case was not flagged');
+  const cases = [
+    ['validation-150f-rel2', 'race-safari-A-r3/form-checkout/events.jsonl', 7],
+    ['validation-150f-rel3', 'race-safari-A-r2/form-checkout/events.jsonl', 6],
+    ['validation-150f-rel3', 'race-safari-B-r1/form-checkout/events.jsonl', 6],
+    ['validation-150f-rel3', 'race-safari-B-r3/form-checkout/events.jsonl', 9],
+    ['validation-150f-rel3', 'race-safari-B-r3/form-checkout/events.jsonl', 11],
+  ];
+  for (const [bank, transcript, call] of cases) {
+    const flag = reports.find(r => r.bank === bank)?.flags.find(f => f.transcript === transcript && f.call === call);
+    if (!flag || flag.requested !== 26 || flag.received !== 53 || flag.isError !== false)
+      throw Error('A recorded wrong-field case did not receive the plain notice');
   }
+  if (reports.reduce((sum, report) => sum + report.flags.length, 0) !== cases.length)
+    throw Error('Recorded-bank flag count changed');
 }
 
 if (process.argv[1] === fileURLToPath(import.meta.url)) {

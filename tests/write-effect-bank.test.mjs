@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import { materialize, auditTranscript } from '../bench/replay/write-effect-bank.mjs';
 import { runSequence, passRules } from '../bench/replay/safari-address-repro.mjs';
 import { recordings } from '../bench/replay/safari-wrong-field.mjs';
+import { wrongFieldEffects } from '../plugins/sleight/lib/write-effect.mjs';
 import { createReadCompactor } from '../plugins/sleight/lib/compact-reads.mjs';
 
 const before = 'Window: "Form", App: Fixture.\n0 standard window Form\n\t26 combo box (settable) Address\n\t53 text field (settable) Promo, Value: old';
@@ -26,7 +27,7 @@ test('bank replay counts correct writes and detects a wrong destination after a 
   const report = auditTranscript(source);
   assert.equal(report.correctWrites, 1);
   assert.equal(report.correctFlags, 0);
-  assert.deepEqual(report.flags, [{ call: 2, method: 'setValue', requested: 26, received: 53 }]);
+  assert.deepEqual(report.flags, [{ call: 2, isError: false, method: 'setValue', requested: 26, received: 53 }]);
 });
 
 test('the compactor retains a full error observation for the next effect comparison, then clears on reset', () => {
@@ -47,9 +48,9 @@ for (const state of ['correct', 'detected', 'unflagged']) test(`prepared six-cal
   const sent = [];
   const report = await runSequence(calls, { mapper: { arguments: args => args, observe() {} }, call: async (server, name, args) => {
     const i = sent.length; sent.push({ server, name, args });
-    return { isError: [3, 4].includes(i) || i === 5 && state === 'detected', content: [{ type: 'text',
+    return { isError: [3, 4].includes(i), content: [{ type: 'text',
       text: i !== 5 ? recording.before : state === 'correct' ? recording.before.replace('Address, Placeholder:', 'Address, Value: 47 Juniper Court, Asheville, NC 28801, Placeholder:') :
-        recording.after + (state === 'detected' ? '\nsleight: Action not done; sleight made no repair.' : '') }] };
+        recording.after + (state === 'detected' ? '\n' + wrongFieldEffects(recording.code, recording.before, recording.after)[0].notice : '') }] };
   } });
   assert.equal(sent.length, 6);
   assert.equal(report.verdict, state === 'unflagged' ? 'inconclusive' : 'pass');

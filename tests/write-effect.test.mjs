@@ -16,7 +16,8 @@ for (const recording of recordings) test(`${recording.id}: effect detection flag
   assert.equal(bad.effects.length, 1);
   assert.deepEqual([bad.effects[0].requested, bad.effects[0].received], [26, 53]);
   assert.equal(good.effects.length, 0);
-  assert.match(bad.result[0].text, /Action not done/);
+  assert.match(bad.result[0].text, /shows no value; check both/);
+  assert.equal(bad.effects[0].isError, false);
   assert.doesNotMatch(bad.result.map(c => c.text).join('\n'), /UI changed \(value\)/);
 });
 
@@ -24,7 +25,7 @@ test('setValue and click/typeText notice names the destination and target withou
   for (const source of [code, 'await app.click(26); await app.typeText("street");']) {
     const effects = wrongFieldEffects(source, before, wrong);
     assert.equal(effects.length, 1);
-    assert.equal(effects[0].notice, 'sleight: The text went into 53 (Promo text field), not 26 (Address combo box). Action not done; sleight made no repair.');
+    assert.equal(effects[0].notice, 'sleight: The text is now in 53 (Promo text field); 26 (Address combo box) shows no value; check both before continuing. Other actions in this call ran; sleight made no repair.');
     assert.doesNotMatch(effects[0].notice, /street/);
   }
 });
@@ -42,14 +43,14 @@ test('Description and ID metadata at the start of a field body retain their labe
   const b = a.replace('ID: login-secret', 'ID: login-secret, Value: street');
   const effect = wrongFieldEffects(code, a, b)[0];
   assert.match(effect.notice, /^sleight: Credential field received the text/);
-  assert.match(effect.notice, /53 \(Password text field\), not 26 \(Address combo box\)/);
+  assert.match(effect.notice, /53 \(Password text field\); 26 \(Address combo box\)/);
 });
 
 test('unchanged, correct, ambiguous, intentional, incomplete and unrelated writes stay silent', () => {
   for (const [source, a, b] of [
     [code, before, before], [code, before, before.replace('Address\n', 'Address, Value: street\n')],
     [code, before, wrong.replace('Value: street', 'Value: STREET')],
-    [code, wrong, wrong], [code, before, wrong.replace('App: Fixture', 'App: Other')],
+    [code, before, wrong.replace('App: Fixture', 'App: Other')],
     [code, before, wrong + '\t\t54 text field (settable) Promo, Value: street\n'],
     [code + 'await app.setValue(53, "street");', before, wrong],
     [code + 'await app.setValue(26, "other");', before, wrong],
@@ -79,12 +80,12 @@ test('an earlier different write to the receiving field does not hide the later 
 
 test('only the misdirected outcome is marked failed, including a remapped target number', () => {
   // A wrong write to a field also explicitly targeted in the batch is ambiguous, so use a third field.
-  const initial = before + '\t\t54 text field (settable) Email\n';
+  const initial = before.replace('Address\n', 'Address, Value: old\n') + '\t\t54 text field (settable) Email\n';
   const compactor = createReadCompactor({ outcomes: true }); compactor.process([{ type: 'text', text: initial }]);
   const batch = compactor.beginAction('await app.setValue(54, "email"); await app.setValue(26, "street");');
   const final = initial.replace('54 text field (settable) Email', '54 text field (settable) Email, Value: email').replace('Promo\n', 'Promo, Value: street\n');
   compactor.process([{ type: 'text', text: final + '\n[receipt]' + JSON.stringify({ outcomes: [
-    { a: 'setValue', n: 54, f: [{ o: 'value', m: true }] }, { a: 'setValue', n: 126, f: [{ o: 'value', m: true }] },
+    { i: 0, a: 'setValue', n: 54, f: [{ o: 'value', m: true }] }, { i: 1, a: 'setValue', n: 126, f: [{ o: 'value', m: true }] },
   ] }) }], { action: batch, filterMark: '[receipt]' });
   const record = compactor.takeOutcomes();
   assert.equal(record.outcomes[0].x, undefined);
@@ -112,10 +113,10 @@ test('relay marks the tool result as failed and sends no repair or additional re
   t.after(() => { relay.dispose(); for (const s of [clientIn, clientOut, serverIn, serverOut]) s.destroy(); });
   const call = (id, source) => clientIn.write(JSON.stringify({ id, method: 'tools/call', params: { name: 'js', arguments: { code: source } } }) + '\n');
   const reply = (id, text) => serverOut.write(JSON.stringify({ id, result: { content: [{ type: 'text', text }] } }) + '\n');
-  call(1, 'let app = await cua.getApp("Fixture")'); reply(1, before);
-  call(2, code); const count = requests.length; reply(2, wrong);
+  call(1, 'let app = await cua.getApp("Fixture")'); reply(1, before.replace('Address\n', 'Address, Value: old\n'));
+  call(2, code); const count = requests.length; reply(2, wrong.replace('Address\n', 'Address, Value: old\n'));
   assert.equal(replies.at(-1).result.isError, true);
-  assert.match(replies.at(-1).result.content[0].text, /Action not done/);
+  assert.match(replies.at(-1).result.content[0].text, /Requested write not done/);
   assert.equal(requests.length, count);
   assert.equal(traces.filter(r => r.direction === 'wrong-field-effect').length, 1);
 });

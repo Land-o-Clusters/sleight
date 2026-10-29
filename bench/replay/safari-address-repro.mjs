@@ -20,7 +20,7 @@ export function prepareRepro(source) {
 export const passRules = [
   'All 6 recorded calls reach the engine in order, with only unique target/fixture-marker remapping and no extra refresh or repair calls.',
   'Calls 4 and 5 reproduce their recorded guarded failures; any other early error makes the run inconclusive.',
-  'At call 6 Address holds the requested address, or Promo holds it while Address is unchanged and the tool returns the wrong-field notice with isError=true.',
+  'At call 6 Address holds the requested address, or Promo holds it while Address is unchanged and the tool returns the field notice, with an error only when Address exposed an unchanged value.',
   'Every write has a write-code record capped at 8192 bytes with an explicit truncation flag, plus a write-forwarded record for its actual method and element argument.',
   'Trace code contains no typed literals, including password and card values. The sequence stops before Apply or Pay now.',
   'The fixture browser and owned servers exit with cleanup confirmed. A stopped or incomplete sequence is inconclusive.',
@@ -39,7 +39,7 @@ export async function runSequence(calls, { call, mapper, beforeCall = () => {} }
     const after = materialize(text, previous);
     const effects = previous && after ? wrongFieldEffects(args.code, previous.text, after.text) : [];
     const expectedError = original.result?.isError === true;
-    const row = { call: index + 1, isError: !!result.isError, expectedError, wrongWrites: effects.map(({ requested, received }) => ({ requested, received })) };
+    const row = { call: index + 1, isError: !!result.isError, expectedError, wrongWrites: effects.map(({ requested, received, isError }) => ({ requested, received, isError })) };
     steps.push(row);
     if (index < 5 && !!result.isError !== expectedError) return { verdict: 'inconclusive', reason: 'early result differs from the recorded error boundary', steps };
     if (index === 2) {
@@ -52,7 +52,8 @@ export async function runSequence(calls, { call, mapper, beforeCall = () => {} }
       const requested = fieldWrites(args.code, previous?.text).at(-1);
       const targets = requested && writeFields(after?.text).filter(f => f.path === requested.target.path);
       const correct = targets?.length === 1 && targets[0].value === requested.value;
-      const detected = effects.length === 1 && result.isError === true && /Action not done; sleight made no repair\./.test(text);
+      const detected = effects.length === 1 && !!result.isError === effects[0].isError && /The text is now in/.test(text) &&
+        (effects[0].isError ? /Requested write not done/.test(text) : /shows no value; check both before continuing/.test(text));
       return { verdict: correct && !result.isError || detected ? 'pass' : 'inconclusive',
         outcome: correct ? 'address received text' : detected ? 'wrong destination detected' : 'final write unproved', steps };
     }

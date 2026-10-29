@@ -10,6 +10,7 @@ const field = (body, name) => {
 };
 const identity = body => body.replace(new RegExp(',? (?:Value|Selected text): [\\s\\S]*?(?=, (?:' + META + '):|$)', 'g'), '')
   .replace(/\([^)]*\)/g, '').trim();
+const safeLabel = text => text.trim().split(new RegExp('(?:^|, )(?:(?:' + META + '):)'))[0].trim() || 'unlabeled';
 export function writeFields(text) {
   const stack = [], fields = [];
   const rows = [];
@@ -28,8 +29,8 @@ export function writeFields(text) {
     const path = JSON.stringify([...(stack.at(-1)?.path ?? []), identity(body)]);
     stack.push({ depth, path: JSON.parse(path) });
     const role = roleOf(body);
-    if (role) fields.push({ number: Number(m[2]), body, path, role, value: field(body, 'Value') ?? '',
-      label: field(body, 'Description') ?? body.slice(role.length).replace(/^\s*\([^)]*\)\s*/, '').split(new RegExp(', (?=(?:' + META + '):)'))[0].trim() });
+    if (role) fields.push({ number: Number(m[2]), body, path, role, value: field(body, 'Value') ?? '', exposed: field(body, 'Value') !== undefined,
+      label: safeLabel(field(body, 'Description') ?? body.slice(role.length).replace(/^\s*\([^)]*\)\s*/, '')) });
   }
   return fields;
 }
@@ -39,10 +40,11 @@ export function fieldWrites(code, before) {
   const ts = tokens(code ?? '');
   if (invalidTokens(ts) || ts.some((t, i) => !t.string && (['for', 'while', 'do', 'function', 'if', 'switch', 'class', '<template>'].includes(t.v) ||
       t.v === '=' && ts[i + 1]?.v === '>'))) return [];
+  if (!ts.some((t, i) => !t.string && ['setValue', 'typeText'].includes(t.v) && ts[i - 1]?.v === '.' && ts[i + 1]?.v === '(')) return [];
   const fields = writeFields(before), writes = [], aims = new Map();
   let actionIndex = 0;
   const inputs = new Set(['click', 'doubleClick', 'rightClick', 'setValue', 'typeText', 'paste', 'pressKey', 'scroll', 'drag',
-    'selectText', 'performSecondaryAction', 'performAction']);
+    'selectText', 'performSecondaryAction', 'performAction', 'press']);
   const literal = arg => arg?.length === 1 && arg[0].string ? arg[0].v : undefined;
   const resolve = arg => {
     if (arg?.length === 1 && !arg[0].string && /^\d+$/.test(arg[0].v)) return fields.filter(f => f.number === Number(arg[0].v));
@@ -88,21 +90,29 @@ const payment = f => !sensitive(f) && /payment|billing|card|carte|tarjeta|karte|
 const describe = f => `${f.number} (${[f.label, f.role].filter(Boolean).join(' ').slice(0, 100)})`;
 
 export function wrongFieldEffects(code, before, after) {
+  // Do not parse either tree for cells without a resolvable field write.
+  if (!/\.\s*(?:setValue|typeText)\s*\(/.test(code ?? '')) return [];
+  const writes = fieldWrites(code, before);
+  if (!writes.length) return [];
   if (!before || !after || documentKey(windowFromText(before)) !== documentKey(windowFromText(after)) ||
       !windowFromText(before) || /…\(\d+\)|sleight: (?:lines changed|no change since)/.test(before + after)) return [];
-  const old = writeFields(before), now = writeFields(after), writes = fieldWrites(code, before), effects = [];
+  const old = writeFields(before), now = writeFields(after), effects = [];
   const unique = (list, path) => { const matches = list.filter(f => f.path === path); return matches.length === 1 ? matches[0] : undefined; };
   for (const [index, write] of writes.entries()) {
     const target = unique(now, write.target.path), was = unique(old, write.target.path);
-    if (!target || !was || target.value !== was.value || target.value === write.value ||
+    if (!target || !was || target.exposed !== was.exposed || target.value !== was.value || target.value === write.value ||
         writes.slice(index + 1).some(w => w.target.path === target.path)) continue;
-    const landed = now.filter(f => f.path !== target.path && f.value === write.value && unique(old, f.path)?.value !== write.value &&
+    const landed = now.filter(f => f.path !== target.path && f.value === write.value &&
       unique(old, f.path) && unique(now, f.path) && !writes.some(w => w.target.path === f.path && w.value === write.value));
     if (landed.length !== 1) continue;
-    const actual = landed[0];
+    const actual = landed[0], isError = was.exposed;
+    // A repeat can leave the wrong field unchanged; only an explicit write to the requested field qualifies.
     const risk = payment(actual) ? /* notice */ 'Payment field received the text. ' : sensitive(actual) ? /* notice */ 'Credential field received the text. ' : '';
-    effects.push({ method: write.method, index: write.index, requested: write.target.number, received: actual.number,
-      notice: /* notice */ `sleight: ${risk}The text went into ${describe(actual)}, not ${describe(target)}. Action not done; sleight made no repair.` });
+    const status = isError
+      ? /* notice */ `clear it before continuing. Requested write not done: ${describe(target)} kept its value.`
+      : /* notice */ `${describe(target)} shows no value; check both before continuing.`;
+    effects.push({ method: write.method, index: write.index, requested: write.target.number, received: actual.number, isError,
+      notice: /* notice */ `sleight: ${risk}The text is now in ${describe(actual)}; ${status} Other actions in this call ran; sleight made no repair.` });
   }
   return effects.sort((a, b) => Number(/^(?:sleight: )(?:Payment|Credential)/.test(b.notice)) - Number(/^(?:sleight: )(?:Payment|Credential)/.test(a.notice)));
 }

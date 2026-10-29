@@ -215,7 +215,7 @@ test('actions with no read between them share the read that came after, and a st
   assert.equal(last[1].x, 'failed');
   const refused = engine([form()]);
   await refused.run('await app.click({ label: "Nope" });', { outcomeMark: MARK, actions: ['click'] }).catch(() => {});
-  assert.deepEqual(refused.records(MARK).at(-1).outcomes[0], { a: 'click', l: 'Nope', x: 'refused', r: 'element not found' });
+  assert.deepEqual(refused.records(MARK).at(-1).outcomes[0], { a: 'click', i: 0, l: 'Nope', x: 'refused', r: 'element not found' });
 });
 
 test('without the mark the guard writes no outcome records', async () => {
@@ -675,11 +675,11 @@ test('typing with no known plain field target keeps its length out, and so does 
   const noFocus = text => text.replace(/\n\nThe focused UI element is .*$/, '');
   const f = engine([noFocus(form()), noFocus(form())], { timed: true });
   await f.run('await app.typeText("123456");', { outcomeMark: MARK, actions: ['typeText'] });
-  assert.deepEqual(f.records(MARK).at(-1).outcomes[0], { a: 'typeText', ms: 7, f: [{ o: 'none' }] });
+  assert.deepEqual(f.records(MARK).at(-1).outcomes[0], { a: 'typeText', i: 0, ms: 7, f: [{ o: 'none' }] });
   const pin = form().replace(/The focused UI element is .*$/, 'The focused UI element is 1 text field (settable) Description: PIN, Value: ');
   const g = engine([pin, pin], { timed: true });
   await g.run('await app.typeText("4821");', { outcomeMark: MARK, actions: ['typeText'] });
-  assert.deepEqual(g.records(MARK).at(-1).outcomes[0], { a: 'typeText', ms: 7, t: { r: 'text field', s: true } });
+  assert.deepEqual(g.records(MARK).at(-1).outcomes[0], { a: 'typeText', i: 0, ms: 7, t: { r: 'text field', s: true } });
 });
 
 test('single-line lengths stay out regardless of the field name, and password names still count as secure', async () => {

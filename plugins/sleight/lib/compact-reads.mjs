@@ -1705,10 +1705,10 @@ export function createReadCompactor({ resultTrim = process.env.SLEIGHT_RESULT_TR
         if (action.writeEffects.length) {
           // A successful engine return does not establish that the requested write happened.
           for (const effect of action.writeEffects) {
-            const rec = outcomeRecord?.outcomes?.[effect.index];
-            if (rec?.a === effect.method) { rec.x = 'failed'; rec.f = []; }
+            const rec = outcomeRecord?.outcomes?.find(rec => rec.i === effect.index && rec.a === effect.method);
+            if (effect.isError && rec) { rec.x = 'failed'; rec.f = []; }
           }
-          out.unshift(...action.writeEffects.map(effect => ({ type: 'text', text: effect.notice })));
+          out.unshift(...action.writeEffects.map(effect => ({ type: 'text', text: promptNotice(effect.notice, prompt) })));
         }
       }
       lastOutcomes = outcomeRecord;

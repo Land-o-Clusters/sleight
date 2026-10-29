@@ -21,7 +21,7 @@ test('code trace masks every string, template, regex and comment, including vari
   const record = writeCodeTrace(source);
   assert.equal(record.truncated, false);
   assert.doesNotMatch(record.code, /secret|55554444/);
-  assert.match(record.code, /app\.setValue\(26, password\)/);
+  assert.match(record.code, /app\.setValue\("<redacted>", password\)/);
   assert.equal(record.bytes, Buffer.byteLength(source));
   const spans = tokens(source, { positions: true });
   assert.deepEqual(spans.map(({ start, end, ...token }) => token), tokens(source));
@@ -33,7 +33,7 @@ test('write code is bounded to 8192 bytes, preserves both ends and reports trunc
   assert.equal(record.truncated, true);
   assert.ok(Buffer.byteLength(record.code) <= WRITE_CODE_BYTES);
   assert.match(record.code, /^const first/);
-  assert.match(record.code, /app\.setValue\(26, "<redacted>"\);$/);
+  assert.match(record.code, /app\.setValue\("<redacted>", "<redacted>"\);$/);
   assert.equal(writeCodeTrace('app.typeText("unfinished').code, '[unparseable code redacted]');
 });
 
@@ -101,4 +101,22 @@ test('relay writes the code actually sent and strips dispatch marks before deliv
   assert.equal(requests.length, count);
   assert.deepEqual(traces.find(t => t.direction === 'write-forwarded').msg, { id: 1, ...dispatch });
   assert.doesNotMatch(JSON.stringify(replies.at(-1)), /writeForward|write-forwarded/);
+});
+
+test('a tracing-enabled warmup retains forwarding records in later reused calls', async () => {
+  const output = [], dispatches = [];
+  const tree = head + '\t26 text field (settable) Address';
+  const raw = { getAXState: async () => tree, setValue: async n => dispatches.push(n) };
+  const context = { cua: { getApp: async () => raw }, nodeRepl: { write: s => output.push(s) }, setTimeout, clearTimeout };
+  const { replSetupCode } = await import('../plugins/sleight/lib/repl-warmup.mjs');
+  const { createContext, runInContext } = await import('node:vm');
+  createContext(context);
+  await runInContext(`(async () => { ${replSetupCode({ writeTracing: true })} })()`, context);
+  const wrapped = guardedCode('var app = await cua.getApp("Fixture"); await app.setValue(26, "secret-value");',
+    { title: 'Form', app: 'Fixture', url: null }, undefined, undefined,
+    { reuseSetup: true, timing: true, guardStopMark: '[warm]', literals: [26], seenLines: { 26: 'text field (settable) Address' } });
+  await runInContext(`(async () => { ${wrapped} })()`, context);
+  assert.deepEqual(dispatches, [26]);
+  const taken = takeGuardStop([{ type: 'text', text: output.join('\n') }], '[warm]');
+  assert.deepEqual(taken.writeForwards, [{ index: 0, method: 'setValue', element: 26, afterClick: null }]);
 });

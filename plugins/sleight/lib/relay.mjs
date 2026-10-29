@@ -1079,7 +1079,7 @@ export function createRelay({
   const frontRestore = process.env.SLEIGHT_FRONT_RESTORE === '0' ? undefined : restoreFront;
   const readHints = {};
   // Each guard install carries only the outcome and completeness experiments selected for this session.
-  const outcomeSetup = { ...(outcomes || actionLog ? { outcomes: true } : {}), ...(completeness ? { completeness: true } : {}) };
+  const outcomeSetup = { ...(guardTiming ? { writeTracing: true } : {}), ...(outcomes || actionLog ? { outcomes: true } : {}), ...(completeness ? { completeness: true } : {}) };
   let turnOutcomes = new TurnOutcomes();
   const outcomeCalls = new Map(), outcomeEnds = new Map();
   const completenessCalls = new Map();
@@ -2593,7 +2593,7 @@ export function createRelay({
     if (closing && msg.result?.action === 'accept') msg = { ...msg, result: { action: 'cancel' } };
     if (serverIn.writableEnded || serverIn.destroyed) { trace('server-input-closed', { id: msg.id }); return; }
     if (msg.result?.action === 'accept' && closeKeyApp) closeRead?.keyPressed(closeKeyApp);
-    if (writeTrace && msg.method === 'tools/call' && msg.params?.name === 'js' && hasWrite(jsCalls.get(msg.id) ?? msg.params.arguments?.code)) {
+    if (writeTrace && traceCode && msg.method === 'tools/call' && msg.params?.name === 'js' && hasWrite(jsCalls.get(msg.id) ?? msg.params.arguments?.code)) {
       trace('write-code', { id: msg.id, ...writeCodeTrace(msg.params.arguments.code) });
     }
     trace('to-server', msg);
@@ -3720,7 +3720,7 @@ export function createRelay({
     }
     // SLEIGHT_TRACE_CODE=1 also keeps Claude's code, for benchmark diagnosis on this Mac only.
     if (msg.method === 'tools/call') { trace('call-received', { id: msg.id, method: msg.method, params: { name: msg.params?.name,
-      ...(traceCode && typeof msg.params?.arguments?.code === 'string' ? { code: msg.params.arguments.code.slice(0, 4000) } : {}) } }); callSeqs.set(msg.id, ++callSeq); callStarts.set(msg.id, Date.now()); }
+      ...(traceCode && typeof msg.params?.arguments?.code === 'string' ? { code: (hasWrite(msg.params.arguments.code) ? writeCodeTrace(msg.params.arguments.code).code : msg.params.arguments.code).slice(0, 4000) } : {}) } }); callSeqs.set(msg.id, ++callSeq); callStarts.set(msg.id, Date.now()); }
     if (msg.method === 'tools/call' && ['js', 'js_reset'].includes(msg.params?.name)) {
       const next = {};
       for (const key of ENGINE_CONTEXT_KEYS) if (msg.params._meta && Object.hasOwn(msg.params._meta, key)) next[key] = msg.params._meta[key];
@@ -6222,7 +6222,7 @@ export function createRelay({
           action: closedLast ? undefined : resultCalls.get(msg.id), failure, failed: !closedLast && (resultFailed || !!msg.result?.isError) });
       const wrongWrites = resultCalls.get(msg.id)?.writeEffects;
       if (wrongWrites?.length) {
-        msg.result.isError = true;
+        if (wrongWrites.some(w => w.isError)) msg.result.isError = true;
         trace('wrong-field-effect', { id: msg.id, writes: wrongWrites.map(({ method, requested, received }) => ({ method, requested, received })) });
       }
       // Claude's code can reach the guard's state, so the record's shape is checked, not trusted.
