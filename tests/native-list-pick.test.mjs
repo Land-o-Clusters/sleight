@@ -337,7 +337,7 @@ function guarded(model, { raw = {}, completeness = false, outcomes = false } = {
     scroll: async (target, direction, ticks) => { model.position = Math.max(0, Math.min(model.names.length - 10, model.position + (direction === 'down' ? 3 : -3) * ticks)); },
     click: async number => { clicks.push(model.numbers.get(number)); model.selected = model.numbers.get(number); }, ...raw };
   const context = { cua: { getApp: async () => handle }, setTimeout, nodeRepl: { write() {} } };
-  const run = code => runInNewContext(`(async () => { ${code} })()`, context);
+  const run = code => runInNewContext(`(async () => { ${code}\nreturn globalThis.picked; })()`, context);
   return { clicks, keys, run, handle, start: () => run(readCode('await cua.getApp("Firefox");', { completeness, outcomes })),
     call: code => run(guardedCode(code, window, undefined, undefined, { completeness, outcomes })) };
 }
@@ -346,7 +346,7 @@ test('app.pickFromList pages by key and clicks the row it resolved in its newest
   const names = sortedNames(400), model = fakeList(names, { page: 9 });
   const g = guarded(model);
   await g.start();
-  const result = await g.call(`return await app.pickFromList(${JSON.stringify(names[333])});`);
+  const result = await g.call(`globalThis.picked = await app.pickFromList(${JSON.stringify(names[333])});`);
   assert.equal(result.clicked, true);
   assert.deepEqual(g.clicks, [names[333]]);
   assert.ok(g.keys.length > 20 && g.keys.every(key => key.startsWith('Page_')));
@@ -360,7 +360,7 @@ test('app.pickFromList stops when the window changes between keys', async () => 
     pressKey: async key => { if (model.keys.length >= 8) swapped = true; await model.key(key); },
   } });
   await g.start();
-  await assert.rejects(g.call(`return await app.pickFromList(${JSON.stringify(names[390])});`), /window changed|Observed/);
+  await assert.rejects(g.call(`globalThis.picked = await app.pickFromList(${JSON.stringify(names[390])});`), /window changed|Observed/);
   assert.deepEqual(g.clicks, []);
 });
 
@@ -373,7 +373,7 @@ test('app.pickFromList refuses to press a key without the input lease', async ()
     const names = sortedNames(400), model = fakeList(names), keys = [], clicks = [];
     const raw = { getAXState: async () => model.tree(), pressKey: async key => { keys.push(key); await model.key(key); },
       click: async number => { clicks.push(number); } };
-    const code = guardedCode(`return await app.pickFromList(${JSON.stringify(names[300])});`, window, undefined, { path, token: 'owner' });
+    const code = guardedCode(`globalThis.picked = await app.pickFromList(${JSON.stringify(names[300])});`, window, undefined, { path, token: 'owner' });
     try {
       await assert.rejects(new AsyncFunction('app', 'cua', 'nodeRepl', code)(raw, { getApp: async () => raw }, { write() {} }), /Input lease stopped/);
     } finally { delete globalThis.__sleightDocumentGuard; delete globalThis.__sleightDocumentGuardSetup; }
@@ -390,10 +390,10 @@ test('a search that does not click ends the call with its reason; a frameless cl
   assert.deepEqual(absent.clicks, []);
   const g = guarded(fakeList(names), { raw: { click: async () => { throw new Error('elementHasNoFrame'); } } });
   await g.start();
-  await assert.rejects(g.call(`return await app.pickFromList(${JSON.stringify(names[3])});`), /click-failed.*Input may have been sent/);
+  await assert.rejects(g.call(`globalThis.picked = await app.pickFromList(${JSON.stringify(names[3])});`), /click-failed.*Input may have been sent/);
   const other = guarded(fakeList(names), { raw: { click: async () => { throw new Error('boom'); } } });
   await other.start();
-  await assert.rejects(other.call(`return await app.pickFromList(${JSON.stringify(names[3])});`), /boom/);
+  await assert.rejects(other.call(`globalThis.picked = await app.pickFromList(${JSON.stringify(names[3])});`), /boom/);
 });
 
 // lp1 (study-form-travel-b7, race-1017): the travel form's virtual list as the b7 reads recorded it. 16 rows render from
@@ -694,9 +694,9 @@ test('lp1: app.pickFromList after app.click on the list, through the guard: keys
     scroll: async (number, direction, ticks) => { scrolls.push([number, direction, ticks]); await m.wheel(number, direction, ticks); },
     click: async number => { clicks.push(number); await m.clickNumber(number); } };
   const context = { cua: { getApp: async () => handle }, setTimeout, nodeRepl: { write() {} } };
-  const run = code => runInNewContext(`(async () => { ${code} })()`, context);
+  const run = code => runInNewContext(`(async () => { ${code}\nreturn globalThis.picked; })()`, context);
   await run(readCode('await cua.getApp("Safari");'));
-  const result = await run(guardedCode(`await app.click(24); return await app.pickFromList(${JSON.stringify(TARGET)});`, travelWindow('safari')));
+  const result = await run(guardedCode(`await app.click(24); globalThis.picked = await app.pickFromList(${JSON.stringify(TARGET)});`, travelWindow('safari')));
   assert.equal(result.clicked, true, JSON.stringify(result));
   assert.equal(clicks[0], 24);
   assert.equal(names[m.selected], TARGET);
@@ -706,10 +706,10 @@ test('lp1: app.pickFromList after app.click on the list, through the guard: keys
   const other = webList(names, { browser: 'safari', focus: 'city' });
   const handle2 = { ...handle, getAXState: async () => other.tree(), click: async number => other.clickNumber(number), pressKey: async key => other.key(key) };
   const context2 = { cua: { getApp: async () => handle2 }, setTimeout, nodeRepl: { write() {} } };
-  const run2 = code => runInNewContext(`(async () => { ${code} })()`, context2);
+  const run2 = code => runInNewContext(`(async () => { ${code}\nreturn globalThis.picked; })()`, context2);
   await run2(readCode('await cua.getApp("Safari");'));
   other.focus = 'city';
-  await assert.rejects(run2(guardedCode(`await app.click(24); await app.pressKey("Tab"); return await app.pickFromList(${JSON.stringify(TARGET)});`, travelWindow('safari'))),
+  await assert.rejects(run2(guardedCode(`await app.click(24); await app.pressKey("Tab"); globalThis.picked = await app.pickFromList(${JSON.stringify(TARGET)});`, travelWindow('safari'))),
     /not-a-list/);
 });
 
@@ -749,7 +749,7 @@ test('lp1 review: a click the next read does not show as selected is reported un
   assert.match(result.note, /another control/);
   const g = guarded(fakeList(sortedNames(100)), { raw: { click: async () => {} } });
   await g.start();
-  await assert.rejects(g.call(`return await app.pickFromList(${JSON.stringify(sortedNames(100)[40])});`), /pickFromList stopped \(click-unverified\)/);
+  await assert.rejects(g.call(`globalThis.picked = await app.pickFromList(${JSON.stringify(sortedNames(100)[40])});`), /pickFromList stopped \(click-unverified\)/);
 });
 
 // CC2 (codex-vs-cc-1019): app.pickFromList(<list>, "<row>") makes the focusing click itself. Haiku's own first move in
@@ -1036,9 +1036,9 @@ test('PF2: the serialized guard recovers container focus and verifies the final 
       await m.clickLine(line);
     } };
   const context = { cua: { getApp: async () => handle }, setTimeout, nodeRepl: { write() {} } };
-  const run = code => runInNewContext(`(async () => { ${code} })()`, context);
+  const run = code => runInNewContext(`(async () => { ${code}\nreturn globalThis.picked; })()`, context);
   await run(readCode('await cua.getApp("Firefox");'));
-  const result = await run(guardedCode(`return await app.pickFromList(${m.list}, ${JSON.stringify(names[612])});`, travelWindow('firefox')));
+  const result = await run(guardedCode(`globalThis.picked = await app.pickFromList(${m.list}, ${JSON.stringify(names[612])});`, travelWindow('firefox')));
   assert.equal(result.clicked, true, JSON.stringify(result));
   assert.equal(names[m.selected], names[612]);
   assert.equal(m.focusClicks.length, 3);
@@ -1058,7 +1058,7 @@ test('PF2: a revoked input lease stops the serialized focus recovery before anot
         await m.clickLine(`text (selectable) ${names[m.rendered[number - m.list - 1]]}`);
         writeFileSync(path, JSON.stringify({ token: 'someone else', expires: Date.now() + 30000 }));
       } };
-    const code = guardedCode(`return await app.pickFromList(${m.list}, ${JSON.stringify(names[612])});`,
+    const code = guardedCode(`globalThis.picked = await app.pickFromList(${m.list}, ${JSON.stringify(names[612])});`,
       travelWindow('firefox'), undefined, { path, token: 'owner' });
     try {
       await assert.rejects(new AsyncFunction('app', 'cua', 'nodeRepl', code)(raw, { getApp: async () => raw }, { write() {} }), /Input lease stopped/);
@@ -1126,9 +1126,9 @@ test('CC2: app.pickFromList(24, row) through the guard clicks a row of list 24 i
       scroll: async (number, direction, ticks) => m.wheel(number, direction, ticks),
       click: async number => { clicks.push(number); await m.clickNumber(number); } };
     const context = { cua: { getApp: async () => handle }, setTimeout, nodeRepl: { write() {} } };
-    const run = code => runInNewContext(`(async () => { ${code} })()`, context);
+    const run = code => runInNewContext(`(async () => { ${code}\nreturn globalThis.picked; })()`, context);
     await run(readCode(`await cua.getApp(${JSON.stringify(browser === 'safari' ? 'Safari' : 'Firefox')});`));
-    const result = await run(guardedCode(`return await app.pickFromList(${m.list}, ${JSON.stringify(TARGET)});`, travelWindow(browser)));
+    const result = await run(guardedCode(`globalThis.picked = await app.pickFromList(${m.list}, ${JSON.stringify(TARGET)});`, travelWindow(browser)));
     assert.equal(result.clicked, true, browser + ' ' + JSON.stringify(result));
     assert.ok(clicks[0] > m.list && clicks[0] <= m.list + 16, 'the first click is a row of the list');
     assert.equal(names[m.selected], TARGET);
@@ -1297,9 +1297,9 @@ test('CC13 review: a stale list number stops through the guard when the relay pa
   const handle = { getAXState: async () => m.tree(), pressKey: async key => m.key(key), scroll: async (number, direction, ticks) => m.wheel(number, direction, ticks),
     click: async number => { clicks.push(number); await m.clickNumber(number); } };
   const context = { cua: { getApp: async () => handle }, setTimeout, nodeRepl: { write() {} } };
-  const run = code => runInNewContext(`(async () => { ${code} })()`, context);
+  const run = code => runInNewContext(`(async () => { ${code}\nreturn globalThis.picked; })()`, context);
   await run(readCode('await cua.getApp("Safari");'));
-  await assert.rejects(run(guardedCode(`return await app.pickFromList(24, ${JSON.stringify(TARGET)});`, travelWindow('safari'), undefined, undefined,
+  await assert.rejects(run(guardedCode(`globalThis.picked = await app.pickFromList(24, ${JSON.stringify(TARGET)});`, travelWindow('safari'), undefined, undefined,
     { literals: [24], seenLines: { 24: 'list (settable) Arriving at' } })), /not-a-list.*Element 24 changed since you read the window/);
   assert.deepEqual(clicks, []);
   assert.deepEqual(m.keys, []);

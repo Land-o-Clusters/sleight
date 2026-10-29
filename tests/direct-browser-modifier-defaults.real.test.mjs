@@ -38,11 +38,13 @@ for (const [name, control] of [
   ['video', '<video id="go" controls width="240" height="120"></video>'],
   ['anchor', '<a id="go" href="/landed" target="_blank">Link</a>'],
 ]) add('submit label containing interactive ' + name,
-  `<form action="/landed"><input id="send" type="submit" hidden></form><label for="send">${control}</label>`);
+  `<form action="/landed"><input id="send" type="submit" hidden></form><label for="send">${control}</label>`,
+  { plain: name === 'select' });
 for (const multiple of [false, true]) {
   const html = `<select id="list" ${multiple ? 'multiple' : ''} size="4"><option selected>First</option><option id="go">Second</option><option>Third</option></select>`;
-  add((multiple ? 'multiple' : 'single') + ' option', html, { differs: multiple, plain: multiple });
-  add((multiple ? 'multiple' : 'single') + ' select', html, { selector: '#list', differs: multiple, plain: multiple });
+  // A native select with size > 1 uses the plain list route without multiple too.
+  add((multiple ? 'multiple' : 'single') + ' option', html, { differs: multiple, plain: true });
+  add((multiple ? 'multiple' : 'single') + ' select', html, { selector: '#list', differs: multiple, plain: true });
 }
 add('summary', '<details id="field"><summary id="go">Summary</summary>Details</details>');
 add('textarea', '<textarea id="go">hello world</textarea>');
@@ -172,7 +174,7 @@ for (const multiple of [false, true]) test('CR5 real native multiple getter resi
       <script>Object.defineProperty(HTMLSelectElement.prototype,'multiple',{get(){throw Error('page multiple')}});</script>`);
     const choices = [], locator = f.entry.page.locator('#go');
     await backgroundClick(f.entry, locator, options => { choices.push(options); return locator.click({ ...options, timeout: 5000 }); }, { timeoutMs: 5000 });
-    assert.deepEqual(choices, [multiple ? {} : { modifiers: ['ControlOrMeta'] }]);
+    assert.deepEqual(choices, [{}]);
     assert.deepEqual(await f.entry.page.locator('select').evaluate(el => [...el.selectedOptions].map(o => o.textContent)), ['Second']);
   });
 

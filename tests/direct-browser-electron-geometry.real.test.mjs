@@ -22,7 +22,7 @@ test('a page that spoofs screenX, outerWidth, devicePixelRatio and visibility in
   const context = await browser.newContext({ viewport: { width: 640, height: 480 } });
   const page = await context.newPage();
   await page.addInitScript(spoof);
-  await page.setContent('<main>renderer</main>');
+  await page.goto('data:text/html,<main>renderer</main>');
   const main = await page.evaluate(() => ({ x: window.screenX, width: window.outerWidth, scale: window.devicePixelRatio, visible: document.visibilityState }));
   assert.deepEqual(main, { x: -12345, width: 1, scale: 9, visible: 'hidden' }, 'the spoof is live in the main world');
   const cdp = await context.newCDPSession(page);

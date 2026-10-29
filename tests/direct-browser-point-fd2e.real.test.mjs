@@ -71,19 +71,23 @@ for (const words of ['Save', 'Complete', 'Book', 'Send', 'Accept', 'Charge', 'Sa
     assert.match(result.lines[0], /input sent/); assert.equal(await f.page.evaluate(() => clicks), 1);
   });
 
-for (const kind of ['ordinary iframe', 'ordinary cross-origin iframe', 'payment fields', 'provider iframe'])
+for (const kind of ['ordinary iframe', 'ordinary cross-origin iframe', 'payment fields', 'provider iframe', 'form without iframe'])
   test('FD2E form classification: ' + kind, { skip, timeout: 60000 }, async t => {
+    const plain = kind === 'form without iframe';
     const f = await setup(t, style + '<form><button type="button" id="pay" onclick="window.clicks++">Continue</button>' +
       (kind === 'payment fields' ? '<input autocomplete="cc-number" style="position:absolute;left:500px">' : '') +
-      `<iframe style="position:absolute;left:500px" srcdoc="<p>Help</p>" src="${kind === 'provider iframe' ? 'https://js.stripe.com/fixture' : kind === 'ordinary cross-origin iframe' ? 'https://docs.example.invalid/help' : '/child'}"></iframe></form><script>window.clicks=0</script>`, { '/child': '<p>Help</p>' });
+      (plain ? '' : `<iframe style="position:absolute;left:500px" srcdoc="<p>Help</p>" src="${kind === 'provider iframe' ? 'https://js.stripe.com/fixture' : kind === 'ordinary cross-origin iframe' ? 'https://docs.example.invalid/help' : '/child'}"></iframe>`) +
+      '</form><script>window.clicks=0;window.downs=0;document.addEventListener("pointerdown",()=>downs++,true)</script>', { '/child': '<p>Help</p>' });
     if (kind === 'ordinary cross-origin iframe') {
       const url = new URL('/child', f.page.url()); url.hostname = 'localhost';
       await f.page.locator('iframe').evaluate((el, src) => { el.removeAttribute('srcdoc'); el.src = src; }, url.href);
     }
-    await f.page.frameLocator('iframe').locator('p').waitFor();
-    const refused = !kind.startsWith('ordinary'), result = await f.act(); t.diagnostic(result.lines[0]);
-    assert.match(result.lines[0], refused ? /use its ref/ : /input sent/);
-    assert.equal(await f.page.evaluate(() => clicks), refused ? 0 : 1);
+    if (!plain) await f.page.frameLocator('iframe').locator('p').waitFor();
+    const result = await f.act(); t.diagnostic(result.lines[0]);
+    // Point geometry distinguishes provider frames, while the existing action
+    // classifier conservatively asks for any iframe in a form.
+    assert.match(result.lines[0], plain ? /input sent/ : kind.startsWith('ordinary') ? /confirmation required through the trusted consent UI/ : /use its ref/);
+    assert.deepEqual(await f.page.evaluate(() => ({ clicks, downs })), plain ? { clicks: 1, downs: 1 } : { clicks: 0, downs: 0 });
   });
 
 for (const kind of ['plain forwarding listener', 'document forwarding listener'])

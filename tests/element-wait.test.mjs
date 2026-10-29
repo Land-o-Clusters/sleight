@@ -11,13 +11,13 @@ function fixture(trees) {
     click: async id => inputs.push(id) };
   const context = { cua: { getApp: async () => raw }, setTimeout,
     nodeRepl: { write: text => output.push(text) } };
-  return { output, starts, inputs, run: code => runInNewContext(`(async () => { ${code} })()`, context) };
+  return { output, starts, inputs, run: code => runInNewContext(`(async () => { ${code}\nreturn globalThis.waited; })()`, context) };
 }
 test('waitFor reads only when called, returns the matching full tree and traces every poll', async () => {
   const f = fixture([header, header + '\n\t1 button Description: 7, ID: Seven']);
   await f.run(readCode('await cua.getApp("Calculator");'));
   assert.equal(f.starts.length, 0);
-  const tree = await f.run(guardedCode('return await app.waitFor({ id: "Seven" }, { timeoutMs: 1000 });', window, undefined, undefined, { timing: true }));
+  const tree = await f.run(guardedCode('globalThis.waited = await app.waitFor({ id: "Seven" }, { timeoutMs: 1000 });', window, undefined, undefined, { timing: true }));
   assert.match(tree, /ID: Seven/);
   assert.equal(f.starts.length, 2);
   // The poll waits setTimeout(250); Node's timer can fire a fraction of a millisecond early against
@@ -32,7 +32,7 @@ test('waitFor accepts labels and exact lines and refuses duplicate matches', asy
   for (const selector of [{ label: '7' }, { line: 'button Description: 7, ID: Seven' }]) {
     const f = fixture([header + '\n\t1 button Description: 7, ID: Seven']);
     await f.run(readCode('await cua.getApp("Calculator");'));
-    assert.match(await f.run(guardedCode(`return await app.waitFor(${JSON.stringify(selector)});`, window)), /ID: Seven/);
+    assert.match(await f.run(guardedCode(`globalThis.waited = await app.waitFor(${JSON.stringify(selector)});`, window)), /ID: Seven/);
   }
   const f = fixture([header + '\n\t1 button 7\n\t2 button 7']);
   await f.run(readCode('await cua.getApp("Calculator");'));
@@ -42,7 +42,7 @@ test('a late wait read cannot overwrite a newer observation', async () => {
   let resolveOld, reads = 0;
   const raw = { getAXState: async () => ++reads === 1 ? new Promise(resolve => { resolveOld = resolve; }) : header + '\n1 button New' };
   const context = { cua: { getApp: async () => raw }, nodeRepl: { write() {} }, setTimeout };
-  const run = code => runInNewContext(`(async () => { ${code} })()`, context);
+  const run = code => runInNewContext(`(async () => { ${code}\nreturn globalThis.waited; })()`, context);
   await run(readCode('await cua.getApp("Calculator");'));
   const pending = run(guardedCode('await app.waitFor({ label: "Old" });', window));
   await run('await app.getAXState();');
@@ -56,9 +56,9 @@ test('a wait follows an Open panel opened by this call only in the default lease
     let opened = false;
     const raw = { getAXState: async () => opened ? panel : initial, pressKey: async () => { opened = true; } };
     const context = { cua: { getApp: async () => raw }, setTimeout, nodeRepl: { write() {} } };
-    const run = code => runInNewContext(`(async () => { ${code} })()`, context);
+    const run = code => runInNewContext(`(async () => { ${code}\nreturn globalThis.waited; })()`, context);
     await run(readCode('await cua.getApp("TextEdit");'));
-    const waiting = run(guardedCode('await app.pressKey("super+o"); return await app.waitFor({ id: "open-panel" });',
+    const waiting = run(guardedCode('await app.pressKey("super+o"); globalThis.waited = await app.waitFor({ id: "open-panel" });',
       { title: 'Untitled', app: 'TextEdit', url: null }, undefined, undefined, { adoptUrl: !strict }));
     if (strict) await assert.rejects(waiting, /window changed/);
     else assert.match(await waiting, /ID: open-panel/);
@@ -77,7 +77,7 @@ test('waitFor timeout includes the last window, validates bounds and stops on wi
   const failed = fixture([]);
   await failed.run(readCode('await cua.getApp("Calculator");'));
   // The actual engine method fails, rather than returning a fabricated missing element.
-  failed.run = code => runInNewContext(`(async () => { ${code} })()`, {
+  failed.run = code => runInNewContext(`(async () => { ${code}\nreturn globalThis.waited; })()`, {
     app: { getAXState: async () => { throw new Error('timeoutReached'); } },
     cua: { getApp() {} }, nodeRepl: { write() {} }
   });

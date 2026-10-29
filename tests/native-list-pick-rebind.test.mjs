@@ -56,9 +56,9 @@ function fixture(recording, { focus = 'container', nested = false, duplicate = f
     scroll: async (number, direction, ticks) => { assert.equal(number, 32); scrolls.push({ number, direction, ticks }); advanced = true; },
   };
   const context = { cua: { getApp: async () => handle }, setTimeout, nodeRepl: { write: note => notes.push(note) } };
-  const run = code => runInNewContext(`(async () => { ${code} })()`, context);
+  const run = code => runInNewContext(`(async () => { ${code}\nreturn globalThis.picked; })()`, context);
   const start = () => run(readCode('globalThis.app = await cua.getApp("Firefox"); await app.getAXState();'));
-  const pick = (number, options = {}) => run(guardedCode(`return await app.pickFromList(${number}, ${JSON.stringify(recording.target)});`,
+  const pick = (number, options = {}) => run(guardedCode(`globalThis.picked = await app.pickFromList(${number}, ${JSON.stringify(recording.target)});`,
     windowFromText(recording.current), undefined, undefined,
     { literals: [number], seenLines: { [number]: 'list Collection' }, uniqueSeen: [number], ...options }));
   return { start, pick, clicks, clickLines, keys, scrolls, notes, tree };

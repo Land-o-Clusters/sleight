@@ -9,6 +9,9 @@ import { buildHarnessEvidence, pinRun } from '../bench/validation/validation-140
 import { sha } from '../bench/validation/audit-140.mjs';
 
 const MODEL = 'claude-haiku-5-5', ENGINE = 'fixture-engine';
+// This file uses fake runners. The real-page suite's inherited opt-in is not a
+// benchmark override for these offline fixtures or their CLI children.
+delete process.env.SLEIGHT_LIVE_DOM_TEST;
 const put = (file, data) => { mkdirSync(dirname(file), { recursive: true }); writeFileSync(file, typeof data === 'string' || Buffer.isBuffer(data) ? data : JSON.stringify(data)); };
 const snapshot = dir => Object.fromEntries(readdirSync(dir, { recursive: true, withFileTypes: true })
   .filter(e => e.isFile()).map(e => { const file = join(e.parentPath, e.name); return [file, sha(readFileSync(file))]; }));
@@ -81,6 +84,12 @@ function fakeHost(f, { seconds = 33, passed = true, code = 0, mutate } = {}) {
     return { code, signal: null };
   }, gate: async () => {}, apps: async () => {}, engine: p => { assert.equal(p.engine, ENGINE); engineCalls.push(p.engine); } };
 }
+
+test('real re-measure admission still refuses the real-page test override', async () => {
+  process.env.SLEIGHT_LIVE_DOM_TEST = '1';
+  try { await assert.rejects(runRemeasure(), /Unset benchmark overrides first: SLEIGHT_LIVE_DOM_TEST/); }
+  finally { delete process.env.SLEIGHT_LIVE_DOM_TEST; }
+});
 
 test('re-measures three final-build rounds and retains every A round and all baseline bytes', async () => {
   const f = fixture({ count: 5 });

@@ -25,7 +25,7 @@ test('setValue on a text area sends no modifier-only key, which the engine refus
     pressKey: async key => events.push(['key', key]),
   };
   const context = { app: raw, cua: { getApp: async () => raw }, nodeRepl: { write() {} } };
-  const result = await runInNewContext(`(async () => { ${guardedCode('const result = await app.setValue({ id: "body" }, "fixture"); await app.pressKey("super+s"); return result;', window)} })()`, context);
+  const result = await runInNewContext(`(async () => { ${guardedCode('const result = await app.setValue({ id: "body" }, "fixture"); await app.pressKey("super+s");', window)} return result; })()`, context);
   assert.equal(result, 'written');
   assert.deepEqual(events, [['write', 1, 'fixture'], ['key', 'super+s']]);
   events.length = 0;

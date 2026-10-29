@@ -91,8 +91,12 @@ test('relay retention sweeps at startup and when recording is turned off while i
   t.after(() => retention.close()); await retention.ready; assert.deepEqual(await readdir(root), []);
   writeFileSync(expired, '\n', { mode: 0o600 });
   writeFileSync(config, '{"version":1,"enabled":false,"record_runs":false}');
-  for (let n = 0; n < 100 && (await readdir(root)).length; n++) await new Promise(resolve => setTimeout(resolve, 5));
+  // macOS directory events can be coalesced beyond the old 500 ms polling
+  // budget. Wait for the deletion, with a bounded deadline, before flushing.
+  const changed = Date.now(), deadline = changed + 5000;
+  while ((await readdir(root)).length && Date.now() < deadline) await new Promise(resolve => setTimeout(resolve, 20));
   await retention.flush(); assert.deepEqual(await readdir(root), []); await retention.close();
+  t.diagnostic(`idle retention sweep observed after ${Date.now() - changed} ms`);
 });
 
 test('mixed unsafe files are reported while recording, listing and clearing safe runs continue', async t => {

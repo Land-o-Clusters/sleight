@@ -6,7 +6,7 @@ import { spawnSync } from 'node:child_process';
 import { mkdirSync, mkdtempSync, readFileSync, realpathSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
-import { GATED_COMMANDS, agentProcess, elapsedMs, refusalLine, rowArgs, settingsCommand, settingsRefusal, systemPs, walkAncestors } from '../plugins/sleight/lib/person-gate.mjs';
+import { GATED_COMMANDS, agentProcess, elapsedMs, refusalLine, rowArgs, settingsCommand, settingsRefusal, walkAncestors } from '../plugins/sleight/lib/person-gate.mjs';
 import { writeHandSetting } from '../plugins/sleight/lib/hand/command.mjs';
 import { handConfigPath, readHandConfig } from '../plugins/sleight/lib/hand/settings.mjs';
 import { registerTemp } from '../scripts/temp-leftovers.mjs';
@@ -381,19 +381,11 @@ test('the menu bar path writes through the host\'s writers, which the gate never
   assert.equal(readHandConfig(path).state, 'off');
 });
 
-test('the real walk on this machine finishes inside its budget, and finds Claude Code when this test runs under it', () => {
+test('the real walk finishes inside its budget and refuses this test runner', () => {
   const started = Date.now(), result = walkAncestors();
   assert.ok(Date.now() - started < 1500, `${Date.now() - started} ms`);
   assert.equal(typeof result.ok, 'boolean');
-  if (process.platform === 'darwin' && process.env.CLAUDECODE === '1') {
-    assert.equal(result.ok, false);
-    // The walk stops at the test runner's node, so read the real rows above it and check the agent match finds Claude.
-    const agents = [];
-    for (let pid = process.ppid, level = 0; pid > 1 && level < 32; level++) {
-      const [, ppid, rest] = /^\s*(\d+) (.+)$/.exec(systemPs(['-o', 'ppid=,comm=,args=', '-p', String(pid)], 1000).trim());
-      agents.push(agentProcess(rowArgs(rest)));
-      pid = Number(ppid);
-    }
-    assert.ok(agents.includes('claude'), agents.join(','));
-  }
+  // The parent is node --test, which the terminal allow-list refuses. An
+  // inherited CLAUDECODE marker does not prove that Claude is still an ancestor.
+  assert.equal(result.ok, false);
 });
