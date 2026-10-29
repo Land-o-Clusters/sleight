@@ -170,6 +170,7 @@ export function takeGuardStop(content, mark) {
   const paid = [];
   const bindings = [];
   const tabProbes = [];
+  const writeForwards = [];
   const head = [];
   const cleaned = content.flatMap(item => {
     if (item?.type !== 'text' || typeof item.text !== 'string') { if (!count) head.push(item); return [item]; }
@@ -184,12 +185,13 @@ export function takeGuardStop(content, mark) {
       if (record?.paid) { paid.push(record.paid); return false; }
       if (record?.binding) { bindings.push(record.binding); return false; }
       if (record?.tabProbe) { tabProbes.push(record.tabProbe); return false; }
+      if (record?.writeForward) { writeForwards.push(record.writeForward); return false; }
       count++; receipt = record;
       return false;
     }).join('\n');
     return text ? [{ ...item, text }] : [];
   });
-  return { content: cleaned, head, receipt: count === 1 ? receipt : undefined, input, adopted, paid, bindings, tabProbes };
+  return { content: cleaned, head, receipt: count === 1 ? receipt : undefined, input, adopted, paid, bindings, tabProbes, writeForwards };
 }
 
 // A tab or navigation continuation passes through a stop on a page Claude never asked about (Firefox's New Tab, 381

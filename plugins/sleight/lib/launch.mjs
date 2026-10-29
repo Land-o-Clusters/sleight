@@ -365,7 +365,7 @@ function traceTo(setting, limit) {
   const cut = keep => (key, value) =>
     typeof value === 'string' && value.length > max && !(keep && key === 'code') ? `${value.slice(0, max)}…(${value.length})` : value;
   return (direction, msg) =>
-    appendFileSync(file, JSON.stringify({ t: new Date().toISOString(), direction, msg }, cut(direction === 'call-received')) + '\n');
+    appendFileSync(file, JSON.stringify({ t: new Date().toISOString(), direction, msg }, cut(['call-received', 'write-code'].includes(direction))) + '\n');
 }
 
 export function approvalLogging(preapproved, env = process.env, auditDirectory) {

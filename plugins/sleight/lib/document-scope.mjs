@@ -535,7 +535,7 @@ async function closedLastWindow(state, record, stopMessage) {
 export function guardedCode(code, window, reason = /* notice */ 'Document scope stopped this action: window or URL changed. Read the window and ask the user with document_scope.', lease, options = {}) {
   // The lease needs a full header after the call. A read Claude made after its
   // last action already wrote one, so the guard reads again only without it.
-  const { reuseSetup, acknowledge, prompt, outcomes, completeness, kernel, dp1 = false, ...checks } = options;
+  const { reuseSetup, acknowledge, prompt, outcomes, completeness, kernel, writeTracing, dp1 = false, ...checks } = options;
   const ck = ((checks.ck1 ?? process.env.SLEIGHT_CK1 !== '0') ? 1 : 0) |
     ((checks.ck2 ?? process.env.SLEIGHT_CK2 !== '0') ? 2 : 0);
   delete checks.ck1; delete checks.ck2;
@@ -548,7 +548,7 @@ export function guardedCode(code, window, reason = /* notice */ 'Document scope 
   const literalOrder = checks.literalOrder ?? literalElements(code);
   // Keep the pre-DP1 tail comment only on the off path for byte parity. The DP1
   // tail omits it to keep compact calls within the existing byte budget.
-  return guardSetup({ window, reason, lease, ...checks, ...(dp1 ? { dp1: true } : {}), literalOrder: literalOrder.length ? literalOrder : undefined }, { reuseSetup, acknowledge, prompt, outcomes, completeness, kernel, dp1 }) +
+  return guardSetup({ window, reason, lease, ...checks, ...(dp1 ? { dp1: true } : {}), literalOrder: literalOrder.length ? literalOrder : undefined }, { reuseSetup, acknowledge, prompt, outcomes, completeness, kernel, writeTracing, dp1 }) +
     (options.browserCandidate ? '\nglobalThis.__sleightDocumentGuard.activeApp = undefined;' : '') + /* generated code */ `\n${code}
 {
   const guard = globalThis.__sleightDocumentGuard, last = await guard.settle?.() ?? (guard.activeApp && guard.reads.get(guard.activeApp));
@@ -569,8 +569,8 @@ ${dp1 ? '' : "  // The call finished, so any failed action was one it didn't awa
 }
 
 // outcomes: the session records action outcomes (SLEIGHT_OUTCOMES or SLEIGHT_ACTION_LOG); without it the guard is unchanged.
-function guardSetup(update, { reuseSetup = false, acknowledge = false, prompt, outcomes = false, completeness = false, kernel, dp1 = process.env.SLEIGHT_DP1 !== '0' } = {}) {
-  const O = outcomes;
+function guardSetup(update, { reuseSetup = false, acknowledge = false, prompt, outcomes = false, completeness = false, kernel, writeTracing = false, dp1 = process.env.SLEIGHT_DP1 !== '0' } = {}) {
+  const O = outcomes, T = writeTracing || update?.timing;
   // Notice text the guard throws or writes, in its SLEIGHT_PROMPT wording.
   const quoted = text => JSON.stringify(promptNotice(text, prompt));
   // Keep executable code in the runtime, never observations. The relay selects the small form
@@ -761,8 +761,8 @@ ${O ? `    // What each action did (action-outcomes.mjs), for SLEIGHT_OUTCOMES a
       for (const rec of pending.recs) state.outcomePart(rec);
     };
     // Typed and set text shows only as its length, and a single printable key not at all.
-    state.outcomeRec = (name, asked, args, text, before) => {
-      const rec = { a: name }, first = args[0];
+    state.outcomeRec = (i, name, asked, args, text, before) => {
+      const rec = { a: name, i }, first = args[0];
       if (typeof asked === 'string' && !['pressKey', 'typeText', 'paste'].includes(name)) rec.l = asked.slice(0, 40);
       else if (asked && typeof asked === 'object' && !Array.isArray(asked)) rec.l = String(asked.label ?? asked.id ?? asked.line ?? '').slice(0, 40);
       if (typeof first === 'number') rec.n = first;
@@ -1139,7 +1139,7 @@ ${O ? `    // What each action did (action-outcomes.mjs), for SLEIGHT_OUTCOMES a
         if (!['click', 'doubleClick', 'rightClick', 'drag', 'scroll', 'selectText', 'setValue', 'performSecondaryAction', 'performAction',
           'paste', 'press', 'pressKey', 'typeText'].includes(name)) return (...args) => { checkNative(); return value.apply(raw, args); };
         const act = async (attempt, ...args) => {
-          checkNative();${O ? '\n          ' + 'const asked = args[0]; if (state.outcomeMark) attempt.rec = state.outcomeRec(name, asked, args);' : ''}
+          checkNative();${O ? '\n          ' + 'const asked = args[0]; if (state.outcomeMark) attempt.rec = state.outcomeRec(attempt.index, name, asked, args);' : ''}
           // The action as Claude wrote it, for a stop that lists what ran.
           // Typed, pasted, set or selected text shows as its length only.
           // typeText's text is masked wherever it sits, as in a tab-style typeText(1, "<text>").
@@ -1682,10 +1682,19 @@ ${O ? `    // What each action did (action-outcomes.mjs), for SLEIGHT_OUTCOMES a
           if (text !== undefined) state.loadingBaselines.set(raw, text);
           // No Shift settle after setValue here, as drag.js does after its own text writes: the
           // engine refuses a key press with only modifiers (-10005, 2/2 live, 2026-10-11).
-          input();${O ? '\n          ' + 'if (state.outcomeMark) attempt.rec = state.outcomeRec(name, asked, args, text ?? priorText, before); attempt.sent = true;' : ''}
+          input();${O ? '\n          ' + 'if (state.outcomeMark) attempt.rec = state.outcomeRec(attempt.index, name, asked, args, text ?? priorText, before); attempt.sent = true;' : ''}${T ? `
+          const invoke = () => {
+            if (state.timing && state.guardStopMark && ['setValue', 'typeText', 'pressKey'].includes(name)) {
+              nodeRepl.write(state.guardStopMark + JSON.stringify({ writeForward: { index: attempt.index, method: name,
+                element: name === 'setValue' ? Number.isInteger(args[0]) ? args[0] : args[0] && typeof args[0] === 'object'
+                  ? Object.fromEntries(['id', 'label', 'line'].filter(key => typeof args[0][key] === 'string').map(key => [key, '<redacted>'])) : null : null,
+                afterClick: before?.name === 'click' && Number.isInteger(before.at) ? before.at : null } }) + '\\n');
+            }
+            return value.apply(raw, args);
+          };` : ''}
           // Input went out before the engine answered, so a rejected action may have acted.
           let result;
-          try { result = await ${O ? 'state.runOutcome(attempt, () => value.apply(raw, args))' : 'value.apply(raw, args)'}; } catch (error) {
+          try { result = await ${O ? T ? 'state.runOutcome(attempt, invoke)' : 'state.runOutcome(attempt, () => value.apply(raw, args))' : T ? 'invoke()' : 'value.apply(raw, args)'}; } catch (error) {
             if (consent?.decline) {
               state.unknown.push(shown);
               nodeRepl.write('sleight: Decline unverified: the decline action did not finish.\\n');
@@ -1759,7 +1768,7 @@ ${O ? `    // What each action did (action-outcomes.mjs), for SLEIGHT_OUTCOMES a
                   if (!state.boundNumbers.has(proxy)) state.boundNumbers.set(proxy, new Map());
                   state.boundNumbers.get(proxy).set(literal, { number: to[0][0], line: to[0][1] });
                 }
-                try { result = await ${O ? 'state.runOutcome(attempt, () => value.apply(raw, args))' : 'value.apply(raw, args)'}; resent = true; } catch (again) {
+                try { result = await ${O ? T ? 'state.runOutcome(attempt, invoke)' : 'state.runOutcome(attempt, () => value.apply(raw, args))' : T ? 'invoke()' : 'value.apply(raw, args)'}; resent = true; } catch (again) {
                   state.unknown.push(shown);
                   keep();
                   throw again;
@@ -1812,7 +1821,7 @@ ${O ? `    // What each action did (action-outcomes.mjs), for SLEIGHT_OUTCOMES a
           pending.catch(error => {${O ? '\n            ' + `// Ahead of the stop mark: a continued call keeps only the output before it. An action that completed
             // keeps its outcome when a later check throws.
             if (state.outcomeMark) {
-              const rec = attempt.rec ?? { a: name };
+              const rec = attempt.rec ?? { a: name, i: attempt.index };
               if (!attempt.completed) {
                 rec.x = attempt.sent ? 'failed' : 'refused';
                 if (!attempt.sent) rec.r = state.refusalOf(String(error?.message ?? error));

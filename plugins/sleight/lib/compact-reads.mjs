@@ -29,6 +29,7 @@ import { unchangedListClicks } from './offscreen-click.mjs';
 import { sortedListShift } from './native-list-pick.mjs';
 import { underDocument } from './menu-continuation.mjs';
 import { renderOutcomes } from './action-outcomes.mjs';
+import { wrongFieldEffects } from './write-effect.mjs';
 
 export { GUARD_END, GUARD_MARK, GUARD_OMIT_MARK };
 const MAX_LINES = 3000; // above this, the line diff costs more than it saves
@@ -1330,6 +1331,7 @@ export function createReadCompactor({ resultTrim = process.env.SLEIGHT_RESULT_TR
   const seen = new Map(), pendingSwaps = new Map(), pendingClicks = new Map();
   // window key -> { sets, calls }: setValue checks whose call ended in another window, such as an alert.
   const pendingSetValues = new Map();
+  const flaggedWrites = new Set();
   // window key -> { title, history }: the Undo item's title in that window's last complete read, and every title it showed (WB2).
   const undoSeen = new Map();
   // window key -> { target, calls }: the current run of calls that scrolled one target in that window.
@@ -1342,7 +1344,7 @@ export function createReadCompactor({ resultTrim = process.env.SLEIGHT_RESULT_TR
   const screenshotHints = readHints.screenshotHints ??= new Set();
   const screenshotWindows = readHints.screenshotWindows ??= new Set();
   const openedFiles = readHints.openedFiles ??= new Map();
-  let latest, observedInResult, observationId = 0, textlessNoted = false, resultObservations = [], callCount = 0, listClicks = [], lastOutcomes;
+  let latest, effectBaseline, observedInResult, observationId = 0, textlessNoted = false, resultObservations = [], callCount = 0, listClicks = [], lastOutcomes;
   // Reads the last call got as changed lines or not at all, for the action log's reads-saved count (action-stats.mjs). Only
   // reads Claude's code asked for count: guardTrees is whether each guard tree went out compacted, and the read the guard
   // adds after a call's last action is sleight's own, so it never counts.
@@ -1696,13 +1698,27 @@ export function createReadCompactor({ resultTrim = process.env.SLEIGHT_RESULT_TR
         return !out && item.text.includes(GUARD_OMIT_MARK) ? [] : { ...item, text: out };
       });
       if (outcomeRecord) outcomeRecord.outcomes = outcomeRecord.outcomes.filter(Boolean);
+      if (action) {
+        const before = action.before ?? action.effectBefore;
+        action.writeEffects = !action.overlap && before && !before.incomplete && !before.degraded &&
+          observedInResult && !observedInResult.invalid && !observedInResult.incomplete && !observedInResult.degraded
+          ? wrongFieldEffects(action.code, before.lines.join('\n'), observedInResult.lines.join('\n'), { flagged: flaggedWrites, failed: failed || stopped }) : [];
+        if (action.writeEffects.length) {
+          // A successful engine return does not establish that the requested write happened.
+          for (const effect of action.writeEffects) {
+            const rec = outcomeRecord?.outcomes?.find(rec => rec.i === effect.index && rec.a === effect.method && rec.n === effect.requested);
+            if (effect.isError && rec) { rec.x = 'failed'; rec.f = []; }
+          }
+          out.unshift(...action.writeEffects.map(effect => ({ type: 'text', text: promptNotice(effect.notice, prompt) })));
+        }
+      }
       lastOutcomes = outcomeRecord;
       lastSaved = savedReads + claudeReads(code, guardTrees, omittedReads);
       // A stop note that lists what wasn't sent covers the rest.
       const outcomeLines = outcomes && outcomeRecord && renderOutcomes(outcomeRecord, { start: outcomeStart, continuing: outcomeContinuing,
         notSent: content.some(item => item?.type === 'text' && /\bnot sent\b/.test(item.text ?? '')) });
       if (outcomeLines) out.push({ type: 'text', text: promptNotice(outcomeLines, prompt) });
-      const note = action && resultNote(action, observedInResult, failed,
+      const note = action && (failed || !action.writeEffects?.length) && resultNote(action, observedInResult, failed,
         failure ?? { message: failureReason(content) }, !!outcomeLines);
       if (note) out.push({ type: 'text', text: promptNotice(note, prompt) });
       const omittedNote = /* lean notice */ `sleight: ${omittedReads} earlier reads of the same window in this call left out; the last is shown. Element numbers refer to the last tree.`;
@@ -1775,7 +1791,7 @@ export function createReadCompactor({ resultTrim = process.env.SLEIGHT_RESULT_TR
           }
         }
       }
-      if (action?.clickAndTyping && !failed && !stopped && !action.overlap &&
+      if (action?.clickAndTyping && !action.writeEffects?.length && !failed && !stopped && !action.overlap &&
           action.before && !action.before.incomplete && !action.before.degraded) {
         if (complete(observedInResult) && observedInResult.delta?.baseline === action.before.id &&
             documentKey(action.before.window) === documentKey(observedInResult.window)) {
@@ -1793,7 +1809,7 @@ export function createReadCompactor({ resultTrim = process.env.SLEIGHT_RESULT_TR
       const saveLine = trackTabOrders(action, own, clickHalted ? undefined : checked, clickHalted, note, moved);
       if (saveLine) out.push({ type: 'text', text: promptNotice(saveLine, prompt) });
       else if (swapReminder) out.push(swapReminder);
-      if (action?.typing && action.before) {
+      if (action?.typing && action.before && !action.writeEffects?.length) {
         const key = documentKey(action.before.window);
         if (!failed && !stopped && !action.overlap && !action.before.incomplete && observedInResult && !observedInResult.invalid &&
             !observedInResult.incomplete && !observedInResult.degraded && observedInResult.delta?.baseline === action.before.id &&
@@ -1818,7 +1834,7 @@ export function createReadCompactor({ resultTrim = process.env.SLEIGHT_RESULT_TR
           if (note) out.push({ type: 'text', text: promptNotice(note, prompt) });
         } else if (++pending.calls > 2) pendingSetValues.delete(key);
       }
-      if (action?.setValues?.length && action.before && !halted && !action.before.incomplete && !action.before.degraded) {
+      if (action?.setValues?.length && !action.writeEffects?.length && action.before && !halted && !action.before.incomplete && !action.before.degraded) {
         const key = documentKey(action.before.window);
         if (key === settledKey) {
           const note = action.setValues.map(set => setValueNote(set, observedInResult)).find(Boolean);
@@ -1833,7 +1849,7 @@ export function createReadCompactor({ resultTrim = process.env.SLEIGHT_RESULT_TR
       // ends in a dialog or gallery says nothing; the next one that ends in the document compares with the read before it.
       // An undo (Cmd+Z moving "Undo Style" back to "Undo Typing") gives the Redo item the title Undo had; without a Redo item,
       // a title this window already showed proves no new edit. Neither says anything.
-      if (undoReceipts && action && !action.overlap && complete(observedInResult)) {
+      if (undoReceipts && action && !action.writeEffects?.length && !action.overlap && complete(observedInResult)) {
         const was = undoSeen.get(documentKey(observedInResult.window)), now = undoTitle(observedInResult.lines);
         const redo = undoTitle(observedInResult.lines, REDO_TITLE);
         const undid = was && (redo !== undefined ? redo === 'Redo' + was.title.slice(4) : was.history.has(now));
@@ -1845,13 +1861,17 @@ export function createReadCompactor({ resultTrim = process.env.SLEIGHT_RESULT_TR
         const key = documentKey(item.window), entry = undoSeen.get(key) ?? undoSeen.set(key, { history: new Set() }).get(key);
         entry.title = title; entry.history.add(title);
       }
-      if (routeSteering && action?.fieldTypings?.length && action.before && !action.overlap && complete(observedInResult) &&
+      if (routeSteering && action?.fieldTypings?.length && !action.writeEffects?.length && action.before && !action.overlap && complete(observedInResult) &&
           documentKey(action.before.window) === documentKey(observedInResult.window)) {
         const missed = missedFieldNote(action, observedInResult);
         if (missed) out.push({ type: 'text', text: promptNotice(missed, prompt) });
       }
       if (moved) out.push({ type: 'text', text: promptNotice(moved, prompt) });
       if (failed || observedInResult?.degraded || (action && (!observedInResult || observedInResult.invalid || action.overlap))) latest = undefined;
+      // A failed batch can still return a complete observation. Keep that observation for the next
+      // effect comparison, without restoring the guard's bindings or its normal success baseline.
+      effectBaseline = observedInResult && !observedInResult.invalid && !observedInResult.incomplete &&
+        !observedInResult.degraded && !action?.overlap ? observedInResult : undefined;
       if (compactToolbars) out = dedupeTrees(out, false, !action && !failed && !stopped, sliced, !full && !failed && !stopped);
       if ((resultTrim || firstAcquisition || compactToolbars) && !full) for (let i = 0; i < out.length; i++) {
         const item = out[i];
@@ -1907,7 +1927,7 @@ export function createReadCompactor({ resultTrim = process.env.SLEIGHT_RESULT_TR
       if (kind?.save && !/^standard window\b/.test(latest?.root ?? '')) {
         kind.saveBases = [...documents.values()].map(observation => ({ window: observation.window, fileTime: fileTime(observation.window.url) }));
       }
-      return kind && { ...kind, code, before: latest };
+      return kind && { ...kind, code, before: latest, effectBefore: effectBaseline };
     },
     // What Claude takes these element numbers to be in this window, from what it was last shown:
     // number -> line text without its number, for the guard to check before the call's first action.
@@ -2040,7 +2060,7 @@ export function createReadCompactor({ resultTrim = process.env.SLEIGHT_RESULT_TR
     },
     // Result attribution resets independently of the element history used by the guard.
     // An engine restart or js_reset also makes each window's next acquisition whole.
-    reset() { latest = observedInResult = undefined; documents.clear(); for (const entry of seen.values()) entry.stale = true; },
+    reset() { latest = effectBaseline = observedInResult = undefined; documents.clear(); flaggedWrites.clear(); for (const entry of seen.values()) entry.stale = true; },
     // open_file's file and its size on disk, under its given and real paths, for the textless-document hint.
     noteOpenedFile(path, real, size) {
       for (const name of new Set([path, real])) if (typeof name === 'string') openedFiles.set(name, Number(size) || 0);

@@ -35,8 +35,22 @@ const skillPath = new URL('../plugins/sleight/skills/drive-mac-apps/SKILL.md', i
 // HO1 pins the shortened default and lean handoff descriptions.
 // KT1 adds one fixed 40-character pending-tab notice (+43 inventoried characters).
 // INT5 measures the combined AS2R2 and RS1AR inventory.
-const leanRatio = 32967 / 45904;
+// SB3 inventories both conditional field-write notices and their risk prefixes.
+const wrongFieldNoticeBudget = 304;
+const leanRatio = 33527 / 46593;
 const leanSkill = () => skillRules(skillPath, { SLEIGHT_PROMPT: 'lean' });
+
+test('SB3 field-write notices have a pinned conditional budget', { skip }, () => {
+  const entries = taggedNoticeInventory().filter(entry => entry.path.startsWith('write-effect.mjs:'));
+  assert.deepEqual(entries.map(e => e.text), [
+    'Payment field received the text. ', 'Credential field received the text. ',
+    'clear it before continuing. Requested write not done: <value> kept its value.',
+    'check <value> and <value> before continuing.',
+    'Other actions in this call ran; ',
+    'sleight: <value>The text is now in <value>; <value> <value>sleight made no repair.',
+  ]);
+  assert.equal(entries.reduce((sum, entry) => sum + entry.text.length, 0), wrongFieldNoticeBudget);
+});
 
 test('hook guard refusals join the pinned notice inventory', { skip }, () => {
   const texts = taggedNoticeInventory().map(entry => entry.text);
@@ -370,9 +384,9 @@ test('the offline budget command measures all sources and stays about 30 percent
   assert.ok(report.rows.some(row => row.source === 'relay notices'));
   assert.ok(report.rows.some(row => row.source === 'tool descriptions'));
   assert.ok(report.rows.some(row => row.source === 'shared notices'));
-  // CA2R2 adds the construct-specific refusal and its direct-call recovery form.
-  assert.ok(report.total.default.characters <= 46282, JSON.stringify(report.total));
-  assert.ok(report.total.lean.characters <= 33216, JSON.stringify(report.total));
+  // CA2R2 adds the construct-specific refusal and its direct-call recovery form; SB3 adds the wrong-field notices.
+  assert.ok(report.total.default.characters <= 46593, JSON.stringify(report.total));
+  assert.ok(report.total.lean.characters <= 33527, JSON.stringify(report.total));
   assert.ok(report.total.lean.characters <= report.total.default.characters * leanRatio, JSON.stringify(report.total));
 });
 
