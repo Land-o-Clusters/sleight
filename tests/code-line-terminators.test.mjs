@@ -1,6 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { tokens, FlowRules } from '../plugins/sleight/lib/flow-rules.mjs';
+import { FlowRules } from '../plugins/sleight/lib/flow-rules.mjs';
+import { tokens } from './fixtures/cell-tokenizer-legacy.mjs';
 import { splitMenuActions } from '../plugins/sleight/lib/menu-continuation.mjs';
 import { splitTextSave, statementSpans } from '../plugins/sleight/lib/text-save.mjs';
 import { evaluateWrite } from '../plugins/sleight/lib/evaluate-write.mjs';

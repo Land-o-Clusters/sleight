@@ -1,0 +1,104 @@
+{
+  "base": "c9fb85bb",
+  "before": "2026-10-28T07:28:00Z",
+  "bank": "~/Projects/sleight-wt/race-1017",
+  "counts": {
+    "chrome": {
+      "files": 1060,
+      "toolCalls": 5968,
+      "turboCalls": 5189,
+      "cells": 10,
+      "evaluateCells": 0,
+      "evaluateCalls": 0,
+      "parseErrors": 0,
+      "writeRefusals": 0,
+      "maskedCells": 0,
+      "awaitRefusals": 0
+    },
+    "helium": {
+      "files": 251,
+      "toolCalls": 1685,
+      "turboCalls": 1113,
+      "cells": 5,
+      "evaluateCells": 0,
+      "evaluateCalls": 0,
+      "parseErrors": 0,
+      "writeRefusals": 0,
+      "maskedCells": 0,
+      "awaitRefusals": 0
+    }
+  },
+  "malformed": 0,
+  "assessment": [
+    {
+      "id": "plain-write-control",
+      "source": "667e09ad473579f991a7e51903bfdafa7edee3b8a2fe160238cc10e30745a711",
+      "methods": [
+        "evaluate",
+        "click",
+        "write"
+      ],
+      "writeRefused": true,
+      "callbackMasked": true,
+      "awaitRefusal": null
+    },
+    {
+      "id": "escaped-write-member",
+      "source": "156ea1aa85ea23a64d4de405ad67e643f582ab8f2f04506db513aecabe641c69",
+      "methods": [
+        "evaluate",
+        "click",
+        "write"
+      ],
+      "writeRefused": false,
+      "callbackMasked": true,
+      "awaitRefusal": null
+    },
+    {
+      "id": "escaped-computed-write-member",
+      "source": "e5b88f66dc65aa4d924f3ee87d8b93d35176d5beaf192c612e3483c861f87e0c",
+      "methods": [
+        "evaluate",
+        "click",
+        "write"
+      ],
+      "writeRefused": false,
+      "callbackMasked": true,
+      "awaitRefusal": null
+    },
+    {
+      "id": "escaped-evaluate-member",
+      "source": "ed03a7c9d01ef7b590da9f957f7bc348423178b71eaa86f543a890e8ea2bedd5",
+      "methods": [
+        "evaluate",
+        "click",
+        "write"
+      ],
+      "writeRefused": false,
+      "callbackMasked": false,
+      "awaitRefusal": "button.click("
+    },
+    {
+      "id": "nonpage-evaluate-receiver",
+      "source": "9af0488b121499db9d2da7e2db197d997cc1920fdf692243d79924956ecb0239",
+      "methods": [
+        "evaluate",
+        "typeText",
+        "getAXState"
+      ],
+      "writeRefused": false,
+      "callbackMasked": true,
+      "awaitRefusal": null
+    }
+  ],
+  "manifest": "330102e2b44b58c364a54706abc1644fc0311f8e393a173539e2d845d98c0ce5",
+  "outputDigest": "4525f3b243ed7d2d259a96a7a239e6e012fb94df09c325748a505061604ed662",
+  "sourcePins": {
+    "evaluate-write.mjs": "375161e8e87fcc65054c428152fc5dbbffc38e2506fb4de2f6027a73471564f6",
+    "page-callbacks.mjs": "063c95a8d42373ad25fad941fb4486b192fae08823426f3fd72239f35daf482b"
+  },
+  "awaitSectionSha256": "9b1dd9283a701b01295217bb43f1eee6d65bceb1571d7409a55973e37c2c1530",
+  "changedGuardModules": 0,
+  "pageGuardMigrationQualified": false,
+  "note": "Unchanged-guard baseline audit. No parser replacement of either page guard was qualified."
+}

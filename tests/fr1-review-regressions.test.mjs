@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { tokens, FlowRules } from '../plugins/sleight/lib/flow-rules.mjs';
+import { FlowRules } from '../plugins/sleight/lib/flow-rules.mjs';
+import { tokens } from './fixtures/cell-tokenizer-legacy.mjs';
 import { clipboardActions } from '../plugins/sleight/lib/clipboard.mjs';
 import { literalElements } from '../plugins/sleight/lib/literal-elements.mjs';
 import { nativeArgumentsProblem } from '../plugins/sleight/lib/native-arguments.mjs';

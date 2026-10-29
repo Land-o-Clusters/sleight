@@ -5,7 +5,7 @@ import { createHash } from 'node:crypto';
 import ts from 'typescript';
 import { checkConsumers } from './consumer-oracle.mjs';
 import { parseCell, walk, memberCall, literalValue, UNKNOWN } from '../../plugins/sleight/lib/code-ast.mjs';
-import { tokens, invalidTokens } from '../../plugins/sleight/lib/flow-rules.mjs';
+import { tokens, invalidTokens } from '../../tests/fixtures/cell-tokenizer-legacy.mjs';
 import { unsupportedCodeLines } from '../../plugins/sleight/lib/code-line-terminators.mjs';
 import { statementOracle } from './statement-oracle.mjs';
 
