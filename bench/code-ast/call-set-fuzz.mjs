@@ -45,8 +45,8 @@ for (let i=0; i<summary.generated; i++) {
   const rules = new FlowRules({version:1,rules:[{id:'payload',kind:'pattern',pattern:'PAYLOAD',destinations:['Mail'],except:['Notes']}]});
   assert.ok(rules.analyze('js',{code:source}).violations.some(v=>v.rule==='payload'),family);
   if (refused) {
-    assert.match(nativeArgumentsProblem(source),/cannot inspect JavaScript: .+\. Use direct handle\./,family);
-    for (const consumer of [literalElements,clipboardActions]) assert.throws(()=>consumer(source),/cannot inspect JavaScript: .+\. Use direct handle\./,family);
+    assert.match(nativeArgumentsProblem(source),/cannot inspect JavaScript\. Use direct calls with literal arguments\. \(.+\)/,family);
+    for (const consumer of [literalElements,clipboardActions]) assert.throws(()=>consumer(source),/cannot inspect JavaScript\. Use direct calls with literal arguments\. \(.+\)/,family);
     summary.explicitRefusals++;
   } else {
     assert.equal(nativeArgumentsProblem(source),undefined,family);
