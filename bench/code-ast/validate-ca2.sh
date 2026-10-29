@@ -7,7 +7,6 @@ fuzz_gate="$HOME/Projects/sleight-wt/ledger/vc/night/fuzz-may-run"
 while [ ! -e "$gate" ]; do sleep 60; done
 case "${1:-tests}" in
   corpus)
-    while [ ! -e "$fuzz_gate" ] || [ ! -e "$gate" ]; do sleep 60; done
     CLAUDE_CONFIG_DIR=$(mktemp -d /tmp/lane-claude-XXXXXX) nice -n 20 node bench/code-ast/consumers.mjs
     ;;
   fuzz)

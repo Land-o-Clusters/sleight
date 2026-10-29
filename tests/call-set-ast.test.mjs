@@ -163,7 +163,7 @@ for (const code of ['const t = app.typeText; t("SECRET")', 'let app=await cua.ge
   'app.typeText.call(app, "SECRET")', 'app.typeText.apply(app, ["SECRET"])', '(0,app.typeText)("SECRET")',
   'app.typeText`SECRET`', 'new app.typeText("SECRET")', 'const x = {get value(){return app.typeText}}; x.value("SECRET")'])
   test('detached or indirect guarded methods refuse before dispatch: ' + code, () => {
-    assert.equal(nativeArgumentsProblem(code), 'sleight: cannot inspect JavaScript. Use direct calls with literal arguments.');
+    assert.match(nativeArgumentsProblem(code), /cannot inspect JavaScript: .+\. Use direct handle\./);
     assert.throws(() => clipboardActions(code), /cannot inspect JavaScript/);
     assert.throws(() => literalElements(code), /cannot inspect JavaScript/);
     assert.ok(flow().analyze('js', {code}, {app:'Fixture'}).violations.length);

@@ -1,16 +1,18 @@
 import { codeInspectionRefusal } from './flow-rules.mjs';
 import { parseCell, walk, memberCall, literalValue, UNKNOWN } from './code-ast.mjs';
 
-import { unsafeHandleUse } from './call-inspection.mjs';
+import { unsafeHandleUse, unsafeHandleRefusal } from './call-inspection.mjs';
 
 const actions = new Set(['click', 'doubleClick', 'rightClick', 'setValue', 'typeText', 'pressKey', 'paste',
   'scroll', 'selectText', 'performSecondaryAction', 'performAction']);
 
 // Keep occurrences, including repeated targets, so completed actions can leave
 // the pending set without discarding another use of the same observed number.
-export function literalElements(code) {
+export function literalElements(code, inspection = {}) {
   const { ast, error } = parseCell(code), numbers = [];
-  if (error || unsafeHandleUse(ast)) throw new Error(codeInspectionRefusal);
+  if (error) throw new Error(codeInspectionRefusal);
+  const unsafe = unsafeHandleUse(ast, undefined, { code, ...inspection });
+  if (unsafe) throw new Error(unsafeHandleRefusal(unsafe));
   // Deliberate parity with the old pending-number guard. Interpolated templates
   // suppress the entire order, even when an expression contains an action.
   if ([...walk(ast)].some(node => node.type === 'TemplateLiteral' && node.expressions.length)) return numbers;

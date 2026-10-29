@@ -6,7 +6,7 @@ import { homedir } from 'node:os';
 import { join } from 'node:path';
 import { createHash } from 'node:crypto';
 import { parseCell } from '../../plugins/sleight/lib/code-ast.mjs';
-import { FlowRules, codeInspectionRefusal } from '../../plugins/sleight/lib/flow-rules.mjs';
+import { FlowRules } from '../../plugins/sleight/lib/flow-rules.mjs';
 import { nativeArgumentsProblem } from '../../plugins/sleight/lib/native-arguments.mjs';
 import { literalElements } from '../../plugins/sleight/lib/literal-elements.mjs';
 import { clipboardActions } from '../../plugins/sleight/lib/clipboard.mjs';
@@ -45,8 +45,8 @@ for (let i=0; i<summary.generated; i++) {
   const rules = new FlowRules({version:1,rules:[{id:'payload',kind:'pattern',pattern:'PAYLOAD',destinations:['Mail'],except:['Notes']}]});
   assert.ok(rules.analyze('js',{code:source}).violations.some(v=>v.rule==='payload'),family);
   if (refused) {
-    assert.equal(nativeArgumentsProblem(source),codeInspectionRefusal,family);
-    for (const consumer of [literalElements,clipboardActions]) assert.throws(()=>consumer(source),{message:codeInspectionRefusal},family);
+    assert.match(nativeArgumentsProblem(source),/cannot inspect JavaScript: .+\. Use direct handle\./,family);
+    for (const consumer of [literalElements,clipboardActions]) assert.throws(()=>consumer(source),/cannot inspect JavaScript: .+\. Use direct handle\./,family);
     summary.explicitRefusals++;
   } else {
     assert.equal(nativeArgumentsProblem(source),undefined,family);

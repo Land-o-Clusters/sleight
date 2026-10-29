@@ -248,7 +248,7 @@ export async function runSpeedMap(plan, runtime) {
           // concurrent read-only sessions avoid taking an action lease.
           await timed(key, read);
           boundary();
-          const reply = await session.js(`nodeRepl.write('AM1METRICS:' + JSON.stringify((${treeMetrics.toString()})(am1Tree, ${JSON.stringify({ marker: fixture.marker, requiredText: fixture.requiredText, scrollMarker: fixture.scrollMarker, anyRegion: fixture.anyRegion === true })})));`);
+          const reply = await session.js(`nodeRepl.write('AM1METRICS:' + JSON.stringify((${treeMetrics.toString()})(typeof am1Tree === "string" ? am1Tree + "" : null, ${JSON.stringify({ marker: fixture.marker, requiredText: fixture.requiredText, scrollMarker: fixture.scrollMarker, anyRegion: fixture.anyRegion === true })})));`);
           if (reply?.isError) throw Object.assign(Error('ENGINE_CALL_FAILED'), { step: steps[key] + 'Metrics', ...engineFailure(reply) });
           return metrics(reply);
         }

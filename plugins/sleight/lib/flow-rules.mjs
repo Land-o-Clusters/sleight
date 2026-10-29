@@ -1,5 +1,5 @@
 import { parseCell, walk, memberCall, literalValue, handleBindings, callInventory, invalidHandleNames, UNKNOWN } from './code-ast.mjs';
-import { receiverRoot, unsafeHandleUse } from './call-inspection.mjs';
+import { receiverRoot, unsafeHandleUse, trustedInvocations, introspectionCalls } from './call-inspection.mjs';
 import { lineCommentEnd, isLineTerminator } from './code-line-terminators.mjs';
 // Literal inspection is a mistake guard. Never evaluate the caller's code here.
 import { existsSync, readFileSync, realpathSync } from 'node:fs';
@@ -177,10 +177,13 @@ export function calls(code, handles, fallback, browsers, { trustedFunctions = ne
   const methods = new Set(['typeText', 'paste', 'setValue', 'pressKey', 'fill', 'type', 'pressSequentially', 'press', 'goto', 'createBrowserTab', 'back', 'forward', 'reload']);
   const invalid = invalidHandleNames(ast);
   for (const name of invalid) handles.delete(name);
-  const indirect = callInventory(ast).filter(entry => entry.kind === 'unknown' && !memberCall(entry.node) &&
-    ![...walk(entry.node.callee)].some(part => part.type === 'FunctionExpression' &&
-      trustedFunctions.has(code.slice(part.range[0], part.range[1]))));
-  const unsafe = unsafeHandleUse(ast, new Set(['app', ...handles.keys()]));
+  const trusted = trustedInvocations(ast, code, trustedFunctions), reads = introspectionCalls(ast).calls;
+  const indirect = callInventory(ast).filter(entry => {
+    if (trusted.has(entry.node) || reads.has(entry.node)) return false;
+    const call = memberCall(entry.node);
+    return !call || call.method === 'eval' || call.method === 'constructor';
+  });
+  const unsafe = unsafeHandleUse(ast, new Set(['app', ...handles.keys()]), { code, trustedFunctions });
   const previous = new Map([...handles].map(([name, value]) => [name, { kind: value.app === 'browser' ? 'browser' : 'app', app: value.app }]));
   for (const statement of ast.body) {
     const hints = handleBindings({ body: [statement] }, previous);
@@ -220,16 +223,14 @@ export function calls(code, handles, fallback, browsers, { trustedFunctions = ne
       const values = call.args.map(literalValue);
       let value = method === 'createBrowserTab' || method === 'setValue' ? values[1]
         : typeof values[0] === 'string' ? values[0] : values[1] ?? values[0];
-      if (value === UNKNOWN) {
+      if (typeof value !== 'string') {
         unknownInputs.push({ method, target: ['goto', 'createBrowserTab'].includes(method)
           ? target(destination?.app, undefined, browsers) : { ...destination } });
         // Preserve the conservative literal-fragment check for concatenations.
         // The complete runtime value is still unknown and is never evaluated.
-        const argument = method === 'createBrowserTab' || method === 'setValue' ? call.args[1]
-          : values[0] === UNKNOWN ? call.args[0] : call.args[1];
         const fragments = node => [...walk(node)].sort((a,b) => a.range[0]-b.range[0]).flatMap(part => part.type === 'Literal' && typeof part.value === 'string'
           ? [part.value] : part.type === 'TemplateElement' ? [part.value.cooked ?? part.value.raw] : []);
-        const known = fragments(argument);
+        const known = call.args.flatMap(fragments);
         if (known.length) value = known.join('');
       }
       const navigation = ['goto', 'createBrowserTab', 'back', 'forward', 'reload'].includes(method);
@@ -242,7 +243,7 @@ export function calls(code, handles, fallback, browsers, { trustedFunctions = ne
     previous.clear();
     for (const [name, value] of handles) previous.set(name, { kind: value.app === 'browser' ? 'browser' : 'app', app: value.app });
   }
-  return { inputs, unknownInputs, unknown: unsafe || indirect.length > 0 || unknownInputs.some(input => input.method === UNKNOWN), readApp: readTarget?.app, readTarget };
+  return { inputs, unknownInputs, unknown: !!unsafe || indirect.length > 0 || unknownInputs.some(input => input.method === UNKNOWN), readApp: readTarget?.app, readTarget };
 }
 
 function keyText(value) {

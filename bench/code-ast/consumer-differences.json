@@ -11,31 +11,31 @@
   "counts": {
     "flow": {
       "compared": 5371,
-      "differences": 1007
+      "differences": 1005
     },
     "native": {
       "compared": 5371,
-      "differences": 35
+      "differences": 26
     },
     "elements": {
       "compared": 5371,
-      "differences": 10
+      "differences": 1
     },
     "clipboard": {
       "compared": 5371,
-      "differences": 10
+      "differences": 1
     }
   },
   "regressions": 0,
   "reasons": {
-    "indirect invocation inventory now feeds the unknown-destination rule policy": 65,
+    "indirect invocation inventory now feeds the unknown-destination rule policy": 63,
     "opened-app binding hints added; existing inputs and read target are identical": 741,
     "window-number acquisition clears only the guessed read-app identity": 4,
     "unproved or invalidated handle hints removed; existing inputs and read target are identical": 11,
     "assigned, shadowed or unbound handles widen only their destinations to unknown; literal inputs are unchanged": 186,
     "opened-app binding exposes a specific malformed native argument list": 25,
-    "detached handle methods now refuse before native dispatch": 10,
-    "detached handle methods now refuse instead of returning a misleading empty inventory": 20
+    "unsafe handle use now refuses before native dispatch": 1,
+    "unsafe handle use now refuses instead of returning a misleading empty inventory": 2
   },
   "diagnostics": [
     {
@@ -75,7 +75,7 @@
       "file": "safari-codex-sleight-b12-r3/form-checkout/events.jsonl",
       "line": 26,
       "source": "900f364af2caaac8263e1744ace7f16966da6a91676f0b19414feaef373ba6af",
-      "unknown": 1,
+      "unknown": 2,
       "reason": "AST explicitly marks non-literal input; existing literal-result data is compared independently"
     },
     {
@@ -85,7 +85,7 @@
       "file": "safari-codex-sleight-b12-r3/form-settings/events.jsonl",
       "line": 26,
       "source": "5af45518672c7d2327468bd86f0f6a663596c008a9b24e297fed512f7f8ad9b2",
-      "unknown": 1,
+      "unknown": 2,
       "reason": "AST explicitly marks non-literal input; existing literal-result data is compared independently"
     },
     {
@@ -774,7 +774,7 @@
       "line": 12,
       "source": "d5eca04fb69411e3c70d8365011741c99b5376ea3218ccc46c8f43e4c2b5fe3b",
       "before": "24cc9b18e7854b3b925fc1503cb635a83d0de671e31c11cbba2303bdf9b0d6dd",
-      "after": "23f3e9f676ef37463f6b38e07eb29a802846a2f28693ee4efa11eb46402040bb",
+      "after": "7ce20354f29bd54c2fb05b7358d66daabbd4b2ff098cd6c6dc3b5088661917ee",
       "engineAccepted": true,
       "verdict": "additive",
       "reason": "opened-app binding hints added; existing inputs and read target are identical"
@@ -839,7 +839,7 @@
       "line": 14,
       "source": "c55d0500b01cf4186850d2d99684c74a5f6d9e45da167d2f66f6acb7dd2b3bea",
       "before": "24cc9b18e7854b3b925fc1503cb635a83d0de671e31c11cbba2303bdf9b0d6dd",
-      "after": "23f3e9f676ef37463f6b38e07eb29a802846a2f28693ee4efa11eb46402040bb",
+      "after": "7ce20354f29bd54c2fb05b7358d66daabbd4b2ff098cd6c6dc3b5088661917ee",
       "engineAccepted": true,
       "verdict": "additive",
       "reason": "opened-app binding hints added; existing inputs and read target are identical"
@@ -1268,7 +1268,7 @@
       "line": 13,
       "source": "0f800623d88fbfe78024991edefdef60d706d59f4874076b99d35159697f72b9",
       "before": "24cc9b18e7854b3b925fc1503cb635a83d0de671e31c11cbba2303bdf9b0d6dd",
-      "after": "23f3e9f676ef37463f6b38e07eb29a802846a2f28693ee4efa11eb46402040bb",
+      "after": "7ce20354f29bd54c2fb05b7358d66daabbd4b2ff098cd6c6dc3b5088661917ee",
       "engineAccepted": true,
       "verdict": "additive",
       "reason": "opened-app binding hints added; existing inputs and read target are identical"
@@ -3016,19 +3016,6 @@
       "reason": "opened-app binding hints added; existing inputs and read target are identical"
     },
     {
-      "index": 267,
-      "consumer": "flow",
-      "arm": "claude",
-      "file": "2026-10-27T10-58-51-869Z/sleight-textedit-notes-table-1/transcript.jsonl",
-      "line": 145,
-      "source": "6a5a1d819badfaaf51456d86fedab13d7e8c07f063a1225dc965b72ad0f7fdb1",
-      "before": "24cc9b18e7854b3b925fc1503cb635a83d0de671e31c11cbba2303bdf9b0d6dd",
-      "after": "77494572b6057c671b35b0ebe104c25dc4923147fce4bed419a4bda33b3772bc",
-      "engineAccepted": true,
-      "verdict": "additive",
-      "reason": "indirect invocation inventory now feeds the unknown-destination rule policy"
-    },
-    {
       "index": 268,
       "consumer": "flow",
       "arm": "claude",
@@ -3894,7 +3881,7 @@
       "line": 22,
       "source": "4dc4ce57301c62cfdf0c8922c1fc129ed45c0cd438a412fb54c1dad68d1b3d72",
       "before": "24cc9b18e7854b3b925fc1503cb635a83d0de671e31c11cbba2303bdf9b0d6dd",
-      "after": "23f3e9f676ef37463f6b38e07eb29a802846a2f28693ee4efa11eb46402040bb",
+      "after": "7ce20354f29bd54c2fb05b7358d66daabbd4b2ff098cd6c6dc3b5088661917ee",
       "engineAccepted": true,
       "verdict": "additive",
       "reason": "opened-app binding hints added; existing inputs and read target are identical"
@@ -6364,7 +6351,7 @@
       "line": 21,
       "source": "8b0e94f64590a20cdd74ce3e48f4c8124cf9f2f548f5237fabd3eca2be554e8a",
       "before": "24cc9b18e7854b3b925fc1503cb635a83d0de671e31c11cbba2303bdf9b0d6dd",
-      "after": "b4aedee0e99f61ea1617d71fb25cd84e92ede1eba5ebc2a0fac1920c51f2551a",
+      "after": "eb8580a6efbb61cce5740b90392a3f87e318178952605bb5da178ec97d1e8f0c",
       "engineAccepted": true,
       "verdict": "additive",
       "reason": "opened-app binding hints added; existing inputs and read target are identical"
@@ -6888,19 +6875,6 @@
       "engineAccepted": true,
       "verdict": "additive",
       "reason": "opened-app binding hints added; existing inputs and read target are identical"
-    },
-    {
-      "index": 793,
-      "consumer": "flow",
-      "arm": "claude",
-      "file": "2026-10-27T23-52-18-827Z/sleight-textedit-window-drag-1/transcript.jsonl",
-      "line": 6,
-      "source": "d7f6a633becbe452dd9e3f5b4f1eef961f7332fc48cc6d6087187a876f78f693",
-      "before": "ea86734f5df107ff4a73f1b006c5bd774acd6a0e115cd87c14b70216efb254e5",
-      "after": "a0378b396f220bf75ae32f4d54669a46cc763d154873e01ed705c74f75d304b4",
-      "engineAccepted": true,
-      "verdict": "additive",
-      "reason": "indirect invocation inventory now feeds the unknown-destination rule policy"
     },
     {
       "index": 794,
@@ -8600,7 +8574,7 @@
       "line": 16,
       "source": "b7ed3160916ab969eda5f012202eef14f2708f401b2e7e451653d48cbacac247",
       "before": "24cc9b18e7854b3b925fc1503cb635a83d0de671e31c11cbba2303bdf9b0d6dd",
-      "after": "23f3e9f676ef37463f6b38e07eb29a802846a2f28693ee4efa11eb46402040bb",
+      "after": "7ce20354f29bd54c2fb05b7358d66daabbd4b2ff098cd6c6dc3b5088661917ee",
       "engineAccepted": true,
       "verdict": "additive",
       "reason": "opened-app binding hints added; existing inputs and read target are identical"
@@ -8665,7 +8639,7 @@
       "line": 18,
       "source": "dd88bf6ef46ded547c8ff38a4fb7fcf1e412930dcb594789fc7359a1ea89ced5",
       "before": "24cc9b18e7854b3b925fc1503cb635a83d0de671e31c11cbba2303bdf9b0d6dd",
-      "after": "23f3e9f676ef37463f6b38e07eb29a802846a2f28693ee4efa11eb46402040bb",
+      "after": "7ce20354f29bd54c2fb05b7358d66daabbd4b2ff098cd6c6dc3b5088661917ee",
       "engineAccepted": true,
       "verdict": "additive",
       "reason": "opened-app binding hints added; existing inputs and read target are identical"
@@ -9185,7 +9159,7 @@
       "line": 15,
       "source": "68e5624d27887003f8e5ec553ad5bfca78570832f71b09ad205341b20773ac1c",
       "before": "24cc9b18e7854b3b925fc1503cb635a83d0de671e31c11cbba2303bdf9b0d6dd",
-      "after": "23f3e9f676ef37463f6b38e07eb29a802846a2f28693ee4efa11eb46402040bb",
+      "after": "7ce20354f29bd54c2fb05b7358d66daabbd4b2ff098cd6c6dc3b5088661917ee",
       "engineAccepted": true,
       "verdict": "additive",
       "reason": "opened-app binding hints added; existing inputs and read target are identical"
@@ -10277,7 +10251,7 @@
       "line": 16,
       "source": "be055c47b965447eeb5e80b4cbaea25517aecd439964e6e0a7ac7cdfb5a3cbff",
       "before": "24cc9b18e7854b3b925fc1503cb635a83d0de671e31c11cbba2303bdf9b0d6dd",
-      "after": "23f3e9f676ef37463f6b38e07eb29a802846a2f28693ee4efa11eb46402040bb",
+      "after": "7ce20354f29bd54c2fb05b7358d66daabbd4b2ff098cd6c6dc3b5088661917ee",
       "engineAccepted": true,
       "verdict": "additive",
       "reason": "opened-app binding hints added; existing inputs and read target are identical"
@@ -10355,7 +10329,7 @@
       "line": 14,
       "source": "6d4c131382d81830da0fa6491ba1ea845d278612b2ec6288f0bc9096a515af5d",
       "before": "b2caba79cfc8e466f12263504061236a455d7bd8d593420f8dd6f9bd3b114e60",
-      "after": "ffccbc8a44cc4b35425f3180f7b3662ed6244bc2fc55ecbd2d5232795e3d34bd",
+      "after": "bf3d1004414b2f2f5b73be4bc1979b404c225805aefe77fc250ba7ba220620ae",
       "engineAccepted": true,
       "verdict": "additive",
       "reason": "opened-app binding hints added; existing inputs and read target are identical"
@@ -10381,7 +10355,7 @@
       "line": 28,
       "source": "4ff87989403f2a798a0c31f24c5eabdc5f2665561ae841e2f98a2efe8397bb6b",
       "before": "7c27b5be1e3116a06a8c961ac9178b0e800c11be42f70c7060f5e5dfa510008e",
-      "after": "1bd019b3fcff85d1764e60d37eea737040396482277d4dae7ecc3ea9b209cda4",
+      "after": "3ea63d536d2aa8cdce1b74fc36e85fa2c601cafd8d1a8bffc3a2d501e5e239f0",
       "engineAccepted": true,
       "verdict": "additive",
       "reason": "opened-app binding hints added; existing inputs and read target are identical"
@@ -10394,7 +10368,7 @@
       "line": 35,
       "source": "f1f0817a23d367d6e6889b723f6d35217fa14e9bf5ea59716b66e9236509637b",
       "before": "24cc9b18e7854b3b925fc1503cb635a83d0de671e31c11cbba2303bdf9b0d6dd",
-      "after": "23f3e9f676ef37463f6b38e07eb29a802846a2f28693ee4efa11eb46402040bb",
+      "after": "7ce20354f29bd54c2fb05b7358d66daabbd4b2ff098cd6c6dc3b5088661917ee",
       "engineAccepted": true,
       "verdict": "additive",
       "reason": "opened-app binding hints added; existing inputs and read target are identical"
@@ -10433,7 +10407,7 @@
       "line": 58,
       "source": "49487713390e61fa0f5f52d7067a30c92446c79fd0d674325b4e58a0e0f9e742",
       "before": "751a8ad706fc098272b7db3a77171465c487556c75adb91a0f7168e41ff35ae8",
-      "after": "b7370e6d8ddd169714ab1e38503f10f95bc560507d9a258d786f0e010048f474",
+      "after": "79e4647ae078b5e832a2162e1303c1a31005fba27b89aa68f99f6fa094a36855",
       "engineAccepted": true,
       "verdict": "additive",
       "reason": "opened-app binding hints added; existing inputs and read target are identical"
@@ -10446,7 +10420,7 @@
       "line": 66,
       "source": "c3d81f82d19c2dd5e364ff7f57d4e8cd46260592db25a83d58386e20140b0125",
       "before": "751a8ad706fc098272b7db3a77171465c487556c75adb91a0f7168e41ff35ae8",
-      "after": "b7370e6d8ddd169714ab1e38503f10f95bc560507d9a258d786f0e010048f474",
+      "after": "79e4647ae078b5e832a2162e1303c1a31005fba27b89aa68f99f6fa094a36855",
       "engineAccepted": true,
       "verdict": "additive",
       "reason": "opened-app binding hints added; existing inputs and read target are identical"
@@ -10459,7 +10433,7 @@
       "line": 73,
       "source": "0fbdda997a37aabcbd83f54024f9fbbb23d6d3117aad86de75753f1b29f672c5",
       "before": "24cc9b18e7854b3b925fc1503cb635a83d0de671e31c11cbba2303bdf9b0d6dd",
-      "after": "23f3e9f676ef37463f6b38e07eb29a802846a2f28693ee4efa11eb46402040bb",
+      "after": "7ce20354f29bd54c2fb05b7358d66daabbd4b2ff098cd6c6dc3b5088661917ee",
       "engineAccepted": true,
       "verdict": "additive",
       "reason": "opened-app binding hints added; existing inputs and read target are identical"
@@ -10472,7 +10446,7 @@
       "line": 81,
       "source": "45c3a0a68a7d6f4c01011d21be76ec8accc10a67c12dbcfe789c1f419d33d692",
       "before": "927d9c73b6b3783e2f909cac3a0a75aa7418f2911172d64c76739b20a3d48ac6",
-      "after": "14f302c18fd389ac665b0dfd65f211e1c43a891acd10e2968727df34f01de07e",
+      "after": "da93897554246c5e63aa2477cd841fd8006dec92877883b08b978e581d1b8380",
       "engineAccepted": true,
       "verdict": "additive",
       "reason": "opened-app binding hints added; existing inputs and read target are identical"
@@ -13728,19 +13702,6 @@
       "reason": "opened-app binding exposes a specific malformed native argument list"
     },
     {
-      "index": 28,
-      "consumer": "native",
-      "arm": "claude",
-      "file": "2026-10-27T01-54-50-034Z/sleight-textedit-drag-1/transcript.jsonl",
-      "line": 12,
-      "source": "d5eca04fb69411e3c70d8365011741c99b5376ea3218ccc46c8f43e4c2b5fe3b",
-      "before": "74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
-      "after": "40f08fa33b5f4d3a31432e03961816eaf77e760079bb0b320aaffa8689ad30ed",
-      "engineAccepted": true,
-      "verdict": "safety correction",
-      "reason": "detached handle methods now refuse before native dispatch"
-    },
-    {
       "index": 31,
       "consumer": "native",
       "arm": "claude",
@@ -13752,19 +13713,6 @@
       "engineAccepted": true,
       "verdict": "old path wrong",
       "reason": "opened-app binding exposes a specific malformed native argument list"
-    },
-    {
-      "index": 33,
-      "consumer": "native",
-      "arm": "claude",
-      "file": "2026-10-27T01-55-21-821Z/sleight-textedit-drag-1/transcript.jsonl",
-      "line": 14,
-      "source": "c55d0500b01cf4186850d2d99684c74a5f6d9e45da167d2f66f6acb7dd2b3bea",
-      "before": "74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
-      "after": "40f08fa33b5f4d3a31432e03961816eaf77e760079bb0b320aaffa8689ad30ed",
-      "engineAccepted": true,
-      "verdict": "safety correction",
-      "reason": "detached handle methods now refuse before native dispatch"
     },
     {
       "index": 36,
@@ -13804,19 +13752,6 @@
       "engineAccepted": true,
       "verdict": "old path wrong",
       "reason": "opened-app binding exposes a specific malformed native argument list"
-    },
-    {
-      "index": 87,
-      "consumer": "native",
-      "arm": "claude",
-      "file": "2026-10-27T02-03-58-122Z/sleight-textedit-drag-1/transcript.jsonl",
-      "line": 13,
-      "source": "0f800623d88fbfe78024991edefdef60d706d59f4874076b99d35159697f72b9",
-      "before": "74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
-      "after": "40f08fa33b5f4d3a31432e03961816eaf77e760079bb0b320aaffa8689ad30ed",
-      "engineAccepted": true,
-      "verdict": "safety correction",
-      "reason": "detached handle methods now refuse before native dispatch"
     },
     {
       "index": 92,
@@ -13897,19 +13832,6 @@
       "reason": "opened-app binding exposes a specific malformed native argument list"
     },
     {
-      "index": 267,
-      "consumer": "native",
-      "arm": "claude",
-      "file": "2026-10-27T10-58-51-869Z/sleight-textedit-notes-table-1/transcript.jsonl",
-      "line": 145,
-      "source": "6a5a1d819badfaaf51456d86fedab13d7e8c07f063a1225dc965b72ad0f7fdb1",
-      "before": "74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
-      "after": "40f08fa33b5f4d3a31432e03961816eaf77e760079bb0b320aaffa8689ad30ed",
-      "engineAccepted": true,
-      "verdict": "safety correction",
-      "reason": "detached handle methods now refuse before native dispatch"
-    },
-    {
       "index": 301,
       "consumer": "native",
       "arm": "claude",
@@ -13962,19 +13884,6 @@
       "reason": "opened-app binding exposes a specific malformed native argument list"
     },
     {
-      "index": 636,
-      "consumer": "native",
-      "arm": "claude",
-      "file": "2026-10-27T22-45-12-105Z/sleight-textedit-window-drag-1/transcript.jsonl",
-      "line": 21,
-      "source": "8b0e94f64590a20cdd74ce3e48f4c8124cf9f2f548f5237fabd3eca2be554e8a",
-      "before": "74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
-      "after": "40f08fa33b5f4d3a31432e03961816eaf77e760079bb0b320aaffa8689ad30ed",
-      "engineAccepted": true,
-      "verdict": "safety correction",
-      "reason": "detached handle methods now refuse before native dispatch"
-    },
-    {
       "index": 765,
       "consumer": "native",
       "arm": "claude",
@@ -13988,17 +13897,17 @@
       "reason": "opened-app binding exposes a specific malformed native argument list"
     },
     {
-      "index": 793,
+      "index": 881,
       "consumer": "native",
       "arm": "claude",
-      "file": "2026-10-27T23-52-18-827Z/sleight-textedit-window-drag-1/transcript.jsonl",
-      "line": 6,
-      "source": "d7f6a633becbe452dd9e3f5b4f1eef961f7332fc48cc6d6087187a876f78f693",
+      "file": "2026-10-28T00-00-18-932Z/sleight-textedit-two-windows-1/transcript.jsonl",
+      "line": 15,
+      "source": "543c3e083e03b9e039cdcf355f796e796b0e27d8ba16f544ebbdb24ef9122f15",
       "before": "74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
-      "after": "40f08fa33b5f4d3a31432e03961816eaf77e760079bb0b320aaffa8689ad30ed",
+      "after": "40c5ca47ee15e5142a5aa857a3bc8981a0876fded7817ecb305b768880c0d185",
       "engineAccepted": true,
       "verdict": "safety correction",
-      "reason": "detached handle methods now refuse before native dispatch"
+      "reason": "unsafe handle use now refuses before native dispatch"
     },
     {
       "index": 887,
@@ -14066,32 +13975,6 @@
       "reason": "opened-app binding exposes a specific malformed native argument list"
     },
     {
-      "index": 1185,
-      "consumer": "native",
-      "arm": "claude",
-      "file": "2026-10-28T01-44-38-642Z/sleight-textedit-two-windows-1/transcript.jsonl",
-      "line": 16,
-      "source": "b7ed3160916ab969eda5f012202eef14f2708f401b2e7e451653d48cbacac247",
-      "before": "74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
-      "after": "40f08fa33b5f4d3a31432e03961816eaf77e760079bb0b320aaffa8689ad30ed",
-      "engineAccepted": true,
-      "verdict": "safety correction",
-      "reason": "detached handle methods now refuse before native dispatch"
-    },
-    {
-      "index": 1195,
-      "consumer": "native",
-      "arm": "claude",
-      "file": "2026-10-28T01-44-38-642Z/sleight-textedit-window-drag-1/transcript.jsonl",
-      "line": 18,
-      "source": "dd88bf6ef46ded547c8ff38a4fb7fcf1e412930dcb594789fc7359a1ea89ced5",
-      "before": "74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
-      "after": "40f08fa33b5f4d3a31432e03961816eaf77e760079bb0b320aaffa8689ad30ed",
-      "engineAccepted": true,
-      "verdict": "safety correction",
-      "reason": "detached handle methods now refuse before native dispatch"
-    },
-    {
       "index": 1196,
       "consumer": "native",
       "arm": "claude",
@@ -14103,19 +13986,6 @@
       "engineAccepted": true,
       "verdict": "old path wrong",
       "reason": "opened-app binding exposes a specific malformed native argument list"
-    },
-    {
-      "index": 1372,
-      "consumer": "native",
-      "arm": "claude",
-      "file": "2026-10-28T06-32-09-777Z/sleight-textedit-two-windows-1/transcript.jsonl",
-      "line": 15,
-      "source": "68e5624d27887003f8e5ec553ad5bfca78570832f71b09ad205341b20773ac1c",
-      "before": "74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
-      "after": "40f08fa33b5f4d3a31432e03961816eaf77e760079bb0b320aaffa8689ad30ed",
-      "engineAccepted": true,
-      "verdict": "safety correction",
-      "reason": "detached handle methods now refuse before native dispatch"
     },
     {
       "index": 1412,
@@ -14131,19 +14001,6 @@
       "reason": "opened-app binding exposes a specific malformed native argument list"
     },
     {
-      "index": 1516,
-      "consumer": "native",
-      "arm": "claude",
-      "file": "2026-10-28T07-20-26-258Z/sleight-textedit-window-drag-1/transcript.jsonl",
-      "line": 16,
-      "source": "be055c47b965447eeb5e80b4cbaea25517aecd439964e6e0a7ac7cdfb5a3cbff",
-      "before": "74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
-      "after": "40f08fa33b5f4d3a31432e03961816eaf77e760079bb0b320aaffa8689ad30ed",
-      "engineAccepted": true,
-      "verdict": "safety correction",
-      "reason": "detached handle methods now refuse before native dispatch"
-    },
-    {
       "index": 1518,
       "consumer": "native",
       "arm": "claude",
@@ -14157,264 +14014,30 @@
       "reason": "opened-app binding exposes a specific malformed native argument list"
     },
     {
-      "index": 28,
+      "index": 881,
       "consumer": "elements",
       "arm": "claude",
-      "file": "2026-10-27T01-54-50-034Z/sleight-textedit-drag-1/transcript.jsonl",
-      "line": 12,
-      "source": "d5eca04fb69411e3c70d8365011741c99b5376ea3218ccc46c8f43e4c2b5fe3b",
-      "before": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
-      "after": "5dd03912a2954237cebd3b282e8d0f68b93ed87f6ce4081d04fae51bff66d898",
-      "engineAccepted": true,
-      "verdict": "safety correction",
-      "reason": "detached handle methods now refuse instead of returning a misleading empty inventory"
-    },
-    {
-      "index": 33,
-      "consumer": "elements",
-      "arm": "claude",
-      "file": "2026-10-27T01-55-21-821Z/sleight-textedit-drag-1/transcript.jsonl",
-      "line": 14,
-      "source": "c55d0500b01cf4186850d2d99684c74a5f6d9e45da167d2f66f6acb7dd2b3bea",
-      "before": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
-      "after": "5dd03912a2954237cebd3b282e8d0f68b93ed87f6ce4081d04fae51bff66d898",
-      "engineAccepted": true,
-      "verdict": "safety correction",
-      "reason": "detached handle methods now refuse instead of returning a misleading empty inventory"
-    },
-    {
-      "index": 87,
-      "consumer": "elements",
-      "arm": "claude",
-      "file": "2026-10-27T02-03-58-122Z/sleight-textedit-drag-1/transcript.jsonl",
-      "line": 13,
-      "source": "0f800623d88fbfe78024991edefdef60d706d59f4874076b99d35159697f72b9",
-      "before": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
-      "after": "5dd03912a2954237cebd3b282e8d0f68b93ed87f6ce4081d04fae51bff66d898",
-      "engineAccepted": true,
-      "verdict": "safety correction",
-      "reason": "detached handle methods now refuse instead of returning a misleading empty inventory"
-    },
-    {
-      "index": 267,
-      "consumer": "elements",
-      "arm": "claude",
-      "file": "2026-10-27T10-58-51-869Z/sleight-textedit-notes-table-1/transcript.jsonl",
-      "line": 145,
-      "source": "6a5a1d819badfaaf51456d86fedab13d7e8c07f063a1225dc965b72ad0f7fdb1",
-      "before": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
-      "after": "5dd03912a2954237cebd3b282e8d0f68b93ed87f6ce4081d04fae51bff66d898",
-      "engineAccepted": true,
-      "verdict": "safety correction",
-      "reason": "detached handle methods now refuse instead of returning a misleading empty inventory"
-    },
-    {
-      "index": 636,
-      "consumer": "elements",
-      "arm": "claude",
-      "file": "2026-10-27T22-45-12-105Z/sleight-textedit-window-drag-1/transcript.jsonl",
-      "line": 21,
-      "source": "8b0e94f64590a20cdd74ce3e48f4c8124cf9f2f548f5237fabd3eca2be554e8a",
-      "before": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
-      "after": "5dd03912a2954237cebd3b282e8d0f68b93ed87f6ce4081d04fae51bff66d898",
-      "engineAccepted": true,
-      "verdict": "safety correction",
-      "reason": "detached handle methods now refuse instead of returning a misleading empty inventory"
-    },
-    {
-      "index": 793,
-      "consumer": "elements",
-      "arm": "claude",
-      "file": "2026-10-27T23-52-18-827Z/sleight-textedit-window-drag-1/transcript.jsonl",
-      "line": 6,
-      "source": "d7f6a633becbe452dd9e3f5b4f1eef961f7332fc48cc6d6087187a876f78f693",
-      "before": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
-      "after": "5dd03912a2954237cebd3b282e8d0f68b93ed87f6ce4081d04fae51bff66d898",
-      "engineAccepted": true,
-      "verdict": "safety correction",
-      "reason": "detached handle methods now refuse instead of returning a misleading empty inventory"
-    },
-    {
-      "index": 1185,
-      "consumer": "elements",
-      "arm": "claude",
-      "file": "2026-10-28T01-44-38-642Z/sleight-textedit-two-windows-1/transcript.jsonl",
-      "line": 16,
-      "source": "b7ed3160916ab969eda5f012202eef14f2708f401b2e7e451653d48cbacac247",
-      "before": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
-      "after": "5dd03912a2954237cebd3b282e8d0f68b93ed87f6ce4081d04fae51bff66d898",
-      "engineAccepted": true,
-      "verdict": "safety correction",
-      "reason": "detached handle methods now refuse instead of returning a misleading empty inventory"
-    },
-    {
-      "index": 1195,
-      "consumer": "elements",
-      "arm": "claude",
-      "file": "2026-10-28T01-44-38-642Z/sleight-textedit-window-drag-1/transcript.jsonl",
-      "line": 18,
-      "source": "dd88bf6ef46ded547c8ff38a4fb7fcf1e412930dcb594789fc7359a1ea89ced5",
-      "before": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
-      "after": "5dd03912a2954237cebd3b282e8d0f68b93ed87f6ce4081d04fae51bff66d898",
-      "engineAccepted": true,
-      "verdict": "safety correction",
-      "reason": "detached handle methods now refuse instead of returning a misleading empty inventory"
-    },
-    {
-      "index": 1372,
-      "consumer": "elements",
-      "arm": "claude",
-      "file": "2026-10-28T06-32-09-777Z/sleight-textedit-two-windows-1/transcript.jsonl",
+      "file": "2026-10-28T00-00-18-932Z/sleight-textedit-two-windows-1/transcript.jsonl",
       "line": 15,
-      "source": "68e5624d27887003f8e5ec553ad5bfca78570832f71b09ad205341b20773ac1c",
+      "source": "543c3e083e03b9e039cdcf355f796e796b0e27d8ba16f544ebbdb24ef9122f15",
       "before": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
-      "after": "5dd03912a2954237cebd3b282e8d0f68b93ed87f6ce4081d04fae51bff66d898",
+      "after": "81472a6d205843b3006f025862666188bda4e56b892fea342bf6de9ecff1dec7",
       "engineAccepted": true,
       "verdict": "safety correction",
-      "reason": "detached handle methods now refuse instead of returning a misleading empty inventory"
+      "reason": "unsafe handle use now refuses instead of returning a misleading empty inventory"
     },
     {
-      "index": 1516,
-      "consumer": "elements",
-      "arm": "claude",
-      "file": "2026-10-28T07-20-26-258Z/sleight-textedit-window-drag-1/transcript.jsonl",
-      "line": 16,
-      "source": "be055c47b965447eeb5e80b4cbaea25517aecd439964e6e0a7ac7cdfb5a3cbff",
-      "before": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
-      "after": "5dd03912a2954237cebd3b282e8d0f68b93ed87f6ce4081d04fae51bff66d898",
-      "engineAccepted": true,
-      "verdict": "safety correction",
-      "reason": "detached handle methods now refuse instead of returning a misleading empty inventory"
-    },
-    {
-      "index": 28,
+      "index": 881,
       "consumer": "clipboard",
       "arm": "claude",
-      "file": "2026-10-27T01-54-50-034Z/sleight-textedit-drag-1/transcript.jsonl",
-      "line": 12,
-      "source": "d5eca04fb69411e3c70d8365011741c99b5376ea3218ccc46c8f43e4c2b5fe3b",
-      "before": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
-      "after": "5dd03912a2954237cebd3b282e8d0f68b93ed87f6ce4081d04fae51bff66d898",
-      "engineAccepted": true,
-      "verdict": "safety correction",
-      "reason": "detached handle methods now refuse instead of returning a misleading empty inventory"
-    },
-    {
-      "index": 33,
-      "consumer": "clipboard",
-      "arm": "claude",
-      "file": "2026-10-27T01-55-21-821Z/sleight-textedit-drag-1/transcript.jsonl",
-      "line": 14,
-      "source": "c55d0500b01cf4186850d2d99684c74a5f6d9e45da167d2f66f6acb7dd2b3bea",
-      "before": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
-      "after": "5dd03912a2954237cebd3b282e8d0f68b93ed87f6ce4081d04fae51bff66d898",
-      "engineAccepted": true,
-      "verdict": "safety correction",
-      "reason": "detached handle methods now refuse instead of returning a misleading empty inventory"
-    },
-    {
-      "index": 87,
-      "consumer": "clipboard",
-      "arm": "claude",
-      "file": "2026-10-27T02-03-58-122Z/sleight-textedit-drag-1/transcript.jsonl",
-      "line": 13,
-      "source": "0f800623d88fbfe78024991edefdef60d706d59f4874076b99d35159697f72b9",
-      "before": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
-      "after": "5dd03912a2954237cebd3b282e8d0f68b93ed87f6ce4081d04fae51bff66d898",
-      "engineAccepted": true,
-      "verdict": "safety correction",
-      "reason": "detached handle methods now refuse instead of returning a misleading empty inventory"
-    },
-    {
-      "index": 267,
-      "consumer": "clipboard",
-      "arm": "claude",
-      "file": "2026-10-27T10-58-51-869Z/sleight-textedit-notes-table-1/transcript.jsonl",
-      "line": 145,
-      "source": "6a5a1d819badfaaf51456d86fedab13d7e8c07f063a1225dc965b72ad0f7fdb1",
-      "before": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
-      "after": "5dd03912a2954237cebd3b282e8d0f68b93ed87f6ce4081d04fae51bff66d898",
-      "engineAccepted": true,
-      "verdict": "safety correction",
-      "reason": "detached handle methods now refuse instead of returning a misleading empty inventory"
-    },
-    {
-      "index": 636,
-      "consumer": "clipboard",
-      "arm": "claude",
-      "file": "2026-10-27T22-45-12-105Z/sleight-textedit-window-drag-1/transcript.jsonl",
-      "line": 21,
-      "source": "8b0e94f64590a20cdd74ce3e48f4c8124cf9f2f548f5237fabd3eca2be554e8a",
-      "before": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
-      "after": "5dd03912a2954237cebd3b282e8d0f68b93ed87f6ce4081d04fae51bff66d898",
-      "engineAccepted": true,
-      "verdict": "safety correction",
-      "reason": "detached handle methods now refuse instead of returning a misleading empty inventory"
-    },
-    {
-      "index": 793,
-      "consumer": "clipboard",
-      "arm": "claude",
-      "file": "2026-10-27T23-52-18-827Z/sleight-textedit-window-drag-1/transcript.jsonl",
-      "line": 6,
-      "source": "d7f6a633becbe452dd9e3f5b4f1eef961f7332fc48cc6d6087187a876f78f693",
-      "before": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
-      "after": "5dd03912a2954237cebd3b282e8d0f68b93ed87f6ce4081d04fae51bff66d898",
-      "engineAccepted": true,
-      "verdict": "safety correction",
-      "reason": "detached handle methods now refuse instead of returning a misleading empty inventory"
-    },
-    {
-      "index": 1185,
-      "consumer": "clipboard",
-      "arm": "claude",
-      "file": "2026-10-28T01-44-38-642Z/sleight-textedit-two-windows-1/transcript.jsonl",
-      "line": 16,
-      "source": "b7ed3160916ab969eda5f012202eef14f2708f401b2e7e451653d48cbacac247",
-      "before": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
-      "after": "5dd03912a2954237cebd3b282e8d0f68b93ed87f6ce4081d04fae51bff66d898",
-      "engineAccepted": true,
-      "verdict": "safety correction",
-      "reason": "detached handle methods now refuse instead of returning a misleading empty inventory"
-    },
-    {
-      "index": 1195,
-      "consumer": "clipboard",
-      "arm": "claude",
-      "file": "2026-10-28T01-44-38-642Z/sleight-textedit-window-drag-1/transcript.jsonl",
-      "line": 18,
-      "source": "dd88bf6ef46ded547c8ff38a4fb7fcf1e412930dcb594789fc7359a1ea89ced5",
-      "before": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
-      "after": "5dd03912a2954237cebd3b282e8d0f68b93ed87f6ce4081d04fae51bff66d898",
-      "engineAccepted": true,
-      "verdict": "safety correction",
-      "reason": "detached handle methods now refuse instead of returning a misleading empty inventory"
-    },
-    {
-      "index": 1372,
-      "consumer": "clipboard",
-      "arm": "claude",
-      "file": "2026-10-28T06-32-09-777Z/sleight-textedit-two-windows-1/transcript.jsonl",
+      "file": "2026-10-28T00-00-18-932Z/sleight-textedit-two-windows-1/transcript.jsonl",
       "line": 15,
-      "source": "68e5624d27887003f8e5ec553ad5bfca78570832f71b09ad205341b20773ac1c",
+      "source": "543c3e083e03b9e039cdcf355f796e796b0e27d8ba16f544ebbdb24ef9122f15",
       "before": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
-      "after": "5dd03912a2954237cebd3b282e8d0f68b93ed87f6ce4081d04fae51bff66d898",
+      "after": "81472a6d205843b3006f025862666188bda4e56b892fea342bf6de9ecff1dec7",
       "engineAccepted": true,
       "verdict": "safety correction",
-      "reason": "detached handle methods now refuse instead of returning a misleading empty inventory"
-    },
-    {
-      "index": 1516,
-      "consumer": "clipboard",
-      "arm": "claude",
-      "file": "2026-10-28T07-20-26-258Z/sleight-textedit-window-drag-1/transcript.jsonl",
-      "line": 16,
-      "source": "be055c47b965447eeb5e80b4cbaea25517aecd439964e6e0a7ac7cdfb5a3cbff",
-      "before": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
-      "after": "5dd03912a2954237cebd3b282e8d0f68b93ed87f6ce4081d04fae51bff66d898",
-      "engineAccepted": true,
-      "verdict": "safety correction",
-      "reason": "detached handle methods now refuse instead of returning a misleading empty inventory"
+      "reason": "unsafe handle use now refuses instead of returning a misleading empty inventory"
     }
   ]
 }

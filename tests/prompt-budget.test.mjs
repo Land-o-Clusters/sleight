@@ -370,8 +370,9 @@ test('the offline budget command measures all sources and stays about 30 percent
   assert.ok(report.rows.some(row => row.source === 'relay notices'));
   assert.ok(report.rows.some(row => row.source === 'tool descriptions'));
   assert.ok(report.rows.some(row => row.source === 'shared notices'));
-  assert.ok(report.total.default.characters <= 46235, JSON.stringify(report.total));
-  assert.ok(report.total.lean.characters <= 33177, JSON.stringify(report.total));
+  // CA2R2 adds the construct-specific refusal and its direct-call recovery form.
+  assert.ok(report.total.default.characters <= 46328, JSON.stringify(report.total));
+  assert.ok(report.total.lean.characters <= 33262, JSON.stringify(report.total));
   assert.ok(report.total.lean.characters <= report.total.default.characters * leanRatio, JSON.stringify(report.total));
 });
 

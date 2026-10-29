@@ -1,0 +1,102 @@
+{
+  "base": "beea0b66498c25f70ad990679b76f410a002efff",
+  "branch": "codex/ca2",
+  "tests": {
+    "tests": 4827,
+    "pass": 4810,
+    "fail": 0,
+    "cancelled": 0,
+    "skipped": 17,
+    "exit": 0,
+    "command": "bash bench/code-ast/validate-ca2.sh tests"
+  },
+  "reviewCases": 114,
+  "previouslyRefusedClaudeCells": {
+    "tested": 10,
+    "pass": 10,
+    "fail": 0,
+    "fixtureBytes": 3595
+  },
+  "consumerReplay": {
+    "manifest": "752ca473d5e60dfad185524f2650d5d6714d6e627ea30db79ac403df2b87e962",
+    "corpus": {
+      "claudeFiles": 233,
+      "codexFiles": 324,
+      "claude": 1576,
+      "codex": 3795,
+      "malformed": 0
+    },
+    "counts": {
+      "flow": {
+        "compared": 5371,
+        "differences": 1005
+      },
+      "native": {
+        "compared": 5371,
+        "differences": 26
+      },
+      "elements": {
+        "compared": 5371,
+        "differences": 1
+      },
+      "clipboard": {
+        "compared": 5371,
+        "differences": 1
+      }
+    },
+    "regressions": 0,
+    "reasons": {
+      "indirect invocation inventory now feeds the unknown-destination rule policy": 63,
+      "opened-app binding hints added; existing inputs and read target are identical": 741,
+      "window-number acquisition clears only the guessed read-app identity": 4,
+      "unproved or invalidated handle hints removed; existing inputs and read target are identical": 11,
+      "assigned, shadowed or unbound handles widen only their destinations to unknown; literal inputs are unchanged": 186,
+      "opened-app binding exposes a specific malformed native argument list": 25,
+      "unsafe handle use now refuses before native dispatch": 1,
+      "unsafe handle use now refuses instead of returning a misleading empty inventory": 2
+    },
+    "unknownDiagnostics": 57,
+    "exit": 0,
+    "comparisons": 21484,
+    "baseline": "c4175f7917fadb10bce86d02d7672df416105aa8"
+  },
+  "gatedQualification": {
+    "reviewers": "owed, fuzz-may-run absent",
+    "shaped": "owed, fuzz-may-run absent",
+    "fuzz": "owed, fuzz-may-run absent"
+  },
+  "runtimeBytes": {
+    "before": 517174,
+    "after": 525276,
+    "delta": 8102,
+    "files": 6
+  },
+  "prompt": {
+    "noticesHash": "5026b1f6036d97cb2c0e8518d4b3862d116f45734bf0af13b2d628e78132340a",
+    "defaultCharacters": 46328,
+    "leanCharacters": 33262
+  },
+  "liveActions": 0,
+  "sourceHashes": {
+    "bench/app-speed-map.mjs": "2a59fda233b6cbda478ad91c1125f10a5b05df27ac3257605f9f87d7e3c95752",
+    "bench/code-ast/call-set-fuzz.mjs": "2bdd2785288565e79e1fd5e4931e27ef6249905dd9863c24f1764f3c43c57136",
+    "bench/code-ast/consumer-classifier.mjs": "e53fe8bfc73e97aa303d1f305d2e1d276b556b7f4478eaa1b429e965a935a96b",
+    "bench/code-ast/consumer-differences.json": "7edb918117211b3fda2198bc3ad51c88645f1541731f41bd17e98121b4ff88f5",
+    "bench/code-ast/validate-ca2.sh": "325b7645f9931ac97ab9d5e7c89f08778330b38bfe7d217329ef61bc821ad0c3",
+    "plugins/sleight/lib/call-inspection.mjs": "361f826333d5535f7a80763b0db15aa18ef4e6ea4a0835039e56ff0a93eb09b7",
+    "plugins/sleight/lib/clipboard.mjs": "64194e28cf7a8e9e43c8bf7281c66b785b1386bcc0f873199778173f338f8e2c",
+    "plugins/sleight/lib/flow-rules.mjs": "e3f0aa8d7192307e228c52331c87aeb1868704f30e4786a1f3a239a56ee55856",
+    "plugins/sleight/lib/literal-elements.mjs": "74800accb41058d9275ebe71f1fb3c235aa2b129cd4dba8adc4df02a69508a3b",
+    "plugins/sleight/lib/native-arguments.mjs": "82f63ce25e9132687f6a78e0e7241658611628f30759bd865a815f45029cfc18",
+    "plugins/sleight/lib/relay.mjs": "7d3b4697f8737b5238cf0ddca70b1656dbf638eb412644e2078dcd0b81f79a00",
+    "tests/app-speed-map.test.mjs": "320fd26c5f899228690c38e0997b64b607e8e022b460015a3e48fcf70277dcd4",
+    "tests/browser-call.test.mjs": "44427a469b0fb9618e735f9e9d87f9fa89298a1143acd8808b12d52849b01717",
+    "tests/ca2r2-review.test.mjs": "eeb3911ca1c0bb596d71f39d80c83259f61062435ed2bd98e47ee1a2b2b8fca5",
+    "tests/call-set-ast.test.mjs": "57504aba8da9c42c6bdc1dd62bf665ec30c9beff9c99542897112f9a9f8877fc",
+    "tests/consumer-classifier.test.mjs": "f63112866af973d0c0d9f59d208fd8ee9b9a2419abbf34b5d8cdee163c3fa777",
+    "tests/filtered-reads.test.mjs": "4bf2a1f55c5cf3efef7c11a6be06dc43c0c6e21c397659b98749b6150d7551b2",
+    "tests/fixtures/ca2r2-introspection.json": "f0b3efced31f7b133d98eb88387471a27af6b00467b9fd9c5b01491adfb65764",
+    "tests/fixtures/prompt-default.json": "064bfb43a01024df61644e251ee0c5bad577a2a346c0a30892ab7372dd143713",
+    "tests/prompt-budget.test.mjs": "b8ada614e04423c872a1febe46ffed75c4dc982fea1c638e9a1d2caa0fd5d4c9"
+  }
+}

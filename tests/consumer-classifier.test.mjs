@@ -1,7 +1,15 @@
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import {classify} from '../bench/code-ast/consumer-classifier.mjs';
+import {nativeArgumentsProblem} from '../plugins/sleight/lib/native-arguments.mjs';
 const empty = () => ({inputs:[],unknown:false,handles:[],readApp:'Fixture',readTarget:{app:'Fixture',host:null,web:false,observed:false}});
+test('an unsafe handle correction must match the complete construct-specific refusal',()=>{
+  const code='String(app)', reason=nativeArgumentsProblem(code);
+  assert.equal(classify('native',code,null,reason).verdict,'safety correction');
+  assert.equal(classify('native',code,null,reason+' extra').verdict,'regression');
+  assert.equal(classify('elements',code,[],{refused:reason}).verdict,'safety correction');
+  assert.equal(classify('clipboard',code,[],{refused:'invented'}).verdict,'regression');
+});
 test('binding hint metadata is additive and requires its exact target',()=>{
   const before=empty(),after=empty();after.handles=[['app',{...after.readTarget}]];
   const code='let app=__sleightOpenedApp2;';

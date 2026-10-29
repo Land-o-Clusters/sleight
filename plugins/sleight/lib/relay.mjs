@@ -609,6 +609,8 @@ function chromeScrollCode(code, tree, size, handles) {
     (match, handle) => handles.has(handle) ? `(${chromeSwipe.toString()}).bind(null, ${handle}, ${JSON.stringify(size)})(` : match);
 }
 
+const swipeInspection = { trustedFunctions: new Set([chromeSwipe.toString()]) };
+
 export function lastImageData(content) {
   return (content ?? []).filter(c => c?.type === 'image' && typeof c.data === 'string').at(-1)?.data;
 }
@@ -4757,19 +4759,19 @@ export function createRelay({
         screenshots.get(lastWindow?.app.toLowerCase())?.byTitle[lastWindow?.title],
         new Set([...helperHandles].filter(([, plan]) => plan.key === key).map(([handle]) => handle))) : code;
       originalCode = msg.params.arguments.code;
-      const problem = nativeArgumentsProblem(policyCode, nativeHandles, browserHandles);
+      const problem = nativeArgumentsProblem(policyCode, nativeHandles, browserHandles, swipeInspection);
       if (problem) { finishedCall(msg.id); toClient({ jsonrpc: '2.0', id: msg.id, result: { isError: true,
         content: [{ type: 'text', text: problem }] } }); return; }
     }
     if (clipboard && msg.method === 'tools/call' && msg.params?.name === 'js' && typeof originalCode === 'string') {
-      try { clipboardAction = clipboardPlan(policyCode); }
+      try { clipboardAction = clipboardPlan(policyCode, swipeInspection); }
       catch (error) { clipboardStop(msg, error.message); return; }
     }
     if (openedFlowPlans.has(msg.id) || openedWindowCalls.has(msg.id)) flowPlan = openedFlowPlans.get(msg.id);
     else if (!openedWindowReads.has(msg.id) && flowRules && msg.method === 'tools/call' && ['js', 'drag', 'menu_bar'].includes(msg.params?.name)) {
       if (running.size || localRunning.size || documentAsking || reviewing) { flowStop(msg, 'wait for the pending call or prompt'); return; }
       if (msg.id === undefined || (msg.params.name === 'js' && typeof originalCode !== 'string')) { flowStop(msg, 'a request id and JavaScript code are required'); return; }
-      flowPlan = flowRules.analyze(msg.params.name, msg.params.name === 'js' ? { ...msg.params.arguments, code: policyCode } : msg.params.arguments, lastWindow, { trustedFunctions: new Set([chromeSwipe.toString()]) });
+      flowPlan = flowRules.analyze(msg.params.name, msg.params.name === 'js' ? { ...msg.params.arguments, code: policyCode } : msg.params.arguments, lastWindow, swipeInspection);
       const print = fingerprint(msg);
       const permitted = flowPermit?.fingerprint === print && flowPermit.revision === flowRules.revision ||
         engineOpenAllowed.has(msg.id) && engineOpenAllowed.get(msg.id) === print;
@@ -4958,7 +4960,7 @@ export function createRelay({
         return;
       }
       if (name === 'js') {
-        const copies = !clipboard && typeof originalCode === 'string' ? clipboardActions(policyCode) : [];
+        const copies = !clipboard && typeof originalCode === 'string' ? clipboardActions(policyCode, swipeInspection) : [];
         if (copies.includes('c') || copies.includes('x')) nativeCopies.set(msg.id, copies.includes('x'));
         const read = typeof originalCode === 'string' && isLeaseRead(originalCode);
         const swipeCode = policyCode;
@@ -5080,7 +5082,7 @@ export function createRelay({
                 ...(close ? { closeRead: { path: close.path } } : {}),
                 // The lines Claude last saw for the numbers it acts on, so the first action stops when
                 // the window renumbered between Claude's read and this call.
-                seenLines, seenParents: compactor.seenParents(seenWindow, numbers), literals: numbers, literalOrder: literalElements(swipeCode),
+                seenLines, seenParents: compactor.seenParents(seenWindow, numbers), literals: numbers, literalOrder: literalElements(swipeCode, swipeInspection),
                 uniqueSeen, payment: paymentMessages.guard(confirmPayments) }));
             if (receiptTyping) msg.params.arguments.code += typingReceiptCode(filterMark);
           } else msg.params.arguments.code = dispatchCheck.mark(swipeCode);

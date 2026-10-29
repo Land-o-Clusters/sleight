@@ -1,6 +1,6 @@
 import { codeInspectionRefusal } from './flow-rules.mjs';
 import { literalValue, UNKNOWN } from './code-ast.mjs';
-import { inspectCalls, unsafeHandleUse } from './call-inspection.mjs';
+import { inspectCalls, unsafeHandleUse, unsafeHandleRefusal } from './call-inspection.mjs';
 import { spawn } from 'node:child_process';
 import { mkdirSync, chmodSync } from 'node:fs';
 import { homedir } from 'node:os';
@@ -384,9 +384,11 @@ export function createClipboardSession(io) {
   } };
 }
 
-export function clipboardActions(code) {
+export function clipboardActions(code, inspection = {}) {
   const { ast, calls, error } = inspectCalls(code), actions = [];
-  if (error || unsafeHandleUse(ast)) throw new Error(codeInspectionRefusal);
+  if (error) throw new Error(codeInspectionRefusal);
+  const unsafe = unsafeHandleUse(ast, undefined, { code, ...inspection });
+  if (unsafe) throw new Error(unsafeHandleRefusal(unsafe));
   for (const { call } of calls) {
     if (!call) continue;
     if (call.method === UNKNOWN) {
@@ -407,8 +409,8 @@ export function clipboardActions(code) {
   return actions;
 }
 
-export function clipboardPlan(code) {
-  const actions = clipboardActions(code);
+export function clipboardPlan(code, inspection = {}) {
+  const actions = clipboardActions(code, inspection);
   if (actions.length > 1) throw new Error('Clipboard: use one clipboard action per js call. Split the call and retry each action separately.');
   return actions[0];
 }

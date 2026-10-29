@@ -1,19 +1,18 @@
 // Classify the specific output delta. Caller spelling never grants a verdict.
 import { isDeepStrictEqual as equal } from 'node:util';
 import { parseCell, walk, memberCall, callInventory, handleBindings, invalidHandleNames, literalValue, UNKNOWN } from '../../plugins/sleight/lib/code-ast.mjs';
-import { argumentValue, unsafeHandleUse, receiverRoot } from '../../plugins/sleight/lib/call-inspection.mjs';
+import { argumentValue, unsafeHandleUse, unsafeHandleRefusal, receiverRoot } from '../../plugins/sleight/lib/call-inspection.mjs';
 import { nativeArgumentError } from '../../plugins/sleight/lib/native-arguments.mjs';
-import { codeInspectionRefusal } from '../../plugins/sleight/lib/flow-rules.mjs';
 const held = () => ({verdict:'regression',reason:'unclassified output difference requires review'});
 export function classify(name, code, before, after) {
   const {ast,error}=parseCell(code); if(error)return held();
   const hints=handleBindings(ast), invalid=invalidHandleNames(ast);
   const unknownCall=callInventory(ast).some(entry=>!memberCall(entry.node) || memberCall(entry.node).method===UNKNOWN);
   const unsafe=unsafeHandleUse(ast);
-  if (['elements','clipboard'].includes(name) && Array.isArray(before) && equal(after,{refused:codeInspectionRefusal}) && unsafe)
-    return {verdict:'safety correction',reason:'detached handle methods now refuse instead of returning a misleading empty inventory'};
+  if (['elements','clipboard'].includes(name) && Array.isArray(before) && unsafe && equal(after,{refused:unsafeHandleRefusal(unsafe)}))
+    return {verdict:'safety correction',reason:'unsafe handle use now refuses instead of returning a misleading empty inventory'};
   if(name==='native' && before===null && typeof after==='string') {
-    if(after===codeInspectionRefusal && unsafe) return {verdict:'safety correction',reason:'detached handle methods now refuse before native dispatch'};
+    if(unsafe && after===unsafeHandleRefusal(unsafe)) return {verdict:'safety correction',reason:'unsafe handle use now refuses before native dispatch'};
     const native=new Set(['app', ...[...hints].filter(([,hint])=>hint.kind==='app').map(([name])=>name)]);
     for(const node of walk(ast)) {
       const call=memberCall(node);

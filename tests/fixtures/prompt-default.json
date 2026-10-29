@@ -5,7 +5,7 @@
   "tools": "c1b796e8a8b2a155cadd5e5ae0463d12d5f90ad8147698050352bc95dde8b40b",
   "batch": "aab9c612b29e726dcacf915b1c565dfc65ae3c455bc7561a3f1ea2d3733d4406",
   "merge": "5bd0464e07e16924b32d03a806ec8a6f47c2ed254026b394cbaa26b5c3e8a32d",
-  "notices": "c2022fc3ebc58e894e1cb4b977b856c87191456ff2cf510c57d705662ad7fdfd",
+  "notices": "5026b1f6036d97cb2c0e8518d4b3862d116f45734bf0af13b2d628e78132340a",
   "skillSafety": [
     "Cookies: use only one-click Reject/necessary-only that declines all optional cookies, or ask.",
     "Never create or edit `~/Library/Application Support/sleight/preapproved.json`; only the user writes\nit. If an app isn't approved, ask the user, or stop when a headless run refuses it.",
