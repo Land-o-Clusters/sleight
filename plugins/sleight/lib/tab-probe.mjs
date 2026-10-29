@@ -4,17 +4,22 @@ import { constants, openSync, closeSync, fstatSync, readdirSync, statSync, renam
 import { join } from 'node:path';
 import { verifyWindowIdentity } from './window-identity.mjs';
 import { tabFocusRefusal } from './menu-continuation.mjs';
-import { tokens, invalidTokens } from './flow-rules.mjs';
+import { memberCall, literalValue } from './code-ast.mjs';
 
 // Only an awaited Cmd+T, literal URL, Return chain. The splitter already excludes intervening reads and other handles.
 export function nativeTabPlan(plan) {
+  try { return tabPlan(plan); } catch { return undefined; }
+}
+
+function tabPlan(plan) {
   if (plan?.actions?.length !== 3 || plan.actions[0].selector?.kind !== 'key' ||
       !/^(?:super|cmd|command|meta)\+t$/i.test(plan.actions[0].selector.value) ||
       plan.actions[2].selector?.kind !== 'key' || !/^(?:return|enter)$/i.test(plan.actions[2].selector.value)) return false;
-  const action = plan.actions[1], ts = tokens(plan.code.slice(action.start, action.end)).filter(t => t.v !== ';');
-  if (invalidTokens(ts)) return false;
-  return ts.length === 7 && ts[3]?.v === 'typeText' && !ts[3].string && ts[5]?.string === true &&
-    /^https?:\/\/[^\s\u0000-\u001f]+$/i.test(ts[5].v);
+  const action = plan.actions[1], call = action.node?.type === 'AwaitExpression' ? memberCall(action.node.argument) : null;
+  const url = call && literalValue(call.args[0]);
+  return Boolean(call && !call.optional && !call.computed && call.receiver.type === 'Identifier' &&
+    call.receiver.name === action.handle && call.method === 'typeText' && call.args.length === 1 &&
+    typeof url === 'string' && /^https?:\/\/[^\s\u0000-\u001f]+$/i.test(url));
 }
 
 // Keep the failed structural check separate from the native walk's reason in diagnostics.

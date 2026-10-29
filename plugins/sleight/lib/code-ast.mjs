@@ -92,9 +92,12 @@ export function statements(ast) {
 
 const unchain = node => node?.type === 'ChainExpression' ? node.expression : node;
 const optionalReceiver = node => {
-  node = unchain(node);
-  if (node?.type === 'MemberExpression') return Boolean(node.optional || optionalReceiver(node.object));
-  if (node?.type === 'CallExpression') return Boolean(node.optional || optionalReceiver(node.callee));
+  for (;;) {
+    node = unchain(node);
+    if (!['MemberExpression', 'CallExpression'].includes(node?.type)) break;
+    if (node.optional) return true;
+    node = node.type === 'MemberExpression' ? node.object : node.callee;
+  }
   return false;
 };
 

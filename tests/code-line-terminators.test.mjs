@@ -21,13 +21,12 @@ for (const [name, end] of ends) {
     const flow = new FlowRules({ version: 1, rules: [{ id: 'secret', kind: 'pattern', pattern: 'SECRET', destinations: ['*'] }] });
     assert.equal(flow.analyze('js', { code: `// c${end}await app.typeText("SECRET")` }, { app: 'Fixture' }).violations.length, 1);
   });
-  test(`${name}: the review tail and hidden save are refused`, () => {
+  test(`${name}: a trailing action refuses menu continuation and remains in the save head`, () => {
     for (const tail of ['nodeRepl.write("x")', 'nodeRepl.emitImage(await app.getScreenshot())']) {
       assert.equal(splitMenuActions(head + `${tail} // c${end}await app.click(3)`), undefined);
     }
     const save = splitTextSave(`await app.setValue(1, "safe"); // c${end}await app.click(3); await app.pressKey("super+s")`);
-    if (name === 'LF') assert.ok(save.head.includes('await app.click(3)'));
-    else assert.equal(save, undefined);
+    assert.ok(save.head.includes('await app.click(3)'));
   });
   test(`${name}: evaluate and callback scans see code after comments`, () => {
     assert.match(evaluateWrite(`tab.playwright.evaluate(() => { // c${end}document.body.click(); })`), /read-only/);
@@ -56,10 +55,11 @@ for (const [name, end] of ends) {
     assert.ok(splitMenuActions(head + 'nodeRepl.write(`' + value + '`)'));
     assert.ok(statementSpans('await app.setValue(1, `' + value + '`); await app.pressKey("super+s")'));
   });
-  if (name !== 'LF') test(`${name}: plans refuse uncommon terminators outside literals`, () => {
+  if (name !== 'LF') test(`${name}: parser ranges accept engine-valid terminators without allowing interpolated read tails`, () => {
     for (const code of [head + end, head + `// c${end}`, head + `/* c${end} */`, head + 'nodeRepl.write(`${1' + end + '}`)']) {
-      assert.equal(splitMenuActions(code), undefined);
-      assert.equal(statementSpans(code), undefined);
+      assert.ok(statementSpans(code));
+      if (code.includes('${1')) assert.equal(splitMenuActions(code), undefined);
+      else assert.equal(splitMenuActions(code)?.actions.length, 2);
     }
   });
 }
@@ -181,9 +181,9 @@ for (const [name, end] of ends) test(`${name}: string and template data do not i
   assert.equal(journal.finish({}).calls[0].actions[0].input.length, ('a' + end.replace(/\r\n?/g, '\n') + 'b').length);
 });
 
-test('continuation admission checks original callback source before the mask can hide a terminator', () => {
+test('AST callbacks preserve engine-valid line terminators before regex test members', () => {
   for (const end of ['\r', '\u2028', '\u2029']) {
     const code = head + 'const state = await app.getAXState(); nodeRepl.write(state.filter(l => /safe/' + end + '.test(l)));';
-    assert.equal(splitMenuActions(code), undefined);
+    assert.equal(splitMenuActions(code)?.actions.length, 2);
   }
 });

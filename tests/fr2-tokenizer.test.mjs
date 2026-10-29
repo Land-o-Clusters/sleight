@@ -48,7 +48,13 @@ for (const boundary of ['if (a) {}\n', 'if (a) {} ', 'if (a) {} /* gap */ ',
       assert.equal(nativeArgumentsProblem(code), undefined);
     }
     assert.equal(splitMenuActions('await app.click(1); await app.click(2); ' + suffix), undefined);
-    assert.equal(splitTextSave(suffix + '; await app.setValue(1, "safe"); await app.pressKey("super+s")'), undefined);
+    const saveCode = suffix + '; await app.setValue(1, "safe"); await app.pressKey("super+s")';
+    // An ungrouped object initializer continues as division and is invalid here.
+    // The other five boundaries start a regex statement in the engine's grammar.
+    if (boundary.startsWith('const value')) assert.equal(splitTextSave(saveCode), undefined);
+    else assert.deepEqual(splitTextSave(saveCode), {
+      handle: 'app', head: suffix + '; await app.setValue(1, "safe");', tail: 'await app.pressKey("super+s")',
+    });
     assert.equal(nativeTabPlan({ code, actions: [
       { selector: { kind: 'key', value: 'super+t' } }, { start: 0, end: code.length },
       { selector: { kind: 'key', value: 'Return' } },

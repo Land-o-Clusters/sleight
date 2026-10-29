@@ -1,6 +1,5 @@
-import { unsupportedCodeLines } from './code-line-terminators.mjs';
 import { randomUUID } from 'node:crypto';
-import { tokens, invalidTokens } from './flow-rules.mjs';
+import { memberCall, literalValue, arrowRegexTest, UNKNOWN } from './code-ast.mjs';
 import { statementSpans } from './text-save.mjs';
 import { GUARD_END, GUARD_MARK, documentKey, elementLines, hasIdentifier, hasLabel, sameElement, windowFromText } from './document-scope.mjs';
 import { verifyWindowIdentity } from './window-identity.mjs';
@@ -8,147 +7,160 @@ import { verifyWindowIdentity } from './window-identity.mjs';
 export const guardStopMark = () => `[sleight:guard-stop:${randomUUID()}]`;
 
 const ACTIONS = ['click', 'drag', 'scroll', 'selectText', 'setValue', 'performSecondaryAction', 'paste', 'pressKey', 'typeText'];
-const isName = t => !!t && !t.string && /^[A-Za-z_$][\w$]*$/.test(t.v);
-const declared = ts => ['let', 'const', 'var'].includes(ts[0]?.v) && !ts[0].string ? 1 : 0;
-// Literal option objects only: { disableDiffing: true }, { windowId: 12 }.
-const literalArgs = args => !args.some((t, i) => !t.string && !/^(?:\d+|true|false|null|[\[\]{},:\-])$/.test(t.v) &&
-  !(args[i + 1]?.v === ':' && /^[A-Za-z_$][\w$]*$/.test(t.v)));
+const isName = node => node?.type === 'Identifier';
+const directCall = node => {
+  const call = memberCall(node);
+  return call && !call.optional && !call.computed ? call : null;
+};
+const onHandle = (call, handle) => call && isName(call.receiver) && call.receiver.name === handle;
+const integer = node => node?.type === 'Literal' && Number.isInteger(node.value) && node.value >= 0;
+const string = node => node?.type === 'Literal' && typeof node.value === 'string' ||
+  node?.type === 'TemplateLiteral' && typeof literalValue(node) === 'string';
+const propertyName = node => isName(node) ? node.name : literalValue(node);
+// Preserve the old data-expression grammar, including holes and subtraction.
+// Computed object keys must themselves be data. Calls, spread and getters refuse.
+function literalArgument(node) {
+  const pending = [node];
+  while (pending.length) {
+    const value = pending.pop();
+    if (string(value) || integer(value)) continue;
+    if (value?.type === 'Literal' && (value.value === null || typeof value.value === 'boolean')) continue;
+    if (value?.type === 'UnaryExpression' && value.operator === '-') { pending.push(value.argument); continue; }
+    if (value?.type === 'BinaryExpression' && value.operator === '-') { pending.push(value.left, value.right); continue; }
+    if (value?.type === 'ArrayExpression') {
+      for (const element of value.elements) if (element !== null) pending.push(element);
+      continue;
+    }
+    if (value?.type !== 'ObjectExpression') return false;
+    for (const property of value.properties) {
+      if (property.type !== 'Property' || property.kind !== 'init' || property.method || property.shorthand) return false;
+      if (property.computed) pending.push(property.key);
+      else if (!isName(property.key) && !string(property.key) && !integer(property.key)) return false;
+      pending.push(property.value);
+    }
+  }
+  return true;
+}
+const literalArgs = args => args.every(literalArgument);
+const binding = node => {
+  if (node.type === 'VariableDeclaration' && ['const', 'let', 'var'].includes(node.kind) && node.declarations.length === 1) {
+    const declaration = node.declarations[0];
+    if (isName(declaration.id)) return { name: declaration.id.name, value: declaration.init };
+  }
+  const expression = node.type === 'ExpressionStatement' ? node.expression : undefined;
+  if (expression?.type === 'AssignmentExpression' && expression.operator === '=' && isName(expression.left))
+    return { name: expression.left.name, value: expression.right };
+};
 
-// `let te = await cua.getApp("App")` (or { windowId: 12 }, or `app = …`) names the handle it binds.
-function acquisition(ts, alias) {
-  const i = declared(ts);
-  // `const a = __sleightOpenedApp3`: a handle the call renames. Nothing is sent, and the rest acts on the new name.
-  // Only a name the caller vouches for: open_file's handles, or one bound to the leased app.
-  if (ts.length === i + 3 && isName(ts[i]) && punct(ts[i + 1], '=') && isName(ts[i + 2]) && !forbidden.has(ts[i + 2].v) &&
-      ts[i + 2].v !== ts[i].v) return alias(ts[i + 2].v) ? ts[i].v : undefined;
-  if (!isName(ts[i]) || ts[i + 1]?.v !== '=' || ts[i + 2]?.v !== 'await' || ts[i + 3]?.v !== 'cua' || ts[i + 4]?.v !== '.' ||
-      ts[i + 5]?.v !== 'getApp' || ts[i + 6]?.v !== '(' || ts.at(-1)?.v !== ')' || ts.slice(i + 2, i + 7).some(t => t.string)) return;
-  const args = ts.slice(i + 7, -1);
-  const selector = args.length === 1 && args[0].string || args.length === 5 && args[0].v === '{' && !args[0].string &&
-    args[1].v === 'windowId' && args[2].v === ':' && !args[2].string && !args[3].string && /^\d+$/.test(args[3].v) && args[4].v === '}' && !args[4].string;
-  return selector ? ts[i].v : undefined;
+// Only the call's first statement can acquire or rename its one action handle.
+function acquisition(node, alias) {
+  const bound = binding(node);
+  if (!bound) return;
+  if (isName(bound.value) && !forbidden.has(bound.value.name) && bound.value.name !== bound.name)
+    return alias(bound.value.name) ? bound.name : undefined;
+  const call = bound.value?.type === 'AwaitExpression' ? directCall(bound.value.argument) : null;
+  if (!onHandle(call, 'cua') || call.method !== 'getApp' || call.args.length !== 1) return;
+  const argument = call.args[0];
+  const window = argument.type === 'ObjectExpression' && argument.properties.length === 1 && argument.properties[0];
+  const selector = string(argument) || window && window.type === 'Property' && !window.computed && !window.method && !window.shorthand &&
+    window.kind === 'init' && propertyName(window.key) === 'windowId' && integer(window.value);
+  return selector ? bound.name : undefined;
 }
 
-// After the last action: a read of the same handle, printing it, or echoing a name. None sends input,
-// and none comes before an action, so the guard's input index still names the action spans.
 const forbidden = new Set(['await', 'cua', 'nodeRepl', 'import', 'require', 'eval', 'Function', 'globalThis', 'process', 'constructor',
-  '__proto__', 'prototype', 'then', 'catch', 'finally', 'call', 'apply', 'bind', '<template>', '<regexp>', ...ACTIONS]);
+  '__proto__', 'prototype', 'then', 'catch', 'finally', 'call', 'apply', 'bind', ...ACTIONS]);
 const READS = new Set(['getAXState', 'getScreenshot', 'getAXStateAndScreenshot']);
 const STRING_READS = new Set(['split', 'slice', 'join', 'trim']), CALLBACK_READS = new Set(['filter', 'find', 'some']);
-// A callback that only tests one regex, l => /Undo|Page/i.test(l), becomes a string
-// of the same length (offsets still name the original code), then a <callback>
-// token that only these reads accept.
-const CALLBACK = '\u0000regex-test';
-const maskCallbacks = code => code.replace(/"(?:[^"\\]|\\[\s\S])*"|'(?:[^'\\]|\\[\s\S])*'|`(?:[^`\\]|\\[\s\S])*`|\/\/[^\n\r\u2028\u2029]*|\/\*[\s\S]*?\*\/|\(\s*([A-Za-z_$][\w$]*)\s*=>\s*\/(?:[^/\\[\n\r\u2028\u2029]|\\[^\n\r\u2028\u2029]|\[(?:[^\]\\\n\r\u2028\u2029]|\\[^\n\r\u2028\u2029])*\])+\/[dgimsuy]*\s*\.\s*test\s*\(\s*\1\s*\)\s*\)/g,
-  (match, name) => name === undefined || match.length - 4 < CALLBACK.length ? match : '("' + CALLBACK.padEnd(match.length - 4) + '")');
-const lex = text => tokens(text).map(t => t.string && t.v.trimEnd() === CALLBACK ? { v: '<callback>' } : t);
-const isNumber = t => !!t && !t.string && /^\d+$/.test(t.v);
-const punct = (t, v) => !!t && !t.string && t.v === v;
-// The argument of nodeRepl.write, as an allowlist: a string or number, the handle's getAXState with
-// literal options, or a name an earlier trailing read bound, then dots to names and calls of
-// split/slice/join/trim with string or number arguments, or filter/find/some with a masked regex test.
-// No brackets, ?., other handles or actions.
-function writeArgument(ts, handle, names) {
-  let i = 0;
-  const literal = () => {
-    if (punct(ts[i], '-') && isNumber(ts[i + 1])) { i += 2; return true; }
-    if (ts[i]?.string || isNumber(ts[i])) { i++; return true; }
-    return false;
-  };
-  if (punct(ts[i], '-') || ts[i]?.string || isNumber(ts[i])) { if (!literal()) return false; }
-  else if (isName(ts[i]) && ts[i].v === handle) {
-    if (!punct(ts[i + 1], '.') || ts[i + 2]?.v !== 'getAXState' || ts[i + 2].string || !punct(ts[i + 3], '(')) return false;
-    const close = ts.findIndex((t, index) => index > i + 3 && punct(t, ')'));
-    if (close < 0 || !literalArgs(ts.slice(i + 4, close)) || ts.slice(i + 4, close).some(t => punct(t, '('))) return false;
-    i = close + 1;
-  } else if (isName(ts[i]) && names.has(ts[i].v) && !forbidden.has(ts[i].v)) i++;
-  else return false;
-  while (punct(ts[i], '.')) {
-    const member = ts[i + 1];
-    if (!isName(member) || forbidden.has(member.v) || member.v === 'getAXState') return false;
-    i += 2;
-    if (!punct(ts[i], '(')) continue;
-    if (CALLBACK_READS.has(member.v)) {
-      if (!punct(ts[i + 1], '<callback>') || !punct(ts[i + 2], ')')) return false;
-      i += 3; continue;
+const writeLiteral = node => string(node) || integer(node) || node?.type === 'UnaryExpression' && node.operator === '-' && integer(node.argument);
+
+// An AST allowlist: this handle's getAXState, an earlier bound read, or literal text/number,
+// followed only by named properties and the existing string/regex read methods.
+function writeArgument(node, handle, names) {
+  // Bound repeated receiver inspection as well as avoiding the JS call stack.
+  for (let depth = 0; depth < 1024; depth++) {
+    if (writeLiteral(node)) return true;
+    if (isName(node)) return names.has(node.name) && !forbidden.has(node.name);
+    if (node?.type === 'MemberExpression') {
+      if (node.computed || node.optional || !isName(node.property) ||
+          forbidden.has(node.property.name) || node.property.name === 'getAXState') return false;
+      node = node.object; continue;
     }
-    if (!STRING_READS.has(member.v)) return false;
-    i++;
-    if (!punct(ts[i], ')')) {
-      for (;;) {
-        if (!literal()) return false;
-        if (!punct(ts[i], ',')) break;
-        i++;
-      }
-    }
-    if (!punct(ts[i], ')')) return false;
-    i++;
+    if (node?.type !== 'CallExpression') return false;
+    const call = directCall(node);
+    if (!call) return false;
+    if (onHandle(call, handle) && call.method === 'getAXState') return literalArgs(call.args);
+    if (STRING_READS.has(call.method) ? !call.args.every(writeLiteral)
+      : !CALLBACK_READS.has(call.method) || call.args.length !== 1 || arrowRegexTest(call.args[0]) === null) return false;
+    node = call.receiver;
   }
-  return i === ts.length;
-}
-// Returns the name a trailing read binds ('' for one that binds none), or undefined when it isn't one.
-// The call's value may be one of the write's expressions too ("done", or the read filtered).
-function trailingRead(ts, handle, names) {
-  if (ts.length === 1) return isName(ts[0]) && !forbidden.has(ts[0].v) || ts[0].string || isNumber(ts[0]) ? '' : undefined;
-  // An emitted screenshot of this handle is an observation after the inputs, not another action.
-  if (ts[0]?.v === 'nodeRepl' && punct(ts[1], '.') && ts[2]?.v === 'emitImage' && punct(ts[3], '(') &&
-      ts[4]?.v === 'await' && ts[5]?.v === handle && punct(ts[6], '.') && ts[7]?.v === 'getScreenshot' &&
-      punct(ts[8], '(') && punct(ts.at(-2), ')') && punct(ts.at(-1), ')') &&
-      !ts.slice(0, 9).some(t => t.string) && literalArgs(ts.slice(9, -2))) return '';
-  if (ts[0]?.v === 'nodeRepl' && ts[1]?.v === '.' && ts[2]?.v === 'write' && ts[3]?.v === '(' && ts.at(-1)?.v === ')' &&
-      !ts.slice(0, 4).some(t => t.string)) return writeArgument(ts.slice(4, -1), handle, names) ? '' : undefined;
-  if (writeArgument(ts, handle, names)) return '';
-  // `await app.getAXState()` as the call's value: 3 of the 8 Firefox new-tab calls ended this way (2026-10-17).
-  if (ts[0]?.v === 'await' && !ts[0].string && ts[1]?.v === handle && !ts[1].string && punct(ts[2], '.') && ts[3]?.v === 'getAXState' &&
-      !ts[3].string && punct(ts[4], '(') && punct(ts.at(-1), ')') && literalArgs(ts.slice(5, -1))) return '';
-  const i = declared(ts);
-  return isName(ts[i]) && ts[i].v !== handle && !forbidden.has(ts[i].v) && ts[i + 1]?.v === '=' && ts[i + 2]?.v === 'await' && ts[i + 3]?.v === handle &&
-    ts[i + 4]?.v === '.' && READS.has(ts[i + 5]?.v) && !ts[i + 5].string && ts[i + 6]?.v === '(' && ts.at(-1)?.v === ')' &&
-    !ts.slice(i + 1, i + 7).some(t => t.string) && literalArgs(ts.slice(i + 7, -1)) ? ts[i].v : undefined;
+  return false;
 }
 
-// Only standalone inputs on one handle, with data arguments. No assignments, calls in
-// arguments, reads or control flow: the guard's input index must name exactly this span.
-// The call may start by acquiring that handle and end by reading it (textedit-calculator,
-// 2026-10-17: both shapes stopped on their own menu click, about 8 to 10 s a run).
+// Returns the name a trailing read binds, '' when it binds none, or undefined on refusal.
+function trailingRead(node, handle, names) {
+  if (node.type === 'DebuggerStatement') return '';
+  const expression = node.type === 'ExpressionStatement' ? node.expression : undefined;
+  if (expression) {
+    if (expression.type === 'ThisExpression' || expression.type === 'Literal' &&
+        (expression.value === null || typeof expression.value === 'boolean')) return '';
+    if (isName(expression) && !forbidden.has(expression.name) || writeArgument(expression, handle, names)) return '';
+    const call = directCall(expression);
+    if (onHandle(call, 'nodeRepl') && call.args.length === 1) {
+      if (call.method === 'write' && writeArgument(call.args[0], handle, names)) return '';
+      const argument = call.args[0];
+      const shot = argument.type === 'AwaitExpression' ? directCall(argument.argument) : null;
+      if (call.method === 'emitImage' && onHandle(shot, handle) && shot.method === 'getScreenshot' && literalArgs(shot.args)) return '';
+    }
+    const read = expression.type === 'AwaitExpression' ? directCall(expression.argument) : null;
+    if (onHandle(read, handle) && read.method === 'getAXState' && literalArgs(read.args)) return '';
+  }
+  const bound = binding(node);
+  if (!bound || bound.name === handle || forbidden.has(bound.name) || bound.value?.type !== 'AwaitExpression') return;
+  const read = directCall(bound.value.argument);
+  return onHandle(read, handle) && READS.has(read.method) && literalArgs(read.args) ? bound.name : undefined;
+}
+
+function actionSelector(call) {
+  const value = literalValue(call.args[0]);
+  if (call.args.length !== 1 || value === UNKNOWN) return;
+  if (call.method === 'pressKey' && typeof value === 'string') return { kind: 'key', value };
+  if (call.method !== 'click') return;
+  if (typeof value === 'string') return { kind: 'label', value };
+  if (integer(call.args[0])) return { kind: 'number', value };
+  if (Array.isArray(value) && value.length === 2 && call.args[0].elements.every(integer)) return { kind: 'point', value };
+  const property = call.args[0].type === 'ObjectExpression' && call.args[0].properties.length === 1 && call.args[0].properties[0];
+  const key = property && propertyName(property.key);
+  if (['label', 'id'].includes(key) && typeof value[key] === 'string') return { kind: key, value: value[key] };
+}
+
+// Only standalone awaited inputs on one handle. Reads can follow, but never precede another input.
 export function splitMenuActions(code, { alias = name => /^__sleightOpenedApp\d+$/.test(name) } = {}) {
-  if (typeof code !== 'string' || code.length > 65536 || unsupportedCodeLines(code)) return;
-  const masked = maskCallbacks(code), split = statementSpans(masked);
+  try { return menuActions(code, alias); } catch { return undefined; }
+}
+
+function menuActions(code, alias) {
+  if (typeof code !== 'string' || code.length > 65536) return;
+  const split = statementSpans(code);
   if (!split) return;
   const actions = [];
-  let acquired, statements = 0, tail = false;
+  let acquired, count = 0, tail = false;
   const names = new Set();
-  for (const [start, end] of split.spans) {
-    const ts = lex(masked.slice(start, end));
-    if (invalidTokens(ts)) return;
-    if (ts.at(-1)?.v === ';') ts.pop();
-    if (!ts.length) continue;
-    statements++;
-    if (statements === 1 && (acquired = acquisition(ts, alias))) continue;
-    const action = ts[0]?.v === 'await' && !ts[0].string && isName(ts[1]) && ts[2]?.v === '.' && ACTIONS.includes(ts[3]?.v) &&
-      !ts[3].string && ts[4]?.v === '(' && ts.at(-1)?.v === ')';
-    if (!action) {
-      const bound = actions.length ? trailingRead(ts, actions[0].handle, names) : undefined;
+  for (const node of split.nodes) {
+    if (node.type === 'EmptyStatement') continue;
+    count++;
+    if (count === 1 && (acquired = acquisition(node, alias))) continue;
+    const expression = node.type === 'ExpressionStatement' ? node.expression : undefined;
+    const call = expression?.type === 'AwaitExpression' ? directCall(expression.argument) : null;
+    if (!call || !isName(call.receiver) || !ACTIONS.includes(call.method)) {
+      const bound = actions.length ? trailingRead(node, actions[0].handle, names) : undefined;
       if (bound === undefined) return;
       if (bound) names.add(bound);
       tail = true; continue;
     }
-    if (tail) return;
-    const args = ts.slice(5, -1);
-    if (!literalArgs(args)) return;
-    const handle = ts[1].v;
+    if (tail || !literalArgs(call.args)) return;
+    const handle = call.receiver.name;
     if (actions.length ? handle !== actions[0].handle : acquired && handle !== acquired) return;
-    let selector;
-    if (ts[3].v === 'click') {
-      if (args.length === 1 && args[0].string) selector = { kind: 'label', value: args[0].v };
-      else if (args.length === 5 && args[0].v === '{' && ['label', 'id'].includes(args[1].v) &&
-          args[2].v === ':' && args[3].string && args[4].v === '}') selector = { kind: args[1].v, value: args[3].v };
-      else if (args.length === 1 && !args[0].string && /^\d+$/.test(args[0].v)) selector = { kind: 'number', value: Number(args[0].v) };
-      else if (args.length === 5 && args[0].v === '[' && args[2].v === ',' && args[4].v === ']' &&
-          [args[1], args[3]].every(t => !t.string && /^\d+$/.test(t.v))) selector = { kind: 'point', value: [Number(args[1].v), Number(args[3].v)] };
-    }
-    if (ts[3].v === 'pressKey' && args.length === 1 && args[0].string) selector = { kind: 'key', value: args[0].v };
-    actions.push({ start, end, handle, selector });
+    actions.push({ start: node.range[0], end: node.range[1], handle, selector: actionSelector(call), node: expression });
   }
   return actions.length > 1 ? { code, actions } : undefined;
 }
@@ -690,8 +702,8 @@ export function stopNote(receipt, plan, earlier = 0, { content, seen, uniqueSeen
 }
 const count = n => `${n} action${n === 1 ? '' : 's'}`;
 const actionName = plan => action => {
-  const ts = tokens(plan.code.slice(action.start, action.end));
-  const method = invalidTokens(ts) ? 'unknown action' : ts[3]?.v, { kind, value } = action.selector ?? {};
+  const name = memberCall(action.node)?.method;
+  const method = typeof name === 'string' ? name : 'unknown action', { kind, value } = action.selector ?? {};
   const shown = kind === 'number' || kind === 'id' && value.length <= 40 || kind === 'key' && NAMED_KEY.test(value);
   return shown ? `${method} ${kind === 'id' ? `id ${JSON.stringify(value)}` : kind === 'key' ? JSON.stringify(value) : value}` : method;
 };

@@ -1,57 +1,45 @@
-import { unsupportedCodeLines } from './code-line-terminators.mjs';
-import { tokens, invalidTokens } from './flow-rules.mjs';
+import { parseCell, statements, memberCall, literalValue, walk } from './code-ast.mjs';
 import { verifyWindowIdentity } from './window-identity.mjs';
 
-// Like FowlBrowser's batched action tools, keep one caller result across the native settle.
-// A bounded splitter for standalone awaited statements, not a JavaScript interpreter.
+// The engine's top-level module statements, including ASI and every line terminator.
+// Keep the nodes so splitters inspect the same parse that supplied their ranges.
 export function statementSpans(code) {
-  if (unsupportedCodeLines(code)) return;
-  const mask = code.replace(/"(?:[^"\\]|\\[\s\S])*"|'(?:[^'\\]|\\[\s\S])*'|`(?:[^`\\]|\\[\s\S])*`|\/\/[^\n\r\u2028\u2029]*|\/\*[\s\S]*?\*\//g,
-    value => value.replace(/[^\n]/g, ' '));
-  const spans = [];
-  let start = 0, depth = 0;
-  for (let i = 0; i < mask.length; i++) {
-    if ('([{'.includes(mask[i])) depth++;
-    else if (')]}'.includes(mask[i])) depth--;
-    if (depth < 0) return;
-    if (!depth && (mask[i] === ';' || (mask[i] === '\n' && /^\s*(?:(?:const|let|var)\s+[\w$]+\s*=\s*)?await\b/.test(mask.slice(i + 1))))) {
-      spans.push([start, i + 1]); start = i + 1;
-    }
-  }
-  if (depth) return;
-  spans.push([start, code.length]);
-  return { spans, mask };
+  if (typeof code !== 'string') return;
+  const { ast, error } = parseCell(code);
+  if (error) return;
+  const entries = statements(ast);
+  return { spans: entries.map(entry => entry.range), nodes: entries.map(entry => entry.node), ast };
 }
 
 export function splitTextSave(code) {
-  if (invalidTokens(tokens(code))) return;
+  try { return textSave(code); } catch { return undefined; }
+}
+
+function textSave(code) {
   const split = statementSpans(code);
   if (!split) return;
-  const { spans, mask } = split;
   const written = new Set();
-  for (const [start, end] of spans) {
-    const ts = tokens(code.slice(start, end));
-    if (invalidTokens(ts)) return;
-    if (ts.at(-1)?.v === ';') ts.pop();
-    if (!ts.length) continue;
-    if (['const', 'let', 'var'].includes(ts[0]?.v) && ts[2]?.v === '=' && ts[3]?.v === 'await') ts.splice(0, 3);
-    if (ts[0]?.v !== 'await' || !/^[A-Za-z_$][\w$]*$/.test(ts[1]?.v ?? '') || ts[2]?.v !== '.' ||
-        ts[4]?.v !== '(' || ts.at(-1)?.v !== ')') { written.clear(); continue; }
-    let nesting = 0, closed;
-    for (let i = 4; i < ts.length; i++) {
-      if (!ts[i].string && ts[i].v === '(') nesting++;
-      if (!ts[i].string && ts[i].v === ')' && --nesting === 0) { closed = i; break; }
-    }
-    if (closed !== ts.length - 1 || ts.some(t => ['<regexp>', '<template>'].includes(t.v))) { written.clear(); continue; }
-    const handle = ts[1].v, method = ts[3].v;
-    if (method === 'setValue') written.add(handle);
-    else if (method === 'pressKey' && ts.length === 7 && ts[5].string && /^(?:cmd|command|super|meta)\+s$/i.test(ts[5].v)) {
-      if (written.has(handle)) {
-        // Keeping control flow whole is conservative; this splitter does not interpret function scopes.
-        if (/\b(?:return|throw)\b/.test(mask.slice(0, start))) return;
-        return { handle, head: code.slice(0, start).trim(), tail: code.slice(start).trim() };
+  let exits = false;
+  for (const node of split.nodes) {
+    if (node.type === 'EmptyStatement') continue;
+    let expression = node.type === 'ExpressionStatement' ? node.expression : undefined;
+    if (node.type === 'VariableDeclaration' && ['const', 'let', 'var'].includes(node.kind) &&
+        node.declarations.length === 1 && node.declarations[0].id.type === 'Identifier')
+      expression = node.declarations[0].init;
+    const call = expression?.type === 'AwaitExpression' ? memberCall(expression.argument) : null;
+    const opaque = call && [...walk(expression)].some(part => part.regex || part.type === 'TemplateLiteral' && part.expressions.length);
+    if (!call || call.optional || call.computed || call.receiver.type !== 'Identifier' || opaque) written.clear();
+    else {
+      const handle = call.receiver.name;
+      if (call.method === 'setValue') written.add(handle);
+      else if (call.method === 'pressKey' && call.args.length === 1 &&
+          typeof literalValue(call.args[0]) === 'string' && /^(?:cmd|command|super|meta)\+s$/i.test(literalValue(call.args[0])) && written.has(handle)) {
+        // Do not move a save past an earlier return or throw, including one in a nested scope.
+        if (exits) return;
+        return { handle, head: code.slice(0, node.range[0]).trim(), tail: code.slice(node.range[0]).trim() };
       }
     }
+    if ([...walk(node)].some(part => ['ReturnStatement', 'ThrowStatement'].includes(part.type))) exits = true;
   }
 }
 

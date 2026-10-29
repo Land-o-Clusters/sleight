@@ -7,6 +7,7 @@ import { checkConsumers } from './consumer-oracle.mjs';
 import { parseCell, walk, memberCall, literalValue, UNKNOWN } from '../../plugins/sleight/lib/code-ast.mjs';
 import { tokens, invalidTokens } from '../../plugins/sleight/lib/flow-rules.mjs';
 import { unsupportedCodeLines } from '../../plugins/sleight/lib/code-line-terminators.mjs';
+import { statementOracle } from './statement-oracle.mjs';
 
 export function astCalls(ast) {
   if (!ast) return [];
@@ -103,6 +104,7 @@ const missing = (expected, visible) => {
 };
 
 export function oracle({ label = 'code-ast', caseOffset = 0, reportFailure = entry => console.log(JSON.stringify(entry)) } = {}) {
+  if (process.argv.includes('--statement-consumers')) return statementOracle({ label, caseOffset, reportFailure });
   if (typeof vm.SourceTextModule !== 'function') throw new Error('code-ast oracle needs --experimental-vm-modules');
   const counts = { label, tested: 0, nodeAccepted: 0, meriyahAccepted: 0, bothRefuse: 0, falseRefusal: 0, meriyahOnly: 0,
     failOpen: 0, falsePositive: 0, consumerFailures: 0, oracleCalls: 0, legacyInventoryMiss: 0, legacyAdmissionRefusal: 0 };

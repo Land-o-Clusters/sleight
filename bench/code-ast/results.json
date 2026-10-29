@@ -528,5 +528,410 @@
         "count": 19866
       }
     ]
+  },
+  "statementDifferences": {
+    "file": "~/Projects/sleight-wt/ledger/vc/ps3-evidence/statement-differences.jsonl.gz",
+    "records": 6314,
+    "bytes": 617139,
+    "sha256": "4f9a56441a3a161458fa804eb42a57f88201cbc966203f0ac37da44aa1b9edf9",
+    "uncompressedSha256": "57d300e3286d355d0120b46f4c0326037783b666f30a53488a56d9d1c7423404"
+  },
+  "ps3r": {
+    "fuzz": {
+      "differential": {
+        "jobs": [
+          {
+            "label": "differential differential.mjs seed=3",
+            "tested": 3000000,
+            "cells": 4000000,
+            "rawCells": 1000000,
+            "failures": 0,
+            "legacyThrows": 0,
+            "newThrows": 0,
+            "oracleChecks": 0,
+            "consumers": {
+              "textSave": {
+                "oldAccepted": 0,
+                "newAccepted": 0,
+                "newlyAccepted": 0,
+                "justified": 0,
+                "unjustified": 0
+              },
+              "menu": {
+                "oldAccepted": 0,
+                "newAccepted": 0,
+                "newlyAccepted": 0,
+                "justified": 0,
+                "unjustified": 0
+              },
+              "tab": {
+                "oldAccepted": 0,
+                "newAccepted": 0,
+                "newlyAccepted": 0,
+                "justified": 0,
+                "unjustified": 0
+              }
+            },
+            "ranges": {
+              "newlyAccepted": 1091690,
+              "checked": 1091690,
+              "grammarDisagreements": 0,
+              "mismatches": 0
+            }
+          }
+        ],
+        "exit": 0,
+        "sourceHashes": {
+          "batch.mjs": "95d55eac8c8c416714a1f8d4b6e0665ee29036ab8db328addeeb2b176f403bd4",
+          "oracle.mjs": "2a131066d58076bed9e11cb343006b16d0eaa386588938881563762c17ec1888",
+          "statement-oracle.mjs": "e8d1855438c3f834f6b12e1b7f76663040e440f44640e6553957d95d5d0c877b",
+          "differential.mjs": "b4fadbef9176900ad5916f68144293a17adc87f4c176a141647d34cd0603ff06",
+          "plugins/sleight/lib/code-ast.mjs": "7ac0bad008eb5edd530a8deed1a609731133a4acc382ad4bd4b6051696bd52e7",
+          "plugins/sleight/lib/text-save.mjs": "ae1231e2362235c2cac17c7bd5568d66d311a068b204b106b2b79ecfe674715c",
+          "plugins/sleight/lib/menu-continuation.mjs": "bd7d55579aabef1066dbe4a2ad5618df4cd41c69c4637fb319f494c3392831d5",
+          "plugins/sleight/lib/tab-probe.mjs": "35a98fb8ad49131e6d79c5b15f737b8a5b6c0d80018ccf9621dbc6b05929ed7d",
+          "tests/fixtures/statement-legacy/index.mjs": "391ef763087fdd7fcd64c4fb0a4c186fe2592b7bc6bb06c0637be66ca59016e9",
+          "tests/fixtures/statement-legacy/text-save.mjs": "f62bd18e0fb302d4e9407ab244231a008c5d6606eba002580961a3920157120f",
+          "tests/fixtures/statement-legacy/menu-continuation.mjs": "d7ac7634dd2f3f0b67f7bbefc5eb32a11151dae6b537b397c7440eb8278e5634",
+          "tests/fixtures/statement-legacy/tab-probe.mjs": "2da7ff99b21350cf17c52603dbcaadd18142c15675cc9907cef7579b28ca71cc",
+          "tests/fixtures/statement-legacy/flow-rules.mjs": "9921936e2e4046f5b495d564af19b0c5de8d68433cead892ea00d593c8293590",
+          "tests/fixtures/statement-legacy/code-line-terminators.mjs": "96ca3ed420086c33411b186c5a095a8605023371f906ca916bf74e219c10e308"
+        }
+      },
+      "reviewers": {
+        "jobs": [
+          {
+            "label": "reviewers reviewer/fuzz.mjs seed=1",
+            "tested": 500000,
+            "cells": 1000000,
+            "rawCells": 500000,
+            "failures": 0,
+            "legacyThrows": 0,
+            "newThrows": 0,
+            "oracleChecks": 0,
+            "consumers": {
+              "textSave": {
+                "oldAccepted": 0,
+                "newAccepted": 0,
+                "newlyAccepted": 0,
+                "justified": 0,
+                "unjustified": 0
+              },
+              "menu": {
+                "oldAccepted": 0,
+                "newAccepted": 0,
+                "newlyAccepted": 0,
+                "justified": 0,
+                "unjustified": 0
+              },
+              "tab": {
+                "oldAccepted": 0,
+                "newAccepted": 0,
+                "newlyAccepted": 0,
+                "justified": 0,
+                "unjustified": 0
+              }
+            },
+            "ranges": {
+              "newlyAccepted": 68,
+              "checked": 68,
+              "grammarDisagreements": 0,
+              "mismatches": 0
+            }
+          },
+          {
+            "label": "reviewers reviewer/fuzz.mjs seed=2",
+            "tested": 500000,
+            "cells": 1000000,
+            "rawCells": 500000,
+            "failures": 0,
+            "legacyThrows": 0,
+            "newThrows": 0,
+            "oracleChecks": 0,
+            "consumers": {
+              "textSave": {
+                "oldAccepted": 0,
+                "newAccepted": 0,
+                "newlyAccepted": 0,
+                "justified": 0,
+                "unjustified": 0
+              },
+              "menu": {
+                "oldAccepted": 0,
+                "newAccepted": 0,
+                "newlyAccepted": 0,
+                "justified": 0,
+                "unjustified": 0
+              },
+              "tab": {
+                "oldAccepted": 0,
+                "newAccepted": 0,
+                "newlyAccepted": 0,
+                "justified": 0,
+                "unjustified": 0
+              }
+            },
+            "ranges": {
+              "newlyAccepted": 76,
+              "checked": 76,
+              "grammarDisagreements": 0,
+              "mismatches": 0
+            }
+          },
+          {
+            "label": "reviewers reviewer/fuzz2.mjs seed=1",
+            "tested": 500000,
+            "cells": 1000000,
+            "rawCells": 500000,
+            "failures": 0,
+            "legacyThrows": 0,
+            "newThrows": 0,
+            "oracleChecks": 0,
+            "consumers": {
+              "textSave": {
+                "oldAccepted": 0,
+                "newAccepted": 0,
+                "newlyAccepted": 0,
+                "justified": 0,
+                "unjustified": 0
+              },
+              "menu": {
+                "oldAccepted": 0,
+                "newAccepted": 0,
+                "newlyAccepted": 0,
+                "justified": 0,
+                "unjustified": 0
+              },
+              "tab": {
+                "oldAccepted": 0,
+                "newAccepted": 0,
+                "newlyAccepted": 0,
+                "justified": 0,
+                "unjustified": 0
+              }
+            },
+            "ranges": {
+              "newlyAccepted": 63,
+              "checked": 63,
+              "grammarDisagreements": 0,
+              "mismatches": 0
+            }
+          },
+          {
+            "label": "reviewers reviewer/fuzz2.mjs seed=2",
+            "tested": 500000,
+            "cells": 1000000,
+            "rawCells": 500000,
+            "failures": 0,
+            "legacyThrows": 0,
+            "newThrows": 0,
+            "oracleChecks": 0,
+            "consumers": {
+              "textSave": {
+                "oldAccepted": 0,
+                "newAccepted": 0,
+                "newlyAccepted": 0,
+                "justified": 0,
+                "unjustified": 0
+              },
+              "menu": {
+                "oldAccepted": 0,
+                "newAccepted": 0,
+                "newlyAccepted": 0,
+                "justified": 0,
+                "unjustified": 0
+              },
+              "tab": {
+                "oldAccepted": 0,
+                "newAccepted": 0,
+                "newlyAccepted": 0,
+                "justified": 0,
+                "unjustified": 0
+              }
+            },
+            "ranges": {
+              "newlyAccepted": 62,
+              "checked": 62,
+              "grammarDisagreements": 0,
+              "mismatches": 0
+            }
+          }
+        ],
+        "exit": 0,
+        "sourceHashes": {
+          "batch.mjs": "95d55eac8c8c416714a1f8d4b6e0665ee29036ab8db328addeeb2b176f403bd4",
+          "oracle.mjs": "2a131066d58076bed9e11cb343006b16d0eaa386588938881563762c17ec1888",
+          "statement-oracle.mjs": "e8d1855438c3f834f6b12e1b7f76663040e440f44640e6553957d95d5d0c877b",
+          "reviewer/fuzz.mjs": "d5673b5bffcb3a414ff9559e1356f961baec8cbc697ac65511e1abeb9028f3ac",
+          "reviewer/fuzz2.mjs": "3b0b94bc53512a5ca0f61f38ea5a77785a4a4673fa25e20ff3858facaaee2878",
+          "plugins/sleight/lib/code-ast.mjs": "7ac0bad008eb5edd530a8deed1a609731133a4acc382ad4bd4b6051696bd52e7",
+          "plugins/sleight/lib/text-save.mjs": "ae1231e2362235c2cac17c7bd5568d66d311a068b204b106b2b79ecfe674715c",
+          "plugins/sleight/lib/menu-continuation.mjs": "bd7d55579aabef1066dbe4a2ad5618df4cd41c69c4637fb319f494c3392831d5",
+          "plugins/sleight/lib/tab-probe.mjs": "35a98fb8ad49131e6d79c5b15f737b8a5b6c0d80018ccf9621dbc6b05929ed7d",
+          "tests/fixtures/statement-legacy/index.mjs": "391ef763087fdd7fcd64c4fb0a4c186fe2592b7bc6bb06c0637be66ca59016e9",
+          "tests/fixtures/statement-legacy/text-save.mjs": "f62bd18e0fb302d4e9407ab244231a008c5d6606eba002580961a3920157120f",
+          "tests/fixtures/statement-legacy/menu-continuation.mjs": "d7ac7634dd2f3f0b67f7bbefc5eb32a11151dae6b537b397c7440eb8278e5634",
+          "tests/fixtures/statement-legacy/tab-probe.mjs": "2da7ff99b21350cf17c52603dbcaadd18142c15675cc9907cef7579b28ca71cc",
+          "tests/fixtures/statement-legacy/flow-rules.mjs": "9921936e2e4046f5b495d564af19b0c5de8d68433cead892ea00d593c8293590",
+          "tests/fixtures/statement-legacy/code-line-terminators.mjs": "96ca3ed420086c33411b186c5a095a8605023371f906ca916bf74e219c10e308"
+        }
+      },
+      "shaped": {
+        "jobs": [
+          {
+            "label": "shaped corpus-shaped.mjs seed=151",
+            "tested": 100000,
+            "cells": 100000,
+            "rawCells": 0,
+            "failures": 0,
+            "legacyThrows": 0,
+            "newThrows": 0,
+            "oracleChecks": 2124,
+            "consumers": {
+              "textSave": {
+                "oldAccepted": 0,
+                "newAccepted": 0,
+                "newlyAccepted": 0,
+                "justified": 0,
+                "unjustified": 0
+              },
+              "menu": {
+                "oldAccepted": 2087,
+                "newAccepted": 4211,
+                "newlyAccepted": 2124,
+                "justified": 2124,
+                "unjustified": 0
+              },
+              "tab": {
+                "oldAccepted": 0,
+                "newAccepted": 0,
+                "newlyAccepted": 0,
+                "justified": 0,
+                "unjustified": 0
+              }
+            },
+            "ranges": {
+              "newlyAccepted": 49976,
+              "checked": 49976,
+              "grammarDisagreements": 0,
+              "mismatches": 0
+            }
+          }
+        ],
+        "exit": 0,
+        "sourceHashes": {
+          "batch.mjs": "95d55eac8c8c416714a1f8d4b6e0665ee29036ab8db328addeeb2b176f403bd4",
+          "oracle.mjs": "2a131066d58076bed9e11cb343006b16d0eaa386588938881563762c17ec1888",
+          "statement-oracle.mjs": "e8d1855438c3f834f6b12e1b7f76663040e440f44640e6553957d95d5d0c877b",
+          "corpus-shaped.mjs": "aca09c9f7cbfbe8771eafcc8046edfdf41cd83f4643bf52a8c46d401ed2333aa",
+          "plugins/sleight/lib/code-ast.mjs": "7ac0bad008eb5edd530a8deed1a609731133a4acc382ad4bd4b6051696bd52e7",
+          "plugins/sleight/lib/text-save.mjs": "ae1231e2362235c2cac17c7bd5568d66d311a068b204b106b2b79ecfe674715c",
+          "plugins/sleight/lib/menu-continuation.mjs": "bd7d55579aabef1066dbe4a2ad5618df4cd41c69c4637fb319f494c3392831d5",
+          "plugins/sleight/lib/tab-probe.mjs": "35a98fb8ad49131e6d79c5b15f737b8a5b6c0d80018ccf9621dbc6b05929ed7d",
+          "tests/fixtures/statement-legacy/index.mjs": "391ef763087fdd7fcd64c4fb0a4c186fe2592b7bc6bb06c0637be66ca59016e9",
+          "tests/fixtures/statement-legacy/text-save.mjs": "f62bd18e0fb302d4e9407ab244231a008c5d6606eba002580961a3920157120f",
+          "tests/fixtures/statement-legacy/menu-continuation.mjs": "d7ac7634dd2f3f0b67f7bbefc5eb32a11151dae6b537b397c7440eb8278e5634",
+          "tests/fixtures/statement-legacy/tab-probe.mjs": "2da7ff99b21350cf17c52603dbcaadd18142c15675cc9907cef7579b28ca71cc",
+          "tests/fixtures/statement-legacy/flow-rules.mjs": "9921936e2e4046f5b495d564af19b0c5de8d68433cead892ea00d593c8293590",
+          "tests/fixtures/statement-legacy/code-line-terminators.mjs": "96ca3ed420086c33411b186c5a095a8605023371f906ca916bf74e219c10e308"
+        }
+      }
+    },
+    "measurements": {
+      "corpus": {
+        "claudeFiles": 233,
+        "codexFiles": 324,
+        "claude": 1576,
+        "codex": 3795,
+        "malformed": 0
+      },
+      "manifest": "752ca473d5e60dfad185524f2650d5d6714d6e627ea30db79ac403df2b87e962",
+      "refused": 0,
+      "timings": {
+        "parse": {
+          "samples": 5371,
+          "p50Ms": 0.0015420000000858636,
+          "p99Ms": 0.016875000000027285
+        },
+        "textSave": {
+          "samples": 5371,
+          "p50Ms": 0.005791000000044733,
+          "p99Ms": 0.0337090000000444
+        },
+        "menu": {
+          "samples": 5371,
+          "p50Ms": 0.002124999999978172,
+          "p99Ms": 0.01862499999992906
+        },
+        "tab": {
+          "samples": 5371,
+          "p50Ms": 4.100000001017179e-05,
+          "p99Ms": 0.0002919999999448919
+        },
+        "consumers": {
+          "samples": 5371,
+          "p50Ms": 0.00816599999996015,
+          "p99Ms": 0.05262500000003456
+        }
+      },
+      "loadBefore": [
+        6.55322265625,
+        5.5625,
+        8.51513671875
+      ],
+      "loadAfter": [
+        6.55322265625,
+        5.5625,
+        8.51513671875
+      ],
+      "sourceHashes": {
+        "plugins/sleight/lib/code-ast.mjs": "7ac0bad008eb5edd530a8deed1a609731133a4acc382ad4bd4b6051696bd52e7",
+        "plugins/sleight/lib/text-save.mjs": "ae1231e2362235c2cac17c7bd5568d66d311a068b204b106b2b79ecfe674715c",
+        "plugins/sleight/lib/menu-continuation.mjs": "bd7d55579aabef1066dbe4a2ad5618df4cd41c69c4637fb319f494c3392831d5",
+        "plugins/sleight/lib/tab-probe.mjs": "35a98fb8ad49131e6d79c5b15f737b8a5b6c0d80018ccf9621dbc6b05929ed7d",
+        "bench/code-ast/statement-measure.mjs": "9cc01578056c456027d33cc2fd85431671c6f9caa3f7bfb4bc9d87b0152e6b9c"
+      },
+      "conditions": "One sequential pass over all recorded calls after loading the parser. Shared Mac at nice 20. Consumer timings include their own parsing; tab reuses the menu plan. Offline CPU cost only."
+    },
+    "validation": {
+      "focused": {
+        "command": "bash bench/code-ast/validate-ps3.sh tests",
+        "exit": 0,
+        "tests": 349,
+        "passed": 349,
+        "failed": 0,
+        "skipped": 0
+      },
+      "related": {
+        "command": "bash bench/code-ast/validate-ps3.sh related",
+        "exit": 0,
+        "tests": 644,
+        "passed": 643,
+        "failed": 0,
+        "skipped": 1,
+        "skipReason": "FS1 requires ENGINE_JS_COPIES"
+      },
+      "portability": {
+        "command": "node bench/code-ast/statement-portability.mjs",
+        "exit": 0,
+        "copiedFiles": 30,
+        "gitDirectory": false,
+        "tests": 3,
+        "passed": 3,
+        "failed": 0
+      },
+      "evidence": {
+        "command": "bash bench/code-ast/validate-ps3.sh evidence",
+        "exit": 0,
+        "records": 6314,
+        "archiveBytes": 617139,
+        "sourceHashes": 13,
+        "fuzzChecks": 5100000,
+        "cells": 8100000,
+        "newAccepts": 2124,
+        "rangeChecks": 1141935
+      },
+      "scope": "Headless and offline. No generated or recorded source executes. Historical CA1 sections remain unchanged."
+    }
   }
 }
