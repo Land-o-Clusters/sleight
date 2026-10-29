@@ -55,7 +55,8 @@ function parseUncachedCell(code) {
     loaded = true;
     if (typeof code !== 'string') throw new TypeError('cell source must be a string');
     const comments = [];
-    const ast = cellParser.parseModule(code, { ...ENGINE_PARSE_OPTIONS, onComment: comments });
+    const ast = cellParser.parseModule(code, { ...ENGINE_PARSE_OPTIONS,
+      onComment: (_type, _text, start, end) => comments.push({ range: [start, end] }) });
     return { ast, comments, error: null };
   } catch (error) {
     // No stack, source excerpt or caller string is added to the upstream reason.

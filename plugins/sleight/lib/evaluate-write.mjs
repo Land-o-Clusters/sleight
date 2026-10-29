@@ -1,4 +1,5 @@
 import { lineCommentEnd, isLineTerminator } from './code-line-terminators.mjs';
+import { pageCallbackEscape } from './page-callbacks.mjs';
 import { EVALUATE_ACTION } from './tab-errors.mjs';
 
 const setters = { value: 'fill', checked: 'check', innerHTML: 'read', textContent: 'read', className: 'read',
@@ -258,8 +259,11 @@ function writeIn(ts, source) {
 }
 
 export function evaluateWrite(code) {
-  if (typeof code !== 'string' || !code.includes('evaluate')) return;
-  const writes = callbacks(tokens(code)).map(range => writeIn(range, code)).filter(Boolean).sort((a, b) => a.token.at - b.token.at);
+  if (typeof code !== 'string') return;
+  const escaped = pageCallbackEscape(code);
+  if (!escaped && !code.includes('evaluate')) return;
+  const writes = escaped ? [{ token: escaped, action: 'read' }]
+    : callbacks(tokens(code)).map(range => writeIn(range, code)).filter(Boolean).sort((a, b) => a.token.at - b.token.at);
   const write = writes[0];
   if (!write) return;
   const line = code.slice(0, write.token.at).split('\n').length;

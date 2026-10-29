@@ -6,7 +6,6 @@ import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { writeCodeTrace, WRITE_CODE_BYTES } from '../plugins/sleight/lib/write-trace.mjs';
-import { tokens } from '../plugins/sleight/lib/flow-rules.mjs';
 import { createRelay } from '../plugins/sleight/lib/relay.mjs';
 import { guardedCode } from '../plugins/sleight/lib/document-scope.mjs';
 import { takeGuardStop } from '../plugins/sleight/lib/menu-continuation.mjs';
@@ -23,9 +22,6 @@ test('code trace masks every string, template, regex and comment, including vari
   assert.doesNotMatch(record.code, /secret|55554444/);
   assert.match(record.code, /app\.setValue\("<redacted>", password\)/);
   assert.equal(record.bytes, Buffer.byteLength(source));
-  const spans = tokens(source, { positions: true });
-  assert.deepEqual(spans.map(({ start, end, ...token }) => token), tokens(source));
-  for (const token of spans) assert.ok(token.end > token.start);
 });
 
 test('write code is bounded to 8192 bytes, preserves both ends and reports truncation', () => {

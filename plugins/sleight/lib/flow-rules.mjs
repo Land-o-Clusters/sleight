@@ -91,7 +91,6 @@ export function loadFlowRules(env = process.env, { cwd = process.cwd(), discover
 
 export { codeInspectionRefusal } from './call-inspection.mjs';
 
-
 export function calls(code, handles, fallback, browsers, { trustedFunctions = new Set() } = {}) {
   const { ast, error } = parseCell(code), inputs = [], unknownInputs = [];
   let readTarget = fallback;

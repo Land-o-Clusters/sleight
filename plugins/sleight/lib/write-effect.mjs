@@ -1,5 +1,5 @@
 // Compare only trees the relay already has. No reads, input, focus changes or repair.
-import { parseCell, walk, memberCall } from './code-ast.mjs';
+import { parseCell, walk, memberCall, literalValue } from './code-ast.mjs';
 import { createHash } from 'node:crypto';
 import { documentKey, windowFromText, hasIdentifier, hasLabel } from './document-scope.mjs';
 
@@ -64,8 +64,7 @@ export function fieldWrites(code, before) {
   const handles = new Set(calls.filter(call => ['setValue', 'typeText', 'getAXState', 'getScreenshot', 'getAXStateAndScreenshot'].includes(call.method))
     .map(handleOf).filter(Boolean));
   // Static templates remain string literals for compatibility with SB3.
-  const literal = arg => arg?.type === 'Literal' && typeof arg.value === 'string' ? arg.value
-    : arg?.type === 'TemplateLiteral' && !arg.expressions.length ? arg.quasis[0].value.cooked : undefined;
+  const literal = arg => { const value = literalValue(arg); return typeof value === 'string' ? value : undefined; };
   const resolve = arg => {
     if (arg?.type === 'Literal' && typeof arg.value === 'number' && /^\d+$/.test(code.slice(...arg.range)))
       return fields.filter(f => f.number === arg.value);

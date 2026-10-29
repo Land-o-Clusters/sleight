@@ -20,7 +20,7 @@ test('trace ranges hide complete templates, every literal and encoder arguments'
 });
 
 test('input presence includes escaped and computed method references', () => {
-  for (const source of ['app.cl\\u0069ck(26)', 'app["\\x70aste"](value)', 'const input = app?.typeText'])
+  for (const source of ['app.cl\\u0069ck(26)', 'app["\\x70aste"](value)', 'app[`pa\\u0073te`](value)', 'const input = app?.typeText'])
     assert.equal(hasWrite(source), true, source);
   assert.equal(hasWrite('const title = "read only"; title.trim()'), false);
 });

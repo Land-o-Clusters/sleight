@@ -1,4 +1,4 @@
-import { parseCell, walk, memberCall } from './code-ast.mjs';
+import { parseCell, walk, memberCall, literalValue } from './code-ast.mjs';
 
 export const WRITE_CODE_BYTES = 8192;
 const INPUTS = new Set(['setValue', 'typeText', 'pressKey', 'paste', 'click', 'doubleClick', 'rightClick', 'drag',
@@ -8,7 +8,7 @@ export const hasWrite = code => {
   const { ast, error } = parseCell(code ?? '');
   if (error) return true;
   for (const node of walk(ast)) {
-    if (node.type === 'Identifier' && INPUTS.has(node.name) || node.type === 'Literal' && INPUTS.has(node.value)) return true;
+    if (node.type === 'Identifier' && INPUTS.has(node.name) || ['Literal', 'TemplateLiteral'].includes(node.type) && INPUTS.has(literalValue(node))) return true;
   }
   return false;
 };
