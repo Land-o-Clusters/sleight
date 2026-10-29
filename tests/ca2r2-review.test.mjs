@@ -55,8 +55,9 @@ for (const code of refused) test('unsafe constructs refuse all consumers: ' + co
   assert.equal(rules().analyze('js', { code }, { app: 'Notes' }).violations.length, 2);
 });
 
-test('the unsafe refusal names the construct and the guarded direct call', () => {
-  assert.match(nativeArgumentsProblem('other.typeText.call(null, "SECRET")'), /typeText\.call.*Use direct handle\.typeText\(/);
+test('the unsafe refusal names the construct beside the existing recovery', () => {
+  assert.equal(nativeArgumentsProblem('other.typeText.call(null, "SECRET")'),
+    'sleight: cannot inspect JavaScript. Use direct calls with literal arguments. (typeText.call)');
 });
 
 for (const code of [

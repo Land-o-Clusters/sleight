@@ -1,5 +1,7 @@
 import { parseCell, walk, memberCall, literalValue, UNKNOWN, callInventory, handleBindings, invalidHandleNames } from './code-ast.mjs';
 
+export const codeInspectionRefusal = /* notice */ 'sleight: cannot inspect JavaScript. Use direct calls with literal arguments.';
+
 const memberName = node => node?.type === 'MemberExpression'
   ? node.computed ? literalValue(node.property) : node.property.name : undefined;
 const guarded = new Set(['typeText', 'setValue', 'pressKey', 'click', 'doubleClick', 'rightClick', 'paste', 'scroll',
@@ -16,8 +18,14 @@ const parentsOf = nodes => {
 
 // Trust only the relay's complete lowering shape, never a function somewhere
 // inside a sequence, property, argument or detached callable.
-export function trustedInvocations(ast, code, trustedFunctions = new Set()) {
-  const calls = new Set();
+export function trustedInvocations(ast, code, trustedFunctions = new Set(), known = new Set(['app'])) {
+  const calls = new Set(), handles = new Set(known), invalid = invalidHandleNames(ast);
+  for (const node of walk(ast)) {
+    if (node.type === 'VariableDeclarator' && node.id.type === 'Identifier') handles.delete(node.id.name);
+    if (node.type === 'Identifier' && /^__sleightOpenedApp\d+$/.test(node.name)) handles.add(node.name);
+  }
+  for (const [name, hint] of handleBindings(ast)) if (['app', 'browser', 'locator'].includes(hint.kind)) handles.add(name);
+  for (const name of invalid) handles.delete(name);
   for (const outer of walk(ast)) {
     if (outer.type !== 'CallExpression' || outer.optional) continue;
     const bind = outer.callee, member = bind?.callee;
@@ -25,7 +33,7 @@ export function trustedInvocations(ast, code, trustedFunctions = new Set()) {
         member.computed || member.optional || memberName(member) !== 'bind' || member.object.type !== 'FunctionExpression' ||
         !trustedFunctions.has(code.slice(...member.object.range))) continue;
     const [receiver, handle, array] = bind.arguments;
-    if (bind.arguments.length !== 3 || literalValue(receiver) !== null || handle?.type !== 'Identifier' ||
+    if (bind.arguments.length !== 3 || literalValue(receiver) !== null || handle?.type !== 'Identifier' || !handles.has(handle.name) ||
         array?.type !== 'ArrayExpression' || literalValue(array) === UNKNOWN) continue;
     calls.add(outer); calls.add(bind);
   }
@@ -37,10 +45,29 @@ export function trustedInvocations(ast, code, trustedFunctions = new Set()) {
 export function introspectionCalls(ast) {
   const nodes = [...walk(ast)], parents = parentsOf(nodes), safe = new Set();
   const shadowed = invalidHandleNames(ast);
+  const forbidden = new Set(['globalThis', 'window', 'self', 'Reflect', 'Function', 'Symbol', 'prototype', '__proto__', 'defineProperty', 'assign']);
+  const locals = new Set(ast.body.flatMap(node => node.type === 'VariableDeclaration'
+    ? node.declarations.filter(declaration => declaration.id.type === 'Identifier').map(declaration => declaration.id.name) : []));
+  const nonLocalWrite = node => {
+    if (!node) return false;
+    if (node.type === 'MemberExpression') return !locals.has(receiverRoot(node.object));
+    if (node.type === 'ArrayPattern') return node.elements.some(nonLocalWrite);
+    if (node.type === 'ObjectPattern') return node.properties.some(part => nonLocalWrite(part.type === 'RestElement' ? part.argument : part.value));
+    if (node.type === 'AssignmentPattern') return nonLocalWrite(node.left);
+    if (node.type === 'RestElement') return nonLocalWrite(node.argument);
+    return false;
+  };
+  let eligible = !nodes.some(node => forbidden.has(node.type === 'Identifier' ? node.name : node.type === 'Literal' ? node.value : undefined));
   for (const node of nodes) {
     const binding = node.type === 'VariableDeclarator' ? node.id : node.type === 'AssignmentExpression' ? node.left
       : node.type === 'UpdateExpression' ? node.argument : undefined;
     if (binding) for (const part of walk(binding)) if (part.type === 'Identifier') shadowed.add(part.name);
+    const write = node.type === 'AssignmentExpression' ? node.left : node.type === 'UpdateExpression' ? node.argument
+      : node.type === 'UnaryExpression' && node.operator === 'delete' ? node.argument
+      : ['ForInStatement', 'ForOfStatement'].includes(node.type) ? node.left : undefined;
+    if (nonLocalWrite(write)) eligible = false;
+    const call = memberCall(node);
+    if (call?.receiver.type === 'Identifier' && call.receiver.name === 'Object' && call.method !== 'keys') eligible = false;
     if (node.type.startsWith('Import') && node.local?.type === 'Identifier') shadowed.add(node.local.name);
     if (['FunctionDeclaration', 'FunctionExpression', 'ArrowFunctionExpression'].includes(node.type)) {
       if (node.id) shadowed.add(node.id.name);
@@ -51,11 +78,14 @@ export function introspectionCalls(ast) {
          parents.get(node)?.type === 'UnaryExpression' && parents.get(node).operator === 'delete')) shadowed.add(receiverRoot(node));
   }
   const dataUse = node => {
+    if (!eligible) return false;
     const parent = parents.get(node);
     if (!parent || parent.type === 'ExpressionStatement') return true;
     if (['ChainExpression', 'UnaryExpression', 'BinaryExpression', 'LogicalExpression', 'ConditionalExpression', 'TemplateLiteral', 'TemplateElement'].includes(parent.type)) return dataUse(parent);
     if (parent.type === 'CallExpression' && parent.arguments.includes(node)) {
       const call = memberCall(parent);
+      if (call?.receiver.type === 'Identifier' && call.receiver.name === 'JSON' && call.method === 'stringify' &&
+          !shadowed.has('JSON') && parent.arguments.length === 1) return dataUse(parent);
       return call && call.receiver.type === 'Identifier' &&
         (call.receiver.name === 'nodeRepl' && call.method === 'write' || call.receiver.name === 'console' && call.method === 'log');
     }
@@ -71,13 +101,27 @@ export function introspectionCalls(ast) {
     const call = memberCall(node);
     if (call?.receiver.type === 'Identifier' && call.receiver.name === 'Object' && call.method === 'keys' && !shadowed.has('Object')) safe.add(node);
   }
-  return { calls: safe, dataUse, parents };
+  return { calls: safe, dataUse, parents, eligible };
 }
 
 export function unsafeHandleRefusal(construct) {
-  const method = construct.split(/[. (]/)[0];
-  const direct = guarded.has(method) ? `handle.${method}` : 'handle.method';
-  return /* notice */ `sleight: cannot inspect JavaScript: ${construct}. Use direct ${direct}(literalArguments) calls instead.`;
+  if (construct === 'String(handle)') construct += /* notice */ '; read-only: Object.keys(handle)';
+  return /* notice */ `${codeInspectionRefusal} (${construct})`;
+}
+
+// References can carry code through callbacks or containers even when their
+// eventual invocation is not visible. This is a mention-based refusal only.
+export function unsafeDynamicCode(ast) {
+  const nodes = [...walk(ast)], parents = parentsOf(nodes);
+  for (const node of nodes) {
+    if (node.type === 'MemberExpression' && ['eval', 'Function', 'constructor'].includes(memberName(node)))
+      return `.${memberName(node)}`;
+    if (node.type === 'Identifier' && ['eval', 'Function'].includes(node.name)) {
+      const parent = parents.get(node);
+      if (parent?.type !== 'CallExpression' || parent.callee !== node) return `${node.name} reference`;
+    }
+  }
+  return false;
 }
 
 // Literal consumers share the parser, but retain their own policy for UNKNOWN.
@@ -121,6 +165,8 @@ export function argumentValue(node) {
 // Extracting a method or invoking it through another callable loses the receiver
 // and signature proof. Refuse these uses before any guarded handle can dispatch.
 export function unsafeHandleUse(ast, known = new Set(['app']), { code = '', trustedFunctions } = {}) {
+  const dynamic = unsafeDynamicCode(ast);
+  if (dynamic) return dynamic;
   const handles = new Set(known);
   for (const node of walk(ast)) if (node.type === 'VariableDeclarator' && node.id.type === 'Identifier') handles.delete(node.id.name);
   for (const [name, hint] of handleBindings(ast)) if (['app', 'browser', 'locator'].includes(hint.kind)) handles.add(name);
@@ -128,8 +174,8 @@ export function unsafeHandleUse(ast, known = new Set(['app']), { code = '', trus
       ['getAXState', 'getAXStateAndScreenshot', 'getScreenshot'].includes(memberCall(node.init)?.method)) handles.delete(node.id.name);
   for (const node of walk(ast)) if (node.type === 'Identifier' && /^__sleightOpenedApp\d+$/.test(node.name)) handles.add(node.name);
   const nodes = [...walk(ast)];
-  const { calls: readCalls, dataUse, parents } = introspectionCalls(ast);
-  const trusted = trustedInvocations(ast, code, trustedFunctions);
+  const { calls: readCalls, dataUse, parents, eligible } = introspectionCalls(ast);
+  const trusted = trustedInvocations(ast, code, trustedFunctions, known);
   // A lost destination hint never proves that the value stopped being a handle.
   for (const node of nodes) {
     const left = node.type === 'VariableDeclarator' ? node.id : node.type === 'AssignmentExpression' ? node.left : undefined;
@@ -208,7 +254,7 @@ export function unsafeHandleUse(ast, known = new Set(['app']), { code = '', trus
     if (parent?.type === 'CallExpression' && parent.callee !== node) return `${String(key)} method argument`;
     let value = node, use = parent;
     while (['AwaitExpression', 'ChainExpression'].includes(use?.type)) { value = use; use = parents.get(use); }
-    if (use?.type === 'ExpressionStatement' || use?.type === 'ConditionalExpression' && (use.test === value || dataUse(use))) continue;
+    if (eligible && (use?.type === 'ExpressionStatement' || use?.type === 'ConditionalExpression' && (use.test === value || dataUse(use)))) continue;
     // Every other use detaches the method, including assignment, conditional,
     // getter and object-property aliases. Data fields above carry no callable.
     return `${String(key === UNKNOWN ? 'computed' : key)} method extraction (${use?.type ?? 'unknown use'})`;

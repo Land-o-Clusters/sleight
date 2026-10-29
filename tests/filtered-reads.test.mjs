@@ -154,7 +154,7 @@ for (const code of [
     const h = await engine(t);
     const result = await h.call(code);
     if (code.includes('const act = app.click')) {
-      assert.equal(result.isError, true); assert.match(output(result), /click method extraction.*Use direct handle\.click\(/);
+      assert.equal(result.isError, true); assert.match(output(result), /Use direct calls with literal arguments\. \(click method extraction/);
       assert.deepEqual(h.actions, []); return;
     }
     assert.match(output(result), /standard window|no change since|lines changed since/);
@@ -263,7 +263,7 @@ for (const suffix of ['await app.click(1);', 'const act = app.click; await act(1
     const result = await h.call('const state = await app.getAXState(); ' + suffix +
       ' nodeRepl.write(state.split("\\n").filter(line => line.includes("Row 7")));');
     if (suffix.includes('const act = app.click')) {
-      assert.equal(result.isError, true); assert.match(output(result), /click method extraction.*Use direct handle\.click\(/);
+      assert.equal(result.isError, true); assert.match(output(result), /Use direct calls with literal arguments\. \(click method extraction/);
       assert.deepEqual(h.actions, []); return;
     }
     assert.equal(result.isError, false);

@@ -13904,7 +13904,7 @@
       "line": 15,
       "source": "543c3e083e03b9e039cdcf355f796e796b0e27d8ba16f544ebbdb24ef9122f15",
       "before": "74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
-      "after": "40c5ca47ee15e5142a5aa857a3bc8981a0876fded7817ecb305b768880c0d185",
+      "after": "867fca949cdb379c7d2979da1a5397f46e09f6b5c9a725513ef6915c119f6ca8",
       "engineAccepted": true,
       "verdict": "safety correction",
       "reason": "unsafe handle use now refuses before native dispatch"
@@ -14021,7 +14021,7 @@
       "line": 15,
       "source": "543c3e083e03b9e039cdcf355f796e796b0e27d8ba16f544ebbdb24ef9122f15",
       "before": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
-      "after": "81472a6d205843b3006f025862666188bda4e56b892fea342bf6de9ecff1dec7",
+      "after": "29e32b1e50cf0df95754ba0ea02bdcafbe9464e0dc06cb3ecdffd6d5bcf68f2e",
       "engineAccepted": true,
       "verdict": "safety correction",
       "reason": "unsafe handle use now refuses instead of returning a misleading empty inventory"
@@ -14034,7 +14034,7 @@
       "line": 15,
       "source": "543c3e083e03b9e039cdcf355f796e796b0e27d8ba16f544ebbdb24ef9122f15",
       "before": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
-      "after": "81472a6d205843b3006f025862666188bda4e56b892fea342bf6de9ecff1dec7",
+      "after": "29e32b1e50cf0df95754ba0ea02bdcafbe9464e0dc06cb3ecdffd6d5bcf68f2e",
       "engineAccepted": true,
       "verdict": "safety correction",
       "reason": "unsafe handle use now refuses instead of returning a misleading empty inventory"

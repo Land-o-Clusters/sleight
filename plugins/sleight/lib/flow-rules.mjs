@@ -91,7 +91,7 @@ export function loadFlowRules(env = process.env, { cwd = process.cwd(), discover
 }
 
 // A small tokenizer, deliberately narrower than a JavaScript interpreter.
-export const codeInspectionRefusal = /* notice */ 'sleight: cannot inspect JavaScript. Use direct calls with literal arguments.';
+export { codeInspectionRefusal } from './call-inspection.mjs';
 export const invalidTokens = ts => ts.some(t => !t.string && t.v === '<invalid>');
 function regexpEnd(code, start) {
   let i = start + 1, bracket = false;
@@ -177,7 +177,7 @@ export function calls(code, handles, fallback, browsers, { trustedFunctions = ne
   const methods = new Set(['typeText', 'paste', 'setValue', 'pressKey', 'fill', 'type', 'pressSequentially', 'press', 'goto', 'createBrowserTab', 'back', 'forward', 'reload']);
   const invalid = invalidHandleNames(ast);
   for (const name of invalid) handles.delete(name);
-  const trusted = trustedInvocations(ast, code, trustedFunctions), reads = introspectionCalls(ast).calls;
+  const trusted = trustedInvocations(ast, code, trustedFunctions, new Set(['app', ...handles.keys()])), reads = introspectionCalls(ast).calls;
   const indirect = callInventory(ast).filter(entry => {
     if (trusted.has(entry.node) || reads.has(entry.node)) return false;
     const call = memberCall(entry.node);

@@ -78,8 +78,15 @@ for (const [keyword, expression] of keywordCases) {
     } });
     assert.deepEqual(typed, ['SECRET']);
     assert.equal(invalidTokens(tokens(code)), false);
+    if (['new', 'instanceof', 'extends'].includes(keyword)) {
+      assert.deepEqual(flow().analyze('js', { code }, { app: 'Fixture' }).violations.map(v => v.rule).sort(), ['other', 'secret']);
+      assert.match(nativeArgumentsProblem(code), /cannot inspect JavaScript.*\(\.constructor\)/);
+      assert.throws(() => clipboardActions(code), /cannot inspect JavaScript/);
+      assert.throws(() => literalElements(code), /cannot inspect JavaScript/);
+      return;
+    }
     assert.deepEqual(flow().analyze('js', { code }, { app: 'Fixture' }).violations.map(v=>v.rule).sort(),
-      ['new', 'return', 'yield'].includes(keyword) ? ['other','secret'] : ['secret']);
+      ['return', 'yield'].includes(keyword) ? ['other','secret'] : ['secret']);
     assert.deepEqual(clipboardActions(code), ['paste']);
     assert.deepEqual(literalElements(code), [7]);
   });
