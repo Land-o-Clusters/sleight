@@ -106,11 +106,13 @@ function regexpEnd(code, start) {
   }
   return -1;
 }
-export function tokens(code) {
+export function tokens(code, { positions = false } = {}) {
   const out = [], parens = [];
   const invalid = () => [...out, { v: '<invalid>' }];
-  let i = 0, afterControl = false;
+  let i = 0, start = 0, afterControl = false;
+  const push = token => out.push(positions ? { ...token, start, end: i } : token);
   while (i < code.length) {
+    start = i;
     const c = code[i];
     if (/\s/.test(c)) { i++; continue; }
     if (code.startsWith('//', i)) { i = lineCommentEnd(code, i); continue; }
@@ -127,7 +129,7 @@ export function tokens(code) {
       if (ambiguous || regex) {
         const end = regexpEnd(code, i);
         if (ambiguous ? end >= 0 : end < 0) return invalid();
-        if (regex) { i = end; out.push({ v: '<regexp>' }); continue; }
+        if (regex) { i = end; push({ v: '<regexp>' }); continue; }
       }
     }
     if (c === '"' || c === "'" || c === '`') {
@@ -153,16 +155,16 @@ export function tokens(code) {
         } else value += simple[esc] ?? esc ?? '';
       }
       if (code[i] !== quote) return invalid();
-      i++; out.push(dynamic ? { v: '<template>' } : { v: value, string: true }); continue;
+      i++; push(dynamic ? { v: '<template>' } : { v: value, string: true }); continue;
     }
     // Escaped identifiers need a full parser; never reinterpret their suffix as a keyword.
     if (c === '\\') return invalid();
     const word = /^[\p{ID_Continue}$\u200c\u200d]+/u.exec(code.slice(i));
-    if (word) { out.push({ v: word[0] }); i += word[0].length; }
+    if (word) { i += word[0].length; push({ v: word[0] }); }
     else {
       if (c === '(') parens.push(!previous?.string && !['.', '#'].includes(out.at(-2)?.v) && ['if', 'while', 'for', 'with', 'switch', 'catch'].includes(previous?.v));
       if (c === ')') afterControl = parens.pop() === true;
-      out.push({ v: c }); i++;
+      i++; push({ v: c });
     }
   }
   return out;

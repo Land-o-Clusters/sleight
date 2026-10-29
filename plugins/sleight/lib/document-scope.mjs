@@ -1683,9 +1683,18 @@ ${O ? `    // What each action did (action-outcomes.mjs), for SLEIGHT_OUTCOMES a
           // No Shift settle after setValue here, as drag.js does after its own text writes: the
           // engine refuses a key press with only modifiers (-10005, 2/2 live, 2026-10-11).
           input();${O ? '\n          ' + 'if (state.outcomeMark) attempt.rec = state.outcomeRec(name, asked, args, text ?? priorText, before); attempt.sent = true;' : ''}
+          const invoke = () => {
+            if (state.timing && state.guardStopMark && ['setValue', 'typeText', 'pressKey'].includes(name)) {
+              nodeRepl.write(state.guardStopMark + JSON.stringify({ writeForward: { index: attempt.index, method: name,
+                element: name === 'setValue' ? Number.isInteger(args[0]) ? args[0] : args[0] && typeof args[0] === 'object'
+                  ? Object.fromEntries(['id', 'label', 'line'].filter(key => typeof args[0][key] === 'string').map(key => [key, '<redacted>'])) : null : null,
+                afterClick: before?.name === 'click' && Number.isInteger(before.at) ? before.at : null } }) + '\\n');
+            }
+            return value.apply(raw, args);
+          };
           // Input went out before the engine answered, so a rejected action may have acted.
           let result;
-          try { result = await ${O ? 'state.runOutcome(attempt, () => value.apply(raw, args))' : 'value.apply(raw, args)'}; } catch (error) {
+          try { result = await ${O ? 'state.runOutcome(attempt, invoke)' : 'invoke()'}; } catch (error) {
             if (consent?.decline) {
               state.unknown.push(shown);
               nodeRepl.write('sleight: Decline unverified: the decline action did not finish.\\n');
@@ -1759,7 +1768,7 @@ ${O ? `    // What each action did (action-outcomes.mjs), for SLEIGHT_OUTCOMES a
                   if (!state.boundNumbers.has(proxy)) state.boundNumbers.set(proxy, new Map());
                   state.boundNumbers.get(proxy).set(literal, { number: to[0][0], line: to[0][1] });
                 }
-                try { result = await ${O ? 'state.runOutcome(attempt, () => value.apply(raw, args))' : 'value.apply(raw, args)'}; resent = true; } catch (again) {
+                try { result = await ${O ? 'state.runOutcome(attempt, invoke)' : 'invoke()'}; resent = true; } catch (again) {
                   state.unknown.push(shown);
                   keep();
                   throw again;

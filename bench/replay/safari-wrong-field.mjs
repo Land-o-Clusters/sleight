@@ -10,10 +10,11 @@ export const recordings = ['safari-r1-c6', 'safari-r3-c9', 'safari-r3-c11'].map(
   JSON.parse(readFileSync(new URL(`../../tests/fixtures/safari-wrong-field/${name}.json`, import.meta.url), 'utf8')));
 
 export async function replay({ code, before, requested = 26, effect = 53 }, {
-  recordedEffect = true, snapshots, dispatchIdentityGuard = false, bind = true, ck1 = true, ck2 = true,
+  recordedEffect = true, snapshots, dispatchIdentityGuard = false, bind = true, ck1 = true, ck2 = true, timing = false,
 } = {}) {
   const compactor = createReadCompactor();
   compactor.process([{ type: 'text', text: before }]);
+  const action = compactor.beginAction(code);
   const window = windowFromText(before), numbers = [...new Set(literalElements(code))];
   const remapped = compactor.remapStale(window, code);
   const seenLines = compactor.seenLines(window, numbers);
@@ -55,7 +56,7 @@ export async function replay({ code, before, requested = 26, effect = 53 }, {
     },
     click: async number => { writes.push({ click: number }); },
   };
-  const checks = { bind, ck1, ck2, guardStopMark: '[replay]', literals: numbers,
+  const checks = { bind, ck1, ck2, timing, guardStopMark: '[replay]', literals: numbers,
     seenLines, seenParents: compactor.seenParents(window, numbers), uniqueSeen: compactor.uniqueSeen(window, numbers) };
   const context = { safari: raw, app: raw, cua: { getApp: async () => raw },
     nodeRepl: { write: value => output.push(value) }, setTimeout, clearTimeout, performance };
@@ -66,7 +67,8 @@ export async function replay({ code, before, requested = 26, effect = 53 }, {
     const source = `safari = await cua.getApp(${JSON.stringify(window.app)}); app = safari;\n` + (remapped?.code ?? code);
     await runInNewContext(`(async () => { ${guardedCode(source, window, undefined, undefined, checks)} })()`, context);
   } catch (caught) { error = caught; }
-  return { writes, dispatches, output, current, error, remapped, seenLines, reads };
+  const result = compactor.process([{ type: 'text', text: current }], { action, failed: !!error });
+  return { writes, dispatches, output, current, error, remapped, seenLines, reads, result, effects: action?.writeEffects ?? [] };
 }
 
 export async function main() {

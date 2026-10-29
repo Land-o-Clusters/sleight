@@ -70,6 +70,7 @@ import { pageSite } from './permissions.mjs';
 import { DOCUMENT_TOOL, WINDOW_HEADER, documentKey, documentLabel, windowFromText, lastWindowFromText, isDocumentRead, withoutEcho, readCode, guardedCode, WINDOWS_MARK, GUARD_READY, GUARD_MARK, GUARD_END, GUARD_OMIT_MARK, menuRoot, selectedMenuEntry } from './document-scope.mjs';
 import { ChangeReview, REVIEW_TOOL, isChangeCancel } from './change-review.mjs';
 import { FLOW_TOOL } from './flow-rules.mjs';
+import { hasWrite, writeCodeTrace } from './write-trace.mjs';
 import { NATIVE_HANDOFF_TOOL, openNativeHandoffUi } from './native-handoff.mjs';
 import { createHandoffWaiter, HANDOFF_WAIT_MS, handoffMessages } from './direct-browser/handoff.mjs';
 import { browserCall, browserReply, nativeBindings, browserLeaseNote } from './browser-call.mjs';
@@ -900,7 +901,7 @@ export function createRelay({
   runningProbe = spaceProbe,
   // Long-lived helper transaction: record, recheck before launch, restore the user's app once.
   frontRestore: restoreFront,
-  trace: writeTrace = () => {},
+  trace: writeTrace,
   traceCode = false,
   now = Date.now,
   helperCrashJitterMs = () => Math.floor(Math.random() * 1500),
@@ -1211,11 +1212,21 @@ export function createRelay({
   // when one of them holds a keyboard filter tap: the mod shows that to the user.
   const drivenApps = new Set(), turnEnds = new Set(), tapWarned = new Set();
   function trace(direction, msg) {
+    if (!writeTrace) return;
     if (traceFailed) {
       if (direction === 'preapproved-app') throw new Error('preapproval trace unavailable');
       return;
     }
-    try { writeTrace(direction, msg); }
+    try {
+      // The ordinary message trace must not retain an unredacted second copy of write code.
+      const redact = value => {
+        if (!value || typeof value !== 'object') return value;
+        if (Array.isArray(value)) return value.map(redact);
+        return Object.fromEntries(Object.entries(value).map(([key, item]) => [key,
+          key === 'code' && typeof item === 'string' && hasWrite(item) ? writeCodeTrace(item).code : redact(item)]));
+      };
+      writeTrace(direction, direction === 'write-code' ? msg : redact(msg));
+    }
     catch (error) {
       traceFailed = true;
       if (direction === 'preapproved-app') throw error;
@@ -2582,6 +2593,9 @@ export function createRelay({
     if (closing && msg.result?.action === 'accept') msg = { ...msg, result: { action: 'cancel' } };
     if (serverIn.writableEnded || serverIn.destroyed) { trace('server-input-closed', { id: msg.id }); return; }
     if (msg.result?.action === 'accept' && closeKeyApp) closeRead?.keyPressed(closeKeyApp);
+    if (writeTrace && msg.method === 'tools/call' && msg.params?.name === 'js' && hasWrite(jsCalls.get(msg.id) ?? msg.params.arguments?.code)) {
+      trace('write-code', { id: msg.id, ...writeCodeTrace(msg.params.arguments.code) });
+    }
     trace('to-server', msg);
     docOrigin.sent(msg, documentationContext());
     if (msg.method === 'tools/call' && msg.id !== undefined) engineCalls.add(msg.id);
@@ -4175,6 +4189,7 @@ export function createRelay({
     msg.result.content = taken.content;
     for (const decision of taken.bindings) trace('setvalue-binding', { id: msg.id, ...decision });
     for (const decision of taken.tabProbes) trace('tab-probe', { id: msg.id, ...decision });
+    for (const decision of taken.writeForwards) trace('write-forwarded', { id: msg.id, ...decision });
     // The private mark proves the guard wrote these: payments it let through count for the request, and a payment stop is
     // answered by the next user message (SLEIGHT_CONFIRM_PAYMENTS=always) or by sleight's own card below.
     for (const record of taken.paid ?? []) paymentMessages.paid(record);
@@ -6205,6 +6220,11 @@ export function createRelay({
           forceFull: healthPlan?.fullVisible === true,
           explicitFull: /\bdisableDiffing\s*:\s*true\b/.test(jsCode ?? ''),
           action: closedLast ? undefined : resultCalls.get(msg.id), failure, failed: !closedLast && (resultFailed || !!msg.result?.isError) });
+      const wrongWrites = resultCalls.get(msg.id)?.writeEffects;
+      if (wrongWrites?.length) {
+        msg.result.isError = true;
+        trace('wrong-field-effect', { id: msg.id, writes: wrongWrites.map(({ method, requested, received }) => ({ method, requested, received })) });
+      }
       // Claude's code can reach the guard's state, so the record's shape is checked, not trusted.
       const record = automatic ? undefined : compactor.takeOutcomes();
       const kept = !Array.isArray(record?.outcomes) ? undefined : continued?.head ? { ...record, outcomes: record.outcomes.filter(rec => rec?.x !== 'refused') } : record;
@@ -6216,7 +6236,7 @@ export function createRelay({
       const savedReads = automatic ? 0 : compactor.takeSaved();
       recordAction('outcomes', msg.id, kept); recordAction('saved', msg.id, savedReads);
       if (!automatic && elementVisibility && jsCode !== undefined && !msg.result.isError) listClicks = compactor.listClicks();
-      if (typingReceipt) msg.result.content.push({ type: 'text', text: typingReceipt });
+      if (typingReceipt && !wrongWrites?.length) msg.result.content.push({ type: 'text', text: typingReceipt });
       if (!automatic && openReads.has(msg.id) && !msg.result.isError && compactor.lastReadNoted()) textlessOpens.add(msg.id);
       filterMarks.delete(msg.id);
     }
