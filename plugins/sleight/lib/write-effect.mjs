@@ -1,5 +1,6 @@
 // Compare only trees the relay already has. No reads, input, focus changes or repair.
 import { tokens, invalidTokens } from './flow-rules.mjs';
+import { createHash } from 'node:crypto';
 import { documentKey, windowFromText, hasIdentifier, hasLabel } from './document-scope.mjs';
 
 const META = 'Value|Description|ID|Help|Placeholder|Secondary Actions|URL|Selected text';
@@ -45,6 +46,9 @@ export function fieldWrites(code, before) {
   let actionIndex = 0;
   const inputs = new Set(['click', 'doubleClick', 'rightClick', 'setValue', 'typeText', 'paste', 'pressKey', 'scroll', 'drag',
     'selectText', 'performSecondaryAction', 'performAction', 'press']);
+  // Only engine handles advance the guard's counter. Calls such as helper.click() do not.
+  const handles = new Set(ts.flatMap((t, i) => !t.string && ['setValue', 'typeText', 'getAXState', 'getScreenshot', 'getAXStateAndScreenshot'].includes(t.v) &&
+    ts[i - 1]?.v === '.' && ts[i + 1]?.v === '(' ? [ts[i - 2]?.v] : []));
   const literal = arg => arg?.length === 1 && arg[0].string ? arg[0].v : undefined;
   const resolve = arg => {
     if (arg?.length === 1 && !arg[0].string && /^\d+$/.test(arg[0].v)) return fields.filter(f => f.number === Number(arg[0].v));
@@ -71,7 +75,7 @@ export function fieldWrites(code, before) {
       args.at(-1).push(t);
     }
     if (j === ts.length) return [];
-    const index = inputs.has(method) ? actionIndex++ : undefined;
+    const index = inputs.has(method) && handles.has(handle) ? actionIndex++ : undefined;
     if (method === 'click') { const matches = resolve(args[0]); aims.set(handle, matches.length === 1 ? matches[0] : undefined); }
     else if (method === 'setValue' || method === 'typeText') {
       const matches = method === 'setValue' ? resolve(args[0]) : [aims.get(handle)].filter(Boolean);
@@ -89,7 +93,7 @@ const sensitive = f => /secure text field|password|passcode|passphrase|\bpin\b|c
 const payment = f => !sensitive(f) && /payment|billing|card|carte|tarjeta|karte|cart[aã]o|カード|\bcvc\b|\bcvv\b|expiry|expir|\bmm\/yy\b|security code|iban|routing|bank account/i.test(context(f));
 const describe = f => `${f.number} (${[f.label, f.role].filter(Boolean).join(' ').slice(0, 100)})`;
 
-export function wrongFieldEffects(code, before, after) {
+export function wrongFieldEffects(code, before, after, { flagged = new Set(), failed = false } = {}) {
   // Do not parse either tree for cells without a resolvable field write.
   if (!/\.\s*(?:setValue|typeText)\s*\(/.test(code ?? '')) return [];
   const writes = fieldWrites(code, before);
@@ -105,14 +109,23 @@ export function wrongFieldEffects(code, before, after) {
     const landed = now.filter(f => f.path !== target.path && f.value === write.value &&
       unique(old, f.path) && unique(now, f.path) && !writes.some(w => w.target.path === f.path && w.value === write.value));
     if (landed.length !== 1) continue;
-    const actual = landed[0], isError = was.exposed;
-    // A repeat can leave the wrong field unchanged; only an explicit write to the requested field qualifies.
+    const actual = landed[0], changed = unique(old, actual.path).value !== actual.value;
+    // Keep only a bounded digest of an earlier flag, never another copy of the input text.
+    const key = createHash('sha256').update(JSON.stringify([documentKey(windowFromText(before)), was.path, was.value,
+      was.exposed, actual.path, write.value])).digest('hex');
+    if (!changed && !flagged.has(key)) continue;
+    if (changed) {
+      flagged.add(key);
+      if (flagged.size > 64) flagged.delete(flagged.values().next().value);
+    }
+    const isError = was.exposed && changed;
     const risk = payment(actual) ? /* notice */ 'Payment field received the text. ' : sensitive(actual) ? /* notice */ 'Credential field received the text. ' : '';
     const status = isError
       ? /* notice */ `clear it before continuing. Requested write not done: ${describe(target)} kept its value.`
-      : /* notice */ `${describe(target)} shows no value; check both before continuing.`;
+      : /* notice */ `check ${actual.number} and ${target.number} before continuing.`;
+    const ran = failed ? '' : /* notice */ 'Other actions in this call ran; ';
     effects.push({ method: write.method, index: write.index, requested: write.target.number, received: actual.number, isError,
-      notice: /* notice */ `sleight: ${risk}The text is now in ${describe(actual)}; ${status} Other actions in this call ran; sleight made no repair.` });
+      notice: /* notice */ `sleight: ${risk}The text is now in ${describe(actual)}; ${status} ${ran}sleight made no repair.` });
   }
   return effects.sort((a, b) => Number(/^(?:sleight: )(?:Payment|Credential)/.test(b.notice)) - Number(/^(?:sleight: )(?:Payment|Credential)/.test(a.notice)));
 }

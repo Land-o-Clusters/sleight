@@ -1218,12 +1218,12 @@ export function createRelay({
       return;
     }
     try {
-      // The ordinary message trace must not retain an unredacted second copy of write code.
+      // Computed calls can hide the input method, so every traced code key masks literals.
       const redact = value => {
         if (!value || typeof value !== 'object') return value;
         if (Array.isArray(value)) return value.map(redact);
         return Object.fromEntries(Object.entries(value).map(([key, item]) => [key,
-          key === 'code' && typeof item === 'string' && hasWrite(item) ? writeCodeTrace(item).code : redact(item)]));
+          key === 'code' && typeof item === 'string' ? writeCodeTrace(item).code : redact(item)]));
       };
       writeTrace(direction, direction === 'write-code' ? msg : redact(msg));
     }
@@ -3720,7 +3720,7 @@ export function createRelay({
     }
     // SLEIGHT_TRACE_CODE=1 also keeps Claude's code, for benchmark diagnosis on this Mac only.
     if (msg.method === 'tools/call') { trace('call-received', { id: msg.id, method: msg.method, params: { name: msg.params?.name,
-      ...(traceCode && typeof msg.params?.arguments?.code === 'string' ? { code: (hasWrite(msg.params.arguments.code) ? writeCodeTrace(msg.params.arguments.code).code : msg.params.arguments.code).slice(0, 4000) } : {}) } }); callSeqs.set(msg.id, ++callSeq); callStarts.set(msg.id, Date.now()); }
+      ...(traceCode && typeof msg.params?.arguments?.code === 'string' ? { code: writeCodeTrace(msg.params.arguments.code).code.slice(0, 4000) } : {}) } }); callSeqs.set(msg.id, ++callSeq); callStarts.set(msg.id, Date.now()); }
     if (msg.method === 'tools/call' && ['js', 'js_reset'].includes(msg.params?.name)) {
       const next = {};
       for (const key of ENGINE_CONTEXT_KEYS) if (msg.params._meta && Object.hasOwn(msg.params._meta, key)) next[key] = msg.params._meta[key];

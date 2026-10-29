@@ -36,7 +36,7 @@ const skillPath = new URL('../plugins/sleight/skills/drive-mac-apps/SKILL.md', i
 // KT1 adds one fixed 40-character pending-tab notice (+43 inventoried characters).
 // INT5 measures the combined AS2R2 and RS1AR inventory.
 // SB3 inventories both conditional field-write notices and their risk prefixes.
-const wrongFieldNoticeBudget = 306;
+const wrongFieldNoticeBudget = 304;
 const leanRatio = 33488 / 46546;
 const leanSkill = () => skillRules(skillPath, { SLEIGHT_PROMPT: 'lean' });
 
@@ -45,8 +45,9 @@ test('SB3 field-write notices have a pinned conditional budget', { skip }, () =>
   assert.deepEqual(entries.map(e => e.text), [
     'Payment field received the text. ', 'Credential field received the text. ',
     'clear it before continuing. Requested write not done: <value> kept its value.',
-    '<value> shows no value; check both before continuing.',
-    'sleight: <value>The text is now in <value>; <value> Other actions in this call ran; sleight made no repair.',
+    'check <value> and <value> before continuing.',
+    'Other actions in this call ran; ',
+    'sleight: <value>The text is now in <value>; <value> <value>sleight made no repair.',
   ]);
   assert.equal(entries.reduce((sum, entry) => sum + entry.text.length, 0), wrongFieldNoticeBudget);
 });

@@ -16,7 +16,7 @@ for (const recording of recordings) test(`${recording.id}: effect detection flag
   assert.equal(bad.effects.length, 1);
   assert.deepEqual([bad.effects[0].requested, bad.effects[0].received], [26, 53]);
   assert.equal(good.effects.length, 0);
-  assert.match(bad.result[0].text, /shows no value; check both/);
+  assert.match(bad.result[0].text, /check 53 and 26 before continuing/);
   assert.equal(bad.effects[0].isError, false);
   assert.doesNotMatch(bad.result.map(c => c.text).join('\n'), /UI changed \(value\)/);
 });
@@ -25,7 +25,7 @@ test('setValue and click/typeText notice names the destination and target withou
   for (const source of [code, 'await app.click(26); await app.typeText("street");']) {
     const effects = wrongFieldEffects(source, before, wrong);
     assert.equal(effects.length, 1);
-    assert.equal(effects[0].notice, 'sleight: The text is now in 53 (Promo text field); 26 (Address combo box) shows no value; check both before continuing. Other actions in this call ran; sleight made no repair.');
+    assert.equal(effects[0].notice, 'sleight: The text is now in 53 (Promo text field); check 53 and 26 before continuing. Other actions in this call ran; sleight made no repair.');
     assert.doesNotMatch(effects[0].notice, /street/);
   }
 });
@@ -43,7 +43,7 @@ test('Description and ID metadata at the start of a field body retain their labe
   const b = a.replace('ID: login-secret', 'ID: login-secret, Value: street');
   const effect = wrongFieldEffects(code, a, b)[0];
   assert.match(effect.notice, /^sleight: Credential field received the text/);
-  assert.match(effect.notice, /53 \(Password text field\); 26 \(Address combo box\)/);
+  assert.match(effect.notice, /53 \(Password text field\); check 53 and 26/);
 });
 
 test('unchanged, correct, ambiguous, intentional, incomplete and unrelated writes stay silent', () => {
@@ -78,14 +78,14 @@ test('an earlier different write to the receiving field does not hide the later 
   assert.equal(wrongFieldEffects('await app.setValue(53, "promo");' + code, before, wrong).length, 1);
 });
 
-test('only the misdirected outcome is marked failed, including a remapped target number', () => {
+test('only the misdirected outcome with the matching requested number is marked failed', () => {
   // A wrong write to a field also explicitly targeted in the batch is ambiguous, so use a third field.
   const initial = before.replace('Address\n', 'Address, Value: old\n') + '\t\t54 text field (settable) Email\n';
   const compactor = createReadCompactor({ outcomes: true }); compactor.process([{ type: 'text', text: initial }]);
   const batch = compactor.beginAction('await app.setValue(54, "email"); await app.setValue(26, "street");');
   const final = initial.replace('54 text field (settable) Email', '54 text field (settable) Email, Value: email').replace('Promo\n', 'Promo, Value: street\n');
   compactor.process([{ type: 'text', text: final + '\n[receipt]' + JSON.stringify({ outcomes: [
-    { i: 0, a: 'setValue', n: 54, f: [{ o: 'value', m: true }] }, { i: 1, a: 'setValue', n: 126, f: [{ o: 'value', m: true }] },
+    { i: 0, a: 'setValue', n: 54, f: [{ o: 'value', m: true }] }, { i: 1, a: 'setValue', n: 26, f: [{ o: 'value', m: true }] },
   ] }) }], { action: batch, filterMark: '[receipt]' });
   const record = compactor.takeOutcomes();
   assert.equal(record.outcomes[0].x, undefined);

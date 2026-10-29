@@ -58,6 +58,7 @@ export function auditTranscript(source, { onCall = () => {} } = {}) {
   const rows = source.trim().split('\n').filter(Boolean).map(JSON.parse), pending = new Map();
   const result = { calls: 0, writeCalls: 0, comparableCalls: 0, correctCalls: 0, correctCallFlags: 0, correctWrites: 0, correctFlags: 0, flags: [], skippedWrites: 0 };
   let previous;
+  const flagged = new Set();
   const start = block => {
     for (const call of pending.values()) call.overlap = true;
     const code = block.input?.code ?? block.arguments?.code;
@@ -74,7 +75,7 @@ export function auditTranscript(source, { onCall = () => {} } = {}) {
       result.writeCalls++;
       if (!call.overlap && !failed && after && call.before?.key === after.key) {
         result.comparableCalls++;
-        const effects = wrongFieldEffects(call.code, call.before.text, after.text), fields = writeFields(after.text);
+        const effects = wrongFieldEffects(call.code, call.before.text, after.text, { flagged }), fields = writeFields(after.text);
         const correct = writes.filter(w => {
           const matches = fields.filter(f => f.path === w.target.path);
           return matches.length === 1 && matches[0].value === w.value;

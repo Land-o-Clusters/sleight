@@ -1331,6 +1331,7 @@ export function createReadCompactor({ resultTrim = process.env.SLEIGHT_RESULT_TR
   const seen = new Map(), pendingSwaps = new Map(), pendingClicks = new Map();
   // window key -> { sets, calls }: setValue checks whose call ended in another window, such as an alert.
   const pendingSetValues = new Map();
+  const flaggedWrites = new Set();
   // window key -> { title, history }: the Undo item's title in that window's last complete read, and every title it showed (WB2).
   const undoSeen = new Map();
   // window key -> { target, calls }: the current run of calls that scrolled one target in that window.
@@ -1701,11 +1702,11 @@ export function createReadCompactor({ resultTrim = process.env.SLEIGHT_RESULT_TR
         const before = action.before ?? action.effectBefore;
         action.writeEffects = !action.overlap && before && !before.incomplete && !before.degraded &&
           observedInResult && !observedInResult.invalid && !observedInResult.incomplete && !observedInResult.degraded
-          ? wrongFieldEffects(action.code, before.lines.join('\n'), observedInResult.lines.join('\n')) : [];
+          ? wrongFieldEffects(action.code, before.lines.join('\n'), observedInResult.lines.join('\n'), { flagged: flaggedWrites, failed: failed || stopped }) : [];
         if (action.writeEffects.length) {
           // A successful engine return does not establish that the requested write happened.
           for (const effect of action.writeEffects) {
-            const rec = outcomeRecord?.outcomes?.find(rec => rec.i === effect.index && rec.a === effect.method);
+            const rec = outcomeRecord?.outcomes?.find(rec => rec.i === effect.index && rec.a === effect.method && rec.n === effect.requested);
             if (effect.isError && rec) { rec.x = 'failed'; rec.f = []; }
           }
           out.unshift(...action.writeEffects.map(effect => ({ type: 'text', text: promptNotice(effect.notice, prompt) })));
@@ -1717,7 +1718,7 @@ export function createReadCompactor({ resultTrim = process.env.SLEIGHT_RESULT_TR
       const outcomeLines = outcomes && outcomeRecord && renderOutcomes(outcomeRecord, { start: outcomeStart, continuing: outcomeContinuing,
         notSent: content.some(item => item?.type === 'text' && /\bnot sent\b/.test(item.text ?? '')) });
       if (outcomeLines) out.push({ type: 'text', text: promptNotice(outcomeLines, prompt) });
-      const note = action && !action.writeEffects?.length && resultNote(action, observedInResult, failed,
+      const note = action && (failed || !action.writeEffects?.length) && resultNote(action, observedInResult, failed,
         failure ?? { message: failureReason(content) }, !!outcomeLines);
       if (note) out.push({ type: 'text', text: promptNotice(note, prompt) });
       const omittedNote = /* lean notice */ `sleight: ${omittedReads} earlier reads of the same window in this call left out; the last is shown. Element numbers refer to the last tree.`;
@@ -2059,7 +2060,7 @@ export function createReadCompactor({ resultTrim = process.env.SLEIGHT_RESULT_TR
     },
     // Result attribution resets independently of the element history used by the guard.
     // An engine restart or js_reset also makes each window's next acquisition whole.
-    reset() { latest = effectBaseline = observedInResult = undefined; documents.clear(); for (const entry of seen.values()) entry.stale = true; },
+    reset() { latest = effectBaseline = observedInResult = undefined; documents.clear(); flaggedWrites.clear(); for (const entry of seen.values()) entry.stale = true; },
     // open_file's file and its size on disk, under its given and real paths, for the textless-document hint.
     noteOpenedFile(path, real, size) {
       for (const name of new Set([path, real])) if (typeof name === 'string') openedFiles.set(name, Number(size) || 0);

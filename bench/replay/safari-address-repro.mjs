@@ -53,7 +53,7 @@ export async function runSequence(calls, { call, mapper, beforeCall = () => {} }
       const targets = requested && writeFields(after?.text).filter(f => f.path === requested.target.path);
       const correct = targets?.length === 1 && targets[0].value === requested.value;
       const detected = effects.length === 1 && !!result.isError === effects[0].isError && /The text is now in/.test(text) &&
-        (effects[0].isError ? /Requested write not done/.test(text) : /shows no value; check both before continuing/.test(text));
+        (effects[0].isError ? /Requested write not done/.test(text) : /check 53 and 26 before continuing/.test(text));
       return { verdict: correct && !result.isError || detected ? 'pass' : 'inconclusive',
         outcome: correct ? 'address received text' : detected ? 'wrong destination detected' : 'final write unproved', steps };
     }
