@@ -137,6 +137,12 @@ refuses terminals and OpenAI's own apps. See [approvals and guards](#approvals-a
 
 ## Approvals and guards
 
+- Code inspection catches mistakes and common indirect forms, and a script written to evade it can still get through:
+  values passed through callbacks (`["x"].forEach(s => app.typeText(s))`) and strings built at run time aren't followed.
+  Use direct calls with literal arguments, and `Object.keys(app)` to list a handle's methods.
+- In Safari's checkout fixture, a `setValue` on the Address combo box put the text into the Promo field 5 times in the
+  recorded runs (2 on 1.4.2). sleight sent the right element number each time, and its traces up to 1.5.0 kept too little
+  to show what the engine chose. sleight now names the field that received the text, but it can't stop the write.
 <a id="protected-consent-input"></a>
 
 - Through 1.4.2, the Mac operation-review, session opt-in and resume alerts put Allow first. One physical Return could
