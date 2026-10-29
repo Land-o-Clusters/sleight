@@ -313,8 +313,10 @@ const cells = 'await app.typeText("Item"); await app.pressKey("Tab"); await app.
 
 test('typing aimed at the document that lands in a sidebar field says where it went', () => {
   assert.match(typing('await app.click(137);', cells), stray);
-  // The same call clicking a document element first.
-  assert.match(typing(undefined, 'await app.click(36); ' + cells), stray);
+  // The same call clicking a document element first. The document field exposed a value and kept it, so SB3's
+  // wrong-field notice (which names both fields) replaces this note instead of giving two kinds of advice.
+  assert.match(typing(undefined, 'await app.click(36); ' + cells),
+    /The text is now in 15 \(Replace With combo box\); clear it before continuing\. Requested write not done: 36 /);
   assert.match(typing('await app.click(137);', cells, { prompt: 'lean' }), /typed text landed in element 15 \(Replace With\); click the document first\./);
 });
 
