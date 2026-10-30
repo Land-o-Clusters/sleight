@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.5.1 (unreleased)
+
+- Public CI runs `npm test` on Linux without installing packages, and 13 of 18,691 tests failed there on 1.5.0. Tests that need the dev-only `typescript` package now skip with a reason when it can't be found, and benchmark modules load it only when they use it. The plugin itself never loads `typescript`, so 1.5.0 users weren't affected.
+- A checkout-tab test injects its clock, so a slow machine can't age its certificate early.
+- The release preflight's Linux leg now matches public CI: it runs `npm test` with no packages installed. A checkout that contains `node_modules` is refused.
+
 ## 1.5.0 (2026-10-30)
 
 ### Turbo reads
