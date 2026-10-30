@@ -11,7 +11,7 @@ import { trackTemp } from '../scripts/temp-leftovers.mjs';
 import { macCommandSkip } from './requirements.mjs';
 import { createSelectedConnection } from '../plugins/sleight/lib/direct-browser/selected-connection.mjs';
 import { createNativeProcessProvider, isNativeProcessProvider, parseProcessMetadata } from '../plugins/sleight/lib/direct-browser/host.mjs';
-import { codeRequirement, signedBrowserAt, verifiedOnDisk, writeClass } from '../plugins/sleight/lib/direct-browser/executable-trust.mjs';
+import { codeRequirement, onDiskVerdict, signedBrowserAt, verifiedOnDisk, writeClass } from '../plugins/sleight/lib/direct-browser/executable-trust.mjs';
 
 class FakeSocket extends EventTarget {
   static instances = [];
@@ -217,6 +217,20 @@ test('real codesign: setup accepts the signed bundle on disk and refuses a tampe
   assert.equal(await make('Signed'), true);
   assert.equal(await make('Tampered', path => { const bytes = readFileSync(path); bytes[0x4000 + 100] ^= 0xff; writeFileSync(path, bytes); }), false);
   assert.equal(await make('Unsigned', path => run('/usr/bin/codesign', ['--remove-signature', path], { timeout: 10000 })), false);
+  // Finder info on the bundle folder, as a Mac set up from a Time Machine backup carries, fails codesign --strict with
+  // "detritus not allowed" although the signature is intact. The verdict names it so setup can point at xattr -rc.
+  const finderInfo = '0000000000000000040000000000000000000000000000000000000000000000';
+  const detritus = async (label, change) => {
+    const executable = join(root, `${label}.app/Contents/MacOS/${label}`); mkdirSync(dirname(executable), { recursive: true });
+    copyFileSync('/bin/sleep', executable);
+    await run('/usr/bin/codesign', ['-f', '-s', '-', '-i', 'com.sleight.test', '-o', 'kill,library,runtime', executable], { timeout: 10000 });
+    await change?.(executable); chmodSync(executable, 0o775);
+    return onDiskVerdict(executable, requirement, lstatSync(executable));
+  };
+  assert.deepEqual(await detritus('Metadata', path => run('/usr/bin/xattr', ['-wx', 'com.apple.FinderInfo', finderInfo, dirname(dirname(dirname(path)))], { timeout: 10000 })),
+    { ok: false, reason: 'detritus' });
+  assert.deepEqual(await detritus('Clean'), { ok: true });
+  assert.deepEqual(await detritus('Unsigned2', path => run('/usr/bin/codesign', ['--remove-signature', path], { timeout: 10000 })), { ok: false, reason: 'signature' });
 });
 test('the browser table yields the Developer ID requirement only at the fixed places', () => {
   const chrome = signedBrowserAt('/Applications/Google Chrome.app/Contents/MacOS/Google Chrome', { appRoots: ['/Applications'] });

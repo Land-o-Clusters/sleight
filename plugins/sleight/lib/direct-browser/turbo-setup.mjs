@@ -12,7 +12,7 @@ import { INSTALLED_ENTRIES, INSTALLED_PLUGIN_ROOT, acceptedInstalledPackage, ins
 import { packageFiles } from './session-host.mjs';
 import { nativeHelpersBuilt } from './host.mjs';
 import { browserChoices, browserDefinitions, qualifiedBrowserNames } from './browsers.mjs';
-import { signedBrowserAt, verifiedOnDisk, writeClass } from './executable-trust.mjs';
+import { onDiskVerdict, signedBrowserAt, writeClass } from './executable-trust.mjs';
 import { BUNDLE_ID, appOptInPath, grantStorePath, readAppOptIns, registryPath as packagedRegistry } from './electron-config.mjs';
 import { readRecipeRegistry, recipeFor } from './electron-recipes.mjs';
 import { createGrantStore } from './electron-consent.mjs';
@@ -27,8 +27,10 @@ const appRootsFor = (home, apps) => [apps ?? '/Applications', join(home, 'Applic
 // Mirrors what the connection requires of the browser executable (selected-connection.mjs securePath and
 // executable-trust.mjs), so a browser turbo would refuse at connect time is never written into the file. A
 // group-writable signed browser passes here on its bundle's signature on disk; the connection then proves the
-// running process.
-export function executableProblem(path, uid = process.getuid(), { appRoots, verify = verifiedOnDisk, primaryGid = process.getgid() } = {}) {
+// running process. verify returns onDiskVerdict's shape, or a plain boolean.
+const bundleOf = executable => dirname(dirname(dirname(executable)));
+const metadataFix = executable => `xattr -rc "${bundleOf(executable)}"`;
+export function executableProblem(path, uid = process.getuid(), { appRoots, verify = onDiskVerdict, primaryGid = process.getgid() } = {}) {
   let stat;
   try { stat = lstatSync(path); } catch { return 'missing'; }
   try {
@@ -39,7 +41,9 @@ export function executableProblem(path, uid = process.getuid(), { appRoots, veri
     if (writers === 'signature') {
       const signed = signedBrowserAt(path, appRoots ? { appRoots } : {});
       if (!signed) return mode;
-      if (!verify(path, signed.requirement, stat)) return `${mode}, and its signature is not ${signed.name}'s from team ${signed.team}`;
+      const verdict = verify(path, signed.requirement, stat), ok = verdict === true || verdict?.ok === true;
+      if (!ok && verdict?.reason === 'detritus') return `${mode}, and codesign --strict refuses its bundle for Finder metadata rather than its signature (${metadataFix(path)} clears it)`;
+      if (!ok) return `${mode}, and its signature is not ${signed.name}'s from team ${signed.team}`;
     }
     if (!(stat.mode & 0o100)) return 'not executable';
     return undefined;
@@ -319,6 +323,7 @@ export function doctorLines(d) {
   row(!d.executableProblem, 'browser', `${d.browser.name}, ${d.browser.executable}${d.executableProblem ? ` (${d.executableProblem})` : ''}`);
   if (d.browser.qualified === false) lines.push(fix(unqualifiedMessage(d.browser)));
   if (d.executableProblem) lines.push(fix(d.executableProblem === 'missing' ? `reinstall the browser, or run sleight-mcp turbo on --browser ${browserChoices()}`
+    : /Finder metadata/.test(d.executableProblem) ? `${metadataFix(d.browser.executable)} strips the metadata (a Mac set up from a backup carries it), then run sleight-mcp turbo on`
     : /signature/.test(d.executableProblem) ? `reinstall ${d.browser.name} from its maker, or choose a qualified browser with sleight-mcp turbo on --browser`
     : `make the executable writable only by you (chmod go-w '${d.browser.executable}'), or choose a qualified browser with sleight-mcp turbo on --browser`));
   if (d.state === 'current') {

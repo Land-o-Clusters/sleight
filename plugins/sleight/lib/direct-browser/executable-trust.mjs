@@ -104,21 +104,35 @@ export async function proveRunningCode(run, status, requirement, executable) {
 const onDisk = new Map();
 
 /** Setup's static mirror: the executable's bundle on disk satisfies the requirement, and its code directory has the
- *  same flags. runSync has spawnSync's shape. Cached per inode, mtime and ctime. Returns true or false, never throws.
+ *  same flags. runSync has spawnSync's shape. Cached per inode, mtime and ctime. Returns { ok: true } or
+ *  { ok: false, reason }, never throws. reason is 'detritus' when codesign --strict refused the bundle for Finder
+ *  metadata (a resource fork or Finder info on the bundle folder, which a Mac set up from a backup carries over)
+ *  while the signature itself may be fine, 'signature' when the bundle fails the requirement, 'flags' when its code
+ *  directory lacks the kill, library-validation and runtime flags, and 'error' when codesign could not run.
  *  It decides only what setup writes; the connection still proves the running process. */
-export function verifiedOnDisk(executable, requirement, stat, runSync = spawnSync) {
+export function onDiskVerdict(executable, requirement, stat, runSync = spawnSync) {
   const key = [executable, requirement, stat.dev, stat.ino, stat.mtimeMs, stat.ctimeMs, stat.size].join(':');
   if (onDisk.has(key)) return onDisk.get(key);
-  let ok = false;
+  let verdict;
   try {
     const bundle = dirname(dirname(dirname(executable)));
     const options = { env: environment, timeout: 10000, maxBuffer: 65536, encoding: 'utf8' };
-    if (bundle.endsWith('.app') && runSync(CODESIGN, ['--verify', '--strict', '-R=' + requirement, bundle], options).status === 0) {
-      const shown = runSync(CODESIGN, ['--display', '--verbose=1', executable], options);
-      ok = shown.status === 0 && (codeFlags(String(shown.stderr ?? '') + '\n' + String(shown.stdout ?? '')) & REQUIRED_CODE_FLAGS) === REQUIRED_CODE_FLAGS;
+    if (!bundle.endsWith('.app')) verdict = { ok: false, reason: 'signature' };
+    else {
+      const verified = runSync(CODESIGN, ['--verify', '--strict', '-R=' + requirement, bundle], options);
+      if (verified.status !== 0) verdict = { ok: false, reason: /detritus/.test(String(verified.stderr ?? '')) ? 'detritus' : 'signature' };
+      else {
+        const shown = runSync(CODESIGN, ['--display', '--verbose=1', executable], options);
+        const flagged = shown.status === 0 && (codeFlags(String(shown.stderr ?? '') + '\n' + String(shown.stdout ?? '')) & REQUIRED_CODE_FLAGS) === REQUIRED_CODE_FLAGS;
+        verdict = flagged ? { ok: true } : { ok: false, reason: 'flags' };
+      }
     }
-  } catch { ok = false; }
+  } catch { verdict = { ok: false, reason: 'error' }; }
+  Object.freeze(verdict);
   if (onDisk.size > 64) onDisk.clear();
-  onDisk.set(key, ok);
-  return ok;
+  onDisk.set(key, verdict);
+  return verdict;
 }
+
+/** onDiskVerdict as a boolean. */
+export const verifiedOnDisk = (executable, requirement, stat, runSync) => onDiskVerdict(executable, requirement, stat, runSync).ok;
