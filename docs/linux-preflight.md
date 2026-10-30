@@ -10,7 +10,7 @@ CLAUDE_CONFIG_DIR=$(mktemp -d /tmp/lane-claude-XXXXXX) node scripts/linux-prefli
 
 Replace `FULL_SHA` with the full commit at HEAD. Use `--worktree PATH` for an explicit
 source worktree. Execution requires `--run` and an exact commit. There is no passing dry
-plan. The command returns the install or test failure status, or another nonzero status
+plan. The command returns the test failure status, or another nonzero status
 when preparation, receipt validation or cleanup fails. It prints one JSON receipt to
 stdout. Test output goes to stderr, so stdout can feed the release parser.
 
@@ -34,7 +34,8 @@ or host environment variables are mounted or forwarded into the container.
 Docker creates the container with `--init` to forward signals and reap orphaned child
 processes. Process-exit assertions and cleanup checks remain required.
 
-The container runs `npm ci --ignore-scripts`, then exactly `npm test`, with argument arrays
+The container runs exactly `npm test` from the committed checkout, without installing packages,
+matching public CI. It refuses a checkout containing `node_modules`. It uses argument arrays
 and no shell. Git and npm use a fresh disposable directory as both `HOME` and
 `CLAUDE_CONFIG_DIR` inside Linux. The inherited image home is replaced for these children.
 The helper removes that configuration after the checks. The public-tree privacy test
@@ -54,7 +55,7 @@ wrapper around Docker.
 A success receipt has schema version 1 and includes:
 
 - `platform: "linux"`, `command: ["npm", "test"]`, `executed: true`, `exitCode: 0`
-  and `installExitCode: 0`.
+  and `dependencyMode: "checkout-only"`.
 - The exact `commit`, canonical source `worktree`, unique `runId`, Docker `containerId`
   and actual `imageId`. Keep the full receipt private because `worktree` is a host path.
 - `trackedFiles` and npm's reported `counts`: tests, suites, pass, fail, cancelled,

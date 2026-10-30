@@ -22,6 +22,9 @@ Before tagging, use candidate mode:
 CLAUDE_CONFIG_DIR=$(mktemp -d /tmp/lane-claude-XXXXXX) node scripts/release-preflight.mjs --candidate 1.4.1 --private-terms /run/private/release-terms.json
 ```
 
+The Linux leg runs `npm test` without installing packages, as public CI does. A failed test, absent counts,
+an install-mode receipt or unconfirmed cleanup blocks the release.
+
 On macOS with Colima installed, append `--linux-runtime colima` to either command. This
 starts an owned VM through the Colima helper, runs the same exact-commit Linux producer,
 then waits for container and VM cleanup. The helper keeps its 20-minute total budget.
@@ -102,7 +105,7 @@ and handles VM cleanup. The history scanner and Linux helper must be tracked; se
 also requires its helper to be tracked. Docker runs a separate exact-commit
 checkout with usable Git metadata, isolated dependencies and a fresh Claude configuration.
 The complete receipt must pass A5's exported parser for that same commit and canonical
-worktree. A failed install or test, absent counts, a plan, a Mac result or unconfirmed
+worktree. A failed test, absent counts, a plan, a Mac result or unconfirmed
 cleanup fails. See [Linux preflight](linux-preflight.md) for the CLI and receipt fields.
 
 A6 waits for A5's owned Docker child and container cleanup after cancellation, and for
