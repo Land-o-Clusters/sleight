@@ -142,7 +142,12 @@ test('a newly connected renderer never replays a sentence approved before secure
   t.after(() => { sink.close(); peers.forEach(p => p.destroy()); server.close(); });
   sink.refresh();
   const deadline = Date.now() + 1000;
-  while (!received.length && Date.now() < deadline) await new Promise(resolve => setTimeout(resolve, 5));
+  while (!received.length && Date.now() < deadline) {
+    // The earlier empty-directory scan may still own discovery after settle().
+    // Request discovery again once that asynchronous scan has finished.
+    sink.refresh();
+    await new Promise(resolve => setTimeout(resolve, 5));
+  }
   assert.ok(received.length); assert.ok(!received.join('').includes('PRIVATE OLD SENTENCE'));
 });
 const settle = async () => { for (let i = 0; i < 15; i++) await new Promise(resolve => setImmediate(resolve)); };
