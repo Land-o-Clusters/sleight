@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import * as fs from 'node:fs';
 import { join } from 'node:path';
+import { tmpdir } from 'node:os';
 import { spawnSync } from 'node:child_process';
 import { encodePng } from '../bench/hand/synthetic-character.mjs';
 import { registerTemp } from '../scripts/temp-leftovers.mjs';
@@ -27,7 +28,9 @@ function atlas(rows) {
   return atlases.get(rows);
 }
 function fixture(t, version = 1, rows = version === 2 ? 11 : 9) {
-  const base = registerTemp(t, fs.realpathSync(fs.mkdtempSync(join('/private', 'tmp', 'sleight-petdex-'))));
+  // The native decoder's macOS test override accepts only canonical /tmp banks.
+  const temporary = process.platform === 'darwin' ? '/tmp' : tmpdir();
+  const base = registerTemp(t, fs.realpathSync(fs.mkdtempSync(join(temporary, 'sleight-petdex-'))));
   const source = join(base, 'download'), root = join(base, 'characters'); fs.mkdirSync(source, { mode: 0o700 });
   const pet = { id: 'synthetic-pet', displayName: 'Synthetic pet', description: 'Generated squares.', spritesheetPath: 'spritesheet.png' };
   if (version !== undefined) pet.spriteVersionNumber = version;

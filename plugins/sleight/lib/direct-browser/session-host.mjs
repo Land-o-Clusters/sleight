@@ -66,7 +66,9 @@ export function createPackageInventory({ root = fileURLToPath(new URL('../..', i
       if (actual.length !== paths.size || actual.some(entry => !paths.has(entry.path))) return fail();
       const tree = new Map([['', dir], ...entries.map(entry => [entry.path, entry.stat])]);
       const now = process.hrtime.bigint();
-      if (sameTree(verified, tree) && now - verifiedAt < PACKAGE_VERIFICATION_TTL_NS) return process.version === manifest.node;
+      // Linux filesystems can leave this entire tuple unchanged across immediate
+      // same-size writes. Only macOS uses metadata reuse; elsewhere hash every check.
+      if (process.platform === 'darwin' && sameTree(verified, tree) && now - verifiedAt < PACKAGE_VERIFICATION_TTL_NS) return process.version === manifest.node;
       // A changed identity or expired TTL requires all bytes, including art. Start
       // the TTL before hashing so verification time cannot extend the reuse window.
       verified = undefined;

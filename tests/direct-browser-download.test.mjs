@@ -44,7 +44,8 @@ test('completed downloads return verified path, size and type in one private ses
   const c = await f.save(undefined, { session: 'two' }); assert.notEqual(join(a.path, '..'), join(c.path, '..'));
   assert.equal(f.files().length, 3); assert.equal(existsSync(join(f.home, 'Downloads')), false);
 });
-test('the user may explicitly select Downloads without overwriting an existing file', async t => {
+test('the user may explicitly select Downloads without overwriting an existing file',
+  { skip: process.platform !== 'darwin' && 'Downloads publication requires macOS quarantine' }, async t => {
   const f = fixture(t), extra = { message: { text: 'Download the statement to my Downloads folder.' } };
   const a = await f.save(undefined, extra), b = await f.save(undefined, extra);
   assert.equal(join(a.path, '..'), join(f.home, 'Downloads')); assert.notEqual(a.path, b.path); assert.equal(f.files().length, 2);

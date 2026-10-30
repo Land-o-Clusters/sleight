@@ -57,7 +57,7 @@ function destination(value, userHome) {
   const expanded = expand(value, userHome);
   if (!path.isAbsolute(expanded) || expanded.split('/').some(part => part === '..' || part === '.')) refuse('Export needs an absolute path');
   // macOS's system /tmp alias is the only symlink accepted, before checking every real parent.
-  return path.normalize(expanded === '/tmp' || expanded.startsWith('/tmp/') ? '/private' + expanded : expanded);
+  return path.normalize(process.platform === 'darwin' && (expanded === '/tmp' || expanded.startsWith('/tmp/')) ? '/private' + expanded : expanded);
 }
 function namedDestination(message, requested, userHome) {
   // A closed affirmative grammar. A mention, negation or page instruction grants no path authority.

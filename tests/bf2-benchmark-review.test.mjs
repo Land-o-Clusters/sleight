@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
+import { createHash } from 'node:crypto';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -61,9 +62,11 @@ test('BF2 patch hunk counts, offsets and reversible application stay valid witho
 
 test('BF2 historical gate prose differs from its published page only by the pin label', () => {
   const file = 'docs/benchmarks/2026-10-13-gate.md';
-  const before = execFileSync('/usr/bin/git', ['show', `ccacf304^:${file}`], { cwd: root, encoding: 'utf8' });
+  // SHA-256 of ccacf304^'s published bytes. CI has only the candidate's shallow
+  // checkout, so keep the historical assertion independent of local Git objects.
+  const before = '75a1ad0406c512d1312f6d2a897da7456b6c89eab22b97d1560b31f7403d1543';
   const current = fs.readFileSync(path.join(root, file), 'utf8');
   const label = 'These results used `8b68924` (baseline). The next race targets `6a12d60` (head).\n\n';
   assert.ok(current.includes(label));
-  assert.equal(current.replace(label, ''), before);
+  assert.equal(createHash('sha256').update(current.replace(label, '')).digest('hex'), before);
 });

@@ -33,6 +33,29 @@ function countReads(t) {
   t.after(() => { t.mock.restoreAll(); syncBuiltinESMExports(); });
   return () => reads;
 }
+test('non-macOS checks reject same-size tampering even when filesystem timestamps collide', t => {
+  const f = fixture(t), file = join(f.root, 'host.mjs'), before = lstatSync(file, { bigint: true });
+  const platform = Object.getOwnPropertyDescriptor(process, 'platform');
+  Object.defineProperty(process, 'platform', { ...platform, value: 'linux' });
+  t.after(() => Object.defineProperty(process, 'platform', platform));
+  // Model the unchanged timestamp tuple observed for immediate writes on Linux.
+  // Reads and writes still use the real file.
+  const originalLstat = fs.lstatSync, originalFstat = fs.fstatSync;
+  const coarse = stat => {
+    if (stat.dev === before.dev && stat.ino === before.ino) {
+      stat.mtimeNs = before.mtimeNs; stat.ctimeNs = before.ctimeNs;
+    }
+    return stat;
+  };
+  t.mock.method(fs, 'lstatSync', (...args) => coarse(originalLstat(...args)));
+  t.mock.method(fs, 'fstatSync', (...args) => coarse(originalFstat(...args)));
+  syncBuiltinESMExports();
+  t.after(() => { t.mock.restoreAll(); syncBuiltinESMExports(); });
+  assert.equal(f.inventory.current(), true);
+  writeFileSync(file, 'x'.repeat(Buffer.byteLength(f.content['host.mjs'])));
+  assert.equal(f.inventory.current(), false, 'the receipt hash must win over unchanged stat fields');
+  assert.equal(createPackageInventory({ root: f.root, receipt: f.receipt }).current(), false);
+});
 test('full hashes expire at 1 s despite repeated checks and start before hashing', t => {
   const f = fixture(t), reads = countReads(t);
   let now = 0n;
@@ -40,9 +63,9 @@ test('full hashes expire at 1 s despite repeated checks and start before hashing
   assert.equal(f.inventory.current(), true);
   const count = f.receipt.files.length;
   for (now = 100_000_000n; now < 1_000_000_000n; now += 100_000_000n) assert.equal(f.inventory.current(), true);
-  assert.equal(reads(), count, 'fast checks do not slide the expiry');
+  assert.equal(reads(), count * (process.platform === 'darwin' ? 1 : 10), 'only macOS reuses metadata before expiry');
   assert.equal(f.inventory.current(), true);
-  assert.equal(reads(), count * 2, 'exactly 1 s forces a full hash');
+  assert.equal(reads(), count * (process.platform === 'darwin' ? 2 : 11), 'exactly 1 s forces a full hash');
   const original = fs.readFileSync;
   t.mock.method(fs, 'readFileSync', (...args) => { now += 200_000_000n; return original(...args); });
   syncBuiltinESMExports();
@@ -52,14 +75,14 @@ test('full hashes expire at 1 s despite repeated checks and start before hashing
   assert.equal(f.inventory.current(), true);
   assert.equal(reads(), before + count, 'a hash taking over 1 s cannot seed a fresh reuse window');
 });
-test('unchanged checks validate identities without rereading bytes; a metadata change rehashes every file', t => {
+test('unchanged macOS checks reuse bytes; other platforms and metadata changes rehash every file', t => {
   const f = fixture(t), reads = countReads(t), count = f.receipt.files.length;
   assert.equal(f.inventory.current(), true); assert.equal(reads(), count);
   for (let i = 0; i < 5; i++) assert.equal(f.inventory.current(), true);
-  assert.equal(reads(), count);
+  assert.equal(reads(), count * (process.platform === 'darwin' ? 1 : 6));
   chmodSync(join(f.root, 'host.mjs'), 0o600);
-  assert.equal(f.inventory.current(), true); assert.equal(reads(), count * 2);
-  assert.equal(f.inventory.current(), true); assert.equal(reads(), count * 2);
+  assert.equal(f.inventory.current(), true); assert.equal(reads(), count * (process.platform === 'darwin' ? 2 : 7));
+  assert.equal(f.inventory.current(), true); assert.equal(reads(), count * (process.platform === 'darwin' ? 2 : 8));
 });
 for (const path of ['host.mjs', 'skills/rules.md', 'characters/preview.webp'])
   test(`same-size tampering with restored mtime is detected: ${path}`, t => {
@@ -126,11 +149,11 @@ test('nanosecond-only identity changes invalidate a cache even within one millis
   syncBuiltinESMExports();
   assert.equal(f.inventory.current(), true); assert.equal(reads(), f.receipt.files.length * 2);
 });
-test('installed acceptance keeps entry hashes and avoids package reads on an unchanged check', t => {
+test('installed acceptance keeps entry hashes and only macOS reuses an unchanged package', t => {
   const pluginRoot = fileURLToPath(new URL('../plugins/sleight', import.meta.url)), config = buildReceipt({ pluginRoot });
   const reads = countReads(t), accepted = acceptedInstalledPackage(config, { pluginRoot });
   assert.equal(reads(), config.receipt.files.length + 3);
-  assert.equal(accepted.current(), true); assert.equal(reads(), config.receipt.files.length + 6);
+  assert.equal(accepted.current(), true); assert.equal(reads(), config.receipt.files.length * (process.platform === 'darwin' ? 1 : 2) + 6);
 });
 test('a failed metadata check invalidates the previous successful snapshot', t => {
   const f = fixture(t), reads = countReads(t), original = fs.lstatSync; let fail = true;
