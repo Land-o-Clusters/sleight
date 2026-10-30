@@ -1,6 +1,6 @@
 # Changelog
 
-## 1.5.0 (unreleased)
+## 1.5.0 (2026-10-30)
 
 ### Turbo reads
 
