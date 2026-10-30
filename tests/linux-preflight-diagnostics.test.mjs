@@ -31,8 +31,8 @@ test('failed container boundaries report closed diagnostics without private stri
       failure: { stage: 'git-tracked', code: 'invalid-tracked' } },
     { overrides: { execute: async (c, args) => args[0] === 'ls-files' ? ok('\0') : baseExecute(c, args) },
       failure: { stage: 'git-tracked', code: 'empty-tracked' } },
-    { overrides: { execute: async (c, args) => c === 'npm' && args[0] === 'ci' ? ({ status: 7, stdout: '', stderr: privateText, collected: true }) : baseExecute(c, args) },
-      failure: { stage: 'install', code: 'child-failed', childExitCode: 7, reason: 'other-stderr' }, exitCode: 7 },
+    { overrides: { execute: async (c, args) => c === 'npm' && args[0] === 'test' ? ({ status: 7, stdout: '', stderr: privateText, collected: true }) : baseExecute(c, args) },
+      failure: { stage: 'test', code: 'child-failed', childExitCode: 7, reason: 'other-stderr' }, exitCode: 7 },
     { overrides: { execute: async (c, args) => c === 'npm' && args[0] === 'test' ? ({ status: 9, stdout: tap, stderr: '', collected: true }) : baseExecute(c, args) },
       failure: { stage: 'test', code: 'child-failed', childExitCode: 9, reason: 'no-stderr' }, exitCode: 9 },
     { overrides: { execute: async (c, args) => c === 'npm' && args[0] === 'test' ? ok('') : baseExecute(c, args) },
@@ -55,7 +55,7 @@ test('success keeps its existing receipt shape without diagnostics', async () =>
   const receipt = await runContainerChecks(base);
   assert.equal(receipt.exitCode, 0);
   assert.deepEqual(Object.keys(receipt).sort(), ['schemaVersion', 'platform', 'command', 'commit', 'runId', 'executed',
-    'exitCode', 'installExitCode', 'counts', 'trackedFiles'].sort());
+    'exitCode', 'dependencyMode', 'counts', 'trackedFiles'].sort());
 });
 
 test('serialized program emits the same closed Git failure and preserves one JSON output', async () => {
@@ -126,7 +126,7 @@ test('host receipt keeps only validated diagnostics and rejects a passing receip
       if (args[0] === 'create') { name = args[args.indexOf('--name') + 1]; return ok('d'.repeat(64)); }
       if (args[0] === 'inspect') return ok(`sha256:${'e'.repeat(64)}`);
       if (args[0] === 'start') return { ...ok(JSON.stringify({ schemaVersion: 1, platform: 'linux', command: ['npm', 'test'],
-        commit: head, runId: name, executed: passing, exitCode: passing ? 0 : 1, installExitCode: passing ? 0 : null,
+        commit: head, runId: name, executed: passing, exitCode: passing ? 0 : 1, dependencyMode: 'checkout-only',
         trackedFiles: passing ? 1 : 0, counts: passing ? { tests: 1, suites: 0, pass: 1, fail: 0, cancelled: 0, skipped: 0, todo: 0 } : null,
         failure: diagnostic })), status: passing ? 0 : 1 };
       if (args[0] === 'rm' || args[0] === 'container') return ok('');

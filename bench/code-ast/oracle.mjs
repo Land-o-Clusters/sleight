@@ -2,7 +2,8 @@
 // supplies an independent static call inventory. V8 supplies module acceptance.
 import * as vm from 'node:vm';
 import { createHash } from 'node:crypto';
-import ts from 'typescript';
+import { createRequire } from 'node:module';
+const require = createRequire(import.meta.url);
 import { checkConsumers } from './consumer-oracle.mjs';
 import { parseCell, walk, memberCall, literalValue, UNKNOWN } from '../../plugins/sleight/lib/code-ast.mjs';
 import { tokens, invalidTokens } from '../../tests/fixtures/cell-tokenizer-legacy.mjs';
@@ -20,6 +21,7 @@ export function astCalls(ast) {
 }
 
 export function typescriptCalls(code) {
+  const ts = require('typescript');
   const source = ts.createSourceFile('cell.mjs', code, ts.ScriptTarget.Latest, true, ts.ScriptKind.JS);
   const calls = [];
   function value(node) {

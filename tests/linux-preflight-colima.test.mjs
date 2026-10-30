@@ -84,7 +84,7 @@ async function fixture(t, overrides = {}) {
         if (overrides.attach) return overrides.attach(options);
         if (overrides.tamper) overrides.tamper(options);
         return ok(JSON.stringify({ schemaVersion: 1, platform: 'linux', command: ['npm', 'test'],
-          commit, runId, executed: true, exitCode: 0, installExitCode: 0, trackedFiles: 1, counts }));
+          commit, runId, executed: true, exitCode: 0, dependencyMode: 'checkout-only', trackedFiles: 1, counts }));
       }
       if (args[0] === 'rm') return ok('');
       if (args[0] === 'container') return overrides.remaining ? overrides.remaining(options) : ok('');
@@ -102,7 +102,7 @@ test('Colima runs the real producer with one readonly checkout mount and private
   assert.equal(result.vm.cleanupConfirmed, true);
   assert.equal(parseLinuxReceipt(JSON.stringify(result.linuxReceipt), f).commit, f.commit);
   assert.deepEqual(Object.keys(result.linuxReceipt).sort(), ['childCollected', 'cleanupConfirmed', 'command', 'commit',
-    'containerId', 'counts', 'executed', 'exitCode', 'imageId', 'installExitCode', 'platform', 'runId', 'schemaVersion', 'trackedFiles', 'worktree'].sort());
+    'containerId', 'counts', 'executed', 'exitCode', 'imageId', 'dependencyMode', 'platform', 'runId', 'schemaVersion', 'trackedFiles', 'worktree'].sort());
   const start = f.calls.find(c => c.command === 'colima' && c.args[0] === 'start');
   assert.equal(start.args.filter(v => v === '--mount').length, 1);
   assert.equal(start.args[start.args.indexOf('--mount') + 1], f.checkout());

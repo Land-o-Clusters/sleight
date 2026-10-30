@@ -1,5 +1,6 @@
 // The live arm may only acquire TextEdit and read its state. Generated context never gains app authority.
-import ts from 'typescript';
+import { createRequire } from 'node:module';
+const require = createRequire(import.meta.url);
 import { resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 const TOOL = 'mcp__plugin_sleight_computer__js';
@@ -14,6 +15,7 @@ export function modOwnCall(event) {
 export function remoteGuardDecision(event, { upfront = false } = {}) {
   if (modOwnCall(event)) return true;
   if (upfront || event?.tool_name !== TOOL || typeof event.tool_input?.code !== 'string') return false;
+  const ts = require('typescript');
   const ast = ts.createSourceFile('fixture.js', event.tool_input.code, ts.ScriptTarget.Latest, true, ts.ScriptKind.JS);
   if (ast.parseDiagnostics.length || !ast.statements.length) return false;
   const path = node => ts.isIdentifier(node) ? node.text : ts.isPropertyAccessExpression(node) ? path(node.expression) + '.' + node.name.text : '';

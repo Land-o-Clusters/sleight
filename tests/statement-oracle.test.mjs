@@ -1,3 +1,5 @@
+import { packageSkip } from './requirements.mjs';
+const parserSkip = packageSkip('typescript');
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
@@ -15,7 +17,7 @@ test('all five frozen legacy files match c4175f79 after restoring only import pa
   }
 });
 
-test('TypeScript justifies newly accepted statement, text-save, menu and tab results', () => {
+test('TypeScript justifies newly accepted statement, text-save, menu and tab results', { skip: parserSkip }, () => {
   const moduleAwait = '({...items, value: [...await/*gap*//}/, app.typeText("PAYLOAD"), /}/]});';
   assert.equal(justifyResult(moduleAwait, 'statements', statementSpans(moduleAwait)), null);
   const save = 'await app.setValue(2, "x");\u2028await app.pressKey("cmd+s");';
@@ -34,7 +36,7 @@ test('TypeScript justifies newly accepted statement, text-save, menu and tab res
   assert.deepEqual(output, []);
 });
 
-test('TypeScript independently refuses forged boundaries, selectors, unsafe tails and tab URLs', () => {
+test('TypeScript independently refuses forged boundaries, selectors, unsafe tails and tab URLs', { skip: parserSkip }, () => {
   const code = 'await app.click({label:"File"}); await app.click(2);';
   const plan = splitMenuActions(code);
   assert.equal(justifyResult(code, 'menu', plan), null);

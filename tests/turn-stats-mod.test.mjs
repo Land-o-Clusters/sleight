@@ -5,7 +5,9 @@ import { readFileSync, existsSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { runInNewContext } from 'node:vm';
-import ts from 'typescript';
+import { packageSkip } from './requirements.mjs';
+const parserSkip = packageSkip('typescript');
+const ts = parserSkip ? undefined : (await import('typescript')).default;
 import { costSnapshot, turnSummary, statsFromReply, turnStatsText } from '../plugins/sleight/hooks/turn-stats.mjs';
 
 const root = fileURLToPath(new URL('../plugins/sleight/hooks/', import.meta.url));
@@ -121,7 +123,7 @@ function host({ cost = true, missingUsage = false, marker = false, malicious = f
 }
 
 for (const failure of ['bootstrap throw', 'bootstrap refusal', 'begin throw', 'begin refusal', 'retry', 'none'])
-  test(`mod logs one payload-free line when turn binding fails: ${failure}`, async () => {
+  test(`mod logs one payload-free line when turn binding fails: ${failure}`, { skip: parserSkip }, async () => {
     let begins = 0;
     const envelope = { version: 1, session: 'fixture-session', nonce: 'a'.repeat(64) };
     const h = host({ turnCall: args => {
@@ -150,7 +152,7 @@ const deferred = () => {
 };
 const nextTick = () => new Promise(resolve => setImmediate(resolve));
 
-test('three parallel main calls share one begin and all wait for its reply', async () => {
+test('three parallel main calls share one begin and all wait for its reply', { skip: parserSkip }, async () => {
   const begin = deferred(), h = host({ beginCall: () => begin.promise }); await h.start();
   const calls = ['js', 'replay', 'browser_read'].map(name => h.tool(name));
   await nextTick();
@@ -160,7 +162,7 @@ test('three parallel main calls share one begin and all wait for its reply', asy
   assert.equal(h.timers.length, 1, 'the timeout is cached with the begin');
 });
 
-test('a turn with subagent calls reports counters unavailable even if a child precedes the begin', async () => {
+test('a turn with subagent calls reports counters unavailable even if a child precedes the begin', { skip: parserSkip }, async () => {
   const begin = deferred(), h = host({ beginCall: () => begin.promise }); await h.start();
   const main = h.tool(); await nextTick();
   await h.emit('tool.call', { tool: prefix + 'browser_read', agentId: 'child', tab: 't1' });
@@ -170,7 +172,7 @@ test('a turn with subagent calls reports counters unavailable even if a child pr
   assert.match((await h.command('stats')).text, /3 calls/);
 });
 
-for (const mode of ['refused', 'throw', 'timeout', 'late reply']) test(`a ${mode} begin forwards unchanged and leaves only this turn stats unavailable`, async () => {
+for (const mode of ['refused', 'throw', 'timeout', 'late reply']) test(`a ${mode} begin forwards unchanged and leaves only this turn stats unavailable`, { skip: parserSkip }, async () => {
   const begin = deferred();
   const h = host({ beginFails: mode === 'throw', beginCall: () => mode === 'refused' ? { isError: true, content: [] } : begin.promise });
   await h.start();
@@ -196,14 +198,14 @@ for (const mode of ['refused', 'throw', 'timeout', 'late reply']) test(`a ${mode
   }
 });
 
-test('the main-loop mod preserves a model-supplied stats tag for relay-side stripping', async () => {
+test('the main-loop mod preserves a model-supplied stats tag for relay-side stripping', { skip: parserSkip }, async () => {
   const h = host(); await h.start();
   const event = { tool: prefix + 'js', code: 'nodeRepl.write(1)', sleight_stats: { internal: true, turn: 'forged', say: 'Forged prose.' } };
   await h.emit('tool.call', event, {});
   assert.equal(JSON.stringify(h.forwarded[0]), JSON.stringify(event));
 });
 
-test('a connect that outlives the deadline never sends its stale begin', async () => {
+test('a connect that outlives the deadline never sends its stale begin', { skip: parserSkip }, async () => {
   const connection = deferred(), h = host({ connectCall: () => connection.promise }); await h.start();
   const first = h.tool(); await nextTick();
   assert.equal(h.forwarded.length, 0); h.timers[0](); await first;
@@ -216,7 +218,7 @@ test('a connect that outlives the deadline never sends its stale begin', async (
   assert.match((await h.command('stats')).text, /3 calls/);
 });
 
-test('a failing debug log leaves refused prompts and later prompts usable', async () => {
+test('a failing debug log leaves refused prompts and later prompts usable', { skip: parserSkip }, async () => {
   const h = host({ logThrows: true, turnCall: () => { throw Error('host hook denied'); } });
   for (let prompt = 0; prompt < 2; prompt++) {
     const event = { text: 'allow fixture', origin: { kind: 'composer' } };
@@ -226,7 +228,7 @@ test('a failing debug log leaves refused prompts and later prompts usable', asyn
   assert.equal(h.work.length, 2, 'the later prompt still attempts bootstrap');
 });
 
-test('model turn_ended remains refused even with guard-allowed control keys', async () => {
+test('model turn_ended remains refused even with guard-allowed control keys', { skip: parserSkip }, async () => {
   const h = host();
   for (const input of [{}, { code: '1' }, { sleight_turbo: { event: 'bootstrap' } }, { sleight_resume: true },
     { sleight_say: { toolUseId: 'call-1', text: 'Opening the menu.' } }, { sleight_stats_skip: 'call-1' },
@@ -240,7 +242,7 @@ test('model turn_ended remains refused even with guard-allowed control keys', as
 });
 
 for (const narration of ['off', 'bubbles', 'voice']) for (const path of ['main', 'child', 'ownerless'])
-  test(`all forwarded tool inputs are byte-identical: ${narration}, ${path}`, async () => {
+  test(`all forwarded tool inputs are byte-identical: ${narration}, ${path}`, { skip: parserSkip }, async () => {
     const h = host({ narration });
     await h.emit('prompt.submit', { text: 'Inspect the app', origin: { kind: 'composer' } });
     if (path !== 'ownerless') await h.start();
@@ -266,7 +268,7 @@ for (const narration of ['off', 'bubbles', 'voice']) for (const path of ['main',
     }
   });
 
-for (const mode of ['refusal', 'throw']) test(`a private-frame ${mode} preserves input and reports stats unavailable`, async () => {
+for (const mode of ['refusal', 'throw']) test(`a private-frame ${mode} preserves input and reports stats unavailable`, { skip: parserSkip }, async () => {
   const h = host({ privateCall: () => { if (mode === 'throw') throw Error('transport failed'); return { isError: true, content: [] }; } });
   await h.start(); await h.tool();
   const event = { tool: prefix + 'browser_read', tool_use_id: 'child-call', tab: 't1', agentId: 'child' };
@@ -276,7 +278,7 @@ for (const mode of ['refusal', 'throw']) test(`a private-frame ${mode} preserves
   await h.complete(); assert.match((await h.command('stats')).text, /stats unavailable/i);
 });
 
-test('private call data has a bounded wait and a late connect never sends it', async () => {
+test('private call data has a bounded wait and a late connect never sends it', { skip: parserSkip }, async () => {
   const connection = deferred(); let connects = 0;
   const h = host({ connectCall: () => ++connects === 1 ? { isConnected: true, server: 'computer' } : connection.promise });
   await h.start(); await h.tool();
@@ -290,7 +292,7 @@ test('private call data has a bounded wait and a late connect never sends it', a
   await h.complete(); assert.match((await h.command('stats')).text, /stats unavailable/i);
 });
 
-test('a refused pane exclusion skips the snapshot and still ends the turn', async () => {
+test('a refused pane exclusion skips the snapshot and still ends the turn', { skip: parserSkip }, async () => {
   const h = host({ paneOpen: true, privateCall: () => ({ isError: true, content: [] }) }); await h.start();
   await h.emit('tool.call', { tool: prefix + 'js', tool_use_id: 'main', code: 'let app = await cua.getApp("Editor")' }, { text: 'App: Editor.' });
   await h.complete();
@@ -298,7 +300,7 @@ test('a refused pane exclusion skips the snapshot and still ends the turn', asyn
   assert.equal(h.state.get('view').kind, 'error');
 });
 
-test('pane snapshots request a one-shot exclusion before their own js call', async () => {
+test('pane snapshots request a one-shot exclusion before their own js call', { skip: parserSkip }, async () => {
   const h = host({ paneOpen: true, paneSnapshot: true }); await h.start();
   await h.emit('tool.call', { tool: prefix + 'js', tool_use_id: 'main', code: 'let app = await cua.getApp("Editor")' }, { text: 'App: Editor.' });
   await h.complete();
@@ -321,7 +323,7 @@ const modEnvelope = payload => ({ ...payload.tool_input, tool: payload.tool_name
 
 for (const identity of [{}, { prompt_id: null }, { agent_id: 'teammate-a', agent_type: 'general-purpose' },
   { session_id: undefined, transcript_path: undefined, cwd: undefined, tool_use_id: undefined }])
-  test(`teammate guards do not need prompt or transcript identity: ${JSON.stringify(identity)}`, async () => {
+  test(`teammate guards do not need prompt or transcript identity: ${JSON.stringify(identity)}`, { skip: parserSkip }, async () => {
     const h = host({ messages: () => { throw Error('parent transcript read'); } });
     const path = '/fixture/home/Library/Application Support/sleight/hand.json';
     for (const [tool, input] of [['Write', { file_path: path, content: '{}' }], ['Bash', { command: `rm '${path}'` }],
@@ -335,7 +337,7 @@ for (const identity of [{}, { prompt_id: null }, { agent_id: 'teammate-a', agent
     assert.equal(h.work.length, 0);
   });
 
-for (const prompt_id of [undefined, null]) test(`promptless separate teammate completes with prompt_id ${prompt_id}`, async () => {
+for (const prompt_id of [undefined, null]) test(`promptless separate teammate completes with prompt_id ${prompt_id}`, { skip: parserSkip }, async () => {
   const h = host();
   await h.start();
   await h.emit('tool.call', modEnvelope(teammatePayload(prefix + 'browser_read', { tab: 'fixture' }, { prompt_id })));
@@ -346,7 +348,7 @@ for (const prompt_id of [undefined, null]) test(`promptless separate teammate co
   assert.deepEqual(h.begins, ['turn-1']);
 });
 
-test('in-process teammates keep shell fences when another loop completes', async () => {
+test('in-process teammates keep shell fences when another loop completes', { skip: parserSkip }, async () => {
   const h = host(), command = 'open fixture.pdf';
   const shell = agentId => h.emit('tool.call', { tool: 'Bash', command, ...(agentId === undefined ? {} : { agentId }) }, { allowed: true });
   for (const agent_id of ['teammate-a', 'teammate-b'])
@@ -364,7 +366,7 @@ test('in-process teammates keep shell fences when another loop completes', async
   assert.equal((await shell('teammate-b')).allowed, true);
 });
 
-test('lead sleight work refuses a teammate launcher until every loop completes', async () => {
+test('lead sleight work refuses a teammate launcher until every loop completes', { skip: parserSkip }, async () => {
   const h = host(); await h.start(); await h.tool();
   const shell = () => h.emit('tool.call', { tool: 'Bash', agentId: 'teammate', command: 'open -a Safari' }, { allowed: true });
   assert.match((await shell()).deny, /shell guard/);
@@ -375,7 +377,7 @@ test('lead sleight work refuses a teammate launcher until every loop completes',
   assert.equal((await shell()).allowed, true);
 });
 
-test('a malformed loop id cannot choose an inactive shell fence', async () => {
+test('a malformed loop id cannot choose an inactive shell fence', { skip: parserSkip }, async () => {
   const h = host();
   for (const agentId of [null, '', 7, {}]) {
     const result = await h.emit('tool.call', { tool: 'Bash', command: 'open fixture.pdf', agentId });
@@ -383,14 +385,14 @@ test('a malformed loop id cannot choose an inactive shell fence', async () => {
   }
 });
 
-test('guard environment failures refuse the call instead of skipping protection', async () => {
+test('guard environment failures refuse the call instead of skipping protection', { skip: parserSkip }, async () => {
   const h = host({ envRead: () => { throw Error('identity environment unavailable'); } });
   assert.match((await h.emit('classic.PreToolUse', { tool: 'Write', file_path: '/fixture/file' })).deny, /guard unavailable/);
   await h.tool();
   assert.match((await h.emit('tool.call', { tool: 'Bash', command: 'open fixture.pdf' })).deny, /shell guard/);
 });
 
-for (const unavailable of ['root', 'component']) test(`an unavailable guard ${unavailable} refuses an alias write`, async () => {
+for (const unavailable of ['root', 'component']) test(`an unavailable guard ${unavailable} refuses an alias write`, { skip: parserSkip }, async () => {
   const h = host({
     statRead: path => unavailable === 'root' ? undefined : unavailable === 'component' && path === '/fixture' ? { isLink: true } : { realPath: path },
   });
@@ -398,7 +400,7 @@ for (const unavailable of ['root', 'component']) test(`an unavailable guard ${un
 });
 
 for (const key of ['HOME', 'CLAUDE_CONFIG_DIR']) for (const value of [undefined, 'relative', null])
-  test(`an unavailable ${key} only refuses paths that need it: ${String(value)}`, async () => {
+  test(`an unavailable ${key} only refuses paths that need it: ${String(value)}`, { skip: parserSkip }, async () => {
     const h = host({ envRead: name => name === key ? value : name === 'HOME' ? '/fixture/home' : undefined });
     for (const command of ['ls', 'ls /fixture', 'printf ok > /fixture/output']) {
       const result = await h.emit('classic.PreToolUse', { tool: 'Bash', command }, { allowed: true });
@@ -420,12 +422,12 @@ for (const key of ['HOME', 'CLAUDE_CONFIG_DIR']) for (const value of [undefined,
     assert.match((await h.emit('classic.PreToolUse', { tool: 'Write', file_path: '/fixture/home/Library/Application Support/sleight/hand.json' })).deny, /Only the user/);
   });
 
-test('missing home still resolves literal aliases before allowing a write', async () => {
+test('missing home still resolves literal aliases before allowing a write', { skip: parserSkip }, async () => {
   const h = host({ envRead: () => undefined, statRead: path => ({ realPath: path === '/fixture/alias' ? '/fixture/home/Library/Application Support/sleight/hand.json' : path }) });
   assert.match((await h.emit('classic.PreToolUse', { tool: 'Write', file_path: '/fixture/alias' })).deny, /Only the user/);
 });
 
-test('unreadable or conflicting classic hook envelopes refuse without a session fallback', async () => {
+test('unreadable or conflicting classic hook envelopes refuse without a session fallback', { skip: parserSkip }, async () => {
   const h = host();
   for (const event of [{}, { tool_name: 'Write' }, { tool: 'Read', tool_name: 'Write', tool_input: { file_path: '/fixture/file' } }])
     assert.match((await h.emit('classic.PreToolUse', event)).deny, /guard unavailable/);
@@ -433,7 +435,7 @@ test('unreadable or conflicting classic hook envelopes refuse without a session 
   assert.equal(await h.emit('classic.PreToolUse', raw, raw), raw, 'valid reads still pass unchanged');
 });
 
-test('a child prompt cannot lift Stop or consume a parent pane notice', async () => {
+test('a child prompt cannot lift Stop or consume a parent pane notice', { skip: parserSkip }, async () => {
   const h = host();
   await h.command('stop');
   const before = h.work.length;
@@ -443,7 +445,7 @@ test('a child prompt cannot lift Stop or consume a parent pane notice', async ()
   assert.match((await h.emit('tool.call', { tool: prefix + 'browser_read', agentId: 'teammate' })).deny, /user stopped/);
 });
 
-test('child tools leave the main pane app, log and stats untouched', async () => {
+test('child tools leave the main pane app, log and stats untouched', { skip: parserSkip }, async () => {
   const h = host(); await h.start();
   await h.emit('tool.call', { tool: prefix + 'js', code: 'await cua.getApp("ParentApp")', tool_use_id: 'same' }, { text: 'App: ParentApp.' });
   const before = JSON.stringify(h.state.get('log'));
@@ -455,7 +457,7 @@ test('child tools leave the main pane app, log and stats untouched', async () =>
   assert.doesNotMatch(await h.pane(), /ChildApp/);
 });
 
-for (const caller of [undefined, 'teammate']) test(`a js call clears only its loop's pane notice: ${caller ?? 'lead'}`, async () => {
+for (const caller of [undefined, 'teammate']) test(`a js call clears only its loop's pane notice: ${caller ?? 'lead'}`, { skip: parserSkip }, async () => {
   const h = host({ paneOpen: true, paneSnapshot: true });
   await h.start();
   await h.start({ agentId: 'teammate' });
@@ -469,7 +471,7 @@ for (const caller of [undefined, 'teammate']) test(`a js call clears only its lo
   assert.equal((await prompt('teammate')).context, undefined, 'the child consumes its own notice once');
 });
 
-for (const start of [true, false]) test(`a child busy fence ends with its own completion, turn.start ${start}`, async () => {
+for (const start of [true, false]) test(`a child busy fence ends with its own completion, turn.start ${start}`, { skip: parserSkip }, async () => {
   const h = host();
   if (start) await h.start({ agentId: 'teammate', turnId: 'child-turn' });
   else await h.emit('tool.call', { tool: prefix + 'browser_read', agentId: 'teammate' });
@@ -480,7 +482,7 @@ for (const start of [true, false]) test(`a child busy fence ends with its own co
 });
 
 for (const boundary of ['session.start', 'session.compact', 'stop', 'lead.complete'])
-  test(`an abandoned child cannot hold refresh, record or replay after ${boundary}`, async () => {
+  test(`an abandoned child cannot hold refresh, record or replay after ${boundary}`, { skip: parserSkip }, async () => {
     const h = host(); await h.start(); await h.start({ agentId: 'abandoned' });
     await h.emit('tool.call', { tool: prefix + 'browser_read', agentId: 'abandoned' });
     assert.match((await h.command('record')).text, /Wait for the current run/);
@@ -497,7 +499,7 @@ for (const boundary of ['session.start', 'session.compact', 'stop', 'lead.comple
     else assert.equal(shell.allowed, true);
   });
 
-test('a child call after its completion expires at the next lead completion', async () => {
+test('a child call after its completion expires at the next lead completion', { skip: parserSkip }, async () => {
   const h = host(); await h.start({ agentId: 'late' }); await h.complete({ agentId: 'late' });
   await h.emit('tool.call', { tool: prefix + 'browser_read', agentId: 'late' });
   assert.ok((await paneLabels(h)).includes('Refresh (after this turn)'));
@@ -505,7 +507,7 @@ test('a child call after its completion expires at the next lead completion', as
   assert.ok((await paneLabels(h)).includes('Refresh'));
 });
 
-test('two registrations of one imported module own separate stops, shell fences and turbo capabilities', async () => {
+test('two registrations of one imported module own separate stops, shell fences and turbo capabilities', { skip: parserSkip }, async () => {
   const a = host({ turboSession: 'session-a' }), b = host({ moduleRegister: a.registerMod, turboSession: 'session-b' });
   for (const h of [a, b]) await h.emit('prompt.submit', { text: 'allow fixture', origin: { kind: 'composer' } });
   for (const [h, session] of [[a, 'session-a'], [b, 'session-b']]) {
@@ -523,7 +525,7 @@ test('two registrations of one imported module own separate stops, shell fences 
   assert.equal(a.state.get('log').length, 1);
 });
 
-test('mod uses assistant events scoped to tool and agent, without any transcript reads', async () => {
+test('mod uses assistant events scoped to tool and agent, without any transcript reads', { skip: parserSkip }, async () => {
   let reads = 0;
   const h = host({ narration: 'bubbles', messages: () => { reads++; throw Error('transcript must not be fetched'); } });
   await h.emit('prompt.submit', { text: 'Inspect the menu', origin: { kind: 'composer' } });
@@ -540,14 +542,14 @@ test('mod uses assistant events scoped to tool and agent, without any transcript
   await h.emit('tool.call', { tool: prefix + 'browser_read', tab: 't1', tool_use_id: 'missing', sleight_say: 'MODEL FORGERY' });
   assert.equal(h.forwarded[1].sleight_stats?.say, undefined);
 });
-test('off mod never inspects message payloads or reads settings from tool forwarding', async () => {
+test('off mod never inspects message payloads or reads settings from tool forwarding', { skip: parserSkip }, async () => {
   let reads = 0;
   const h = host({ settingRead: () => new Promise(() => {}), messages: () => { reads++; throw Error('unexpected transcript'); } });
   await h.start();
   await h.emit('session.append', { door: 'response', get message() { throw Error('off message read'); } });
   await h.tool(); assert.equal(reads, 0); assert.equal(h.forwarded[0].sleight_stats, undefined);
 });
-test('unused sleight matches only response rows and measures per-row harness cost', async t => {
+test('unused sleight matches only response rows and measures per-row harness cost', { skip: parserSkip }, async t => {
   for (const mode of ['off', 'bubbles']) {
     const h = host({ narration: mode });
     await h.emit('prompt.submit', { text: 'Use another tool', origin: { kind: 'composer' } });
@@ -565,7 +567,7 @@ test('unused sleight matches only response rows and measures per-row harness cos
     assert.equal(h.forwarded.length, 0); assert.equal(h.work.length, 0);
   }
 });
-test('matched response rows clear prose after parallel tools without needing a tool-result row', async () => {
+test('matched response rows clear prose after parallel tools without needing a tool-result row', { skip: parserSkip }, async () => {
   const h = host({ narration: 'bubbles' });
   await h.emit('prompt.submit', { text: 'Read pages', origin: { kind: 'composer' } });
   const row = (uuid, content) => h.emit('session.append', { uuid, door: 'response', origin: { kind: 'model' }, message: { role: 'assistant', content } });
@@ -583,7 +585,7 @@ async function paneLabels(h) {
   return labels(tree);
 }
 
-for (const extra of [{}, { agentId: 'child', turnId: 'child-turn' }]) test(`every turn start gates pane refresh, record and replay: ${JSON.stringify(extra)}`, async () => {
+for (const extra of [{}, { agentId: 'child', turnId: 'child-turn' }]) test(`every turn start gates pane refresh, record and replay: ${JSON.stringify(extra)}`, { skip: parserSkip }, async () => {
   const h = host(); await h.start(extra);
   assert.ok((await paneLabels(h)).includes('Refresh (after this turn)'));
   assert.match((await h.command('record')).text, /Wait for the current run/);
@@ -591,7 +593,7 @@ for (const extra of [{}, { agentId: 'child', turnId: 'child-turn' }]) test(`ever
   assert.equal(h.usageReads, extra.agentId ? 0 : 1);
 });
 
-test('a never-resolving usage read cannot delay turn.start or an unused turn', async () => {
+test('a never-resolving usage read cannot delay turn.start or an unused turn', { skip: parserSkip }, async () => {
   const h = host({ usageRead: () => new Promise(() => {}) });
   const start = h.start();
   assert.equal(await Promise.race([start.then(() => true), nextTick().then(() => false)]), true);
@@ -602,7 +604,7 @@ test('a never-resolving usage read cannot delay turn.start or an unused turn', a
   assert.match((await h.command('stats')).text, /No completed/);
 });
 
-test('a hung final usage read cannot delay the pane snapshot, Stop or stats command', async () => {
+test('a hung final usage read cannot delay the pane snapshot, Stop or stats command', { skip: parserSkip }, async () => {
   const h = host({ paneOpen: true, usageRead: n => n === 1
     ? { startedAt: 100, cost: { usd: 1 } } : new Promise(() => {}) });
   await h.start();
@@ -623,7 +625,7 @@ test('a hung final usage read cannot delay the pane snapshot, Stop or stats comm
   assert.equal(h.usageReads, 2);
 });
 
-for (const isAborted of [false, true]) test(`throwing completion still cleans up before a hung final usage read: ${isAborted}`, async () => {
+for (const isAborted of [false, true]) test(`throwing completion still cleans up before a hung final usage read: ${isAborted}`, { skip: parserSkip }, async () => {
   const h = host({ paneOpen: true, usageRead: n => n === 1
     ? { startedAt: 100, cost: { usd: 1 } } : new Promise(() => {}) });
   await h.start();
@@ -641,7 +643,7 @@ for (const isAborted of [false, true]) test(`throwing completion still cleans up
   assert.equal(h.work.length, work, 'usedThisTurn resets on a throwing completion');
 });
 
-test('a throwing subagent completion preserves the main turn stats and cleanup owner', async () => {
+test('a throwing subagent completion preserves the main turn stats and cleanup owner', { skip: parserSkip }, async () => {
   const h = host(); await h.start(); await h.tool();
   await assert.rejects(h.emit('turn.complete', { turnId: 'child-turn', agentId: 'child' }, () => { throw Error('child failed'); }), /child failed/);
   assert.equal(h.work.length, 0);
@@ -652,7 +654,7 @@ test('a throwing subagent completion preserves the main turn stats and cleanup o
   assert.match((await h.command('stats')).text, /55 characters/);
 });
 
-test('a late final usage read patches cost after Stop while preserving the completed stats', async () => {
+test('a late final usage read patches cost after Stop while preserving the completed stats', { skip: parserSkip }, async () => {
   const final = deferred();
   let workAtFinalRead;
   const h = host({ paneOpen: true, usageRead: n => {
@@ -676,7 +678,7 @@ test('a late final usage read patches cost after Stop while preserving the compl
   assert.equal(h.work.length, 2, 'patching cost does not send another engine call');
 });
 
-for (const nextId of ['turn-2', 'turn-1']) test(`an older final usage read cannot patch newer completed stats: ${nextId}`, async () => {
+for (const nextId of ['turn-2', 'turn-1']) test(`an older final usage read cannot patch newer completed stats: ${nextId}`, { skip: parserSkip }, async () => {
   const old = deferred();
   const h = host({ usageRead: n => n === 2 ? old.promise
     : { startedAt: 100, cost: { usd: n === 1 ? 1 : n === 3 ? 3 : 4 } } });
@@ -692,7 +694,7 @@ for (const nextId of ['turn-2', 'turn-1']) test(`an older final usage read canno
   assert.equal((await h.command('stats')).text, latest);
 });
 
-test('a late final usage read still patches the latest stats during a later unused turn', async () => {
+test('a late final usage read still patches the latest stats during a later unused turn', { skip: parserSkip }, async () => {
   const final = deferred();
   const h = host({ usageRead: n => n === 2 ? final.promise : { startedAt: 100, cost: { usd: 1 } } });
   await h.start(); await h.tool();
@@ -704,7 +706,7 @@ test('a late final usage read still patches the latest stats during a later unus
   assert.match(text, /1\.5 s/); assert.match(text, /since turn start: \$0\.5000/);
 });
 
-test('a checked Stop completion also returns before its final usage read', async () => {
+test('a checked Stop completion also returns before its final usage read', { skip: parserSkip }, async () => {
   const final = deferred();
   const h = host({ usageRead: n => n === 1 ? { startedAt: 100, cost: { usd: 1 } } : final.promise });
   await h.start(); await h.tool(); await h.command('stop');
@@ -718,7 +720,7 @@ test('a checked Stop completion also returns before its final usage read', async
   assert.equal(h.work.length, 1, 'checked Stop is not sent twice');
 });
 
-test('a delayed start cost is recorded on its owner after the start hook returns', async () => {
+test('a delayed start cost is recorded on its owner after the start hook returns', { skip: parserSkip }, async () => {
   const baseline = deferred();
   const h = host({ usageRead: n => n === 1 ? baseline.promise : { startedAt: 100, cost: { usd: 2 } } });
   const start = h.start();
@@ -728,7 +730,7 @@ test('a delayed start cost is recorded on its owner after the start hook returns
   assert.match((await h.command('stats')).text, /since turn start: \$0\.5000/);
 });
 
-test('an unresolved baseline does not delay a used completion or invent a delta', async () => {
+test('an unresolved baseline does not delay a used completion or invent a delta', { skip: parserSkip }, async () => {
   const baseline = deferred();
   const h = host({ usageRead: n => n === 1 ? baseline.promise : { startedAt: 100, cost: { usd: 2 } } });
   const start = h.start();
@@ -740,7 +742,7 @@ test('an unresolved baseline does not delay a used completion or invent a delta'
   assert.equal((await h.command('stats')).text, text, 'late baseline does not revise a completed summary');
 });
 
-test('a late baseline from an older start cannot overwrite the next main turn', async () => {
+test('a late baseline from an older start cannot overwrite the next main turn', { skip: parserSkip }, async () => {
   const old = deferred();
   const h = host({ usageRead: n => n === 1 ? old.promise : { startedAt: 100, cost: { usd: n === 2 ? 3 : 4 } } });
   const start = h.start();
@@ -751,7 +753,7 @@ test('a late baseline from an older start cannot overwrite the next main turn', 
   assert.match((await h.command('stats')).text, /since turn start: \$1\.0000/);
 });
 
-for (const name of ['js', 'replay', 'browser_read']) test(`an interrupted pending ${name} call already owns stats`, async () => {
+for (const name of ['js', 'replay', 'browser_read']) test(`an interrupted pending ${name} call already owns stats`, { skip: parserSkip }, async () => {
   const h = host(); await h.start();
   const entered = deferred(), reply = deferred();
   const running = h.emit('tool.call', { tool: prefix + name, code: 'await app.click(1)' }, () => { entered.resolve(); return reply.promise; });
@@ -765,7 +767,7 @@ for (const name of ['js', 'replay', 'browser_read']) test(`an interrupted pendin
   } finally { reply.resolve({ text: 'done' }); await running; }
 });
 
-test('a downstream denial cannot erase another pending call from stats', async () => {
+test('a downstream denial cannot erase another pending call from stats', { skip: parserSkip }, async () => {
   const h = host(); await h.start();
   const entered = deferred(), reply = deferred();
   const running = h.emit('tool.call', { tool: prefix + 'js', code: 'await app.click(1)' }, () => { entered.resolve(); return reply.promise; });
@@ -778,7 +780,7 @@ test('a downstream denial cannot erase another pending call from stats', async (
   } finally { reply.resolve({ text: 'done' }); await running; }
 });
 
-test('a thrown downstream call still shows interrupted stats', async () => {
+test('a thrown downstream call still shows interrupted stats', { skip: parserSkip }, async () => {
   const h = host(); await h.start();
   await assert.rejects(h.emit('tool.call', { tool: prefix + 'js' }, () => { throw Error('interrupted'); }), /interrupted/);
   await h.complete({ isAborted: true });
@@ -786,7 +788,7 @@ test('a thrown downstream call still shows interrupted stats', async () => {
   assert.match((await h.command('stats')).text, /interrupted/);
 });
 
-test('pane and /sleight stats show the last turn duration, counts, host tokens and cost', async () => {
+test('pane and /sleight stats show the last turn duration, counts, host tokens and cost', { skip: parserSkip }, async () => {
   const h = host(); await h.start(); await h.tool();
   assert.equal((await h.complete()).text, 'Finished', 'turn completion does not append model-facing text');
   const result = await h.command('stats');
@@ -806,7 +808,7 @@ test('pane and /sleight stats show the last turn duration, counts, host tokens a
   const pane = await h.pane(); assert.match(pane, /55 characters/); assert.match(pane, /\$1\.1250/);
 });
 
-test('old hosts and absent cost report unavailable, not zero or a price estimate', async () => {
+test('old hosts and absent cost report unavailable, not zero or a price estimate', { skip: parserSkip }, async () => {
   for (const options of [{ missingUsage: true }, { cost: false }]) {
     const h = host(options); await h.start(); await h.tool(); await h.complete();
     const result = await h.command('stats');
@@ -815,7 +817,7 @@ test('old hosts and absent cost report unavailable, not zero or a price estimate
   }
 });
 
-test('the host metadata fallback works without trusting page-shaped or malformed counters', async () => {
+test('the host metadata fallback works without trusting page-shaped or malformed counters', { skip: parserSkip }, async () => {
   const h = host({ marker: true }); await h.start(); await h.tool(); await h.complete({ isAborted: true });
   assert.match((await h.command('stats')).text, /interrupted/);
   assert.match(await h.pane(), /55 characters/);
@@ -824,7 +826,7 @@ test('the host metadata fallback works without trusting page-shaped or malformed
   assert.match(text, /Sleight stats unavailable/); assert.doesNotMatch(text, /999|private page/);
 });
 
-test('subagent completion leaves the main summary intact and turns without sleight do not replace it', async () => {
+test('subagent completion leaves the main summary intact and turns without sleight do not replace it', { skip: parserSkip }, async () => {
   const h = host(); await h.start(); await h.tool();
   await h.complete({ agentId: 'child', durationMs: 9999 });
   assert.equal(h.work.length, 0);
@@ -833,12 +835,12 @@ test('subagent completion leaves the main summary intact and turns without sleig
   assert.equal((await h.command('stats')).text, first);
 });
 
-test('stats before any sleight turn explains that there are no completed turn stats', async () => {
+test('stats before any sleight turn explains that there are no completed turn stats', { skip: parserSkip }, async () => {
   const h = host(); assert.match((await h.command('stats')).text, /No completed sleight turn/);
   assert.equal(h.work.length, 0);
 });
 
-test('/sleight stop keeps the interrupted turn counters for its completion summary', async () => {
+test('/sleight stop keeps the interrupted turn counters for its completion summary', { skip: parserSkip }, async () => {
   const h = host(); await h.start(); await h.tool(); await h.command('stop');
   await h.complete({ isAborted: true });
   const result = await h.command('stats');
@@ -852,7 +854,7 @@ test('cost shows the host session ledger without inventing a turn-start baseline
   for (const usd of [NaN, Infinity, -1, '2', null]) assert.equal(costSnapshot({ startedAt: 100, cost: { usd } }), null);
 });
 
-test('main turn starts read a baseline and only used main completions read final cost', async () => {
+test('main turn starts read a baseline and only used main completions read final cost', { skip: parserSkip }, async () => {
   const h = host(); await h.start(); await h.complete();
   assert.equal(h.usageReads, 1);
   await h.start({ turnId: 'turn-2' }); await h.tool();
@@ -863,7 +865,7 @@ test('main turn starts read a baseline and only used main completions read final
   assert.equal(h.usageReads, 3);
 });
 
-test('a stopped call is denied without marking the next turn used', async () => {
+test('a stopped call is denied without marking the next turn used', { skip: parserSkip }, async () => {
   const h = host(); await h.start(); await h.tool(); await h.command('stop');
   await h.complete({ isAborted: true }); const first = (await h.command('stats')).text;
   const ends = h.work.length;
@@ -875,7 +877,7 @@ test('a stopped call is denied without marking the next turn used', async () => 
   assert.equal((await h.command('stats')).text, first);
 });
 
-test('convenience tools preserve the pre-G8 usedThisTurn scope', async () => {
+test('convenience tools preserve the pre-G8 usedThisTurn scope', { skip: parserSkip }, async () => {
   const h = host(); await h.start();
   for (const name of ['menu_bar', 'notifications', 'drag', 'js_reset']) await h.tool(name);
   await h.complete();
@@ -884,7 +886,7 @@ test('convenience tools preserve the pre-G8 usedThisTurn scope', async () => {
   assert.match((await h.command('stats')).text, /No completed/);
 });
 
-test('late subagent calls cannot enter a later main summary or inherit its stats id', async () => {
+test('late subagent calls cannot enter a later main summary or inherit its stats id', { skip: parserSkip }, async () => {
   const h = host(); await h.start(); await h.tool(); await h.complete();
   const first = (await h.command('stats')).text, ends = h.work.length;
   await h.start({ turnId: 'turn-2' });
@@ -897,7 +899,7 @@ test('late subagent calls cannot enter a later main summary or inherit its stats
   assert.equal(h.forwarded.at(-1).sleight_stats, undefined);
 });
 
-test('turn ids stay attached to admitted main calls and stale Stop data resets at start', async () => {
+test('turn ids stay attached to admitted main calls and stale Stop data resets at start', { skip: parserSkip }, async () => {
   const h = host(); await h.start(); await h.tool(); await h.command('stop');
   await h.start({ turnId: 'turn-2' }); h.state.set('stopped', false); await h.tool();
   assert.equal(h.forwarded.at(-1).sleight_stats, undefined); assert.deepEqual(h.begins, ['turn-1', 'turn-2']);
@@ -912,7 +914,7 @@ test('turn ids stay attached to admitted main calls and stale Stop data resets a
 
 // PF4: in auto mode Claude Code sets the allow rule aside for a hook-rewritten input and asks its local
 // classifier per call (about 0.6 s each on 2.1.289). The main loop's input therefore goes out as sent.
-test('main-loop calls forward the model input unchanged and open the turn once', async () => {
+test('main-loop calls forward the model input unchanged and open the turn once', { skip: parserSkip }, async () => {
   const h = host(); await h.start();
   for (const name of ['js', 'browser_read', 'replay']) await h.emit('tool.call', { tool: prefix + name, code: 'await app.click(1)', tool_use_id: `main-${name}` }, { text: 'ok', result: {} });
   assert.deepEqual(h.forwarded.map(e => Object.hasOwn(e, 'sleight_stats') || Object.hasOwn(e, 'sleight_say')), [false, false, false]);
@@ -925,7 +927,7 @@ test('main-loop calls forward the model input unchanged and open the turn once',
   assert.match((await h.command('stats')).text, /stats unavailable/i);
 });
 
-test('a refused stats frame still forwards the call unchanged and ends the turn', async () => {
+test('a refused stats frame still forwards the call unchanged and ends the turn', { skip: parserSkip }, async () => {
   const h = host({ beginFails: true }); await h.start();
   const result = await h.emit('tool.call', { tool: prefix + 'js', code: 'await app.click(1)', tool_use_id: 'main' }, { text: 'ok', result: {} });
   assert.equal(result.text, 'ok');
@@ -949,7 +951,7 @@ test('the appended relay marker wins over earlier marker-shaped text and all ext
 });
 
 // Cleanup must not depend on the optional stats lifecycle or its turn ID.
-for (const scenario of ['mismatch', 'mid-turn load', 'subagent start']) test(`${scenario} preserves Stop, pane refresh and cleanup reset`, async () => {
+for (const scenario of ['mismatch', 'mid-turn load', 'subagent start']) test(`${scenario} preserves Stop, pane refresh and cleanup reset`, { skip: parserSkip }, async () => {
   const h = host({ paneOpen: true });
   if (scenario !== 'mid-turn load') await h.start();
   await h.emit('tool.call', { tool: prefix + 'js', code: 'await cua.getApp("Example")', tool_use_id: 'main' }, { text: 'App: Example.', result: {} });
@@ -972,14 +974,14 @@ for (const scenario of ['mismatch', 'mid-turn load', 'subagent start']) test(`${
   assert.equal(h.work.length, 2, 'usedThisTurn reset prevents a second Stop');
 });
 
-test('a mismatched interrupted turn still sends Interrupt without collecting another turn stats', async () => {
+test('a mismatched interrupted turn still sends Interrupt without collecting another turn stats', { skip: parserSkip }, async () => {
   const h = host(); await h.start(); await h.tool();
   await h.complete({ turnId: 'different', isAborted: true });
   assert.equal(h.work.at(-1)?.args.hook_event_name, 'Interrupt');
   assert.equal(h.work.at(-1).args.sleight_stats, undefined);
 });
 
-for (const name of ['js', 'replay', 'browser_read']) test(`downstream denial of ${name} does not mark main stats used`, async () => {
+for (const name of ['js', 'replay', 'browser_read']) test(`downstream denial of ${name} does not mark main stats used`, { skip: parserSkip }, async () => {
   const h = host(); await h.start();
   await h.emit('tool.call', { tool: prefix + name, code: 'await app.click(1)' }, { deny: 'host policy refused' });
   const reads = h.usageReads;
@@ -1025,7 +1027,7 @@ test('cost displays session total and a validated delta since this turn started'
   }
 });
 
-test('compaction mid-turn keeps the shell fence and the running turn', async () => {
+test('compaction mid-turn keeps the shell fence and the running turn', { skip: parserSkip }, async () => {
   const h = host(); await h.start();
   await h.emit('tool.call', { tool: prefix + 'browser_read' });
   assert.match((await h.emit('tool.call', { tool: 'Bash', command: 'open -a Safari' }, { allowed: true })).deny, /shell guard/);

@@ -1,3 +1,5 @@
+import { packageSkip } from './requirements.mjs';
+const parserSkip = packageSkip('typescript');
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from 'node:fs';
@@ -9,11 +11,11 @@ import { readCorpus } from '../bench/code-ast/corpus.mjs';
 import { astCalls, typescriptCalls, oracle } from '../bench/code-ast/oracle.mjs';
 import { parseCell } from '../plugins/sleight/lib/code-ast.mjs';
 
-test('TypeScript and Meriyah inventories agree on nested, optional and computed literal calls', () => {
+test('TypeScript and Meriyah inventories agree on nested, optional and computed literal calls', { skip: parserSkip }, () => {
   const code = 'await app.typeText("PAYLOAD"); `${app.click(3)}`; app["paste"]?.(); app.setValue(1,{x:[true,null,3]});';
   assert.deepEqual(astCalls(parseCell(code).ast), typescriptCalls(code));
 });
-test('oracle counts syntax refusals and inventories without executing code', { skip: typeof vm.SourceTextModule !== 'function' && 'needs --experimental-vm-modules' }, () => {
+test('oracle counts syntax refusals and inventories without executing code', { skip: parserSkip || typeof vm.SourceTextModule !== 'function' && 'needs --experimental-vm-modules' }, () => {
   const run = oracle({ reportFailure: () => {} });
   run.check('throw new Error("would execute"); app.typeText("PAYLOAD")', null);
   run.check('const = 1', null);

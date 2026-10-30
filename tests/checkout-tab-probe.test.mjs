@@ -261,20 +261,34 @@ test('CK3 off restores the old continuation reads', async t => {
   assert.deepEqual(f.calls, ['read', 'typeText', 'read', 'pressKey', 'read']);
 });
 
+// Feed two valid samples 50 ms apart, then expire the accepted certificate by one
+// millisecond. Scheduling cannot age a sample before this test reaches dispatch.
+async function expiringFixture(t, options = {}) {
+  let now, request = 0, info;
+  const sandboxFS = { ...engineFS, promises: { ...engineFS.promises,
+    open: async () => ({ stat: async () => ({ isFIFO: () => true }), close: async () => { if (request === 1) now += 50; } }),
+    readFile: async (path, ...args) => path === info.path
+      ? JSON.stringify({ request: ++request, start: now, end: now, observed: identity })
+      : engineFS.promises.readFile(path, ...args),
+  } };
+  const f = await fixture(t, { ...options, sandboxFS, guardDate: { now: () => now },
+    setupProbe: value => { info = value; now = value.since; },
+    onOutput: value => { if (value.includes('"decision":"probe"')) now += info.freshMs + 1; } });
+  return f;
+}
+
 test('CK3 a certificate that ages before dispatch reads and stops before input', async t => {
-  let offset = 0;
-  const f = await fixture(t, { guardDate: { now: () => Date.now() + offset },
-    onOutput: value => { if (value.includes('"decision":"probe"')) offset = 200; } });
+  const f = await expiringFixture(t);
   await assert.rejects(f.run(), /native tab certificate expired/);
+  assert.equal(f.output.filter(value => value.includes('"decision":"probe"')).length, 1);
   assert.deepEqual(f.calls, ['read']);
 });
 
 test('CK3 an expired certificate cannot type into a newly tracking menu', async t => {
-  let offset = 0;
-  const f = await fixture(t, { guardDate: { now: () => Date.now() + offset },
-    current: () => tree + '\n3 menu bar\n\t4 menu bar item File, Selected: true',
-    onOutput: value => { if (value.includes('"decision":"probe"')) offset = 200; } });
+  const f = await expiringFixture(t, {
+    current: () => tree + '\n3 menu bar\n\t4 menu bar item File, Selected: true' });
   await assert.rejects(f.run(), /native tab certificate expired/);
+  assert.equal(f.output.filter(value => value.includes('"decision":"probe"')).length, 1);
   assert.deepEqual(f.calls, ['read']);
 });
 

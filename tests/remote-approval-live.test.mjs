@@ -1,6 +1,8 @@
 import { remoteGuardDecision } from '../bench/remote-approval-guard.mjs';
 import * as guard from '../bench/remote-approval-guard.mjs';
-import ts from 'typescript';
+import { packageSkip } from './requirements.mjs';
+const parserSkip = packageSkip('typescript');
+const ts = parserSkip ? undefined : (await import('typescript')).default;
 import { spawnSync } from 'node:child_process';
 import test from 'node:test';
 import assert from 'node:assert/strict';
@@ -42,7 +44,7 @@ test('mod keys on another tool do not pass the guard', () => {
     assert.equal(remoteGuardDecision({ tool_name, tool_input: modCalls[0] }, { upfront }), false);
 });
 
-test('every mod turn_ended call stays within the guard key set, including conditional spreads', () => {
+test('every mod turn_ended call stays within the guard key set, including conditional spreads', { skip: parserSkip }, () => {
   assert.ok(guard.MOD_KEYS instanceof Set);
   assert.deepEqual([...guard.MOD_KEYS].sort(), ['sleight_turbo', 'sleight_resume', 'sleight_stop', 'sleight_stats', 'sleight_stats_begin', 'sleight_say', 'sleight_stats_skip', 'hook_event_name'].sort());
   const source = readFileSync(new URL('../plugins/sleight/hooks/register.tsx', import.meta.url), 'utf8');
@@ -299,7 +301,7 @@ for (const [code, expected] of [
   ['await cua.getApp("Mail")', false], ['await app.click(1)', false],
   ['await cua.getState()', false], ['let app = await cua.getApp("TextEdit"); await app.typeText("x")', false],
   ['nodeRepl.write(await fetch("https://example.test"))', false], ['let state = await app.getAXState({ x: shell() })', false],
-]) test(`live arm read guard: ${code}`, () => {
+]) test(`live arm read guard: ${code}`, { skip: parserSkip }, () => {
   const event = { tool_name: 'mcp__plugin_sleight_computer__js', tool_input: { code } };
   assert.equal(remoteGuardDecision(event), expected);
   assert.equal(remoteGuardDecision(event, { upfront: true }), false);

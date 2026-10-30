@@ -1,3 +1,5 @@
+import { packageSkip } from './requirements.mjs';
+const parserSkip = packageSkip('typescript');
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
@@ -19,7 +21,7 @@ for (const [name, file, args] of [
   ['reviewer fuzz2 plain', 'reviewer/fuzz2.mjs', (count, offset) => [1, count, 'plain', offset]],
   ['reviewer fuzz2 HTML', 'reviewer/fuzz2.mjs', (count, offset) => [2, count, 'html', offset]],
   ['corpus statements', 'corpus-shaped.mjs', (count, offset) => [count, offset]],
-]) test(`bounded fuzz preserves the exact seed sequence: ${name}`, () => {
+]) test(`bounded fuzz preserves the exact seed sequence: ${name}`, { skip: parserSkip }, () => {
   const whole = run(file, args(40, 0));
   const pieces = [run(file, args(20, 0)), run(file, args(20, 20))];
   for (const [key, value] of Object.entries(whole.counts)) if (typeof value === 'number')

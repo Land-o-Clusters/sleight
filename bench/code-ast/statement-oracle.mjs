@@ -1,6 +1,8 @@
 // Independent TypeScript checks for newly accepted statement-consumer results.
 // Parse only. Nothing links, evaluates, launches an app or loads bench/run.mjs.
-import ts from 'typescript';
+import { createRequire } from 'node:module';
+const require = createRequire(import.meta.url);
+let ts;
 import { createHash } from 'node:crypto';
 import * as text from '../../plugins/sleight/lib/text-save.mjs';
 import * as menu from '../../plugins/sleight/lib/menu-continuation.mjs';
@@ -110,6 +112,7 @@ function trailing(statement, source, handle, names) {
 }
 
 export function justifyResult(code, consumer, result) {
+  ts ??= require('typescript');
   const source = sourceFile(code);
   const statements = [...source.statements];
   if (consumer === 'statements') return JSON.stringify(result.spans) ===

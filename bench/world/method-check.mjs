@@ -1,4 +1,6 @@
-import ts from 'typescript';
+import { createRequire } from 'node:module';
+const require = createRequire(import.meta.url);
+let ts;
 
 const writers = /^(?:type|typeText|type_text|insert_text|setValue|fill|paste|cut|setClipboard|writeText)$/i;
 const cutOrPaste = text => /(?:command|cmd|super|meta|ctrl|control)[+\s-]+(?:(?:command|cmd|super|meta|ctrl|control|shift|alt|option)[+\s-]+)*(?:key[_-]?)?[xv]\b|shift[+\s-]+(?:key[_-]?)?insert\b/i.test(text.replace(/["'\[\],]/g, ' '));
@@ -20,8 +22,6 @@ const methods = new Set(['getApp', 'getState', 'listApps', 'listWindows', 'getAX
   // Pure string and array reads. The engine API has no method by these names, so none can type or paste.
   'slice', 'includes', 'indexOf', 'lastIndexOf', 'startsWith', 'endsWith', 'trim', 'split', 'join', 'map', 'some', 'every',
   'match', 'test', 'toString', 'toLowerCase', 'toUpperCase', 'at', 'keys', 'values', 'entries']);
-const logical = new Set([ts.SyntaxKind.AmpersandAmpersandToken, ts.SyntaxKind.BarBarToken, ts.SyntaxKind.QuestionQuestionToken,
-  ts.SyntaxKind.AmpersandAmpersandEqualsToken, ts.SyntaxKind.BarBarEqualsToken, ts.SyntaxKind.QuestionQuestionEqualsToken]);
 function refusedBeforeExecution(name, success, content) {
   if (success || name !== 'mcp__plugin_sleight_computer__js') return false;
   const text = typeof content === 'string' ? content : Array.isArray(content) && content.length === 1 && content[0]?.type === 'text' ? content[0].text : '';
@@ -36,6 +36,9 @@ function literal(node) {
 }
 // Supplement saved artifacts with drag and prohibited replacement patterns.
 export function dragMethodAudit(transcript, { diagnostics = false } = {}) {
+  ts ??= require('typescript');
+  const logical = new Set([ts.SyntaxKind.AmpersandAmpersandToken, ts.SyntaxKind.BarBarToken, ts.SyntaxKind.QuestionQuestionToken,
+    ts.SyntaxKind.AmpersandAmpersandEqualsToken, ts.SyntaxKind.BarBarEqualsToken, ts.SyntaxKind.QuestionQuestionEqualsToken]);
   const audit = { drag: false, replacement: false, complete: true }, pending = new Map(), apps = new Set();
   const issues = [];
   let issuesOmitted = 0, transcriptLine = 0;

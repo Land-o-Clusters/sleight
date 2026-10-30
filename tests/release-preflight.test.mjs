@@ -38,8 +38,12 @@ function processBoundary(root, overrides = {}) {
       if (overrides.start) return overrides.start(options);
       const receipt = await runContainerChecks({ platform: 'linux', commit: head, runId,
         prepare() {}, makeConfig: () => '/container/config', removeConfig() {}, log() {},
-        execute: async (command, args) => command === '/usr/bin/git' ? ok(args[0] === 'rev-parse' ? head : 'README.md\0')
-          : ok(args[0] === 'test' ? tap : '') });
+        execute: async (command, args) => {
+          if (command === '/usr/bin/git') return ok(args[0] === 'rev-parse' ? head : 'README.md\0');
+          assert.equal(command, 'npm');
+          assert.deepEqual(args, ['test'], 'release Linux leg must match public CI without installing packages');
+          return ok(tap);
+        } });
       return { ...ok(JSON.stringify(receipt)), status: receipt.exitCode };
     }
     if (args[0] === 'rm') return ok('removed');
@@ -619,7 +623,10 @@ async function colimaFixture(t, overrides = {}) {
         execute: async (program, argv, config) => {
           assert.equal(config.cwd, join(termsBank, 'container-workspace'));
           if (program === '/usr/bin/git') return runOwnedCommand(program, argv, config);
-          assert.equal(program, 'npm'); return ok(argv[0] === 'test' ? tap : '');
+          assert.equal(program, 'npm');
+          assert.deepEqual(argv, ['test'], 'Colima release leg must match public CI without installing packages');
+          assert.equal(existsSync(join(config.cwd, 'node_modules')), false);
+          return ok(tap);
         } });
       overrides.receipt?.(receipt); overrides.attached?.();
       return { ...ok(JSON.stringify(receipt)), status: receipt.exitCode };

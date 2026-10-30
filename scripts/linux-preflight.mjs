@@ -70,7 +70,7 @@ function validExecution(receipt, { commit, runId } = {}) {
     && !Object.hasOwn(receipt, 'failure')
     && receipt.commit === commit && (!runId || receipt.runId === runId)
     && receipt.command?.length === 2 && receipt.command[0] === 'npm' && receipt.command[1] === 'test'
-    && receipt.exitCode === 0 && receipt.installExitCode === 0 && Number.isSafeInteger(receipt.trackedFiles)
+    && receipt.exitCode === 0 && receipt.dependencyMode === 'checkout-only' && Number.isSafeInteger(receipt.trackedFiles)
     && receipt.trackedFiles > 0 && receipt.counts?.tests > 0 && receipt.counts?.pass > 0
     && ['tests', 'suites', 'pass', 'fail', 'cancelled', 'skipped', 'todo'].every(key => Number.isSafeInteger(receipt.counts?.[key]) && receipt.counts[key] >= 0)
     && receipt.counts.tests === receipt.counts.pass + receipt.counts.skipped
@@ -84,7 +84,7 @@ function closedFailure(value) {
     prepare: ['exception'], 'config-create': ['exception'], 'config-cleanup': ['exception'],
     'git-head': ['exception', 'child-failed', 'identity-mismatch'],
     'git-tracked': ['exception', 'child-failed', 'invalid-tracked', 'empty-tracked'],
-    install: ['exception', 'child-failed'], test: ['exception', 'child-failed'], counts: ['invalid-counts'],
+    dependencies: ['present', 'exception'], test: ['exception', 'child-failed'], counts: ['invalid-counts'],
   };
   const errors = ['ENOENT', 'EACCES', 'EPERM', 'EEXIST', 'ENOTDIR', 'EISDIR', 'EINVAL', 'ENOSPC', 'EROFS',
     'EMFILE', 'ENFILE', 'ERR_FS_CP_EEXIST', 'ERR_FS_CP_DIR_TO_NON_DIR', 'ERR_FS_CP_NON_DIR_TO_DIR',
@@ -173,13 +173,17 @@ export function parseLinuxReceipt(text, { commit, worktree } = {}) {
 // Serialized below and executed inside Linux. Every command uses the copied exact-commit checkout.
 export async function runContainerChecks({ execute = runOwnedCommand, platform = process.platform,
   env = process.env, commit, runId, source = '/source', root = '/w', nodeVersion = process.version,
+  dependenciesPresent = () => {
+    try { lstatSync(join(root, 'node_modules')); return true; }
+    catch (error) { if (error.code === 'ENOENT') return false; throw error; }
+  },
   prepare = () => cpSync(source, root, { recursive: true, dereference: false, verbatimSymlinks: true, errorOnExist: true, force: false }),
   makeConfig = () => mkdtempSync(join(tmpdir(), 'lane-claude-')),
   removeConfig = directory => rmSync(directory, { recursive: true, force: true }),
   log = text => process.stderr.write(text),
 } = {}) {
   const receipt = { schemaVersion: 1, platform, command: ['npm', 'test'], commit, runId,
-    executed: false, exitCode: 1, installExitCode: null, counts: null, trackedFiles: 0 };
+    executed: false, exitCode: 1, dependencyMode: 'checkout-only', counts: null, trackedFiles: 0 };
   if (platform !== 'linux' || !shaPattern.test(commit ?? '')) return receipt;
   let config, destination, stage = 'prepare';
   const errorCode = error => ['ENOENT', 'EACCES', 'EPERM', 'EEXIST', 'ENOTDIR', 'EISDIR', 'EINVAL', 'ENOSPC', 'EROFS',
@@ -225,10 +229,9 @@ export async function runContainerChecks({ execute = runOwnedCommand, platform =
     receipt.trackedFiles = tracked.stdout.split('\0').filter(Boolean).length;
     if (!receipt.trackedFiles) return fail('empty-tracked');
     const npmOptions = { ...options, timeout: 1_200_000, log: { stdout: log, stderr: log } };
-    stage = 'install';
-    const install = await execute('npm', ['ci', '--ignore-scripts'], npmOptions);
-    receipt.installExitCode = Number.isInteger(install.status) ? install.status : 1;
-    if (install.status !== 0 || install.collected === false) { receipt.exitCode = receipt.installExitCode || 1; return fail('child-failed', install); }
+    // Public CI runs npm test from the checkout without npm install or npm ci.
+    stage = 'dependencies';
+    if (dependenciesPresent()) return fail('present');
     stage = 'test';
     const result = await execute('npm', ['test'], npmOptions);
     receipt.executed = true;
@@ -341,7 +344,7 @@ export async function runLinuxPreflight({ worktree = fileURLToPath(new URL('..',
     if (Number.isInteger(tested.status) && tested.status > 0) result.exitCode = tested.status;
     const receipt = JSON.parse(tested.stdout);
     if (receipt?.schemaVersion === 1 && receipt.commit === commit && receipt.runId === runId) {
-      for (const key of ['executed', 'installExitCode', 'counts', 'trackedFiles']) result[key] = receipt[key];
+      for (const key of ['executed', 'dependencyMode', 'counts', 'trackedFiles']) result[key] = receipt[key];
       const failure = closedFailure(receipt.failure);
       if (failure) result.failure = failure;
     }

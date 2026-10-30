@@ -5,6 +5,31 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { commandSkip, macCommandSkip, packageSkip } from './requirements.mjs';
 import { trackTemp } from '../scripts/temp-leftovers.mjs';
+import { spawnSync } from 'node:child_process';
+
+test('benchmark imports and non-parser guards work when TypeScript cannot resolve', () => {
+  const modules = ['../bench/remote-approval-guard.mjs', '../bench/world/method-check.mjs',
+    '../bench/code-ast/oracle.mjs', '../bench/code-ast/statement-oracle.mjs', './requirements.mjs']
+    .map(path => new URL(path, import.meta.url).href);
+  const child = spawnSync(process.execPath, ['--input-type=module', '-e', `
+    import { registerHooks } from 'node:module';
+    import assert from 'node:assert/strict';
+    registerHooks({ resolve(name, context, next) {
+      if (name === 'typescript') throw Object.assign(Error('missing test parser'), { code: 'MODULE_NOT_FOUND' });
+      return next(name, context);
+    } });
+    const [guard, world, oracle, statements, requirements] = await Promise.all(${JSON.stringify(modules)}.map(url => import(url)));
+    assert.equal(requirements.packageSkip('typescript'), 'needs the typescript dependency');
+    assert.equal(guard.remoteGuardDecision({ tool_name: 'other' }), false);
+    assert.equal(guard.remoteGuardDecision({ tool_name: 'mcp__plugin_sleight_computer__turn_ended',
+      tool_input: { sleight_resume: true } }), true);
+    assert.deepEqual(oracle.astCalls(null), []);
+    for (const call of [() => oracle.typescriptCalls(''), () => statements.justifyResult('', 'statements', { spans: [] }),
+      () => world.dragMethodAudit(''), () => guard.remoteGuardDecision({ tool_name: 'mcp__plugin_sleight_computer__js',
+        tool_input: { code: 'await app.getAXState()' } })]) assert.throws(call, { code: 'MODULE_NOT_FOUND' });
+  `], { encoding: 'utf8', timeout: 10000 });
+  assert.equal(child.status, 0, child.stderr);
+});
 
 test('command requirements reject absent, nonexecutable and directory entries without launching them', t => {
   const dir = trackTemp(mkdtempSync(join(tmpdir(), 'sleight-requirement-')));

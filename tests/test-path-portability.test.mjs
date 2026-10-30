@@ -178,7 +178,7 @@ test('container producer verifies platform and Git, runs actual npm argv, captur
   assert.deepEqual(receipt.counts, { tests: 3, suites: 0, pass: 2, fail: 0, cancelled: 0, skipped: 1, todo: 0 });
   assert.deepEqual(calls.map(([command, args]) => [command, args]), [
     ['/usr/bin/git', ['rev-parse', '--verify', 'HEAD^{commit}']], ['/usr/bin/git', ['ls-files', '-z']],
-    ['npm', ['ci', '--ignore-scripts']], ['npm', ['test']],
+    ['npm', ['test']],
   ]);
   for (const [, , options] of calls) {
     assert.equal(options.cwd, '/w');
@@ -188,7 +188,29 @@ test('container producer verifies platform and Git, runs actual npm argv, captur
   assert.deepEqual(removed, ['/container/config']);
 });
 
-test('container rejects Mac, wrong Git commit, no tracked files, install/test failure, absent counts and thrown boundary', async () => {
+test('public CI mode refuses installed dependencies and receipts from the old install leg', async t => {
+  let npmCalls = 0;
+  const options = containerOptions({ dependenciesPresent: () => true });
+  const execute = options.execute;
+  options.execute = async (command, ...args) => { if (command === 'npm') npmCalls++; return execute(command, ...args); };
+  const refused = await runContainerChecks(options);
+  assert.deepEqual(refused.failure, { stage: 'dependencies', code: 'present' });
+  assert.equal(refused.executed, false);
+  assert.equal(npmCalls, 0);
+  const root = registerTemp(t, mkdtempSync(join(tmpdir(), 'sleight-checkout-only-')));
+  symlinkSync('absent', join(root, 'node_modules'));
+  const linked = await runContainerChecks(containerOptions({ root }));
+  assert.deepEqual(linked.failure, { stage: 'dependencies', code: 'present' });
+  assert.equal(linked.executed, false);
+  const receipt = { ...await runContainerChecks(containerOptions()), worktree: '/fixture',
+    cleanupConfirmed: true, childCollected: true, containerId: id, imageId: image };
+  assert.equal(parseLinuxReceipt(JSON.stringify(receipt), { commit, worktree: '/fixture' }).dependencyMode, 'checkout-only');
+  delete receipt.dependencyMode;
+  receipt.installExitCode = 0;
+  assert.throws(() => parseLinuxReceipt(JSON.stringify(receipt), { commit, worktree: '/fixture' }), /Invalid Linux execution receipt/);
+});
+
+test('container rejects Mac, wrong Git commit, no tracked files, test failure, absent counts and thrown boundary', async () => {
   for (const override of [{ platform: 'darwin' }, { execute: async () => ok('wrong commit') },
     { execute: async (_c, args) => ok(args[0] === 'rev-parse' ? commit : '') },
     { execute: async (c, args) => c === 'npm' ? { status: 7 } : ok(args[0] === 'rev-parse' ? commit : 'README.md\0') },
@@ -213,13 +235,14 @@ test('serialized container program runs the same receipt producer with injected 
       : args[0] === 'rev-parse' ? commit : 'README.md\0'); child.emit('close', 0, null); });
     return child;
   };
-  await runInNewContext(`(async () => {${source}})()`, { process, spawn, cpSync() {}, mkdtempSync: () => '/config', rmSync() {},
+  await runInNewContext(`(async () => {${source}})()`, { process, spawn, cpSync() {},
+    lstatSync() { throw Object.assign(Error('absent'), { code: 'ENOENT' }); }, mkdtempSync: () => '/config', rmSync() {},
     tmpdir: () => '/temp', join, setTimeout, clearTimeout, queueMicrotask });
   const receipt = JSON.parse(output.join(''));
   assert.equal(receipt.exitCode, 0);
   assert.equal(receipt.counts.tests, 3);
-  assert.equal(calls.filter(([c]) => c === 'npm').length, 2);
-  assert.match(logs.join(''), /install log/);
+  assert.equal(calls.filter(([c]) => c === 'npm').length, 1);
+  assert.doesNotMatch(logs.join(''), /install log/);
   assert.match(logs.join(''), /# tests 3/);
   assert.equal(output.length, 1);
 });
@@ -240,23 +263,22 @@ test('parent cancellation waits for Docker client completion, removes only owned
   assert.equal(h.calls.at(-1).args.at(-1), `name=^/${receipt.runId}$`);
 });
 
-test('Linux failures preserve actual install/test statuses and counts after confirmed cleanup', async t => {
-  for (const [installStatus, testStatus, output] of [[7, 0, tap], [0, 9, tap], [0, 0, ''],
-    [0, 0, tap.replace('# pass 2', '# pass 1').replace('# fail 0', '# fail 1')]]) {
+test('Linux failures preserve actual test statuses and counts after confirmed cleanup', async t => {
+  for (const [testStatus, output] of [[9, tap], [0, ''],
+    [0, tap.replace('# pass 2', '# pass 1').replace('# fail 0', '# fail 1')]]) {
     const f = sourceFixture(t);
     const h = dockerBoundary(f, { start: async () => {
       const producer = await runContainerChecks(containerOptions({ commit: f.head,
         runId: h.calls.find(c => c.args[0] === 'create').args[2],
-        execute: async (c, args) => c === 'npm' ? { status: args[0] === 'ci' ? installStatus : testStatus, stdout: output }
+        execute: async (c, args) => c === 'npm' ? { status: testStatus, stdout: output }
           : ok(args[0] === 'rev-parse' ? f.head : 'README.md\0') }));
       return { ...ok(JSON.stringify(producer)), status: producer.exitCode };
     } });
     const receipt = await runLinuxPreflight({ worktree: f.worktree, commit: f.head, execute: h.execute });
     assert.notEqual(receipt.exitCode, 0);
     assert.equal(receipt.cleanupConfirmed, true);
-    assert.equal(receipt.installExitCode, installStatus);
-    assert.equal(receipt.executed, installStatus === 0);
-    if (installStatus) assert.equal(receipt.exitCode, installStatus);
+    assert.equal(receipt.dependencyMode, 'checkout-only');
+    assert.equal(receipt.executed, true);
     if (testStatus) assert.equal(receipt.exitCode, testStatus);
     if (output === '') assert.equal(receipt.counts, null);
   }

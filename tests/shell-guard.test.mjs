@@ -2,7 +2,9 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { runInNewContext } from 'node:vm';
-import ts from 'typescript';
+import { packageSkip } from './requirements.mjs';
+const parserSkip = packageSkip('typescript');
+const ts = parserSkip ? undefined : (await import('typescript')).default;
 import * as guard from '../plugins/sleight/hooks/shell-guard.mjs';
 
 const denied = command => guard.shellLaunchDenied({ tool: 'Bash', command });
@@ -362,7 +364,7 @@ function installedGuard({ disabled = false, refuseWrite = false } = {}) {
     stop: () => hooks.get('command.run:sleight')($, { args: 'stop' }) };
 }
 
-test('installed tool.call shell fence refuses before PreToolUse filesystem access and preserves the write guard', async () => {
+test('installed tool.call shell fence refuses before PreToolUse filesystem access and preserves the write guard', { skip: parserSkip }, async () => {
   const h = installedGuard({ refuseWrite: true });
   await h.use();
   const pre = h.pre;
@@ -373,7 +375,7 @@ test('installed tool.call shell fence refuses before PreToolUse filesystem acces
   await pre({ tool: 'Read' }); assert.equal(h.passed(), 1);
 });
 
-test('shell guard covers only sleight turns, resets on completion or stop, and supports opt-out', async () => {
+test('shell guard covers only sleight turns, resets on completion or stop, and supports opt-out', { skip: parserSkip }, async () => {
   const event = { tool: 'Bash', command: 'open report.pdf' };
   for (const tool of ['js', 'replay', 'browser_open', 'browser_read', 'browser_act', 'browser_fill']) {
     const h = installedGuard();
@@ -402,7 +404,7 @@ test('shell guard covers only sleight turns, resets on completion or stop, and s
   assert.match(guard.shellGuardReason, /SLEIGHT_SHELL_GUARD=0/);
 });
 
-test('turbo prompt setup alone leaves ordinary shell work untouched and still ends its binding', async () => {
+test('turbo prompt setup alone leaves ordinary shell work untouched and still ends its binding', { skip: parserSkip }, async () => {
   const h = installedGuard(), event = { tool: 'Bash', command: 'open report.pdf' };
   await h.hooks.get('prompt.submit')(h.$, { origin: { kind: 'composer' }, text: 'ordinary work' }, event => event);
   assert.equal((await h.pre(event)).deny, undefined);
