@@ -79,7 +79,7 @@ From the installed plugin folder, you run `./bin/sleight-mcp turbo on` (Chrome f
 - Optional narration uses Claude's existing prose and local system voices. Private run recordings support local replay. Screenshots can contain sensitive content.
 - Native source inspection refuses ambiguous syntax. Deferred engine documentation retains its provenance so caller output cannot become trusted instructions.
 
-[All changes](CHANGELOG.md#150-unreleased) · [Release notes draft](docs/releases/1.5.0.md)
+[All changes](CHANGELOG.md#150-2026-10-30) · [Release notes](docs/releases/1.5.0.md)
 
 <!-- hub:release -->
 [Release A/B](docs/results/validation.md): RELEASE PASS: final release A/B against 1.4.2 (the 1.5.0 harness with the 1.4.2 plugin tree), 8 of 8 groups within their time and pass-loss limits (2026-10-28, 06:10 to 14:04 UTC, engine 26.1023.50603 build 22391). 3 scored banks, including the older engine records.
