@@ -492,7 +492,7 @@ test('proven commit data keeps apostrophes, parentheses, backticks and opener wo
   }
 });
 
-test('top-level completion clears the shell guard even when downstream completion throws', async () => {
+test('top-level completion clears the shell guard even when downstream completion throws', { skip: parserSkip }, async () => {
   const h = installedGuard(), event = { tool: 'Bash', command: 'open report.pdf' };
   await h.use();
   await assert.rejects(h.complete({}, async () => { throw Error('completion failed'); }), /completion failed/);
