@@ -664,9 +664,12 @@ compaction, so it cannot isolate wording alone. That A/B has not run live.
   its folders (`com.apple.FinderInfo`, and a Time Machine completion date). `codesign --verify --strict` refuses such
   a bundle with "resource fork, Finder information, or similar detritus not allowed" although the signature is
   Google's, and through 1.4.3 setup and the doctor reported that as "its signature is not Google Chrome's". One migrated
-  Mac (2026-10-28, Chrome at mode 775 with 72 folders carrying Finder info) hit it. The doctor now says Finder
-  metadata and names the fix, `xattr -rc "/Applications/Google Chrome.app"`, which cleared it there without sudo. A
-  plain `codesign --verify` passes on such a bundle, so the metadata is not a sign of a changed Chrome.
+  Mac (2026-10-28, Chrome at mode 775 with 72 folders carrying Finder info) hit it. `--strict` reports detritus
+  before it checks the requirement, so a bundle signed by another team with Finder info gets the same sentence. Setup
+  now reruns the check without `--strict` and says Finder metadata only when that passes; otherwise it stays a
+  signature refusal. The doctor names the fix, `xattr -rd com.apple.FinderInfo "/Applications/Google Chrome.app"`,
+  which keeps the quarantine flag. On a clone of Chrome with Finder info added (2026-11-02), that command cleared the
+  refusal, and the same bundle checked against another team's requirement was reported as a signature problem.
 - The signature proof covers only the browser's main process. Helpers (renderer, GPU, network) start later from the
   bundle on disk and aren't proven, so someone who can write the bundle after the proof could run code in a helper.
   An older Chrome or Helium with a valid signature from the same team and the same flags also passes, so a downgrade isn't caught. Both

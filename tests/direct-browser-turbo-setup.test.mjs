@@ -299,10 +299,10 @@ test('a group-writable signed browser passes setup only when its bundle signatur
   assert.equal(check(chrome, { ok: true }), undefined);
   assert.match(check(chrome, { ok: false, reason: 'signature' }), /and its signature is not Google Chrome's from team EQHXZ8M8AV$/);
   const metadata = check(chrome, { ok: false, reason: 'detritus' }), bundle = join(w.apps, 'Google Chrome.app');
-  assert.equal(metadata, `writable by others (mode 775), and codesign --strict refuses its bundle for Finder metadata rather than its signature (xattr -rc "${bundle}" clears it)`);
+  assert.equal(metadata, `writable by others (mode 775), and codesign --strict refuses its bundle for Finder metadata rather than its signature (xattr -rd com.apple.FinderInfo "${bundle}" clears it)`);
   const doctor = doctorLines({ state: 'current', browsers: [], browser: { name: 'Google Chrome', executable: chrome, qualified: true }, executableProblem: metadata, helpers: true, port: true }).join('\n');
   assert.match(doctor, /PROBLEM {3}browser: Google Chrome, .*Finder metadata/);
-  assert.ok(doctor.includes(`fix: xattr -rc "${bundle}" strips the metadata`), doctor);
+  assert.ok(doctor.includes(`fix: xattr -rd com.apple.FinderInfo "${bundle}" strips the metadata`), doctor);
   assert.doesNotMatch(doctor, /reinstall Google Chrome/);
 });
 

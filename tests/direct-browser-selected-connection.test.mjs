@@ -218,17 +218,20 @@ test('real codesign: setup accepts the signed bundle on disk and refuses a tampe
   assert.equal(await make('Tampered', path => { const bytes = readFileSync(path); bytes[0x4000 + 100] ^= 0xff; writeFileSync(path, bytes); }), false);
   assert.equal(await make('Unsigned', path => run('/usr/bin/codesign', ['--remove-signature', path], { timeout: 10000 })), false);
   // Finder info on the bundle folder, as a Mac set up from a Time Machine backup carries, fails codesign --strict with
-  // "detritus not allowed" although the signature is intact. The verdict names it so setup can point at xattr -rc.
+  // "detritus not allowed" although the signature is intact. The verdict names it so setup can point at
+  // xattr -rd com.apple.FinderInfo.
   const finderInfo = '0000000000000000040000000000000000000000000000000000000000000000';
-  const detritus = async (label, change) => {
+  const detritus = async (label, change, identifier = 'com.sleight.test') => {
     const executable = join(root, `${label}.app/Contents/MacOS/${label}`); mkdirSync(dirname(executable), { recursive: true });
     copyFileSync('/bin/sleep', executable);
-    await run('/usr/bin/codesign', ['-f', '-s', '-', '-i', 'com.sleight.test', '-o', 'kill,library,runtime', executable], { timeout: 10000 });
+    await run('/usr/bin/codesign', ['-f', '-s', '-', '-i', identifier, '-o', 'kill,library,runtime', executable], { timeout: 10000 });
     await change?.(executable); chmodSync(executable, 0o775);
     return onDiskVerdict(executable, requirement, lstatSync(executable));
   };
-  assert.deepEqual(await detritus('Metadata', path => run('/usr/bin/xattr', ['-wx', 'com.apple.FinderInfo', finderInfo, dirname(dirname(dirname(path)))], { timeout: 10000 })),
-    { ok: false, reason: 'detritus' });
+  const addFinderInfo = path => run('/usr/bin/xattr', ['-wx', 'com.apple.FinderInfo', finderInfo, dirname(dirname(dirname(path)))], { timeout: 10000 });
+  assert.deepEqual(await detritus('Metadata', addFinderInfo), { ok: false, reason: 'detritus' });
+  // --strict reports the same sentence for a bundle signed as someone else, which must stay a signature refusal.
+  assert.deepEqual(await detritus('WrongIdentifier', addFinderInfo, 'com.other.test'), { ok: false, reason: 'signature' });
   assert.deepEqual(await detritus('Clean'), { ok: true });
   assert.deepEqual(await detritus('Unsigned2', path => run('/usr/bin/codesign', ['--remove-signature', path], { timeout: 10000 })), { ok: false, reason: 'signature' });
 });

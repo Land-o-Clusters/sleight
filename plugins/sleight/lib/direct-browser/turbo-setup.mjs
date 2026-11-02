@@ -29,7 +29,7 @@ const appRootsFor = (home, apps) => [apps ?? '/Applications', join(home, 'Applic
 // group-writable signed browser passes here on its bundle's signature on disk; the connection then proves the
 // running process. verify returns onDiskVerdict's shape, or a plain boolean.
 const bundleOf = executable => dirname(dirname(dirname(executable)));
-const metadataFix = executable => `xattr -rc "${bundleOf(executable)}"`;
+const metadataFix = executable => `xattr -rd com.apple.FinderInfo "${bundleOf(executable)}"`;
 export function executableProblem(path, uid = process.getuid(), { appRoots, verify = onDiskVerdict, primaryGid = process.getgid() } = {}) {
   let stat;
   try { stat = lstatSync(path); } catch { return 'missing'; }

@@ -102,13 +102,16 @@ export async function proveRunningCode(run, status, requirement, executable) {
 }
 
 const onDisk = new Map();
+const DETRITUS = /resource fork, Finder information, or similar detritus not allowed/;
 
 /** Setup's static mirror: the executable's bundle on disk satisfies the requirement, and its code directory has the
  *  same flags. runSync has spawnSync's shape. Cached per inode, mtime and ctime. Returns { ok: true } or
  *  { ok: false, reason }, never throws. reason is 'detritus' when codesign --strict refused the bundle for Finder
- *  metadata (a resource fork or Finder info on the bundle folder, which a Mac set up from a backup carries over)
- *  while the signature itself may be fine, 'signature' when the bundle fails the requirement, 'flags' when its code
- *  directory lacks the kill, library-validation and runtime flags, and 'error' when codesign could not run.
+ *  metadata (a resource fork or Finder info on the bundle folder, which a Mac set up from a backup carries over) and
+ *  the same check without --strict passes, so the signature does satisfy the requirement. --strict reports detritus
+ *  before it checks the requirement, so a bundle signed by someone else with Finder info gets the same message.
+ *  reason is 'signature' when the bundle fails the requirement, 'flags' when its code directory lacks the kill,
+ *  library-validation and runtime flags, and 'error' when codesign could not run.
  *  It decides only what setup writes; the connection still proves the running process. */
 export function onDiskVerdict(executable, requirement, stat, runSync = spawnSync) {
   const key = [executable, requirement, stat.dev, stat.ino, stat.mtimeMs, stat.ctimeMs, stat.size].join(':');
@@ -120,8 +123,10 @@ export function onDiskVerdict(executable, requirement, stat, runSync = spawnSync
     if (!bundle.endsWith('.app')) verdict = { ok: false, reason: 'signature' };
     else {
       const verified = runSync(CODESIGN, ['--verify', '--strict', '-R=' + requirement, bundle], options);
-      if (verified.status !== 0) verdict = { ok: false, reason: /detritus/.test(String(verified.stderr ?? '')) ? 'detritus' : 'signature' };
-      else {
+      if (verified.status !== 0) {
+        const detritus = DETRITUS.test(String(verified.stderr ?? '')) && runSync(CODESIGN, ['--verify', '-R=' + requirement, bundle], options).status === 0;
+        verdict = { ok: false, reason: detritus ? 'detritus' : 'signature' };
+      } else {
         const shown = runSync(CODESIGN, ['--display', '--verbose=1', executable], options);
         const flagged = shown.status === 0 && (codeFlags(String(shown.stderr ?? '') + '\n' + String(shown.stdout ?? '')) & REQUIRED_CODE_FLAGS) === REQUIRED_CODE_FLAGS;
         verdict = flagged ? { ok: true } : { ok: false, reason: 'flags' };
