@@ -164,7 +164,10 @@ refuses terminals and OpenAI's own apps. See [approvals and guards](#approvals-a
   scope (`SLEIGHT_APPROVAL_SCOPE=once` and `document` ask at the Mac). The up-front ask picks apps by matching the prompt's words
   and missed 12 phrasings in a review, such as "email Sam" and "turn this into slides" (2026-10-25). Not yet checked on a
   real capture: whether `@file` content or a transcript-link click ends up in the typed first line, and whether the engine can
-  drive apps while the Mac is locked.
+  drive apps while the Mac is locked. Typed grants and the up-front ask know only apps in /Applications,
+  /System/Applications and ~/Applications. Through 1.5.1 an app elsewhere, such as Simulator inside Xcode, asked on every
+  action with no Always choice. Its card is now remembered when LaunchServices resolves the quoted name to exactly the
+  engine's bundle ID, but `allow Simulator` still grants nothing, and away its card asks at the Mac.
 
 - In 1.4.0, Always allow, payment and sleight consent buttons require a person's physical click or key press.
   The native guard rejects Accessibility presses and posted input. VoiceOver, Switch Control, Voice Control and

@@ -3,11 +3,13 @@ const fold = value => value.trim().replace(/\.app$/i, '').toLocaleLowerCase('en-
 const names = app => [...new Set([app.name, ...(app.names ?? [])].filter(n => typeof n === 'string' && n.trim()))];
 const safeName = name => typeof name === 'string' && name.length > 0 && name.length <= 255 && !/[\x00-\x1f\x7f",]/.test(name);
 const installed = apps => (Array.isArray(apps) ? apps : []).filter(a => typeof a?.id === 'string' && /^[A-Za-z0-9][A-Za-z0-9.-]{0,254}$/.test(a.id) && safeName(a.name));
+const named = (name, apps) => typeof name === 'string' ? installed(apps).filter(a => names(a).some(n => fold(n) === fold(name))) : [];
 export function resolveApp(name, apps) {
-  if (typeof name !== 'string') return undefined;
-  const matches = installed(apps).filter(a => names(a).some(n => fold(n) === fold(name)));
+  const matches = named(name, apps);
   return matches.length === 1 ? matches[0] : undefined;
 }
+// True when any scanned app carries the name, including two apps that share it.
+export const catalogNames = (name, apps) => named(name, apps).length > 0;
 export function parseTypedApps(text, apps) {
   if (typeof text !== 'string' || /[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]/.test(text)) return [];
   const granted = new Set();

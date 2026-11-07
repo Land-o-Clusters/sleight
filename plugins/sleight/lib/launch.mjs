@@ -1233,6 +1233,8 @@ export async function run({ leaseDirectory, inspectInput: inspectStoppedInput, h
   relay = createRelay({
     directBrowser, turboUnavailable: prepared.turboUnavailable,
     directHost: prepared.directHost,
+    // Remote approvals bridge a quoted app name the catalog lacks through LaunchServices.
+    resolveApprovalApp: resolveAppId,
     ...remoteApprovalOptions(),
     startupCache: createStartupCache({ identity: startupIdentity(activeServer, join(LIB, '..')) }),
     browserChoice: browserSelection.choice,

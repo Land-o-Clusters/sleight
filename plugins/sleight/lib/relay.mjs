@@ -2,7 +2,7 @@ import { unsupportedCodeLines } from './code-line-terminators.mjs';
 import { parseCell, withCellCache } from './code-ast.mjs';
 import { dispatchInspection, sameGuardedCalls } from './dispatched-calls.mjs';
 import { codeInspectionRefusal } from './flow-rules.mjs';
-import { parseTypedApps, isPresent, predictApps, upfrontAsk, remoteApprovalNotice, physicalApprovalNotice, resolveApp } from './remote-approvals.mjs';
+import { parseTypedApps, isPresent, predictApps, upfrontAsk, remoteApprovalNotice, physicalApprovalNotice, resolveApp, catalogNames } from './remote-approvals.mjs';
 import { turboFirstRules } from './turbo-first-rules.mjs';
 // A stdio relay between Claude Code and the computer-use server.
 //
@@ -699,7 +699,8 @@ function plainAppCard(msg, apps = []) {
   const match = /^Allow Computer Use to use "([^"\r\n]+)"\?$/.exec(msg.params?.message ?? '');
   const app = msg.params?._meta?.tool_params?.app;
   // Real engine cards quote the display name and carry the bundle ID in tool_params.app.
-  // Only an unambiguous catalog match may bridge those two identities.
+  // Only an unambiguous catalog match may bridge those two identities here (the card path adds LaunchServices for a name
+  // the catalog lacks).
   return isAppApproval(msg) && !!match && (match[1] === app ||
     typeof app === 'string' && /^[A-Za-z0-9-]+(?:\.[A-Za-z0-9-]+)+$/.test(app) && resolveApp(match[1], apps)?.id === app);
 }
@@ -1310,6 +1311,7 @@ export function createRelay({
   }
   let asking = Promise.resolve(); // `ask` prompts, one at a time
   const shellAppCards = new WeakMap(), pendingShellAsks = new Map();
+  const launchServicesPairs = new Set(); // [quoted name, bundle ID] pairs LaunchServices confirmed, so repeats skip the lookup
   const plainCard = msg => shellAppCards.get(msg) ?? plainAppCard(msg);
   let clientCanElicit; // undefined until initialize (legacy in-process callers)
   const localNames = new Set(localTools?.tools.map(t => t.name) ?? []);
@@ -5790,13 +5792,19 @@ export function createRelay({
       const app = msg.params?._meta?.tool_params?.app;
       // A display-name mismatch is resolved only against an engine-supplied bundle ID. Unknown names, changed
       // identities, action wording and lookup failures retain their one-action card and grant no session access.
+      // The catalog scans only the usual app folders, so a name it lacks entirely (Simulator inside Xcode, an app in a
+      // deeper folder) may bridge through LaunchServices, and only when that names exactly the engine's bundle ID.
       if (match && match[1] !== app && typeof app === 'string' && /^[A-Za-z0-9-]+(?:\.[A-Za-z0-9-]+)+$/.test(app) && (remoteApprovals || resolveApprovalApp)) {
         const generation = stopGeneration;
         shellAppCards.set(msg, false);
         Promise.resolve().then(async () => {
           if (!remoteApprovals) return (await resolveApprovalApp(match[1])) === app;
           await waitCatalog();
-          return plainAppCard(msg, remoteCatalog.apps);
+          if (plainAppCard(msg, remoteCatalog.apps)) return true;
+          if (!resolveApprovalApp || catalogNames(match[1], remoteCatalog.apps)) return false;
+          const pair = JSON.stringify([match[1], app]);
+          if (!launchServicesPairs.has(pair) && (await resolveApprovalApp(match[1])) === app) launchServicesPairs.add(pair);
+          return launchServicesPairs.has(pair);
         }).catch(() => false).then(plain => {
           if (generation !== stopGeneration || closing || disposed) {
             if (remoteApprovals) toServer({ jsonrpc: '2.0', id: msg.id, result: { action: 'cancel' } });
