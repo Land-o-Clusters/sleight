@@ -591,6 +591,17 @@ test('a Simulator card the catalog lacks offers Always and is remembered for the
   assert.deepEqual(written, []);
 });
 
+test('choosing Always on the Simulator card writes it to the pre-approved list', async t => {
+  const written = [];
+  const h = harness(t, { resolveApprovalApp: launchServices({ Simulator: 'com.apple.iphonesimulator' }, []),
+    alwaysAllow: (app, riskLevel) => written.push([app, riskLevel]) });
+  h.engine(simulatorCard(1)); await settle();
+  const el = h.client.find(m => m.method === 'elicitation/create');
+  h.call({ jsonrpc: '2.0', id: el.id, result: { action: 'accept', content: { remember: 'Always' } } }); await settle();
+  assert.deepEqual(written, [['com.apple.iphonesimulator', 'low']]);
+  assert.deepEqual(h.server.find(m => m.id === 1)?.result, { action: 'accept', content: {}, _meta: { persist: 'session' } });
+});
+
 // A generic app outside the scanned folders, such as one nested in another bundle, whose display name differs from its ID.
 const nestedCard = (id, name, app = 'com.fixture.toolbox.helper') =>
   card(id, app, { message: `Allow Computer Use to use "${name}"?` });
@@ -609,15 +620,18 @@ for (const [variant, name, known, plain] of [
   h.call({ jsonrpc: '2.0', id: el.id, result: { action: 'accept', content: {} } }); await settle();
   h.engine(nestedCard('second', name)); await settle();
   assert.equal(h.server.find(m => m.id === 'second')?.result?.action === 'accept', plain, 'only a bridged identity is remembered');
-  assert.deepEqual(lookups, catalogNames(name, apps) ? [] : plain ? [name] : [name, name], 'a name the catalog knows never reaches LaunchServices');
+  assert.deepEqual(lookups, catalogNames(name, apps) ? [] : [name],
+    'a name the catalog knows never reaches LaunchServices, and either answer is kept for the session');
 });
 
 test('a failed LaunchServices lookup keeps the one-action card', async t => {
-  const h = harness(t, { resolveApprovalApp: async () => { throw Error('lookup failed'); } });
+  let lookups = 0;
+  const h = harness(t, { resolveApprovalApp: async () => { lookups++; throw Error('lookup failed'); } });
   h.engine(simulatorCard(1)); await settle();
   const el = h.client.find(m => m.method === 'elicitation/create');
   assert.equal(el?.params.requestedSchema.properties.remember, undefined);
   h.call({ jsonrpc: '2.0', id: el.id, result: { action: 'accept', content: {} } }); await settle();
   h.engine(simulatorCard(2)); await settle();
   assert.equal(h.server.some(m => m.id === 2), false);
+  assert.equal(lookups, 1, 'a failed lookup is not retried on every card');
 });

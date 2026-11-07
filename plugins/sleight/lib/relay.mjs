@@ -1311,7 +1311,9 @@ export function createRelay({
   }
   let asking = Promise.resolve(); // `ask` prompts, one at a time
   const shellAppCards = new WeakMap(), pendingShellAsks = new Map();
-  const launchServicesPairs = new Set(); // [quoted name, bundle ID] pairs LaunchServices confirmed, so repeats skip the lookup
+  // [quoted name, bundle ID] pair -> whether LaunchServices named exactly that ID. Both answers are kept for the relay's life,
+  // so a name it can't bridge costs one lookup (up to 11 s), not one per card. A lookup that throws counts as no.
+  const launchServicesPairs = new Map();
   const plainCard = msg => shellAppCards.get(msg) ?? plainAppCard(msg);
   let clientCanElicit; // undefined until initialize (legacy in-process callers)
   const localNames = new Set(localTools?.tools.map(t => t.name) ?? []);
@@ -5803,8 +5805,10 @@ export function createRelay({
           if (plainAppCard(msg, remoteCatalog.apps)) return true;
           if (!resolveApprovalApp || catalogNames(match[1], remoteCatalog.apps)) return false;
           const pair = JSON.stringify([match[1], app]);
-          if (!launchServicesPairs.has(pair) && (await resolveApprovalApp(match[1])) === app) launchServicesPairs.add(pair);
-          return launchServicesPairs.has(pair);
+          if (!launchServicesPairs.has(pair)) {
+            launchServicesPairs.set(pair, await Promise.resolve(match[1]).then(resolveApprovalApp).then(id => id === app, () => false));
+          }
+          return launchServicesPairs.get(pair);
         }).catch(() => false).then(plain => {
           if (generation !== stopGeneration || closing || disposed) {
             if (remoteApprovals) toServer({ jsonrpc: '2.0', id: msg.id, result: { action: 'cancel' } });
