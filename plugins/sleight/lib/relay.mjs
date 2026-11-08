@@ -3195,18 +3195,28 @@ export function createRelay({
     } }).then(msg => msg.result?.action === 'accept' ? msg.result.content?.decision : 'cancel');
   }
 
+  // The user allowed the app itself this session, on the engine's card or with a typed allow. A revoke clears both.
+  function appAllowedThisSession(app) {
+    const id = appIdentity(app)?.id ?? app;
+    return typedApps.has(typedKey(id)) || [...approved].some(key => {
+      try { const [name] = JSON.parse(key); return name !== 'sleight' && (name === app || name === id || appIdentity(name)?.id === id); } catch { return false; }
+    });
+  }
+
   // Approval for a local tool: once per key and session, like app approvals.
   // options.once asks and is never remembered, for sends that must reach the
   // user every time. The user's pre-approved list covers drag, menu_bar and
-  // open_file per app, but never a once ask.
+  // open_file per app at high risk, and select_window at any listed level, but
+  // never a once ask. select_window also needs no ask for an app allowed this session.
   function approve(keyParts, message, callId, options = {}) {
     const generation = stopGeneration;
     const key = JSON.stringify(['sleight', ...keyParts]);
     // A once ask must reach the user every time: never answered from the
     // pre-approved list and never from session memory.
     const scoped = !panelOnly && approvalScope === 'session' && !options.once;
-    const preapprovable = !panelOnly && !options.once && keyParts.length === 2 &&
-      ['drag', 'menu_bar', 'open_file'].includes(keyParts[0]);
+    // Raising one window without activating it does less than the clicks and typing a listed app already allows.
+    const listRisk = panelOnly || options.once || keyParts.length !== 2 ? undefined
+      : ['drag', 'menu_bar', 'open_file'].includes(keyParts[0]) ? 'high' : keyParts[0] === 'select_window' ? 'low' : undefined;
     // withdraw() declines a pending ask whose call failed first: later asks stop waiting on it, an
     // elicitation of ours is cancelled, and a later answer grants nothing. A native panel stays up.
     let withdrawn = false, elicitation, settle;
@@ -3218,9 +3228,9 @@ export function createRelay({
       if (withdrawn || generation !== stopGeneration || closing || disposed) return false;
       let auditFailed = false;
       try {
-        if (preapprovable && userListGrant(keyParts[1], 'high', keyParts[0], [callId])) return true;
+        if (listRisk && userListGrant(keyParts[1], listRisk, keyParts[0], [callId])) return true;
       } catch { auditFailed = true; }
-      if (!auditFailed && scoped && approved.has(key)) return true;
+      if (!auditFailed && scoped && (approved.has(key) || keyParts[0] === 'select_window' && keyParts.length === 2 && appAllowedThisSession(keyParts[1]))) return true;
       let action;
       try {
         cursorStatus('waiting', localCursor.get(callId));
@@ -3429,6 +3439,8 @@ export function createRelay({
       current();
       pauseHost?.activity();
       result = await localTools.call(name, callArgs, async (parts, message, options) => {
+        // One app, one approval: "Simulator" and com.apple.iphonesimulator asked twice in one session (2026-11-08).
+        if (appTool && resolved?.appId && parts.length === 2 && parts[1] === args.app) parts = [parts[0], resolved.appId];
         const allowed = await (prepared?.approval ?? approve(parts, message, msg.id, options));
         current();
         if (allowed) {

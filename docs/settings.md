@@ -168,6 +168,8 @@ has accept and decline, so without help you'd get asked on every click. The rela
 You can also pick "Always allow", with the third button in sleight's panel or the *Always* option
 of *Remember this choice* in Claude Code's form. It adds the app, at that risk level and with the date, to your
 pre-approved list, so later sessions don't ask. Terminals and OpenAI's apps never offer it.
+An app on the list at any level, or one you allowed this session, also skips `select_window`'s own prompt for
+that app. `drag`, `menu_bar` and `open_file` skip theirs only for an app listed at high risk.
 `sleight-mcp allow list` shows the list and `sleight-mcp allow remove <app>` takes an app off.
 [Permissions](#permissions) shows it beside everything else sleight may do.
 
