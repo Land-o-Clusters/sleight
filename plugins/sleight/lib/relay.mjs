@@ -2,7 +2,7 @@ import { unsupportedCodeLines } from './code-line-terminators.mjs';
 import { parseCell, withCellCache } from './code-ast.mjs';
 import { dispatchInspection, sameGuardedCalls } from './dispatched-calls.mjs';
 import { codeInspectionRefusal } from './flow-rules.mjs';
-import { parseTypedApps, isPresent, predictApps, upfrontAsk, remoteApprovalNotice, physicalApprovalNotice, resolveApp } from './remote-approvals.mjs';
+import { parseTypedApps, isPresent, predictApps, upfrontAsk, remoteApprovalNotice, physicalApprovalNotice, resolveApp, catalogNames } from './remote-approvals.mjs';
 import { turboFirstRules } from './turbo-first-rules.mjs';
 // A stdio relay between Claude Code and the computer-use server.
 //
@@ -699,7 +699,8 @@ function plainAppCard(msg, apps = []) {
   const match = /^Allow Computer Use to use "([^"\r\n]+)"\?$/.exec(msg.params?.message ?? '');
   const app = msg.params?._meta?.tool_params?.app;
   // Real engine cards quote the display name and carry the bundle ID in tool_params.app.
-  // Only an unambiguous catalog match may bridge those two identities.
+  // Only an unambiguous catalog match may bridge those two identities here (the card path adds LaunchServices for a name
+  // the catalog lacks).
   return isAppApproval(msg) && !!match && (match[1] === app ||
     typeof app === 'string' && /^[A-Za-z0-9-]+(?:\.[A-Za-z0-9-]+)+$/.test(app) && resolveApp(match[1], apps)?.id === app);
 }
@@ -1310,6 +1311,9 @@ export function createRelay({
   }
   let asking = Promise.resolve(); // `ask` prompts, one at a time
   const shellAppCards = new WeakMap(), pendingShellAsks = new Map();
+  // [quoted name, bundle ID] pair -> whether LaunchServices named exactly that ID. Both answers are kept for the relay's life,
+  // so a name it can't bridge costs one lookup (up to 11 s), not one per card. A lookup that throws counts as no.
+  const launchServicesPairs = new Map();
   const plainCard = msg => shellAppCards.get(msg) ?? plainAppCard(msg);
   let clientCanElicit; // undefined until initialize (legacy in-process callers)
   const localNames = new Set(localTools?.tools.map(t => t.name) ?? []);
@@ -3191,18 +3195,28 @@ export function createRelay({
     } }).then(msg => msg.result?.action === 'accept' ? msg.result.content?.decision : 'cancel');
   }
 
+  // The user allowed the app itself this session, on the engine's card or with a typed allow. A revoke clears both.
+  function appAllowedThisSession(app) {
+    const id = appIdentity(app)?.id ?? app;
+    return typedApps.has(typedKey(id)) || [...approved].some(key => {
+      try { const [name] = JSON.parse(key); return name !== 'sleight' && (name === app || name === id || appIdentity(name)?.id === id); } catch { return false; }
+    });
+  }
+
   // Approval for a local tool: once per key and session, like app approvals.
   // options.once asks and is never remembered, for sends that must reach the
   // user every time. The user's pre-approved list covers drag, menu_bar and
-  // open_file per app, but never a once ask.
+  // open_file per app at high risk, and select_window at any listed level, but
+  // never a once ask. select_window also needs no ask for an app allowed this session.
   function approve(keyParts, message, callId, options = {}) {
     const generation = stopGeneration;
     const key = JSON.stringify(['sleight', ...keyParts]);
     // A once ask must reach the user every time: never answered from the
     // pre-approved list and never from session memory.
     const scoped = !panelOnly && approvalScope === 'session' && !options.once;
-    const preapprovable = !panelOnly && !options.once && keyParts.length === 2 &&
-      ['drag', 'menu_bar', 'open_file'].includes(keyParts[0]);
+    // Raising one window without activating it does less than the clicks and typing a listed app already allows.
+    const listRisk = panelOnly || options.once || keyParts.length !== 2 ? undefined
+      : ['drag', 'menu_bar', 'open_file'].includes(keyParts[0]) ? 'high' : keyParts[0] === 'select_window' ? 'low' : undefined;
     // withdraw() declines a pending ask whose call failed first: later asks stop waiting on it, an
     // elicitation of ours is cancelled, and a later answer grants nothing. A native panel stays up.
     let withdrawn = false, elicitation, settle;
@@ -3214,9 +3228,9 @@ export function createRelay({
       if (withdrawn || generation !== stopGeneration || closing || disposed) return false;
       let auditFailed = false;
       try {
-        if (preapprovable && userListGrant(keyParts[1], 'high', keyParts[0], [callId])) return true;
+        if (listRisk && userListGrant(keyParts[1], listRisk, keyParts[0], [callId])) return true;
       } catch { auditFailed = true; }
-      if (!auditFailed && scoped && approved.has(key)) return true;
+      if (!auditFailed && scoped && (approved.has(key) || keyParts[0] === 'select_window' && keyParts.length === 2 && appAllowedThisSession(keyParts[1]))) return true;
       let action;
       try {
         cursorStatus('waiting', localCursor.get(callId));
@@ -3425,6 +3439,8 @@ export function createRelay({
       current();
       pauseHost?.activity();
       result = await localTools.call(name, callArgs, async (parts, message, options) => {
+        // One app, one approval: "Simulator" and com.apple.iphonesimulator asked twice in one session (2026-11-08).
+        if (appTool && resolved?.appId && parts.length === 2 && parts[1] === args.app) parts = [parts[0], resolved.appId];
         const allowed = await (prepared?.approval ?? approve(parts, message, msg.id, options));
         current();
         if (allowed) {
@@ -5790,13 +5806,21 @@ export function createRelay({
       const app = msg.params?._meta?.tool_params?.app;
       // A display-name mismatch is resolved only against an engine-supplied bundle ID. Unknown names, changed
       // identities, action wording and lookup failures retain their one-action card and grant no session access.
+      // The catalog scans only the usual app folders, so a name it lacks entirely (Simulator inside Xcode, an app in a
+      // deeper folder) may bridge through LaunchServices, and only when that names exactly the engine's bundle ID.
       if (match && match[1] !== app && typeof app === 'string' && /^[A-Za-z0-9-]+(?:\.[A-Za-z0-9-]+)+$/.test(app) && (remoteApprovals || resolveApprovalApp)) {
         const generation = stopGeneration;
         shellAppCards.set(msg, false);
         Promise.resolve().then(async () => {
           if (!remoteApprovals) return (await resolveApprovalApp(match[1])) === app;
           await waitCatalog();
-          return plainAppCard(msg, remoteCatalog.apps);
+          if (plainAppCard(msg, remoteCatalog.apps)) return true;
+          if (!resolveApprovalApp || catalogNames(match[1], remoteCatalog.apps)) return false;
+          const pair = JSON.stringify([match[1], app]);
+          if (!launchServicesPairs.has(pair)) {
+            launchServicesPairs.set(pair, await Promise.resolve(match[1]).then(resolveApprovalApp).then(id => id === app, () => false));
+          }
+          return launchServicesPairs.get(pair);
         }).catch(() => false).then(plain => {
           if (generation !== stopGeneration || closing || disposed) {
             if (remoteApprovals) toServer({ jsonrpc: '2.0', id: msg.id, result: { action: 'cancel' } });

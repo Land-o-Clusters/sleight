@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { PassThrough } from 'node:stream';
-import { parseTypedApps, isPresent, predictApps, upfrontAsk, remoteApprovalNotice, physicalApprovalNotice } from '../plugins/sleight/lib/remote-approvals.mjs';
+import { parseTypedApps, isPresent, predictApps, upfrontAsk, remoteApprovalNotice, physicalApprovalNotice, catalogNames } from '../plugins/sleight/lib/remote-approvals.mjs';
 import { createRelay } from '../plugins/sleight/lib/relay.mjs';
 import { remoteApprovalOptions } from '../plugins/sleight/lib/launch.mjs';
 
@@ -565,4 +565,73 @@ test('a present client card still offers Always, and choosing it writes the pre-
   h.call({ jsonrpc: '2.0', id: el.id, result: { action: 'accept', content: { remember: 'Always' } } }); await settle();
   assert.deepEqual(written, [['com.apple.TextEdit', 'low']]);
   assert.equal(h.server.find(m => m.id === 'c1').result.action, 'accept');
+});
+
+// The engine's card for Simulator, as a 1.5.1 trace recorded it. Simulator.app sits inside Xcode, outside the scanned folders.
+const simulatorCard = id => ({ jsonrpc: '2.0', id, method: 'elicitation/create', params: {
+  _meta: { codex_approval_kind: 'mcp_tool_call', connector_id: 'computer-use', connector_name: 'Computer Use',
+    persist: ['session', 'always'], riskLevel: 'low', tool_name: 'click', tool_params: { app: 'com.apple.iphonesimulator' },
+    tool_params_display: [{ display_name: 'App', name: 'app', value: 'Simulator' }] },
+  message: 'Allow Computer Use to use "Simulator"?', mode: 'form', requestedSchema: { properties: {}, type: 'object' } } });
+const launchServices = (known, lookups) => async name => { lookups.push(name); return known[name] ?? ''; };
+
+test('a Simulator card the catalog lacks offers Always and is remembered for the session through LaunchServices', async t => {
+  const lookups = [], written = [];
+  const h = harness(t, { resolveApprovalApp: launchServices({ Simulator: 'com.apple.iphonesimulator' }, lookups),
+    alwaysAllow: (app, riskLevel) => written.push([app, riskLevel]) });
+  h.engine(simulatorCard(1)); await settle();
+  const el = h.client.find(m => m.method === 'elicitation/create');
+  assert.deepEqual(el?.params.requestedSchema.properties.remember.enum, ['This session', 'Always']);
+  h.call({ jsonrpc: '2.0', id: el.id, result: { action: 'accept', content: { remember: 'This session' } } }); await settle();
+  assert.deepEqual(h.server.find(m => m.id === 1)?.result, { action: 'accept', content: {}, _meta: { persist: 'session' } });
+  h.engine(simulatorCard(2)); await settle();
+  assert.deepEqual(h.server.find(m => m.id === 2)?.result, { action: 'accept', content: {}, _meta: { persist: 'session' } });
+  assert.equal(h.client.filter(m => m.method === 'elicitation/create').length, 1);
+  assert.deepEqual(lookups, ['Simulator'], 'a confirmed pair skips the second lookup');
+  assert.deepEqual(written, []);
+});
+
+test('choosing Always on the Simulator card writes it to the pre-approved list', async t => {
+  const written = [];
+  const h = harness(t, { resolveApprovalApp: launchServices({ Simulator: 'com.apple.iphonesimulator' }, []),
+    alwaysAllow: (app, riskLevel) => written.push([app, riskLevel]) });
+  h.engine(simulatorCard(1)); await settle();
+  const el = h.client.find(m => m.method === 'elicitation/create');
+  h.call({ jsonrpc: '2.0', id: el.id, result: { action: 'accept', content: { remember: 'Always' } } }); await settle();
+  assert.deepEqual(written, [['com.apple.iphonesimulator', 'low']]);
+  assert.deepEqual(h.server.find(m => m.id === 1)?.result, { action: 'accept', content: {}, _meta: { persist: 'session' } });
+});
+
+// A generic app outside the scanned folders, such as one nested in another bundle, whose display name differs from its ID.
+const nestedCard = (id, name, app = 'com.fixture.toolbox.helper') =>
+  card(id, app, { message: `Allow Computer Use to use "${name}"?` });
+for (const [variant, name, known, plain] of [
+  ['LaunchServices names the same ID', 'Toolbox Helper', { 'Toolbox Helper': 'com.fixture.toolbox.helper' }, true],
+  ['LaunchServices names another ID', 'Toolbox Helper', { 'Toolbox Helper': 'com.fixture.other' }, false],
+  ['LaunchServices finds nothing', 'Toolbox Helper', {}, false],
+  ['the catalog has two apps of that name', 'Duplicate', { Duplicate: 'com.fixture.toolbox.helper' }, false],
+  ['the catalog names another app', 'Mail', { Mail: 'com.fixture.toolbox.helper' }, false],
+]) test(`a nested app's card: ${variant}`, async t => {
+  const lookups = [];
+  const h = harness(t, { resolveApprovalApp: launchServices(known, lookups), alwaysAllow: () => {} });
+  h.engine(nestedCard('first', name)); await settle();
+  const el = h.client.find(m => m.method === 'elicitation/create');
+  assert.equal(!!el?.params.requestedSchema?.properties?.remember, plain);
+  h.call({ jsonrpc: '2.0', id: el.id, result: { action: 'accept', content: {} } }); await settle();
+  h.engine(nestedCard('second', name)); await settle();
+  assert.equal(h.server.find(m => m.id === 'second')?.result?.action === 'accept', plain, 'only a bridged identity is remembered');
+  assert.deepEqual(lookups, catalogNames(name, apps) ? [] : [name],
+    'a name the catalog knows never reaches LaunchServices, and either answer is kept for the session');
+});
+
+test('a failed LaunchServices lookup keeps the one-action card', async t => {
+  let lookups = 0;
+  const h = harness(t, { resolveApprovalApp: async () => { lookups++; throw Error('lookup failed'); } });
+  h.engine(simulatorCard(1)); await settle();
+  const el = h.client.find(m => m.method === 'elicitation/create');
+  assert.equal(el?.params.requestedSchema.properties.remember, undefined);
+  h.call({ jsonrpc: '2.0', id: el.id, result: { action: 'accept', content: {} } }); await settle();
+  h.engine(simulatorCard(2)); await settle();
+  assert.equal(h.server.some(m => m.id === 2), false);
+  assert.equal(lookups, 1, 'a failed lookup is not retried on every card');
 });

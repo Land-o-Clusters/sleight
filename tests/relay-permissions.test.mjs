@@ -156,6 +156,61 @@ test('a revoke that takes an app off the always list also ends this session\'s o
   assert.equal(asked.length, 2, 'after the revoke the app asks again');
 });
 
+// The 2026-11-08 Simulator session: select_window asked for "Simulator", then again for its bundle ID, and the
+// pre-approved list that answered the engine's card for Simulator three times never answered select_window.
+function localApprovals(t, preapproved) {
+  const asked = [], grants = [];
+  const tool = name => ({ name, description: 'x', inputSchema: { type: 'object' } });
+  const h = harness(t, { permissions: undefined, preapproved, grantAudit: grant => grants.push(grant),
+    ask: async message => { asked.push(message); return 'accept'; },
+    localTools: { tools: ['select_window', 'drag'].map(tool),
+      target: async () => ({ appId: 'com.apple.iphonesimulator', app: 'Simulator', title: null, url: null }),
+      call: async (name, args, approve) => (await approve([name, args.app], `Allow Claude to ${name} in ${args.app}?`))
+        ? { content: [{ type: 'text', text: JSON.stringify({ ok: true, target: { appId: 'com.apple.iphonesimulator', app: 'Simulator', title: args.title ?? 'x' } }) }] }
+        : { isError: true, content: [{ type: 'text', text: 'declined' }] } } });
+  return { h, asked, grants };
+}
+const listing = apps => ({ size: apps.size, allows: (app, risk) => apps.has(app) && ['low', 'medium', 'high'].indexOf(risk) <= ['low', 'medium', 'high'].indexOf(apps.get(app)),
+  list: () => [], add() {}, onRemoved() {} });
+
+test('select_window asks once per app, whichever name Claude gives it', async t => {
+  const { h, asked } = localApprovals(t, listing(new Map()));
+  for (const [id, app] of [[1, 'Simulator'], [2, 'com.apple.iphonesimulator'], [3, 'Simulator']]) {
+    h.call(id, 'select_window', { app, title: 'iPhone 18 Pro – iOS 27.0' }); await settle();
+    assert.equal(h.reply(id)?.result?.isError, undefined, `call ${id}`);
+  }
+  assert.deepEqual(asked, ['Allow Claude to select_window in Simulator?']);
+});
+
+test('an app on the pre-approved list at any level covers select_window, while drag still needs high', async t => {
+  const { h, asked, grants } = localApprovals(t, listing(new Map([['com.apple.iphonesimulator', 'low']])));
+  h.call(1, 'select_window', { app: 'Simulator', title: 'iPhone 18 Pro – iOS 27.0' }); await settle();
+  assert.equal(h.reply(1)?.result?.isError, undefined);
+  assert.deepEqual(asked, []);
+  assert.deepEqual(grants.map(g => [g.app, g.riskLevel, g.tool]), [['com.apple.iphonesimulator', 'low', 'select_window']]);
+  assert.match(JSON.stringify(h.reply(1).result), /pre-approved by the user's list/);
+  h.call(2, 'drag', { app: 'Simulator', from: [1, 1], to: [2, 2] }); await settle();
+  assert.deepEqual(asked, ['Allow Claude to drag in Simulator?'], 'a low listing does not cover drag');
+});
+
+test('accepting the app on the engine\'s card covers select_window for it until a revoke', async t => {
+  let removed;
+  const preapproved = { ...listing(new Map()), onRemoved: listener => { removed = listener; } };
+  const { h, asked } = localApprovals(t, preapproved);
+  h.fromServer({ jsonrpc: '2.0', id: 'e1', method: 'elicitation/create', params: { message: 'Allow Computer Use to use "Simulator"?',
+    _meta: { connector_id: 'computer-use', persist: ['session', 'always'], riskLevel: 'low', tool_params: { app: 'com.apple.iphonesimulator' } } } });
+  await settle();
+  assert.equal(asked.length, 1);
+  h.call(1, 'select_window', { app: 'Simulator', title: 'iPhone 18 Pro – iOS 27.0' }); await settle();
+  assert.equal(h.reply(1)?.result?.isError, undefined);
+  assert.equal(asked.length, 1, 'no second prompt for the same app');
+  h.call(2, 'drag', { app: 'Simulator', from: [1, 1], to: [2, 2] }); await settle();
+  assert.equal(asked.length, 2, 'drag keeps its own prompt');
+  removed(['com.apple.iphonesimulator']);
+  h.call(3, 'select_window', { app: 'Simulator', title: 'iPhone 18 Pro – iOS 27.0' }); await settle();
+  assert.equal(asked.at(-1), 'Allow Claude to select_window in Simulator?', 'after the revoke it asks again');
+});
+
 test('without the launcher\'s permissions nothing is blocked', async t => {
   const h = harness(t, { permissions: null });
   h.js(1, 'let app = await cua.getApp("com.example.blocked")');
