@@ -23,7 +23,8 @@ export function checkCellParser(binary) {
     return /^([\s\S]*?onComment\s*\([^)]*\)\s*\{\s*diagnosticComments\.push\(\s*\{\s*start\s*,\s*end\s*\}\s*\)\s*;\s*\}\s*,?\s*)\}\s*\)/.exec(tail)?.[1];
   });
   const expected = Object.entries(ENGINE_PARSE_OPTIONS).map(([key, value]) => `${key}:${value}`).join(',');
-  const valid = blocks.length === 2 && blocks.every(block => {
+  // ChatGPT 26.1103.41825 carries three identical blocks (1.5.1 shipped against two). Every block must match.
+  const valid = blocks.length >= 2 && blocks.every(block => {
     if (!block) return false;
     // Pin all scalar options before the diagnostic callbacks, including their order.
     const prefix = block.split(/\bonToken\s*:/)[0].replace(/\s/g, '').replace(/,$/, '');

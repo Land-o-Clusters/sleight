@@ -26,6 +26,7 @@ for (const [name, mutation] of [
   ['new version', binary.replace('7.0.0', '7.1.0')],
   ['missing banner', binary.replace('Meriyah v7.0.0', '')],
   ['one parser block', `Meriyah v7.0.0\0${block}`],
+  ['third block drifts', `${binary}\0${block.replace('loc:false', 'loc:true')}`],
   ['changed next', binary.replace('next:true', 'next:false')],
   ['changed module', binary.replace('module:true', 'module:false')],
   ['changed ranges', binary.replace('ranges:true', 'ranges:false')],
@@ -35,3 +36,8 @@ for (const [name, mutation] of [
   ['extra trailing option', binary.replace('}); }})', '}); },jsx:true})')],
   ['wrong callback shape', binary.replace('onComment(', 'otherCallback(')],
 ]) test(`parser contract fails closed: ${name}`, () => assert.equal(checkCellParser(mutation).status, 'fail'));
+
+test('three identical parser blocks pass (ChatGPT 26.1103.41825 carries three)', () => {
+  const check = checkCellParser(`${binary}\0${block}`);
+  assert.equal(check.status, 'pass'); assert.equal(check.blocks, 3);
+});
