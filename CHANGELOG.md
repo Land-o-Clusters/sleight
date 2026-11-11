@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.5.2 (2026-11-11)
+
+- sleight starts again after the Codex update of 2026-11-10 that moved the ChatGPT engine into the ChatGPT app. Codex now
+  leaves a disabled entry in its plugin cache whose command is a bare `node` with no arguments, and sleight stopped at
+  startup with "server runtime missing: node". A cached entry that is disabled, or whose command is a bare name rather
+  than a path, now falls back to the engine bundled in the ChatGPT app.
+
 ## 1.5.1 (2026-10-30)
 
 - Public CI runs `npm test` on Linux without installing packages, and 13 of 18,691 tests failed there on 1.5.0. Tests that need the dev-only `typescript` package now skip with a reason when it can't be found, and benchmark modules load it only when they use it. The plugin itself never loads `typescript`, so 1.5.0 users weren't affected.

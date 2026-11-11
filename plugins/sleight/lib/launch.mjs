@@ -126,7 +126,13 @@ export function resolveServer(env = process.env) {
   } catch (err) {
     return { error: `could not read ${configPath}: ${err.message}` };
   }
-  if (!server?.command) return { error: `${configPath} has no "${SERVER_KEY}" server` };
+  // Codex 2026-11 ships a disabled stub here (`"command": "node"`, no args) once the engine lives in the ChatGPT
+  // app. A disabled entry, or one that names a bare command, means the app's bundled engine is the one to run.
+  // An absolute command that's missing keeps its old handling (engine updates keep the running engine then).
+  if (!server?.command || server.enabled === false || !isAbsolute(server.command)) {
+    const fallback = fromBundle();
+    return fallback.error ? { error: server?.command ? `${configPath} names no runnable "${SERVER_KEY}" server (command ${JSON.stringify(server.command)}), and no engine in the ChatGPT app. Install the ChatGPT desktop app (no sign-in needed), then run ${setupCommand()}.` : `${configPath} has no "${SERVER_KEY}" server` } : fallback;
+  }
 
   const serverEnv = { ...server.env };
   // Automatic selection below uses only a recent connected-extension inventory.

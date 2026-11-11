@@ -32,7 +32,8 @@ test('the real read on this Mac is pure and quick', t => {
   assert.ok(Date.now() - started < 2000);
   if (!read.version) { t.skip(`no engine on this Mac (${read.error})`); return; }
   assert.match(read.version, /^\d+(\.\d+)+$/);
-  assert.equal(read.source, 'codex-plugin-cache');
+  // Since Codex's 2026-11-10 update the cache can hold a disabled stub, and the engine comes from the ChatGPT app.
+  assert.ok(['codex-plugin-cache', 'chatgpt-app'].includes(read.source), read.source);
 });
 
 test('a span flags a change between the start and end reads, dated by both reads', () => {
