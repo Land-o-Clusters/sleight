@@ -3,7 +3,7 @@ import { createInterface } from 'node:readline';
 import { randomBytes } from 'node:crypto';
 import { charactersDirectory, refuseUrlSource, prepareCharacterImport, installCharacter, listCharacters, checkCharacter, removeCharacter, characterCallout, resolveCharacterStates } from './character.mjs';
 import { characterFrame } from './character-frame.mjs';
-import { CURSOR_STYLES, LINES_MODES, characterSizeValid, handConfigPath, handSetting } from './settings.mjs';
+import { CURSOR_STYLES, LINES_MODES, handConfigPath, handSetting } from './settings.mjs';
 import { writeHandSetting } from './command.mjs';
 import { handHostBuilt, prepareHandHost } from '../direct-browser/host.mjs';
 import { statSync } from 'node:fs';
@@ -19,7 +19,7 @@ const hostCheckCharacter = async frame => {
 };
 const handLine = s => s.reason === 'unsafe' ? 'off (hand.json is unsafe to read; run sleight-mcp hand on or off to replace it)'
   : s.enabled ? 'on' : s.reason === 'env' ? 'off (SLEIGHT_HAND=0)' : s.reason === 'platform' ? 'off (macOS only)' : 'off';
-const usage = 'usage: sleight-mcp cursor import <folder|file.sleightchar> [--yes]\n       sleight-mcp cursor export <id> <file.sleightchar>\n       sleight-mcp cursor list\n       sleight-mcp cursor check <id>\n       sleight-mcp cursor remove <id>\n       sleight-mcp cursor style <glove|ring|seam|sprite> [<character-id>] [--perch]\n       sleight-mcp cursor size <small|medium|stage|104..560>\n       sleight-mcp cursor lines on|off\n       sleight-mcp cursor status\n';
+const usage = 'usage: sleight-mcp cursor import <folder|file.sleightchar> [--yes]\n       sleight-mcp cursor export <id> <file.sleightchar>\n       sleight-mcp cursor list\n       sleight-mcp cursor check <id>\n       sleight-mcp cursor remove <id>\n       sleight-mcp cursor style <glove|ring|seam|sprite> [<character-id>] [--perch]\n       sleight-mcp cursor lines on|off\n       sleight-mcp cursor status\n';
 function ask(input, out, prompt) {
   out(prompt);
   return new Promise(resolve => {
@@ -38,9 +38,7 @@ export async function cursorCommand(args, { out = text => process.stdout.write(t
   const [op, ...all] = args, options = { root, uid, builtins };
   // --perch goes with style sprite only: the character sits on the target window instead of trailing the ring.
   const perch = op === 'style' && all[0] === 'sprite' && all.at(-1) === '--perch', rest = perch ? all.slice(0, -1) : all;
-  const size = rest.length === 1 && /^(?:\d+(?:\.\d+)?|\.\d+)$/.test(rest[0]) ? Number(rest[0]) : rest[0];
-  if (!(op === 'size' && rest.length === 1 && characterSizeValid(size) ||
-      op === 'lines' && rest.length === 1 && LINES_MODES.includes(rest[0]) || op === 'import' && (rest.length === 1 || rest.length === 2 && rest[1] === '--yes') && !rest[0].startsWith('--') ||
+  if (!(op === 'lines' && rest.length === 1 && LINES_MODES.includes(rest[0]) || op === 'import' && (rest.length === 1 || rest.length === 2 && rest[1] === '--yes') && !rest[0].startsWith('--') ||
       op === 'export' && rest.length === 2 && rest.every(a => !a.startsWith('--')) ||
       ['list', 'status'].includes(op) && rest.length === 0 || ['check', 'remove'].includes(op) && rest.length === 1 ||
       op === 'style' && CURSOR_STYLES.includes(rest[0]) && (rest.length === 1 || rest.length === 2 && rest[0] === 'sprite' && !rest[1].startsWith('--')))) { out(usage); return 2; }
@@ -50,7 +48,6 @@ export async function cursorCommand(args, { out = text => process.stdout.write(t
       out([`hand      ${handLine(s)}`,
         `style     ${s.style ?? 'glove'}${s.styleReason === 'env' ? ' (SLEIGHT_CURSOR_STYLE)' : s.styleReason === 'env-invalid' ? ' (invalid SLEIGHT_CURSOR_STYLE)' : ''}`,
         `character ${s.character ?? 'none'}`, `perch     ${s.perch ? 'on' : 'off'}`, `lines     ${s.lines ?? 'on'}`,
-        `size      ${s.size}${typeof s.size === 'number' ? ' pt' : ''}`, `cast      ${s.cast?.length ? s.cast.join(', ') : 'selected character'}`,
         `stream    ${s.stream ? 'on' : 'off'}`, `labels    ${s.labels ?? 'off'}`,
         `narration ${s.narration ?? 'off'}`, `voice     ${s.voice?.id ?? 'system default'} (rate ${s.voice?.rate ?? 0.5})`,
         `host      ${built() ? 'compiled' : 'not compiled'}`].join('\n') + '\n');
@@ -65,12 +62,8 @@ export async function cursorCommand(args, { out = text => process.stdout.write(t
       const before = handSetting({ env: {}, path, platform }).perch === true;
       writeHandSetting({ style, ...style === 'sprite' ? { character, ...perch || before ? { perch } : {} } : {} }, { path, uid });
       const after = handSetting({ env: {}, path, platform });
-      const seated = perch || after.size !== 'small';
-      out(`Cursor style: ${style}${style === 'sprite' ? seated ? ' (perched on the window)' : ' (trailing the ring)' : ''}. ${after.enabled ? 'Start a new sleight session to use it.' : 'The hand is off, so it draws nothing yet. Turn it on with sleight-mcp hand on, then start a new sleight session.'}\n`);
+      out(`Cursor style: ${style}${style === 'sprite' ? perch ? ' (perched on the window)' : ' (trailing the ring)' : ''}. ${after.enabled ? 'Start a new sleight session to use it.' : 'The hand is off, so it draws nothing yet. Turn it on with sleight-mcp hand on, then start a new sleight session.'}\n`);
       if (env.SLEIGHT_CURSOR_STYLE) out('SLEIGHT_CURSOR_STYLE in this environment still wins for servers started from here.\n');
-    } else if (op === 'size') {
-      writeHandSetting({ size }, { path, uid });
-      out(`Character size: ${size}${typeof size === 'number' ? ' pt' : ''}. Applies to the sprite style; the hand's on/off setting stays the same.\n`);
     } else if (op === 'lines') {
       writeHandSetting({ lines: rest[0] }, { path, uid });
       out(`Character lines: ${rest[0]}. ${rest[0] === 'on' ? 'A sprite character with lines says them at a few moments of a task.' : 'The character stays quiet.'}\n`);

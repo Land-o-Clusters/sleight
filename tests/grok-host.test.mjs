@@ -1,4 +1,3 @@
-import { offlineDoctor } from './fixtures/preapproved-storage.mjs';
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
@@ -58,13 +57,12 @@ test('doctor honors the Grok home and disabled Claude import, without reading au
 
 test('launcher prints the Grok section before an unavailable engine stops doctor', async () => {
   const lines = [];
-  const code = await doctor({ ...offlineDoctor, settings: () => [], env: { CODEX_HOME: '/no-such-sleight-home', SLEIGHT_CHATGPT_APP: '/no-such-ChatGPT.app' },
-    runtime: () => ({ selected: 'engine', ok: true, lines: [] }), documentation: () => {},
+  const code = await doctor({ settings: () => [], env: { CODEX_HOME: '/no-such-sleight-home', SLEIGHT_CHATGPT_APP: '/no-such-ChatGPT.app' },
     turbo: async () => [], hand: async () => [], permissions: async () => [], codex: () => [], cursor: () => [],
     grok: () => grokDoctorLines(grokStatus(fake(imported))), grokbot: () => [], log: line => lines.push(line),
   });
   assert.equal(code, 1);
   assert.match(lines[0], /^sleight \d+\.\d+\.\d+$/);
-  assert.equal(lines[2], 'Grok CLI 1.0.13');
+  assert.equal(lines[1], 'Grok CLI 1.0.13');
   assert.ok(lines.some(line => line.includes('different copies')));
 });

@@ -40,7 +40,7 @@ function deadline(task, ms, message = 'background preparation timed out') {
 // If the property already exists the install returns false and changes nothing (a page or a stale install got there
 // first), and the controller must treat that document as having no hook.
 export function popupHook(options) {
-  const { key, secret, late = false } = options !== null && typeof options === 'object' ? options : {};
+  const { key, secret } = options !== null && typeof options === 'object' ? options : {};
   if (typeof key !== 'string' || key.length === 0 || typeof secret !== 'object' || secret === null) return false;
   // Every global this hook reads after install is captured here, before page scripts, so a page that replaces or
   // deletes window.Element, window.Object, window.Set and the rest cannot change what the hook sees. These locals
@@ -48,7 +48,7 @@ export function popupHook(options) {
   const { Object, Function, Symbol, Math, Number, String, Error, Set, WeakMap, Promise, URL, JSON, Date, RegExp, Array,
     Element, WeakSet, HTMLElement, HTMLButtonElement, HTMLInputElement, HTMLSelectElement, HTMLLabelElement, HTMLTextAreaElement,
     HTMLFormElement, Event, EventTarget, MouseEvent, KeyboardEvent, Node, Document, DocumentFragment, ShadowRoot, NodeList,
-    Window, HTMLCollection, Uint8Array, Uint32Array, setTimeout, clearTimeout, navigator } = globalThis;
+    Window, Uint8Array, Uint32Array, setTimeout, clearTimeout, navigator } = globalThis;
   const { defineProperty, getOwnPropertyDescriptor: getOwn, freeze } = Object, isFinite = Number.isFinite, stringify = JSON.stringify;
   const uncurry = Function.prototype.bind.bind(Function.prototype.call);
   // Whole-thread expansion never authorizes a popup, dialog, submit or history change.
@@ -88,8 +88,7 @@ export function popupHook(options) {
   }
   let secretText = '';
   for (let i = 0; i < secretLength; i++) secretText += (i === 0 ? '' : ',') + String(secretBytes[i]);
-  const installPrefix = '(' + uncurry(Function.prototype.toString)(popupHook) + ')({"key":"' + key + '","secret":[' + secretText + ']';
-  const installSource = installPrefix + '})', lateInstallSource = installPrefix + ',"late":true})';
+  const installSource = '(' + uncurry(Function.prototype.toString)(popupHook) + ')({"key":"' + key + '","secret":[' + secretText + ']})';
   // https://html.spec.whatwg.org/multipage/document-sequences.html#navigable-container
   // and iframe-embed-object.html, obsolete.html#frames; fenced frames:
   // https://wicg.github.io/fenced-frame/#fenced-frame-element. Do not cross documents.
@@ -106,8 +105,6 @@ export function popupHook(options) {
   const nameGetter = getOwn(window, 'name')?.get, openerGetter = getOwn(window, 'opener')?.get, framesGetter = getOwn(window, 'frames')?.get;
   const nameOf = context => nameGetter ? nameGetter.call(context) : context.name;
   const framesOf = context => framesGetter ? framesGetter.call(context) : context.frames;
-  const parentGetter = getOwn(window, 'parent')?.get ?? getOwn(Window?.prototype ?? {}, 'parent')?.get;
-  const windowParentOf = context => { if (!parentGetter) throw Error('native parent unavailable'); return parentGetter.call(context); };
   const editable = getOwn(HTMLElement.prototype, 'isContentEditable').get;
   const attribute = (node, name) => getAttribute.call(node, name);
   const has = (node, name) => hasAttribute.call(node, name);
@@ -281,8 +278,8 @@ export function popupHook(options) {
         let parent = window;
         for (let depth = 0; depth < 64; depth++) {
           try {
-            if (parent === windowParentOf(parent)) break;
-            parent = windowParentOf(parent);
+            if (parent === parent.parent) break;
+            parent = parent.parent;
             const proof = proofFor('wholeWorker');
             if (openAnswer('wholeWorker', proof, parent[key]?.wholeWorker(proof)) === 't') { refused = true; break; }
           } catch { break; }
@@ -457,24 +454,22 @@ export function popupHook(options) {
   // already hooked. A window offered it before (the page got another handle to it by name) is never offered it again:
   // by then page scripts may have replaced its eval, which would read the secret.
   const offered = new WeakSet(), wasOffered = uncurry(WeakSet.prototype.has), offer = uncurry(WeakSet.prototype.add);
-  const installInto = (opened, late) => {
+  const installInto = opened => {
     if (hooked(opened)) return;
     let fresh = false;
     try { fresh = !wasOffered(offered, opened); if (fresh) offer(offered, opened); } catch { /* Not an object a set can hold. */ }
-    if (fresh) try { opened.eval(late ? lateInstallSource : installSource); } catch { /* Cross-origin, or a policy that forbids eval. */ }
+    if (fresh) try { opened.eval(installSource); } catch { /* Cross-origin, or a policy that forbids eval. */ }
     if (!hooked(opened)) coverInitialDocument(opened);
   };
   const open = { open(url, target, features) {
-    const name = target === undefined ? '' : String(target);
     if (wholeBlock('new tab')) return null;
     // Explicit selection modifiers never authorize a page handler to open a window.
     if (live() && arm.modifier) { held++; if (shield?.token === arm.token) shield.violation ??= changedReason; return null; }
-    if (/^_(self|parent|top)$/i.test(name)) return nativeOpen.call(this, url, name, features);
+    if (/^_(self|parent|top)$/i.test(String(target))) return nativeOpen.apply(this, arguments);
     if (!active() || !navigator.userActivation?.isActive) { held++; return null; }
     const kept = String(features ?? '').split(',').map(value => value.trim()).filter(value => /^(noopener|noreferrer)(?:=|$)/i.test(value));
-    const opened = nativeOpen.call(this, url, name, kept.join(','));
-    // A named target can reuse an unhooked live document. Only an unnamed or _blank target is known to be new.
-    if (opened) { openedWindows.push(opened); installInto(opened, name !== '' && !/^_blank$/i.test(name)); }
+    const opened = nativeOpen.call(this, url, target, kept.join(','));
+    if (opened) { openedWindows.push(opened); installInto(opened); }
     return opened;
   } }.open;
   replace(window, 'open', { configurable: true, writable: true, value: open });
@@ -572,9 +567,9 @@ export function popupHook(options) {
   // Every same-origin window this page reaches counts, including handles from window.open and the opener.
   const probeType = 'sleight.probe';
   // A frame the page later removes keeps its way back to the owner that was its parent when it was hooked.
-  const home = [windowParentOf(window), window.top];
+  const home = [window.parent, window.top];
   const realms = () => {
-    const seen = new Set([window]), found = [], pending = [window.top, windowParentOf(window), ...home, ...childWindows(window), ...openedWindows];
+    const seen = new Set([window]), found = [], pending = [window.top, window.parent, ...home, ...childWindows(window), ...openedWindows];
     try { const opener = openerGetter?.call(window); if (opener) pending.push(opener); } catch { /* No opener. */ }
     for (let steps = 0; pending.length && steps < 512; steps++) {
       const context = pending.pop();
@@ -582,7 +577,7 @@ export function popupHook(options) {
       seen.add(context);
       if (readable(context)) {
         found.push(context);
-        try { pending.push(context.top, windowParentOf(context), openerGetter?.call(context)); } catch { /* Unreadable. */ }
+        try { pending.push(context.top, context.parent, openerGetter?.call(context)); } catch { /* Unreadable. */ }
       }
       pending.push(...childWindows(context));
     }
@@ -777,7 +772,7 @@ export function popupHook(options) {
     if (!element || !isLinkTag(element) || !hasHref(element) || has(element, 'download')) return;
     if (sameContext(element)) return;
     let url;
-    try { url = new URL(hrefOf(element), baseURIOf(document)); } catch { return; }
+    try { url = new URL(hrefOf(element), document.baseURI); } catch { return; }
     if (!['http:', 'https:'].includes(url.protocol) || url.username || url.password) return;
     const target = targetOf(element);
     const rel = attribute(element, 'rel') ?? '';
@@ -998,8 +993,6 @@ export function popupHook(options) {
   const parentElementOf = getter(globalThis.Node, 'parentElement'), listLength = getter(globalThis.NodeList, 'length'), typeOf = getter(Event, 'type');
   const shadowMode = getter(globalThis.ShadowRoot, 'mode'), shadowHost = getter(globalThis.ShadowRoot, 'host');
   const labelOf = getter(HTMLLabelElement, 'control'), baseURIOf = getter(globalThis.Node, 'baseURI'), urlOf = getter(globalThis.Document, 'URL');
-  const scriptsOf = getter(Document, 'scripts'), scriptCollectionLength = getter(HTMLCollection, 'length');
-  const scriptsLength = doc => scriptCollectionLength(scriptsOf(doc)), activeElementOf = getter(Document, 'activeElement');
   const submitterOfEvent = getter(globalThis.SubmitEvent, 'submitter');
   const controlGetters = [HTMLButtonElement, HTMLInputElement, globalThis.HTMLTextAreaElement, HTMLSelectElement].map(type => [getter(type, 'form'), getter(type, 'type')]);
   const rootOf = uncurry(globalThis.Node?.prototype.getRootNode), queryElementAll = uncurry(Element.prototype.querySelectorAll), closest = uncurry(Element.prototype.closest);
@@ -1368,9 +1361,8 @@ export function popupHook(options) {
   const lengthOf = uncurry(getOwn(window, 'length')?.get ?? (() => 0));
   const hookId = String(random()) + ':' + now();
   // A hook put into a document after its scripts ran sits behind the page's own listeners and cannot veto what they do. At the
-  // start of a document no script element has been parsed yet. Only the controller's document-start route can claim freshness;
-  // a live document may have removed its scripts or run code without any script elements.
-  const atStart = (() => { try { return !late && scriptsLength(document) === 0; } catch { return false; } })();
+  // start of a document no script element has been parsed yet; a late one finds scripts already there.
+  const atStart = (() => { try { return document.scripts.length === 0; } catch { return false; } })();
   let alive = false, attachedTo;
   const onProbe = () => { alive = true; };
   const install = () => {
@@ -1651,9 +1643,9 @@ export function popupHook(options) {
       held = 0;
       if (arm) finish(arm.token);
       // The modifier goes to the focused document, so a frame still holding focus (a card field just filled) is let go first; one that keeps it refuses.
-      if (CR2_NESTED_DOCUMENT(activeElementOf(document))) {
-        try { nativeBlur.call(CR2_FOCUSED(activeElementOf(document))); } catch { /* No native blur; the check below refuses. */ }
-        if (CR2_NESTED_DOCUMENT(activeElementOf(document))) throw Error('document focus is inside a frame');
+      if (CR2_NESTED_DOCUMENT(document.activeElement)) {
+        try { nativeBlur.call(CR2_FOCUSED(document.activeElement)); } catch { /* No native blur; the check below refuses. */ }
+        if (CR2_NESTED_DOCUMENT(document.activeElement)) throw Error('document focus is inside a frame');
       }
       if (!isElement(element) || !isConnected(element) || !isFinite(capMs) || capMs <= 0) return false;
       if (modifier && (modifier !== 'Meta' && modifier !== 'Control' || refusesModifier(element))) return { kind: 'refuse', reason: 'modifier' };
@@ -1738,7 +1730,7 @@ export function popupHook(options) {
     // The top window of a tab also collects what the hooks of its frames held, so a page cannot open a tab from a frame unreported.
     take() {
       let count = held; held = 0;
-      if (windowParentOf(window) === window) {
+      if (window.parent === window) {
         const seen = new Set(), pending = childWindows(window);
         for (let steps = 0; pending.length && steps < 512; steps++) {
           const context = pending.pop();
@@ -1929,7 +1921,7 @@ export function popupHook(options) {
   // A frame created while its parent is guarded starts armed. The parent's answer is checked here against the shared
   // secret, like the controller checks one, so a window that is not this hook cannot arm or disarm this frame.
   try {
-    const parent = windowParentOf(window);
+    const parent = window.parent;
     if (parent !== window) {
       const proof = proofFor('armed'), text = openAnswer('armed', proof, parent[key].armed(proof));
       if (text !== undefined && charCodeAt(text, 0) === 97) {
@@ -1942,7 +1934,7 @@ export function popupHook(options) {
   // A frame or window created inside a script-started click's listener missed the watching(true) the click sent, so it asks
   // the windows above it and the one that opened it, and checks the answer like any other signed answer.
   try {
-    const above = [windowParentOf(window), window.top, openerGetter?.call(window)];
+    const above = [window.parent, window.top, openerGetter?.call(window)];
     for (let i = 0; i < above.length; i++) {
       const other = above[i];
       if (!other || other === window) continue;
@@ -1966,9 +1958,9 @@ export const newHook = () => Object.freeze({ key: 'k' + randomBytes(16).toString
 // The install expression for a hook: popupHook called with { key, secret } where secret is the secret's bytes as numeric
 // literals (an array of 16 to 64 byte values). The page never holds a string it must convert, and an array or object
 // literal runs no page code.
-export function hookSource(hook, { late = false } = {}) {
+export function hookSource(hook) {
   if (typeof hook?.key !== 'string' || typeof hook?.secret !== 'string') throw capabilityError('background popup hook unavailable; use the engine browser path');
-  return `(${popupHook})(${JSON.stringify({ key: hook.key, secret: Array.from(Buffer.from(hook.secret, 'latin1')), ...(late ? { late: true } : {}) })})`;
+  return `(${popupHook})(${JSON.stringify({ key: hook.key, secret: Array.from(Buffer.from(hook.secret, 'latin1')) })})`;
 }
 const issued = new WeakMap();
 export function hookProof(hook, method) {
@@ -2476,7 +2468,6 @@ function keyFrames(tab, owner, { hook, token, capMs, timeoutMs = 1000, settleMs 
     for (const waitUntil = Date.now() + ms; ; await new Promise(resolve => setTimeout(resolve, 25))) {
       try {
         const found = await survey();
-        if (found.unreached.some(context => Array.isArray(context.info) && context.info.some(node => node.id !== null && node.fresh === false))) return undefined;
         if (!found.unreached.length && 1 + found.unique.reduce((sum, entry) => sum + entry.n, 0) <= found.unique.length) return found;
       } catch { return undefined; }
       if (Date.now() >= waitUntil) return undefined;
@@ -2648,14 +2639,13 @@ export function createPageRegistry({ browser, session, context = browser?.contex
     const { identifier } = await entry.cdp.send('Page.addScriptToEvaluateOnNewDocument', { source });
     if (!identifier) throw capabilityError('background popup hook installation failed; use the engine browser path');
     entry.script = identifier;
-    // Evaluating into the current document is late on purpose; source above is only for future documents.
-    const result = await entry.cdp.send('Runtime.evaluate', { expression: hookSource(entry.hook, { late: true }), returnByValue: true });
+    const result = await entry.cdp.send('Runtime.evaluate', { expression: source, returnByValue: true });
     if (result.exceptionDetails) throw capabilityError('background popup hook installation failed; use the engine browser path');
     // The page session's script does not reach a frame in another process (a cross-site iframe). The filter puts the hook at the
     // start of every document in such a frame, before that frame is resumed. Playwright's addInitScript is not used: it runs its
     // scripts at once in a frame whose document has already started, which puts the hook behind the page's own listeners.
     const framesHooked = async () => {
-      await hookFrames(entry);
+      await hookFrames(entry, source);
       if (entry.frames) entry.frameHook = await entry.frames.addScript(source);
     };
     if (result.result?.value === true) { await framesHooked(); return; }
@@ -2671,8 +2661,7 @@ export function createPageRegistry({ browser, session, context = browser?.contex
   // A page adopted after it loaded (a popup) has child frames that began before the registry's script was registered. Give
   // the same-site ones the hook too, so the controller can arm them: frameShield treats a same-site frame with no hook
   // as a failure, since a page can fake that answer. Cross-site frames are separate processes and stay hookless.
-  const hookFrames = async entry => {
-    const source = hookSource(entry.hook, { late: true });
+  const hookFrames = async (entry, source) => {
     const here = siteOf(entry.page.url()), main = entry.page.mainFrame?.();
     for (const frame of entry.page.frames?.() ?? []) {
       const site = siteOf(frame.url?.() ?? '');

@@ -1,4 +1,3 @@
-import { testChromiumExecutable, launchTestChromium } from './fixtures/chromium-isolated.mjs';
 import { defaultReadBaseline, sha256 } from './fixtures/default-read-baseline.mjs';
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
@@ -503,12 +502,12 @@ test('real travel.html finds MAO and airports at the start, middle and end of th
   t.after(() => server.close());
   const { port } = server.address();
   const shells = [
-    testChromiumExecutable({ revision: 1234, platform: 'darwin', arch: 'arm64' }),
-    testChromiumExecutable({ revision: 1228, platform: 'darwin', arch: 'arm64' }),
+    join(homedir(), 'Library/Caches/ms-playwright/chromium_headless_shell-1234/chrome-headless-shell-mac-arm64/chrome-headless-shell'),
+    join(homedir(), 'Library/Caches/ms-playwright/chromium_headless_shell-1228/chrome-headless-shell-mac-arm64/chrome-headless-shell'),
     '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
   ];
   const executablePath = shells.find(path => existsSync(path));
-  const browser = await launchTestChromium(chromium, { headless: true, ...(executablePath ? { executablePath } : {}) });
+  const browser = await chromium.launch({ headless: true, ...(executablePath ? { executablePath } : {}) });
   t.after(() => browser.close());
   const page = await browser.newPage({ viewport: { width: 900, height: 800 } });
   await page.goto(`http://127.0.0.1:${port}/travel.html`);

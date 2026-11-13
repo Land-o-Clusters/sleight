@@ -8,12 +8,6 @@ The plugin distributes native/peer-host.c and native/consent-host.swift as sourc
 browser's PID, start time and executable evidence. The consent host supplies authenticated payment and connection controls.
 Both compile locally at first use with Apple's command-line tools. No signed or notarized native binary is distributed.
 
-Windows phase 1 also distributes native/win/Protocol.cs, RingPlanner.cs, Sprites.cs, WebPLossless.cs, SecureInput.cs,
-Overlay.cs, Program.cs and cache-access.ps1 as source. windows-host.mjs compiles the hand-only host with the in-box
-.NET Framework compiler after source hashes and native owner/DACL checks pass. Its receipt records source, compiler and
-executable hashes. PNG and lossless WebP decode in bounded managed code. The source includes neither an image codec nor pet artwork.
-The Windows host cannot display consent or payment cards. Windows compilation and live rendering remain unverified.
-
 Electron turbo modules load only on a turn for an app the operator opted in per app (turbo-apps.json, read by
 electron-config). Each uses built-in Node modules and the shared v3 modules named here, never a new dependency.
 - electron-identity and electron-consent: the app instance, typed app documents and the debugger card. consent-ui, host-files

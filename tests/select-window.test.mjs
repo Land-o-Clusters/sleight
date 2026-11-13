@@ -1,25 +1,12 @@
-import { assertChildStatus } from './fixtures/child-status.mjs';
-import { test, describe } from 'node:test';
-import { localBackendSkip, localBackends, nativeLocal } from './fixtures/mac-driver-tools.mjs';
+import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { runInNewContext } from 'node:vm';
 import { spawnSync } from 'node:child_process';
 import { selectWindow } from '../plugins/sleight/lib/select-window.mjs';
-import { callLocalTool, localToolDefinitions } from './fixtures/local-tools.mjs';
-for (const backend of localBackends) describe(backend, { skip: localBackendSkip(backend) }, () => {
+import { callLocalTool, localToolDefinitions } from '../plugins/sleight/lib/launch.mjs';
 const source = readFileSync(new URL('../plugins/sleight/lib/select-window.js', import.meta.url), 'utf8');
 function select(request, windows, options = {}) {
-  if (backend === 'driver') {
-    const app = { appId: 'com.apple.TextEdit', name: 'TextEdit', path: '/Applications/TextEdit.app', pid: 1, active: false,
-      tree: { AXWindows: windows.map((window, key) => ({ ...window, key, AXPosition: window.position, AXSize: window.size,
-        mainStatus: options.mainStatus, raiseStatus: options.raiseStatus, ...(options.renames ? { rename: 'Renamed during selection' } : {}) })) } };
-    const f = nativeLocal('select-window.js', request, { frontPID: 2, activates: options.activates,
-      apps: options.ambiguous ? [app, app] : [app, ...(options.otherApps ?? []).map(a => ({ ...app,
-        appId: a.bundleIdentifier, name: a.localizedName, pid: a.processIdentifier, tree: { AXWindows: a.windows ?? [] } }))], cg: options.cgWindows ?? [] });
-    return { result: f.result, events: f.events.filter(e => ['action', 'main', 'main-read'].includes(e[0])).map(e =>
-      e[0] === 'action' ? { window: windows[e[1]], action: e[2] } : { window: windows[e[1]], key: 'AXMain' }) };
-  }
   const events = [], list = entries => ({ count: entries.length, objectAtIndex: i => entries[i] });
   const app = { bundleIdentifier: 'com.apple.TextEdit', localizedName: 'TextEdit',
     bundleURL: { isNil: () => false, path: '/Applications/TextEdit.app' }, processIdentifier: 1, active: false };
@@ -49,12 +36,6 @@ function select(request, windows, options = {}) {
   return { result: JSON.parse(result), events };
 }
 const left = { AXTitle: 'left.txt', AXDocument: 'file:///tmp/left.txt' };
-test('missing title metadata cannot match an explicitly empty title', () => {
-  for (const window of [{}, { AXTitle: null }]) {
-    const { result, events } = select({ app: 'TextEdit', title: '' }, [window]);
-    assert.equal(result.ok, false); assert.deepEqual(events, []);
-  }
-});
 test('recorded unsaved TextEdit headers with equal titles refuse selection without AX input', () => {
   const recorded = JSON.parse(readFileSync(new URL('../docs/benchmarks/2026-10-04-input-lease-window-attempt.json', import.meta.url), 'utf8'));
   const tree = recorded.trials[0].error.slice(recorded.trials[0].error.indexOf('Window: '));
@@ -118,12 +99,6 @@ test('an 11-character suffix refuses while its exact title still selects', () =>
   assert.match(result.error, /found 0/);
   assert.deepEqual(events, []);
   assert.equal(select({ app: 'TextEdit', title }, [{ AXTitle: title }]).result.ok, true);
-});
-if (backend === 'driver') test('GLS4 missing-title refusal states the 12-code-point rule without input', () => {
-  const { result, events } = select({ app: 'TextEdit', title: 'short' }, [{ AXTitle: 'Work: short' }]);
-  assert.equal(result.ok, false);
-  assert.match(result.error, /No exact title: unique ending after whitespace; 12\+ code points after trim\(\), excluding Cf\/M\./);
-  assert.deepEqual(events, []);
 });
 test('11 Unicode characters never qualify as a suffix through surrogate pairs', () => {
   const title = '\u{1F4C4}1234567890';
@@ -300,8 +275,8 @@ test('local selection validates and asks before running its helper', async () =>
 test('benchmark window-selection approval remains confined to the app allowlist', () => {
   for (const [app, allowed] of [['TextEdit', true], ['Calculator', true], ['Chess', true], ['Terminal', false], ['ChatGPT', false]]) {
     const result = spawnSync(process.execPath, ['bench/approve.mjs'], { encoding: 'utf8',
-      input: JSON.stringify({ message: `Allow Claude to select a window in ${app}? Explanation.`, mcp_server_name: 'plugin:sleight:computer' }), timeout: 60000, killSignal: 'SIGKILL' });
-    assertChildStatus(result, 0);
+      input: JSON.stringify({ message: `Allow Claude to select a window in ${app}? Explanation.`, mcp_server_name: 'plugin:sleight:computer' }) });
+    assert.equal(result.status, 0);
     assert.equal(!!result.stdout, allowed);
   }
 });
@@ -313,10 +288,8 @@ test('merged local dispatcher uses the supplied selection helper runner', async 
     events.push({ parts, message }); return true;
   }, async (script, request) => {
     events.push({ script, request }); return { ok: true, target: left };
-  }, undefined, undefined, { internal: true });
+  });
   assert.equal(result.isError, undefined);
   assert.deepEqual(events[0].parts, ['select_window', 'TextEdit']);
   assert.deepEqual(events[1], { script: 'select-window.js', request: args });
-});
-
 });

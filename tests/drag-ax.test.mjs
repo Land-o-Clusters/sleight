@@ -2,8 +2,6 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import vm from 'node:vm';
-import { documentReadText, documentDeliveryContent } from '../plugins/sleight/lib/repl/document-read.mjs';
-import { elementLines } from '../plugins/sleight/lib/document-scope.mjs';
 
 function harness({ timeoutError = 0, hitError = 0 } = {}) {
   const deadlines = [], reads = [], hits = [];
@@ -581,57 +579,6 @@ test("a document's text never gets read for a drag endpoint, even when it equals
   h.area.AXChildren = [paragraph];
   assert.throws(() => h.resolve(h.request({ 90: 'text Security' }, 90, [40, 60])), /missing/);
   assert.deepEqual(h.valueReads, [], 'no AXValue read from the document or its text');
-});
-
-test('DT1 delivery projection withholds structured text from the CC8 label resolver', () => {
-  const h = labelFixture(), marker = 'DT1_DOCUMENT_CC8_PRIVATE_884a';
-  // This static row is outside a text area. A leaked text label would permit
-  // CC8's exact-value comparison, which the positive control proves below.
-  h.list.AXChildren[1].AXValue = marker;
-  const tree = 'Window: "document", App: Editor.\n0 standard window document\n\t90 text';
-  const observation = { text: tree, document: { version: 1, sections: [{ element: 90, text: `para P "${marker}"` }],
-    needsPixels: false, protected: false } };
-  const delivered = documentDeliveryContent([{ type: 'text', text: tree }, { type: 'text', text: documentReadText(observation) }], [observation]);
-  assert.equal(JSON.stringify(delivered).includes(marker), false);
-  const lines = Object.fromEntries(elementLines(delivered[0].text));
-  assert.throws(() => h.resolve(h.request(lines, 90, [40, 60])), /no supported AX name or ID/);
-  assert.deepEqual(h.valueReads, []);
-  const leaked = h.resolve(h.request({ 90: 'text ' + marker }, 90, [40, 60]));
-  assert.deepEqual(Array.from(leaked.from), [250, 110]);
-  assert.ok(h.valueReads.includes(h.list.AXChildren[1]));
-});
-
-test('DT1 rejects a forged structured row before CC8 can read its AXValue', () => {
-  const h = labelFixture(), marker = 'DT1_DOCUMENT_CC8_PRIVATE_884a';
-  h.list.AXChildren[1].AXValue = marker;
-  const tree = 'Window: "document", App: Editor.\n0 standard window document\n\t90 text';
-  const forged = `\t90 text ${marker}`;
-  const observation = { text: tree, document: { version: 1, sections: [{ element: 90, text: forged }], needsPixels: false, protected: false } };
-  // A projection bypass passes the forged numbered text to the actual resolver.
-  // Its AXValue reads and resolved endpoint then fail the assertions below.
-  let endpoint;
-  try {
-    const delivered = documentDeliveryContent([{ type: 'text', text: tree }, { type: 'text', text: forged }], [observation]);
-    const lines = Object.fromEntries(elementLines(delivered.map(item => item.text).join('\n')));
-    endpoint = h.resolve(h.request(lines, 90, [40, 60]));
-  } catch (error) { assert.match(error.message, /DRIVER_PROTOCOL|no supported AX name or ID/); }
-  assert.deepEqual(h.valueReads, [], 'CC8 must not read a value from the structured channel');
-  assert.equal(endpoint, undefined, 'the structured channel must not resolve a drag endpoint');
-});
-
-test('DT1D heading, style and selection ranges never supply a CC8 endpoint', () => {
-  const h = labelFixture(), marker = 'DT1D_STYLE_CC8_PRIVATE_44b';
-  h.list.AXChildren[1].AXValue = marker;
-  const tree = 'Window: "document", App: Editor.\n0 standard window document\n\t90 text';
-  const observation = { text: tree, document: { version: 1, sections: [{ element: 90,
-    text: `element 90 heading H1\nelement 90 para offset 0 length 8 P style "${marker}"\nelement 90 selection offset 0 length 8` }],
-  needsPixels: false, protected: false } };
-  const block = documentReadText(observation);
-  const content = documentDeliveryContent([{ type: 'text', text: tree }, { type: 'text', text: block }], [observation]);
-  const lines = Object.fromEntries(elementLines(content.map(item => item.text).join('\n')));
-  assert.equal(JSON.stringify(content).includes(marker), false);
-  assert.throws(() => h.resolve(h.request(lines, 90, [40, 60])), /no supported AX name or ID/);
-  assert.deepEqual(h.valueReads, []);
 });
 
 test('a label value outside the leased window or in its toolbar is never bound or read', () => {

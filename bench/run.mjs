@@ -27,10 +27,9 @@
 // tasks without a model call. Every run first checks that each arm loads its
 // own tool and not the other's.
 
-import { waitForBenchmark, runTaskWithHold, benchmarkStopCode, benchmarkHeld } from './hold.mjs';
 import { execFileSync } from 'node:child_process';
 import { randomBytes } from 'node:crypto';
-import { chmodSync, existsSync, mkdirSync, readFileSync, realpathSync, statSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync, realpathSync, rmdirSync, statSync, writeFileSync } from 'node:fs';
 import { homedir, tmpdir } from 'node:os';
 import { basename, dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -71,18 +70,12 @@ import { actionLogPath } from '../plugins/sleight/lib/action-outcomes.mjs';
 import { refreshHub } from './hub-refresh.mjs';
 import { sleightPluginLaunch } from './sleight-plugin-launch.mjs';
 import { mcpCatalogProblems } from './mcp-catalog.mjs';
-import { routeRuntimeArms } from './runtime-arm.mjs';
-import { loadReceipt, loadWarnings } from './load.mjs';
-import { loadCheck4Bench, check4BenchDescriptor, delegatedCheck4Lock, writeCheck4BenchResult, check4FinderObservation } from './hand/check4-bench.mjs';
-
-// RT13's second sleight arm reuses this runner once per task and arm, with ABBA rounds.
-if (await routeRuntimeArms(process.argv.slice(2))) process.exit(process.exitCode ?? 0);
 
 // The desktop arm owns no Claude CLI, MCP config or engine approval list.
 // Dispatch before the ordinary runner prepares any of those resources.
 if (process.argv[process.argv.indexOf('--arm') + 1]?.split(',').includes('cursor-cu')) {
   try { await (await import('./world/arms/cursor-cu/suite.mjs')).nativeMain(process.argv.slice(2)); }
-  catch (error) { console.error(error.message); process.exitCode = benchmarkStopCode(error) ?? 1; }
+  catch (error) { console.error(error.message); process.exitCode = 1; }
   process.exit(process.exitCode ?? 0);
 }
 
@@ -134,8 +127,6 @@ const armOption = option('arm', 'sleight');
 // has its own isolated config dir and its own login, checked before any task. --auth api stays available.
 // All testing runs on the owner's account login (LAWS, 2026-10-15). The API key needs an explicit --auth api or auto.
 const authMode = option('auth', 'login');
-const check4 = loadCheck4Bench(option('check4-config', undefined), { suite, arm: armOption, task: option('tasks', ''),
-  runs: Number(option('runs', '1')), auth: authMode, ownerAway, dryRun: isDryRun });
 // X3 is a short native validation pass, with the switch only in this bank's MCP descriptor.
 const analyticsBank = option('analytics-config', undefined);
 if (process.argv.includes('--analytics-config') && (!analyticsBank || analyticsBank.startsWith('--'))) throw new Error('--analytics-config needs a prepared bank');
@@ -156,7 +147,7 @@ const ARMS = {
   // the git root, so both arms got them.
   sleight: {
     cwd: (() => {
-      const dir = check4?.armDir ?? analytics?.cwd ?? process.env.SLEIGHT_ARM_DIR ?? join(ARM_HOME, 'sleight-arm');
+      const dir = analytics?.cwd ?? process.env.SLEIGHT_ARM_DIR ?? join(ARM_HOME, 'sleight-arm');
       if (!isDryRun) mkdirSync(dir, { recursive: true });
       return dir;
     })(),
@@ -228,8 +219,6 @@ for (const name of armNames) {
   if (arm.interactive) continue;
   if (world && !arm.codex) {
     arm = ARMS[name] = worldArm(arm, name);
-    // Keep the benchmark's existing isolated account login. A new random config has no login of its own.
-    if (check4 && name === 'sleight') arm.env.CLAUDE_CONFIG_DIR = check4.loginConfig;
     if (!isDryRun) mkdirSync(arm.env.CLAUDE_CONFIG_DIR, { recursive: true, mode: 0o700 });
   }
   if (!arm.codex && !arm.args.includes('--no-chrome')) arm.args.push('--no-chrome');
@@ -240,7 +229,7 @@ for (const name of armNames) {
       if (name === 'sleight') {
         // Retain the plugin identity for both the model and the mod's connection.
         const mcp = join(arm.cwd, 'bench-mcp.json');
-        arm.mcp = { mcpServers: { [arm.server]: check4 ? check4BenchDescriptor(check4, ROOT) : { command: join(ROOT, 'plugins/sleight/bin/sleight-mcp') } } };
+        arm.mcp = { mcpServers: { [arm.server]: { command: join(ROOT, 'plugins/sleight/bin/sleight-mcp') } } };
         if (!isDryRun) writeFileSync(mcp, JSON.stringify(arm.mcp), { mode: 0o600 });
         arm.args.push('--mcp-config', mcp);
       }
@@ -390,7 +379,7 @@ function armServers(arm) {
     // Dry discovery is collected at init, before a model or task setup. Live
     // discovery additionally requires a working system permission observer.
     return (arm.guarded ? guardGenericOperation(discover, { signal: controller.signal, stopFile: arm.stopFile,
-      held: () => false, permissionCheck: isDryRun ? undefined : observePermission }) : discover(controller.signal)).then(result => {
+      permissionCheck: isDryRun ? undefined : observePermission }) : discover(controller.signal)).then(result => {
       if (result.approvalStop) throw new Error(result.approvalStop);
       if (!result.groupClean) throw new Error('Arm preflight process group cleanup unconfirmed');
       if (!catalog) throw new Error('Arm preflight returned no init event');
@@ -409,9 +398,7 @@ function armServers(arm) {
 const otherServers = Object.values(ARMS).flatMap(a => a.servers ?? [a.server]).filter(Boolean);
 async function checkArms() {
 if (world && !isDryRun && armNames.some(name => !ARMS[name].codex && !ARMS[name].interactive && !ARMS[name].unsupported && !ARMS[name].rejected)) {
-  // Only check 4's runs get its login config and the 10 s bound; the default benchmark path is unchanged.
-  assertWorldCLI(claudeBin, check4 ? (command, args, options) => execFileSync(command, args, { ...options,
-    env: { ...options.env, CLAUDE_CONFIG_DIR: check4.loginConfig }, timeout: 10000, killSignal: 'SIGKILL' }) : execFileSync);
+  assertWorldCLI(claudeBin, execFileSync);
 }
 if (!isDryRun && !isSetupOnly) {
   // Admit every selected arm before discovery can start an MCP server or a fixture. Every arm that is not
@@ -429,12 +416,9 @@ if (!isDryRun && !isSetupOnly) {
   if (notLoggedIn.length) throw new Error(notLoggedIn.join('\n'));
   if (selected.some(task => task.surface === 'extension')) await assertEngineSockets();
 }
-if (calculatorGate) {
-  await waitForBenchmark({ signal: controller.signal });
-  await calculatorReady('preflight');
-}
+if (calculatorGate) await calculatorReady('preflight');
 for (const name of armNames.filter(n => !ARMS[n].codex && !ARMS[n].unsupported && !isSetupOnly && !isDryRun)) {
-  if (!isDryRun) await waitForBenchmark({ signal: controller.signal });
+  if (guardedPass && !isDryRun) assertNoHold();
   const arm = ARMS[name];
   if (arm.interactive) {
     if (!isDryRun) verifyInteractiveCLI(interactivePlan({ armDir: arm.cwd, prompt: 'version preflight only', model, effort }));
@@ -455,6 +439,16 @@ for (const name of armNames.filter(n => !ARMS[n].codex && !ARMS[n].unsupported &
   const leaked = servers.filter(s => s.name !== arm.server && otherServers.includes(s.name));
   if (leaked.length) throw new Error(`${name} arm also loads ${leaked.map(s => s.name).join(', ')}`);
 }
+}
+
+function assertNoHold() {
+  if (existsSync('/tmp/sleight-hold')) throw new Error('live run stopped: /tmp/sleight-hold exists');
+}
+async function guardedPermissionCheck() {
+  assertNoHold();
+  const permission = await observePermission();
+  assertNoHold();
+  return permission;
 }
 
 // Keyboard filter taps held by benchmark apps after a run's cleanup. Device Hub kept one after the
@@ -496,8 +490,7 @@ async function runClaude(prompt, arm, env = {}, { signal, evidenceDir, onPermiss
     if (out.approvalBlock && evidenceDir && !privateMail) writeFileSync(join(evidenceDir, 'approval-block.json'), scrub(JSON.stringify(out.approvalBlock, null, 2)) + '\n', { mode: 0o600 });
     const approvalStop = out.gateBlocked ? out.reason : !out.groupClean ? 'interactive cleanup unverified' : undefined;
     if (approvalStop) onPermissionRefusal?.();
-    return { code: out.is_error ? 1 : 0, out, ...loadReceipt(out.stamps), stamps: out.stamps,
-      agentSeconds: out.agentSeconds ?? null, agentTiming: out.agentTiming, groupClean: out.groupClean, timedOut: out.timedOut,
+    return { code: out.is_error ? 1 : 0, out, agentSeconds: out.agentSeconds ?? null, agentTiming: out.agentTiming, groupClean: out.groupClean, timedOut: out.timedOut,
       ...(out.is_error && { passed: false, reason: out.reason }),
       ...(auditDrag && { methodAudit: dragMethodAudit(events.join('\n')) }),
       ...(approvalStop && { approvalStop }) };
@@ -509,10 +502,10 @@ async function runClaude(prompt, arm, env = {}, { signal, evidenceDir, onPermiss
       onPermissionRefusal: arm.guarded ? () => stop('unsupported approval: permission refused') : onPermissionRefusal,
       format: suite === 'real' || guardedPass || fixtureLifecycle ? 'stream-json' : 'json' });
   const response = arm.guarded ? await guardGenericOperation(drive, { signal: signal ?? controller.signal,
-    held: () => false, stopFile: arm.stopFile, onStop: onPermissionRefusal }) : await drive(signal ?? controller.signal);
+    stopFile: arm.stopFile, onStop: onPermissionRefusal }) : await drive(signal ?? controller.signal);
   const approvalStop = response.approvalStop ?? (arm.guarded && response.out?.permission_denials?.length
     ? 'unsupported approval: arm requested a non-elicitation permission' : undefined);
-  return { ...response, ...loadReceipt(response.stamps), ...(approvalStop && { approvalStop }) };
+  return { ...response, ...(approvalStop && { approvalStop }) };
 }
 
 // runCodex's home option for an arm. The sleight-in-Codex arms get this run's servers written into their own Codex home first
@@ -593,14 +586,14 @@ const scrub = text => {
 };
 
 const stamp = new Date().toISOString().replace(/[:.]/g, '-');
-const results = [], heldAttempts = [];
+const results = [];
 const liveConditions = [];
 async function calculatorReady(stage) {
-  try { liveConditions.push({ stage, ...await assertCalculatorReady({ signal: controller.signal, held: () => false }) }); }
+  try { liveConditions.push({ stage, ...await assertCalculatorReady({ signal: controller.signal }) }); }
   catch (error) { controller.abort(error); throw error; }
 }
 const realContexts = [], passCleanupErrors = [], armPids = [], touchedApps = new Set();
-let windowHygiene, hygieneResult, hygieneResume, cleanupDeferred, deferredReceipt;
+let windowHygiene, hygieneResult;
 const hygieneErrors = [];
 let hygieneErrorCount = 0;
 const recordHygieneError = error => {
@@ -628,9 +621,8 @@ const save = (final = false) => {
   }
   if (privatePass) {
     if (!fullName) throw new Error('PRIVATE_MAIL_OWNER_AUDIT_UNAVAILABLE');
-    const json = JSON.stringify({ engine: engineSpan(publicRead(engineAtStart), final ? publicRead(readEngine()) : undefined), results: publicPrivateMailRows(results), heldAttempts: publicPrivateMailRows(heldAttempts),
+    const json = JSON.stringify({ engine: engineSpan(publicRead(engineAtStart), final ? publicRead(readEngine()) : undefined), results: publicPrivateMailRows(results),
       ...(hygieneError && { hygieneError: { count: hygieneError.count, code: 'HYGIENE_INVENTORY_UNAVAILABLE' } }),
-      ...(cleanupDeferred && { cleanupDeferred: { reason: 'benchmark hold' } }),
       ...(hygieneResult && { leftWindows: hygieneResult.leftWindows.map(({ pid, id }) => ({ pid, ...(id && { id }) })) }) }, null, 2);
     publishPrivateMailResults(file, json, { ownerName: fullName,
       terms: realContexts.flatMap(ctx => ctx.privateTask.privateTerms(ctx)) });
@@ -640,17 +632,15 @@ const save = (final = false) => {
     ...(guardedPass && { fixturePolicy: 'retained app observers for every arm', ownerAway }),
     arms: armNames, sleight: sleightBuild, ghostHand: ghostHand === '1' ? 'on' : 'off', engine: engineSpan(engineAtStart, final ? readEngine() : undefined), ...(armNames.some(name => ARMS[name].codex) && { codexModels: Object.fromEntries(armNames.filter(name => ARMS[name].codex).map(name => [name, ARMS[name].codexModel])),
       codexEffort, codexCliVersions: [...new Set(results.map(row => row.codexCliVersion).filter(Boolean))], engineAllowList: setsEngineList ? 'benchmark apps for the pass' : 'untouched' }), ...(world ? { world: true } : {}), armMetadata: Object.fromEntries(armNames.filter(name => ARMS[name].generic || ARMS[name].world || ARMS[name].interactive || ARMS[name].sleightHost).map(name => [name, ARMS[name].identity])), model, effort, claude: claudeBin, auth: auth.mode,
-    armSetup: cleanArms ? 'clean' : 'normal', ...(codexCleanConfig && { codexConfig: codexCleanConfig }), results, heldAttempts,
+    armSetup: cleanArms ? 'clean' : 'normal', ...(codexCleanConfig && { codexConfig: codexCleanConfig }), results,
     ...(hygieneError && { hygieneError }),
-    ...(cleanupDeferred && { cleanupDeferred }),
     ...(calculatorGate && { liveConditions }), ...(passCleanupErrors.length && { passCleanupErrors }),
     ...(hygieneResult && { hygiene: hygieneResult, leftWindows: hygieneResult.leftWindows }) }, null, 2);
   writeFileSync(file, scrub(json) + '\n');
-  writeCheck4BenchResult(check4, { cleanupConfirmed: false, row: results.find(r => r.arm === 'sleight' && r.task === check4?.task && r.run === 1) });
 };
 // The runner owns the pass lock. Real tasks reuse it, so they cannot wait on
 // themselves. This extends main's pass lock through driver collection.
-let unlock, cuaDaemon, passLockIdentity, check4CleanupConfirmed = false;
+let unlock, lockIdentity, cuaDaemon;
 function finishRun(result) {
   if (isDryRun) return;
   // Results publish the model each arm ran (LAWS): a Codex run whose session log names another model says so.
@@ -684,12 +674,12 @@ if (preparationErrors.length) {
   results.push(...preparationErrors);
   controller.abort(new Error('arm configuration refused')); process.exitCode = 1;
 }
-if (!controller.signal.aborted && !isDryRun) await waitForBenchmark({ signal: controller.signal });
+if (!controller.signal.aborted && guardedPass && !isDryRun && existsSync('/tmp/sleight-hold')) throw new Error('live run stopped: /tmp/sleight-hold exists');
 if (!controller.signal.aborted && !isDryRun && armNames.some(name => !ARMS[name].unsupported)) {
   save();
   console.error('Acquiring /tmp/sleight-live.lock.');
-  unlock = check4 ? delegatedCheck4Lock(check4) : await acquireLiveLock(undefined, { wait: !guardedPass, signal: controller.signal, interval: 2000 });
-  { const { dev, ino } = statSync('/tmp/sleight-live.lock'); passLockIdentity = { dev, ino }; }
+  unlock = await acquireLiveLock(undefined, { wait: !guardedPass, signal: controller.signal, interval: 2000 });
+  lockIdentity = statSync('/tmp/sleight-live.lock');
   engineAtStart = readEngine();
   // Without a baseline the receipts-only handle closes no window but still quits proven launches.
   try { windowHygiene = await beginPassHygiene({ cacheDir: ARM_HOME, signal: controller.signal }); }
@@ -709,10 +699,16 @@ if (!controller.signal.aborted && !isDryRun && armNames.some(name => !ARMS[name]
     process.once('exit', () => { try { restore(); } catch (err) { console.error(`Restore the app approvals from ${backup}: ${err.message}`); } });
     console.error(`App approvals set to the benchmark apps; saved the previous list to ${backup}.`);
   }
+  process.once('exit', () => {
+    if (!unlock) return;
+    try {
+      const current = statSync('/tmp/sleight-live.lock');
+      if (current.dev === lockIdentity.dev && current.ino === lockIdentity.ino) rmdirSync('/tmp/sleight-live.lock');
+    } catch {}
+  });
 }
 try { if (!controller.signal.aborted) await checkArms(); }
 catch (error) {
-  if (benchmarkStopCode(error)) throw error;
   // The private pass's table drops the reason, so the local log carries it (2026-10-11: two preflight
   // failures said nothing).
   console.error('preflight failed: ' + scrub(error.message));
@@ -735,227 +731,194 @@ pass: for (let run = 1; run <= runs; run++) {
         save();
         continue;
       }
-      const resultStart = results.length, previousExitCode = process.exitCode;
-      let retrySafe = false;
-      await runTaskWithHold(async attempt => {
-        retrySafe = false;
-        await hygieneBoundary();
-        const nonce = randomBytes(4).toString('hex');
-        const dir = join(suite === 'real' ? realpathSync(tmpdir()) : tmpdir(), 'sleight-bench', stamp, `${armName}-${task.id}-${run}${attempt > 1 ? `-hold-${attempt}` : ""}`);
-        mkdirSync(dir, { recursive: true, mode: 0o700 });
-        chmodSync(dir, 0o700);
-        const ctx = { dir, nonce, fixtureRoot: join(tmpdir(), 'sleight-bench'), ownerAway, ownerPresent, realProfile: option('real-profile', undefined), ...(guardedPass && { stopOnAppDialog: true }) };
-        if (check4) {
-          ctx.check4RecordWindowFrames = check4.recordWindowFrames === true;
-          ctx.finderObservation = fixture => check4FinderObservation(check4, fixture);
-          // Start the Finder census at process identification, before creating
-          // its fixture window, rather than waiting until model driving starts.
-          ctx.onFixtureDiagnostics = () => writeFileSync(check4.pids, JSON.stringify({
-            pids: [...new Set((ctx.windowLeases ?? []).map(lease => lease.pid).filter(Number.isSafeInteger))],
-          }), { mode: 0o600 });
-        }
-        fixtureContexts.push(ctx);
-        for (const app of [task.app, ...task.allowedApps ?? []].filter(Boolean)) touchedApps.add(app);
-        if (suite === 'real' || task.fixtureLifecycle || guardedPass) {
-          if (task.privateMail) assertPrivateClaudePolicy();
-          if (task.privateMail) ctx.privateTask = task;
-          realContexts.push(ctx);
-          const evidenceDir = check4?.evidence ?? (task.privateMail || task.noScreenshot ? undefined : join(ARM_HOME, 'evidence', stamp, `${armName}-${task.id}-${run}${attempt > 1 ? `-hold-${attempt}` : ""}`));
-          if (evidenceDir) mkdirSync(evidenceDir, { recursive: true, mode: 0o700 });
-          const codexHome = ARMS[armName].codex ? codexRunHome(ARMS[armName], armName, task, run, { dir, evidenceDir }) : {};
-          if (!codexHome) return;
-          let result;
-          try { result = await executeRealTask(task, ctx, { dryRun: isDryRun, setupOnly: isSetupOnly, signal: controller.signal,
-            lockHeld: !isDryRun,
-            stop: () => controller.abort(new Error('macOS permission prompt')),
-            permissionCheck: observePermission,
-            drive: async (prompt, _ctx, callbacks) => {
-              if (check4) writeFileSync(check4.pids, JSON.stringify({ pids: [...new Set((ctx.windowLeases ?? []).map(lease => lease.pid).filter(Number.isSafeInteger))] }), { mode: 0o600 });
-              if (calculatorGate) await calculatorReady(armName);
-              const observedApps = task.observedApps ?? [ctx.sim?.app ?? task.app];
-              const cpu = footprint(task.privateMail ? [] : observedApps, ARMS[armName].codex ? 'codex' : 'claude');
-              const watchers = guardedPass ? observedApps.map(app => [app, watchAppWindows(app)]) : [];
-              const finishWatching = async response => {
-                if (!watchers.length) return;
-                const samples = Object.fromEntries(await Promise.all(watchers.map(async ([app, stop]) => [app, await stop()])));
-                response.appWindows = samples[observedApps[0]];
-                if (watchers.length > 1) response.appWindowsByApp = samples;
-              };
-              if (ARMS[armName].codex) {
-                const response = await runCodex(prompt, { cwd: ARMS[armName].cwd, model: ARMS[armName].codexModel, effort: codexEffort, timeoutMs: task.timeoutMs ?? TIMEOUT_MS, signal: controller.signal, onSpawn: cpu.onSpawn, auditDrag: suite === 'world' && task.id === 'textedit-window-drag',
-                  ...(codexHome.home && { home: codexHome.home }) });
-                Object.assign(response, loadReceipt(response.stamps));
-                strayServers(response, codexHome);
-                response.timing = runTiming(response.out);
-                if (ARMS[armName].sleightHost) {
-                  // The Claude-hosted arms stop the pass on a prompt outside the allowlist (BENCH_APPROVAL_STOP); so does this one.
-                  response.approvals = approvalSummary(join(dir, 'approvals.jsonl'), { log: true });
-                  if (response.approvals.declined.length) response.approvalStop = 'unsupported approval: elicitation is outside the benchmark app allowlist or uses an unsupported form';
-                }
-                response.footprint = await cpu.finish();
-                await finishWatching(response);
-                return response;
+      await hygieneBoundary();
+      const nonce = randomBytes(4).toString('hex');
+      const dir = join(suite === 'real' ? realpathSync(tmpdir()) : tmpdir(), 'sleight-bench', stamp, `${armName}-${task.id}-${run}`);
+      mkdirSync(dir, { recursive: true });
+      const ctx = { dir, nonce, fixtureRoot: join(tmpdir(), 'sleight-bench'), ownerAway, ownerPresent, realProfile: option('real-profile', undefined), ...(guardedPass && { stopOnAppDialog: true }) };
+      fixtureContexts.push(ctx);
+      for (const app of [task.app, ...task.allowedApps ?? []].filter(Boolean)) touchedApps.add(app);
+      if (suite === 'real' || task.fixtureLifecycle || guardedPass) {
+        if (task.privateMail) assertPrivateClaudePolicy();
+        if (task.privateMail) ctx.privateTask = task;
+        realContexts.push(ctx);
+        const evidenceDir = task.privateMail || task.noScreenshot ? undefined : join(ARM_HOME, 'evidence', stamp, `${armName}-${task.id}-${run}`);
+        if (evidenceDir) mkdirSync(evidenceDir, { recursive: true, mode: 0o700 });
+        const codexHome = ARMS[armName].codex ? codexRunHome(ARMS[armName], armName, task, run, { dir, evidenceDir }) : {};
+        if (!codexHome) break pass;
+        let result;
+        try { result = await executeRealTask(task, ctx, { dryRun: isDryRun, setupOnly: isSetupOnly, signal: controller.signal,
+          lockHeld: !isDryRun,
+          stop: () => controller.abort(new Error('macOS permission prompt')),
+          permissionCheck: guardedPass ? guardedPermissionCheck : observePermission,
+          drive: async (prompt, _ctx, callbacks) => {
+            if (calculatorGate) await calculatorReady(armName);
+            const observedApps = task.observedApps ?? [ctx.sim?.app ?? task.app];
+            const cpu = footprint(task.privateMail ? [] : observedApps, ARMS[armName].codex ? 'codex' : 'claude');
+            const watchers = guardedPass ? observedApps.map(app => [app, watchAppWindows(app)]) : [];
+            const finishWatching = async response => {
+              if (!watchers.length) return;
+              const samples = Object.fromEntries(await Promise.all(watchers.map(async ([app, stop]) => [app, await stop()])));
+              response.appWindows = samples[observedApps[0]];
+              if (watchers.length > 1) response.appWindowsByApp = samples;
+            };
+            if (ARMS[armName].codex) {
+              const response = await runCodex(prompt, { cwd: ARMS[armName].cwd, model: ARMS[armName].codexModel, effort: codexEffort, timeoutMs: task.timeoutMs ?? TIMEOUT_MS, signal: controller.signal, onSpawn: cpu.onSpawn, auditDrag: suite === 'world' && task.id === 'textedit-window-drag',
+                ...(codexHome.home && { home: codexHome.home }) });
+              strayServers(response, codexHome);
+              response.timing = runTiming(response.out);
+              if (ARMS[armName].sleightHost) {
+                // The Claude-hosted arms stop the pass on a prompt outside the allowlist (BENCH_APPROVAL_STOP); so does this one.
+                response.approvals = approvalSummary(join(dir, 'approvals.jsonl'), { log: true });
+                if (response.approvals.declined.length) response.approvalStop = 'unsupported approval: elicitation is outside the benchmark app allowlist or uses an unsupported form';
               }
-              const response = await runClaude(prompt, ARMS[armName], !task.privateMail && !task.noScreenshot && armName === 'sleight' ? { SLEIGHT_TRACE: evidenceDir } : {},
-                { signal: controller.signal, evidenceDir, ...callbacks, privateMail: task.privateMail,
-                  fixtureLifecycle: true, onSpawn: task.privateMail ? pid => { armPids.push(pid); windowHygiene?.recordArm?.(pid); } : cpu.onSpawn, timeoutMs: task.timeoutMs ?? TIMEOUT_MS,
-                  allowedApps: task.allowedApps, allowedGrants: task.allowedGrants, auditDrag: suite === 'world' && task.id === 'textedit-window-drag' });
-              if (!task.privateMail) response.footprint = await cpu.finish();
+              response.footprint = await cpu.finish();
               await finishWatching(response);
-              if (!task.privateMail) response.timing = runTiming(response.out, armName === 'sleight' ? traceTiming(evidenceDir) : undefined);
               return response;
-            },
-          }); } catch (error) {
-            if (!task.privateMail) throw error;
-            // Unexpected lifecycle errors must not expose AX text in a stack.
-            // Collect attached helpers without making further window actions.
-            for (const lease of ctx.windowLeases ?? []) try { await lease.dispose(); } catch {}
-            result = { passed: false, groupClean: false, reason: 'PRIVATE_MAIL_UNEXPECTED_STOP' };
-          }
-          retrySafe = result.groupClean === true && !ctx.fixtureLockUnconfirmed &&
-            !result.cleanupError && !result.permissionPrompt && !result.observerError && !result.appDialog;
-          // A shell or file edit could pass a check without the app, so it fails the run.
-          if (result.forbidden?.length) { result.passed = false; result.reason = `used ${[...new Set(result.forbidden)].join(' and ')}`; }
-          if (result.approvalStop) { result.passed = false; result.reason = result.approvalStop; controller.abort(new Error(result.approvalStop)); process.exitCode = 1; }
-          const contained = !task.privateMail && cleanupContained(result);
-          if (contained) { result.passed = result.taskPassed === true; result.cleanupContained = true; }
-          const { out, code, forbidden: _forbidden, ...rest } = result;
-          if (task.noScreenshot) { delete rest.screenshot; delete rest.cartShot; }
-          results.push(task.privateMail ? privateMailResult(task, ctx, result, { arm: armName, run }) : { arm: armName, task: task.id, run, ...rest,
-            ...sleightRow(), ...(ARMS[armName].codex && { codexModel: ARMS[armName].codexModel }),
-            ...(suite === 'world' && { half: task.half, timeoutMs: task.timeoutMs }),
-            ...((task.surface || ctx.webKind) && { surface: task.surface ?? 'native' }),
-            ...(isDryRun && ARMS[armName].generic && { command: [claudeBin, ...ARMS[armName].args, '--disallowedTools', OUTSIDE_TOOLS.join(','), '--settings', ARMS[armName].settings] }),
-            reason: scrub(result.reason), cleanupError: scrub(result.cleanupError), prompt: scrub(result.prompt),
-            turns: out?.num_turns, costUsd: runCost(out), reportedCostUsd: out?.total_cost_usd, models: Object.keys(out?.modelUsage ?? {}),
-            usage: out?.usage && { input: out.usage.input_tokens, cacheRead: out.usage.cache_read_input_tokens,
-              cacheWrite: out.usage.cache_creation_input_tokens, output: out.usage.output_tokens },
-            exitCode: code, answer: scrub(out?.result?.slice(0, 300)), stderr: code === 0 ? undefined : scrub(rest.stderr),
-          });
-          ctx.result = results.at(-1);
-          finishRun(results.at(-1));
-          save();
-          const recorded = results.at(-1);
-          // A private row has no reason; its code (CHAT_…, MIMESTREAM_…) carries no content, so the local log shows it.
-          const privateCode = task.privateMail && !recorded.passed ? /^[A-Z][A-Z0-9_]+\b/.exec(String(result.reason ?? result.cleanupError ?? ''))?.[0] : undefined;
-          console.error(`${recorded.passed ? 'PASS' : isDryRun ? 'DRY' : recorded.outcome ? 'STOP' : 'FAIL'} ${armName} ${task.id} #${run} ${recorded.seconds ?? 0}s${recorded.reason ? ` (${recorded.reason})` : privateCode ? ` (${privateCode})` : ''}`);
-          if (contained) console.error(`CONTINUE: ${scrub(result.cleanupError)} (every app this run launched exited)`);
-          else if (result.cleanupError || result.permissionPrompt || result.permissionRefusal || result.observerError || result.appDialog || result.groupClean === false) {
-            // Which check and its code only (MIMESTREAM_…): codes carry no mail content.
-            const privateStop = () => ['cleanupError', 'permissionPrompt', 'permissionRefusal', 'observerError', 'appDialog'].filter(key => result[key])
-              .concat(result.groupClean === false ? ['groupClean'] : []).join(', ') + '; ' +
-              [result.cleanupError, result.reason, result.observerError].map(v => /^[A-Z][A-Z0-9_]+\b/.exec(String(v ?? ''))?.[0]).filter(Boolean).join(', ');
-            console.error(task.privateMail ? `STOP: private mail safety check failed (${privateStop()}).` : `STOP: ${scrub(result.cleanupError ?? result.reason ?? 'permission stop')}`);
-            controller.abort(new Error('live safety stop'));
-            process.exitCode = 1;
-          }
-          if (!result.passed && !isDryRun) process.exitCode = 1;
-          return;
+            }
+            const response = await runClaude(prompt, ARMS[armName], !task.privateMail && !task.noScreenshot && armName === 'sleight' ? { SLEIGHT_TRACE: evidenceDir } : {},
+              { signal: controller.signal, evidenceDir, ...callbacks, privateMail: task.privateMail,
+                fixtureLifecycle: true, onSpawn: task.privateMail ? pid => { armPids.push(pid); windowHygiene?.recordArm?.(pid); } : cpu.onSpawn, timeoutMs: task.timeoutMs ?? TIMEOUT_MS,
+                allowedApps: task.allowedApps, allowedGrants: task.allowedGrants, auditDrag: suite === 'world' && task.id === 'textedit-window-drag' });
+            if (!task.privateMail) response.footprint = await cpu.finish();
+            await finishWatching(response);
+            if (!task.privateMail) response.timing = runTiming(response.out, armName === 'sleight' ? traceTiming(evidenceDir) : undefined);
+            return response;
+          },
+        }); } catch (error) {
+          if (!task.privateMail) throw error;
+          // Unexpected lifecycle errors must not expose AX text in a stack.
+          // Collect attached helpers without making further window actions.
+          for (const lease of ctx.windowLeases ?? []) try { await lease.dispose(); } catch {}
+          result = { passed: false, groupClean: false, reason: 'PRIVATE_MAIL_UNEXPECTED_STOP' };
         }
-        const codexHome = arm.codex ? codexRunHome(arm, armName, task, run, { dir }) : {};
-        if (!codexHome) return;
-        // A setup this Mac can't do (no iOS runtime for the simulator task) skips
-        // the run rather than ending the pass; skipped runs stay out of the table.
-        try {
-          if (windowHygiene) await windowHygiene.trackLaunch([task.app].filter(Boolean), () => task.setup?.(ctx));
-          else await task.setup?.(ctx);
-        } catch (err) {
-          results.push({ arm: armName, task: task.id, run, skipped: true, reason: `setup: ${err.message}` });
-          finishRun(results.at(-1));
-          save();
-          console.error(`SKIP ${armName} ${task.id} #${run} (setup: ${err.message})`);
-          return;
-        }
-        await hygieneBoundary();
-        const prompt = task.prompt(ctx);
-
-        if (isDryRun) {
-          results.push({ arm: armName, task: task.id, run, prompt, dryRun: true, check: String(task.check({ ...ctx, answer: '' })),
-            ...(ARMS[armName].generic && { command: [claudeBin, ...ARMS[armName].args, '--disallowedTools', OUTSIDE_TOOLS.join(','), '--settings', ARMS[armName].settings] }) });
-          return;
-        }
-
-        const started = Date.now();
-        const stopWatching = watchAppWindows(ctx.sim?.app ?? task.app);
-        // sleight traces into the run's scratch folder, so its timing comes from this run alone.
-        const cpu = footprint([ctx.sim?.app ?? task.app], arm.codex ? 'codex' : 'claude');
-        const codexRun = arm.codex ? await runCodex(prompt, { cwd: arm.cwd, model: arm.codexModel, effort: codexEffort, timeoutMs: TIMEOUT_MS, signal: controller.signal, onSpawn: cpu.onSpawn,
-          ...(codexHome.home && { home: codexHome.home }) }) : undefined;
-        if (codexRun) strayServers(codexRun, codexHome);
-        const { code, out, stderr, groupClean = true, cancelled, stamps, agentSeconds, agentTiming } = codexRun ?? await runClaude(prompt, arm, armName === 'sleight' ? { SLEIGHT_TRACE: dir } : {}, { onSpawn: cpu.onSpawn });
-        const cpuUsed = await cpu.finish();
-        const appWindows = await stopWatching();
-        const answer = out?.result ?? '';
-        let verdict;
-        try { verdict = groupClean ? task.check({ ...ctx, answer }) : 'Driver process group cleanup unconfirmed'; } catch (err) { verdict = err.message; }
         // A shell or file edit could pass a check without the app, so it fails the run.
-        if (codexRun?.forbidden.length) verdict = `used ${[...new Set(codexRun.forbidden)].join(' and ')}`;
-        // As in the fixture path: a prompt the proxy declined stops a sleight-in-Codex pass.
-        const approvals = arm.sleightHost ? approvalSummary(join(dir, 'approvals.jsonl'), { log: true }) : undefined;
-        if (approvals?.declined.length) {
-          verdict = 'unsupported approval: elicitation is outside the benchmark app allowlist or uses an unsupported form';
-          controller.abort(new Error(verdict)); process.exitCode = 1;
-        }
-        if (groupClean) try { await task.cleanup?.(ctx); retrySafe = true; } catch {} // an unproved cleanup cannot retry
-        else { controller.abort(new Error('Driver cleanup unconfirmed')); process.exitCode = 1; }
-        const elapsedMs = Date.now() - started;
-        results.push({
-          arm: armName,
-          task: task.id,
-          run,
-          passed: verdict === true,
-          reason: verdict === true ? undefined : scrub(verdict),
-          seconds: Math.round(elapsedMs / 100) / 10,
-          agentSeconds: agentSeconds ?? null,
-          agentTiming,
-          secondsTiming: { start: 'outer-drive', end: 'task-cleanup', startupIncluded: true },
-          turns: out?.num_turns,
-          costUsd: runCost(out), reportedCostUsd: out?.total_cost_usd,
-          // Input, cached and output tokens: what a smaller result would save.
+        if (result.forbidden?.length) { result.passed = false; result.reason = `used ${[...new Set(result.forbidden)].join(' and ')}`; }
+        if (result.approvalStop) { result.passed = false; result.reason = result.approvalStop; controller.abort(new Error(result.approvalStop)); process.exitCode = 1; }
+        const contained = !task.privateMail && cleanupContained(result);
+        if (contained) { result.passed = result.taskPassed === true; result.cleanupContained = true; }
+        const { out, code, forbidden: _forbidden, ...rest } = result;
+        if (task.noScreenshot) { delete rest.screenshot; delete rest.cartShot; }
+        results.push(task.privateMail ? privateMailResult(task, ctx, result, { arm: armName, run }) : { arm: armName, task: task.id, run, ...rest,
+          ...sleightRow(), ...(ARMS[armName].codex && { codexModel: ARMS[armName].codexModel }),
+          ...(suite === 'world' && { half: task.half, timeoutMs: task.timeoutMs }),
+          ...((task.surface || ctx.webKind) && { surface: task.surface ?? 'native' }),
+          ...(isDryRun && ARMS[armName].generic && { command: [claudeBin, ...ARMS[armName].args, '--disallowedTools', OUTSIDE_TOOLS.join(','), '--settings', ARMS[armName].settings] }),
+          reason: scrub(result.reason), cleanupError: scrub(result.cleanupError), prompt: scrub(result.prompt),
+          turns: out?.num_turns, costUsd: runCost(out), reportedCostUsd: out?.total_cost_usd, models: Object.keys(out?.modelUsage ?? {}),
           usage: out?.usage && { input: out.usage.input_tokens, cacheRead: out.usage.cache_read_input_tokens,
             cacheWrite: out.usage.cache_creation_input_tokens, output: out.usage.output_tokens },
-          timing: withStamps(runTiming(out, armName === 'sleight' ? traceTiming(dir) : undefined, elapsedMs), stamps, started),
-          footprint: cpuUsed,
-          ...loadReceipt(stamps),
-          // Samples every 5 s of the app's windows: on the current Space, only off it, or none.
-          appWindows,
-          exitCode: code,
-          groupClean, cancelled,
-          answer: scrub(answer.slice(0, 300)),
-          // What Claude Code reports it used, to catch a model setting that didn't apply.
-          models: Object.keys(out?.modelUsage ?? {}),
-          ...sleightRow(),
-          ...(codexRun && { toolCalls: codexRun.toolCalls, toolServers: codexRun.toolServers, engineMs: codexRun.engineMs, codexModel: arm.codexModel, modelsRan: codexRun.modelsRan,
-            effortsRan: codexRun.effortsRan, codexCliVersion: codexRun.codexCliVersion, ...(approvals && { approvals }) }),
-          stderr: code === 0 ? undefined : scrub(stderr),
+          exitCode: code, answer: scrub(out?.result?.slice(0, 300)), stderr: code === 0 ? undefined : scrub(rest.stderr),
         });
+        ctx.result = results.at(-1);
         finishRun(results.at(-1));
         save();
-        const r = results.at(-1);
-        console.error(`${r.passed ? 'PASS' : 'FAIL'} ${armName} ${task.id} #${run} ${r.seconds}s${r.reason ? ` (${r.reason})` : ''}`);
-      }, { signal: controller.signal,
-        canRetry: () => retrySafe && !controller.signal.aborted,
-        onRetry: () => {
-          console.error(`HOLD ${armName} ${task.id} #${run}: attempt excluded; rerunning after the hold clears.`);
-          heldAttempts.push(...results.splice(resultStart).map(row => ({ ...row, excluded: 'benchmark hold overlapped task' })));
-          process.exitCode = previousExitCode;
-          save();
-        } });
+        const recorded = results.at(-1);
+        // A private row has no reason; its code (CHAT_…, MIMESTREAM_…) carries no content, so the local log shows it.
+        const privateCode = task.privateMail && !recorded.passed ? /^[A-Z][A-Z0-9_]+\b/.exec(String(result.reason ?? result.cleanupError ?? ''))?.[0] : undefined;
+        console.error(`${recorded.passed ? 'PASS' : isDryRun ? 'DRY' : recorded.outcome ? 'STOP' : 'FAIL'} ${armName} ${task.id} #${run} ${recorded.seconds ?? 0}s${recorded.reason ? ` (${recorded.reason})` : privateCode ? ` (${privateCode})` : ''}`);
+        if (contained) console.error(`CONTINUE: ${scrub(result.cleanupError)} (every app this run launched exited)`);
+        else if (result.cleanupError || result.permissionPrompt || result.permissionRefusal || result.observerError || result.appDialog || result.groupClean === false) {
+          // Which check and its code only (MIMESTREAM_…): codes carry no mail content.
+          const privateStop = () => ['cleanupError', 'permissionPrompt', 'permissionRefusal', 'observerError', 'appDialog'].filter(key => result[key])
+            .concat(result.groupClean === false ? ['groupClean'] : []).join(', ') + '; ' +
+            [result.cleanupError, result.reason, result.observerError].map(v => /^[A-Z][A-Z0-9_]+\b/.exec(String(v ?? ''))?.[0]).filter(Boolean).join(', ');
+          console.error(task.privateMail ? `STOP: private mail safety check failed (${privateStop()}).` : `STOP: ${scrub(result.cleanupError ?? result.reason ?? 'permission stop')}`);
+          controller.abort(new Error('live safety stop'));
+          process.exitCode = 1;
+        }
+        if (!result.passed && !isDryRun) process.exitCode = 1;
+        continue;
+      }
+      const codexHome = arm.codex ? codexRunHome(arm, armName, task, run, { dir }) : {};
+      if (!codexHome) break pass;
+      // A setup this Mac can't do (no iOS runtime for the simulator task) skips
+      // the run rather than ending the pass; skipped runs stay out of the table.
+      try {
+        if (windowHygiene) await windowHygiene.trackLaunch([task.app].filter(Boolean), () => task.setup?.(ctx));
+        else await task.setup?.(ctx);
+      } catch (err) {
+        results.push({ arm: armName, task: task.id, run, skipped: true, reason: `setup: ${err.message}` });
+        finishRun(results.at(-1));
+        save();
+        console.error(`SKIP ${armName} ${task.id} #${run} (setup: ${err.message})`);
+        continue;
+      }
+      await hygieneBoundary();
+      const prompt = task.prompt(ctx);
+
+      if (isDryRun) {
+        results.push({ arm: armName, task: task.id, run, prompt, dryRun: true, check: String(task.check({ ...ctx, answer: '' })),
+          ...(ARMS[armName].generic && { command: [claudeBin, ...ARMS[armName].args, '--disallowedTools', OUTSIDE_TOOLS.join(','), '--settings', ARMS[armName].settings] }) });
+        continue;
+      }
+
+      const started = Date.now();
+      const stopWatching = watchAppWindows(ctx.sim?.app ?? task.app);
+      // sleight traces into the run's scratch folder, so its timing comes from this run alone.
+      const cpu = footprint([ctx.sim?.app ?? task.app], arm.codex ? 'codex' : 'claude');
+      const codexRun = arm.codex ? await runCodex(prompt, { cwd: arm.cwd, model: arm.codexModel, effort: codexEffort, timeoutMs: TIMEOUT_MS, signal: controller.signal, onSpawn: cpu.onSpawn,
+        ...(codexHome.home && { home: codexHome.home }) }) : undefined;
+      if (codexRun) strayServers(codexRun, codexHome);
+      const { code, out, stderr, groupClean = true, cancelled, stamps, agentSeconds, agentTiming } = codexRun ?? await runClaude(prompt, arm, armName === 'sleight' ? { SLEIGHT_TRACE: dir } : {}, { onSpawn: cpu.onSpawn });
+      const cpuUsed = await cpu.finish();
+      const appWindows = await stopWatching();
+      const answer = out?.result ?? '';
+      let verdict;
+      try { verdict = groupClean ? task.check({ ...ctx, answer }) : 'Driver process group cleanup unconfirmed'; } catch (err) { verdict = err.message; }
+      // A shell or file edit could pass a check without the app, so it fails the run.
+      if (codexRun?.forbidden.length) verdict = `used ${[...new Set(codexRun.forbidden)].join(' and ')}`;
+      // As in the fixture path: a prompt the proxy declined stops a sleight-in-Codex pass.
+      const approvals = arm.sleightHost ? approvalSummary(join(dir, 'approvals.jsonl'), { log: true }) : undefined;
+      if (approvals?.declined.length) {
+        verdict = 'unsupported approval: elicitation is outside the benchmark app allowlist or uses an unsupported form';
+        controller.abort(new Error(verdict)); process.exitCode = 1;
+      }
+      if (groupClean) try { await task.cleanup?.(ctx); } catch {} // leaving an app open doesn't change the verdict
+      else { controller.abort(new Error('Driver cleanup unconfirmed')); process.exitCode = 1; }
+      const elapsedMs = Date.now() - started;
+      results.push({
+        arm: armName,
+        task: task.id,
+        run,
+        passed: verdict === true,
+        reason: verdict === true ? undefined : scrub(verdict),
+        seconds: Math.round(elapsedMs / 100) / 10,
+        agentSeconds: agentSeconds ?? null,
+        agentTiming,
+        secondsTiming: { start: 'outer-drive', end: 'task-cleanup', startupIncluded: true },
+        turns: out?.num_turns,
+        costUsd: runCost(out), reportedCostUsd: out?.total_cost_usd,
+        // Input, cached and output tokens: what a smaller result would save.
+        usage: out?.usage && { input: out.usage.input_tokens, cacheRead: out.usage.cache_read_input_tokens,
+          cacheWrite: out.usage.cache_creation_input_tokens, output: out.usage.output_tokens },
+        timing: withStamps(runTiming(out, armName === 'sleight' ? traceTiming(dir) : undefined, elapsedMs), stamps, started),
+        footprint: cpuUsed,
+        // Samples every 5 s of the app's windows: on the current Space, only off it, or none.
+        appWindows,
+        exitCode: code,
+        groupClean, cancelled,
+        answer: scrub(answer.slice(0, 300)),
+        // What Claude Code reports it used, to catch a model setting that didn't apply.
+        models: Object.keys(out?.modelUsage ?? {}),
+        ...sleightRow(),
+        ...(codexRun && { toolCalls: codexRun.toolCalls, toolServers: codexRun.toolServers, engineMs: codexRun.engineMs, codexModel: arm.codexModel, modelsRan: codexRun.modelsRan,
+          effortsRan: codexRun.effortsRan, codexCliVersion: codexRun.codexCliVersion, ...(approvals && { approvals }) }),
+        stderr: code === 0 ? undefined : scrub(stderr),
+      });
+      finishRun(results.at(-1));
+      save();
+      const r = results.at(-1);
+      console.error(`${r.passed ? 'PASS' : 'FAIL'} ${armName} ${task.id} #${run} ${r.seconds}s${r.reason ? ` (${r.reason})` : ''}`);
     }
   }
 }
 
-} catch (error) {
-  const code = benchmarkStopCode(error);
-  if (!code) throw error;
-  process.exitCode ||= code;
-  console.error(error.message);
 } finally {
   try {
     if (windowHygiene) {
       try {
         hygieneResult = await windowHygiene.finish({ dryRun: hygieneDryRun,
-          deferVisible: benchmarkHeld,
           ...(privatePass && { log: () => {} }),
           touchedApps: [...touchedApps, ...realContexts.flatMap(ctx => (ctx.windowLeases ?? []).flatMap(lease => [lease.app, lease.bundle]).filter(Boolean))],
           fixturePaths: fixtureContexts.flatMap(ctx => [ctx.dir, ctx.document, ctx.pdf, ctx.folder, ...(ctx.documents ?? [])].filter(Boolean)),
@@ -966,38 +929,18 @@ pass: for (let run = 1; run <= runs; run++) {
           launched: realContexts.flatMap(ctx => (ctx.windowLeases ?? []).filter(lease => lease.launched && lease.running === false)
             .map(lease => ({ pid: lease.pid, start: lease.processStartedAtMs / 1000, bundle: lease.bundle }))),
           beforeAction: async () => {
-            controller.signal.throwIfAborted();
+            controller.signal.throwIfAborted(); assertNoHold();
             if (await observePermission()) throw new Error('macOS permission prompt: hygiene stopped');
           } });
-        hygieneResume = hygieneResult.resume;
-        delete hygieneResult.resume;
       } catch (error) {
         recordHygieneError(error);
         passCleanupErrors.push({ phase: 'window hygiene', error: scrub(error.message) });
       }
     }
-    if (!isDryRun && unlock && !hygieneResult?.deferred) for (const cleanup of [closeBenchTextEdit, quitChess, quitSimApp]) {
+    if (!isDryRun && unlock) for (const cleanup of [closeBenchTextEdit, quitChess, quitSimApp]) {
       // Unscoped legacy tails could close windows that predate this pass.
-      try { if (!hygieneDryRun && !benchmarkHeld()) await cleanup({ ownedOnly: true }); }
+      try { if (!hygieneDryRun) await cleanup({ ownedOnly: true }); }
       catch (error) { console.error(privatePass ? 'Pass cleanup failed: PRIVATE_MAIL_CLEANUP_UNCONFIRMED' : `Pass cleanup failed: ${error.message}`); process.exitCode = 1; }
-    }
-    if (!isDryRun && unlock && (hygieneResult?.deferred || benchmarkHeld())) {
-      const cleanupDir = join(resultsDir, '.cleanup');
-      mkdirSync(cleanupDir, { recursive: true, mode: 0o700 });
-      const receipt = join(cleanupDir, stamp + '.json');
-      // This private receipt retains exact identities and paths for cleanup only. Published results are scrubbed.
-      cleanupDeferred = { reason: 'benchmark hold', receipt, skippedTails: ['closeBenchTextEdit', 'quitChess', 'quitSimApp'] };
-      deferredReceipt = { version: 1, lock: passLockIdentity,
-        hygiene: hygieneResume ?? { launched: realContexts.flatMap(ctx => (ctx.windowLeases ?? [])
-          .filter(lease => lease.launched && lease.running === false)
-          .map(lease => ({ pid: lease.pid, start: lease.processStartedAtMs / 1000, bundle: lease.bundle }))) },
-        leftWindows: hygieneResult?.leftWindows ?? [],
-        fixtureCleanupUnconfirmed: realContexts.some(ctx => ctx.fixtureLockUnconfirmed || ctx.pendingAcquisitions?.size || ctx.exitDisagreements?.length) ||
-          results.some(result => result.groupClean === false || result.cleanupError || result.appDialog || result.permissionPrompt || result.observerError || result.approvalStop) ||
-          passCleanupErrors.length > 0 || (hygieneResult?.errors.length ?? 0) > 0,
-      };
-      writeFileSync(receipt, JSON.stringify(deferredReceipt, null, 2) + '\n', { mode: 0o600, flag: 'wx' });
-      console.error(`Cleanup deferred during benchmark hold; live lock kept. After the hold, run node bench/resume-hygiene.mjs --owner-away --receipt ${receipt}`);
     }
     save(true);
   } finally {
@@ -1011,26 +954,15 @@ pass: for (let run = 1; run <= runs; run++) {
     }
     // Stops only a daemon this pass started; one already listening was the owner's and stays.
     try { await cuaDaemon?.stop(); }
-    catch (error) {
-      console.error(`Cua daemon: ${error.message}`); process.exitCode = 1;
-      if (deferredReceipt) {
-        deferredReceipt.fixtureCleanupUnconfirmed = true;
-        writeFileSync(cleanupDeferred.receipt, JSON.stringify(deferredReceipt, null, 2) + '\n', { mode: 0o600 });
-      }
-    }
+    catch (error) { console.error(`Cua daemon: ${error.message}`); process.exitCode = 1; }
     try {
-      const released = !cleanupDeferred && await releaseFixtureLock(realContexts, unlock);
-      check4CleanupConfirmed = Boolean(unlock) && released && !controller.signal.aborted && passCleanupErrors.length === 0 &&
-        !results.some(row => row.liveLockKept || row.cleanupError || row.cleanupUnconfirmed || row.groupClean === false || row.permissionPrompt || row.observerError || row.appDialog || row.approvalStop);
-      if (!cleanupDeferred && !released) {
+      if (!await releaseFixtureLock(realContexts, unlock)) {
         process.exitCode = 1;
         console.error('STOP: fixture setup, window cleanup or helper collection unconfirmed; live lock kept.');
       }
     }
-    catch (error) { check4CleanupConfirmed = false; console.error(`Live lock: ${error.message}`); process.exitCode = 1; }
+    catch (error) { console.error(`Live lock: ${error.message}`); process.exitCode = 1; }
     unlock = undefined;
-    writeCheck4BenchResult(check4, { cleanupConfirmed: check4CleanupConfirmed,
-      row: results.find(row => row.arm === 'sleight' && row.task === check4?.task && row.run === 1) });
   }
 }
 if (controller.signal.aborted && !process.exitCode) process.exitCode = 130;
@@ -1041,7 +973,6 @@ if (!isDryRun && privatePass) {
   for (const row of results) console.log(`| ${row.arm} | ${row.task} | ${row.run} | ${row.passed} | ${row.seconds} | ${row.turns ?? '–'} | ${row.expectedHash ?? '–'} | ${row.actualHash ?? '–'} |`);
 }
 if (!isDryRun && !privatePass) {
-  for (const warning of loadWarnings(results)) console.log(warning);
   // Tools, outside tools and harness add up to the run's time; API time overlaps them.
   console.log('\n| Arm | Task | Passed | Median s | Tools s | Outside tools s | Harness s | API s (overlaps) | Engine s | Local tools s | Relay ms | Median turns | CPU sleight s | CPU engine s | CPU client s | CPU other s | API-price cost |');
   console.log('|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|');

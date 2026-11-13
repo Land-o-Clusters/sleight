@@ -58,7 +58,7 @@ if (mode === 'audit') {
 
 const controller = new AbortController();
 for (const signal of ['SIGINT', 'SIGTERM']) process.on(signal, () => controller.abort());
-const trace = join(bank, 'trace'); mkdirSync(trace, { mode: 0o700 });
+const trace = join(bank, 'trace'); mkdirSync(trace);
 const config = join(bank, 'plain.json');
 writeFileSync(config, JSON.stringify({ mcpServers: { 'sleight-plain': {
   command: join(root, 'plugins/sleight/bin/sleight-mcp'),

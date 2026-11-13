@@ -1,4 +1,3 @@
-import { testChromiumExecutable, launchTestChromium } from './fixtures/chromium-isolated.mjs';
 // Headless loopback fixtures only. No engine, installed browser profile or native UI.
 import test from 'node:test';
 import assert from 'node:assert/strict';
@@ -14,7 +13,9 @@ import { readWhole } from '../plugins/sleight/lib/direct-browser/whole.mjs';
 
 const pin = JSON.parse(readFileSync(new URL('../plugins/sleight/vendor/playwright-core/browsers.json', import.meta.url)))
   .browsers.find(browser => browser.name === 'chromium-headless-shell');
-const executablePath = testChromiumExecutable({ revision: pin.revision });
+const platform = process.platform === 'darwin' ? 'mac-' + process.arch : 'linux64';
+const executablePath = join(homedir(), process.platform === 'darwin' ? 'Library/Caches' : '.cache', 'ms-playwright',
+  'chromium_headless_shell-' + pin.revision, 'chrome-headless-shell-' + platform, 'chrome-headless-shell');
 const skip = process.env.SLEIGHT_LIVE_DOM_TEST !== '1' ? 'requires headless fixture opt-in' :
   !existsSync(executablePath) ? 'pinned headless shell unavailable' : false;
 const fixtureFiles = new Map(['chat.html', 'feed.html', 'virtual.html', 'fixture.js', 'fixture.css']
@@ -33,7 +34,7 @@ async function fixture(t, kind) {
   });
   await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
   t.after(() => { server.closeAllConnections(); return new Promise(resolve => server.close(resolve)); });
-  const browser = await launchTestChromium(chromium, { headless: true, executablePath });
+  const browser = await chromium.launch({ headless: true, executablePath });
   t.after(() => browser.close());
   const context = await browser.newContext({ viewport: { width: 900, height: 700 } }), hook = newHook();
   await context.addInitScript({ content: hookSource(hook) });

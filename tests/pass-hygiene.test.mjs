@@ -35,28 +35,6 @@ test('dry run prints every planned action without acting or stopping a daemon', 
   assert.equal(result.planned.length, 4);
 });
 
-test('an active hold defers both close and Quit and records the windows left for resume', async () => {
-  const result = await hygiene.finishWindows(baseline, {
-    fixtureNames, touchedApps: current.apps.map(app => app.bundle), snapshot: async () => current,
-    launched: [app(3)], deferVisible: () => true, act: () => assert.fail('visible action during hold'), log() {},
-  });
-  assert.equal(result.deferred, true);
-  assert.equal(result.leftWindows.length, 4);
-  assert.deepEqual(result.planned.map(item => item.action), ['close', 'close', 'quit', 'close']);
-});
-
-test('a hold that starts during cleanup stops every following visible action', async () => {
-  let held = false;
-  const actions = [];
-  const result = await hygiene.finishWindows(baseline, {
-    fixtureNames, touchedApps: current.apps.map(app => app.bundle), snapshot: async () => current,
-    launched: [app(3)], deferVisible: () => held, beforeAction: async () => { held = true; },
-    act: item => actions.push(item), log() {},
-  });
-  assert.equal(result.deferred, true);
-  assert.deepEqual(actions, []);
-});
-
 test('a refused quit and close are left in results; no prompt response is attempted', async () => {
   const calls = [];
   const result = await hygiene.finishWindows(baseline, {

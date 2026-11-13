@@ -1,4 +1,3 @@
-import { assertChildStatus } from './fixtures/child-status.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { EventEmitter } from 'node:events';
@@ -281,11 +280,11 @@ test('window selection is accepted only for the gate browser and only with the e
 });
 
 test('the select_window guard runs as a hook process and denies with PreToolUse output', () => {
-  const run = (input, env) => spawnSync(process.execPath, [join(repo, 'bench/fowl/origin-hook.mjs')], { input: JSON.stringify(input), encoding: 'utf8', env: { PATH: process.env.PATH, ...env }, timeout: 60000, killSignal: 'SIGKILL' });
+  const run = (input, env) => spawnSync(process.execPath, [join(repo, 'bench/fowl/origin-hook.mjs')], { input: JSON.stringify(input), encoding: 'utf8', env: { PATH: process.env.PATH, ...env } });
   const env = { FOWL_GATE_WINDOW: JSON.stringify({ apps: ['Firefox'], title: 'Sleight Gate fixture-plan' }) };
   const base = { hook_event_name: 'PreToolUse', tool_name: 'mcp__plugin_sleight_computer__select_window' };
   const allowed = run({ ...base, tool_input: { app: 'Firefox', title: 'Sleight Gate fixture-plan' } }, env);
-  assertChildStatus(allowed, 0); assert.equal(allowed.stdout, '');
+  assert.equal(allowed.status, 0); assert.equal(allowed.stdout, '');
   const denied = run({ ...base, tool_input: { app: 'Firefox', title: 'Other' } }, env);
   assert.equal(JSON.parse(denied.stdout).hookSpecificOutput.permissionDecision, 'deny');
 });
@@ -300,8 +299,8 @@ test('Firefox CLI dry plans enumerate all pinned tasks for all five arms without
     const out = join(home, 'never', surface);
     const result = spawnSync(process.execPath, [join(repo, 'bench/fowl/real-gate.mjs'), '--real-browser', 'firefox',
       '--dry-run', '--surface', surface, '--tasks', tasks, '--out', out],
-    { encoding: 'utf8', env: { HOME: home, PATH: process.env.PATH }, maxBuffer: 4 * 1024 * 1024, timeout: 60000, killSignal: 'SIGKILL' });
-    assertChildStatus(result, 0, result.stderr);
+    { encoding: 'utf8', env: { HOME: home, PATH: process.env.PATH }, maxBuffer: 4 * 1024 * 1024 });
+    assert.equal(result.status, 0, result.stderr);
     const plan = JSON.parse(result.stdout);
     assert.equal(plan.arms.length, 12);
     assert.deepEqual(plan.unsupported.map(row => row.task.name), ['mobile', 'takeover']);
@@ -602,13 +601,13 @@ test('forced collection samples top-level metadata after the child has actually 
 });
 
 test('the compiled Firefox quit helper checks start time and the exact -profile pair before AppKit', async t => {
-  const compiler = spawnSync('/usr/bin/xcrun', ['--find', 'swiftc'], { encoding: 'utf8', timeout: 600000, killSignal: 'SIGKILL' });
+  const compiler = spawnSync('/usr/bin/xcrun', ['--find', 'swiftc'], { encoding: 'utf8', timeout: 5000 });
   if (compiler.status !== 0 || !existsSync(compiler.stdout.trim())) return t.skip('swiftc is unavailable; JS refusal path is covered');
   const dir = mkdtempSync(join(tmpdir(), 'br2c-swift-')); t.after(() => rmSync(dir, { recursive: true, force: true }));
   const helper = join(dir, 'quit-firefox');
   const built = spawnSync('/usr/bin/xcrun', ['swiftc', '-module-cache-path', swiftModuleCache(),
-    join(repo, 'bench/fowl/firefox-quit.swift'), '-o', helper], { encoding: 'utf8', timeout: 600000, killSignal: 'SIGKILL' });
-  assertChildStatus(built, 0, built.stderr);
+    join(repo, 'bench/fowl/firefox-quit.swift'), '-o', helper], { encoding: 'utf8', timeout: 60000 });
+  assert.equal(built.status, 0, built.stderr);
   // A plain child, not an app: the checks before AppKit decide each refusal.
   const child = spawn(process.execPath, ['-e', 'setTimeout(() => {}, 20000)', '--', '-profile', '/fixture/profile dir'], { stdio: 'ignore' });
   t.after(() => child.kill());
@@ -621,8 +620,8 @@ test('the compiled Firefox quit helper checks start time and the exact -profile 
   const started = String(row.startedMs / 1000);
   for (const [profile, second, code] of [['/fixture/profile', started, /PROFILE_MISMATCH/], ['/fixture/profile dir', String(row.startedMs / 1000 - 1), /START_MISMATCH/],
     ['/fixture/profile dir', started, /QUIT_REFUSED/]]) {
-    const refused = spawnSync(helper, [String(child.pid), process.execPath, profile, second], { encoding: 'utf8', timeout: 5000, killSignal: 'SIGKILL' });
-    assertChildStatus(refused, 1);
+    const refused = spawnSync(helper, [String(child.pid), process.execPath, profile, second], { encoding: 'utf8', timeout: 5000 });
+    assert.equal(refused.status, 1);
     assert.match(refused.stderr, code);
   }
 });

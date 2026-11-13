@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// Original MIT character artwork. No browser or window is launched.
+// Original MIT cast from ledger/vc/characters/gen. No browser or window is launched.
 import * as fs from 'node:fs';
 import { execFileSync } from 'node:child_process';
 import { tmpdir } from 'node:os';
@@ -8,14 +8,16 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 import { createHash } from 'node:crypto';
 import { CLIPS, PERCH_CLIPS, lastAnchors, usedCells } from './lib/poses.mjs';
 import { decodePNG, encodePNG } from './lib/png.mjs';
+import { renderAnime } from './styles/anime.mjs';
+import { renderPixel } from './styles/pixel.mjs';
+import { renderPaper } from './styles/paper.mjs';
 import { loadCharacter } from '../../../lib/hand/character.mjs';
 import { contactSheet } from './lib/contact.mjs';
-import { CAST, ORIGINAL_CAST, EVERYDAY_CAST, styles, renderPose, isCritter, manifestForCritter } from './stage.mjs';
-import { clipTiming } from './rigs/critter.mjs';
 
-export { CAST } from './stage.mjs';
+export const CAST = Object.freeze(['tsugi', 'shizu', 'bit', 'kit', 'yori', 'tab']);
 const here = fileURLToPath(new URL('.', import.meta.url));
 const lines = JSON.parse(fs.readFileSync(join(here, 'lines.json')));
+const styles = { anime: renderAnime, pixel: renderPixel, paper: renderPaper };
 const hash = b => createHash('sha256').update(b).digest('hex');
 const nest = (svg, x, y, k) => svg.replace(/id="([^"]+)"/g, `id="k${k}_$1"`).replace(/url\(#([^)]+)\)/g, `url(#k${k}_$1)`)
   .replace(/^<svg[^>]*>/, `<svg x="${x}" y="${y}" width="192" height="208" viewBox="0 0 192 208">`);
@@ -41,7 +43,7 @@ export function swiftPins(manifest) {
 // Custom art has no byte-for-byte rebuild contract. PNG is a format-v1 sheet too.
 export function sheetEncoding(custom, run = execFileSync) {
   let version;
-  try { version = run('cwebp', ['-version'], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'], timeout: 30000, killSignal: 'SIGKILL' }).trim().split('\n')[0]; }
+  try { version = run('cwebp', ['-version'], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] }).trim().split('\n')[0]; }
   catch (error) {
     if (!custom) throw error;
     return 'png';
@@ -52,13 +54,13 @@ export function sheetEncoding(custom, run = execFileSync) {
 export function encodeSheet(png, webp, { extension, custom, run = execFileSync }) {
   if (extension === 'webp') {
     try {
-      run('cwebp', ['-quiet', '-lossless', '-z', '9', '-exact', '-metadata', 'none', png, '-o', webp], { timeout: 300000, killSignal: 'SIGKILL' });
+      run('cwebp', ['-quiet', '-lossless', '-z', '9', '-exact', '-metadata', 'none', png, '-o', webp]);
       return { extension, bytes: fs.readFileSync(webp) };
     } catch (error) { if (!custom) throw error; }
   }
   return { extension: 'png', bytes: fs.readFileSync(png) };
 }
-export async function buildCast(output, { design, ids: selection = CAST } = {}) {
+export async function buildCast(output, { design } = {}) {
   let custom;
   if (design) {
     custom = (await import(pathToFileURL(resolve(design)))).default;
@@ -76,8 +78,7 @@ export async function buildCast(output, { design, ids: selection = CAST } = {}) 
     } catch (error) { if (error.code !== 'ENOENT') throw error; }
     if (parent === dirname(parent)) throw Error('Output parent is unavailable');
   }
-  const ids = custom ? [custom.id] : selection;
-  if (!custom && (!ids.length || ids.some(id => !CAST.includes(id)))) throw Error('Unknown built-in cast selection');
+  const ids = custom ? [custom.id] : CAST;
   if (process.platform !== 'darwin') throw Error('Cast rasterization needs macOS sips');
   const extension = sheetEncoding(!!custom);
   const temp = fs.mkdtempSync(join(tmpdir(), 'sleight-character-build-'));
@@ -86,7 +87,7 @@ export async function buildCast(output, { design, ids: selection = CAST } = {}) 
   try {
     for (const id of ids) {
       const D = custom ?? (await import(pathToFileURL(join(here, 'cast', `${id}.mjs`)))).default;
-      const folder = join(output, id);
+      const render = styles[D.style], ctx = { E: D.E ?? 1 }, folder = join(output, id);
       if (fs.existsSync(folder)) throw Error(`Output already exists: ${id}`);
       fs.mkdirSync(folder, { mode: 0o755 });
       const states = {}, files = {}, sheetNames = {};
@@ -94,12 +95,12 @@ export async function buildCast(output, { design, ids: selection = CAST } = {}) 
       for (const [sheet, clips, rows] of [['sheet', CLIPS.filter(c => c.sheet === 'sheet'), 11], ['extra', CLIPS.filter(c => c.sheet === 'extra'), 11], ['perch', PERCH_CLIPS, 3]]) {
         let body = '';
         for (const clip of clips) {
-          for (let f = 0; f < clip.frames; f++) body += nest(renderPose(D, clip, f), ((clip.start ?? 0) + f) * 192, clip.row * 208, k++);
-          for (const st of clip.states) states[st] = { ...sheet === 'sheet' ? {} : { sheet }, row: clip.row, ...clip.start ? { start: clip.start } : {}, frames: clip.frames, ms: isCritter(D) ? clipTiming(D, clip) : clip.ms, loop: clip.loop };
+          for (let f = 0; f < clip.frames; f++) body += nest(render(D, clip.pose(f, ctx)), ((clip.start ?? 0) + f) * 192, clip.row * 208, k++);
+          for (const st of clip.states) states[st] = { ...sheet === 'sheet' ? {} : { sheet }, row: clip.row, ...clip.start ? { start: clip.start } : {}, frames: clip.frames, ms: clip.ms, loop: clip.loop };
         }
         const svg = join(temp, 'atlas.svg'), png = join(temp, 'atlas.png'), webp = join(temp, 'atlas.webp');
         fs.writeFileSync(svg, `<svg xmlns="http://www.w3.org/2000/svg" width="1536" height="${rows * 208}" viewBox="0 0 1536 ${rows * 208}">${body}</svg>`);
-        execFileSync('/usr/bin/sips', ['-s', 'format', 'png', svg, '--out', png], { stdio: 'ignore', timeout: 10000, killSignal: 'SIGKILL' });
+        execFileSync('/usr/bin/sips', ['-s', 'format', 'png', svg, '--out', png], { stdio: 'ignore' });
         const img = decodePNG(fs.readFileSync(png)); checkPixels(img, sheet, rows);
         // Strip rasterizer metadata and zero hidden RGB. All visible RGBA values are kept exactly.
         for (let p = 0; p < img.data.length; p += 4) if (!img.data[p + 3]) img.data.fill(0, p, p + 3);
@@ -117,15 +118,11 @@ export async function buildCast(output, { design, ids: selection = CAST } = {}) 
         }
       }
       states.move = { dir16: { rowA: 9, rowB: 10 } }; states.look = { dir16: { rowA: 9, rowB: 10 } };
-      const hf = PERCH_CLIPS.find(c => c.name === 'high-five'); renderPose(D, hf, hf.frames - 1);
-      if (!isCritter(D)) states['high-five'].hotspot = { x: Math.round(lastAnchors['hand.r'][0]), y: Math.round(lastAnchors['hand.r'][1]) };
+      const hf = PERCH_CLIPS.find(c => c.name === 'high-five'); render(D, hf.pose(hf.frames - 1, ctx));
+      states['high-five'].hotspot = { x: Math.round(lastAnchors['hand.r'][0]), y: Math.round(lastAnchors['hand.r'][1]) };
       const m = { format: 'sleight-character', version: 1, id, name: D.name, description: D.description, author: D.author, license: D.license,
         sheet: sheetNames.sheet, extra: sheetNames.extra, frame: { w: 192, h: 208 }, grid: { cols: 8, rows: 11 }, scale: 0.5,
         anchor: { x: 96, y: 196 }, hotspot: { x: 96, y: 104 }, states, perch: { anchor: { x: 96, y: D.seat }, sheet: sheetNames.perch }, lines: lines[id] };
-      if (isCritter(D)) {
-        const critter = manifestForCritter(D);
-        m.anchor = critter.anchor; m.states = critter.states;
-      }
       files['character.json'] = Buffer.from(JSON.stringify(m, null, 2) + '\n');
       manifest.packs[id] = {};
       for (const name of Object.keys(files).sort()) {
@@ -138,10 +135,8 @@ export async function buildCast(output, { design, ids: selection = CAST } = {}) 
       if (custom) console.log(`${Object.values(sheetNames).join(', ')}; 6 contact sheets at 96 by 104 pixels per cell: ${join(output, 'review', id)}`);
     }
     fs.writeFileSync(join(output, 'manifest.json'), JSON.stringify(manifest, null, 2) + '\n', { mode: 0o644 });
-    const original = ORIGINAL_CAST.filter(id => ids.includes(id)).reduce((sum, id) => sum + fs.readdirSync(join(output, id)).reduce((n, f) => n + fs.statSync(join(output, id, f)).size, 0), 0);
-    if (original >= 8_000_000) throw Error(`Original base packs exceed 8 MB: ${original}`);
-    const added = EVERYDAY_CAST.filter(id => ids.includes(id)).reduce((sum, id) => sum + fs.readdirSync(join(output, id)).reduce((n, f) => n + fs.statSync(join(output, id, f)).size, 0), 0);
-    if (added > 15_000_000) throw Error(`Everyday base packs exceed 15 MB: ${added}`);
+    const bytes = ids.reduce((n, id) => n + fs.readdirSync(join(output, id)).reduce((n, f) => n + fs.statSync(join(output, id, f)).size, 0), 0);
+    if (bytes >= 8_000_000) throw Error(`Bundled packs exceed 8 MB: ${bytes}`);
     return manifest;
   } finally { fs.rmSync(temp, { recursive: true, force: true }); }
 }

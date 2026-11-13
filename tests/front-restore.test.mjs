@@ -1,5 +1,4 @@
-import { test, describe } from 'node:test';
-import { localBackendSkip, localBackends, nativeLocal } from './fixtures/mac-driver-tools.mjs';
+import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { existsSync, readFileSync } from 'node:fs';
 import { runInNewContext } from 'node:vm';
@@ -7,7 +6,6 @@ import { PassThrough } from 'node:stream';
 import { createRelay } from '../plugins/sleight/lib/relay.mjs';
 import { createAppHealthHelper } from '../plugins/sleight/lib/read-failure.mjs';
 
-for (const backend of localBackends) describe(backend, { skip: localBackendSkip(backend) }, () => {
 const source = new URL('../plugins/sleight/lib/front-restore.js', import.meta.url);
 const owner = { bundleId: 'org.example.writer', pid: 12, app: 'Writer' };
 const target = { bundleId: 'org.example.canvas', pid: 34, app: 'Canvas' };
@@ -16,18 +14,6 @@ const tick = () => new Promise(resolve => setImmediate(resolve));
 async function settle() { for (let i = 0; i < 12; i++) await tick(); }
 
 function fixture() {
-  if (backend === 'driver') {
-    let serial = 0;
-    const state = { front: owner, targets: [], previous: owner, time: 100, idleSeconds: 20, activationOK: true };
-    const activated = [], preceding = [];
-    return { state, activated, request: args => {
-      const fixture = JSON.parse(JSON.stringify({ frontState: state, token: String(++serial), activationOK: state.activationOK }));
-      const f = nativeLocal('front-restore.js', args, fixture, preceding);
-      preceding.push({ script: 'front-restore.js', args, fixture });
-      for (const e of f.events.filter(e => e[0] === 'activate')) { activated.push(e[1]); state.front = e[1]; }
-      return f.result;
-    } };
-  }
   assert.ok(existsSync(source), 'front restoration has a helper controller');
   const create = runInNewContext(readFileSync(source, 'utf8') + '\nfrontRestoreController', {});
   let serial = 0;
@@ -231,6 +217,4 @@ test('front transactions reuse the probe helper instead of spawning for each acq
     assert.equal((await helper.frontRestore({ action: 'finish', token: 'begin', success: true })).token, 'finish');
     assert.equal(spawned, 1);
   } finally { await helper.close(); }
-});
-
 });

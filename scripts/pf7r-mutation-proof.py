@@ -8,6 +8,7 @@ from pathlib import Path
 import re
 import subprocess
 import tempfile
+import time
 
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -15,7 +16,7 @@ ACT = "plugins/sleight/lib/direct-browser/act.mjs"
 TOOLS = "plugins/sleight/lib/direct-browser/tools.mjs"
 ACT_TEST = "tests/direct-browser-v3-act.test.mjs"
 POPUP_TEST = "tests/direct-browser-popup-observe.test.mjs"
-GATE = os.environ.get("SLEIGHT_BENCH_GATE_FILE")
+GATE = Path.home() / "Projects/sleight-wt/ledger/vc/night/lanes-may-test"
 MUTATIONS = [
     ("page-no-change-text", ACT, "!fullOnce && /no (?:visible )?changes?/i", "/no (?:visible )?changes?/i", ACT_TEST),
     ("parent-action-pending", TOOLS, "!entry.state.actionPending && !entry.state.dialog && !entry.state.stuck", "!entry.state.dialog && !entry.state.stuck", POPUP_TEST),
@@ -43,7 +44,7 @@ def main():
     evidence = {"source_sha256": {name: hashlib.sha256(data).hexdigest() for name, data in originals.items()}, "runs": []}
     failures = 0
     for name, source, before, after, test in MUTATIONS:
-        while GATE and not Path(GATE).exists():
+        while not GATE.exists():
             time.sleep(30)
         path = ROOT / source
         original = originals[source]

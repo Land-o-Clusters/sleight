@@ -1,4 +1,3 @@
-import { assertChildStatus } from './fixtures/child-status.mjs';
 import { remoteGuardDecision } from '../bench/remote-approval-guard.mjs';
 import * as guard from '../bench/remote-approval-guard.mjs';
 import { packageSkip } from './requirements.mjs';
@@ -25,8 +24,6 @@ const modCalls = [
   { sleight_stats_skip: 'fixture-call' },
   { sleight_say: { toolUseId: 'fixture-child', text: 'Reading the page.' }, sleight_stats_skip: 'fixture-child' },
   { sleight_stats_skip: { snapshot: true } },
-  { sleight_person_prompt: 'composer' },
-  { sleight_person_prompt: 'bridge' },
   ...['Stop', 'Interrupt'].flatMap(hook_event_name => [
     { hook_event_name }, { hook_event_name, sleight_stop: true },
     { hook_event_name, sleight_stats: 'fixture-turn' }, { sleight_stats_begin: 'fixture-turn' }, { hook_event_name, sleight_stop: true, sleight_stats: 'fixture-turn' },
@@ -49,7 +46,7 @@ test('mod keys on another tool do not pass the guard', () => {
 
 test('every mod turn_ended call stays within the guard key set, including conditional spreads', { skip: parserSkip }, () => {
   assert.ok(guard.MOD_KEYS instanceof Set);
-  assert.deepEqual([...guard.MOD_KEYS].sort(), ['sleight_turbo', 'sleight_resume', 'sleight_stop', 'sleight_stats', 'sleight_stats_begin', 'sleight_say', 'sleight_stats_skip', 'hook_event_name', 'sleight_person_prompt'].sort());
+  assert.deepEqual([...guard.MOD_KEYS].sort(), ['sleight_turbo', 'sleight_resume', 'sleight_stop', 'sleight_stats', 'sleight_stats_begin', 'sleight_say', 'sleight_stats_skip', 'hook_event_name'].sort());
   const source = readFileSync(new URL('../plugins/sleight/hooks/register.tsx', import.meta.url), 'utf8');
   const ast = ts.createSourceFile('register.tsx', source, ts.ScriptTarget.Latest, true, ts.ScriptKind.TSX);
   let calls = 0;
@@ -95,14 +92,13 @@ for (const upfront of [false, true]) test(`configured PreToolUse command passes 
   assert.equal(hook.matcher, '.*');
   const command = hook.hooks[0].command.match(/^"([^"]+)" "([^"]+)"$/);
   assert.ok(command, 'configured command is the executable and guard script');
-  for (const [tool_input, allow] of [[modCalls[0], true], [modCalls[1], true],
-    [{ sleight_person_prompt: 'composer' }, true], [{ sleight_person_prompt: 'bridge' }, true],
-    [{ code: '1' }, false], [{ ...modCalls[0], extra: true }, false], [{ sleight_person_prompt: 'composer', extra: true }, false]]) {
+  for (const tool_input of [modCalls[0], modCalls[1], { code: '1' }, { ...modCalls[0], extra: true }]) {
     const result = spawnSync(command[1], [command[2]], { env: plan.env, encoding: 'utf8', timeout: 5000,
-      input: JSON.stringify({ hook_event_name: 'PreToolUse', tool_name: TURN_END, tool_input }), killSignal: 'SIGKILL' });
-    assertChildStatus(result, 0, result.stderr);
+      input: JSON.stringify({ hook_event_name: 'PreToolUse', tool_name: TURN_END, tool_input }) });
+    assert.equal(result.status, 0, result.stderr);
     const verdict = JSON.parse(result.stdout).hookSpecificOutput;
     assert.equal(verdict.hookEventName, 'PreToolUse');
+    const allow = tool_input === modCalls[0] || tool_input === modCalls[1];
     assert.equal(verdict.permissionDecision, allow ? 'allow' : 'deny');
     if (allow) assert.equal(verdict.permissionDecisionReason, 'RA1 mod turn binding');
   }

@@ -84,14 +84,8 @@ export function checkBrowserFixture(fixture, answer) {
 export async function serveWorldPage(ctx, kind) {
   if (ctx.closeServer) throw new Error('world page server already exists');
   ctx.worldPage = createBrowserFixture(kind, ctx);
-  await serveWorldFixture(ctx, origin => browserHandler(ctx.worldPage, origin));
-}
-
-// Shared loopback hosting for owned world-suite pages and dedicated probes.
-export async function serveWorldFixture(ctx, handler) {
-  if (ctx.closeServer) throw new Error('world page server already exists');
   let origin;
-  const server = createServer((req, res) => Promise.resolve().then(() => handler(origin)(req, res)).catch(() => res.writeHead(500).end()));
+  const server = createServer((req, res) => browserHandler(ctx.worldPage, origin)(req, res).catch(() => res.writeHead(500).end()));
   await new Promise((resolve, reject) => { server.once('error', reject); server.listen(0, '127.0.0.1', resolve); });
   origin = `http://127.0.0.1:${server.address().port}`;
   ctx.url = `${origin}/${ctx.nonce}/`;

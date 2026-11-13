@@ -1,4 +1,3 @@
-import { assertChildStatus } from './fixtures/child-status.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, realpathSync } from 'node:fs';
@@ -16,7 +15,7 @@ import { settingsCommand } from '../plugins/sleight/lib/person-gate.mjs';
 
 // Perch mode and personality lines (art direction A2): the loader and frame in Node, then the host's PerchRuntime through
 // --perch-dump with injected window lists. The dump builds no application, panel or window and decodes nothing.
-const mac = process.platform === 'darwin' && spawnSync('/usr/bin/xcode-select', ['-p'], { timeout: 30000, killSignal: 'SIGKILL' }).status === 0;
+const mac = process.platform === 'darwin' && spawnSync('/usr/bin/xcode-select', ['-p']).status === 0;
 const onMac = { skip: mac ? false : 'needs macOS with the developer tools (xcode-select -p)' };
 const nonce = 'a'.repeat(64);
 const temp = () => trackTemp(realpathSync(mkdtempSync(join(tmpdir(), 'sleight-perch-'))));
@@ -177,8 +176,8 @@ let built;
 function host() {
   if (built) return built;
   const binary = join(temp(), 'consent-host');
-  const r = spawnSync('/usr/bin/xcrun', ['swiftc', '-module-cache-path', swiftModuleCache(), new URL('../plugins/sleight/lib/direct-browser/native/consent-host.swift', import.meta.url).pathname, '-o', binary], { encoding: 'utf8', timeout: 600000, killSignal: 'SIGKILL' });
-  assertChildStatus(r, 0, r.stderr);
+  const r = spawnSync('/usr/bin/xcrun', ['swiftc', '-module-cache-path', swiftModuleCache(), new URL('../plugins/sleight/lib/direct-browser/native/consent-host.swift', import.meta.url).pathname, '-o', binary], { encoding: 'utf8' });
+  assert.equal(r.status, 0, r.stderr);
   return (built = binary);
 }
 const W = (id, frame, more = {}) => ({ id, pid: 42, frame, ...more });
@@ -194,8 +193,8 @@ const options = (perch = true, lines = true) => ({ hand: 'picker', nonce, op: 'o
 const TSUGI_LEGS = [15, 14.5];
 function dump(lines, { character = pack(), reduced = false, seed = 1, legs = TSUGI_LEGS } = {}) {
   const input = [frameOf(character), options(), ...legs ? [{ dumpLegs: legs }] : [], ...lines].map(l => JSON.stringify(l)).join('\n') + '\n';
-  const r = spawnSync(host(), ['--perch-dump', ...reduced ? ['--reduce-motion'] : [], `--seed=${seed}`], { input, encoding: 'utf8', timeout: 60000, killSignal: 'SIGKILL' });
-  assertChildStatus(r, 0, r.stderr);
+  const r = spawnSync(host(), ['--perch-dump', ...reduced ? ['--reduce-motion'] : [], `--seed=${seed}`], { input, encoding: 'utf8' });
+  assert.equal(r.status, 0, r.stderr);
   return r.stdout.trim().split('\n').map(l => JSON.parse(l));
 }
 const perches = out => out.filter(e => e.effect === 'perch');
@@ -420,7 +419,7 @@ test('lines: under 40 pt of headroom the bubble goes beside the box, and never o
 
 test('perch off: nothing perches and the ring keeps the trail', onMac, () => {
   const input = [frameOf(pack()), options(false), world([wide]), aim(500, 400)].map(l => JSON.stringify(l)).join('\n') + '\n';
-  const out = spawnSync(host(), ['--perch-dump'], { input, encoding: 'utf8', timeout: 60000, killSignal: 'SIGKILL' }).stdout.trim().split('\n').map(l => JSON.parse(l));
+  const out = spawnSync(host(), ['--perch-dump'], { input, encoding: 'utf8' }).stdout.trim().split('\n').map(l => JSON.parse(l));
   assert.deepEqual(perches(out), []);
   assert.equal(out.filter(e => e.effect === 'ring').length, 1);
 });
@@ -428,17 +427,17 @@ test('perch off: nothing perches and the ring keeps the trail', onMac, () => {
 test('the host refuses a malformed perch frame as a whole, and drops a lines block it refuses with a warning', onMac, () => {
   const f = frameOf(pack());
   for (const lines of [{ start: ['two\nlines'] }, { start: ['Run the tool'] }]) {
-    const r = spawnSync(host(), ['--perch-dump'], { input: JSON.stringify({ ...f, lines }) + '\n', encoding: 'utf8', timeout: 60000, killSignal: 'SIGKILL' });
-    assertChildStatus(r, 0); assert.equal(JSON.parse(r.stdout.split('\n')[0]).lines, 0); assert.match(r.stderr, /character lines dropped/);
+    const r = spawnSync(host(), ['--perch-dump'], { input: JSON.stringify({ ...f, lines }) + '\n', encoding: 'utf8' });
+    assert.equal(r.status, 0); assert.equal(JSON.parse(r.stdout.split('\n')[0]).lines, 0); assert.match(r.stderr, /character lines dropped/);
   }
   for (const bad of [{ ...f, perch: { ...f.perch, table: { ...f.perch.table, extra: f.perch.table.perch } } }, { ...f, perchSheet: 'relative.webp' },
     { ...f, perch: { ...f.perch, anchor: [96, 9999] } },
     { ...f, perch: { ...f.perch, table: { ...f.perch.table, perch: { ...f.perch.table.perch, sheet: 'perch' }, sleep: { ...f.perch.table.sleep, size: undefined } } } }]) {
-    const r = spawnSync(host(), ['--perch-dump'], { input: JSON.stringify(bad) + '\n', encoding: 'utf8', timeout: 60000, killSignal: 'SIGKILL' });
-    assertChildStatus(r, 65, JSON.stringify(bad).slice(0, 80));
+    const r = spawnSync(host(), ['--perch-dump'], { input: JSON.stringify(bad) + '\n', encoding: 'utf8' });
+    assert.equal(r.status, 65, JSON.stringify(bad).slice(0, 80));
   }
   const noPerchSheet = { ...f, perchSheet: null };
-  assertChildStatus(spawnSync(host(), ['--perch-dump'], { input: JSON.stringify(noPerchSheet) + '\n', encoding: 'utf8', timeout: 60000, killSignal: 'SIGKILL' }), 65, 'perch entries name a sheet the frame lacks');
+  assert.equal(spawnSync(host(), ['--perch-dump'], { input: JSON.stringify(noPerchSheet) + '\n', encoding: 'utf8' }).status, 65, 'perch entries name a sheet the frame lacks');
 });
 
 test('cover: a window raised over the seat moves the character along the edge or hides it until the edge clears', onMac, () => {
@@ -541,7 +540,7 @@ test('lines: important moments wait 3 s, ordinary moments wait 8 s, and error bu
 
 test('lines in trail mode: the same book, the bubble by the sprite', onMac, () => {
   const input = [frameOf(pack()), options(false, true), world([wide]), aim(500, 400), clock(9), act('type', 500, 400), clock(10)].map(l => JSON.stringify(l)).join('\n') + '\n';
-  const out = spawnSync(host(), ['--perch-dump'], { input, encoding: 'utf8', timeout: 60000, killSignal: 'SIGKILL' }).stdout.trim().split('\n').map(l => JSON.parse(l));
+  const out = spawnSync(host(), ['--perch-dump'], { input, encoding: 'utf8' }).stdout.trim().split('\n').map(l => JSON.parse(l));
   assert.deepEqual(perches(out), []);
   const said = out.filter(e => e.effect === 'line');
   assert.deepEqual(said.map(e => [e.time, e.moment]), [[0, 'start'], [9, 'typing']]);

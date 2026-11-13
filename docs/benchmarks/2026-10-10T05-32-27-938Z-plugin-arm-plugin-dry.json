@@ -17,7 +17,7 @@
   },
   "timedOut": false,
   "cancelled": false,
-  "stdout": "\nresults: <private-evidence>/plugin-arm/bench/results/2026-10-10T05-32-28-410Z-dry.json\n",
+  "stdout": "\nresults: ~/Projects/sleight-wt/plugin-arm/bench/results/2026-10-10T05-32-28-410Z-dry.json\n",
   "stderr": "",
   "groupClean": true,
   "raw": {
@@ -30,7 +30,7 @@
         "kind": "plugin",
         "name": "sleight",
         "version": "1.1.0",
-        "source": "<private-evidence>/plugin-arm/plugins/sleight",
+        "source": "~/Projects/sleight-wt/plugin-arm/plugins/sleight",
         "commit": "332e3ca0260d7eee0b003882d95d8b64ec431dd3",
         "dirty": false,
         "packageHash": "6afd535737e7ae2ade72cb01ee32b67e5b70f618b17f0b73364f3b3e8d02375a"

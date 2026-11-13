@@ -1,4 +1,3 @@
-import { testChromiumExecutable, launchTestChromium } from './fixtures/chromium-isolated.mjs';
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { createContext, runInContext } from 'node:vm';
@@ -298,10 +297,11 @@ test('real fixture forms preserve read-only dates and already-on ARIA switches',
   });
   await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
   t.after(() => new Promise(resolve => server.close(resolve)));
-  const executablePath = [1234, 1228].map(version => testChromiumExecutable({ revision: version, platform: 'darwin', arch: 'arm64' }))
+  const executablePath = [1234, 1228].map(version => join(homedir(),
+    `Library/Caches/ms-playwright/chromium_headless_shell-${version}/chrome-headless-shell-mac-arm64/chrome-headless-shell`))
     .find(path => existsSync(path));
   if (!executablePath) { t.skip('headless Chromium is not installed'); return; }
-  const browser = await launchTestChromium(chromium, { headless: true, executablePath });
+  const browser = await chromium.launch({ headless: true, executablePath });
   t.after(() => browser.close());
   const page = await browser.newPage();
   // Only the engine locator methods fillForm uses are exposed. Playwright's timeout name

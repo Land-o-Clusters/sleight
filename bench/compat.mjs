@@ -20,7 +20,7 @@ import { homedir, tmpdir, userInfo } from 'node:os';
 import { dirname, isAbsolute, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { promisify } from 'node:util';
-import { DOCS_CODE, engineDocsText, captureEngineDocs } from '../scripts/engine-docs.mjs';
+import { DOCS_CODE, engineDocsText } from '../scripts/engine-docs.mjs';
 import { openClient, textOf } from './compat/client.mjs';
 import { PROBE_CODE, checkApiContract, checkPolicyRewrite, checkWorkflowRewrite, checkReplProbe, checkToolSurface, parseProbe } from './compat/contract.mjs';
 import { SAFE_VERSION, plistString } from './compat/static.mjs';
@@ -333,7 +333,7 @@ export function record(logs, report) {
   mkdirSync(logs, { recursive: true });
   appendFileSync(join(logs, 'compat.jsonl'), JSON.stringify(report) + '\n');
   // The docs baseline moves only when every engine check passed.
-  if (report.tier !== 'live' && report.tier !== 'documentation' && report.verdict === 'pass' && report.engineVersion) atomic(join(logs, 'compat-accepted'), report.engineVersion + '\n');
+  if (report.tier !== 'live' && report.verdict === 'pass' && report.engineVersion) atomic(join(logs, 'compat-accepted'), report.engineVersion + '\n');
 }
 
 // The latest record for a version, from compat.jsonl.
@@ -374,7 +374,7 @@ export function takeStateLock(logs, { now = Date.now } = {}) {
 
 // scripts/watch.sh: doctor every day; the engine checks when the version changed (or --force); the live checks when
 // SLEIGHT_COMPAT_LIVE=1 (watch-install.sh --live), the Mac has been idle 5 minutes, and this version has no live result.
-export async function runWatch({ env = process.env, logs = logsDir(), force = false, documentationOnly = false, deps = {} } = {}) {
+export async function runWatch({ env = process.env, logs = logsDir(), force = false, deps = {} } = {}) {
   const log = message => appendFileSync(join(logs, 'watch.log'), `${stamp()} ${message}\n`);
   const tell = deps.notify ?? notify;
   mkdirSync(logs, { recursive: true });
@@ -386,34 +386,6 @@ export async function runWatch({ env = process.env, logs = logsDir(), force = fa
     if (waiting) { log(`deferred: ${waiting}`); return 0; }
     const statePath = join(logs, 'watch-engine-version');
     const previous = readOr(statePath, undefined);
-    // This path reads launch files and first-use docs only. It never runs the
-    // doctor, inventory probes, launcher checks, live checks or notifications.
-    // The observed version is not an accepted compatibility qualification.
-    if (documentationOnly) {
-      let version, steps = [];
-      try {
-        const resolveServer = deps.resolve ?? (await import('../plugins/sleight/lib/launch.mjs')).resolveServer;
-        const server = resolveServer(env);
-        if (server?.error || !SAFE_VERSION.test(server?.version ?? '')) throw Error('no installed engine version');
-        version = server.version;
-        const launch = await launchShapeCheck({ env, server, nodeHelp: deps.nodeHelp, run: deps.run });
-        steps.push(launch.result);
-        if (launch.result.status === 'pass') {
-          const docs = await (deps.capture ?? captureEngineDocs)({ command: server.command, args: server.args,
-            env: { ...env, ...server.env, CUA_REPL_ENABLED_SURFACES: 'computer' } });
-          steps.push(...checkApiContract(docs));
-          atomic(join(logs, `engine-api-${version}.md`), docs);
-          steps.push(...await docsDiff(logs, version, docs, readOr(join(logs, 'compat-accepted'), undefined), deps.run));
-        }
-      } catch (error) { steps.push(step('documentation-capture', 'error', 'app-free documentation capture did not complete', error.message)); }
-      const report = makeReport({ version, steps, source: 'watch', tier: 'documentation', env });
-      record(logs, report);
-      const reportPath = join(logs, `compat-${version ?? 'unknown'}-${report.checkedAt.replace(/[:.]/g, '-')}.json`);
-      writeFileSync(reportPath, JSON.stringify(report, null, 2) + '\n');
-      log(`documentation only on engine ${version ?? '?'}: ${report.verdict}; full compatibility not run; report ${reportPath}`);
-      if (report.verdict === 'pass') atomic(statePath, version + '\n');
-      return report.verdict === 'pass' ? 0 : 1;
-    }
     const doctor = await runDoctor(deps.launcher ?? LAUNCHER, env, deps.run);
     if (doctor.result.status !== 'pass') {
       // A launch change may be why doctor failed. Preserve its shape even before the session checks can run.
@@ -431,14 +403,12 @@ export async function runWatch({ env = process.env, logs = logsDir(), force = fa
     const changed = previous !== version;
     // A live check that couldn't start (pending), never ran, or found its app already open tries again on the next run,
     // but only after the engine checks for this version passed.
-    const engineRecord = lastRecord(logs, version, entry => entry.tier !== 'live' && entry.tier !== 'documentation');
-    const enginePassed = engineRecord?.verdict === 'pass';
+    const enginePassed = lastRecord(logs, version, entry => entry.tier !== 'live')?.verdict === 'pass';
     const livePending = liveWanted && enginePassed && last && ['pending', 'not run', 'skipped'].includes(last.live);
-    const docsOnlyBaseline = last?.tier === 'documentation' && !engineRecord;
-    if (!changed && !force && !livePending && !docsOnlyBaseline) { log(`doctor ok, engine ${version} unchanged`); return 0; }
+    if (!changed && !force && !livePending) { log(`doctor ok, engine ${version} unchanged`); return 0; }
 
     let steps, tier;
-    if (!changed && !force && !docsOnlyBaseline) { tier = 'live'; steps = []; }
+    if (!changed && !force) { tier = 'live'; steps = []; }
     else {
       tier = 'engine';
       const tierResult = await engineTier({ env, logs, doctor, ...deps });
@@ -537,7 +507,7 @@ export async function main(argv = process.argv.slice(2)) {
     console.log(`published ${publish({ staticLogs })} entries to docs/results/engine-compat.md`);
     return 0;
   }
-  if (argv.includes('--watch')) return runWatch({ force: argv.includes('--force'), documentationOnly: argv.includes('--docs-only') });
+  if (argv.includes('--watch')) return runWatch({ force: argv.includes('--force') });
   const minIdle = option(argv, 'min-idle');
   if (minIdle !== undefined && !/^\d+$/.test(minIdle)) { console.error('--min-idle takes a whole number of seconds'); return 2; }
   const logs = logsDir();

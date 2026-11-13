@@ -113,8 +113,8 @@ export function verifiedOnDisk(executable, requirement, stat, runSync = spawnSyn
   try {
     const bundle = dirname(dirname(dirname(executable)));
     const options = { env: environment, timeout: 10000, maxBuffer: 65536, encoding: 'utf8' };
-    if (bundle.endsWith('.app') && runSync(CODESIGN, ['--verify', '--strict', '-R=' + requirement, bundle], { ...options, killSignal: 'SIGKILL' }).status === 0) {
-      const shown = runSync(CODESIGN, ['--display', '--verbose=1', executable], { ...options, killSignal: 'SIGKILL' });
+    if (bundle.endsWith('.app') && runSync(CODESIGN, ['--verify', '--strict', '-R=' + requirement, bundle], options).status === 0) {
+      const shown = runSync(CODESIGN, ['--display', '--verbose=1', executable], options);
       ok = shown.status === 0 && (codeFlags(String(shown.stderr ?? '') + '\n' + String(shown.stdout ?? '')) & REQUIRED_CODE_FLAGS) === REQUIRED_CODE_FLAGS;
     }
   } catch { ok = false; }

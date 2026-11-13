@@ -1,10 +1,6 @@
-import { MOD_META } from './fixtures/mod-attribution.mjs';
 import { test, after } from 'node:test';
 import { PassThrough } from 'node:stream';
-import { EventEmitter } from 'node:events';
 import { createRelay } from '../plugins/sleight/lib/relay.mjs';
-import { createV3Bridge, createV3Frontend, serveV3Worker } from '../plugins/sleight/lib/direct-browser/worker.mjs';
-import { requestedQuitApps } from '../plugins/sleight/lib/quit-key.mjs';
 import { InputLease } from '../plugins/sleight/lib/input-lease.mjs';
 import assert from 'node:assert/strict';
 import { runInNewContext, constants as vmConstants } from 'node:vm';
@@ -15,7 +11,6 @@ import { join } from 'node:path';
 import { guardedCode, GUARD_MARK, GUARD_OMIT_MARK, GUARD_END, sameElement, samePlace, refusedPlace } from '../plugins/sleight/lib/document-scope.mjs';
 import { createReadCompactor } from '../plugins/sleight/lib/compact-reads.mjs';
 import { inspect } from './helpers/window-identity-fixture.mjs';
-import { visibleTypingTree } from './helpers/visible-typing-fixture.mjs';
 import { packageSkip } from './requirements.mjs';
 const parserSkip = packageSkip('typescript');
 const { loadCheck } = parserSkip ? {} : await import('../bench/replay/run.mjs');
@@ -47,27 +42,20 @@ function defaultOptions() {
   } finally { relay.dispose(); }
 }
 
-function fixture({ current = () => tree(), action = () => {}, screenshotState, strict = false, ordinary = false, typingVisible = false } = {}) {
+function fixture({ current = () => tree(), action = () => {}, screenshotState, strict = false, ordinary = false } = {}) {
   const calls = [], output = [];
-  let typed = '';
-  const snapshot = text => typingVisible ? visibleTypingTree(text, typed) : text;
   const raw = {
-    async getAXState(options) { calls.push(['read', options]); return snapshot(current()); },
+    async getAXState(options) { calls.push(['read', options]); return current(); },
     async getAXStateAndScreenshot(options) {
       calls.push(['both', options]);
-      const state = snapshot(screenshotState ? screenshotState(options) : current());
+      const state = screenshotState ? screenshotState(options) : current();
       if (options?.emit !== false) output.push(state);
       return { state, screenshot: new Uint8Array([1, 2, 3]) };
     },
     async getScreenshot() { calls.push(['screenshot']); return new Uint8Array([1]); },
   };
   for (const name of ['click', 'drag', 'scroll', 'selectText', 'setValue', 'performSecondaryAction', 'paste', 'pressKey', 'typeText']) {
-    raw[name] = async (...args) => {
-      calls.push([name, ...args]);
-      const result = await action(name, args);
-      if (['typeText', 'paste'].includes(name)) typed += args[0];
-      return result;
-    };
+    raw[name] = async (...args) => { calls.push([name, ...args]); return action(name, args); };
   }
   const engine = strict ? new Proxy(raw, { get(object, key) {
     if (key in object || typeof key === 'symbol' || key === 'then') return object[key];
@@ -76,7 +64,7 @@ function fixture({ current = () => tree(), action = () => {}, screenshotState, s
   const context = { app: engine, setTimeout, clearTimeout, cua: { getApp: async () => engine, listApps: async () => [{ id: 'fixture.app', displayName: expected.app, windows: [{ id: 1, title: expected.title }] }] }, nodeRepl: { write: value => output.push(value), emitImage: async () => {} } };
   const run = (code, options = ordinary ? defaultOptions() : {}, target = expected) => runInNewContext(`(async () => { ${guardedCode(code, target, 'changed window', undefined, { focused: true, ...options })} })()`, context,
     { importModuleDynamically: vmConstants.USE_MAIN_CONTEXT_DEFAULT_LOADER });
-  return { run, raw, calls, output, context, snapshot };
+  return { run, raw, calls, output, context };
 }
 
 const closeTarget = { ...expected, appId: 'fixture.app', nativeIdentity: { pid: 123, processStart: 1 } };
@@ -232,10 +220,8 @@ test('DP1 uses native zero counts despite the recorded inventory lacking pid and
   for (const key of ['super+w', 'cmd+shift+w', 'command+q']) {
     const f = closeFixture();
     f.context.cua.listApps = async () => { throw Error('DP1 must not depend on engine inventory'); };
-    const quitting = key === 'command+q';
-    await f.run(`await app.pressKey(${JSON.stringify(key)});`,
-      { ...closeOptions, quitApps: requestedQuitApps(quitting ? 'Quit TextEdit' : 'Close the window') });
-    assert.equal(f.calls.filter(c => c[0] === 'read').length, quitting ? 2 : 1);
+    await f.run(`await app.pressKey(${JSON.stringify(key)});`);
+    assert.equal(f.calls.filter(c => c[0] === 'read').length, 1);
     const event = JSON.parse(f.output.find(text => text.startsWith('[sleight:dp1]')).slice(13));
     assert.equal(event.decision, 'skipped-read');
     assert.equal(event.windowCount, 0);
@@ -401,16 +387,14 @@ test('DPo Cmd+Q and quit-on-close return a closed notice for the same leased pro
   for (const key of ['cmd+q', 'super+w']) for (const caller of [false, true]) {
     const sample = { status: 'ok', appId: 'fixture.app', pid: 123, processStart: 1, running: false };
     const f = closeFixture({ sample });
-    const quitting = key === 'cmd+q';
-    const run = f.run(`await app.pressKey(${JSON.stringify(key)});` + (caller ? 'await app.getAXState();' : ''),
-      { ...closeOptions, quitApps: requestedQuitApps(quitting ? 'Quit TextEdit' : 'Close the window') });
+    const run = f.run(`await app.pressKey(${JSON.stringify(key)});` + (caller ? 'await app.getAXState();' : ''));
     if (caller) await assert.rejects(run, /\[sleight:closed-read\]/);
     else await run;
     const event = JSON.parse(f.output.find(text => text.startsWith('[sleight:dp1]')).slice(13));
     assert.equal(event.decision, 'skipped-read');
     assert.equal(event.reason, 'process exited');
     assert.equal(f.clock(), 10050, 'two distinct fresh exit observations are required');
-    assert.equal(f.calls.filter(c => c[0] === 'read').length, quitting ? 2 : 1);
+    assert.equal(f.calls.filter(c => c[0] === 'read').length, 1);
   }
 });
 
@@ -587,22 +571,7 @@ test('DPn keeps reads when samples predate the key, files fail or input overtake
   assert.ok(missing.output.some(text => text.includes('"decision":"kept-read"') && text.includes('"reason":"error"')));
 });
 
-test('DP1 recorded close runs through relay wrapping, emits its call id and returns the close notice', { skip: parserSkip }, async t => {
-  // Authenticate the user's quit message through the mod envelope and an
-  // in-memory turbo worker. No browser, engine or host process is started.
-  const child = new EventEmitter(), endpoint = new EventEmitter();
-  child.connected = endpoint.connected = true;
-  child.send = value => queueMicrotask(() => endpoint.emit('message', structuredClone(value)));
-  endpoint.send = value => queueMicrotask(() => child.emit('message', structuredClone(value)));
-  child.disconnect = () => { child.connected = endpoint.connected = false; endpoint.emit('disconnect'); child.emit('disconnect'); };
-  child.unref = () => {};
-  const worker = serveV3Worker({ channel: endpoint, browser: 'bfixture', async begin() {
-    return { call: async () => ({ text: 'fixture', isError: false }), delivered: () => true,
-      end: async () => ({ revoked: true, cleanup: [] }) };
-  } });
-  const bridge = await createV3Bridge({}, { readConfig: () => ({}), acceptPackage: () => ({ current: () => true }),
-    forkWorker() { queueMicrotask(() => worker.ready()); return child; } });
-  t.after(() => bridge.detach());
+test('DP1 recorded close runs through relay wrapping, emits its call id and returns the close notice', { skip: parserSkip }, async () => {
   for (const [remaining, enabled, exited] of [[false, true, false], [false, true, true], [true, true, false], [true, false, false]]) {
     let closed = false, nativeReads = 0;
     const f = fixture({ action: () => { closed = true; }, current: () => {
@@ -615,22 +584,12 @@ test('DP1 recorded close runs through relay wrapping, emits its call id and retu
     serverIn.on('data', data => sent.push(JSON.parse(data)));
     clientOut.on('data', data => replies.push(JSON.parse(data)));
     const relay = createRelay({ clientIn, clientOut, serverIn, serverOut, changeReview: false, closeReadSkip: enabled, guardTiming: true,
-      directHost: bridge, directBrowser: createV3Frontend(bridge),
       inputLease: new InputLease({ directory: leaseDir, holder: 'recorded-close' }),
       windowIdentity: async window => window.closeCount ? (nativeReads++, { ...nativeClosed, running: !exited, windowCount: remaining ? 1 : 0 }) : ({ ...window, status: 'ok', epoch: 'fixture', window: 1,
         windowNumber: 44, pid: 123, processStart: 1, matches: 1 }),
       trace: (direction, msg) => traces.push({ direction, msg }) });
     const call = (id, code) => clientIn.write(JSON.stringify({ id, method: 'tools/call', params: { name: 'js', arguments: { code } } }) + '\n');
     try {
-      if (exited) {
-        const request = (id, frame) => clientIn.write(JSON.stringify({ id, method: 'tools/call', params: {
-          name: 'turn_ended', _meta: MOD_META, arguments: { sleight_turbo: frame } } }) + '\n');
-        request('quit-bootstrap', { event: 'bootstrap' });
-        const envelope = JSON.parse(replies.find(msg => msg.id === 'quit-bootstrap').result.content[0].text).sleightTurbo;
-        request('quit-begin', { ...envelope, event: 'begin', turn: 'recorded-close-quit', text: 'Quit TextEdit' });
-        for (let i = 0; i < 5; i++) await new Promise(resolve => setImmediate(resolve));
-        assert.equal(replies.find(msg => msg.id === 'quit-begin')?.result.isError, false, 'the user quit message authenticated');
-      }
       call(1, 'let __sleightOpenedApp2 = await cua.getApp("TextEdit");');
       // The VM wraps each execution in an async function; save the binding that
       // the engine's persistent REPL would keep across calls.
@@ -943,9 +902,9 @@ for (const action of ['app.pressKey("a")', 'app.pressKey("Return")', 'app.typeTe
   test('first-off skips only the first guard read for ' + action, async () => {
     for (const [options, reads] of [[{}, 2], [{ firstOff: true }, 1], [{ firstOff: true, careful: true }, 2],
       [{ firstOff: true, fileOnly: true }, 2]]) {
-      const f = fixture({ strict: true, typingVisible: true }); await f.run('await ' + action + ';', options);
+      const f = fixture({ strict: true }); await f.run('await ' + action + ';', options);
       assert.equal(f.calls.filter(c => c[0] === 'read').length, reads, JSON.stringify(options));
-      assert.equal(f.output.at(-1), GUARD_MARK + f.snapshot(tree()) + GUARD_END);
+      assert.equal(f.output.at(-1), GUARD_MARK + tree() + GUARD_END);
     }
   });
 
@@ -959,7 +918,7 @@ for (const action of ['app.click(1)', 'app.click({id:"Save"})', 'app.click({labe
 for (const action of ['app.click([5,5])', 'app.pressKey("super+o")', 'app.pressKey("Return")',
   'app.pressKey("Escape")', 'app.pressKey("Tab")', 'app.pressKey("Space")'])
   test('first-off keeps the next settle read after ' + action, async () => {
-    const f = fixture({ strict: true, typingVisible: true }); await f.run('await ' + action + '; await app.typeText("x");', { firstOff: true });
+    const f = fixture({ strict: true }); await f.run('await ' + action + '; await app.typeText("x");', { firstOff: true });
     assert.deepEqual(f.calls.map(c => c[0]), [action.match(/app\.(\w+)/)[1], 'read', 'typeText', 'read']);
   });
 
@@ -976,7 +935,7 @@ test('first-off uses an explicit in-call read and still refuses its changed wind
 });
 
 test('first-off resets each call and does not use the prior inventory for its skipped read', async () => {
-  const f = fixture({ strict: true, typingVisible: true });
+  const f = fixture({ strict: true });
   f.context.cua.listApps = () => { assert.fail('first-off must not inventory to reuse the skipped first read'); };
   const prior = { text: tree(), id: 'fixture.app', title: 'a.txt', windows: [{ title: 'a.txt' }] };
   for (let i = 0; i < 2; i++) {
@@ -1527,7 +1486,7 @@ const editKeys = ['super+a', 'cmd+c', 'command+x', 'meta+z', 'super+shift+z', 'c
 for (const key of editKeys) test('quiet-edits skips the next read after ' + key, async () => {
   for (const [options, reads] of [[{}, key.includes('+') ? 3 : 2], [{ quietEdits: true }, 2],
     [{ quietEdits: true, careful: true }, 4]]) {
-    const f = fixture({ strict: true, typingVisible: true });
+    const f = fixture({ strict: true });
     await f.run(`await app.typeText("a"); await app.pressKey(${JSON.stringify(key)}); await app.typeText("x");`, options);
     assert.equal(f.calls.filter(c => c[0] === 'read').length, reads, JSON.stringify(options));
   }
@@ -1538,7 +1497,7 @@ for (const role of ['text field', 'text area', 'text entry area', 'search field'
     test('quiet-edits recognizes ' + role + ' clicked by ' + target, async () => {
       for (const next of ['typeText("x")', 'paste("x")']) for (const [options, reads] of
         [[{}, 3], [{ quietEdits: true }, 3], [{ quietEdits: true, careful: true }, 3]]) {
-        const f = fixture({ strict: true, typingVisible: true, current: () => tree(expected, '\t1 ' + role + ' Description: Editor, ID: editor\n\nThe focused UI element is 1 ' + role + ' Description: Editor, ID: editor') });
+        const f = fixture({ strict: true, current: () => tree(expected, '\t1 ' + role + ' Description: Editor, ID: editor\n\nThe focused UI element is 1 ' + role + ' Description: Editor, ID: editor') });
         await f.run(`await app.click(${target}); await app.${next};`, options);
         assert.equal(f.calls.filter(c => c[0] === 'read').length, reads, JSON.stringify(options));
         assert.deepEqual(f.calls.find(c => c[0] === 'click'), ['click', 1]);
@@ -1548,7 +1507,7 @@ for (const role of ['text field', 'text area', 'text entry area', 'search field'
 for (const action of ['click(1)', 'click([5,5])', ...['super+o', 'super+s', 'super+n', 'super+p', 'super+shift+g',
   'Return', 'Escape', 'Tab', 'Space', 'super+shift+a', 'ctrl+a', 'super+alt+z'].map(key => `pressKey("${key}")`)])
   test('quiet-edits retains the settle read after ' + action, async () => {
-    const f = fixture({ strict: true, typingVisible: true, current: () => tree(expected, '\t1 button Description: text field, ID: editor') });
+    const f = fixture({ strict: true, current: () => tree(expected, '\t1 button Description: text field, ID: editor') });
     await f.run(`await app.${action}; await app.typeText("x");`, { quietEdits: true });
     assert.equal(f.calls.filter(c => c[0] === 'read').length, 3);
   });
@@ -1563,7 +1522,7 @@ test('quiet-edits field clicks keep non-text action lookups fresh', async () => 
 
 test('the default skips reads between edit shortcuts and typing, and careful reads every time', async () => {
   for (const [options, reads] of [[undefined, 2], [{ careful: true }, 3], [{ careful: true, fileOnly: true }, 3]]) {
-    const f = fixture({ ordinary: true, strict: true, typingVisible: true });
+    const f = fixture({ ordinary: true, strict: true });
     await f.run('await app.pressKey("super+a"); await app.typeText("x");', options);
     assert.equal(f.calls.filter(c => c[0] === 'read').length, reads);
   }

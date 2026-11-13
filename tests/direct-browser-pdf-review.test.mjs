@@ -50,12 +50,12 @@ test('local PDF checks the opened descriptor ownership even after the path audit
 });
 test('local PDF refuses Finder-hidden files and write-granting ACLs', { skip: process.platform !== 'darwin' }, async t => {
   const { path } = await fixture(t), pdf = reader();
-  execFileSync('/usr/bin/chflags', ['hidden', path], { timeout: 60000, killSignal: 'SIGKILL' });
+  execFileSync('/usr/bin/chflags', ['hidden', path]);
   await assert.rejects(pdf.file(path), /hidden/i);
-  execFileSync('/usr/bin/chflags', ['nohidden', path], { timeout: 60000, killSignal: 'SIGKILL' });
-  execFileSync('/bin/chmod', ['+a', 'everyone allow write', path], { timeout: 60000, killSignal: 'SIGKILL' });
+  execFileSync('/usr/bin/chflags', ['nohidden', path]);
+  execFileSync('/bin/chmod', ['+a', 'everyone allow write', path]);
   await assert.rejects(pdf.file(path), /another account/i);
-  execFileSync('/bin/chmod', ['-N', path], { timeout: 60000, killSignal: 'SIGKILL' });
+  execFileSync('/bin/chmod', ['-N', path]);
   assert.match((await pdf.file(path)).text, /fixture/);
 });
 test('PDF metadata size refuses before any resource content fetch', async () => {

@@ -508,172 +508,21 @@ func consentInputActions(_ alert: NSAlert, choices: [String], kind: String) -> [
 }
 // END PERSON INPUT
 
-// BEGIN GLIDE STOP
-struct GlideStopFrame {
-    let nonce: String, token: String, phase: String
-    var pid: Int32 = 0
-    var window: UInt32 = 0
-    static func parse(_ data: [String: Any]) -> GlideStopFrame? {
-        guard data["hand"] as? String == "glide-stop", let nonce = data["nonce"] as? String,
-            nonce.range(of: "^[0-9a-f]{64}$", options: .regularExpression) != nil,
-            let token = data["token"] as? String, token.range(of: "^[0-9a-f]{32}$", options: .regularExpression) != nil,
-            let phase = data["phase"] as? String else { return nil }
-        if phase == "end", Set(data.keys) == ["hand", "nonce", "token", "phase"] {
-            return GlideStopFrame(nonce: nonce, token: token, phase: phase)
-        }
-        func integer(_ raw: Any?, _ max: Double) -> Double? {
-            guard let n = raw as? NSNumber, CFGetTypeID(n) != CFBooleanGetTypeID(), n.doubleValue.isFinite,
-                n.doubleValue.rounded() == n.doubleValue, n.doubleValue >= 1, n.doubleValue <= max else { return nil }
-            return n.doubleValue
-        }
-        guard phase == "begin", Set(data.keys) == ["hand", "nonce", "token", "phase", "pid", "windowId"],
-            let pid = integer(data["pid"], Double(Int32.max)), let window = integer(data["windowId"], Double(UInt32.max)) else { return nil }
-        return GlideStopFrame(nonce: nonce, token: token, phase: phase, pid: Int32(pid), window: UInt32(window))
-    }
-}
-// AppKit points, using the consent card's screen-relative anchor. Prefer free
-// space, then sleight's own small consent panel at the target display's edge.
-func glideStopRect(target: CGRect, screens: [CGRect], size: CGSize = CGSize(width: 204, height: 44)) -> CGRect? {
-    guard !target.isEmpty, !target.isInfinite, !target.isNull else { return nil }
-    for screen in screens {
-        let regions = [screen,
-            CGRect(x: screen.minX, y: max(screen.minY, target.maxY + 8), width: screen.width, height: max(0, screen.maxY - target.maxY - 8)),
-            CGRect(x: screen.minX, y: screen.minY, width: screen.width, height: max(0, min(screen.maxY, target.minY - 8) - screen.minY)),
-            CGRect(x: screen.minX, y: screen.minY, width: max(0, min(screen.maxX, target.minX - 8) - screen.minX), height: screen.height),
-            CGRect(x: max(screen.minX, target.maxX + 8), y: screen.minY, width: max(0, screen.maxX - target.maxX - 8), height: screen.height)]
-        for area in regions where area.width >= size.width && area.height >= size.height {
-            let rect = CGRect(x: area.midX - size.width / 2, y: area.minY + (area.height - size.height) * 0.62,
-                width: size.width, height: size.height)
-            if screen.contains(rect), !rect.intersects(target.insetBy(dx: -4, dy: -4)) { return rect }
-        }
-    }
-    if let screen = screens.first(where: { $0.intersects(target) && $0.width >= size.width && $0.height >= size.height }) {
-        return CGRect(x: screen.maxX - size.width, y: screen.minY, width: size.width, height: size.height)
-    }
-    return nil
-}
-// Geometry changes describe control availability, never a person's decision.
-// Keeping the poll separate also permits a fake window provider and frame sink.
-final class GlideStopTracker {
-    private let frame: GlideStopFrame
-    private let send: ([String: Any]) -> Void
-    private(set) var unavailable = false
-    init(_ frame: GlideStopFrame, send: @escaping ([String: Any]) -> Void) { self.frame = frame; self.send = send }
-    func refresh(target: CGRect?, screens: [CGRect], place: (CGRect) -> Void) -> Bool {
-        guard !unavailable else { return false }
-        guard let target = target, let rect = glideStopRect(target: target, screens: screens) else {
-            unavailable = true
-            send(["hand": "glide-stop", "nonce": frame.nonce, "token": frame.token, "phase": "control-unavailable"])
-            return false
-        }
-        place(rect); return true
-    }
-}
-final class GlideStopPanel: NSPanel {
-    override var canBecomeKey: Bool { true }
-    override var canBecomeMain: Bool { false }
-}
-class GlideStopButton: NSButton {
-    var stop: () -> Void = {}
-    override var acceptsFirstResponder: Bool { true }
-    override func acceptsFirstMouse(for event: NSEvent?) -> Bool { true }
-    override func accessibilityPerformPress() -> Bool { false }
-    override func accessibilityPerformAction(_ action: NSAccessibility.Action) {
-        if action != .press { super.accessibilityPerformAction(action) }
-    }
-    override func mouseDown(with event: NSEvent) {
-        // Stop on the person's down. Waiting for up would let a held click or
-        // the takeover guard end the call before this safety control answers.
-        guard event.type == .leftMouseDown,
-            personActivation(event, in: window, keyboard: false, consent: true) else { return }
-        stop()
-    }
-    override func keyDown(with event: NSEvent) {
-        guard [36, 49, 76].contains(event.keyCode), window?.firstResponder === self,
-            personActivation(event, in: window, consent: true) else { return }
-        stop()
-    }
-}
-final class GlideStopControl {
-    private var panel: GlideStopPanel?
-    private var timer: Timer?
-    private var active: GlideStopFrame?
-    private var tracker: GlideStopTracker?
-    private let send: ([String: Any]) -> Void
-    init(send: @escaping ([String: Any]) -> Void) { self.send = send }
-    private func emit(_ phase: String, _ frame: GlideStopFrame) {
-        send(["hand": "glide-stop", "nonce": frame.nonce, "token": frame.token, "phase": phase])
-    }
-    private func target(_ frame: GlideStopFrame) -> CGRect? {
-        guard let rows = CGWindowListCopyWindowInfo([.optionOnScreenOnly, .excludeDesktopElements], kCGNullWindowID) as? [[String: Any]],
-            let row = rows.first(where: { ($0[kCGWindowNumber as String] as? NSNumber)?.uint32Value == frame.window &&
-                ($0[kCGWindowOwnerPID as String] as? NSNumber)?.int32Value == frame.pid }),
-            let raw = row[kCGWindowBounds as String] as? [String: Any],
-            let rect = CGRect(dictionaryRepresentation: raw as CFDictionary), rect.width > 0, rect.height > 0 else { return nil }
-        let top = NSScreen.screens.first?.frame.maxY ?? 0
-        return CGRect(x: rect.minX, y: top - rect.maxY, width: rect.width, height: rect.height)
-    }
-    func close() {
-        timer?.invalidate(); timer = nil; active = nil; tracker = nil
-        (panel?.contentView?.subviews.first as? GlideStopButton)?.stop = {}
-        panel?.orderOut(nil); panel?.close(); panel = nil
-    }
-    private func stopped() {
-        guard let frame = active else { return }
-        close(); emit("stop", frame)
-    }
-    func receive(_ frame: GlideStopFrame) {
-        if frame.phase == "end" { if active?.token == frame.token { close() }; return }
-        guard active == nil, let target = target(frame),
-            let rect = glideStopRect(target: target, screens: NSScreen.screens.map { $0.visibleFrame }) else { emit("control-unavailable", frame); return }
-        let panel = GlideStopPanel(contentRect: rect, styleMask: [.titled, .fullSizeContentView, .nonactivatingPanel], backing: .buffered, defer: false)
-        panel.title = "sleight"; panel.titleVisibility = .hidden; panel.titlebarAppearsTransparent = true
-        panel.level = .floating; panel.hidesOnDeactivate = false; panel.isReleasedWhenClosed = false
-        panel.collectionBehavior = [.transient, .ignoresCycle, .fullScreenAuxiliary, .stationary]
-        panel.animationBehavior = .none; panel.sharingType = .none; panel.becomesKeyOnlyIfNeeded = true
-        let button = GlideStopButton(title: "Stop the Glide engine", target: nil, action: nil)
-        button.bezelStyle = .rounded; button.keyEquivalent = ""
-        button.frame = NSRect(x: 8, y: 6, width: rect.width - 16, height: rect.height - 12)
-        button.stop = { [weak self] in self?.stopped() }
-        panel.contentView?.addSubview(button)
-        panel.setFrame(rect, display: false)
-        self.panel = panel; active = frame
-        tracker = GlideStopTracker(frame, send: send)
-        panel.orderFrontRegardless(); emit("ready", frame)
-        timer = Timer.scheduledTimer(withTimeInterval: 0.025, repeats: true) { [weak self] _ in
-            guard let self = self, let active = self.active, let panel = self.panel else { return }
-            guard self.tracker?.refresh(target: self.target(active), screens: NSScreen.screens.map { $0.visibleFrame }, place: { rect in
-                if panel.frame != rect { panel.setFrame(rect, display: false) }
-            }) == true else { self.close(); return }
-        }
-    }
-}
-func writeGlideStop(_ message: [String: Any]) {
-    if let bytes = try? JSONSerialization.data(withJSONObject: message) { FileHandle.standardOutput.write(bytes + Data([10])) }
-}
-// END GLIDE STOP
-
 // BEGIN PERSON CONFIRM
 // High-stakes settings changes (person-confirm.mjs names them) wait for macOS's own Touch ID or
 // password sheet, which an agent can't answer: it has no finger, and the password sheet is the system's, which sleight's
 // tools refuse to drive (own-host.mjs). The sheet's reason comes only from this table: a key, and at most a bundle id or one
 // of the browser names below. On macOS it reads "consent-host is trying to <reason>."
 let personConfirmReasons: [String: (plain: String, subject: String?)] = [
-    "owner-present-sitting": ("start a hands-off input check on this Mac", nil),
     "turbo-on": ("turn on sleight turbo", "turn on sleight turbo for %@"),
     "turbo-app-on": ("let sleight turbo drive an app", "let sleight turbo drive %@"),
     "permissions-unblock": ("lift one of sleight's blocks", "let sleight act in %@ again"),
-    "permissions-unblock-site": ("lift one of sleight's site blocks", "let sleight act on %@ again"),
-    "permissions-sites-only": ("limit the sites sleight may act on", "limit sleight to %@ sites"),
-    "permissions-sites-all": ("lift the limit to chosen sites; blocked sites stay blocked", nil),
+    "permissions-sites": ("change the sites sleight may act on", nil),
     "permissions-repair": ("repair sleight's permissions file", nil),
-    "permissions-repair-discard": ("erase every sleight block and site limit", nil),
     "routine-add": ("install a sleight routine", nil),
     "routine-unlock": ("clear a sleight routine's run lock", nil),
     "watch-add": ("install a sleight watch", nil),
     "watch-unlock": ("clear a sleight watch's run lock", nil),
-    "replay": ("run a saved script", nil),
-    "record": ("record or convert a run", nil),
     "settings": ("change sleight's settings", nil),
 ]
 let personConfirmBrowsers: Set<String> = ["Google Chrome", "Helium", "Google Chrome Beta", "Google Chrome Dev", "Google Chrome Canary",
@@ -684,20 +533,6 @@ func personConfirmSubject(_ value: String) -> Bool {
 /// The sheet's reason for [key] or [key, subject], or nil for anything the table doesn't hold.
 func personConfirmReason(_ arguments: [String]) -> String? {
     guard (1...2).contains(arguments.count), let entry = personConfirmReasons[arguments[0]] else { return nil }
-    let key = arguments[0]
-    if key == "permissions-sites-only" || key == "permissions-unblock-site" {
-        guard arguments.count == 2, let template = entry.subject else { return nil }
-        let value = arguments[1]
-        if key == "permissions-sites-only" {
-            guard value.range(of: #"^[1-9][0-9]{0,2}$"#, options: .regularExpression) != nil,
-                let count = Int(value), count <= 256 else { return nil }
-        } else {
-            guard value.count <= 2048,
-                value.range(of: #"^https?://(?:[a-z0-9*.-]+|\[[a-f0-9:.]+\])(?::[0-9]{1,5})?$"#, options: .regularExpression) != nil,
-                value.rangeOfCharacter(from: .controlCharacters) == nil else { return nil }
-        }
-        return template.replacingOccurrences(of: "%@", with: value)
-    }
     if arguments.count == 1 { return entry.plain }
     guard let template = entry.subject, personConfirmSubject(arguments[1]) else { return nil }
     return template.replacingOccurrences(of: "%@", with: arguments[1])
@@ -738,54 +573,6 @@ func confirmPerson(_ reason: String, evaluator: PersonEvaluator, timeout: Double
     return { timer.cancel(); evaluator.cancel(); finish(.cancelled) }
 }
 // END PERSON CONFIRM
-
-#if SLEIGHT_SEALED_SETTINGS
-// All authorization is produced here. No argument or pipe field claims that a person confirmed.
-private var settingsIntentCard: AskCardPanel?
-private var settingsIntentSignals: [DispatchSourceSignal] = []
-func settingsAuthorizedIntentMain(_ store: SealedSettings, _ arguments: [String]) -> Int32 {
-    func finish(_ action: () throws -> Void) -> Never {
-        do { try action(); for row in try store.verifyAll() { print(try row.line()) }; exit(0) }
-        catch { FileHandle.standardError.write(Data("\(error)\n".utf8)); exit(65) }
-    }
-    func sheet(_ reason: String, action: @escaping () throws -> Void) -> Never {
-        let cancel = confirmPerson(reason, evaluator: localAuthentication()) { result in
-            guard result == .confirmed else { exit(result.rawValue) }; finish(action)
-        }
-        for number in [SIGINT, SIGTERM, SIGHUP] {
-            signal(number, SIG_IGN)
-            let source = DispatchSource.makeSignalSource(signal: number, queue: .main)
-            source.setEventHandler { cancel() }; source.resume(); settingsIntentSignals.append(source)
-        }
-        dispatchMain()
-    }
-    do {
-        if arguments == ["adopt"] || arguments == ["repair"] || arguments == ["permissions", "repair"] {
-            guard isatty(STDIN_FILENO) == 1 && isatty(STDOUT_FILENO) == 1 else { throw SettingsFault.person }
-            let review = try store.reviewAdoption()
-            FileHandle.standardOutput.write(Data((review.text + "\nGrants are not adopted. Rename preapproved.json and electron-grants.json yourself, then allow each app again.\nType adopt to review these settings with Touch ID: ").utf8))
-            guard readLine() == "adopt" else { throw SettingsFault.person }
-            let repair = arguments == ["repair"]
-            sheet("adopt sleight settings written before sealing") { try store.adoptReviewed(review, word: "adopt", confirmed: true, repair: repair) }
-        }
-        let change = try store.prepareIntent(arguments)
-        if let name = change.cardApp, let risk = change.risk {
-            let application = NSApplication.shared
-            application.setActivationPolicy(.accessory)
-            let card = AskCard(question: "Always allow sleight in " + name + "?", detail: "Risk level: " + risk,
-                host: "sleight", icon: consentIconPath(), kind: "opt-in", choices: ["cancel", "always"])
-            settingsIntentCard = AskCardPanel(card, deadline: (Date().timeIntervalSince1970 + 60) * 1000) { choice in
-                guard choice == "always" else { exit(2) }
-                // The protected Always button and typed-word path are the only callers of this closure.
-                finish { try store.commitIntent(change, personConfirmed: true) }
-            }
-            settingsIntentCard!.show(); application.run(); return 2
-        }
-        if change.needsSheet { sheet(change.reason) { try store.commitIntent(change, personConfirmed: true) } }
-        finish { try store.commitIntent(change, personConfirmed: false) }
-    } catch { FileHandle.standardError.write(Data("\(error)\n".utf8)); return 65 }
-}
-#endif
 
 // BEGIN SESSION FRAME
 func sessionFrame(_ data: [String: Any], _ choices: [String]) -> (kind: String, session: String)? {
@@ -993,7 +780,7 @@ func withHand(_ rows: [StatusRow], enabled: Bool, permissions: [PermissionRow]? 
 // `sleight-mcp permissions unblock` does.
 struct PermissionGrant: Equatable { let title: String, detail: String, used: Double?, target: String }
 struct PermissionApp: Equatable { let title: String, target: String }
-struct PermissionsData: Equatable { let grants: [PermissionGrant], current: PermissionApp?, blocked: [String], only: [String]?; var problems: [String] = [] }
+struct PermissionsData: Equatable { let grants: [PermissionGrant], current: PermissionApp?, blocked: [String], only: [String]? }
 enum PermissionRow: Equatable {
     case grant(String, target: String)
     case revokeAll
@@ -1010,7 +797,7 @@ let bundlePattern = #"^[A-Za-z0-9-]+(\.[A-Za-z0-9-]+)+$"#
 let grantTargetPattern = #"^(app:.{1,255}|electron:[A-Za-z0-9-]+(\.[A-Za-z0-9-]+)+|turbo)$"#
 // Exact keys only; used is seconds since 1970 or null.
 func permissionsData(_ value: Any?) -> PermissionsData? {
-    guard let data = value as? [String: Any], Set(data.keys).isSubset(of: ["grants", "current", "blocked", "only", "problems"]),
+    guard let data = value as? [String: Any], Set(data.keys).isSubset(of: ["grants", "current", "blocked", "only"]),
         let rawGrants = data["grants"] as? [Any], rawGrants.count <= 24, let rawBlocked = data["blocked"] as? [Any], rawBlocked.count <= 24 else { return nil }
     var grants: [PermissionGrant] = []
     for raw in rawGrants {
@@ -1037,13 +824,7 @@ func permissionsData(_ value: Any?) -> PermissionsData? {
         guard sites.count == list.count else { return nil }
         only = sites
     }
-    var problems: [String] = []
-    if let raw = data["problems"] {
-        guard let list = raw as? [Any], list.count <= 3 else { return nil }
-        problems = list.compactMap { permissionText($0, 200) }
-        guard problems.count == list.count else { return nil }
-    }
-    return PermissionsData(grants: grants, current: current, blocked: blocked, only: only, problems: problems)
+    return PermissionsData(grants: grants, current: current, blocked: blocked, only: only)
 }
 func usedWords(_ used: Double?, now: Double) -> String {
     guard let used = used else { return "not used yet" }
@@ -1060,7 +841,6 @@ func permissionRows(_ data: PermissionsData, now: Double) -> [PermissionRow] {
         return grant.target == "turbo" ? [.info(words), .info("Turn Turbo Off… or sleight-mcp turbo off stops turbo")] : [.grant(words, target: grant.target)]
     }
     if data.grants.contains(where: { $0.target != "turbo" }) { rows.append(.revokeAll) }
-    rows += data.problems.map { .info($0) }
     if let current = data.current { rows += [.separator, .block("Never Act in " + current.title, target: current.target)] }
     if !data.blocked.isEmpty || data.only != nil {
         rows.append(.separator)
@@ -1524,16 +1304,11 @@ final class CursorPauseControl {
     @discardableResult func click(_ event: NSEvent?, windowMatches: Bool, highlighted: Bool = true, accessibility: Bool = false) -> Bool {
         guard pending == nil,
             personActivation(event, windowMatches: windowMatches, highlighted: highlighted, accessibility: accessibility, now: now()) else { return false }
-        return request(!paused)
-    }
-    // Internal continuation of a hardware-authenticated badge drag, never a consent action.
-    @discardableResult func request(_ value: Bool) -> Bool {
-        guard pending == nil, value != paused else { return false }
         applied = nil
         guard nonce() != nil else { failed = true; changed?(paused); return false }
         let token = UUID().uuidString.lowercased().replacingOccurrences(of: "-", with: "")
-        pending = (token, value, paused, now() + 0.5); failed = false
-        guard emit("request", token, value) else { pending = nil; failed = true; changed?(paused); return false }
+        pending = (token, !paused, paused, now() + 0.5); failed = false
+        guard emit("request", token, !paused) else { pending = nil; failed = true; changed?(paused); return false }
         schedule(0.5) { [weak self] in if self?.pending?.token == token { self?.expire() } }
         return true
     }
@@ -1899,9 +1674,6 @@ final class ConsentHost: NSObject, NSApplicationDelegate, NSMenuDelegate {
             add(handRows(enabled: hand.enabled, version: hand.version, permissions: permissionMenu, usage: usage), to: menu, id: "")
         }
         cursorPicker.install(in: menu, enabled: plan.cursor || hand?.enabled == true)
-#if SLEIGHT_SEALED_SETTINGS
-        menu.addItem(NSMenuItem(title: settingsMenuSealLine(), action: nil, keyEquivalent: ""))
-#endif
         if plan.quit {
             menu.addItem(NSMenuItem.separator())
             let quit = CursorPickerMenuItem(title: "Quit Menu", action: #selector(quitMenu(_:)), keyEquivalent: "")
@@ -2555,9 +2327,7 @@ struct HandAct {
     let seq: Int, kind: String, pid: Int32, windowId: UInt32, at: CGPoint, path: [CGPoint], delay: Double, beats: Int
     var label: String? = nil
     var say: String? = nil
-    var windowRect: CGRect? = nil
     var rect: CGRect? = nil, caretX: Double? = nil
-    var retry = false, transfer: String? = nil
 }
 // menu: the hand's setting, capture mode and the plugin version, for the shared host's Ghost Hand row.
 // permissions: the Permissions submenu's rows (permissionsData), when the relay has them. usage: the usage row (usageData),
@@ -2565,16 +2335,10 @@ struct HandAct {
 // a bad number must never take the glove down.
 struct RingEvent {
     let seq: Int, state: String, pid: Int32, windowId: UInt32, at: CGPoint?, rect: CGRect?, label: String?
-    var windowRect: CGRect? = nil
     var say: String? = nil
     var path: [CGPoint] = []
     var beats: Int = 1
     var caretX: Double? = nil, holdMs = 0, ok = false
-    var detail: String? = nil, retry = false, transfer: String? = nil
-    var producer: StageProducerIdentity? = nil
-    var area: String? = nil
-    var wideName: String? = nil, wideReason: String? = nil
-    var wideEpoch: Int? = nil
 }
 // Labels are plain text: control, format (bidi overrides included) and separator characters go, then 40 characters and at
 // most 80 scalars, so a stacked cluster cannot stretch the chip.
@@ -2626,20 +2390,19 @@ enum CursorPickerRow {
     static func valid(_ row: [String: Any], nested: Bool = false) -> Bool {
         guard let title = row["title"] as? String, (1...60).contains(title.count),
             title.unicodeScalars.allSatisfy({ !CharacterSet.controlCharacters.contains($0) && $0.properties.generalCategory != .format }),
-            Set(row.keys).isSubset(of: ["title", "op", "style", "character", "selected", "key", "children", "reason", "size"]) else { return false }
+            Set(row.keys).isSubset(of: ["title", "op", "style", "character", "selected", "key", "children", "reason"]) else { return false }
         if let children = row["children"] as? [[String: Any]] {
             return !nested && Set(row.keys) == ["title", "children"] && children.count <= 512 && children.allSatisfy { valid($0, nested: true) }
         }
         switch row["op"] as? String {
         case "select":
-            guard let style = row["style"] as? String, let on = row["selected"] as? NSNumber,
+            guard !nested, let style = row["style"] as? String, let on = row["selected"] as? NSNumber,
                 CFGetTypeID(on) == CFBooleanGetTypeID() else { return false }
             if style == "sprite" {
                 return Set(row.keys) == ["title", "op", "style", "character", "selected"] &&
                     (row["character"] as? String)?.range(of: "^[a-z0-9-]{1,48}$", options: .regularExpression) != nil
             }
-            return !nested && ["ring", "seam", "glove"].contains(style) && Set(row.keys) == ["title", "op", "style", "selected"]
-        case "size": return sizeRowValid(row, nested: nested)
+            return ["ring", "seam", "glove"].contains(style) && Set(row.keys) == ["title", "op", "style", "selected"]
         case "import":
             return nested && Set(row.keys) == ["title", "op", "key"] &&
                 (row["key"] as? String)?.range(of: "^[0-9a-f]{64}$", options: .regularExpression) != nil
@@ -2662,21 +2425,6 @@ enum CursorPickerRow {
         rows.append(["title": "Add your Codex pets", "children": [[String: Any]]()])
         rows.append(["title": "Open characters folder", "op": "folder"])
         return rows
-    }
-}
-// ST10 keeps the size menu and grouped-character traversal out of the placement runtime.
-extension CursorPickerRow {
-    static func sizeRowValid(_ row: [String: Any], nested: Bool) -> Bool {
-        guard nested, Set(row.keys) == ["title", "op", "size", "selected"],
-            let size = row["size"] as? String, ["small", "medium", "stage"].contains(size),
-            let selected = row["selected"] as? NSNumber else { return false }
-        return CFGetTypeID(selected) == CFBooleanGetTypeID()
-    }
-    static func characterIDs(_ rows: [[String: Any]]) -> Set<String> {
-        Set(rows.flatMap { row -> [String] in
-            if let id = row["character"] as? String { return [id] }
-            return (row["children"] as? [[String: Any]] ?? []).compactMap { $0["character"] as? String }
-        })
     }
 }
 func writeCursorPickerEvent(_ event: [String: String]) {
@@ -2948,7 +2696,7 @@ final class CursorPickerHost: NSObject, NSMenuDelegate {
     }
     @objc func click(_ sender: NSMenuItem) {
         guard personMenuActivation(sender) else { refuseSelection(); return }
-        guard let row = sender.representedObject as? [String: Any], CursorPickerRow.valid(row, nested: sender.menu !== submenu) else { return }
+        guard let row = sender.representedObject as? [String: Any], CursorPickerRow.valid(row, nested: ["import", "skipped"].contains(row["op"] as? String ?? "")) else { return }
         if row["op"] as? String == "skipped" {
             showNotice("\(row["title"] as! String)\n\(row["reason"] as! String)"); return
         }
@@ -2961,7 +2709,7 @@ final class CursorPickerHost: NSObject, NSMenuDelegate {
             return
         }
         var event: [String: String] = [:]
-        for key in ["op", "style", "character", "key", "size"] { if let value = row[key] as? String { event[key] = value } }
+        for key in ["op", "style", "character", "key"] { if let value = row[key] as? String { event[key] = value } }
         if row["op"] as? String == "lines" { event["lines"] = row["selected"] as? Bool == true ? "off" : "on" } // the toggle's new value
         writeCursorPickerEvent(event)
     }
@@ -2974,7 +2722,7 @@ final class CursorPickerHost: NSObject, NSMenuDelegate {
         switch message.op {
         case "catalog":
             generation = epoch.next(); rows = message.data["rows"] as! [[String: Any]]
-            let ids = CursorPickerRow.characterIDs(rows); images = images.filter { ids.contains($0.key) }
+            let ids = Set(rows.compactMap { $0["character"] as? String }); images = images.filter { ids.contains($0.key) }
             imageKeys = imageKeys.filter { ids.contains($0.key) }
             if let menu = submenu { fill(menu) }
         case "thumbnail":
@@ -3030,7 +2778,7 @@ func cursorMenuDump() {
                 ["title": "Dog", "op": "select", "style": "sprite", "character": "dog", "selected": false]]
             menu.addItem(NSMenuItem.separator())
             menu.addItem(NSMenuItem(title: "Settings & Help", action: #selector(ConsentHost.help(_:)), keyEquivalent: ""))
-            menu.addItem(NSMenuItem(title: "sleight 1.6.0", action: nil, keyEquivalent: ""))
+            menu.addItem(NSMenuItem(title: "sleight 1.5.1", action: nil, keyEquivalent: ""))
             picker.install(in: menu, enabled: true)
             let inner = picker.submenu!, cat = picker.characterItems["cat"]!, dog = picker.characterItems["dog"]!
             let image = NSImage(size: NSSize(width: 16, height: 16))
@@ -3078,9 +2826,8 @@ func cursorMenuDump() {
 }
 // END CURSOR PICKER
 // BEGIN HAND FRAME TAIL
-enum HandFrame { case edge(String, EdgeChipMessage), pause(String, String, String, Bool), clear(String, String), activity(String), call(String), picker(String, CursorPickerMessage), narrationCheck(String, String), character(String, SpriteFrame), act(String, HandAct), aim(String, RingEvent), status(String, RingEvent), hide(String), menu(String, enabled: Bool, capture: String, version: String, permissions: PermissionsData?, usage: UsageStats?) }
+enum HandFrame { case pause(String, String, String, Bool), clear(String, String), activity(String), picker(String, CursorPickerMessage), narrationCheck(String, String), character(String, SpriteFrame), act(String, HandAct), aim(String, RingEvent), status(String, RingEvent), hide(String), menu(String, enabled: Bool, capture: String, version: String, permissions: PermissionsData?, usage: UsageStats?) }
 let handKinds: Set<String> = ["click", "double", "right", "key", "type", "drag", "scroll"]
-func handSequenceFresh(_ seq: Int, after last: Int) -> Bool { seq > last }
 func handFrame(_ data: [String: Any]) -> HandFrame? {
     func number(_ value: Any?) -> Double? {
         guard let value = value as? NSNumber, CFGetTypeID(value) != CFBooleanGetTypeID(), value.doubleValue.isFinite else { return nil }
@@ -3104,8 +2851,6 @@ func handFrame(_ data: [String: Any]) -> HandFrame? {
         return .some(CGRect(origin: origin, size: CGSize(width: w, height: h)))
     }
     guard let nonce = data["nonce"] as? String, nonce.range(of: "^[0-9a-f]{64}$", options: .regularExpression) != nil else { return nil }
-    if data["hand"] as? String == "edge" { return EdgeChipMessage.parse(data).map { .edge(nonce, $0) } }
-    guard honestFieldsValid(data) else { return nil }
     if data["hand"] as? String == "pause-ack" {
         guard Set(data.keys) == ["hand", "nonce", "phase", "token", "paused"],
             let phase = data["phase"] as? String, ["ready", "applied", "restore", "aborted"].contains(phase),
@@ -3114,16 +2859,11 @@ func handFrame(_ data: [String: Any]) -> HandFrame? {
         return .pause(nonce, phase, token, value)
     }
     if data["hand"] as? String == "clear" {
-        guard Set(data.keys).subtracting(["keepStage", "placed", "placementSeq"]) == ["hand", "nonce", "token"],
-            data["keepStage"] == nil || (data["keepStage"] as? NSNumber).map({ CFGetTypeID($0) == CFBooleanGetTypeID() }) == true,
-            data["placed"] == nil || (data["placed"] as? NSNumber).map({ CFGetTypeID($0) == CFBooleanGetTypeID() && $0.boolValue }) == true,
-            data["placed"] == nil ? data["placementSeq"] == nil : integer(data["placementSeq"], 0...9007199254740991) != nil,
-            let token = data["token"] as? String,
+        guard Set(data.keys) == ["hand", "nonce", "token"], let token = data["token"] as? String,
             token.range(of: "^[0-9a-f]{32}$", options: .regularExpression) != nil else { return nil }
         return .clear(nonce, token)
     }
     if data["hand"] as? String == "activity" { return Set(data.keys) == ["hand", "nonce"] ? .activity(nonce) : nil }
-    if data["hand"] as? String == "call" { return Set(data.keys) == ["hand", "nonce"] ? .call(nonce) : nil }
     if data["hand"] as? String == "picker" { return CursorPickerMessage.parse(data).map { .picker(nonce, $0) } }
     if data["hand"] as? String == "narration-check" {
         guard Set(data.keys) == ["hand", "nonce", "token"], let token = data["token"] as? String,
@@ -3131,10 +2871,7 @@ func handFrame(_ data: [String: Any]) -> HandFrame? {
         return .narrationCheck(nonce, token)
     }
     if data["hand"] as? String == "character" { return spriteFrame(data).map { .character(nonce, $0) } }
-    if data["hand"] as? String == "hide" {
-        return Set(data.keys).subtracting(["reason"]) == ["hand", "nonce"] &&
-            (data["reason"] == nil || data["reason"] as? String == "unknown-app") ? .hide(nonce) : nil
-    }
+    if data["hand"] as? String == "hide" { return Set(data.keys) == ["hand", "nonce"] ? .hide(nonce) : nil }
     if data["hand"] as? String == "menu" {
         let keys: Set<String> = ["hand", "nonce", "enabled", "capture", "version"]
         guard keys.isSubset(of: Set(data.keys)), Set(data.keys).subtracting(keys).isSubset(of: ["permissions", "usage", "narration", "voice"]), NarrationOptions.parse(data) != nil,
@@ -3146,40 +2883,17 @@ func handFrame(_ data: [String: Any]) -> HandFrame? {
         if let parsed = permissions, parsed == nil { return nil }
         return .menu(nonce, enabled: enabled.boolValue, capture: capture, version: version, permissions: permissions ?? nil, usage: usageData(data["usage"]))
     }
-    if data["hand"] as? String == "wide" {
-        let keys = Set(data.keys)
-        guard keys.isSuperset(of: ["hand", "nonce", "seq", "reason", "epoch"]),
-            keys.isSubset(of: ["hand", "nonce", "seq", "reason", "epoch", "pid", "windowId", "app"]),
-            let seq = integer(data["seq"], 0...9007199254740991), let epoch = integer(data["epoch"], 0...9007199254740991),
-            let reason = data["reason"] as? String, ["read", "unlocated", "scroll", "drag", "acquisition"].contains(reason),
-            data["pid"] == nil || integer(data["pid"], 1...2147483647) != nil,
-            data["windowId"] == nil || data["pid"] != nil && integer(data["windowId"], 1...4294967295) != nil else { return nil }
-        let name = data["app"] as? String
-        if data["app"] != nil {
-            guard let name = name, !name.isEmpty, name.utf16.count <= 160,
-                !name.unicodeScalars.contains(where: { CharacterSet.controlCharacters.contains($0) || CharacterSet.illegalCharacters.contains($0) || [0x2028, 0x2029].contains($0.value) }),
-                data["pid"] == nil else { return nil }
-        }
-        guard data["pid"] != nil || name != nil else { return nil }
-        var event = RingEvent(seq: seq, state: "thinking", pid: Int32(integer(data["pid"], 1...2147483647) ?? 0),
-            windowId: UInt32(integer(data["windowId"], 1...4294967295) ?? 0), at: nil, rect: nil, label: nil)
-        event.area = event.windowId > 0 ? "window" : "app"
-        event.wideName = name; event.wideReason = reason; event.wideEpoch = epoch
-        return .status(nonce, event)
-    }
     if let tag = data["hand"] as? String, ["aim", "status"].contains(tag) {
         let keys: Set<String> = tag == "aim" ? ["hand", "nonce", "seq", "kind", "pid", "windowId", "at"] : ["hand", "nonce", "seq", "state", "pid", "windowId"]
-        let optional: Set<String> = tag == "aim" ? ["rect", "holdMs", "label", "say", "retry", "transfer", "windowRect"] : ["at", "ok", "say", "detail", "windowRect", "area"]
-        let area = data["area"] as? String
-        guard data["area"] == nil || tag == "status" && ["window", "app"].contains(area ?? "") && data["at"] == nil else { return nil }
+        let optional: Set<String> = tag == "aim" ? ["rect", "holdMs", "label", "say"] : ["at", "ok", "say"]
         guard keys.isSubset(of: Set(data.keys)), Set(data.keys).subtracting(keys).isSubset(of: optional),
             data["say"] == nil || (data["say"] as? String).map({ $0.utf8.count <= 1024 }) == true,
             data["ok"] == nil || (data["state"] as? String == "done" && (data["ok"] as? NSNumber).map { CFGetTypeID($0) == CFBooleanGetTypeID() } == true),
             let seq = integer(data["seq"], 0...9007199254740991),
-            let pid = integer(data["pid"], 1...2147483647), let window = integer(data["windowId"], (area == "app" ? 0 : 1)...4294967295),
+            let pid = integer(data["pid"], 1...2147483647), let window = integer(data["windowId"], 1...4294967295),
             data["at"] == nil || point(data["at"]) != nil,
             data["label"] == nil || data["label"] is String else { return nil }
-        guard let rect = rectValue(data["rect"]), let windowRect = rectValue(data["windowRect"]) else { return nil }
+        guard let rect = rectValue(data["rect"]) else { return nil }
         let state: String
         if tag == "aim" {
             guard let kind = data["kind"] as? String, handKinds.contains(kind),
@@ -3189,17 +2903,15 @@ func handFrame(_ data: [String: Any]) -> HandFrame? {
             guard let value = data["state"] as? String, ["waiting", "error", "done", "handback", "thinking", "paused"].contains(value) else { return nil }
             state = value
         }
-        var event = RingEvent(seq: seq, state: state, pid: Int32(pid), windowId: UInt32(window), at: point(data["at"]), rect: rect,
-            label: handLabel(data["label"]), say: narrationText(data["say"]), holdMs: integer(data["holdMs"], 0...600) ?? 0, ok: (data["ok"] as? NSNumber)?.boolValue ?? false, detail: data["detail"] as? String, retry: data["retry"] as? Bool ?? false, transfer: data["transfer"] as? String)
-        event.windowRect = windowRect
-        event.area = area
+        let event = RingEvent(seq: seq, state: state, pid: Int32(pid), windowId: UInt32(window), at: point(data["at"]), rect: rect,
+            label: handLabel(data["label"]), say: narrationText(data["say"]), holdMs: integer(data["holdMs"], 0...600) ?? 0, ok: (data["ok"] as? NSNumber)?.boolValue ?? false)
         return tag == "aim" ? .aim(nonce, event) : .status(nonce, event)
     }
     let actKeys: Set<String> = ["hand", "nonce", "seq", "kind", "pid", "windowId", "at", "path", "delayMs", "beats"]
     guard data["hand"] as? String == "act", actKeys.isSubset(of: Set(data.keys)),
-        Set(data.keys).subtracting(actKeys).isSubset(of: ["label", "rect", "caretX", "say", "retry", "transfer", "windowRect"]),
+        Set(data.keys).subtracting(actKeys).isSubset(of: ["label", "rect", "caretX", "say"]),
         data["say"] == nil || (data["say"] as? String).map({ $0.utf8.count <= 1024 }) == true, data["label"] == nil || data["label"] is String,
-        let rect = rectValue(data["rect"]), let windowRect = rectValue(data["windowRect"]), data["caretX"] == nil || ((data["kind"] as? String).map { ["type", "key"].contains($0) } == true
+        let rect = rectValue(data["rect"]), data["caretX"] == nil || ((data["kind"] as? String).map { ["type", "key"].contains($0) } == true
             && number(data["caretX"]).map { abs($0) <= 100000 } == true),
         let seq = integer(data["seq"], 0...9007199254740991), let kind = data["kind"] as? String, handKinds.contains(kind),
         let pid = integer(data["pid"], 1...2147483647), let windowId = integer(data["windowId"], 1...4294967295),
@@ -3208,7 +2920,7 @@ func handFrame(_ data: [String: Any]) -> HandFrame? {
     let path = raw.compactMap(point)
     guard path.count == raw.count else { return nil }
     return .act(nonce, HandAct(seq: seq, kind: kind, pid: Int32(pid), windowId: UInt32(windowId), at: at, path: path,
-        delay: Double(delay) / 1000, beats: beats, label: handLabel(data["label"]), say: narrationText(data["say"]), windowRect: windowRect, rect: rect, caretX: number(data["caretX"]), retry: data["retry"] as? Bool ?? false, transfer: data["transfer"] as? String))
+        delay: Double(delay) / 1000, beats: beats, label: handLabel(data["label"]), say: narrationText(data["say"]), rect: rect, caretX: number(data["caretX"])))
 }
 // Consecutive repeats dropped, so a one-point route means the hand appears there without a glide.
 func handPoints(_ points: [CGPoint]) -> [CGPoint] {
@@ -3633,7 +3345,6 @@ struct RingChip {
 struct RingTimer { let at: Double, action: String }
 struct RingPlan {
     var state: String, at: CGPoint
-    var grab: CGPoint? = nil
     var sprite: SpritePlan? = nil
     var bubble: NarrationBubble? = nil, oldBubble: NarrationBubble? = nil
     var layers: [RingLayer] = [], tracks: [RingTrack] = []
@@ -3643,12 +3354,7 @@ struct RingPlan {
     var points: [CGPoint] = [], positions: [(Double, CGPoint)] = [], shape: [String: Double] = [:]
     var phases: [String: [Double]] = [:], timers: [RingTimer] = [], budget: [String: Double] = [:]
     var entrance: String?, variation: Double?
-    var detail: String? = nil, retry = false, transfer: String? = nil
-    var windowRect: CGRect? = nil
-    var seq = 0
-    var producer: StageProducerIdentity? = nil
     var pid: Int32 = 0, window: UInt32 = 0, ok = false   // the drawn frame's window and done result, for perch mode
-    var protectsTarget = true
     func position(at time: Double) -> CGPoint {
         guard let first = positions.first else { return at }
         if time <= first.0 { return first.1 }
@@ -4274,7 +3980,6 @@ final class RingPlanner {
     }
     func finish() -> RingPlan {
         var p = RingPlan(state: event.state, at: at, label: c.secure ? nil : event.label, rect: wrap)
-        p.grab = event.state == "drag" ? event.path.first ?? event.at : nil
         let lengths = ribbon.map { seg -> Double in
             var length = 0.0, last = seg.a
             for i in 1...8 {
@@ -4461,7 +4166,7 @@ struct RingSession {
 }
 func ringEvent(_ act: HandAct) -> RingEvent {
     RingEvent(seq: act.seq, state: act.kind, pid: act.pid, windowId: act.windowId, at: act.at, rect: act.rect, label: act.label,
-        windowRect: act.windowRect, say: act.say, path: act.path, beats: act.beats, caretX: act.caretX, retry: act.retry, transfer: act.transfer)
+        say: act.say, path: act.path, beats: act.beats, caretX: act.caretX)
 }
 // END RING PLAN
 
@@ -4524,22 +4229,18 @@ struct RingRuntime {
         return out
     }
     mutating func draw(_ event: RingEvent, _ now: Double, _ env: RingEnvironment) -> [(Double, RingEffect)] {
-        let frameOk = event.ok, measuredWindow = event.windowRect, producer = event.producer, protectsTarget = event.at != nil || event.windowRect != nil, (event, palm) = perchDissolve(event, .null, dissolveAt)
+        let frameOk = event.ok, (event, palm) = perchDissolve(event, .null, dissolveAt)
         let known = session.pid == event.pid && session.window == event.windowId && session.point != nil
         guard event.at != nil || known else { return [(now, .drop(event.state))] }
         // A repeat of the state the ring already shows at the same point, inside that plan, changes nothing.
         if known, ["thinking", "waiting", "error", "done", "handback", "paused"].contains(event.state), let last = session.previous, last.state == event.state, event.at == nil || event.at == last.at,
-            frameOk == last.ok, measuredWindow == last.windowRect, event.detail == last.detail, event.label == last.label, narrationText(event.say) == last.bubble?.spoken, now - session.began < last.total { return [] }
+            event.label == last.label, narrationText(event.say) == last.bubble?.spoken, now - session.began < last.total { return [] }
         guard let bounds = env.bounds(event.pid, event.windowId) else { return hide(now) }
         let clip = palm.isNull ? bounds : bounds.union(palm)
         let previousBubble = known ? session.previous?.bubble : nil
         var plan = session.plan(event, theme: theme, now: now, reduced: env.reduced(), secure: env.secure(), clip: clip, seed: seed)
         guard !plan.dropped else { return [(now, .drop(event.state))] }
-        plan.detail = event.detail; plan.retry = event.retry; plan.transfer = event.transfer
-        plan.windowRect = measuredWindow
-        plan.seq = event.seq; plan.pid = event.pid; plan.window = event.windowId; plan.ok = frameOk
-        plan.producer = producer
-        plan.protectsTarget = protectsTarget
+        plan.pid = event.pid; plan.window = event.windowId; plan.ok = frameOk
         if let character = character { plan.sprite = SpritePlan.make(plan, character: character, reduced: env.reduced(), secure: env.secure(), clip: clip) }
         NarrationBubble.attach(&plan, say: event.say, clip: clip, secure: env.secure(), options: narration,
             previous: previousBubble, reduced: env.reduced(), ink: theme.ink)
@@ -4569,16 +4270,13 @@ let spriteStates: Set<String> = ["idle", "move", "aim", "click", "double-click",
 let spriteDirectional: Set<String> = ["move", "aim", "drag-carry", "move-far", "drag-carry-far"]
 // One sheet is at most 1536 by 2288 pixels (8 columns of 192, 11 rows of 208): 13.4 MiB decoded.
 let spriteSheetCap = (width: 1536, height: 2288), spriteCellCap = (width: 192.0, height: 208.0)
-struct SpriteEntry: Equatable {
+struct SpriteEntry {
     let sheet: String, row: Int, columns: [Int], ms: [Double], loop: Bool, flip: Bool, hotspot: CGPoint
     let size: CGSize?, scale: Double, then: String?
 }
 struct SpriteFrame {
     let seq: Int, id: String, sheet: String, extra: String?, cell: CGSize, table: [String: SpriteEntry]
     var perch: PerchTable? = nil, perchSheet: String? = nil, lines: PerchLineSet? = nil
-    var stage: [String: SpriteStageEntry]? = nil
-    var stageOptions = StageOptions()
-    var sessionBadge: String? = nil
 }
 func spriteFrame(_ data: [String: Any]) -> SpriteFrame? {
     func n(_ raw: Any?, _ range: ClosedRange<Double>) -> Double? {
@@ -4597,7 +4295,7 @@ func spriteFrame(_ data: [String: Any]) -> SpriteFrame? {
     func path(_ raw: Any?) -> String? {
         guard let p = raw as? String, p.utf8.count <= 4096, p.hasPrefix("/"), !p.contains("\0") else { return nil }; return p
     }
-    guard Set(data.keys).subtracting(["perch", "perchSheet", "lines", "stage", "size", "stageAttention", "stageFrontSit", "sessionBadge"]) == ["hand", "nonce", "seq", "id", "sheet", "extra", "cell", "table"],
+    guard Set(data.keys).subtracting(["perch", "perchSheet", "lines"]) == ["hand", "nonce", "seq", "id", "sheet", "extra", "cell", "table"],
         let seq = int(data["seq"], 0...9007199254740991), let id = data["id"] as? String,
         id.range(of: "^[a-z0-9-]{1,48}$", options: .regularExpression) != nil,
         let sheet = path(data["sheet"]), data["extra"] is NSNull || path(data["extra"]) != nil,
@@ -4636,17 +4334,9 @@ func spriteFrame(_ data: [String: Any]) -> SpriteFrame? {
         table[key] = SpriteEntry(sheet: s, row: row, columns: columns, ms: ms, loop: loop, flip: flip,
             hotspot: CGPoint(x: hotspot[0], y: hotspot[1]), size: size, scale: n(v["scale"], 0.25...2) ?? 1, then: v["then"] as? String)
     }
-    guard let stageOptions = StageOptions.parse(data), let extras = perchFrameExtras(data, cell: CGSize(width: cell[0], height: cell[1]), extra: path(data["extra"]) != nil) else { return nil }
-    var frame = SpriteFrame(seq: seq, id: id, sheet: sheet, extra: path(data["extra"]), cell: CGSize(width: cell[0], height: cell[1]), table: table,
-        perch: extras.table, perchSheet: extras.sheet, lines: extras.lines, stageOptions: stageOptions)
-    if let raw = data["sessionBadge"] {
-        guard let badge = raw as? String, badge.range(of: "^[A-Z]$", options: .regularExpression) != nil else { return nil }
-        frame.sessionBadge = badge
-    }
-    if let raw = data["stage"] {
-        guard let stage = spriteStageFrame(raw, frame: frame) else { return nil }; frame.stage = stage
-    }
-    return frame
+    guard let extras = perchFrameExtras(data, cell: CGSize(width: cell[0], height: cell[1]), extra: path(data["extra"]) != nil) else { return nil }
+    return SpriteFrame(seq: seq, id: id, sheet: sheet, extra: path(data["extra"]), cell: CGSize(width: cell[0], height: cell[1]), table: table,
+        perch: extras.table, perchSheet: extras.sheet, lines: extras.lines)
 }
 enum SpriteLoadError: String, Error { case path, permissions, size, type, decode, alpha, pixels, changed, timeout, child, sandbox, cancelled }
 func spriteWarning(_ message: String) { FileHandle.standardError.write(Data(("sleight sprite: " + message + "\n").utf8)) }
@@ -4697,58 +4387,10 @@ func spriteUntrack(_ pid: pid_t) {
     spriteLiveLock.lock(); defer { spriteLiveLock.unlock() }
     for i in 0..<8 where spriteLiveSlots[i] == pid { spriteLiveSlots[i] = 0 }
 }
-// BEGIN SPRITE REAP
-final class SpriteExitEvent {
-    let queue: Int32, registered: Bool
-    init(_ pid: pid_t) {
-        queue = kqueue()
-        guard queue >= 0 else { registered = false; return }
-        _ = fcntl(queue, F_SETFD, FD_CLOEXEC)
-        var change = kevent(ident: UInt(pid), filter: Int16(EVFILT_PROC), flags: UInt16(EV_ADD | EV_ONESHOT),
-            fflags: UInt32(NOTE_EXIT), data: 0, udata: nil)
-        registered = kevent(queue, &change, 1, nil, 0, nil) == 0
-    }
-    deinit { if queue >= 0 { close(queue) } }
-}
-// The child starts suspended, so the exit event is armed before it can enter
-// exit teardown (EV_ADD can return ESRCH before waitpid can collect that exit).
-// waitpid is only the collector. The post-EOF event wait retains its 0.5 s bound.
-func spriteReap(_ pid: pid_t, wait: Bool, event: SpriteExitEvent) -> (reaped: Bool, status: Int32) {
-    var status: Int32 = 0, reaped = false
-    if wait {
-        if event.registered {
-            let deadline = ProcessInfo.processInfo.systemUptime + 0.5
-            while true {
-                let result = waitpid(pid, &status, WNOHANG)
-                if result == pid { reaped = true; break }
-                if result < 0 { if errno == EINTR && ProcessInfo.processInfo.systemUptime < deadline { continue }; break }
-                let left = deadline - ProcessInfo.processInfo.systemUptime
-                guard left > 0 else { break }
-                var timeout = timespec(tv_sec: Int(left), tv_nsec: Int((left - floor(left)) * 1_000_000_000))
-                var notification = kevent()
-                let ready = kevent(event.queue, nil, 0, &notification, 1, &timeout)
-                if ready < 0 && errno == EINTR { continue }
-                guard ready > 0, notification.flags & UInt16(EV_ERROR) == 0 else { break }
-                // NOTE_EXIT is one-shot. Collection after delivery cannot need polling.
-                var collected: pid_t
-                repeat { collected = waitpid(pid, &status, 0) } while collected < 0 && errno == EINTR
-                reaped = collected == pid; break
-            }
-        }
-    }
-    if !reaped { kill(pid, SIGKILL); while waitpid(pid, &status, 0) < 0 && errno == EINTR {} }
-    return (reaped, status)
-}
-// END SPRITE REAP
-final class SpriteDecodeTelemetry {
-    var parts: [String: Double] = [:]
-    func record(_ key: String, since start: Double) { parts[key] = (ProcessInfo.processInfo.systemUptime - start) * 1000 }
-}
 // Runs `--decode-sheet` on the open file and reads exactly w*h*4 bytes within 2 s. The child gets the file as stdin, a pipe
 // as stdout and /dev/null as stderr; POSIX_SPAWN_CLOEXEC_DEFAULT keeps every other descriptor (the consent channel's fds 3
 // and 4 among them) out of it. The returned buffer is malloc'd; the caller owns it.
-func spriteDecodeInChild(fd: Int32, width: Int, height: Int, format: String, cancelled: () -> Bool = { false }, telemetry: SpriteDecodeTelemetry? = nil) throws -> UnsafeMutableRawPointer {
-    let spawnBegan = ProcessInfo.processInfo.systemUptime
+func spriteDecodeInChild(fd: Int32, width: Int, height: Int, format: String, cancelled: () -> Bool = { false }) throws -> UnsafeMutableRawPointer {
     guard let executable = Bundle.main.executablePath else { throw SpriteLoadError.child }
     var pipeEnds: [Int32] = [0, 0]
     guard pipe(&pipeEnds) == 0 else { throw SpriteLoadError.child }
@@ -4763,25 +4405,16 @@ func spriteDecodeInChild(fd: Int32, width: Int, height: Int, format: String, can
     // SIGXCPU fires (it inherited a mask that blocked it, measured by the review).
     var noSignals = sigset_t(), allSignals = sigset_t(); sigemptyset(&noSignals); sigfillset(&allSignals)
     posix_spawnattr_setsigmask(&attributes, &noSignals); posix_spawnattr_setsigdefault(&attributes, &allSignals)
-    posix_spawnattr_setflags(&attributes, Int16(POSIX_SPAWN_CLOEXEC_DEFAULT | POSIX_SPAWN_SETSIGMASK | POSIX_SPAWN_SETSIGDEF | POSIX_SPAWN_START_SUSPENDED))
+    posix_spawnattr_setflags(&attributes, Int16(POSIX_SPAWN_CLOEXEC_DEFAULT | POSIX_SPAWN_SETSIGMASK | POSIX_SPAWN_SETSIGDEF))
     let argv = [executable, "--decode-sheet", String(width), String(height), format].map { strdup($0) } + [nil]
     defer { argv.forEach { free($0) } }
     var pid: pid_t = 0
     let spawned = posix_spawn(&pid, executable, &actions, &attributes, argv, environ)
     close(pipeEnds[1])
     guard spawned == 0 else { throw SpriteLoadError.child }
-    guard spriteTrack(pid) else {
-        kill(pid, SIGKILL); var s: Int32 = 0; while waitpid(pid, &s, 0) < 0 && errno == EINTR {}; throw SpriteLoadError.child
-    }
-    let exitEvent = SpriteExitEvent(pid)
-    guard exitEvent.registered, let buffer = malloc(width * height * 4) else {
+    guard spriteTrack(pid), let buffer = malloc(width * height * 4) else {
         kill(pid, SIGKILL); var s: Int32 = 0; while waitpid(pid, &s, 0) < 0 && errno == EINTR {}; spriteUntrack(pid); throw SpriteLoadError.child
     }
-    guard kill(pid, SIGCONT) == 0 else {
-        _ = spriteReap(pid, wait: false, event: exitEvent); spriteUntrack(pid); free(buffer); throw SpriteLoadError.child
-    }
-    telemetry?.record("spawnMs", since: spawnBegan)
-    let transferBegan = ProcessInfo.processInfo.systemUptime
     // The 2 s deadline is the real bound on the child. Tests may lengthen it (to see the CPU limit act on its own).
     let env = ProcessInfo.processInfo.environment
     let seconds = env["SLEIGHT_CURSOR_TEST"] == "1" ? env["SLEIGHT_CURSOR_DECODE_DEADLINE"].flatMap(Double.init).map { min(max($0, 0.1), 30) } ?? 2 : 2
@@ -4810,12 +4443,18 @@ func spriteDecodeInChild(fd: Int32, width: Int, height: Int, format: String, can
         }
     }
     // The reap is bounded too: a child that closes stdout and then doesn't exit gets 0.5 s, then SIGKILL.
-    telemetry?.record("transferMs", since: transferBegan)
-    let reapBegan = ProcessInfo.processInfo.systemUptime
-    let (reaped, status) = spriteReap(pid, wait: !(timedOut || extra || stopped), event: exitEvent)
+    var status: Int32 = 0, reaped = false
+    if !(timedOut || extra || stopped) {
+        for _ in 0..<50 {
+            let r = waitpid(pid, &status, WNOHANG)
+            if r == pid { reaped = true; break }
+            if r < 0 && errno != EINTR { break }
+            usleep(10_000)
+        }
+    }
+    if !reaped { kill(pid, SIGKILL); while waitpid(pid, &status, 0) < 0 && errno == EINTR {} }
     // After the reap, never at function end, so a reused pid is never signalled.
     spriteUntrack(pid)
-    telemetry?.record("reapMs", since: reapBegan)
     let exited = reaped && status & 0x7f == 0, code = (status >> 8) & 0xff
     guard !stopped else { free(buffer); throw SpriteLoadError.cancelled }
     guard !timedOut else { free(buffer); throw SpriteLoadError.timeout }
@@ -4857,56 +4496,12 @@ let spriteBuiltinHashes: [String: [String: String]] = [
         "extra.webp": "11713ae8936af7b539550de17f428e005bba743a620fa170ad0d41cc61f3dd82",
         "perch.webp": "9fa4762b1fc93afcc5335329d6bc0f11bc0f1ef21620427dca76c4d1e4d532d3",
         "sheet.webp": "2d503eaa2794eef137d860ad7d2775f2d08c590948043e9ca678cc0a76d403eb"
-    ],
-    "mabel": [
-        "extra.webp": "9d578ad6e9bff979f41840a908b480046e6f92b6047b141372d9298bf11e1bd5",
-        "perch.webp": "7d37e5990c992ab59e81ceae7e65c97b38a6bc703502b2175bfe05f262fc1676",
-        "sheet.webp": "c6b1781d87eec0bcc9d0698e14f1e2a6b46f1b8603939dce6d4ad693696b9111"
-    ],
-    "biscuit": [
-        "extra.webp": "f525ec76f5332b46331b929ee91c200270b53125103df66748bf05bee1e27980",
-        "perch.webp": "92bb7e76414277a95ab506f08b23f1922dc66acf3371ec5d8a78b1193640438a",
-        "sheet.webp": "ae2a3ae25f068a45d672c56062c42f55d4ef404d4553ac74170907983f3ae6ce"
-    ],
-    "rudy": [
-        "extra.webp": "b4801d2da6fab3c94fec31eceaae8aaa390fe50f03a8daa38596e083e291d88c",
-        "perch.webp": "73a9fba524b017416f98e5b552da0f14eb6f2fdef49654245fde92afe0387c30",
-        "sheet.webp": "859b0a4390009a79af7f47c363d1cf0ec70b9350f2ac9a8e5abe1667903eb614"
-    ],
-    "mo": [
-        "extra.webp": "451b05afc285ca616c019b761c06aa3c6da41e5cda7071d0f7824bf918ba6f72",
-        "perch.webp": "bf16c30acc098faaff33f717e85c889080da369a0056ee16712ea81f53c5d069",
-        "sheet.webp": "8502e25e8f1a70ab163e9d992fb6d7b5e17a89287f7b1500b3c4f76ff8bd8daa"
-    ],
-    "dennis": [
-        "extra.webp": "abb0de5aa718b58090c2a70456fdb395fe9190e2a8155bcc38be863f008f0e4d",
-        "perch.webp": "af6aadc769230f0429dc8346e46f15fc021cc956af68bebb51d36724128e6849",
-        "sheet.webp": "c54e6c36677ea79b6fc26c11b8f870a49d1d0ea7bd525d7b592c3c8d2040ca25"
-    ],
-    "nana": [
-        "extra.webp": "5c49d2d67a131d8c0ec62bfeb33f48421093a905ba1429ca0ab22a6b0107fea4",
-        "perch.webp": "82ab7f94219732e590f4f59b8e70372cbb2353b68ab78ff01000ed6bd736c514",
-        "sheet.webp": "e3d3eff282fa7b51770b1c81a67a01ddd1f7786cabdcf95530e9d5933f6025d6"
-    ],
-    "hal": [
-        "extra.webp": "bc2eaf3f740c4c30506ad5759ffd82d3e16fb1de518c0d0ae6e7e987b8e9efad",
-        "perch.webp": "fb1b5c9a40b19c2b63f4f75fd23a29299efc462ae2793e52a5d3ce1540c5f87a",
-        "sheet.webp": "d5e7b54c1abf8543112816dbaae78c70ca377aefcdb891bdccd269704eb51874"
     ]
 ]
 // END BUILTIN CHARACTER HASHES
 struct SpriteCharacter {
     let frame: SpriteFrame, images: [String: CGImage]
-    let stage: SpriteStageCache
-    var ink: [String: CGRect] = [:]
     struct Result { let character: SpriteCharacter?, reason: String?, warnings: [String] }
-    static func stageRoot() -> String {
-        let env = ProcessInfo.processInfo.environment
-        // Only no-window dumps can redirect the stage bank into an owned temporary fixture.
-        if env["SLEIGHT_CURSOR_TEST"] == "1", CommandLine.arguments.contains("--stage-cache-dump"),
-            let p = env["SLEIGHT_CURSOR_STAGE_ROOT"], p.hasPrefix("/private/tmp/") { return p }
-        return NSHomeDirectory() + "/Library/Application Support/sleight/character-stage"
-    }
     static func root() -> String {
         // The no-window sharing check can read only an owned private temporary bank. Live rendering never takes this path.
         let args = CommandLine.arguments
@@ -4926,65 +4521,50 @@ struct SpriteCharacter {
         return FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent("Library/Application Support/sleight/characters").path
     }
     // Every check, with no output. The extra sheet loads only when a table entry uses it.
-    static func check(_ frame: SpriteFrame, validateStage: Bool = false, cancelled: @escaping () -> Bool = { false }) -> Result {
+    static func check(_ frame: SpriteFrame, cancelled: @escaping () -> Bool = { false }) -> Result {
         do {
-            var images: [String: CGImage] = [:], ink: [String: CGRect] = [:], warnings = Set<String>()
+            var images: [String: CGImage] = [:], warnings = Set<String>()
             let used = Set(frame.allEntries.map { $0.sheet })
             for (key, path) in [("sheet", Optional(frame.sheet)), ("extra", frame.extra), ("perch", frame.perchSheet)] {
                 guard let path = path, used.contains(key) else { continue }
                 guard !cancelled() else { throw SpriteLoadError.cancelled }
                 let loaded = try decode(path, key: key, frame: frame, cancelled: cancelled)
-                images[key] = loaded.0; warnings.formUnion(loaded.1); ink[key] = loaded.2
+                images[key] = loaded.0; warnings.formUnion(loaded.1)
             }
-            if validateStage {
-                var checked = Set<String>()
-                for entry in (frame.stage ?? [:]).sorted(by: { $0.key < $1.key }).map({ $0.value }) {
-                    guard let file = entry.file, checked.insert(file).inserted else { continue }
-                    // Release each strip before checking the next. Import checks never fill the live cache.
-                    warnings.formUnion(try decode(file, key: file, frame: frame, stage: entry, cancelled: cancelled).1)
-                }
-            }
-            return Result(character: SpriteCharacter(frame: frame, images: images, stage: SpriteStageCache(frame: frame), ink: ink), reason: nil, warnings: warnings.sorted())
+            return Result(character: SpriteCharacter(frame: frame, images: images), reason: nil, warnings: warnings.sorted())
         } catch { return Result(character: nil, reason: (error as? SpriteLoadError)?.rawValue ?? "decode", warnings: []) }
     }
     // check plus one stderr line (a trace for the dump and direct runs; the relay reads the stdout event instead).
     static func load(_ frame: SpriteFrame, cancelled: @escaping () -> Bool = { false }) -> Result {
         let result = check(frame, cancelled: cancelled)
-        if !cancelled() && frame.stageOptions.size == "stage" { result.character?.stage.warm() }
         if result.reason == SpriteLoadError.cancelled.rawValue { return result }
         if let reason = result.reason { spriteWarning("character refused (\(reason)); using ring") }
         else if !result.warnings.isEmpty { spriteWarning(result.warnings.joined(separator: ", ") + " (warning)") }
         return result
     }
-    static func decode(_ path: String, key: String, frame: SpriteFrame, stage: SpriteStageEntry? = nil, cancelled: @escaping () -> Bool = { false }, telemetry: SpriteDecodeTelemetry? = nil) throws -> (CGImage, Set<String>, CGRect) {
-        let validationBegan = ProcessInfo.processInfo.systemUptime
+    static func decode(_ path: String, key: String, frame: SpriteFrame, cancelled: @escaping () -> Bool = { false }) throws -> (CGImage, Set<String>) {
         // The launcher supplies this fixed package path in its sanitized environment. Frames cannot add roots.
         let sharingCheck = CommandLine.arguments.count == 3 && CommandLine.arguments[1] == "--check-character"
         let builtin = !sharingCheck && spriteBuiltinHashes[frame.id] != nil
         let packageRoot = ProcessInfo.processInfo.environment["SLEIGHT_BUILTIN_CHARACTERS"] ?? ""
-        let cachedStage = builtin && stage?.cacheKey != nil
-        let root = cachedStage ? stageRoot() : builtin ? packageRoot : root()
-        let characterParent = root + "/" + frame.id
-        let expectedParent = cachedStage ? characterParent + "/" + stage!.cacheKey! : characterParent
+        let root = builtin ? packageRoot : root(), expectedParent = root + "/" + frame.id
         guard root.hasPrefix("/") else { throw SpriteLoadError.path }
         func canonical(_ path: String) -> Bool {
             var bytes = [CChar](repeating: 0, count: Int(PATH_MAX))
             return realpath(path, &bytes) != nil && String(cString: bytes) == path
         }
-        let parent = stage == nil ? expectedParent : expectedParent + "/stage"
         guard canonical(path), canonical(root),
-            (path as NSString).deletingLastPathComponent == parent else { throw SpriteLoadError.path }
+            (path as NSString).deletingLastPathComponent == expectedParent else { throw SpriteLoadError.path }
         // Check every directory within the private character bank, not just the leaf filename.
-        for directory in Set([root, characterParent, expectedParent, parent]) {
+        for directory in [root, expectedParent] {
             var st = stat()
-            guard lstat(directory, &st) == 0, st.st_mode & S_IFMT == S_IFDIR, st.st_uid == getuid(), st.st_mode & 0o7022 == 0,
-                !cachedStage || st.st_mode & 0o7777 == 0o700 else { throw SpriteLoadError.permissions }
+            guard lstat(directory, &st) == 0, st.st_mode & S_IFMT == S_IFDIR, st.st_uid == getuid(), st.st_mode & 0o7022 == 0 else { throw SpriteLoadError.permissions }
         }
         // Match character.mjs: 0600 plus the 0644 data mode measured in both plugin caches.
         var before = stat()
         guard lstat(path, &before) == 0, before.st_mode & S_IFMT == S_IFREG, before.st_uid == getuid(),
-            ((before.st_mode & 0o7777) == 0o600 || builtin && !cachedStage && (before.st_mode & 0o7777) == 0o644), before.st_nlink == 1 else { throw SpriteLoadError.permissions }
-        guard before.st_size > 0, before.st_size <= (stage == nil ? 8 : 4) * 1024 * 1024 else { throw SpriteLoadError.size }
+            ((before.st_mode & 0o7777) == 0o600 || builtin && (before.st_mode & 0o7777) == 0o644), before.st_nlink == 1 else { throw SpriteLoadError.permissions }
+        guard before.st_size > 0, before.st_size <= 8 * 1024 * 1024 else { throw SpriteLoadError.size }
         // O_NOFOLLOW_ANY (which can't be combined with O_NOFOLLOW: EINVAL) refuses a symlink in any component, so a directory swapped after the realpath check can't redirect
         // the open; F_GETPATH confirms the descriptor is the checked path.
         let fd = open(path, O_RDONLY | O_NOFOLLOW_ANY | O_NONBLOCK | O_CLOEXEC)
@@ -4995,8 +4575,7 @@ struct SpriteCharacter {
             opened.st_mode == before.st_mode, opened.st_uid == before.st_uid, opened.st_size == before.st_size else { throw SpriteLoadError.changed }
         if builtin {
             var bytes = [UInt8](repeating: 0, count: Int(opened.st_size))
-            let relative = stage == nil ? (path as NSString).lastPathComponent : "stage/" + (path as NSString).lastPathComponent
-            guard let pin = cachedStage ? stage?.sha256 : spriteBuiltinHashes[frame.id]?[relative],
+            guard let pin = spriteBuiltinHashes[frame.id]?[(path as NSString).lastPathComponent],
                 pread(fd, &bytes, bytes.count, 0) == bytes.count,
                 SHA256.hash(data: Data(bytes)).map({ String(format: "%02x", $0) }).joined() == pin else { throw SpriteLoadError.changed }
         }
@@ -5005,51 +4584,32 @@ struct SpriteCharacter {
         guard headCount > 0, let header = spriteSheetHeader(Array(head.prefix(headCount))) else { throw SpriteLoadError.type }
         guard (path as NSString).pathExtension.lowercased() == header.format else { throw SpriteLoadError.type }
         let w = header.width, h = header.height
-        let cell = stage?.cell ?? frame.cell, columns = stage?.columns.count ?? 8
-        let entries: [SpriteEntry]
-        if let stage = stage {
-            guard w == Int(cell.width) * columns, h == Int(cell.height), w <= 4096, h <= 1024 else { throw SpriteLoadError.size }
-            var bytes = [UInt8](repeating: 0, count: Int(opened.st_size))
-            guard pread(fd, &bytes, bytes.count, 0) == bytes.count, spriteStageContainer(bytes, format: header.format) else { throw SpriteLoadError.type }
-            entries = [stage.art]
-        } else {
-            guard w > 0, h > 0, w <= spriteSheetCap.width, h <= spriteSheetCap.height, w == Int(cell.width) * 8,
-                h % Int(cell.height) == 0 else { throw SpriteLoadError.size }
-            entries = frame.allEntries.filter { $0.sheet == key }
-            guard entries.allSatisfy({ ($0.row + 1) * Int(cell.height) <= h && ($0.size == nil || $0.size == CGSize(width: w, height: h)) }) else { throw SpriteLoadError.size }
-        }
-        telemetry?.record("validationMs", since: validationBegan)
-        let buffer = try spriteDecodeInChild(fd: fd, width: w, height: h, format: header.format, cancelled: cancelled, telemetry: telemetry)
-        let imageBegan = ProcessInfo.processInfo.systemUptime
+        guard w > 0, h > 0, w <= spriteSheetCap.width, h <= spriteSheetCap.height, w == Int(frame.cell.width) * 8,
+            h % Int(frame.cell.height) == 0 else { throw SpriteLoadError.size }
+        let entries = frame.allEntries.filter { $0.sheet == key }
+        guard entries.allSatisfy({ ($0.row + 1) * Int(frame.cell.height) <= h && ($0.size == nil || $0.size == CGSize(width: w, height: h)) }) else { throw SpriteLoadError.size }
+        let buffer = try spriteDecodeInChild(fd: fd, width: w, height: h, format: header.format, cancelled: cancelled)
         // The image wraps the child's bytes without a copy and frees them when it goes (replacement, style change or exit).
         guard let provider = CGDataProvider(dataInfo: nil, data: buffer, size: w * h * 4, releaseData: { _, data, _ in free(UnsafeMutableRawPointer(mutating: data)) }) else {
             free(buffer); throw SpriteLoadError.decode
         }
         let pixels = buffer.assumingMemoryBound(to: UInt8.self)
-        let scanBegan = ProcessInfo.processInfo.systemUptime
-        var ink = CGRect.null
         var used = Set<Int>(), rows = Set<Int>(), warnings = Set<String>()
-        for entry in entries { rows.insert(entry.row); for col in entry.columns { used.insert(entry.row * columns + col) } }
-        let cw = Int(cell.width), ch = Int(cell.height)
+        for entry in entries { rows.insert(entry.row); for col in entry.columns { used.insert(entry.row * 8 + col) } }
+        let cw = Int(frame.cell.width), ch = Int(frame.cell.height)
         for row in rows {
-            for col in 0..<columns {
+            for col in 0..<8 {
                 var visible = 0, opaque = 0, green = 0
-                var minX = cw, minY = ch, maxX = -1, maxY = -1
                 for y in row * ch..<(row + 1) * ch {
                     for x in col * cw..<(col + 1) * cw {
                         let p = (y * w + x) * 4, a = pixels[p + 3]
-                        if a > 0 {
-                            visible += 1
-                            minX = min(minX, x - col * cw); maxX = max(maxX, x - col * cw)
-                            minY = min(minY, y - row * ch); maxY = max(maxY, y - row * ch)
-                        }
+                        if a > 0 { visible += 1 }
                         if a == 255 { opaque += 1 }
                         if a > 0, pixels[p + 1] > 100, Int(pixels[p + 1]) > Int(pixels[p]) * 2, Int(pixels[p + 1]) > Int(pixels[p + 2]) * 2 { green += 1 }
                     }
                 }
-                if used.contains(row * columns + col) {
+                if used.contains(row * 8 + col) {
                     guard visible >= 50, Double(opaque) < Double(cw * ch) * 0.95 else { throw SpriteLoadError.pixels }
-                    ink = ink.union(CGRect(x: minX, y: minY, width: maxX - minX + 1, height: maxY - minY + 1))
                     if green > 0 { warnings.insert("chroma fringe") }
                 } else if visible > 0, !(row == 0 && col == 6) { // Codex v2 permits its optional neutral look pose here.
                     // The host sees only resolved columns, not each row's declared frame count, so this is a warning.
@@ -5057,8 +4617,6 @@ struct SpriteCharacter {
                 }
             }
         }
-        telemetry?.record("scanMs", since: scanBegan)
-        let scanEnded = ProcessInfo.processInfo.systemUptime
         var after = stat()
         guard fstat(fd, &after) == 0, after.st_size == opened.st_size,
             after.st_mtimespec.tv_sec == opened.st_mtimespec.tv_sec, after.st_mtimespec.tv_nsec == opened.st_mtimespec.tv_nsec,
@@ -5067,273 +4625,26 @@ struct SpriteCharacter {
             let image = CGImage(width: w, height: h, bitsPerComponent: 8, bitsPerPixel: 32, bytesPerRow: w * 4, space: space,
                 bitmapInfo: CGBitmapInfo(rawValue: CGImageAlphaInfo.premultipliedLast.rawValue | CGBitmapInfo.byteOrder32Big.rawValue),
                 provider: provider, decode: nil, shouldInterpolate: false, intent: .defaultIntent) else { throw SpriteLoadError.decode }
-        telemetry?.parts["imageMs"] = ((scanBegan - imageBegan) + (ProcessInfo.processInfo.systemUptime - scanEnded)) * 1000
-        return (image, warnings, ink)
+        return (image, warnings)
     }
 }
 // Loads characters off the caller's thread, one at a time. Each start supersedes the load before it (its child is killed
 // within 50 ms and its result dropped), and cancel() supersedes without a new load. done runs on the loader's queue, only
 // for the current load; callers recheck isCurrent on their own thread before using the result.
 final class SpriteLoader {
-    static let queue = DispatchQueue(label: "sleight.sprite.load", qos: .userInitiated)
-    private let lock = NSLock()
+    private let lock = NSLock(), queue = DispatchQueue(label: "sleight.sprite.load", qos: .userInitiated)
     private var generation = 0
-    private weak var stageCache: SpriteStageCache?
     @discardableResult func start(_ frame: SpriteFrame, done: @escaping (Int, SpriteCharacter.Result) -> Void) -> Int {
-        lock.lock(); generation += 1; let mine = generation; stageCache?.cancel(); stageCache = nil; lock.unlock()
-        Self.queue.async {
+        lock.lock(); generation += 1; let mine = generation; lock.unlock()
+        queue.async {
             guard self.isCurrent(mine) else { return }
             let result = SpriteCharacter.load(frame, cancelled: { !self.isCurrent(mine) })
-            self.lock.lock()
-            let current = mine == self.generation
-            if current { self.stageCache = result.character?.stage }
-            self.lock.unlock()
-            if current { done(mine, result) }
+            if self.isCurrent(mine) { done(mine, result) }
         }
         return mine
     }
-    func cancel() { lock.lock(); generation += 1; stageCache?.cancel(); stageCache = nil; lock.unlock() }
+    func cancel() { lock.lock(); generation += 1; lock.unlock() }
     func isCurrent(_ generation: Int) -> Bool { lock.lock(); defer { lock.unlock() }; return generation == self.generation }
-}
-// Stage art is optional. Live loads and draws defer decoding; import checks validate each unique strip.
-let spriteStageCacheCap = 24 * 1024 * 1024
-// Owner decision 5: imported pets and missing strips use medium. Change this one policy to permit upscaling.
-let spriteStageFallbackAtMedium = true
-let spriteStageFallbacks: [String: String] = [
-    "stage-lie": "perch", "stage-lie-reach": "perch-point-right", "stage-lie-peek": "perch-peek", "stage-sleep": "sleep",
-    "stage-sit": "perch", "stage-sit-notes": "perch-peek", "stage-think": "perch-peek", "stage-wait": "perch-wait", "stage-cheer": "high-five",
-    "stage-hang": "perch", "stage-hang-peek": "perch-peek", "stage-climb": "running-right", "stage-stand": "idle",
-    "stage-point": "aim", "stage-carry": "drag-carry", "stage-wince": "error", "stage-handoff": "handoff",
-    "stage-paused": "paused", "stage-leap": "jumping", "stage-run": "running-right", "stage-startle": "startle",
-]
-struct SpriteStageEntry {
-    let file: String?, cell: CGSize, anchor: CGPoint, filter: String, next: [String], art: SpriteEntry
-    let fallback: String, fallbackArt: SpriteEntry
-    var cacheKey: String? = nil, sha256: String? = nil
-    var columns: [Int] { art.columns }
-}
-func spriteStageFrame(_ raw: Any, frame: SpriteFrame) -> [String: SpriteStageEntry]? {
-    func n(_ raw: Any?, _ range: ClosedRange<Double>, integer: Bool = false) -> Double? {
-        guard let v = raw as? NSNumber, CFGetTypeID(v) != CFBooleanGetTypeID(), v.doubleValue.isFinite,
-            range.contains(v.doubleValue), !integer || v.doubleValue.rounded() == v.doubleValue else { return nil }; return v.doubleValue
-    }
-    func pair(_ raw: Any?, _ range: ClosedRange<Double>, integer: Bool = false) -> [Double]? {
-        guard let v = raw as? [Any], v.count == 2, let x = n(v[0], range, integer: integer), let y = n(v[1], range, integer: integer) else { return nil }; return [x, y]
-    }
-    func bool(_ raw: Any?) -> Bool? { guard let v = raw as? NSNumber, CFGetTypeID(v) == CFBooleanGetTypeID() else { return nil }; return v.boolValue }
-    guard let v = raw as? [String: Any], Set(v.keys) == (v["cache"] == nil ? ["table"] : ["table", "cache"]), let table = v["table"] as? [String: Any],
-        Set(table.keys) == Set(spriteStageFallbacks.keys) else { return nil }
-    let sheets = Set(["sheet"] + (frame.extra != nil ? ["extra"] : []) + (frame.perchSheet != nil ? ["perch"] : []))
-    let cache = v["cache"] as? String
-    if v["cache"] != nil {
-        guard let key = cache, key.range(of: "^[a-f0-9]{64}$", options: .regularExpression) != nil,
-            spriteBuiltinHashes[frame.id] != nil else { return nil }
-    }
-    let folder = cache.map { SpriteCharacter.stageRoot() + "/" + frame.id + "/" + $0 } ?? (frame.sheet as NSString).deletingLastPathComponent
-    var result: [String: SpriteStageEntry] = [:], files: [String: [Double]] = [:], pixels = 0.0
-    for (name, raw) in table {
-        guard let entry = raw as? [String: Any], let fallback = entry["fallback"] as? String, fallback == spriteStageFallbacks[name],
-            let art = perchEntry(entry["art"], cell: frame.cell, sheets: sheets) else { return nil }
-        if entry["file"] == nil {
-            guard Set(entry.keys) == ["fallback", "art"] else { return nil }
-            result[name] = SpriteStageEntry(file: nil, cell: frame.cell, anchor: frame.perch?.anchor ?? .zero, filter: "linear", next: [], art: art, fallback: fallback, fallbackArt: art)
-            continue
-        }
-        let keys: Set<String> = ["fallback", "art", "file", "cell", "anchor", "hotspot", "frames", "ms", "loop", "flip", "filter", "next"]
-        let pin = entry["sha256"] as? String
-        guard Set(entry.keys) == (cache == nil ? keys : keys.union(["sha256"])),
-            cache == nil || (pin?.range(of: "^[a-f0-9]{64}$", options: .regularExpression) != nil),
-            let file = entry["file"] as? String, file.utf8.count <= 4096, file.hasPrefix(folder + "/stage/"),
-            (file as NSString).deletingLastPathComponent == folder + "/stage",
-            (file as NSString).lastPathComponent.range(of: "^[a-z-]{1,24}\\.(png|webp)$", options: .regularExpression) != nil,
-            let c = pair(entry["cell"], 192...1024, integer: true), let a = pair(entry["anchor"], 0...1024), let p = pair(entry["hotspot"], 0...1024),
-            a[0] <= c[0], a[1] <= c[1], p[0] <= c[0], p[1] <= c[1],
-            let count = n(entry["frames"], 1...8, integer: true), count * c[0] <= 4096,
-            let loop = bool(entry["loop"]), let flip = bool(entry["flip"]), let filter = entry["filter"] as? String, ["linear", "nearest"].contains(filter),
-            let durations = entry["ms"] as? [Any], durations.count == Int(count),
-            let next = entry["next"] as? [String], next.count <= 4, next.allSatisfy({ spriteStageFallbacks[$0] != nil }) else { return nil }
-        let ms = durations.compactMap { n($0, (loop ? 40.0 : 20.0)...2000) }
-        guard ms.count == durations.count, ms.reduce(0, +) <= 8000 else { return nil }
-        let size = CGSize(width: count * c[0], height: c[1])
-        let geometry = [c[0], c[1], count]
-        if let previous = files[file] { guard previous == geometry else { return nil } }
-        else { files[file] = geometry; pixels += size.width * size.height }
-        guard files.count <= 24, pixels <= 24_000_000 else { return nil }
-        let stageArt = SpriteEntry(sheet: file, row: 0, columns: Array(0..<Int(count)), ms: ms, loop: loop, flip: flip,
-            hotspot: CGPoint(x: p[0], y: p[1]), size: size, scale: 1, then: nil)
-        result[name] = SpriteStageEntry(file: file, cell: CGSize(width: c[0], height: c[1]), anchor: CGPoint(x: a[0], y: a[1]), filter: filter,
-            next: next, art: stageArt, fallback: fallback, fallbackArt: art, cacheKey: cache, sha256: pin)
-    }
-    return result
-}
-// Check every chunk before ImageIO, including one-frame animation containers and bytes after the terminator.
-func spriteStageContainer(_ b: [UInt8], format: String) -> Bool {
-    func ascii(_ r: Range<Int>) -> String { String(decoding: b[r], as: UTF8.self) }
-    func be(_ i: Int) -> Int { (0..<4).reduce(0) { ($0 << 8) | Int(b[i + $1]) } }
-    func le(_ i: Int) -> Int { (0..<4).reduce(0) { $0 | Int(b[i + $1]) << (8 * $1) } }
-    if format == "png" {
-        var at = 8, data = false
-        while at + 12 <= b.count {
-            let size = be(at), kind = ascii(at + 4..<at + 8)
-            guard size <= b.count - at - 12, !["acTL", "fcTL", "fdAT"].contains(kind), kind != "IHDR" || at == 8 else { return false }
-            if kind == "IDAT" { data = true }
-            at += 12 + size
-            if kind == "IEND" { return size == 0 && data && at == b.count }
-        }
-        return false
-    }
-    guard b.count >= 30, le(4) + 8 == b.count else { return false }
-    var at = 12, images = 0
-    while at + 8 <= b.count {
-        let size = le(at + 4), kind = ascii(at..<at + 4), start = at + 8
-        guard size <= b.count - start, size + (size & 1) <= b.count - start,
-            !["ANIM", "ANMF"].contains(kind), kind != "VP8X" || at == 12 && size == 10 && b[start] & 2 == 0 else { return false }
-        if at == 12 && !["VP8X", "VP8 ", "VP8L"].contains(kind) { return false }
-        if ["VP8 ", "VP8L"].contains(kind) { images += 1 }
-        at = start + size + (size & 1)
-    }
-    return at == b.count && images == 1
-}
-struct SpriteStagePose {
-    let image: CGImage, entry: SpriteEntry, cell: CGSize, anchor: CGPoint, filter: String, source: String, medium: Bool
-    var pending = false
-    var ink: CGRect? = nil
-}
-final class SpriteStageCache {
-    private struct Cached { let image: CGImage, bytes: Int, ink: CGRect; var use: UInt64 }
-    private let lock = NSLock(), frame: SpriteFrame
-    private struct Retry { let attempts: Int, after: Double }
-    private var cache: [String: Cached] = [:], pending: [String: Int] = [:], failed = Set<String>(), skipped = Set<String>()
-    private var retries: [String: Retry] = [:], use: UInt64 = 0, attempts = 0
-    private var active = true, protected: String?, bytes = 0, peak = 0, evictions = 0, decodes = 0, maxDecodeMs = 0.0
-    private var firstDecodeMs: Double?, firstStripReadyAtMs: Double?, cacheSelects = 0, cacheHits = 0
-    private var decodeSpans: [[String: Double]] = []
-    private var clockOffset = 0.0, injectedFaults = Set<String>()
-    init(frame: SpriteFrame) { self.frame = frame }
-    // Warm complete sets when they fit. Larger packs reserve the first-seat and common mood
-    // strips in priority order; the ordinary prefetch reservations never evict or exceed the cap.
-    func warm() {
-        var seen = Set<String>()
-        var entries = (frame.stage ?? [:]).sorted { $0.key < $1.key }.compactMap { pair -> SpriteStageEntry? in
-            guard let file = pair.value.file, seen.insert(file).inserted else { return nil }
-            return pair.value
-        }
-        func cost(_ entry: SpriteStageEntry) -> Int { Int(entry.cell.width) * entry.columns.count * Int(entry.cell.height) * 4 }
-        let total = entries.reduce(0) { $0 + cost($1) }
-        if total > spriteStageCacheCap {
-            entries.removeAll(); seen.removeAll()
-            var reserved = 0
-            for name in ["stage-think", "stage-wait", "stage-hang", "stage-stand", "stage-sit"] {
-                guard let entry = frame.stage?[name], let file = entry.file, seen.insert(file).inserted,
-                    cost(entry) <= spriteStageCacheCap - reserved else { continue }
-                reserved += cost(entry); entries.append(entry)
-            }
-        }
-        for entry in entries { request(entry, prefetch: true) }
-    }
-    func cancel() { lock.lock(); active = false; cache.removeAll(); bytes = 0; lock.unlock() }
-    private func current() -> Bool { lock.lock(); defer { lock.unlock() }; return active }
-    // Called only by the no-window dump so retry tests do not sleep or depend on host load.
-    func advanceRetryClock(_ seconds: Double) { lock.lock(); clockOffset += seconds; lock.unlock() }
-    var counters: [String: Any] {
-        lock.lock(); defer { lock.unlock() }
-        return ["cacheBytes": bytes, "peakBytes": peak, "evictions": evictions, "decodes": decodes, "attempts": attempts,
-            "residentStrips": cache.count, "resident2xStrips": cache.values.filter { $0.image.height == 416 }.count,
-            "pending": pending.count, "failed": failed.count, "skipped": skipped.count, "retrying": retries.count, "maxDecodeMs": maxDecodeMs,
-            "firstDecodeMs": firstDecodeMs as Any? ?? NSNull(), "firstStripReadyAtMs": firstStripReadyAtMs as Any? ?? NSNull(),
-            "cacheSelects": cacheSelects, "cacheHits": cacheHits, "decodeSpans": decodeSpans]
-    }
-    // Reserve decoded bytes before queueing. Prefetch only uses free space, including pending reservations.
-    private func request(_ entry: SpriteStageEntry, prefetch: Bool = false) {
-        guard let file = entry.file else { return }
-        let cost = Int(entry.cell.width) * entry.columns.count * Int(entry.cell.height) * 4
-        lock.lock()
-        guard active, cache[file] == nil, pending[file] == nil, !failed.contains(file), !skipped.contains(file),
-            retries[file].map({ ProcessInfo.processInfo.systemUptime + clockOffset >= $0.after }) ?? true else { lock.unlock(); return }
-        guard cost <= spriteStageCacheCap else { failed.insert(file); lock.unlock(); return }
-        let reserved = pending.values.reduce(0, +)
-        while bytes + reserved + cost > spriteStageCacheCap {
-            guard !prefetch, let victim = cache.filter({ $0.key != protected }).min(by: { $0.value.use < $1.value.use }) else {
-                skipped.insert(file); lock.unlock(); return
-            }
-            bytes -= victim.value.bytes; cache.removeValue(forKey: victim.key); evictions += 1
-        }
-        let queued = ProcessInfo.processInfo.systemUptime
-        pending[file] = cost; lock.unlock()
-        SpriteLoader.queue.async { [weak self] in
-            guard let self = self, self.current() else { return }
-            let started = ProcessInfo.processInfo.systemUptime
-            let env = ProcessInfo.processInfo.environment
-            let fault = env["SLEIGHT_CURSOR_TEST"] == "1" ? env["SLEIGHT_CURSOR_STAGE_DECODE_FAULT"] : nil
-            self.lock.lock(); self.attempts += 1
-            let inject = self.injectedFaults.insert(file).inserted
-            self.lock.unlock()
-            var loaded: CGImage?, failure: SpriteLoadError?, ink = CGRect.null
-            let telemetry = SpriteDecodeTelemetry()
-            do {
-                if fault == "slow" {
-                    for _ in 0..<20 { if !self.current() { break }; usleep(50_000) }
-                }
-                if inject && fault == "timeout-once" { throw SpriteLoadError.timeout }
-                if inject && fault == "child-once" { throw SpriteLoadError.child }
-                let decoded = try SpriteCharacter.decode(file, key: file, frame: self.frame, stage: entry, cancelled: { !self.current() }, telemetry: telemetry)
-                loaded = decoded.0; ink = decoded.2
-            } catch { failure = (error as? SpriteLoadError) ?? .decode }
-            let elapsed = (ProcessInfo.processInfo.systemUptime - started) * 1000
-            self.lock.lock(); defer { self.lock.unlock() }
-            self.pending.removeValue(forKey: file)
-            guard self.active else { return }
-            guard let image = loaded else {
-                self.skipped.removeAll() // A failed reservation leaves room for other strips.
-                if failure == .timeout || failure == .child {
-                    let count = (self.retries[file]?.attempts ?? 0) + 1
-                    let delay = min(30.0, pow(2.0, Double(min(count - 1, 5))))
-                    self.retries[file] = Retry(attempts: count, after: ProcessInfo.processInfo.systemUptime + self.clockOffset + delay)
-                } else if failure != .cancelled { self.failed.insert(file) }
-                return
-            }
-            self.retries.removeValue(forKey: file)
-            self.skipped.removeAll() // Completed reservations can now be evicted by a foreground request.
-            self.decodes += 1; self.maxDecodeMs = max(self.maxDecodeMs, elapsed)
-            if self.firstDecodeMs == nil { self.firstDecodeMs = elapsed }
-            if self.firstStripReadyAtMs == nil { self.firstStripReadyAtMs = ProcessInfo.processInfo.systemUptime * 1000 }
-            if self.decodeSpans.count < 64 {
-                telemetry.parts["otherMs"] = max(0, elapsed - telemetry.parts.values.reduce(0, +))
-                self.decodeSpans.append(["queuedMs": queued * 1000, "startedMs": started * 1000,
-                    "publishedMs": ProcessInfo.processInfo.systemUptime * 1000, "queueMs": (started - queued) * 1000, "decodeMs": elapsed].merging(telemetry.parts) { $1 })
-            }
-            // The reservation and validated geometry account for exactly these RGBA bytes.
-            guard image.bytesPerRow * image.height == cost, self.bytes + cost <= spriteStageCacheCap else { self.failed.insert(file); return }
-            self.use += 1; self.cache[file] = Cached(image: image, bytes: cost, ink: ink, use: self.use)
-            self.bytes += cost; self.peak = max(self.peak, self.bytes)
-        }
-    }
-    func select(_ state: String, images: [String: CGImage], facingLeft: Bool = false) -> SpriteStagePose? {
-        lock.lock(); cacheSelects += 1; lock.unlock()
-        guard let fallback = spriteStageFallbacks[state] else { return nil }
-        let entry = frame.stage?[state]
-        let directed = facingLeft ? ["perch-point-right": "perch-point-left", "running-right": "running-left"][fallback] ?? fallback : fallback
-        let art = (directed != fallback ? frame.perch?.table[directed] : nil) ?? entry?.fallbackArt ?? frame.perch?.table[fallback] ?? frame.table[fallback] ?? frame.table["idle"]!
-        guard let image = images[art.sheet] else { return nil }
-        if let entry = entry, let file = entry.file {
-            lock.lock()
-            if protected != file { skipped.removeAll() }; protected = file; use += 1
-            var ready = cache[file]
-            if ready != nil { ready!.use = use; cache[file] = ready; cacheHits += 1 }
-            lock.unlock()
-            request(entry)
-            // The predecessor's first draw schedules its likely successors too, without waiting for either.
-            for name in entry.next { if let next = frame.stage?[name] { request(next, prefetch: true) } }
-            if let ready = ready {
-                return SpriteStagePose(image: ready.image, entry: entry.art, cell: entry.cell, anchor: entry.anchor, filter: entry.filter, source: state, medium: false, ink: ready.ink)
-            }
-        }
-        lock.lock()
-        if entry?.file == nil { protected = nil; skipped.removeAll() }
-        let loading = entry?.file.map { !failed.contains($0) } ?? false
-        lock.unlock()
-        return SpriteStagePose(image: image, entry: art, cell: frame.cell, anchor: frame.perch?.anchor ?? .zero, filter: "linear", source: directed, medium: spriteStageFallbackAtMedium, pending: loading, ink: nil)
-    }
 }
 struct SpritePose {
     var time: Double, state: String, entry: SpriteEntry, column: Int, direction: Int
@@ -5500,45 +4811,6 @@ func installSprite(_ sprite: SpritePlan, ring: RingPlan, root: CALayer, frame: C
     }
 }
 // END SPRITE
-
-// BEGIN STAGE CACHE DUMP
-// No NSApplication, views, layers or windows. The dump uses exactly the production selection, queue and cache.
-func spriteStageCacheDump() {
-    var character: SpriteCharacter?, count = 0, last = -1
-    let loader = SpriteLoader()
-    func emit(_ row: [String: Any]) {
-        guard let bytes = try? JSONSerialization.data(withJSONObject: row, options: [.sortedKeys]) else { exit(70) }
-        FileHandle.standardOutput.write(bytes + Data([10]))
-    }
-    while let line = readLine() {
-        guard line.utf8.count <= 32768, let bytes = line.data(using: .utf8), let data = try? JSONSerialization.jsonObject(with: bytes) as? [String: Any] else { exit(65) }
-        if data["hand"] as? String == "character" {
-            guard case let .character(_, frame)? = handFrame(data), frame.seq > last else { exit(65) }; last = frame.seq
-            let started = ProcessInfo.processInfo.systemUptime, loaded = DispatchSemaphore(value: 0)
-            var result: SpriteCharacter.Result?
-            loader.start(frame) { _, value in result = value; loaded.signal() }
-            loaded.wait(); character = result?.character
-            emit(["effect": "character", "loaded": character != nil, "reason": result?.reason as Any? ?? NSNull(), "cacheBytes": 0,
-                "loadMs": (ProcessInfo.processInfo.systemUptime - started) * 1000])
-        } else if Set(data.keys) == ["stageAwait"], data["stageAwait"] as? Bool == true {
-            SpriteLoader.queue.sync {}
-            guard let character = character else { exit(65) }; emit(character.stage.counters.merging(["effect": "ready"]) { $1 })
-        } else if Set(data.keys) == ["stageRetryAdvance"], let seconds = data["stageRetryAdvance"] as? Double,
-            seconds.isFinite, seconds >= 0, seconds <= 60, let character = character {
-            character.stage.advanceRetryClock(seconds)
-        } else if Set(data.keys) == ["stageState"], let state = data["stageState"] as? String, let character = character {
-            let started = ProcessInfo.processInfo.systemUptime
-            guard let pose = character.stage.select(state, images: character.images) else { exit(65) }
-            let elapsed = (ProcessInfo.processInfo.systemUptime - started) * 1000; count += 1
-            emit(character.stage.counters.merging(["effect": "stage", "state": state, "source": pose.source, "medium": pose.medium,
-                "cell": [pose.cell.width, pose.cell.height], "selectMs": elapsed]) { $1 })
-        } else { exit(65) }
-    }
-    SpriteLoader.queue.sync {}
-    if let character = character { emit(character.stage.counters.merging(["effect": "end", "states": count]) { $1 }) }
-}
-
-// END STAGE CACHE DUMP
 // The character's result on the hand channel's stdout, so the relay can say why the ring shows alone.
 func writeCharacterResult(_ id: String, _ result: SpriteCharacter.Result) {
     guard let nonce = nonceBook.nonce("hand"), let bytes = try? JSONSerialization.data(withJSONObject: ["hand": "character", "nonce": nonce,
@@ -5563,8 +4835,7 @@ let spriteWarmImages: [[UInt8]] = [
      0x10, 0x07, 0x10, 0x11, 0x11, 0x88, 0x88, 0xfe, 0x07, 0x00],
 ]
 func spriteDecodeChild(_ args: [String]) -> Never {
-    guard args.count == 3, let w = Int(args[0]), let h = Int(args[1]),
-        ((1...spriteSheetCap.width).contains(w) && (1...spriteSheetCap.height).contains(h) || (1...4096).contains(w) && (1...1024).contains(h)),
+    guard args.count == 3, let w = Int(args[0]), let h = Int(args[1]), (1...spriteSheetCap.width).contains(w), (1...spriteSheetCap.height).contains(h),
         let uti = ["png": "public.png", "webp": "org.webmproject.webp"][args[2]] else { exit(64) }
     let env = ProcessInfo.processInfo.environment
     let fault = env["SLEIGHT_CURSOR_TEST"] == "1" ? env["SLEIGHT_CURSOR_DECODE_FAULT"] : nil
@@ -5643,7 +4914,7 @@ struct PerchTable { let anchor: CGPoint, table: [String: SpriteEntry] }
 struct PerchLineSet { let lang: String?, lines: [String: [String]] }
 extension SpriteFrame {
     // Every entry the decode checks: the trail table and, with perch, the perch table (the third sheet's cells among them).
-    var allEntries: [SpriteEntry] { Array(table.values) + (perch.map { Array($0.table.values) } ?? []) + (stage.map { $0.values.map { $0.fallbackArt } } ?? []) }
+    var allEntries: [SpriteEntry] { Array(table.values) + (perch.map { Array($0.table.values) } ?? []) }
 }
 // A perch entry: the trail table's rules, with explicit columns, durations, size and scale, and the perch sheet allowed.
 func perchEntry(_ raw: Any?, cell: CGSize, sheets: Set<String>) -> SpriteEntry? {
@@ -5767,7 +5038,6 @@ func perchLegs(_ character: SpriteCharacter, states: [String] = perchLegStates) 
 // The target window, the windows in front of it (the window list's order), its display and the display's usable top.
 struct PerchWorld { var window: CGRect, above: [CGRect], display: CGRect, top: Double, fullScreen: Bool }
 struct PerchSeat: Equatable {
-    var usable: CGRect? = nil
     var pid: Int32, window: UInt32, x: Double, edge: Double, peek: Bool, rise: Double, frame: CGRect, display: CGRect, top: Double
 }
 enum PerchPlace: Equatable { case seat(PerchSeat), hide(String) }
@@ -5835,21 +5105,10 @@ func perchPlace(_ world: PerchWorld?, pid: Int32, window: UInt32, target: CGPoin
 }
 
 // One plan: the box's cells, its top-left positions, opacity and peek mask over time, installed as keyframes.
-struct PerchCell: Equatable { let time: Double, state: String, entry: SpriteEntry, column: Int }
+struct PerchCell { let time: Double, state: String, entry: SpriteEntry, column: Int }
 struct PerchPlan {
-#if SLEIGHT_STAGE_BENCH
-    // A copied plan keeps its identity through a reinstall. A newly built pose gets a new identity, even if it looks equal.
-    let stageBenchIdentity = UUID()
-#endif
     var kind: String, seat: PerchSeat, cells: [PerchCell] = [], positions: [(Double, CGPoint)] = [], opacity: [(Double, Double)] = []
     var masked: [(Double, Bool)] = [], duration = 0.0, zs = false, zsStill = false, reduced = false, states: [String] = []
-    func samePose(as other: PerchPlan) -> Bool {
-        seat == other.seat && cells == other.cells && duration == other.duration && zs == other.zs &&
-            zsStill == other.zsStill && reduced == other.reduced &&
-            positions.elementsEqual(other.positions, by: { $0.0 == $1.0 && $0.1 == $1.1 }) &&
-            opacity.elementsEqual(other.opacity, by: { $0.0 == $1.0 && $0.1 == $1.1 }) &&
-            masked.elementsEqual(other.masked, by: { $0.0 == $1.0 && $0.1 == $1.1 })
-    }
     func position(at t: Double) -> CGPoint {
         guard let first = positions.first else { return .zero }
         if t <= first.0 { return first.1 }
@@ -5988,28 +5247,13 @@ struct PerchEnvironment {
     var reduced: () -> Bool
     var measure: (String) -> CGSize
 }
-struct PerchWindowObservation {
-    let pid: Int32, window: UInt32, expected: CGRect, observed: CGRect
-    var fixture: [String: Any]? = nil
-    var json: [String: Any] {
-        ["pid": pid, "window": window, "expected": stageTraceRect(expected), "observed": stageTraceRect(observed),
-            "differencePt": max(abs(expected.minX - observed.minX), abs(expected.minY - observed.minY),
-                abs(expected.width - observed.width), abs(expected.height - observed.height)),
-            "edgeDifferencePt": stageWindowEdgeDifference(expected, observed),
-            "fixture": fixture as Any? ?? NSNull(), "matched": stageSameWindowBounds(expected, observed)]
-    }
-}
-#if SLEIGHT_STAGE_BENCH
-// The owned fixture supplies its own frame synchronously at the geometry decision.
-var stageBenchLegacyWindowFrame: ((Int32, UInt32) -> [String: Any]?)?
-#endif
-enum PerchEffect { case draw(PerchPlan), reseat(CGPoint), hide(String, Double), park, still, line(PerchLine), lineOut(Double) }
+enum PerchEffect { case draw(PerchPlan), hide(String, Double), park, still, line(PerchLine), lineOut(Double) }
 // end: a drag's grab point. A drag's ring point is its drop, so the seat dodges both ends.
-struct PerchEvent { let state: String, pid: Int32, window: UInt32, at: CGPoint, ok: Bool, drop: Double?, end: CGPoint?; var detail: String? = nil, retry = false, transfer: String? = nil; var windowRect: CGRect? = nil; var area: String? = nil; var wideReason: String? = nil }
+struct PerchEvent { let state: String, pid: Int32, window: UInt32, at: CGPoint, ok: Bool, drop: Double?, end: CGPoint? }
 // The ring's draw as a perch frame: the character reacts when the ring draws, after any act delay.
 func perchEvent(_ plan: RingPlan) -> PerchEvent {
     PerchEvent(state: plan.state, pid: plan.pid, window: plan.window, at: plan.at, ok: plan.ok, drop: plan.phases["drop"]?.first,
-        end: plan.state == "drag" ? plan.grab : nil, detail: plan.detail, retry: plan.retry, transfer: plan.transfer, windowRect: plan.windowRect)
+        end: plan.state == "drag" ? plan.points.first : nil)
 }
 // How long a ring plan's narration bubble (C2) stays: until the plan's fade ends or it releases.
 func perchNarrationSpan(_ plan: RingPlan) -> Double {
@@ -6045,11 +5289,7 @@ struct PerchRuntime {
     var seat: PerchSeat?, shown = false, asleep = false, paused = false, current = "perch"
     var plan: PerchPlan?, began = 0.0, lastFrame = -Double.infinity
     var timers: [(at: Double, action: String)] = []
-    var reseatAnchor: CGRect?             // the window frame at the last full placement, never a silent correction
     var moving: CGRect?                  // the target window's frame while the person moves it; hidden until it holds still
-    var windowObservation: PerchWindowObservation?, lastWindowMismatch: PerchWindowObservation?
-    var silentReseats = 0, maxSilentReseatDifferencePt = 0.0
-    var windowDecisions: [[String: Any]] = []
     var covered = false                  // hidden because a window was raised over the seat; back once it clears
     var legs: (Double, Double)?          // the measured leg spread left and right of the seat, in points
     var trail: (box: CGRect, display: CGRect, top: Double)?   // lines in trail mode anchor to the sprite's box
@@ -6057,19 +5297,11 @@ struct PerchRuntime {
     var turnOk: Bool?            // whether the turn's last call so far succeeded (its done with ok) or failed (an error)
     var metrics: PerchMetrics? { frame.flatMap { perchMetrics($0, legs: legs) } }
     var next: Double? { timers.map { $0.at }.min() }
-    // Window fallback: 250 ms while moving, 500 ms awake, 2 s asleep or once a paused animation parks.
-    // Drawing and line deadlines still win. nil means nothing is perched (including after the 10 minute deep hide).
-    var poll: Double? { seat == nil ? nil : moving != nil ? 0.25 : asleep || paused && !timers.contains(where: { $0.action == "park" }) ? 2 : 0.5 }
-    func nextWake(_ now: Double, callHidden: Bool = false) -> (at: Double, source: String, leeway: Int)? {
-        let interval = poll ?? (callHidden ? 2 : nil)
-        let check = interval.map { now + $0 }, timer = timers.min { $0.at < $1.at }
-        guard let at = [timer?.at, check].compactMap({ $0 }).min() else { return nil }
-        if let timer = timer, timer.at <= at + 1e-9 { return (at, "legacy-timer:" + timer.action, 10) }
-        return (at, "legacy-window-check", Int((poll ?? 0.5) * 200))
-    }
+    // How often the host rereads the target window: while it moves, while awake or covered, slower asleep. nil: nothing
+    // perched (also after 10 minutes asleep, covered or paused, until the next frame).
+    var poll: Double? { seat == nil ? nil : moving != nil ? 0.25 : asleep ? 2 : 0.5 }
     mutating func load(_ frame: SpriteFrame?) {
-        self.frame = frame; book.set = frame?.lines; book.recent = [:]; seat = nil; shown = false; asleep = false; plan = nil; moving = nil; reseatAnchor = nil; timers = []; windowObservation = nil; lastWindowMismatch = nil
-        silentReseats = 0; maxSilentReseatDifferencePt = 0; windowDecisions = []
+        self.frame = frame; book.set = frame?.lines; book.recent = [:]; seat = nil; shown = false; asleep = false; plan = nil; moving = nil; timers = []
         line = nil; book.showing = nil; turnOk = nil; covered = false; trail = nil
     }
     mutating func timer(_ at: Double, _ action: String) { timers.removeAll { $0.action == action }; timers.append((at, action)) }
@@ -6087,7 +5319,7 @@ struct PerchRuntime {
     mutating func hide(_ now: Double, _ reason: String, keepSeat: Bool = false) -> [(Double, PerchEffect)] {
         let was = shown
         shown = false; asleep = false; plan = nil
-        if !keepSeat { seat = nil; moving = nil; reseatAnchor = nil; covered = false }
+        if !keepSeat { seat = nil; moving = nil; covered = false }
         timers.removeAll { !(keepSeat && ["return", "deep"].contains($0.action)) }
         if keepSeat && !timers.contains(where: { $0.action == "deep" }) { timer(now + 600, "deep") }
         // Reported even when nothing showed, so a seat refused on the first frame says why (the host has nothing to fade).
@@ -6227,7 +5459,7 @@ struct PerchRuntime {
                 } else if let old = seat, abs(old.x - s.x) > 0.5 || abs(old.edge - s.edge) > 0.5 {
                     move = abs(old.x - s.x) > 360 ? "run" : "hop"
                 }
-                seat = s; reseatAnchor = s.frame; covered = false
+                seat = s; covered = false
             }
         }
         let from = shown ? plan?.position(at: now - began) : nil
@@ -6299,35 +5531,14 @@ struct PerchRuntime {
     // the frame stops changing. A window raised over the seat moves it to an uncovered span, or hides it until one clears.
     mutating func observe(_ now: Double, env: PerchEnvironment) -> [(Double, PerchEffect)] {
         var out = advance(to: now, env: env)
-        guard var seat = seat, let m = metrics else { return out }
+        guard let seat = seat, let m = metrics else { return out }
         guard let world = env.world(seat.pid, seat.window) else { return out + hide(now, "gone") }
         if world.fullScreen { return out + hide(now, "full-screen") }
-        let still = moving ?? reseatAnchor ?? seat.frame
-        // Both rectangles describe the target window. Drawing-panel crops and
-        // layer coordinates never participate in this comparison.
-        windowObservation = PerchWindowObservation(pid: seat.pid, window: seat.window, expected: still, observed: world.window)
-#if SLEIGHT_STAGE_BENCH
-        windowObservation?.fixture = stageBenchLegacyWindowFrame?(seat.pid, seat.window)
-#endif
-        if !stageSameWindowBounds(world.window, still) {
-            lastWindowMismatch = windowObservation
-            recordWindowDecision("moved", now: now)
+        let still = moving ?? seat.frame
+        if world.window != still {
             if shown { out += hide(now, "moved", keepSeat: true) }
             moving = world.window; timer(now + 0.5, "return")
             return out
-        }
-        if moving == nil, world.window != seat.frame {
-            let delta = CGPoint(x: world.window.minX - seat.frame.minX, y: world.window.minY - seat.frame.minY)
-            seat.x += delta.x; seat.edge += delta.y; seat.frame = world.window
-            seat.display = world.display; seat.top = world.top; self.seat = seat
-            silentReseats += 1
-            maxSilentReseatDifferencePt = max(maxSilentReseatDifferencePt, stageWindowEdgeDifference(still, world.window))
-            recordWindowDecision("silent-reseat", now: now)
-            if var pose = plan {
-                pose.seat = seat; pose.positions = pose.positions.map { ($0.0, CGPoint(x: $0.1.x + delta.x, y: $0.1.y + delta.y)) }
-                plan = pose
-                if shown { out.append((now, .reseat(delta))) }
-            }
         }
         guard moving == nil, shown ? !perchUncovered(seat, world, m) : covered else { return out }
         // The same spot on the window; the point is below the window so nothing dodges it.
@@ -6337,7 +5548,7 @@ struct PerchRuntime {
         case let .seat(s):
             let move = !shown ? "return" : abs(s.x - seat.x) > 360 ? "run" : "hop"
             let from = shown ? plan?.position(at: now - began) : nil
-            self.seat = s; reseatAnchor = s.frame; covered = false
+            self.seat = s; covered = false
             if !paused { timers.removeAll { $0.action == "deep" } }
             if let p = draw(current, ok: false, at: nil, move: move, from: from, woke: false, now: now, env: env) {
                 plan = p; began = now; shown = true; out.append((now, .draw(p))); timer(now + p.duration, "park")
@@ -6345,34 +5556,6 @@ struct PerchRuntime {
             }
         }
         return out
-    }
-    private mutating func recordWindowDecision(_ decision: String, now: Double) {
-        guard let observation = windowObservation else { return }
-        windowDecisions.append(observation.json.merging(["decision": decision, "time": now]) { $1 })
-        if windowDecisions.count > 128 { windowDecisions.removeFirst(windowDecisions.count - 128) }
-    }
-    // A microphone completion observes geometry and due timers, but never restarts an unchanged installed pose.
-    mutating func observeCall(now: Double, env: PerchEnvironment, visible: Bool) -> [(Double, PerchEffect)] {
-        let previous = plan, previousBegan = began, wasShown = shown
-        let effects = observe(now, env: env)
-        return preserveInstalledPose(effects, previous: previous, previousBegan: previousBegan, wasShown: wasShown, visible: visible)
-    }
-    // Only a paused replay may retain its installed pose. Actions must replay their reaction.
-    mutating func receiveVisible(_ ev: PerchEvent, now: Double, env: PerchEnvironment, visible: Bool) -> [(Double, PerchEffect)] {
-        let previous = plan, previousBegan = began, wasShown = shown
-        let effects = receive(ev, now: now, env: env)
-        guard ev.state == "paused" else { return effects }
-        return preserveInstalledPose(effects, previous: previous, previousBegan: previousBegan, wasShown: wasShown, visible: visible)
-    }
-    private mutating func preserveInstalledPose(_ incoming: [(Double, PerchEffect)], previous: PerchPlan?, previousBegan: Double,
-        wasShown: Bool, visible: Bool) -> [(Double, PerchEffect)] {
-        var effects = incoming
-        if wasShown && visible && shown, !effects.contains(where: { if case .hide = $0.1 { return true }; return false }),
-            let previous = previous, let current = plan, previous.samePose(as: current) {
-            effects.removeAll { if case .draw = $0.1 { return true }; return false }
-            plan = previous; began = previousBegan
-        }
-        return effects
     }
     mutating func advance(to now: Double, env: PerchEnvironment) -> [(Double, PerchEffect)] {
         var out: [(Double, PerchEffect)] = []
@@ -6405,7 +5588,7 @@ struct PerchRuntime {
             case "return":
                 guard let seat = seat, let m = metrics else { continue }
                 guard let world = env.world(seat.pid, seat.window) else { out += hide(at, "gone"); continue }
-                if moving.map({ stageSameWindowBounds(world.window, $0) }) != true { moving = world.window; timer(at + 0.5, "return"); continue }
+                if world.window != moving { moving = world.window; timer(at + 0.5, "return"); continue }
                 moving = nil
                 // The same spot on the moved window; the point is below the window so nothing dodges it.
                 let target = CGPoint(x: seat.x + Double(world.window.minX - seat.frame.minX), y: Double(world.window.maxY) + 100)
@@ -6414,11 +5597,10 @@ struct PerchRuntime {
                     if reason == "covered" {
                         self.seat?.x = Double(target.x); self.seat?.edge = Double(world.window.minY)
                         self.seat?.frame = world.window; self.seat?.display = world.display; self.seat?.top = world.top
-                        reseatAnchor = world.window
                         covered = true
                     } else { out += hide(at, reason) }
                 case let .seat(s):
-                    self.seat = s; reseatAnchor = s.frame; covered = false
+                    self.seat = s; covered = false
                     if !paused { timers.removeAll { $0.action == "deep" } }
                     if let p = draw(current, ok: false, at: nil, move: "return", from: nil, woke: false, now: at, env: env) {
                         plan = p; began = at; shown = true; out.append((at, .draw(p))); timer(at + p.duration, "park")
@@ -6473,308 +5655,15 @@ final class PerchBubbleView: NSView {
     }
     override func accessibilityPerformPress() -> Bool { refuseConsentInput(); return false }
 }
-// BEGIN STAGE PANEL LIFETIME
-// The panel owner is shared by the drawing host and the headless dump. Only window
-// visibility and lifetime are observed; the dump cannot supply a measurement.
-protocol StagePanelWindow: AnyObject {
-    var isVisible: Bool { get }
-    func orderOut(_ sender: Any?)
-    func close()
-}
-final class StagePanelLifetime<Window: StagePanelWindow> {
-    var panel: Window?
-    var panelOnScreen: Bool { panel?.isVisible == true }
-    func release() {
-        panel?.orderOut(nil); panel?.close(); panel = nil
-    }
-    func hide(_ reason: String, duration: Double, release: () -> Void, fade: (Double) -> Void) {
-        if reason != "hide" || duration == 0 { release(); return }
-        fade(duration)
-    }
-}
-// END STAGE PANEL LIFETIME
-extension HandPanel: StagePanelWindow {}
-
-#if SLEIGHT_STAGE_BENCH
-struct StageBenchPlanSequence {
-    private var value = 0
-    private var values: [UUID: Int] = [:]
-    // Negative identities cannot collide with the stage path's nonnegative producer sequences.
-    mutating func next(_ plan: PerchPlan) -> Int {
-        if let value = values[plan.stageBenchIdentity] { return value }
-        value -= 1; values[plan.stageBenchIdentity] = value; return value
-    }
-}
-#endif
 final class PerchHost {
     weak var host: HandHost?
-#if SLEIGHT_STAGE_BENCH
-    var stageBenchLegacyPlans = StageBenchPlanSequence()
-    var stageBenchInstallCause = "unattributed"
-    // Caller and runtime transition are both retained, since a timer or seat hop may run inside an observation.
-    func stageBenchCause(_ path: String, previousSeat: PerchSeat?, due: [String]) -> String {
-        var parts = [path]
-        if !due.isEmpty { parts.append("due-timer:" + due.joined(separator: ",")) }
-        if let seat = runtime.seat, seat != previousSeat { parts.append(previousSeat == nil ? "startup" : "seat-hop") }
-        return parts.joined(separator: "/")
-    }
-#endif
     var runtime = PerchRuntime()
-    var stage = StageRuntime(), stageLocked = false, stageSleeping = false
-    let stageSlot: StageSlot
-#if SLEIGHT_CALL_SELFTEST
-    // Compiled only by the offline wiring tests. The production methods still own every transition.
-    var callTestClock: Double?
-    var callTestWorld: StageWorld?, callTestInstalls = 0, callTestVisible = false, callTestReduced = true
-#endif
-    var stageObservers: [(NotificationCenter, NSObjectProtocol)] = []
-    var stageMouseMonitors: [Any] = []
-    var pointerWake: DispatchWorkItem?, pointerCheckAt = -Double.infinity
-    var pointerNearAt = CACurrentMediaTime()
-    var stageWindow: (pid: Int32, window: UInt32)?
-    let stageCall = StageCallMonitor()
-    var legacyCallEvent: PerchEvent?, legacyCallAt = -Double.infinity
-    var lastHideReason: String? = nil
-    // Observational only. Reading status neither samples Core Audio nor changes rendering.
-    var diagnostics: [String: Any] {
-        let stagePath = stageActive
-        let up = (stagePath ? stage.shown : runtime.shown) && panel?.isVisible == true
-        // Describe existing protection state only. Do not poll windows or admit a target to answer status.
-        let wide: [[String: Any]] = stage.wideWindows.sorted {
-            $0.pid == $1.pid ? $0.window < $1.window : $0.pid < $1.pid
-        }.map { key in
-            var reasons: [String] = []
-            if stage.compactedWindows.contains(key) { reasons.append("capacity") }
-            if stage.unmappableDrags.contains(key) { reasons.append("drag") }
-            // The runtime retains an uncertainty latch, not a historical trigger log. Do not invent a precise cause.
-            if reasons.isEmpty { reasons.append("uncertain-geometry-scroll-epoch-or-stale") }
-            let bounds = stage.windowBook.current[key]?.bounds ?? stage.wideObservedFrames[key]
-            return ["pid": key.pid, "id": key.window, "frame": bounds.map(stageTraceRect) as Any? ?? NSNull(),
-                "reasons": reasons]
-        }
-        return stageVisibilityStatus(stagePath: stagePath, stageShown: stage.shown, legacyShown: runtime.shown,
-            panelVisible: panel?.isVisible == true, rung: stage.draw?.seat.rung,
-            reason: stagePath ? stage.hiddenReason ?? lastHideReason : lastHideReason)
-            .merging(["callMonitor": stageCall.snapshot(now),
-                "turnTargets": stagePath ? stage.turnTargets.count : 0,
-                "activeTargets": stagePath ? stage.activeTargets.count : 0, "wideWindows": wide,
-                "areaProtection": stagePath && stage.event?.area != nil && !stage.wideWindows.isEmpty,
-                "usableFrame": (stage.seat?.world.usable ?? stage.noSeatWorld?.usable).map(stageTraceRect) as Any? ?? NSNull(),
-                "protectedRects": stagePath ? (stage.exclusions + stage.activeTargets).map(stageTraceRect) : [],
-                "panelGenerations": panelGenerations, "hideReasonCounts": stage.hideReasonCounts, "maxWindowBoundsDifferencePt": stage.maxWindowBoundsDifferencePt as Any? ?? NSNull(),
-                "legacyWindowObservation": runtime.windowObservation?.json as Any? ?? NSNull(),
-                "legacyWindowMismatch": runtime.lastWindowMismatch?.json as Any? ?? NSNull(),
-                "legacySilentReseats": runtime.silentReseats, "legacyMaxSilentReseatDifferencePt": runtime.maxSilentReseatDifferencePt,
-                "legacyWindowDecisions": runtime.windowDecisions,
-                "stageSilentReseats": stage.silentReseats, "stageMaxSilentReseatDifferencePt": stage.maxSilentReseatDifferencePt,
-                "stageWindowDecisions": stage.windowDecisions,
-                "drawing": drawingGeometry?.json as Any? ?? NSNull(),
-                "seat": up ? (stagePath ? stage.draw?.seat.kind ?? "unknown" : "legacy-perch") as Any : NSNull()]) { $1 }
-    }
-    var stageActive: Bool { active && loaded?.frame.stageOptions.enabled == true }
     var enabled = false, lines = true
     var loaded: SpriteCharacter?
-    var stageEffects: (([StageEffect]) -> Void)?
-    var panelGenerations = 0
-    let panelLifetime = StagePanelLifetime<HandPanel>()
-    var panel: HandPanel? { get { panelLifetime.panel } set { panelLifetime.panel = newValue } }
-    var root: CALayer?, boxLayer: CALayer?, maskLayer: CALayer?, zs: CAReplicatorLayer?, frame = CGRect.null
-    var drawingGeometry: SpritePanelGeometry?
+    var panel: HandPanel?, root: CALayer?, boxLayer: CALayer?, maskLayer: CALayer?, zs: CAReplicatorLayer?, frame = CGRect.null
     var bubble: PerchBubblePanel?
     var wake: DispatchSourceTimer?
-    init(host: HandHost, stageSlot: StageSlot = StageSlot()) {
-        self.stageSlot = stageSlot
-        self.host = host; runtime.seed = UInt64.random(in: 1...UInt64.max); runtime.book.seed = runtime.seed
-        stageCall.changed = { [weak self] in
-            guard let self = self, self.host?.cursorStyle == "sprite", self.loaded != nil, !self.stageLocked, !self.stageSleeping else { return }
-            if !self.active {
-                if self.legacyCallBlocked() { self.host?.hideRingCharacter(); self.hideLegacyCall() }; return
-            }
-            if self.stageActive, self.stage.event != nil {
-                self.performStage(self.stage.observe(self.now, world: self.stageEnvironment(), reduced: NSWorkspace.shared.accessibilityDisplayShouldReduceMotion))
-            } else if !self.stageActive { self.observeLegacyCall() }
-        }
-#if SLEIGHT_CALL_SELFTEST
-        if CommandLine.arguments.contains("--call-host-selftest") { return }
-#endif
-        func observe(_ center: NotificationCenter, _ name: Notification.Name, _ change: @escaping (PerchHost) -> Void) {
-            let token = center.addObserver(forName: name, object: nil, queue: .main) { [weak self] _ in
-                guard let self = self else { return }; change(self)
-                if self.stageLocked || self.stageSleeping { self.host?.edgeChips.hide() }
-                else { self.host?.edgeChips.refresh() }
-                if self.stageActive { self.performStage(self.stage.observe(self.now, world: self.stageEnvironment(), reduced: NSWorkspace.shared.accessibilityDisplayShouldReduceMotion)) }
-            }
-            stageObservers.append((center, token))
-        }
-        let workspace = NSWorkspace.shared.notificationCenter, distributed = DistributedNotificationCenter.default()
-        observe(workspace, NSWorkspace.willSleepNotification) { $0.stageCall.refreshSubscription() }
-        observe(workspace, NSWorkspace.didWakeNotification) { $0.stageCall.refreshSubscription() }
-        observe(workspace, NSWorkspace.screensDidSleepNotification) { $0.stageSleeping = true; $0.stageCall.refreshSubscription() }
-        observe(workspace, NSWorkspace.screensDidWakeNotification) { $0.stageSleeping = false; $0.stageCall.refreshSubscription() }
-        observe(workspace, NSWorkspace.sessionDidResignActiveNotification) { $0.stageLocked = true }
-        observe(workspace, NSWorkspace.sessionDidBecomeActiveNotification) { $0.stageLocked = false }
-        observe(distributed, Notification.Name("com.apple.screenIsLocked")) { $0.stageLocked = true }
-        observe(distributed, Notification.Name("com.apple.screenIsUnlocked")) { $0.stageLocked = false }
-        observe(workspace, NSWorkspace.activeSpaceDidChangeNotification) { _ in }
-        observe(workspace, NSWorkspace.didActivateApplicationNotification) { _ in }
-        observe(.default, NSApplication.didChangeScreenParametersNotification) { _ in }
-    }
-    func configureStageMouse() {
-        guard stageActive else {
-            for token in stageMouseMonitors { NSEvent.removeMonitor(token) }; stageMouseMonitors = []
-            pointerWake?.cancel(); pointerWake = nil; return
-        }
-        guard stageMouseMonitors.isEmpty else { return }
-        let mouse: NSEvent.EventTypeMask = [.mouseMoved, .leftMouseDragged, .rightMouseDragged, .otherMouseDragged]
-        if let token = NSEvent.addGlobalMonitorForEvents(matching: mouse, handler: { [weak self] event in self?.stagePointerChanged(event.timestamp) }) { stageMouseMonitors.append(token) }
-        if let token = NSEvent.addLocalMonitorForEvents(matching: mouse, handler: { [weak self] event in self?.stagePointerChanged(event.timestamp); return event }) { stageMouseMonitors.append(token) }
-    }
-
-    deinit {
-        for (center, token) in stageObservers { center.removeObserver(token) }
-        for token in stageMouseMonitors { NSEvent.removeMonitor(token) }
-        pointerWake?.cancel()
-    }
-    func stagePointerChanged(_ enteredAt: Double) {
-        guard stageActive, stage.pointerActive, !stageLocked, !stageSleeping, pointerWake == nil else { return }
-        // Coalesce high-rate mouse streams to at most one metadata read per 150 ms. The first event after idle is immediate.
-        let delay = max(0, 0.15 - (now - pointerCheckAt))
-        let deliver = { [weak self] in
-            guard let self = self else { return }; self.pointerWake = nil
-            guard self.stageActive, self.stage.pointerActive, !self.stageLocked, !self.stageSleeping else { return }
-            self.pointerCheckAt = self.now
-            let world = self.stageEnvironment()
-#if SLEIGHT_STAGE_BENCH
-            let pointerPanelID = self.panel?.windowNumber, pointerBox = self.stage.draw?.seat.box
-#endif
-            let effects = self.stage.pointerChanged(self.now, enteredAt: enteredAt, world: world, reduced: NSWorkspace.shared.accessibilityDisplayShouldReduceMotion)
-            self.performStage(effects)
-#if SLEIGHT_STAGE_BENCH
-            stageBenchPointerObserved?(effects, pointerPanelID, pointerBox, enteredAt)
-#endif
-        }
-        if delay == 0 { deliver() }
-        else { let work = DispatchWorkItem(block: deliver); pointerWake = work; DispatchQueue.main.asyncAfter(deadline: .now() + delay, execute: work) }
-    }
-    func stageEnvironment() -> StageWorld? {
-        // A window-list sample is a veto, never a presentation lock. In
-        // particular, equal bounds cannot detect an intervening change/restore.
-        guard var ev = stage.event else { yieldStageSlot(); return nil }
-#if SLEIGHT_CALL_SELFTEST
-        if CommandLine.arguments.contains("--call-host-selftest") {
-            guard var world = callTestWorld else { yieldStageSlot(); return nil }
-            world.call = stageCall.active(now)
-            world.stageAvailable = stageAdmission(world)
-            return world
-        }
-#endif
-        if let world = host?.admissionWorld { return world(ev) }
-        let at = now
-        stage.locked = stageLocked; stage.displaySleeping = stageSleeping
-        guard !stage.locked, !stage.displaySleeping else { pointerWake?.cancel(); pointerWake = nil; yieldStageSlot(); return nil }
-        if stageWindow?.pid != ev.pid || stageWindow?.window != ev.window {
-            stageWindow = (ev.pid, ev.window); pointerNearAt = at
-        }
-        let session = CGSessionCopyCurrentDictionary() as? [String: Any]
-        let locked = stageLocked || (session?["CGSSessionScreenIsLocked"] as? Bool == true)
-        stage.locked = locked
-        guard !locked else { yieldStageSlot(); return nil }
-        guard let snapshot = CGWindowListCopyWindowInfo([.optionOnScreenOnly, .excludeDesktopElements], kCGNullWindowID) as? [[String: Any]] else { yieldStageSlot(); return nil }
-        let namedPids = stageWidePids(stage.wideNames, snapshot: snapshot, bundle: { NSRunningApplication(processIdentifier: $0)?.bundleIdentifier })
-        if stage.wideApps.union(namedPids).count > 128 { stage.targetCapacity = true }
-        else { stage.wideApps.formUnion(namedPids) }
-        let areaApps = stage.wideApps.union(stage.wideWindows.map { $0.pid }).union(ev.area != nil ? [ev.pid] : [])
-        let observedWindows = stageWindows(snapshot, areaApps: areaApps)
-        stage.observeWindows(observedWindows)
-        if stage.windowBook.current[StageWindowKey(pid: ev.pid, window: ev.window)] == nil,
-            let key = observedWindows.keys.filter({ $0.pid == ev.pid || ev.pid == 0 && stage.wideApps.contains($0.pid) }).sorted(by: { $0.pid == $1.pid ? $0.window < $1.window : $0.pid < $1.pid }).first,
-            let bounds = stage.windowBook.current[key]?.bounds {
-            let reason = ev.wideReason
-            ev = PerchEvent(state: ev.state, pid: key.pid, window: key.window, at: CGPoint(x: bounds.midX, y: bounds.midY),
-                ok: ev.ok, drop: nil, end: nil, area: "app", wideReason: reason)
-            stage.wideApps.insert(key.pid)
-            for candidate in observedWindows.keys where candidate.pid == ev.pid { stage.invalidateGeometry(candidate) }
-            stage.event = ev
-        }
-        guard var world = stageWorld(pid: ev.pid, window: ev.window, pointerAway: max(0, at - pointerNearAt),
-            locked: locked, sleeping: stageSleeping, call: stageCall.active(at), snapshot: snapshot) else { yieldStageSlot(); return nil }
-        if !areaApps.isEmpty { world.windows = stageWindows(snapshot, areaApps: areaApps) }
-        // The badge is an intentional input target. Approaching that 16 pt corner must not dodge it away.
-        stage.badgeApproach = host?.pauseOverlay.panel.map { $0.isVisible && $0.frame.insetBy(dx: -40, dy: -40).contains(NSEvent.mouseLocation) } ?? false
-        if stageDistance(world.pointer, world.base.window) <= 100 { pointerNearAt = at; world.pointerAway = 0 }
-        world.stageAvailable = stageAdmission(world)
-        return world
-    }
-    // Ordering out precedes unlocking, including a display transfer and attention shrinking to medium.
-    func yieldStageSlot() {
-        if stageSlot.display != nil { release(); _ = stage.hide("stage-slot", immediate: true, at: now) }
-        stageSlot.release()
-    }
-    func stageAdmission(_ world: StageWorld) -> Bool {
-        guard stage.options.size == "stage", !world.stopped, !world.call,
-            loaded?.frame.stage?.values.contains(where: { $0.file != nil }) == true,
-            !(stage.options.attention && world.inputAge < 8 && world.person != world.base.window),
-            let display = world.displayID else { yieldStageSlot(); return false }
-        if stageSlot.display != display { yieldStageSlot() }
-        let held = stageSlot.display != nil
-        let admitted = stageSlot.claim(display)
-        if !admitted && held { yieldStageSlot() }
-        return admitted
-    }
-    func releaseUnusedStageSlot(visible: Bool) {
-        // A fading stage still owns its slot until the panel orders out. A parked medium never owns one.
-        if !visible || stage.shown && !["stage", "three-quarter"].contains(stage.seat?.rung ?? "") { stageSlot.release() }
-    }
-    func performStage(_ effects: [StageEffect]) {
-        var effects = stageCallApply(effects, runtime: &stage, active: { stageCall.active(now) }, at: now)
-        // Recheck at main-queue application as well as planning. No native
-        // scope proves an ambient motion envelope, so even an older queued
-        // draw must stay hidden for the producer's entire protected turn.
-        if stage.producerOwner != nil || stage.producerCollectionOnly {
-            if effects.contains(where: { switch $0 { case .draw, .reseat: return true; default: return false } }) {
-                effects = stage.hide("producer-presentation-unproved", immediate: true, at: now)
-            }
-        }
-        if let deliver = stageEffects { deliver(effects); return }
-        guard host?.badgeDrag.active != true else { return }
-        for effect in effects {
-            switch effect {
-            case let .draw(draw):
-                guard host?.captureHeld != true else { takeDown(); return }
-#if SLEIGHT_STAGE_BENCH
-                stageBenchPlanned?(draw.seq, draw.pose, draw.metrics)
-                let previousInstallCause = stageBenchInstallCause
-                stageBenchInstallCause = "stage-draw/" + (draw.pose.cells.last?.state ?? "unknown") +
-                    (draw.decisionReason.map { "/" + $0 } ?? "")
-                defer { stageBenchInstallCause = previousInstallCause }
-#endif
-                lastHideReason = nil
-                closeBubble(); install(draw.pose, stageMetrics: draw.metrics, stagePose: draw.art)
-                if let panel = panel {
-                    let actual = HandPanelPolicy(panel)
-                    stage.draw?.panelPolicy = actual
-                    if !actual.stageSafe(for: host?.capture ?? "hidden") { spriteWarning("stage panel policy mismatch: capture=\(actual.captureName) hitAreas=\(actual.hitAreas)"); takeDown(); return }
-                }
-            case let .hide(reason, duration):
-                lastHideReason = reason
-                panelLifetime.hide(reason, duration: duration, release: release) { duration in
-                    func stop(_ layer: CALayer) { layer.removeAllAnimations(); layer.sublayers?.forEach(stop) }
-                    root.map(stop); fadeOut(duration)
-                }
-            case let .reseat(delta):
-                guard host?.captureHeld != true else { takeDown(); return }
-                if !reseat(delta, checked: true) { performStage(stage.hide("panel-moved", immediate: true, at: now)); return }
-            case .park:
-                func stop(_ layer: CALayer) { layer.removeAllAnimations(); layer.sublayers?.forEach(stop) }
-                root.map(stop)
-            }
-        }
-        var visible = panel?.isVisible == true
-#if SLEIGHT_CALL_SELFTEST
-        if CommandLine.arguments.contains("--call-host-selftest") { visible = callTestVisible }
-#endif
-        releaseUnusedStageSlot(visible: visible); schedule()
-    }
+    init(host: HandHost) { self.host = host; runtime.seed = UInt64.random(in: 1...UInt64.max); runtime.book.seed = runtime.seed }
     // Perch mode: perch on and a character frame with a perch table (the relay sends one only with perch on).
     var active: Bool { enabled && host?.cursorStyle == "sprite" && loaded?.frame.perch != nil }
     // Lines: in either sprite mode, while lines are on and the pack has some.
@@ -6786,136 +5675,39 @@ final class PerchHost {
         if let perch = perch { enabled = perch }
         if let lines = lines { self.lines = lines; runtime.book.enabled = lines; if !lines { perform(runtime.dismiss(now)) } }
         if active != was || loaded?.frame.seq != seq || replace && loaded == nil {
-            takeDown(); runtime.load(sprite ? loaded?.frame : nil); stage.load(sprite ? loaded?.frame : nil)
-            if let character = loaded {
-                stage.artProvider = { state in character.stage.select(state, images: character.images) }
-            } else { stage.artProvider = nil }
-            runtime.book.enabled = self.lines
+            takeDown(); runtime.load(sprite ? loaded?.frame : nil); runtime.book.enabled = self.lines
             runtime.legs = active ? loaded.flatMap { perchLegs($0) } : nil
         }
-        configureStageMouse()
         if sprite { host?.ringRuntime.character = active ? nil : loaded }
     }
-    var now: Double {
-#if SLEIGHT_CALL_SELFTEST
-        if let clock = callTestClock { return clock }
-#endif
-        return CACurrentMediaTime()
-    }
+    var now: Double { CACurrentMediaTime() }
     var environment: PerchEnvironment {
-#if SLEIGHT_CALL_SELFTEST
-        if CommandLine.arguments.contains("--call-host-selftest") {
-            return PerchEnvironment(world: { [weak self] _, _ in self?.callTestWorld?.base },
-                reduced: { [weak self] in self?.callTestReduced ?? true }, measure: { _ in .zero })
-        }
-#endif
-        return PerchEnvironment(world: { pid, window in perchWorld(pid: pid, window: window) },
+        PerchEnvironment(world: { pid, window in perchWorld(pid: pid, window: window) },
             reduced: { NSWorkspace.shared.accessibilityDisplayShouldReduceMotion }, measure: perchMeasure)
     }
-    // The legacy renderer keeps its last event while call-hidden so a quiet completion can re-admit it.
-    func legacyCallBlocked() -> Bool {
-        return stageCall.active(now)
-    }
-    func hideLegacyCall() {
-        if lastHideReason != "call" { stage.hideReasonCounts["call", default: 0] += 1 }
-        _ = runtime.hide(now, "call")
-        lastHideReason = "call"; release(); closeBubble(); schedule()
-    }
-    var legacyPanelVisible: Bool {
-#if SLEIGHT_CALL_SELFTEST
-        if CommandLine.arguments.contains("--call-host-selftest") { return callTestVisible }
-#endif
-        return panel?.isVisible == true
-    }
-    func observeLegacyCall() {
-        guard active, !stageActive, let event = legacyCallEvent else { return }
-        if now - legacyCallAt >= 600 {
-            legacyCallEvent = nil; _ = runtime.hide(now, "asleep")
-            lastHideReason = "asleep"; release(); closeBubble(); schedule(); return
-        }
-        if legacyCallBlocked() { hideLegacyCall(); return }
-#if SLEIGHT_STAGE_BENCH
-        let stageBenchPreviousCause = stageBenchInstallCause, stageBenchPreviousSeat = runtime.seat
-        let stageBenchDue = runtime.timers.filter { $0.at <= now }.map { $0.action }.sorted()
-        defer { stageBenchInstallCause = stageBenchPreviousCause }
-#endif
-        if !runtime.shown && lastHideReason == "call" {
-            let effects = runtime.receive(event, now: now, env: environment)
-#if SLEIGHT_STAGE_BENCH
-            stageBenchInstallCause = stageBenchCause("call-restore", previousSeat: stageBenchPreviousSeat, due: stageBenchDue)
-#endif
-            perform(effects)
-        } else {
-            var visible = panel?.isVisible == true
-#if SLEIGHT_CALL_SELFTEST
-            if CommandLine.arguments.contains("--call-host-selftest") { visible = callTestVisible }
-#endif
-            let effects = runtime.observeCall(now: now, env: environment, visible: visible)
-#if SLEIGHT_STAGE_BENCH
-            stageBenchInstallCause = stageBenchCause(stageBenchPreviousCause == "wake" ? "wake" : "call-observe",
-                previousSeat: stageBenchPreviousSeat, due: stageBenchDue)
-#endif
-            perform(effects)
-        }
-    }
-    func dissolve(_ event: RingEvent) -> CGPoint? { active && !stageActive ? runtime.dissolve(event) : nil }
+    func dissolve(_ event: RingEvent) -> CGPoint? { active ? runtime.dissolve(event) : nil }
     // Each ring draw: C1's clear state, C2's narration bubble (narration first), then the perch or the trail sprite's line.
     func ringDrew(_ plan: RingPlan) {
         guard active || talking, let frame = loaded?.frame else { return }
         let at = now
-#if SLEIGHT_STAGE_BENCH
-        let stageBenchPreviousCause = stageBenchInstallCause, stageBenchPreviousSeat = runtime.seat
-        let stageBenchDue = runtime.timers.filter { $0.at <= at }.map { $0.action }.sorted()
-        stageBenchInstallCause = "ring-receive"
-        defer { stageBenchInstallCause = stageBenchPreviousCause }
-#endif
-        if stageActive {
-            stage.carrying = host?.honestMood.carrying == true
-            stage.carryUntil = host?.honestMood.carryUntil ?? 0
-            stage.held = host?.captureHeld == true
-            stage.paused = host?.pauseControl.paused == true
-            let event = perchEvent(plan)
-            let previous = stage.event
-            stage.event = event
-            let world = stageEnvironment()
-            stage.event = previous
-            performStage(stage.receive(event, seq: plan.seq, rect: plan.rect, now: at, world: world, reduced: NSWorkspace.shared.accessibilityDisplayShouldReduceMotion, producer: plan.producer, protectsTarget: plan.protectsTarget))
-            return
-        }
-        if active {
-            legacyCallEvent = perchEvent(plan); legacyCallAt = at
-            if legacyCallBlocked() { hideLegacyCall(); return }
-        } else if talking && legacyCallBlocked() { hideLegacyCall(); return }
         runtime.book.cleared = host?.pauseVisibility.cleared ?? false
         var effects = runtime.narrationDrawn(plan.bubble == nil ? nil : perchNarrationSpan(plan), now: at)
-        if active { effects += runtime.receiveVisible(perchEvent(plan), now: at, env: environment, visible: legacyPanelVisible) }
+        if active { effects += runtime.receive(perchEvent(plan), now: at, env: environment) }
         else if let world = perchWorld(pid: plan.pid, window: plan.window), let box = perchTrailBox(plan.at, frame: frame, clip: world.window) {
             effects += runtime.trail(perchEvent(plan), box: box, world: world, now: at, env: environment)
         }
-#if SLEIGHT_STAGE_BENCH
-        stageBenchInstallCause = stageBenchCause("ring-receive", previousSeat: stageBenchPreviousSeat, due: stageBenchDue)
-#endif
         perform(effects)
     }
     func takeDown() {
         wake?.cancel(); wake = nil
-        legacyCallEvent = nil
-        lastHideReason = "hide"
-        _ = runtime.hide(now, "hide"); _ = stage.hide("hide", immediate: true, at: now); stage.event = nil
+        _ = runtime.hide(now, "hide")
         release(); closeBubble()
     }
     func perform(_ effects: [(Double, PerchEffect)]) {
-        guard host?.badgeDrag.active != true else { return }
-        if (active || talking) && !stageActive && legacyCallBlocked() { hideLegacyCall(); return }
         for (_, effect) in effects {
             switch effect {
-            case let .draw(plan): if host?.captureHeld == true { takeDown(); return }; lastHideReason = nil; install(plan)
-            case let .reseat(delta):
-                guard host?.captureHeld != true else { takeDown(); return }
-                reseat(delta)
-            case let .hide(reason, duration):
-                if !stageActive && lastHideReason != reason { stage.hideReasonCounts[reason, default: 0] += 1 }
-                lastHideReason = reason; fadeOut(duration)
+            case let .draw(plan): if host?.captureHeld == true { takeDown(); return }; install(plan)
+            case let .hide(_, duration): fadeOut(duration)
             case .park:
                 // The Zs finish on their own clock (the still effect); everything else stops here.
                 func strip(_ layer: CALayer) { guard layer !== zs else { return }; layer.removeAllAnimations(); layer.sublayers?.forEach(strip) }
@@ -6933,122 +5725,43 @@ final class PerchHost {
     // for a timer that changes the drawing, a fifth of the interval for a check. Nothing is scheduled with nothing perched.
     func schedule() {
         wake?.cancel(); wake = nil
-        if stageActive {
-            guard let due = stage.nextWake(now)?.at else { return }
-            let source = DispatchSource.makeTimerSource(queue: .main)
-            source.schedule(deadline: .now() + max(0.001, due - now), leeway: .milliseconds(5))
-            source.setEventHandler { [weak self] in
-                guard let self = self else { return }
-                self.performStage(self.stage.observe(self.now, world: self.stageEnvironment(), reduced: NSWorkspace.shared.accessibilityDisplayShouldReduceMotion))
-            }
-            wake = source; source.resume(); return
-        }
-        guard let due = runtime.nextWake(now, callHidden: active && legacyCallEvent != nil && lastHideReason == "call") else { return }
+        let check = runtime.poll.map { now + $0 }, timer = runtime.next
+        guard let at = [timer, check].compactMap({ $0 }).min() else { return }
+        let leeway = timer.map { $0 <= at + 1e-9 } == true ? 10 : Int((runtime.poll ?? 0.5) * 200)
         let source = DispatchSource.makeTimerSource(queue: .main)
-        source.schedule(deadline: .now() + max(0, due.at - now), leeway: .milliseconds(due.leeway))
+        source.schedule(deadline: .now() + max(0, at - now), leeway: .milliseconds(leeway))
         source.setEventHandler { [weak self] in
             guard let self = self else { return }
             self.wake?.cancel(); self.wake = nil
-#if SLEIGHT_STAGE_BENCH
-            let stageBenchPreviousCause = self.stageBenchInstallCause, stageBenchPreviousSeat = self.runtime.seat
-            let stageBenchDue = self.runtime.timers.filter { $0.at <= self.now }.map { $0.action }.sorted()
-            self.stageBenchInstallCause = "wake"
-            defer { self.stageBenchInstallCause = stageBenchPreviousCause }
-#endif
-            if self.active && self.legacyCallEvent != nil { self.observeLegacyCall() }
-            else {
-                let effects = self.runtime.observeCall(now: self.now, env: self.environment, visible: self.legacyPanelVisible)
-#if SLEIGHT_STAGE_BENCH
-                self.stageBenchInstallCause = self.stageBenchCause("wake", previousSeat: stageBenchPreviousSeat, due: stageBenchDue)
-#endif
-                self.perform(effects)
-            }
+            self.perform(self.runtime.observe(self.now, env: self.environment))
         }
         wake = source
         source.resume()
     }
-    // A small window correction translates the existing backing and animation clock together.
-    @discardableResult func reseat(_ delta: CGPoint, checked: Bool = false) -> Bool {
-        guard let panel = panel, !frame.isNull else { return false }
-        frame = frame.offsetBy(dx: delta.x, dy: delta.y)
-        CATransaction.begin(); CATransaction.setDisableActions(true)
-        panel.setFrame(appKitRect(frame), display: false)
-        let accepted = !checked || stagePanelFrameAccepted(target: appKitRect(frame), actual: panel.frame)
-        if let bubble = bubble { bubble.setFrame(bubble.frame.offsetBy(dx: delta.x, dy: -delta.y), display: false) }
-        host?.pauseOverlay.translate(delta, owner: panel)
-        CATransaction.commit()
-        if let geometry = drawingGeometry {
-            drawingGeometry = geometry.offsetBy(delta)
-        }
-        return accepted
-    }
-    func install(_ plan: PerchPlan, stageMetrics: PerchMetrics? = nil, stagePose: SpriteStagePose? = nil) {
-#if SLEIGHT_STAGE_BENCH
-        let stageBenchBegan = CACurrentMediaTime()
-#endif
-        guard let character = loaded, let metrics = stageMetrics ?? runtime.metrics, !plan.cells.isEmpty else { return }
-#if SLEIGHT_STAGE_BENCH
-        if stageMetrics == nil { stageBenchPlanned?(stageBenchLegacyPlans.next(plan), plan, metrics) }
-#endif
-#if SLEIGHT_CALL_SELFTEST
-        if CommandLine.arguments.contains("--call-host-selftest") {
-            callTestInstalls += 1; callTestVisible = true
-#if SLEIGHT_STAGE_BENCH
-            stageBenchInstalled?(self, plan, metrics, stagePose, (CACurrentMediaTime() - stageBenchBegan) * 1000)
-#endif
-            return
-        }
-#endif
-        let cell = stagePose?.cell ?? character.frame.cell
+    func install(_ plan: PerchPlan) {
+        guard let character = loaded, let metrics = runtime.metrics, !plan.cells.isEmpty else { return }
+        let cell = character.frame.cell
         var box = CGRect.null
         for (_, p) in plan.positions { box = box.union(CGRect(origin: p, size: metrics.size)) }
-        let logicalPanel = stageMetrics == nil ? box.insetBy(dx: -24, dy: -44) : stagePanelBounds(plan, metrics)
-        // Only the physical panel changes. Layer coordinates, cell transforms, the
-        // seat, pause badge and every clearance/motion check keep the logical box.
-        let hasExtras = plan.zs || character.frame.sessionBadge != nil || host?.honestMood.detail != nil ||
-            host?.honestMood.retry == true || host?.honestMood.carrying == true
-        // Legacy panels requested fractional frames. Preserve their existing
-        // AppKit rounding phase when replacing that frame with an integral crop.
-        let panelOffset = stageMetrics == nil ? spritePanelRoundingOffset(appKitRect(logicalPanel)) : .zero
-        let drawingOffset = hasExtras ? .zero : panelOffset
-        let drawingClip = stageMetrics == nil ? CGRect(x: logicalPanel.minX + panelOffset.x, y: logicalPanel.minY + panelOffset.y,
-            width: ceil(logicalPanel.width), height: ceil(logicalPanel.height)) : logicalPanel
-        let geometry = spritePanelGeometry(plan, metrics: metrics, cell: cell, logicalPanel: logicalPanel,
-            offset: panelOffset, clip: drawingClip, hasExtras: hasExtras) { sheet in
-                stagePose?.ink ?? character.ink[sheet] ?? CGRect(origin: .zero, size: cell)
-            }
-        let target = geometry.target
-        drawingGeometry = geometry
-        if self.panel == nil { panelGenerations += 1 }
+        let target = box.insetBy(dx: -24, dy: -44)
         let panel = self.panel ?? makeHandPanel(capture: host?.capture ?? "hidden")
         self.panel = panel; frame = target
-        if stageMetrics != nil { _ = stagePanelSnapshot(panel, capture: host?.capture ?? "hidden") }
-        else { HandPanelPolicy(sharing: handCaptureModes[host?.capture ?? "hidden"] ?? NSWindow.SharingType.none).apply(panel) }
-        // AppKit submits frame changes outside the layer transaction. Hide the
-        // window first so committed old art cannot appear at its new location.
-        if panel.isVisible && panel.frame != appKitRect(target) { panel.orderOut(nil) }
+        panel.sharingType = handCaptureModes[host?.capture ?? "hidden"] ?? NSWindow.SharingType.none
+        panel.setFrame(appKitRect(target), display: false)
         CATransaction.begin(); CATransaction.setDisableActions(true)
-        root?.removeFromSuperlayer() // Exclude old art before AppKit can submit a frame change.
-        if panel.frame != appKitRect(target) { panel.setFrame(appKitRect(target), display: false) }
-        if stageMetrics != nil && !stagePanelFrameAccepted(target: appKitRect(target), actual: panel.frame) {
-            CATransaction.commit()
-            performStage(stage.hide("panel-moved", immediate: true, at: now))
-            return
-        }
+        root?.removeFromSuperlayer()
         let root = CALayer(); root.frame = CGRect(origin: .zero, size: target.size); root.isGeometryFlipped = true
-        root.masksToBounds = stageMetrics != nil
         panel.contentView?.layer?.addSublayer(root); self.root = root
         let layer = CALayer(); layer.name = "perch"; layer.anchorPoint = .zero; layer.bounds = CGRect(origin: .zero, size: cell)
-        layer.contentsGravity = .resize; layer.minificationFilter = stagePose?.filter == "nearest" ? .nearest : .linear; layer.magnificationFilter = stagePose?.filter == "linear" ? .linear : .nearest
+        layer.contentsGravity = .resize; layer.minificationFilter = .linear; layer.magnificationFilter = .nearest
         root.addSublayer(layer); boxLayer = layer
-        host?.honestMood.install(in: root, box: box.offsetBy(dx: -target.minX, dy: -target.minY), reduced: plan.reduced)
         let mask = CALayer(); mask.backgroundColor = CGColor(gray: 0, alpha: 1); mask.anchorPoint = .zero
         let cut = CGRect(x: 0, y: 0, width: Double(cell.width), height: plan.seat.rise / metrics.scale), whole = CGRect(origin: .zero, size: cell)
         mask.bounds = plan.mask(at: plan.duration) ? cut : whole; layer.mask = mask; maskLayer = mask
         let begin = CACurrentMediaTime(), length = max(plan.duration, 0.001)
         func unit(_ t: Double) -> NSNumber { NSNumber(value: min(max(t / length, 0), 1)) }
         func local(_ p: CGPoint, _ e: SpriteEntry) -> NSValue {
-            NSValue(point: CGPoint(x: p.x + drawingOffset.x - target.minX + (e.flip ? metrics.size.width : 0), y: p.y + drawingOffset.y - target.minY))
+            NSValue(point: CGPoint(x: p.x - target.minX + (e.flip ? metrics.size.width : 0), y: p.y - target.minY))
         }
         // Only the key paths whose values change (PerchPlan.keyPaths, which the dump reports) get an animation; every other
         // value is set on the model.
@@ -7063,18 +5776,12 @@ final class PerchHost {
         }
         let cells = plan.cells.isEmpty ? [] : plan.cells + [plan.cells.last!]
         let cellTimes = plan.cells.map { $0.time } + [plan.duration]
-        add(layer, "contents", cells.compactMap { stagePose?.image ?? character.images[$0.entry.sheet] }, cellTimes, discrete: true)
+        add(layer, "contents", cells.compactMap { character.images[$0.entry.sheet] }, cellTimes, discrete: true)
         add(layer, "contentsRect", cells.map { NSValue(rect: PerchPlan.rect($0.entry, $0.column, cell: cell)) }, cellTimes, discrete: true)
         add(layer, "transform", cells.map { NSValue(caTransform3D: CATransform3DMakeScale($0.entry.scale * ($0.entry.flip ? -1 : 1), $0.entry.scale, 1)) }, cellTimes, discrete: true)
         let flipAt = { (t: Double) in plan.cell(at: t)?.entry ?? cells[0].entry }
         add(layer, "position", plan.positions.map { local($0.1, flipAt($0.0)) }, plan.positions.map { $0.0 }, discrete: plan.reduced)
         if !plan.opacity.isEmpty { add(layer, "opacity", plan.opacity.map { NSNumber(value: $0.1) }, plan.opacity.map { $0.0 }, discrete: false) }
-        if let text = character.frame.sessionBadge {
-            let badge = sessionBadgeLayer(text, scale: panel.screen?.backingScaleFactor ?? 2)
-            root.addSublayer(badge)
-            add(badge, "position", plan.positions.map { NSValue(point: CGPoint(x: $0.1.x - target.minX + metrics.size.width - 16, y: $0.1.y - target.minY)) }, plan.positions.map { $0.0 }, discrete: plan.reduced)
-            if !plan.opacity.isEmpty { add(badge, "opacity", plan.opacity.map { NSNumber(value: $0.1) }, plan.opacity.map { $0.0 }, discrete: false) }
-        }
         if Set(plan.masked.map { $0.1 }).count > 1 {
             add(mask, "bounds", plan.masked.map { NSValue(rect: $0.1 ? cut : whole) }, plan.masked.map { $0.0 }, discrete: true, path: "mask.bounds")
         }
@@ -7084,13 +5791,6 @@ final class PerchHost {
         }
         CATransaction.commit()
         if !panel.isVisible { panel.orderFrontRegardless() }
-#if SLEIGHT_STAGE_BENCH
-        stageBenchInstalled?(self, plan, metrics, stagePose, (CACurrentMediaTime() - stageBenchBegan) * 1000)
-#endif
-        let body = plan.positions.last.map { CGRect(origin: $0.1, size: metrics.size) }
-        host?.showCharacterBadge(body, after: plan.duration, pid: plan.seat.pid, window: plan.seat.window) { [weak self, weak panel] in
-            self?.panel === panel && panel?.isVisible == true
-        }
     }
     // Three z glyphs (7, 9 and 11 pt, white over a 2 pt ink outline) as one replicated layer: one animation group rises 16 pt and
     // drifts 10 pt over 1.8 s, three times, staggered 600 ms. Still: one static z.
@@ -7122,7 +5822,6 @@ final class PerchHost {
         return replicator
     }
     func fadeOut(_ duration: Double) {
-        host?.pauseOverlay.hide(owner: panel)
         guard let root = root else { release(); return }
         CATransaction.begin(); CATransaction.setDisableActions(true)
         let a = CABasicAnimation(keyPath: "opacity"); a.fromValue = root.opacity; a.toValue = 0; a.duration = duration
@@ -7132,13 +5831,8 @@ final class PerchHost {
         DispatchQueue.main.asyncAfter(deadline: .now() + duration) { [weak self] in if self?.root === mine { self?.release() } }
     }
     func release() {
-#if SLEIGHT_CALL_SELFTEST
-        callTestVisible = false
-#endif
-        host?.pauseOverlay.hide(owner: panel)
         root?.removeAllAnimations(); root?.removeFromSuperlayer(); root = nil; boxLayer = nil; maskLayer = nil; zs = nil
-        panelLifetime.release(); frame = .null
-        stageSlot.release()
+        panel?.orderOut(nil); panel?.close(); panel = nil; frame = .null
     }
     // The white comic bubble in its own click panel, the only part of the overlay that takes a click.
     func showBubble(_ line: PerchLine) {
@@ -7194,8 +5888,8 @@ func perchBubblePath(_ r: CGRect, tail: CGPoint, side: String) -> CGPath {
 }
 // The window list, front to back: the target window's frame, the frames in front of it that cross nothing of ours, its
 // display (the one holding its top edge's center) and that display's top below the menu bar. Bounds and owners need no grant.
-func perchWorld(pid: Int32, window: UInt32, snapshot: [[String: Any]]? = nil) -> PerchWorld? {
-    guard let list = snapshot ?? (CGWindowListCopyWindowInfo([.optionOnScreenOnly, .excludeDesktopElements], kCGNullWindowID) as? [[String: Any]]) else { return nil }
+func perchWorld(pid: Int32, window: UInt32) -> PerchWorld? {
+    guard let list = CGWindowListCopyWindowInfo([.optionOnScreenOnly, .excludeDesktopElements], kCGNullWindowID) as? [[String: Any]] else { return nil }
     let own = ProcessInfo.processInfo.processIdentifier
     var above: [CGRect] = []
     for info in list {
@@ -7219,1959 +5913,6 @@ func perchWorld(pid: Int32, window: UInt32, snapshot: [[String: Any]]? = nil) ->
 }
 // END PERCH
 
-// BEGIN STAGE
-func sessionBadgeLayer(_ text: String, scale: CGFloat) -> CATextLayer {
-    let layer = CATextLayer(); layer.name = "session-badge"; layer.anchorPoint = .zero
-    layer.bounds = CGRect(x: 0, y: 0, width: 16, height: 16); layer.cornerRadius = 8
-    layer.backgroundColor = CGColor(gray: 0.12, alpha: 0.9); layer.foregroundColor = CGColor(gray: 1, alpha: 1)
-    layer.borderWidth = 1; layer.borderColor = CGColor(gray: 1, alpha: 1)
-    layer.string = text; layer.fontSize = 11; layer.alignmentMode = .center; layer.contentsScale = scale
-    return layer
-}
-// BEGIN STAGE SLOT
-// Owner decision 7, reversible in one place. Lock inodes remain: unlinking a held flock could admit two hosts.
-let oneStagePerDisplay = true
-final class StageSlot {
-    let root: String
-    private var descriptor: Int32 = -1
-    private var directoryDescriptor: Int32 = -1
-    private var directoryLinks: [(parent: Int32, name: String, device: dev_t, inode: ino_t)] = []
-    private(set) var display: String?
-    init(root: String = FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent("Library/Application Support/sleight/cursor/sessions").path) { self.root = root }
-    private func valid(_ s: stat) -> Bool {
-        s.st_uid == getuid() && s.st_nlink == 1 && s.st_mode & S_IFMT == S_IFREG && s.st_mode & 0o7777 == 0o600
-    }
-    private func directory() -> Int32 {
-        if directoryDescriptor >= 0 {
-            // Keep the descriptors, but prove every named ancestor still leads to the acquired directory.
-            // A rename, replacement or symlink must refuse admission just as a fresh O_NOFOLLOW walk does.
-            for link in directoryLinks {
-                var named = stat()
-                guard fstatat(link.parent, link.name, &named, AT_SYMLINK_NOFOLLOW) == 0,
-                    named.st_mode & S_IFMT == S_IFDIR, named.st_dev == link.device, named.st_ino == link.inode else {
-                    closeDirectories(); return -1
-                }
-            }
-            return directoryDescriptor
-        }
-        let parts = root.split(separator: "/")
-        guard root == "/" + parts.joined(separator: "/"), !parts.contains("."), !parts.contains("..") else { return -1 }
-        var fd = open("/", O_RDONLY | O_DIRECTORY | O_CLOEXEC)
-        guard fd >= 0 else { return -1 }
-        for part in parts {
-            let name = String(part)
-            var next = openat(fd, name, O_RDONLY | O_DIRECTORY | O_NOFOLLOW | O_CLOEXEC)
-            if next < 0 && errno == ENOENT {
-                if mkdirat(fd, name, mode_t(0o700)) != 0 && errno != EEXIST { close(fd); closeDirectories(); return -1 }
-                next = openat(fd, name, O_RDONLY | O_DIRECTORY | O_NOFOLLOW | O_CLOEXEC)
-            }
-            var child = stat()
-            guard next >= 0, fstat(next, &child) == 0 else {
-                if next >= 0 { close(next) }; close(fd); closeDirectories(); return -1
-            }
-            directoryLinks.append((parent: fd, name: name, device: child.st_dev, inode: child.st_ino))
-            fd = next
-        }
-        directoryDescriptor = fd; return fd
-    }
-    private func closeDirectories() {
-        if directoryDescriptor >= 0 { close(directoryDescriptor) }; directoryDescriptor = -1
-        for link in directoryLinks { close(link.parent) }
-        directoryLinks = []
-    }
-    func claim(_ key: String) -> Bool {
-        guard oneStagePerDisplay else { return true }
-        guard let number = UInt32(key), number > 0, String(number) == key else { return false }
-        // The panel owner must order out before releasing an old display, even on a failed claim.
-        guard descriptor < 0 || display == key else { return false }
-        let dir = directory()
-        guard dir >= 0 else { return false }
-        defer { if descriptor < 0 { closeDirectories() } }
-        var folder = stat()
-        guard fstat(dir, &folder) == 0, folder.st_uid == getuid(), folder.st_mode & 0o7777 == 0o700 else { return false }
-        let name = "stage-\(key).lock"
-        var named = stat(), current = stat()
-        if descriptor >= 0 {
-            guard fstat(descriptor, &current) == 0, fstatat(dir, name, &named, AT_SYMLINK_NOFOLLOW) == 0,
-                valid(current), valid(named), current.st_dev == named.st_dev, current.st_ino == named.st_ino else { return false }
-            return true
-        }
-        let fd = openat(dir, name, O_RDWR | O_CREAT | O_NOFOLLOW | O_CLOEXEC | O_NONBLOCK, mode_t(0o600))
-        guard fd >= 0 else { return false }
-        guard fstat(fd, &current) == 0, fstatat(dir, name, &named, AT_SYMLINK_NOFOLLOW) == 0,
-            valid(current), valid(named), current.st_dev == named.st_dev, current.st_ino == named.st_ino,
-            flock(fd, LOCK_EX | LOCK_NB) == 0 else { close(fd); return false }
-        descriptor = fd; display = key; return true
-    }
-    func release() { if descriptor >= 0 { close(descriptor) }; descriptor = -1; display = nil; closeDirectories() }
-    deinit { release() }
-}
-// END STAGE SLOT
-// Stage placement wraps the A2 pose builder. Geometry uses whole boxes, including transparent padding, so a missing
-// silhouette measurement can only hide a character. The dump and the host supply the same metadata-only world.
-struct StageOptions {
-    var size = "medium", points: Double? = nil, attention = true, frontSit = false
-    var enabled: Bool { size != "small" || points != nil }
-    static func parse(_ data: [String: Any]) -> StageOptions? {
-        var value = StageOptions()
-        if let raw = data["size"] {
-            if let s = raw as? String, ["small", "medium", "stage"].contains(s) { value.size = s }
-            else if let n = raw as? NSNumber, CFGetTypeID(n) != CFBooleanGetTypeID(), n.doubleValue.isFinite, (104...560).contains(n.doubleValue) {
-                value.size = "stage"; value.points = n.doubleValue
-            } else { return nil }
-        }
-        for key in ["stageAttention", "stageFrontSit"] where data[key] != nil {
-            guard let n = data[key] as? NSNumber, CFGetTypeID(n) == CFBooleanGetTypeID() else { return nil }
-            if key == "stageAttention" { value.attention = n.boolValue } else { value.frontSit = n.boolValue }
-        }
-        return value
-    }
-}
-func stageWindowEdgeDifference(_ a: CGRect, _ b: CGRect) -> Double {
-    max(abs(a.minX - b.minX), abs(a.minY - b.minY), abs(a.maxX - b.maxX), abs(a.maxY - b.maxY))
-}
-func stageSameWindowBounds(_ a: CGRect, _ b: CGRect) -> Bool { stageWindowEdgeDifference(a, b) <= 2 }
-// Seating tolerates the two CG frame sources. Target provenance still widens
-// protection for any measured mismatch beyond floating-point roundoff.
-func stageSameTargetBounds(_ a: CGRect, _ b: CGRect) -> Bool {
-    abs(a.minX - b.minX) <= 0.01 && abs(a.minY - b.minY) <= 0.01 && abs(a.width - b.width) <= 0.01 && abs(a.height - b.height) <= 0.01
-}
-struct StageWindowKey: Hashable { var pid: Int32, window: UInt32 }
-struct StageWindowEpoch: Equatable { var bounds: CGRect, generation: Int, content: Int = 0 }
-// Local frame provenance cannot establish action completion or result consumption.
-struct StageContributor: Equatable { var seq: Int, state: String, content: Int }
-struct StageTarget { var box: CGRect, key: StageWindowKey, epoch: StageWindowEpoch, contributors: [StageContributor] = []; var outside = false }
-struct StageWindowBook {
-    var current: [StageWindowKey: StageWindowEpoch] = [:], serial = 0, overflow = false
-    var discontinuous: Set<StageWindowKey> = []
-    mutating func observe(_ windows: [StageWindowKey: CGRect]) {
-        if windows.count > 128 { overflow = true }
-        for key in current.keys where windows[key] == nil {
-            if discontinuous.count < 128 { discontinuous.insert(key) } else { overflow = true }
-        }
-        var next: [StageWindowKey: StageWindowEpoch] = [:]
-        for key in windows.keys.sorted(by: { $0.pid == $1.pid ? $0.window < $1.window : $0.pid < $1.pid }).prefix(128) {
-            let bounds = windows[key]!
-            // A visibility gap breaks continuity, including an equal-bounds PID/window reuse.
-            if let old = current[key], stageSameWindowBounds(old.bounds, bounds) { next[key] = old }
-            else { serial += 1; next[key] = StageWindowEpoch(bounds: bounds, generation: serial, content: current[key]?.content ?? 0) }
-        }
-        current = next
-    }
-    mutating func contentChanged(_ key: StageWindowKey) {
-        guard var epoch = current[key] else { return }
-        epoch.content += 1; current[key] = epoch
-    }
-}
-func stageWidePids(_ names: Set<String>, snapshot: [[String: Any]], bundle: (Int32) -> String? = { _ in nil }) -> Set<Int32> {
-    guard !names.isEmpty else { return [] }
-    var pids: Set<Int32> = [], bundles: [Int32: String] = [:]
-    for item in snapshot {
-        guard let pid = (item[kCGWindowOwnerPID as String] as? NSNumber)?.int32Value, pid > 0 else { continue }
-        if pids.contains(pid) { continue }
-        let owner = item[kCGWindowOwnerName as String] as? String ?? ""
-        if names.contains(where: { $0.caseInsensitiveCompare(owner) == .orderedSame }) { pids.insert(pid); continue }
-        let identity = bundles[pid] ?? bundle(pid) ?? ""; bundles[pid] = identity
-        if names.contains(where: { $0.caseInsensitiveCompare(identity) == .orderedSame }) { pids.insert(pid) }
-    }
-    return pids
-}
-func stageWindows(_ list: [[String: Any]], areaApps: Set<Int32> = []) -> [StageWindowKey: CGRect] {
-    var windows: [StageWindowKey: CGRect] = [:]
-    for info in list {
-        if let pid = (info[kCGWindowOwnerPID as String] as? NSNumber)?.int32Value,
-            let layer = (info[kCGWindowLayer as String] as? NSNumber)?.intValue,
-            layer == 0 || areaApps.contains(pid),
-            let id = (info[kCGWindowNumber as String] as? NSNumber)?.uint32Value,
-            let raw = info[kCGWindowBounds as String] as? NSDictionary,
-            let bounds = CGRect(dictionaryRepresentation: raw as CFDictionary), stageRectValid(bounds) {
-            windows[StageWindowKey(pid: pid, window: id)] = bounds
-        }
-    }
-    return windows
-}
-struct StageWorld {
-    var base: PerchWorld, usable: CGRect, person: CGRect?, pointer: CGPoint, inputAge: Double, pointerAway: Double
-    var windows: [StageWindowKey: CGRect]? = nil
-    // Front to back, from the same layer-0 snapshot as windows. Dictionaries cannot select a drop destination.
-    var orderedWindows: [StageWindowKey] = []
-    var cards: [CGRect] = [], locked = false, sleeping = false, call = false
-    var displayID: String? = nil, stageAvailable = true
-    var stopped: Bool { locked || sleeping || call }
-}
-struct StageSeat {
-    var kind: String, box: CGRect, height: Double, rung: String, world: StageWorld, pid: Int32, window: UInt32
-    var art: SpriteStagePose? = nil
-}
-struct StageDraw {
-    var pose: PerchPlan, seat: StageSeat, metrics: PerchMetrics, seq: Int, fallback: Bool, dodgeMs = 0.0
-    var decisionReason: String? = nil
-    var art: SpriteStagePose? = nil
-    var seatLine = 0.0
-    var panelPolicy = stagePanelSnapshot()
-}
-enum StageEffect { case draw(StageDraw), reseat(CGPoint), hide(String, Double), park }
-func stagePanelFrameAccepted(target: CGRect, actual: CGRect) -> Bool { target == actual }
-func stagePanelBounds(_ plan: PerchPlan, _ metrics: PerchMetrics) -> CGRect {
-    let extent = plan.positions.reduce(CGRect.null) { $0.union(CGRect(origin: $1.1, size: metrics.size)) }
-    // Stage art already fits inside the admitted cell. Transparent padding can cover a protected
-    // area and AppKit can move that enlarged panel back onto the display. Keep the real panel in it.
-    // AppKit floors the origin and ceils the size independently. Plan with a whole-point
-    // enclosing rectangle so its real frame is exact and remains part of every clearance check.
-    return extent.integral.intersection(plan.seat.usable ?? plan.seat.display)
-}
-// BEGIN SPRITE DRAWING BOUNDS
-// AppKit floors the origin and ceils size in its bottom-left coordinates.
-// Return the resulting top-left displacement of the original layer contents.
-func spritePanelRoundingOffset(_ appKit: CGRect) -> CGPoint {
-    CGPoint(x: floor(appKit.minX) - appKit.minX, y: appKit.maxY - floor(appKit.minY) - ceil(appKit.height))
-}
-// The renderer samples a half-texel-inset contentsRect across the original cell.
-// Include the linear filter's support, then round outward to whole screen points.
-// No image, frame rectangle, layer scale or animation is resampled or rewritten.
-func spriteDrawingBounds(_ positions: [CGPoint], size: CGSize, cell: CGSize, ink: CGRect, flips: [Bool], clip: CGRect) -> CGRect {
-    guard !ink.isNull, !ink.isEmpty, cell.width > 1, cell.height > 1 else { return clip }
-    let extent = spriteInkUnion(positions, size: size, cell: cell, ink: ink, flips: flips, filter: true)
-    let cropped = extent.integral.intersection(clip)
-    return cropped.isNull || cropped.isEmpty ? clip : cropped
-}
-func spriteInkUnion(_ positions: [CGPoint], size: CGSize, cell: CGSize, ink: CGRect, flips: [Bool], filter: Bool) -> CGRect {
-    guard !ink.isNull, !ink.isEmpty, cell.width > 1, cell.height > 1 else { return .null }
-    let support: CGFloat = filter ? 1 : 0
-    let x0 = max(0, (ink.minX - support) * cell.width / (cell.width - 1))
-    let y0 = max(0, (ink.minY - support) * cell.height / (cell.height - 1))
-    let x1 = min(cell.width, (ink.maxX + support) * cell.width / (cell.width - 1))
-    let y1 = min(cell.height, (ink.maxY + support) * cell.height / (cell.height - 1))
-    var extent = CGRect.null
-    for flip in Set(flips) {
-        let left = flip ? cell.width - x1 : x0
-        let local = CGRect(x: left * size.width / cell.width, y: y0 * size.height / cell.height,
-            width: (x1 - x0) * size.width / cell.width, height: (y1 - y0) * size.height / cell.height)
-        for point in positions { extent = extent.union(local.offsetBy(dx: point.x, dy: point.y)) }
-    }
-    return extent
-}
-// END SPRITE DRAWING BOUNDS
-// BEGIN SPRITE PANEL GEOMETRY
-struct SpritePanelGeometry {
-    let target: CGRect, inkUnion: CGRect, filterUnion: CGRect, clip: CGRect, required: CGRect
-    let positions: Int, geometries: Int, hasExtras: Bool
-    func offsetBy(_ delta: CGPoint) -> SpritePanelGeometry {
-        func shift(_ r: CGRect) -> CGRect { r.offsetBy(dx: delta.x, dy: delta.y) }
-        return SpritePanelGeometry(target: shift(target), inkUnion: shift(inkUnion), filterUnion: shift(filterUnion),
-            clip: shift(clip), required: shift(required), positions: positions, geometries: geometries, hasExtras: hasExtras)
-    }
-    var json: [String: Any] {
-        ["inkUnion": stageTraceRect(inkUnion), "filterUnion": stageTraceRect(filterUnion), "clip": stageTraceRect(clip),
-            "required": stageTraceRect(required), "positions": positions, "geometries": geometries, "hasExtras": hasExtras]
-    }
-}
-private struct SpritePanelPoseKey: Hashable { let sheet: String, scale: Double, flip: Bool }
-func spritePanelGeometry(_ plan: PerchPlan, metrics: PerchMetrics, cell: CGSize, logicalPanel: CGRect,
-    offset: CGPoint, clip: CGRect, hasExtras: Bool, inkFor: (String) -> CGRect) -> SpritePanelGeometry {
-    var target = CGRect.null, inkUnion = CGRect.null, filterUnion = CGRect.null
-    var seen = Set<SpritePanelPoseKey>()
-    // Every frame of the same sheet, scale and flip has the same conservative
-    // decoded ink bounds. Compute that geometry once, across every motion point.
-    for pose in plan.cells {
-        guard seen.insert(SpritePanelPoseKey(sheet: pose.entry.sheet, scale: pose.entry.scale, flip: pose.entry.flip)).inserted else { continue }
-        let size = CGSize(width: cell.width * pose.entry.scale, height: cell.height * pose.entry.scale)
-        let positions = plan.positions.map { CGPoint(x: $0.1.x + offset.x + (pose.entry.flip ? metrics.size.width - size.width : 0), y: $0.1.y + offset.y) }
-        let ink = inkFor(pose.entry.sheet)
-        inkUnion = inkUnion.union(spriteInkUnion(positions, size: size, cell: cell, ink: ink, flips: [pose.entry.flip], filter: false))
-        filterUnion = filterUnion.union(spriteInkUnion(positions, size: size, cell: cell, ink: ink, flips: [pose.entry.flip], filter: true))
-        target = target.union(spriteDrawingBounds(positions, size: size, cell: cell, ink: ink, flips: [pose.entry.flip], clip: clip))
-    }
-    // The pre-existing logical clip still admits the motion. The new physical
-    // panel must contain every pixel it previously drew, including filter support.
-    // Decorations retain their original full drawing envelope, including glyph
-    // strokes and motion. They never qualify from the sprite's ink alone.
-    let required = hasExtras ? clip : filterUnion.intersection(clip)
-    return SpritePanelGeometry(target: hasExtras ? logicalPanel : target, inkUnion: inkUnion, filterUnion: filterUnion,
-        clip: clip, required: required, positions: plan.positions.count, geometries: seen.count, hasExtras: hasExtras)
-}
-// END SPRITE PANEL GEOMETRY
-func stageAreaEvent(_ incoming: RingEvent, windows: [StageWindowKey: CGRect]) -> PerchEvent {
-    let key = incoming.windowId == 0 ? windows.keys.filter { $0.pid == incoming.pid }.sorted { $0.window < $1.window }.first :
-        StageWindowKey(pid: incoming.pid, window: incoming.windowId)
-    let bounds = key.flatMap { windows[$0] }
-    return PerchEvent(state: incoming.state, pid: incoming.pid, window: key?.window ?? 0,
-        at: bounds.map { CGPoint(x: $0.midX, y: $0.midY) } ?? .zero, ok: incoming.ok, drop: nil, end: nil,
-        windowRect: incoming.windowRect, area: incoming.area)
-}
-func stageAreaEvent(_ incoming: RingEvent, snapshot: [[String: Any]]) -> PerchEvent {
-    stageAreaEvent(incoming, windows: stageWindows(snapshot, areaApps: [incoming.pid]))
-}
-func stageInputAge() -> Double {
-    [CGEventType.keyDown, .mouseMoved, .leftMouseDown, .rightMouseDown, .otherMouseDown, .scrollWheel,
-        .leftMouseDragged, .rightMouseDragged, .otherMouseDragged].map { CGEventSource.secondsSinceLastEventType(.hidSystemState, eventType: $0) }.min() ?? 0
-}
-func stageRectValid(_ r: CGRect) -> Bool {
-    [r.minX, r.minY, r.width, r.height].allSatisfy { $0.isFinite && abs($0) <= 100000 } && r.size.width > 0 && r.size.height > 0
-}
-func stagePointRect(_ p: CGPoint, _ radius: Double) -> CGRect { CGRect(x: p.x - radius, y: p.y - radius, width: radius * 2, height: radius * 2) }
-func stageDistance(_ p: CGPoint, _ r: CGRect) -> Double {
-    hypot(max(r.minX - p.x, 0, p.x - r.maxX), max(r.minY - p.y, 0, p.y - r.maxY))
-}
-// Opt-in bounded transaction journal. It contains geometry and fixed state names only.
-// The benchmark enables it; normal hosts allocate no journal or JSON records.
-final class StageTrace {
-    var rows: [[String: Any]] = [], bytes = 0, overflow = false
-    var imageIDs: [ObjectIdentifier: Int] = [:]
-    let limit: Int
-    init(limit: Int = 2 * 1024 * 1024) { self.limit = limit }
-    func append(_ input: [String: Any], _ output: [String: Any] = [:]) {
-        guard !overflow else { return }
-        if let windows = input["windows"] as? [[String: Any]], windows.count > 128 { overflow = true; return }
-        if let world = input["world"] as? [String: Any],
-            (world["windows"] as? [Any] ?? []).count > 128 || (world["above"] as? [Any] ?? []).count > 128 || (world["cards"] as? [Any] ?? []).count > 128 {
-            overflow = true; return
-        }
-        let row: [String: Any] = ["order": rows.count, "input": input, "output": output]
-        guard let data = try? JSONSerialization.data(withJSONObject: row), rows.count < 16384, bytes + data.count <= limit else { overflow = true; return }
-        bytes += data.count; rows.append(row)
-    }
-    func art(_ pose: SpriteStagePose) -> [String: Any] {
-        let key = ObjectIdentifier(pose.image)
-        if imageIDs[key] == nil {
-            guard imageIDs.count < 4096 else { overflow = true; return [:] }
-            imageIDs[key] = imageIDs.count
-        }
-        return pose.traceJSON.merging(["image": imageIDs[key]!]) { $1 }
-    }
-    var json: [String: Any] { ["schema": "sleight.stage-trace/1", "complete": !overflow, "bytes": bytes, "records": rows] }
-}
-func stageTraceRect(_ r: CGRect) -> [Double] { [r.minX, r.minY, r.width, r.height] }
-func stageTraceWindows(_ windows: [StageWindowKey: CGRect]) -> [[String: Any]] {
-    windows.keys.sorted { $0.pid == $1.pid ? $0.window < $1.window : $0.pid < $1.pid }.map {
-        ["pid": $0.pid, "id": $0.window, "frame": stageTraceRect(windows[$0]!)]
-    }
-}
-extension StageWorld {
-    var traceJSON: [String: Any] {
-        ["window": stageTraceRect(base.window), "above": base.above.map(stageTraceRect), "display": stageTraceRect(base.display),
-            "top": base.top, "fullScreen": base.fullScreen, "usable": stageTraceRect(usable),
-            "person": person.map(stageTraceRect) as Any? ?? NSNull(), "pointer": [pointer.x, pointer.y],
-            "inputAge": inputAge, "pointerAway": pointerAway, "windows": windows.map(stageTraceWindows) as Any? ?? NSNull(),
-            "orderedWindows": orderedWindows.map { ["pid": $0.pid, "id": $0.window] },
-            "cards": cards.map(stageTraceRect), "locked": locked, "sleeping": sleeping, "call": call,
-            "displayID": displayID as Any? ?? NSNull(), "stageAvailable": stageAvailable]
-    }
-}
-extension PerchEvent {
-    var traceJSON: [String: Any] {
-        ["state": state, "pid": pid, "window": window, "at": [at.x, at.y], "ok": ok,
-            "drop": drop as Any? ?? NSNull(), "end": end.map { [$0.x, $0.y] } as Any? ?? NSNull(),
-            "windowRect": windowRect.map(stageTraceRect) as Any? ?? NSNull(), "area": area as Any? ?? NSNull(), "wideReason": wideReason as Any? ?? NSNull()]
-    }
-}
-extension SpriteStagePose {
-    var traceJSON: [String: Any] {
-        ["source": source, "medium": medium, "pending": pending, "cell": [cell.width, cell.height], "anchor": [anchor.x, anchor.y],
-            "filter": filter, "entry": ["sheet": entry.sheet, "row": entry.row, "frames": entry.columns, "ms": entry.ms,
-                "loop": entry.loop, "flip": entry.flip, "hotspot": [entry.hotspot.x, entry.hotspot.y],
-                "size": [entry.size?.width ?? cell.width * 8, entry.size?.height ?? cell.height], "scale": entry.scale]]
-    }
-}
-// A geometry witness is private metadata from an observing producer, never a timer, delta or completion.
-// Ordinary hand frames carry no such witness and cannot unlock an uncertain window.
-struct StageGeometryReference {
-    var seq: Int, rects: [CGRect], departed: Bool
-}
-struct StageGeometryObservation {
-    var key: StageWindowKey, incarnation: String, observation: Int, content: Int, after: Int, mode: String, bounds: CGRect
-    var references: [StageGeometryReference]
-    var json: [String: Any] {
-        ["pid": key.pid, "windowId": key.window, "incarnation": incarnation, "observation": observation,
-            "contentGeneration": content, "after": after, "mode": mode, "bounds": stageTraceRect(bounds),
-            "references": references.map { ["seq": $0.seq, "rects": $0.rects.map(stageTraceRect), "departed": $0.departed] as [String: Any] }]
-    }
-    static func parse(_ data: [String: Any]) -> StageGeometryObservation? {
-        func int(_ raw: Any?, _ range: ClosedRange<Int>) -> Int? {
-            guard let n = raw as? NSNumber, CFGetTypeID(n) != CFBooleanGetTypeID(), n.doubleValue.isFinite,
-                n.doubleValue.rounded() == n.doubleValue, Double(range.lowerBound) <= n.doubleValue,
-                n.doubleValue <= Double(range.upperBound) else { return nil }; return n.intValue
-        }
-        func rect(_ raw: Any?) -> CGRect? {
-            guard let a = raw as? [NSNumber], a.count == 4,
-                a.allSatisfy({ CFGetTypeID($0) != CFBooleanGetTypeID() && $0.doubleValue.isFinite && abs($0.doubleValue) <= 100000 }) else { return nil }
-            let r = CGRect(x: a[0].doubleValue, y: a[1].doubleValue, width: a[2].doubleValue, height: a[3].doubleValue)
-            return stageRectValid(r) ? r : nil
-        }
-        guard Set(data.keys) == ["pid", "windowId", "incarnation", "observation", "contentGeneration", "after", "mode", "bounds", "references"],
-            let pid = int(data["pid"], 1...2147483647), let window = int(data["windowId"], 1...4294967295),
-            let incarnation = data["incarnation"] as? String, incarnation.range(of: "^[0-9a-f]{32}$", options: .regularExpression) != nil,
-            let observation = int(data["observation"], 0...9007199254740991), let content = int(data["contentGeneration"], 0...9007199254740991),
-            let after = int(data["after"], -1...9007199254740991), let mode = data["mode"] as? String, ["baseline", "move", "scroll"].contains(mode),
-            let bounds = rect(data["bounds"]), let refs = data["references"] as? [[String: Any]], refs.count <= 512 else { return nil }
-        var references: [StageGeometryReference] = []
-        for raw in refs {
-            guard Set(raw.keys) == ["seq", "rects", "departed"], let seq = int(raw["seq"], 0...9007199254740991),
-                let rs = raw["rects"] as? [Any], rs.count <= 4, let flag = raw["departed"] as? NSNumber,
-                CFGetTypeID(flag) == CFBooleanGetTypeID(), flag.boolValue ? rs.isEmpty : !rs.isEmpty else { return nil }
-            let boxes = rs.compactMap(rect); guard boxes.count == rs.count else { return nil }
-            references.append(StageGeometryReference(seq: seq, rects: boxes, departed: flag.boolValue))
-        }
-        guard Set(references.map { $0.seq }).count == references.count else { return nil }
-        return StageGeometryObservation(key: StageWindowKey(pid: Int32(pid), window: UInt32(window)), incarnation: incarnation,
-            observation: observation, content: content, after: after, mode: mode, bounds: bounds, references: references)
-    }
-}
-func stageGeometryFrame(_ data: [String: Any]) -> (String, Int, StageGeometryObservation)? {
-    guard Set(data.keys) == ["hand", "nonce", "seq", "geometry"], data["hand"] as? String == "stage-geometry",
-        let nonce = data["nonce"] as? String, nonce.range(of: "^[0-9a-f]{64}$", options: .regularExpression) != nil,
-        let seq = data["seq"] as? NSNumber, CFGetTypeID(seq) != CFBooleanGetTypeID(), seq.doubleValue.isFinite,
-        seq.doubleValue.rounded() == seq.doubleValue, (0...9007199254740991).contains(seq.doubleValue),
-        let raw = data["geometry"] as? [String: Any], let proof = StageGeometryObservation.parse(raw) else { return nil }
-    return (nonce, seq.intValue, proof)
-}
-
-// Private parent transport. Public cursor frames cannot carry these fields.
-func writeStageProducerAck(_ ack: [String: Any]) {
-    if let bytes = try? JSONSerialization.data(withJSONObject: ack) { FileHandle.standardOutput.write(bytes + Data([10])) }
-}
-struct StageProducerPrefix: Equatable {
-    var call: String, action: Int, attempt: Int, ordinal: Int
-    static func parse(_ raw: Any?) -> StageProducerPrefix? {
-        guard let d = raw as? [String: Any], Set(d.keys) == ["call", "action", "attempt", "ordinal"],
-            let call = producerToken(d["call"]), let action = producerInt(d["action"], minimum: 1),
-            let attempt = producerInt(d["attempt"], minimum: 1), let ordinal = producerInt(d["ordinal"], minimum: 1) else { return nil }
-        return StageProducerPrefix(call: call, action: action, attempt: attempt, ordinal: ordinal)
-    }
-}
-struct StageProducerIdentity: Equatable { var session: String, turn: String }
-func producerInt(_ raw: Any?, minimum: Int = 0) -> Int? {
-    guard let n = raw as? NSNumber, CFGetTypeID(n) != CFBooleanGetTypeID(), n.doubleValue.isFinite,
-        n.doubleValue.rounded() == n.doubleValue, n.doubleValue >= Double(minimum), n.doubleValue <= 9007199254740991 else { return nil }
-    return n.intValue
-}
-func producerToken(_ raw: Any?) -> String? {
-    guard let s = raw as? String, s.range(of: "^[0-9a-f]{32}$", options: .regularExpression) != nil else { return nil }; return s
-}
-struct StageProducerFrame {
-    var nonce: String, session: String, turn: String, seq: Int, op: String
-    var prefix: StageProducerPrefix?, after = -1, epoch = 0, observation = 0, acquired: [Double] = []
-    var target: RingEvent?, geometry: StageGeometryObservation?, barrier = 0.0
-    static func parse(_ d: [String: Any], bytes: Int) -> StageProducerFrame? {
-        guard bytes <= 65536, d["hand"] as? String == "stage-producer",
-            let nonce = d["nonce"] as? String, nonce.range(of: "^[0-9a-f]{64}$", options: .regularExpression) != nil,
-            let session = producerToken(d["session"]), let turn = producerToken(d["turn"]),
-            let seq = producerInt(d["seq"]), let op = d["op"] as? String else { return nil }
-        let common: Set<String> = ["hand", "nonce", "session", "turn", "seq", "op"]
-        var f = StageProducerFrame(nonce: nonce, session: session, turn: turn, seq: seq, op: op)
-        if ["begin", "admit", "invalidate"].contains(op) {
-            guard let n = d["barrier"] as? NSNumber, CFGetTypeID(n) != CFBooleanGetTypeID(), n.doubleValue.isFinite, n.doubleValue >= 0 else { return nil }
-            f.barrier = n.doubleValue
-        }
-        switch op {
-        case "begin": guard Set(d.keys) == common.union(["barrier"]) else { return nil }
-        case "end", "fault": guard Set(d.keys) == common else { return nil }
-        case "public":
-            guard Set(d.keys) == common.union(["frame"]), var raw = d["frame"] as? [String: Any],
-                raw["nonce"] == nil, raw["seq"] == nil else { return nil }
-            raw["nonce"] = nonce; raw["seq"] = seq
-            guard let parsed = handFrame(raw), case let .status(_, event) = parsed else { return nil }
-            f.target = event
-        case "admit":
-            guard Set(d.keys) == common.union(["prefix", "frame", "barrier"]), let prefix = StageProducerPrefix.parse(d["prefix"]),
-                var raw = d["frame"] as? [String: Any], raw["nonce"] == nil, raw["seq"] == nil else { return nil }
-            raw["hand"] = raw["hand"] ?? "act"; raw["nonce"] = nonce; raw["seq"] = seq
-            guard let parsed = handFrame(raw) else { return nil }
-            switch parsed { case let .act(_, act): f.target = ringEvent(act)
-                case let .aim(_, event): f.target = event
-                default: return nil }
-            f.prefix = prefix
-        case "invalidate", "certificate":
-            let extra: Set<String> = op == "invalidate" ? ["epoch", "after", "prefix", "reason", "barrier"] : ["epoch", "after", "prefix", "observation", "acquired", "geometry"]
-            guard Set(d.keys) == common.union(extra), let epoch = producerInt(d["epoch"]),
-                let after = producerInt(d["after"], minimum: -1) else { return nil }
-            f.epoch = epoch; f.after = after
-            if d["prefix"] is NSNull { f.prefix = nil }
-            else { guard let prefix = StageProducerPrefix.parse(d["prefix"]) else { return nil }; f.prefix = prefix }
-            if op == "invalidate" {
-                guard let reason = d["reason"] as? String, ["layout", "resize", "typing", "navigation", "ambient", "scroll"].contains(reason) else { return nil }
-            } else {
-                guard let observation = producerInt(d["observation"], minimum: 1), let acquired = d["acquired"] as? [NSNumber],
-                    acquired.count == 2, acquired.allSatisfy({ CFGetTypeID($0) != CFBooleanGetTypeID() && $0.doubleValue.isFinite && $0.doubleValue >= 0 }),
-                    acquired[0].doubleValue <= acquired[1].doubleValue, var raw = d["geometry"] as? [String: Any],
-                    Set(raw.keys) == ["pid", "windowId", "incarnation", "contentGeneration", "mode", "bounds", "references"] else { return nil }
-                let layout = raw["mode"] as? String == "layout"
-                if layout { raw["mode"] = "scroll" }
-                raw["observation"] = observation; raw["after"] = after
-                guard var geometry = StageGeometryObservation.parse(raw) else { return nil }
-                if layout { geometry.mode = "layout" }
-                f.geometry = geometry; f.observation = observation; f.acquired = acquired.map { $0.doubleValue }
-            }
-        default: return nil
-        }
-        return f
-    }
-}
-struct StageProducerState {
-    var session: String?, turn: String?, ended: [String] = [], last = -1, epoch = 0, after = -1, observation = 0
-    var prefix: StageProducerPrefix?, failed = false, baselineLost = false, acquiredEnd = -1.0, barrier = 0.0
-    var references: [Int: StageWindowKey] = [:], attempts: [StageProducerPrefix] = []
-    var baselines: [StageWindowKey: String] = [:], contents: [StageWindowKey: Int] = [:]
-    var observations: [StageWindowKey: StageGeometryObservation] = [:]
-    var endedIdentities: [StageProducerIdentity] = []
-    var active: Bool { turn != nil }
-    var identity: StageProducerIdentity? {
-        guard let session = session, let turn = turn else { return nil }
-        return StageProducerIdentity(session: session, turn: turn)
-    }
-    mutating func finish() {
-        var recent = ended
-        var identities = endedIdentities
-        if let identity = identity { identities.append(identity) }
-        if identities.count > 512 { identities.removeFirst(identities.count - 512) }
-        if let turn = turn { recent.append(turn) }
-        if recent.count > 512 { recent.removeFirst(recent.count - 512) }
-        let sequence = last
-        self = StageProducerState(); ended = recent; endedIdentities = identities; last = sequence
-    }
-}
-
-struct StageRuntime {
-    var trace: StageTrace?, traceDepth = 0, traceInput: [String: Any]?, traceArt: [[String: Any]] = []
-    mutating func beginTrace(_ op: String, now: Double, world: StageWorld? = nil, reduced: Bool = false, extra: @autoclosure () -> [String: Any] = [:]) {
-        guard trace != nil else { return }
-        if traceDepth == 0 {
-            traceArt = []
-            traceInput = ["op": op, "now": now, "world": world?.traceJSON as Any? ?? NSNull(), "reduced": reduced,
-                "flags": ["carrying": carrying, "carryUntil": carryUntil, "held": held, "paused": paused,
-                    "locked": locked, "sleeping": displaySleeping, "badgeApproach": badgeApproach, "stageArt": stageArt],
-                "provider": artProvider != nil].merging(extra()) { _, new in new }
-        }
-        traceDepth += 1
-    }
-    mutating func endTrace() {
-        guard let trace = trace else { return }
-        traceDepth -= 1
-        if traceDepth == 0, var input = traceInput {
-            input["art"] = traceArt
-            trace.append(input, ["turnTargets": turnTargets.count, "contributors": turnTargets.reduce(0, { $0 + $1.contributors.count }),
-                "shown": shown, "hiddenReason": hiddenReason as Any? ?? NSNull(), "seq": seq, "planBegan": planBegan,
-                "draw": shown ? draw.map { $0.json(base.frame?.cell ?? .zero, time: input["now"] as! Double) } as Any? ?? NSNull() : NSNull()])
-            traceInput = nil
-        }
-    }
-    mutating func selectArt(_ state: String) -> SpriteStagePose? {
-        let pose = artProvider?(state)
-        if trace != nil && traceDepth > 0 { traceArt.append(["state": state, "pose": pose.map { trace!.art($0) } as Any? ?? NSNull()]) }
-        return pose
-    }
-    mutating func observeWindows(_ windows: [StageWindowKey: CGRect]) {
-        if traceDepth == 0 { trace?.append(["op": "windows", "windows": stageTraceWindows(windows)]) }
-        windowBook.observe(windows)
-        for key in windows.keys where wideApps.contains(key.pid) { invalidateGeometry(key) }
-    }
-
-    var base = PerchRuntime(), options = StageOptions(size: "small"), seat: StageSeat?, draw: StageDraw?, shown = false
-    // The production provider uses ST3's lazy cache. The geometry-only dump can also test large seats without decoding art.
-    var artPose: SpriteStagePose?
-    var artProvider: ((String) -> SpriteStagePose?)?
-    func artState(for kind: String) -> String {
-        if paused { return "stage-paused" }; if asleep { return "stage-sleep" }
-        if reaction == "error" { return "stage-wince" }; if reaction == "waiting" { return "stage-wait" }
-        if carrying { return "stage-carry" }
-        if ["handback", "done"].contains(reaction) { return "stage-handoff" }; if reaction == "turn-success" { return "stage-cheer" }
-        if reaction == "thinking" { return "stage-think" }
-        if kind == "edge-hang" { return "stage-hang" }
-        if kind == "floor-stand" { return "stage-stand" }
-        let typing = ["type", "scroll", "drag"].contains(reaction)
-        if kind == "corner-hang" { return typing ? "stage-hang-peek" : "stage-hang" }
-        if kind == "side-climb" { return "stage-climb" }
-        if kind == "desk-stand" { return reaction == "aim" ? "stage-point" : "stage-stand" }
-        if ["edge-sit", "front-sit"].contains(kind) { return typing ? "stage-sit-notes" : "stage-sit" }
-        return typing ? "stage-lie-peek" : ["click", "double", "right", "key"].contains(reaction) ? "stage-lie-reach" : "stage-lie"
-    }
-    var carrying = false, carryUntil = 0.0
-    var stageArt = false, paused = false, held = false, asleep = false, woke = false
-    var badgeApproach = false
-    var installedReaction = "perch"
-    var reaction = "perch", afterReaction: String? = nil
-    var reactionBegan: Double?, reactionUntil: Double?
-    var phase: String?, phaseUntil: Double?
-    var oneShot: Bool { ["click", "double", "right", "key", "error", "handback", "done", "turn-success"].contains(reaction) }
-    var event: PerchEvent?, seq = 0, aimRect: CGRect?, recent: [CGPoint] = []
-    var turnTargets: [StageTarget] = [], windowBook = StageWindowBook(), targetCapacity = false
-    var wideWindows: Set<StageWindowKey> = [], compactedWindows: Set<StageWindowKey> = []
-    var wideApps: Set<Int32> = []
-    var wideNames: Set<String> = [], wideEpoch = -1, endedWideEpoch = -1
-    mutating func beginWide(_ incoming: RingEvent, windows: [StageWindowKey: CGRect], pids: Set<Int32>) -> PerchEvent? {
-        guard let epoch = incoming.wideEpoch, epoch > endedWideEpoch, epoch >= wideEpoch else { return nil }
-        wideEpoch = epoch
-        if let name = incoming.wideName {
-            guard wideNames.count < 128 || wideNames.contains(name) else { targetCapacity = true; return nil }
-            wideNames.insert(name)
-        }
-        if incoming.windowId == 0 {
-            guard wideApps.union(pids).count <= 128 else { targetCapacity = true; return nil }
-            wideApps.formUnion(pids)
-        }
-        observeWindows(windows)
-        let pid = incoming.pid > 0 ? incoming.pid : pids.sorted().first ?? 0
-        var event = incoming
-        event = RingEvent(seq: incoming.seq, state: "thinking", pid: pid, windowId: incoming.windowId,
-            at: nil, rect: nil, label: nil, area: incoming.area)
-        var result = stageAreaEvent(event, windows: windows)
-        result.wideReason = incoming.wideReason
-        return result
-    }
-    var terminalSeatUntil: Double? = nil
-    var terminalSeen = false
-    var wideRecords: [StageWindowKey: CGRect] = [:], wideObservedFrames: [StageWindowKey: CGRect] = [:]
-    var pendingDrops: [CGPoint] = []
-    var unmappedWindows: Set<StageWindowKey> = [], unmappableDrags: Set<StageWindowKey> = []
-    var admissionWatermarks: [StageWindowKey: Int] = [:], geometryObservations: [StageWindowKey: StageGeometryObservation] = [:]
-    var requiredReferences: [StageWindowKey: [StageContributor]] = [:]
-    var producerCollectionOnly = false
-    var producerOwner: StageProducerIdentity?
-    var targetUnmapped: Bool { !unmappedWindows.isEmpty }
-    mutating func invalidateGeometry(_ key: StageWindowKey) {
-        guard wideWindows.count < 128 || wideWindows.contains(key) else { windowBook.overflow = true; targetCapacity = true; return }
-        if wideWindows.insert(key).inserted { noSeatWorld = nil }
-        // Marking uncertainty can precede the next world bind. Retain the admitted epoch's
-        // whole container now, so a later already-wide check cannot skip its old envelope.
-        for target in turnTargets where target.key == key && !target.outside {
-            retainWide(key, box: target.box.union(target.epoch.bounds.insetBy(dx: -48, dy: -48)))
-        }
-        if unmappedWindows.count < 128 || unmappedWindows.contains(key) { unmappedWindows.insert(key) }
-        else { windowBook.overflow = true; targetCapacity = true }
-    }
-    mutating func retainWide(_ key: StageWindowKey, box: CGRect) {
-        guard wideRecords.count < 128 || wideRecords[key] != nil else { windowBook.overflow = true; targetCapacity = true; return }
-        wideRecords[key] = (wideRecords[key] ?? CGRect.null).union(box)
-    }
-    mutating func widenStale(_ key: StageWindowKey, measured: CGRect, observed: CGRect) {
-        let difference = max(abs(measured.minX - observed.minX), abs(measured.minY - observed.minY),
-            abs(measured.width - observed.width), abs(measured.height - observed.height))
-        maxWindowBoundsDifferencePt = max(maxWindowBoundsDifferencePt ?? 0, difference)
-        invalidateGeometry(key)
-        retainWide(key, box: measured.union(observed).insetBy(dx: -48, dy: -48))
-    }
-    // Capacity aggregates retain geometry for the entire turn. They can never accept a shrinking certificate.
-    mutating func collapseBusiest() {
-        let keys = Set(turnTargets.map { $0.key }).union(requiredReferences.keys)
-        guard let key = keys.sorted(by: { a, b in
-            let ac = turnTargets.filter { $0.key == a }.count, bc = turnTargets.filter { $0.key == b }.count
-            if ac != bc { return ac > bc }
-            let ar = requiredReferences[a, default: []].count, br = requiredReferences[b, default: []].count
-            if ar != br { return ar > br }
-            return a.pid == b.pid ? a.window < b.window : a.pid < b.pid
-        }).first else { return }
-        let records = turnTargets.filter { $0.key == key && !$0.outside }
-        let box = records.reduce(wideRecords[key] ?? CGRect.null) { $0.union($1.box) }
-        invalidateGeometry(key)
-        if !box.isNull { retainWide(key, box: box) }
-        if let frame = windowBook.current[key]?.bounds { retainWide(key, box: frame.insetBy(dx: -48, dy: -48)) }
-        compactedWindows.insert(key)
-        turnTargets.removeAll { $0.key == key }; requiredReferences.removeValue(forKey: key)
-        geometryObservations.removeValue(forKey: key)
-    }
-    var moving: CGRect?, stableAt: Double?, parkedAt: Double?, lastFrame = 0.0
-    var planBegan = 0.0
-    var locked = false, displaySleeping = false, hiddenReason: String?
-    var pointerEnteredAt: Double?
-    var pointerBlocked = false, pointerClearSince: Double?
-    var hideReasonCounts: [String: Int] = ["stale-window": 0]
-    var maxWindowBoundsDifferencePt: Double?
-    var silentReseats = 0, maxSilentReseatDifferencePt = 0.0
-    var windowDecisions: [[String: Any]] = []
-    var exclusions: [CGRect] = [], forbiddenBuilds = 0
-    var noSeatWorld: StageWorld?
-    mutating func remember(_ target: CGRect, key: StageWindowKey, epoch: StageWindowEpoch, contributor: StageContributor? = nil) {
-        guard !targetCapacity else { return }
-        if wideWindows.contains(key) { retainWide(key, box: target) }
-        if compactedWindows.contains(key) { return }
-        let c = contributor ?? StageContributor(seq: seq, state: event?.state ?? "unknown", content: epoch.content)
-        var contributors = [c]
-        let same: (StageTarget) -> Bool = { $0.key == key && $0.epoch == epoch && !$0.outside }
-        if let index = turnTargets.firstIndex(where: { same($0) && $0.box.contains(target) }) {
-            if !turnTargets[index].contributors.contains(c) {
-                if turnTargets.reduce(0, { $0 + $1.contributors.count }) >= 512 {
-                    collapseBusiest(); remember(target, key: key, epoch: epoch, contributor: c); return
-                }
-                turnTargets[index].contributors.append(c)
-            }
-            return
-        }
-        for old in turnTargets.filter({ same($0) && target.contains($0.box) }) {
-            for prior in old.contributors where !contributors.contains(prior) { contributors.append(prior) }
-        }
-        let remaining = turnTargets.filter { !(same($0) && target.contains($0.box)) }
-        if remaining.reduce(contributors.count, { $0 + $1.contributors.count }) > 512 || remaining.count >= 64 {
-            collapseBusiest(); remember(target, key: key, epoch: epoch, contributor: c); return
-        }
-        turnTargets = remaining
-        turnTargets.append(StageTarget(box: target, key: key, epoch: epoch, contributors: contributors))
-    }
-    func validGeometryCertificate(_ proof: StageGeometryObservation, world: StageWorld) -> Bool {
-        guard !targetCapacity, !compactedWindows.contains(proof.key), !windowBook.discontinuous.contains(proof.key), !unmappableDrags.contains(proof.key),
-            let current = windowBook.current[proof.key], world.windows?[proof.key] == proof.bounds,
-            proof.after == admissionWatermarks[proof.key, default: -1] else { return false }
-        let targets = turnTargets.filter { $0.key == proof.key }
-        if proof.mode == "baseline" {
-            return requiredReferences[proof.key, default: []].isEmpty && targets.isEmpty && geometryObservations[proof.key] == nil && proof.references.isEmpty && proof.content == current.content
-        }
-        guard let prior = geometryObservations[proof.key], prior.incarnation == proof.incarnation,
-            proof.observation > prior.observation else { return false }
-        let sequences = Set(requiredReferences[proof.key, default: []].map { $0.seq })
-        let mapped = Set(proof.references.map { $0.seq }) == sequences &&
-            proof.references.allSatisfy { $0.departed || $0.rects.allSatisfy { $0.intersects(proof.bounds) } }
-        if proof.mode == "move" {
-            guard proof.content == prior.content, proof.content == current.content, proof.bounds.size == prior.bounds.size else { return false }
-            // Pure translation requires every old coordinate. A stale admission needs an explicit full mapping.
-            if !proof.references.isEmpty { return mapped }
-            return Set(targets.flatMap { $0.contributors.map { $0.seq } }) == sequences &&
-                targets.allSatisfy { $0.epoch.content == proof.content && $0.epoch.bounds == prior.bounds }
-        }
-        return proof.content == current.content && proof.content > prior.content && mapped
-    }
-    mutating func certifyGeometry(_ proof: StageGeometryObservation, now: Double, world: StageWorld?, reduced: Bool) -> [StageEffect] {
-        beginTrace("geometry", now: now, world: world, reduced: reduced, extra: ["geometry": proof.json]); defer { endTrace() }
-        guard let world = world else { return hide("geometry-unobserved", immediate: true) }
-        bindWindows(world)
-        guard validGeometryCertificate(proof, world: world) else { invalidateGeometry(proof.key); return hide("geometry-uncertified", immediate: true) }
-        guard geometryObservations.count < 128 || geometryObservations[proof.key] != nil else { windowBook.overflow = true; targetCapacity = true; return hide("target-capacity", immediate: true) }
-        if proof.mode == "baseline" { geometryObservations[proof.key] = proof; return [] }
-        let prior = geometryObservations[proof.key]!, epoch = windowBook.current[proof.key]!
-        let translates = proof.mode == "move" && proof.references.isEmpty
-        var replacement: [StageTarget] = []
-        for var target in turnTargets {
-            guard target.key == proof.key else { replacement.append(target); continue }
-            if translates {
-                target.box = target.box.offsetBy(dx: proof.bounds.minX - prior.bounds.minX, dy: proof.bounds.minY - prior.bounds.minY)
-            } else {
-                let references = proof.references.filter { ref in target.contributors.contains { $0.seq == ref.seq } }
-                var protected: [CGRect] = []
-                for reference in references where !reference.departed {
-                    for rect in reference.rects {
-                        protected.append(rect.insetBy(dx: -48, dy: -48))
-                        if rect.minY <= proof.bounds.minY + 56 && rect.maxY >= proof.bounds.minY {
-                            protected.append(CGRect(x: rect.minX - 72, y: proof.bounds.minY, width: rect.width + 144, height: 56))
-                        }
-                    }
-                }
-                target.outside = protected.isEmpty
-                if !protected.isEmpty { target.box = protected.reduce(CGRect.null) { $0.union($1) } }
-            }
-            target.epoch = epoch
-            replacement.append(target)
-        }
-        let represented = Set(replacement.filter { $0.key == proof.key }.flatMap { $0.contributors.map { $0.seq } })
-        for contributor in requiredReferences[proof.key, default: []] where !represented.contains(contributor.seq) {
-            guard let reference = proof.references.first(where: { $0.seq == contributor.seq }) else { return hide("geometry-uncertified", immediate: true) }
-            let box = reference.rects.map { $0.insetBy(dx: -72, dy: -56) }.reduce(CGRect.null) { $0.union($1) }
-            replacement.append(StageTarget(box: reference.departed ? proof.bounds : box, key: proof.key, epoch: epoch,
-                contributors: [contributor], outside: reference.departed))
-        }
-        // Build and validate first. The old geometry stays protected until the whole replacement is ready.
-        guard replacement.allSatisfy({ stageRectValid($0.box) }) else { invalidateGeometry(proof.key); return hide("geometry-uncertified", immediate: true) }
-        let effects = hide("geometry-remap", immediate: true)
-        turnTargets = replacement; geometryObservations[proof.key] = proof; unmappedWindows.remove(proof.key)
-        while turnTargets.count > 64 || turnTargets.reduce(0, { $0 + $1.contributors.count }) > 512 { collapseBusiest() }
-        noSeatWorld = nil; moving = nil; stableAt = nil
-        if let ev = event, ev.pid == proof.key.pid && ev.window == proof.key.window {
-            let dx = translates ? proof.bounds.minX - prior.bounds.minX : 0
-            let dy = translates ? proof.bounds.minY - prior.bounds.minY : 0
-            event = PerchEvent(state: ev.state, pid: ev.pid, window: ev.window, at: CGPoint(x: ev.at.x + dx, y: ev.at.y + dy), ok: ev.ok,
-                drop: ev.drop, end: ev.end.map { CGPoint(x: $0.x + dx, y: $0.y + dy) }, detail: ev.detail, retry: ev.retry, transfer: ev.transfer, windowRect: proof.bounds)
-            if let rect = aimRect { aimRect = rect.offsetBy(dx: dx, dy: dy) }
-        }
-        guard let ev = event, ev.pid == proof.key.pid, ev.window == proof.key.window else { return effects }
-        return effects + (paused ? [] : observe(now, world: world, reduced: reduced))
-    }
-
-    mutating func bindWindows(_ world: StageWorld, acting: StageWindowKey? = nil) {
-        if let windows = world.windows { windowBook.observe(windows) }
-        else if let ev = event { windowBook.observe([StageWindowKey(pid: ev.pid, window: ev.window): world.base.window]) }
-        if windowBook.overflow { targetCapacity = true; return }
-        for key in windowBook.current.keys where wideApps.contains(key.pid) { invalidateGeometry(key) }
-        var windows = world.windows ?? [:]
-        if !world.base.window.isEmpty, let key = acting ?? event.map({ StageWindowKey(pid: $0.pid, window: $0.window) }) { windows[key] = world.base.window }
-        // Ordinary frames prove no remapping. Keep old geometry until a complete observation certifies its replacement.
-        // A stable seating epoch does not certify that a target moved with it.
-        let changed = Set(turnTargets.filter { target in
-            windowBook.current[target.key] != target.epoch ||
-                windows[target.key].map { !stageSameTargetBounds($0, target.epoch.bounds) } == true
-        }.map { $0.key }).subtracting(wideWindows)
-        for key in changed {
-            for target in turnTargets where target.key == key {
-                retainWide(key, box: target.epoch.bounds.insetBy(dx: -48, dy: -48))
-            }
-            invalidateGeometry(key)
-        }
-        // An equal-bounds replacement with a new PID is still a new incarnation of the protected window ID.
-        for key in windows.keys where !wideWindows.contains(key) && wideWindows.contains(where: { $0.window == key.window }) { invalidateGeometry(key) }
-        for key in wideWindows {
-            if let old = wideObservedFrames[key], windows[key] != old { retainWide(key, box: old.insetBy(dx: -48, dy: -48)) }
-            if let frame = windows[key] {
-                wideObservedFrames[key] = frame
-            }
-        }
-        if world.windows != nil && !world.orderedWindows.isEmpty && !pendingDrops.isEmpty {
-            let drops = pendingDrops; pendingDrops = []
-            for drop in drops { protectDrop(drop, world: world) }
-        }
-    }
-    var activeTargets: [CGRect] { turnTargets.filter { !$0.outside }.map { $0.box } + Array(wideRecords.values) }
-    func targetWindows(_ world: StageWorld) -> [StageWindowKey: CGRect] {
-        let keys = Set(turnTargets.map { $0.key }).union(wideWindows)
-        return (world.windows ?? [:]).filter { keys.contains($0.key) }
-    }
-    func samePlacementWorld(_ a: StageWorld, _ b: StageWorld) -> Bool {
-        a.base.window == b.base.window && a.base.above == b.base.above && a.base.display == b.base.display && a.base.fullScreen == b.base.fullScreen &&
-            targetWindows(a) == targetWindows(b) && a.usable == b.usable && a.cards == b.cards && a.person == b.person && a.pointer == b.pointer &&
-            (a.inputAge < 8) == (b.inputAge < 8) && (a.pointerAway < 5) == (b.pointerAway < 5) && a.stageAvailable == b.stageAvailable
-    }
-    mutating func prepare(_ world: StageWorld) { exclusions = forbidden(world); forbiddenBuilds += 1 }
-    mutating func load(_ frame: SpriteFrame?) {
-        if producerCollectionOnly && !requiredReferences.values.allSatisfy({ $0.isEmpty }) {
-            targetCapacity = true; _ = hide("producer-replacement", immediate: true); return
-        }
-        base.load(frame); options = frame?.stageOptions ?? StageOptions(size: "small"); seat = nil; draw = nil; shown = false
-        silentReseats = 0; maxSilentReseatDifferencePt = 0; windowDecisions = []
-        artPose = nil
-        terminalSeatUntil = nil
-        terminalSeen = false
-        wideNames = []; wideEpoch = -1; endedWideEpoch = -1
-        noSeatWorld = nil; hiddenReason = nil; pointerEnteredAt = nil; pointerBlocked = false; pointerClearSince = nil; exclusions = []; locked = false; displaySleeping = false
-        event = nil; recent = []; turnTargets = []; windowBook = StageWindowBook(); targetCapacity = false; wideWindows = []; wideApps = []; compactedWindows = []; wideRecords = [:]; wideObservedFrames = [:]; pendingDrops = []; unmappedWindows = []; unmappableDrags = []; admissionWatermarks = [:]; geometryObservations = [:]; requiredReferences = [:]; aimRect = nil; moving = nil; stableAt = nil; parkedAt = nil; paused = false; held = false; asleep = false; woke = false; reaction = "perch"; afterReaction = nil; reactionBegan = nil; reactionUntil = nil; phase = nil; phaseUntil = nil
-    }
-    var poll: Double? { event == nil || held || locked || displaySleeping ? nil : asleep || !shown || paused ? 2 : 0.2 }
-    // Shared by the real one-shot scheduler and the no-window clock dump.
-    func nextWake(_ now: Double) -> (at: Double, source: String)? {
-        guard let poll = poll else { return nil }
-        let deadlines: [(Double?, String)] = [(now + poll, "stage-window-check"), (reactionUntil, "stage-reaction"),
-            (phaseUntil, "stage-phase"), (parkedAt, "stage-park"), (stableAt, "stage-stable"),
-            (paused ? nil : lastFrame + (event?.state == "waiting" ? 120 : 20), "stage-idle"), (lastFrame + 600, "stage-deep")]
-        return deadlines.compactMap { at, source in at.map { (at: $0, source: source) } }
-            .filter { $0.at > now + 0.001 }.min { $0.at < $1.at } ?? (now + poll, "stage-window-check")
-    }
-    var pointerActive: Bool { event != nil && shown && !asleep && !paused && !held && !locked && !displaySleeping }
-    mutating func hide(_ reason: String, immediate: Bool = false, at: Double? = nil) -> [StageEffect] {
-        beginTrace("hide", now: at ?? lastFrame, extra: ["reason": reason, "immediate": immediate]); defer { endTrace() }
-        if hiddenReason != reason { hideReasonCounts[reason, default: 0] += 1 }
-        let was = shown; shown = false; draw = nil; parkedAt = nil; hiddenReason = reason
-        return [.hide(reason, immediate || !was || reason != "hide" ? 0 : 0.12)]
-    }
-    func forbidden(_ world: StageWorld, pointer: Double? = nil) -> [CGRect] {
-        guard let event = event else { return [] }
-        var out = world.base.above + world.cards + activeTargets + (world.person.map { [$0] } ?? [])
-        out += wideFrames(world)
-        if event.area == nil { out.append(stagePointRect(event.at, 48)) }
-        if let rect = aimRect { out.append(rect.insetBy(dx: -48, dy: -48)) }
-        if let end = event.end { out.append(stagePointRect(end, 48)) }
-        // A2's under-edge target rule is retained for both endpoints and the aim rectangle's whole width.
-        let edge = world.base.window.minY
-        for p in (event.area == nil ? [event.at] : []) + (event.end.map { [$0] } ?? []) where p.y >= edge && p.y <= edge + 56 {
-            out.append(CGRect(x: p.x - 72, y: edge, width: 144, height: 56))
-        }
-        let w = world.base.window
-        if !w.isEmpty {
-            out += [CGRect(x: w.minX, y: w.minY, width: min(80, w.width), height: 32),
-                CGRect(x: max(w.minX, w.maxX - 80), y: w.minY, width: min(80, w.width), height: 32)]
-        }
-        if let radius = pointer { out.append(stagePointRect(world.pointer, radius)) }
-        return out
-    }
-    func wideFrames(_ world: StageWorld) -> [CGRect] {
-        var windows = world.windows ?? [:]
-        if let ev = event, !world.base.window.isEmpty { windows[StageWindowKey(pid: ev.pid, window: ev.window)] = world.base.window }
-        return windows.filter { wideWindows.contains($0.key) }.map { $0.value.insetBy(dx: -48, dy: -48) }
-    }
-    func clear(_ box: CGRect, _ world: StageWorld, pointer: Double? = nil) -> Bool {
-        stageRectValid(box) && world.usable.contains(box) && !exclusions.contains { $0.intersects(box.insetBy(dx: -1, dy: -1)) } &&
-            (pointer.map { !stagePointRect(world.pointer, $0).intersects(box) } ?? true)
-    }
-    func blockedSpan(_ lo: CGFloat, _ hi: CGFloat, width: CGFloat, y: CGFloat, height: CGFloat) -> Bool {
-        var intervals: [(CGFloat, CGFloat)] = []
-        for box in exclusions where box.width > 0 && box.height > 0 && box.minY < y + height && box.maxY > y {
-            let left = box.minX - width, right = box.maxX
-            if left < lo && right > hi { return true }
-            if right > lo && left < hi { intervals.append((left, right)) }
-        }
-        var reach = lo
-        for (left, right) in intervals.sorted(by: { $0.0 < $1.0 }) {
-            // This span shortcut is permissive; clear also enforces the final one-point gap.
-            if left >= reach { return false }
-            reach = max(reach, right)
-            if reach > hi { return true }
-        }
-        return false
-    }
-    func ladder(_ world: StageWorld) -> [(String, Double)] {
-        let stage = options.points ?? min(480, max(288, Double(world.usable.height) * 0.36))
-        let active = options.attention && world.inputAge < 8 && world.person != world.base.window
-        if options.size == "small" { return [("small", 92)] }
-        if options.size == "medium" { return [("medium", 184), ("small", 92)] }
-        if (artProvider == nil && !stageArt) || active || !world.stageAvailable { return [("medium", min(184, stage)), ("small", min(92, stage))] }
-        var previous = Double.infinity
-        return [("stage", stage), ("three-quarter", stage * 0.75), ("medium", 184.0), ("small", 92.0)].filter { entry in
-            guard entry.1 < previous else { return false }; previous = entry.1; return true
-        }
-    }
-    mutating func place(_ world: StageWorld, avoidingPointer: Bool = true, dodge: Bool = false) -> StageSeat? {
-        // Resolve the seat using manifest geometry first. Only that seat may make a foreground cache request.
-        let dodged = locate(world, avoidingPointer: avoidingPointer, dodge: dodge)
-        guard var next = dodged ?? (dodge ? locate(world, avoidingPointer: false, dodge: false) : nil) else { return nil }
-        if artProvider != nil {
-            let art = selectArt(artState(for: next.kind))
-            if art?.medium == true {
-                // A cold strip renders its A2 fallback at medium or small, in the same seat family.
-                guard let fallback = locate(world, avoidingPointer: dodged == nil ? false : avoidingPointer,
-                    dodge: dodged == nil ? false : dodge, only: next.kind, art: art) else { return nil }
-                next = fallback
-            }
-            next.art = art
-        }
-        return next
-    }
-    func locate(_ world: StageWorld, avoidingPointer: Bool, dodge: Bool, only: String? = nil, art: SpriteStagePose? = nil) -> StageSeat? {
-        guard let ev = event, let frame = base.frame, stageRectValid(world.usable),
-            world.base.window.isEmpty || stageRectValid(world.base.window) && world.base.window.width >= 48,
-            !world.stopped, !world.base.fullScreen else { return nil }
-        // No person window: attention is unknown, so count it as looking (FA1 rule 3; no edge-sit or front-sit).
-        let win = world.base.window, looking = world.person == nil || world.person == win || world.pointerAway < 5 || stageDistance(world.pointer, win) <= 100
-        let tx = Double(ev.at.x)
-        // Try every seat at this size before shrinking the authored stage art.
-        for (rung, h) in ladder(world) {
-        for screenEdge in [false, true] {
-            if world.base.window.isEmpty && !screenEdge { continue }
-            let large = ["stage", "three-quarter"].contains(rung)
-            var kinds = ["edge-lie", "edge-sit", "corner-hang", "side-climb", "desk-stand"]
-            if world.person == win { kinds = ["edge-lie", "corner-hang"] }
-            if options.frontSit && options.size == "stage" && large && !looking { kinds.append("front-sit") }
-            if screenEdge { kinds = ["edge-hang", "floor-stand"] }
-            if let only = only { kinds = kinds.filter { $0 == only } }
-            for kind in kinds {
-                let entry = frame.stage?[artState(for: kind)]
-                let own = entry?.file != nil && art == nil
-                if large && (art?.medium == true || artProvider != nil && !own) { continue }
-                let cell = art?.cell ?? (own ? entry!.cell : frame.cell)
-                let anchor = art?.anchor ?? (own ? entry!.anchor : frame.perch?.anchor ?? CGPoint(x: frame.cell.width / 2, y: frame.cell.height))
-                let artScale = h / 184 * Double(frame.cell.height / cell.height)
-                let artH = Double(cell.height) * artScale, artW = Double(cell.width) * artScale
-                let lieW = large ? max(1.5 * h, artW) : artW
-                if kind == "edge-sit" && looking { continue }
-                if kind == "edge-lie" && large && win.width < 1.5 * h + 160 - 0.001 { continue }
-                var candidates: [CGRect] = []
-                let bh = artH, bw = kind == "edge-lie" ? lieW : artW
-                if kind == "edge-lie" || kind == "edge-sit" || screenEdge {
-                    let lo = screenEdge ? world.usable.minX : win.minX + (large ? 80 : 0)
-                    let hi = screenEdge ? world.usable.maxX - bw : win.maxX - (large ? 80 : 0) - bw
-                    guard lo <= hi else { continue }
-                    let y = screenEdge ? (kind == "edge-hang" ? world.usable.minY + 1.01 : world.usable.maxY - bh - 1.01) : win.minY - Double(anchor.y) * artScale
-                    // The union of blocked x intervals can reject a whole span before allocating candidates.
-                    if blockedSpan(lo, hi, width: bw, y: y, height: bh) { continue }
-                    var xs = [min(max(tx - bw / 2, lo), hi), lo, hi]
-                    // Obstacle boundaries produce a finite candidate set, no pixel scan and no per-frame layout loop.
-                    for r in exclusions + (avoidingPointer ? [stagePointRect(world.pointer, 40)] : []) { xs += [r.minX - bw - 1.01, r.maxX + 1.01] }
-                    if kind == "edge-sit" { xs.sort() } // One-way seated art dangles its legs over the left end of a free span.
-                    if let old = seat, screenEdge ? old.kind == kind : old.window == ev.window {
-                        xs.insert(old.box.minX, at: 0)
-                        if dodge { xs = [old.box.minX + 120, old.box.minX - 120] + xs }
-                    }
-                    candidates = xs.filter { $0 >= lo && $0 <= hi }.map { CGRect(x: $0, y: y, width: bw, height: bh) }
-                } else if kind == "corner-hang" || kind == "side-climb" {
-                    let y = kind == "corner-hang" ? win.minY : min(max(ev.at.y - bh / 2, win.minY), win.maxY - bh)
-                    candidates = [CGRect(x: win.maxX + 1.01, y: y, width: bw, height: bh), CGRect(x: win.minX - bw - 1.01, y: y, width: bw, height: bh)]
-                } else if kind == "desk-stand" {
-                    candidates = [CGRect(x: win.maxX + 1.01, y: win.maxY - bh, width: bw, height: bh), CGRect(x: win.minX - bw - 1.01, y: win.maxY - bh, width: bw, height: bh)]
-                } else {
-                    candidates = [CGRect(x: win.minX + 80, y: win.minY + 80, width: bw, height: bh),
-                        CGRect(x: win.maxX - 80 - bw, y: win.minY + 80, width: bw, height: bh),
-                        CGRect(x: win.minX + 80, y: win.maxY - 40 - bh, width: bw, height: bh),
-                        CGRect(x: win.maxX - 80 - bw, y: win.maxY - 40 - bh, width: bw, height: bh)]
-                    candidates = candidates.filter { r in win.contains(r) && (recent + [ev.at]).allSatisfy { stageDistance($0, r) >= h * 0.5 } }
-                    candidates.sort { a, b in (recent + [ev.at]).map { stageDistance($0, a) }.min()! > (recent + [ev.at]).map { stageDistance($0, b) }.min()! }
-                }
-                for box in candidates where clear(box, world, pointer: avoidingPointer ? 40 : nil) {
-                    if dodge {
-                        guard let old = seat, kind == old.kind, h == old.height, abs(box.minY - old.box.minY) < 0.001,
-                            abs(abs(box.minX - old.box.minX) - 120) < 0.1 else { continue }
-                    }
-                    return StageSeat(kind: kind, box: box, height: h, rung: rung, world: world, pid: ev.pid, window: ev.window, art: art)
-                }
-            }
-        }
-        }
-        return nil
-    }
-    mutating func completeTurn(state: String, ok: Bool, now: Double? = nil, terminal: PerchEvent? = nil) {
-        beginTrace("complete", now: now ?? lastFrame, world: nil, reduced: false, extra: ["state": state, "ok": ok]); defer { endTrace() }
-        guard state == "handback" || state == "done" && !ok else { return }
-        // Release protection at the terminal, then keep an already safe panel still for one poll.
-        // WindowServer and Accessibility can observe its new frame before an external observer
-        // has consumed the released protection snapshot. No action or input waits for this seat.
-        if !terminalSeen { terminalSeatUntil = shown && seat != nil && !wideWindows.isEmpty ? (now ?? lastFrame) + 0.2 : nil }
-        if !terminalSeen { endedWideEpoch = max(endedWideEpoch + 1, wideEpoch) }
-        terminalSeen = true
-        wideNames = []
-        turnTargets = []; windowBook = StageWindowBook(); recent = []; targetCapacity = false; wideWindows = []; wideApps = []; compactedWindows = []; wideRecords = [:]; wideObservedFrames = [:]; pendingDrops = []; unmappedWindows = []; unmappableDrags = []; admissionWatermarks = [:]; geometryObservations = [:]; requiredReferences = [:]; noSeatWorld = nil; aimRect = nil
-        carrying = false; carryUntil = 0; pointerBlocked = false; pointerClearSince = nil
-        if let old = terminal ?? event, terminal != nil || !(old.state == "handback" || old.state == "done" && !old.ok) {
-            reaction = state == "done" && base.turnOk == true ? "turn-success" : state
-            afterReaction = nil; reactionBegan = nil; reactionUntil = nil; phase = nil; phaseUntil = nil
-            event = PerchEvent(state: state, pid: old.pid, window: old.window, at: old.at, ok: false, drop: nil, end: nil, windowRect: nil)
-            if let now = now { lastFrame = now }
-        }
-    }
-    mutating func protectDrop(_ drop: CGPoint, world: StageWorld?) {
-        guard let world = world, let windows = world.windows, !world.orderedWindows.isEmpty else { return }
-        if let destination = world.orderedWindows.first(where: { windows[$0]?.contains(drop) == true }) {
-            invalidateGeometry(destination); unmappableDrags.insert(destination)
-            if let frame = windows[destination] {
-                retainWide(destination, box: frame.insetBy(dx: -48, dy: -48))
-                wideObservedFrames[destination] = frame
-            }
-        }
-    }
-    mutating func admitTargets(_ ev: PerchEvent, seq: Int, rect: CGRect?, world: StageWorld?, turnEnd: Bool) {
-        guard !targetCapacity else { return }
-        if let world = world { bindWindows(world, acting: StageWindowKey(pid: ev.pid, window: ev.window)) }
-        if let area = ev.area, !turnEnd {
-            if area == "app" {
-                if wideApps.count < 128 || wideApps.contains(ev.pid) { wideApps.insert(ev.pid) }
-                else { targetCapacity = true; return }
-            }
-            var keys = Set(windowBook.current.keys.filter { area == "app" && $0.pid == ev.pid })
-            if ev.window > 0 { keys.insert(StageWindowKey(pid: ev.pid, window: ev.window)) }
-            for key in keys {
-                invalidateGeometry(key)
-                if let bounds = windowBook.current[key]?.bounds { retainWide(key, box: bounds.insetBy(dx: -48, dy: -48)) }
-            }
-            return
-        }
-        var targets = [stagePointRect(ev.at, 48)]
-        if let rect = rect { targets.append(rect.insetBy(dx: -48, dy: -48)) }
-        if let end = ev.end { targets.append(stagePointRect(end, 48)) }
-        if let edge = windowBook.current[StageWindowKey(pid: ev.pid, window: ev.window)]?.bounds.minY {
-            for p in [ev.at] + (ev.end.map { [$0] } ?? []) where p.y >= edge && p.y <= edge + 56 {
-                targets.append(CGRect(x: p.x - 72, y: edge, width: 144, height: 56))
-            }
-        }
-        let key = StageWindowKey(pid: ev.pid, window: ev.window)
-        if !turnEnd {
-            if admissionWatermarks.count < 128 || admissionWatermarks[key] != nil { admissionWatermarks[key] = max(admissionWatermarks[key, default: -1], seq) }
-            else { windowBook.overflow = true; targetCapacity = true; return }
-        }
-        if ev.state == "drag" {
-            invalidateGeometry(key); unmappableDrags.insert(key)
-            // PerchEvent.end is the grab point; its ring point (at) is the drop.
-            if let world = world, world.windows != nil, !world.orderedWindows.isEmpty {
-                protectDrop(ev.at, world: world)
-            } else if pendingDrops.count < 128 {
-                pendingDrops.append(ev.at)
-            } else { targetCapacity = true }
-
-        }
-        if ev.state == "scroll" && !requiredReferences[key, default: []].contains(where: { $0.seq == seq }) {
-            if turnTargets.contains(where: { $0.key == key }) || wideWindows.contains(key) { invalidateGeometry(key) }
-            windowBook.contentChanged(key)
-        }
-        if !turnEnd, !compactedWindows.contains(key), !requiredReferences[key, default: []].contains(where: { $0.seq == seq }) {
-            if requiredReferences.values.reduce(0, { $0 + $1.count }) >= 512 { collapseBusiest() }
-            if !compactedWindows.contains(key) { requiredReferences[key, default: []].append(StageContributor(seq: seq, state: ev.state, content: windowBook.current[key]?.content ?? -1)) }
-        }
-        if !turnEnd, let epoch = windowBook.current[key], ev.windowRect == nil || stageSameTargetBounds(ev.windowRect!, epoch.bounds) {
-            for target in targets { remember(target, key: key, epoch: epoch, contributor: StageContributor(seq: seq, state: ev.state, content: epoch.content)) }
-        } else if !turnEnd {
-            invalidateGeometry(key)
-            if let measured = ev.windowRect, let observed = windowBook.current[key]?.bounds, !stageSameTargetBounds(measured, observed) {
-                widenStale(key, measured: measured, observed: observed)
-            }
-            for target in targets {
-                if let epoch = windowBook.current[key] { remember(target, key: key, epoch: epoch, contributor: StageContributor(seq: seq, state: ev.state, content: epoch.content)) }
-                else { retainWide(key, box: target) }
-            }
-        }
-    }
-    mutating func admitPaused(_ ev: PerchEvent, seq: Int, rect: CGRect?, now: Double, world: StageWorld?) -> [StageEffect] {
-        beginTrace("admission", now: now, world: world, extra: ["event": ev.traceJSON, "seq": seq, "rect": rect.map(stageTraceRect) as Any? ?? NSNull()]); defer { endTrace() }
-        if event == nil { event = ev }
-        terminalSeen = false; terminalSeatUntil = nil
-        admitTargets(ev, seq: seq, rect: rect, world: world, turnEnd: false)
-        noSeatWorld = nil
-        return hide("paused-admission", immediate: true)
-    }
-    mutating func receive(_ ev: PerchEvent, seq: Int, rect: CGRect?, now: Double, world: StageWorld?, reduced: Bool, producer: StageProducerIdentity? = nil, protectsTarget: Bool = true) -> [StageEffect] {
-        beginTrace("receive", now: now, world: world, reduced: reduced, extra: ["event": ev.traceJSON, "seq": seq, "rect": rect.map(stageTraceRect) as Any? ?? NSNull()]); defer { endTrace() }
-        let terminal = ev.state == "handback" || ev.state == "done" && !ev.ok
-        // Producer terminals complete at receipt, before ownership clears. Ring delivery cannot release again.
-        if terminal && (producer != nil || producerOwner != nil) { return hide("producer-stale-terminal", immediate: true) }
-        completeTurn(state: ev.state, ok: ev.ok, now: now)
-        var ev = ev
-        let turnEnd = ev.state == "handback" || ev.state == "done" && !ev.ok
-        if !turnEnd { terminalSeen = false; terminalSeatUntil = nil }
-        if turnEnd { ev.windowRect = nil }
-        if protectsTarget && (producerOwner == nil || handKinds.contains(ev.state) || ev.state == "aim") {
-            admitTargets(ev, seq: seq, rect: rect, world: world, turnEnd: turnEnd)
-        }
-        noSeatWorld = nil
-        if paused && event != nil { return observe(now, world: world, reduced: reduced) }
-        if let old = seat, old.window != ev.window || old.pid != ev.pid { moving = nil; stableAt = nil }
-        woke = asleep
-        event = ev; self.seq = seq; aimRect = rect; lastFrame = now; asleep = false
-        let semantic = ev.state == "done" && ev.ok ? "perch" : ev.state == "done" && base.turnOk == true ? "turn-success" : ev.state
-        // A routine call completion or screen read must not truncate the authored response to that call.
-        let preserveReaction = (oneShot && (reactionUntil == nil || now < reactionUntil!) || phase != nil) &&
-            (ev.state == "thinking" || ev.state == "done" && ev.ok)
-        if preserveReaction {
-            afterReaction = semantic
-        } else {
-            reaction = semantic; afterReaction = nil; reactionBegan = nil; reactionUntil = nil; phase = nil; phaseUntil = nil
-        }
-        if ev.state == "done" { base.turnOk = ev.ok ? true : nil }
-        else if ev.state == "error" { base.turnOk = false }
-        else if ev.state == "handback" { base.turnOk = nil }
-        if handKinds.contains(ev.state) { recent.append(ev.at); if recent.count > 3 { recent.removeFirst() } }
-        if ev.state == "paused" { paused = true }
-        guard !held else { return hide("held", immediate: true) }
-        return update(now, world: world, reduced: reduced, force: !preserveReaction)
-    }
-    mutating func setPaused(_ value: Bool, now: Double, world: StageWorld?, reduced: Bool) -> [StageEffect] {
-        beginTrace("pause", now: now, world: world, reduced: reduced, extra: ["value": value]); defer { endTrace() }
-        paused = value
-        if let world = world { bindWindows(world) }
-        if targetCapacity { return hide("target-capacity", immediate: true) }
-        if !pendingDrops.isEmpty { return hide("drag-destination-pending", immediate: true) }
-        if !value { return update(now, world: world, reduced: reduced, force: true) }
-        guard var next = seat, let world = world, shown else { return observe(now, world: world, reduced: reduced) }
-        if value, let previous = draw { next.box.origin = previous.pose.position(at: now - planBegan) }
-        prepare(world)
-        guard clear(next.box, world, pointer: badgeApproach ? nil : 40) else { return hide("paused-covered", immediate: true) }
-        return install(next, now: now, reduced: reduced, faded: stageDistance(world.pointer, next.box) < 40, dodge: false)
-    }
-    mutating func pointerChanged(_ now: Double, enteredAt: Double, world: StageWorld?, reduced: Bool) -> [StageEffect] {
-        beginTrace("pointer", now: now, world: world, reduced: reduced, extra: ["enteredAt": enteredAt]); defer { endTrace() }
-        pointerEnteredAt = enteredAt
-        return observe(now, world: world, reduced: reduced)
-    }
-    mutating func observe(_ now: Double, world: StageWorld?, reduced: Bool) -> [StageEffect] {
-        beginTrace("observe", now: now, world: world, reduced: reduced, extra: [:]); defer { endTrace() }
-        guard event != nil else { return [] }
-        return update(now, world: world, reduced: reduced, force: false)
-    }
-    mutating func update(_ now: Double, world: StageWorld?, reduced: Bool, force: Bool) -> [StageEffect] {
-        if producerCollectionOnly { return hide("producer-collection-only", immediate: true) }
-        if now >= carryUntil { carrying = false }
-        if let until = reactionUntil, now + 1e-9 >= until {
-            reaction = afterReaction ?? "perch"; afterReaction = nil; reactionBegan = nil; reactionUntil = nil
-        }
-        if let until = phaseUntil, now + 1e-9 >= until { phase = nil; phaseUntil = nil }
-        if locked || displaySleeping { return hide(locked ? "locked" : "sleeping", immediate: true) }
-        if now - lastFrame >= 600 { event = nil; return hide("asleep") }
-        let wantSleep = !paused && now - lastFrame >= (event?.state == "waiting" ? 120 : 20)
-        let sleepChanged = asleep != wantSleep; asleep = wantSleep
-        guard let world = world else { moving = nil; stableAt = nil; return hide("gone") }
-        bindWindows(world)
-        if targetCapacity { return hide("target-capacity", immediate: true) }
-        if !pendingDrops.isEmpty { return hide("drag-destination-pending", immediate: true) }
-        if let measured = event?.windowRect {
-            let observed = world.base.window
-            // Zero means compared without a stale-window decision. Nil means no comparison yet.
-            if maxWindowBoundsDifferencePt == nil { maxWindowBoundsDifferencePt = 0 }
-            if !stageSameTargetBounds(measured, observed) {
-                let key = StageWindowKey(pid: event!.pid, window: event!.window)
-                widenStale(key, measured: measured, observed: observed)
-            }
-        }
-        locked = world.locked; displaySleeping = world.sleeping
-        guard !world.stopped, !held else { return hide(world.locked ? "locked" : world.sleeping ? "sleeping" : world.call ? "call" : "held", immediate: true) }
-        if world.base.fullScreen { return hide("full-screen") }
-        // bindWindows retained the old obligations and widened the changed window.
-        // Search outside both areas now instead of hiding for a settle timer.
-        moving = nil; stableAt = nil
-        if artProvider == nil, !force, !shown, let previous = noSeatWorld, samePlacementWorld(previous, world) { return [] }
-        prepare(world)
-        if let until = terminalSeatUntil {
-            if now < until, shown, let previous = draw,
-                clear(stagePanelBounds(previous.pose, previous.metrics), world, pointer: 40) { return [] }
-            terminalSeatUntil = nil
-        }
-        if paused && shown, let old = seat {
-            if ["stage", "three-quarter"].contains(old.rung) && !world.stageAvailable { return hide("stage-slot") }
-            return clear(old.box, world) ? [] : hide("paused-covered", immediate: true)
-        }
-        let pointerNear = !badgeApproach && (seat.map { stageDistance(world.pointer, $0.box) < 40 } ?? false)
-        let next = place(world, avoidingPointer: !badgeApproach, dodge: pointerNear)
-        guard let next = next else { noSeatWorld = world; return hide("no-seat") }
-        noSeatWorld = nil
-        if !badgeApproach && stagePointRect(world.pointer, 40).intersects(next.box) {
-            pointerBlocked = true; pointerClearSince = nil
-            return hide("pointer-covered", immediate: true)
-        }
-        if pointerBlocked && !badgeApproach {
-            if stagePointRect(world.pointer, 56).intersects(next.box) { pointerClearSince = nil; return hide("pointer-covered", immediate: true) }
-            if pointerClearSince == nil { pointerClearSince = now }
-            guard now - pointerClearSince! >= 0.3 else { return hide("pointer-covered", immediate: true) }
-        }
-        pointerBlocked = false; pointerClearSince = nil
-        let faded = !badgeApproach && stageDistance(world.pointer, next.box) < 40
-        let same = shown && seat?.box == next.box && seat?.kind == next.kind && seat?.height == next.height
-        var unsafeMotion = false
-        if let previous = draw, let last = previous.pose.positions.last, now - planBegan < last.0 {
-            let elapsed = now - planBegan
-            let remaining = [(elapsed, previous.pose.position(at: elapsed))] + previous.pose.positions.filter { $0.0 > elapsed }
-            for (a, b) in zip(remaining, remaining.dropFirst()) {
-                let swept = CGRect(origin: a.1, size: previous.seat.box.size).union(CGRect(origin: b.1, size: previous.seat.box.size))
-                if !clear(swept, world, pointer: 100) || swept.intersects(world.base.window) { unsafeMotion = true; break }
-            }
-        }
-        // A small correction follows the freshly placed seat without replaying its authored motion.
-        // Exact epoch/certificate checks elsewhere still retain their provenance requirements.
-        if !force, !sleepChanged, !unsafeMotion, shown, installedReaction == reaction, let old = seat, var previous = draw,
-            old.world.base.window != world.base.window, stageSameWindowBounds(old.world.base.window, world.base.window),
-            old.kind == next.kind, old.height == next.height, old.box.size == next.box.size,
-            previous.art?.pending == next.art?.pending, previous.art?.source == next.art?.source, previous.art?.image === next.art?.image,
-            previous.pose.reduced == reduced, previous.pose.opacity.last?.1 == (faded ? 0.35 : next.kind == "front-sit" ? 0.85 : 1) {
-            let delta = CGPoint(x: next.box.minX - old.box.minX, y: next.box.minY - old.box.minY)
-            let shifted = previous.pose.positions.map { ($0.0, CGPoint(x: $0.1.x + delta.x, y: $0.1.y + delta.y)) }
-            let safe = zip(shifted, shifted.dropFirst()).allSatisfy { a, b in
-                clear(CGRect(origin: a.1, size: next.box.size).union(CGRect(origin: b.1, size: next.box.size)), world, pointer: 100)
-            } && shifted.allSatisfy { clear(CGRect(origin: $0.1, size: next.box.size), world, pointer: 40) }
-            if abs(delta.x) <= 2, abs(delta.y) <= 2, safe {
-                let difference = stageWindowEdgeDifference(old.world.base.window, world.base.window)
-                silentReseats += 1; maxSilentReseatDifferencePt = max(maxSilentReseatDifferencePt, difference)
-                var observation = PerchWindowObservation(pid: next.pid, window: next.window, expected: old.world.base.window, observed: world.base.window)
-#if SLEIGHT_STAGE_BENCH
-                observation.fixture = stageBenchLegacyWindowFrame?(next.pid, next.window)
-#endif
-                windowDecisions.append(observation.json.merging(["decision": "silent-reseat", "time": now]) { $1 })
-                if windowDecisions.count > 128 { windowDecisions.removeFirst(windowDecisions.count - 128) }
-                previous.pose.positions = shifted
-                previous.pose.seat.x += delta.x; previous.pose.seat.edge += delta.y; previous.pose.seat.frame = world.base.window
-                previous.seat = next; seat = next; draw = previous
-                return [.reseat(delta)]
-            }
-        }
-        if phase != nil, !force, !sleepChanged, !unsafeMotion, same, let previous = draw,
-            samePlacementWorld(previous.seat.world, world), phaseUntil != nil { return [] }
-        if same && !force && !sleepChanged && !unsafeMotion && phase == nil && installedReaction == reaction && draw?.art?.pending == next.art?.pending && draw?.art?.source == next.art?.source && draw?.art?.image === next.art?.image && draw?.pose.reduced == reduced && draw?.pose.opacity.last?.1 == (faded ? 0.35 : next.kind == "front-sit" ? 0.85 : 1) {
-            if let until = parkedAt, now >= until { parkedAt = nil; return [.park] }; return []
-        }
-        return install(next, now: now, reduced: reduced, faded: faded, dodge: pointerNear, forcePop: unsafeMotion)
-    }
-    mutating func install(_ next: StageSeat, now: Double, reduced: Bool, faded: Bool, dodge: Bool, forcePop: Bool = false) -> [StageEffect] {
-        guard let frame = base.frame, let ev = event, let table = frame.perch else { return hide("no-perch") }
-        artPose = next.art
-        let old = seat, previous = draw
-        // Pose cells and geometry use the same cache selection. A cold or missing strip stays at medium.
-        let cell = artPose?.cell ?? frame.cell
-        let scale = next.height / 184 * Double(frame.cell.height / cell.height)
-        var scaled = frame
-        scaled = SpriteFrame(seq: frame.seq, id: frame.id, sheet: frame.sheet, extra: frame.extra, cell: cell, table: frame.table,
-            perch: frame.perch, perchSheet: frame.perchSheet, lines: frame.lines, stage: frame.stage, stageOptions: frame.stageOptions)
-        let entries = table.table.mapValues { e in SpriteEntry(sheet: e.sheet, row: e.row, columns: e.columns, ms: e.ms, loop: e.loop, flip: e.flip,
-            hotspot: e.hotspot, size: e.size, scale: scale, then: e.then) }
-        scaled.perch = PerchTable(anchor: CGPoint(x: cell.width / 2, y: cell.height), table: entries)
-        base.frame = scaled
-        defer { base.frame = frame }
-        let metrics = perchMetrics(scaled)!
-        let box = next.box, anchorX = box.midX
-        base.seat = PerchSeat(pid: next.pid, window: next.window, x: anchorX, edge: box.maxY, peek: false, rise: Double(box.height),
-            frame: next.world.base.window, display: next.world.base.display, top: Double(next.world.usable.minY))
-        base.seat?.usable = next.world.usable
-        let env = PerchEnvironment(world: { _, _ in next.world.base }, reduced: { reduced }, measure: { _ in .zero })
-        guard var pose = base.draw(paused ? "paused" : asleep ? "sleep" : reaction, ok: ev.ok, at: ev.at, move: nil, from: nil, woke: woke, now: now, env: env) else { return hide("no-pose") }
-        // Remove A2's reaction bumps: the placement is approved for this exact box. Motion below is checked separately.
-        let origin = CGPoint(x: box.minX, y: box.minY)
-        pose.positions = [(0, origin)]; pose.masked = [(0, false)]; pose.zs = false
-        let opacity = faded ? 0.35 : next.kind == "front-sit" ? 0.85 : 1
-        pose.opacity = [(0, opacity)]; pose.kind = "stay"
-        if forcePop {
-            pose.kind = "far"; pose.opacity = [(0, 0), (0.12, opacity)]
-        } else if let old = old, shown, let previous = previous, old.box != box || old.kind != next.kind &&
-            (["edge-hang", "floor-stand"].contains(old.kind) || ["edge-hang", "floor-stand"].contains(next.kind)) {
-            // Interruption starts at the presentation position, never at the old destination.
-            let from = previous.pose.position(at: now - planBegan)
-            let d = hypot(box.minX - from.x, box.minY - from.y)
-            var positions: [(Double, CGPoint)] = []
-            let sizeChanged = old.height != next.height, displayChanged = old.world.base.display != next.world.base.display
-            let screenEdge = ["edge-hang", "floor-stand"].contains(next.kind) || ["edge-hang", "floor-stand"].contains(old.kind)
-            var far = reduced || sizeChanged || displayChanged || dodge || screenEdge
-            if !far {
-                let sameWindow = old.window == next.window && old.pid == next.pid
-                let seatChange = sameWindow && old.kind != next.kind
-                let run = sameWindow && !seatChange && d > 4 * next.height
-                let hops = sameWindow && !seatChange && !run ? max(1, Int(ceil(d / (1.3 * next.height)))) : 1
-                let span = seatChange ? (next.kind == "corner-hang" ? 0.26 : 0.4) : sameWindow ? (run ? min(0.6, d / 600) : 0.24 * Double(hops)) : min(0.6, 0.32 + 0.0005 * d)
-                let lift = run ? 0 : sameWindow ? min(14, next.height * 0.1) : 60.0
-                for i in 0...(32 * hops) {
-                    let f = Double(i) / Double(32 * hops)
-                    let local = i == 32 * hops ? 1 : (f * Double(hops)).truncatingRemainder(dividingBy: 1)
-                    positions.append((span * f, CGPoint(x: from.x + (box.minX - from.x) * f, y: from.y + (box.minY - from.y) * f - 4 * lift * local * (1 - local))))
-                }
-                // A swept rectangle for EVERY linear segment protects every in-between point, not just sample instants.
-                for (a, b) in zip(positions, positions.dropFirst()) {
-                    let swept = CGRect(origin: a.1, size: box.size).union(CGRect(origin: b.1, size: box.size))
-                    if !clear(swept, next.world, pointer: 100) || swept.intersects(next.world.base.window) { far = true; break }
-                }
-                pose.kind = sameWindow ? (seatChange ? (next.kind == "corner-hang" ? "swing" : "drop") : run ? "run" : "hop") : "leap"
-            }
-            if far {
-                // Drop the old panel before moving its origin. A discrete jump at zero opacity never sweeps content.
-                pose.kind = displayChanged ? "far" : sizeChanged || reduced ? "crossfade" : "far"
-                let duration = sizeChanged || reduced ? 0.15 : dodge ? 0.2 : 0.12
-                pose.opacity = [(0, 0), (duration, opacity)]; positions = [(0, origin)]
-            }
-            pose.positions = positions
-        } else if !shown { pose.kind = "arrive"; pose.opacity = [(0, 0), (0.12, opacity)] }
-        let motion = pose.positions.last?.0 ?? 0
-        let transition = !reduced && !paused ? (woke ? "stage-startle" : motion > 0 ? (pose.kind == "run" ? "stage-run" : "stage-leap") : phase) : nil
-        if let state = transition, let travel = selectArt(state) {
-            if travel.medium && next.height > 184 {
-                guard var fallback = locate(next.world, avoidingPointer: true, dodge: false, only: next.kind, art: travel) else { return hide("no-seat") }
-                fallback.art = travel
-                return install(fallback, now: now, reduced: reduced, faded: faded, dodge: false, forcePop: true)
-            }
-            // Fit the whole travel cell inside the approved swept box, including differing strip dimensions.
-            artPose = travel; phase = state
-            let duration = state == "stage-startle" ? travel.entry.ms.reduce(0, +) / 1000 : motion
-            if phaseUntil == nil { phaseUntil = state == "stage-startle" && travel.pending ? nil : now + duration }
-        }
-        if let art = artPose {
-            let e = art.entry
-            let artScale = min(Double(box.width / art.cell.width), Double(box.height / art.cell.height))
-            let entry = SpriteEntry(sheet: e.sheet, row: e.row, columns: e.columns, ms: e.ms, loop: e.loop, flip: e.flip,
-                hotspot: e.hotspot, size: e.size, scale: artScale, then: e.then)
-            var builder = PerchBuilder(table: [art.source: entry], reduced: reduced, plan: PerchPlan(kind: pose.kind, seat: pose.seat))
-            let travelTime = phase == "stage-run" || phase == "stage-leap" ? max(0.001, (phaseUntil ?? now) - now) : nil
-            let span = builder.play(art.source, at: 0, indices: oneShot || phase != nil ? Array(e.columns.indices) : nil, stretch: travelTime)
-            pose.cells = builder.plan.cells; pose.states = [art.source]; pose.duration = span
-            if phase == nil && oneShot && !paused && !art.pending {
-                if reactionBegan == nil { reactionBegan = now; reactionUntil = now + (reduced ? e.ms.reduce(0, +) / 1000 : span) }
-                let elapsed = max(0, now - (reactionBegan ?? now))
-                if elapsed > 0, let current = builder.plan.cell(at: elapsed) {
-                    pose.cells = [PerchCell(time: 0, state: current.state, entry: current.entry, column: current.column)] +
-                        pose.cells.filter { $0.time > elapsed }.map { PerchCell(time: $0.time - elapsed, state: $0.state, entry: $0.entry, column: $0.column) }
-                    pose.duration = max(0, span - elapsed)
-                }
-            }
-        } else if oneShot && !paused && reactionUntil == nil { reactionBegan = now; reactionUntil = now + pose.duration }
-        let motionTime = pose.positions.last?.0 ?? 0
-        if motionTime > 0, !reduced, !paused, artPose == nil {
-            let state = pose.kind == "run" ? (origin.x >= (pose.positions.first?.1.x ?? origin.x) ? "running-right" : "running-left") : ["leap", "drop"].contains(pose.kind) ? "jumping" : "perch-hop"
-            if let entry = entries[state] {
-                var builder = PerchBuilder(table: entries, reduced: false, plan: PerchPlan(kind: pose.kind, seat: pose.seat))
-                builder.play(state, at: 0, indices: Array(entry.columns.indices), stretch: motionTime)
-                pose.cells = builder.plan.cells + pose.cells.map { PerchCell(time: $0.time + motionTime, state: $0.state, entry: $0.entry, column: $0.column) }
-                pose.states = [state] + pose.states; pose.duration += motionTime
-            }
-        }
-        pose.duration = max(pose.duration, pose.positions.last?.0 ?? 0, pose.opacity.last?.0 ?? 0)
-        // A static NSPanel encloses the entire animation, including empty space between its segments.
-        // If that rectangle cannot be seated, present the destination cell without a swept panel.
-        if !clear(stagePanelBounds(pose, metrics), next.world, pointer: 40) {
-            pose.positions = [(0, origin)]; pose.kind = "far"
-            pose.opacity = [(0, 0), (0.12, opacity)]
-        }
-        if paused { pose.cells = Array(pose.cells.prefix(1)); pose.duration = 0; pose.positions = [(0, origin)]; pose.opacity = [(0, opacity)] }
-        let result = StageDraw(pose: pose, seat: next, metrics: metrics, seq: seq, fallback: (artPose?.medium ?? !stageArt) && options.size == "stage", dodgeMs: pointerEnteredAt.map { max(0, now - $0) * 1000 } ?? 0, decisionReason: dodge ? "pointer-near" : nil, art: artPose, seatLine: box.minY + (artPose?.anchor.y ?? table.anchor.y) * scale)
-        pointerEnteredAt = nil; hiddenReason = nil
-        seat = next; draw = result; installedReaction = reaction; shown = true; planBegan = now; parkedAt = now + pose.duration
-        woke = false
-        return [.draw(result)]
-    }
-}
-// Metadata only. A front app without an on-screen window gives no person window (nothing to protect), and the
-// character still seats; a missing display identity hides it instead of guessing. Cards include our own
-// panels, which the legacy perch world deliberately omits from its foreign-window stack.
-func stagePersonWindow(_ list: [[String: Any]], frontPID: Int32?, ownPID: Int32, standIn: StageWindowKey? = nil) -> CGRect? {
-    guard let pid = standIn?.pid ?? frontPID, standIn != nil || pid != ownPID,
-        let info = list.first(where: {
-            ($0[kCGWindowOwnerPID as String] as? NSNumber)?.int32Value == pid &&
-            ($0[kCGWindowLayer as String] as? NSNumber)?.intValue == 0 &&
-            (standIn == nil || ($0[kCGWindowNumber as String] as? NSNumber)?.uint32Value == standIn?.window)
-        }), let raw = info[kCGWindowBounds as String] as? NSDictionary,
-        let rect = CGRect(dictionaryRepresentation: raw as CFDictionary), stageRectValid(rect) else { return nil }
-    return rect
-}
-func stageWindowlessAbove(_ list: [[String: Any]], own: Int32) -> [CGRect] {
-    list.compactMap { item -> CGRect? in
-        let layer = (item[kCGWindowLayer as String] as? NSNumber)?.intValue ?? 0
-        let alpha = (item[kCGWindowAlpha as String] as? NSNumber)?.doubleValue ?? 1
-        guard (item[kCGWindowOwnerPID as String] as? NSNumber)?.int32Value != own,
-            layer >= 0, layer < 1000, alpha > 0,
-            let raw = item[kCGWindowBounds as String] as? NSDictionary else { return nil }
-        return CGRect(dictionaryRepresentation: raw as CFDictionary)
-    }
-}
-// Both the host and the geometry dump apply this final call veto to queued draws.
-func stageCallApply(_ effects: [StageEffect], runtime: inout StageRuntime, active: () -> Bool, at now: Double) -> [StageEffect] {
-    if effects.contains(where: { switch $0 { case .draw, .reseat: return true; default: return false } }), active() {
-        return runtime.hide("call", immediate: true, at: now)
-    }
-    return effects
-}
-func stageWorld(pid: Int32, window: UInt32, pointerAway: Double, locked: Bool, sleeping: Bool, call: Bool, snapshot: [[String: Any]]? = nil) -> StageWorld? {
-    guard let list = snapshot ?? (CGWindowListCopyWindowInfo([.optionOnScreenOnly, .excludeDesktopElements], kCGNullWindowID) as? [[String: Any]]),
-        let primary = NSScreen.screens.first?.frame.maxY else { return nil }
-    func topRect(_ r: CGRect) -> CGRect { CGRect(x: r.minX, y: primary - r.maxY, width: r.width, height: r.height) }
-    let observedBase = perchWorld(pid: pid, window: window, snapshot: list)
-    guard let screen = observedBase.flatMap({ base in NSScreen.screens.first(where: { topRect($0.frame) == base.display }) }) ?? NSScreen.screens.first else { return nil }
-    let windowlessAbove = stageWindowlessAbove(list, own: getpid())
-    let base = observedBase ?? PerchWorld(window: .zero, above: windowlessAbove, display: topRect(screen.frame), top: Double(topRect(screen.visibleFrame).minY), fullScreen: false)
-    var standIn: StageWindowKey?
-#if SLEIGHT_STAGE_BENCH
-    standIn = stageBenchPersonWindow
-#endif
-    // No person window (a windowless app in front: Finder with no windows, a menu-bar app, an app on another Space)
-    // leaves nothing to protect, so the character still seats. Returning no world here hid it as "gone" (2026-11-09).
-    let person = stagePersonWindow(list, frontPID: NSWorkspace.shared.frontmostApplication?.processIdentifier,
-        ownPID: getpid(), standIn: standIn)
-    var pointer = CGPoint(x: NSEvent.mouseLocation.x, y: primary - NSEvent.mouseLocation.y)
-#if SLEIGHT_STAGE_BENCH
-    // Only the benchmark can replace the position input. Decision and effect dispatch remain the production path.
-    if let input = stageBenchPointerPosition { pointer = input }
-#endif
-    let age = stageInputAge()
-    guard age.isFinite, age >= 0 else { return nil }
-    let cards = NSApp.windows.filter { $0.isVisible && $0.level.rawValue >= NSWindow.Level.modalPanel.rawValue }.map { topRect($0.frame) }
-    let windows = stageWindows(list)
-    let ordered = list.compactMap { info -> StageWindowKey? in
-        guard (info[kCGWindowLayer as String] as? NSNumber)?.intValue == 0,
-            let owner = (info[kCGWindowOwnerPID as String] as? NSNumber)?.int32Value,
-            let id = (info[kCGWindowNumber as String] as? NSNumber)?.uint32Value else { return nil }
-        let key = StageWindowKey(pid: owner, window: id)
-        return windows[key] == nil ? nil : key
-    }
-    return StageWorld(base: base, usable: topRect(screen.visibleFrame), person: person, pointer: pointer, inputAge: age,
-        pointerAway: pointerAway, windows: windows, orderedWindows: ordered, cards: cards, locked: locked, sleeping: sleeping, call: call,
-        displayID: (screen.deviceDescription[NSDeviceDescriptionKey("NSScreenNumber")] as? NSNumber).map { String($0.uint32Value) })
-}
-// A running microphone is a call proxy, as for narration. Only a successful live reading hides the character.
-// Pending and failed checks preserve the last successful reading, including shown before the first reading.
-// The same executable reads metadata in one persistent pipe child. It never requests capture, activates an audio session,
-// or inherits the consent pipe. A wedged Core Audio read cannot retain the host's worker or become a quiet sample.
-func stageCallQuery() -> (quiet: Bool, state: String, reason: String) { stageCallWorker.query() }
-let stageCallWorker = StageCallWorker()
-// One outstanding query. 1 reads now, 3 subscribes, 4 waits, 5 invalidates listeners without an extra reply.
-// A failed transaction discards the pipe and child, so a late quiet reply cannot answer a later request.
-final class StageCallWorker {
-    private let lock = NSLock(), controlLock = NSLock()
-    private(set) var subscribed = false
-    private(set) var pid: pid_t?
-    private var input: Int32 = -1, output: Int32 = -1
-    private(set) var spawns = 0
-    deinit { stop() }
-    @discardableResult func collect() -> Bool {
-        guard let child = pid else { return true }
-        var status: Int32 = 0
-        let result = waitpid(child, &status, WNOHANG)
-        if result == child || result < 0 && errno == ECHILD { spriteUntrack(child); pid = nil; return true }
-        return false
-    }
-    func refreshSubscription() {
-        controlLock.lock(); defer { controlLock.unlock() }
-        guard input >= 0 else { return }
-        var request: UInt8 = 5; _ = write(input, &request, 1)
-    }
-    func stop() {
-        controlLock.lock()
-        if input >= 0 { close(input); input = -1 }; if output >= 0 { close(output); output = -1 }
-        subscribed = false; controlLock.unlock()
-        guard let child = pid, !collect() else { return }
-        kill(child, SIGKILL)
-        let until = CACurrentMediaTime() + 0.05
-        repeat { if collect() { return }; usleep(1_000) } while CACurrentMediaTime() < until
-        // Retain ownership and block replacement until a later nonblocking reap proves exit.
-    }
-    private func start(_ executable: String, _ arguments: [String]) -> Bool {
-        if pid != nil { guard collect() else { return false } }
-        var toChild: [Int32] = [-1, -1], fromChild: [Int32] = [-1, -1]
-        guard pipe(&toChild) == 0 else { return false }
-        defer { for fd in toChild where fd >= 0 { close(fd) } }
-        guard pipe(&fromChild) == 0 else { return false }
-        defer { for fd in fromChild where fd >= 0 { close(fd) } }
-        for fd in toChild + fromChild { guard fcntl(fd, F_SETFD, FD_CLOEXEC) == 0 else { return false } }
-        guard fcntl(toChild[1], F_SETNOSIGPIPE, 1) == 0 else { return false }
-        var actions: posix_spawn_file_actions_t? = nil, attributes: posix_spawnattr_t? = nil
-        guard posix_spawn_file_actions_init(&actions) == 0 else { return false }
-        defer { posix_spawn_file_actions_destroy(&actions) }
-        guard posix_spawnattr_init(&attributes) == 0 else { return false }
-        defer { posix_spawnattr_destroy(&attributes) }
-        guard posix_spawn_file_actions_adddup2(&actions, toChild[0], 0) == 0,
-            posix_spawn_file_actions_adddup2(&actions, fromChild[1], 1) == 0,
-            posix_spawn_file_actions_addopen(&actions, 2, "/dev/null", O_WRONLY, 0) == 0 else { return false }
-        var empty = sigset_t(), defaults = sigset_t(); sigemptyset(&empty); sigfillset(&defaults)
-        guard posix_spawnattr_setsigmask(&attributes, &empty) == 0,
-            posix_spawnattr_setsigdefault(&attributes, &defaults) == 0,
-            posix_spawnattr_setflags(&attributes, Int16(POSIX_SPAWN_CLOEXEC_DEFAULT | POSIX_SPAWN_SETSIGMASK | POSIX_SPAWN_SETSIGDEF)) == 0 else { return false }
-        let argv = ([executable] + arguments).map { strdup($0) } + [nil]
-        defer { argv.forEach { free($0) } }
-        var pid: pid_t = 0
-        guard posix_spawn(&pid, executable, &actions, &attributes, argv, environ) == 0 else { return false }
-        let tracked = spriteTrack(pid)
-        self.pid = pid; spawns += 1
-        guard tracked else { stop(); return false }
-        controlLock.lock()
-        input = toChild[1]; toChild[1] = -1; output = fromChild[0]; fromChild[0] = -1
-        controlLock.unlock()
-        return true
-    }
-    func query(executable: String? = Bundle.main.executablePath, arguments: [String] = ["--stage-call-worker"],
-        deadline: Double? = 1, requestByte: UInt8 = 1) -> (quiet: Bool, state: String, reason: String) {
-        lock.lock(); defer { lock.unlock() }
-        let unavailable = (false, "unavailable", "microphone process metadata unavailable")
-        let began = CACurrentMediaTime()
-        if input < 0 {
-            guard let executable = executable, start(executable, arguments) else {
-                return pid == nil ? unavailable : (false, "unavailable", "microphone metadata child cleanup pending")
-            }
-        }
-        var ready = pollfd(fd: output, events: Int16(POLLIN), revents: 0)
-        // EOF or an unsolicited reply invalidates the transaction before writing a new request.
-        guard poll(&ready, 1, 0) == 0 else { stop(); return unavailable }
-        var request = requestByte
-        guard write(input, &request, 1) == 1 else { stop(); return unavailable }
-        while true {
-            let left = deadline.map { $0 - (CACurrentMediaTime() - began) } ?? Double.infinity
-            if left <= 0 {
-                stop(); return (false, "timeout", "microphone metadata query timed out (1 s deadline)")
-            }
-            ready.revents = 0
-            // A subscribed idle worker has no deadline and no polling timeout. Its own
-            // alarm still bounds each actual Core Audio read; pipe EOF reports a dead source.
-            let result = poll(&ready, 1, deadline == nil ? -1 : Int32(min(1000, ceil(left * 1000))))
-            if result < 0 && errno == EINTR { continue }
-            if result == 0 { continue }
-            guard result > 0, ready.revents & Int16(POLLIN) != 0 else { stop(); return unavailable }
-            var response: UInt8 = 255
-            guard read(output, &response, 1) == 1 else { stop(); return unavailable }
-            // A reply read after the deadline never becomes a completed quiet reading.
-            guard deadline.map({ CACurrentMediaTime() - began <= $0 }) ?? true else {
-                stop(); return (false, "timeout", "microphone metadata query timed out (1 s deadline)")
-            }
-            switch response {
-            case 0: subscribed = requestByte != 1; return (true, "quiet", "quiet")
-            case 1: subscribed = requestByte != 1; return (false, "input-active", "microphone input active")
-            case 3: subscribed = false; return (true, "quiet", "quiet")
-            case 4: subscribed = false; return (false, "input-active", "microphone input active")
-            case 2: return unavailable
-            default: stop(); return unavailable
-            }
-        }
-    }
-}
-// Property listeners invalidate readings; they never count as a successful input reading.
-// One coalesced byte wakes a transaction. A 30 s safety census repairs missed notifications. No audio IO or capture.
-struct StageCallWatchAudio {
-    var processes: () -> [AudioObjectID]?
-    var add: (AudioObjectID, AudioObjectPropertySelector, DispatchQueue, @escaping AudioObjectPropertyListenerBlock) -> OSStatus
-    var remove: (AudioObjectID, AudioObjectPropertySelector, DispatchQueue, @escaping AudioObjectPropertyListenerBlock) -> OSStatus
-    static let system = StageCallWatchAudio(processes: NarrationAudio.system.processes, add: { object, selector, queue, block in
-        var address = AudioObjectPropertyAddress(mSelector: selector, mScope: kAudioObjectPropertyScopeGlobal, mElement: kAudioObjectPropertyElementMain)
-        return AudioObjectAddPropertyListenerBlock(object, &address, queue, block)
-    }, remove: { object, selector, queue, block in
-        var address = AudioObjectPropertyAddress(mSelector: selector, mScope: kAudioObjectPropertyScopeGlobal, mElement: kAudioObjectPropertyElementMain)
-        return AudioObjectRemovePropertyListenerBlock(object, &address, queue, block)
-    })
-}
-final class StageCallInputWatch {
-    let audio: StageCallWatchAudio
-    let queue = DispatchQueue(label: "com.sleight.microphone-metadata", qos: .utility)
-    private let lock = NSLock()
-    private var pipeEnds: [Int32] = [-1, -1], dirty = false, system = false, restart = false, resetRequired = false
-    private var objects: Set<AudioObjectID> = []
-    private lazy var listener: AudioObjectPropertyListenerBlock = { [weak self] _, _ in self?.invalidate() }
-    private lazy var restartListener: AudioObjectPropertyListenerBlock = { [weak self] _, _ in self?.invalidate(reset: true) }
-    init(audio: StageCallWatchAudio = .system) { self.audio = audio }
-    deinit { stop() }
-    func invalidate(reset: Bool = false) {
-        lock.lock(); defer { lock.unlock() }
-        resetRequired = resetRequired || reset
-        guard pipeEnds[1] >= 0, !dirty else { return }
-        var byte: UInt8 = 1
-        if write(pipeEnds[1], &byte, 1) == 1 { dirty = true }
-    }
-    func stop() {
-        if restart { _ = audio.remove(AudioObjectID(kAudioObjectSystemObject), kAudioHardwarePropertyServiceRestarted, queue, restartListener); restart = false }
-        if system { _ = audio.remove(AudioObjectID(kAudioObjectSystemObject), kAudioHardwarePropertyProcessObjectList, queue, listener); system = false }
-        for object in objects { _ = audio.remove(object, kAudioProcessPropertyIsRunningInput, queue, listener) }
-        objects = []
-        lock.lock(); defer { lock.unlock() }
-        for fd in pipeEnds where fd >= 0 { close(fd) }; pipeEnds = [-1, -1]; dirty = false; resetRequired = false
-    }
-    func refresh() -> Bool {
-        guard #available(macOS 14.2, *) else { return false }
-        if pipeEnds[0] < 0 {
-            guard pipe(&pipeEnds) == 0 else { return false }
-            for fd in pipeEnds {
-                guard fcntl(fd, F_SETFD, FD_CLOEXEC) == 0, fcntl(fd, F_SETFL, O_NONBLOCK) == 0 else { stop(); return false }
-            }
-        }
-        if !system {
-            guard audio.add(AudioObjectID(kAudioObjectSystemObject), kAudioHardwarePropertyProcessObjectList, queue, listener) == noErr else { return false }
-            system = true
-        }
-        if !restart {
-            guard audio.add(AudioObjectID(kAudioObjectSystemObject), kAudioHardwarePropertyServiceRestarted, queue, restartListener) == noErr else { return false }
-            restart = true
-        }
-        // Install before sampling. An input or process-list change during a read stays queued for the next transaction.
-        guard let list = audio.processes() else { return false }
-        let current = Set(list)
-        for object in objects.subtracting(current) {
-            _ = audio.remove(object, kAudioProcessPropertyIsRunningInput, queue, listener); objects.remove(object)
-        }
-        for object in current.subtracting(objects) {
-            guard audio.add(object, kAudioProcessPropertyIsRunningInput, queue, listener) == noErr else { return false }
-            objects.insert(object)
-        }
-        return true
-    }
-    func clear() -> Bool {
-        lock.lock(); defer { lock.unlock() }
-        var byte: UInt8 = 0
-        while read(pipeEnds[0], &byte, 1) == 1 {}
-        dirty = false
-        let reset = resetRequired; resetRequired = false; return reset
-    }
-    // 2: rebuild (safety deadline, service restart, sleep/wake), 1: change, 0: EOF, -1: failure.
-    func waitForChange() -> Int {
-        guard pipeEnds[0] >= 0 else { return 2 }
-        let deadline = CACurrentMediaTime() + 30
-        while true {
-            var fds = [pollfd(fd: 0, events: Int16(POLLIN), revents: 0),
-                pollfd(fd: pipeEnds[0], events: Int16(POLLIN), revents: 0)]
-            let remaining = max(0, deadline - CACurrentMediaTime())
-            let result = poll(&fds, 2, Int32(ceil(remaining * 1000)))
-            if result < 0 && errno == EINTR { continue }
-            if result == 0 { return 2 }
-            guard result > 0 else { return -1 }
-            if fds[0].revents != 0 {
-                var byte: UInt8 = 0
-                let count = read(0, &byte, 1)
-                return count == 0 ? 0 : count == 1 && byte == 5 ? 2 : -1
-            }
-            if fds[1].revents & Int16(POLLIN) != 0 { return clear() ? 2 : 1 }
-            if fds[1].revents != 0 { return -1 }
-        }
-    }
-}
-func stageCallQueryMain() -> Int32 {
-    // Each Core Audio transaction expires even if the parent disappears during the read.
-    alarm(2); defer { alarm(0) }
-    guard #available(macOS 14.2, *), let processes = NarrationAudio.system.processes() else { return 2 }
-    var active = false
-    for process in processes {
-        guard let flag = NarrationAudio.system.word(process, kAudioProcessPropertyIsRunningInput,
-            kAudioObjectPropertyScopeGlobal, kAudioObjectPropertyElementMain) else { return 2 }
-        if flag != 0 { active = true }
-    }
-    return active ? 1 : 0
-}
-func stageCallWorkerMain() -> Int32 {
-    // EOF on the private request pipe ends an idle child immediately after parent loss.
-    let watch = StageCallInputWatch()
-    defer { watch.stop() }
-    while true {
-        var request: UInt8 = 0
-        let count = read(0, &request, 1)
-        if count < 0 && errno == EINTR { continue }
-        if count == 0 { return 0 }
-        guard count == 1, [1, 3, 4, 5].contains(request) else { return 2 }
-        if request == 5 { alarm(2); watch.stop(); alarm(0); continue }
-        if request == 4 {
-            let changed = watch.waitForChange()
-            if changed == 0 { return 0 }
-            guard changed == 1 || changed == 2 else { return 2 }
-            if changed == 2 { alarm(2); watch.stop(); alarm(0) }
-        }
-        var ready = false
-        if request != 1 {
-            alarm(2)
-            ready = watch.refresh()
-            if !ready { watch.stop() }
-            alarm(0)
-        }
-        var result = UInt8(stageCallQueryMain())
-        // A listener failure cannot discard a successful census. Degrade to per-wake reads.
-        if request != 1 && !ready && result < 2 { result += 3 }
-        guard write(1, &result, 1) == 1 else { return 2 }
-    }
-}
-final class StageCallMonitor {
-    var pending = false, sampled = -Double.infinity, requested = -Double.infinity
-    private var observing = false
-    private let worker: StageCallWorker
-    private let executable: String?
-    private let arguments: [String]
-    init(worker: StageCallWorker = stageCallWorker, executable: String? = Bundle.main.executablePath, arguments: [String] = ["--stage-call-worker"]) {
-        self.worker = worker; self.executable = executable; self.arguments = arguments
-    }
-    func refreshSubscription() { worker.refreshSubscription() }
-    private(set) var lastSuccessfulInput: Bool?, successfulSampled = -Double.infinity
-    private var completionQuiet = false
-    // Retain the diagnostics fixture's direct-reading setter. Production completions always go through complete().
-    var quiet: Bool {
-        get { completionQuiet }
-        set { completionQuiet = newValue; lastSuccessfulInput = !newValue }
-    }
-    var reason = "microphone metadata not requested", reported: Set<String> = []
-    var sampleState = "not-requested", retryAt = -Double.infinity, backoff = 0.5
-    var changed: (() -> Void)?
-    var queryElapsedMs: Double?, prefetchAddedMs = 0.0
-    func isActive(_ now: Double) -> Bool {
-        lastSuccessfulInput == true
-    }
-    func statusReason(_ now: Double) -> String {
-        pending ? "microphone metadata pending" : reason
-    }
-    func snapshot(_ now: Double) -> [String: Any] {
-        let state = pending ? "pending" : sampleState
-        let since = pending ? requested : sampled
-        return ["state": state, "sampleState": sampleState, "pending": pending,
-            "ageMs": since.isFinite ? max(0, now - since) * 1000 as Any : NSNull(),
-            "lastCompletionAgeMs": sampled.isFinite ? max(0, now - sampled) * 1000 as Any : NSNull(),
-            "active": isActive(now), "reason": statusReason(now),
-            "lastSuccessfulState": lastSuccessfulInput.map { $0 ? "input-active" : "quiet" } as Any? ?? NSNull(),
-            "lastSuccessAgeMs": successfulSampled.isFinite ? max(0, now - successfulSampled) * 1000 as Any : NSNull(),
-            "queryElapsedMs": queryElapsedMs as Any? ?? NSNull(), "prefetchAddedMs": prefetchAddedMs]
-    }
-    func complete(_ result: (quiet: Bool, state: String, reason: String), at completed: Double, elapsedMs: Double?) {
-        let wasActive = isActive(completed)
-        let oldState = sampleState
-        pending = false
-        completionQuiet = result.quiet && result.state == "quiet"
-        // A failure neither clears a live reading nor invents one. No freshness expiry changes visibility.
-        if result.state == "quiet" && result.quiet { lastSuccessfulInput = false; successfulSampled = completed }
-        else if result.state == "input-active" && !result.quiet { lastSuccessfulInput = true; successfulSampled = completed }
-        reason = result.reason; sampleState = result.state; sampled = completed; queryElapsedMs = elapsedMs
-        if ["timeout", "unavailable"].contains(result.state) {
-            retryAt = sampled + backoff; backoff = min(30, backoff * 2)
-        } else { retryAt = sampled; backoff = 0.5 }
-        if wasActive != isActive(completed) || oldState != sampleState { changed?() }
-    }
-    func prefetch(_ now: Double) {
-        let began = CACurrentMediaTime()
-        defer { prefetchAddedMs = (CACurrentMediaTime() - began) * 1000 }
-        if !observing && !pending && now - requested >= 0.5 && now >= retryAt {
-            pending = true; observing = true; requested = now
-            let worker = self.worker, executable = self.executable, arguments = self.arguments
-            DispatchQueue.global(qos: .utility).async { [weak self] in
-                var first = true
-                while self != nil {
-                    let began = CACurrentMediaTime()
-                    let result = worker.query(executable: executable, arguments: arguments, deadline: first ? 1 : nil, requestByte: first ? 3 : 4)
-                    let completed = CACurrentMediaTime(), elapsed = (completed - began) * 1000, initial = first
-                    let failed = !["quiet", "input-active"].contains(result.state)
-                    let fallback = !worker.subscribed
-                    if failed { worker.stop() }
-                    DispatchQueue.main.async { [weak self] in
-                        if failed || fallback { self?.observing = false }
-                        self?.complete(result, at: completed, elapsedMs: initial ? elapsed : nil)
-                    }
-                    if failed || fallback { return }
-                    first = false
-                }
-            }
-        }
-    }
-    func active(_ now: Double) -> Bool {
-        prefetch(now)
-        let active = isActive(now)
-        if active && reported.insert("input-active").inserted { spriteWarning("character hidden: microphone input active") }
-        return active
-    }
-}
-func stageVisibilityStatus(stagePath: Bool, stageShown: Bool, legacyShown: Bool, panelVisible: Bool,
-    rung: String?, reason: String?) -> [String: Any] {
-    let up = (stagePath ? stageShown : legacyShown) && panelVisible
-    return ["shown": up, "size": up ? (stagePath ? rung as Any? ?? NSNull() : "small") : NSNull(),
-        "rendererPath": stagePath ? "stage" : "legacy-perch", "hideReason": up ? NSNull() : reason as Any? ?? "not-shown"]
-}
-// END STAGE
-
-// BEGIN HONEST MOODS AND EDGE CHIPS (ST8)
-func honestFieldsValid(_ data: [String: Any]) -> Bool {
-    if let value = data["detail"] { guard let s = value as? String, ["approval", "payment", "page", "handoff", "person"].contains(s) else { return false } }
-    if let value = data["retry"] { guard let n = value as? NSNumber, CFGetTypeID(n) == CFBooleanGetTypeID() else { return false } }
-    if let value = data["transfer"] { guard data["kind"] as? String == "key", let s = value as? String, ["take", "give"].contains(s) else { return false } }
-    return true
-}
-// Each cue is a two-cell layer animation inside the approved box, with no timer or new window.
-final class HonestMoodCells {
-    var detail: String?, retry = false, carrying = false
-    var take: (Int32, UInt32, Double)?, carryUntil = 0.0
-    func receive(_ plan: RingPlan, now: Double) {
-        detail = plan.detail; retry = plan.retry; carrying = now < carryUntil
-        if let prior = take, now < prior.2 || now - prior.2 > 30 { take = nil }
-        if plan.state == "key", plan.transfer == "take" { take = (plan.pid, plan.window, now) }
-        if plan.state == "key", plan.transfer == "give", let prior = take {
-            carrying = prior.0 != plan.pid || prior.1 != plan.window
-            if carrying { carryUntil = now + 0.6 }; take = nil
-        }
-    }
-    func install(in root: CALayer, box: CGRect, reduced: Bool) {
-        guard let detail = detail, ["approval", "payment", "page"].contains(detail) || retry || carrying else {
-            if retry || carrying { draw(in: root, box: box, kind: carrying ? "carry" : "retry", reduced: reduced) }; return
-        }
-        draw(in: root, box: box, kind: detail, reduced: reduced)
-    }
-    func draw(in root: CALayer, box: CGRect, kind: String, reduced: Bool) {
-        guard box.width >= 24, box.height >= 24 else { return }
-        let layer = CAShapeLayer(), path = CGMutablePath()
-        layer.name = "honest-" + kind; layer.frame = CGRect(x: box.maxX - 22, y: box.minY + 8, width: 16, height: 16)
-        layer.strokeColor = NSColor.white.cgColor; layer.fillColor = NSColor(calibratedRed: 1, green: 0.48, blue: 0.24, alpha: 1).cgColor
-        layer.lineWidth = 1.5
-        switch kind {
-        case "approval":
-            path.move(to: CGPoint(x: 8, y: 1)); path.addQuadCurve(to: CGPoint(x: 13, y: 12), control: CGPoint(x: 18, y: 15))
-            path.addQuadCurve(to: CGPoint(x: 3, y: 12), control: CGPoint(x: 8, y: 20)); path.addQuadCurve(to: CGPoint(x: 8, y: 1), control: CGPoint(x: -2, y: 15))
-        case "payment", "carry":
-            path.addRect(CGRect(x: 3, y: 2, width: 10, height: 12))
-            path.move(to: CGPoint(x: 5, y: 6)); path.addLine(to: CGPoint(x: 11, y: 6))
-            path.move(to: CGPoint(x: 5, y: 10)); path.addLine(to: CGPoint(x: 11, y: 10))
-        case "page": path.addRoundedRect(in: CGRect(x: 2, y: 10, width: 12, height: 4), cornerWidth: 2, cornerHeight: 2)
-        default:
-            path.addArc(center: CGPoint(x: 8, y: 8), radius: 5, startAngle: 0, endAngle: .pi * 1.5, clockwise: false)
-        }
-        layer.path = path; root.addSublayer(layer)
-        if !reduced {
-            let cells = CAKeyframeAnimation(keyPath: "transform.translation.y")
-            cells.values = [0, -2, 0]; cells.keyTimes = [0, 0.5, 1]; cells.calculationMode = .discrete
-            cells.duration = kind == "page" ? 0.6 : 0.4; cells.repeatCount = kind == "page" ? 4 : 1
-            layer.add(cells, forKey: "mood-cells")
-        }
-        if ["retry", "carry"].contains(kind) {
-            let fade = CABasicAnimation(keyPath: "opacity"); fade.fromValue = 1; fade.toValue = 0; fade.beginTime = CACurrentMediaTime() + 0.6
-            fade.duration = 0.12; fade.fillMode = .forwards; fade.isRemovedOnCompletion = false; layer.add(fade, forKey: "one-shot")
-        }
-    }
-}
-struct EdgeChipMessage {
-    var op: String, pid: Int32 = 0, window: UInt32 = 0, count = 0, first = 0, time = 0.0, run: String? = nil
-    static func parse(_ data: [String: Any]) -> EdgeChipMessage? {
-        guard let op = data["op"] as? String else { return nil }
-        let base: Set<String> = ["hand", "nonce", "op"]
-        if ["clear", "end"].contains(op) { return Set(data.keys) == base ? EdgeChipMessage(op: op) : nil }
-        func integer(_ key: String, _ max: Double) -> Double? {
-            guard let n = data[key] as? NSNumber, CFGetTypeID(n) != CFBooleanGetTypeID(), n.doubleValue.isFinite,
-                n.doubleValue >= 1, n.doubleValue <= max, n.doubleValue.rounded() == n.doubleValue else { return nil }; return n.doubleValue
-        }
-        guard op == "put", Set(data.keys) == base.union(["pid", "windowId", "count", "first", "time", "run"]),
-            let pid = integer("pid", 2147483647), let window = integer("windowId", 4294967295), let count = integer("count", 999),
-            let first = integer("first", 9007199254740991), let time = integer("time", 8640000000000000),
-            data["run"] is NSNull || (data["run"] as? String)?.range(of: "^\\d{4}-\\d{2}-\\d{2}-[a-f0-9]{32}$", options: .regularExpression) != nil else { return nil }
-        return EdgeChipMessage(op: op, pid: Int32(pid), window: UInt32(window), count: Int(count), first: Int(first), time: time, run: data["run"] as? String)
-    }
-}
-// Top-left coordinates. The entire chip is above content and between the 80 pt control clamps.
-func edgeChipRect(window: CGRect, usable: CGRect, excluding: [CGRect]) -> CGRect? {
-    let box = CGRect(x: window.maxX - 80 - 48, y: window.minY - 24, width: 48, height: 22)
-    guard stageRectValid(window), stageRectValid(usable), window.width >= 208, usable.contains(box),
-        box.minX >= window.minX + 80, box.maxX <= window.maxX - 80, box.maxY <= window.minY,
-        !excluding.contains(where: { $0.intersects(box) }) else { return nil }
-    return box
-}
-final class EdgeChipView: NSView {
-    var click: (() -> Void)?, clickable = false
-    override func resetCursorRects() { if clickable { addCursorRect(bounds, cursor: .pointingHand) } }
-    override func mouseUp(with event: NSEvent) {
-        guard clickable, personActivation(event, windowMatches: event.window === window) else { return }; click?()
-    }
-    override func accessibilityPerformPress() -> Bool { false }
-    override func accessibilityPerformAction(_ action: NSAccessibility.Action) {}
-}
-final class EdgeChipHost {
-    weak var host: HandHost?
-    var painted: [String: String] = [:]
-    var rows: [String: EdgeChipMessage] = [:], panels: [String: HandPanel] = [:], expires: Double?, wake: DispatchWorkItem?, aim: CGRect?
-    init(host: HandHost) { self.host = host }
-    func hide() { panels.values.forEach { $0.orderOut(nil) }; wake?.cancel(); wake = nil }
-    func receive(_ message: EdgeChipMessage) {
-        if message.op == "clear" { hide(); rows.removeAll(); panels.removeAll(); painted.removeAll(); expires = nil; return }
-        if message.op == "end" { expires = CACurrentMediaTime() + 600 }
-        if message.op == "put" {
-            let key = "\(message.pid):\(message.window)"
-            guard rows[key] != nil || rows.count < 32 else { return }; rows[key] = message
-        }
-        refresh()
-    }
-    func refresh() {
-        wake?.cancel(); wake = nil
-        guard !rows.isEmpty, let host = host else { return }
-        if let end = expires, CACurrentMediaTime() >= end { receive(EdgeChipMessage(op: "clear")); return }
-        // Hidden rows still need to expire and recover from a timed-out capture hold or missing metadata.
-        defer {
-            let item = DispatchWorkItem { [weak self] in self?.refresh() }; wake = item
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.2, execute: item)
-        }
-        guard host.cursorStyle == "sprite", !host.captureHeld, !host.perch.stageLocked, !host.perch.stageSleeping else { hide(); return }
-        guard let snapshot = CGWindowListCopyWindowInfo([.optionOnScreenOnly, .excludeDesktopElements], kCGNullWindowID) as? [[String: Any]] else { hide(); return }
-        for (key, row) in rows {
-            guard let world = stageWorld(pid: row.pid, window: row.window, pointerAway: 0, locked: false, sleeping: false, call: false, snapshot: snapshot), !world.base.fullScreen,
-                let box = edgeChipRect(window: world.base.window, usable: world.usable,
-                    excluding: world.base.above + world.cards + [world.person, aim, host.perch.frame.isNull ? nil : host.perch.frame].compactMap { $0 }) else { panels[key]?.orderOut(nil); continue }
-            let panel = panels[key] ?? HandPanel(contentRect: .zero, styleMask: [.borderless, .nonactivatingPanel], backing: .buffered, defer: false)
-            panels[key] = panel
-            panel.isOpaque = false; panel.backgroundColor = .clear; panel.hasShadow = false; panel.level = .floating
-            panel.sharingType = .none; panel.ignoresMouseEvents = row.run == nil; panel.hidesOnDeactivate = false
-            panel.collectionBehavior = [.fullScreenAuxiliary]
-            if panel.frame != appKitRect(box) { panel.setFrame(appKitRect(box), display: false) }
-            let signature = "\(row.count):\(row.first):\(row.run ?? "")"
-            if painted[key] != signature {
-            painted[key] = signature
-            let view = EdgeChipView(frame: CGRect(origin: .zero, size: box.size)); view.wantsLayer = true
-            view.layer?.backgroundColor = NSColor(calibratedRed: 0.08, green: 0.1, blue: 0.15, alpha: 1).cgColor
-            view.layer?.cornerRadius = 11; view.layer?.borderWidth = 1; view.layer?.borderColor = NSColor.white.cgColor
-            let text = CATextLayer(); text.frame = CGRect(x: 19, y: 4, width: 26, height: 14); text.string = "\(row.count)"
-            text.fontSize = 10; text.foregroundColor = NSColor.white.cgColor; text.contentsScale = panel.screen?.backingScaleFactor ?? 2
-            view.layer?.addSublayer(text)
-            // A 16 pt crop of the loaded character's idle cell, never a window image.
-            if let character = host.perch.loaded, let idle = character.frame.table["idle"], let image = character.images[idle.sheet] {
-                let face = CALayer(); face.frame = CGRect(x: 2, y: 3, width: 16, height: 16); face.contents = image
-                face.contentsRect = PerchPlan.rect(idle, idle.columns[0], cell: character.frame.cell); view.layer?.addSublayer(face)
-            }
-            let formatter = DateFormatter(); formatter.dateFormat = "HH:mm"
-            view.toolTip = "sleight changed this window: \(row.count) actions, \(formatter.string(from: Date(timeIntervalSince1970: row.time / 1000)))"
-            view.clickable = row.run != nil
-            view.click = { [weak self] in
-                guard let self = self, let run = row.run, let nonce = nonceBook.nonce("hand") else { return }
-                narrationJSON(["hand": "replay", "nonce": nonce, "run": run, "first": row.first])
-                self.rows.removeValue(forKey: key); self.panels.removeValue(forKey: key)?.orderOut(nil)
-            }
-            panel.contentView = view
-            }
-            if !panel.isVisible { panel.orderFrontRegardless() }
-        }
-    }
-}
-// Pure parser and mood-state probe. It creates no application, panel or layer.
-func honestMoodDump() {
-    let mood = HonestMoodCells()
-    while let line = readLine() {
-        guard let bytes = line.data(using: .utf8), var data = try? JSONSerialization.jsonObject(with: bytes) as? [String: Any],
-            let now = data.removeValue(forKey: "clock") as? Double, now.isFinite, let frame = handFrame(data) else { exit(65) }
-        let event: RingEvent
-        switch frame { case let .act(_, act): event = ringEvent(act); case let .aim(_, ev), let .status(_, ev): event = ev; default: exit(65) }
-        var plan = RingPlan(state: event.state, at: event.at ?? .zero)
-        plan.pid = event.pid; plan.window = event.windowId; plan.detail = event.detail; plan.retry = event.retry; plan.transfer = event.transfer
-        mood.receive(plan, now: now)
-        let result: [String: Any] = ["detail": mood.detail as Any? ?? NSNull(), "retry": mood.retry, "carrying": mood.carrying]
-        FileHandle.standardOutput.write(try! JSONSerialization.data(withJSONObject: result) + Data([10]))
-    }
-}
-func edgeChipDump() {
-    while let line = readLine() {
-        guard let bytes = line.data(using: .utf8), let data = try? JSONSerialization.jsonObject(with: bytes) as? [String: Any] else { exit(65) }
-        func rect(_ raw: Any?) -> CGRect? {
-            guard let v = raw as? [Double], v.count == 4 else { return nil }
-            let r = CGRect(x: v[0], y: v[1], width: v[2], height: v[3]); return stageRectValid(r) ? r : nil
-        }
-        guard let window = rect(data["window"]), let usable = rect(data["usable"]), let raw = data["excluding"] as? [Any] else { exit(65) }
-        let excluded = raw.compactMap(rect); guard excluded.count == raw.count else { exit(65) }
-        let box = edgeChipRect(window: window, usable: usable, excluding: excluded)
-        let result: [String: Any] = ["rect": box.map { [$0.minX, $0.minY, $0.width, $0.height] } as Any? ?? NSNull(), "capture": "none"]
-        FileHandle.standardOutput.write(try! JSONSerialization.data(withJSONObject: result) + Data([10]))
-    }
-}
-// END HONEST MOODS AND EDGE CHIPS (ST8)
-
 // BEGIN HAND HOST
 // The ghost hand (ROADMAP 2.7): a glove that glides to where sleight acts in a background window, flourishes and fades. It only
 // draws: the panel never activates, takes key, catches a click or shows in another process's capture unless the user chose
@@ -9188,36 +5929,6 @@ func handCapture(_ args: [String]) -> String? {
     if args.isEmpty { return "hidden" }
     guard args.count == 1, args[0].hasPrefix("--capture="), handCaptureModes[String(args[0].dropFirst(10))] != nil else { return nil }
     return String(args[0].dropFirst(10))
-}
-// The installer reads its flags back through the same interface in a real panel and the headless probe.
-protocol HandPanelSurface: AnyObject {
-    var sharingType: NSWindow.SharingType { get set }
-    var ignoresMouseEvents: Bool { get set }
-}
-extension NSPanel: HandPanelSurface {}
-struct HandPanelPolicy {
-    var sharing: NSWindow.SharingType, ignoresMouseEvents = true
-    init(sharing: NSWindow.SharingType, ignoresMouseEvents: Bool = true) { self.sharing = sharing; self.ignoresMouseEvents = ignoresMouseEvents }
-    init(_ panel: HandPanelSurface) { sharing = panel.sharingType; ignoresMouseEvents = panel.ignoresMouseEvents }
-    // Stage panels follow the user's hand capture setting like every other hand panel: hidden (the default) keeps them
-    // out of screen captures, visible lets recordings show them. Same mapping as handCaptureModes.
-    static func stageSharing(_ capture: String) -> NSWindow.SharingType { capture == "visible" ? .readOnly : .none }
-    static func stage(capture: String = "hidden") -> HandPanelPolicy { HandPanelPolicy(sharing: stageSharing(capture)) }
-    var captureName: String { sharing == .none ? "none" : sharing == .readOnly ? "readOnly" : "other" }
-    var hitAreas: Int { ignoresMouseEvents ? 0 : 1 }
-    var stageSafe: Bool { stageSafe(for: "hidden") }
-    func stageSafe(for capture: String) -> Bool { sharing == HandPanelPolicy.stageSharing(capture) && ignoresMouseEvents }
-    func apply(_ panel: HandPanelSurface) {
-        if panel.sharingType != sharing { panel.sharingType = sharing }
-        if panel.ignoresMouseEvents != ignoresMouseEvents { panel.ignoresMouseEvents = ignoresMouseEvents }
-    }
-}
-final class StagePanelProbe: HandPanelSurface {
-    var sharingType: NSWindow.SharingType = .readOnly, ignoresMouseEvents = false
-}
-func stagePanelSnapshot(_ panel: HandPanelSurface = StagePanelProbe(), capture: String = "hidden") -> HandPanelPolicy {
-    HandPanelPolicy.stage(capture: capture).apply(panel)
-    return HandPanelPolicy(panel)
 }
 func makeHandPanel(capture: String) -> HandPanel {
     let panel = HandPanel(contentRect: NSRect(x: 0, y: 0, width: 1, height: 1), styleMask: [.borderless, .nonactivatingPanel],
@@ -9261,85 +5972,6 @@ func handDemoRect(_ text: String) -> CGRect? {
 }
 
 // BEGIN CURSOR PAUSE PANEL
-// Only the badge takes input, independent of the character's size or opaque body pixels.
-func cursorBadgeRect(_ body: CGRect) -> CGRect {
-    CGRect(x: body.maxX - 16, y: body.minY, width: 16, height: 16)
-}
-func cursorBadgeHit(_ point: CGPoint, _ body: CGRect) -> Bool { cursorBadgeRect(body).contains(point) }
-func cursorDragArtAllowed(_ box: CGRect, excluding: [CGRect]) -> Bool { !excluding.contains { $0.intersects(box) } }
-
-// A drag never touches the consent channel. Both ends require hardware input on the original badge window.
-final class CursorBadgeDrag {
-    let control: CursorPauseControl
-    private(set) var active = false
-    private var before = false, released = false, sent = false
-    private var drop: [String: Any]?
-    private var timeoutToken: UUID?, cancelTimeout: (() -> Void)?
-    var finished: () -> Void = {}
-    var epoch: () -> Double = { floor(Date().timeIntervalSince1970 * 1000) }
-    var schedule: (Double, @escaping () -> Void) -> (() -> Void) = { delay, task in
-        let work = DispatchWorkItem(block: task)
-        DispatchQueue.main.asyncAfter(deadline: .now() + delay, execute: work)
-        return { work.cancel() }
-    }
-    init(_ control: CursorPauseControl) { self.control = control }
-    @discardableResult func begin(_ event: NSEvent?, windowMatches: Bool) -> Bool {
-        guard !active, control.pending == nil, event?.type == .leftMouseDown,
-            personActivation(event, windowMatches: windowMatches, keyboard: false, now: control.now(), consent: true),
-            event?.cgEvent?.getIntegerValueField(.eventSourceUnixProcessID) == 0 else { return false }
-        active = true; before = control.paused; released = false; sent = false; drop = nil
-        if !before, !control.request(true) { cancel(); return false }
-        let token = UUID(); timeoutToken = token
-        cancelTimeout = schedule(30) { [weak self] in
-            guard let self = self, self.timeoutToken == token else { return }
-            self.cancel()
-        }
-        return true
-    }
-    @discardableResult func end(_ event: NSEvent?, windowMatches: Bool, target: [String: Any]?) -> Bool {
-        guard active, event?.type == .leftMouseUp,
-            personActivation(event, windowMatches: windowMatches, keyboard: false, now: control.now()) else { return false }
-        released = true
-        if let target = target, let nonce = control.nonce() {
-            drop = target.merging(["hand": "hint", "nonce": nonce, "ts": epoch()]) { $1 }
-        }
-        settle(); return true
-    }
-    func settle() {
-        guard active else { return }
-        guard !control.failed else { cancel(); return }
-        guard released, control.pending == nil else { return }
-        if !sent {
-            guard control.paused else { cancel(); return }
-            sent = true
-            if let drop = drop { _ = control.send(drop) }
-            if !before { if !control.request(false) { cancel() }; return }
-        }
-        cancel()
-    }
-    // Losing capture, the badge or a handshake preserves the committed pause.
-    func cancel() {
-        timeoutToken = nil; cancelTimeout?(); cancelTimeout = nil
-        guard active else { return }; active = false; drop = nil; finished()
-    }
-}
-func cursorHintTarget(at: CGPoint, snapshot: [[String: Any]]) -> [String: Any]? {
-    for row in snapshot {
-        guard let raw = row[kCGWindowBounds as String] as? [String: Any],
-            let bounds = CGRect(dictionaryRepresentation: raw as CFDictionary), bounds.contains(at) else { continue }
-        guard let pid = row[kCGWindowOwnerPID as String] as? Int, pid > 0, pid != Int(getpid()),
-            let window = row[kCGWindowNumber as String] as? UInt32, window > 0,
-            row[kCGWindowLayer as String] as? Int == 0 else { return nil }
-        return ["pid": pid, "windowId": window, "at": [at.x, at.y]]
-    }
-    return nil
-}
-func cursorDragMotion(_ event: NSEvent, now: Double) -> Bool {
-    guard event.type == .leftMouseDragged, event.timestamp.isFinite, now >= event.timestamp, now - event.timestamp < 5,
-        let cg = event.cgEvent else { return false }
-    return cg.getIntegerValueField(.eventSourceStateID) == Int64(CGEventSourceStateID.hidSystemState.rawValue) &&
-        cg.getIntegerValueField(.eventSourceUnixProcessID) == 0 && cg.getIntegerValueField(.eventSourceUserData) == 0
-}
 // A separate hit rectangle, never the ring's large click-through panel. There is no timer while parked.
 func cursorPauseRect(at: CGPoint, size: CGSize, clip: CGRect, drag: Bool) -> CGRect? {
     guard !drag, size.width > 0, size.height > 0, size.width <= clip.width, size.height <= clip.height else { return nil }
@@ -9405,9 +6037,6 @@ final class CursorPauseView: NSView {
     let control: CursorPauseControl
     let current: () -> Bool
     var sprite = false, pressed = false
-    var down: NSEvent?
-    var drag: CursorBadgeDrag?
-    var dragBegan: () -> Void = {}, dragMoved: (CGPoint) -> Void = { _ in }
     var hitOpaque: (NSPoint) -> Bool = { _ in true }
     override func hitTest(_ point: NSPoint) -> NSView? { hitOpaque(point) ? super.hitTest(point) : nil }
     init(_ control: CursorPauseControl, current: @escaping () -> Bool) { self.control = control; self.current = current; super.init(frame: .zero); setAccessibilityElement(false) }
@@ -9419,38 +6048,14 @@ final class CursorPauseView: NSView {
     override func mouseDown(with event: NSEvent) {
         guard current(), hitOpaque(convert(event.locationInWindow, from: nil)) else { pressed = false; window?.orderOut(nil); return }
         pressed = event.cgEvent.map { $0.type == .leftMouseDown && $0.getIntegerValueField(.eventSourceUnixProcessID) == 0 } ?? false
-        down = pressed ? event : nil
-    }
-    func screenPoint(_ event: NSEvent) -> CGPoint {
-        let point = window?.convertPoint(toScreen: event.locationInWindow) ?? NSEvent.mouseLocation
-        return CGPoint(x: point.x, y: (NSScreen.screens.first?.frame.maxY ?? 0) - point.y)
-    }
-    override func mouseDragged(with event: NSEvent) {
-        guard pressed, let down = down, let window = window, let drag = drag,
-            cursorDragMotion(event, now: control.now()) else { return }
-        if !drag.active {
-            guard current(), hypot(event.locationInWindow.x - down.locationInWindow.x, event.locationInWindow.y - down.locationInWindow.y) >= 3,
-                drag.begin(down, windowMatches: down.window === window) else { return }
-            dragBegan()
-        }
-        dragMoved(screenPoint(event))
     }
     override func mouseUp(with event: NSEvent) {
-        defer { pressed = false; down = nil }
-        if let drag = drag, drag.active {
-            let snapshot = CGWindowListCopyWindowInfo([.optionOnScreenOnly, .excludeDesktopElements], kCGNullWindowID) as? [[String: Any]] ?? []
-            if !drag.end(event, windowMatches: event.window === window && window != nil, target: cursorHintTarget(at: screenPoint(event), snapshot: snapshot)) { drag.cancel() }
-            return
-        }
+        defer { pressed = false }
         guard let window = window, current(), pressed, hitOpaque(convert(event.locationInWindow, from: nil)), bounds.contains(convert(event.locationInWindow, from: nil)) else { return }
         _ = control.click(event, windowMatches: event.window === window)
     }
     override func draw(_ dirtyRect: NSRect) {
         guard !sprite else { return }
-        NSGraphicsContext.saveGraphicsState()
-        defer { NSGraphicsContext.restoreGraphicsState() }
-        let transform = NSAffineTransform(); transform.scaleX(by: bounds.width / 24, yBy: bounds.height / 24); transform.concat()
-        let bounds = CGRect(x: 0, y: 0, width: 24, height: 24)
         NSColor(calibratedWhite: 0.08, alpha: 0.92).setFill()
         NSBezierPath(roundedRect: bounds.insetBy(dx: 1, dy: 1), xRadius: 8, yRadius: 8).fill()
         (control.failed ? NSColor.systemOrange : NSColor.white).setFill()
@@ -9465,48 +6070,44 @@ final class CursorPauseView: NSView {
 }
 final class CursorPauseOverlay {
     var panel: CursorPausePanel?, pending: DispatchWorkItem?
-    var badgeRect: CGRect?
-    weak var owner: AnyObject?
     var generation = 0
     var globalMonitor: Any?, localMonitor: Any?
-    func hide(owner: AnyObject?) {
-        guard let owner = owner, self.owner === owner else { return }
-        hide()
-    }
     func hide() {
-        (panel?.contentView as? CursorPauseView)?.drag?.cancel()
         if let monitor = globalMonitor { NSEvent.removeMonitor(monitor) }; globalMonitor = nil
         if let monitor = localMonitor { NSEvent.removeMonitor(monitor) }; localMonitor = nil
-        generation += 1; pending?.cancel(); pending = nil; panel?.ignoresMouseEvents = true; panel?.orderOut(nil); panel?.close(); panel = nil; owner = nil; badgeRect = nil }
-    func translate(_ delta: CGPoint, owner: AnyObject?) {
-        guard let owner = owner, self.owner === owner else { return }
-        badgeRect = badgeRect?.offsetBy(dx: delta.x, dy: delta.y)
-        if let panel = panel { panel.setFrame(panel.frame.offsetBy(dx: delta.x, dy: -delta.y), display: false) }
-    }
-    func show(_ rect: CGRect?, sprite: Bool, after delay: Double, capture: String, control: CursorPauseControl, mask: CursorPauseMask? = nil,
-        drag: CursorBadgeDrag? = nil, owner: AnyObject? = nil, began: @escaping () -> Void = {}, moved: @escaping (CGPoint) -> Void = { _ in }, current: @escaping () -> Bool) {
+        generation += 1; pending?.cancel(); pending = nil; panel?.ignoresMouseEvents = true; panel?.orderOut(nil); panel?.close(); panel = nil }
+    func show(_ rect: CGRect?, sprite: Bool, after delay: Double, capture: String, control: CursorPauseControl, mask: CursorPauseMask? = nil, current: @escaping () -> Bool) {
         hide()
         guard let rect = rect else { return }
-        self.owner = owner
-        badgeRect = sprite ? cursorBadgeRect(rect) : rect
         let expected = generation
         let show = { [weak self] in
             guard let self = self, self.generation == expected else { return }
             self.pending = nil
-            guard current(), let badge = self.badgeRect else { return }
-            let panel = CursorPausePanel(contentRect: appKitRect(badge), styleMask: CursorPausePanel.mask, backing: .buffered, defer: true)
+            guard current() else { return }
+            let panel = CursorPausePanel(contentRect: appKitRect(rect), styleMask: CursorPausePanel.mask, backing: .buffered, defer: true)
             panel.level = .floating; panel.hasShadow = false; panel.isOpaque = false; panel.backgroundColor = .clear
             panel.ignoresMouseEvents = false; panel.hidesOnDeactivate = false; panel.isReleasedWhenClosed = false
             panel.animationBehavior = .none; panel.becomesKeyOnlyIfNeeded = true
             panel.collectionBehavior = [.transient, .ignoresCycle, .fullScreenAuxiliary, .stationary]
             panel.sharingType = handCaptureModes[capture] ?? NSWindow.SharingType.none
             panel.setAccessibilityElement(false)
-            let view = CursorPauseView(control, current: current)
-            view.drag = drag; view.dragBegan = began; view.dragMoved = moved
-            view.hitOpaque = { [weak view] point in view.map { sprite ? cursorBadgeHit(point, $0.bounds) : $0.bounds.contains(point) } ?? false }
+            let view = CursorPauseView(control, current: current); view.sprite = sprite
             view.toolTip = control.paused ? "Resume sleight" : "Pause sleight"
             panel.contentView = view
             self.panel = panel
+            if sprite, let mask = mask {
+                view.hitOpaque = { point in mask.contains(CGPoint(x: rect.minX + point.x, y: rect.maxY - point.y)) }
+                let update = { [weak panel] in
+                    guard let panel = panel else { return }
+                    let mouse = NSEvent.mouseLocation
+                    let point = CGPoint(x: mouse.x, y: (NSScreen.screens.first?.frame.maxY ?? 0) - mouse.y)
+                    panel.ignoresMouseEvents = !mask.contains(point)
+                }
+                update()
+                self.globalMonitor = NSEvent.addGlobalMonitorForEvents(matching: [.mouseMoved, .leftMouseDragged]) { _ in update() }
+                self.localMonitor = NSEvent.addLocalMonitorForEvents(matching: [.mouseMoved, .leftMouseDragged]) { event in update(); return event }
+                panel.acceptsMouseMovedEvents = true
+            } else if sprite { panel.ignoresMouseEvents = true }
             panel.orderFrontRegardless()
         }
         if delay <= 0 { show() }
@@ -9516,7 +6117,7 @@ final class CursorPauseOverlay {
         }
     }
 }
-// Validation and geometry only. This mode never creates NSApplication, NSPanel or CALayer, or posts input.
+// Validation and geometry only. This mode never creates NSApplication, NSPanel, NSView or CALayer.
 func cursorPauseDump() {
     let control = CursorPauseControl()
     var clock = 1000.0, emitted: [[String: Any]] = [], lastEvent: NSEvent?
@@ -9532,201 +6133,8 @@ func cursorPauseDump() {
             let data = try? JSONSerialization.jsonObject(with: bytes) as? [String: Any] else { exit(65) }
         var output: [String: Any] = ["canBecomeKey": CursorPausePanel.key, "canBecomeMain": CursorPausePanel.main,
             "acceptsFirstMouse": CursorPausePanel.firstMouse, "nonactivating": CursorPausePanel.mask.contains(.nonactivatingPanel)]
-        if let gate = data["stageAdmissionCheck"] as? String {
-            let host = HandHost(), bounds = CGRect(x: 200, y: 500, width: 900, height: 350)
-            let key = StageWindowKey(pid: 42, window: 7), target = CGPoint(x: 650, y: 700)
-            let world = StageWorld(base: PerchWorld(window: bounds, above: [], display: CGRect(x: 0, y: 0, width: 1800, height: 1200), top: 30, fullScreen: false),
-                usable: CGRect(x: 0, y: 30, width: 1800, height: 1140), person: CGRect(x: 1450, y: 700, width: 300, height: 300),
-                pointer: CGPoint(x: 1750, y: 1150), inputAge: 20, pointerAway: 10, windows: [key: bounds])
-            host.admissionWorld = { _ in world }
-            host.cursorStyle = "sprite"; host.perch.enabled = true
-            host.perch.stageEffects = { _ in }; host.ringEffects = { _ in }
-            if let raw = data["character"] as? [String: Any], case let .character(_, frame)? = handFrame(raw) {
-                host.perch.stage.load(frame); host.perch.stage.stageArt = true
-                host.perch.loaded = SpriteCharacter(frame: frame, images: [:], stage: SpriteStageCache(frame: frame))
-            }
-            output["fixtureLoaded"] = host.perch.stage.base.frame != nil
-            host.perch.stage.options.size = "stage"
-            host.perch.stage.event = PerchEvent(state: "aim", pid: 42, window: 7, at: CGPoint(x: 450, y: 700), ok: false, drop: nil, end: nil, windowRect: bounds)
-            host.perch.stage.windowBook.observe([key: bounds])
-            host.perch.stage.lastFrame = 1
-            _ = host.perch.stage.observe(1, world: world, reduced: true)
-            output["shownBeforeHold"] = host.perch.stage.shown
-            if data["trace"] as? Bool == true { host.perch.stage.trace = StageTrace() }
-            let hold = data["hold"] as? String ?? "pause"
-            if hold == "pause" { host.ownPause.set(true); host.perch.stage.paused = true }
-            else if hold == "capture" { host.captureHolds["fixture"] = Date().addingTimeInterval(30) }
-            else if hold == "drag" {
-                // Unposted fixture event only. The production drag gate owns the active state.
-                let stamp = ProcessInfo.processInfo.systemUptime
-                host.ownPause.now = { stamp }; host.ownPause.nonce = { String(repeating: "a", count: 64) }
-                host.ownPause.send = { _ in true }; host.ownPause.schedule = { _, _ in }
-                host.badgeDrag.schedule = { _, _ in {} }
-                let cg = CGEvent(keyboardEventSource: CGEventSource(stateID: .hidSystemState)!, virtualKey: 0, keyDown: true)!
-                cg.type = .leftMouseDown; cg.timestamp = UInt64(stamp * 1e9)
-                cg.setIntegerValueField(.eventSourceUnixProcessID, value: 0); cg.setIntegerValueField(.eventSourceUserData, value: 0)
-                guard host.badgeDrag.begin(NSEvent(cgEvent: cg), windowMatches: true) else { exit(65) }
-            } else { exit(65) }
-            output["heldAtAdmission"] = hold == "pause" ? host.pauseControl.paused : hold == "capture" ? host.captureHeld : host.badgeDrag.active
-            host.pauseVisibility.clear()
-            let pauseGeneration = host.pauseOverlay.generation
-            var event = RingEvent(seq: 3, state: data["state"] as? String ?? "aim", pid: 42, windowId: 7, at: target, rect: CGRect(x: 630, y: 680, width: 40, height: 40), label: nil)
-            let measured = data["unknownGeometry"] as? Bool == true ? bounds.offsetBy(dx: 10, dy: 0) : bounds
-            event.windowRect = measured
-            if gate == "act" {
-                guard case let .act(_, act)? = handFrame(["hand": "act", "nonce": String(repeating: "a", count: 64), "seq": 3,
-                    "kind": "click", "pid": 42, "windowId": 7, "at": [650, 700], "windowRect": [measured.minX, measured.minY, measured.width, measured.height], "path": [[650, 700]], "delayMs": 0, "beats": 1]) else { exit(65) }
-                host.receiveAct(act)
-            } else if gate == "ring" { host.ringFrame(event, delay: 0) }
-            else if gate == "cursor" { host.receiveCursor(event) } else { exit(65) }
-            if let trace = host.perch.stage.trace { output["trace"] = trace.json }
-            output["admitted"] = host.perch.stage.turnTargets.contains { $0.box.contains(target) && $0.contributors.contains { $0.seq == 3 } }
-            output["shown"] = host.perch.stage.shown
-            host.badgeDrag.cancel(); host.captureHolds.removeAll(); host.ownPause.set(false)
-            _ = host.perch.stage.setPaused(false, now: 1, world: world, reduced: true)
-            output["cleared"] = host.pauseVisibility.cleared
-            output["pauseOverlayHides"] = host.pauseOverlay.generation - pauseGeneration
-            output["afterResume"] = host.perch.stage.turnTargets.contains { $0.box.contains(target) }
-            output["shownAfterResume"] = host.perch.stage.shown
-            output["targetUnmapped"] = host.perch.stage.targetUnmapped
-            output["windows"] = host.panel == nil && host.perch.panel == nil && host.pauseOverlay.panel == nil ? 0 : 1
-            output["layers"] = host.ringRoot == nil && host.hand == nil && host.glove == nil ? 0 : 1
-        } else if data["turnCompletionCheck"] as? Bool == true {
-            var targets: [Int] = [], measured: [Bool] = [], receipts: [[String: Any]] = [], windows = 0
-            for directRing in [true, false] {
-                let host = HandHost()
-                let bounds = CGRect(x: 200, y: 500, width: 900, height: 350)
-                let key = StageWindowKey(pid: 42, window: 7)
-                host.perch.stage.event = PerchEvent(state: "aim", pid: 42, window: 7, at: CGPoint(x: 650, y: 700), ok: false, drop: nil, end: nil, windowRect: bounds)
-                host.perch.stage.remember(bounds, key: key, epoch: StageWindowEpoch(bounds: bounds, generation: 1))
-                // The guards prevent all rendering. Each entry point must release independently.
-                host.ownPause.set(true)
-                let done = RingEvent(seq: 3, state: "done", pid: 42, windowId: 7, at: nil, rect: nil, label: nil)
-                if directRing { host.ringFrame(done, delay: 0) } else { host.receiveCursor(done) }
-                _ = host.perch.stage.hide("stale-window")
-                host.perch.stage.maxWindowBoundsDifferencePt = 2.25
-                receipts.append(host.perch.diagnostics.filter { ["hideReasonCounts", "maxWindowBoundsDifferencePt"].contains($0.key) })
-                targets.append(host.perch.stage.turnTargets.count)
-                measured.append(host.perch.stage.event?.windowRect != nil)
-                windows += host.panel == nil && host.perch.panel == nil && host.pauseOverlay.panel == nil ? 0 : 1
-            }
-            output["turnTargets"] = targets; output["measuredBounds"] = measured; output["windows"] = windows; output["receipts"] = receipts
-        } else if let frame = data["exitFrame"] as? [String: Any] {
+        if let frame = data["exitFrame"] as? [String: Any] {
             output["exitAccepted"] = handControlExit(frame, nonce: String(repeating: "a", count: 64))
-        } else if data["badgeLifetimeCheck"] as? Bool == true {
-            let overlay = CursorPauseOverlay(), owner = NSObject(), other = NSObject()
-            overlay.show(CGRect(x: 0, y: 0, width: 96, height: 104), sprite: true, after: 10, capture: "hidden", control: control, owner: owner, current: { false })
-            output["pendingBefore"] = overlay.pending != nil
-            overlay.hide(owner: other); output["pendingAfterOtherOwner"] = overlay.pending != nil
-            overlay.hide(owner: owner); output["pendingAfterOwner"] = overlay.pending != nil; output["windows"] = overlay.panel == nil ? 0 : 1
-        } else if data["dragArtCheck"] as? Bool == true {
-            let avoid = [CGRect(x: 0, y: 0, width: 200, height: 200), CGRect(x: 300, y: 0, width: 100, height: 100), CGRect(x: 0, y: 300, width: 200, height: 50)]
-            output["allowed"] = [CGRect(x: 500, y: 500, width: 96, height: 104), CGRect(x: 190, y: 190, width: 96, height: 104),
-                CGRect(x: 350, y: 50, width: 96, height: 104), CGRect(x: 10, y: 310, width: 96, height: 104)].map { cursorDragArtAllowed($0, excluding: avoid) }
-        } else if let size = data["badgeCheck"] as? [Double], size.count == 2 {
-            let view = CursorPauseView(control, current: { true })
-            view.frame = CGRect(x: 0, y: 0, width: size[0], height: size[1])
-            view.hitOpaque = { [weak view] point in view.map { cursorBadgeHit(point, $0.bounds) } ?? false }
-            let badge = cursorBadgeRect(view.bounds)
-            output["badgeHit"] = view.hitTest(CGPoint(x: badge.midX, y: badge.midY)) === view
-            var hits = 0, samples = 0, seed: UInt64 = 1707
-            while samples < 200 {
-                seed = seed &* 6364136223846793005 &+ 1
-                let x = Double(seed % 100000) / 100000 * size[0]
-                seed = seed &* 6364136223846793005 &+ 1
-                let point = CGPoint(x: x, y: Double(seed % 100000) / 100000 * size[1])
-                if badge.contains(point) { continue }
-                samples += 1; if view.hitTest(point) != nil { hits += 1 }
-            }
-            output["outsideHits"] = hits; output["samples"] = samples; output["badgeSize"] = [badge.width, badge.height]
-        } else if data["hintTargetCheck"] as? Bool == true {
-            let point = CGPoint(x: 100, y: 200)
-            let bounds: [String: Any] = ["X": 0, "Y": 0, "Width": 500, "Height": 500]
-            let app: [String: Any] = [kCGWindowOwnerPID as String: 42, kCGWindowNumber as String: UInt32(77), kCGWindowLayer as String: 0, kCGWindowBounds as String: bounds]
-            var card = app; card[kCGWindowOwnerPID as String] = Int(getpid()); card[kCGWindowLayer as String] = NSWindow.Level.modalPanel.rawValue
-            var overlay = app; overlay[kCGWindowLayer as String] = 8
-            output["app"] = cursorHintTarget(at: point, snapshot: [app])
-            output["card"] = cursorHintTarget(at: point, snapshot: [card, app]) as Any? ?? NSNull()
-            output["desktop"] = cursorHintTarget(at: point, snapshot: []) as Any? ?? NSNull()
-            output["overlay"] = cursorHintTarget(at: point, snapshot: [overlay, app]) as Any? ?? NSNull()
-        } else if data["cardDropCheck"] as? Bool == true || data["hintDragCheck"] as? Bool == true || data["queuedDragCheck"] as? Bool == true {
-            // Construct unposted events. The source PID is changed in memory for a hardware positive control.
-            func event(_ type: CGEventType, pid: Int64 = 0) -> NSEvent {
-                clock += 0.01
-                let cg = CGEvent(keyboardEventSource: CGEventSource(stateID: .hidSystemState)!, virtualKey: 0, keyDown: true)!
-                cg.type = type; cg.timestamp = UInt64(clock * 1e9)
-                cg.setIntegerValueField(.eventSourceUnixProcessID, value: pid); cg.setIntegerValueField(.eventSourceUserData, value: 0)
-                return NSEvent(cgEvent: cg)!
-            }
-            if data["queuedDragCheck"] as? Bool == true {
-                let host = HandHost(); host.ownPause.now = { clock }; host.ownPause.nonce = { String(repeating: "a", count: 64) }; host.ownPause.schedule = { _, _ in }
-                var hints = 0, states: [Bool] = []
-                host.ownPause.send = { frame in if frame["hand"] as? String == "hint" { hints += 1 }; return true }
-                host.ownPause.changed = { _ in host.badgeDrag.settle() }
-                host.pauseVisibility.clear()
-                _ = host.badgeDrag.begin(event(.leftMouseDown), windowMatches: true)
-                let act = HandAct(seq: 1, kind: "click", pid: 42, windowId: 77, at: .zero, path: [], delay: 0, beats: 1)
-                let aim = RingEvent(seq: 2, state: "aim", pid: 42, windowId: 77, at: .zero, rect: nil, label: nil)
-                func queued() { host.receiveAct(act); host.receiveCursor(aim); states.append(host.badgeDrag.active) }
-                func ack() { if let request = host.ownPause.pending { host.ownPause.receive("ready", token: request.token, value: request.value); host.ownPause.receive("applied", token: request.token, value: request.value) } }
-                queued(); ack(); queued()
-                _ = host.badgeDrag.end(event(.leftMouseUp), windowMatches: true, target: ["pid": 42, "windowId": 77, "at": [100, 200]])
-                ack()
-                output["active"] = states; output["hints"] = hints; output["cleared"] = host.pauseVisibility.cleared
-                output["paused"] = host.ownPause.paused; output["windows"] = host.panel == nil && host.pauseOverlay.panel == nil ? 0 : 1
-            } else if data["cardDropCheck"] as? Bool == true {
-                var answers = 0
-                let synthetic = personActivation(event(.leftMouseUp, pid: 1234), windowMatches: true, now: clock, consent: true)
-                if synthetic { answers += 1 }
-                output["syntheticAccepted"] = synthetic
-                output["hardwareAccepted"] = personActivation(event(.leftMouseUp), windowMatches: true, now: clock, consent: true)
-                output["answers"] = answers
-            } else {
-                let pause = CursorPauseControl(); pause.now = { clock }; pause.nonce = { String(repeating: "a", count: 64) }; pause.schedule = { _, _ in }
-                pause.set(data["alreadyPaused"] as? Bool == true)
-                let drag = CursorBadgeDrag(pause); drag.epoch = { 100000 }
-                var timers: [(delay: Double, deadline: Double, task: () -> Void)] = [], cancelledTimers = 0, finishes = 0
-                drag.schedule = { delay, task in
-                    timers.append((delay, clock + delay, task)); return { cancelledTimers += 1 }
-                }
-                drag.finished = { finishes += 1 }
-                var states: [Bool] = [], hints: [[String: Any]] = [], pausedAtHint = false, appliedToken: String?
-                pause.changed = { value in states.append(value); drag.settle() }
-                pause.send = { frame in if frame["hand"] as? String == "hint" { hints.append(frame); pausedAtHint = pause.paused }; return true }
-                _ = drag.begin(event(.leftMouseDown), windowMatches: true)
-                func ack() {
-                    if let request = pause.pending { pause.receive("ready", token: request.token, value: request.value); pause.receive("applied", token: request.token, value: request.value) }
-                }
-                let failure = data["heldFailure"] as? String
-                appliedToken = pause.pending?.token
-                if failure != "expire" { ack() }
-                let target: [String: Any]? = data["desktop"] as? Bool == true ? nil : ["pid": 42, "windowId": 77, "at": [100, 200]]
-                if failure == "expire" { clock += 0.501; pause.expire() }
-                else if failure == "aborted", let token = appliedToken { pause.receive("aborted", token: token, value: true) }
-                else if data["abandon"] as? Bool == true {
-                    let deadline = timers[0].deadline
-                    clock = deadline - 0.001
-                    for timer in timers where timer.deadline <= clock { timer.task() }
-                    output["activeBeforeTimeout"] = drag.active
-                    output["timeoutSeconds"] = timers[0].delay
-                    clock = deadline
-                    for timer in timers where timer.deadline <= clock { timer.task() }
-                    output["activeAtTimeout"] = drag.active
-                    _ = drag.begin(event(.leftMouseDown), windowMatches: true)
-                    timers[0].task() // Even an already queued old callback cannot cancel the next drag.
-                    output["activeAfterOldTimer"] = drag.active
-                    drag.cancel()
-                } else {
-                    if data["badDrop"] as? Bool == true {
-                        let view = CursorPauseView(pause, current: { true }); view.drag = drag
-                        view.mouseUp(with: event(.leftMouseUp, pid: 1234))
-                    } else { _ = drag.end(event(.leftMouseUp), windowMatches: true, target: target) }
-                    ack()
-                }
-                output["states"] = states; output["hints"] = hints; output["pausedAtHint"] = pausedAtHint
-                output["active"] = drag.active; output["paused"] = pause.paused; output["failed"] = pause.failed
-                output["finishes"] = finishes; output["cancelledTimers"] = cancelledTimers
-            }
         } else if data["alphaCheck"] as? Bool == true {
             // Synthetic RGBA bytes, no graphics context or drawing.
             var pixels = [UInt8](repeating: 0, count: 16 * 2 * 4)
@@ -9820,181 +6228,12 @@ func cursorPauseDump() {
 // END CURSOR PAUSE PANEL
 
 final class HandHost: NSObject, NSApplicationDelegate {
-    var unknownAppHidden = false
-    // A routine mood cannot re-use an old app after an unlocated call hid the character.
-    // Existing producer authority still owns its terminal. An ordinary terminal may
-    // release protection without presenting that old app again.
-    func keepUnknownAppHidden(_ event: RingEvent) -> Bool {
-        if unknownAppHidden, !producer.active, event.state == "handback" || event.state == "done" && !event.ok {
-            perch.stage.completeTurn(state: event.state, ok: event.ok, now: perch.now)
-            return true
-        }
-        if event.area != nil && event.state == "thinking" || event.state == "aim" || handKinds.contains(event.state) {
-            unknownAppHidden = false
-        }
-        guard unknownAppHidden, !producer.active else { return false }
-        perch.stage.completeTurn(state: event.state, ok: event.ok, now: perch.now)
-        return true
-    }
-    var producer = StageProducerState()
-    var producerAck: (([String: Any]) -> Void)?
-    var readerFaulted: (() -> Void)?, readerFinished: (() -> Void)?
-    var ringEffects: (([(Double, RingEffect)]) -> Void)?
-    var ringEnvironmentProvider: (() -> RingEnvironment)?
-    func finishProducer(terminal: RingEvent? = nil) {
-        let event = terminal.flatMap { ev in ev.at.map { at in
-            PerchEvent(state: ev.state, pid: ev.pid, window: ev.windowId, at: at, ok: false, drop: nil, end: nil)
-        } }
-        perch.stage.completeTurn(state: terminal?.state ?? "handback", ok: false, now: perch.now, terminal: event)
-        perch.stage.producerOwner = nil
-        perch.stage.producerCollectionOnly = false
-        producer.finish()
-    }
-    func producerHide() {
-        perch.stage.producerCollectionOnly = true
-        perch.performStage(perch.stage.hide("producer-uncertain", immediate: true))
-        hide()
-    }
-    // The same parser, shared sequence predicate and main-queue entry serve stdin and the offline dump.
-    func receiveProducer(_ f: StageProducerFrame) {
-        // A completed identity cannot acquire ownership again, even before its ack reaches the client.
-        if producer.endedIdentities.contains(StageProducerIdentity(session: f.session, turn: f.turn)) {
-            guard handSequenceFresh(f.seq, after: producer.last) else { return }
-            producer.last = f.seq
-            if var event = f.target {
-                event.producer = producer.active ? StageProducerIdentity(session: f.session, turn: f.turn) : nil
-                let terminal = event.state == "handback" || event.state == "done" && !event.ok
-                if producer.active, !terminal, event.at != nil, !handKinds.contains(event.state), event.state != "aim" {
-                    // A foreign status target is ordinary protection, never this producer's art-only anchor.
-                    producer.failed = true; producerHide(); admitPausedStage(event, ordinary: true)
-                }
-                receiveCursor(event)
-            }
-            let ack: [String: Any] = ["hand": "stage-producer-ack", "nonce": f.nonce, "session": f.session, "turn": f.turn,
-                "seq": f.seq, "op": f.op, "accepted": f.op == "public"]
-            if let send = producerAck { send(ack) } else { writeStageProducerAck(ack) }
-            return
-        }
-        // Status-only traffic preserves the ring's anchor and narration. Begin/fault already hid the character.
-        if f.op != "public" || !producer.active { producerHide() }
-        var accepted = false
-        defer {
-            if !accepted {
-                producer.failed = true
-                if !producer.active {
-                    producer.session = f.session; producer.turn = f.turn
-                    perch.stage.producerOwner = producer.identity
-                }
-            }
-            let ack: [String: Any] = ["hand": "stage-producer-ack", "nonce": f.nonce, "session": f.session, "turn": f.turn,
-                "seq": f.seq, "op": f.op, "accepted": accepted]
-            if let send = producerAck { send(ack) }
-            else { writeStageProducerAck(ack) }
-        }
-        guard handSequenceFresh(f.seq, after: producer.last) else { return }
-        producer.last = f.seq
-        if f.op == "fault" { return }
-        if f.op == "public", var event = f.target {
-            guard producer.session == f.session, producer.turn == f.turn else { return }
-            event.producer = producer.identity
-            if event.state == "handback" || event.state == "done" && !event.ok { finishProducer(terminal: event) }
-            receiveCursor(event)
-            accepted = true; return
-        }
-        guard !producer.failed else { return }
-        if f.op == "begin" {
-            guard producer.turn == nil, producer.session == nil,
-                !producer.ended.contains(f.turn),
-                perch.stage.requiredReferences.values.allSatisfy({ $0.isEmpty }), perch.stage.turnTargets.isEmpty else { return }
-            producer.session = f.session; producer.turn = f.turn; producer.epoch = 0; producer.after = -1
-            perch.stage.producerOwner = producer.identity
-            producer.barrier = f.barrier
-            producer.prefix = nil; producer.observation = 0; producer.acquiredEnd = -1; producer.baselineLost = false
-            producer.baselines = [:]; producer.contents = [:]; producer.observations = [:]; producer.references = [:]; producer.attempts = []; accepted = true; return
-        }
-        guard producer.session == f.session, producer.turn == f.turn else { return }
-        if f.op == "end" {
-            finishProducer()
-            accepted = true; return
-        }
-        if f.op == "admit", let target = f.target, let prefix = f.prefix {
-            // Even a rejected ordinal/attempt remains protected until the attributed turn end.
-            admitPausedStage(target)
-            guard prefix.ordinal == (producer.prefix?.ordinal ?? 0) + 1, producer.references.count < 512,
-                !producer.attempts.contains(where: { $0.call == prefix.call && $0.action == prefix.action && $0.attempt == prefix.attempt }) else { return }
-            let key = StageWindowKey(pid: target.pid, window: target.windowId)
-            if producer.baselines[key] == nil { producer.baselineLost = true }
-            // Record through the production admission transaction, including coalesced and unmappable references.
-            guard perch.stage.requiredReferences[key, default: []].contains(where: { $0.seq == f.seq }), !perch.stage.targetCapacity else { return }
-            guard f.barrier >= producer.barrier else { return }
-            producer.barrier = f.barrier
-            producer.references[f.seq] = key; producer.after = f.seq; producer.prefix = prefix; producer.attempts.append(prefix)
-            accepted = true; return
-        }
-        guard f.after == producer.after, f.prefix == producer.prefix else { return }
-        if f.op == "invalidate" {
-            guard f.epoch == producer.epoch + 1, f.barrier >= producer.barrier else { return }
-            producer.epoch = f.epoch
-            producer.barrier = f.barrier
-            for key in Set(producer.references.values) { perch.stage.invalidateGeometry(key) }
-            accepted = true; return
-        }
-        guard f.op == "certificate", let proof = f.geometry, f.epoch == producer.epoch,
-            f.observation > producer.observation, f.acquired[0] >= producer.acquiredEnd, f.acquired[0] >= producer.barrier,
-            !producer.baselineLost, !perch.stage.targetCapacity, !perch.stage.windowBook.discontinuous.contains(proof.key),
-            !perch.stage.unmappableDrags.contains(proof.key) else { return }
-        let ev = PerchEvent(state: "thinking", pid: proof.key.pid, window: proof.key.window,
-            at: CGPoint(x: proof.bounds.midX, y: proof.bounds.midY), ok: false, drop: nil, end: nil, windowRect: proof.bounds)
-        let previous = perch.stage.event; perch.stage.event = ev
-        let world = admissionWorld.map { $0(ev) } ?? perch.stageEnvironment()
-        perch.stage.event = previous
-        guard let world = world, world.windows?[proof.key] == proof.bounds else { return }
-        perch.stage.bindWindows(world)
-        guard !perch.stage.windowBook.discontinuous.contains(proof.key) else { return }
-        if proof.mode == "baseline" {
-            guard producer.after == -1, producer.references.isEmpty, perch.stage.turnTargets.isEmpty,
-                producer.baselines[proof.key] == nil, producer.baselines.count < 128, proof.references.isEmpty else { return }
-            producer.baselines[proof.key] = proof.incarnation; producer.contents[proof.key] = proof.content
-        } else {
-            guard producer.baselines[proof.key] == proof.incarnation, let content = producer.contents[proof.key],
-                proof.mode == "move" ? proof.content == content : proof.content >= content else { return }
-            let expected = Set(producer.references.filter { $0.value == proof.key }.keys)
-            let retained = Set(perch.stage.requiredReferences[proof.key, default: []].map { $0.seq })
-            guard Set(proof.references.map { $0.seq }) == expected, expected == retained,
-                proof.references.allSatisfy({ $0.departed || $0.rects.allSatisfy({ $0.intersects(proof.bounds) }) }) else { return }
-        }
-        // Collection only. GP4 must establish presentation ordering before any remap can restore visibility.
-        producer.observations[proof.key] = proof
-        producer.contents[proof.key] = proof.content
-        producer.observation = f.observation; producer.acquiredEnd = f.acquired[1]; accepted = true
-    }
-
-    private lazy var glideStop = GlideStopControl(send: writeGlideStop)
     let pauseOverlay = CursorPauseOverlay(), ownPause = CursorPauseControl()
-    lazy var badgeDrag: CursorBadgeDrag = {
-        let drag = CursorBadgeDrag(pauseControl)
-        drag.finished = { [weak self] in
-            guard let self = self else { return }
-            self.endBadgeArt()
-            if self.pauseControl.paused && !self.captureHeld { self.pauseChanged(true) }
-        }
-        return drag
-    }()
-    var badgeArt: HandPanel?
     var pauseVisibility = CursorPauseVisibility()
     var pauseControl: CursorPauseControl { consent?.cursorPause ?? ownPause }
     var pauseTarget: RingEvent?
-    // Dependency injection keeps metadata-only host entry points usable without WindowServer.
-    var admissionWorld: ((PerchEvent) -> StageWorld?)?
     func pauseChanged(_ paused: Bool) {
         let target = pauseTarget
-        if badgeDrag.active {
-            badgeDrag.settle()
-            if badgeDrag.active { consent?.rebuildMenu(); return }
-        }
-        if perch.stageActive && !pauseControl.failed {
-            pauseStage(paused); consent?.rebuildMenu(); return
-        }
         hide()
         if cursorStyle != "glove", paused || pauseControl.failed, let target = target {
             let event = RingEvent(seq: target.seq, state: paused ? "paused" : "error", pid: target.pid, windowId: target.windowId, at: target.at, rect: nil, label: nil)
@@ -10004,8 +6243,6 @@ final class HandHost: NSObject, NSApplicationDelegate {
     }
     var settingsMenu = false
     var cursorStyle = "glove" { didSet { if cursorStyle != "sprite" { spriteLoader.cancel(); ringRuntime.character = nil; perch.configure(replace: true) } } }
-    let honestMood = HonestMoodCells()
-    lazy var edgeChips = EdgeChipHost(host: self)
     let spriteLoader = SpriteLoader()
     lazy var perch = PerchHost(host: self)   // perch mode and lines (BEGIN PERCH)
     var ringRuntime = RingRuntime(theme: .seamPlus, seed: 1)
@@ -10042,7 +6279,6 @@ final class HandHost: NSObject, NSApplicationDelegate {
     }
     func applicationDidFinishLaunching(_ notification: Notification) {
         if let demo = demo { play(demo); return }
-        if cursorStyle == "sprite" { perch.stageCall.prefetch(CACurrentMediaTime()) }
         consent?.applicationDidFinishLaunching(notification)
         pauseControl.changed = { [weak self] paused in self?.pauseChanged(paused) }
         // Only suppresses artwork. No notification can answer a consent card or change a setting.
@@ -10056,9 +6292,8 @@ final class HandHost: NSObject, NSApplicationDelegate {
                 _ = self.captureHeld
                 guard self.captureHolds.count < 32 || self.captureHolds[token] != nil else { return }
                 self.captureHolds[token] = Date().addingTimeInterval(30); self.hide()
-                self.edgeChips.refresh()
                 DistributedNotificationCenter.default().postNotificationName(Notification.Name(name + ".ack"), object: token, userInfo: nil, deliverImmediately: true)
-            } else if parts[0] == "end" { self.captureHolds.removeValue(forKey: token); self.edgeChips.refresh() }
+            } else if parts[0] == "end" { self.captureHolds.removeValue(forKey: token) }
         }
         DispatchQueue.global(qos: .utility).async { self.read() }
     }
@@ -10069,15 +6304,13 @@ final class HandHost: NSObject, NSApplicationDelegate {
         var buffer = Data(), last = -1, faulted = false
         func fault() {
             faulted = true; buffer.removeAll()
-            if let failed = readerFaulted { DispatchQueue.main.async(execute: failed); return }
-            DispatchQueue.main.async { self.glideStop.close(); self.consent?.retireControl(); writeHandControlGone(); if self.consent?.consentOpen == true { self.hide(); self.consent?.handGone() } else { exit(65) } }
+            DispatchQueue.main.async { self.consent?.retireControl(); writeHandControlGone(); if self.consent?.consentOpen == true { self.hide(); self.consent?.handGone() } else { exit(65) } }
         }
         while true {
             let chunk = FileHandle.standardInput.availableData
             if chunk.isEmpty {
-                if let finished = readerFinished { DispatchQueue.main.async(execute: finished); return }
                 let retired = faulted
-                DispatchQueue.main.async { self.glideStop.close(); if !retired && self.consent?.consentOpen == true { self.hide(); self.consent?.handGone() } else { NSApp.terminate(nil) } }
+                DispatchQueue.main.async { if !retired && self.consent?.consentOpen == true { self.hide(); self.consent?.handGone() } else { NSApp.terminate(nil) } }
                 return
             }
             if faulted { continue }
@@ -10086,35 +6319,11 @@ final class HandHost: NSObject, NSApplicationDelegate {
             lines: while !faulted, let end = buffer.firstIndex(of: 10) {
                 let line = buffer.prefix(upTo: end)
                 buffer.removeSubrange(...end)
-                if line.count <= 8192, let data = try? JSONSerialization.jsonObject(with: line) as? [String: Any], data["hand"] as? String == "glide-stop" {
-                    guard !settingsMenu, let frame = GlideStopFrame.parse(data), nonceBook.admit("hand", frame.nonce) else { fault(); continue lines }
-                    DispatchQueue.main.async {
-                        if channelValidationOnly { writeGlideStop(["hand": "glide-stop", "nonce": frame.nonce, "token": frame.token, "phase": "unavailable"]) }
-                        else { self.glideStop.receive(frame) }
-                    }
-                    continue
-                }
-                if line.count < 65536, let data = try? JSONSerialization.jsonObject(with: line) as? [String: Any], data["hand"] as? String == "stage-producer" {
-                    guard !settingsMenu, let frame = StageProducerFrame.parse(data, bytes: line.count + 1), nonceBook.admit("hand", frame.nonce),
-                        handSequenceFresh(frame.seq, after: last) else { fault(); continue lines }
-                    last = frame.seq
-                    DispatchQueue.main.async { self.receiveProducer(frame) }
-                    continue
-                }
-                if line.count <= 65536, let data = try? JSONSerialization.jsonObject(with: line) as? [String: Any], data["hand"] as? String == "stage-geometry" {
-                    guard !settingsMenu, let (nonce, seq, proof) = stageGeometryFrame(data), nonceBook.admit("hand", nonce), handSequenceFresh(seq, after: last) else { fault(); continue lines }
-                    last = seq
-                    DispatchQueue.main.async { self.receiveGeometry(proof) }
-                    continue
-                }
                 guard line.count <= 65536, let data = try? JSONSerialization.jsonObject(with: line) as? [String: Any],
                     line.count <= 8192 || data["hand"] as? String == "character" && line.count <= 32768 || data["hand"] as? String == "picker",
                     let frame = handFrame(data) else { fault(); continue lines }
                 if settingsMenu && !["menu", "picker", "hide"].contains(data["hand"] as? String ?? "") { fault(); continue lines }
                 switch frame {
-                case let .edge(nonce, message):
-                    guard nonceBook.admit("hand", nonce) else { fault(); continue lines }
-                    DispatchQueue.main.async { self.edgeChips.receive(message) }
                 case let .pause(nonce, phase, token, value):
                     guard nonceBook.admit("hand", nonce) else { fault(); continue lines }
                     DispatchQueue.main.async { self.pauseControl.receive(phase, token: token, value: value) }
@@ -10122,29 +6331,14 @@ final class HandHost: NSObject, NSApplicationDelegate {
                     guard nonceBook.admit("hand", nonce) else { fault(); continue lines }
                     DispatchQueue.main.async {
                         self.pauseVisibility.clear()
-                        if data["keepStage"] as? Bool == true && self.perch.stageActive {
-                            // The local helpers exclude our PID. Keep the safely seated stage panel, while
-                            // clearing the pointer marker and every input-taking pause control as before.
-                            self.pending.values.forEach { $0.cancel() }; self.pending.removeAll()
-                            self.ringWake?.cancel(); self.ringWake = nil; _ = self.ringRuntime.hide(0)
-                            self.fading?.cancel(); self.release(); self.pauseOverlay.hide(); self.edgeChips.hide()
-                        } else { self.hide() }
-                        // Earlier action frames have run on this queue. Commit their panel placement
-                        // before releasing the existing bounded local-input wait.
-                        if data["placed"] as? Bool == true {
-                            _ = self.placeLocalTarget((data["placementSeq"] as? NSNumber)?.intValue ?? -1)
-                            CATransaction.flush()
-                        }
-                        if let bytes = try? JSONSerialization.data(withJSONObject: ["hand": data["placed"] as? Bool == true ? "placed-ready" : "clear-ready", "nonce": nonce, "token": token]) {
+                        self.hide()
+                        if let bytes = try? JSONSerialization.data(withJSONObject: ["hand": "clear-ready", "nonce": nonce, "token": token]) {
                             FileHandle.standardOutput.write(bytes + Data([10]))
                         }
                     }
                 case let .activity(nonce):
                     guard nonceBook.admit("hand", nonce) else { fault(); continue lines }
                     DispatchQueue.main.async { self.consent?.cursorControlSession = true; self.consent?.rebuildMenu() }
-                case let .call(nonce):
-                    guard nonceBook.admit("hand", nonce) else { fault(); continue lines }
-                    DispatchQueue.main.async { if self.cursorStyle == "sprite" { self.perch.stageCall.prefetch(CACurrentMediaTime()) } }
                 case let .picker(nonce, message):
                     guard nonceBook.admit("hand", nonce), message.op != "input-check" else { fault(); continue lines }
                     DispatchQueue.main.async {
@@ -10165,10 +6359,9 @@ final class HandHost: NSObject, NSApplicationDelegate {
                         narrationJSON(["hand": "narration-check", "nonce": nonce, "token": token, "secure": IsSecureEventInputEnabled()])
                     }
                 case let .character(nonce, value):
-                    guard nonceBook.admit("hand", nonce), handSequenceFresh(value.seq, after: last) else { fault(); continue lines }
+                    guard nonceBook.admit("hand", nonce), value.seq > last else { fault(); continue lines }
                     last = value.seq
                     DispatchQueue.main.async {
-                        if self.producer.active { self.producer.failed = true; self.producerHide(); return }
                         self.ringRoot?.sublayers?.filter { $0.name == "sprite" }.forEach { $0.removeFromSuperlayer() }
                         self.ringRuntime.character = nil; self.perch.configure(replace: true)
                         guard self.cursorStyle == "sprite" else { self.spriteLoader.cancel(); return }
@@ -10177,29 +6370,32 @@ final class HandHost: NSObject, NSApplicationDelegate {
                         self.spriteLoader.start(value) { generation, result in
                             DispatchQueue.main.async {
                                 guard self.spriteLoader.isCurrent(generation), self.cursorStyle == "sprite" else { return }
-                                if self.producer.active { self.producer.failed = true; self.producerHide(); return }
                                 self.perch.configure(character: result.character, replace: true); writeCharacterResult(value.id, result)
                             }
                         }
                     }
                 case let .hide(nonce):
                     guard nonceBook.admit("hand", nonce) else { fault(); continue lines }
-                    DispatchQueue.main.async {
-                        self.hide()
-                        if data["reason"] as? String == "unknown-app" {
-                            self.unknownAppHidden = true
-                            _ = self.perch.stage.hide("unknown-app", immediate: true, at: self.perch.now)
-                            self.perch.lastHideReason = "unknown-app"
-                        }
-                    }
+                    DispatchQueue.main.async { self.hide() }
                 case let .act(nonce, act):
-                    guard nonceBook.admit("hand", nonce), handSequenceFresh(act.seq, after: last) else { fault(); continue lines }
+                    guard nonceBook.admit("hand", nonce), act.seq > last else { fault(); continue lines }
                     last = act.seq
-                    DispatchQueue.main.async { self.receiveAct(act) }
+                    DispatchQueue.main.async {
+                        self.pauseOverlay.hide()
+                        guard !self.pauseControl.paused else { return }
+                         self.pauseTarget = ringEvent(act)
+                        if self.cursorStyle == "glove" { self.schedule(act) } else { self.ringFrame(ringEvent(act), delay: act.delay) }
+                    }
                 case let .aim(nonce, event), let .status(nonce, event):
-                    guard nonceBook.admit("hand", nonce), handSequenceFresh(event.seq, after: last) else { fault(); continue lines }
+                    guard nonceBook.admit("hand", nonce), event.seq > last else { fault(); continue lines }
                     last = event.seq
-                    DispatchQueue.main.async { self.receiveCursor(event) }
+                    DispatchQueue.main.async {
+                        self.pauseVisibility.status(event.state)
+                        if event.state == "aim" { self.pauseOverlay.hide() }
+                        guard event.state == "paused" ? self.pauseControl.paused : !self.pauseControl.paused else { return }
+                        if event.at != nil { self.pauseTarget = event }
+                        if self.cursorStyle != "glove" { self.ringFrame(event, delay: 0) }
+                    }
                 case let .menu(nonce, enabled, capture, version, permissions, usage):
                     guard nonceBook.admit("hand", nonce) else { fault(); continue lines }
                     DispatchQueue.main.async {
@@ -10210,9 +6406,6 @@ final class HandHost: NSObject, NSApplicationDelegate {
                         self.capture = capture
                         if let panel = self.panel { panel.sharingType = handCaptureModes[capture] ?? NSWindow.SharingType.none }
                         self.pauseOverlay.panel?.sharingType = handCaptureModes[capture] ?? NSWindow.SharingType.none
-                        // The character panel takes the new mode now, not at its next install (a parked stage character
-                        // may not reinstall for a while, and hidden must apply at once).
-                        self.perch.panel?.sharingType = handCaptureModes[capture] ?? NSWindow.SharingType.none
                         if !enabled { self.hide() }
                         self.consent?.handState(enabled: enabled, version: version, permissions: permissions, usage: usage)
                     }
@@ -10233,20 +6426,10 @@ final class HandHost: NSObject, NSApplicationDelegate {
         DispatchQueue.main.asyncAfter(deadline: .now() + act.delay, execute: item)
     }
     func hide() {
-        badgeDrag.cancel()
-        // Cancelling a drag can refresh chips while restoring the paused pose.
-        edgeChips.hide()
         narrator.stop(); narrationWatch?.cancel(); narrationWatch = nil
         pending.values.forEach { $0.cancel() }; pending.removeAll()
         ringWake?.cancel(); ringWake = nil; _ = ringRuntime.hide(0)
         fading?.cancel(); release(); perch.takeDown()
-    }
-    func pauseStage(_ paused: Bool) {
-        narrator.stop(); narrationWatch?.cancel(); narrationWatch = nil
-        pending.values.forEach { $0.cancel() }; pending.removeAll()
-        ringWake?.cancel(); ringWake = nil; _ = ringRuntime.hide(0)
-        fading?.cancel(); release()
-        perch.performStage(perch.stage.setPaused(paused, now: perch.now, world: perch.stageEnvironment(), reduced: NSWorkspace.shared.accessibilityDisplayShouldReduceMotion))
     }
     // A frame during the hold cancels the fade and glides on from where the hand is.
     func draw(_ act: HandAct, clip: CGRect) {
@@ -10281,23 +6464,17 @@ final class HandHost: NSObject, NSApplicationDelegate {
     // The ring: the runtime decides, this adapter installs plans on one clipped panel with a flipped root, so all geometry
     // keeps the wire's top-left coordinates. One one-shot wake-up serves the runtime's earliest pending act or timer.
     var ringEnvironment: RingEnvironment {
-        if let environment = ringEnvironmentProvider { return environment() }
-        return RingEnvironment(bounds: { pid, window in handWindowBounds(window, pid: pid) },
+        RingEnvironment(bounds: { pid, window in handWindowBounds(window, pid: pid) },
             reduced: { NSWorkspace.shared.accessibilityDisplayShouldReduceMotion }, secure: { IsSecureEventInputEnabled() })
     }
     func ringFrame(_ event: RingEvent, delay: Double) {
-        if producer.active && (handKinds.contains(event.state) || event.state == "aim") { producer.failed = true; producerHide(); admitPausedStage(event); return }
         if channelValidationOnly { return }
-        // Turn completion releases geometry even when no ring can draw (closed window, capture or pause).
-        if !producer.active { perch.stage.completeTurn(state: event.state, ok: event.ok, now: perch.now) }
-        if pauseControl.paused && event.state != "paused" && !producer.active { admitPausedStage(event); return }
-        if badgeDrag.active || captureHeld { admitPausedStage(event); return }
+        guard !captureHeld, !pauseControl.paused || event.state == "paused" else { return }
         ringRuntime.dissolveAt = perch.dissolve(event)
         ringPerform(ringRuntime.receive(event, delay: delay, now: CACurrentMediaTime(), ringEnvironment))
         ringWakeUp()
     }
     func ringWakeUp() {
-        if ringEffects != nil { return }
         ringWake?.cancel(); ringWake = nil
         guard let next = ringRuntime.next else { return }
         let item = DispatchWorkItem { [weak self] in
@@ -10310,14 +6487,10 @@ final class HandHost: NSObject, NSApplicationDelegate {
         DispatchQueue.main.asyncAfter(deadline: .now() + max(0, next - CACurrentMediaTime()), execute: item)
     }
     func ringPerform(_ effects: [(Double, RingEffect)]) {
-        if let deliver = ringEffects { deliver(effects); return }
         for (_, effect) in effects {
             switch effect {
             case let .draw(plan, frame):
                 if captureHeld { hide(); return }
-                honestMood.receive(plan, now: CACurrentMediaTime())
-                edgeChips.aim = plan.rect ?? stagePointRect(plan.at, 48)
-                edgeChips.refresh()
                 installRing(plan, frame: frame); perch.ringDrew(plan)
                 narrator.speakingChanged = { [weak self] active in self?.voiceBars(active) }
                 narrator.offer(plan.bubble?.spoken)
@@ -10364,11 +6537,6 @@ final class HandHost: NSObject, NSApplicationDelegate {
             }
         }
         CATransaction.commit()
-    }
-    func hideRingCharacter() {
-        guard ringRoot?.sublayers?.contains(where: { $0.name == "sprite" }) == true else { return }
-        ringRoot?.sublayers?.filter { ["sprite", "narration", "oldNarration", "narrationTether"].contains($0.name ?? "") || ($0.name ?? "").hasPrefix("honest-") }.forEach { $0.removeFromSuperlayer() }
-        perch.closeBubble()
     }
     func installRing(_ plan: RingPlan, frame: CGRect) {
         pauseOverlay.hide()
@@ -10497,157 +6665,17 @@ final class HandHost: NSObject, NSApplicationDelegate {
                 layer.add(group, forKey: "ring")
             }
         }
-        if let sprite = plan.sprite, !perch.legacyCallBlocked() {
-            installSprite(sprite, ring: plan, root: root, frame: frame, begin: begin)
-            if let pose = sprite.poses.last {
-                let cell = sprite.character.frame.cell
-                let box = CGRect(origin: sprite.origin(plan.at, pose.entry), size: CGSize(width: cell.width * pose.entry.scale, height: cell.height * pose.entry.scale))
-                honestMood.install(in: root, box: box.offsetBy(dx: -frame.minX, dy: -frame.minY), reduced: sprite.reduced)
-            }
-        }
+        if let sprite = plan.sprite { installSprite(sprite, ring: plan, root: root, frame: frame, begin: begin) }
         CATransaction.commit()
         if !panel.isVisible { panel.orderFrontRegardless() }
         guard let pid = ringRuntime.session.pid, let window = ringRuntime.session.window,
             let clip = ringEnvironment.bounds(pid, window) else { return }
         // Wait until the moving art parks. A static hit box must never sit over a moving target or a drag route.
         let hit = pauseVisibility.placement(plan, clip: clip, sprite: cursorStyle == "sprite")
-        pauseOverlay.show(hit.rect, sprite: hit.sprite, after: hit.after, capture: capture, control: pauseControl, mask: CursorPauseMask.make(plan),
-            drag: cursorStyle == "sprite" ? badgeDrag : nil, began: { [weak self] in self?.beginBadgeArt() }, moved: { [weak self] in self?.moveBadgeArt($0) }, current: { [weak self] in
+        pauseOverlay.show(hit.rect, sprite: hit.sprite, after: hit.after, capture: capture, control: pauseControl, mask: CursorPauseMask.make(plan), current: { [weak self] in
             self?.pauseVisibility.cleared == false && self?.captureHeld == false && cursorPauseCurrent(clip, handWindowBounds(window, pid: pid))
         })
     }
-
-    func showCharacterBadge(_ rect: CGRect?, after delay: Double, pid: Int32, window: UInt32, current: @escaping () -> Bool) {
-        guard !badgeDrag.active, !captureHeld, !pauseVisibility.cleared, let clip = handWindowBounds(window, pid: pid) else { return }
-        pauseOverlay.show(rect, sprite: true, after: delay, capture: capture, control: pauseControl, drag: badgeDrag, owner: perch.panel,
-            began: { [weak self] in self?.beginBadgeArt() }, moved: { [weak self] in self?.moveBadgeArt($0) }, current: { [weak self] in
-                let expected = self?.perch.stageActive == true ? self?.perch.stage.seat?.world.base.window : self?.perch.runtime.seat?.frame
-                return self?.captureHeld == false && self?.pauseVisibility.cleared == false && current() && cursorPauseCurrent(expected ?? clip, handWindowBounds(window, pid: pid))
-            })
-    }
-    func receiveGeometry(_ proof: StageGeometryObservation) {
-        // The old unscoped certificate is available to offline replay only.
-        producer.failed = true; producerHide()
-    }
-    func admitPausedStage(_ incoming: RingEvent, ordinary: Bool = false) {
-        guard ordinary || !producer.active || handKinds.contains(incoming.state) || incoming.state == "aim" else { return }
-        guard perch.stage.options.enabled, let at = incoming.at,
-            !(incoming.state == "handback" || incoming.state == "done" && !incoming.ok) else { return }
-        let ev = PerchEvent(state: incoming.state, pid: incoming.pid, window: incoming.windowId, at: at, ok: incoming.ok,
-            drop: nil, end: incoming.state == "drag" ? incoming.path.first : nil, windowRect: incoming.windowRect)
-        let previous = perch.stage.event
-        perch.stage.event = ev
-        let world = admissionWorld.map { $0(ev) } ?? perch.stageEnvironment()
-        perch.stage.event = previous ?? ev
-        // Protection changes atomically. This admission path never installs a drawing or a ring timer.
-        perch.performStage(perch.stage.admitPaused(ev, seq: incoming.seq, rect: incoming.rect, now: perch.now, world: world))
-    }
-    func placeLocalTarget(_ sequence: Int) -> Bool {
-        guard perch.stageActive, !producer.active, !pauseControl.paused, !captureHeld, !badgeDrag.active,
-            let incoming = pauseTarget, incoming.seq == sequence, let at = incoming.at,
-            ["drag", "aim"].contains(incoming.state) else { hide(); return false }
-        // Ring artwork may still be queued behind an older flourish. Admission and seating
-        // use the resolved helper points immediately, before the local input is released.
-        let ev = PerchEvent(state: incoming.state, pid: incoming.pid, window: incoming.windowId,
-            at: incoming.state == "drag" ? incoming.path.last ?? at : at, ok: false, drop: nil,
-            end: incoming.state == "drag" ? at : nil, windowRect: incoming.windowRect)
-        let previous = perch.stage.event
-        perch.stage.event = ev
-        let world = admissionWorld.map { $0(ev) } ?? perch.stageEnvironment()
-        perch.stage.event = previous
-        perch.performStage(perch.stage.receive(ev, seq: sequence, rect: incoming.rect, now: perch.now,
-            world: world, reduced: NSWorkspace.shared.accessibilityDisplayShouldReduceMotion))
-        return perch.stage.shown
-    }
-    func receiveAct(_ act: HandAct) {
-        _ = keepUnknownAppHidden(ringEvent(act))
-        if producer.active { producer.failed = true; producerHide(); admitPausedStage(ringEvent(act)); return }
-        if pauseControl.paused { admitPausedStage(ringEvent(act)); return }
-        if badgeDrag.active || captureHeld { admitPausedStage(ringEvent(act)); return }
-        pauseOverlay.hide(); pauseTarget = ringEvent(act)
-        if cursorStyle == "glove" { schedule(act) } else { ringFrame(ringEvent(act), delay: act.delay) }
-    }
-    func receiveCursor(_ event: RingEvent) {
-        pauseVisibility.status(event.state)
-        if keepUnknownAppHidden(event) { return }
-        if event.area != nil, perch.stageActive {
-            if producer.active { producer.failed = true; producerHide(); return }
-            let snapshot = CGWindowListCopyWindowInfo([.optionOnScreenOnly, .excludeDesktopElements], kCGNullWindowID) as? [[String: Any]] ?? []
-            let ev: PerchEvent
-            if event.wideEpoch != nil {
-                let pids = event.pid > 0 ? Set([event.pid]) : stageWidePids(Set(event.wideName.map { [$0] } ?? []), snapshot: snapshot,
-                    bundle: { NSRunningApplication(processIdentifier: $0)?.bundleIdentifier })
-                let windows = stageWindows(snapshot, areaApps: pids)
-                guard let admitted = perch.stage.beginWide(event, windows: windows, pids: pids) else {
-                    if perch.stage.targetCapacity { perch.performStage(perch.stage.hide("target-capacity", immediate: true, at: perch.now)) }
-                    return
-                }
-                ev = admitted
-            } else { ev = stageAreaEvent(event, snapshot: snapshot) }
-            perch.stage.event = ev; perch.stage.held = captureHeld; perch.stage.paused = pauseControl.paused
-            perch.performStage(perch.stage.receive(ev, seq: event.seq, rect: nil, now: perch.now,
-                world: perch.stageEnvironment(), reduced: NSWorkspace.shared.accessibilityDisplayShouldReduceMotion))
-            return
-        }
-        if event.state == "aim" { pauseOverlay.hide() }
-        let terminal = event.state == "handback" || event.state == "done" && !event.ok
-        if terminal, let identity = event.producer, identity != producer.identity {
-            ringFrame(event, delay: 0); return
-        }
-        if producer.active && (event.state == "aim" || event.state == "handback" || event.state == "done" && !event.ok) {
-            producer.failed = true; producerHide(); admitPausedStage(event); return
-        }
-        if !producer.active { perch.stage.completeTurn(state: event.state, ok: event.ok, now: perch.now) }
-        if pauseControl.paused && event.state != "paused" && !producer.active { admitPausedStage(event); return }
-        if badgeDrag.active || captureHeld { admitPausedStage(event); return }
-        guard event.state != "paused" || pauseControl.paused else { return }
-        if event.at != nil { pauseTarget = event }
-        if cursorStyle != "glove" { ringFrame(event, delay: 0) }
-    }
-    // Drag art reuses a decoded, box-free paused cell. No capture, decode, timer or per-frame animation.
-    func beginBadgeArt() {
-        narrator.stop(); narrationWatch?.cancel(); narrationWatch = nil
-        pending.values.forEach { $0.cancel() }; pending.removeAll()
-        ringWake?.cancel(); ringWake = nil; fading?.cancel(); fading = nil
-        perch.wake?.cancel(); perch.wake = nil; perch.pointerWake?.cancel(); perch.pointerWake = nil
-        panel?.orderOut(nil); perch.panel?.orderOut(nil); perch.closeBubble()
-        guard !captureHeld, let character = perch.loaded ?? ringRuntime.character,
-            let entry = character.frame.table["paused"] ?? character.frame.table["idle"], let image = character.images[entry.sheet] else { return }
-        let cell = character.frame.cell
-        var height: CGFloat = cell.height * entry.scale
-        if let draw = perch.stage.draw { height = draw.metrics.size.height }
-        else if let metrics = perch.runtime.metrics { height = metrics.size.height }
-        let scale = height / cell.height, size = CGSize(width: cell.width * scale, height: height)
-        let panel = makeHandPanel(capture: "hidden"); badgeArt = panel
-        panel.sharingType = .none
-        panel.setFrame(appKitRect(CGRect(origin: .zero, size: size)), display: false)
-        let layer = CALayer(); layer.frame = CGRect(origin: .zero, size: size); layer.contents = image
-        layer.contentsRect = PerchPlan.rect(entry, entry.columns.first ?? 0, cell: cell)
-        layer.contentsGravity = .resize; layer.magnificationFilter = .nearest
-        panel.contentView?.layer?.isGeometryFlipped = true; panel.contentView?.layer?.addSublayer(layer)
-    }
-    func moveBadgeArt(_ point: CGPoint) {
-        guard badgeDrag.active, !captureHeld, let panel = badgeArt else { return }
-        let rect = CGRect(x: point.x - panel.frame.width / 2, y: point.y + 8, width: panel.frame.width, height: panel.frame.height)
-        guard let snapshot = CGWindowListCopyWindowInfo([.optionOnScreenOnly, .excludeDesktopElements], kCGNullWindowID) as? [[String: Any]] else { panel.orderOut(nil); return }
-        var exclusions: [CGRect] = []
-        let person = NSWorkspace.shared.frontmostApplication?.processIdentifier
-        var foundPerson = false
-        for row in snapshot {
-            guard let raw = row[kCGWindowBounds as String] as? [String: Any], let box = CGRect(dictionaryRepresentation: raw as CFDictionary) else { continue }
-            let pid = row[kCGWindowOwnerPID as String] as? Int32, level = row[kCGWindowLayer as String] as? Int
-            if !foundPerson, pid == person, level == 0 { exclusions.append(box); foundPerson = true }
-            if pid == getpid(), level == NSWindow.Level.modalPanel.rawValue { exclusions.append(box) }
-        }
-        if let target = pauseTarget {
-            if let at = target.at { exclusions.append(stagePointRect(at, 48)) }
-            if let box = target.rect { exclusions.append(box.insetBy(dx: -48, dy: -48)) }
-        }
-        guard cursorDragArtAllowed(rect, excluding: exclusions) else { panel.orderOut(nil); return }
-        panel.setFrame(appKitRect(rect), display: false)
-        if !panel.isVisible { panel.orderFrontRegardless() }
-    }
-    func endBadgeArt() { badgeArt?.orderOut(nil); badgeArt?.close(); badgeArt = nil }
 
     // Every animation of a plan on the glove and the dabs, which run the position track 50 ms behind (the trail).
     func apply(_ plan: HandPlan, model: (CGPoint, Double, HandState)) {
@@ -10830,456 +6858,6 @@ func handDump(capture: String) -> [String: Any] {
 }
 // END HAND DUMP
 
-// BEGIN STAGE DUMP
-extension StageDraw {
-    func json(_ cell: CGSize, time: Double) -> [String: Any] {
-        var out = pose.json(art?.cell ?? cell)
-        let panel = stagePanelBounds(pose, metrics)
-        out.merge(["effect": "stage", "time": time, "seq": seq, "height": seat.height, "rung": seat.rung, "fallback": fallback,
-            "box": [seat.box.minX, seat.box.minY, seat.box.width, seat.box.height], "capture": panelPolicy.captureName, "hitAreas": panelPolicy.hitAreas, "dodgeMs": dodgeMs,
-            "decisionReason": decisionReason as Any? ?? NSNull(),
-            "legSpread": [metrics.legs.left, metrics.legs.right], "metricAnchor": [metrics.anchor.x, metrics.anchor.y],
-            "metricSize": [metrics.size.width, metrics.size.height],
-            "seat": ["kind": seat.kind, "window": seat.window], "seatLine": seatLine,
-            "artSource": art?.source as Any? ?? NSNull(), "artCell": [art?.cell.width ?? cell.width, art?.cell.height ?? cell.height], "panel": [panel.minX, panel.minY, panel.width, panel.height]] as [String: Any]) { $1 }
-        return out
-    }
-}
-// BEGIN STAGE PANEL RECORDER
-// A window-free substitute for an installed panel. Only the production release
-// calls orderOut/close; the recorder reads the same lifetime as the real host.
-final class StageDumpPanel: StagePanelWindow {
-    private(set) var isVisible = true
-    func orderOut(_ sender: Any?) { isVisible = false }
-    func close() { isVisible = false }
-}
-func stageHideRow<Window>(_ lifetime: StagePanelLifetime<Window>, reason: String, duration: Double, time: Double) -> [String: Any] {
-    ["effect": "stage-hide", "reason": reason, "duration": duration,
-        "panelOnScreen": lifetime.panelOnScreen, "time": time, "animations": 0]
-}
-// END STAGE PANEL RECORDER
-// Fixture metadata is separate from the nonce-bound hand protocol. No application, panel or layer exists.
-// dumpLoadArt optionally exercises the sandboxed strip loader, with no drawing.
-// dumpWorld: windows [{id,pid,frame,onScreen?,minimized?,fullScreen?}], displays [{frame,visible}], person (rect or null),
-// pointer, inputAge, pointerAway, cards, missing? (true: no world at all, as when the window list can't be read; a null
-// person is a windowless front app, which still seats). dumpActivity: locked/sleeping/call. dumpStageArt enables
-// geometry ONLY, not art.
-func stageDump(reduced: Bool, throughRing: Bool = false) {
-    var ring = RingRuntime(theme: .seamPlus, seed: 1)
-    struct Window { var id: UInt32, pid: Int32, rect: CGRect, visible: Bool, full: Bool; var owner: String = "" }
-    var runtime = StageRuntime(), loadedArt: SpriteCharacter?, clock = 0.0, bound: String?, last = -1, buffer = Data()
-    let panelLifetime = StagePanelLifetime<StageDumpPanel>()
-    var panelFadeEnd: Double?, callMonitor: StageCallMonitor?
-    var scheduledClock = false, wakeCounts: [String: Int] = [:]
-    var panelGenerations = 0
-    var replayImages: [Int: CGImage] = [:]
-    var windows: [Window] = [], displays: [(CGRect, CGRect)] = [], person: CGRect?, pointer = CGPoint.zero, cards: [CGRect] = []
-    var missing = false
-    var age = 20.0, away = 10.0, sampled = 0.0, locked = false, sleeping = false, call = false, stageAvailable = true
-    func tn(_ raw: Any?) -> Double? {
-        guard let v = raw as? NSNumber, CFGetTypeID(v) != CFBooleanGetTypeID(), v.doubleValue.isFinite, abs(v.doubleValue) <= 1e12 else { return nil }
-        return v.doubleValue
-    }
-    func n(_ raw: Any?) -> Double? {
-        guard let v = raw as? NSNumber, CFGetTypeID(v) != CFBooleanGetTypeID(), v.doubleValue.isFinite, abs(v.doubleValue) <= 100000 else { return nil }; return v.doubleValue
-    }
-    func r(_ raw: Any?, empty: Bool = false) -> CGRect? {
-        guard let a = raw as? [Any], a.count == 4, let x = n(a[0]), let y = n(a[1]), let w = n(a[2]), let h = n(a[3]) else { return nil }
-        let rect = CGRect(x: x, y: y, width: w, height: h); return stageRectValid(rect) || empty && rect == .zero ? rect : nil
-    }
-    func world(_ supplied: PerchEvent? = nil) -> StageWorld? {
-        guard !missing, let ev = supplied ?? runtime.event else { return nil }
-        let index = windows.firstIndex(where: { $0.id == ev.window && $0.pid == ev.pid && $0.visible })
-        let w = index.map { windows[$0] }
-        let matchedDisplay = w.flatMap { win in displays.first(where: { $0.0.contains(CGPoint(x: win.rect.midX, y: win.rect.minY)) }) }
-        guard let d = matchedDisplay ?? displays.first else { return nil }
-        let above = index.map { windows[..<$0].filter { $0.visible }.map { $0.rect } } ?? windows.filter { $0.visible }.map { $0.rect }
-        return StageWorld(base: PerchWorld(window: w?.rect ?? .zero, above: above, display: d.0, top: Double(d.1.minY), fullScreen: w?.full ?? false),
-            usable: d.1, person: person, pointer: pointer, inputAge: age + clock - sampled, pointerAway: away + clock - sampled,
-            windows: Dictionary(uniqueKeysWithValues: windows.filter { $0.visible }.map { (StageWindowKey(pid: $0.pid, window: $0.id), $0.rect) }),
-            orderedWindows: windows.filter { $0.visible }.map { StageWindowKey(pid: $0.pid, window: $0.id) }, cards: cards, locked: locked, sleeping: sleeping, call: call || callMonitor?.isActive(clock) == true, stageAvailable: stageAvailable)
-    }
-    var ringEnvironment: RingEnvironment {
-        RingEnvironment(bounds: { pid, id in windows.first { $0.pid == pid && $0.id == id && $0.visible }?.rect },
-            reduced: { reduced }, secure: { false })
-    }
-    func ringEffects(_ effects: [(Double, RingEffect)]) {
-        for (_, effect) in effects {
-            if case let .draw(plan, _) = effect {
-                let ev = perchEvent(plan)
-                if !runtime.paused { runtime.event = ev }
-                emit(runtime.receive(ev, seq: plan.seq, rect: plan.rect, now: clock, world: world(), reduced: reduced))
-            }
-        }
-    }
-    func write(_ object: [String: Any]) {
-        let object = object.merging(["turnTargets": runtime.turnTargets.count, "shown": runtime.shown, "seq": runtime.seq, "time": clock,
-            "hiddenReason": runtime.hiddenReason as Any? ?? NSNull(), "panelGenerations": panelGenerations]) { old, _ in old }
-        guard let bytes = try? JSONSerialization.data(withJSONObject: object, options: [.sortedKeys]) else { exit(70) }
-        FileHandle.standardOutput.write(bytes + Data([10]))
-    }
-    func emit(_ effects: [StageEffect]) {
-        let effects = stageCallApply(effects, runtime: &runtime, active: { callMonitor?.isActive(clock) == true }, at: clock)
-        // The simulated clock completes a scheduled production fade. A later draw
-        // cancels it, as the host's root-identity check does on the real queue.
-        if let end = panelFadeEnd, clock >= end { panelLifetime.release(); panelFadeEnd = nil }
-        for effect in effects {
-            switch effect {
-            case let .draw(plan):
-                panelFadeEnd = nil
-                if panelLifetime.panel == nil { panelLifetime.panel = StageDumpPanel(); panelGenerations += 1 }
-                write(plan.json(runtime.base.frame?.cell ?? .zero, time: clock).merging(["panelOnScreen": panelLifetime.panelOnScreen]) { $1 })
-            case let .hide(reason, duration):
-                panelLifetime.hide(reason, duration: duration, release: { panelLifetime.release(); panelFadeEnd = nil }) { duration in
-                    panelFadeEnd = clock + duration
-                }
-                write(stageHideRow(panelLifetime, reason: reason, duration: duration, time: clock))
-            case .park: write(["effect": "stage-park", "time": clock, "animations": 0])
-            case let .reseat(delta): write(["effect": "stage-reseat", "delta": [delta.x, delta.y], "time": clock])
-            }
-        }
-    }
-    while true {
-        let bytes = FileHandle.standardInput.availableData
-        if bytes.isEmpty {
-            guard buffer.isEmpty else { exit(65) }
-            write(["effect": "end", "time": clock, "shown": runtime.shown, "asleep": runtime.asleep, "animations": runtime.parkedAt == nil ? 0 : runtime.draw?.pose.keyPaths(runtime.base.frame?.cell ?? .zero).count ?? 0]); return
-        }
-        buffer.append(bytes); guard buffer.count <= 131072 else { exit(65) }
-        while let end = buffer.firstIndex(of: 10) {
-            let line = buffer.prefix(upTo: end); buffer.removeSubrange(...end)
-            guard line.count <= 32768, let data = try? JSONSerialization.jsonObject(with: line) as? [String: Any] else { exit(65) }
-            if Set(data.keys) == ["dumpTrace"] {
-                guard data["dumpTrace"] as? Bool == true else { exit(65) }
-                runtime.trace = StageTrace(); continue
-            }
-            if Set(data.keys) == ["dumpTraceRead"] {
-                guard data["dumpTraceRead"] as? Bool == true, let trace = runtime.trace else { exit(65) }
-                write(trace.json.merging(["effect": "stage-trace"]) { $1 }); continue
-            }
-            if Set(data.keys) == ["dumpTransaction"] {
-                guard let input = data["dumpTransaction"] as? [String: Any], let op = input["op"] as? String else { exit(65) }
-                func windowMap(_ raw: Any?) -> [StageWindowKey: CGRect]? {
-                    guard let list = raw as? [[String: Any]], list.count <= 128 else { return nil }
-                    var out: [StageWindowKey: CGRect] = [:]
-                    for item in list {
-                        guard let pid = tn(item["pid"]), (1...2147483647).contains(pid), pid.rounded() == pid,
-                            let id = tn(item["id"]), (1...4294967295).contains(id), id.rounded() == id, let rect = r(item["frame"]) else { return nil }
-                        let key = StageWindowKey(pid: Int32(pid), window: UInt32(id))
-                        guard out[key] == nil else { return nil }; out[key] = rect
-                    }
-                    return out
-                }
-                if op == "windows" {
-                    guard let windows = windowMap(input["windows"]) else { exit(65) }
-                    runtime.observeWindows(windows); continue
-                }
-                guard let at = tn(input["now"]), let reduced = input["reduced"] as? Bool,
-                    let flags = input["flags"] as? [String: Any], let provider = input["provider"] as? Bool,
-                    let art = input["art"] as? [[String: Any]], art.count <= 8 else { exit(65) }
-                clock = at
-                runtime.carrying = flags["carrying"] as? Bool == true; runtime.carryUntil = tn(flags["carryUntil"]) ?? 0
-                runtime.held = flags["held"] as? Bool == true; runtime.paused = flags["paused"] as? Bool == true
-                runtime.locked = flags["locked"] as? Bool == true; runtime.displaySleeping = flags["sleeping"] as? Bool == true
-                runtime.badgeApproach = flags["badgeApproach"] as? Bool == true; runtime.stageArt = flags["stageArt"] as? Bool == true
-                var exactWorld: StageWorld?
-                if let w = input["world"] as? [String: Any] {
-                    guard let win = r(w["window"], empty: true), let display = r(w["display"]), let usable = r(w["usable"]),
-                        let above = w["above"] as? [Any], above.count <= 128, let cards = w["cards"] as? [Any], cards.count <= 128,
-                        let pointer = w["pointer"] as? [Double], pointer.count == 2, pointer.allSatisfy({ $0.isFinite }),
-                        let inputAge = tn(w["inputAge"]), let pointerAway = tn(w["pointerAway"]), let top = n(w["top"]) else { exit(65) }
-                    let asRects = above.compactMap { r($0) }, cs = cards.compactMap { r($0) }
-                    guard asRects.count == above.count, cs.count == cards.count else { exit(65) }
-                    exactWorld = StageWorld(base: PerchWorld(window: win, above: asRects, display: display, top: top, fullScreen: w["fullScreen"] as? Bool == true),
-                        usable: usable, person: r(w["person"]), pointer: CGPoint(x: pointer[0], y: pointer[1]), inputAge: inputAge, pointerAway: pointerAway,
-                        windows: windowMap(w["windows"]), orderedWindows: (w["orderedWindows"] as? [[String: Int]] ?? []).compactMap {
-                            guard let pid = $0["pid"], let id = $0["id"], pid > 0, pid <= Int(Int32.max), id > 0, id <= Int(UInt32.max) else { return nil }
-                            return StageWindowKey(pid: Int32(pid), window: UInt32(id))
-                        }, cards: cs, locked: w["locked"] as? Bool == true, sleeping: w["sleeping"] as? Bool == true,
-                        call: w["call"] as? Bool == true, displayID: w["displayID"] as? String, stageAvailable: w["stageAvailable"] as? Bool == true)
-                } else if !(input["world"] is NSNull) { exit(65) }
-                func traceEntry(_ raw: [String: Any], _ cell: CGSize) -> SpriteEntry? {
-                    guard let sheet = raw["sheet"] as? String, sheet.utf8.count <= 4096,
-                        let row = raw["row"] as? Int, (0...63).contains(row), let columns = raw["frames"] as? [Int], (1...8).contains(columns.count),
-                        columns.allSatisfy({ (0...7).contains($0) }), let ms = raw["ms"] as? [Double], ms.count == columns.count,
-                        ms.allSatisfy({ $0.isFinite && (20...2000).contains($0) }), ms.reduce(0, +) <= 8000,
-                        let loop = raw["loop"] as? Bool, let flip = raw["flip"] as? Bool,
-                        let hotspot = raw["hotspot"] as? [Double], hotspot.count == 2, hotspot.allSatisfy({ $0.isFinite && abs($0) <= 2048 }),
-                        let size = raw["size"] as? [Double], size.count == 2, size.allSatisfy({ $0.isFinite && (1...16384).contains($0) }),
-                        size[0] >= cell.width * Double((columns.max() ?? 0) + 1), size[1] >= cell.height * Double(row + 1),
-                        let scale = tn(raw["scale"]), (0.25...2).contains(scale) else { return nil }
-                    return SpriteEntry(sheet: sheet, row: row, columns: columns, ms: ms, loop: loop, flip: flip,
-                        hotspot: CGPoint(x: hotspot[0], y: hotspot[1]), size: CGSize(width: size[0], height: size[1]), scale: scale, then: nil)
-                }
-                var artIndex = 0
-                runtime.artProvider = provider ? { state in
-                    guard artIndex < art.count, art[artIndex]["state"] as? String == state else { exit(65) }
-                    let raw = art[artIndex]["pose"]; artIndex += 1
-                    if raw is NSNull { return nil }
-                    guard let p = raw as? [String: Any], let cell = p["cell"] as? [Double], cell.count == 2,
-                        cell.allSatisfy({ $0.isFinite && (1...1024).contains($0) }), let anchor = p["anchor"] as? [Double], anchor.count == 2,
-                        anchor.allSatisfy({ $0.isFinite && abs($0) <= 1024 }), let entryRaw = p["entry"] as? [String: Any],
-                        let entry = traceEntry(entryRaw, CGSize(width: cell[0], height: cell[1])),
-                        let source = p["source"] as? String, source.utf8.count <= 64, let imageID = p["image"] as? Int, (0..<4096).contains(imageID),
-                        let data = CGDataProvider(data: Data([0, 0, 0, 0]) as CFData),
-                        let image = CGImage(width: 1, height: 1, bitsPerComponent: 8, bitsPerPixel: 32, bytesPerRow: 4,
-                            space: CGColorSpaceCreateDeviceRGB(), bitmapInfo: CGBitmapInfo(rawValue: CGImageAlphaInfo.premultipliedLast.rawValue),
-                            provider: data, decode: nil, shouldInterpolate: false, intent: .defaultIntent) else { exit(65) }
-                    if replayImages[imageID] == nil { replayImages[imageID] = image }
-                    return SpriteStagePose(image: replayImages[imageID]!, entry: entry, cell: CGSize(width: cell[0], height: cell[1]), anchor: CGPoint(x: anchor[0], y: anchor[1]),
-                        filter: p["filter"] as? String ?? "linear", source: source, medium: p["medium"] as? Bool == true, pending: p["pending"] as? Bool == true)
-                } : nil
-                switch op {
-                case "receive", "admission":
-                    guard let e = input["event"] as? [String: Any], let state = e["state"] as? String, state.utf8.count <= 32,
-                        let pid = tn(e["pid"]), (1...2147483647).contains(pid), let id = tn(e["window"]), (1...4294967295).contains(id),
-                        let xy = e["at"] as? [Double], xy.count == 2, xy.allSatisfy({ $0.isFinite }), let seq = tn(input["seq"]) else { exit(65) }
-                    let end = e["end"] as? [Double]
-                    guard end == nil || end!.count == 2 && end!.allSatisfy({ $0.isFinite }) else { exit(65) }
-                    let event = PerchEvent(state: state, pid: Int32(pid), window: UInt32(id), at: CGPoint(x: xy[0], y: xy[1]), ok: e["ok"] as? Bool == true,
-                        drop: tn(e["drop"]), end: end.map { CGPoint(x: $0[0], y: $0[1]) }, windowRect: r(e["windowRect"]), area: e["area"] as? String, wideReason: e["wideReason"] as? String)
-                    if !runtime.paused || runtime.event == nil { runtime.event = event }
-                    if op == "admission" { emit(runtime.admitPaused(event, seq: Int(seq), rect: r(input["rect"]), now: at, world: exactWorld)) }
-                    else { emit(runtime.receive(event, seq: Int(seq), rect: r(input["rect"]), now: at, world: exactWorld, reduced: reduced)) }
-                case "geometry":
-                    guard let raw = input["geometry"] as? [String: Any], let proof = StageGeometryObservation.parse(raw) else { exit(65) }
-                    emit(runtime.certifyGeometry(proof, now: at, world: exactWorld, reduced: reduced))
-                case "observe": emit(runtime.observe(at, world: exactWorld, reduced: reduced))
-                case "pause":
-                    guard let value = input["value"] as? Bool else { exit(65) }
-                    emit(runtime.setPaused(value, now: at, world: exactWorld, reduced: reduced))
-                case "pointer":
-                    guard let entered = tn(input["enteredAt"]) else { exit(65) }
-                    emit(runtime.pointerChanged(at, enteredAt: entered, world: exactWorld, reduced: reduced))
-                case "complete":
-                    guard let state = input["state"] as? String, let ok = input["ok"] as? Bool else { exit(65) }
-                    runtime.completeTurn(state: state, ok: ok, now: at)
-                case "hide":
-                    guard let reason = input["reason"] as? String, let immediate = input["immediate"] as? Bool else { exit(65) }
-                    emit(runtime.hide(reason, immediate: immediate, at: at))
-                    if reason == "hide" { runtime.event = nil }
-                default: exit(65)
-                }
-                guard artIndex == art.count else { exit(65) }; continue
-            }
-            if Set(data.keys) == ["dumpSyntheticArt"] {
-                let config = data["dumpSyntheticArt"] as? [String: Any]
-                guard config == nil || Set(config!.keys) == ["mode", "pending"],
-                    let mode = (data["dumpSyntheticArt"] as? String) ?? config?["mode"] as? String, ["ready", "pending", "failed"].contains(mode),
-                    let pending = config == nil ? [] : config?["pending"] as? [String], pending.count <= 21,
-                    pending.allSatisfy({ spriteStageFallbacks[$0] != nil }),
-                    let frame = runtime.base.frame,
-                    let provider = CGDataProvider(data: Data([0, 0, 0, 0]) as CFData),
-                    let image = CGImage(width: 1, height: 1, bitsPerComponent: 8, bitsPerPixel: 32, bytesPerRow: 4,
-                        space: CGColorSpaceCreateDeviceRGB(), bitmapInfo: CGBitmapInfo(rawValue: CGImageAlphaInfo.premultipliedLast.rawValue),
-                        provider: provider, decode: nil, shouldInterpolate: false, intent: .defaultIntent) else { exit(65) }
-                runtime.artProvider = { state in
-                    guard let entry = frame.stage?[state] else { return nil }
-                    let ready = mode == "ready" && !pending.contains(state)
-                    return SpriteStagePose(image: image, entry: ready ? entry.art : entry.fallbackArt,
-                        cell: ready ? entry.cell : frame.cell,
-                        anchor: ready ? entry.anchor : frame.perch!.anchor,
-                        filter: entry.filter, source: ready ? state : entry.fallback,
-                        medium: !ready, pending: mode == "pending" || pending.contains(state))
-                }
-                continue
-            }
-            if Set(data.keys) == ["dumpLoadArt"] {
-                guard data["dumpLoadArt"] as? Bool == true, let frame = runtime.base.frame else { exit(65) }
-                let result = SpriteCharacter.check(frame)
-                guard let character = result.character else { write(["effect": "stage-load", "reason": result.reason ?? "unknown"]); exit(65) }
-                loadedArt = character
-                runtime.artProvider = { state in character.stage.select(state, images: character.images) }
-                write(["effect": "stage-load", "loaded": true]); continue
-            }
-            if Set(data.keys) == ["dumpAwaitArt"] {
-                guard data["dumpAwaitArt"] as? Bool == true, let character = loadedArt else { exit(65) }
-                SpriteLoader.queue.sync {}
-                write(character.stage.counters.merging(["effect": "stage-ready"]) { $1 }); continue
-            }
-            if Set(data.keys) == ["dumpPanelCheck"] {
-                guard let values = data["dumpPanelCheck"] as? [String: Any], let target = r(values["target"]), let actual = r(values["actual"]) else { exit(65) }
-                write(["effect": "panel-check", "accepted": stagePanelFrameAccepted(target: target, actual: actual)]); continue
-            }
-            if Set(data.keys) == ["dumpStats"] {
-                guard data["dumpStats"] as? Bool == true else { exit(65) }
-                write(["effect": "stage-stats", "poll": runtime.poll as Any? ?? NSNull(), "wakeCounts": wakeCounts, "forbiddenBuilds": runtime.forbiddenBuilds,
-                    "wideWindows": runtime.wideWindows.sorted { $0.pid == $1.pid ? $0.window < $1.window : $0.pid < $1.pid }.map { ["pid": $0.pid, "id": $0.window] },
-                    "wideRecords": stageTraceWindows(runtime.wideRecords),
-                    "compactedWindows": runtime.compactedWindows.map { ["pid": $0.pid, "id": $0.window] },
-                    "worldAvailable": world() != nil,
-                    "forbidden": world().map { runtime.forbidden($0).map(stageTraceRect) } ?? runtime.activeTargets.map(stageTraceRect),
-                    "turnTargets": runtime.turnTargets.count, "activeTargets": runtime.activeTargets.count, "targetCapacity": runtime.targetCapacity, "targetUnmapped": runtime.targetUnmapped,
-                    "contributors": runtime.turnTargets.reduce(0, { $0 + $1.contributors.count }), "windowRecords": runtime.windowBook.current.count,
-                    "planBegan": runtime.planBegan, "presented": runtime.shown ? runtime.draw.map { $0.json(runtime.base.frame?.cell ?? .zero, time: clock) } as Any? ?? NSNull() : NSNull(),
-                    "hideReasonCounts": runtime.hideReasonCounts, "maxWindowBoundsDifferencePt": runtime.maxWindowBoundsDifferencePt as Any? ?? NSNull(),
-                    "targetBindings": runtime.turnTargets.map { ["pid": $0.key.pid, "window": $0.key.window, "generation": $0.epoch.generation,
-                        "contentGeneration": $0.epoch.content, "outside": $0.outside,
-                        "contributors": $0.contributors.map { ["seq": $0.seq, "state": $0.state, "contentGeneration": $0.content] as [String: Any] },
-                        "windowRect": [$0.epoch.bounds.minX, $0.epoch.bounds.minY, $0.epoch.bounds.width, $0.epoch.bounds.height],
-                        "rect": [$0.box.minX, $0.box.minY, $0.box.width, $0.box.height]] as [String: Any] }, "pointerActive": runtime.pointerActive,
-                    "hiddenReason": runtime.hiddenReason as Any? ?? NSNull()]); continue
-            }
-            if Set(data.keys) == ["dumpMeasureTicks"] {
-                guard let count = n(data["dumpMeasureTicks"]), count.rounded() == count, (1...10000).contains(count) else { exit(65) }
-                let before = runtime.forbiddenBuilds, began = CACurrentMediaTime()
-                for _ in 0..<Int(count) { _ = runtime.observe(clock, world: world(), reduced: reduced) }
-                write(["effect": "stage-cost", "ticks": Int(count), "msPerTick": (CACurrentMediaTime() - began) * 1000 / count,
-                    "forbiddenBuilds": runtime.forbiddenBuilds - before, "turnTargets": runtime.turnTargets.count]); continue
-            }
-            if Set(data.keys) == ["dumpPointer"] {
-                guard let p = data["dumpPointer"] as? [String: Any], let xy = p["at"] as? [Any], xy.count == 2,
-                    let x = n(xy[0]), let y = n(xy[1]), let delay = n(p["delayMs"]), (0...500).contains(delay) else { exit(65) }
-                let entered = clock, began = CACurrentMediaTime()
-                // Exercise actual run-loop delivery after idle, without creating an app or a window.
-                RunLoop.current.run(until: Date(timeIntervalSinceNow: delay / 1000))
-                clock += CACurrentMediaTime() - began; pointer = CGPoint(x: x, y: y); age = 0; away = 0; sampled = clock
-                emit(runtime.pointerChanged(clock, enteredAt: entered, world: world(), reduced: reduced)); continue
-            }
-            if Set(data.keys) == ["dumpSchedule"] {
-                guard let value = data["dumpSchedule"] as? Bool else { exit(65) }; scheduledClock = value; continue
-            }
-            if Set(data.keys) == ["dumpClock"] {
-                guard let next = n(data["dumpClock"]), next >= clock else { exit(65) }
-                if scheduledClock {
-                    while let wake = runtime.nextWake(clock), wake.at <= next {
-                        clock = wake.at; wakeCounts[wake.source, default: 0] += 1
-                        emit(runtime.observe(clock, world: world(), reduced: reduced))
-                    }
-                }
-                clock = next
-                if throughRing { ringEffects(ring.advance(to: clock, ringEnvironment)) }
-                emit(runtime.observe(clock, world: world(), reduced: reduced)); continue
-            }
-            if Set(data.keys) == ["dumpStageArt"] {
-                guard let v = data["dumpStageArt"] as? Bool else { exit(65) }; runtime.stageArt = v; continue
-            }
-            if Set(data.keys) == ["dumpStageAvailable"] {
-                guard let v = data["dumpStageAvailable"] as? Bool else { exit(65) }; stageAvailable = v; continue
-            }
-            if Set(data.keys) == ["dumpReset"] {
-                guard data["dumpReset"] as? Bool == true else { exit(65) }
-                panelLifetime.release(); panelFadeEnd = nil
-                let frame = runtime.base.frame, art = runtime.stageArt; runtime.load(frame); runtime.stageArt = art; continue
-            }
-            if Set(data.keys) == ["dumpPaused"] {
-                guard let p = data["dumpPaused"] as? Bool else { exit(65) }
-                emit(runtime.setPaused(p, now: clock, world: world(), reduced: reduced)); continue
-            }
-            // Opt-in microphone fixtures share production completion logic. They never query audio.
-            if Set(data.keys) == ["dumpCallSample"] {
-                guard let state = data["dumpCallSample"] as? String,
-                    ["pending", "quiet", "input-active", "timeout", "unavailable"].contains(state) else { exit(65) }
-                if callMonitor == nil { callMonitor = StageCallMonitor() }
-                if state == "pending" { callMonitor!.pending = true; callMonitor!.requested = clock }
-                else { callMonitor!.complete((state == "quiet", state, state == "input-active" ? "microphone input active" : state), at: clock, elapsedMs: 0) }
-                emit(runtime.observe(clock, world: world(), reduced: reduced))
-                write(["effect": "call-sample", "callMonitor": callMonitor!.snapshot(clock)]); continue
-            }
-            if Set(data.keys) == ["dumpActivity"] {
-                guard let a = data["dumpActivity"] as? [String: Any], Set(a.keys).isSubset(of: ["locked", "sleeping", "call"]), !a.isEmpty else { exit(65) }
-                for (key, raw) in a {
-                    guard let v = raw as? NSNumber, CFGetTypeID(v) == CFBooleanGetTypeID() else { exit(65) }
-                    if key == "locked" { locked = v.boolValue; runtime.locked = locked }; if key == "sleeping" { sleeping = v.boolValue; runtime.displaySleeping = sleeping }; if key == "call" { call = v.boolValue }
-                }
-                emit(runtime.observe(clock, world: world(), reduced: reduced)); continue
-            }
-            if Set(data.keys) == ["dumpWindowMetadata"] {
-                guard let census = data["dumpWindowMetadata"] as? [String: Any], Set(census.keys) == ["windows", "appPids"],
-                    let windows = census["windows"] as? [[String: Any]], windows.count <= 128,
-                    let pids = census["appPids"] as? [Int32], pids.count <= 128, pids.allSatisfy({ $0 > 0 }) else { exit(65) }
-                let anchors: [[String: Any]] = pids.map { pid in
-                    let event = RingEvent(seq: 0, state: "thinking", pid: pid, windowId: 0, at: nil, rect: nil, label: nil, say: nil, area: "app")
-                    let anchor = stageAreaEvent(event, snapshot: windows)
-                    return ["pid": pid, "id": anchor.window, "area": "app", "at": [anchor.at.x, anchor.at.y]]
-                }
-                write(["effect": "stage-census", "windows": stageTraceWindows(stageWindows(windows, areaApps: Set(pids))), "areaAnchors": anchors,
-                    "dropWindows": stageTraceWindows(stageWindows(windows)), "windowlessAbove": stageWindowlessAbove(windows, own: 0).map(stageTraceRect)]); continue
-            }
-            if Set(data.keys) == ["dumpWorld"] {
-                guard let w = data["dumpWorld"] as? [String: Any], let list = w["windows"] as? [[String: Any]], list.count <= 129,
-                    let ds = w["displays"] as? [[String: Any]], (1...16).contains(ds.count),
-                    let xy = w["pointer"] as? [Any], xy.count == 2, let x = n(xy[0]), let y = n(xy[1]),
-                    let input = n(w["inputAge"]), input >= 0, let pointerAge = n(w["pointerAway"]), pointerAge >= 0,
-                    let cs = w["cards"] as? [Any], cs.count <= 128 else { exit(65) }
-                windows = []; displays = []; cards = []
-                for item in list {
-                    guard let id = n(item["id"]), id.rounded() == id, (1...100000).contains(id),
-                        let pid = n(item["pid"]), pid.rounded() == pid, (1...100000).contains(pid), let frame = r(item["frame"]) else { exit(65) }
-                    windows.append(Window(id: UInt32(id), pid: Int32(pid), rect: frame, visible: item["onScreen"] as? Bool != false && item["minimized"] as? Bool != true, full: item["fullScreen"] as? Bool == true, owner: item["owner"] as? String ?? ""))
-                }
-                guard Set(windows.map { $0.id }).count == windows.count else { exit(65) }
-                let namedPids = Set(windows.filter { w in runtime.wideNames.contains(where: { $0.caseInsensitiveCompare(w.owner) == .orderedSame }) }.map { $0.pid })
-                if runtime.wideApps.union(namedPids).count > 128 { runtime.targetCapacity = true }
-                else { runtime.wideApps.formUnion(namedPids) }
-                runtime.observeWindows(Dictionary(uniqueKeysWithValues: windows.filter { $0.visible }.map { (StageWindowKey(pid: $0.pid, window: $0.id), $0.rect) }))
-                if let ev = runtime.event, !windows.contains(where: { $0.pid == ev.pid && $0.id == ev.window && $0.visible }),
-                    let w = windows.first(where: { $0.visible && ($0.pid == ev.pid || ev.pid == 0 && runtime.wideApps.contains($0.pid)) }) {
-                    runtime.wideApps.insert(w.pid)
-                    for candidate in windows where candidate.pid == w.pid { runtime.invalidateGeometry(StageWindowKey(pid: candidate.pid, window: candidate.id)) }
-                    runtime.event = PerchEvent(state: ev.state, pid: w.pid, window: w.id, at: CGPoint(x: w.rect.midX, y: w.rect.midY),
-                        ok: ev.ok, drop: nil, end: nil, area: "app", wideReason: ev.wideReason)
-                }
-                for d in ds { guard let frame = r(d["frame"]), let visible = r(d["visible"]), frame.contains(visible) else { exit(65) }; displays.append((frame, visible)) }
-                for c in cs { guard let rect = r(c) else { exit(65) }; cards.append(rect) }
-                if w["person"] is NSNull { person = nil } else { guard let rect = r(w["person"]) else { exit(65) }; person = rect }
-                if let m = w["missing"] { guard let flag = m as? Bool, CFGetTypeID(m as CFTypeRef) == CFBooleanGetTypeID() else { exit(65) }; missing = flag } else { missing = false }
-                pointer = CGPoint(x: x, y: y); age = input; away = pointerAge; sampled = clock
-                if runtime.event != nil { emit(runtime.observe(clock, world: world(), reduced: reduced)) }; continue
-            }
-            if data["hand"] as? String == "stage-geometry" {
-                guard let (nonce, seq, proof) = stageGeometryFrame(data), bound == nil || bound == nonce, handSequenceFresh(seq, after: last) else { exit(65) }
-                bound = nonce; last = seq
-                let ev = PerchEvent(state: "thinking", pid: proof.key.pid, window: proof.key.window,
-                    at: CGPoint(x: proof.bounds.midX, y: proof.bounds.midY), ok: false, drop: nil, end: nil, windowRect: proof.bounds)
-                emit(runtime.certifyGeometry(proof, now: clock, world: world(ev), reduced: reduced)); continue
-            }
-            guard let hand = handFrame(data), let nonce = data["nonce"] as? String, bound == nil || bound == nonce else { exit(65) }; bound = nonce
-            switch hand {
-            case let .character(_, f):
-                guard handSequenceFresh(f.seq, after: last) else { exit(65) }; last = f.seq
-                panelLifetime.release(); panelFadeEnd = nil; runtime.load(f)
-            case let .aim(_, ev), let .status(_, ev):
-                if ev.area != nil {
-                    guard handSequenceFresh(ev.seq, after: last) else { exit(65) }; last = ev.seq
-                    let event: PerchEvent
-                    let observed = Dictionary(uniqueKeysWithValues: windows.filter { $0.visible }.map { (StageWindowKey(pid: $0.pid, window: $0.id), $0.rect) })
-                    if ev.wideEpoch != nil {
-                        let pids = ev.pid > 0 ? Set([ev.pid]) : Set(windows.filter { $0.owner.caseInsensitiveCompare(ev.wideName ?? "") == .orderedSame }.map { $0.pid })
-                        guard let admitted = runtime.beginWide(ev, windows: observed, pids: pids) else {
-                            if runtime.targetCapacity { emit(runtime.hide("target-capacity", immediate: true, at: clock)) }
-                            continue
-                        }
-                        event = admitted
-                    } else { event = stageAreaEvent(ev, windows: observed) }
-                    runtime.event = event
-                    emit(runtime.receive(event, seq: ev.seq, rect: nil, now: clock, world: world(), reduced: reduced)); continue
-                }
-                guard handSequenceFresh(ev.seq, after: last) else { exit(65) }; last = ev.seq
-                if ev.at == nil && (ev.state == "handback" || ev.state == "done" && !ev.ok) {
-                    runtime.completeTurn(state: ev.state, ok: ev.ok, now: clock); continue
-                }
-                guard let at = ev.at else { exit(65) }
-                if throughRing { runtime.completeTurn(state: ev.state, ok: ev.ok, now: clock); ringEffects(ring.receive(ev, delay: 0, now: clock, ringEnvironment)); continue }
-                let event = PerchEvent(state: ev.state, pid: ev.pid, window: ev.windowId, at: at, ok: ev.ok, drop: nil, end: nil, windowRect: ev.windowRect)
-                // Set the identity before looking up its metadata, exactly as the host does for a new window.
-                if !runtime.paused { runtime.event = event }
-                emit(runtime.receive(event, seq: ev.seq, rect: ev.rect, now: clock, world: world(), reduced: reduced))
-            case let .act(_, act):
-                guard handSequenceFresh(act.seq, after: last) else { exit(65) }; last = act.seq
-                if throughRing { ringEffects(ring.receive(ringEvent(act), delay: act.delay, now: clock, ringEnvironment)); continue }
-                let event = PerchEvent(state: act.kind, pid: act.pid, window: act.windowId, at: act.at, ok: false, drop: nil, end: act.kind == "drag" ? act.path.first : nil, windowRect: act.windowRect)
-                if !runtime.paused { runtime.event = event }
-                emit(runtime.receive(event, seq: act.seq, rect: act.rect, now: clock, world: world(), reduced: reduced))
-            case .clear: runtime.held = true; emit(runtime.hide("clear", immediate: true, at: clock))
-            case .hide: emit(runtime.hide("hide", at: clock)); runtime.event = nil
-            default: exit(65)
-            }
-        }
-    }
-}
-// END STAGE DUMP
-
 // BEGIN PERCH DUMP
 // --perch-dump [--reduce-motion] [--seed=N]: PerchRuntime and the ring's RingRuntime on a simulated clock, as the host drives
 // them, with window lists the input injects. It builds no application, panel, window or layer and decodes nothing: plans
@@ -11300,12 +6878,9 @@ extension PerchPlan {
          "masked": masked.map { [$0.0, $0.1] as [Any] }]
     }
 }
-func perchDump(reduced: Bool, seed: UInt64, callChecks: Bool = false) {
+func perchDump(reduced: Bool, seed: UInt64) {
     var buffer = Data(), bound: String?, last = -1, clock = 0.0, enabled = true
     var ring = RingRuntime(theme: .seamPlus, seed: seed), perch = PerchRuntime(), pauseVisibility = CursorPauseVisibility()
-    let monitor = StageCallMonitor()
-    var callEvent: PerchEvent?, hideReason: String?, installCount = 0, quietRechecks = 0, panelVisible = false
-    var wakeCounts: [String: Int] = [:]
     perch.seed = seed; perch.book.seed = seed
     var windows: [(id: UInt32, pid: Int32, frame: CGRect, fullScreen: Bool)] = []
     var displays: [(frame: CGRect, top: Double)] = [(CGRect(x: 0, y: 0, width: 1440, height: 900), 25)]
@@ -11325,13 +6900,8 @@ func perchDump(reduced: Bool, seed: UInt64, callChecks: Bool = false) {
         let cell = perch.frame?.cell ?? .zero
         for (time, effect) in effects {
             switch effect {
-            case let .draw(plan):
-                installCount += 1; hideReason = nil; panelVisible = true
-                write(plan.json(cell).merging(["effect": "perch", "time": time]) { $1 })
-            case let .reseat(delta): write(["effect": "perch-reseat", "delta": [delta.x, delta.y], "time": time])
-            case let .hide(reason, duration):
-                hideReason = reason; panelVisible = false
-                write(["effect": "perch-hide", "reason": reason, "duration": duration, "time": time])
+            case let .draw(plan): write(plan.json(cell).merging(["effect": "perch", "time": time]) { $1 })
+            case let .hide(reason, duration): write(["effect": "perch-hide", "reason": reason, "duration": duration, "time": time])
             case .park: write(["effect": "perch-park", "time": time])
             case .still: write(["effect": "perch-still", "time": time])
             case let .line(line):
@@ -11342,27 +6912,13 @@ func perchDump(reduced: Bool, seed: UInt64, callChecks: Bool = false) {
             }
         }
     }
-    func observeCall() {
-        guard let event = callEvent else { return }
-        if monitor.isActive(clock) {
-            if perch.shown { emit(perch.hide(clock, "call")) }
-        } else if !perch.shown && hideReason == "call" { emit(perch.receive(event, now: clock, env: env)) }
-        else { emit(perch.observeCall(now: clock, env: env, visible: panelVisible)) }
-    }
     func ringEmit(_ effects: [(Double, RingEffect)]) {
         for (time, effect) in effects {
             guard case let .draw(plan, _) = effect else { if case .hide = effect { write(["effect": "ring-hide", "time": time]) }; continue }
             write(["effect": "ring", "state": plan.state, "at": [plan.at.x, plan.at.y], "time": time, "narration": plan.bubble != nil])
-            if callChecks {
-                callEvent = perchEvent(plan)
-                if monitor.isActive(clock) { emit(perch.hide(clock, "call")); continue }
-            }
             perch.book.cleared = pauseVisibility.cleared
             emit(perch.narrationDrawn(plan.bubble == nil ? nil : perchNarrationSpan(plan), now: time))
-            if enabled {
-                if callChecks { emit(perch.receiveVisible(perchEvent(plan), now: time, env: env, visible: panelVisible)) }
-                else { emit(perch.receive(perchEvent(plan), now: time, env: env)) }
-            }
+            if enabled { emit(perch.receive(perchEvent(plan), now: time, env: env)) }
             else if let frame = perch.frame, let w = world(plan.pid, plan.window), let box = perchTrailBox(plan.at, frame: frame, clip: w.window) {
                 emit(perch.trail(perchEvent(plan), box: box, world: w, now: time, env: env))
             }
@@ -11391,40 +6947,9 @@ func perchDump(reduced: Bool, seed: UInt64, callChecks: Bool = false) {
             guard line.count <= 32768, let data = try? JSONSerialization.jsonObject(with: line) as? [String: Any] else { exit(65) }
             if Set(data.keys) == ["dumpClock"] {
                 guard let value = number(data["dumpClock"]), value >= clock else { exit(65) }
-                if callChecks {
-                    // The renderer's earliest-deadline policy, on a simulated clock.
-                    // Metadata reads and microphone completions are supplied by stdin, never queried from the Mac.
-                    while true {
-                        guard let due = perch.nextWake(clock, callHidden: hideReason == "call"), due.at <= value else { break }
-                        clock = due.at
-                        wakeCounts[due.source, default: 0] += 1
-                        observeCall()
-                    }
-                    clock = value; continue
-                }
                 clock = value
                 ringEmit(ring.advance(to: clock, ringEnv)); emit(perch.advance(to: clock, env: env))
                 continue
-            }
-            if callChecks && Set(data.keys) == ["dumpCallSample"] {
-                guard let state = data["dumpCallSample"] as? String,
-                    ["quiet", "input-active", "pending", "timeout", "unavailable"].contains(state) else { exit(65) }
-                if state == "pending" { monitor.pending = true; monitor.requested = clock }
-                else {
-                    if state == "quiet" { quietRechecks += 1 }
-                    monitor.complete((state == "quiet", state, state), at: clock, elapsedMs: 0)
-                }
-                observeCall(); continue
-            }
-            if callChecks && Set(data.keys) == ["dumpStats"] {
-                guard data["dumpStats"] as? Bool == true else { exit(65) }
-                write(["effect": "legacy-stats", "time": clock, "shown": perch.shown, "installCount": installCount,
-                    "quietRechecks": quietRechecks, "callMonitor": monitor.snapshot(clock), "wakeCounts": wakeCounts, "panelVisible": panelVisible,
-                    "poll": perch.poll as Any? ?? NSNull(), "timers": perch.timers.map { ["at": $0.at, "action": $0.action] },
-                    "windowsCreated": 0, "captures": 0]); continue
-            }
-            if callChecks && Set(data.keys) == ["dumpPanelVisible"] {
-                guard let visible = data["dumpPanelVisible"] as? Bool else { exit(65) }; panelVisible = visible; continue
             }
             if Set(data.keys) == ["dumpWorld"] {
                 guard let w = data["dumpWorld"] as? [String: Any], let list = w["windows"] as? [[String: Any]] else { exit(65) }
@@ -11434,12 +6959,10 @@ func perchDump(reduced: Bool, seed: UInt64, callChecks: Bool = false) {
                     windows.append((UInt32(id), Int32(pid), frame, item["fullScreen"] as? Bool ?? false))
                 }
                 if let list = w["displays"] as? [[String: Any]] {
-                    displays = list.compactMap { d in rect(d["frame"]).flatMap { f in
-                        (number(d["top"]) ?? (callChecks ? rect(d["visible"]).map { Double($0.minY) } : nil)).map { (f, $0) }
-                    } }
+                    displays = list.compactMap { d in rect(d["frame"]).flatMap { f in number(d["top"]).map { (f, $0) } } }
                     guard displays.count == list.count, !displays.isEmpty else { exit(65) }
                 }
-                if callChecks { observeCall() } else { emit(perch.observe(clock, env: env)) }; continue
+                emit(perch.observe(clock, env: env)); continue
             }
             if Set(data.keys) == ["dumpNarration"] { guard let s = number(data["dumpNarration"]) else { exit(65) }; emit(perch.narration(until: clock + s, now: clock)); continue }
             if Set(data.keys) == ["dumpLegs"] {
@@ -11471,7 +6994,6 @@ func perchDump(reduced: Bool, seed: UInt64, callChecks: Bool = false) {
             bound = nonce
             let event: RingEvent, delay: Double
             switch frame {
-            case .edge: continue
             case let .picker(_, message):
                 guard message.op == "options" else { continue }
                 enabled = message.data["perch"] as? Bool ?? false
@@ -11491,7 +7013,7 @@ func perchDump(reduced: Bool, seed: UInt64, callChecks: Bool = false) {
                 // C1's clear: the host hides everything, and no click panel shows until the action's done or idle.
                 pauseVisibility.clear(); ringEmit(ring.hide(clock)); emit(perch.hide(clock, "hide")); continue
             case .menu: ring.narration = NarrationOptions.parse(data) ?? NarrationOptions(); continue
-            case .pause, .activity, .call, .narrationCheck: continue
+            case .pause, .activity, .narrationCheck: continue
             }
             guard event.seq > last else { exit(65) }
             last = event.seq
@@ -11578,10 +7100,9 @@ func ringPlanDump(theme: RingTheme?, reduced: Bool, secure: Bool, clip: CGRect, 
             bound = nonce
             let event: RingEvent, delay: Double
             switch frame {
-            case .edge: continue
             case .pause: write(["effect": "drop", "state": "pause-channel", "time": clock]); continue
             case .clear: pauseVisibility.clear(); emit(runtime.hide(clock)); continue
-            case .activity, .call: write(["effect": "drop", "state": "pause-control", "time": clock]); continue
+            case .activity: write(["effect": "drop", "state": "pause-control", "time": clock]); continue
             case .picker: write(["effect": "drop", "state": "picker", "dropped": true, "animations": [], "time": clock]); continue
             case let .narrationCheck(_, token):
                 write(["effect": "narration-check", "token": token, "secure": secure, "time": clock]); continue
@@ -11619,262 +7140,8 @@ func ringPlanDump(theme: RingTheme?, reduced: Bool, secure: Bool, clip: CGRect, 
 // [--capture=…] and --hand-dump [--capture=…]: the hand. With --consent the hand host is the session's shared host: turbo's
 // consent channel runs on fds 3 (in) and 4 (out) beside the hand's stdin, and the menu bar glove serves both. --menu is the
 // hand-only host: the glove and its hand-only menu, with no consent channel.
-func stageProducerDump(reader: Bool = false, characterPath: String? = nil) {
-    let host = HandHost(), bounds = CGRect(x: 200, y: 500, width: 900, height: 350)
-    let key = StageWindowKey(pid: 42, window: 7)
-    var currentBounds = bounds, visible = true
-    var ringPlans = 0, holdRing = false, probeEnabled = true
-    var queued: RingPlan?, lastRingIdentity: StageProducerIdentity?
-    host.readerFaulted = { host.producerHide(); writeStageProducerAck(["readerFault": true, "shown": host.perch.stage.shown]); exit(65) }
-    host.readerFinished = { exit(0) }
-    host.ringEnvironmentProvider = { RingEnvironment(bounds: { _, _ in currentBounds }, reduced: { true }, secure: { false }) }
-    host.perch.stageEffects = { _ in }
-    host.ringEffects = { effects in
-        for (_, effect) in effects {
-            if case let .draw(plan, _) = effect {
-                ringPlans += 1; lastRingIdentity = plan.producer
-                if holdRing { queued = plan } else { host.perch.ringDrew(plan) }
-            }
-        }
-    }
-    host.cursorStyle = "sprite"
-    host.perch.enabled = true
-    host.perch.stage.options.size = "stage"
-    host.admissionWorld = { _ in
-        StageWorld(base: PerchWorld(window: currentBounds, above: [], display: CGRect(x: 0, y: 0, width: 1800, height: 1200), top: 30, fullScreen: false),
-            usable: CGRect(x: 0, y: 30, width: 1800, height: 1140), person: nil, pointer: CGPoint(x: 1750, y: 1150),
-            inputAge: 20, pointerAway: 10, windows: visible ? [key: currentBounds] : [:])
-    }
-    if let path = characterPath {
-        guard let bytes = FileManager.default.contents(atPath: path),
-            let data = try? JSONSerialization.jsonObject(with: bytes) as? [String: Any],
-            let parsed = handFrame(data), case let .character(_, frame) = parsed else { exit(65) }
-        host.perch.stage.load(frame); host.perch.stage.stageArt = true
-        host.perch.loaded = SpriteCharacter(frame: frame, images: [:], stage: SpriteStageCache(frame: frame))
-    }
-    func probe() {
-        guard probeEnabled, host.perch.stage.base.frame != nil else { return }
-        let ev = PerchEvent(state: "thinking", pid: 42, window: 7, at: CGPoint(x: 650, y: 700), ok: false, drop: nil, end: nil, windowRect: currentBounds)
-        host.perch.stage.event = ev; host.perch.stage.lastFrame = 1
-        _ = host.perch.stage.observe(1, world: host.admissionWorld?(ev), reduced: true)
-    }
-    func emit(_ ack: [String: Any]) {
-        var row = ack
-        row["references"] = host.producer.references.keys.sorted()
-        row["retained"] = host.perch.stage.requiredReferences.values.flatMap { $0.map { $0.seq } }.sorted()
-        row["watermark"] = host.perch.stage.admissionWatermarks[key] as Any? ?? NSNull()
-        row["targetMemories"] = host.perch.stage.turnTargets.count
-        row["targetBoxes"] = host.perch.stage.turnTargets.map { [Double($0.box.minX), Double($0.box.minY), Double($0.box.width), Double($0.box.height)] }
-        row["protectedIntersections"] = host.perch.stage.shown ? host.perch.stage.activeTargets.filter { host.perch.stage.draw?.seat.box.intersects($0) == true }.count : 0
-        row["epoch"] = host.producer.epoch; row["baselineLost"] = host.producer.baselineLost
-        row["observation"] = host.producer.observation; row["shown"] = host.perch.stage.shown
-        row["loaded"] = host.perch.stage.base.frame != nil
-        row["unmappedWindows"] = host.perch.stage.unmappedWindows.map { [Int($0.pid), Int($0.window)] }.sorted { $0.lexicographicallyPrecedes($1) }
-        row["active"] = host.producer.active; row["failed"] = host.producer.failed
-        row["collectionOnly"] = host.perch.stage.producerCollectionOnly
-        row["stageEvent"] = host.perch.stage.event?.state as Any? ?? NSNull()
-        row["stageReaction"] = host.perch.stage.reaction
-        row["ringPlans"] = ringPlans
-        row["ringSession"] = lastRingIdentity?.session as Any? ?? NSNull()
-        row["ringTurn"] = lastRingIdentity?.turn as Any? ?? NSNull()
-        row["sessionState"] = host.producer.session as Any? ?? NSNull(); row["turnState"] = host.producer.turn as Any? ?? NSNull()
-        row["recentEnded"] = host.producer.ended.count
-        row["oldestEnded"] = host.producer.ended.first as Any? ?? NSNull()
-        row["windows"] = host.panel == nil && host.perch.panel == nil && host.pauseOverlay.panel == nil ? 0 : 1
-        row["layers"] = host.ringRoot == nil && host.hand == nil && host.glove == nil ? 0 : 1
-        if let bytes = try? JSONSerialization.data(withJSONObject: row) { FileHandle.standardOutput.write(bytes + Data([10])) }
-    }
-    host.producerAck = { ack in
-        let event = host.perch.stage.event, reaction = host.perch.stage.reaction
-        probe()
-        emit(ack.merging(["eventAtAck": event?.state as Any? ?? NSNull(), "reactionAtAck": reaction]) { _, new in new })
-    }
-    if reader { DispatchQueue.global(qos: .utility).async { host.read() }; dispatchMain() }
-    var nonce: String?, last = -1
-    while let line = readLine() {
-        guard line.utf8.count < 65536, let bytes = line.data(using: .utf8), let data = try? JSONSerialization.jsonObject(with: bytes) as? [String: Any] else { exit(65) }
-        if data["dumpStats"] as? Bool == true { probe(); emit(["effect": "producer-stats"]); continue }
-        if let hold = data["dumpHoldRing"] as? Bool { holdRing = hold; continue }
-        if let enabled = data["dumpProbe"] as? Bool { probeEnabled = enabled; continue }
-        if let paused = data["dumpPaused"] as? Bool { host.pauseControl.set(paused); continue }
-        if let raw = data["dumpQueueTerminal"] as? [String: Any], let parsed = handFrame(raw), case var .status(_, event) = parsed {
-            if let session = data["session"] as? String, let turn = data["turn"] as? String {
-                event.producer = StageProducerIdentity(session: session, turn: turn)
-            }
-            var ring = RingRuntime(theme: .seamPlus, seed: 1)
-            let env = RingEnvironment(bounds: { _, _ in currentBounds }, reduced: { true }, secure: { false })
-            for (_, effect) in ring.receive(event, delay: 0, now: 0, env) {
-                if case let .draw(plan, _) = effect { queued = plan }
-            }
-            guard queued != nil else { exit(65) }; continue
-        }
-        if data["dumpDrawQueued"] as? Bool == true, let plan = queued {
-            host.perch.ringDrew(plan)
-            emit(["effect": "producer-stats"]); queued = nil; continue
-        }
-        if data["dumpReload"] as? Bool == true { host.perch.stage.load(nil); continue }
-        if let raw = data["dumpPublic"] as? [String: Any], let parsed = handFrame(raw) {
-            switch parsed { case let .act(_, act): host.receiveAct(act)
-                case let .aim(_, event), let .status(_, event): host.receiveCursor(event)
-                default: exit(65) }; continue
-        }
-        if let rect = data["dumpBounds"] as? [Double], rect.count == 4 { currentBounds = CGRect(x: rect[0], y: rect[1], width: rect[2], height: rect[3]); continue }
-        if let flag = data["dumpVisible"] as? Bool { visible = flag; host.perch.stage.observeWindows(visible ? [key: currentBounds] : [:]); continue }
-        if let hand = data["hand"] as? String, hand != "stage-producer", let parsed = handFrame(data) {
-            switch parsed { case let .act(token, act):
-                    guard nonce == nil || nonce == token, handSequenceFresh(act.seq, after: last) else { exit(65) }
-                    nonce = token; last = act.seq; host.receiveAct(act)
-                case let .aim(token, event), let .status(token, event):
-                    guard nonce == nil || nonce == token, handSequenceFresh(event.seq, after: last) else { exit(65) }
-                    nonce = token; last = event.seq; host.receiveCursor(event)
-                default: exit(65) }; continue
-        }
-        guard let frame = StageProducerFrame.parse(data, bytes: bytes.count + 1), nonce == nil || nonce == frame.nonce,
-            handSequenceFresh(frame.seq, after: last) else { exit(65) }
-        nonce = frame.nonce; last = frame.seq; host.receiveProducer(frame)
-    }
-}
-
-#if SLEIGHT_CALL_SELFTEST
-// No application, observers, input, audio, image decoding or windows. Only the metadata and install boundary are fake.
-func callHostSelftest(_ slotRoot: String) {
-    let owner = HandHost()
-    owner.perch = PerchHost(host: owner, stageSlot: StageSlot(root: slotRoot))
-    let perch = owner.perch
-    owner.cursorStyle = "sprite"; perch.enabled = true; perch.lines = false
-    perch.stageCall.requested = Double.greatestFiniteMagnitude
-    let bounds = CGRect(x: 200, y: 500, width: 900, height: 350)
-    perch.callTestWorld = StageWorld(base: PerchWorld(window: bounds, above: [], display: CGRect(x: 0, y: 0, width: 1800, height: 1200), top: 30, fullScreen: false),
-        usable: CGRect(x: 0, y: 30, width: 1800, height: 1140), person: CGRect(x: 1450, y: 700, width: 300, height: 300),
-        pointer: CGPoint(x: 1750, y: 1150), inputAge: 20, pointerAway: 10, windows: [StageWindowKey(pid: 42, window: 7): bounds], displayID: "1")
-    let changed = perch.stageCall.changed
-    var sequence = 0
-    while let line = readLine() {
-        guard line.utf8.count <= 32768, let bytes = line.data(using: .utf8),
-            let row = try? JSONSerialization.jsonObject(with: bytes) as? [String: Any] else { exit(65) }
-        if let reduced = row["reduced"] as? Bool { perch.callTestReduced = reduced }
-        if let clock = row["clock"] as? Double, clock.isFinite, clock >= 0,
-            perch.callTestClock == nil || clock >= perch.callTestClock! {
-            perch.callTestClock = clock
-        } else if let timer = row["timer"] as? [String: Any], let after = timer["after"] as? Double,
-            after.isFinite, after > 0, timer["action"] as? String == "line-out" {
-            perch.runtime.timer(perch.now + after, "line-out"); perch.schedule()
-        } else if let raw = row["character"] as? [String: Any], case var .character(_, frame)? = handFrame(raw) {
-            let art = frame.perch!.table["perch"]!
-            frame.stage = ["stage-lie": SpriteStageEntry(file: "fixture", cell: frame.cell, anchor: frame.perch!.anchor,
-                filter: "nearest", next: [], art: art, fallback: "perch", fallbackArt: art)]
-            perch.loaded = SpriteCharacter(frame: frame, images: [:], stage: SpriteStageCache(frame: frame))
-            perch.runtime.load(frame); perch.runtime.book.enabled = false
-            perch.stage.load(frame); perch.stage.stageArt = true
-        } else if let enabled = row["callbacks"] as? Bool {
-            perch.stageCall.changed = enabled ? changed : nil
-        } else if let state = row["sample"] as? String, ["quiet", "input-active", "timeout", "unavailable"].contains(state) {
-            perch.stageCall.complete((state == "quiet", state, state), at: perch.now, elapsedMs: 0)
-        } else if row["ring"] as? Bool == true {
-            sequence += 1
-            var plan = RingPlan(state: row["state"] as? String ?? "thinking", at: CGPoint(x: 650, y: 700))
-            plan.seq = sequence; plan.pid = 42; plan.window = 7; plan.windowRect = bounds
-            plan.ok = row["ok"] as? Bool ?? false
-            perch.ringDrew(plan)
-        } else if row["settle"] as? Bool == true, let plan = perch.runtime.plan {
-            perch.callTestClock = max(perch.now, perch.runtime.began + plan.duration + 0.001)
-            perch.perform(perch.runtime.advance(to: perch.now, env: perch.environment))
-        } else if row["observe"] as? Bool == true {
-            perch.performStage(perch.stage.observe(perch.now, world: perch.stageEnvironment(), reduced: true))
-        } else if row["samePoseTimer"] as? Bool == true {
-            perch.runtime.timer(perch.now, "wait-end"); perch.observeLegacyCall()
-        } else if let action = row["dueTimer"] as? String, action == "sleep" {
-            perch.runtime.timer(perch.now, action); perch.observeLegacyCall()
-        } else if let visible = row["panelVisible"] as? Bool {
-            perch.callTestVisible = visible
-        } else if let geometry = row["geometry"] as? String {
-            var world = perch.callTestWorld!
-            let old = world.base
-            world.base = PerchWorld(window: geometry == "moved" ? bounds.offsetBy(dx: 30, dy: 0) : bounds,
-                above: geometry == "covered" ? [CGRect(x: 0, y: 30, width: 1800, height: 1100)] : [],
-                display: old.display, top: old.top, fullScreen: false)
-            perch.callTestWorld = world; perch.observeLegacyCall()
-        } else if row["receiveAfterDeep"] as? Bool == true {
-            perch.runtime.timer(perch.now, "deep")
-            var plan = RingPlan(state: "paused", at: CGPoint(x: 650, y: 700))
-            plan.seq = sequence + 1; plan.pid = 42; plan.window = 7; plan.windowRect = bounds
-            perch.ringDrew(plan)
-        } else if row["installAgain"] as? Bool == true, let plan = perch.runtime.plan {
-            perch.install(plan)
-        } else if row["freshPlan"] as? Bool == true,
-            let plan = perch.runtime.draw("paused", ok: false, at: nil, move: nil, from: nil, woke: false, now: perch.now, env: perch.environment) {
-            perch.runtime.plan = plan; perch.install(plan)
-        } else if row["queuedDraw"] as? Bool == true {
-            // Plan against quiet metadata, then deliver after a live reading. Only the production apply hook can veto it.
-            let world = perch.callTestWorld!
-            let event = PerchEvent(state: "thinking", pid: 42, window: 7, at: CGPoint(x: 650, y: 700), ok: false, drop: nil, end: nil)
-            let effects = perch.stage.receive(event, seq: 999, rect: nil, now: perch.now, world: world, reduced: true)
-            precondition(effects.contains { if case .draw = $0 { return true }; return false })
-            perch.stageCall.changed = nil
-            perch.stageCall.complete((false, "input-active", "input-active"), at: perch.now, elapsedMs: 0)
-            perch.performStage(effects)
-        } else if row["admissionCall"] as? Bool == true {
-            var world = perch.callTestWorld!; world.call = true
-            precondition(!perch.stageAdmission(world), "call-hidden host must not claim a display slot")
-        } else if row["trail"] as? Bool == true {
-            perch.enabled = false; perch.lines = true; perch.callTestVisible = true
-            if let loaded = perch.loaded {
-                var frame = loaded.frame; frame.lines = PerchLineSet(lang: nil, lines: ["thinking": ["Thinking"]])
-                perch.loaded = SpriteCharacter(frame: frame, images: loaded.images, stage: loaded.stage)
-            }
-        } else if row["schedule"] as? Bool == true { perch.schedule() }
-        else if let seconds = row["wait"] as? Double, (0...3).contains(seconds) {
-            RunLoop.current.run(until: Date(timeIntervalSinceNow: seconds))
-        } else if row["stats"] as? Bool != true { exit(65) }
-        let legacyWake = perch.runtime.nextWake(perch.now, callHidden: perch.lastHideReason == "call")
-        let out: [String: Any] = ["shown": perch.stageActive ? perch.stage.shown : perch.runtime.shown,
-            "time": perch.now,
-            "nextWake": legacyWake.map { ["at": $0.at, "source": $0.source, "leewayMs": $0.leeway] as [String: Any] } as Any? ?? NSNull(),
-            "visible": perch.callTestVisible, "installs": perch.callTestInstalls,
-            "pose": perch.runtime.plan?.cells.last?.state as Any? ?? NSNull(), "began": perch.runtime.began,
-            "posePlan": perch.runtime.plan.map { $0.json(perch.runtime.metrics?.size ?? .zero) } as Any? ?? NSNull(),
-            "timers": perch.runtime.timers.map { $0.action },
-            "reason": (perch.stageActive ? perch.stage.hiddenReason : perch.lastHideReason) as Any? ?? NSNull(),
-            "slot": perch.stageSlot.display as Any? ?? NSNull(), "size": perch.stage.options.size,
-            "rung": perch.stage.seat?.rung as Any? ?? NSNull(), "wake": perch.wake != nil,
-            "poll": perch.runtime.poll as Any? ?? NSNull(),
-            "windows": owner.panel == nil && perch.panel == nil && perch.bubble == nil && owner.pauseOverlay.panel == nil ? 0 : 1,
-            "layers": perch.root == nil && owner.ringRoot == nil ? 0 : 1]
-        let data = try! JSONSerialization.data(withJSONObject: out, options: [.sortedKeys])
-        FileHandle.standardOutput.write(data + Data([10]))
-    }
-    perch.takeDown()
-}
-#endif
 let arguments = Array(CommandLine.arguments.dropFirst(channelValidationOnly ? 2 : 1))
-#if SLEIGHT_CALL_SELFTEST
-if arguments.first == "--call-host-selftest" {
-    guard arguments.count == 2, arguments[1].hasPrefix("/private/tmp/") else { exit(64) }
-    callHostSelftest(arguments[1]); exit(0)
-}
-#endif
-if arguments == ["--stage-call-query"] { exit(stageCallQueryMain()) }
-if arguments == ["--stage-call-worker"] { exit(stageCallWorkerMain()) }
-#if SLEIGHT_SEALED_SETTINGS
-if arguments.first == "--settings" { exit(settingsMain(Array(arguments.dropFirst()))) }
-#if SLEIGHT_KEYSTORE_PROBE
-if arguments.first == "--key-store-probe" {
-    guard arguments.count == 4, let store = try? KeychainKeyStore(probeGroup: arguments[3]) else { exit(69) }
-    exit(store.probe(arguments[1], op: arguments[2]))
-}
-#endif
-#endif
-#if SLEIGHT_STAGE_BENCH
-if arguments.first == "--stage-bench" { stageBenchMain(Array(arguments.dropFirst())); exit(0) }
-#endif
 if channelValidationOnly && arguments.first != "--hand" && arguments.first != "--hand-dump" { exit(64) }
-if ["--stage-producer-dump", "--stage-producer-reader-dump"].contains(arguments.first ?? "") {
-    guard (1...2).contains(arguments.count) else { exit(64) }
-    stageProducerDump(reader: arguments[0] == "--stage-producer-reader-dump", characterPath: arguments.count == 2 ? arguments[1] : nil); exit(0)
-}
-if arguments == ["--stage-cache-dump"] { spriteStageCacheDump(); exit(0) }
-if arguments == ["--honest-mood-dump"] { honestMoodDump(); exit(0) }
-if arguments == ["--edge-chip-dump"] { edgeChipDump(); exit(0) }
 if arguments == ["--pause-control-dump"] { cursorPauseDump(); exit(0) }
 if arguments.first == "--cursor-menu-dump" { guard arguments.count == 1 else { exit(64) }; cursorMenuDump(); exit(0) }
 if arguments.first == "--narration-audio-selftest" { guard arguments.count == 1 else { exit(64) }; narrationAudioSelftest(); exit(0) }
@@ -11893,7 +7160,7 @@ if arguments.first == "--check-character" {
     let line = input.split(separator: 10).first ?? Data()
     guard input.count <= 32769, let data = try? JSONSerialization.jsonObject(with: line) as? [String: Any],
         data["nonce"] as? String != nil, case let .character(_, frame)? = handFrame(data) else { exit(65) }
-    let result = SpriteCharacter.check(frame, validateStage: true)
+    let result = SpriteCharacter.check(frame)
     let out = try! JSONSerialization.data(withJSONObject: ["id": frame.id, "loaded": result.character != nil,
         "reason": result.reason as Any? ?? NSNull(), "warnings": result.warnings], options: [.sortedKeys])
     FileHandle.standardOutput.write(out + Data([10]))
@@ -11902,15 +7169,6 @@ if arguments.first == "--check-character" {
 if arguments == ["--settings-menu-dump"] {
     let bytes = try! JSONSerialization.data(withJSONObject: SettingsMenuPlan(menuOnly: true).json, options: [.sortedKeys])
     FileHandle.standardOutput.write(bytes + Data([10])); exit(0)
-}
-if arguments.first == "--stage-dump" {
-    let flags = Array(arguments.dropFirst())
-    guard flags.allSatisfy({ ["--reduce-motion", "--through-ring", "--legacy-perch"].contains($0) }), Set(flags).count == flags.count else { exit(64) }
-    if flags.contains("--legacy-perch") {
-        guard !flags.contains("--through-ring") else { exit(64) }
-        perchDump(reduced: flags.contains("--reduce-motion"), seed: 1, callChecks: true); exit(0)
-    }
-    stageDump(reduced: flags.contains("--reduce-motion"), throughRing: flags.contains("--through-ring")); exit(0)
 }
 if arguments.first == "--perch-dump" {
     let flags = Array(arguments.dropFirst()), seeds = flags.filter { $0.hasPrefix("--seed=") }

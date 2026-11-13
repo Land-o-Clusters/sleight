@@ -1,4 +1,3 @@
-import { modCall } from './fixtures/mod-attribution.mjs';
 import { test } from './macos-only.mjs';
 import assert from 'node:assert/strict';
 import { PassThrough } from 'node:stream';
@@ -217,7 +216,7 @@ test('metadata-free rereads after reset and through aliases establish a native b
     h.send(rpc('again', 'js', { code: reset ? 'let te = await cua.getApp("TextEdit");' : 'await te.getAXState();' }));
     const reply = result('again', tree); delete reply.result._meta; h.reply(reply);
     await new Promise(resolve => setImmediate(resolve));
-    assert.equal(checks, 2, 'a read without independent window and process evidence samples its baseline');
+    assert.equal(checks, 2, 'the metadata-free read checked native identity');
     identity = 2;
     const before = h.forwarded.length;
     h.send(rpc('action', 'js', { code: 'await te.typeText("x");' }));
@@ -264,7 +263,7 @@ test('explicit stop cuts off hung calls and delayed local targeting cannot resta
   const { harness } = setup(t);
   let resolveTarget, localCalls = 0;
   const h = harness('local stop', { changeReview: false, stopGraceMs: 5,
-    localTools: { tools: [{ name: 'drag', inputSchema: { type: 'object' } }], target: () => new Promise(resolve => { resolveTarget = resolve; }),
+    localTools: { tools: [{ name: 'drag' }], target: () => new Promise(resolve => { resolveTarget = resolve; }),
       call: async () => { localCalls++; return { content: [] }; } },
     stopEngine: async () => ({ collected: true, cutOff: true }), inspectInput: async () => ({ ok: true }) });
   h.send(rpc('pending', 'drag', { app: 'TextEdit', from: [0, 0], to: [1, 1] }));
@@ -446,7 +445,7 @@ test('single native windows and the recorded TextEdit Save sheet fall back when 
     await new Promise(resolve => setImmediate(resolve));
     assert.equal(h.received.at(-1).result.isError, undefined);
     // A standard window's read also asks once for the app's process (LW4 review 1).
-    assert.equal(checks, tree === save ? 1 : 3);
+    assert.equal(checks, tree === save ? 1 : 2);
   }
 });
 test('untrusted helper falls back for duplicate candidates and warns once per session', async t => {
@@ -757,7 +756,7 @@ test('new-message recovery never revives pre-stop local input waiting for its ta
   const { harness } = setup(t);
   let resolveTarget, actions = 0;
   const h = harness('cancelled local', { changeReview: false, stopGraceMs: 5, stopEngine: async () => ({ collected: false }),
-    localTools: { tools: [{ name: 'drag', inputSchema: { type: 'object' } }], target: () => new Promise(resolve => { resolveTarget = resolve; }), call: async () => { actions++; return { content: [] }; } } });
+    localTools: { tools: [{ name: 'drag' }], target: () => new Promise(resolve => { resolveTarget = resolve; }), call: async () => { actions++; return { content: [] }; } } });
   h.send(rpc('old', 'drag', { app: 'TextEdit', from: [0, 0], to: [1, 1] }));
   h.send(rpc('stop', 'turn_ended', { sleight_stop: true })); await new Promise(resolve => setTimeout(resolve, 20));
   h.send(rpc('resume', 'turn_ended', { sleight_resume: true }));
@@ -774,7 +773,7 @@ test('tree-free input checks focus for a unique target even without engine inven
   await new Promise(resolve => setImmediate(resolve));
   h.send(rpc('act', 'js', { code: 'await app.typeText("x")' }));
   await new Promise(resolve => setImmediate(resolve));
-  assert.equal(h.forwarded.at(-1).id, 'act'); assert.equal(checks, 2); h.reply(result('act', 'Window: "Unique", App: TextEdit.'));
+  assert.equal(h.forwarded.at(-1).id, 'act'); assert.equal(checks, 1); h.reply(result('act', 'Window: "Unique", App: TextEdit.'));
 });
 
 test('first-off requires fresh focused-window confirmation on saved unique windows', async t => {
@@ -794,8 +793,8 @@ test('first-off requires fresh focused-window confirmation on saved unique windo
     await new Promise(resolve => setImmediate(resolve));
     h.send(rpc('act', 'js', { code: 'await app.pressKey("super+a"); await app.typeText("x");' }));
     await new Promise(resolve => setImmediate(resolve));
-    assert.equal(checks, status === 'absent' ? 0 : 2);
-    assert.equal(admissions.length, ['absent', 'mismatch'].includes(status) ? 0 : 1);
+    assert.equal(checks, status === 'absent' ? 0 : 1);
+    assert.equal(admissions.length, ['ok', 'unknown'].includes(status) ? 1 : 0);
     if (admissions.length) {
       assert.equal(admissions[0].confirmed, status === 'ok');
       assert.ok(Number.isFinite(admissions[0].ms) && admissions[0].ms >= 0);
@@ -1121,8 +1120,8 @@ function setup(t) {
       // Recovery needs a running check; unless a test passes its own, every app is running.
       runningProbe: () => ({ status: 'responding' }), ...options });
     relays.push(relay);
-    const send = msg => clientIn.write(JSON.stringify(modCall(msg)) + '\n');
-    const reply = msg => serverOut.write(JSON.stringify(modCall(msg)).replaceAll('file:///tmp/a.txt', pathToFileURL(path).href) + '\n');
+    const send = msg => clientIn.write(JSON.stringify(msg) + '\n');
+    const reply = msg => serverOut.write(JSON.stringify(msg).replaceAll('file:///tmp/a.txt', pathToFileURL(path).href) + '\n');
     if (!fresh) { send(rpc('read', 'js', { code: 'let app = await cua.getApp("TextEdit")' })); reply(result('read')); }
     forwarded.length = received.length = 0;
     return { send, reply, forwarded, received, relay, inputLease, serverIn, serverOut, clientOut };
@@ -1223,7 +1222,7 @@ test('actions carry both guards and retain the original saved snapshot across tu
   a.send(rpc(3, 'js', { code: 'await app.typeText("second")' }));
   writeFileSync(path, 'second\n'); a.reply(result(3));
   a.send(rpc(4, 'review_changes', { op: 'list' }));
-  assert.match(a.received.at(-1).result.content[0].text, /^  -before\n  \+second$/m);
+  assert.match(a.received.at(-1).result.content[0].text, /-before\n\+second/);
   a.relay.close(); assert.equal(existsSync(bank), false);
   assert.equal(a.inputLease.owned.size, 0);
 });
@@ -1258,7 +1257,7 @@ for (const [binding, reread, handle] of [
     assert.ok(a.forwarded.some(m => m.id === 5), 'the edit reaches the engine with leases and change review enabled');
     writeFileSync(path, 'alpha delta gamma\n'); a.reply(result(5, document));
     a.send(rpc(6, 'review_changes', { op: 'list' }));
-    assert.match(a.received.at(-1).result.content[0].text, /^Undo starts at the later copy[\s\S]*^  -alpha beta gamma\n  \+alpha delta gamma$/m);
+    assert.match(a.received.at(-1).result.content[0].text, /Undo starts at the later copy[\s\S]*-alpha beta gamma\n\+alpha delta gamma/);
   });
 }
 
@@ -1404,7 +1403,7 @@ test('open_file runs when its app isn\'t running yet; other local tools still ne
   const { harness } = setup(t);
   const called = [];
   const notRunning = async () => { throw new Error('Input lease: the local tool needs one running app with a bundle ID; launch it first'); };
-  const h = harness('opener', { localTools: { tools: [{ name: 'open_file', inputSchema: { type: 'object' } }, { name: 'drag', inputSchema: { type: 'object' } }], target: notRunning,
+  const h = harness('opener', { localTools: { tools: [{ name: 'open_file' }, { name: 'drag' }], target: notRunning,
     call: async name => { called.push(name); return { content: [{ type: 'text', text: 'ok' }] }; } } });
   h.send(rpc(1, 'open_file', { app: 'TextEdit', path: '/tmp/a.txt' })); await new Promise(resolve => setImmediate(resolve));
   h.send(rpc(2, 'drag', { app: 'TextEdit', from: [1, 1], to: [2, 2] })); await new Promise(resolve => setImmediate(resolve));
@@ -1783,7 +1782,7 @@ test('review refuses another holder before prompting, while review listing remai
   writeFileSync(path, 'edit\n'); a.reply(result(1)); a.send(rpc(2, 'turn_ended'));
   b.send(rpc(3, 'js', { code: 'await app.typeText("x")' })); b.reply(result(3));
   a.send(rpc(4, 'review_changes', { op: 'list' }));
-  assert.match(a.received.at(-1).result.content[0].text, /^  -before\n  \+edit$/m);
+  assert.match(a.received.at(-1).result.content[0].text, /-before\n\+edit/);
   a.send(rpc(5, 'review_changes', { op: 'review' }));
   await new Promise(resolve => setImmediate(resolve));
   assert.match(a.received.at(-1).result.content[0].text, /Input lease.*B/);
@@ -1888,7 +1887,7 @@ test('approved document screenshot reads preserve identity without snapshots or 
 
 test('local actions take an app lease; inventory reads stay available', async t => {
   const { harness, b } = setup(t);
-  const h = harness('local', { localTools: { tools: [{ name: 'drag', inputSchema: { type: 'object' } }, { name: 'menu_bar', inputSchema: { type: 'object' } }],
+  const h = harness('local', { localTools: { tools: [{ name: 'drag' }, { name: 'menu_bar' }],
     call: async () => ({ content: [] }) } });
   h.send(rpc(1, 'drag', { app: 'TextEdit', from: [0, 0], to: [1, 1] }));
   await new Promise(resolve => setImmediate(resolve));
@@ -1904,7 +1903,7 @@ test('hover reserves only its app and conflicts with another holder before appro
   const { harness, b } = setup(t);
   let approvals = 0, actions = 0;
   const h = harness('hover', { ask: async () => { approvals++; return 'accept'; },
-    localTools: { tools: [{ name: 'hover', inputSchema: { type: 'object' } }], target: async () => ({ appId: 'com.apple.TextEdit', app: 'TextEdit' }),
+    localTools: { tools: [{ name: 'hover' }], target: async () => ({ appId: 'com.apple.TextEdit', app: 'TextEdit' }),
       call: async (_name, _args, approve) => { if (await approve(['hover', 'TextEdit'], 'Allow hover?')) actions++; return { content: [] }; } } });
   b.send(rpc(1, 'js', { code: 'await app.typeText("x")' })); b.reply(result(1));
   h.send(rpc(2, 'hover', { app: 'TextEdit', at: [1, 2] })); await new Promise(resolve => setImmediate(resolve));
@@ -1921,7 +1920,7 @@ test('a delayed local approval cannot act after expiry and another session takeo
   const { harness, b } = setup(t);
   let answer, actions = 0;
   const h = harness('local approval', { ask: () => new Promise(resolve => { answer = resolve; }),
-    localTools: { tools: [{ name: 'drag', inputSchema: { type: 'object' } }], call: async (_name, _args, approve) => {
+    localTools: { tools: [{ name: 'drag' }], call: async (_name, _args, approve) => {
       if (await approve(['drag', 'TextEdit'], 'Allow drag?')) actions++;
       return { content: [] };
     } } });
@@ -1939,7 +1938,7 @@ test('a delayed local approval is cancelled while the session drains on shutdown
   const { harness } = setup(t);
   let answer, actions = 0;
   const h = harness('local shutdown', { ask: () => new Promise(resolve => { answer = resolve; }),
-    localTools: { tools: [{ name: 'drag', inputSchema: { type: 'object' } }], call: async (_name, _args, approve) => {
+    localTools: { tools: [{ name: 'drag' }], call: async (_name, _args, approve) => {
       if (await approve(['drag', 'TextEdit'], 'Allow drag?')) actions++;
       return { content: [] };
     } } });
@@ -2435,119 +2434,4 @@ test('GA1: a getApp named only in a comment or typed text does not stop recovery
   const { h } = await droppedOnChrome(t);
   h.send(rpc('c', 'js', { code: '// cua.getApp is how this was acquired\nawait te.typeText("cua.getApp(x)")' })); await settle();
   assert.match(acquisitions(h).at(-1)?.params.arguments.code ?? '', /getApp\("com\.apple\.TextEdit"\)$/);
-});
-
-for (const fault of ['none', 'ambiguous', 'unreadable', 'replacement', 'recycled-pid', 'lost-list',
-  'duplicate-same-bounds', 'duplicate-other-bounds', 'retitled', 'minimized-duplicate', 'other-space-duplicate']) {
-  test(`AD3 single-window lease using macOS 27 helper: ${fault}`, async t => {
-    const { inspect } = await import('./helpers/window-identity-fixture.mjs');
-    const { harness } = setup(t);
-    let changed = false;
-    const h = harness('ad3', { fresh: true, changeReview: false, windowIdentity: request =>
-      inspect(request, fault === 'ambiguous' || changed && fault.startsWith('duplicate-') ? [null, null] : [null],
-        changed && fault === 'duplicate-other-bounds' ? 1 : 0, true, [], (_app, windows, _list, runtime) => {
-        windows.forEach(window => { window.missing = ['AXWindowNumber', 'AXDocument']; });
-        runtime.cgUnavailable = fault === 'unreadable' || changed && fault === 'lost-list';
-        if (changed && fault === 'replacement') runtime.cgNumber = 77;
-        if (changed && fault === 'recycled-pid') runtime.running.launchDate.timeIntervalSince1970 = 2;
-        if (changed && fault === 'duplicate-same-bounds') windows[1].AXPosition = windows[0].AXPosition;
-        if (changed && fault === 'retitled') windows[0].AXTitle = 'Renamed';
-        if (changed && ['minimized-duplicate', 'other-space-duplicate'].includes(fault)) {
-          const row = { kCGWindowOwnerPID: 123, kCGWindowLayer: 0, kCGWindowNumber: 11, kCGWindowName: 'Untitled',
-            kCGWindowBounds: { X: 0, Y: 20, Width: 300, Height: 200 } };
-          runtime.cgWindows = [row, { ...row, kCGWindowNumber: 12, kCGWindowIsOnscreen: false,
-            ...(fault === 'minimized-duplicate' ? { minimized: true } : {}) }];
-        }
-      }) });
-    const reply = id => result(id, 'Window: "Untitled", App: TextEdit.\n0 standard window Untitled');
-    h.send(rpc('read', 'js', { code: 'let app = await cua.getApp("TextEdit")' })); h.reply(reply('read'));
-    await settle();
-    const warning = h.received.flatMap(msg => msg.result.content).some(c => /sleight-warning:.*identity/.test(c.text ?? ''));
-    assert.equal(warning, ['ambiguous', 'unreadable'].includes(fault));
-    changed = true;
-    h.forwarded.length = 0;
-    h.send(rpc('act', 'js', { code: 'await app.typeText("x")' }));
-    await settle();
-    if (!['none', 'ambiguous', 'unreadable'].includes(fault)) {
-      assert.equal(h.forwarded.length, 0);
-      assert.equal(h.received.at(-1).result.isError, true);
-      const step = fault === 'replacement' ? 'window-number' : fault === 'recycled-pid' ? 'window-metadata'
-        : fault === 'retitled' ? 'window-inventory' : fault === 'duplicate-other-bounds' ? 'window-root' : 'native-identity';
-      const reason = ['replacement', 'recycled-pid', 'duplicate-other-bounds'].includes(fault) ? 'the native window changed'
-        : fault === 'retitled' ? 'window identity is ambiguous' : 'native window identity is unavailable';
-      const category = reason.includes('unavailable') ? 'Missing target identity: status=ok, epoch, window, pid, processStart'
-        : 'Unconfirmed target identity';
-      assert.equal(h.received.at(-1).result.content.map(c => c.text ?? '').join(' '),
-        `Input lease: step=${step} ${reason}. ${category}. Read the intended window again before acting. Next: await cua.getApp("com.apple.TextEdit").`);
-    } else {
-      assert.equal(h.forwarded.at(-1).id, 'act'); h.reply(reply('act'));
-    }
-  });
-}
-
-for (const status of ['ok', 'unknown']) for (const tree of [true, false]) test(`AD3X helper calls per read and action, status=${status}, tree=${tree}`, async t => {
-  const { harness } = setup(t);
-  let calls = 0;
-  const events = [];
-  const h = harness('ad3x-cost', { fresh: true, changeReview: false,
-    trace: (direction, msg) => { if (direction.startsWith('native-window-')) events.push({ direction, msg }); },
-    windowIdentity: request => { calls++; return { ...request, status, matches: 1,
-      epoch: 'fixture', window: 1, windowNumber: 11, pid: 123, processStart: 1 }; } });
-  const reply = id => result(id, 'Window: "Untitled", App: TextEdit.' + (tree ? '\n0 standard window Untitled\n1 button Next' : ''));
-  h.send(rpc('first', 'js', { code: 'let app = await cua.getApp("TextEdit")' })); h.reply(reply('first')); await settle();
-  const first = calls;
-  h.send(rpc('reread', 'js', { code: 'await app.getAXState()' })); h.reply(reply('reread')); await settle();
-  const reread = calls - first;
-  h.send(rpc('act', 'js', { code: 'await app.typeText("x")' })); await settle();
-  assert.equal(h.forwarded.at(-1).id, 'act');
-  const action = calls - first - reread;
-  h.reply(reply('act')); await settle();
-  const initial = status === 'unknown' && tree ? 2 : 1;
-  assert.deepEqual([first, reread, action, calls], [initial, 1, 1, initial + 2]);
-  const reads = events.filter(e => e.direction === 'native-window-read-identity').map(e => e.msg);
-  assert.equal(reads.length, 2);
-  assert.equal(reads[0].reused, false);
-  assert.equal(reads[1].reused, false, 'missing independent health evidence prevents reuse');
-  assert.ok(reads.every(e => Number.isFinite(e.ms) && e.ms >= 0));
-  assert.equal(events.filter(e => e.direction === 'native-window-admission').length, 1);
-  t.diagnostic(JSON.stringify({ status, tree, firstRead: first, unchangedRead: reread, action, total: calls, events }));
-});
-
-for (const inventory of [true, false]) test(`AD3X a second read turning ambiguous keeps its pin, inventory=${inventory}`, async t => {
-  const { inspect } = await import('./helpers/window-identity-fixture.mjs');
-  const { harness } = setup(t);
-  let changed = false, requests = 0;
-  const h = harness('ad3x-reread', { fresh: true, changeReview: false, windowIdentity: request => {
-    requests++;
-    return inspect(request, changed ? [null, null] : [null], 0, true, [], (_app, windows) => {
-      windows.forEach(window => { window.missing = ['AXWindowNumber', 'AXDocument']; window.AXPosition = { x: 0, y: 20 }; });
-    });
-  } });
-  const text = 'Window: "Untitled", App: TextEdit.\n0 standard window Untitled';
-  h.send(rpc('read', 'js', { code: 'let app = await cua.getApp("TextEdit")' })); h.reply(result('read', text)); await settle();
-  changed = true;
-  h.send(rpc('again', 'js', { code: 'await app.getAXState()' })); h.reply(result('again', inventory ? duplicateTree : text)); await settle();
-  assert.equal(requests, 2, 'a matching header without process and window evidence still rechecks');
-  const forwarded = h.forwarded.length;
-  h.send(rpc('act', 'js', { code: 'await app.typeText("x")' })); await settle();
-  assert.equal(h.forwarded.length, forwarded);
-  assert.equal(h.received.at(-1).result.isError, true);
-  assert.match(h.received.at(-1).result.content[0].text, /native window identity is unavailable/);
-});
-
-test('AD3X a rejected read helper cannot drop a retained pin', async t => {
-  const { harness } = setup(t);
-  let fail = false;
-  const h = harness('ad3x-reject', { fresh: true, changeReview: false, windowIdentity: request => {
-    if (fail) throw Error('fake helper rejection');
-    return { ...request, status: 'ok', matches: 1, epoch: 'fixture', window: 1, windowNumber: 11, pid: 123, processStart: 1 };
-  } });
-  h.send(rpc('read', 'js', { code: 'let app = await cua.getApp("TextEdit")' }));
-  h.reply(result('read', 'Window: "Untitled", App: TextEdit.\n0 standard window Untitled')); await settle();
-  fail = true;
-  h.send(rpc('again', 'js', { code: 'await app.getAXState()' })); h.reply(result('again', duplicateTree)); await settle();
-  const forwarded = h.forwarded.length;
-  h.send(rpc('act', 'js', { code: 'await app.typeText("x")' })); await settle();
-  assert.equal(h.forwarded.length, forwarded);
-  assert.match(h.received.at(-1).result.content[0].text, /native window identity is unavailable/);
 });

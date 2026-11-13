@@ -18,43 +18,6 @@ const TOOLS = new Set(['js', 'drag', 'hover', 'menu_bar', 'notifications', 'sele
 // the opened window through the engine, which counts as its engine time.
 const LOCAL = new Set(['drag', 'hover', 'menu_bar', 'notifications', 'select_window', 'open_file']);
 
-// Optional parent receipts add diagnostics without changing the additive split.
-// Preparation is cumulative per server, so repeated cells use a maximum within
-// one trace file. Only numeric fields leave the trace reader.
-function glideTiming(calls) {
-  const keys = ['admissionMs', 'admissionReadMs', 'personMs', 'policyMs', 'sendMs', 'settleMs',
-    'postReadMs', 'driverMs', 'observeMs', 'totalMs'];
-  const valid = value => Number.isFinite(value) && value >= 0;
-  const actions = [], preparations = new Map(), cells = [];
-  let waitMs = 0, preparingCalls = 0, hasGlideReceipt = false;
-  for (const call of calls) {
-    const receipt = call.glideTiming;
-    if (!receipt || typeof receipt !== 'object') continue;
-    if ((Array.isArray(receipt.actions) && receipt.actions.length === 0) || valid(receipt.cellMs)) hasGlideReceipt = true;
-    if (Array.isArray(receipt.actions)) actions.push(...receipt.actions.slice(0, 1024)
-      .filter(row => row && keys.every(key => valid(row[key]))));
-    if (valid(receipt.cellMs)) cells.push(receipt.cellMs);
-    const p = receipt.preparation;
-    if (!['preparing', 'ready', 'unavailable'].includes(p?.status) ||
-        !['compileMs', 'elapsedMs', 'waitMs'].every(key => valid(p[key]))) continue;
-    hasGlideReceipt = true;
-    const before = preparations.get(call.file);
-    preparations.set(call.file, { compileMs: Math.max(before?.compileMs ?? 0, p.compileMs),
-      elapsedMs: Math.max(before?.elapsedMs ?? 0, p.elapsedMs) });
-    waitMs += p.waitMs;
-    if (p.status === 'preparing') preparingCalls++;
-  }
-  const sum = values => values.reduce((total, n) => total + n, 0);
-  return {
-    ...(hasGlideReceipt || actions.length) ? { glideCells: cells.length, glideActions: actions.length, glideActionFailures: actions.filter(row => row.failed === true).length,
-      glideNativeTimingMissingActions: actions.filter(row => row.nativeTimingAvailable !== true).length,
-      glideActionPhases: Object.fromEntries(keys.map(key => [key, sum(actions.map(row => row[key]))])) } : {},
-    ...cells.length ? { glideCellMs: sum(cells) } : {},
-    ...preparations.size ? { glidePreparation: { compileMs: sum([...preparations.values()].map(row => row.compileMs)),
-      elapsedMs: sum([...preparations.values()].map(row => row.elapsedMs)), waitMs, preparingCalls } } : {},
-  };
-}
-
 // Total length of a list of [start, end] intervals, overlaps counted once.
 export function intervalUnion(intervals) {
   let total = 0, start, end;
@@ -94,18 +57,13 @@ export function traceTiming(dir) {
         if (waiting.length === 1) acquisitions.set(key, waiting[0][0]);
       }
       const owner = calls.get(acquisitions.get(key));
-      const metricCall = owner ?? calls.get(key);
-      if (metricCall && Number.isFinite(e.msg.ms) && e.msg.ms >= 0) {
-        if (e.direction === 'native-window-admission') (metricCall.windowAdmissions ??= []).push(e.msg);
-        if (e.direction === 'native-window-read-identity') (metricCall.windowReadIdentities ??= []).push(e.msg);
-      }
       if (owner) {
         if (e.direction === 'to-server' && owner.acquireSent === undefined) owner.acquireSent = t;
         if (e.direction === 'from-server' && e.msg.method === undefined && owner.acquireSent !== undefined && owner.acquireDone === undefined) owner.acquireDone = t;
         continue;
       }
       if (e.direction === 'call-received' && TOOLS.has(e.msg.params?.name) && !calls.has(key)) {
-        calls.set(key, { tool: e.msg.params.name, received: t, file });
+        calls.set(key, { tool: e.msg.params.name, received: t });
       }
       const call = calls.get(key);
       if (!call) continue;
@@ -114,22 +72,16 @@ export function traceTiming(dir) {
       }
       if (e.direction === 'to-server' && call.sent === undefined) call.sent = t;
       if (e.direction === 'from-server' && e.msg.method === undefined && call.sent !== undefined && call.engineDone === undefined) call.engineDone = t;
-      if (e.direction === 'to-client' && e.msg.method === undefined) {
-        call.answered = t;
-        call.glideTiming = e.msg.result?.timing;
-      }
+      if (e.direction === 'to-client' && e.msg.method === undefined) call.answered = t;
     }
   }
   const done = [...calls.values()].filter(c => c.answered !== undefined);
   const local = done.filter(c => LOCAL.has(c.tool)), relayed = done.filter(c => !LOCAL.has(c.tool));
   const sum = (list, f) => list.reduce((total, c) => total + f(c), 0);
   const guardReads = done.flatMap(c => c.guardReads ?? []);
-  const windowAdmissions = done.flatMap(c => c.windowAdmissions ?? []);
-  const windowReadIdentities = done.flatMap(c => c.windowReadIdentities ?? []);
   const acquired = c => c.acquireSent !== undefined && c.acquireDone !== undefined;
   const acquireMs = c => acquired(c) ? c.acquireDone - c.acquireSent : 0;
   return {
-    ...glideTiming(done),
     calls: done.length,
     refused: relayed.filter(c => c.sent === undefined).length,
     toolMs: sum(done, c => c.answered - c.received),
@@ -142,13 +94,6 @@ export function traceTiming(dir) {
     localMs: sum(local, c => (acquired(c) ? c.acquireSent : c.answered) - c.received),
     ...(guardReads.length ? { guardReads: guardReads.length,
       guardReadMs: sum(guardReads, r => r.ms), guardReadFailures: guardReads.filter(r => r.failed).length } : {}),
-    ...(windowAdmissions.length ? { nativeWindowAdmissions: windowAdmissions.length,
-      nativeWindowAdmissionMs: sum(windowAdmissions, r => r.ms),
-      nativeWindowAdmissionFailures: windowAdmissions.filter(r => r.failed).length } : {}),
-    ...(windowReadIdentities.length ? { nativeWindowReadIdentities: windowReadIdentities.length,
-      nativeWindowReadIdentityMs: sum(windowReadIdentities, r => r.ms),
-      nativeWindowReadIdentityReused: windowReadIdentities.filter(r => r.reused).length,
-      nativeWindowReadIdentityFailures: windowReadIdentities.filter(r => r.failed).length } : {}),
   };
 }
 

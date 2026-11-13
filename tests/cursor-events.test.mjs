@@ -180,16 +180,9 @@ test('discovery requires socket mode 0600 before and after connecting', async t 
   const server = net.createServer(); await new Promise(r => server.listen(path, r));
   t.after(() => server.close());
   for (const mode of [0o000, 0o400, 0o644, 0o660, 0o700, 0o1600, 0o2600, 0o4600]) {
-    let connections = 0, inspected = false;
-    // Freeze each requested mode in this scan's stat fixture. A file system can
-    // clear special bits, and an earlier scan must not observe the next case.
-    const sink = createRendererSink({ dir, async inspect(file) {
-      const stat = await lstat(file);
-      if (file === path) { stat.mode = (stat.mode & ~0o7777) | mode; inspected = true; }
-      return stat;
-    }, connect() { connections++; throw Error('unsafe socket'); } });
-    sink.write({}); await until(() => inspected); await settle();
-    assert.equal(connections, 0, mode.toString(8)); sink.close();
+    chmodSync(path, mode); let connections = 0;
+    const sink = createRendererSink({ dir, connect() { connections++; throw Error('unsafe socket'); } });
+    sink.write({}); await settle(); assert.equal(connections, 0, mode.toString(8)); sink.close();
   }
   chmodSync(path, 0o600);
   const socket = new EventEmitter(); let writes = 0, destroyed = false;
@@ -417,7 +410,7 @@ test('a host aim waits for the act before it when approvals pace the acts', asyn
     hand.approval(id, { tool_name: 'click', tool_params: { app: 'Editor' } }); hand.answered(id, 'accept'); await settle();
   }
   // Each approval also shows waiting, ahead of the act it lets go.
-  assert.deepEqual(host.lines.map(l => l.hand === 'status' ? l.state : l.hand), ['aim', 'waiting', 'thinking', 'act', 'aim', 'waiting', 'thinking', 'act', 'aim', 'waiting', 'thinking', 'act']);
+  assert.deepEqual(host.lines.map(l => l.hand === 'status' ? l.state : l.hand), ['aim', 'waiting', 'act', 'aim', 'waiting', 'act', 'aim', 'waiting', 'act']);
 });
 
 test('a dead host client plans, locates and projects nothing for drawing when the stream is off', async () => {
@@ -644,7 +637,7 @@ test('consent presentation publishes waiting without any page, payment or app-do
   const seen = [], ui = createConsentUi({ authenticate: () => true, present() {}, checkCurrent: () => true, cursorStatus: (...args) => seen.push(args) });
   const operation = { browserIncarnation: 'browser', brokerEpoch: 1, clientSession: 'session', turn: 'turn', leaseGeneration: 1, target: 'target', frame: 'frame', document: 'doc',
     sequence: 1, origin: 'https://fixture.invalid', action: 'click', args: {}, destination: 'https://fixture.invalid/private', payment: { secret: 'SECRET' } };
-  ui.request(operation, { label: 'SECRET' }); assert.deepEqual(seen, [['waiting', { detail: 'payment' }]]);
+  ui.request(operation, { label: 'SECRET' }); assert.deepEqual(seen, [['waiting']]);
 });
 
 test('worker IPC merges turbo and Electron events into the relay session with unchanged hand frames', async () => {

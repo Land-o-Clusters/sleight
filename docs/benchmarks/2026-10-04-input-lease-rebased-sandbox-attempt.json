@@ -6,7 +6,7 @@
   "path": "/private/tmp/sleight-input-lease-Nufw4v/sleight-input-lease-Nufw4v.txt",
   "trials": [
     {
-      "error": "Command failed: osascript -l JavaScript <private-evidence>/input-lease/bench/input-lease-fixture.js open /private/tmp/sleight-input-lease-Nufw4v/sleight-input-lease-Nufw4v.txt\n<private-evidence>/input-lease/bench/input-lease-fixture.js: execution error: Error: Error: Application can't be found. (-2700)\n"
+      "error": "Command failed: osascript -l JavaScript ~/Projects/sleight-wt/input-lease/bench/input-lease-fixture.js open /private/tmp/sleight-input-lease-Nufw4v/sleight-input-lease-Nufw4v.txt\n~/Projects/sleight-wt/input-lease/bench/input-lease-fixture.js: execution error: Error: Error: Application can't be found. (-2700)\n"
     },
     {
       "phase": "lease-cleanup",

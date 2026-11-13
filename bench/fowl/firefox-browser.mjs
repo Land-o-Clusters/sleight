@@ -5,7 +5,6 @@ import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { promisify } from 'node:util';
 import { checkBrowserOwner } from './real-browser.mjs';
-import { compileSwiftHelper } from '../swift-cache.mjs';
 
 const execute = promisify(execFile), limit = 16 * 1024 * 1024;
 const invalid = () => Error('BENCH_FIREFOX_SESSIONSTORE_INVALID');
@@ -121,8 +120,12 @@ export function requestFirefoxQuit(executable, browser) {
     String(Math.floor(browser.startedMs / 1000))], { timeout: 5000 });
 }
 
-export async function prepareFirefoxQuit(options) {
-  const executable = await compileSwiftHelper(fileURLToPath(new URL('./firefox-quit.swift', import.meta.url)), options);
+async function quitHelper(root) {
+  const executable = join(root, 'quit-firefox'), cache = join(root, 'module-cache');
+  try {
+    await execute('/usr/bin/xcrun', ['swiftc', '-module-cache-path', cache,
+      fileURLToPath(new URL('./firefox-quit.swift', import.meta.url)), '-o', executable], { timeout: 60000 });
+  } finally { rmSync(cache, { recursive: true, force: true }); }
   return browser => requestFirefoxQuit(executable, browser);
 }
 
@@ -264,7 +267,7 @@ export async function launchFirefox(plan, { openBrowser = (command, args) => exe
     current.restartUnproved = false;
     auditAfter();
   };
-  try { quitBrowser ??= await prepareFirefoxQuit(); await start(); return browser; }
+  try { quitBrowser ??= await quitHelper(root); await start(); return browser; }
   catch (error) {
     // An unproved restart may still own the profile; never erase its evidence.
     if (error.message !== 'BENCH_BROWSER_CLEANUP_UNPROVED') {

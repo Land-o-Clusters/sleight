@@ -1,9 +1,0 @@
-{
-  "schema": "sleight.windows-check-manifest/1",
-  "suites": [
-    { "item": "WIN1", "patterns": ["windows-settings.test.mjs", "windows-launch.test.mjs"] },
-    { "item": "WIN2", "patterns": ["cursor-windows.test.mjs"] },
-    { "item": "WIN3", "patterns": ["windows-host-native.test.mjs", "windows-host-reference.test.mjs", "windows-host-gates.test.mjs"] },
-    { "item": "WIN4", "patterns": ["direct-browser-windows.test.mjs", "direct-browser-windows-gates.test.mjs", "direct-browser-windows-geometry.test.mjs"] }
-  ]
-}

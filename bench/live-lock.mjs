@@ -1,4 +1,4 @@
-import { mkdir, lstat, rmdir } from 'node:fs/promises';
+import { mkdir, stat, rmdir } from 'node:fs/promises';
 import { setTimeout as sleep } from 'node:timers/promises';
 
 // Use the cooperative mkdir/rmdir protocol of the other live scripts. Only
@@ -14,13 +14,10 @@ export async function acquireLiveLock(path = '/tmp/sleight-live.lock', { wait = 
       await sleep(interval, undefined, { signal });
     }
   }
-  const owned = await lstat(path);
-  if (!owned.isDirectory() || owned.isSymbolicLink()) throw new Error('Live lock ownership changed during acquisition.');
-  let released = false;
+  const owned = await stat(path);
   return async () => {
-    if (released) return;
     // On 2026-10-17 something else removed the lock during a claim run, and the release crashed on a bare ENOENT.
-    const current = await lstat(path).catch(error => {
+    const current = await stat(path).catch(error => {
       if (error.code !== 'ENOENT') throw error;
       throw Object.assign(new Error(`${path} was removed by another process during this run, so other live runs weren't kept out.`),
         { code: 'LIVE_LOCK_REMOVED' });
@@ -29,6 +26,5 @@ export async function acquireLiveLock(path = '/tmp/sleight-live.lock', { wait = 
       throw new Error('Live lock ownership changed; refusing to remove it.');
     }
     await rmdir(path);
-    released = true;
   };
 }

@@ -1,10 +1,8 @@
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { createRequire } from 'node:module';
-const require = createRequire(import.meta.url);
+import ts from 'typescript';
 
 export function requireReplayLauncher(worktree) {
-  const ts = require('typescript');
   const entry = join(worktree, 'plugins/sleight/lib/launch.mjs');
   const ast = ts.createSourceFile(entry, readFileSync(entry, 'utf8'), ts.ScriptTarget.Latest, true, ts.ScriptKind.JS);
   const run = ast.statements.find(n => ts.isFunctionDeclaration(n) && n.name?.text === 'run' && n.modifiers?.some(m => m.kind === ts.SyntaxKind.ExportKeyword));

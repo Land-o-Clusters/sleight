@@ -52,10 +52,10 @@ const TERMINAL_SETTINGS_PANES = /^(?:general|profiles|window groups|encodings|ad
 export function forbiddenTargetsAllowed(read) {
   try { return /^(?:1|true|yes)$/i.test(String(read()).trim()); } catch { return false; }
 }
-export function forbiddenTargetWarning(app, { agentHost = false } = {}) {
+export function forbiddenTargetWarning(app) {
   if (typeof app !== 'string') return undefined;
   const bundleLike = /^[\w-]+(?:\.[\w-]+)+$/.test(app.trim());
-  const match = (bundleLike && matchBlockedApp(app, app)) || matchBlockedApp(app) || (agentHost ? { name: app } : undefined);
+  const match = (bundleLike && matchBlockedApp(app, app)) || matchBlockedApp(app);
   if (!match) return undefined;
   return match.terminal
     ? `This app could be dangerous: ${match.name} is a terminal, and Claude could type and run commands in it.`

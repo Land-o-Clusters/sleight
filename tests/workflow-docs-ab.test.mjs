@@ -1,4 +1,3 @@
-import { assertChildStatus } from './fixtures/child-status.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { existsSync, lstatSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
@@ -140,14 +139,10 @@ test('bad exit and signal cannot be rescued by otherwise safe artifacts', async 
   }
 });
 
-test('production gate waits for a hold, then checks lock and local pause without manipulating them', async () => {
-  let held = true, waits = 0;
-  await productionGate('/output', candidate => candidate === '/tmp/sleight-hold' && held,
-    { wait: async () => { waits++; held = false; }, log() {} });
-  assert.equal(waits, 1);
-  for (const [path, message] of [['/tmp/sleight-live.lock', /lock/], ['/output/pause', /pause/]])
-    await assert.rejects(productionGate('/output', candidate => candidate === path), message);
-  await productionGate('/output', () => false);
+test('production gate checks hold, lock and local pause without manipulating them', () => {
+  for (const [path, message] of [['/tmp/sleight-hold', /hold/], ['/tmp/sleight-live.lock', /lock/], ['/output/pause', /pause/]])
+    assert.throws(() => productionGate('/output', candidate => candidate === path), message);
+  productionGate('/output', () => false);
 });
 
 const put = (path, value) => { mkdirSync(join(path, '..'), { recursive: true }); writeFileSync(path, JSON.stringify(value)); };
@@ -235,10 +230,10 @@ test('CC prompt normalization accepts only the fixture URL substitution', t => {
 
 test('CLI dry plan is offline before reset and does not create output', t => {
   const out = sandbox(t), script = new URL('../bench/validation/workflow-docs-ab.mjs', import.meta.url);
-  const head = execFileSync('/usr/bin/git', ['rev-parse', 'HEAD'], { encoding: 'utf8', timeout: 30000, killSignal: 'SIGKILL' }).trim();
+  const head = execFileSync('/usr/bin/git', ['rev-parse', 'HEAD'], { encoding: 'utf8' }).trim();
   const result = spawnSync(process.execPath, [script.pathname, '--plan', '--build', head, '--engine', engine, '--out', out],
-    { encoding: 'utf8', env: { ...process.env, CLAUDE_CONFIG_DIR: process.env.CLAUDE_CONFIG_DIR }, timeout: 60000, killSignal: 'SIGKILL' });
-  assertChildStatus(result, 0, result.stderr);
+    { encoding: 'utf8', env: { ...process.env, CLAUDE_CONFIG_DIR: process.env.CLAUDE_CONFIG_DIR } });
+  assert.equal(result.status, 0, result.stderr);
   assert.equal(JSON.parse(result.stdout).rounds.length, 42);
   assert.equal(existsSync(out), false);
 });

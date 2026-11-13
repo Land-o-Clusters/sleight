@@ -216,7 +216,7 @@ test('CLI removes its socket on SIGTERM, SIGINT and SIGHUP through a symlink ent
 });
 
 test('Swift overlay typechecks without launching a window', { timeout: 180000 }, async t => {
-  if (process.platform !== 'darwin' || spawnSync('xcode-select', ['-p'], { timeout: 60000, killSignal: 'SIGKILL' }).status !== 0) return t.skip('macOS developer tools unavailable');
+  if (process.platform !== 'darwin' || spawnSync('xcode-select', ['-p']).status !== 0) return t.skip('macOS developer tools unavailable');
   const dir = await fixture(t);
   const child = spawn('nice', ['-n', '20', 'swiftc', '-module-cache-path', join(dir, 'cache'),
     '-typecheck', fileURLToPath(new URL('RingOverlay.swift', kit))]);

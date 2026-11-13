@@ -18,10 +18,10 @@ export function requireOwnerFree({ ownerSaysCursorFree = false } = {}) {
   if (ownerSaysCursorFree !== true) throw Error('Cursor requires --owner-says-cursor-free: the owner must explicitly free their own logged-in Cursor for this run');
 }
 
-export function guardLive({ ownerAway = false, supervised = false, ownerSaysCursorFree = false } = {}, { exists = existsSync, checkHold = true } = {}) {
+export function guardLive({ ownerAway = false, supervised = false, ownerSaysCursorFree = false } = {}, { exists = existsSync } = {}) {
   requireOwnerFree({ ownerSaysCursorFree });
   if (!ownerAway && !supervised) throw Error('Cursor desktop requires --owner-away');
-  if (checkHold && exists('/tmp/sleight-hold')) throw Error('sleight-hold is active');
+  if (exists('/tmp/sleight-hold')) throw Error('sleight-hold is active');
   if (exists('/tmp/sleight-live.lock')) throw Error('sleight live lock is held');
 }
 

@@ -176,7 +176,7 @@
       "stamp": "2026-10-09T05-09-52-402Z",
       "exitCode": 1,
       "source": "39108e4 plus uncommitted round-7 implementation",
-      "error": "EPERM writing <private-evidence>/real-use-tasks/bench/results/2026-10-09T05-09-52-402Z-dry.json; no results file created. The first per-task outcome could not be retained.",
+      "error": "EPERM writing ~/Projects/sleight-wt/real-use-tasks/bench/results/2026-10-09T05-09-52-402Z-dry.json; no results file created. The first per-task outcome could not be retained.",
       "targetAppsLaunched": 0,
       "modelTrials": 0
     },

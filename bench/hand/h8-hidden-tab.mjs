@@ -76,7 +76,7 @@ async function main(argv) {
     const { handHostBuilt, prepareHandHost } = await import('../../plugins/sleight/lib/direct-browser/host.mjs');
     if (!handHostBuilt() && (await prepareHandHost()).status !== 'ready') { console.error('The hand host did not build'); return 2; }
     const plan = roundCommand({ out: resolve(out), only: value('--only'), model: value('--model') });
-    mkdirSync(plan.env.SLEIGHT_TRACE, { recursive: true, mode: 0o700 });
+    mkdirSync(plan.env.SLEIGHT_TRACE, { recursive: true });
     while (existsSync('/tmp/sleight-hold') || existsSync('/tmp/sleight-live.lock')) await new Promise(r => setTimeout(r, 20000));
     console.log(`Running one Chrome turbo round with the hand on: ${plan.args.join(' ')}`);
     const code = await new Promise(done => spawn(plan.command, plan.args, { cwd: ROOT, env: { ...process.env, ...plan.env }, stdio: 'inherit' }).once('close', done));

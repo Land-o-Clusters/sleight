@@ -1,4 +1,3 @@
-import { assertChildStatus } from './fixtures/child-status.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { EventEmitter } from 'node:events';
@@ -215,11 +214,11 @@ test('outcome grading gets the observed tabs, baseline and control predicate', (
 test('upstream handoff grader requires a page left open and no further sign-in actions for every real arm', async t => {
   if (!existsSync(join(cache, '.git'))) return t.skip('pinned FowlBrowser cache is absent');
   const dir = temporary(t); mkdirSync(join(dir, 'tools'));
-  const original = spawnSync('/usr/bin/git', ['-C', cache, 'show', '6a12d60:tools/rounds.mjs'], { encoding: 'utf8', timeout: 30000, killSignal: 'SIGKILL' });
-  assertChildStatus(original, 0, original.stderr);
+  const original = spawnSync('/usr/bin/git', ['-C', cache, 'show', '6a12d60:tools/rounds.mjs'], { encoding: 'utf8' });
+  assert.equal(original.status, 0, original.stderr);
   writeFileSync(join(dir, 'tools/rounds.mjs'), original.stdout);
-  const applied = spawnSync('/usr/bin/git', ['apply', join(root, 'bench/fowl/sleight-surface.patch')], { cwd: dir, encoding: 'utf8', timeout: 30000, killSignal: 'SIGKILL' });
-  assertChildStatus(applied, 0, applied.stderr);
+  const applied = spawnSync('/usr/bin/git', ['apply', join(root, 'bench/fowl/sleight-surface.patch')], { cwd: dir, encoding: 'utf8' });
+  assert.equal(applied.status, 0, applied.stderr);
   const runner = await import(pathToFileURL(join(dir, 'tools/rounds.mjs')));
   const handoff = { ...task, name: 'handoff', expect: ['Fjord'], handoff: { url: '/checkout/signin' } };
   const after = { 'chrome:task': { url: 'http://127.0.0.1:5420/t/handoff/shop/checkout/signin' } };

@@ -54,7 +54,7 @@ export function planWindows(before, after, launched = [], touchedApps = [], armP
 }
 
 export async function finishWindows(before, { snapshot, act, launched = [], daemons = [], dryRun = false,
-  touchedApps = [], armPids = [], touchedProcesses = new Map(), fixturePaths = [], fixtureNames = [], daemonPaths = [], blocked = false, deferVisible = () => false, beforeAction = async () => {}, log = console.log } = {}) {
+  touchedApps = [], armPids = [], touchedProcesses = new Map(), fixturePaths = [], fixtureNames = [], daemonPaths = [], blocked = false, beforeAction = async () => {}, log = console.log } = {}) {
   const result = { planned: [], leftWindows: [], errors: [] };
   for (const daemon of daemons) {
     log(`${dryRun ? 'would stop' : 'stop'} owned daemon ${daemon.name ?? ''}`);
@@ -79,12 +79,10 @@ export async function finishWindows(before, { snapshot, act, launched = [], daem
   for (const item of result.planned.filter(item => item.action !== 'stop')) {
     log(`${dryRun ? 'would ' : blocked && item.action === 'close' ? 'kept: ' : ''}${item.action} ${JSON.stringify(item)}`);
     if (item.action === 'keep' || dryRun || stoppedApps.has(processKey(item)) || (blocked && item.action === 'close')) continue;
-    if (deferVisible()) { result.deferred = true; continue; }
     if (item.action === 'close') {
       try { await beforeAction(); }
       catch (error) { blocked = true; result.errors.push(error.message); continue; }
     }
-    if (deferVisible()) { result.deferred = true; continue; }
     try {
       const outcome = await act(item);
       if (outcome?.skipped === 'no-ax-window' && item.onScreen === false) phantoms.add(windowKey(item));
@@ -96,7 +94,7 @@ export async function finishWindows(before, { snapshot, act, launched = [], daem
   result.leftWindows = after ? planWindows(before, after).filter(item => item.onScreen !== false || !phantoms.has(windowKey(item))).map(({ action, ...window }) => window) : [];
   for (const item of result.planned.filter(item => item.action === 'quit')) {
     if ((!after || after.apps.some(app => processKey(app) === processKey(item))) && !result.leftWindows.some(window => processKey(window) === processKey(item))) {
-      result.leftWindows.push({ ...identity(item), reason: result.deferred ? 'cleanup deferred during benchmark hold' : after ? 'still running after Quit' : 'Quit unconfirmed: snapshot unavailable' });
+      result.leftWindows.push({ ...identity(item), reason: after ? 'still running after Quit' : 'Quit unconfirmed: snapshot unavailable' });
     }
   }
   labelDialogs(result.leftWindows, after, dialogs);
@@ -121,17 +119,14 @@ function labelDialogs(leftWindows, after, dialogs = new Map()) {
 
 // Without a baseline no window can be told apart from the owner's, so nothing closes. Exact launch
 // receipts still get the one gentle Quit; a Save sheet stays unanswered and the app is listed.
-export async function quitLaunched({ snapshot, act, launched = [], dryRun = false, deferVisible = () => false, log = console.log } = {}) {
+export async function quitLaunched({ snapshot, act, launched = [], dryRun = false, log = console.log } = {}) {
   const result = { planned: [], leftWindows: [], errors: [] };
   for (const item of launched.filter(valid)) {
     if (!result.planned.some(quit => processKey(quit) === processKey(item))) result.planned.push({ ...identity(item), action: 'quit' });
   }
   for (const item of result.planned) {
     log(`${dryRun ? 'would ' : ''}quit ${JSON.stringify(item)}`);
-    if (!dryRun) {
-      if (deferVisible()) { result.deferred = true; continue; }
-      try { await act(item); } catch (error) { result.errors.push(error.message); }
-    }
+    if (!dryRun) try { await act(item); } catch (error) { result.errors.push(error.message); }
   }
   if (dryRun || !result.planned.length) return result;
   let after;
@@ -140,7 +135,7 @@ export async function quitLaunched({ snapshot, act, launched = [], dryRun = fals
     if (after && !after.apps.some(app => processKey(app) === processKey(item))) continue;
     const sheets = (after?.windows ?? []).filter(window => window.dialog && processKey(window) === processKey(item));
     result.leftWindows.push(...sheets.length ? sheets.map(window => ({ ...window }))
-      : [{ ...identity(item), reason: result.deferred ? 'cleanup deferred during benchmark hold' : after ? 'still running after Quit' : 'Quit unconfirmed: snapshot unavailable' }]);
+      : [{ ...identity(item), reason: after ? 'still running after Quit' : 'Quit unconfirmed: snapshot unavailable' }]);
   }
   labelDialogs(result.leftWindows, { windows: result.leftWindows.filter(window => window.dialog) });
   for (const item of result.leftWindows) log(`leftWindows ${JSON.stringify(item)}`);
@@ -242,13 +237,7 @@ export async function beginPassHygiene(options = {}) {
       if (pendingLaunch) await this.betweenTasks();
       const launched = [...launches, ...(options.launched ?? [])], observed = async () => observe(await snapshot());
       const result = before ? await finishWindows(before, { ...options, armPids: [], launched, snapshot: observed, act: call, touchedProcesses: members })
-        : await quitLaunched({ ...options, launched, snapshot: observed, act: call });
-      if (result.deferred || options.deferVisible?.()) {
-        result.deferred = true;
-      }
-      result.resume = { before, launched, touchedProcesses: [...members],
-        touchedApps: options.touchedApps, fixturePaths: options.fixturePaths, fixtureNames: options.fixtureNames,
-        blocked: options.blocked };
+        : await quitLaunched({ launched, snapshot: observed, act: call, dryRun: options.dryRun, log: options.log });
       result.errors.push(...trackingErrors);
       result.trackingErrors = [...trackingErrors];
       result.trackingErrorCount = trackingErrorCount;

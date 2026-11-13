@@ -1,4 +1,3 @@
-import { assertChildStatus } from './fixtures/child-status.mjs';
 // H5, the ghost hand capture test: the pixel rules, the verdicts and the whole run against a fake Mac.
 import test from 'node:test';
 import { EventEmitter } from 'node:events';
@@ -128,7 +127,7 @@ test('hand wire frames have exactly the host\'s keys, one nonce and rising seq',
   // and narration's optional say.
   const swift = readFileSync(join(root, 'plugins/sleight/lib/direct-browser/native/consent-host.swift'), 'utf8');
   assert.match(swift, /let actKeys: Set<String> = \["hand", "nonce", "seq", "kind", "pid", "windowId", "at", "path", "delayMs", "beats"\]/);
-  assert.match(swift, /Set\(data\.keys\)\.subtracting\(actKeys\)\.isSubset\(of: \["label", "rect", "caretX", "say", "retry", "transfer", "windowRect"\]\)/);
+  assert.match(swift, /Set\(data\.keys\)\.subtracting\(actKeys\)\.isSubset\(of: \["label", "rect", "caretX", "say"\]\)/);
 });
 
 test('capture commands: hover\'s region call, a one-window -l without shadow, and the helper\'s ScreenCaptureKit paths', () => {
@@ -159,8 +158,6 @@ test('engineImage takes the last image block; readFrame checks the raw size; arg
   assert.deepEqual(parseArgs(['--owner-away']), { ownerAway: true, samples: 5, keepImages: false, out: undefined, host: undefined,
     helper: undefined, receipt: undefined, style: 'glove', dryRun: false });
   assert.equal(parseArgs(['--cursor-style', 'sprite', '--dry-run']).style, 'sprite');
-  assert.equal(parseArgs(['--stage-case', 'edge-lie', '--character', '/tmp/fixture', '--dry-run']).character, '/tmp/fixture');
-  assert.throws(() => parseArgs(['--stage-case', 'edge-lie', '--character']), /needs a path/);
   assert.throws(() => parseArgs(['--cursor-style', 'pet']), /--cursor-style must be one of glove, ring, seam, sprite/);
   assert.throws(() => parseArgs(['--samples', '2']), /from 3 to 20/);
 });
@@ -251,10 +248,10 @@ test('a host that never draws, an AX hit on the panel and a covered window are i
 test('the capture helper builds, decodes and encodes raw sRGB frames without touching the screen', { skip: process.platform !== 'darwin' || !existsSync('/usr/bin/xcrun') }, t => {
   const dir = mkdtempSync(join(tmpdir(), 'h5-helper-')); t.after(() => rmSync(dir, { recursive: true, force: true }));
   const bin = join(dir, 'capture-helper');
-  execFileSync('/usr/bin/xcrun', ['swiftc', '-module-cache-path', swiftModuleCache(), join(root, 'bench/hand/capture.swift'), '-o', bin], { timeout: 600000, killSignal: 'SIGKILL' });
+  execFileSync('/usr/bin/xcrun', ['swiftc', '-module-cache-path', swiftModuleCache(), join(root, 'bench/hand/capture.swift'), '-o', bin], { timeout: 300000 });
   const frame = withHand(page());
   writeFileSync(join(dir, 'in.rgba'), frame.data);
-  const run = args => JSON.parse(spawnSync(bin, args, { encoding: 'utf8', timeout: 60000, killSignal: 'SIGKILL' }).stdout.trim());
+  const run = args => JSON.parse(spawnSync(bin, args, { encoding: 'utf8' }).stdout.trim());
   assert.deepEqual(run(['encode', join(dir, 'in.rgba'), '60', '40', join(dir, 'out.png')]), { ok: true });
   assert.deepEqual(run(['decode', join(dir, 'out.png'), join(dir, 'back.rgba')]), { ok: true, width: 60, height: 40 });
   assert.deepEqual(compareFrames(frame, readFrame(join(dir, 'back.rgba'), { width: 60, height: 40 })), { differing: 0, handLike: 0 });
@@ -312,59 +309,4 @@ test('underLiveLock: SIGINT or SIGTERM mid-run cleans up, releases the lock and 
     f.signals.emit(name);
     assert.deepEqual(f.exits, [code, code], name);
   }
-});
-
-test('ST9 stage H5 requires a measured stage seat, covers its full box and keeps five samples at six sources', async () => {
-  const { runStageCaptureTest, stageCaptureRegion } = await import('../bench/hand/h5-capture.mjs');
-  const target = { pid: 5, id: 9, bounds: { x: 100, y: 200, width: 800, height: 600 } };
-  const panel = { x: 300, y: 100, width: 300, height: 350 };
-  const windows = [{ ...target, alpha: 1 }];
-  const r = stageCaptureRegion(target, panel, windows);
-  assert.ok(r.rect.y <= panel.y && r.rect.y + r.rect.height >= panel.y + panel.height);
-  assert.ok(stageCaptureRegion(target, panel, [...windows, { id: 99, pid: 77, alpha: 1,
-    bounds: { x: 300, y: 100, width: 80, height: 80 } }]).covered, 'even a window behind the target outside it must refuse');
-  let mode, up = false, hidden = false; const seen = [], closed = [];
-  const base = { width: 10, height: 10, data: new Uint8Array(400).fill(255) };
-  const painted = { ...base, data: new Uint8Array(400) };
-  for (let i = 0; i < 100; i++) painted.data.set([214, 38, 196, 255], i * 4);
-  const deps = {
-    windows: async () => ({ front: 5, windows: [...windows, ...(up ? [{ id: 11, pid: 44, alpha: 1, bounds: panel }] : [])] }),
-    capture: async (source, ctx) => { seen.push([source, ctx]); return { ...(mode === 'visible' && !hidden && ['region', 'composite'].includes(source) ? painted : base), captureRect: ctx.rect }; },
-    sleep: async () => {}, hit: async () => 5,
-    startHost: async m => { mode = m; up = true; hidden = false; return { pid: 44,
-      write: line => { hidden = JSON.parse(line).hand === 'hide'; }, close: async () => { closed.push(m); up = false; } }; },
-    configureStage: async ({ seat, size }) => ({ seat, size, panel, stageArt: true }),
-    observeStage: async () => ({ seat: 'edge-lie', size: 'stage', panel, stageArt: true }),
-    stageWire: () => ({ nonce: 'b'.repeat(64), character: () => '{"hand":"character"}\n',
-      act: () => '{"hand":"act"}\n', hide: () => '{"hand":"hide"}\n' }),
-  };
-  const report = await runStageCaptureTest(deps, { target, seat: 'edge-lie', panel, character: {}, samples: 5 });
-  assert.equal(report.seat, 'edge-lie'); assert.equal(report.size, 'stage');
-  assert.equal(report.modes.hidden.samples.length, 30);
-  assert.equal(report.modes.hidden.verdict, 'pass');
-  assert.deepEqual(closed, ['hidden', 'visible']);
-  assert.ok(seen.some(([source, ctx]) => source === 'composite' && ctx.includeStageExtent === true));
-  await assert.rejects(runStageCaptureTest({ ...deps, configureStage: async () => ({ seat: 'edge-lie', size: 'medium', panel }) },
-    { target, seat: 'edge-lie', panel, character: {} }), /stage/);
-  assert.deepEqual(closed.slice(-1), ['hidden'], 'setup rejection still closes the host');
-  const fallback = await runStageCaptureTest({ ...deps, observeStage: async () => ({ size: 'medium' }) },
-    { target, seat: 'edge-lie', panel, character: {} });
-  assert.notEqual(fallback.modes.hidden.verdict, 'pass', 'a mid-run medium fallback cannot qualify stage');
-  await assert.rejects(runStageCaptureTest({ ...deps, stageWire: () => { throw Error('wire failed'); } },
-    { target, seat: 'edge-lie', panel, character: {} }), /wire failed/);
-  assert.equal(closed.at(-1), 'hidden', 'wire setup errors close the host');
-  await assert.rejects(runStageCaptureTest(deps, { target, seat: 'front-sit', samples: 4 }), /5/);
-});
-
-test('ST9 stage CLI plans both seats and refuses missing owner-away before any lock or host', () => {
-  for (const seat of ['edge-lie', 'front-sit']) {
-    const opts = parseArgs(['--stage-case', seat, '--dry-run']);
-    assert.equal(opts.style, 'sprite'); assert.equal(opts.stageCase, seat);
-    const dry = spawnSync(process.execPath, [join(root, 'bench/hand/h5-capture.mjs'), '--stage-case', seat, '--dry-run'], { encoding: 'utf8', timeout: 10000, killSignal: 'SIGKILL' });
-    assertChildStatus(dry, 0, dry.stderr); assert.match(dry.stdout, /30 samples/);
-    const blocked = spawnSync(process.execPath, [join(root, 'bench/hand/h5-capture.mjs'), '--stage-case', seat], { encoding: 'utf8', timeout: 10000, killSignal: 'SIGKILL' });
-    assertChildStatus(blocked, 2); assert.match(blocked.stderr, /owner-away/);
-  }
-  assert.throws(() => parseArgs(['--stage-case']), /stage-case/);
-  assert.throws(() => parseArgs(['--stage-case', 'front-sit', '--samples', '3']), /5 samples/);
 });

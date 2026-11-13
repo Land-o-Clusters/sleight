@@ -153,9 +153,9 @@ test('explicit user naming and approval cannot authorize a hidden file or hidden
 
 test('actual macOS Finder flag and write-granting ACL metadata refuse owned fixture files', { skip: process.platform !== 'darwin' }, async t => {
   const hidden = fixture(t), acl = fixture(t);
-  execFileSync('/usr/bin/chflags', ['hidden', hidden.file], { timeout: 60000, killSignal: 'SIGKILL' });
+  execFileSync('/usr/bin/chflags', ['hidden', hidden.file]);
   await assert.rejects(hidden.authority.issue([hidden.file], binding), error => error.message === uploadRefusals.hidden);
-  execFileSync('/bin/chmod', ['+a', 'everyone allow write', acl.file], { timeout: 60000, killSignal: 'SIGKILL' });
+  execFileSync('/bin/chmod', ['+a', 'everyone allow write', acl.file]);
   await assert.rejects(acl.authority.issue([acl.file], binding), error => error.message === uploadRefusals.shared);
 });
 
@@ -189,7 +189,7 @@ test('all folders are refused without recursive enumeration', async t => {
 
 test('FIFO is refused before open, so no writer or blocking read is needed', { timeout: 3000 }, async t => {
   const f = fixture(t), pipe = join(f.directory, 'pipe');
-  execFileSync('/usr/bin/mkfifo', [pipe], { timeout: 30000, killSignal: 'SIGKILL' });
+  execFileSync('/usr/bin/mkfifo', [pipe]);
   await assert.rejects(f.authority.issue([pipe], binding), error => error.message === uploadRefusals.type);
 });
 

@@ -150,7 +150,7 @@ test('FT1c re-review: only a top-level { id } with only reads before it is rewri
     'await app.click(24).then(() => app.click({ id: "18" }));',
   ]) {
     const { forwarded, result } = act(code);
-    if (code.includes('app[m]')) { assert.equal(forwarded, ''); assert.match(result, /evaluate is read-only.*Rejected before the engine call/); }
+    if (code.includes('app[m]')) { assert.equal(forwarded, ''); assert.match(result, /cannot inspect JavaScript/); }
     else assert.ok(forwarded.includes(code), code);
   }
   for (const code of ['const s = await app.getAXState(); await app.setValue({ id: "18" }, "p01");',

@@ -25,12 +25,10 @@ export function turboWindowPrompt(browser) {
 // "never use any other browser window" with no word on pop-ups lost demoid for every Sol run of sleight inside Codex (6 of 6,
 // race-1017 b16): "Sign in with DemoID" opens a separate window, and Sol called it "your window restriction" and stopped.
 // The pop-up clause is the same for every arm that gets this prompt (engine, Codex, sleight inside Codex, native arms).
-export function windowPrompt(browser, { browserCore = false, unknownApp = false } = {}) {
+export function windowPrompt(browser, { browserCore = false } = {}) {
   const name = isolatedBrowser(browser);
-  const scope = unknownApp ? `Use only the dedicated fixture window initially titled "${browser.marker}". Its app has not been named. `
-    : `Use only the dedicated ${name} window initially titled "${browser.marker}"` +
-      `${browser.pid ? `, browser PID ${browser.pid}` : ''}, profile ${browser.profileName || browser.profileRoot}. `;
-  return scope +
+  return `Use only the dedicated ${name} window initially titled "${browser.marker}"` +
+    `${browser.pid ? `, browser PID ${browser.pid}` : ''}, profile ${browser.profileName || browser.profileRoot}. ` +
     (browserCore ? 'browser_open opens the page in a new tab of that window and returns its title and tabs, which is the check. ' : '') +
     'Identify that window before acting, keep task pages in it, and never use any other browser window or profile, except a pop-up window of that same browser and profile, opened by a page in that window as a result of a step the task asked for (a sign-in window, say). Once that pop-up closes, the dedicated window is the browser\'s window again. Never act in a window that was already open, another profile, another browser, or another app. If the dedicated window cannot be identified, stop. User activity still ends the input lease.\n\n';
 }

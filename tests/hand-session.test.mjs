@@ -37,8 +37,7 @@ test('admission only queues work; the frames go out after the engine call, with 
     1: { role: 'AXButton', id: 'saveButton', description: 'Save', title: undefined } }, versions: { 1: '9e41af0cf584a429d820306e6ac8d456aa18381d53495fc7d022b6b68cbcc080' }, focus: false }]);
   assert.deepEqual(f.sent.map(s => [s.kind, s.at, s.delayMs]), [
     ['click', [300, 298], 0], ['click', [160, 250], GUARD_READ_MS + WRITE_MS - 100], ['type', [160, 250], GUARD_READ_MS + 2 * WRITE_MS - 100]]);
-  assert.deepEqual(Object.keys(f.sent[0]).sort(), ['at', 'beats', 'delayMs', 'kind', 'path', 'pid', 'sentAt', 'windowId', 'windowRect']);
-  assert.deepEqual(f.sent[0].windowRect, [BOUNDS.X, BOUNDS.Y, BOUNDS.Width, BOUNDS.Height]);
+  assert.deepEqual(Object.keys(f.sent[0]).sort(), ['at', 'beats', 'delayMs', 'kind', 'path', 'pid', 'sentAt', 'windowId']);
 });
 
 test('once an app sends approval requests, each accepted approval is the exact beat for its action', async () => {

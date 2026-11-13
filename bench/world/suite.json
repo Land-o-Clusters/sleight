@@ -1243,21 +1243,6 @@
   ],
   "heldOut": [
     {
-      "id": "native/preview-early-scroll",
-      "task": "preview-early-scroll",
-      "title": "Preview early scroll",
-      "source": "world",
-      "runner": "bench/run.mjs --suite world --tasks preview-early-scroll --runs 1 --owner-away",
-      "half": "native",
-      "prompt": "In Preview, use only {document}. After acquiring its window, make your first action a downward scroll in the document. Continue scrolling to the final page. Use scroll gestures, without search, page selection or navigation shortcuts. Read the single line on that final page. Reply with exactly that line, without changing or saving the PDF. Leave it open.",
-      "timeoutMs": 300000,
-      "check": "final-page random readback and unchanged PDF hash; Check 4 separately requires a real scroll frame in the first fifth of driving time",
-      "fixture": "owned 12-page PDF and retained Preview window",
-      "requires": ["confirmed fixture ownership and cleanup", "owner-away run boundary"],
-      "claim": false,
-      "support": { "sleight": true }
-    },
-    {
       "id": "heldOut/mail-to-sheet",
       "task": "mail-to-sheet",
       "title": "Mail to Numbers",

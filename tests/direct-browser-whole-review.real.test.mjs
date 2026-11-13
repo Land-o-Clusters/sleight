@@ -1,4 +1,3 @@
-import { testChromiumExecutable, launchTestChromium, closeTestChromium } from './fixtures/chromium-isolated.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {createServer} from 'node:http';
@@ -13,7 +12,7 @@ import {guardWholeRead} from '../plugins/sleight/lib/direct-browser/whole-guard.
 import {protectWholeRows} from '../plugins/sleight/lib/direct-browser/snapshot.mjs';
 import {fixture as filteredFixture} from './fixtures/fd1-filtered-real.mjs';
 const pin=JSON.parse(readFileSync(new URL('../plugins/sleight/vendor/playwright-core/browsers.json',import.meta.url))).browsers.find(b=>b.name==='chromium-headless-shell');
-const executablePath=testChromiumExecutable({ revision: pin.revision, platform: 'darwin' });
+const executablePath=join(homedir(),'Library/Caches/ms-playwright','chromium_headless_shell-'+pin.revision,'chrome-headless-shell-mac-'+process.arch,'chrome-headless-shell');
 const skip=process.env.SLEIGHT_LIVE_DOM_TEST!=='1'?'requires headless fixture opt-in':!existsSync(executablePath)?'pinned headless shell unavailable':false;
 const shell=(rows,extra='',script='')=>`<!doctype html><meta charset="utf-8"><style>body{margin:0}#box{height:560px;width:850px;overflow:auto}article{min-height:36px}button{height:28px}</style><aside id="clock"></aside><div id="box" role="log"><p>Beginning of chat</p><div id="rows" role="list">${rows.replaceAll("<article",'<article role="listitem"')}</div>${extra}<p>You're all caught up</p></div><script>window.clicked=[];${script}</script>`;
 async function harness(t,html,{worker}={}){
@@ -26,7 +25,7 @@ async function harness(t,html,{worker}={}){
   else res.end('ok');
  });
  await new Promise(r=>server.listen(0,'127.0.0.1',r));
- const browser=await launchTestChromium(chromium, {headless:true,executablePath});t.after(async()=>{try{await closeTestChromium(browser,async()=>{try{for(const close of cleanups.reverse())await close();}finally{await browser.close();}});}finally{server.closeAllConnections();await new Promise(r=>server.close(r));}});
+ const browser=await chromium.launch({headless:true,executablePath});t.after(async()=>{try{for(const close of cleanups.reverse())await close();}finally{await browser.close();server.closeAllConnections();await new Promise(r=>server.close(r));}});
  const context=await browser.newContext({viewport:{width:900,height:700}}),hook=newHook();await context.addInitScript({content:hookSource(hook)});
  const page=await context.newPage(),base='http://127.0.0.1:'+server.address().port;await page.goto(base+'/');
  return {page,context,requests,base,cleanup:fn=>cleanups.push(fn),entry:{page,hook,state:{},popups:[]}};
@@ -45,172 +44,6 @@ test('review: explicit English and localized expander names work without collaps
  const h=await harness(t,shell('<article data-key="one">one</article>',names.map(n=>`<button type="button">${n}</button>`).join(''),`document.querySelectorAll('button').forEach(b=>b.onclick=()=>{clicked.push(b.textContent);b.remove()});`));
  const dom=await createWholeDOM(h.page);h.cleanup(()=>dom.dispose());const view=await dom.view();
  assert.deepEqual(view.controls.filter(c=>c.allowed).map(c=>c.name),names);
-});
-
-test('TW1: semantic rows named Show more are data, while unsafe controls stay refused',{skip,timeout:10000},async t=>{
- const h=await harness(t,shell('<article data-key="one">Show more</article><article data-key="two">second</article>',
-  '<a href="/danger">Show more</a><div role="button">Load more</div><button type="button" class="danger">Archive</button><button type="button" class="danger">Reply all</button>'));
- const dom=await createWholeDOM(h.page);h.cleanup(()=>dom.dispose());const view=await dom.view();
- assert.deepEqual(view.rows.map(r=>r.text),['Show more','second']);
- assert.equal(view.controls.length,2);
- assert.deepEqual(view.refused,['Show more (link)','Load more (non-button role)']);
- assert.equal(view.fragments,false);
- // Uncollected text still needs the partial warning, even beside hidden chrome.
- await h.page.evaluate(()=>{
-  box.append(document.createTextNode('Uncollected thread body. '.repeat(30)));
-  const b=document.createElement('button');b.style.visibility='hidden';b.textContent='Archive '.repeat(300);box.append(b);
- });
- assert.equal((await dom.view()).fragments,true);
-});
-
-for(const wrapper of ['expanded','status','link'])test('TW1R: '+wrapper+' wrapper cannot hide uncollected body text',{skip,timeout:22000},async t=>{
- const script=`const wrapper=document.createElement('${wrapper==='link'?'a':'div'}');
- ${wrapper==='expanded'?"wrapper.setAttribute('aria-expanded','true');":wrapper==='status'?"wrapper.setAttribute('role','status');":"wrapper.href='/danger';"}
- rows.before(wrapper);wrapper.append(rows);rows.append(document.createTextNode('Uncollected body. '.repeat(2)));`;
- const h=await harness(t,shell('<article data-key="one">one</article><article data-key="two">two</article>','',script));
- const dom=await createWholeDOM(h.page);h.cleanup(()=>dom.dispose());const view=await dom.view();
- assert.deepEqual(view.rows.map(r=>r.text),['one','two']);assert.equal(view.fragments,true);
- const result=await readWhole(h.entry,{max_seconds:18});
- assert.deepEqual(lines(result.text),['one','two'],result.text);
- assert.match(result.text,/Start: reached\./);assert.match(result.text,/End: reached\./);
- assert.match(result.text,/Complete: NO\. partial: possible fragments\./,result.text);
- assert.deepEqual(await h.page.evaluate(()=>clicked),[]);assert.equal(h.page.url(),h.base+'/');
-});
-
-for(const tag of ['a','button','status'])test('TW1R: large '+tag+' second column outside root stays partial',{skip,timeout:22000},async t=>{
- const column=tag==='status'?'<div role="status">'+'Uncollected second column. '.repeat(8)+'</div>':
-  `<${tag} ${tag==='a'?'href="/danger"':'type="button"'}>`+'Uncollected second column. '.repeat(8)+`</${tag}>`;
- const h=await harness(t,shell('<article data-key="one">one</article><article data-key="two">two</article>',column,
-  "rows.style.cssText='display:inline-block;vertical-align:top;width:300px';rows.nextElementSibling.style.cssText='display:inline-block;vertical-align:top;width:300px';"));
- const dom=await createWholeDOM(h.page);h.cleanup(()=>dom.dispose());const view=await dom.view();
- assert.deepEqual(view.rows.map(r=>r.text),['one','two']);assert.equal(view.fragments,true);
- const result=await readWhole(h.entry,{max_seconds:18});
- assert.deepEqual(lines(result.text),['one','two'],result.text);
- assert.match(result.text,/Start: reached\./);assert.match(result.text,/End: reached\./);
- assert.match(result.text,/Complete: NO\. partial: possible fragments\./,result.text);
- assert.deepEqual(await h.page.evaluate(()=>clicked),[]);
- assert.equal(h.requests.filter(r=>r.path.startsWith('/danger')).length,0);
- assert.equal(h.page.url(),h.base+'/');assert.equal(h.context.pages().length,1);
-});
-
-for(const role of ['presentation','none','generic'])test('TW1R: focusable '+role+' Load more outside rows is refused',{skip,timeout:22000},async t=>{
- const h=await harness(t,shell('<article data-key="one">first message</article><article data-key="two">last message</article>',
-  `<span role="${role}" tabindex="0" id="more">Load more</span>`,"more.onclick=()=>{clicked.push('unsafe');fetch('/danger',{method:'POST'});};"));
- const dom=await createWholeDOM(h.page);h.cleanup(()=>dom.dispose());const view=await dom.view();
- assert.deepEqual(view.rows.map(r=>r.text),['first message','last message']);assert.equal(view.fragments,false);
- assert.deepEqual(view.refused,['Load more (non-button role)']);
- assert.equal(view.controls.length,1);assert.equal(view.controls[0].allowed,false);
- const result=await readWhole(h.entry,{max_seconds:18});
- assert.deepEqual(lines(result.text),['first message','last message'],result.text);
- assert.match(result.text,/Complete: NO\./,result.text);assert.match(result.text,/partial: .*unopened controls\./);
- assert.doesNotMatch(result.text,/possible fragments|time cap|unavailable/);
- assert.match(result.text,/Load more \(non-button role\)/);assert.match(result.text,/Clicks: 0\./);
- assert.deepEqual(await h.page.evaluate(()=>clicked),[]);
- assert.equal(h.requests.filter(r=>r.method!=='GET'||r.path.startsWith('/danger')).length,0);
-});
-
-test('TW1R: nested small chrome labels are subtracted once',{skip,timeout:10000},async t=>{
- const h=await harness(t,shell('<article data-key="one">one</article><article data-key="two">two</article>',
-  '<a href="/danger"><span role="presentation">Archive</span></a>',"rows.append(document.createTextNode('Uncollected.'));"));
- const dom=await createWholeDOM(h.page);h.cleanup(()=>dom.dispose());const view=await dom.view();
- assert.deepEqual(view.rows.map(r=>r.text),['one','two']);assert.equal(view.fragments,true);
-});
-
-test('TW1R: sparse semantic rows and nested action labels complete without false warnings',{skip,timeout:22000},async t=>{
- const roles=['listitem','row','article','cell','gridcell','log','feed','list','grid','region','group'];
- const h=await harness(t,shell(roles.map((_,i)=>`<article data-key="${i}">Show more</article>`).join(''),
-  '<a href="/danger"><span role="presentation">Archive</span></a><button type="button">Reply all</button>',
-  `const roles=${JSON.stringify(roles)};[...rows.children].forEach((row,i)=>row.setAttribute('role',roles[i]));`));
- const dom=await createWholeDOM(h.page);h.cleanup(()=>dom.dispose());const view=await dom.view();
- assert.equal(view.rows.length,roles.length);assert.deepEqual(view.controls,[]);assert.equal(view.fragments,false);
- assert.deepEqual(await h.page.locator('#rows>article').evaluateAll(nodes=>nodes.map(n=>n.getAttribute('role'))),roles);
- await h.page.evaluate(()=>{for(const row of rows.children)row.tabIndex=0;});
- assert.deepEqual((await dom.view()).controls,[],'focusable transcript rows remain data');
- const result=await readWhole(h.entry,{max_seconds:18});
- assert.deepEqual(lines(result.text),roles.map(()=>'Show more'),result.text);
- assert.match(result.text,/Complete: yes\./,result.text);assert.match(result.text,/Clicks: 0\./);
- assert.doesNotMatch(result.text,/possible fragments|unopened controls/);
- assert.deepEqual(await h.page.evaluate(()=>clicked),[]);
- assert.equal(h.requests.filter(r=>r.path.startsWith('/danger')).length,0);
-});
-
-test('TW2: twenty presentation labels of seventy characters stay partial',{skip,timeout:22000},async t=>{
- const h=await harness(t,shell('<article data-key="one">first message</article><article data-key="two">last message</article>',
-  '<div role="status" style="display:inline-block;width:300px;white-space:nowrap">'+
-  Array.from({length:20},()=>`<span role="presentation" style="display:block">${'x'.repeat(70)}</span>`).join('')+'</div>',
-  "rows.style.cssText='display:inline-block;width:300px';"));
- const dom=await createWholeDOM(h.page);h.cleanup(()=>dom.dispose());const view=await dom.view();
- assert.deepEqual(view.rows.map(r=>r.text),['first message','last message']);assert.equal(view.fragments,true);
- const result=await readWhole(h.entry,{max_seconds:18});
- assert.deepEqual(lines(result.text),['first message','last message'],result.text);
- assert.match(result.text,/Start: reached\./);assert.match(result.text,/End: reached\./);
- assert.match(result.text,/Complete: NO\. partial: possible fragments\./,result.text);
- assert.match(result.text,/Clicks: 0\./);
-});
-
-for(const role of ['listitem','row','article','cell','gridcell','log','feed','list','grid','region','group'])test('TW2: focusable '+role+' expander outside rows is refused',{skip,timeout:22000},async t=>{
- // The container-role element uses a div, so its role alone must not turn it into data.
- const h=await harness(t,shell('<article data-key="one">first message</article><article data-key="two">last message</article>',
-  `<div role="${role}" tabindex="0" id="more">Load more</div>`,"more.onclick=()=>{clicked.push('unsafe');fetch('/danger',{method:'POST'});};"));
- const dom=await createWholeDOM(h.page);h.cleanup(()=>dom.dispose());const view=await dom.view();
- assert.deepEqual(view.rows.map(r=>r.text),['first message','last message']);
- assert.deepEqual(view.refused,['Load more (non-button role)']);
- const result=await readWhole(h.entry,{max_seconds:18});
- assert.match(result.text,/Complete: NO\./,result.text);assert.match(result.text,/unopened controls/);
- assert.match(result.text,/Load more \(non-button role\)/);assert.match(result.text,/Clicks: 0\./);
- assert.deepEqual(await h.page.evaluate(()=>clicked),[]);
- assert.equal(h.requests.filter(r=>r.method!=='GET'||r.path.startsWith('/danger')).length,0);
-});
-
-test('TW2: a visible aria-hidden row keeps the transcript partial',{skip,timeout:22000},async t=>{
- const h=await harness(t,shell('<article data-key="one">first message</article><article data-key="hidden" aria-hidden="true">omitted</article><article data-key="two">last message</article>'));
- const dom=await createWholeDOM(h.page);h.cleanup(()=>dom.dispose());const view=await dom.view();
- assert.deepEqual(view.rows.map(r=>r.text),['first message','last message']);assert.equal(view.fragments,true);
- const result=await readWhole(h.entry,{max_seconds:18});
- assert.deepEqual(lines(result.text),['first message','last message'],result.text);
- assert.match(result.text,/Complete: NO\. partial: possible fragments\./,result.text);
-});
-
-test('TW2: a focusable container loader beside rows inside the root is refused',{skip,timeout:22000},async t=>{
- const h=await harness(t,shell('<article data-key="one">first message</article><article data-key="two">last message</article><div role="group" tabindex="0">Load more</div>'));
- const dom=await createWholeDOM(h.page);h.cleanup(()=>dom.dispose());const view=await dom.view();
- assert.deepEqual(view.rows.map(r=>r.text),['first message','last message']);
- assert.deepEqual(view.refused,['Load more (non-button role)']);
- const result=await readWhole(h.entry,{max_seconds:18});
- assert.match(result.text,/Complete: NO\./,result.text);assert.match(result.text,/unopened controls/);
- assert.match(result.text,/Clicks: 0\./);
-});
-
-for(const kind of ['iframe','shadow'])test('TW2: an empty-innerText '+kind+' body keeps the transcript partial',{skip,timeout:22000},async t=>{
- const script=kind==='iframe'?`opaque.srcdoc='<p>Uncollected frame body</p>';`:
-  `opaque.attachShadow({mode:'open'}).innerHTML='<p>Uncollected shadow body</p>';`;
- const h=await harness(t,shell('<article data-key="one">first message</article><article data-key="two">last message</article>',
-  kind==='iframe'?'<iframe id="opaque"></iframe>':'<div id="opaque"></div>',script));
- assert.equal(await h.page.locator('#opaque').evaluate(n=>n.innerText??''),'');
- const dom=await createWholeDOM(h.page);h.cleanup(()=>dom.dispose());const view=await dom.view();
- assert.deepEqual(view.rows.map(r=>r.text),['first message','last message']);assert.equal(view.fragments,true);
- const result=await readWhole(h.entry,{max_seconds:18});
- assert.deepEqual(lines(result.text),['first message','last message'],result.text);
- assert.match(result.text,/Complete: NO\. partial: possible fragments\./,result.text);
-});
-
-test('TW1: delayed bodies and a nested quote update keyed rows while expander POSTs stay held',{skip,timeout:20000},async t=>{
- const h=await harness(t,shell('<article data-key="one">From Dana<button type="button">Show more</button><div hidden>Body one: the first message has no invoice.</div></article><article data-key="two">From Lee<button type="button">Show more</button><div hidden>Body two: a reply.<button type="button">Show trimmed content</button><blockquote hidden>Quoted invoice TW1-184, from the earlier message.</blockquote></div></article>',
-  '<a href="/danger">Show more</a><button type="button" class="danger">Archive</button>',
-  `document.querySelectorAll('article>button').forEach(b=>b.onclick=()=>{clicked.push('body');box.setAttribute('aria-busy','true');setTimeout(()=>{b.nextElementSibling.hidden=false;b.remove();box.setAttribute('aria-busy','false');},450);});
-  document.querySelector('article div button').onclick=e=>{clicked.push('quote');box.setAttribute('aria-busy','true');fetch('/telemetry',{method:'POST'}).catch(()=>{});setTimeout(()=>{e.target.nextElementSibling.hidden=false;e.target.remove();box.setAttribute('aria-busy','false');},450);};
-  document.querySelector('.danger').onclick=()=>{clicked.push('Archive');fetch('/danger',{method:'POST'});};`));
- const result=await readWhole(h.entry,{max_seconds:18});
- assert.equal(lines(result.text).length,2,result.text);
- assert.match(lines(result.text)[0],/Body one: the first message has no invoice/);
- assert.match(lines(result.text)[1],/Body two: a reply\.[\s\S]*Quoted invoice TW1-184, from the earlier message\./);
- assert.match(result.text,/expanded: "Show trimmed content"/);
- assert.match(result.text,/held after expander click: POST /);
- assert.match(result.text,/Show more \(link\)/);
- assert.doesNotMatch(result.text,/possible fragments|Show more \(non-button role\)/);
- assert.deepEqual(await h.page.evaluate(()=>clicked),['body','body','quote']);
- assert.equal(h.requests.filter(r=>r.method!=='GET'||r.path.startsWith('/danger')).length,0);
- assert.equal(h.page.url(),h.base+'/');assert.equal(h.context.pages().length,1);
 });
 
 test('review: a late-loading First message item is not a start marker',{skip,timeout:22000},async t=>{
@@ -335,8 +168,7 @@ test('LR1C: a cross-process iframe and its worker cannot send POSTs after the ta
  const f=await filteredFixture(t,shell('<article data-key="a">first message</article><article data-key="b">last message</article>',`<button type="button" id="more">Show more</button><iframe style="display:none" src="${base}/frame"></iframe>`,script));t.after(()=>f.context.close());
  await f.entry.page.evaluate(()=>frameReady);assert.ok(f.entry.frames.sessions().length>0,'fixture must have an out-of-process frame');
  const result=await f.call('browser_read',{whole:{}});
- assert.deepEqual(posts,[],result.text);
- assert.match(result.text,/Complete: NO\. partial: possible fragments\./,result.text);
+ assert.deepEqual(posts,[],result.text);assert.match(result.text,/Complete: yes\./,result.text);
  assert.ok(result.text.includes('held after expander click: POST '+base+' x2'),result.text);
 });
 

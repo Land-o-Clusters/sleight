@@ -1,12 +1,6 @@
 #!/bin/sh
 # Runs lib/launch.mjs with the Node that ships inside the ChatGPT app, so
 # sleight needs nothing installed beyond ChatGPT itself.
-case "$(uname -s)" in
-  MINGW*|MSYS*|CYGWIN*)
-    echo "sleight: On Windows use bin\\sleight-mcp.cmd from CMD or PowerShell." >&2
-    exit 1
-    ;;
-esac
 APP_NODE="${SLEIGHT_CHATGPT_APP:-/Applications/ChatGPT.app}/Contents/Resources/cua_node/bin/node"
 if [ -x "$APP_NODE" ]; then
   NODE="$APP_NODE"

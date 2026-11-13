@@ -1,9 +1,9 @@
-// .sleightchar is an uncompressed POSIX ustar archive. Only stage strips may have a directory component.
+// .sleightchar v1 is a flat, uncompressed POSIX ustar archive. No external extractor runs.
 import * as fs from 'node:fs';
-import { CHARACTER_LIMITS, STAGE_LIMITS, stageFilename, parseCharacterJSON } from './character.mjs';
+import { CHARACTER_LIMITS } from './character.mjs';
 
-export const ARCHIVE_LIMITS = Object.freeze({ entries: 8 + STAGE_LIMITS.files, name: 80, total: STAGE_LIMITS.total,
-  bytes: STAGE_LIMITS.total + (8 + STAGE_LIMITS.files) * 1024 + 1024, ratio: 1 });
+export const ARCHIVE_LIMITS = Object.freeze({ entries: 8, name: 80, total: CHARACTER_LIMITS.total,
+  bytes: CHARACTER_LIMITS.total + 8 * 1024 + 1024, ratio: 1 });
 const refuse = reason => { throw Error(`Character archive: ${reason}`); };
 const zero = bytes => bytes.every(b => b === 0);
 function fileCap(name) {
@@ -11,7 +11,6 @@ function fileCap(name) {
   if (name === 'LICENSE.txt') return CHARACTER_LIMITS.license;
   if (name === 'preview.png') return CHARACTER_LIMITS.preview;
   if (/^(sheet|extra|perch)\.(png|webp)$/.test(name)) return CHARACTER_LIMITS.sheet;
-  if (stageFilename(name)) return STAGE_LIMITS.strip;
   refuse('entry name is not a v1 pack file');
 }
 function entriesCheck(files) {
@@ -22,11 +21,6 @@ function entriesCheck(files) {
     total += bytes.length;
   }
   if (total > ARCHIVE_LIMITS.total) refuse('total size cap exceeded');
-  let stage;
-  try { stage = parseCharacterJSON(files.get('character.json'))?.stage !== undefined; }
-  catch { refuse('invalid character manifest JSON'); }
-  if (!stage && (files.size > 8 || total > CHARACTER_LIMITS.total || [...files.keys()].some(stageFilename))) refuse('v1 total size, entry count or stage files refused');
-  if ([...files.keys()].filter(stageFilename).length > STAGE_LIMITS.files) refuse('stage entry count exceeded');
 }
 function octal(header, start, length) {
   const value = header.toString('ascii', start, start + length);

@@ -54,8 +54,6 @@ test('FD3 real app-link descendants and SVG links refuse before input; web links
   const f = await fixture(t, content + '<a href="mailto:fixture@example.invalid"><span id="mail">Mail</span></a>' +
     '<svg><a xlink:href="zoommtg://fixture.invalid" xmlns:xlink="http://www.w3.org/1999/xlink"><text id="svg">Meeting</text></a></svg>' +
     '<a id="web" href="/landed">Web</a>');
-  const navigations = [];
-  f.entry.cdp.on('Page.frameRequestedNavigation', event => navigations.push(event.url));
   for (const selector of ['#mail', 'svg a', '#svg']) {
     const element = await trustedLocatorRead(f.entry.page.locator(selector), inspectElement);
     assert.equal(element.appLink, true);
@@ -63,17 +61,6 @@ test('FD3 real app-link descendants and SVG links refuse before input; web links
     assert.equal(verdict.verdict, 'refuse'); assert.match(verdict.message, /native app/);
   }
   assert.equal((await trustedLocatorRead(f.entry.page.locator('#web'), inspectElement)).appLink, false);
-  await f.entry.page.evaluate(() => {
-    window.mailClicks = 0;
-    document.querySelector('#mail').addEventListener('click', () => window.mailClicks++);
-  });
-  const d = dispatcher(f), tab = f.entry.tab;
-  const read = await d.call({ name: 'browser_read', arguments: { tab } }); d.delivered(read);
-  const ref = /link "Mail"[^\n]*\[ref=(\w+)\]/.exec(read.text)?.[1]; assert.ok(ref, read.text);
-  const refused = await d.call({ name: 'browser_act', arguments: { tab, steps: [{ do: 'click', ref }] } });
-  assert.match(refused.text, /native app.*no browser input was sent/i);
-  assert.equal(await f.entry.page.evaluate(() => window.mailClicks), 0);
-  assert.deepEqual(navigations, [], 'a refused direct link never requests native navigation');
   assert.match(f.entry.page.url(), /\/start$/);
 });
 

@@ -297,7 +297,7 @@ function actionKind(code, before) {
 }
 
 // Compare state itself, so losing Help or renaming an unselected row cannot become a value change.
-export function stateFields(line) {
+function stateFields(line) {
   const fields = [];
   for (const pattern of [/\bValue: ?(.*?)(?=, (?:Secondary Actions|ID|Help|Description):|$)/,
     /;value:([^,]*)/, /\bSelected text: (.*?)(?=, (?:Secondary Actions|ID|Help|Description):|$)/]) {
@@ -313,7 +313,7 @@ export function stateFields(line) {
 // Controls whose title is their value (a field's text, a scroll bar's position, a triangle's 0 or 1) key on role and ID;
 // an untitled row, cell or field without ID or Description keys on its Value too, since that is all that tells repeated
 // blocks such as Finder's file rows apart (LS1 review, 2026-10-17).
-export function structuralKey(key) {
+function structuralKey(key) {
   const valued = /^(\t*)(text field|text entry area|text area|search field|combo box|scroll bar|value indicator|slider|stepper|disclosure triangle|row|cell)\b/.exec(key);
   if (valued) {
     const [, depth, role] = valued, id = /(?:^|, )ID: ([^,]*)/.exec(key)?.[1];
@@ -358,7 +358,7 @@ const EXTENSION_TYPES = { txt: 'public.plain-text', text: 'public.plain-text', m
 // The file's type identifier first, then the types it conforms to; undefined when Spotlight has none.
 export function spotlightTypes(path) {
   const run = spawnSync('/usr/bin/mdls', ['-raw', '-name', 'kMDItemContentType', '-name', 'kMDItemContentTypeTree', path],
-    { encoding: 'utf8', timeout: 1000, killSignal: 'SIGKILL' });
+    { encoding: 'utf8', timeout: 1000 });
   const [type, tree = ''] = run.status === 0 ? run.stdout.split('\0') : [];
   if (!type || type === '(null)') return;
   return [type, ...[...tree.matchAll(/"([^"]+)"/g)].map(m => m[1])];
@@ -805,7 +805,7 @@ export function failureReason(content) {
 }
 
 // outcomes: per-action outcome lines already say what changed, so the call-level UI line is left out.
-function resultNote(action, after, failed, failure, outcomes = false, outcomeRecord) {
+function resultNote(action, after, failed, failure, outcomes = false) {
   const before = action.before;
   const invalidRead = after?.invalid;
   if (invalidRead) after = undefined;
@@ -874,13 +874,9 @@ function resultNote(action, after, failed, failure, outcomes = false, outcomeRec
   }
   const selectedTabs = !reason && !incomplete && !degraded && after?.delta?.baseline === before.id
     ? after.delta.selectedTabs : [];
-  const textOutcome = outcomeRecord?.outcomes?.findLast(rec => /^(?:setValue|typeText|paste)$/.test(rec.a));
-  const valueMatches = !textOutcome?.x && textOutcome?.f?.some(fact => fact.o === 'value' && fact.m === true);
-  const fields = [/* lean notice */ failed ? 'call failed (' + (failure?.noInput && !action.overlap ? 'no input was sent' :
-    failure?.delivery === 'not-sent' ? 'failed action sent no input' : 'partial input possible') + ')' +
+  const fields = [/* lean notice */ failed ? 'call failed (' + (failure?.noInput && !action.overlap ? 'no input was sent' : 'partial input possible') + ')' +
     (failure?.message ? ': ' + failure.message : ': engine returned no error text') : outcomes ? undefined : ui, ...selectedTabs, saved && /* lean notice */ 'saved: ' + saved,
-    saved?.startsWith('observed') && after.window.url?.startsWith('file://') && fileReceipt(after.window.url),
-    saved?.startsWith('observed') && !valueMatches && /* lean notice */ 'requested text: unverified (save evidence only)'].filter(Boolean);
+    saved?.startsWith('observed') && after.window.url?.startsWith('file://') && fileReceipt(after.window.url)].filter(Boolean);
   const finish = saveFinishLine(after, before, failed, action.overlap);
   if (!fields.length) return finish;
   const note = fields.join('; ');
@@ -1318,8 +1314,6 @@ function claudeReads(code, compacted, omitted) {
 }
 
 export function createReadCompactor({ resultTrim = process.env.SLEIGHT_RESULT_TRIM === '1', leanCalls = false, prompt,
-  // The Glide parent tracks delivered views separately from the ChatGPT relay.
-  renumberRefusalNote = true, reacquireNumbers = true, removalDiffs = false,
   callTrees = process.env.SLEIGHT_CALL_TREES !== 'all', scrollNote = process.env.SLEIGHT_SCROLL_NOTE !== '0',
   compactAcquisition = process.env.SLEIGHT_COMPACT_ACQUISITION === '1',
   compactReacquire = process.env.SLEIGHT_COMPACT_REACQUIRE === '1',
@@ -1413,7 +1407,6 @@ export function createReadCompactor({ resultTrim = process.env.SLEIGHT_RESULT_TR
     const window = windowFromText(tree);
     const lines = tree.replace(/\n+$/, '').split('\n');
     if (!window) {
-      if ([...tree.matchAll(/^Window: /gm)].length > 1) remember(tree);
       latest = undefined;
       observedInResult = { invalid: tree.includes('Window: ') ? 'ambiguous window read' : 'missing window header' };
       return tree;
@@ -1422,9 +1415,7 @@ export function createReadCompactor({ resultTrim = process.env.SLEIGHT_RESULT_TR
     const before = seen.get(key);
     const observation = observe(tree, window, lines);
     seen.set(key, { lines, observation });
-    // An ambiguous read can leave only revoked numbers, with no observation to
-    // compare. This complete read establishes a new baseline without a delta.
-    if (!before?.observation) return tree;
+    if (!before) return tree;
     const old = before.lines.map(parse), now = lines.map(parse);
     const keys = now.map(line => line.key);
     const degraded = new Set();
@@ -1499,21 +1490,9 @@ export function createReadCompactor({ resultTrim = process.env.SLEIGHT_RESULT_TR
     const note = renumbered
       ? promptNotice(/* lean notice */ `\nsleight: ${renumbered} other elements have new numbers. Use numbers from + lines above or from a full read. Read the window again with getAXState() for changed lines with current numbers before acting on any other element; sleight refuses actions on numbers that changed.`, prompt)
       : '';
-    const renumberNote = renumberRefusalNote ? note : note
-      .replace('; sleight refuses actions on numbers that changed.', '.')
-      .replace('; sleight refuses actions on changed numbers.', '.');
     const degradedNote = fewerAttributes ? promptNotice(/* lean notice */ `\nsleight: ${fewerAttributes} button lines returned fewer attributes. Their unique IDs still match; missing descriptions and help are unavailable in this read.`, prompt) : '';
-    const text = `${header}\n${body}${renumberNote}${degradedNote}`;
-    if (!(leanCalls && action) && text.length > tree.length * MAX_SHARE) {
-      // Bulk known-number refreshes can dwarf a removed block. Retry without
-      // them, retaining all actual edits and the same 60% churn limit. Those
-      // omitted shifted numbers gain no belief and require a selector or read.
-      if (removalDiffs && refreshNumbers && pairs.some(([i, j]) => i >= 0 && j < 0 && old[i].num !== undefined)) {
-        seen.set(key, before);
-        return compact(tree, prefix, action, false);
-      }
-      return tree;
-    }
+    const text = `${header}\n${body}${note}${degradedNote}`;
+    if (!(leanCalls && action) && text.length > tree.length * MAX_SHARE) return tree;
     const allValid = [...current.keys()].every(num => valid.has(num));
     seen.set(key, { lines, observation, valid: allValid ? undefined : valid, believed: allValid ? undefined : believed });
     return text;
@@ -1533,7 +1512,7 @@ export function createReadCompactor({ resultTrim = process.env.SLEIGHT_RESULT_TR
     if (ELEMENT.exec(lines[1] ?? '')?.[2] !== '0' || !/^(?:(?:standard|floating|system|dialog) window|window|sheet|dialog)\b/.test(parse(lines[1]).key) ||
         /…\(\d+\)|sleight: (?:lines changed|no change since)/.test(tree)) return;
     if (latest?.window.app === window.app && latest.window.title === window.title && latest.window.url && !window.url) return;
-    const sent = compact(tree, text.slice(0, at), undefined, reacquireNumbers);
+    const sent = compact(tree, text.slice(0, at), undefined, true);
     return sent === tree ? text : text.slice(0, at) + sent;
   }
 
@@ -1544,32 +1523,7 @@ export function createReadCompactor({ resultTrim = process.env.SLEIGHT_RESULT_TR
   function remember(text, action) {
     const starts = [...text.matchAll(/^Window: /gm)];
     if (!starts.length) return;
-    // A label can contain an imitation header without a window root. Do not
-    // let that split erase the real window's number guard, even before a cap.
-    const rootAfter = index => {
-      const start = text.indexOf('\n', index), end = text.indexOf('\n', start + 1);
-      return start < 0 ? '' : text.slice(start + 1, end < 0 ? undefined : end);
-    };
-    if (starts.length > 1 && starts.some(({ index }) => !windowRoot(parse(rootAfter(index)).key))) {
-      const lines = text.slice(starts[0].index).replace(/\n+$/, '').split('\n');
-      const window = windowFromText(lines.slice(0, 2).join('\n'));
-      if (window && windowRoot(parse(lines[1] ?? '').key)) {
-        seen.set(documentKey(window), { lines, valid: new Set(), believed: new Map() });
-      }
-      latest = undefined; observedInResult = { invalid: 'ambiguous window read' };
-      return;
-    }
     const ambiguous = starts.length > 1 && !windowFromText(text);
-    if (ambiguous) {
-      // A second header with an imitation root is indistinguishable from a
-      // different window here. Revoke the first window's old baseline before
-      // remembering the last; it must not keep numbers hidden by a later cap.
-      const lines = text.slice(starts[0].index, starts[1].index).replace(/\n+$/, '').split('\n');
-      const window = windowFromText(lines.slice(0, 2).join('\n'));
-      if (window && windowRoot(parse(lines[1] ?? '').key)) {
-        seen.set(documentKey(window), { lines, valid: new Set(), believed: new Map() });
-      }
-    }
     const shown = new Set();
     for (const [i, { index }] of (ambiguous ? starts.slice(-1) : starts).entries()) {
       const tree = text.slice(index, ambiguous ? undefined : starts[i + 1]?.index).replace(/\n+$/, '');
@@ -1765,7 +1719,7 @@ export function createReadCompactor({ resultTrim = process.env.SLEIGHT_RESULT_TR
         notSent: content.some(item => item?.type === 'text' && /\bnot sent\b/.test(item.text ?? '')) });
       if (outcomeLines) out.push({ type: 'text', text: promptNotice(outcomeLines, prompt) });
       const note = action && (failed || !action.writeEffects?.length) && resultNote(action, observedInResult, failed,
-        failure ?? { message: failureReason(content) }, !!outcomeLines, outcomeRecord);
+        failure ?? { message: failureReason(content) }, !!outcomeLines);
       if (note) out.push({ type: 'text', text: promptNotice(note, prompt) });
       const omittedNote = /* lean notice */ `sleight: ${omittedReads} earlier reads of the same window in this call left out; the last is shown. Element numbers refer to the last tree.`;
       if (omittedReads) out.push({ type: 'text', text: promptNotice(omittedNote, prompt) });
@@ -1963,41 +1917,6 @@ export function createReadCompactor({ resultTrim = process.env.SLEIGHT_RESULT_TR
         for (const entry of seen.values()) entry.stale = true;
       }
       return trimBrowserResults(out, code);
-    },
-    // A later delivery cap can hide rows after process() established the native
-    // baseline. Revoke those numbers without granting any new observations.
-    hideNumbers(text, numbers, delivered = []) {
-      if (!numbers.length) return;
-      const removed = new Set(numbers);
-      const at = text.search(/^Window: /m);
-      if (at < 0) return;
-      const header = text.slice(at).split('\n').slice(0, 2).join('\n');
-      const window = windowFromText(header), key = window && documentKey(window);
-      let owner = key && seen.get(key);
-      const fallback = !owner || !numbered(owner.lines).some(([num]) => removed.has(num))
-        ? [...seen].filter(([, entry]) => numbered(entry.lines).some(([num]) => removed.has(num))) : [];
-      if (key && !owner) {
-        owner = { lines: header.split('\n'), valid: new Set(), believed: new Map() };
-        seen.set(key, owner);
-      }
-      const targets = new Map([...(owner ? [[key, owner]] : []), ...fallback]);
-      for (const [entryKey, entry] of targets) {
-        const hidden = new Set(removed), current = new Map();
-        // Repeated numbers can be label continuations. No occurrence can
-        // establish which line owns that number, so none earns a reprieve.
-        for (const [num, line] of numbered(entry.lines)) current.set(num, current.has(num) ? undefined : line);
-        // An earlier tree may give space to a later read of the same window. A
-        // number still shown on its exact current line has not been hidden.
-        for (const item of delivered) if (item.type === 'text' && typeof item.text === 'string') {
-          // Multiple headers inside one item are ambiguous. They never restore
-          // a revoked number, even if an imitation repeats the owner's name.
-          if ([...item.text.matchAll(/^Window: /gm)].length !== 1) continue;
-          if (documentKey(windowFromText(item.text)) !== entryKey) continue;
-          for (const [num, line] of numbered(item.text.split('\n'))) if (current.get(num) === line) hidden.delete(num);
-        }
-        entry.valid = new Set([...(entry.valid ?? numbered(entry.lines).map(([num]) => num))].filter(num => !hidden.has(num)));
-        entry.believed = new Map([...(entry.believed ?? numbered(entry.lines))].filter(([num]) => !hidden.has(num)));
-      }
     },
     beginAction(code) {
       const kind = actionKind(code, latest);

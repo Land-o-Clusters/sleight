@@ -1,4 +1,3 @@
-import { selectRuntime } from '../runtime-choice.mjs';
 import { narrationLine } from '../../hooks/narration.mjs';
 import { sessionCursorEvents, withCursorCall, workerCursorStatus, workerCursorAction, cursorStep, cursorStreamEnabled } from '../hand/events.mjs';
 import { fork } from 'node:child_process';
@@ -20,8 +19,6 @@ import { validHostLabel } from '../host-label.mjs';
 import { isMainModule } from '../main-module.mjs';
 import { recoverNativeClipboard } from '../clipboard.mjs';
 import { createSessionPause, PAUSED_NOTE } from '../session-pause.mjs';
-import { ownWorkerProcess } from './worker-process.mjs';
-import { selectedBrowserId } from './browser-identity.mjs';
 
 const bridges = new WeakSet(), frontends = new WeakSet();
 export const isV3Bridge = value => !!value && bridges.has(value);
@@ -167,9 +164,7 @@ export function handoffRpcWaitMs(waitMs, ownedTabs) {
   return Math.min(HANDOFF_DRAIN_WAIT_MS, waitMs + 5000 * ownedTabs);
 }
 
-export const TURBO_STARTUP_TIMEOUT_MS = 120000;
-export async function createV3Bridge({ startupTimeoutMs = TURBO_STARTUP_TIMEOUT_MS, timeoutMs = 31000, signal } = {}, dependencies = {}) {
-  signal?.throwIfAborted();
+export async function createV3Bridge({ startupTimeoutMs = 120000, timeoutMs = 31000 } = {}, dependencies = {}) {
   const config = (dependencies.readConfig ?? readInstalledConfig)();
   if (!config) return null;
   const accepted = (dependencies.acceptPackage ?? acceptedInstalledPackage)(config);
@@ -183,28 +178,12 @@ export async function createV3Bridge({ startupTimeoutMs = TURBO_STARTUP_TIMEOUT_
   // the channel's ends as fds 4 and 5 and talks to the host directly; the relay retains idle copies for reattachment.
   // Without a shared host the worker opens its own, as before.
   let shared, child;
-  try {
-    const sharing = Promise.resolve((dependencies.shareConsent ?? (await import('../hand/client.mjs')).shareConsent)());
-    shared = await new Promise((resolve, reject) => {
-      const abort = () => reject(signal.reason);
-      signal?.addEventListener('abort', abort, { once: true });
-      sharing.then(value => {
-        signal?.removeEventListener('abort', abort);
-        if (signal?.aborted) { value?.release(); value?.detached?.(); reject(signal.reason); }
-        else resolve(value);
-      }, error => { signal?.removeEventListener('abort', abort); reject(error); });
-      if (signal?.aborted) abort();
-    });
-  }
+  try { shared = await (dependencies.shareConsent ?? (await import('../hand/client.mjs')).shareConsent)(); }
   catch (error) { trace.close(); throw Object.assign(error, { stage: 'worker-spawn', reason: startupReason(error) }); }
   try { child = (dependencies.forkWorker ?? fork)(fileURLToPath(new URL('./worker.mjs', import.meta.url)), shared ? ['--shared-ui', ...(Number.isSafeInteger(shared.pid) && shared.pid > 0 ? ['--shared-hand-pid=' + shared.pid] : [])] : [],
     { env, execArgv: [], stdio: ['ignore', 'ignore', 'ignore', 'ipc', ...shared ? [shared.write, shared.read] : []], serialization: 'json' }); }
   catch (error) { shared?.detached?.(); trace.close(); throw Object.assign(Error('V3_WORKER_UNAVAILABLE'), { stage: 'worker-spawn', reason: startupReason(error) }); }
   finally { shared?.release(); }
-  const ownedWorker = ownWorkerProcess(child, { identity: dependencies.workerProcessIdentity });
-  let collection;
-  const aborted = () => lose('V3_WORKER_UNAVAILABLE', 'startup-aborted');
-  signal?.addEventListener('abort', aborted, { once: true });
   child.once('exit', () => shared?.detached?.());
   trace('worker-spawned');
   let hello, active = false, lost = false, generation = 0, sequence = 0, ending, callTimeoutMs = timeoutMs;
@@ -221,7 +200,7 @@ export async function createV3Bridge({ startupTimeoutMs = TURBO_STARTUP_TIMEOUT_
   const current = () => { try { return accepted.current() === true; } catch { return false; } };
   function fence() { active = false; generation++; deliveries = new WeakMap(); }
   // stage and reason say why a worker never became ready (unavailableFrame); after hello they are unused.
-  function lose(code = 'V3_WORKER_UNAVAILABLE', stage = 'worker-disconnect', reason, { graceful = false } = {}) {
+  function lose(code = 'V3_WORKER_UNAVAILABLE', stage = 'worker-disconnect', reason) {
     if (lost) return;
     lost = true; fence(); handoffCall = undefined; handoffCalls.clear(); clearTimeout(timer);
     const error = Error(typeof code === 'string' ? code : 'V3_WORKER_UNAVAILABLE');
@@ -229,11 +208,7 @@ export async function createV3Bridge({ startupTimeoutMs = TURBO_STARTUP_TIMEOUT_
     rejectReady(error);
     for (const entry of pending.values()) { clearTimeout(entry.timer); entry.reject(Error('V3_WORKER_UNAVAILABLE')); }
     pending.clear();
-    signal?.removeEventListener('abort', aborted);
-    collection = ownedWorker.stop(() => {
-      try { if (child.connected) child.send({ version: 3, id: 'q' + (++sequence), method: 'close', params: {} }, () => {}); } catch {}
-      try { if (child.connected) child.disconnect(); } catch {}
-    }, { graceful });
+    try { if (child.connected) child.disconnect(); child.unref?.(); } catch {}
     trace.close();
   }
   child.on('message', frame => {
@@ -325,10 +300,7 @@ export async function createV3Bridge({ startupTimeoutMs = TURBO_STARTUP_TIMEOUT_
       try { child.send(frame, error => { if (error) failed(); }); } catch { failed(); }
     });
   }
-  if (signal?.aborted) aborted();
-  try { await ready; } catch (error) { await collection; throw error; }
-  // The startup controller no longer owns a worker that has completed hello.
-  signal?.removeEventListener('abort', aborted);
+  await ready;
   if (!current()) { lose(); throw Object.assign(Error('HOST_PACKAGE_MISMATCH'), { stage: 'package', reason: 'HOST_PACKAGE_MISMATCH' }); }
   function endTurn() {
     fence();
@@ -370,6 +342,7 @@ export async function createV3Bridge({ startupTimeoutMs = TURBO_STARTUP_TIMEOUT_
       const result = await rpc('begin', { turn: frame.turn, text: frame.text, apps: [...apps], appSecret: serverAppSecret(),
         ...(validHostLabel(host) ? { host } : {}) });
       if (epoch !== generation || lost || !current()) return false;
+      // The begin reply follows the old runtime's end and its call cleanup.
       handoffCall = undefined;
       active = result?.available === true;
       // An app turn's first calls prepare it and may wait on the user's clicks; the worker names that deadline, within 10 minutes.
@@ -413,130 +386,25 @@ export async function createV3Bridge({ startupTimeoutMs = TURBO_STARTUP_TIMEOUT_
       rpc('delivered', { resultId: record.id, hash: record.hash }).catch(() => {}); return true;
     },
     end: endTurn, endTurn,
-    async detach() { const receipt = await endTurn(); lose(undefined, undefined, undefined, { graceful: true }); await collection; return receipt; },
-    async close() { fence(); try { return await rpc('close', {}); } catch { return unproved(); }
-      finally { lose(undefined, undefined, undefined, { graceful: true }); await collection; } },
+    async detach() { const receipt = await endTurn(); lose(); return receipt; },
+    async close() { fence(); try { return await rpc('close', {}); } catch { return unproved(); } finally { lose(); } },
   });
   bridges.add(bridge); return bridge;
 }
-// Installed startup advertises the configured catalog without starting helpers or inspecting Chrome.
-// Only an authenticated begin may join the existing, fully validated worker startup.
-export const TURBO_PREPARING_NOTICE = 'Preparing turbo. Wait 35 seconds before retrying. Startup (helpers and hello) times out after 120 seconds. No browser action ran.';
-const deferredFailure = ({ code, stage, reason }) => `Tell the user: Turbo is off (${code} at ${stage}: ${reason}). Use the engine browser path.`;
-export const turboStartupNotices = () => [TURBO_PREPARING_NOTICE, deferredFailure({ code: '<value>', stage: '<value>', reason: '<value>' })];
-export function createDeferredV3Bridge(start, dependencies = {}) {
-  const config = (dependencies.readConfig ?? readInstalledConfig)();
-  if (!config) return null;
-  const accepted = (dependencies.acceptPackage ?? acceptedInstalledPackage)(config);
-  if (!accepted.current()) throw Error('HOST_PACKAGE_MISMATCH');
-  const browser = selectedBrowserId(config), application = applicationName(config.executable);
-  const envelope = { version: 1, session: 'v3' + randomBytes(16).toString('hex'), nonce: randomBytes(32).toString('hex') };
-  const turns = new Set();
-  let pending, bridge, closed = false, paused = false, active = false, generation = 0, closing, request, unavailable;
-  let bindings = Promise.resolve(), preparation;
-  const current = () => { try { return accepted.current() === true; } catch { return false; } };
-  const idle = () => ({ revoked: true, cleanup: [] });
-  function ensure() {
-    if (pending) return pending;
-    preparation = new AbortController();
-    const timer = setTimeout(() => preparation.abort(), TURBO_STARTUP_TIMEOUT_MS);
-    return pending = Promise.resolve().then(() => start({ signal: preparation.signal })).then(async value => {
-      if (!value) throw Error('SETTING_OFF');
-      if (!isV3Bridge(value)) throw Error('TRUSTED_ROUTE_REQUIRED');
-      if (value.browser !== browser || value.application !== application || !current()) {
-        await value.close(); throw Error('HOST_PACKAGE_MISMATCH');
-      }
-      bridge = value;
-      bridge.setPaused?.(paused);
-      return bridge;
-    }).catch(error => {
-      unavailable = Object.freeze({ code: startupReason(error), stage: startupStage(error?.stage) ?? 'startup', reason: startupReason({ message: error?.reason ?? error?.message }) });
-      return undefined;
-    }).finally(() => clearTimeout(timer));
-  }
-  function endTurn() {
-    active = false; request = undefined; generation++;
-    // Stop cancels preparation and joins child collection before reporting cleanup.
-    if (bridge) return bridge.endTurn();
-    if (!pending || unavailable) return Promise.resolve(idle());
-    preparation.abort();
-    return pending.then(async value => {
-      const receipt = value ? await value.close() : idle();
-      bridge = undefined; pending = undefined; unavailable = undefined;
-      return receipt;
-    });
-  }
-  function bindRequest(turn) {
-    turn.started = true;
-    // Serialize late binds too, so an old turn's cleanup cannot revoke a newer turn.
-    bindings = bindings.then(async () => {
-      if (closed || turn.epoch !== generation || !current()) return;
-      const ready = await ensure();
-      if (!ready || closed || turn.epoch !== generation || !current()) return;
-      const bound = await ready.bind({ ...turn.frame, ...ready.bootstrapEnvelope() }, turn.apps, turn.host);
-      if (closed || turn.epoch !== generation || !current()) { await ready.endTurn(); return; }
-      active = bound === true;
-    }).catch(() => { active = false; }).finally(() => { turn.finished = true; });
-    return bindings;
-  }
-  const deferred = Object.freeze({ browser, application, deferred: true,
-    unavailable: () => unavailable,
-    bootstrapEnvelope: () => ({ ...envelope }),
-    tools: () => browserTools(browser),
-    handoffPending: () => bridge?.handoffPending?.() === true,
-    setPaused(value) {
-      if (typeof value !== 'boolean') return;
-      paused = value; bridge?.setPaused?.(value);
-    },
-    async bind(frame, apps = [], host) {
-      if (closed) return false;
-      if (!exact(frame, ['version', 'session', 'nonce', 'event', 'turn', 'text']) || frame.version !== 1 ||
-          frame.session !== envelope.session || frame.nonce !== envelope.nonce || frame.event !== 'begin' || !id(frame.turn) ||
-          typeof frame.text !== 'string' || Buffer.byteLength(frame.text) > 65536 || !approvedApps(apps) || turns.has(frame.turn) || !current())
-        throw Error('TRUSTED_TURN_REQUIRED');
-      turns.add(frame.turn); active = false;
-      // Snapshot authenticated data. Preparation never retains caller-mutable authority.
-      request = { frame: { ...frame }, apps: [...apps], host, epoch: ++generation, started: false };
-      // Later turns bind an already prepared worker normally, with no extra tool retry.
-      if (bridge && !unavailable) { await bindRequest(request); return active; }
-      return !unavailable;
-    },
-    call(input, options) {
-      if (closed || !current() || !request) return Promise.resolve(failure());
-      if (unavailable) return Promise.resolve({ isError: true, text: deferredFailure(unavailable) });
-      if (active) return bridge.call(input, options);
-      if (request.finished) return Promise.resolve(failure());
-      if (!request.started) bindRequest(request);
-      return Promise.resolve({ text: TURBO_PREPARING_NOTICE, isError: true });
-    },
-    delivered: result => active && !closed && current() && bridge.delivered(result),
-    end: endTurn, endTurn,
-    detach() { return deferred.close(); },
-    close() {
-      if (closing) return closing;
-      closed = true; active = false; request = undefined; generation++;
-      // Abort first, then collect the compiler and worker before releasing the bank.
-      preparation?.abort();
-      return closing = bridge ? bridge.close() : pending ? pending.then(value => value?.close() ?? idle(), idle) : Promise.resolve(idle());
-    },
-  });
-  bridges.add(deferred); return deferred;
-}
-
 export function createV3Frontend(bridge) {
   if (!isV3Bridge(bridge)) throw Error('TRUSTED_ROUTE_REQUIRED');
   const frontend = Object.freeze({ browser: bridge.browser, application: bridge.application, tools: bridge.tools, call: bridge.call, delivered: bridge.delivered, end: bridge.endTurn, setPaused: bridge.setPaused,
-    handoffPending: bridge.handoffPending, deferred: bridge.deferred, unavailable: bridge.unavailable });
+    handoffPending: bridge.handoffPending });
   frontends.add(frontend); return frontend;
 }
 
 // The installed join supplies owned pages and snapshots. Only the worker begin
 // binding supplies user authority; MCP arguments never reach this constructor.
-export async function createV3TurnRuntime({ binding, browser, application, pages, snapshot, ui, endpoint, dependencies = {} }) {
+export async function createV3TurnRuntime({ binding, browser, pages, snapshot, ui, endpoint, dependencies = {} }) {
   const [{ runSteps }, { fillFields }, { deliverSnapshot }] = await Promise.all([
     import('./act.mjs'), import('./fill.mjs'), import('./rules.mjs'),
   ]);
-  const ctx = (dependencies.createContext ?? createV3Context)({ binding, browser, application, ui, ...dependencies.strictText !== undefined ? { strictText: dependencies.strictText } : {} });
+  const ctx = (dependencies.createContext ?? createV3Context)({ binding, browser, ui });
   const permitted = recordingPermission(binding);
   let recording;
   if (permitted() && dependencies.recordingSupported !== false) {
@@ -705,8 +573,6 @@ export function serveV3Worker({ channel, browser, begin, current = () => true, c
 // Dependency injection is a module-only test seam; IPC cannot choose a provider,
 // endpoint, package, loader, authority or executable.
 export async function startInstalledV3Worker({ channel }, dependencies = {}) {
-  let strictText, helperPreparation;
-  const preparation = new AbortController();
   const trace = phaseTrace(dependencies, process.ppid);
   trace('worker-entry');
   let parentLost = channel.connected === false, stopped = false, selected, ui, protocol, timer, unsubscribe;
@@ -779,11 +645,10 @@ export async function startInstalledV3Worker({ channel }, dependencies = {}) {
     return resource.collecting;
   }
   async function close() {
-    stopped = true; preparation.abort();
+    stopped = true;
     if (finalReceipt) return finalReceipt;
     if (closing) return closing;
     closing = (async () => {
-      await helperPreparation?.catch(() => {});
       await protocol?.end().catch(unproved);
       await protocol?.drain();
       const receipts = await Promise.all([...resources].map(collect));
@@ -853,12 +718,8 @@ export async function startInstalledV3Worker({ channel }, dependencies = {}) {
   // Which startup step is running, so a failure can say where it stopped (unavailableFrame).
   let stage = 'config';
   try {
-    stage = 'runtime-choice';
-    strictText = dependencies.strictText ?? selectRuntime() === 'own';
     stage = 'clipboard-recovery';
-    // Own-runtime startup has no automatic clipboard recovery. Old records stay
-    // untouched for owner-directed recovery. Engine startup keeps its behavior.
-    if (!strictText) await (dependencies.recoverClipboard ?? recoverNativeClipboard)();
+    await (dependencies.recoverClipboard ?? recoverNativeClipboard)();
     stage = 'config';
     const config = (dependencies.readConfig ?? readInstalledConfig)();
     if (!config) throw Error('SETTING_OFF');
@@ -868,7 +729,7 @@ export async function startInstalledV3Worker({ channel }, dependencies = {}) {
     const host = await import('./host.mjs'); startupCurrent();
     stage = 'helpers';
     trace('helpers-check-start');
-    const built = await (helperPreparation = (dependencies.prepareHelpers ?? host.prepareNativeHelpers)({ inventory: config.receipt, signal: preparation.signal })); startupCurrent();
+    const built = await (dependencies.prepareHelpers ?? host.prepareNativeHelpers)({ inventory: config.receipt }); startupCurrent();
     trace('helpers-check-end');
     if (built.status !== 'ready') throw Error(built.code);
     const { createSelectedConnection } = await import('./selected-connection.mjs'); startupCurrent();
@@ -975,11 +836,11 @@ export async function startInstalledV3Worker({ channel }, dependencies = {}) {
             const session = await resource.browser.newBrowserCDPSession();
             resource.pages = (dependencies.createPages ?? createPageRegistry)({ browser: resource.browser, session,
               endpoint: selected.endpoint, endpointBlocked: resource.filter.endpointBlocked, upstream: selected.session, ownTarget: resource.filter.own, releaseTarget: resource.filter.release, frames: resource.filter.frames });
-            const runtime = await (dependencies.createRuntime ?? createV3TurnRuntime)({ binding, browser: selected.selectedBrowser, application: applicationName(config.executable), pages: resource.pages,
+            const runtime = await (dependencies.createRuntime ?? createV3TurnRuntime)({ binding, browser: selected.selectedBrowser, pages: resource.pages,
               snapshot: snapshots.snapshot, ui, endpoint: selected.endpoint, dependencies: {
                 // Acknowledgment is coupled to the exact output identity in the
                 // fork protocol. Merely taking a snapshot never admits its refs.
-                acknowledgeSnapshot: snapshots.acknowledgeSnapshot, sites, onSite: noteSite, pdfInventory: config.receipt, strictText,
+                acknowledgeSnapshot: snapshots.acknowledgeSnapshot, sites, onSite: noteSite, pdfInventory: config.receipt,
                 tracePhase: (phase, call) => trace(phase, turnNo, call),
               } });
             resource.runtime = runtime;

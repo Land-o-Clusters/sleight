@@ -1,7 +1,7 @@
 {
  "family": "browser-race",
  "title": "Safari and Firefox race",
- "source": {"race":"<private-evidence>/race-1017","browsers":["safari","firefox"]},
+ "source": {"race":"~/Projects/sleight-wt/race-1017","browsers":["safari","firefox"]},
  "inProgress": ["safari-sleight-fson-r1","safari-sleight-pg3-r1"],
  "excludedRounds": [
   {

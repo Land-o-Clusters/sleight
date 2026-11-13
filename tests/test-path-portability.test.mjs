@@ -1,4 +1,3 @@
-import { assertChildStatus } from './fixtures/child-status.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
@@ -66,8 +65,8 @@ function sourceFixture(t) {
   mkdirSync(primary);
   const git = (cwd, args) => {
     const result = spawnSync('/usr/bin/git', args, { cwd, encoding: 'utf8',
-      env: { PATH: process.env.PATH, HOME: bank, GIT_CONFIG_NOSYSTEM: '1', GIT_CONFIG_GLOBAL: '/dev/null' }, timeout: 30000, killSignal: 'SIGKILL' });
-    assertChildStatus(result, 0, result.stderr);
+      env: { PATH: process.env.PATH, HOME: bank, GIT_CONFIG_NOSYSTEM: '1', GIT_CONFIG_GLOBAL: '/dev/null' } });
+    assert.equal(result.status, 0, result.stderr);
     return result.stdout.trim();
   };
   git(primary, ['init', '--quiet']);
@@ -362,8 +361,8 @@ test('owned process boundary collects a harmless child after abort and reports s
   const result = await pending;
   assert.equal(result.collected, true);
   assert.equal(result.cancelled, true);
-  assertChildStatus(result, null);
-  assertChildStatus(await runOwnedCommand('/no-such-executable', []), null);
+  assert.equal(result.status, null);
+  assert.equal((await runOwnedCommand('/no-such-executable', [])).status, null);
 });
 
 test('tests contain no hardcoded macOS temporary or home paths', () => {

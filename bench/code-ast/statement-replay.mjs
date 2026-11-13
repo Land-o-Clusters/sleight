@@ -2,7 +2,8 @@
 import { execFileSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
-import { dirname } from 'node:path';
+import { homedir } from 'node:os';
+import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { gzipSync } from 'node:zlib';
 import { readCorpus } from './corpus.mjs';
@@ -10,7 +11,6 @@ import { parseCell } from '../../plugins/sleight/lib/code-ast.mjs';
 import { compareRecord } from './statement-compare.mjs';
 import { justifyResult } from './statement-oracle.mjs';
 import { sources as frozenSources } from '../../tests/fixtures/statement-legacy/index.mjs';
-import { benchOutputPath, waitForBenchGate, writeBenchJson } from '../runtime-options.mjs';
 
 export const BASE = 'c4175f7917fadb10bce86d02d7672df416105aa8';
 const root = new URL('../../', import.meta.url);
@@ -43,12 +43,10 @@ export async function legacyConsumers() {
 }
 
 async function main() {
-  await waitForBenchGate();
   const corpus = await readCorpus(), old = await legacyConsumers();
   for (const [path, expected] of Object.entries(frozenSources)) if (old.sources[path] !== expected) throw Error('legacy fixture differs: ' + path);
   const rows = [], counts = {}, accepted = {}, oracleChecks = {}, newAccepts = {};
   for (const [index, record] of corpus.records.entries()) {
-    if (index % 500 === 0) await waitForBenchGate();
     if (parseCell(record.code).error) throw Error('corpus contains engine-refused source at record ' + index);
     const result = compareRecord(record.code, old);
     for (const consumer of Object.keys(result.before)) {
@@ -76,27 +74,26 @@ async function main() {
   }
   const outputs = rows.map(row => JSON.stringify(row)).join('\n') + (rows.length ? '\n' : '');
   const archive = gzipSync(outputs);
-  const archivePath = benchOutputPath('code-ast/statement-differences.jsonl.gz');
-  const evidenceDirectory = dirname(archivePath);
+  const evidenceDirectory = join(homedir(), 'Projects/sleight-wt/ledger/vc/ps3-evidence');
+  const archivePath = join(evidenceDirectory, 'statement-differences.jsonl.gz');
   mkdirSync(evidenceDirectory, { recursive: true });
   if (existsSync(archivePath) && !readFileSync(archivePath).equals(archive)) throw Error('existing statement evidence differs; preserve it');
   if (!existsSync(archivePath)) writeFileSync(archivePath, archive);
   const sources = { ...old.sources };
   for (const path of ['plugins/sleight/lib/text-save.mjs', 'plugins/sleight/lib/menu-continuation.mjs', 'plugins/sleight/lib/tab-probe.mjs',
     'plugins/sleight/lib/code-ast.mjs', 'bench/code-ast/statement-replay.mjs', 'bench/code-ast/statement-compare.mjs',
-    'bench/code-ast/statement-oracle.mjs', 'bench/code-ast/corpus.mjs', 'bench/runtime-options.mjs'])
+    'bench/code-ast/statement-oracle.mjs', 'bench/code-ast/corpus.mjs'])
     sources['new:' + path] = hash(readFileSync(new URL(path, root), 'utf8'));
   const summary = { base: BASE, corpus: corpus.counts, before: corpus.before, manifest: corpus.manifest,
     accepted, differences: rows.length, reasons: counts, regressions: Object.values(accepted).reduce((sum, entry) => sum + entry.lost, 0), unclassified: rows.filter(row => row.reason === 'unclassified').length,
     differencesSha256: hash(outputs), archiveSha256: createHash('sha256').update(archive).digest('hex'),
     archiveBytes: archive.length, uncompressedBytes: Buffer.byteLength(outputs), oracleChecks, newAccepts, sources };
-  writeBenchJson('code-ast/statement-results.json', summary);
-  const resultsUrl = existsSync(benchOutputPath('code-ast/results.json'))
-    ? benchOutputPath('code-ast/results.json') : new URL('results.json', import.meta.url);
+  writeFileSync(new URL('statement-results.json', import.meta.url), JSON.stringify(summary, null, 2) + '\n');
+  const resultsUrl = new URL('results.json', import.meta.url);
   const results = JSON.parse(readFileSync(resultsUrl));
-  results.statementDifferences = { file: archivePath,
+  results.statementDifferences = { file: '~/Projects/sleight-wt/ledger/vc/ps3-evidence/statement-differences.jsonl.gz',
     records: rows.length, bytes: archive.length, sha256: summary.archiveSha256, uncompressedSha256: hash(outputs) };
-  writeBenchJson('code-ast/results.json', results);
+  writeFileSync(resultsUrl, JSON.stringify(results, null, 2) + '\n');
   console.log(JSON.stringify(summary, null, 2));
   if (!corpus.records.length || corpus.counts.malformed || summary.unclassified || summary.regressions) process.exitCode = 1;
 }

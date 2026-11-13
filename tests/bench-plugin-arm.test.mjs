@@ -32,7 +32,7 @@ test('generic children receive only runtime basics and declared variables, befor
     writeFileSync(join(f.plugin, '.claude-plugin/plugin.json'), JSON.stringify({ name: 'rival', version: '1', mcpServers: { computer: server } }));
     const arm = api.prepareGenericArm(`${kind}:rival`, { ...f, env: { ...inherited, PLUGIN_ARM_RIVAL_DIR: f.plugin, MCP_ARM_RIVAL_CONFIG: f.config } });
     const prepared = preparedServer(arm);
-    const observed = JSON.parse(execFileSync(prepared.command, prepared.args, { encoding: 'utf8', cwd: arm.cwd, env: { ...inherited, ...prepared.env }, timeout: 60000, killSignal: 'SIGKILL' }));
+    const observed = JSON.parse(execFileSync(prepared.command, prepared.args, { encoding: 'utf8', cwd: arm.cwd, env: { ...inherited, ...prepared.env } }));
     assert.notEqual(observed.__CF_USER_TEXT_ENCODING, 'ambient-sentinel');
     delete observed.__CF_USER_TEXT_ENCODING; // macOS may recreate this value during process startup.
     assert.deepEqual(observed, { PATH: inherited.PATH, HOME: f.bank, TMPDIR: f.bank, LANG: 'C', OWN_SETTING: 'declared' });
@@ -54,7 +54,7 @@ test('generic config refuses ambient interpolation and keeps quoted plugin roots
   } }));
   const arm = api.prepareGenericArm('plugin:rival', { ...f, env: { PLUGIN_ARM_RIVAL_DIR: plugin } });
   const server = preparedServer(arm);
-  assert.equal(execFileSync(server.command, server.args, { encoding: 'utf8', timeout: 60000, killSignal: 'SIGKILL' }).trim(), plugin);
+  assert.equal(execFileSync(server.command, server.args, { encoding: 'utf8' }).trim(), plugin);
 });
 
 test('plugins declaring hooks or automatic module hooks refuse before launch', t => {
@@ -101,10 +101,10 @@ test('plugin settings cannot select an agent or install an agent status command'
 
 test('provenance reads a commit without executing a source repository fsmonitor', t => {
   const f = fixture(t), marker = join(f.bank, 'fsmonitor-ran'), hook = join(f.bank, 'fsmonitor');
-  execFileSync('/usr/bin/git', ['init', '-q', f.plugin], { timeout: 30000, killSignal: 'SIGKILL' });
-  execFileSync('/usr/bin/git', ['-C', f.plugin, '-c', 'user.name=Fixture', '-c', 'user.email=fixture@example.invalid', 'commit', '--allow-empty', '-qm', 'fixture'], { timeout: 30000, killSignal: 'SIGKILL' });
+  execFileSync('/usr/bin/git', ['init', '-q', f.plugin]);
+  execFileSync('/usr/bin/git', ['-C', f.plugin, '-c', 'user.name=Fixture', '-c', 'user.email=fixture@example.invalid', 'commit', '--allow-empty', '-qm', 'fixture']);
   writeFileSync(hook, `#!/bin/sh\ntouch '${marker}'\n`, { mode: 0o700 });
-  execFileSync('/usr/bin/git', ['-C', f.plugin, 'config', 'core.fsmonitor', hook], { timeout: 30000, killSignal: 'SIGKILL' });
+  execFileSync('/usr/bin/git', ['-C', f.plugin, 'config', 'core.fsmonitor', hook]);
   const arm = api.prepareGenericArm('plugin:rival', { ...f, env: { PLUGIN_ARM_RIVAL_DIR: f.plugin } });
   assert.match(arm.identity.commit, /^[a-f0-9]{40}$/);
   assert.equal(existsSync(marker), false);
@@ -119,7 +119,7 @@ test('plugin MCP file and automatic config forms keep declared server variables'
     writeFileSync(join(f.plugin, mcpServers ? 'external.json' : '.mcp.json'), JSON.stringify(config));
     writeFileSync(file, JSON.stringify({ name: 'rival', version: '1', mcpServers }));
     const server = preparedServer(api.prepareGenericArm('plugin:rival', { ...f, env: { PLUGIN_ARM_RIVAL_DIR: f.plugin } }));
-    assert.equal(execFileSync(server.command, server.args, { encoding: 'utf8', env: server.env, timeout: 60000, killSignal: 'SIGKILL' }).trim(), 'declared');
+    assert.equal(execFileSync(server.command, server.args, { encoding: 'utf8', env: server.env }).trim(), 'declared');
   }
 });
 
@@ -226,7 +226,7 @@ test('unidentified remote servers and installer commands stop before discovery',
 
 test('an arm home inside a git repository is rejected before writing configuration', t => {
   const f = fixture(t);
-  execFileSync('/usr/bin/git', ['init', '-q', f.bank], { timeout: 30000, killSignal: 'SIGKILL' });
+  execFileSync('/usr/bin/git', ['init', '-q', f.bank]);
   assert.throws(() => api.prepareGenericArm('plugin:rival', { ...f, env: { PLUGIN_ARM_RIVAL_DIR: f.plugin } }), /outside.*git/);
 });
 
@@ -272,7 +272,7 @@ test('elicitation approves only supported forms for the selected server and benc
     cwd: new URL('..', import.meta.url), encoding: 'utf8',
     env: { ...process.env, BENCH_ARM_SERVERS: '["rival"]', BENCH_APPROVAL_STOP: stop, BENCH_SUITE: 'default' },
     input: JSON.stringify({ mcp_server_name: 'rival', message: 'Allow Computer Use to use "Calculator"?', ...extra }),
-   timeout: 60000, killSignal: 'SIGKILL' })).hookSpecificOutput;
+  })).hookSpecificOutput;
   assert.equal(call({}).action, 'accept');
   assert.deepEqual(call({ requested_schema: { properties: { choice: { enum: ['always', 'session', 'decline'] } } } }).content, { choice: 'session' });
   for (const extra of [

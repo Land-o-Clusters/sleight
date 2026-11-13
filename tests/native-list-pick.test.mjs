@@ -903,20 +903,6 @@ test('PF2R: an early timer wake never permits a recovery double-click', async ()
   assert.equal(m.keys.length + m.ticks.length, 0);
 });
 
-test('PF2R: a timer that fires 1 ms early still gets the recovery click after the full gap', async () => {
-  const { m, names } = containerFocusList({ delayed: false, recover: false });
-  let clock = 0;
-  const times = [];
-  const click = m.clickLine;
-  m.clickLine = async line => { times.push(clock); return click(line); };
-  const result = await namedPicker(m, 'firefox', { now: () => clock, sleep: async ms => { clock += Math.max(0, ms - 1); } })
-    .run(m.list, names[612]);
-  assert.equal(result.reason, 'focus-lost');
-  assert.equal(times.length, 2);
-  assert.ok(times[1] - times[0] >= 600, `click gap ${times[1] - times[0]} ms`);
-  assert.equal(m.keys.length + m.ticks.length, 0);
-});
-
 test('PF2R: recovery waits cannot spend past the deadline or click at it', async () => {
   for (const timeoutMs of [599, 600]) {
     const { m, names } = containerFocusList({ delayed: false });

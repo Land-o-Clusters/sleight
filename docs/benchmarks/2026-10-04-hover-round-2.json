@@ -1,6 +1,6 @@
 {
   "branch": "codex/local-hover",
-  "worktree": "<private-evidence>/local-hover",
+  "worktree": "~/Projects/sleight-wt/local-hover",
   "liveRuns": 0,
   "restoration": "Native hover restoration remains unmeasured separately from fixture cleanup; recorded in README Known problems.",
   "privacy": {

@@ -1,4 +1,3 @@
-import { assertChildStatus } from './fixtures/child-status.mjs';
 // Constructed macOS paths are synthetic validation and redaction data, never allocation roots.
 const MAC_USERS = ['', 'Users', ''].join('/');
 import { test } from 'node:test';
@@ -19,8 +18,8 @@ test('dry run prints the STATE order, commands, sources and estimates without li
   await load();
   // Node denies writes, child processes and network access inside this dry-run process.
   const result = spawnSync(process.execPath, ['--permission', `--allow-fs-read=${new URL('../', import.meta.url).pathname}`,
-    url.pathname, '--dry-run'], { encoding: 'utf8', timeout: 60000, killSignal: 'SIGKILL' });
-  assertChildStatus(result, 0, result.stderr);
+    url.pathname, '--dry-run'], { encoding: 'utf8' });
+  assert.equal(result.status, 0, result.stderr);
   const plan = JSON.parse(result.stdout);
   assert.equal(plan.dryRun, true);
   assert.deepEqual(plan.steps.map(s => s.id), ids);

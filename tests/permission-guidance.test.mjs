@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { rewriteTabError } from '../plugins/sleight/lib/tab-errors.mjs';
-import { callLocalTool } from './fixtures/local-tools.mjs';
+import { callLocalTool } from '../plugins/sleight/lib/launch.mjs';
 import { createRelay } from '../plugins/sleight/lib/relay.mjs';
 import { PassThrough } from 'node:stream';
 
@@ -26,7 +26,7 @@ test('ungranted tool permission is not described as an unsupported operation', (
 
 for (const name of ['drag', 'hover']) test(`declined ${name} stops before any helper and names the human choice`, async () => {
   let approvals = 0, helpers = 0;
-  const result = await callLocalTool(name, { app: 'Example', ...(name === 'hover' ? { at: [1, 2] } : { from: [1, 2], to: [3, 4] }) }, async () => { approvals++; return false; },
+  const result = await callLocalTool(name, {app: 'Example'}, async () => { approvals++; return false; },
     () => { helpers++; assert.fail('a denied helper must not run'); });
   assert.equal(result.isError, true);
   const text = result.content[0].text;

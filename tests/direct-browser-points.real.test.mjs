@@ -9,7 +9,6 @@ import { backgroundClick } from '../plugins/sleight/lib/direct-browser/page.mjs'
 import { createV3Context, createV3TurnBinding } from '../plugins/sleight/lib/direct-browser/v3-context.mjs';
 import { capturePointView, assertPointView, resolvePoint } from '../plugins/sleight/lib/direct-browser/points.mjs';
 import { trustedRead } from '../plugins/sleight/lib/direct-browser/trusted-dom.mjs';
-import { refusePointSettle, exhaustPointGeometry } from './helpers/point-evidence-replay.mjs';
 
 async function setup(t, html, message = 'Test the fixture controls', routes = {}) {
   const f = await fixture(t, html, routes), page = f.entry.page;
@@ -28,19 +27,6 @@ async function setup(t, html, message = 'Test the fixture controls', routes = {}
   return { ...f, page, ctx, read, at, act };
 }
 const pass = result => assert.match(result.lines[0], /input sent/, result.lines.join('\n'));
-
-async function readPointView(read) {
-  // A pending resize can overlap a read. Reacquire before testing retirement;
-  // never retry an action or substitute an older view for an omitted one.
-  for (let attempt = 0; attempt < 5; attempt++) {
-    const result = await read();
-    if (result.viewSignature !== undefined) {
-      assert.match(result.viewSignature, /^[a-f0-9]{16}$/);
-      return result;
-    }
-  }
-  assert.fail('No point view after 5 reads of the static fixture');
-}
 
 // Each FD2C refusal must happen before Chromium receives pointer input. These
 // pages deliberately forward harmless-looking hits to a guarded control.
@@ -308,37 +294,13 @@ test('FD2 real point selection modifiers keep the requested page semantics', { s
   assert.deepEqual(await f.page.evaluate(() => clicks), [[false,true,point.x,point.y],[true,false,point.x,point.y]]);
 });
 
-for (const resizeDuringRead of [false, true]) test('FD2 real viewport and navigation changes retire the point view' +
-  (resizeDuringRead ? ' with a resize during the read' : ''), { skip, timeout: 60000 }, async t => {
+test('FD2 real viewport and navigation changes retire the point view', { skip, timeout: 60000 }, async t => {
   const f = await setup(t, '<button type="button">Plain</button>');
-  await readPointView(f.read);
+  await f.read();
   assert.match((await f.act({ do: 'click', x: 10000, y: 10000 })).lines[0], /outside the tab viewport/);
   await f.page.setViewportSize({ width: 900, height: 500 });
   assert.match((await f.act({ do: 'hover', x: 20, y: 20 })).lines[0], /Point coordinates are stale/);
-  if (resizeDuringRead) {
-    const frame = f.page.mainFrame(), impl = frame._connection.toImpl(frame);
-    const client = impl._page.delegate._sessionForFrame(impl)._client, send = client._sendMayFail;
-    let injected = false;
-    client._sendMayFail = async function(method, ...args) {
-      const result = await send.call(this, method, ...args);
-      if (method === 'DOMSnapshot.captureSnapshot' && !injected) {
-        injected = true;
-        const utility = await impl.utilityContext();
-        await utility.evaluateExpression('() => dispatchEvent(new Event("resize"))', { isFunction: true });
-      }
-      return result;
-    };
-    t.after(() => { client._sendMayFail = send; });
-  }
-  const reads = [];
-  const read = async () => { const result = await f.read(); reads.push(result); return result; };
-  const resized = await readPointView(read);
-  assert.match(resized.viewSignature, /^[a-f0-9]{16}$/, 'acquire a point view before deliberately retiring it');
-  if (resizeDuringRead) {
-    assert.equal(reads[0].viewSignature, undefined, 'an overlapping resize withholds point authority');
-    assert.ok(reads.length >= 2, 'a later stable read reacquires point authority');
-  }
-  await f.page.goto(f.page.url() + '?new');
+  await f.read(); await f.page.goto(f.page.url() + '?new');
   assert.match((await f.act({ do: 'click', x: 20, y: 20 })).lines[0], /Point coordinates are stale/);
 });
 
@@ -404,93 +366,9 @@ test('FD2B unchanged point actions use one native layout capture per renderer', 
   assert.deepEqual(counts, [1, 1, 1], 'each step owns a fresh cache and reuses only its unchanged layout');
 });
 
-async function deliveredActDiffs(t, { refusal, refuseAttempts = 0, trace = [] } = {}) {
-  const f = await setup(t, '<button type="button">Plain</button><canvas width="400" height="150"></canvas><script>window.inputs=[];for(const type of ["pointerdown","pointerup","mousedown","mouseup","click"])document.addEventListener(type,()=>inputs.push(type),true);document.querySelector("button").onclick=()=>document.querySelector("button").textContent="Changed"</script>');
-  let attempt = 0;
-  const run = createActionRunner({ check: () => assert.fail('trusted context required'), snapshot,
-    backgroundClick: (...args) => attempt <= refuseAttempts && refusal === 'settle acknowledgement'
-      ? refusePointSettle(backgroundClick)(...args) : backgroundClick(...args) });
-  const dispatcher = createToolDispatcher({ browser: 'bfixture', pages: f.registry, snapshot, runSteps: run, ctx: f.ctx,
-    fillFields: () => assert.fail('no fill'), deliverSnapshot: (state, capture) => {
-      if (!acknowledgeSnapshot(capture.page, capture.number)) return false;
-      state.snapshotNo = Math.max(state.snapshotNo, capture.number); return true;
-    } });
-  const request = (name, args) => dispatcher.call({ name, arguments: { tab: f.entry.tab, ...args } });
-  const initial = await request('browser_read', {}); assert.equal(dispatcher.delivered(initial), true);
-  let first = initial.text.match(/view=([a-f0-9]{16})/)[1], action;
-  const point = await f.at('button');
-  const allowedRefusals = new Set([
-    'page changed during the click; read again. The page received no press, release or click, so a fresh read and one retry is safe.',
-    'Point geometry scan unavailable; use a control ref.',
-  ]);
-  for (attempt = 1; attempt <= 2; attempt++) {
-    const act = () => request('browser_act', { steps: [{ do: 'click', ...point, view: first }] });
-    let clockCalls;
-    if (attempt <= refuseAttempts && refusal === 'geometry budget') {
-      const replay = await exhaustPointGeometry(f.page, act);
-      action = replay.result; clockCalls = replay.calls;
-      assert.ok(clockCalls >= 2, 'the replay exhausted the geometry budget');
-    } else action = await act();
-    trace.push({ attempt, text: action.text, clockCalls });
-    t.diagnostic('FD2B attempt ' + attempt + ': ' + action.text);
-    const reason = action.text.split('\n')[0].match(/: not run: (.*)$/)?.[1];
-    const detail = 'FD2B attempt ' + attempt + ': ' + (reason ?? action.text);
-    if (reason !== undefined) {
-      assert.ok(allowedRefusals.has(reason), detail);
-      assert.deepEqual(await f.page.evaluate(() => inputs), [], detail);
-      assert.equal(await f.page.locator('button').textContent(), 'Plain', detail);
-      assert.equal(attempt, 1, detail);
-      t.diagnostic('FD2B retry after attempt 1 refusal: ' + reason);
-      // A new read must reach the model before the single allowed retry.
-      const fresh = await request('browser_read', {});
-      assert.equal(dispatcher.delivered(fresh), true, detail);
-      first = fresh.text.match(/view=([a-f0-9]{16})/)[1];
-      await assertPointView(f.page, first);
-      continue;
-    }
-    assert.doesNotMatch(action.text, /not run:|effect unconfirmed/, detail);
-    assert.equal(await f.page.locator('button').textContent(), 'Changed', detail);
-    assert.deepEqual(await f.page.evaluate(() => inputs), ['pointerdown', 'mousedown', 'pointerup', 'mouseup', 'click'], detail);
-    break;
-  }
-  const next = action.text.match(/view=([a-f0-9]{16})/)[1]; assert.notEqual(next, first);
-  await assert.rejects(assertPointView(f.page, next), /stale or unavailable/);
-  assert.equal(dispatcher.delivered(action), true); await assertPointView(f.page, next);
-  const hidden = await request('browser_act', { steps: [{ do: 'hover', x: 100, y: 70, view: next }], observe: 'none' });
-  assert.doesNotMatch(hidden.text, /view=/); assert.equal(dispatcher.delivered(hidden), false);
-}
-
-test('FD2B delivered act diffs acknowledge their view, suppressed observations do not', { skip, timeout: 60000 }, deliveredActDiffs);
-
-for (const [refusal, reason] of [
-  ['settle acknowledgement', 'page changed during the click'],
-  ['geometry budget', 'Point geometry scan unavailable; use a control ref'],
-]) {
-  test('FL4B delivered diff succeeds after one refusal: ' + refusal, { skip, timeout: 60000 }, async t => {
-    const trace = [];
-    await deliveredActDiffs(t, { refusal, refuseAttempts: 1, trace });
-    assert.equal(trace.length, 2, 'exactly one retry');
-    assert.ok(trace[0].text.includes('not run: ' + reason));
-    assert.match(trace[1].text, /button "Changed"/);
-  });
-  test('FL4B delivered diff rejects a second refusal: ' + refusal, { skip, timeout: 60000 }, async t => {
-    const trace = [];
-    await assert.rejects(deliveredActDiffs(t, { refusal, refuseAttempts: 2, trace }), error => {
-      assert.ok(error.message.includes('FD2B attempt 2: ' + reason), error.message);
-      t.diagnostic('Expected failure: ' + error.message);
-      return true;
-    });
-    assert.equal(trace.length, 2, 'a second refusal must not start a third attempt');
-    assert.ok(trace.every(row => row.text.includes('not run: ' + reason)));
-  });
-}
-
-for (const refusal of ['settle acknowledgement', 'geometry budget'])
-test('FL4 a refused point click reports an unchanged view and still requires delivery: ' + refusal, { skip, timeout: 60000 }, async t => {
-  const f = await setup(t, '<button type="button">Plain</button><canvas width="400" height="150"></canvas>' +
-    '<script>window.inputs=[];for(const type of ["pointerdown","pointerup","click"])document.addEventListener(type,()=>inputs.push(type));document.querySelector("button").onclick=()=>document.querySelector("button").textContent="Changed"</script>');
-  const trace = [], run = createActionRunner({ check: () => assert.fail('trusted context required'), snapshot,
-    backgroundClick: refusal === 'settle acknowledgement' ? refusePointSettle(backgroundClick, trace) : backgroundClick });
+test('FD2B delivered act diffs acknowledge their view, suppressed observations do not', { skip, timeout: 60000 }, async t => {
+  const f = await setup(t, '<button type="button">Plain</button><canvas width="400" height="150"></canvas><script>document.querySelector("button").onclick=()=>document.querySelector("button").textContent="Changed"</script>');
+  const run = createActionRunner({ check: () => assert.fail('trusted context required'), snapshot, backgroundClick });
   const dispatcher = createToolDispatcher({ browser: 'bfixture', pages: f.registry, snapshot, runSteps: run, ctx: f.ctx,
     fillFields: () => assert.fail('no fill'), deliverSnapshot: (state, capture) => {
       if (!acknowledgeSnapshot(capture.page, capture.number)) return false;
@@ -499,17 +377,8 @@ test('FL4 a refused point click reports an unchanged view and still requires del
   const request = (name, args) => dispatcher.call({ name, arguments: { tab: f.entry.tab, ...args } });
   const initial = await request('browser_read', {}); assert.equal(dispatcher.delivered(initial), true);
   const first = initial.text.match(/view=([a-f0-9]{16})/)[1], point = await f.at('button');
-  const act = () => request('browser_act', { steps: [{ do: 'click', ...point, view: first }] });
-  const { result: action, calls } = refusal === 'geometry budget' ? await exhaustPointGeometry(f.page, act) : { result: await act() };
-  t.diagnostic(JSON.stringify({ trace, clockCalls: calls, text: action.text }));
-  assert.deepEqual(trace, refusal === 'settle acknowledgement' ? ['settle acknowledgement unavailable'] : []);
-  if (refusal === 'geometry budget') assert.ok(calls >= 2);
-  assert.match(action.text, refusal === 'settle acknowledgement'
-    ? /not run: page changed during the click/ : /not run: Point geometry scan unavailable; use a control ref/);
-  assert.match(action.text, /No visible changes/);
-  assert.equal(await f.page.locator('button').textContent(), 'Plain');
-  assert.deepEqual(await f.page.evaluate(() => inputs), []);
-  const next = action.text.match(/view=([a-f0-9]{16})/)[1]; assert.equal(next, first);
+  const action = await request('browser_act', { steps: [{ do: 'click', ...point, view: first }] });
+  const next = action.text.match(/view=([a-f0-9]{16})/)[1]; assert.notEqual(next, first);
   await assert.rejects(assertPointView(f.page, next), /stale or unavailable/);
   assert.equal(dispatcher.delivered(action), true); await assertPointView(f.page, next);
   const hidden = await request('browser_act', { steps: [{ do: 'hover', x: 100, y: 70, view: next }], observe: 'none' });

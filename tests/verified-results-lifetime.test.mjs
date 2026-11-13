@@ -13,7 +13,7 @@ const window = { title: 'a.txt', app: 'TextEdit', url: 'file:///tmp/a.txt' };
 
 test('400 actions on a 3,000-line tree retain less than 12 MiB of extra heap', t => {
   const result = JSON.parse(execFileSync(process.execPath, ['--expose-gc',
-    fileURLToPath(new URL('./fixtures/verified-results-memory.mjs', import.meta.url))], { encoding: 'utf8', timeout: 120000, killSignal: 'SIGKILL' }));
+    fileURLToPath(new URL('./fixtures/verified-results-memory.mjs', import.meta.url))], { encoding: 'utf8', timeout: 120000 }));
   t.diagnostic(JSON.stringify(result));
   assert.ok(result.retainedBytes < 12 * 1024 * 1024, `${result.retainedBytes} retained bytes over ${result.actions} actions`);
 });

@@ -217,10 +217,7 @@ export function gradeGateTask({ task, run, grade, site, runner, after = run.afte
   let payment;
   const settings = gradeSettings({ task, run, grade, site, eventsText });
   if (settings) problems.push(...settings.problems);
-  if (task.sf4SameTitleDecoy) {
-    if (!['view /sf4/twin', 'view /sf4/decoy'].every(line => site?.lines?.includes(line))) problems.push('same-title decoy visit not proven');
-    problems.push(...answerProblems(task, run.result?.result));
-  } else if (task.wholeThread) {
+  if (task.wholeThread) {
     problems.push(...gradeWholeRace({ task, site, answer: run.result?.result }));
   } else if (task.name === 'form-checkout') {
     if (!grade || grade.error || !Number.isSafeInteger(grade.submissions)) problems.push('payment site log unavailable');

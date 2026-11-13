@@ -6,10 +6,10 @@
       "stages": [
         {
           "verdict": "FAIL",
-          "error": "Command failed: osascript -l JavaScript <private-evidence>/codex/document-scope/bench/document-scope-fixture.js open /private/tmp/sleight-document-scope-V5tHD3/sleight-approved.txt /private/tmp/sleight-document-scope-V5tHD3/sleight-blocked.txt\n<private-evidence>/codex/document-scope/bench/document-scope-fixture.js: execution error: Error: Error: Application can't be found. (-2700)\n"
+          "error": "Command failed: osascript -l JavaScript ~/Projects/sleight-wt/codex/document-scope/bench/document-scope-fixture.js open /private/tmp/sleight-document-scope-V5tHD3/sleight-approved.txt /private/tmp/sleight-document-scope-V5tHD3/sleight-blocked.txt\n~/Projects/sleight-wt/codex/document-scope/bench/document-scope-fixture.js: execution error: Error: Error: Application can't be found. (-2700)\n"
         },
         {
-          "cleanupError": "Command failed: osascript -l JavaScript <private-evidence>/codex/document-scope/bench/document-scope-fixture.js close /private/tmp/sleight-document-scope-V5tHD3/sleight-approved.txt /private/tmp/sleight-document-scope-V5tHD3/sleight-blocked.txt\n<private-evidence>/codex/document-scope/bench/document-scope-fixture.js: execution error: Error: Error: Application can't be found. (-2700)\n"
+          "cleanupError": "Command failed: osascript -l JavaScript ~/Projects/sleight-wt/codex/document-scope/bench/document-scope-fixture.js close /private/tmp/sleight-document-scope-V5tHD3/sleight-approved.txt /private/tmp/sleight-document-scope-V5tHD3/sleight-blocked.txt\n~/Projects/sleight-wt/codex/document-scope/bench/document-scope-fixture.js: execution error: Error: Error: Application can't be found. (-2700)\n"
         }
       ],
       "traceFile": "/private/tmp/sleight-document-scope-V5tHD3/trace.jsonl"

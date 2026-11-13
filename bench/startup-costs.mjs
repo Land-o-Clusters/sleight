@@ -15,7 +15,6 @@ import { mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from 'node
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { promisify } from 'node:util';
-import { randomBytes } from 'node:crypto';
 import { acquireLiveLock } from './live-lock.mjs';
 import { baseClient } from './other-hosts-client.mjs';
 import { InputLease } from '../plugins/sleight/lib/input-lease.mjs';
@@ -274,11 +273,11 @@ function snapshotCodeFromFile(app, cols, rows, terminal) {
   const source = readFileSync(join(root, 'plugins/sleight/hooks/snapshot.ts'), 'utf8');
   const template = /const SNAPSHOT_JS = `([\s\S]*?)`\n/.exec(source)?.[1];
   if (!template) throw new Error('could not read SNAPSHOT_JS from hooks/snapshot.ts');
-  const replacements = {
-    __APP__: JSON.stringify(app), __TERMINAL__: String(terminal),
-    __COLS__: String(cols), __ROWS__: String(rows), __TOKEN__: JSON.stringify(randomBytes(16).toString('hex')),
-  };
-  return template.replace(/__APP__|__TERMINAL__|__COLS__|__ROWS__|__TOKEN__/g, key => replacements[key]);
+  return template
+    .replace('__APP__', JSON.stringify(app))
+    .replace('__TERMINAL__', String(terminal))
+    .replace('__COLS__', String(cols))
+    .replace('__ROWS__', String(rows));
 }
 
 async function sectionSnapshot() {

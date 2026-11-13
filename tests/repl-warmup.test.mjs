@@ -1,4 +1,3 @@
-import { modCall } from './fixtures/mod-attribution.mjs';
 import { fixtureDocumentation } from './helpers/canonical-docs.mjs';
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
@@ -204,8 +203,8 @@ function relayFixture(t, options = {}) {
   for (const [stream, out] of [[serverIn, sent], [clientOut, received]]) stream.on('data', bytes => out.push(...bytes.toString().trim().split('\n').map(JSON.parse)));
   const relay = createRelay({ documentationTrust: fixtureDocumentation('# Computer Use Confirmations Policy\nAlways ask.', '## Computer Use\n\nNative app reference.\n# Computer Use Confirmations Policy\nAlways ask.'), clientIn, clientOut, serverIn, serverOut, warmRepl: true, changeReview: false, firstCallRules: 'SLEIGHT RULES', ...options });
   t.after(() => relay.close());
-  const send = msg => clientIn.write(JSON.stringify(modCall(msg)) + '\n');
-  const respond = msg => serverOut.write(JSON.stringify(modCall(msg)) + '\n');
+  const send = msg => clientIn.write(JSON.stringify(msg) + '\n');
+  const respond = msg => serverOut.write(JSON.stringify(msg) + '\n');
   send(init); respond({ id: 1, result: { capabilities: {} } }); send(initialized);
   return { relay, sent, received, send, respond, serverIn, warm: sent.find(msg => String(msg.id).startsWith('sleight-warm-')) };
 }

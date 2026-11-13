@@ -35,7 +35,7 @@ let reasons: [String: String] = [
     "turbo-app-on bundle": personConfirmReason(["turbo-app-on", "com.example.App"]) ?? "nil",
     "unblock free text": personConfirmReason(["permissions-unblock", "com.example.App to stay safe"]) ?? "nil",
     "unknown key": personConfirmReason(["approve-everything"]) ?? "nil",
-    "subject on a plain key": personConfirmReason(["permissions-sites-all", "com.example.App"]) ?? "nil",
+    "subject on a plain key": personConfirmReason(["permissions-sites", "com.example.App"]) ?? "nil",
     "browser name elsewhere": personConfirmReason(["turbo-app-on", "Google Chrome"]) ?? "nil",
     "too many": personConfirmReason(["turbo-on", "Helium", "x"]) ?? "nil",
 ]

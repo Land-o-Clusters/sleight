@@ -1,5 +1,4 @@
 import { moneyFigures, moneyConflicts } from './payment-figures.mjs';
-import { requestedQuitApps } from './quit-key.mjs';
 import { paymentWords, refundableName } from './direct-browser/rules.mjs';
 
 // The engine-path payment gate. LAWS: the payment rule holds on the engine path and on turbo alike, and the engine path had
@@ -219,27 +218,11 @@ export function enginePayment(name, args, text, payment, probe = false) {
   if (message.several) return stop('several');
   if (message.amount === undefined) return stop('none');
   if (payment.setting === 'always' && !message.afterAsk) return stop('always');
-  if (payment.setting === 'never' && moneyConflicts(lines, message.display ?? message.amount, message.currency, true))
-    return stop('none', { named: message.display });
-  const conflict = moneyConflicts(lines, message.display ?? message.amount, message.currency);
-  // A matching grouped quote may locate its larger reading only after the figure check agrees.
-  // Never mode has already stopped quotes with more than one reading.
-  const amount = !conflict && message.display ? moneyFigures([message.display]).figures[0]?.value : parse(String(message.amount), !conflict);
-  if (payment.setting !== 'never' && conflict)
+  const amount = parse(String(message.amount));
+  if (payment.setting !== 'never' && moneyConflicts(lines, message.amount, message.currency))
     return stop('over', { shown: largest(figures.filter(f => !(f.value <= amount + 0.005))) ?? shown, named: message.display });
   // The page has to show the amount the message named, as turbo requires of its terms. A value typed into a field doesn't count.
-  // Suffix yen quotes are newly recognized by the parser. Even never mode needs a page figure that states yen.
-  const suffixYen = message.currency === 'JPY' && /(?:円|yen)\s*$/i.test(message.display ?? '');
-  const rounded = f => {
-    if (payment.setting !== 'never' || !Number.isFinite(f.value)) return false;
-    // The user's quote has one reading here. A page fraction may round to those cents even when its
-    // three-decimal dot also has a grouped reading. Default mode keeps the page's existing maximum.
-    const decimal = /^\D*(\d+\.\d{3,})\D*$/.exec(f.text)?.[1];
-    const value = decimal === undefined ? f.value : Number(decimal);
-    return Math.abs(value - amount) <= 0.005 + Number.EPSILON * Math.max(1, Math.abs(value), Math.abs(amount));
-  };
-  const showsAmount = moneyFigures(page.map(row => row.label)).figures.some(f => f.cur && (Math.abs(f.value - amount) < 0.005 || rounded(f)) &&
-    (!suffixYen || f.cur === 'JPY'));
+  const showsAmount = moneyFigures(page.map(row => row.label)).figures.some(f => f.cur && Math.abs(f.value - amount) < 0.005);
   if (!showsAmount) return stop('mismatch', { named: message.display });
   return { allowed: payment.setting === 'never' ? 'never' : 'message', ...details };
 }
@@ -261,7 +244,7 @@ export function paymentAction(name, args) {
 // The amount the user's own message names: one money figure with its currency. Several different figures, or none, name no
 // amount the gate can hold a page to.
 export function namedAmount(text) {
-  const { figures } = moneyFigures(String(text ?? '').split('\n'), false);
+  const { figures } = moneyFigures(String(text ?? '').split('\n'));
   const distinct = new Map(figures.filter(f => f.cur && Number.isFinite(f.value)).map(f => [f.value + ' ' + f.cur, f]));
   if (distinct.size > 1) return { several: true };
   const [one] = distinct.values();
@@ -274,12 +257,10 @@ export function namedAmount(text) {
 // never counts), and allow is an Allow once from sleight's card. It lasts until the action it matches spends it, the next user
 // message, the turn's end or two minutes.
 export function createPaymentMessages({ now = Date.now } = {}) {
-  let message, spent, allow, asked = false, quitApps = [], menuRequests = [];
+  let message, spent, allow, asked = false;
   return {
-    set(text) { message = { ...namedAmount(text), afterAsk: asked }; quitApps = requestedQuitApps(text); menuRequests = requestedQuitApps(text, { menu: true }); asked = false; spent = undefined; allow = undefined; },
-    end() { message = undefined; spent = undefined; allow = undefined; quitApps = []; menuRequests = []; },
-    quitApps() { return quitApps.slice(); },
-    menuRequests() { return menuRequests.slice(); },
+    set(text) { message = { ...namedAmount(text), afterAsk: asked }; asked = false; spent = undefined; allow = undefined; },
+    end() { message = undefined; spent = undefined; allow = undefined; },
     asked() { asked = true; },
     paid(record) {
       const { site, shown, control, modal, payment, allowed } = record ?? {};

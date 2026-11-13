@@ -1,4 +1,3 @@
-import { testChromiumExecutable, launchTestChromiumContext } from './fixtures/chromium-isolated.mjs';
 import { trackTemp } from '../scripts/temp-leftovers.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
@@ -15,7 +14,9 @@ import { createToolDispatcher } from '../plugins/sleight/lib/direct-browser/tool
 
 const pin = JSON.parse(readFileSync(new URL('../plugins/sleight/vendor/playwright-core/browsers.json', import.meta.url)))
   .browsers.find(browser => browser.name === 'chromium-headless-shell');
-const executablePath = testChromiumExecutable({ revision: pin.revision });
+const platform = process.platform === 'darwin' ? 'mac-' + process.arch : 'linux64';
+const executablePath = join(homedir(), 'Library/Caches/ms-playwright', 'chromium_headless_shell-' + pin.revision,
+  'chrome-headless-shell-' + platform, 'chrome-headless-shell');
 const skip = process.env.SLEIGHT_LIVE_DOM_TEST !== '1' ? 'needs the opt-in headless DOM harness'
   : !existsSync(executablePath) ? 'pinned Chromium headless shell unavailable' : false;
 
@@ -40,9 +41,10 @@ async function fixture(t, html, routes = {}, { fullChrome = false } = {}) {
     t.diagnostic('cleanup: owned headless browser closed, private profile removed, fixture server and sockets closed');
   });
   const executable = fullChrome ? process.platform === 'darwin'
-    ? testChromiumExecutable({ headless: false, revision: pin.revision })
+    ? join(homedir(), 'Library/Caches/ms-playwright', 'chromium-' + pin.revision, 'chrome-mac-' + process.arch,
+      'Google Chrome for Testing.app/Contents/MacOS/Google Chrome for Testing')
     : join(homedir(), 'Library/Caches/ms-playwright', 'chromium-' + pin.revision, 'chrome-linux64/chrome') : executablePath;
-  context = await launchTestChromiumContext(chromium, profile, { headless: true, executablePath: executable, viewport: null,
+  context = await chromium.launchPersistentContext(profile, { headless: true, executablePath: executable, viewport: null,
     ...(fullChrome ? { colorScheme: null, reducedMotion: null } : {}) });
   const browser = context.browser(), page = context.pages()[0];
   const origin = 'http://127.0.0.1:' + server.address().port;

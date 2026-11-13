@@ -1,7 +1,7 @@
 {
   "status": "round-three-edits-prepared-required-check-and-live-held",
   "branch": "codex/plugin-arm",
-  "worktree": "<private-evidence>/plugin-arm",
+  "worktree": "~/Projects/sleight-wt/plugin-arm",
   "requiredChecks": [
     {
       "command": "npm run check",

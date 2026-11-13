@@ -9,7 +9,7 @@ function fixture() {
   const calls = [];
   const raw = { getAXState: async options => {
     calls.push(['read', options.disableDiffing, options.emit]);
-    return `Window: "${title}", App: Calculator.\n0 standard window\n\t1 button One\n\t2 button ${shifted ? 'Other' : 'Two'}`;
+    return `Window: "${title}", App: Calculator.\n0 standard window\n1 button One\n2 button ${shifted ? 'Other' : 'Two'}`;
   }, click: async n => { calls.push(['click', n]); shifted = true; },
   typeText: async value => calls.push(['type', value]) };
   const context = createContext({ cua: { getApp: async () => raw }, nodeRepl: { write() {} } });

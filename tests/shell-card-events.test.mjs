@@ -1,4 +1,3 @@
-import { assertChildStatus } from './fixtures/child-status.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { mkdtempSync, readFileSync, realpathSync, writeFileSync } from 'node:fs';
@@ -16,10 +15,10 @@ test('foreign-window click preserves both coordinates through serialization and 
   const swift = join(dir, 'main.swift'), binary = join(dir, 'fixture');
   writeFileSync(swift, 'import AppKit\nimport Darwin\n' + block +
     readFileSync(new URL('./fixtures/shell-card-events.swift', import.meta.url), 'utf8'));
-  const build = spawnSync('/usr/bin/xcrun', ['swiftc', '-module-cache-path', join(dir, 'cache'), swift, '-o', binary], { encoding: 'utf8', timeout: 600000, killSignal: 'SIGKILL' });
-  assertChildStatus(build, 0, build.stderr);
-  const run = spawnSync(binary, [], { encoding: 'utf8', timeout: 10000, killSignal: 'SIGKILL' });
-  assertChildStatus(run, 0, run.stderr + run.stdout);
+  const build = spawnSync('/usr/bin/xcrun', ['swiftc', '-module-cache-path', join(dir, 'cache'), swift, '-o', binary], { encoding: 'utf8', timeout: 120000 });
+  assert.equal(build.status, 0, build.stderr);
+  const run = spawnSync(binary, [], { encoding: 'utf8', timeout: 10000 });
+  assert.equal(run.status, 0, run.stderr + run.stdout);
   const records = JSON.parse(run.stdout);
   assert.equal(records.length, 8);
   assert.ok(records.some(event => event.expectedGlobal[0] < 0), 'cover a negative screen origin');

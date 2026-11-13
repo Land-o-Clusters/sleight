@@ -1,4 +1,3 @@
-import { assertChildStatus } from './fixtures/child-status.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { mkdtempSync, mkdirSync, readFileSync, writeFileSync, rmSync } from 'node:fs';
@@ -24,8 +23,8 @@ function auth(t, { model, surface, tasks, only = '', world = false, remote = '',
     ...(only ? ['--only', only] : []), ...(world ? ['--world'] : []), ...(remote ? ['--remote', remote] : []), ...(swap ? ['--swap'] : [])];
   const result = spawnSync('/bin/sh', ['-c', selection + '\nprintf "%s:%s" "$AUTH" "$KEY"', 'auth-fixture', ...args], {
     encoding: 'utf8', env: { PATH: process.env.PATH, HOME: dir, MODEL: model, SURFACE: surface, ONLY: only, SPEND: ledger, OUT: join(dir, 'out'),
-      REPO: new URL('..', import.meta.url).pathname, TASKS: taskFile }, timeout: 60000, killSignal: 'SIGKILL' });
-  assertChildStatus(result, status, result.stderr);
+      REPO: new URL('..', import.meta.url).pathname, TASKS: taskFile } });
+  assert.equal(result.status, status, result.stderr);
   return result.stdout;
 }
 

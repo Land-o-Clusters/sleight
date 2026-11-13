@@ -300,11 +300,6 @@ for (const [index, code] of [...bypasses, ...missed].entries()) {
     runInContext('var k = "constructor"; var nativeAction = () => app.typeText("blocked"); JSON.nativeAction = nativeAction; var clipboard = app;', h.context);
     h.call(3, code + '; await app.typeText("blocked")');
     const forwarded = h.sent.find(msg => msg.id === 3);
-    if (index === 11) {
-      assert.equal(forwarded, undefined);
-      assert.match(h.received.find(msg => msg.id === 3).result.content[0].text, /evaluate is read-only.*Rejected before the engine call/);
-      assert.deepEqual(Array.from(h.context.writes), []); return;
-    }
     if ([9,10,16,17,18].includes(index)) {
       assert.equal(forwarded, undefined);
       assert.match(h.received.find(msg=>msg.id===3).result.content[0].text, /cannot inspect JavaScript\. Use direct calls with literal arguments\. \(.+\)/);

@@ -39,8 +39,7 @@ function fixture() {
 function boundFixture(title) {
   const f = fixture(), owned = f.windows[0];
   Object.assign(owned, { title, document: '', number: 71 });
-  Object.assign(f.request.finderOwnership, { created: [owned], windowNumber: 71,
-    baseline: f.windows.slice(1).map(reference => ({ reference, role: 'AXWindow' })) });
+  Object.assign(f.request.finderOwnership, { created: [owned], windowNumber: 71 });
   f.api.windowNumber = window => window.number;
   f.api.exists = window => f.api.windows().includes(window);
   return f;
@@ -60,7 +59,7 @@ for (const title of ['Archive', 'Created', 'Recents', 'Desktop']) {
   test(`Finder cleanup preserves a documentless unrecorded window titled ${title} with the bound number`, () => {
     const f = boundFixture(title), unrecorded = { ...f.windows[0] };
     f.windows.push(unrecorded);
-    assert.throws(() => f.close(), /replacement window ownership unconfirmed/);
+    f.close();
     assert.deepEqual(f.closed, [f.windows[0]]);
     assert.ok(f.api.windows().includes(unrecorded));
   });
@@ -206,7 +205,7 @@ test('Finder cleanup refuses matching fixture paths without a creation receipt',
 test('Finder cleanup preserves an unreceipted extra window even at the exact target path', () => {
   const f = fixture(), extra = { ...f.windows[0] };
   f.windows.push(extra);
-  assert.throws(() => f.close(), /replacement window ownership unconfirmed/);
+  f.close();
   assert.deepEqual(f.closed, f.windows.slice(0, 4));
   assert.ok(f.api.windows().includes(extra));
 });

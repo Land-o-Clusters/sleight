@@ -1,7 +1,5 @@
 import { createRemoteApprovals } from './remote-approvals.mjs';
-import { validateLocalArguments, localTargetPolicy } from './local-tool-policy.mjs';
-import { skillRules } from './skill-rules.mjs';
-export { skillRules } from './skill-rules.mjs';
+import { requestedSubmitRules } from './requested-submit.mjs';
 // Starts the computer-use MCP server that ships with the ChatGPT desktop app.
 //
 // The ChatGPT app writes the server's launch config to a versioned folder,
@@ -18,24 +16,23 @@ export { skillRules } from './skill-rules.mjs';
 //   launch.mjs record|replay …  turn a finished run into a script, and run it again (replay.mjs)
 
 import { execFile, execFileSync, spawn } from 'node:child_process';
-import { appendFileSync, closeSync, constants, existsSync, fchmodSync, fstatSync, lstatSync, mkdirSync, openSync, readdirSync, readFileSync, realpathSync } from 'node:fs';
+import { appendFileSync, existsSync, lstatSync, mkdirSync, readdirSync, readFileSync, realpathSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { dirname, isAbsolute, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { randomUUID } from 'node:crypto';
+import { leanCallRules } from './lean-calls.mjs';
+import { screenshotGuidance } from './screenshot-guidance.mjs';
 export { SCREENSHOT_GUIDANCE_START, SCREENSHOT_GUIDANCE_END } from './screenshot-guidance.mjs';
 import { discoverExtensions, createBrowserSelection } from './browser-discovery.mjs';
 import { createSurfaceCache, firstClientCallRefresh } from './surface-cache.mjs';
 import { createStartupCache, startupIdentity } from './startup-cache.mjs';
 import { createRelay, firstCallBatchSetting } from './relay.mjs';
-import { selectRuntime } from './runtime-choice.mjs';
 import { createRelayHand } from './hand/relay-hand.mjs';
-import { attachPointerPlacement } from './hand/pointer-placement.mjs';
-export { attachPointerPlacement } from './hand/pointer-placement.mjs';
 import { startRunRetention } from './runs/retention.mjs';
 import { createSessionPause } from './session-pause.mjs';
 import { sessionCursorEvents } from './hand/events.mjs';
-import { isV3Frontend, createV3Frontend, createDeferredV3Bridge, transientStartup, traceStartupFailure } from './direct-browser/worker.mjs';
+import { isV3Frontend, createV3Frontend, transientStartup, traceStartupFailure } from './direct-browser/worker.mjs';
 import { prepareTextWrite, settleTextWrite } from './text-save.mjs';
 import { stuckEscapeOption } from './stuck-escape.mjs';
 import { createAppHealthHelper, diagnoseReadFailure } from './read-failure.mjs';
@@ -43,8 +40,7 @@ import { loadFlowRules } from './flow-rules.mjs';
 import { InputLease } from './input-lease.mjs';
 import { lightReturnEnabled } from './light-return.mjs';
 import { collectOwnedEngine } from './checked-stop.mjs';
-import { addPreapprovedAsync, listPreapproved, livePreapproved, loadPreapproved, removePreapproved, sessionPreapproved, preapprovedDoctorLine } from './preapproved.mjs';
-import { appendSettingsSealNotes, settingsSealDoctorLine } from './sealed-settings.mjs';
+import { addPreapproved, listPreapproved, livePreapproved, loadPreapproved, removePreapproved } from './preapproved.mjs';
 import { createPermissionCheck, noteCurrentApp } from './permissions.mjs';
 import { browserDefinitions } from './direct-browser/browsers.mjs';
 import { createGrantAudit } from './preapproved-audit.mjs';
@@ -53,7 +49,7 @@ import { SELECT_WINDOW_TOOL, selectWindow } from './select-window.mjs';
 import { loadInstalledDocumentation } from './canonical-documentation.mjs';
 import { probeHelper, staleHelperJobs } from './helper-health.mjs';
 import { replayBridge } from './replay.mjs';
-import { serverFromChatGPTApp, setup, NODE_REL, REPL_REL } from './setup.mjs';
+import { serverFromChatGPTApp, setup } from './setup.mjs';
 import { handPid } from './hand/pid.mjs';
 import { ActionLog, actionLogPath } from './action-outcomes.mjs';
 import { codexDoctorLines, codexStatus } from './codex-host.mjs';
@@ -62,14 +58,11 @@ import { grokDoctorLines, grokStatus } from './grok-host.mjs';
 import { grokbotDoctorLines, grokbotSessionStatus } from './grokbot-host.mjs';
 import { hostLabel, hostName } from './host-label.mjs';
 import { createPaymentCard } from './payment-card.mjs';
-import { ownHelper, ownedHelperChildren } from './owned-helpers.mjs';
-export { ownedHelperPid } from './owned-helpers.mjs';
 import { codexTurnClient } from './codex-turn.mjs';
 import { doctorVersionLine } from './version.mjs';
 import { parserDoctorLine } from './code-ast.mjs';
 import { isMainModule } from './main-module.mjs';
 import { recoverNativeClipboard } from './clipboard.mjs';
-import { sweepClipboardSnapshots } from './clipboard-recovery.mjs';
 
 const PLUGIN_DIR = ['plugins', 'cache', 'openai-bundled', 'unified-computer-use'];
 const SERVER_KEY = 'cua_repl';
@@ -145,22 +138,7 @@ export function resolveServer(env = process.env) {
   // Automatic selection below uses only a recent connected-extension inventory.
   serverEnv.CUA_REPL_ENABLED_SURFACES = env.SLEIGHT_SURFACES || 'computer';
 
-  // Cache directories can lag an in-place ChatGPT update. Only relabel a launch
-  // when both its runtime and REPL resolve to this app's installed files.
-  const args = server.args || [];
-  const app = env.SLEIGHT_CHATGPT_APP || '/Applications/ChatGPT.app';
-  let installed, appLaunch = false;
-  try {
-    if (realpathSync(server.command) === realpathSync(join(app, NODE_REL)) &&
-        realpathSync(engineLaunchPaths(args).script) === realpathSync(join(app, REPL_REL))) {
-      appLaunch = true;
-      const plist = readFileSync(join(app, 'Contents/Info.plist'), 'utf8');
-      installed = /<key>CFBundleShortVersionString<\/key>\s*<string>(\d+(?:\.\d+)*)<\/string>/.exec(plist)?.[1];
-    }
-  } catch { /* Missing version evidence keeps the configured version. */ }
-  return { version: installed || version, ...(installed && installed !== version ? { configVersion: version } : {}),
-    ...(appLaunch && !installed ? { appVersionUnreadable: true } : {}),
-    configPath, command: server.command, args, env: serverEnv };
+  return { version, configPath, command: server.command, args: server.args || [], env: serverEnv };
 }
 
 // Node options that take their value as the next argument. Engine 26.1023.50603 starts its server
@@ -225,8 +203,8 @@ export async function probeSurfaces(server, env = process.env, options) {
 }
 
 // The helper's own opt-out of its app refusals, which only the user sets.
-export const readForbiddenTargets = () => execFileSync(process.execPath, [join(LIB, 'probe-supervisor.mjs'), '--forbidden-targets'],
-  { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'], timeout: 8000, killSignal: 'SIGKILL' });
+const readForbiddenTargets = () => execFileSync(process.execPath, [join(LIB, 'probe-supervisor.mjs'), '--forbidden-targets'],
+  { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'], timeout: 8000 });
 
 const listLaunchdJobs = () => new Promise((resolve, reject) =>
   execFile(process.execPath, [join(LIB, 'probe-supervisor.mjs'), '--launchd-jobs'], { timeout: 6000 }, (err, stdout) => (err ? reject(err) : resolve(stdout))));
@@ -269,27 +247,11 @@ async function permissionsDoctorSection() {
   catch (err) { return ['permissions', `PROBLEM   could not read the permissions (${err.message})`]; }
 }
 
-export function claudeModDoctorLine() {
-  // Doctor has no live MCP session to attribute. State the pinned contract and
-  // fallback, without claiming the installed host was probed by this command.
-  return 'Claude Code mod attribution: toolu_plugin_ plus 32 lowercase hex (measured 2.1.309, 4 runs). Missing or changed IDs refuse typed approvals and turbo; approve on the Mac. Payments ask on sleight\'s card. This doctor has no live mod probe.';
-}
-
-export async function doctor({ platform = process.platform, windows, documentation = loadInstalledDocumentation, env = process.env, log = console.log, app = process.argv.includes('--doctor') ? process.argv[process.argv.indexOf('--doctor') + 1] : undefined, timeoutMs = 5000, startupTimeoutMs = 10000, launchctlList = listLaunchdJobs, forbiddenTargets = readForbiddenTargets, preapprovedIO, auditDirectory, seals = settingsSealDoctorLine, turbo = turboDoctorLines, hand = handDoctorSection, permissions = permissionsDoctorSection, settings = async () => [(await import('./settings-link.mjs')).settingsDoctorLine(undefined, env)], codex = codexDoctor, cursor = cursorDoctor, grok = grokDoctor, grokbot = grokbotDoctor, runtime = options => import('./runtime-doctor.mjs').then(module => module.runtimeDoctor(options)) } = {}) {
-  if (platform === 'win32') return (await import('./windows-launch.mjs')).windowsDoctor({ ...windows, log });
+export async function doctor({ documentation = loadInstalledDocumentation, env = process.env, log = console.log, app = process.argv.includes('--doctor') ? process.argv[process.argv.indexOf('--doctor') + 1] : undefined, timeoutMs = 5000, startupTimeoutMs = 10000, launchctlList = listLaunchdJobs, forbiddenTargets = readForbiddenTargets, preapprovedIO, auditDirectory, turbo = turboDoctorLines, hand = handDoctorSection, permissions = permissionsDoctorSection, settings = async () => [(await import('./settings-link.mjs')).settingsDoctorLine(undefined, env)], codex = codexDoctor, cursor = cursorDoctor, grok = grokDoctor, grokbot = grokbotDoctor } = {}) {
   if (app !== undefined && (typeof app !== 'string' || !app.trim() || app.startsWith('-'))) {
     log('usage: sleight-mcp --doctor [running app name or bundle ID]'); return 1;
   }
   log(doctorVersionLine());
-  log(preapprovedDoctorLine(preapprovedIO));
-  const runtimeState = await runtime({ env, platform });
-  for (const line of runtimeState.lines) log(line);
-  // Own diagnosis checks TCC preflights without driving the optional app.
-  // The engine doctor's app checks remain on the engine path only.
-  if (runtimeState.selected !== 'engine') {
-    log(claudeModDoctorLine());
-    log(seals()); return runtimeState.ok ? 0 : 1;
-  }
   for (const line of await turbo()) log(line);
   for (const line of await hand()) log(line);
   for (const line of await permissions()) log(line);
@@ -298,8 +260,6 @@ export async function doctor({ platform = process.platform, windows, documentati
   for (const line of cursor()) log(line);
   for (const line of grok(env)) log(line);
   for (const line of await grokbot()) log(line);
-  log(claudeModDoctorLine());
-  log(seals());
   try {
     documentation({ app: env.SLEIGHT_CHATGPT_APP || '/Applications/ChatGPT.app' });
     log('engine docs validated against the installed bundle');
@@ -318,8 +278,6 @@ export async function doctor({ platform = process.platform, windows, documentati
     ['computer-use helper', s.env.SKY_CUA_SERVICE_PATH],
   ];
   log(`Codex computer-use ${s.version}`);
-  if (s.configVersion) log(`config version  ${s.configVersion} (installed ChatGPT app: ${s.version})`);
-  if (s.appVersionUnreadable) log(`WARNING: ChatGPT app version is unreadable; using configured version ${s.version}.`);
   log(`config    ${s.configPath}`);
   log(`surfaces  ${s.env.CUA_REPL_ENABLED_SURFACES}`);
   log(`refused apps  ${forbiddenTargetsAllowed(forbiddenTargets) ? 'allowed through the engine (ComputerUseAllowForbiddenTargets is on)' : `refused by the engine (the user can run ${ALLOW_FORBIDDEN_COMMAND})`}`);
@@ -333,8 +291,10 @@ export async function doctor({ platform = process.platform, windows, documentati
   log(parserDoctorLine());
   let preapproved, grantAudit;
   if (app !== undefined) {
-    preapproved = sessionPreapproved({ load: () => loadPreapproved(preapprovedIO), live: apps => apps }).preapproved;
-    grantAudit = preapproved.size ? createGrantAudit(auditDirectory) : undefined;
+    try {
+      preapproved = loadPreapproved(preapprovedIO);
+      grantAudit = preapproved.size ? createGrantAudit(auditDirectory) : undefined;
+    } catch (err) { log(`sleight: ${err.message}`); return 1; }
   }
   let probe;
   try { probe = await probeHelper(s, { app, preapproved, grantAudit, timeoutMs, startupTimeoutMs }); }
@@ -403,53 +363,20 @@ export async function browserDoctorLines(run = runScript) {
 // SLEIGHT_TRACE_CUT. Claude's code, which the relay records only with SLEIGHT_TRACE_CODE=1
 // and caps itself, is kept whole: cut at 300, it lost the end of every batch (2026-10-10).
 function traceTo(setting, limit) {
-  const defaultDir = join(homedir(), 'Library', 'Logs', 'sleight');
-  const dir = setting === '1' ? defaultDir : setting;
-  mkdirSync(dir, { recursive: true, mode: 0o700 });
-  const directory = lstatSync(dir);
-  if (!directory.isDirectory() || directory.isSymbolicLink() || directory.uid !== process.getuid())
-    throw Error('Unsafe trace directory');
-  // Tighten only the owned directory we checked, never a symlink target swapped in before chmod.
-  const directoryFd = openSync(dir, constants.O_RDONLY | constants.O_NOFOLLOW | constants.O_NONBLOCK);
-  try {
-    const opened = fstatSync(directoryFd);
-    if (!opened.isDirectory() || opened.uid !== process.getuid() || opened.dev !== directory.dev || opened.ino !== directory.ino)
-      throw Error('Unsafe trace directory');
-    if ((opened.mode & 0o777) !== 0o700) {
-      if (dir !== defaultDir) throw Error('Unsafe trace directory');
-      fchmodSync(directoryFd, 0o700);
-    }
-    const tightened = fstatSync(directoryFd), current = lstatSync(dir);
-    if ((tightened.mode & 0o777) !== 0o700 || current.isSymbolicLink() || current.dev !== opened.dev || current.ino !== opened.ino)
-      throw Error('Unsafe trace directory');
-  } finally { closeSync(directoryFd); }
+  const dir = setting === '1' ? join(homedir(), 'Library', 'Logs', 'sleight') : setting;
+  mkdirSync(dir, { recursive: true });
   const file = join(dir, `trace-${process.pid}.jsonl`);
-  const created = openSync(file, constants.O_WRONLY | constants.O_CREAT | constants.O_EXCL | constants.O_NOFOLLOW, 0o600);
-  let identity;
-  try { identity = fstatSync(created); } finally { closeSync(created); }
   process.stderr.write(`sleight: tracing to ${file}\n`);
   const max = /^[1-9]\d*$/.test(limit ?? '') ? Number(limit) : 300;
   const cut = keep => (key, value) =>
     typeof value === 'string' && value.length > max && !(keep && key === 'code') ? `${value.slice(0, max)}…(${value.length})` : value;
-  return (direction, msg) => {
-    const fd = openSync(file, constants.O_WRONLY | constants.O_APPEND | constants.O_NOFOLLOW | constants.O_NONBLOCK);
-    try {
-      const opened = fstatSync(fd);
-      if (!opened.isFile() || opened.nlink !== 1 || opened.uid !== process.getuid() || (opened.mode & 0o777) !== 0o600 ||
-          opened.dev !== identity.dev || opened.ino !== identity.ino) throw Error('Unsafe trace file');
-      appendFileSync(fd, JSON.stringify({ t: new Date().toISOString(), direction, msg }, cut(['call-received', 'write-code'].includes(direction))) + '\n');
-    } finally { closeSync(fd); }
-  };
+  return (direction, msg) =>
+    appendFileSync(file, JSON.stringify({ t: new Date().toISOString(), direction, msg }, cut(['call-received', 'write-code'].includes(direction))) + '\n');
 }
 
 export function approvalLogging(preapproved, env = process.env, auditDirectory) {
-  let trace;
-  if (env.SLEIGHT_TRACE) {
-    try { trace = traceTo(env.SLEIGHT_TRACE, env.SLEIGHT_TRACE_CUT); }
-    catch { process.stderr.write('sleight: tracing disabled; continuing without tracing.\n'); }
-  }
   return {
-    trace,
+    trace: env.SLEIGHT_TRACE ? traceTo(env.SLEIGHT_TRACE, env.SLEIGHT_TRACE_CUT) : undefined,
     grantAudit: preapproved.size ? createGrantAudit(auditDirectory) : undefined,
   };
 }
@@ -467,14 +394,34 @@ export function paymentConfirmationSetting(env = process.env) {
   return value === 'always' || value === 'never' ? value : 'requested';
 }
 
+// The skill's body. The relay defers its Browsers section until a browser result.
+// Missing or unreadable means none.
+// Under the sheet A/B, the menu rule gets the call to send. 9 textedit-save runs opened Format in one call
+// and chose Make Plain Text in the next, 33.8 s over 11 calls (turn study, 2026-10-11).
+export function skillRules(path = join(LIB, '..', 'skills', 'drive-mac-apps', 'SKILL.md'), env = process.env) {
+  if (env.SLEIGHT_SKILL === 'none') return undefined;
+  if (env.SLEIGHT_PROMPT === 'lean') path = join(dirname(path instanceof URL ? fileURLToPath(path) : path), 'SKILL.lean.md');
+  try {
+    let text = readFileSync(path, 'utf8').replace(/^---\n[\s\S]*?\n---\n+/, '').trim() || undefined;
+    text = requestedSubmitRules(screenshotGuidance(text, env.SLEIGHT_SCREENSHOT_READS !== '0'), env);
+    return env.SLEIGHT_LEAN_CALLS === '1' ? leanCallRules(text) : text;
+  }
+  catch { return undefined; }
+}
 const ICON = join(LIB, '..', 'assets', 'icon.png');
 const ASK_SECONDS = 300;
+const ownedHelpers = new Set();
 const pendingDrags = new Set();
 let helpersClosing = false;
 let helperTrace;
+function ownHelper(child) {
+  ownedHelpers.add(child);
+  child.once('close', () => ownedHelpers.delete(child));
+  return child;
+}
 export async function stopHelpers() {
   helpersClosing = true;
-  await Promise.all(ownedHelperChildren().map(child => new Promise(resolve => {
+  await Promise.all([...ownedHelpers].map(child => new Promise(resolve => {
     const force = setTimeout(() => child.kill('SIGKILL'), 2000);
     child.once('close', () => { clearTimeout(force); resolve(); });
     child.kill('SIGTERM');
@@ -484,7 +431,7 @@ export async function stopHelpers() {
   await Promise.allSettled([...pendingDrags]);
 }
 export function resumeHelpers() {
-  if (ownedHelperChildren().length || pendingDrags.size) throw new Error('Owned helpers are not collected.');
+  if (ownedHelpers.size || pendingDrags.size) throw new Error('Owned helpers are not collected.');
   helpersClosing = false;
 }
 
@@ -520,30 +467,27 @@ export function approvalCardText(message, sessionScoped, options = {}) {
   const question = app ? `Allow ${who} to use ${app}?` : wordForHost(message, { claudeCode, host: options.host });
   const review = options?.kind === 'review';
   const flow = options?.kind === 'flow';
-  let detail = flow ? options.detail : review ? `${options.detail}\n\nUndo restores the saved copy. A capped preview is shown above. Reopen it in the app afterward. Later leaves the decision pending.` : (app ? `${actor} can then click and type in ${app} in the background. ` : '') +
+  const detail = flow ? options.detail : review ? `${options.detail}\n\nUndo restores the saved copy shown above. Reopen it in the app afterward. Later leaves the decision pending.` : (app ? `${actor} can then click and type in ${app} in the background. ` : '') +
     (sessionScoped ? `Allow lasts until ${session} ends.${options?.always ? ' Always allow adds it to your pre-approved list.' : ''}` : 'It asks again next time.');
-  if (typeof options.appWarning === 'string' && options.appWarning) detail += '\n' + options.appWarning;
   return { question, detail, panel, mode: flow ? 'flow' : review ? 'review' : 'approval' };
 }
 
 export function askWithDialog(message, sessionScoped, options = {}, launch = execFile) {
-  // JXA has no hardware-origin input guard. It grants only session/once approvals; reviews stay pending.
-  if (helpersClosing || options.kind === 'review') return Promise.resolve('cancel');
-  const { question, detail, panel, mode } = approvalCardText(message, sessionScoped, { ...options, always: false });
+  if (helpersClosing) return Promise.resolve('cancel');
+  const { question, detail, panel, mode } = approvalCardText(message, sessionScoped, options);
+  const review = mode === 'review';
   const args = ['-l', 'JavaScript', join(LIB, 'ask.js'), question, detail, ICON, String(ASK_SECONDS), mode, panel,
-    '', sessionScoped ? 'session' : 'once'];
+    options?.always ? 'always' : '', sessionScoped ? 'session' : 'once'];
   return new Promise((resolve, reject) => {
     ownHelper(launch('osascript', args, (err, stdout, stderr) => {
       const answer = stdout.trim();
-      if (!err && answer === 'always') return resolve('decline');
-      if (!err && ['accept', 'decline', 'cancel'].includes(answer)) return resolve(answer);
+      if (!err && (review ? ['keep', 'undo', 'cancel'] : ['accept', 'decline', 'cancel', ...(options?.always ? ['always'] : [])]).includes(answer)) return resolve(answer);
       // Logged, so a broken prompt doesn't pass for a decline.
       process.stderr.write(`sleight: approval prompt failed: ${stderr || err?.message || answer}\n`);
       reject(Object.assign(new Error("The approval prompt couldn't be shown. The user made no decision. Stop and tell them."), { code: 'SLEIGHT_PROMPT_UNAVAILABLE' }));
     }));
   });
 }
-Object.assign(askWithDialog, { allowsAlways: false, allowsReview: false });
 
 // sleight's own tools for what the engine can't reach: apps' status items in
 // the menu bar and notification banners (lib/menubar.js, System Events UI
@@ -775,7 +719,7 @@ export async function openDocument(args, { exec = runOpen, resolve = resolveAppI
     let timer;
     try {
       present = await Promise.race([
-        Promise.resolve().then(() => { current(); return hasDocument(bundleId, path); }),
+        Promise.resolve().then(() => hasDocument(bundleId, path)),
         new Promise(resolve => { timer = setTimeout(() => resolve(false), 1000); }),
       ]) === true;
       // A visible window for this exact file URL needs no `open -g` (150 to 200 ms, 2026-10-17), as the skill
@@ -845,7 +789,7 @@ export const HOVER_TOOL = {
 
 export function runScript(script, request, options = {}) {
   // Tests pass a stand-in for execFile directly; the drag cleanup path passes { cleanup: true }.
-  const { cleanup = false, run = execFile, trace = helperTrace, placeHand } = typeof options === 'function' ? { run: options } : options;
+  const { cleanup = false, run = execFile, trace = helperTrace } = typeof options === 'function' ? { run: options } : options;
   if (helpersClosing && !cleanup) return Promise.resolve({ ok: false, error: 'sleight session is closing' });
   // Base64 PNGs from ordinary app windows can exceed execFile's 1 MiB default.
   // The ghost hand stops waiting for locate.js after 2 s; a stalled AX app must not leave osascripts running.
@@ -861,14 +805,9 @@ export function runScript(script, request, options = {}) {
     request = handPid() ? { ...rest, handPid: handPid() } : rest;
   }
   return new Promise(resolve => {
-    let child, detachPlacement;
-    const placement = placeHand && ['drag.js', 'hover.js'].includes(script);
-    const token = placement ? randomUUID().replaceAll('-', '') : undefined;
-    const args = placement ? [join(LIB, 'hand/pointer-placement.js'), join(LIB, script), JSON.stringify(request), token] : [join(LIB, script), JSON.stringify(request)];
-    child = ownHelper(run('osascript', ['-l', 'JavaScript', ...args], execOptions, (err, stdout, stderr) => {
-      detachPlacement?.();
+    let child;
+    child = ownHelper(run('osascript', ['-l', 'JavaScript', join(LIB, script), JSON.stringify(request)], execOptions, (err, stdout, stderr) => {
       const diagnostic = String(stderr ?? '').split('\n').filter(line => {
-        if (placement && (line.startsWith('sleight-place ') || line.startsWith('sleight-place-timeout '))) return false;
         if (script !== 'drag.js' || !line.startsWith('sleight-drag-phase ')) return true;
         if (request.trace) try {
           const { phase, edge, monoMs } = JSON.parse(line.slice('sleight-drag-phase '.length));
@@ -888,26 +827,25 @@ export function runScript(script, request, options = {}) {
           : diagnostic || err?.message || 'no output' });
       }
     }));
-    if (placement) detachPlacement = attachPointerPlacement(child, { token, ...placeHand });
   });
 }
 
 const text = (value, isError) => ({ content: [{ type: 'text', text: typeof value === 'string' ? value : JSON.stringify(value, null, 1) }], ...(isError ? { isError: true } : {}) });
 
-async function performDrag(args, runLocal, afterDrag, onDrag) {
+async function performDrag(args, runLocal, afterDrag) {
   const focus = await runLocal('drag-focus.js', { op: 'capture', app: args.app });
   if (!focus.ok) return text(focus.error, true);
-  let result, dragTimedOut = false, dragRefused = false;
+  let result, dragTimedOut = false;
   try {
     result = await runLocal('drag.js', args);
   }
-  catch (e) { dragRefused = e.refused === true; result = { ok: false, error: String(e.message || e) }; }
+  catch (e) { result = { ok: false, error: String(e.message || e) }; }
   finally {
     // Copy-and-Paste advice follows the drag's own timeout, not a focus restore timing out after a drag that worked.
     dragTimedOut = !result?.ok && (!!result?.timedOut || /timed out/i.test(result?.error ?? ''));
     // A completed background or Accessibility attempt never owned focus, including lost text.
     // Unknown child termination retains the existing guarded timeout cleanup.
-    if (!dragRefused && !['background', 'accessibility', 'none'].includes(result?.path)) {
+    if (!['background', 'accessibility', 'none'].includes(result?.path)) {
       if (!result?.path) {
         // The child ended without reporting (a timeout or a crash), maybe mid-press.
         try {
@@ -926,9 +864,7 @@ async function performDrag(args, runLocal, afterDrag, onDrag) {
   if (!result.ok && dragTimedOut) {
     result = { ...result, error: `${result.error}; for files, use Copy and then the app's Move command; for list items, Cut and Paste` };
   }
-  const { ok, _sleightHand, ...rest } = result;
-  // Resolved points are private renderer metadata, never a tool result or text endpoint.
-  if (ok && _sleightHand) try { onDrag?.(_sleightHand); } catch {}
+  const { ok, ...rest } = result;
   const reply = text(rest, !ok);
   if (process.env.SLEIGHT_DP4 !== '0' && result.textChanged === true && afterDrag) {
     try { reply.content.push(...await afterDrag(result)); }
@@ -937,56 +873,17 @@ async function performDrag(args, runLocal, afterDrag, onDrag) {
   return reply;
 }
 
-// These fields come only from the relay after it validates the public call.
-const LOCAL_PRIVATE_FIELDS = {
-  select_window: ['expectedAppId'],
-  drag: ['screenshot', 'screenshots', 'screenshotFrame', 'screenshotFrames', 'screenshotsByWindow',
-    'elementLines', 'elementWindow', 'toElementLines', 'toElementWindow'],
-};
-export function validateLocalToolArguments(name, args, { internal = false } = {}) {
-  const tool = localToolDefinitions({}).find(tool => tool.name === name);
-  const publicArgs = internal && args && typeof args === 'object' && !Array.isArray(args)
-    ? Object.fromEntries(Object.entries(args).filter(([key]) => !LOCAL_PRIVATE_FIELDS[name]?.includes(key))) : args;
-  validateLocalArguments(tool, publicArgs);
-}
-
-export async function callLocalTool(name, args, approve, runLocal = runScript, resolved, prepared, { blocked, resolve = resolveAppId, afterDrag, onDrag, placeHand, current = () => {}, internal = false, allowForbidden = false } = {}) {
-  try { validateLocalToolArguments(name, args, { internal }); }
-  catch (error) { return text(error.message, true); }
-  let policy = localTargetPolicy(name, args, resolved, allowForbidden);
-  if (policy.refusal) return text(policy.refusal, true);
-  current();
-  if (name !== 'notifications' && name !== 'open_file' && !(name === 'menu_bar' && args.op === 'apps') && !resolved) {
-    try { resolved = { app: args.app, appId: await resolve(args.app) }; }
-    catch (error) { return text(String(error?.message ?? error), true); }
-    current();
-    policy = localTargetPolicy(name, args, resolved, allowForbidden);
-    if (policy.refusal) return text(policy.refusal, true);
-  }
-  const originalApprove = approve;
-  approve = (key, message, options) => originalApprove(key, message,
-    { ...options, ...policy.warning ? { appWarning: policy.warning, noPreapproved: true } : {} });
-  const run = (script, request, options) => {
-    // Cleanup must release any input already sent, even if handoff began while
-    // the helper ran. New reads and actions recheck at the helper boundary.
-    if (!options?.cleanup) {
-      try { current(); }
-      catch (error) { throw Object.assign(new Error(String(error?.message ?? error)), { refused: true }); }
-    }
-    return runLocal(script, request, placeHand && ['drag.js', 'hover.js'].includes(script) ? { ...options, placeHand } : options);
-  };
-  current();
+export async function callLocalTool(name, args, approve, runLocal = runScript, resolved, prepared, { blocked, resolve = resolveAppId, afterDrag } = {}) {
   if (name === 'hover') {
     if (!await approve(['hover', args.app], `Allow Claude to hover in ${args.app}? It moves your pointer briefly.`)) {
       return text(`The user didn't allow hovering in ${args.app}. Stop and tell them; don't work around it.`, true);
     }
-    const { ok, image, _sleightHand, ...rest } = await run('hover.js', args);
-    if (ok && _sleightHand) try { onDrag?.(_sleightHand); } catch {}
+    const { ok, image, ...rest } = await runLocal('hover.js', args);
     const result = text(rest, !ok);
     if (ok && image) result.content.push({ type: 'image', data: image, mimeType: 'image/png' });
     return result;
   }
-  if (name === 'select_window') return selectWindow(args, { approve, runScript: run });
+  if (name === 'select_window') return selectWindow(args, { approve, runScript: runLocal });
   if (name === 'open_file') {
     // A blocked app is refused before the user is asked to approve opening files in it.
     let bundleId = prepared?.bundleId;
@@ -998,13 +895,13 @@ export async function callLocalTool(name, args, approve, runLocal = runScript, r
     if (!await approveOpenFile(args, approve)) {
       return text(`The user didn't allow opening files in ${args.app}. Stop and tell them; don't work around it.`, true);
     }
-    return openDocument(args, { ...prepared ? { ...prepared, fast: true, target: resolved } : {}, ...bundleId ? { bundleId } : {}, ...blocked ? { blocked } : {}, current });
+    return openDocument(args, { ...prepared ? { ...prepared, fast: true, target: resolved } : {}, ...bundleId ? { bundleId } : {}, ...blocked ? { blocked } : {} });
   }
   if (name === 'drag') {
     if (!await approve(['drag', args.app], `Allow Claude to drag in ${args.app}? Background comes first; foreground fallback can move your pointer for a few seconds.`)) {
       return text(`The user didn't allow dragging in ${args.app}. Stop and tell them; don't work around it.`, true);
     }
-    const operation = performDrag(args, run, afterDrag, onDrag);
+    const operation = performDrag(args, runLocal, afterDrag);
     pendingDrags.add(operation);
     try { return await operation; }
     finally { pendingDrags.delete(operation); }
@@ -1017,19 +914,14 @@ export async function callLocalTool(name, args, approve, runLocal = runScript, r
         return text(`The user didn't allow ${args.app}'s menu bar item. Stop and tell them; don't work around it.`, true);
       }
     }
-    request = { caller: 'menu_bar', op: args.op,
-      ...args.op === 'apps' ? {} : { app: args.app },
-      ...['open', 'choose', 'close'].includes(args.op) && args.item !== undefined ? { item: args.item } : {},
-      ...args.op === 'choose' && args.path !== undefined ? { path: args.path } : {},
-      ...args.op === 'press' && args.element !== undefined ? { element: args.element } : {} };
+    request = args;
   } else {
     if (!await approve(['notifications'], 'Allow Claude to read and use your notifications?')) {
       return text("The user didn't allow notifications. Stop and tell them; don't work around it.", true);
     }
-    request = args.op === 'list' ? { caller: 'notifications', op: 'notifications' }
-      : { caller: 'notifications', op: 'notify-press', banner: args.banner, button: args.button };
+    request = args.op === 'list' ? { op: 'notifications' } : { op: 'notify-press', banner: args.banner, button: args.button };
   }
-  const result = await run('menubar.js', request);
+  const result = await runScript('menubar.js', request);
   if (result.ok) {
     const { ok, ...rest } = result;
     return text(rest);
@@ -1062,7 +954,6 @@ export function approvalOptions(env = process.env, dialog = askWithDialog) {
       : 'without the sleight mod: turn_ended hidden, no turbo, sleight ends turns itself'}\n`);
   };
   const prompt = (message, scoped, options) => dialog(message, scoped, { ...options, ...wording });
-  Object.assign(prompt, { allowsAlways: false, allowsReview: false });
   const extras = { onInitialize, wording: () => wording };
   if (setting === 'dialog' || (!setting && env.CLAUDE_CODE_ENTRYPOINT === 'claude-desktop')) return { ask: prompt, ...extras };
   return { fallbackAsk: setting === 'client' ? undefined : prompt, ...extras };
@@ -1157,8 +1048,8 @@ const startupDetail = detail => detail?.stage ? ` at ${detail.stage}${detail.rea
 function installedUnavailable(code, detail) {
   process.stderr.write(`sleight: turbo unavailable (${code}${startupDetail({ ...detail, code })}); using the engine. Check turbo settings and run sleight-mcp --doctor before retrying turbo.\n`);
 }
-export async function createInstalledBrowserBridge(factories, options) {
-  return (factories?.v3 ?? (await import('./direct-browser/worker.mjs')).createV3Bridge)(options);
+export async function createInstalledBrowserBridge(factories) {
+  return (factories?.v3 ?? (await import('./direct-browser/worker.mjs')).createV3Bridge)();
 }
 
 // Turbo is on by default: before the bridge is built, write turbo.json when it is absent or no longer matches this
@@ -1181,22 +1072,18 @@ export const turboOff = (env = process.env) => env.SLEIGHT_TURBO === '0';
 // between two reads) starts once more after retryDelayMs, instead of leaving turbo off for the whole session. Each
 // failed attempt goes to the trace (SLEIGHT_TRACE) with its stage and code.
 export async function prepareInstalledStartup(factory, unavailable = installedUnavailable, { ensure, log = text => process.stderr.write(text), env = process.env,
-  retryDelayMs = 300, trace = traceStartupFailure, defer = false, deferredDependencies, throwFailure = false, signal } = {}) {
+  retryDelayMs = 300, trace = traceStartupFailure } = {}) {
   if (turboOff(env)) return { directBrowser: undefined, directHost: undefined };
   try { await ensure?.(log); } catch { /* Setup never blocks startup. */ }
   for (let attempt = 1; ; attempt++) {
     try {
-      signal?.throwIfAborted();
-      const bridge = defer ? createDeferredV3Bridge(async options => (await prepareInstalledStartup(factory, unavailable,
-        { log, env, retryDelayMs, trace, throwFailure: true, ...options })).directHost, deferredDependencies)
-        : await (factory ?? (options => createInstalledBrowserBridge(undefined, options)))({ signal });
+      const bridge = await (factory ?? (() => createInstalledBrowserBridge()))();
       if (!bridge) return { directBrowser: undefined, directHost: undefined };
       return { directBrowser: createV3Frontend(bridge), directHost: bridge, turnHook: { close: () => bridge.detach() } };
     } catch (error) {
-      if (signal?.aborted) throw error;
       const code = /^[A-Z][A-Z0-9_]{0,127}$/.test(error?.message) ? error.message : 'TURBO_STARTUP_FAILED';
       const detail = typeof error?.stage === 'string' ? { stage: error.stage, reason: error.reason } : undefined;
-      const retrying = !signal?.aborted && attempt === 1 && transientStartup(error);
+      const retrying = attempt === 1 && transientStartup(error);
       if (detail) try { trace({ code, ...detail, attempt, retrying }); } catch {}
       if (retrying) {
         log(`sleight: turbo startup failed (${code}${startupDetail({ ...detail, code })}); starting it once more.\n`);
@@ -1204,7 +1091,6 @@ export async function prepareInstalledStartup(factory, unavailable = installedUn
         continue;
       }
       if (detail) unavailable(code, detail); else unavailable(code);
-      if (throwFailure) throw Object.assign(Error(code), detail);
       return { directBrowser: undefined, directHost: undefined, turboUnavailable: code };
     }
   }
@@ -1215,25 +1101,11 @@ export function turboState(readConfig, env = process.env) {
   try { return { enabled: !!readConfig() }; } catch { return { enabled: false }; }
 }
 
-export async function run({ platform = process.platform, windows, leaseDirectory, inspectInput: inspectStoppedInput, healthHelperFactory = createAppHealthHelper, browserFactory,
-  directBrowser, ensureTurbo = false, shellRoute = false, runRetentionOptions, clientOutputFactory, ownRuntimeOptions = {}, browserSelectionFactory = createBrowserSelection,
+export async function run({ leaseDirectory, inspectInput: inspectStoppedInput, healthHelperFactory = createAppHealthHelper,
+  directBrowser, ensureTurbo = false, shellRoute = false,
   logging = approvalLogging,
-  approvalStorage = { load: loadPreapproved, live: livePreapproved, add: addPreapprovedAsync },
-  paymentCardFactory = createPaymentCard, recoverClipboard = recoverNativeClipboard, sweepClipboard = sweepClipboardSnapshots } = {}) {
-  if (platform === 'win32') return (await import('./windows-launch.mjs')).runWindows(windows);
-  await sweepClipboard();
-  if (selectRuntime() === 'own') {
-    const prepared = shellRoute ? { turboUnavailable: shellRelayOptions().turboUnavailable }
-      : directBrowser === undefined ? await prepareInstalledStartup(browserFactory, undefined, { ensure: ensureTurbo ? ensureInstalledTurbo : undefined, defer: true }) : { directBrowser };
-    const own = await import('./runtime-select.mjs');
-    const host = await own.prepareOwnRuntimeHost({ driverOptions: ownRuntimeOptions.driverOptions, lazy: true });
-    try { return await own.runOwnRuntime({ leaseDirectory, approvalStorage, ...prepared, ...ownRuntimeOptions, ...host }); }
-    catch (error) {
-      host.runtimeHost.startup.abort();
-      try { await host.driver.close(); } finally { host.runtimeHost.actionEvents.close(); }
-      throw error;
-    }
-  }
+  approvalStorage = { load: loadPreapproved, live: livePreapproved, add: addPreapproved },
+  paymentCardFactory = createPaymentCard, recoverClipboard = recoverNativeClipboard } = {}) {
   await recoverClipboard();
   let finishStartup;
   const startupReady = new Promise(resolve => { finishStartup = resolve; });
@@ -1244,12 +1116,11 @@ export async function run({ platform = process.platform, windows, leaseDirectory
   // The ghost hand's session client, before turbo's bridge forks its worker so the worker can share the session's one host.
   // It spawns nothing until sleight acts or turbo forks, and the default off setting leaves it out. The relay's hand hooks take this
   // same client.
-  // The hand client can report numeric host events before approval logging exists. Retain them.
+  // Startup can fork turbo before approval logging exists. Retain its numeric host events.
   let handTrace;
   const earlyHandTrace = [];
   const cursor = sessionCursorEvents();
   const runRetention = startRunRetention({
-    ...runRetentionOptions,
     onSkip: row => process.stderr.write(`sleight runs: skipped ${row.name}: ${row.reason}\n`),
     onError: error => process.stderr.write(`sleight runs: retention failed: ${error.code ?? error.message}\n`),
   });
@@ -1263,20 +1134,20 @@ export async function run({ platform = process.platform, windows, leaseDirectory
     hand = (await import('./hand/client.mjs')).sessionHandClient({ onPause: value => pause.set(value), trace: (direction, msg) => { if (handTrace) handTrace(direction, msg); else if (earlyHandTrace.length < 64) earlyHandTrace.push([direction, msg]); } });
   } catch { if (earlyHandTrace.length < 64) earlyHandTrace.push(['hand-off', { reason: 'client', code: 'HAND_CLIENT_FAILED' }]); }
   process.once('exit', () => hand?.close());
-  // Claim the trace with O_EXCL before startup workers append their numeric events to it.
-  const { preapproved, appendNotice: appendPreapprovedNotice } = sessionPreapproved(approvalStorage);
-  const { trace, grantAudit } = logging(preapproved);
   const prepared = shellRoute ? { turboUnavailable: shellRelayOptions().turboUnavailable }
-    : directBrowser === undefined ? await prepareInstalledStartup(browserFactory, undefined, { ensure: ensureTurbo ? ensureInstalledTurbo : undefined, defer: true }) : { directBrowser };
+    : directBrowser === undefined ? await prepareInstalledStartup(undefined, undefined, { ensure: ensureTurbo ? ensureInstalledTurbo : undefined }) : { directBrowser };
   directBrowser = prepared.directBrowser;
   const turnHook = prepared.turnHook;
   process.once('exit', () => { turnHook?.close(); });
-  let flowRules;
-  try { flowRules = loadFlowRules(); } catch (err) { fail(err.message); }
+  let flowRules, preapproved;
+  try { flowRules = loadFlowRules(); preapproved = approvalStorage.load(); } catch (err) { fail(err.message); }
+  // A revoke from the menu or the command reaches this session at once; the startup list is the first copy.
+  preapproved = approvalStorage.live(preapproved);
   // The user's blocks and site limits. With site limits already set, which apps are browsers is asked now, not at the first action.
   const permissionCheck = createPermissionCheck(), webBrowser = webBrowserCheck();
   if (permissionCheck.sitesLimited()) webBrowser.ask();
   const appBlocked = (bundleId, app) => permissionCheck.app({ bundleId, name: app });
+  const { trace, grantAudit } = logging(preapproved);
   helperTrace = trace;
   handTrace = trace;
   for (const event of earlyHandTrace.splice(0)) trace?.(...event);
@@ -1287,7 +1158,7 @@ export async function run({ platform = process.platform, windows, leaseDirectory
   let stopping = false, deadCleanup;
   let stoppingForReceipt = false;
   let terminating = false;
-  const browserSelection = browserSelectionFactory();
+  const browserSelection = createBrowserSelection();
   let activeServer = s;
   const serverIdentity = server => JSON.stringify([server.version, server.configPath, server.command, server.args]);
   let runningServerIdentity;
@@ -1355,8 +1226,7 @@ export async function run({ platform = process.platform, windows, leaseDirectory
   const openedFiles = new Map();
   process.once('exit', () => appHealth.close());
   const cardContext = shellRoute ? shellCardContext() : undefined;
-  const replayClient = replayBridge({ input: process.stdin,
-    output: clientOutputFactory?.(process.stdin, process.stdout) ?? process.stdout, ...cardContext });
+  const replayClient = replayBridge({ input: process.stdin, output: process.stdout, ...cardContext });
   paymentCard = paymentCardFactory(shellRoute ? { presentation: { icon: ICON },
     requestContext: cardContext.current, prepareTimeoutMs: 175000, onStatus: params => {
     replayClient.clientOut.write(JSON.stringify({ jsonrpc: '2.0', method: 'notifications/sleight/approval', params }) + '\n');
@@ -1375,8 +1245,6 @@ export async function run({ platform = process.platform, windows, leaseDirectory
     backendChanged: () => browserSelection.changed(),
     prepareEngine,
     engineChanged: () => {
-      // Re-enter the ordinary engine preparation on its next call after deferred turbo fails.
-      if (directBrowser && prepared.directHost?.unavailable?.()) { directBrowser = undefined; return true; }
       try {
         const latest = directBrowserServer(resolveServer(), directBrowser);
         return !latest.error && serverIdentity(latest) !== runningServerIdentity;
@@ -1403,7 +1271,7 @@ export async function run({ platform = process.platform, windows, leaseDirectory
     warmEngine: process.env.SLEIGHT_WARM_ENGINE !== '0',
     // Default since the 2026-10-17 A/B; =0 only for A/B baselines.
     openFast: process.env.SLEIGHT_OPEN_FAST !== '0',
-    onClientReply: message => { firstCallObserver?.reply(message); appendSettingsSealNotes(message); appendPreapprovedNotice(message); },
+    onClientReply: message => firstCallObserver?.reply(message),
     confirmPayments: paymentConfirmationSetting(),
     rs: process.env.SLEIGHT_RS,
     // sleight's own card for an engine-path payment the gate stopped (payment-card.mjs); opened on the first such payment.
@@ -1421,7 +1289,7 @@ export async function run({ platform = process.platform, windows, leaseDirectory
     approvalScope: ['once', 'document'].includes(process.env.SLEIGHT_APPROVAL_SCOPE) ? process.env.SLEIGHT_APPROVAL_SCOPE : 'session',
     ...promptOptions,
     preapproved,
-    alwaysAllow: async (app, riskLevel) => { await approvalStorage.add(app, riskLevel); preapproved.add(app, riskLevel); },
+    alwaysAllow: (app, riskLevel) => { approvalStorage.add(app, riskLevel); preapproved.add(app, riskLevel); },
     grantAudit,
     flowRules,
     changeReview: process.env.SLEIGHT_CHANGE_REVIEW === '1',
@@ -1433,8 +1301,6 @@ export async function run({ platform = process.platform, windows, leaseDirectory
     // The mod runs only in Claude Code, which initialize's clientInfo names (hostWording).
     modHost: () => wording().claudeCode,
     inputLease: new InputLease({ directory: leaseDirectory, holder: `session ${sessionId} (pid ${process.pid})` }),
-    // Snapshot at launch: lifting the switch needs a new relay session. A stale
-    // refusal stays closed even if the runtime adapter observes a later change.
     engineForbiddenTargets: forbiddenTargetsAllowed(readForbiddenTargets),
     // The user's blocks, read again whenever permissions.json changes.
     permissions: { ...permissionCheck, noteApp: noteCurrentApp },
@@ -1445,8 +1311,6 @@ export async function run({ platform = process.platform, windows, leaseDirectory
     // SLEIGHT_SELECT_WINDOW=0 window selection.
     localTools: {
       tools: localToolDefinitions(),
-      // Status-only apps need identity resolution without a window lookup.
-      resolve: async app => ({ app, appId: await resolveAppId(app) }),
       prepareOpen: (args, approve) => prepareOpenFile(args, (parts, message, options) =>
         approve(parts, wordForHost(message, wording()), options), { openedFiles, blocked: appBlocked }),
       reopen: (bundleId, path) => reopenDocument(bundleId, path, { openedFiles }),
@@ -1499,7 +1363,7 @@ export async function run({ platform = process.platform, windows, leaseDirectory
       const taps = await appHealth.keyboardTapState();
       await appHealth.close(); await stopHelpers();
       const ok = pointer.ok === true && Array.isArray(pointer.buttons) && pointer.buttons.length === 0 &&
-        taps.ok === true && Array.isArray(taps.taps) && taps.taps.length === 0 && ownedHelperChildren().length === 0;
+        taps.ok === true && Array.isArray(taps.taps) && taps.taps.length === 0 && ownedHelpers.size === 0;
       return { ok, error: ok ? undefined : pointer.ok !== true ? 'Pointer state inspection failed'
         : pointer.buttons.length ? 'A pointer button is down; its owner is unknown'
         : taps.ok !== true ? 'Keyboard tap inspection failed'
@@ -1542,7 +1406,7 @@ export async function run({ platform = process.platform, windows, leaseDirectory
 }
 
 // `record` and `replay` (replay.mjs): a finished run, run again with no model. Approvals go to the
-// terminal. The executable's dispatch gates both families through person-gate.mjs; library callers own their context.
+// terminal; without one, only apps the user pre-approved can run.
 export async function replayCommand(args, { home, between } = {}) {
   const { record, replay, relayServer, replayOptions } = await import('./replay.mjs');
   const [command, source, out] = args;
@@ -1608,47 +1472,35 @@ export function allowCommand(args, { list = listPreapproved, remove = removePrea
 
 // The command families whose settings-changing forms run only when a person starts them in a terminal (person-gate.mjs,
 // GATED_COMMANDS). The list lives here too so the server's own start never loads the gate.
-const SETTINGS_COMMANDS = ['hand', 'turbo', 'cursor', 'permissions', 'allow', 'routine', 'watch', 'runs', 'replay', 'record', 'menu', 'link', 'unlink'];
+const SETTINGS_COMMANDS = ['hand', 'turbo', 'cursor', 'permissions', 'allow', 'routine', 'watch', 'runs', 'menu', 'link', 'unlink'];
 
 /** The refusal line for a settings command, or undefined when it may run: the terminal check (person-gate.mjs) first, then
  *  for high-stakes changes macOS's Touch ID or password sheet (person-confirm.mjs). The launcher dispatches only on undefined,
  *  so a refused or failed confirmation writes nothing. Tests inject gate and confirmation; production passes neither. */
 export async function settingsChangeRefusal(args, { gate, confirmation = {} } = {}) {
   let refusal;
-  // Replay and record use the same 10 s session-age bar as high-stakes settings forms.
+  // The 10 s session-age bar applies only to high-stakes forms (person-gate.mjs settingsRefusal freshMs).
   try {
     const { highStakesChange } = await import('./person-confirm.mjs');
-    const freshMs = (['replay', 'record'].includes(args[0]) || highStakesChange(args)) ? 10000 : 0;
-    refusal = gate ? gate(args, { freshMs }) : await (await import('./person-gate.mjs')).settingsRefusalAsync(args, { freshMs });
+    const freshMs = highStakesChange(args) ? 10000 : 0;
+    refusal = gate ? gate(args, { freshMs }) : (await import('./person-gate.mjs')).settingsRefusal(args, { freshMs });
   }
-  catch { refusal = `sleight: ${args[0]} ${['replay', 'record'].includes(args[0]) ? 'starts a separate recording or replay' : "changes sleight's settings"}, so run it yourself in a terminal (or use the menu bar). Reason: check failed.`; }
+  catch { refusal = `sleight: ${args[0]} changes sleight's settings, so run it yourself in a terminal (or use the menu bar). Reason: check failed.`; }
   if (refusal) return refusal;
   try {
     const { confirmationRefusal, helperConfirm } = await import('./person-confirm.mjs');
     const notice = text => process.stderr.write(text);
     return await confirmationRefusal(args, { notice, confirm: (found, options) => helperConfirm(found, { ...options, notice }),
-      presence: process.platform === 'win32' ? async () => (await import('./platform/index.mjs')).getPlatform().person.presence() :
-        async () => (await import('./remote-approvals.mjs')).isPresent(await runScript('remote-approvals.js', { operation: 'presence' })),
+      presence: async () => (await import('./remote-approvals.mjs')).isPresent(await runScript('remote-approvals.js', { operation: 'presence' })),
       ...confirmation });
-  } catch { return `sleight: ${args[0]} needs ${process.platform === 'win32' ? 'Windows Hello' : 'Touch ID'} or your password, so ${['replay', 'record'].includes(args[0]) ? 'nothing ran' : 'nothing changed'}. Reason: the check failed.`; }
+  } catch { return `sleight: ${args[0]} needs Touch ID or your password, so nothing changed. Reason: the check failed.`; }
 }
 
 if (isMainModule(import.meta.url)) {
-  // Windows has its own settings dispatcher, but replay must not reach it before the shared process gate.
-  const replayRefusal = process.platform === 'win32' && ['replay', 'record'].includes(process.argv[2])
-    ? await settingsChangeRefusal(process.argv.slice(2)) : undefined;
-  if (replayRefusal) { process.stderr.write(replayRefusal + '\n'); process.exitCode = 3; }
-  else if (process.platform === 'win32') {
-    try { process.exitCode = await (await import('./windows-launch.mjs')).windowsCommand(process.argv.slice(2)); }
-    catch (err) { fail(err.message); }
-  } else {
   const refusal = SETTINGS_COMMANDS.includes(process.argv[2]) ? await settingsChangeRefusal(process.argv.slice(2)) : undefined;
   if (refusal) { process.stderr.write(refusal + '\n'); process.exitCode = 3; }
   else if (['session', 'js', 'js_reset', 'open_file', 'select_window', 'drag'].includes(process.argv[2])) {
-    try {
-      await sweepClipboardSnapshots();
-      process.exitCode = await (await import('./socket-bridge.mjs')).socketCommand(process.argv.slice(2));
-    }
+    try { process.exitCode = await (await import('./socket-bridge.mjs')).socketCommand(process.argv.slice(2)); }
     catch (err) { process.stderr.write(`sleight: ${err.message}\n`); process.exitCode = 1; }
   } else if (process.argv[2] === '--socket-relay') run({ shellRoute: true }).catch(err => fail(err.message));
   else if (process.argv[2] === 'turbo') {
@@ -1704,5 +1556,4 @@ if (isMainModule(import.meta.url)) {
     try { process.exitCode = await replayCommand(process.argv.slice(2)); }
     catch (err) { process.stderr.write(`sleight: ${err.message}\n`); process.exitCode = 1; }
   } else run({ ensureTurbo: true }).catch(err => fail(err.message));
-  }
 }

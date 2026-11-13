@@ -8,7 +8,7 @@
       "path": "/private/tmp/sleight-input-lease-ATcYiI/sleight-input-lease-ATcYiI.txt",
       "trials": [
         {
-          "error": "Command failed: osascript -l JavaScript <private-evidence>/input-lease/bench/input-lease-fixture.js open /private/tmp/sleight-input-lease-ATcYiI/sleight-input-lease-ATcYiI.txt\n<private-evidence>/input-lease/bench/input-lease-fixture.js: execution error: Error: Error: Application can't be found. (-2700)\n"
+          "error": "Command failed: osascript -l JavaScript ~/Projects/sleight-wt/input-lease/bench/input-lease-fixture.js open /private/tmp/sleight-input-lease-ATcYiI/sleight-input-lease-ATcYiI.txt\n~/Projects/sleight-wt/input-lease/bench/input-lease-fixture.js: execution error: Error: Error: Application can't be found. (-2700)\n"
         }
       ],
       "records": []
@@ -1731,7 +1731,7 @@
       "path": "/private/tmp/sleight-input-lease-C0HwVu/sleight-input-lease-C0HwVu.txt",
       "trials": [
         {
-          "error": "Command failed: osascript -l JavaScript <private-evidence>/input-lease/bench/input-lease-fixture.js open /private/tmp/sleight-input-lease-C0HwVu/sleight-input-lease-C0HwVu.txt\n<private-evidence>/input-lease/bench/input-lease-fixture.js: execution error: Error: Error: Application can't be found. (-2700)\n"
+          "error": "Command failed: osascript -l JavaScript ~/Projects/sleight-wt/input-lease/bench/input-lease-fixture.js open /private/tmp/sleight-input-lease-C0HwVu/sleight-input-lease-C0HwVu.txt\n~/Projects/sleight-wt/input-lease/bench/input-lease-fixture.js: execution error: Error: Error: Application can't be found. (-2700)\n"
         }
       ],
       "records": []
@@ -5373,7 +5373,7 @@
         "path": "/private/tmp/sleight-input-lease-4fp4EQ/sleight-input-lease-4fp4EQ.txt",
         "trials": [
           {
-            "error": "Command failed: osascript -l JavaScript <private-evidence>/input-lease/bench/input-lease-fixture.js open /private/tmp/sleight-input-lease-4fp4EQ/sleight-input-lease-4fp4EQ.txt\n<private-evidence>/input-lease/bench/input-lease-fixture.js: execution error: Error: Error: Application can't be found. (-2700)\n"
+            "error": "Command failed: osascript -l JavaScript ~/Projects/sleight-wt/input-lease/bench/input-lease-fixture.js open /private/tmp/sleight-input-lease-4fp4EQ/sleight-input-lease-4fp4EQ.txt\n~/Projects/sleight-wt/input-lease/bench/input-lease-fixture.js: execution error: Error: Error: Application can't be found. (-2700)\n"
           }
         ],
         "records": []

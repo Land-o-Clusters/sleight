@@ -12,50 +12,12 @@
 ObjC.import('AppKit');
 ObjC.import('CoreGraphics');
 ObjC.import('ApplicationServices');
-
-// Installed only by the Glide engine's parent-owned drag runner. Ordinary
-// engine-path drags keep their original delays and have no stop-file authority.
-let dragStopChannel = null;
-let dragHeldInput = null;
-function dragStopCheck() { if (dragStopChannel) dragStopChannel(); }
-function dragStopped() { try { dragStopCheck(); return false; } catch (_) { return true; } }
-function dragPause(seconds) {
-  if (!dragStopChannel) return delay(seconds);
-  for (let left = seconds; left > 0;) {
-    dragStopCheck(); const step = Math.min(0.02, left); delay(step); left -= step;
-  }
-  dragStopCheck();
-}
-function dragPostToPid(pid, event, release = false) {
-  if (dragStopChannel && !release && !([2, 4, 26, 11].includes(Number($.CGEventGetType(event))) || Number($.CGEventGetType(event)) === 12 && Number($.CGEventGetFlags(event)) === 0)) dragStopCheck();
-  dragHeldInput?.(event, pid, false);
-  $.CGEventPostToPid(pid, event);
-  dragHeldInput?.(event, pid, true);
-}
-function dragPost(tap, event, release = false) {
-  if (dragStopChannel && !release && !([2, 4, 26, 11].includes(Number($.CGEventGetType(event))) || Number($.CGEventGetType(event)) === 12 && Number($.CGEventGetFlags(event)) === 0)) dragStopCheck();
-  dragHeldInput?.(event, undefined, false);
-  $.CGEventPost(tap, event);
-  dragHeldInput?.(event, undefined, true);
-}
-
 // sleight's own consent host (its menu bar glove, approval and payment cards) is the binary sleight builds in its helper
 // cache. Only the person's click answers it, so no local tool acts on that process (own-host.mjs).
 const OWN_HOST_LINE = "That is sleight's own confirmation window; only you can answer it.";
-const GLIDE_ENGINE_LINE = "That is sleight's Glide engine; tools never act on it.";
-// Refusal classification only. C wins for an old driver still named consent-host.
-function ownHostLine(values) {
-  const names = values.map(value => String(value ?? '').trim().replace(/^.*\//, '').replace(/\.app$/i, '').toLowerCase().replace(/[^a-z0-9]/g, ''));
-  const cache = /\/Library\/Caches\/sleight\/turbo-host\//i;
-  const driver = /\/Library\/Caches\/sleight\/turbo-host\/mac-driver\//i;
-  const prebuilt = /\/lib\/mac-driver\/prebuilt\/darwin-arm64\/glide-engine(?:\/|$)/i;
-  if (names.includes('consenthost') || values.some(value => cache.test(value) && !driver.test(value))) return OWN_HOST_LINE;
-  if (names.includes('glideengine') || values.some(value => driver.test(value) || prebuilt.test(value))) return GLIDE_ENGINE_LINE;
-  return undefined;
-}
 function ownHost(app) {
-  const read = fn => { try { return String(ObjC.unwrap(fn()) ?? ''); } catch (e) { if (e?.code === 'USER_STOPPED') throw e; return ''; } };
-  return ownHostLine([read(() => app.localizedName), read(() => app.executableURL.path), read(() => app.bundleURL.path)]);
+  const read = fn => { try { return String(ObjC.unwrap(fn()) ?? ''); } catch (e) { return ''; } };
+  return /\/Library\/Caches\/sleight\/turbo-host\//i.test(read(() => app.executableURL.path)) || /^consent-host$/i.test(read(() => app.localizedName).trim());
 }
 
 // The person at the Mac. The foreground path takes the pointer and keyboard
@@ -73,7 +35,7 @@ function waitForIdle() {
     if (waited + step > WAIT_S) {
       throw new Error(`the person at the Mac kept typing or using the mouse for ${WAIT_S} s, and a foreground drag would take their pointer and keyboard focus; nothing was pressed. Tell the user, and retry when they've paused, or ask them to uncover the drop point so the drag can run in the background`);
     }
-    dragPause(step);
+    delay(step);
     waited += step;
   }
 }
@@ -111,13 +73,12 @@ function dragPhase(phase, edge) {
   try { console.log('sleight-drag-phase ' + JSON.stringify({ phase, edge, monoMs: $.NSProcessInfo.processInfo.systemUptime * 1000 })); } catch (_) {}
 }
 function inDragPhase(phase, fn) {
-  dragStopCheck();
   dragPhase(phase, 'start');
   try { return fn(); } finally { dragPhase(phase, 'end'); }
 }
-const settleDrag = seconds => inDragPhase('settle', () => dragPause(seconds));
+const settleDrag = seconds => inDragPhase('settle', () => delay(seconds));
 const overlay = w => /Computer Use$/.test(w.owner) || (handPid > 0 && w.pid === handPid);
-const attempt = (fn, fallback) => { try { return fn(); } catch (e) { if (e?.code === 'USER_STOPPED') throw e; if (e?.axCode === -25204 || e?.modifierReleaseFailed) throw e; return fallback; } };
+const attempt = (fn, fallback) => { try { return fn(); } catch (e) { if (e?.axCode === -25204) throw e; return fallback; } };
 const axFailure = (name, code) => Object.assign(new Error(`AX ${name} failed (${code})`), { axCode: Number(code) });
 const at = (b, p) => ({ x: b.X + p[0], y: b.Y + p[1] });
 const sameBounds = (a, b) => ['X', 'Y', 'Width', 'Height'].every(k => Math.abs(a[k] - b[k]) < 0.5);
@@ -143,11 +104,6 @@ function screenshotScale(request, bounds, title) {
   return Math.abs(x - y) <= 0.03 * Math.max(x, y) && x >= 0.25 && x <= 4 ? { x, y, size: s } : null;
 }
 const toPoints = (p, scale) => scale ? [p[0] / scale.x, p[1] / scale.y] : p;
-function dragHandFrame(pid, window, start, end) {
-  const b = window.bounds;
-  return { kind: 'drag', pid: Number(pid), windowId: window.id, at: [start.x, start.y], path: [[start.x, start.y], [end.x, end.y]],
-    windowRect: [b.X, b.Y, b.Width, b.Height], delayMs: 0, beats: 1 };
-}
 function resolveWindow(own, request) {
   const list = () => JSON.stringify(own.map(w => ({ windowId: w.id, title: w.title, bounds: w.bounds })));
   const candidates = request.windowId === undefined
@@ -348,7 +304,6 @@ function checkSemantic(before, request, pid, win, main) {
 // Keep the guard's element interface, with bounded C API reads instead of an
 // Apple event for each attribute. Retain bridged elements for later readback.
 function axAttribute(el, name) {
-  dragStopCheck();
   const out = Ref(), error = Number($.AXUIElementCopyAttributeValue(el, $(name), out));
   if (error) throw axFailure(name, error);
   return ObjC.castRefToObject(out[0]);
@@ -380,12 +335,12 @@ function axElement(el) {
     attributes: { byName: name => ({
       get value() { return () => scalar(name); },
       set value(value) {
-        dragStopCheck(); const error = Number($.AXUIElementSetAttributeValue(el, $(name), $(value)));
+        const error = Number($.AXUIElementSetAttributeValue(el, $(name), $(value)));
         if (error) throw new Error(`AX write of ${name} failed (${error})`);
       },
     }) },
     actions: { byName: name => ({ perform: () => {
-      dragStopCheck(); const error = Number($.AXUIElementPerformAction(el, $(name)));
+      const error = Number($.AXUIElementPerformAction(el, $(name)));
       if (error) throw new Error(`AX ${name} failed (${error})`);
     } }) },
   };
@@ -518,8 +473,8 @@ function repairTextDrop(snapshot) {
     const expected = after.slice(0, at) + ' ' + after.slice(at);
     if (snapshot.el.value() !== expected) throw new Error(`${snapshot.app} did not confirm the spacing repair; read the text before continuing`);
     return { spaceInserted: true };
-  } catch (e) { if (e?.code === 'USER_STOPPED') throw e;
-    if (e?.axCode === -25204 || e?.modifierReleaseFailed) throw e;
+  } catch (e) {
+    if (e?.axCode === -25204) throw e;
     return { spaceInserted: false, spacingError: String(e.message || e) };
   }
 }
@@ -559,27 +514,12 @@ function finishTextDrop(snapshot, window) {
 // the app (not the HID stream, so it never reaches the user's keyboard) after the write: 0 hangs in
 // 10 trials that edited, against 5 in 8 without it (2026-10-09). Why it works is unknown.
 function settleAfterTextWrite(pid) {
-  dragStopCheck();
-  const post = down => {
+  for (const down of [true, false]) {
     const e = $.CGEventCreateKeyboardEvent(null, 56, down); // kVK_Shift
-    if (!e) throw new Error('could not create the Shift event');
     $.CGEventSetFlags(e, down ? $.kCGEventFlagMaskShift : 0);
     $.CGEventSetType(e, $.kCGEventFlagsChanged);
-    dragPostToPid(pid, e, !down);
-    if (down) dragPause(0.05); else delay(0.05);
-  };
-  try { post(true); }
-  finally {
-    // A failed Shift-down still gets one Shift-up to this same pid, even if down never posted.
-    try { post(false); }
-    catch (_) {
-      // Retry only the release, to the same app. Never repeat the text write or Shift-down.
-      try { post(false); }
-      catch (error) { if (error?.code === 'USER_STOPPED') throw error;
-        throw Object.assign(new Error(`Shift release failed twice for pid ${pid}; Shift may still be held in that app. Text may already have moved. Tell the user; read the window before continuing (${error.message || error})`),
-          { modifierReleaseFailed: true });
-      }
-    }
+    $.CGEventPostToPid(pid, e);
+    delay(0.05);
   }
 }
 
@@ -619,7 +559,7 @@ function axTextArea(pid, point, reference) {
   const described = ref => ObjC.unwrap(ObjC.castRefToObject(ref).description);
   const get = (el, name) => { const out = Ref(); const err = $.AXUIElementCopyAttributeValue(el, $(name), out); if (err) throw axFailure(name, err); return out[0]; };
   const ask = (el, name, arg) => { const out = Ref(); const err = $.AXUIElementCopyParameterizedAttributeValue(el, $(name), arg, out); if (err) throw axFailure(name, err); return out[0]; };
-  const set = (el, name, v) => { dragStopCheck(); const err = $.AXUIElementSetAttributeValue(el, $(name), v); if (err) throw new Error(`AX write of ${name} failed (${err})`); };
+  const set = (el, name, v) => { const err = $.AXUIElementSetAttributeValue(el, $(name), v); if (err) throw new Error(`AX write of ${name} failed (${err})`); };
   const app = $.AXUIElementCreateApplication(pid);
   const hit = Ref();
   // An app element hit-tests only that app's windows, so a covering app doesn't matter.
@@ -672,7 +612,7 @@ function dropIndex(area, p, text) {
   const bounds = dp7 && area.bounds ? attempt(() => area.bounds(), null) : undefined;
   if (bounds !== undefined && (!validRect(bounds) || bounds.Width <= 0 || !inside(bounds, p))) throw new Error(refusal);
   const noValue = fn => {
-    try { return fn(); } catch (error) { if (error?.code === 'USER_STOPPED') throw error; if (error?.axCode !== -25212) throw error; return null; }
+    try { return fn(); } catch (error) { if (error?.axCode !== -25212) throw error; return null; }
   };
   const hit = point => {
     const index = noValue(() => area.indexAt(point));
@@ -817,7 +757,7 @@ function accessibilityMove(area, snapshot, end, window) {
   let after;
   try {
     area.replace(...edits[0]);
-  } catch (e) { if (e?.code === 'USER_STOPPED') throw e;
+  } catch (e) {
     after = attempt(() => area.value(), null);
     if (after === before) throw e; // nothing changed, so another path may try
   }
@@ -825,25 +765,17 @@ function accessibilityMove(area, snapshot, end, window) {
     try { area.replace(...edits[1]); } catch (_) {}
     after = attempt(() => area.value(), null);
   }
-  let settleError;
-  try { attempt(() => inDragPhase('settle', () => area.settle())); }
-  catch (error) { if (error?.code === 'USER_STOPPED') throw error; if (!error?.modifierReleaseFailed) throw error; settleError = error; }
-  const finish = outcome => settleError ? { ...outcome, deliveryVerified: false,
-    error: `${outcome.error || `The text move in ${snapshot.app} window ${window.id} (${window.title}) was verified.`} ${settleError.message}` } : outcome;
+  attempt(() => inDragPhase('settle', () => area.settle()));
   // Safari's web text areas accept the writes and change nothing (2026-10-09). Nothing to undo,
   // so another path may try.
-  if (after === before) {
-    if (settleError) return finish({ textChanged: false, error: 'The app ignored the Accessibility text writes; the text is unchanged.' });
-    throw new Error('the app ignored the Accessibility text writes');
-  }
+  if (after === before) throw new Error('the app ignored the Accessibility text writes');
   if (after !== expected) {
-    return finish({ lostText: typeof after !== 'string' || after.replace(/\s/gu, '').length < before.replace(/\s/gu, '').length,
-      error: `The text in ${snapshot.app} window ${window.id} (${window.title}) isn't what the move should have made. Press Cmd+Z twice in that window, then read it again before continuing.` +
-        (settleError && typeof after !== 'string' ? ' The text could not be read; the move is unverified.' : '') });
+    return { lostText: typeof after !== 'string' || after.replace(/\s/gu, '').length < before.replace(/\s/gu, '').length,
+      error: `The text in ${snapshot.app} window ${window.id} (${window.title}) isn't what the move should have made. Press Cmd+Z twice in that window, then read it again before continuing.` };
   }
   const movedAt = (dest > srcEnd ? dest - (cutTo - cutFrom) : dest) + insertion.offset;
-  if (!settleError) attempt(() => area.select(movedAt, word.length));
-  return finish({ textChanged: true, spaceInserted: insertion.spaceInserted });
+  attempt(() => area.select(movedAt, word.length));
+  return { textChanged: true, spaceInserted: insertion.spaceInserted };
 }
 
 function findApp(name) {
@@ -853,8 +785,7 @@ function findApp(name) {
     const id = ObjC.unwrap(a.bundleIdentifier);
     const path = ObjC.unwrap(a.bundleURL.path);
     if (ObjC.unwrap(a.localizedName) === name || id === name || path === name) {
-      const own = ownHost(a);
-      if (own) throw new Error(own);
+      if (ownHost(a)) throw new Error(OWN_HOST_LINE);
       return a;
     }
   }
@@ -1140,63 +1071,44 @@ function accessibilityCrossWindowMove(sourceArea, destinationArea, source, desti
     return { textChanged: true, rolledBack: false, deliveryVerified: false, lostText: false,
       error: `Partial Accessibility text move between ${names}: ${reason}, and removing the inserted ${JSON.stringify(insert)} at index ${dest} could not be verified: window ${b.id} (${b.title}) now contains ${shown}. Read both windows before continuing; undo the insertion there if the source still has its text.` };
   };
-  let settleError;
-  // Keep rollback returns and pending read errors until after the release attempt.
-  const move = () => {
-    let attempted = false, inserted = false;
-    try {
-      attempted = true; progress.wrote = true;
-      destinationArea.replace(dest, 0, insert);
-      if (destinationArea.value() === other && sourceArea.value() === before) throw new Error('the app ignored the Accessibility text writes');
-      inserted = destinationArea.value() === expected;
-      if (inserted) {
-        if (sourceArea.value() !== before) return rollback('the source text changed when the destination was written (the two windows may share one document) or was edited');
-        if (source.el.attributes.byName('AXSelectedText').value() !== source.selected || !sameRange(sourceArea.selection(), sel)) return rollback('the source selection changed during the move');
-        try { sourceArea.replace(cutFrom, cutTo - cutFrom, ''); } catch (error) { if (error?.code === 'USER_STOPPED') throw error;
-          if (attempt(() => sourceArea.value(), null) === before) return rollback(`the source window refused the cut (${error.message || error}); it may be read-only`);
-          throw error;
-        }
-        if (sourceArea.value() === before) return rollback('the source window ignored the cut; it may be read-only');
-      }
-    } catch (error) { if (error?.code === 'USER_STOPPED') throw error;
-      if (error?.axCode === -25204) throw error;
-      // A failing setter may already have changed text. Only proven unchanged permits retry.
-      if (!inserted && attempt(() => sourceArea.value(), null) === before && attempt(() => destinationArea.value(), null) === other) {
-        const current = destinationArea.selection();
-        if (!sameRange(sourceArea.selection(), sel) || (!sameRange(current, destinationSelection) && !sameRange(current, { location: dest, length: 0 }))) {
-          throw new Error('selection changed before the move; read both windows again');
-        }
-        // replace sets B's range before its text setter. Restore only that exact authored range,
-        // with both values unchanged; an unrelated selection must still stop the next path.
-        if (!sameRange(current, destinationSelection)) destinationArea.select(destinationSelection.location, destinationSelection.length);
+  let attempted = false, inserted = false;
+  try {
+    attempted = true; progress.wrote = true;
+    destinationArea.replace(dest, 0, insert);
+    if (destinationArea.value() === other && sourceArea.value() === before) throw new Error('the app ignored the Accessibility text writes');
+    inserted = destinationArea.value() === expected;
+    if (inserted) {
+      if (sourceArea.value() !== before) return rollback('the source text changed when the destination was written (the two windows may share one document) or was edited');
+      if (source.el.attributes.byName('AXSelectedText').value() !== source.selected || !sameRange(sourceArea.selection(), sel)) return rollback('the source selection changed during the move');
+      try { sourceArea.replace(cutFrom, cutTo - cutFrom, ''); } catch (error) {
+        if (attempt(() => sourceArea.value(), null) === before) return rollback(`the source window refused the cut (${error.message || error}); it may be read-only`);
         throw error;
       }
-    } finally {
-      if (attempted) {
-        try { attempt(() => inDragPhase('settle', () => sourceArea.settle())); }
-        catch (error) { if (error?.code === 'USER_STOPPED') throw error; if (!error?.modifierReleaseFailed) throw error; settleError = error; }
+      if (sourceArea.value() === before) return rollback('the source window ignored the cut; it may be read-only');
+    }
+  } catch (error) {
+    if (error?.axCode === -25204) throw error;
+    // A failing setter may already have changed text. Only proven unchanged permits retry.
+    if (!inserted && attempt(() => sourceArea.value(), null) === before && attempt(() => destinationArea.value(), null) === other) {
+      const current = destinationArea.selection();
+      if (!sameRange(sourceArea.selection(), sel) || (!sameRange(current, destinationSelection) && !sameRange(current, { location: dest, length: 0 }))) {
+        throw new Error('selection changed before the move; read both windows again');
       }
+      // replace sets B's range before its text setter. Restore only that exact authored range,
+      // with both values unchanged; an unrelated selection must still stop the next path.
+      if (!sameRange(current, destinationSelection)) destinationArea.select(destinationSelection.location, destinationSelection.length);
+      throw error;
     }
-    const outcome = finishCrossWindowDrop(source, destination, a, b);
-    if (sourceArea.value() !== before.slice(0, cutFrom) + before.slice(cutTo) || destinationArea.value() !== expected) {
-      outcome.error = `Partial Accessibility text move between ${names}. Read both windows before continuing; undo the destination insertion there if the source still has its text.`;
-      outcome.deliveryVerified = false;
-      return outcome;
-    }
-    // As the single-window move does, leave the moved text selected in its new place.
-    if (!settleError) attempt(() => destinationArea.select(dest + insertion.offset, word.length));
+  } finally { if (attempted) attempt(() => inDragPhase('settle', () => sourceArea.settle())); }
+  const outcome = finishCrossWindowDrop(source, destination, a, b);
+  if (sourceArea.value() !== before.slice(0, cutFrom) + before.slice(cutTo) || destinationArea.value() !== expected) {
+    outcome.error = `Partial Accessibility text move between ${names}. Read both windows before continuing; undo the destination insertion there if the source still has its text.`;
+    outcome.deliveryVerified = false;
     return outcome;
-  };
-  try {
-    const outcome = move();
-    if (!settleError) return outcome;
-    return { ...outcome, deliveryVerified: false,
-      error: `${outcome.error || `The text move between ${names} was verified.`} ${settleError.message}` };
-  } catch (error) { if (error?.code === 'USER_STOPPED') throw error;
-    if (!settleError) throw error;
-    throw Object.assign(new Error(`cannot verify the drop between ${names}; read both windows before continuing (${error.message || error}). ${settleError.message}`),
-      { modifierReleaseFailed: true });
   }
+  // As the single-window move does, leave the moved text selected in its new place.
+  attempt(() => destinationArea.select(dest + insertion.offset, word.length));
+  return outcome;
 }
 
 function runCrossWindow(request) {
@@ -1245,17 +1157,16 @@ function runCrossWindow(request) {
     const checkBoth = () => { checkWindow(a, pid, aw); return checkWindow(b, pid, bw); };
     checkBoth(); verifySemantic();
     const points = { start: at(a.bounds, startState.from), end: at(b.bounds, endState.to) };
-    const _sleightHand = dragHandFrame(pid, a, points.start, points.end);
     const exposed = (list, sameAppOnly) => {
       try {
         exposedEndpoints(list, a, points, sameAppOnly, b);
-      } catch (error) { if (error?.code === 'USER_STOPPED') throw error;
+      } catch (error) {
         if (error.systemOverlay) throw error;
         throw new Error(`${error.message}; tile the windows with Window > Move & Resize, then read again`);
       }
     };
     try { exposed(checkBoth(), true); }
-    catch (error) { if (error?.code === 'USER_STOPPED') throw error;
+    catch (error) {
       if (!dp2 || error.systemOverlay) throw error;
       raiseWindow(aw); // Same-app overlap still needs a raise and a fresh proof.
       checkBoth(); verifySemantic(); exposed(checkBoth(), true);
@@ -1278,16 +1189,14 @@ function runCrossWindow(request) {
     const withinBudget = () => { if (Date.now() - started > PRESS_BUDGET_MS) throw new Error('reading both windows took too long to start a drag; read both windows again'); };
     const list = validate();
     const cover = coveringApp(list, a, points);
-    if (typeof sleightPlaceHand === 'function') sleightPlaceHand(_sleightHand);
     if (globalThis.SLEIGHT_ACCESSIBILITY_MOVE !== false) {
       try {
         withinBudget(); validate();
         const outcome = inDragPhase('ax-move', () => accessibilityCrossWindowMove(axTextArea(pid, points.start, source.el.reference),
           axTextArea(pid, points.end, destination.el.reference), source, destination, end, a, b, progress));
-        return JSON.stringify({ ok: !outcome.error, app, windowId: a.id, toWindowId: b.id, from, to, path: 'accessibility', _sleightHand,
+        return JSON.stringify({ ok: !outcome.error, app, windowId: a.id, toWindowId: b.id, from, to, path: 'accessibility',
           ...(dp7 ? { fallbackReason: outcome.error ? `accessibility move failed: ${outcome.error}` : null } : {}), ...outcome });
-      } catch (error) { if (error?.code === 'USER_STOPPED') throw error;
-        if (error?.modifierReleaseFailed) { path = 'accessibility'; throw error; }
+      } catch (error) {
         if (error?.axCode === -25204 && progress.wrote) { path = 'accessibility'; throw error; }
         unchanged(); fallbackReason = `accessibility move unavailable: ${error.message || error}`;
       }
@@ -1306,23 +1215,23 @@ function runCrossWindow(request) {
         x: points.start.x + (points.end.x - points.start.x) * (i + 1) / steps,
         y: points.start.y + (points.end.y - points.start.y) * (i + 1) / steps,
       })), event(2, points.end)];
-    } catch (error) { if (error?.code === 'USER_STOPPED') throw error; fallbackReason = `background unavailable: ${error.message || error}`; }
+    } catch (error) { fallbackReason = `background unavailable: ${error.message || error}`; }
     if (sequence) {
       path = 'background'; withinBudget(); validate();
-      post = item => { $.CGEventSetTimestamp(item.event, $.NSProcessInfo.processInfo.systemUptime * 1e9); dragPostToPid(pid, item.event); };
+      post = item => { $.CGEventSetTimestamp(item.event, $.NSProcessInfo.processInfo.systemUptime * 1e9); $.CGEventPostToPid(pid, item.event); };
       release = sequence.at(-1);
       let postingError;
       try {
-        post(sequence[0]); dragPause(0.05);
+        post(sequence[0]); delay(0.05);
         if (coveringApp(validate(), a, points)) throw new Error('another app now covers a drag endpoint; background mouse-down was skipped');
-        pressed = true; didPress = true; inDragPhase('posted-press', () => post(sequence[1])); dragPause(holdMs / 1000);
-        for (const item of sequence.slice(2, -1)) { post(item); dragPause(0.02); }
-      } catch (error) { if (error?.code === 'USER_STOPPED') throw error; postingError = String(error.message || error); }
-      finally { if (pressed) { try { post(release); pressed = false; } catch (error) { if (error?.code === 'USER_STOPPED') throw error; throw new Error(`background release failed: ${error.message}; read both windows before continuing`); } } }
-      dragPause(0.2);
+        pressed = true; didPress = true; inDragPhase('posted-press', () => post(sequence[1])); delay(holdMs / 1000);
+        for (const item of sequence.slice(2, -1)) { post(item); delay(0.02); }
+      } catch (error) { postingError = String(error.message || error); }
+      finally { if (pressed) { try { post(release); pressed = false; } catch (error) { throw new Error(`background release failed: ${error.message}; read both windows before continuing`); } } }
+      delay(0.2);
       const outcome = finishCrossWindowDrop(source, destination, a, b);
       if (outcome.textChanged || (postingError && didPress)) return JSON.stringify({ ok: !outcome.error && !postingError, app, windowId: a.id, toWindowId: b.id,
-        path, _sleightHand, ...outcome, ...(postingError ? { error: [outcome.error, postingError].filter(Boolean).join('; ') } : {}) });
+        path, ...outcome, ...(postingError ? { error: [outcome.error, postingError].filter(Boolean).join('; ') } : {}) });
       fallbackReason = postingError ? `background unavailable before press: ${postingError}` : 'background text unchanged';
     }
     unchanged(); waitForIdle(); unchanged();
@@ -1330,22 +1239,20 @@ function runCrossWindow(request) {
     const focusedAt = Date.now();
     target.activateWithOptions(0); raiseWindow(aw); settleDrag(settleMs / 1000);
     validate(true); withinBudget();
-    post = e => dragPost($.kCGHIDEventTap, e);
+    post = e => $.CGEventPost($.kCGHIDEventTap, e);
     const event = (type, p) => { const e = $.CGEventCreateMouseEvent(null, type, $.CGPointMake(p.x, p.y), $.kCGMouseButtonLeft); $.CGEventSetIntegerValueField(e, 1, 1); return e; };
-    post(event(5, points.start)); dragPause(0.05);
+    post(event(5, points.start)); delay(0.05);
     if (typedSince(focusedAt)) throw new Error('the user typed while the app was in front; nothing was pressed. Read both windows again and tell the user');
-    validate(true); release = event(2, points.start); pressed = true; didPress = true; inDragPhase('posted-press', () => post(event(1, points.start))); dragPause(holdMs / 1000);
+    validate(true); release = event(2, points.start); pressed = true; didPress = true; inDragPhase('posted-press', () => post(event(1, points.start))); delay(holdMs / 1000);
     for (let i = 1; i <= steps; i++) {
       const p = { x: points.start.x + (end.x - points.start.x) * i / steps, y: points.start.y + (end.y - points.start.y) * i / steps };
-      release = event(2, p); post(event(6, p)); dragPause(0.02);
+      release = event(2, p); post(event(6, p)); delay(0.02);
     }
-    post(release); pressed = false; dragPause(0.2);
+    post(release); pressed = false; delay(0.2);
     const outcome = finishCrossWindowDrop(source, destination, a, b);
     if (typedSince(focusedAt)) outcome.error = [outcome.error, 'the user typed during the drag; read both windows again and tell the user'].filter(Boolean).join('; ');
-    return JSON.stringify({ ok: !outcome.error, app, windowId: a.id, toWindowId: b.id, from, to, path, fallbackReason, _sleightHand, ...outcome });
+    return JSON.stringify({ ok: !outcome.error, app, windowId: a.id, toWindowId: b.id, from, to, path, fallbackReason, ...outcome });
   } catch (error) {
-    if (error?.code === 'USER_STOPPED') return JSON.stringify({ ok: false, code: 'USER_STOPPED', error: 'USER_STOPPED', path, deliveryVerified: false });
-    if (error?.modifierReleaseFailed) return JSON.stringify({ ok: false, path, fallbackReason, deliveryVerified: false, error: String(error.message || error) });
     // A timed-out read after input or a text write proves nothing either way, as in the single-window path.
     if ((didPress || progress.wrote) && error?.axCode === -25204) return JSON.stringify({ ok: false, path, fallbackReason, deliveryVerified: false,
       error: `cannot verify the drop between window ${a?.id} (${a?.title}) and window ${b?.id} (${b?.title}); read both windows before continuing` });
@@ -1353,8 +1260,8 @@ function runCrossWindow(request) {
       error: String(error.message || error) + (didPress || String(error.message).includes('nothing was pressed') ? '' : '; nothing was pressed') });
   } finally {
     if (pressed && post) attempt(() => post(release));
-    if (saved && !dragStopped()) attempt(() => $.CGWarpMouseCursorPosition(saved));
-    if (!dragStopped() && previous && !previous.isNil() && (path === 'foreground' || attempt(() => $.NSWorkspace.sharedWorkspace.frontmostApplication.processIdentifier, null) !== previous.processIdentifier)) attempt(() => previous.activateWithOptions(0));
+    if (saved) attempt(() => $.CGWarpMouseCursorPosition(saved));
+    if (previous && !previous.isNil() && (path === 'foreground' || attempt(() => $.NSWorkspace.sharedWorkspace.frontmostApplication.processIdentifier, null) !== previous.processIdentifier)) attempt(() => previous.activateWithOptions(0));
   }
 }
 
@@ -1434,7 +1341,7 @@ function run(argv) {
     const chosenWindow = win || axWindow(pid, main);
     let build;
     try { build = backgroundBuilder(); }
-    catch (e) { if (e?.code === 'USER_STOPPED') throw e; fallbackReason = `background unavailable: ${e.message || e}`; }
+    catch (e) { fallbackReason = `background unavailable: ${e.message || e}`; }
     if (build || globalThis.SLEIGHT_ACCESSIBILITY_MOVE !== false) {
       previous = $.NSWorkspace.sharedWorkspace.frontmostApplication;
       if (!dp2) { raiseWindow(chosenWindow); settleDrag(settleMs / 1000); }
@@ -1442,14 +1349,13 @@ function run(argv) {
       verifySemantic();
       scanned = { info: dragContent(pid, chosenWindow, main.bounds, pointFrom, pointTo), bounds: main.bounds };
       const points = validatePoints(scanned.info, main.bounds, pointFrom, pointTo, app);
-      units._sleightHand = dragHandFrame(pid, main, points.start, points.end);
       scanned.text = !!points.text;
       if (points.text) points.text.pid = pid;
       // Another document of this app must not receive the press: check fresh
       // own-app order at both ends, then other apps' coverage below.
       let ordered = checkWindow(main, pid, chosenWindow);
       try { exposedEndpoints(ordered, main, points, true); }
-      catch (error) { if (error?.code === 'USER_STOPPED') throw error;
+      catch (error) {
         if (!dp2 || error.systemOverlay) throw error;
         raiseWindow(chosenWindow);
         verifySemantic();
@@ -1466,7 +1372,6 @@ function run(argv) {
       // in every covered run of the 2026-10-09 head-to-head. Keep the pointer and say what works.
       if (cover && !points.text) throw new Error(COVERED_NO_TEXT(cover));
       if (cover) fallbackReason = `background skipped: ${cover} covers the window at the drag points`;
-      if (typeof sleightPlaceHand === 'function') sleightPlaceHand(units._sleightHand);
       // A text move can be done without any pointer at all: the foreground
       // path took the owner's pointer and focus mid-sentence (2026-10-08). The write
       // is followed by settleAfterTextWrite, without which TextEdit's next save could
@@ -1476,13 +1381,12 @@ function run(argv) {
         verifySemantic();
         let area;
         try { area = axTextArea(pid, points.end); }
-        catch (e) { if (e?.code === 'USER_STOPPED') throw e; fallbackReason = [fallbackReason, `accessibility move unavailable: ${e.message || e}`].filter(Boolean).join('; '); return null; }
+        catch (e) { fallbackReason = [fallbackReason, `accessibility move unavailable: ${e.message || e}`].filter(Boolean).join('; '); return null; }
         try {
           const outcome = accessibilityMove(area, points.text, points.end, main);
           path = 'accessibility';
           return JSON.stringify({ ok: !outcome.error, app, windowId: main.id, from, to, ...units, path, fallbackReason, ...outcome });
-        } catch (e) { if (e?.code === 'USER_STOPPED') throw e;
-          if (e?.modifierReleaseFailed) { path = 'accessibility'; throw e; }
+        } catch (e) {
           if (/changed before the move|inside the selection/.test(String(e.message))) throw e;
           fallbackReason = [fallbackReason, `accessibility move failed: ${e.message || e}`].filter(Boolean).join('; ');
           return null;
@@ -1521,12 +1425,12 @@ function run(argv) {
         // Chromium, 2026-10-18). The hold and the step spacing are unchanged.
         sequence = [event(5, points.start), event(1, points.start),
           ...moves.map(p => event(6, p)), event(6, points.end), event(2, points.end)];
-      } catch (e) { if (e?.code === 'USER_STOPPED') throw e; fallbackReason = `background unavailable: ${e.message || e}`; }
+      } catch (e) { fallbackReason = `background unavailable: ${e.message || e}`; }
       if (sequence) {
         path = 'background';
         post = item => {
           $.CGEventSetTimestamp(item.event, $.NSProcessInfo.processInfo.systemUptime * 1e9);
-          dragPostToPid(pid, item.event);
+          $.CGEventPostToPid(pid, item.event);
         };
         let postingError, releaseError;
         withinBudget();
@@ -1535,21 +1439,21 @@ function run(argv) {
         const stale = relocated && relocated(windows(true));
         if (stale) throw new Error(`${stale} since it was chosen; read the window again; nothing was pressed`);
         try {
-          post(sequence[0]); dragPause(0.05);
+          post(sequence[0]); delay(0.05);
           // Mark down before posting, so a posting exception still releases.
           pressed = true; didPress = true; current = sequence[sequence.length - 1];
-          inDragPhase('posted-press', () => post(sequence[1])); dragPause(holdMs / 1000);
-          for (const item of sequence.slice(2, -1)) { post(item); dragPause(0.02); }
+          inDragPhase('posted-press', () => post(sequence[1])); delay(holdMs / 1000);
+          for (const item of sequence.slice(2, -1)) { post(item); delay(0.02); }
           post(current); pressed = false;
-        } catch (e) { if (e?.code === 'USER_STOPPED') throw e; postingError = String(e.message || e); }
+        } catch (e) { postingError = String(e.message || e); }
         finally {
           if (pressed) {
             try { post(current); }
-            catch (e) { if (e?.code === 'USER_STOPPED') throw e; releaseError = `background release failed: ${e.message || e}; read the window before continuing`; }
+            catch (e) { releaseError = `background release failed: ${e.message || e}; read the window before continuing`; }
             pressed = false;
           }
         }
-        dragPause(0.2);
+        delay(0.2);
         // An unreadable snapshot is not unchanged. Never repeat an uncertain or
         // changed edit, even if posting or the spacing repair failed.
         const after = points.text ? points.text.el.value() : null;
@@ -1595,7 +1499,6 @@ function run(argv) {
     const info = scanned?.text && sameBounds(scanned.bounds, main.bounds) ? scanned.info
       : dragContent(pid, chosenWindow, main.bounds, pointFrom, pointTo);
     const { start, end, text } = validatePoints(info, main.bounds, pointFrom, pointTo, app);
-    units._sleightHand = dragHandFrame(pid, main, start, end);
     if (text) text.pid = pid;
     // Match the exact window at both endpoints, even for another window of
     // the same app. The engine cursor overlay lets events through.
@@ -1603,47 +1506,43 @@ function run(argv) {
     const unchanged = currentWindows.find(w => w.id === main.id && w.pid === pid);
     if (!unchanged || !sameBounds(unchanged.bounds, main.bounds)) throw new Error('the chosen window moved during validation; read it again');
     exposedEndpoints(currentWindows, main, { start, end }, false);
-    if (typeof sleightPlaceHand === 'function') sleightPlaceHand(units._sleightHand);
     withinBudget();
     post = (type, p) => {
       const e = $.CGEventCreateMouseEvent(null, type, $.CGPointMake(p.x, p.y), $.kCGMouseButtonLeft);
       $.CGEventSetIntegerValueField(e, 1, 1); // click state
-      dragPost($.kCGHIDEventTap, e);
+      $.CGEventPost($.kCGHIDEventTap, e);
     };
     post($.kCGEventMouseMoved, start);
     current = start;
-    dragPause(0.05);
+    delay(0.05);
     if (typedSince(focusedAt)) throw new Error(`the user typed while ${app} was in front, so their keys may have gone into it; nothing was pressed. Read the window again before continuing, and tell the user`);
     unchangedText();
     verifySemantic();
     inDragPhase('posted-press', () => post($.kCGEventLeftMouseDown, start));
     pressed = true; didPress = true;
-    dragPause(holdMs / 1000);
+    delay(holdMs / 1000);
     for (let i = 1; i <= steps; i++) {
       current = { x: start.x + (end.x - start.x) * i / steps, y: start.y + (end.y - start.y) * i / steps };
       post($.kCGEventLeftMouseDragged, current);
-      dragPause(0.02);
+      delay(0.02);
     }
     post($.kCGEventLeftMouseUp, end);
     pressed = false;
-    dragPause(0.2);
+    delay(0.2);
     const outcome = finishTextDrop(text, main);
     if (typedSince(focusedAt)) {
       outcome.error = [outcome.error, `the user typed during the drag while ${app} was in front, so their keys may have gone into it. Read the window again and tell the user`].filter(Boolean).join('; ');
     }
     return JSON.stringify({ ok: !outcome.error, app, windowId: main.id, from, to, ...units, holdMs, steps, path, fallbackReason, ...outcome });
   } catch (e) {
-    if (e?.code === 'USER_STOPPED') return JSON.stringify({ ok: false, code: 'USER_STOPPED', error: 'USER_STOPPED', path, deliveryVerified: false });
-    if (e?.modifierReleaseFailed) return JSON.stringify({ ok: false, path, fallbackReason, ...units, deliveryVerified: false,
-      error: String(e.message || e) + (didPress ? '; the drop may have landed; its outcome is unverified' : '') });
     if (didPress && e?.axCode === -25204) return JSON.stringify({ ok: false, path, fallbackReason, ...units,
       deliveryVerified: false, error: 'cannot verify the drop; read the window before continuing' });
     const message = String(e.message || e);
     return JSON.stringify({ ok: false, path, fallbackReason, ...units, error: message + (!didPress && !/nothing was pressed/i.test(message) ? '; nothing was pressed' : '') });
   } finally {
     if (pressed && post) attempt(() => post($.kCGEventLeftMouseUp, current));
-    if (saved && !dragStopped()) attempt(() => $.CGWarpMouseCursorPosition(saved));
-    if (!dragStopped() && previous && !previous.isNil() && previous.processIdentifier !== pid &&
+    if (saved) attempt(() => $.CGWarpMouseCursorPosition(saved));
+    if (previous && !previous.isNil() && previous.processIdentifier !== pid &&
         (path === 'foreground' || attempt(() => $.NSWorkspace.sharedWorkspace.frontmostApplication.processIdentifier, null) === pid)) {
       attempt(() => previous.activateWithOptions(0));
     }

@@ -4,13 +4,11 @@
 # Waits on /tmp/sleight-hold, /tmp/sleight-live.lock and $O/flags-pause (never touches the first two). After a STOP, or with
 # Word or Excel left running, it creates the pause file and waits: clear the app, then rm $O/flags-pause.
 # Closes loc arch's CLEAR while it runs and reopens it at the end. Score: node bench/flag-ab.mjs score
-#   open -a Terminal bench/flag-ab.command                          (defaults: 5 rounds, this checkout, logs in bench/results/evidence/race-1017)
+#   open -a Terminal bench/flag-ab.command                          (defaults: 5 rounds, race-131, logs in race-1017)
 #   ROUNDS=2 START=6 ARMS=office zsh bench/flag-ab.command          (top-up rounds 6 and 7 of one arm)
 set -u
 REPO=${0:A:h:h}
-EVIDENCE_ROOT=${SLEIGHT_BENCH_EVIDENCE_DIR:-$REPO/bench/results/evidence}
-O=${O:-$EVIDENCE_ROOT/race-1017}; WT=${WT:-$REPO}
-mkdir -p "$O" || exit 1
+O=${O:-$HOME/Projects/sleight-wt/race-1017}; WT=${WT:-$HOME/Projects/sleight-wt/race-131}
 ROUNDS=${ROUNDS:-5}; START=${START:-1}; ARMS=${ARMS:-}; AFTER=${AFTER:-}
 PAUSE=$O/flags-pause; LOG=$O/flags.log; MANIFEST=$O/flags-manifest.tsv
 unset -m 'SLEIGHT_*'  # the plan explicitly sets each tested switch, including the off side

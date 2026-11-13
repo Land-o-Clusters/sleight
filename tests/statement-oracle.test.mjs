@@ -9,16 +9,10 @@ import { legacyConsumers, sources } from './fixtures/statement-legacy/index.mjs'
 import { statementSpans, splitTextSave } from '../plugins/sleight/lib/text-save.mjs';
 import { splitMenuActions } from '../plugins/sleight/lib/menu-continuation.mjs';
 
-test('all five frozen legacy files match c4175f79 after restoring imports and HG3 termination options', () => {
+test('all five frozen legacy files match c4175f79 after restoring only import paths', () => {
   for (const [path, expected] of Object.entries(sources)) {
-    let source = readFileSync(new URL('./fixtures/statement-legacy/' + path.split('/').at(-1), import.meta.url), 'utf8')
+    const source = readFileSync(new URL('./fixtures/statement-legacy/' + path.split('/').at(-1), import.meta.url), 'utf8')
       .replace(/^\/\/ Frozen[^\n]*\n/, '').replaceAll("from '../../../plugins/sleight/lib/", "from './");
-    // Keep the executable copies bounded. Only these two copies gained one
-    // SIGKILL option each in HG3; restore that addition for the historical hash.
-    if (['plugins/sleight/lib/tab-probe.mjs', 'plugins/sleight/lib/flow-rules.mjs'].includes(path)) {
-      assert.equal(source.split(", killSignal: 'SIGKILL'").length, 2, path);
-      source = source.replace(", killSignal: 'SIGKILL'", '');
-    }
     assert.equal(createHash('sha256').update(source).digest('hex'), expected, path);
   }
 });

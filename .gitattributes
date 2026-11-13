@@ -1,4 +1,0 @@
-# Keep native source hashes stable in Windows checkouts.
-*.swift text eol=lf
-*.cs text eol=lf
-*.ps1 text eol=lf

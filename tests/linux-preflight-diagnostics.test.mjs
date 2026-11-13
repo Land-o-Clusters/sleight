@@ -6,7 +6,7 @@ import { join } from 'node:path';
 import { mkdtempSync, mkdirSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { trackTemp } from '../scripts/temp-leftovers.mjs';
-import { containerProgram, linuxTestBudget, linuxRunBudget, runContainerChecks, runOwnedCommand, runLinuxPreflight } from '../scripts/linux-preflight.mjs';
+import { containerProgram, runContainerChecks, runOwnedCommand, runLinuxPreflight } from '../scripts/linux-preflight.mjs';
 
 const commit = 'a'.repeat(40), runId = 'sleight-linux-00000000-0000-0000-0000-000000000000';
 const privateText = 'private-sentinel/path-and-token';
@@ -15,19 +15,6 @@ const ok = stdout => ({ status: 0, stdout, stderr: '', collected: true });
 const baseExecute = async (command, args) => ok(command === 'npm' ? args[0] === 'test' ? tap : '' : args[0] === 'rev-parse' ? commit : 'README\0');
 const exception = code => () => { throw Object.assign(Error(privateText), { code }); };
 const base = { platform: 'linux', commit, runId, prepare() {}, makeConfig: () => '/config', removeConfig() {}, log() {}, execute: baseExecute };
-
-test('Linux npm hang guard reserves thirty minutes and Docker has two extra minutes', async () => {
-  assert.equal(linuxTestBudget, 30 * 60_000);
-  assert.equal(linuxRunBudget, 32 * 60_000);
-  let npmTimeout;
-  const receipt = await runContainerChecks({ ...base, execute: async (command, args, options) => {
-    if (command === 'npm') npmTimeout = options.timeout;
-    return baseExecute(command, args);
-  } });
-  assert.equal(receipt.exitCode, 0);
-  assert.equal(npmTimeout, linuxTestBudget);
-  assert.ok(containerProgram.includes(`const linuxTestBudget = ${linuxTestBudget};`));
-});
 
 test('failed container boundaries report closed diagnostics without private strings', async () => {
   const cases = [

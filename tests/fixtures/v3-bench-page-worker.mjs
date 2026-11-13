@@ -1,4 +1,3 @@
-import { launchTestChromiumContext, closeTestChromium } from './chromium-isolated.mjs';
 // Host-only fixture providers for the actual V7 dispatcher and inherited IPC.
 // This does not supply the V10 production trust join or exercise its rules.
 import { mkdtempSync, realpathSync, rmSync, existsSync } from 'node:fs';
@@ -21,7 +20,7 @@ const locator = (page, ref) => {
 serveBenchWorker({ channel: process, async begin(event) {
   if (event.source !== 'user' || !event.text.includes('fixture')) throw Error('Original fixture task required');
   profile = mkdtempSync(join(realpathSync(tmpdir()), 'sleight-v3-page-'));
-  context = await launchTestChromiumContext(chromium, profile, { headless: true, serviceWorkers: 'block' });
+  context = await chromium.launchPersistentContext(profile, { headless: true, serviceWorkers: 'block' });
   await context.route('**/*', route => origins.includes(new URL(route.request().url()).origin) ? route.continue() : route.abort());
   const pages = {
     async openTab({ url }) {
@@ -32,10 +31,8 @@ serveBenchWorker({ channel: process, async begin(event) {
     tab(id) { if (!entries.has(id)) throw Error('Unowned tab'); return entries.get(id); },
     enqueue: (id, run) => run(pages.tab(id)),
     list: async () => [...entries].map(([tab, entry]) => ({ tab, url: entry.page.url() })),
-    async close(id) { await closeTestChromium(context, () => pages.tab(id).page.close()); entries.delete(id); return { closed: true }; },
-    async endTurn() { return closeTestChromium(context, async () => {
-      for (const entry of entries.values()) await entry.page.close(); entries.clear(); return { cleanedUp: true };
-    }); },
+    async close(id) { await pages.tab(id).page.close(); entries.delete(id); return { closed: true }; },
+    async endTurn() { for (const entry of entries.values()) await entry.page.close(); entries.clear(); return { cleanedUp: true }; },
   };
   return createToolDispatcher({ browser: 'bbench', pages, snapshot, ctx: event,
     async runSteps(entry, steps, ctx) {
@@ -60,9 +57,9 @@ serveBenchWorker({ channel: process, async begin(event) {
     } });
 }, async close() {
   const turboTabsLeft = entries.size;
-  try { await context?.close(); }
-  finally { if (profile) rmSync(profile, { recursive: true }); }
+  await context?.close();
   const tabsAfterBrowserClose = context?.pages().length ?? 0;
+  if (profile) rmSync(profile, { recursive: true });
   return { revoked: true, cleanup: [], turboTabsLeft, tabsAfterBrowserClose,
     browserClosed: true, profileDeleted: !!profile && !existsSync(profile), socketsClosed: true };
 } }).ready();

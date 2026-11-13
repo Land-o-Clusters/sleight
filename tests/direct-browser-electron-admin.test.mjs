@@ -14,7 +14,7 @@ import { readRecipeRegistry } from '../plugins/sleight/lib/direct-browser/electr
 import { createElectronConnection } from '../plugins/sleight/lib/direct-browser/electron-connection.mjs';
 import { makeHost, pageSession, until } from './direct-browser-electron-host-fixture.mjs';
 
-const python = spawnSync('python3', ['-c', 'print(1)'], { encoding: 'utf8', timeout: 60000, killSignal: 'SIGKILL' });
+const python = spawnSync('python3', ['-c', 'print(1)'], { encoding: 'utf8' });
 const skipSpawn = python.status !== 0 ? 'python3 is unavailable' : false;
 const finish = h => { h.host._crashForTest(); h.state.remove(); };
 const recipe = (bundleId, version) => ({ build: `${bundleId}@${version}`, name: 'Fake', bundleId, signer: 'TEAM123456', runtime: 'electron/43.0.0',

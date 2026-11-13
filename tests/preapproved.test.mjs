@@ -119,11 +119,12 @@ test('list() names the listed apps read-only, with this session\'s Always allow 
   assert.deepEqual(list.list(), ['com.apple.calculator', 'com.microsoft.VSCode', 'com.todesktop.230313mzl4w4u92']);
   assert.deepEqual(new PreapprovedApps({ version: 1, apps: [] }).list(), []);
 });
-test('rejects malformed lists, wildcards and unrecognized fields', t => {
+test('rejects malformed lists, wildcards, duplicates and unrecognized fields', t => {
   for (const bad of [null, {}, { ...config, version: 2 }, { ...config, apps: ['Calculator'] },
     { ...config, path: '/tmp/elsewhere' }, { ...config, apps: [{ app: '*', riskLevel: 'high' }] },
     { ...config, apps: [{ app: 'Calculator', riskLevel: 'critical' }] },
-    { ...config, apps: [{ app: 'Calculator', riskLevel: 'low', persist: 'always' }] }]) {
+    { ...config, apps: [{ app: 'Calculator', riskLevel: 'low', persist: 'always' }] },
+    { ...config, apps: [config.apps[0], config.apps[0]] }]) {
     assert.throws(() => new PreapprovedApps(bad));
   }
   const { file, io } = fixture(t); fs.writeFileSync(file, '{');

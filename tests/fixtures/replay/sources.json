@@ -1,16 +1,16 @@
 {
   "claude": {
-    "source": "<private-evidence>/race-1017/safari-sleight-b8-r1/form-checkout/events.jsonl",
+    "source": "~/Projects/sleight-wt/race-1017/safari-sleight-b8-r1/form-checkout/events.jsonl",
     "calls": 2,
     "scrub": "Home path replaced with ~; non-tool messages omitted."
   },
   "codex": {
-    "source": "<private-evidence>/race-1017/safari-codex-sleight-sol-pg3-r1/form-checkout/events.jsonl",
+    "source": "~/Projects/sleight-wt/race-1017/safari-codex-sleight-sol-pg3-r1/form-checkout/events.jsonl",
     "calls": 2,
     "scrub": "Home path replaced with ~; non-tool messages omitted."
   },
   "turbo": {
-    "source": "<private-evidence>/race-1017/chrome-sleight-turbo-rel131-r2/form-settings/events.jsonl",
+    "source": "~/Projects/sleight-wt/race-1017/chrome-sleight-turbo-rel131-r2/form-settings/events.jsonl",
     "calls": 2,
     "scrub": "Home path replaced with ~; non-tool messages omitted."
   },

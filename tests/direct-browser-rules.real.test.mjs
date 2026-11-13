@@ -1,4 +1,3 @@
-import { testChromiumExecutable, launchTestChromium } from './fixtures/chromium-isolated.mjs';
 import test from 'node:test';
 import { trustedLocatorRead } from '../plugins/sleight/lib/direct-browser/trusted-dom.mjs';
 import assert from 'node:assert/strict';
@@ -15,7 +14,9 @@ async function fixture(t, html) {
   const { chromium } = await import('../plugins/sleight/vendor/playwright-core/index.mjs');
   const spec = JSON.parse(readFileSync(new URL('../plugins/sleight/vendor/playwright-core/browsers.json', import.meta.url)))
     .browsers.find(browser => browser.name === 'chromium-headless-shell');
-  const executable = testChromiumExecutable({ revision: spec.revision });
+  const platform = process.platform === 'darwin' ? 'mac-' + process.arch : 'linux64';
+  const executable = join(homedir(), 'Library/Caches/ms-playwright', 'chromium_headless_shell-' + spec.revision,
+    'chrome-headless-shell-' + platform, 'chrome-headless-shell');
   assert.ok(existsSync(executable), 'host must provide pinned headless Chromium; live qualification cannot skip');
   const sockets = new Set(), timers = new Set(); let posts = 0;
   const server = createServer((request, response) => {
@@ -32,7 +33,7 @@ async function fixture(t, html) {
     await new Promise(resolve => server.close(resolve));
     t.diagnostic('owned local HTTP server, sockets and delay timers collected');
   });
-  const browser = await launchTestChromium(chromium, { headless: true, executablePath: executable });
+  const browser = await chromium.launch({ headless: true, executablePath: executable });
   t.after(async () => { await browser.close(); t.diagnostic('owned headless Chromium closed'); });
   const page = await browser.newPage(), origin = 'http://127.0.0.1:' + server.address().port;
   await page.goto(origin);

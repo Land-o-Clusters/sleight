@@ -31,7 +31,7 @@ function compareResults(A, B, orderedWindows = false) {
     verdict: A === undefined || B === undefined ? 'missing' : reason || changes.length ? 'changed' : documentationChanges.length ? 'docs-differ' : 'equal' };
 }
 
-export function campaignEvidence(runs, spec, roles = {}, { handOn = false } = {}) {
+export function campaignEvidence(runs, spec, roles = {}) {
   const engine = campaignEngine(runs);
   const comparisons = [...new Set(runs.map(r => r.iteration))].flatMap(iteration => {
     const a = runs.find(r => r.iteration === iteration && r.variant === 'A'), b = runs.find(r => r.iteration === iteration && r.variant === 'B');
@@ -66,29 +66,8 @@ export function campaignEvidence(runs, spec, roles = {}, { handOn = false } = {}
   const docsChanged = comparisons.some(pair => pair.calls.some(row => row.documentation?.verdict === 'changed'));
   if (verdict === 'pass' && docsChanged) verdict = 'docs-differ';
   if (engine.verdict === 'refuse') verdict = 'diverge';
-  const handRuns = runs.filter(run => run.hand);
-  const handMissing = handOn && (!runs.length || handRuns.length !== runs.length);
-  if (handMissing) verdict = 'diverge';
-  const hand = handRuns.length ? {
-    mode: 'hand-on', sides: [...new Set(runs.map(run => run.variant))].map(variant => {
-      const group = runs.filter(run => run.variant === variant);
-      const drags = group.flatMap(run => run.hand?.drags ?? []);
-      return { variant, identity: group[0]?.hand?.identity, runs: group.length, measured: group.filter(run => run.hand?.verdict === 'measured').length,
-        drags: drags.length, seatedDrags: drags.filter(row => row.stayedSeated === true).length,
-        approvalToAXStartMedianMs: median(drags.map(row => row.approvalToAXStartMs).filter(Number.isFinite)),
-        placementAckMedianMs: median(drags.flatMap(row => row.placementAckMs)), placedAcknowledgements: drags.reduce((n, row) => n + row.placedAcknowledgements, 0) };
-    }),
-  } : undefined;
-  if (hand && (handRuns.length !== runs.length || handRuns.some(run => run.hand.verdict !== 'measured') ||
-      new Set(hand.sides.map(side => side.identity?.cache)).size !== hand.sides.length ||
-      new Set(hand.sides.map(side => side.identity?.worktree)).size !== hand.sides.length)) verdict = 'diverge';
-  if (hand && spec?.id === 'CH4' && candidate.some(run => run.hand?.drags.some(drag =>
-      drag.placedAcknowledgements < 1 || drag.stayedSeated !== true || drag.panelContacts > 0))) {
-    hand.reason = 'Candidate drag lacks a placed acknowledgement, continuous seating or zero panel contacts';
-    if (verdict === 'pass') verdict = 'check-incomplete';
-  }
-  return { verdict, roles, comparisons, timing, engine, ...(hand ? { hand } : {}),
-    ...(handMissing ? { reason: 'Hand-on campaign is missing character evidence' } : engine.reason ? { reason: engine.reason } : docsChanged ? { reason: 'engine documentation text changed' } : {}) };
+  return { verdict, roles, comparisons, timing, engine,
+    ...(engine.reason ? { reason: engine.reason } : docsChanged ? { reason: 'engine documentation text changed' } : {}) };
 }
 
 function dragOrder(events) {

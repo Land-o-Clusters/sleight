@@ -142,7 +142,7 @@ test('PF7 motion observation preserves parent frames without reading a child', a
     session: 'session', turn: 'turn', id: 'request', text: 'Inspect the animation after this click.' }, () => true) });
   t.after(() => ctx.dispose());
   let input, captures = 0, detached = 0;
-  const f = fixture({ ctx, onRun: () => { input('mousePressed'); input('mouseReleased'); } });
+  const f = fixture({ ctx, onRun: () => input('mousePressed') });
   f.parent.observeInput = fn => { input = fn; return () => { input = undefined; }; };
   // Native CDP replies are fixture data. No browser, image capture or input is sent.
   const data = Buffer.from([0xff, 0xd8, 0xff, 0xc0, 0, 8, 8, 0, 10, 0, 10, 0, 0xff, 0xd9]).toString('base64');

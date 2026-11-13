@@ -68,9 +68,9 @@ test('the setup CLI dry run creates nothing and refuses an incomplete directory 
   const temp = mkdtempSync(join(tmpdir(), 'sleight-world-cli-plan-'));
   try {
     const dir = join(temp, 'absent'), file = new URL('../bench/world/native-world.mjs', import.meta.url).pathname;
-    const output = execFileSync(process.execPath, [file, '--setup', '--dry-run', '--dir', dir], { encoding: 'utf8', timeout: 60000, killSignal: 'SIGKILL' });
+    const output = execFileSync(process.execPath, [file, '--setup', '--dry-run', '--dir', dir], { encoding: 'utf8' });
     assert.equal(JSON.parse(output).version, '2.1.289');
     assert.equal(existsSync(dir), false);
-    assert.throws(() => execFileSync(process.execPath, [file, '--setup', '--dry-run', '--dir'], { stdio: 'pipe', timeout: 60000, killSignal: 'SIGKILL' }), /incomplete/);
+    assert.throws(() => execFileSync(process.execPath, [file, '--setup', '--dry-run', '--dir'], { stdio: 'pipe' }), /incomplete/);
   } finally { removeTemp(temp); }
 });

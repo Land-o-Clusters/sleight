@@ -61,7 +61,7 @@ for (const populated of [false, true]) test(`clear all from another session inva
   const f = fixture(t); if (populated) f.memory.record(row());
   const epoch = f.memory.generation();
   execFileSync(process.execPath, ['--input-type=module', '-e',
-    "import { SiteMemory } from './plugins/sleight/lib/site-memory.mjs'; new SiteMemory({home: process.argv[1]}).clear();", f.home], { timeout: 60000, killSignal: 'SIGKILL' });
+    "import { SiteMemory } from './plugins/sleight/lib/site-memory.mjs'; new SiteMemory({home: process.argv[1]}).clear();", f.home]);
   assert.equal(f.memory.record(row('More'), epoch), false);
   assert.equal(f.memory.record(row('More')), true);
 });

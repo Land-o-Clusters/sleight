@@ -1,4 +1,3 @@
-import { testChromiumExecutable, readTestDevToolsPort, launchTestChromiumContext, closeTestChromium } from './fixtures/chromium-isolated.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { existsSync, mkdtempSync, readFileSync, rmSync } from 'node:fs';
@@ -13,7 +12,8 @@ import { setViewport } from '../plugins/sleight/lib/direct-browser/viewport.mjs'
 const pin = JSON.parse(readFileSync(new URL('../plugins/sleight/vendor/playwright-core/browsers.json', import.meta.url)))
   .browsers.find(browser => browser.name === 'chromium');
 const executablePath = process.platform === 'darwin'
-  ? testChromiumExecutable({ headless: false, revision: pin.revision })
+  ? join(homedir(), 'Library/Caches/ms-playwright', 'chromium-' + pin.revision,
+    'chrome-mac-' + process.arch, 'Google Chrome for Testing.app/Contents/MacOS/Google Chrome for Testing')
   : join(homedir(), 'Library/Caches/ms-playwright', 'chromium-' + pin.revision, 'chrome-linux64/chrome');
 const skip = process.env.SLEIGHT_LIVE_DOM_TEST !== '1' && 'requires opt-in headless Chromium';
 const state = page => page.evaluate(() => ({ width: innerWidth, height: innerHeight, dpr: devicePixelRatio,
@@ -41,17 +41,18 @@ async function fixture(t) {
   });
   await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
   t.after(async () => {
-    try { await closeTestChromium(launcher, async () => {
-      try { if (registry) assert.equal((await registry.endTurn()).cleanedUp, true); }
-      finally { try { await browser?.close(); } finally { await launcher?.close(); } }
-    }); } finally { rmSync(profile, { recursive: true, force: true }); }
+    try { if (registry) assert.equal((await registry.endTurn()).cleanedUp, true); }
+    finally {
+      try { await browser?.close(); await launcher?.close(); }
+      finally { rmSync(profile, { recursive: true, force: true }); }
+    }
     assert.equal(existsSync(profile), false);
     t.diagnostic('cleanup: owned headless browser closed and private profile removed');
   });
-  launcher = await launchTestChromiumContext(chromium, profile, { headless: true, executablePath, viewport: null,
+  launcher = await chromium.launchPersistentContext(profile, { headless: true, executablePath, viewport: null,
     colorScheme: null, reducedMotion: null,
     args: ['--remote-debugging-port=0', '--force-device-scale-factor=2', '--force-dark-mode', '--window-size=1200,900'] });
-  const [port, path] = (await readTestDevToolsPort(profile));
+  const [port, path] = readFileSync(join(profile, 'DevToolsActivePort'), 'utf8').trim().split('\n');
   // Installed turbo connects without Playwright's default media or viewport overrides.
   browser = await chromium.connectOverCDP('ws://127.0.0.1:' + port + path, { noDefaults: true });
   const session = await browser.newBrowserCDPSession();

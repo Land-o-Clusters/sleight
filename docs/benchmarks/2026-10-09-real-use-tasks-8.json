@@ -2119,7 +2119,7 @@
             "passed": false,
             "reason": "Microsoft Word unexpected-dialog dialog: stopped",
             "seconds": 21.4,
-            "cleanupError": "Fixture cleanup stopped by application dialog; Launched Microsoft Word quit unconfirmed: <private-evidence>/real-use-tasks/bench/real-fixture.js: execution error: Error: Error: Launched app quit unconfirmed (-2700)",
+            "cleanupError": "Fixture cleanup stopped by application dialog; Launched Microsoft Word quit unconfirmed: ~/Projects/sleight-wt/real-use-tasks/bench/real-fixture.js: execution error: Error: Error: Launched app quit unconfirmed (-2700)",
             "fixtureDiagnostics": [
               {
                 "app": "Microsoft Word",
@@ -2383,7 +2383,7 @@
         "passCleanupErrors": [
           {
             "app": "Microsoft Word",
-            "error": "Launched Microsoft Word quit unconfirmed: <private-evidence>/real-use-tasks/bench/real-fixture.js: execution error: Error: Error: Launched app quit unconfirmed (-2700)"
+            "error": "Launched Microsoft Word quit unconfirmed: ~/Projects/sleight-wt/real-use-tasks/bench/real-fixture.js: execution error: Error: Error: Launched app quit unconfirmed (-2700)"
           }
         ]
       }

@@ -1,4 +1,3 @@
-import { assertChildStatus } from './fixtures/child-status.mjs';
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
@@ -96,7 +95,7 @@ test('production JXA reads attributes of real attributed strings without a bridg
         attributedTextHasAttributes(spelling, 5, 3), attributedTextHasAttributes(markedBold, 5, 3),
         Number(spelling.attributesAtIndexEffectiveRange(3, null).count), attributedTextHasAttributes(markedBaseline, 5, 3),
         Number(markedBaseline.attributesAtIndexEffectiveRange(0, null).count)]);
-    }`], { encoding: 'utf8', timeout: 15000, killSignal: 'SIGKILL' });
-  assertChildStatus(probe, 0, probe.stderr);
+    }`], { encoding: 'utf8', timeout: 15000 });
+  assert.equal(probe.status, 0, probe.stderr);
   assert.deepEqual(JSON.parse(probe.stdout), [false, true, true, false, true, 3, false, 3]);
 });

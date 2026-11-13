@@ -2,7 +2,6 @@
 #include <sys/socket.h>
 #include <sys/un.h>
 #include <sys/proc_info.h>
-#include <sys/proc.h>
 #include <libproc.h>
 #include <bsm/libbsm.h>
 #include <unistd.h>
@@ -66,58 +65,7 @@ static int process_metadata(const char *argument, const char *expected, int code
   return 0;
 }
 
-/* Exact executable paths for running processes. No app, window, input, or command-line APIs.
- * Omit vanished/replaced executables and permission refusals for other users; other failures refuse the whole scan. */
-static int cache_processes(void) {
-  int bytes = proc_listpids(PROC_ALL_PIDS, 0, NULL, 0);
-  if (bytes <= 0 || bytes > 1024 * 1024) return 65;
-  size_t capacity = (size_t)bytes + 4096 * sizeof(pid_t);
-  pid_t *pids = calloc(1, capacity);
-  if (!pids) return 65;
-  bytes = proc_listpids(PROC_ALL_PIDS, 0, pids, (int)capacity);
-  if (bytes <= 0 || (size_t)bytes >= capacity) { free(pids); return 65; }
-  char *json = NULL;
-  size_t length = 0;
-  FILE *out = open_memstream(&json, &length);
-  if (!out) { free(pids); return 65; }
-  fprintf(out, "[");
-  int comma = 0;
-  for (size_t i = 0; i < (size_t)bytes / sizeof(pid_t); i++) {
-    if (pids[i] <= 0) continue;
-    char path[PROC_PIDPATHINFO_MAXSIZE];
-    memset(path, 0, sizeof(path));
-    errno = 0;
-    int path_length = proc_pidpath(pids[i], path, sizeof(path) - 1);
-    int path_error = errno;
-    if (path_length <= 0 || path[0] != '/') {
-      struct proc_bsdinfo info;
-      memset(&info, 0, sizeof(info));
-      int read = proc_pidinfo(pids[i], PROC_PIDTBSDINFO, 0, &info, sizeof(info));
-      int uid_known = read == sizeof(info);
-      int skip = path_length <= 0 && (path_error == ENOENT || path_error == ESRCH ||
-        (path_error == EPERM && uid_known && info.pbi_uid != getuid()));
-      fprintf(stderr, "Cache process %s (pid %d, uid %lld, errno %d).\n", skip ? "omitted" : "inventory unavailable",
-        pids[i], uid_known ? (long long)info.pbi_uid : -1LL, path_error);
-      if (skip) continue;
-      fclose(out); free(json); free(pids); return 65;
-    }
-    fprintf(out, "%s{\"pid\":%d,\"path\":\"", comma ? "," : "", pids[i]); comma = 1;
-    for (const unsigned char *p = (const unsigned char *)path; *p; p++) {
-      if (*p == '"' || *p == '\\') fprintf(out, "\\%c", *p);
-      else if (*p < 32) fprintf(out, "\\u%04x", *p);
-      else fputc(*p, out);
-    }
-    fprintf(out, "\"}");
-    if (fflush(out) || length > 4 * 1024 * 1024) { fclose(out); free(json); free(pids); return 65; }
-  }
-  fprintf(out, "]\n");
-  int error = fclose(out);
-  if (!error) fwrite(json, 1, length, stdout);
-  free(json); free(pids); return error ? 65 : 0;
-}
-
 int main(int argc, char **argv) {
-  if (argc == 2 && !strcmp(argv[1], "--cache-processes")) return cache_processes();
   if (argc == 4 && !strcmp(argv[1], "--process-pid")) return process_metadata(argv[2], argv[3], 0);
   if (argc == 4 && !strcmp(argv[1], "--code-status")) return process_metadata(argv[2], argv[3], 1);
   if (argc != 3 || strcmp(argv[1], "--peer-fd") || strcmp(argv[2], "3")) return 64;

@@ -1,11 +1,9 @@
-import { assertChildStatus } from './fixtures/child-status.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
-import { tmpdir } from 'node:os';
+import { homedir, tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { retainedBank } from './helpers/retained-bank.mjs';
 import { fileURLToPath } from 'node:url';
 import { COVER_MIN, coverEvidence, coverExclusions, coverRefusals, countedCover, gradeGateTask, harnessFailure, raceProblems, runErrorClass } from '../bench/fowl/real-gate-grade.mjs';
 import { coveredRows, expandRounds, flipped, loadRound, markCover, regradeRow, scoreRounds } from '../bench/fowl/race-score.mjs';
@@ -13,7 +11,7 @@ import { runRealGate } from '../bench/fowl/real-gate.mjs';
 
 const repo = fileURLToPath(new URL('..', import.meta.url));
 // A round records the checkout's commits, so a source tree without .git (an exported archive) cannot check that.
-const gitSkip = spawnSync('git', ['-C', repo, 'rev-parse', 'HEAD'], { encoding: 'utf8', timeout: 30000, killSignal: 'SIGKILL' }).status !== 0 && 'needs a git checkout to record commits';
+const gitSkip = spawnSync('git', ['-C', repo, 'rev-parse', 'HEAD'], { encoding: 'utf8' }).status !== 0 && 'needs a git checkout to record commits';
 // Event lines in the shapes the saved Firefox rounds hold (/tmp/fb-rounds/real-29077030-*, real-4693816f-*, real-a61bdeb2-*).
 const codexRefused = JSON.stringify({ type: 'item.completed', item: { type: 'mcp_tool_call', status: 'failed', error: null,
   result: { content: [{ type: 'text', text: 'Computer Use was not approved to use Firefox' }] } } });
@@ -160,16 +158,16 @@ test('race-score groups rounds by browser, arm and task with the claim rules, an
   assert.deepEqual(h.pairs.map(p => [p.arm, p.sleight, p.runs]), [['fowlbrowser', 8, { 'sleight-turbo': 1, fowlbrowser: 1 }]]);
   assert.match(flipped(rounds).find(f => f.arm === 'fowlbrowser').problems.join(), /no successful browser tool call/);
 
-  const cli = spawnSync(process.execPath, [join(repo, 'bench/fowl/race-score.mjs'), join(root, 'real-*'), '--json'], { encoding: 'utf8', timeout: 60000, killSignal: 'SIGKILL' });
-  assertChildStatus(cli, 0, cli.stderr);
+  const cli = spawnSync(process.execPath, [join(repo, 'bench/fowl/race-score.mjs'), join(root, 'real-*'), '--json'], { encoding: 'utf8' });
+  assert.equal(cli.status, 0, cli.stderr);
   const json = JSON.parse(cli.stdout);
   assert.equal(json.browsers.firefox.table.sleight['inject-order'].expected, 20);
   assert.equal(json.rounds.filter(r => r.excluded).length, 2);
-  const text = spawnSync(process.execPath, [join(repo, 'bench/fowl/race-score.mjs'), root], { encoding: 'utf8', timeout: 60000, killSignal: 'SIGKILL' });
+  const text = spawnSync(process.execPath, [join(repo, 'bench/fowl/race-score.mjs'), root], { encoding: 'utf8' });
   assert.match(text.stdout, /real-c9-codex .*excluded, 12 of 12 tasks failed with approval refused/);
   assert.match(text.stdout, /Within 20% of sleight, need 5 runs: form-travel\/codex \(sleight 3\/5, codex 3\/5\)/);
   assert.equal(existsSync(join(root, 'real-c9-codex', 'harness-failure.json')), false, 'scoring alone writes nothing');
-  spawnSync(process.execPath, [join(repo, 'bench/fowl/race-score.mjs'), root, '--mark'], { encoding: 'utf8', timeout: 60000, killSignal: 'SIGKILL' });
+  spawnSync(process.execPath, [join(repo, 'bench/fowl/race-score.mjs'), root, '--mark'], { encoding: 'utf8' });
   assert.equal(JSON.parse(readFileSync(join(root, 'real-c9-codex', 'harness-failure.json'), 'utf8')).class, 'approval refused');
 });
 
@@ -197,8 +195,8 @@ test('sleight inside Codex is left out of sleight\'s verdict and scored against 
   // |45-40|/45 = 11%: within 20%, so the pair needs 5 runs.
   assert.deepEqual(p.topUps.map(x => [x.task, x.arm, x.short]), [['mdn', 'codex', ['codex-sleight 3/5', 'codex 3/5']]]);
   assert.equal(p.wording, 'completed every task, fastest on 1 of 2');
-  const cli = spawnSync(process.execPath, [join(repo, 'bench/fowl/race-score.mjs'), join(root, 'real-*')], { encoding: 'utf8', timeout: 60000, killSignal: 'SIGKILL' });
-  assertChildStatus(cli, 0, cli.stderr);
+  const cli = spawnSync(process.execPath, [join(repo, 'bench/fowl/race-score.mjs'), join(root, 'real-*')], { encoding: 'utf8' });
+  assert.equal(cli.status, 0, cli.stderr);
   assert.match(cli.stdout, /No pair within 20% of sleight is short of 5 runs\./);
   assert.match(cli.stdout, /Same model: codex-sleight \(sleight inside Codex\) against codex/);
   assert.match(cli.stdout, /Within 20% of codex-sleight, need 5 runs: mdn\/codex \(codex-sleight 3\/5, codex 3\/5\)/);
@@ -287,7 +285,7 @@ test('a live round records the build and harness commits and marks itself a harn
     runner: { gradeOutcome: () => ({ problems: ['nothing submitted'] }), gradeSite: () => ({ problems: [] }) }, runtime: gateRuntime(dir, codexRefused) });
   process.exitCode = 0;
   const commits = JSON.parse(readFileSync(join(out, 'commits.json'), 'utf8'));
-  const head = spawnSync('git', ['-C', repo, 'rev-parse', 'HEAD'], { encoding: 'utf8', timeout: 30000, killSignal: 'SIGKILL' }).stdout.trim();
+  const head = spawnSync('git', ['-C', repo, 'rev-parse', 'HEAD'], { encoding: 'utf8' }).stdout.trim();
   assert.equal(commits.build.commit, head);
   assert.equal(commits.harness.commit, head);
   assert.equal(commits.build.repo, repo);
@@ -331,8 +329,8 @@ test('race-score names each arm\'s engine version, recorded or inferred, and fla
   assert.deepEqual([s.engines.lcu.versions['26.1007.71326'].runs, s.engines.lcu.ambiguous.runs], [1, 1]);
   // LCU doesn't drive the ChatGPT engine, so only sleight against Codex counts as a mix.
   assert.deepEqual(s.engineMix, { versions: ['26.1007.71326', '26.1013.40934'], arms: { sleight: ['26.1013.40934'], codex: ['26.1007.71326'] } });
-  const cli = spawnSync(process.execPath, [join(repo, 'bench/fowl/race-score.mjs'), join(root, 'real-*')], { encoding: 'utf8', timeout: 60000, killSignal: 'SIGKILL' });
-  assertChildStatus(cli, 0, cli.stderr);
+  const cli = spawnSync(process.execPath, [join(repo, 'bench/fowl/race-score.mjs'), join(root, 'real-*')], { encoding: 'utf8' });
+  assert.equal(cli.status, 0, cli.stderr);
   assert.match(cli.stdout, /real-c1-codex \(safari, codex, 2 rows, engine 26\.1007\.71326 inferred, 2026-10-18\)/);
   assert.match(cli.stdout, /Engine and UTC dates per arm \(runs\): sleight engine 26\.1013\.40934 \(2 recorded\), 2026-10-19 \| codex engine 26\.1007\.71326 \(2 inferred\), 2026-10-18 \| lcu not used, 2026-10-18\./);
   assert.match(cli.stdout, /different engine versions: sleight on 26\.1013\.40934, codex on 26\.1007\.71326\./);
@@ -436,9 +434,9 @@ test('race-score scores covered runs by default, says so first, and leaves them 
   assert.deepEqual(on.fastest.sleight, ['form-travel']);
   assert.ok(on.short.some(c => c.arm === 'sleight' && c.task === 'form-settings' && c.runs === 1));
   assert.deepEqual(plain.fastest['codex-sol'], []);
-  const cli = (...flags) => spawnSync(process.execPath, [join(repo, 'bench/fowl/race-score.mjs'), root, ...flags], { encoding: 'utf8', timeout: 60000, killSignal: 'SIGKILL' });
+  const cli = (...flags) => spawnSync(process.execPath, [join(repo, 'bench/fowl/race-score.mjs'), root, ...flags], { encoding: 'utf8' });
   const off = cli();
-  assertChildStatus(off, 0, off.stderr);
+  assert.equal(off.status, 0, off.stderr);
   assert.match(off.stdout, /^Cover exclusions: OFF \(default\)\n/);
   assert.match(off.stdout, /Rows with cover evidence \(3\), 3 of them left out under --exclude-covered, scored above \(1 passes, 2 failures\):\n  real-f1-codex-sol codex-sol form-settings fail: out, harness-covered by Claude 83%/);
   assert.match(off.stdout, /\* under 3 runs, kept out of "fastest on": .*form-settings\/codex-sol \(1\)/);
@@ -492,9 +490,8 @@ test('the hub states the cover rule only when its collect applied it, and the sh
   assert.match(render(all)['browser-race.md'], /An arm's cell with fewer than 3 runs isn't counted for lowest expected time on its task\./);
   all['browser-race'].cover.applied = true;
   assert.match(render(all)['browser-race.md'], /This collect also left out 15 runs, 3 of them passes, that tried a drag while another app's window covered the browser's/);
-  const bank = retainedBank('race-1017');
-  if (bank.skip) { t.skip(bank.skip); return; }
-  const raceDir = bank.path;
+  const raceDir = join(homedir(), 'Projects/sleight-wt/race-1017');
+  if (!existsSync(raceDir)) { t.skip('the race folder is not on this Mac'); return; }
   const off = collectRace({ raceDir, browsers: ['firefox'], family: 'browser-race', title: 'race' });
   const on = collectRace({ raceDir, browsers: ['firefox'], family: 'browser-race', title: 'race', excludeCovered: true });
   assert.equal(off.cover.applied, false);

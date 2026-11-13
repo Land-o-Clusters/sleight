@@ -12,10 +12,10 @@
       "stages": [
         {
           "verdict": "FAIL",
-          "error": "Command failed: osascript -l JavaScript <private-evidence>/codex/change-review-guard/bench/document-scope-fixture.js open /private/tmp/sleight-change-review-jidcTx/UNDO-jidcTx.txt /private/tmp/sleight-change-review-jidcTx/KEEP-jidcTx.txt\n<private-evidence>/codex/change-review-guard/bench/document-scope-fixture.js: execution error: Error: Error: Application can't be found. (-2700)\n"
+          "error": "Command failed: osascript -l JavaScript ~/Projects/sleight-wt/codex/change-review-guard/bench/document-scope-fixture.js open /private/tmp/sleight-change-review-jidcTx/UNDO-jidcTx.txt /private/tmp/sleight-change-review-jidcTx/KEEP-jidcTx.txt\n~/Projects/sleight-wt/codex/change-review-guard/bench/document-scope-fixture.js: execution error: Error: Error: Application can't be found. (-2700)\n"
         },
         {
-          "cleanupError": "Command failed: osascript -l JavaScript <private-evidence>/codex/change-review-guard/bench/document-scope-fixture.js close /private/tmp/sleight-change-review-jidcTx/UNDO-jidcTx.txt /private/tmp/sleight-change-review-jidcTx/KEEP-jidcTx.txt\n<private-evidence>/codex/change-review-guard/bench/document-scope-fixture.js: execution error: Error: Error: Application can't be found. (-2700)\n"
+          "cleanupError": "Command failed: osascript -l JavaScript ~/Projects/sleight-wt/codex/change-review-guard/bench/document-scope-fixture.js close /private/tmp/sleight-change-review-jidcTx/UNDO-jidcTx.txt /private/tmp/sleight-change-review-jidcTx/KEEP-jidcTx.txt\n~/Projects/sleight-wt/codex/change-review-guard/bench/document-scope-fixture.js: execution error: Error: Error: Application can't be found. (-2700)\n"
         }
       ],
       "traceFile": "/private/tmp/sleight-change-review-jidcTx/trace.jsonl",
@@ -269,10 +269,10 @@
       "stages": [
         {
           "verdict": "FAIL",
-          "error": "Command failed: osascript -l JavaScript <private-evidence>/codex/change-review-guard/bench/document-scope-fixture.js open /private/tmp/sleight-change-review-NEbs4M/UNDO-NEbs4M.txt /private/tmp/sleight-change-review-NEbs4M/KEEP-NEbs4M.txt\n<private-evidence>/codex/change-review-guard/bench/document-scope-fixture.js: execution error: Error: Error: Application can't be found. (-2700)\n"
+          "error": "Command failed: osascript -l JavaScript ~/Projects/sleight-wt/codex/change-review-guard/bench/document-scope-fixture.js open /private/tmp/sleight-change-review-NEbs4M/UNDO-NEbs4M.txt /private/tmp/sleight-change-review-NEbs4M/KEEP-NEbs4M.txt\n~/Projects/sleight-wt/codex/change-review-guard/bench/document-scope-fixture.js: execution error: Error: Error: Application can't be found. (-2700)\n"
         },
         {
-          "cleanupError": "Command failed: osascript -l JavaScript <private-evidence>/codex/change-review-guard/bench/document-scope-fixture.js close /private/tmp/sleight-change-review-NEbs4M/UNDO-NEbs4M.txt /private/tmp/sleight-change-review-NEbs4M/KEEP-NEbs4M.txt\n<private-evidence>/codex/change-review-guard/bench/document-scope-fixture.js: execution error: Error: Error: Application can't be found. (-2700)\n"
+          "cleanupError": "Command failed: osascript -l JavaScript ~/Projects/sleight-wt/codex/change-review-guard/bench/document-scope-fixture.js close /private/tmp/sleight-change-review-NEbs4M/UNDO-NEbs4M.txt /private/tmp/sleight-change-review-NEbs4M/KEEP-NEbs4M.txt\n~/Projects/sleight-wt/codex/change-review-guard/bench/document-scope-fixture.js: execution error: Error: Error: Application can't be found. (-2700)\n"
         }
       ],
       "traceFile": "/private/tmp/sleight-change-review-NEbs4M/trace.jsonl",

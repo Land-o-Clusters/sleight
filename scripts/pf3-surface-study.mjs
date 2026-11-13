@@ -15,18 +15,14 @@ const hash = text => createHash('sha256').update(text).digest('hex');
 const size = text => ({ characters: text.length, bytes: Buffer.byteLength(text), sha256: hash(text) });
 const source = (revision, path) => revision === 'working'
   ? readFileSync(join(root, path), 'utf8')
-  : execFileSync('/usr/bin/git', ['show', `${revision}:${path}`], { cwd: root, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] });
-const optionalSource = (revision, path) => {
-  try { return source(revision, path); } catch { return undefined; }
-};
+  : execFileSync('/usr/bin/git', ['show', `${revision}:${path}`], { cwd: root, encoding: 'utf8' });
 
 export function catalogAt(revision) {
   if (revision === 'working') return browserTools('bbench');
   const text = source(revision, 'plugins/sleight/lib/direct-browser/tools.mjs');
   const catalog = text.slice(text.indexOf('// v3\'s five'), text.indexOf('\nfunction data('));
   if (!catalog || !catalog.includes('export function browserTools')) throw Error('Unsupported catalog source');
-  const descriptions = optionalSource(revision, 'plugins/sleight/lib/direct-browser/tool-surface.mjs') ?? '';
-  return JSON.parse(JSON.stringify(runInNewContext(descriptions.replaceAll('export ', '') + '\n' + catalog.replaceAll('export function ', 'function ') + '\nbrowserTools("bbench")',
+  return JSON.parse(JSON.stringify(runInNewContext(catalog.replaceAll('export function ', 'function ') + '\nbrowserTools("bbench")',
     { structuredClone, process: { env: {} }, pointInputEnabled: () => false }, { timeout: 1000 })));
 }
 
@@ -37,13 +33,9 @@ export function surfaceAt(revision) {
   const skill = screenshotGuidance(source(revision, 'plugins/sleight/skills/drive-mac-apps/SKILL.md')
     .replace(/^---\n[\s\S]*?\n---\n+/, '').trim());
   const fullRules = skill.replace(/## Browsers\n[\s\S]*?(?=\n## |$)/, browserRules + '\n');
-  const projection = revision === 'working' ? undefined : optionalSource(revision, 'plugins/sleight/lib/turbo-first-rules.mjs');
-  const firstRules = revision === 'working' ? turboFirstRules(fullRules) : projection
-    ? runInNewContext(projection.replace(/^import .*;\n/gm, '').replaceAll('export ', '') + '\nturboFirstRules(rules)', { createHash, rules: fullRules }, { timeout: 1000 })
-    : fullRules;
-  const nativeSource = revision === 'working' ? undefined : optionalSource(revision, 'plugins/sleight/lib/native-handoff.mjs');
-  const handoff = revision === 'working' ? JSON.stringify(NATIVE_HANDOFF_TOOL) : nativeSource
-    ? JSON.stringify(runInNewContext(nativeSource.slice(0, nativeSource.indexOf('// Separate')).replaceAll('export ', '') + '\nNATIVE_HANDOFF_TOOL', {}, { timeout: 1000 })) : '';
+  const firstRules = revision === 'working' ? turboFirstRules(fullRules) : fullRules;
+  // This definition is identical on 559e731a, 24268ea4 and PF3. It was absent on df27db01.
+  const handoff = revision === 'df27db01' ? '' : JSON.stringify(NATIVE_HANDOFF_TOOL);
   return { revision, catalog: size(JSON.stringify(catalog)), browserRules: size(browserRules),
     firstRules: size(firstRules), fullRules: size(fullRules),
     // The host wrapper, engine companion and task add tokens not measured by this byte inventory.
@@ -101,13 +93,13 @@ if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.ur
   const traces = process.argv.indexOf('--traces');
   if (traces !== -1) {
     const bank = resolve(process.argv[traces + 1]);
-    for (const round of readdirSync(bank).filter(name => /^(?:rerun-)?chrome-(?:haiku-)?[AB]-r\d+$/.test(name)).sort()) {
+    for (const round of ['chrome-A-r1', 'chrome-B-r1', 'chrome-B-r2', 'chrome-A-r2']) {
       for (const task of readdirSync(join(bank, round), { withFileTypes: true }).filter(e => e.isDirectory()).map(e => e.name).sort()) {
         const row = traceAt(join(bank, round, task, 'events.jsonl'));
         console.log(JSON.stringify({ round, task, ...(process.argv.includes('--summary') ? traceSummary(row) : row) }));
       }
     }
   } else {
-    console.log(JSON.stringify(['df27db01', '998d0dfb', 'working'].map(surfaceAt), null, 2));
+    console.log(JSON.stringify(['df27db01', '559e731a', '24268ea4', 'working'].map(surfaceAt), null, 2));
   }
 }

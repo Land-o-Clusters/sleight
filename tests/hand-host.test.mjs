@@ -1,16 +1,15 @@
-import { assertChildStatus } from './fixtures/child-status.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync, mkdtempSync, realpathSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { spawnSync } from 'node:child_process';
-import { helperCompileArgs } from '../plugins/sleight/lib/direct-browser/host-cache.mjs';
 import { trackTemp } from '../scripts/temp-leftovers.mjs';
 import { macCommandSkip } from './requirements.mjs';
 import { swiftModuleCache } from '../bench/swift-cache.mjs';
 
-// Feed the optimized consent host through --channels-selftest, with all drawing and menu controls suppressed.
+// The ghost hand's host is the consent host in hand mode. These tests build it and feed it frames, but never show the panel:
+// every frame names a window that doesn't exist, so the host validates it and draws nothing.
 const sourcePath = new URL('../plugins/sleight/lib/direct-browser/native/consent-host.swift', import.meta.url).pathname;
 const source = readFileSync(sourcePath, 'utf8');
 const section = name => source.match(new RegExp(`// BEGIN ${name}\\n([\\s\\S]*?)// END ${name}`))?.[1];
@@ -27,7 +26,7 @@ test('hand source: it never posts input, moves the pointer, activates or takes k
   const frame = section('HAND FRAME'), art = section('HAND ART'), motion = section('HAND MOTION');
   const ring = section('RING PLAN'), runtime = section('RING RUNTIME'), tail = section('HAND FRAME TAIL'), picker = section('CURSOR PICKER');
   assert.ok(host && frame && art && motion && ring && runtime && tail && picker && pausePanel, 'hand sections absent');
-  const withoutAck = host.replace(/if let bytes = try\? JSONSerialization.data\(withJSONObject: \["hand": (?:"clear-ready"|data\["placed"\] as\? Bool == true \? "placed-ready" : "clear-ready"), "nonce": nonce, "token": token\]\) \{\s*FileHandle.standardOutput.write\(bytes \+ Data\(\[10\]\)\)\s*\}/, '');
+  const withoutAck = host.replace(/if let bytes = try\? JSONSerialization.data\(withJSONObject: \["hand": "clear-ready", "nonce": nonce, "token": token\]\) \{\s*FileHandle.standardOutput.write\(bytes \+ Data\(\[10\]\)\)\s*\}/, '');
   assert.notEqual(withoutAck, host, 'clear acknowledgment absent');
   // The picker answers the relay on stdout, nonce-bound, through one writer (plus its dump mode); it posts no input either.
   assert.match(picker, /func writeCursorPickerEvent[\s\S]*?nonceBook\.nonce\("hand"\)/);
@@ -84,24 +83,11 @@ function build() {
   if (built) return built;
   const dir = trackTemp(realpathSync(mkdtempSync(join(tmpdir(), 'sleight-hand-host-'))));
   const binary = join(dir, 'consent-host');
-  const result = spawnSync('/usr/bin/xcrun', helperCompileArgs('consent-host', { sources: [sourcePath], binary, moduleCache: swiftModuleCache() }), { encoding: 'utf8', timeout: 600000, killSignal: 'SIGKILL' });
-  assertChildStatus(result, 0, result.stderr);
+  const result = spawnSync('/usr/bin/xcrun', ['swiftc', '-module-cache-path', swiftModuleCache(), sourcePath, '-o', binary], { encoding: 'utf8' });
+  assert.equal(result.status, 0, result.stderr);
   return (built = binary);
 }
-// Exercise the production parsers with all drawing, cards and menu controls suppressed.
-const run = (binary, args, input, invoke = spawnSync) => {
-  const validationArgs = args[0] === '--hand-dump' ? args : ['--channels-selftest', ...args];
-  assert.ok(validationArgs[0] === '--channels-selftest' || validationArgs[0] === '--hand-dump', 'only parser validation or a hidden dump may run');
-  return invoke(binary, validationArgs, { input, encoding: 'utf8', timeout: 60000, env: { PATH: '/usr/bin:/bin', LANG: 'en_US.UTF-8' }, killSignal: 'SIGKILL' });
-};
-
-test('CP1A2 parser test launches always suppress drawing, with a fake child only', () => {
-  const calls = [];
-  run('/fixture/host', ['--hand'], '', (...args) => { calls.push(args); return { status: 0 }; });
-  assert.deepEqual(calls[0][1], ['--channels-selftest', '--hand']);
-  run('/fixture/host', ['--hand-dump'], '', (...args) => { calls.push(args); return { status: 0 }; });
-  assert.deepEqual(calls[1][1], ['--hand-dump'], 'dump mode exercises drawing code without showing a panel');
-});
+const run = (binary, args, input) => spawnSync(binary, args, { input, encoding: 'utf8', timeout: 60000, env: { PATH: '/usr/bin:/bin', LANG: 'en_US.UTF-8' } });
 
 test('hand mode: 1,000 hand frames and a hide give 0 bytes on stdout and a clean exit', { skip: macCommandSkip('xcrun') }, t => {
   const binary = build();
@@ -113,7 +99,7 @@ test('hand mode: 1,000 hand frames and a hide give 0 bytes on stdout and a clean
     if (seq % 250 === 0) input += line({ hand: 'hide', nonce });
   }
   const result = run(binary, ['--hand'], input);
-  assertChildStatus(result, 0, result.stderr);
+  assert.equal(result.status, 0, result.stderr);
   assert.equal(Buffer.byteLength(result.stdout), 0);
 });
 
@@ -137,7 +123,7 @@ test('hand mode: what the client writes is what the host accepts, for every kind
   setHandPid(0);
   assert.equal(text.split('\n').length - 1, 304, 'a menu frame, 300 acts and 3 hides');
   const result = run(binary, ['--hand'], text);
-  assertChildStatus(result, 0, result.stderr); assert.equal(result.stdout, '');
+  assert.equal(result.status, 0, result.stderr); assert.equal(result.stdout, '');
 });
 
 test('hand mode: each malformed, unbound or replayed frame exits 65, with stdout empty or the control-gone notice', { skip: macCommandSkip('xcrun') }, t => {
@@ -171,7 +157,7 @@ test('hand mode: each malformed, unbound or replayed frame exits 65, with stdout
   };
   for (const [name, frame] of Object.entries(cases)) {
     const result = run(binary, ['--hand'], line(frame));
-    assertChildStatus(result, 65, name + ': ' + result.stderr);
+    assert.equal(result.status, 65, name + ': ' + result.stderr);
     assert.equal(result.stdout, '', name);
   }
   // The first frame binds the nonce; a later frame with another nonce, or a seq that doesn't increase, ends the host.
@@ -183,12 +169,12 @@ test('hand mode: each malformed, unbound or replayed frame exits 65, with stdout
     'seq going back': [act(5), act(4)],
   })) {
     const result = run(binary, ['--hand'], frames.map(line).join(''));
-    assertChildStatus(result, 65, name);
+    assert.equal(result.status, 65, name);
     assert.deepEqual(result.stdout.split('\n').filter(Boolean).map(text => JSON.parse(text)), [{ hand: 'control-gone', nonce }], name);
   }
   // Valid frames before the bad one were drawn or skipped quietly, and still nothing reached stdout.
   const good = run(binary, ['--hand'], [act(1), act(2), { hand: 'hide', nonce }].map(line).join(''));
-  assertChildStatus(good, 0, good.stderr); assert.equal(good.stdout, '');
+  assert.equal(good.status, 0, good.stderr); assert.equal(good.stdout, '');
 });
 
 test('hand mode: arguments other than its own modes exit 64 without drawing', { skip: macCommandSkip('xcrun') }, t => {
@@ -197,12 +183,12 @@ test('hand mode: arguments other than its own modes exit 64 without drawing', { 
     ['--hand', '--capture=shown'], ['--hand', '--capture='], ['--hand', '--capture=visible', '--capture=hidden'], ['--hand', '--capture', 'visible'],
     ['--hand-dump', '--capture=readOnly'], ['--hand-demo', '0,0,10,10', '--capture=none'], ['--capture=visible', '--hand']]) {
     const result = run(binary, args, '');
-    assertChildStatus(result, 64, args.join(' ')); assert.equal(result.stdout, '');
+    assert.equal(result.status, 64, args.join(' ')); assert.equal(result.stdout, '');
   }
   // Both capture modes run hand mode the same way.
   for (const capture of ['hidden', 'visible']) {
     const result = run(binary, ['--hand', '--capture=' + capture], [act(1), act(2, { kind: 'drag' }), { hand: 'hide', nonce }].map(line).join(''));
-    assertChildStatus(result, 0, capture + ': ' + result.stderr); assert.equal(result.stdout, '');
+    assert.equal(result.status, 0, capture + ': ' + result.stderr); assert.equal(result.stdout, '');
   }
 });
 
@@ -210,7 +196,7 @@ test('hand dump: capture visible makes the panel readOnly so screenshots show it
   const binary = build();
   const dumps = [[], ['--capture=hidden'], ['--capture=visible']].map(args => {
     const result = run(binary, ['--hand-dump', ...args], '');
-    assertChildStatus(result, 0, result.stderr);
+    assert.equal(result.status, 0, result.stderr);
     return JSON.parse(result.stdout);
   });
   assert.deepEqual([dumps[0].capture, dumps[0].panel.sharingType], ['hidden', 'none']);
@@ -222,7 +208,7 @@ test('hand dump: capture visible makes the panel readOnly so screenshots show it
 test('hand dump: the panel has exactly the flags of the design, never shown, with the art at 1x and 2x', { skip: macCommandSkip('xcrun') }, t => {
   const binary = build();
   const result = run(binary, ['--hand-dump'], '');
-  assertChildStatus(result, 0, result.stderr);
+  assert.equal(result.status, 0, result.stderr);
   const dump = JSON.parse(result.stdout);
   t.diagnostic(JSON.stringify(dump.art));
   assert.deepEqual(dump.panel, {

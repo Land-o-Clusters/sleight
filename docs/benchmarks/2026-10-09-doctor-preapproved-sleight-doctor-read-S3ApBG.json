@@ -21,5 +21,5 @@
   "doctorExit": 1,
   "exitCode": 1,
   "finished": "2026-10-10T01:42:58.144Z",
-  "publicationError": "EPERM: operation not permitted, open '<private-evidence>/doctor-flow/docs/benchmarks/2026-10-09-doctor-preapproved-sleight-doctor-read-S3ApBG.json'"
+  "publicationError": "EPERM: operation not permitted, open '~/Projects/sleight-wt/doctor-flow/docs/benchmarks/2026-10-09-doctor-preapproved-sleight-doctor-read-S3ApBG.json'"
 }

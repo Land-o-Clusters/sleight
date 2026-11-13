@@ -33,15 +33,7 @@ function wholeDOM(ref) {
   const localized=/^(?:mostrar (?:m[aá]s|mensajes anteriores|respuestas)|cargar m[aá]s|ver (?:m[aá]s|respuestas)|afficher (?:plus|les messages pr[eé]c[eé]dents|les r[eé]ponses)|voir les r[eé]ponses|charger plus|mehr (?:anzeigen|laden)|[aä]ltere nachrichten|vorherige nachrichten|antworten anzeigen|mostrar mais|carregar mais|ver respostas|mostra (?:altro|di pi[uù]|risposte)|carica altri|messaggi precedenti|もっと見る|以前のメッセージ|返信を表示|显示更多|顯示更多|加载更多|載入更多|较早的消息|較早的訊息|查看回复|查看回覆|더 보기|이전 메시지|답글 보기)$/iu;
   const deny=/\b(send|like|delete|archive|report|block|follow|buy|pay|mark|share|vote|accept|edit|save|sign in|settings)\b/i;
   const keyOf=node=>{for(const {name,value}of node.attributes??[])if(/^(?:data-key|data-(?:message|row|post|comment)-?id)$/.test(name)&&value)return name+':'+value;return undefined;};
-  // Container roles inherit their children's text; that does not make a row
-  // named "Show more" an expander. Focusable containers outside the row root
-  // can still be refused controls, even when their role claims to be a row.
-  const itemLike=n=>!n.matches('button,[role=progressbar],[role=status]')&&
-    (!/^(?:loading(?:\.{3}|…)?|load more|show more)$/i.test(text(n))||n.matches('li,tr,article,[role=listitem],[role=row],[role=article]'));
-  const inRows=n=>{for(let p=n;p&&p!==root;p=parent(p))if(parent(p)===root)return itemLike(p);return false;};
-  const controlLike=n=>n.matches('button,a,input,select,textarea,[aria-expanded]')||n.hasAttribute('role')&&
-    (!/^(listitem|row|article|cell|gridcell|log|feed|list|grid|region|group)$/.test(role(n))||n.hasAttribute('tabindex')&&!inRows(n));
-  const controls=()=>all(region).filter(controlLike).flatMap(n=>{
+  const controls=()=>all(region).filter(n=>n.matches('button,a,[role],[aria-expanded]')).flatMap(n=>{
     const name=(attr(n,'aria-label')??text(n)).normalize('NFKC').replace(/\s+/g,' ').trim().slice(0,60);
     let item=n,depth=0;while(item&&depth++<4&&!item.matches('li,[role=listitem],[role=row],[role=article]'))item=parent(item);
     const collapsed=attr(n,'aria-expanded')==='false'&&item&&depth<=4;
@@ -87,10 +79,9 @@ function wholeDOM(ref) {
     const reverse=getComputedStyle(box).flexDirection==='column-reverse'||box.scrollTop<0;
     const top=box.scrollTop+(reverse?Math.max(0,height-client):0);
     const cs=controls();
-    const children=[...root.children].filter(itemLike);
-    const renderedRows=children.filter(n=>{const r=n.getBoundingClientRect();return r.width>0&&r.height>0&&r.bottom>=rect.top-2*client&&r.top<=rect.bottom+2*client&&text(n)&&getComputedStyle(n).display!=='none'&&getComputedStyle(n).visibility!=='hidden';});
-    const hiddenRows=renderedRows.some(n=>n.matches('[aria-hidden=true]'));
-    const rowNodes=renderedRows.filter(n=>!n.matches('[aria-hidden=true]')).sort((a,b)=>{const x=a.getBoundingClientRect(),y=b.getBoundingClientRect();return x.top-y.top||x.left-y.left;});
+    const children=[...root.children].filter(n=>!n.matches('button,[role=progressbar],[role=status]')&&
+      (!/^(?:loading(?:\.{3}|…)?|load more|show more)$/i.test(text(n))||n.matches('li,tr,article,[role=listitem],[role=row],[role=article]')));
+    const rowNodes=children.filter(n=>{const r=n.getBoundingClientRect();return r.width>0&&r.height>0&&r.bottom>=rect.top-2*client&&r.top<=rect.bottom+2*client&&text(n)&&getComputedStyle(n).display!=='none'&&getComputedStyle(n).visibility!=='hidden'&&!n.matches('[aria-hidden=true]');}).sort((a,b)=>{const x=a.getBoundingClientRect(),y=b.getBoundingClientRect();return x.top-y.top||x.left-y.left;});
     let bytes=0,textCapped=false;const encoder=new TextEncoder();
     const rows=rowNodes.flatMap(n=>{const value=text(n),size=encoder.encode(value).length;if(bytes+size>8000000){textCapped=true;return [];}bytes+=size;return [({node:id(n),key:keyOf(n),text:text(n),truncated:String(n.innerText??n.textContent??'').trim().length>65536,pos:Number(attr(n,'aria-posinset')??attr(n,'aria-rowindex'))||undefined})];});
     const itemNodes=new Set(children);
@@ -118,18 +109,9 @@ function wholeDOM(ref) {
     const busy=animated||all(box).some(n=>visible(n)&&(attr(n,'aria-busy')==='true'||role(n)==='progressbar'||role(n)==='status'&&/loading|please wait/i.test(text(n))))||attr(box,'aria-busy')==='true';
     const itemText=children.map(text).join(' ').replace(/\s+/g,' ').length;
     const markerChars=all(box).filter(n=>n.children.length===0&&/^(beginning of (?:chat|thread)|start of (?:feed|thread|chat)|you['’]re all caught up|end of (?:chat|thread|feed)|\d+\s+(?:messages|posts|items))$/i.test(text(n))).reduce((sum,n)=>sum+text(n).length,0);
-    // Actions beside a sparse transcript are page chrome, not missing body text.
-    // Only small labels qualify. Wrappers around the root or collected rows
-    // still contribute body text, including the uncollected text they contain.
-    const chrome=all(box).filter(n=>(controlLike(n)||/^(status|progressbar)$/.test(role(n)))&&!itemContains(n)&&!n.contains(root)&&!rowNodes.some(row=>n.contains(row))&&text(n).replace(/\s+/g,' ').length<=80&&n.getBoundingClientRect().height>0&&getComputedStyle(n).visibility!=='hidden');
-    const chromeSet=new Set(chrome);
-    const boxChars=text(box).replace(/\s+/g,' ').length;
-    const chromeChars=Math.min(300,Math.floor(boxChars*.25),chrome.filter(n=>{for(let p=parent(n);p&&p!==box;p=parent(p))if(chromeSet.has(p))return false;return true;}).slice(0,10).reduce((sum,n)=>sum+text(n).replace(/\s+/g,' ').length,0));
-    const contentChars=Math.max(0,boxChars-markerChars-chromeChars);
-    // innerText does not include frame documents or a shadow host's body.
-    const opaqueBody=[region,...all(region)].some(n=>(n.localName==='iframe'||n.shadowRoot)&&!String(n.innerText??'').trim());
+    const contentChars=Math.max(0,text(box).replace(/\s+/g,' ').length-markerChars-cs.reduce((sum,c)=>sum+c.name.length,0));
     return {rows,textCapped,top,height,client,markers,total,totalConflict:new Set(counts).size>1,busy,quiet:performance.now()-lastChange,
-      fragments:hiddenRows||opaqueBody||!!rows.length&&itemText<contentChars*.5,
+      fragments:!!rows.length&&itemText<contentChars*.5,
       controls:cs.filter(c=>c.visible).map(({node,...c})=>c),refused:cs.filter(c=>!c.allowed).map(c=>c.name+' ('+c.reason+')'),
       point:{x:Math.max(1,Math.min(innerWidth-1,(rect.left+rect.right)/2)),y:Math.max(1,Math.min(innerHeight-1,(rect.top+rect.bottom)/2))}};
   };

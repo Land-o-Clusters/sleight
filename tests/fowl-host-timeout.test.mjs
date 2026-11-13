@@ -1,4 +1,3 @@
-import { assertChildStatus } from './fixtures/child-status.mjs';
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
@@ -16,13 +15,13 @@ async function runner(t) {
   if (!existsSync(join(cache, '.git'))) { t.skip('pinned FowlBrowser cache is absent'); return; }
   const dir = trackTemp(mkdtempSync(join(tmpdir(), 'sleight-fowl-host-')));
   t.after(() => rmSync(dir, { recursive: true, force: true }));
-  const original = spawnSync('/usr/bin/git', ['-C', cache, 'show', '6a12d60:tools/rounds.mjs'], { encoding: 'utf8', maxBuffer: 4 * 1024 * 1024, timeout: 30000, killSignal: 'SIGKILL' });
-  assertChildStatus(original, 0, original.stderr);
+  const original = spawnSync('/usr/bin/git', ['-C', cache, 'show', '6a12d60:tools/rounds.mjs'], { encoding: 'utf8', maxBuffer: 4 * 1024 * 1024 });
+  assert.equal(original.status, 0, original.stderr);
   mkdirSync(join(dir, 'tools'));
   const file = join(dir, 'tools/rounds.mjs');
   writeFileSync(file, original.stdout);
-  const applied = spawnSync('/usr/bin/git', ['apply', join(root, 'bench/fowl/sleight-surface.patch')], { cwd: dir, encoding: 'utf8', timeout: 30000, killSignal: 'SIGKILL' });
-  assertChildStatus(applied, 0, applied.stderr);
+  const applied = spawnSync('/usr/bin/git', ['apply', join(root, 'bench/fowl/sleight-surface.patch')], { cwd: dir, encoding: 'utf8' });
+  assert.equal(applied.status, 0, applied.stderr);
   return { dir, mod: await import(pathToFileURL(file)), source: readFileSync(file, 'utf8') };
 }
 

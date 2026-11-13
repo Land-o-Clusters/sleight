@@ -104,7 +104,7 @@ test('composeFilter repeats frames before trimming, then scrubs before cropping'
 });
 
 let ffmpegOk = true;
-try { execFileSync('ffmpeg', ['-hide_banner', '-version'], { stdio: 'ignore', timeout: 60000, killSignal: 'SIGKILL' }); } catch { ffmpegOk = false; }
+try { execFileSync('ffmpeg', ['-hide_banner', '-version'], { stdio: 'ignore' }); } catch { ffmpegOk = false; }
 
 // A synthetic take: two 640 by 400 px windows at scale 2 with a red title bar (28 pt), and a green square to scrub in
 // "front". "back"

@@ -1,20 +1,10 @@
-import { MOD_META } from './fixtures/mod-attribution.mjs';
 // Execute the real hooks with an in-memory host. No Claude process, engine, app, pane snapshot or browser starts.
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { readFileSync, existsSync, mkdtempSync } from 'node:fs';
-import { dirname, resolve, join } from 'node:path';
-import { tmpdir } from 'node:os';
+import { readFileSync, existsSync } from 'node:fs';
+import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { runInNewContext } from 'node:vm';
-import { webcrypto } from 'node:crypto';
-import { PassThrough } from 'node:stream';
-import { EventEmitter } from 'node:events';
-import { createRelay } from '../plugins/sleight/lib/relay.mjs';
-import { createV3Bridge, serveV3Worker } from '../plugins/sleight/lib/direct-browser/worker.mjs';
-import { prepareInstalledStartup } from '../plugins/sleight/lib/launch.mjs';
-import { InputLease } from '../plugins/sleight/lib/input-lease.mjs';
-import { registerTemp } from '../scripts/temp-leftovers.mjs';
 import { packageSkip } from './requirements.mjs';
 const parserSkip = packageSkip('typescript');
 const ts = parserSkip ? undefined : (await import('typescript')).default;
@@ -26,40 +16,22 @@ const metrics = { calls: 3, reads: 1, characters: 55, text: { docs: 10, tree: 40
   paths: { native: { actions: 2, estimatedActions: 2, estimatedCalls: 1, actionMs: 0, timedActions: 0 }, turbo: { actions: 0, estimatedActions: 0, estimatedCalls: 0, actionMs: 0, timedActions: 0 }, engine: { actions: 0, estimatedActions: 0, estimatedCalls: 0, actionMs: 0, timedActions: 0 } } };
 const usage = { input_tokens: 12, output_tokens: 34, cache_read_input_tokens: 56, cache_creation_input_tokens: 78, model: 'host-model' };
 
-function host({ cwd = '/fixture/project', cost = true, missingUsage = false, marker = false, malicious = false, paneOpen = false, paneSnapshot = false, usageRead, messages, narration = 'off', settingRead, moduleRegister, envRead, statRead, turboSession, turnCall, logThrows = false, beginFails = false, beginCall, connectCall, privateCall, personCall, atomUpdate } = {}) {
-  const hooks = [], state = new Map(), work = [], begins = [], statuses = [], replies = [], forwarded = [], hookRuns = [], logs = [], toasts = [];
+function host({ cost = true, missingUsage = false, marker = false, malicious = false, paneOpen = false, paneSnapshot = false, usageRead, messages, narration = 'off', settingRead, moduleRegister, envRead, statRead, turboSession, turnCall, logThrows = false, beginFails = false, beginCall, connectCall, privateCall } = {}) {
+  const hooks = [], state = new Map(), work = [], begins = [], statuses = [], replies = [], forwarded = [], hookRuns = [], logs = [];
   const timers = [];
-  const executedHooks = new Set();
   const privateFrames = [], traffic = [];
   let usageReads = 0;
   const elements = Object.fromEntries(['Box', 'Text', 'Button'].map(name => [name, name]));
   const api = {
     atom: (id, initial) => { if (!state.has(id.key)) state.set(id.key, initial); return { ...id, initial }; },
     read: async ($, id) => $.testState.has(id.key) ? $.testState.get(id.key) : id.initial,
-    update: async ($, id, fn) => { if (atomUpdate) await atomUpdate(id); $.testState.set(id.key, fn($.testState.has(id.key) ? $.testState.get(id.key) : id.initial)); },
+    update: async ($, id, fn) => { $.testState.set(id.key, fn($.testState.has(id.key) ? $.testState.get(id.key) : id.initial)); },
   };
   const cache = new Map();
   function load(file) {
     if (cache.has(file)) return cache.get(file).exports;
     const module = { exports: {} }; cache.set(file, module);
-    let input = readFileSync(file, 'utf8');
-    const mutation = process.env.INT22I_MOD_MUTANT;
-    const variants = {
-      'no-generation': ['register.tsx', 'state.stopGeneration === stopGeneration ? false : value', 'false'],
-      'command-generation': ['register.tsx', "if (e.args.trim() === 'stop') {\n      state.stopGeneration++", "if (e.args.trim() === 'stop') {"],
-      'button-generation': ['register.tsx', 'onPress={() => {\n              state.stopGeneration++', 'onPress={() => {'],
-      'mod-notice': ['stop-notice.mjs', 'person ? (pane ? paneRecovery : personRecovery) : sessionRecovery', 'paneRecovery'],
-    };
-    if (mutation) {
-      assert.ok(Object.hasOwn(variants, mutation), 'known INT22I mod variant');
-      const [target, before, after] = variants[mutation];
-      if (file.endsWith(target)) {
-        assert.ok(input.includes(before), 'INT22I mod mutation anchor: ' + mutation);
-        input = input.replace(before, after);
-      }
-    }
-    const source = ts.transpileModule(process.env.MB1B_MOD_MUTANT === 'no-refusal-log' && file.endsWith('register.tsx')
-      ? input.replace("if (refused) debugLog($, 'sleight: turn_ended was refused;", "if (false) debugLog($, 'sleight: turn_ended was refused;") : input, { fileName: file.replace(/\.mjs$/, '.ts'),
+    const source = ts.transpileModule(readFileSync(file, 'utf8'), { fileName: file.replace(/\.mjs$/, '.ts'),
       compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.CommonJS, jsx: ts.JsxEmit.React, jsxFactory: 'h' } }).outputText;
     const require = name => {
       if (name === 'claude-code') return api;
@@ -68,7 +40,7 @@ function host({ cwd = '/fixture/project', cost = true, missingUsage = false, mar
       if (!existsSync(target)) target += '.ts';
       return load(target);
     };
-    runInNewContext('(function(require,module,exports){' + source + '\n})', { crypto: webcrypto, atob, h: (type, props, ...children) => ({ type, props, children }), console })(require, module, module.exports);
+    runInNewContext('(function(require,module,exports){' + source + '\n})', { h: (type, props, ...children) => ({ type, props, children }), console })(require, module, module.exports);
     return module.exports;
   }
   const registerMod = moduleRegister ?? load(resolve(root, 'register.tsx')).register;
@@ -82,10 +54,10 @@ function host({ cwd = '/fixture/project', cost = true, missingUsage = false, mar
     testState: state,
     env: { get: async key => envRead ? envRead(key) : key === 'HOME' ? '/fixture/home' : undefined },
     fs: { stat: async path => statRead ? statRead(path) : ({ realPath: path }) },
-    ui: { status: text => statuses.push(text), log: (text, options) => { logs.push({ text, options }); if (logThrows === 'async') return Promise.reject(Error('debug unavailable')); if (logThrows) throw Error('debug unavailable'); }, toast: text => toasts.push(text), panes: async () => paneOpen ? [{ id: 'sleight' }] : [], open: async () => work.push('open'), resolve: () => elements },
+    ui: { status: text => statuses.push(text), log: (text, options) => { logs.push({ text, options }); if (logThrows) throw Error('debug unavailable'); }, toast() {}, panes: async () => paneOpen ? [{ id: 'sleight' }] : [], open: async () => work.push('open'), resolve: () => elements },
     plugin: { root: '/fixture/plugin' },
     process: { run: async () => settingRead ? settingRead() : ({ exitCode: 0, stdout: JSON.stringify({ enabled: false, narration, presence: { idleSeconds: 0, locked: false } }) }) },
-    session: { cwd: async () => cwd, messages: async args => typeof messages === 'function' ? messages(args) : messages ?? [], usage: async () => {
+    session: { messages: async args => typeof messages === 'function' ? messages(args) : messages ?? [], usage: async () => {
       usageReads++;
       if (missingUsage) throw Error('older host');
       if (usageRead) return usageRead(usageReads, usd);
@@ -93,10 +65,6 @@ function host({ cwd = '/fixture/project', cost = true, missingUsage = false, mar
     } },
     mcp: { connect: async () => connectCall ? connectCall() : ({ isConnected: true, server: 'computer' }), call: async (_server, tool, args) => {
       traffic.push({ tool, args });
-      if (tool === 'turn_ended' && Object.hasOwn(args, 'sleight_person_prompt')) {
-        if (personCall) return personCall(args);
-        return { content: [] };
-      }
       if (tool === 'turn_ended' && (Object.hasOwn(args, 'sleight_say') || Object.hasOwn(args, 'sleight_stats_skip'))) {
         privateFrames.push(args);
         if (privateCall) return privateCall(args);
@@ -108,7 +76,7 @@ function host({ cwd = '/fixture/project', cost = true, missingUsage = false, mar
         begins.push(args.sleight_stats_begin); return beginCall ? beginCall(args) : { content: [] };
       }
       work.push({ tool, args });
-      if (tool === 'js' && paneOpen) return { content: [{ type: 'text', text: paneSnapshot ? 'SLEIGHT_FRAME ' + String(args.code).match(/FRAME_TOKEN = "([a-f0-9]{32})"/)?.[1] + ' ' + JSON.stringify({ app: 'ParentApp', width: 1, height: 1, columns: 1, rows: 1, cells: Buffer.alloc(12).toString('base64') }) : '' }] };
+      if (tool === 'js' && paneOpen) return { content: [{ type: 'text', text: paneSnapshot ? 'SLEIGHT_FRAME {"app":"ParentApp","width":1,"height":1}' : '' }] };
       if (tool !== 'turn_ended') throw Error('test must never call the engine');
       if (turnCall) return turnCall(args);
       if (turboSession && args.sleight_turbo) return { content: [{ type: 'text', text: JSON.stringify(
@@ -119,10 +87,6 @@ function host({ cwd = '/fixture/project', cost = true, missingUsage = false, mar
         : { content: [], _meta: { 'sleight/stats': value } };
     } },
     clock: { now: () => 1000, after: (ms, callback) => {
-      if (ms === 100) {
-        const timer = setTimeout(callback, ms);
-        return { cancel: () => clearTimeout(timer) };
-      }
       assert.equal(ms, 2000, 'only the bounded stats begin timer is allowed'); timers.push(callback);
     } },
     command: { register: async () => {} },
@@ -133,7 +97,6 @@ function host({ cwd = '/fixture/project', cost = true, missingUsage = false, mar
       if (index === list.length) { if (name === 'tool.call') { forwarded.push(event); traffic.push({ forwarded: event }); } return typeof answer === 'function' ? answer(event) : answer; }
       const next = async rewritten => { next.called = true; if (rewritten) event = rewritten; return run(index + 1); };
       hookRuns.push(name);
-      executedHooks.add(list[index]);
       try { return await list[index].handler($, event, next); }
       catch (error) {
         if (!list[index].errorHandler) throw error;
@@ -151,374 +114,13 @@ function host({ cwd = '/fixture/project', cost = true, missingUsage = false, mar
   const complete = async (extra = {}) => { usd = 1.125; return emit('turn.complete', { turnId: 'turn-1', durationMs: 1500, isAborted: false,
     answer: 'Finished', reason: 'answer', ...(!missingUsage ? { usage } : {}), ...extra }, { text: 'Finished' }); };
   const command = args => emit('command.run', { command: 'sleight', args });
-  async function pane(treeOnly = false) {
+  async function pane() {
     const tree = await emit('ui.render', { component: 'Pane', requestId: 'sleight', surface: 'terminal', props: { bodyColumns: 80, scroll: { bodyRows: 30 } } });
-    if (treeOnly) return tree;
     const text = value => typeof value === 'string' ? value : Array.isArray(value) ? value.map(text).join('\n') : value?.children ? text(value.children) : '';
     return text(tree);
   }
-  return { start, complete, tool, command, pane, paneTree: () => pane(true), work, begins, privateFrames, traffic, state, emit, forwarded, hookRuns, logs, toasts, statuses, hooks, executedHooks, timers, registerMod, get usageReads() { return usageReads; } };
+  return { start, complete, tool, command, pane, work, begins, privateFrames, traffic, state, emit, forwarded, hookRuns, logs, timers, registerMod, get usageReads() { return usageReads; } };
 }
-
-// HK1: real registered handlers, with no MCP server or native process. Only the
-// host transport boundary is replaced. A tool failure remains the host's result.
-const offlineModes = {
-  absent: { connectCall: () => ({ isConnected: false, message: 'server absent' }) },
-  crashed: { connectCall: () => { throw Error('relay exited'); } },
-  'daemon crash': { beginFails: true, turnCall: () => { throw Error('daemon pipe closed'); } },
-  'stale cache': { settingRead: () => { throw Error('ENOENT: old plugin launcher'); },
-    connectCall: () => ({ isConnected: false, message: 'cached server unavailable' }) },
-  'stale server': { beginCall: () => ({ isError: true, content: [] }),
-    turnCall: () => ({ isError: true, content: [{ type: 'text', text: 'unknown tool' }] }) },
-};
-
-for (const [mode, transport] of Object.entries(offlineModes)) test(`offline hooks: every registration survives ${mode}`, { skip: parserSkip }, async () => {
-  const h = host(transport), response = { isError: true, text: 'server unavailable' };
-  const pass = async (name, event) => assert.equal(await h.emit(name, event, value => value), event);
-  await pass('session.start', {});
-  for (let turn = 0; turn < 2; turn++) {
-    await pass('prompt.submit', { text: 'Use another tool', origin: { kind: 'composer' } });
-    await h.start();
-    assert.equal((await h.complete()).text, 'Finished');
-  }
-  assert.equal(h.work.length, 0, 'unused turns send no cleanup or approval frames');
-  assert.equal(h.logs.length, 0, 'unused turns produce no outage diagnostics');
-  await pass('prompt.submit', { text: 'allow fixture', origin: { kind: 'composer' } });
-  await h.start();
-  await pass('session.append', { door: 'response', message: { type: 'assistant', content: [{ type: 'text', text: 'Reading.' }] } });
-  await pass('session.compact', {});
-  await pass('classic.PreToolUse', { tool: 'Read', file_path: '/fixture/file' });
-  await pass('tool.check', { tool: prefix + 'js', input: {} });
-  for (const tool of ['Bash', 'PowerShell', 'Monitor']) await pass('tool.call', { tool, command: 'printf ok' });
-  for (const name of ['js', 'replay', 'browser_open', 'browser_read', 'browser_act', 'browser_fill',
-    'drag', 'hover', 'open_file', 'menu_bar', 'select_window', 'notifications', 'app_handoff', 'browser_tabs'])
-    assert.equal(await h.emit('tool.call', { tool: prefix + name, tool_use_id: name }, response), response);
-  assert.match((await h.emit('tool.call', { tool: prefix + 'turn_ended' })).deny, /internal to sleight/);
-  await h.complete({ agentId: 'child' });
-  assert.equal((await h.complete()).text, 'Finished');
-  await h.command('stats');
-  // This renders a virtual tree only. It never calls ui.open or any button.
-  await h.pane();
-  assert.equal(h.work.includes('open'), false);
-  assert.equal(h.toasts.length, 0);
-  assert.ok(h.logs.every(row => row.options?.to === 'debug'));
-  assert.equal(new Set(h.hooks.map(row => row.name)).size, 11);
-  assert.equal(h.hooks.length, 28);
-  for (const hook of h.hooks) assert.ok(h.executedHooks.has(hook), `unexercised ${hook.name} ${JSON.stringify(hook.filter)}`);
-});
-
-for (const [mode, transport] of Object.entries(offlineModes)) test(`offline hooks: safety refusals survive ${mode}`, { skip: parserSkip }, async () => {
-  const h = host(transport);
-  for (const event of [
-    { tool: 'Write', file_path: '/fixture/home/Library/Application Support/sleight/hand.json' },
-    { tool: 'Bash', command: 'sleight-mcp cursor import fixture' },
-    { tool: 'Edit', file_path: '/fixture/settings.json', new_string: 'SLEIGHT_ACTION_LOG=1' },
-    {},
-  ]) assert.ok((await h.emit('classic.PreToolUse', event)).deny, JSON.stringify(event));
-  await h.start(); await h.tool();
-  for (const tool of ['Bash', 'PowerShell'])
-    assert.match((await h.emit('tool.call', { tool, command: 'open fixture.pdf' })).deny, /shell guard/);
-  assert.match((await h.emit('classic.PreToolUse', { tool: 'Bash', command: 'open fixture.pdf' })).deny, /shell guard/);
-  const stop = await h.command('stop');
-  assert.match(stop.text, /stop unconfirmed/);
-  for (const name of ['js', 'replay', 'browser_open', 'browser_read', 'browser_act', 'browser_fill'])
-    assert.match((await h.emit('tool.call', { tool: prefix + name })).deny, /user stopped/);
-  await h.emit('prompt.submit', { text: 'child', agentId: 'child', origin: { kind: 'composer' } });
-  assert.equal(h.state.get('stopped'), true);
-  await h.emit('prompt.submit', { text: 'allow fixture', origin: { kind: 'composer' } });
-  assert.equal(h.state.get('stopped'), ['absent', 'crashed', 'stale cache'].includes(mode),
-    'a missing relay cannot acknowledge a person boundary');
-  assert.equal(h.toasts.length, 0);
-});
-
-for (const logThrows of [true, 'async']) for (const mode of ['absent', 'crashed', 'daemon crash', 'stale server'])
-  test(`offline hooks: cleanup does not throw when debug logging fails, ${mode}, ${logThrows}`, { skip: parserSkip }, async () => {
-    const h = host({ ...offlineModes[mode], logThrows });
-    for (let turn = 0; turn < 2; turn++) {
-      await h.start(); await h.tool();
-      assert.equal((await h.complete({ isAborted: turn === 1 })).text, 'Finished');
-    }
-    assert.match((await h.command('stop')).text, /stop unconfirmed/);
-    assert.equal(h.state.get('stopped'), true);
-    assert.equal(h.toasts.length, 0);
-  });
-
-for (const logThrows of [true, 'async']) test(`offline hooks: failed prompt diagnostics stay private, ${logThrows}`, { skip: parserSkip }, async () => {
-  const h = host({ ...offlineModes.absent, logThrows, envRead: key => key === 'SLEIGHT_TRACE' ? '1' : undefined });
-  for (let prompt = 0; prompt < 2; prompt++) {
-    const event = { text: 'allow fixture', origin: { kind: 'composer' } };
-    assert.equal(await h.emit('prompt.submit', event, value => value), event);
-  }
-  assert.equal(h.toasts.length, 0);
-});
-
-// Real mod and relay, with an in-memory worker and catalog. No host input or app access.
-async function desktopHost(t, { switchValue = '1', entrypoint = 'claude-desktop', turbo = false,
-  presence = { idleSeconds: 999, locked: false }, envFailure = false, native = false,
-  nested = undefined, trace = undefined, relayDesktopTurns = switchValue === '1' } = {}) {
-  const streams = Array.from({ length: 4 }, () => new PassThrough());
-  const [clientIn, clientOut, serverIn, serverOut] = streams, pending = new Map(), server = [], traces = [], bindings = [];
-  const child = new EventEmitter(), endpoint = new EventEmitter();
-  child.connected = endpoint.connected = true;
-  child.send = value => queueMicrotask(() => endpoint.emit('message', structuredClone(value)));
-  endpoint.send = value => queueMicrotask(() => child.emit('message', structuredClone(value)));
-  child.disconnect = () => { child.connected = endpoint.connected = false; endpoint.emit('disconnect'); child.emit('disconnect'); };
-  child.unref = () => {};
-  const worker = serveV3Worker({ channel: endpoint, browser: 'bfixture', async begin(message) {
-    bindings.push(message);
-    return { call: async () => ({ text: 'fixture', isError: false }), delivered: () => true,
-      end: async () => ({ revoked: true, cleanup: [] }) };
-  } });
-  const bridge = await createV3Bridge({}, { readConfig: () => ({}), acceptPackage: () => ({ current: () => true }),
-    forkWorker() { queueMicrotask(() => worker.ready()); return child; } });
-  clientOut.on('data', bytes => {
-    for (const line of String(bytes).trim().split('\n')) {
-      const msg = JSON.parse(line); pending.get(msg.id)?.(msg.result); pending.delete(msg.id);
-    }
-  });
-  serverIn.on('data', bytes => {
-    for (const msg of String(bytes).trim().split('\n').map(JSON.parse)) {
-      server.push(msg);
-      if (msg.method === 'tools/call' && msg.params?.name === 'turn_ended')
-        queueMicrotask(() => serverOut.write(JSON.stringify({ id: msg.id, result: { content: [] } }) + '\n'));
-    }
-  });
-  const relay = createRelay({ clientIn, clientOut, serverIn, serverOut,
-    ...await prepareInstalledStartup(() => bridge, undefined, { env: {} }), desktopTurns: relayDesktopTurns, changeReview: false,
-    ...(native ? { inputLease: new InputLease({ directory: registerTemp(t, mkdtempSync(join(tmpdir(), 'sleight-desktop-turn-'))), holder: 'desktop-test' }) } : {}),
-    trace: (direction, msg) => traces.push({ direction, msg }), stderr: { write() {} },
-    remoteApprovals: { presence: async () => presence,
-      catalog: async () => ({ apps: [{ id: 'com.utmapp.UTM', name: 'UTM', names: ['UTM'] }] }) } });
-  t.after(async () => { relay.dispose(); await bridge.detach(); streams.forEach(s => s.destroy()); });
-  let seq = 0;
-  const request = (name, args) => new Promise(resolve => {
-    const id = ++seq; pending.set(id, resolve);
-    clientIn.write(JSON.stringify({ id, method: 'tools/call', params: { name, arguments: args, ...(name === 'turn_ended' ? { _meta: MOD_META } : {}) } }) + '\n');
-  });
-  const h = host({ envRead: key => {
-    if (envFailure) throw Error('environment unavailable');
-    return key === 'SLEIGHT_DESKTOP_TURNS' ? switchValue : key === 'CLAUDE_CODE_ENTRYPOINT' ? entrypoint
-      : key === 'CLAUDECODE' ? nested : key === 'SLEIGHT_TRACE' ? trace : undefined;
-  }, settingRead: () => ({ exitCode: 0, stdout: JSON.stringify({ enabled: turbo, presence }) }),
-  turnCall: args => request('turn_ended', args) });
-  const tick = async () => { for (let i = 0; i < 5; i++) await new Promise(resolve => setImmediate(resolve)); };
-  return { ...h, bindings, traces, relayPrompt(text, origin = 'desktop', turbo = true) {
-    return request('turn_ended', { sleight_turbo: { ...bridge.bootstrapEnvelope(), event: 'begin',
-      turn: 'raw-' + seq, text, origin, turbo } });
-  }, browserAction() {
-    return request('browser_act', { tab: 't1', steps: [{ do: 'click', ref: 'e1' }] });
-  }, async nativePayment() {
-    const send = (id, code) => clientIn.write(JSON.stringify({ id, method: 'tools/call', params: { name: 'js', arguments: { code } } }) + '\n');
-    send('native-read', 'let app = await cua.getApp("Firefox")');
-    const tree = readFileSync(new URL('fixtures/payment-gate/firefox-checkout-sol.txt', import.meta.url), 'utf8');
-    serverOut.write(JSON.stringify({ id: 'native-read', result: { content: [{ type: 'text', text: tree }],
-      _meta: { 'codex/toolSurface': { app: { appId: 'org.mozilla.firefox' } } } } }) + '\n');
-    await tick(); send('native-act', 'await app.click(88)'); await tick();
-    const code = server.find(msg => msg.id === 'native-act')?.params.arguments.code ?? '';
-    const match = /__sleightDocumentGuardSetup\((\{[^\n]*\})\);/.exec(code);
-    assert.ok(match, 'the native action receives the document guard');
-    return JSON.parse(match[1]).payment;
-  }, async approval() {
-    serverOut.write(JSON.stringify({ id: 'utm-card', method: 'elicitation/create', params: {
-      message: 'Allow Computer Use to use "UTM"?', _meta: { connector_id: 'computer-use',
-        tool_params: { app: 'com.utmapp.UTM' }, tool_params_display: [{ name: 'app', value: 'UTM' }],
-        persist: ['session', 'always'], riskLevel: 'low' } } }) + '\n');
-    await tick(); return server.find(msg => msg.id === 'utm-card')?.result;
-  } };
-}
-
-test('desktop SDK prompt grants allow UTM through the real mod and relay', { skip: parserSkip }, async t => {
-  const h = await desktopHost(t);
-  await h.emit('prompt.submit', { text: 'allow UTM', origin: { kind: 'sdk' } });
-  assert.deepEqual(await h.approval(), { action: 'accept', content: {}, _meta: { persist: 'session' } });
-  assert.deepEqual(h.traces.filter(row => row.direction === 'mod-turn-begin'),
-    [{ direction: 'mod-turn-begin', msg: { origin: 'desktop' } }]);
-});
-
-test('the relay switch off refuses a desktop prompt even when the mod switch is on', { skip: parserSkip }, async t => {
-  const h = await desktopHost(t, { relayDesktopTurns: false, trace: '1' });
-  await h.emit('prompt.submit', { text: 'allow UTM', origin: { kind: 'sdk' } });
-  assert.equal((await h.approval()).action, 'decline');
-  const row = h.logs.find(row => row.text.startsWith('sleight: prompt '));
-  assert.deepEqual(JSON.parse(row.text.slice('sleight: prompt '.length)), {
-    kind: 'sdk', bound: false, scope: 'none', reason: 'not-bound',
-  });
-  assert.equal(h.bindings.length, 0);
-});
-
-for (const switchValue of ['0', '1']) test(`desktop native payment guard switch=${switchValue}`, { skip: parserSkip }, async t => {
-  const h = await desktopHost(t, { switchValue, turbo: true, native: true });
-  await h.emit('prompt.submit', { text: 'Pay Northbound Supply $268.00 with the test card.', origin: { kind: 'sdk' } });
-  const payment = await h.nativePayment();
-  assert.equal(payment.message, null, 'desktop text never supplies a named payment amount');
-});
-
-// These exact frames are the 330041a4 contract, including mid-turn composer/bridge
-// delivery. A common busy/turnId gate would drop the begin and fail these cases.
-for (const kind of ['composer', 'bridge']) for (const turbo of [false, true])
-  for (const scenario of ['idle', 'turn-id', 'main-busy', 'child-busy', 'child-prompt'])
-  test(`switch unset preserves base ${kind} frames: ${scenario}, turbo=${turbo}`, { skip: parserSkip }, async () => {
-    const h = host({ turboSession: 'base-fixture', settingRead: () => ({ exitCode: 0, stdout: JSON.stringify({ enabled: turbo }) }) });
-    if (scenario === 'main-busy') await h.start();
-    if (scenario === 'child-busy') await h.start({ agentId: 'child' });
-    await h.emit('prompt.submit', { text: 'allow UTM', origin: { kind }, wait: false,
-      ...(scenario === 'turn-id' ? { turnId: 'already-running' } : {}),
-      ...(scenario === 'child-prompt' ? { agentId: 'child' } : {}) });
-    // Compare the frames as data: the host's frame objects may carry another prototype than these literals.
-    assert.deepEqual(JSON.parse(JSON.stringify(h.work)), scenario === 'child-prompt' ? [] : [
-      { tool: 'turn_ended', args: { sleight_turbo: { event: 'bootstrap' } } },
-      { tool: 'turn_ended', args: { sleight_turbo: { version: 1, session: 'base-fixture', nonce: 'a'.repeat(64),
-        event: 'begin', turn: 'turbo-1', text: 'allow UTM', origin: kind, turbo } } },
-    ]);
-  });
-
-for (const kind of ['sdk', 'task-notification', 'scheduled-trigger', 'peer', 'peer-send-message', 'projects-relay',
-  'channel', 'coordinator', 'observer', 'observer-activity', 'auto-continuation', 'slack-ping', 'plugin', 'unclassified', undefined])
-  test(`switch unset preserves base refusal for ${kind ?? 'missing origin'}`, { skip: parserSkip }, async () => {
-    const h = host({ turboSession: 'base-fixture', settingRead: () => ({ exitCode: 0, stdout: '{"enabled":true}' }) });
-    await h.emit('prompt.submit', { text: 'allow UTM', ...(kind ? { origin: { kind, asUser: true } } : {}) });
-    assert.deepEqual(h.work, []);
-  });
-
-test('a desktop attestation finishing after turn.start cannot replace that turn', { skip: parserSkip }, async () => {
-  let release;
-  const gate = new Promise(resolve => { release = resolve; });
-  const h = host({ envRead: async key => {
-    if (key === 'SLEIGHT_DESKTOP_TURNS') { await gate; return '1'; }
-    return key === 'CLAUDE_CODE_ENTRYPOINT' ? 'claude-desktop' : undefined;
-  }, turboSession: 'fixture' });
-  const prompt = h.emit('prompt.submit', { text: 'allow UTM', origin: { kind: 'sdk' } });
-  await new Promise(resolve => setImmediate(resolve)); await h.start(); release(); await prompt;
-  assert.equal(h.work.length, 0);
-});
-
-for (const phase of ['turbo-state', 'bootstrap'])
-test(`a desktop prompt cannot bind after turn.start during ${phase}`, { skip: parserSkip }, async () => {
-  const reached = deferred(), release = deferred();
-  const h = host({
-    envRead: key => key === 'SLEIGHT_DESKTOP_TURNS' ? '1' : key === 'CLAUDE_CODE_ENTRYPOINT' ? 'claude-desktop' : undefined,
-    settingRead: async () => {
-      if (phase === 'turbo-state') { reached.resolve(); await release.promise; }
-      return { exitCode: 0, stdout: '{"enabled":true}' };
-    },
-    turnCall: async args => {
-      if (args.sleight_turbo.event === 'bootstrap') {
-        if (phase === 'bootstrap') { reached.resolve(); await release.promise; }
-        return { content: [{ type: 'text', text: JSON.stringify({ sleightTurbo: { version: 1, session: 'fixture', nonce: 'a'.repeat(64) } }) }] };
-      }
-      return { content: [] };
-    },
-  });
-  const pending = h.emit('prompt.submit', { text: 'allow UTM', origin: { kind: 'sdk' } });
-  await reached.promise; await h.start(); release.resolve(); await pending;
-  assert.equal(h.work.some(row => row.args.sleight_turbo?.event === 'begin'), false);
-});
-
-for (const options of [
-  { entrypoint: 'sdk-cli' }, { entrypoint: 'sdk-ts' }, { entrypoint: 'sdk-py' }, { entrypoint: '' },
-  { entrypoint: 'cli' }, { entrypoint: 'claude-desktop-other' }, { switchValue: undefined },
-  { switchValue: '0' }, { switchValue: 'true' }, { envFailure: true },
-  ...['task-notification', 'scheduled-trigger', 'peer', 'peer-send-message', 'projects-relay', 'channel',
-    'coordinator', 'observer', 'observer-activity', 'auto-continuation', 'slack-ping', 'plugin', 'unclassified'].map(kind => ({ kind })),
-  { turnId: 'already-running' }, { agentId: 'child' }, { running: true }, { runningChild: true },
-  { nested: '1' }, { nested: 'unexpected-nonempty-marker' },
-]) test(`desktop attestation refuses ${JSON.stringify(options)}`, { skip: parserSkip }, async t => {
-  // An explicitly absent switch must not be replaced by the fixture's default.
-  const h = await desktopHost(t, { ...options, ...Object.hasOwn(options, 'switchValue') && options.switchValue === undefined ? { switchValue: '' } : {} });
-  if (options.running) await h.start();
-  if (options.runningChild) await h.start({ agentId: 'child' });
-  await h.emit('prompt.submit', { text: 'allow UTM', origin: { kind: options.kind ?? 'sdk', name: 'fixture', asUser: true },
-    ...options.turnId ? { turnId: options.turnId } : {}, ...options.agentId ? { agentId: options.agentId } : {} });
-  assert.equal((await h.approval())?.action, 'decline');
-  assert.equal(h.traces.some(row => row.direction === 'mod-turn-begin'), false);
-  assert.equal(h.work.length, 0, 'no private bootstrap or begin');
-});
-
-for (const switchValue of ['0', '1']) for (const text of [
-  'Pay Northbound Supply $268.00 with the test card.', 'Book a table at Northbound tonight.',
-  'Submit the form and save my notification settings.', 'Quit UTM.', 'allow UTM',
-]) test(`desktop private prompt binding switch=${switchValue}: ${text}`, { skip: parserSkip }, async t => {
-  const h = await desktopHost(t, { switchValue, turbo: true });
-  await h.emit('prompt.submit', { text, origin: { kind: 'sdk' } });
-  assert.deepEqual(h.bindings, [], 'no payment, booking, submit, quit exception or turbo authority');
-  assert.equal((await h.browserAction()).isError, true, 'the real bridge cannot run a desktop-authorized action');
-  if (switchValue === '1') {
-    await h.start(); await h.complete();
-    assert.equal(h.work.filter(row => row.args?.hook_event_name === 'Stop').length, 1);
-  }
-});
-
-test('a desktop grant clears a preceding composer payment and turbo capability', { skip: parserSkip }, async t => {
-  const h = await desktopHost(t, { turbo: true, native: true });
-  await h.emit('prompt.submit', { text: 'Pay Northbound Supply $268.00 with the test card.', origin: { kind: 'composer' } });
-  assert.equal(h.bindings.length, 1);
-  assert.equal((await h.browserAction()).isError, false, 'the fixture action is valid under a composer turn');
-  await h.emit('prompt.submit', { text: 'allow UTM', origin: { kind: 'sdk' } });
-  assert.equal((await h.nativePayment()).message, null, 'previous named payment authority is gone');
-  assert.equal((await h.browserAction()).isError, true, 'previous turbo turn was revoked');
-  assert.equal(h.bindings.length, 1, 'desktop did not bind a replacement trusted turn');
-  assert.equal((await h.approval()).action, 'accept', 'typed session grant still works');
-});
-
-for (const text of ['Pay Northbound Supply $268.00 with the test card.', 'Book a table tonight.',
-  'Submit the form and save it.', 'Quit UTM.', 'allow UTM'])
-  test(`relay limits desktop authority even with turbo=true: ${text}`, { skip: parserSkip }, async t => {
-    const h = await desktopHost(t, { turbo: true, native: true });
-    await h.emit('prompt.submit', { text: 'Pay Northbound Supply $268.00 with the test card.', origin: { kind: 'composer' } });
-    assert.equal((await h.relayPrompt(text)).isError, false);
-    assert.equal((await h.nativePayment()).message, null);
-    const action = await h.browserAction();
-    assert.equal(action.isError, true);
-    assert.match(action.content[0].text, /Turbo is unavailable for this turn/);
-    assert.equal(h.bindings.length, 1, 'only the preceding composer reached the worker');
-  });
-
-for (const [kind, options, bound, reason] of [
-  ['sdk', {}, true, 'accepted'], ['sdk', { switchValue: '0' }, false, 'desktop-off'],
-  ['sdk', { entrypoint: 'sdk-cli' }, false, 'entrypoint'], ['sdk', { nested: '1' }, false, 'nested-marker'],
-  ['peer-send-message', {}, false, 'origin'], ['scheduled-trigger', {}, false, 'origin'],
-  ['task-notification', {}, false, 'origin'], ['sdk', { runningChild: true }, false, 'busy'],
-  ['private-forged-kind', {}, false, 'origin'],
-]) test(`prompt trace records classification without private payload: ${kind} ${reason}`, { skip: parserSkip }, async t => {
-  const h = await desktopHost(t, { ...options, trace: '1' });
-  if (options.runningChild) await h.start({ agentId: 'private-agent' });
-  await h.emit('prompt.submit', { text: 'allow UTM\nprivate prompt', origin: { kind } });
-  const rows = h.logs.filter(row => row.text.startsWith('sleight: prompt '));
-  assert.equal(rows.length, 1);
-  const value = JSON.parse(rows[0].text.slice('sleight: prompt '.length));
-  assert.equal(value.kind, kind === 'private-forged-kind' ? 'unknown' : kind);
-  assert.equal(value.bound, bound); assert.equal(value.reason, reason);
-  assert.equal(value.scope, bound ? 'typed-apps' : 'none');
-  assert.equal(rows[0].options.to, 'debug');
-  assert.doesNotMatch(rows[0].text, /private|UTM|aaaa|session|nonce/);
-});
-
-test('prompt classification emits no trace with SLEIGHT_TRACE unset', { skip: parserSkip }, async t => {
-  const h = await desktopHost(t);
-  await h.emit('prompt.submit', { text: 'allow UTM', origin: { kind: 'sdk' } });
-  assert.deepEqual(h.logs, []);
-});
-
-test('a debug log failure cannot drop a composer prompt or its binding', { skip: parserSkip }, async () => {
-  const h = host({ turboSession: 'fixture', logThrows: true, envRead: key => key === 'SLEIGHT_TRACE' ? '1' : undefined });
-  const prompt = { text: 'allow UTM', origin: { kind: 'composer' } };
-  assert.equal(await h.emit('prompt.submit', prompt, value => value), prompt);
-  assert.equal(h.work.filter(row => row.args.sleight_turbo?.event === 'begin').length, 1);
-  assert.equal(h.logs.length, 1);
-});
-
-for (const [presence, expected] of [
-  [{ idleSeconds: 0, locked: false }, 1], [{ idleSeconds: 120, locked: false }, 1],
-  [{ idleSeconds: 0, locked: true }, 1], [null, 1],
-]) test(`desktop turbo-off prompt observes Mac presence: ${JSON.stringify(presence)}`, { skip: parserSkip }, async t => {
-  const h = await desktopHost(t, { presence });
-  await h.emit('prompt.submit', { text: 'open UTM', origin: { kind: 'sdk' } });
-  assert.equal(h.traces.filter(row => row.direction === 'mod-turn-begin').length, expected);
-  if (expected) {
-    await h.start(); await h.complete();
-    assert.equal(h.work.filter(row => row.args?.hook_event_name === 'Stop').length, 1, 'no-tool desktop turn clears remote state');
-  }
-});
 
 for (const failure of ['bootstrap throw', 'bootstrap refusal', 'begin throw', 'begin refusal', 'retry', 'none'])
   test(`mod logs one payload-free line when turn binding fails: ${failure}`, { skip: parserSkip }, async () => {
@@ -543,40 +145,11 @@ for (const failure of ['bootstrap throw', 'bootstrap refusal', 'begin throw', 'b
     assert.equal(begins, failure.startsWith('bootstrap') ? 0 : failure === 'none' ? 1 : 2);
   });
 
-for (const ending of ['Stop', 'Interrupt', 'checked stop'])
-  test(`CB1S mod ${ending} carries its private bootstrap binding`, { skip: parserSkip }, async () => {
-    const h = host({ turboSession: 'clipboard-session' });
-    const prompt = { text: 'allow Fixture', origin: { kind: 'composer' } };
-    assert.equal(await h.emit('prompt.submit', prompt, value => value), prompt);
-    await h.start(); await h.tool();
-    const result = ending === 'checked stop' ? await h.command('stop')
-      : await h.complete({ isAborted: ending === 'Interrupt' });
-    const end = h.work.find(row => row.args?.hook_event_name);
-    assert.ok(end, 'the mod sends its turn end');
-    assert.ok(end.args.sleight_turbo, 'the turn end includes the bootstrap binding');
-    assert.deepEqual(JSON.parse(JSON.stringify(end.args.sleight_turbo)), {
-      version: 1, session: 'clipboard-session', nonce: 'a'.repeat(64), event: 'end',
-    });
-    assert.equal(end.args.hook_event_name, ending === 'Stop' ? 'Stop' : 'Interrupt');
-    assert.doesNotMatch(JSON.stringify([...h.state, ...h.logs, ...h.forwarded, result]), /clipboard-session|aaaaaaaa/);
-  });
-
 const deferred = () => {
   let resolve, reject;
   const promise = new Promise((yes, no) => { resolve = yes; reject = no; });
   return { promise, resolve, reject };
 };
-
-for (const cwd of ['/fixture/project', '/home/fixture/project', '/mnt/c/fixture/project'])
-  test(`opt-in PowerShell focus guard follows a model tool call at ${cwd}`, { skip: parserSkip }, async () => {
-    const h = host({ cwd });
-    await h.start();
-    await h.tool('js');
-    const input = { tool: 'PowerShell', command: 'open -a Calculator' };
-    assert.match((await h.emit('classic.PreToolUse', input)).deny, /shell guard/);
-    const safe = { tool: 'PowerShell', command: 'git status' };
-    assert.equal(await h.emit('classic.PreToolUse', safe, safe), safe);
-  });
 const nextTick = () => new Promise(resolve => setImmediate(resolve));
 
 test('three parallel main calls share one begin and all wait for its reply', { skip: parserSkip }, async () => {
@@ -806,8 +379,8 @@ test('lead sleight work refuses a teammate launcher until every loop completes',
 
 test('a malformed loop id cannot choose an inactive shell fence', { skip: parserSkip }, async () => {
   const h = host();
-  for (const tool of ['Bash', 'PowerShell']) for (const agentId of [null, '', 7, {}]) {
-    const result = await h.emit('tool.call', { tool, command: 'open fixture.pdf', agentId });
+  for (const agentId of [null, '', 7, {}]) {
+    const result = await h.emit('tool.call', { tool: 'Bash', command: 'open fixture.pdf', agentId });
     assert.match(result.deny, /shell guard/);
   }
 });
@@ -865,7 +438,7 @@ test('unreadable or conflicting classic hook envelopes refuse without a session 
 test('a child prompt cannot lift Stop or consume a parent pane notice', { skip: parserSkip }, async () => {
   const h = host();
   await h.command('stop');
-  const before = h.traffic.length;
+  const before = h.work.length;
   await h.emit('prompt.submit', { text: 'inbox work', agentId: 'teammate', origin: { kind: 'composer' } });
   assert.equal(h.state.get('stopped'), true);
   assert.equal(h.work.length, before, 'no relay resume or approval bootstrap');
@@ -1306,7 +879,7 @@ test('a stopped call is denied without marking the next turn used', { skip: pars
 
 test('convenience tools preserve the pre-G8 usedThisTurn scope', { skip: parserSkip }, async () => {
   const h = host(); await h.start();
-  for (const name of ['menu_bar', 'notifications', 'drag', 'js_reset', 'app_handoff', 'browser_tabs']) await h.tool(name);
+  for (const name of ['menu_bar', 'notifications', 'drag', 'js_reset']) await h.tool(name);
   await h.complete();
   assert.equal(h.work.length, 0);
   assert.equal(h.usageReads, 1);
@@ -1461,123 +1034,4 @@ test('compaction mid-turn keeps the shell fence and the running turn', { skip: p
   await h.emit('session.compact');
   assert.match((await h.emit('tool.call', { tool: 'Bash', command: 'open -a Safari' }, { allowed: true })).deny, /shell guard/);
   assert.match((await h.command('record')).text, /Wait for the current run/);
-});
-
-for (const tool of ['Bash', 'PowerShell']) test(`shell fence spans all loops for ${tool} without rewriting input`, { skip: parserSkip }, async () => {
-  const h = host();
-  await h.tool();
-  assert.match((await h.emit('tool.call', { tool, command: 'open fixture.pdf', agentId: 'child' })).deny, /shell guard/);
-  await h.complete();
-  const event = { tool, command: 'printf fixture' };
-  assert.equal(await h.emit('tool.call', event, e => e), event);
-});
-
-test('MB1B three refused bootstraps bind no prompt and add no model-facing notice', { skip: parserSkip }, async () => {
-  const h = host({ turnCall: () => ({ isError: true, content: [{ type: 'text', text: 'Trusted turn binding unavailable.' }] }) });
-  for (let n = 0; n < 3; n++) {
-    const result = await h.emit('prompt.submit', { text: 'allow TextEdit', origin: { kind: 'composer' } }, event => event);
-    assert.equal(result.context, undefined);
-  }
-  assert.deepEqual(JSON.parse(JSON.stringify(h.work.map(row => row.args))), Array.from({ length: 3 }, () => ({ sleight_turbo: { event: 'bootstrap' } })));
-  assert.equal(h.logs.length, 3);
-  assert.ok(h.logs.every(row => row.options.to === 'debug' && /typed approvals could not reach/.test(row.text)));
-  assert.equal(h.toasts.length, 0, 'the MB1B budget decision adds no toast');
-});
-
-for (const kind of ['composer', 'bridge', 'task-notification', 'scheduled-trigger', 'auto-continuation', 'plugin', 'sdk', undefined])
-test(`INT22H only person-origin prompts lift the mod Stop: ${kind}`, { skip: parserSkip }, async () => {
-  const h = host({ turboSession: 'person-stop-fixture' });
-  await h.command('stop');
-  assert.equal(h.state.get('stopped'), true);
-  const before = h.work.length;
-  await h.emit('prompt.submit', { text: 'continue', ...(kind ? { origin: { kind } } : {}) });
-  const person = kind === 'composer' || kind === 'bridge';
-  assert.equal(h.state.get('stopped'), !person);
-  const boundaries = h.traffic.slice(before).filter(row => row.args?.sleight_person_prompt);
-  assert.equal(boundaries.length, person ? 1 : 0, 'ordinary person boundary reaches relay with turbo off');
-  if (person) assert.deepEqual(Object.keys(boundaries[0].args), ['sleight_person_prompt']);
-  else assert.equal(h.traffic.slice(before).some(row => row.args?.sleight_resume), false);
-});
-
-
-for (const kind of ['composer', 'bridge', 'sdk', undefined])
-test(`INT22I mod Stop recovery follows host attribution: ${kind}`, { skip: parserSkip }, async () => {
-  const h = host({ turboSession: 'host-recovery', envRead: key => ({ SLEIGHT_DESKTOP_TURNS: '1', CLAUDE_CODE_ENTRYPOINT: 'claude-desktop' })[key] });
-  if (kind) await h.emit('prompt.submit', { text: 'continue', origin: { kind } });
-  await h.command('stop');
-  const person = kind === 'composer' || kind === 'bridge';
-  const expected = person ? "The person's next message clears Stop; do not use sleight again before then." : 'Start a new session to continue.';
-  const paneExpected = person ? 'Your next message clears it.' : expected;
-  for (const name of ['js', 'replay', 'browser_open', 'browser_read', 'browser_act', 'browser_fill']) {
-    const reply = await h.emit('tool.call', { tool: prefix + name });
-    assert.equal(reply.deny, 'The user stopped sleight. ' + expected);
-  }
-  assert.ok((await h.pane()).includes('Stopped. ' + paneExpected));
-  // The replay command has its own early refusal before a tool can be sent.
-  assert.equal((await h.command('replay fixture.json')).text, 'The user stopped sleight. ' + expected);
-  if (kind === 'sdk') {
-    await h.emit('prompt.submit', { text: 'go on', origin: { kind } });
-    assert.equal(h.state.get('stopped'), true);
-    assert.ok((await h.pane()).includes(expected));
-    assert.equal(h.traffic.some(row => row.args?.sleight_person_prompt), false);
-  }
-});
-
-test('INT22I plugin-origin slash prompt retains Stop after an attributable composer prompt', { skip: parserSkip }, async () => {
-  const h = host();
-  await h.emit('prompt.submit', { text: 'start', origin: { kind: 'composer' } });
-  await h.command('stop');
-  const frames = h.traffic.length;
-  await h.emit('prompt.submit', { text: 'continue', origin: { kind: 'plugin' } });
-  assert.equal(h.state.get('stopped'), true);
-  assert.equal(h.traffic.length, frames, 'plugin prompt sends no person or resume frame');
-  await h.emit('prompt.submit', { text: 'continue', origin: { kind: 'composer' } });
-  assert.equal(h.state.get('stopped'), false);
-});
-
-const findButton = (tree, key) => tree?.props?.key === key ? tree
-  : (Array.isArray(tree) ? tree : tree?.children ?? []).map(child => findButton(child, key)).find(Boolean);
-for (const via of ['command', 'button']) for (const boundary of ['person RPC', 'atom update'])
-test(`INT22I newer ${via} Stop wins during ${boundary}`, { skip: parserSkip }, async () => {
-  const entered = deferred(), release = deferred();
-  let stoppedUpdates = 0, waiting = false;
-  const h = host({
-    personCall: async () => {
-      if (boundary === 'person RPC') { entered.resolve(); await release.promise; }
-      return { content: [] };
-    },
-    atomUpdate: async id => {
-      if (id.key === 'stopped' && ++stoppedUpdates === 2 && boundary === 'atom update') {
-        waiting = true; entered.resolve(); await release.promise;
-      }
-    },
-  });
-  await h.command('stop');
-  const pending = h.emit('prompt.submit', { text: 'continue', origin: { kind: 'composer' } });
-  await entered.promise;
-  try {
-    if (via === 'command') await h.command('stop');
-    else {
-      const button = findButton(await h.paneTree(), 'stop');
-      assert.ok(button, 'fixture renders the real Stop callback without mounting a pane');
-      button.props.onPress();
-    }
-  } finally { release.resolve(); await pending; }
-  assert.equal(waiting, boundary === 'atom update');
-  if (boundary === 'person RPC') assert.equal(h.traffic.some(row => row.args?.sleight_resume), false, 'stale prompt cannot send resume');
-  assert.equal(h.state.get('stopped'), true, 'older prompt cannot erase newer Stop');
-  assert.match((await h.emit('tool.call', { tool: prefix + 'js' })).deny, /user stopped/);
-  assert.ok((await h.pane()).includes('Stopped.'));
-  await h.emit('prompt.submit', { text: 'continue again', origin: { kind: 'composer' } });
-  assert.equal(h.state.get('stopped'), false, 'a later person prompt can still resume');
-});
-
-
-test('INT22L a refused person frame cannot promise prompt recovery in the pane', { skip: parserSkip }, async () => {
-  const h = host({ personCall: async () => ({ isError: true, content: [] }) });
-  await h.command('stop');
-  await h.emit('prompt.submit', { text: 'continue', origin: { kind: 'composer' } });
-  assert.equal(h.state.get('stopped'), true);
-  assert.ok((await h.pane()).includes('Start a new session to continue.'));
-  assert.equal(h.traffic.some(row => row.args?.sleight_resume), false);
 });

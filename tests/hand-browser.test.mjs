@@ -1,9 +1,11 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { EventEmitter } from 'node:events';
+import { performance } from 'node:perf_hooks';
 import { planBrowserFrame, createBrowserHand, pageMetrics, workerHandTrace } from '../plugins/sleight/lib/hand/browser-hand.mjs';
 import { createActionRunner } from '../plugins/sleight/lib/direct-browser/act.mjs';
 import { utilityLocator } from './direct-browser-utility-fixture.mjs';
+import { assessLatencyCycles, collectLatencyCycles } from './fixtures/hand-act-latency.mjs';
 
 // A 1200×900-point browser window at (100, 50) with 100 points of tabs and toolbar, on a 2× display, page zoom 100%.
 const OUTER = { X: 100, Y: 50, Width: 1200, Height: 900 };
@@ -16,7 +18,7 @@ const BOX = { x: 200, y: 100, width: 100, height: 40 };
 
 test('a CDP box becomes global points through the content origin, page zoom and device pixel ratio', () => {
   assert.deepEqual(planBrowserFrame({ op: 'click', box: BOX, metrics: METRICS, geometry: GEOMETRY }),
-    { frame: { kind: 'click', pid: 77, windowId: 5, windowRect: [100, 50, 1200, 900], at: [350, 270], path: [[350, 270]], delayMs: 0, beats: 1 } });
+    { frame: { kind: 'click', pid: 77, windowId: 5, at: [350, 270], path: [[350, 270]], delayMs: 0, beats: 1 } });
   // Zoomed to 125%: the viewport is 960×640 CSS pixels and devicePixelRatio 2.5 (2× display times 1.25).
   const zoomed = { ...METRICS, innerWidth: 960, innerHeight: 640, dpr: 2.5 };
   assert.deepEqual(planBrowserFrame({ op: 'click', box: BOX, metrics: zoomed, geometry: GEOMETRY }).frame.at, [412.5, 300]);
@@ -92,7 +94,7 @@ test('a step only queues work; the frame follows from the page metrics, the CDP 
   assert.deepEqual([f.reads.length, f.locates.length], [0, 0], 'nothing runs inside the act path');
   await f.run();
   assert.deepEqual(f.locates, [{ bounds: OUTER }]);
-  assert.deepEqual(f.sent, [{ kind: 'click', pid: 77, windowId: 5, windowRect: [100, 50, 1200, 900], at: [350, 270], path: [[350, 270]], delayMs: 0, beats: 1 }]);
+  assert.deepEqual(f.sent, [{ kind: 'click', pid: 77, windowId: 5, at: [350, 270], path: [[350, 270]], delayMs: 0, beats: 1 }]);
   // The window's geometry is reused for a burst of steps.
   f.hand.step({ op: 'type', page: f.page, locator: f.locator, ref: 'e1', text: 'hi' }); await f.run();
   assert.equal(f.locates.length, 1);
@@ -146,13 +148,10 @@ test('the act runner tells the hand about each step it starts, after its rules a
   const steps = [];
   const hand = { step: input => steps.push(input) };
   const f = actFixture(hand);
-  const batch = await f.run(f.tab, [{ do: 'click', ref: 'e1' }, { do: 'type', ref: 'e2', text: 'hello' }, { do: 'drag', ref: 'e3', to: 'e4' }, { do: 'hover', ref: 'e5' }], {});
+  await f.run(f.tab, [{ do: 'click', ref: 'e1' }, { do: 'type', ref: 'e2', text: 'hello' }, { do: 'drag', ref: 'e3', to: 'e4' }, { do: 'hover', ref: 'e5' }], {});
   assert.deepEqual(steps.map(s => [s.op, s.ref, s.locator.ref, s.to?.ref, s.text, s.page === f.page]), [
     ['click', 'e1', 'e1', undefined, undefined, true], ['type', 'e2', 'e2', undefined, 'hello', true],
-    ['drag', 'e3', 'e3', 'e4', undefined, true]]);
-  assert.equal(batch.stoppedAt, 3); assert.match(batch.lines[2], /TRUSTED_TURN_REQUIRED/);
-  assert.match(batch.lines[3], /not reached/);
-  assert.deepEqual(f.actions, [['click', 'e1'], ['fill', 'e2', 'hello']]);
+    ['drag', 'e3', 'e3', 'e4', undefined, true], ['hover', 'e5', 'e5', undefined, undefined, true]]);
   // A refused step starts no input and shows no hand.
   steps.length = 0;
   const refused = actFixture(hand, { kind: 'refuse', message: 'no' });
@@ -166,53 +165,33 @@ test('the act runner tells the hand about each step it starts, after its rules a
   assert.doesNotMatch(result.lines[0], /unconfirmed|not run/);
 });
 
-test('act with the hand queues one frame per input, adds no microtask turns or timers, and completes while hand reads are blocked', { timeout: 10000 }, async t => {
-  let sent = 0, closed = 0, reads = 0, release;
-  const deferred = [], frames = [];
-  const blocked = new Promise(resolve => { release = resolve; });
-  const setTimer = t.mock.method(globalThis, 'setTimeout');
-  // Count event-loop ordering rather than sub-millisecond wall time on shared CI.
-  // An extra await in the hand's input path must cost a microtask turn.
-  const measure = async (f, steps) => {
-    let turns = 0, measuring = true;
-    const beforeTimers = setTimer.mock.callCount();
-    const tick = () => { if (measuring && turns < 1000) { turns++; queueMicrotask(tick); } };
-    queueMicrotask(tick);
-    try {
-      const result = await f.run(f.tab, steps, {});
-      assert.ok(turns < 1000, 'act completes before the microtask counter is exhausted');
-      return { result, turns, timers: setTimer.mock.calls.slice(beforeTimers).map(call => call.arguments[1]) };
-    }
-    finally { measuring = false; }
-  };
+test('act latency with the hand is within 0.1 ms of act without it', async t => {
+  let sent = 0, closed = 0;
   const hand = createBrowserHand({ client: { enabled: true, send() { sent++; }, hide() {}, close() { closed++; } }, env: { SLEIGHT_HAND: '1' }, setting: () => ({ enabled: true }),
-    now: () => 0, defer: fn => deferred.push(fn),
-    readMetrics: async () => { reads++; await blocked; return METRICS; }, locate: async () => GEOMETRY });
+    readMetrics: async () => METRICS, locate: async () => GEOMETRY });
+  const fixtures = { off: actFixture(), on: actFixture(hand) };
+  const measure = async side => {
+    const f = fixtures[side], before = sent, beforeActions = f.actions.length;
+    const start = performance.now();
+    const result = await f.run(f.tab, [{ do: 'click', ref: 'e1' }, { do: 'type', ref: 'e2', text: 'hi' }], {});
+    const elapsed = performance.now() - start;
+    // Default setImmediate scheduling remains active. Drain the fake async readers after stopping the clock.
+    await new Promise(resolve => setImmediate(resolve));
+    assert.equal(result.lines.length, 2);
+    assert.equal(result.stoppedAt, null);
+    assert.deepEqual(f.actions.slice(beforeActions), [['click', 'e1'], ['fill', 'e2', 'hi']]);
+    assert.equal(sent - before, side === 'on' ? 2 : 0, 'every enabled click and type delivered its deferred frame');
+    return elapsed;
+  };
   try {
-    const off = actFixture(), on = actFixture(hand);
-    const steps = [{ do: 'click', ref: 'e1' }, { do: 'type', ref: 'e2', text: 'hi' }];
-    const offResult = await measure(off, steps);
-    const onResult = await measure(on, steps);
-    assert.deepEqual(onResult.result, offResult.result);
-    assert.equal(onResult.turns, offResult.turns, 'hand input adds no awaited microtask turns');
-    assert.deepEqual(onResult.timers, offResult.timers, 'hand input adds no timers');
-    t.diagnostic(`off/on: ${offResult.turns}/${onResult.turns} microtask turns, ${offResult.timers.length}/${onResult.timers.length} timers`);
-    assert.deepEqual(on.actions, [['click', 'e1'], ['fill', 'e2', 'hi']]);
-    assert.deepEqual(on.actions, off.actions);
-    assert.equal(deferred.length, 2, 'one deferred hand job per admitted input');
-    assert.deepEqual([reads, sent], [0, 0], 'act completes before any hand reader runs');
-    frames.push(...deferred.splice(0).map(fn => fn()));
-    assert.deepEqual([reads, sent], [2, 0], 'both hand jobs are blocked on metrics after act completed');
-    const offAgain = await off.run(off.tab, steps, {});
-    const whileBlocked = await on.run(on.tab, steps, {});
-    assert.deepEqual(whileBlocked, offAgain, 'a later act also completes while the previous hand reads are pending');
-    assert.deepEqual(on.actions, off.actions);
-    assert.equal(deferred.length, 2);
-    frames.push(...deferred.splice(0).map(fn => fn()));
-    assert.deepEqual([reads, sent], [4, 0]);
-    release();
-    await Promise.all(frames);
-    assert.equal(sent, 4, 'every enabled click and type delivers its frame after release');
+    await collectLatencyCycles(measure); // 300 warmup samples per side, in the same balanced order
+    const measured = assessLatencyCycles(await collectLatencyCycles(measure)), { off, on } = measured;
+    assert.equal(sent, 1200, 'warmup and measured on runs each delivered 600 frames');
+    t.diagnostic(`act median off ${off.median.toFixed(4)} ms, on ${on.median.toFixed(4)} ms; delta ${measured.deltaMs.toFixed(4)} ms; ` +
+      `whole-cycle bootstrap upper95 ${measured.upper95Ms.toFixed(4)} ms; p95 off ${off.p95.toFixed(4)}, on ${on.p95.toFixed(4)}; ` +
+      `${measured.samplesPerCondition} per side, ${measured.cycles} cycles, ${measured.resamples} resamples, seed ${measured.seed}`);
+    assert.ok(on.median - off.median < 0.1, `act ${on.median} ms with the hand against ${off.median} ms without`);
+    assert.ok(measured.upper95Ms < 0.1, `act latency measurement inconclusive: cycle-bootstrap upper95 ${measured.upper95Ms} ms exceeds the strict 0.1 ms limit`);
   } finally { hand.close(); assert.equal(closed, 1); }
 });
 

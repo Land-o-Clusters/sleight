@@ -1,4 +1,3 @@
-import { testChromiumExecutable, launchTestChromium } from './fixtures/chromium-isolated.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createServer } from 'node:http';
@@ -11,7 +10,9 @@ import { createToolDispatcher } from '../plugins/sleight/lib/direct-browser/tool
 
 const pin = JSON.parse(readFileSync(new URL('../plugins/sleight/vendor/playwright-core/browsers.json', import.meta.url)))
   .browsers.find(browser => browser.name === 'chromium-headless-shell');
-const executablePath = testChromiumExecutable({ revision: pin.revision });
+const platform = process.platform === 'darwin' ? 'mac-' + process.arch : 'linux64';
+const executablePath = join(homedir(), 'Library/Caches/ms-playwright', 'chromium_headless_shell-' + pin.revision,
+  'chrome-headless-shell-' + platform, 'chrome-headless-shell');
 const skip = process.env.SLEIGHT_LIVE_DOM_TEST !== '1' && 'needs SLEIGHT_LIVE_DOM_TEST=1, pinned headless Chromium only';
 const HTML = `<!doctype html><title>Developer fixture</title><main>Fixture only</main><script>
 window.getterReads = 0;
@@ -97,7 +98,7 @@ test('owned real-page console, request failures and timings are scrubbed without
       await new Promise(resolve => server.close(resolve));
     }
   });
-  browser = await launchTestChromium(chromium, { headless: true, executablePath });
+  browser = await chromium.launch({ headless: true, executablePath });
   const context = await browser.newContext();
   foreign = await context.newPage();
   await foreign.setContent('<title>Foreign private fixture</title>');

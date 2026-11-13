@@ -160,7 +160,7 @@ test('--launch-shape CLI is read-only and reports the fixture config without sta
   const report = join(f.root, 'report.json');
   const output = execFileSync(process.execPath, ['bench/compat.mjs', '--launch-shape', '--report', report], {
     env: { ...process.env, ...f.env }, encoding: 'utf8', timeout: 10000,
-   killSignal: 'SIGKILL' });
+  });
   const parsed = JSON.parse(readFileSync(report, 'utf8'));
   assert.equal(parsed.verdict, 'pass');
   assert.deepEqual(parsed.steps.map(s => s.id), ['launch-shape']);

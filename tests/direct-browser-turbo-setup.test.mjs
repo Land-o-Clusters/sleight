@@ -1,4 +1,3 @@
-import { offlineDoctor } from './fixtures/preapproved-storage.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { chmodSync, chownSync, cpSync, existsSync, lstatSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, realpathSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
@@ -28,8 +27,6 @@ function world(t, { chrome = false, helium = false, chromeMode = 0o755 } = {}) {
   const install = (app, binary, mode = 0o755) => {
     const dir = join(apps, app + '.app/Contents/MacOS'); mkdirSync(dir, { recursive: true });
     writeFileSync(join(dir, binary), '#!/bin/sh\n'); chmodSync(join(dir, binary), mode);
-    // A shared temporary directory can inherit another group. These fixtures model the user's primary group.
-    chownSync(join(dir, binary), -1, process.getgid());
   };
   if (chrome) install('Google Chrome', 'Google Chrome', chromeMode);
   if (helium) install('Helium', 'Helium');
@@ -621,13 +618,11 @@ test('launcher startup logs one line and keeps the engine when setup cannot writ
 
 test('doctor prints the turbo section after its version, read-only', async t => {
   const w = world(t, { helium: true }), lines = [];
-  const code = await doctor({ ...offlineDoctor, env: { CODEX_HOME: '/no-such-sleight-home', SLEIGHT_CHATGPT_APP: '/no-such-ChatGPT.app' }, log: x => lines.push(x),
-    runtime: () => ({ selected: 'engine', ok: true, lines: [] }), documentation: () => {},
-    hand: () => [], permissions: () => [], settings: () => [], codex: () => [], cursor: () => [], grok: () => [], grokbot: () => [],
+  const code = await doctor({ env: { CODEX_HOME: '/no-such-sleight-home', SLEIGHT_CHATGPT_APP: '/no-such-ChatGPT.app' }, log: x => lines.push(x),
     turbo: async () => doctorLines(turboDiagnosis(w.base)) });
   assert.equal(code, 1);
   assert.match(lines[0], /^sleight \d+\.\d+\.\d+$/);
-  assert.equal(lines[2], 'turbo (direct browser path)'); assert.match(lines.join('\n'), /not set up yet/);
+  assert.equal(lines[1], 'turbo (direct browser path)'); assert.match(lines.join('\n'), /not set up yet/);
   assert.equal(existsSync(w.configPath), false);
 });
 

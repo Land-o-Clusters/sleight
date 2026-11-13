@@ -3,7 +3,6 @@
 // No ink lines on the body; the screen face carries the expression. Same pose schema as every style.
 import { Doc, f, path, g, ellD, rrD, starD, capsuleD, outlineUnderlay, rot, RAD, clamp } from '../lib/svg.mjs';
 import { recordAnchors } from '../lib/poses.mjs';
-import { stageRig } from '../lib/stage-rig.mjs';
 import { drawFx } from '../lib/fx.mjs';
 
 const CX = 96;
@@ -26,7 +25,6 @@ function piece(doc, d, pal, { fold = null, shadow = true } = {}) {
 }
 
 export function renderPaper(D, pose) {
-  if(pose.stage) return renderStagePaper(D,pose);
   const doc = new Doc(192, 208), P = D.pal, p = pose, t = clamp(p.head.turn, -1, 1), scr = D.screen;
   const SH = 113, HIP = 148;
   // arms
@@ -82,43 +80,6 @@ export function renderPaper(D, pose) {
   return doc.wrap(g(drawFx(fxs, anchor, D.ink, 'back') + lift + edge + all + tape + drawFx(fxs, anchor, D.ink, 'front'), { transform: root }));
 }
 
-function renderStagePaper(D,pose) {
-  const p=structuredClone(pose), P=D.pal;
-  const R=stageRig(D,p,{shY:113,hipY:148,headY:64,shoulder:23,hipW:11,limb:1,head:1});
-  const doc=new Doc(R.width,208);
-  const hand=A=>{
-    let s=piece(doc,ellD(...A.hc,5.8),P.hand,{fold:`M${A.hc[0]-8},${A.hc[1]+1}h16v8h-16Z`});
-    if(A.hand==='point') s+=piece(doc,capsuleD(...A.hc,...A.tip,2.4,2.2),P.hand);
-    if(A.hand==='grip') s+=path(`M${A.hc[0]-3},${A.hc[1]-3}v-4q3,-3 6,0v4`,{fill:'none',stroke:P.hand.shade,'stroke-width':2,'stroke-linecap':'round'});
-    return s;
-  };
-  let body='';
-  for(const s of R.legOrder) {
-    const L=R.legs[s];
-    body+=piece(doc,capsuleD(...L.hip,...L.knee,4.8,4.4),P.leg)+piece(doc,capsuleD(...L.knee,...L.foot,4.4,4),P.leg);
-    body+=g(piece(doc,cutRect(-9,-3,18,9,4,'foot'+s),P.foot,{fold:'M-10,2H10V8H-10Z'}),{transform:`translate(${f(L.foot[0])} ${f(L.foot[1])}) rotate(${L.toe})`});
-  }
-  body+=piece(doc,capsuleD(R.head[0],R.head[1]+26,...R.sh,5,5),P.limb);
-  const torso=piece(doc,cutRect(71,102,50,48,9,'torso'),P.body,{fold:'M102,100H136V160H110Z'})+
-    piece(doc,cutRect(83,116,26,15,3,'label'),P.label,{shadow:false})+
-    path(rrD(86,119.5,4.5,8,1),{fill:P.labelMark})+path('M93,121.5H105M93,125.5H102',{stroke:P.labelLine,'stroke-width':1.6,'stroke-linecap':'round'});
-  body+=g(torso,{transform:R.torso});
-  for(const s of ['l','r']) {
-    const A=R.arms[s];
-    body+=piece(doc,capsuleD(...A.sh,...A.el,4.6,4.2),P.limb)+piece(doc,capsuleD(...A.el,...A.wr,4.2,4),P.limb)+hand(A);
-  }
-  body+=g(drawHead(doc,D,p,p.head.turn),{transform:`translate(${f(R.head[0])} ${f(R.head[1])}) rotate(${f(p.head.tilt)})`});
-  body+=R.props.map(x=>drawProp(doc,D,x)).join('');
-  for(const s of ['l','r']) if(R.arms[s].hc[1]>R.head[1]+22||p.stage.posture==='hang') body+=hand(R.arms[s]);
-  const edge=outlineUnderlay(body,{ink:D.edge??'#fffdf6',rim:2.6,sticker:1,stickerColor:'rgba(42,34,56,0.28)',inner:0});
-  const shadow=g(outlineUnderlay(body,{ink:'#2a2238',rim:2.6,inner:0}),{transform:'translate(2.2 3)',opacity:0.16});
-  // Tab tapes its own mistakes, keeping the cut-paper language in the error reaction.
-  const tape=R.fx.some(x=>x.type==='sweat')?g(path(cutRect(-13,-4,26,8,1,'tape',0.8),{fill:'#f6e2aa'})+path('M-9,-1.5H9M-9,1.5H9',{stroke:'#bea064','stroke-width':0.8}),{transform:`translate(${R.head[0]+26} ${R.head[1]-22}) rotate(38)`}):'';
-  const fxs=R.fx.filter(x=>x.type!=='sweat');
-  recordAnchors(R.anchor,{...p,lean:0,x:0,y:0,sx:1,sy:1});
-  return doc.wrap(drawFx(fxs,R.anchor,D.ink,'back')+shadow+edge+body+tape+drawFx(fxs,R.anchor,D.ink,'front'));
-}
-
 function drawHead(doc, D, p, t) {
   const P = D.pal, S = D.screen, face = p.face, ink = S.ink;
   let s = '';
@@ -170,14 +131,6 @@ function mouth(x, y, type, S) {
 }
 function drawProp(doc, D, x) {
   const P = D.pal;
-  if(x.type==='notes') return g(piece(doc,cutRect(-24,-13,48,26,2,'notebook'),{base:'#fffdf8',shade:'#ece6da'},{fold:'M0,-14H25V14H0Z'})+
-    path('M0,-12V12M-18,-5H-5M5,-5H18M-18,1H-5M5,1H16',{stroke:'#b4b0a6','stroke-width':1.2})+
-    path(`M${8+(x.writing%3)*3},-4l8,-17`,{stroke:'#3d4766','stroke-width':3,'stroke-linecap':'round'}),{transform:`translate(${x.x} ${x.y}) rotate(-8)`});
-  if(x.type==='box') return g(piece(doc,cutRect(-25,-19,50,38,2,'box'),{base:'#d9ac79',shade:'#bb8756'},{fold:'M5,-20H26V20H13Z'})+
-    path('M-5,-19H5V19H-5Z',{fill:'#f7dfb4'})+path('M-25,-4H25',{stroke:'#a26f44','stroke-width':1.2}),{transform:`translate(${x.x} ${x.y})`});
-  if(x.type==='mug') return g(path('M10,-7h5q9,8 0,15h-5',{fill:'none',stroke:P.limb.shade,'stroke-width':4})+
-    piece(doc,cutRect(-13,-12,26,25,4,'mug'),P.hand,{fold:'M3,-13H14V14H7Z'})+
-    path('M-5,-17q-5,-5 0,-10M4,-17q-5,-5 0,-10',{fill:'none',stroke:'#aaa8b3','stroke-width':1.3,'stroke-linecap':'round'}),{transform:`translate(${x.x} ${x.y})`});
   if (x.type === 'keyboard') {
     let s = piece(doc, cutRect(x.x - 30, x.y - 7, 60, 15, 3.5, 'kb'), { base: '#2c3352', shade: '#222842' });
     for (let r = 0; r < 2; r++) for (let c = 0; c < 7; c++) { const kx = x.x - 27 + c * 8, on = (x.press === 'l' && r === 0 && c === 1) || (x.press === 'r' && r === 0 && c === 5);

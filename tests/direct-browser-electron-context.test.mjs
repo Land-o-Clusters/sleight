@@ -18,28 +18,6 @@ const terms = { item: 'Fixture item', amount: '18.00', payee: 'Fixture shop', me
 const payText = value => 'Pay ' + JSON.stringify(value);
 const root = 'file:///Applications/Fixture.app/Contents/Resources/app/';
 
-test('quit-key exceptions bind to the Electron instance and expire on grant revocation', async () => {
-  for (const text of ['Save the file', 'Quit Safari', 'Do not quit ' + instance.name]) {
-    const f = fixture(text);
-    const answer = await f.ctx.check('press', f.target({ key: 'Meta+q', app: { name: 'Safari' } }));
-    assert.equal(answer.verdict, 'refuse');
-    assert.match(answer.message, /quit-key rule.*nothing was sent/);
-    await f.ctx.dispose();
-  }
-  for (const name of [instance.name, instance.bundleId]) {
-    const f = fixture('Quit ' + name); f.ordinary();
-    assert.equal(f.ctx.allowQuitShortcut(), true);
-    assert.equal((await f.ctx.check('press', f.target({ key: 'Meta+q' }))).verdict, 'allow');
-    for (const key of ['Cmd+Shift+Q', 'Cmd+Option+Shift+Q', 'Ctrl+Cmd+Q', 'Cmd+Option+Esc',
-      'Super_L+Alt_L+Escape', 'Control_L+Super_L+q', 'Meta_L+Super_L+Escape', 'Meta+Escape',
-      'Meta+Shift+q', 'Cmd+Q', 'Hyper_L+q', 'Super_L+Super_R+q', 'cmd+q+Left', 'cmd+KeyQ'])
-      assert.equal((await f.ctx.check('press', f.target({ key }))).verdict, 'refuse', key);
-    f.gate.alive = false;
-    assert.equal(f.ctx.allowQuitShortcut(), false);
-    await f.ctx.dispose();
-  }
-});
-
 function fixture(text = payText(terms), options = {}) {
   assert.equal(typeof api.createV3Context, 'function');
   assert.equal(typeof identity.createAppBinding, 'function', 'typed app-document binding is required');

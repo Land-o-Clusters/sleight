@@ -1,5 +1,4 @@
-import { walk, literalValue, parseCell, UNKNOWN } from './code-ast.mjs';
-import { pageCode, lexicalIndex, propertyName, unchain, isFunction, escapedSyntax } from './page-code.mjs';
+import { lineCommentEnd, isLineTerminator } from './code-line-terminators.mjs';
 import { pageCallbackEscape } from './page-callbacks.mjs';
 import { EVALUATE_ACTION } from './tab-errors.mjs';
 
@@ -8,166 +7,267 @@ const setters = { value: 'fill', checked: 'check', innerHTML: 'read', textConten
   draggable: 'read', cssText: 'read' };
 const methods = { click: 'click', dispatchEvent: 'read', createEvent: 'read', addEventListener: 'read',
   append: 'read', prepend: 'read', replaceWith: 'read', remove: 'read', insertAdjacentHTML: 'read',
-  setAttribute: 'read', appendChild: 'drag', insertBefore: 'drag', removeChild: 'drag', replaceChild: 'drag',
-  submit: 'read', requestSubmit: 'read' };
+  setAttribute: 'read', appendChild: 'drag', insertBefore: 'drag', removeChild: 'drag', replaceChild: 'drag' };
 const ambiguousMethods = new Set(['append', 'prepend', 'replaceWith', 'remove', 'insertAdjacentHTML']);
 
-// Only bindings created inside the transferred function exist in its page realm.
-// Captured kernel variables cannot shadow page globals. Nested lexical scopes can.
-function writeIn(fn, plan) {
-  const localScopes = new Set([...walk(fn)].map(node => plan.scopes.get(node)));
-  const inside = binding => binding && localScopes.has(binding.scope);
-  const local = node => node?.type === 'Identifier' && inside(plan.lookup(node.name, node));
-  const bindingKind = (binding, seen) => {
-    if (!inside(binding) || seen.has(binding)) return;
-    const next = new Set(seen).add(binding);
-    const values = [...binding.values.map(value => {
-      let result = kind(value.node, next);
-      // Destructuring does not establish a data exemption. Keep page taint and
-      // fetch aliases, and let other destructured values remain unknown.
-      if (value.path.length && result === 'data') return;
-      for (const key of value.path) if (result === 'page' && key === 'fetch') result = 'fetch';
-      return result;
-    }), ...binding.writes.map(node => kind(node, next))];
-    // A data exemption needs every assignment to be data. A page source is kept
-    // across branches and reassignments so data never launders a page alias.
-    if (values.includes('page')) return 'page';
-    if (values.includes('fetch')) return 'fetch';
-    if (values.length && values.every(value => value === 'data')) return 'data';
-  };
-  function kind(node, seen = new Set()) {
-    node = unchain(node);
-    if (node?.type === 'Identifier') {
-      const binding = plan.lookup(node.name, node);
-      if (inside(binding)) return bindingKind(binding, seen);
-      if (['document', 'window', 'globalThis'].includes(node.name)) return 'page';
-      if (node.name === 'fetch') return 'fetch';
-      if (node.name === 'location') return 'page';
-    }
-    if (node?.type === 'Literal' || isFunction(node) || node?.type === 'ClassExpression' || node?.type === 'ClassDeclaration') return 'data';
-    if (node?.type === 'ArrayExpression') return node.elements.every(part => part === null || kind(part, seen) === 'data') ? 'data' : 'page';
-    if (node?.type === 'ObjectExpression') return node.properties.every(part => part.type === 'Property' &&
-      part.kind === 'init' && (!part.computed || literalValue(part.key) !== UNKNOWN) && kind(part.value, seen) === 'data') ? 'data' : 'page';
-    if (node?.type === 'AwaitExpression') return kind(node.argument, seen);
-    if (['ConditionalExpression', 'LogicalExpression', 'SequenceExpression'].includes(node?.type)) {
-      const values = (node.type === 'ConditionalExpression' ? [node.consequent, node.alternate]
-        : node.type === 'LogicalExpression' ? [node.left, node.right] : node.expressions).map(part => kind(part, seen));
-      if (values.includes('page')) return 'page';
-      if (values.includes('fetch')) return 'fetch';
-      if (values.every(value => value === 'data')) return 'data';
-    }
-    if (node?.type === 'MemberExpression') {
-      const receiver = kind(node.object, seen);
-      return receiver === 'page' && propertyName(node) === 'fetch' ? 'fetch' : receiver;
-    }
-    if (node?.type === 'CallExpression') {
-      const callee = unchain(node.callee);
-      if (callee.type === 'MemberExpression' && callee.object.type === 'Identifier' && callee.object.name === 'JSON' &&
-          !local(callee.object) && propertyName(callee) === 'parse') return 'data';
-      if (callee.type === 'MemberExpression' && kind(callee.object, seen) === 'page') return 'page';
+// Like the A3R5 check, ignore literal text. Keep offsets, regex character classes and
+// template expressions so a quoted action cannot hide a later write or become one.
+function tokens(code) {
+  const out = []; let i = 0;
+  const push = (v, at, string = false) => out.push({ v, at, string });
+  function scan(interpolation = false) {
+    let braces = 0;
+    while (i < code.length) {
+      const at = i, c = code[i];
+      if (/\s/.test(c)) { i++; continue; }
+      if (code.startsWith('//', i)) { i = lineCommentEnd(code, i); continue; }
+      if (code.startsWith('/*', i)) { const end = code.indexOf('*/', i + 2); i = end < 0 ? code.length : end + 2; continue; }
+      if (c === '}' && interpolation && braces === 0) { i++; return; }
+      if (c === '{') braces++;
+      if (c === '}') braces--;
+      if (c === '`') {
+        i++; push('(', at);
+        while (i < code.length && code[i] !== '`') {
+          if (code[i] === '\\') { i += 2; continue; }
+          if (code.startsWith('${', i)) { i += 2; push('(', i); scan(true); push(')', i); }
+          else i++;
+        }
+        i++; push(')', i - 1); continue;
+      }
+      if (c === '"' || c === "'") {
+        i++; let value = '';
+        while (i < code.length && code[i] !== c) {
+          if (code[i] === '\\') {
+            const escaped = code[++i]; i++;
+            if (escaped === '\r' && code[i] === '\n') i++;
+            if (!isLineTerminator(escaped)) value += escaped ?? '';
+          }
+          else value += code[i++];
+        }
+        i++; push(value, at, true); continue;
+      }
+      if (c === '/' && (!out.length || (!out.at(-1).string && ['(', ',', '=', ':', '[', '!', '&', '|', '?', '{', '}', ';', 'return', '=>', '&&', '||', '??'].includes(out.at(-1).v)))) {
+        i++; let bracket = false;
+        while (i < code.length) {
+          const ch = code[i++];
+          if (isLineTerminator(ch)) break;
+          if (ch === '\\') i++;
+          else if (ch === '[') bracket = true;
+          else if (ch === ']') bracket = false;
+          else if (ch === '/' && !bracket) break;
+        }
+        while (i < code.length && /[a-z]/i.test(code[i])) i++;
+        push('<regexp>', at); continue;
+      }
+      const word = /^[\w$]+/.exec(code.slice(i));
+      if (word) { push(word[0], at); i += word[0].length; continue; }
+      const operator = /^(?:=>|\?\.|===|!==|==|!=|\+\+|--|\+=|-=|\|\|=|&&=|\?\?=|&&|\|\||\?\?)/.exec(code.slice(i));
+      if (operator) { push(operator[0], at); i += operator[0].length; }
+      else { push(c, at); i++; }
     }
   }
-  const writes = [];
-  const add = (node, v, action) => writes.push({ token: { at: node.range[0], v }, action });
-  function assignmentTargets(target) {
-    target = unchain(target);
-    if (!target) return [];
-    if (target.type === 'RestElement') return assignmentTargets(target.argument);
-    if (target.type === 'AssignmentPattern') return assignmentTargets(target.left);
-    if (target.type === 'ArrayPattern') return target.elements.flatMap(assignmentTargets);
-    if (target.type === 'ObjectPattern') return target.properties.flatMap(part => assignmentTargets(part.value ?? part.argument));
-    return [target];
-  }
-  for (const node of walk(fn)) {
-    if (node.type === 'Identifier' && ['eval', 'Function'].includes(node.name)) {
-      const parent = plan.parents.get(node);
-      if (!(parent?.type === 'Property' && parent.key === node && !parent.computed && !parent.shorthand)) add(node, node.name, 'read');
-    }
-    if (node.type === 'NewExpression') {
-      const callee = unchain(node.callee), member = callee.type === 'MemberExpression';
-      const name = member ? propertyName(callee) : callee.name;
-      if (typeof name === 'string' && (member ? kind(callee.object) !== 'data' : !local(callee))) {
-        const action = ['DataTransfer', 'DragEvent'].includes(name) ? 'drag' : /Event$/.test(name) || name === 'Function' ? 'read' : undefined;
-        if (action) add(member ? callee.property : callee, name, action);
-      }
-    }
-    if (node.type === 'CallExpression') {
-      const callee = unchain(node.callee);
-      if (callee.type === 'Identifier') {
-        if (callee.name === 'fetch' && !local(callee) || kind(callee) === 'fetch') add(callee, 'fetch', 'read');
-        if (kind(callee) === 'page') add(callee, 'evaluate', 'read');
-        if (['eval', 'Function'].includes(callee.name)) add(callee, callee.name, 'read');
-      } else if (callee.type === 'MemberExpression') {
-        const name = propertyName(callee), receiver = kind(callee.object);
-        if (callee.computed && !['string', 'number', 'boolean'].includes(typeof name) && name !== null) add(callee.property, 'evaluate', 'read');
-        if (['eval', 'Function'].includes(name)) add(callee.property, name, 'read');
-        if (['set', 'assign', 'defineProperty', 'defineProperties', 'setPrototypeOf'].includes(name) &&
-            (kind(node.arguments[0]) !== 'data' || callee.object.type === 'Identifier' && callee.object.name === 'Reflect' && name === 'set')) add(callee.property, name, 'read');
-        if (name === 'fetch' && receiver !== 'data') add(callee.property, 'fetch', 'read');
-        if (receiver === 'data' || !Object.hasOwn(methods, name)) continue;
-        if (ambiguousMethods.has(name) && receiver !== 'page') continue;
-        const attribute = literalValue(node.arguments[0]);
-        const action = name === 'setAttribute' && ['value', 'checked', 'selected'].includes(attribute) ? setters[attribute] : methods[name];
-        add(callee.property, name, action);
-      }
-    }
-    if (['AssignmentExpression', 'UpdateExpression'].includes(node.type)) {
-      for (const target of assignmentTargets(node.left ?? node.argument)) {
-        if (target.type === 'Identifier' && target.name === 'fetch' && !local(target)) add(target, 'fetch', 'read');
-        if (target.type === 'Identifier' && target.name === 'location' && !local(target)) add(target, 'location', 'read');
-        if (target.type !== 'MemberExpression' || kind(target.object) === 'data') continue;
-        const name = propertyName(target);
-        const action = Object.hasOwn(setters, name) ? setters[name]
-          : ['location', 'cookie'].includes(name) || typeof name === 'string' && /^on\w+$/.test(name) ||
-            kind(target.object) === 'page' && ['href', 'pathname', 'search', 'hash'].includes(name) ||
-            target.computed && name === UNKNOWN ? 'read' : undefined;
-        if (action) add(target.property, name, action);
-      }
-    }
-  }
-  return writes.sort((a, b) => a.token.at - b.token.at)[0];
+  scan(); return out;
 }
 
-export function evaluateWrite(code, handles) {
-  if (typeof code !== 'string') return;
-  const plan = pageCode(code, handles);
-  const escaped = pageCallbackEscape(code, handles, plan);
-  let writes = escaped ? [{ token: escaped, action: 'read' }]
-    : plan.callbacks.map(fn => writeIn(fn, plan)).filter(Boolean).sort((a, b) => a.token.at - b.token.at);
-  if (!escaped) for (const evaluation of plan.evaluations) {
-    for (const source of stringArguments(evaluation.argument, plan)) {
-      const wrapped = `(${source}\n)`, parsed = parseCell(wrapped);
-      const script = parsed.error ? parseCell(source) : parsed;
-      const innerCode = parsed.error ? source : wrapped;
-      const inner = script.error ? null : { ...script, ...lexicalIndex(script.ast) };
-      const escape = inner && escapedSyntax(innerCode, inner.ast, [[0, innerCode.length]]);
-      const write = inner && !escape && writeIn(inner.ast, inner);
-      if (!inner || escape || write) writes.push({ token: { at: evaluation.argument.range[0], v: write?.token?.v ?? 'evaluate' }, action: write?.action ?? 'read' });
+function argumentEnd(ts, start) {
+  let depth = 0;
+  for (let i = start; i < ts.length; i++) {
+    if (ts[i].string) continue;
+    const v = ts[i].v;
+    if (!depth && [',', ')', ';'].includes(v)) return i;
+    if (['(', '[', '{'].includes(v)) depth++;
+    if ([')', ']', '}'].includes(v)) depth--;
+    if (depth < 0) return i;
+  }
+  return ts.length;
+}
+
+function callbacks(ts) {
+  const ranges = [];
+  const range = (start, end) => Object.assign(ts.slice(start, end), { endAt: ts[end]?.at });
+  for (let i = 0; i < ts.length; i++) {
+    const computed = ts[i - 1]?.v === '[' && ts[i].string && ts[i + 1]?.v === ']';
+    let open = computed ? i + 2 : i + 1;
+    if (ts[open]?.v === '?.') open++;
+    if (ts[i].v !== 'evaluate' || (!computed && !['.', '?.'].includes(ts[i - 1]?.v)) || ts[open]?.v !== '(') continue;
+    const start = open + 1, end = argumentEnd(ts, start), arg = range(start, end);
+    if (arg.some(t => !t.string && ['=>', 'function'].includes(t.v))) ranges.push(arg);
+    else if (arg.length === 1 && !arg[0].string) {
+      const name = arg[0].v;
+      for (let j = 0; j < ts.length; j++) {
+        if (ts[j].v !== name || ts[j].string) continue;
+        if (ts[j - 1]?.v === 'function') {
+          const parameters = ts.findIndex((t, k) => k > j && !t.string && t.v === '(');
+          const body = closingToken(ts, parameters) + 1;
+          if (ts[body]?.v === '{') ranges.push(range(j - 1, closingToken(ts, body) + 1));
+        } else if (ts[j + 1]?.v === '=') {
+          const value = range(j + 2, argumentEnd(ts, j + 2));
+          if (value.some(t => t.v === '=>' || t.v === 'function')) ranges.push(value);
+        }
+      }
     }
   }
-  if (!writes.length) {
-    const refused = plan.evaluations.find(evaluation => evaluation.dynamic || evaluation.unsafeArgument);
-    if (refused) writes = [{ token: { at: (unchain(refused.node.callee).property ?? unchain(refused.node.callee)).range[0], v: 'evaluate' }, action: 'read' }];
+  return ranges;
+}
+
+function closingToken(ts, start) {
+  const open = ts[start]?.v, close = { '(': ')', '[': ']', '{': '}' }[open];
+  if (!close) return start;
+  let depth = 1;
+  for (let i = start + 1; i < ts.length; i++) {
+    if (ts[i].string) continue;
+    if (ts[i].v === open) depth++;
+    if (ts[i].v === close && --depth === 0) return i;
   }
-  for (const reference of plan.references ?? []) writes.push({ token: { at: reference.range[0], v: 'evaluate' }, action: 'read' });
-  writes.sort((a, b) => a.token.at - b.token.at);
+  return ts.length - 1;
+}
+
+function receiverRoot(ts, index) {
+  let i = index;
+  while (i >= 0) {
+    if ([')', ']'].includes(ts[i].v) && !ts[i].string) {
+      const close = ts[i].v, open = close === ')' ? '(' : '['; let depth = 1;
+      while (--i >= 0 && depth) {
+        if (ts[i].string) continue;
+        if (ts[i].v === close) depth++;
+        if (ts[i].v === open) depth--;
+      }
+      continue;
+    }
+    if (['.', '?.'].includes(ts[i - 1]?.v)) { i -= 2; continue; }
+    return ts[i].v;
+  }
+}
+
+function splitTop(ts, separator) {
+  const parts = []; let depth = 0, start = 0;
+  for (let i = 0; i < ts.length; i++) {
+    if (ts[i].string) continue;
+    const v = ts[i].v;
+    if (!depth && v === separator) { parts.push(ts.slice(start, i)); start = i + 1; }
+    if (['(', '[', '{'].includes(v)) depth++;
+    if ([')', ']', '}'].includes(v)) depth--;
+  }
+  return [...parts, ts.slice(start)];
+}
+
+function bindsFetch(ts, depth = 0) {
+  if (depth > 32) return false;
+  const part = splitTop(ts, '=')[0];
+  while (part[0]?.v === '.') part.shift(); // Rest binding.
+  if (part.length === 1) return !part[0].string && part[0].v === 'fetch';
+  if (part[0]?.v === '[') return splitTop(part.slice(1, -1), ',').some(value => bindsFetch(value, depth + 1));
+  if (part[0]?.v === '{') return splitTop(part.slice(1, -1), ',').some(value => {
+    const property = splitTop(value, ':');
+    return bindsFetch(property.length > 1 ? property[1] : property[0], depth + 1);
+  });
+  return false;
+}
+
+function parameterScopes(ts, source) {
+  const ranges = [];
+  const bodyEnd = start => {
+    if (ts[start]?.v === '{') return closingToken(ts, start);
+    const end = argumentEnd(ts, start), candidates = [end]; let depth = 0;
+    for (let i = start; i < end; i++) {
+      if (!ts[i].string) {
+        if (['(', '[', '{'].includes(ts[i].v)) depth++;
+        if ([')', ']', '}'].includes(ts[i].v)) depth--;
+      }
+      if (!depth && i + 1 < end && /[\r\n\u2028\u2029]/.test(source.slice(ts[i].at, ts[i + 1].at))) candidates.push(i + 1);
+    }
+    // The JS parser distinguishes ASI from a multiline call, property, operator
+    // or tagged template. Keep class/private/super context by parenthesizing
+    // the candidate in the original program. Compile only, never invoke it.
+    // Choose the longest complete expression before a possible statement break.
+    for (const candidate of candidates.sort((a, b) => b - a)) {
+      const at = ts[start].at, endAt = ts[candidate]?.at ?? ts.endAt ?? source.length;
+      const program = source.slice(0, at) + '(' + source.slice(at, endAt) + '\n)\n' + source.slice(endAt);
+      try { new Function('return async () => {\n' + program + '\n}'); return candidate; } catch {}
+    }
+    return end;
+  };
+  for (let i = 0; i < ts.length; i++) {
+    if (!ts[i].string && ts[i].v === 'fetch' && ts[i + 1]?.v === '=>') ranges.push([i, bodyEnd(i + 2)]);
+    if (ts[i].string || ts[i].v !== '(') continue;
+    const end = closingToken(ts, i), arrow = ts[end + 1]?.v === '=>';
+    const fn = ts[i - 1]?.v === 'function' || ts[i - 2]?.v === 'function' || ts[i - 3]?.v === 'function' && ts[i - 2]?.v === '*';
+    if (!arrow && (!fn || ts[end + 1]?.v !== '{')) continue;
+    if (splitTop(ts.slice(i + 1, end), ',').some(part => bindsFetch(part))) ranges.push([i, bodyEnd(end + (arrow ? 2 : 1))]);
+  }
+  return ranges;
+}
+
+function writeIn(ts, source) {
+  const locals = new Set(), data = new Set(), parameters = parameterScopes(ts, source);
+  const pageRoots = new Set(['document', 'window', 'globalThis']), pageAliases = new Set();
+  for (let i = 0; i < ts.length; i++) {
+    if (['const', 'let', 'var', 'function', 'class'].includes(ts[i - 1]?.v) && !ts[i].string) {
+      locals.add(ts[i].v);
+      if (ts[i + 1]?.v === '=' && ['{', '['].includes(ts[i + 2]?.v)) data.add(ts[i].v);
+      if (ts[i + 1]?.v === '=' && ts[i + 2]?.v === 'JSON' && ts[i + 3]?.v === '.' && ts[i + 4]?.v === 'parse') data.add(ts[i].v);
+    }
+  }
+  for (let pass = 0; pass < locals.size; pass++) {
+    let added = false;
+    for (let i = 0; i < ts.length; i++) {
+      if (locals.has(ts[i].v) && ts[i + 1]?.v === '=' && data.has(ts[i + 2]?.v) && !data.has(ts[i].v)) {
+        data.add(ts[i].v); added = true;
+      }
+    }
+    if (!added) break;
+  }
+  for (let i = 0; i < ts.length; i++) {
+    const token = ts[i], v = token.v;
+    const property = ['.', '?.'].includes(ts[i - 1]?.v);
+    const computed = token.string && ts[i - 1]?.v === '[' && ts[i + 1]?.v === ']';
+    let nextIndex = i + (computed ? 2 : 1);
+    if (ts[nextIndex]?.v === '?.') nextIndex++;
+    const next = ts[nextIndex]?.v;
+    const receiver = receiverRoot(ts, i - 2);
+    if (!token.string && !property && locals.has(v) && next === '=' && !pageRoots.has(v)) {
+      const source = ts[nextIndex + 1]?.v;
+      if (pageAliases.has(source) || pageRoots.has(source) && !data.has(source)) pageAliases.add(v);
+      else pageAliases.delete(v);
+    }
+    let constructor = i;
+    while (['.', '?.'].includes(ts[constructor - 1]?.v)) constructor -= 2;
+    if (!token.string && ts[constructor - 1]?.v === 'new' && next === '(' && !locals.has(v) && !data.has(receiver)) {
+      const action = v === 'DataTransfer' || v === 'DragEvent' ? 'drag' : /Event$/.test(v) ? 'read' : undefined;
+      if (action) return { token, action };
+    }
+    const localFetch = !property && !computed && (locals.has(v) || parameters.some(([start, end]) => i >= start && i < end));
+    if (!token.string && v === 'fetch' && next === '(' && !localFetch && !data.has(receiver)) return { token, action: 'read' };
+    if (!token.string && !property && v === 'fetch' && next === '=' && !localFetch) return { token, action: 'read' };
+    if ((property || computed) && next === '(' && ambiguousMethods.has(v)) {
+      // Unknown receivers can be local classes or collection values. The
+      // engine remains the read-only boundary when this preflight cannot tell.
+      if (pageAliases.has(receiver) || pageRoots.has(receiver) && !data.has(receiver)) return { token, action: methods[v] };
+      continue;
+    }
+    if ((!property && !computed) || data.has(receiver)) continue;
+    if (next === '(' && Object.hasOwn(methods, v)) {
+      const attribute = ts[nextIndex + 1];
+      const action = v === 'setAttribute' && attribute?.string && ['value', 'checked', 'selected'].includes(attribute.v) ? setters[attribute.v] : methods[v];
+      return { token, action };
+    }
+    if (['=', '+=', '-=', '++', '--', '||=', '&&=', '??='].includes(next)) {
+      const action = Object.hasOwn(setters, v) ? setters[v] : /^on\w+$/.test(v) ? 'read' : undefined;
+      if (action) return { token, action };
+    }
+  }
+}
+
+export function evaluateWrite(code) {
+  if (typeof code !== 'string') return;
+  const escaped = pageCallbackEscape(code);
+  if (!escaped && !code.includes('evaluate')) return;
+  const writes = escaped ? [{ token: escaped, action: 'read' }]
+    : callbacks(tokens(code)).map(range => writeIn(range, code)).filter(Boolean).sort((a, b) => a.token.at - b.token.at);
   const write = writes[0];
   if (!write) return;
   const line = code.slice(0, write.token.at).split('\n').length;
   const action = EVALUATE_ACTION[write.action];
   const advice = action ? ` ${write.action === 'read' ? 'Read the controls with' : 'Use'} ${action}.` : '';
   return `Line ${line}: evaluate is read-only; ${write.token.v} cannot run there.${advice} Rejected before the engine call.`;
-}
-
-// Resolve source strings without evaluating templates, wrappers or prior cells.
-function stringArguments(node, plan, seen = new Set()) {
-  if (!node) return [];
-  const value = literalValue(node);
-  if (typeof value === 'string') return [value];
-  if (node.type !== 'Identifier') return [];
-  const binding = plan.lookup(node.name, node);
-  if (!binding || seen.has(binding)) return [];
-  const next = new Set(seen).add(binding);
-  return [...binding.values.filter(value => !value.path.length).map(value => value.node), ...binding.writes]
-    .flatMap(part => stringArguments(part, plan, next));
 }

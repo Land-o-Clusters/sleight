@@ -7,7 +7,6 @@ import { resolve, join } from 'node:path';
 import { parseRecording, loadRecording } from './recording.mjs';
 import { materialize } from './write-effect-bank.mjs';
 import { wrongFieldEffects, fieldWrites, writeFields } from '../../plugins/sleight/lib/write-effect.mjs';
-import { benchGateOpen, requireLiveBenchGate } from '../runtime-options.mjs';
 
 const fixture = JSON.parse(readFileSync(new URL('../../tests/fixtures/safari-wrong-field/safari-r1-c6.json', import.meta.url), 'utf8'));
 export function prepareRepro(source) {
@@ -66,7 +65,6 @@ export async function runSequence(calls, { call, mapper, beforeCall = () => {} }
 
 async function main(argv) {
   const live = argv.includes('--run-live');
-  if (live) requireLiveBenchGate();
   const value = flag => { const at = argv.indexOf(flag); return at < 0 ? undefined : argv[at + 1]; };
   const input = value('--recording');
   if (!input) throw Error('Expected --recording B_R1_EVENTS_JSONL');
@@ -77,7 +75,7 @@ async function main(argv) {
     return;
   }
   if (!argv.includes('--owner-away') || !argv.includes('--quiet-window') || !process.env.CLAUDE_CONFIG_DIR ||
-      !benchGateOpen()) throw Error('Live run requires --run-live --owner-away --quiet-window, an isolated CLAUDE_CONFIG_DIR and an existing SLEIGHT_BENCH_GATE_FILE');
+      !existsSync(new URL('../../../ledger/vc/night/lanes-may-test', import.meta.url))) throw Error('Live run requires owner-away, quiet-window, isolated Claude config and the test gate');
   const out = value('--out');
   if (!out || existsSync(out)) throw Error('Expected an absent --out directory');
   // This script never acquires a live lock. The authorized operator must run it inside the normal

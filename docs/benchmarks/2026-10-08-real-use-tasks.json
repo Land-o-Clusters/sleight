@@ -120,7 +120,7 @@
           "task": "safari-form",
           "run": 1,
           "passed": false,
-          "reason": "Command failed: /usr/bin/osascript <private-evidence>/real-use-tasks/bench/real-safari.applescript open com.apple.Safari http://127.0.0.1:62356/e0e21e4b/\n",
+          "reason": "Command failed: /usr/bin/osascript ~/Projects/sleight-wt/real-use-tasks/bench/real-safari.applescript open com.apple.Safari http://127.0.0.1:62356/e0e21e4b/\n",
           "cleanupError": "Browser window creation was interrupted before its ID was recorded; cleanup unconfirmed",
           "models": []
         }

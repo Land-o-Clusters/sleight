@@ -2,7 +2,6 @@
 // files and decodes nothing. The caller passes VC3's resolveCharacterStates as `resolve`, so this module has no import of
 // character.mjs.
 import { isAbsolute, join } from 'node:path';
-import { characterSizeValid } from './settings.mjs';
 
 // The host's caps: 8 columns of at most 192 px, 11 rows of at most 208 px (13.4 MiB decoded per sheet).
 export const SPRITE_LIMITS = Object.freeze({ sheet: Object.freeze({ width: 1536, height: 2288 }), cell: Object.freeze({ width: 192, height: 208 }) });
@@ -11,11 +10,10 @@ const FAR = 100;
 
 /** Build once after host spawn, using the host's nonce and shared increasing sequence counter. Throws when the host would
  * refuse the character's size, so the wizard and the doctor can say so. */
-export function characterFrame(character, { nonce, seq, resolve, perch = true, size, stageAttention }) {
+export function characterFrame(character, { nonce, seq, resolve, perch = true }) {
   const { manifest: m, folder, sheets } = character;
   if (!/^[0-9a-f]{64}$/.test(nonce) || !Number.isSafeInteger(seq) || seq < 0 || !isAbsolute(folder)) throw Error('Invalid character frame identity');
   if (typeof resolve !== 'function') throw Error('characterFrame needs VC3 resolveCharacterStates as resolve');
-  if (size !== undefined && !characterSizeValid(size) || stageAttention !== undefined && typeof stageAttention !== 'boolean') throw Error('Invalid character size options');
   const { sheet: capSheet, cell: capCell } = SPRITE_LIMITS;
   if (m.frame.w > capCell.width || m.frame.h > capCell.height) throw Error(`Character cells over ${capCell.width}x${capCell.height} are too large to draw`);
   for (const s of Object.values(sheets)) {
@@ -51,8 +49,7 @@ export function characterFrame(character, { nonce, seq, resolve, perch = true, s
     }
   }
   const frame = { hand: 'character', nonce, seq, id: m.id, sheet: join(folder, m.sheet), extra: m.extra ? join(folder, m.extra) : null,
-    cell: [m.frame.w, m.frame.h], table,
-    ...size !== undefined ? { size } : {}, ...stageAttention === false ? { stageAttention } : {} };
+    cell: [m.frame.w, m.frame.h], table };
   // Perch mode (A2): the seat point and the complete perch table, the third sheet, and the lines block. The host uses them
   // only with perch and lines on; it draws lines and does nothing else with them.
   // perch: false (the setting is off) leaves the perch sheet and table out, so the host never decodes or checks them.
@@ -63,16 +60,6 @@ export function characterFrame(character, { nonce, seq, resolve, perch = true, s
     frame.perchSheet = m.perch?.sheet ? join(folder, m.perch.sheet) : null;
   }
   if (m.lines) frame.lines = m.lines;
-  if (m.stage && character.stage && perch) {
-    const fallbackWire = s => ({ sheet: key(s), row: s.row, frames: s.columns, ms: s.ms, loop: s.loop, flip: s.flip === 'h',
-      hotspot: [s.hotspot.x, s.hotspot.y], size: [sheets[key(s)].width, sheets[key(s)].height], scale: m.scale });
-    frame.stage = { ...character.stageKey ? { cache: character.stageKey } : {}, table: Object.fromEntries(Object.entries(character.stage.states).map(([name, s]) => [name, {
-      fallback: s.fallback.state, art: fallbackWire(s.fallback),
-      ...s.file ? { file: join(character.stageFolder ?? folder, s.file), ...character.stagePins ? { sha256: character.stagePins[s.file] } : {}, cell: [s.cell.w, s.cell.h], anchor: [s.anchor.x, s.anchor.y],
-        hotspot: [s.hotspot.x, s.hotspot.y], frames: s.frames, ms: s.ms, loop: s.loop, flip: s.flip,
-        filter: s.filter, next: s.next } : {},
-    }])) };
-  }
   if (Buffer.byteLength(JSON.stringify(frame)) > 32768) throw Error('Character frame exceeds 32 KiB');
   return frame;
 }

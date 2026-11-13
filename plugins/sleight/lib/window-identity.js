@@ -6,23 +6,6 @@ const windowEpoch = ObjC.unwrap($.NSUUID.UUID.UUIDString);
 const windowReferences = [];
 const chromeReferences = [];
 const chromeReferenceBuckets = new Map();
-// JXA bridges BOOL as either a boolean or 0/1. Other shapes cannot prove liveness.
-function identityBool(value, name) {
-  let scalar = value;
-  if (typeof scalar !== 'boolean' && typeof scalar !== 'number') {
-    try { scalar = ObjC.unwrap(value); } catch { throw new Error(name + ' invalid'); }
-  }
-  if (scalar === false || scalar === 0) return false;
-  if (scalar === true || scalar === 1) return true;
-  throw new Error(name + ' invalid');
-}
-function identityNil(value, name) {
-  if (value === null || value === undefined) return true;
-  try {
-    const nil = value.isNil;
-    return nil === undefined ? false : identityBool(typeof nil === 'function' ? value.isNil() : nil, name + ' isNil');
-  } catch { throw new Error(name + ' isNil invalid'); }
-}
 // References belong to this helper epoch, never to an engine element number. Only browser chrome metadata is read.
 function tabCertificate(app, window, readAttr, scalar) {
   const started = Date.now();
@@ -186,19 +169,16 @@ function run(argv) {
       const current = () => {
         unknownReason = 'process-changed';
         const running = $.NSRunningApplication.runningApplicationWithProcessIdentifier(pid);
-        unknownReason = 'process-nil';
-        if (identityNil(running, 'Window owner')) return { status: 'ok', appId: request.appId, pid, processStart, running: false };
-        unknownReason = 'process-state';
-        const terminated = identityBool(running.terminated, 'Window owner terminated');
-        unknownReason = 'process-changed';
+        if (!running || running.isNil()) return { status: 'ok', appId: request.appId, pid, processStart, running: false };
         const actual = { appId: ObjC.unwrap(running.bundleIdentifier), pid: Number(running.processIdentifier),
-          processStart: Number(running.launchDate.timeIntervalSince1970), running: !terminated };
+          processStart: Number(running.launchDate.timeIntervalSince1970), running: running.terminated === false };
         // Preserve concrete conflicts even on a terminated replacement. Absence
         // of the leased pid is distinct from reusing it for another launch.
         if (actual.pid !== pid || actual.appId !== request.appId || actual.processStart !== processStart) {
           return { status: 'unknown', unknownReason, ...actual };
         }
-        if (terminated) return { status: 'ok', ...actual };
+        if (running.terminated === true) return { status: 'ok', ...actual };
+        if (running.terminated !== false) throw new Error('Unknown process state');
       };
       const before = current();
       if (before) return JSON.stringify(before);
@@ -268,7 +248,7 @@ function run(argv) {
         const cg = ObjC.castRefToObject($.CGWindowListCopyWindowInfo(
           $.kCGWindowListOptionAll | $.kCGWindowListExcludeDesktopElements, 0));
         unknownReason = 'cg-invalid';
-        if (identityNil(cg, 'Window server list')) throw new Error('Missing CG list');
+        if (!cg || cg.isNil?.()) throw new Error('Missing CG list');
         const total = Number(cg.count);
         if (!Number.isSafeInteger(total) || total < 0 || total > 10000) throw new Error('CG list bound');
         // Missing owners do not match. An owned row with a missing layer stays
@@ -305,13 +285,6 @@ function run(argv) {
     const apps = $.NSRunningApplication.runningApplicationsWithBundleIdentifier(request.appId);
     if (Number(apps.count) !== 1) throw new Error('Expected one running app');
     const running = apps.objectAtIndex(0), pid = Number(running.processIdentifier);
-    const processStart = Number(running.launchDate.timeIntervalSince1970);
-    if (!Number.isSafeInteger(pid) || pid <= 0 || !Number.isFinite(processStart) || processStart <= 0) throw new Error('Process identity unavailable');
-    const baseline = request.nativeIdentity;
-    if (baseline && (baseline.pid !== undefined && baseline.pid !== pid ||
-        baseline.processStart !== undefined && baseline.processStart !== processStart)) {
-      return JSON.stringify({ status: 'mismatch', error: 'Window owner process changed' });
-    }
     if (request.followTab && (!request.tabCertificate || request.nativeIdentity?.epoch !== windowEpoch ||
         request.nativeIdentity?.pid !== pid || request.nativeIdentity?.processStart !== Number(running.launchDate.timeIntervalSince1970) ||
         !windowReferences[request.nativeIdentity?.window - 1])) throw new Error('Tab window baseline unavailable');
@@ -327,12 +300,6 @@ function run(argv) {
     const hidIdleSeconds = () => {
       try { return Number($.CGEventSourceSecondsSinceLastEventType(1, 0xFFFFFFFF)); } catch { return null; }
     };
-    // macOS 27 omits AXDocument. A readable conflict still excludes the window;
-    // an absent document needs the independent server number proof below.
-    const documentMatches = window => {
-      const document = scalar(attr(window, 'AXDocument', true));
-      return document === null || document === request.url;
-    };
     const windows = attr(app, 'AXWindows');
     let matches = [];
     if (Number(windows.count) > 64) throw new Error('Too many windows');
@@ -342,70 +309,52 @@ function run(argv) {
       // (late-alert probe, 2026-10-17: 5 of 5 baselines empty). A window without a title matches no header.
       const title = scalar(attr(window, 'AXTitle', true));
       if (request.followTab ? $.CFEqual(window, windowReferences[request.nativeIdentity.window - 1])
-        : title !== null && title === request.title && documentMatches(window)) matches.push(window);
+        : title !== null && title === request.title && scalar(attr(window, 'AXDocument', true)) === request.url) matches.push(window);
     }
-    // Before an explicit number narrows them: a caller with no number for the window needs exactly one.
+    // Before the number or focus narrows them: a caller with no number for the window needs exactly one.
     let headerMatches = matches.length;
     const focused = attr(app, 'AXFocusedWindow');
     let cg;
-    const windowNumbers = new Map();
     const number = window => {
-      if (windowNumbers.has(window)) return windowNumbers.get(window);
-      if (!cg) {
-        const list = ObjC.castRefToObject($.CGWindowListCopyWindowInfo($.kCGWindowListOptionAll | $.kCGWindowListExcludeDesktopElements, 0));
-        if (identityNil(list, 'Window server list')) throw new Error('Window server list unavailable');
-        const count = Number(list.count);
-        if (!Number.isSafeInteger(count) || count < 0 || count > 10000) throw new Error('Window server list count invalid');
-        // Foundation filters before any row crosses JXA. Keep all Spaces and
-        // minimized rows: an off-screen duplicate must still prevent a proof.
-        const own = list.filteredArrayUsingPredicate($.NSPredicate.predicateWithFormatArgumentArray(
-          'kCGWindowOwnerPID == %@ AND (kCGWindowLayer == nil OR kCGWindowLayer == 0)', [pid]));
-        if (identityNil(own, 'Window server candidates')) throw new Error('Window server candidates unavailable');
-        const n = Number(own.count);
-        if (!Number.isSafeInteger(n) || n < 0 || n > count) throw new Error('Window server candidate count invalid');
-        cg = [];
-        for (let i = 0; i < n; i++) {
-          const info = ObjC.deepUnwrap(own.objectAtIndex(i));
-          if (info.kCGWindowOwnerPID !== pid || info.kCGWindowLayer !== 0) throw new Error('Window server owner or layer invalid');
-          cg.push(info);
-        }
-      }
-      const position = axPair(attr(window, 'AXPosition'), 1), size = axPair(attr(window, 'AXSize'), 2);
-      if (!position || !size) return null;
-      const bounds = [...position, ...size], title = scalar(attr(window, 'AXTitle', true));
-      if (!bounds.every(Number.isFinite) || size.some(n => n <= 0) || typeof title !== 'string') return null;
-      const candidates = cg.filter(info => info.kCGWindowLayer === 0 && info.kCGWindowName === title &&
-        ['X', 'Y', 'Width', 'Height'].every((key, i) => Number.isFinite(info.kCGWindowBounds?.[key]) &&
-          Math.abs(info.kCGWindowBounds[key] - bounds[i]) < 0.5));
-      const id = candidates.length === 1 ? candidates[0].kCGWindowNumber : null;
-      if (!Number.isSafeInteger(id) || id <= 0) return null;
       const direct = scalar(attr(window, 'AXWindowNumber', true));
-      if (direct !== null && (!Number.isSafeInteger(direct) || direct <= 0)) throw new Error('AXWindowNumber invalid');
-      if (direct !== null && direct !== id) throw new Error('AXWindowNumber differs from Window server');
-      windowNumbers.set(window, id);
-      return id;
+      if (Number.isSafeInteger(direct) && direct > 0) return direct;
+      try {
+        if (!cg) {
+          const list = ObjC.castRefToObject($.CGWindowListCopyWindowInfo($.kCGWindowListOptionAll | $.kCGWindowListExcludeDesktopElements, 0));
+          cg = Array.from({ length: Number(list.count) }, (_, i) => ObjC.deepUnwrap(list.objectAtIndex(i)));
+        }
+        const position = axPair(attr(window, 'AXPosition'), 1), size = axPair(attr(window, 'AXSize'), 2);
+        if (!position || !size) return null;
+        const bounds = [...position, ...size];
+        if (!bounds.every(Number.isFinite)) return null;
+        const matches = cg.filter(info => Number(info.kCGWindowOwnerPID) === pid && info.kCGWindowLayer === 0 &&
+          ['X', 'Y', 'Width', 'Height'].every((key, i) => Math.abs(info.kCGWindowBounds?.[key] - bounds[i]) < 0.5));
+        return matches.length === 1 ? matches[0].kCGWindowNumber : null;
+      } catch { return null; }
     };
     const requestedNumber = request.windowNumber ?? request.nativeIdentity?.windowNumber;
     if (requestedNumber !== undefined && requestedNumber !== null) {
       const numbers = matches.map(number);
-      if (numbers.some(value => !Number.isSafeInteger(value) || value <= 0)) throw new Error('Window server identity unavailable');
       matches = matches.filter((window, i) => numbers[i] === requestedNumber);
       if (!matches.length && numbers.length && numbers.every(value => Number.isSafeInteger(value) && value > 0)) {
         return JSON.stringify({ status: 'mismatch', error: 'Known window number disappeared' });
       }
     }
+    else if (matches.length > 1 && !request.allowUnfocused) {
+      const focusedNumber = number(focused);
+      if (Number.isSafeInteger(focusedNumber) && focusedNumber > 0) matches = matches.filter(window => number(window) === focusedNumber);
+    }
     if (matches.length !== 1) return JSON.stringify({ status: 'ok', matches: matches.length, headerMatches,
       appId: request.appId, title: request.title, url: request.url, epoch: windowEpoch, window: 0,
       pid, processStart: Number(running.launchDate.timeIntervalSince1970), hidIdleSeconds: hidIdleSeconds() });
-    const window = matches[0], windowNumber = number(window);
-    if (!Number.isSafeInteger(windowNumber) || windowNumber <= 0) throw new Error('Window server identity unavailable');
+    const window = matches[0];
     if (request.followTab) {
       request.title = scalar(attr(window, 'AXTitle'));
       request.url = scalar(attr(window, 'AXDocument', true));
       headerMatches = 0;
       for (let i = 0; i < Number(windows.count); i++) {
         const candidate = windows.objectAtIndex(i);
-        if (scalar(attr(candidate, 'AXTitle', true)) === request.title && documentMatches(candidate)) headerMatches++;
+        if (scalar(attr(candidate, 'AXTitle', true)) === request.title && scalar(attr(candidate, 'AXDocument', true)) === request.url) headerMatches++;
       }
     }
     // Only read-only discovery may read an unfocused window. Input admission still requires focus.
@@ -450,19 +399,11 @@ function run(argv) {
     }
     const chrome = request.tabCertificate ? tabCertificate(app, window, attr, scalar) : undefined;
     if (request.tabCertificate && !$.CFEqual(window, attr(app, 'AXFocusedWindow'))) throw new Error('Window changed during certificate');
-    // Recheck the owner after AX/CG reads so a launch during the sample cannot
-    // certify the preceding process with the replacement's start time.
-    const windowSubrole = scalar(attr(window, 'AXSubrole', true)) ?? null;
-    const current = $.NSRunningApplication.runningApplicationWithProcessIdentifier(pid);
-    if (identityNil(current, 'Window owner') || identityBool(current.terminated, 'Window owner terminated') ||
-        ObjC.unwrap(current.bundleIdentifier) !== request.appId || Number(current.launchDate.timeIntervalSince1970) !== processStart) {
-      return JSON.stringify({ status: 'mismatch', error: 'Window owner process changed during inspection' });
-    }
     return JSON.stringify({ status: 'ok', matches: 1, headerMatches, appId: request.appId, title: request.title, ...(chrome ? { chrome } : {}),
-      url: request.url, epoch: windowEpoch, window: index + 1, windowNumber, pid,
+      url: request.url, epoch: windowEpoch, window: index + 1, windowNumber: number(window), pid,
       // The parent lease takes only a standard window (SLEIGHT_PARENT_LEASE), read before HID idle is sampled.
-      windowSubrole,
-      processStart, hidIdleSeconds: hidIdleSeconds(), ...(focus ? { focus } : {}) });
+      windowSubrole: scalar(attr(window, 'AXSubrole', true)) ?? null,
+      processStart: Number(running.launchDate.timeIntervalSince1970), hidIdleSeconds: hidIdleSeconds(), ...(focus ? { focus } : {}) });
   } catch (error) { return JSON.stringify(closeCount ? { status: 'unknown', unknownReason }
     : { status: 'unknown', error: String(error.message || error) }); }
 }

@@ -1,4 +1,3 @@
-import { testChromiumExecutable, launchTestChromium } from './fixtures/chromium-isolated.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
@@ -12,9 +11,11 @@ const skip = process.env.SLEIGHT_LIVE_DOM_TEST !== '1' && 'requires the owned he
 test('a hidden frame with held animation callbacks uses the host timer fallback', { skip, timeout: 15000 }, async t => {
   const spec = JSON.parse(readFileSync(new URL('../plugins/sleight/vendor/playwright-core/browsers.json', import.meta.url)))
     .browsers.find(b => b.name === 'chromium-headless-shell');
-  const executablePath = testChromiumExecutable({ revision: spec.revision });
+  const platform = process.platform === 'darwin' ? 'mac-' + process.arch : 'linux64';
+  const executablePath = join(homedir(), 'Library/Caches/ms-playwright', 'chromium_headless_shell-' + spec.revision,
+    'chrome-headless-shell-' + platform, 'chrome-headless-shell');
   const runtime = loadPlaywrightCore({ turbo: true });
-  const browser = await launchTestChromium(runtime.inprocess.playwright.chromium, { headless: true, executablePath });
+  const browser = await runtime.inprocess.playwright.chromium.launch({ headless: true, executablePath });
   t.after(() => browser.close());
   const page = await browser.newPage();
   await page.setContent('<iframe hidden srcdoc="<p>Hidden page</p>"></iframe>');

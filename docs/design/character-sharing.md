@@ -180,7 +180,7 @@ The launcher retains its person gate. Import shows the v1 size, license and gene
 asks for confirmation. `--yes` is the existing explicit CLI option. Import leaves the sprite hidden.
 Export needs a stated license. It validates and decodes the snapshot before creating a new 0600 file.
 It never overwrites an existing file. Import copies data into the private character bank through the existing atomic
-installer. Existing IDs and all 13 built-in IDs are refused. Packs with license `unknown` are accepted locally but cannot be shared.
+installer. Existing IDs and all six built-in IDs are refused. Packs with license `unknown` are accepted locally but cannot be shared.
 
 `.sleightchar` v1 is an uncompressed POSIX ustar archive. Use flat, allowlisted filenames directly at its
 root, with no enclosing folder. The reader uses only Node built-ins. It accepts at most 8 files with names up

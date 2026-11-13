@@ -46,14 +46,12 @@ End is best effort when the relay closes.
 | `point` | Optional `[x,y]` in global screen points, top-left origin of the main display |
 | `path` | Optional drag path, at most 64 `[x,y]` points, retaining the endpoints |
 | `rect` | Optional target element rectangle `[x,y,width,height]` in screen points |
-| `window` | Optional object: `id`, `pid`, `app`, `bundle`, `rect`, `exposure`, Windows `appUserModelId` |
+| `window` | Optional object: `id`, `pid`, `app`, `bundle`, `rect`, `exposure` |
 | `display` | Optional object: `id`, `scale` |
 | `count` | Optional character beats, capped at 8 for `type`, or scroll steps |
 | `role` | Optional known AX or ARIA role |
 | `reason` | Required for `skipped`; absent for other phases |
 | `label` | Optional element label, controlled by the user's setting |
-| `retry` | Optional boolean: the same kind and target were planned in this window within 10 seconds |
-| `transfer` | Optional `take` or `give` on a key action, from an exact Command-C, Command-X or Command-V chord |
 | `say` | Optional assistant narration, at most 90 characters; see Narration |
 
 Window exposure is `exposed`, `covered`, `offscreen`, `other-space` or `minimized`. Window rectangles use the same units as
@@ -91,7 +89,6 @@ Browser point steps retain the hand's existing exclusion and can report `skipped
 | --- | --- |
 | `state` | `thinking`, `waiting`, `error`, `done`, `handback`, `idle` or `paused` |
 | `app` | Optional app name |
-| `detail` | Optional `approval`, `payment`, `page` or `handoff`, describing a known pending state |
 | `say` | Optional assistant narration, at most 90 characters; see Narration |
 | `call` | Optional opaque call identifier |
 
@@ -111,43 +108,6 @@ continuations. A call with no further checkpoint can finish. While paused, later
 A person's resume emits `idle` and never replays dropped actions. Fresh native calls wait for an older paused call to return,
 since the engine's approval tokens have no parent call id. The built-in host receives the same paused state. This stream
 remains output-only: renderer messages cannot pause or resume sleight.
-
-`detail: approval` marks a pending consent request. `detail: payment` marks a pending turbo payment card.
-`detail: page` marks a turbo wait or navigation still pending after 2 seconds. A finished wait clears that detail.
-These enums contain no amounts, keys or page text. Readers that ignore them keep parsing v1 records.
-A retry mark describes repeated planning, independently of the earlier action's outcome.
-
-The built-in sprite shows a box when a `give` follows a `take` in another window within 30 seconds.
-The prop contains no clipboard data. Its placement follows the stage exclusion rules.
-
-Sprite mode also counts completed action records per window in this turn, up to 32 windows and 999 actions per chip.
-Moves and scrolls do not count. A completed native record confirms the call result, with the per-action limits described above.
-A 22 pt chip sits above the content, between the 80 pt control clamps. It hides if that space intersects a target,
-the person's window or a window above the target. The chip shows a count, and its tooltip includes the time. Neither
-contains window titles or labels.
-Tooltip availability with recording off remains unverified because the panel passes mouse events through.
-It expires 10 minutes after turn end and clears when the session ends or the next turn changes a window.
-With `record_runs` on, a hardware click opens the local replay in the default browser at that window's first recorded event.
-The browser comes forward because the person clicked the chip.
-With recording off, the chip passes clicks through and has no hand cursor. Chips use hidden capture mode. Capture holds,
-lock and display sleep hide chips without clearing their records. After the hold ends, unlock or wake, the host refreshes
-them through the same placement checks. Hidden records still expire 10 minutes after turn end.
-
-## Stage qualification
-
-The harness for stage prints its steps, a window list and estimated duration with
-`node bench/hand/stage-cost.mjs --dry-run`. Live collection requires `--owner-away --out DIR`; add `--character DIR` to
-measure supplied stage art. A live run follows the project's owner-away and quiet-window rules.
-
-Receipts distinguish scripted renderer probes from runtime-selected motion. Attention ages of 0 and 8 seconds are
-scripted clock labels. A size downgrade or a foreign window on the normal layer invalidates its phase while later phases
-continue. Missing observations stay unmeasured. Badge dragging, consent and hint delivery need separate observations.
-
-Before qualification, collect three runs at each size and report CPU, WindowServer, memory, decode, startup and frame
-pacing, the source art hash, Mac model and macOS build. Include both capture seats' per-source pixel counts and the achieved
-capture rate. The harness measures install counts, leg bounds and loader warnings. Its live costs, stage capture exclusion
-and 120 Hz delivery remain unmeasured. The synthetic Codex v1 import emits one partial-character warning, which the
-strict zero-extra-warnings gate refuses. The proposed CPU and RSS limits await the owner's stage-study decision.
 
 ## Narration
 
@@ -219,62 +179,6 @@ disconnect, tolerate sequence gaps and merge simultaneous relay sessions. A rend
 
 Renderer windows must be click-through and should set `sharingType = .none` to stay out of captures. sleight has no v1 renderer
 PID exclusion list. Every other window can count as cover for a drag or hover, including a renderer that intercepts input.
-
-## Windows
-
-The stream is off by default. A private Windows `hand.json` with `"stream":true` enables it independently of drawing.
-`SLEIGHT_HAND=0` suppresses both outputs. Native owner, DACL and reparse checks protect file reads.
-Windows compilation, ACL enforcement and live delivery still need VM checks.
-
-The version stays `sleight.cursor/1`. Windows adds `window.appUserModelId`. Named pipes use
-`\\.\pipe\sleight-cursor-<current-user-sid>-<name>`, with 1 to 32 ASCII letters, digits, `_` or `-` in the name.
-Discovery reads values under `HKCU\Software\sleight\cursor\renderers`, never the shared pipe namespace.
-Each REG_SZ value is JSON with `name`, `sid`, `pipe`, `pid` and a random 32-hex `token` for that listener incarnation.
-The registry key is owned by the current user, with inheritance disabled and one full-control ACE for that SID.
-At most 16 values are considered per scan. A listener removes only its own matching token on exit.
-A failed pipe verification prunes only the matching registry token, so stale values can make room for newer listeners.
-The registry DACL doesn't grant access to SYSTEM or Administrators on this key.
-
-The pipe descriptor is `O:<sid>D:P(A;;GA;;;<sid>)`: current-user owner, protected DACL, one allow ACE for that user.
-As with Unix mode `0600`, access belongs to the current user, and the SID in a name does not prove ownership. The writer checks the registry
-token, pipe owner, DACL and server PID before sending, then repeats the check after connection. A failed connection
-check drops that peer. Node does not expose the connected pipe handle. The native check opens the pipe by name.
-The sealed DACL and PID check protect against other users. Processes running as the same user are outside this boundary,
-as with Unix mode `0600`.
-
-Run listeners from a normal, unelevated shell. An elevated listener whose pipe owner is Administrators is refused,
-even when its DACL grants access only to the current user. sleight requires the current user's SID as owner.
-The kit seals the pipe before publishing it and discards pre-publication connections. Before sealing, Node's default DACL
-may admit connections that occupy slots, and the listener discards their bytes without parsing them.
-Whether later libuv pipe instances retain the sealed DACL needs a Windows check.
-
-The Windows sink uses the platform interface in `plugins/sleight/lib/platform/`. It loads the transport only during
-Windows discovery. One persistent PowerShell 5.1 worker runs SHA-256-pinned `windows-security.ps1` bytes through
-`-EncodedCommand`, takes JSONL requests on stdin and compiles its Add-Type helper once before announcing readiness.
-No execution-policy flag is passed. A policy that blocks Add-Type or PowerShell causes startup to fail closed.
-The worker uses the packages included with Windows. Startup has a separate 15-second budget, followed by a 4-second
-deadline per request. Worker failures, including exits after readiness, back off for 1 second, 5 seconds and 30 seconds, then stop after the fourth failure
-and report the reason. A successful security request resets the failure count. Restarting the session permits another attempt.
-Discovery stays asynchronous, with the same 2-second interval and 256-event backpressure limit. A scan has one 4-second
-deadline across identity, registry reads and verification. Only new or changed listener incarnations need a discovery
-verification. Scans skip verification for connected peers. The sink checks a connection before sending events.
-A failed or timed-out scan retains connected peers. Windows qualification must measure startup time and check native ACL enforcement.
-
-Windows `point`, `path`, `rect` and `window.rect` use physical desktop pixels, with `(0,0)` at the primary monitor's
-top-left. Producers must use per-monitor-v2 awareness to supply physical coordinates without DPI virtualization.
-Monitors to its left or above have negative coordinates. `display.scale` is that monitor's DPI divided by 96.
-A per-monitor-DPI-aware Win32 renderer places the point directly in physical pixels, without multiplying it by scale.
-A renderer drawing in monitor-local DIPs obtains the monitor's physical origin `(ox,oy)` from the OS, then maps
-`(x,y)` to `((x-ox)/scale,(y-oy)/scale)`. Divide rectangle sizes by scale too. Split paths at monitor boundaries and
-use each monitor's scale. Never divide the global origin by scale. The sample scales its ring size, not its point. Built-in Windows ring art, stroke widths, chip text and sprite cells
-are measured in DIPs. The built-in host converts physical frame geometry around the target monitor origin before
-planning and applies the target HWND DPI when drawing. A window spanning monitors uses its HWND DPI; a monitor or DPI
-change clears the old plan before the next frame binds. Geometry must keep its physical desktop location at every scale.
-
-`window.app` is the executable path's basename, such as `notepad.exe`. `window.appUserModelId` contains the AUMID when
-known. Windows omits `bundle`. Executable paths and window titles remain private. Windows overlays request
-`SetWindowDisplayAffinity(WDA_EXCLUDEFROMCAPTURE)` and stay click-through and nonactivating. That request needs a
-live capture check on the Windows version and capture API in use.
 
 ## Privacy
 

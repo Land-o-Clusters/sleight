@@ -1,4 +1,3 @@
-import { testChromiumExecutable, launchTestChromium } from './fixtures/chromium-isolated.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createServer } from 'node:http';
@@ -9,7 +8,9 @@ import { chromium } from '../plugins/sleight/vendor/playwright-core/index.mjs';
 
 const pin = JSON.parse(readFileSync(new URL('../plugins/sleight/vendor/playwright-core/browsers.json', import.meta.url)))
   .browsers.find(browser => browser.name === 'chromium-headless-shell');
-const executablePath = testChromiumExecutable({ revision: pin.revision });
+const platform = process.platform === 'darwin' ? 'mac-' + process.arch : 'linux64';
+const executablePath = join(homedir(), 'Library/Caches/ms-playwright', 'chromium_headless_shell-' + pin.revision,
+  'chrome-headless-shell-' + platform, 'chrome-headless-shell');
 const skip = process.env.SLEIGHT_LIVE_DOM_TEST !== '1' ? 'modifier timing belongs to sleight-arch host runner'
   : !existsSync(executablePath) ? 'pinned Chromium headless shell is unavailable' : false;
 
@@ -36,7 +37,7 @@ test('CR2 measures 20 ControlOrMeta keydown-to-click intervals on a local page',
     t.diagnostic('cleanup: timing browser closed; local server and sockets closed; no persistent profile');
   });
   await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
-  browser = await launchTestChromium(chromium, { headless: true, executablePath });
+  browser = await chromium.launch({ headless: true, executablePath });
   const page = await browser.newPage();
   await page.goto('http://127.0.0.1:' + server.address().port);
   for (let i = 0; i < 20; i++) await page.getByRole('button', { name: 'Measure' }).click({ modifiers: ['ControlOrMeta'], timeout: 1000 });

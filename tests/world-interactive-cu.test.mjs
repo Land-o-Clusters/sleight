@@ -1,4 +1,3 @@
-import { assertChildStatus } from './fixtures/child-status.mjs';
 // Constructed macOS paths are synthetic validation and redaction data, never allocation roots.
 const MAC_TMP = ['', 'private', 'tmp'].join('/');
 import test from 'node:test';
@@ -10,16 +9,7 @@ import { test as macTest } from './macos-only.mjs';
 import { createHash } from 'node:crypto';
 import { spawnSync } from 'node:child_process';
 import { removeTemp } from '../scripts/temp-leftovers.mjs';
-import { interactivePlan, prepareInteractive, SessionTranscript, runInteractive, terminalGate, interactiveAgentSetup, launchPty, admitInteractive } from '../bench/world/arms/claude-cu/interactive.mjs';
-
-test('a parent-owned attempt never waits on a hold inside task timing', async () => {
-  await admitInteractive({ parentLock: true }, { wait: () => assert.fail('parent attempt waited'),
-    lock: () => assert.fail('parent attempt acquired another lock'), exists: () => true, stat: () => ({ isDirectory: () => true }) });
-  await assert.rejects(admitInteractive({ parentLock: true }, { wait: () => assert.fail('parent attempt waited'), exists: () => false }), /parent benchmark lock/);
-  const calls = [], release = () => {};
-  assert.equal(await admitInteractive({}, { wait: async () => calls.push('wait'), lock: async () => { calls.push('lock'); return release; } }), release);
-  assert.deepEqual(calls, ['wait', 'lock']);
-});
+import { interactivePlan, prepareInteractive, SessionTranscript, runInteractive, terminalGate, interactiveAgentSetup, launchPty } from '../bench/world/arms/claude-cu/interactive.mjs';
 
 const id = '550e8400-e29b-41d4-a716-446655440000';
 const plan = () => interactivePlan({ armDir: `${MAC_TMP}/cu-fixture`, sessionId: id, prompt: 'Same task\nReturn RESULT ok.', model: 'claude-haiku-5-5', effort: 'high' });
@@ -30,8 +20,8 @@ for (const mode of ['cancel', 'natural']) macTest(`PTY bridge collects descendan
   const dir = mkdtempSync(join(tmpdir(), 'sleight-cu-tree-')); t.after(() => removeTemp(dir));
   const result = spawnSync('/usr/bin/python3', [new URL('./fixtures/cu-pty-tree.py', import.meta.url).pathname,
     mode, join(dir, 'heartbeat'), new URL('../bench/world/arms/claude-cu/pty-bridge.py', import.meta.url).pathname],
-  { encoding: 'utf8', timeout: 20000, killSignal: 'SIGKILL' });
-  assertChildStatus(result, 0, result.stderr);
+  { encoding: 'utf8', timeout: 20000 });
+  assert.equal(result.status, 0, result.stderr);
 });
 
 test('interactive plan preserves task, model and effort and loads only the isolated arm', () => {
@@ -357,10 +347,6 @@ process.stdout.write('\\n❯ \\n');
   assert.equal(result.modelUsage['claude-haiku-5-5'].outputTokens, 5);
   assert.equal(result.total_cost_usd, 0.0000025);
   assert.equal(result.groupClean, true);
-  assert.equal(result.stamps.loadStart.length, 3);
-  assert.equal(result.stamps.loadEnd.length, 3);
-  assert.ok(result.stamps.loadCores > 0);
-  assert.ok(result.stamps.spawnAt <= result.stamps.exitAt);
 });
 
 for (const dialog of ['', 'Allow for this session', 'Trust this folder', 'Sign in to Claude']) {

@@ -125,13 +125,13 @@ export function wrongFieldEffects(code, before, after, { flagged = new Set(), fa
       if (flagged.size > 64) flagged.delete(flagged.values().next().value);
     }
     const isError = was.exposed && changed;
-    const risk = payment(actual) ? /* lean notice */ 'Payment field received the text. ' : sensitive(actual) ? /* lean notice */ 'Credential field received the text. ' : '';
+    const risk = payment(actual) ? /* notice */ 'Payment field received the text. ' : sensitive(actual) ? /* notice */ 'Credential field received the text. ' : '';
     const status = isError
-      ? /* lean notice */ `clear it before continuing. Requested write not done: ${describe(target)} kept its value.`
-      : /* lean notice */ `check ${actual.number} and ${target.number} before continuing.`;
-    const ran = failed ? '' : /* lean notice */ 'Other actions in this call ran; ';
+      ? /* notice */ `clear it before continuing. Requested write not done: ${describe(target)} kept its value.`
+      : /* notice */ `check ${actual.number} and ${target.number} before continuing.`;
+    const ran = failed ? '' : /* notice */ 'Other actions in this call ran; ';
     effects.push({ method: write.method, index: write.index, requested: write.target.number, received: actual.number, isError,
-      notice: /* lean notice */ `sleight: ${risk}The text is now in ${describe(actual)}; ${status} ${ran}sleight made no repair.` });
+      notice: /* notice */ `sleight: ${risk}The text is now in ${describe(actual)}; ${status} ${ran}sleight made no repair.` });
   }
   return effects.sort((a, b) => Number(/^(?:sleight: )(?:Payment|Credential)/.test(b.notice)) - Number(/^(?:sleight: )(?:Payment|Credential)/.test(a.notice)));
 }

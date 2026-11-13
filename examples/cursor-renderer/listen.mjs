@@ -46,14 +46,14 @@ export function parseEvent(line, warn = () => {}) {
   for (const key of ['index', 'count']) if (e[key] !== undefined && !id(e[key])) return;
   if (e.window !== undefined && (!object(e.window) ||
     ['id', 'pid'].some(k => e.window[k] !== undefined && !id(e.window[k])) ||
-    ['app', 'bundle', 'appUserModelId'].some(k => e.window[k] !== undefined && typeof e.window[k] !== 'string') ||
+    ['app', 'bundle'].some(k => e.window[k] !== undefined && typeof e.window[k] !== 'string') ||
     (e.window.rect !== undefined && !rect(e.window.rect)) ||
     (e.window.exposure !== undefined && !exposures.has(e.window.exposure)))) return;
   if (e.display !== undefined && (!object(e.display) ||
     (e.display.id !== undefined && !id(e.display.id)) ||
     (e.display.scale !== undefined && (!Number.isFinite(e.display.scale) || e.display.scale <= 0)))) return;
   const result = pick(e, fields);
-  if (e.window) result.window = pick(e.window, ['id', 'pid', 'app', 'bundle', 'appUserModelId', 'rect', 'exposure']);
+  if (e.window) result.window = pick(e.window, ['id', 'pid', 'app', 'bundle', 'rect', 'exposure']);
   if (e.display) result.display = pick(e.display, ['id', 'scale']);
   return result;
 }
@@ -82,21 +82,16 @@ async function recoverSocket(path) {
 }
 
 export async function createCursorListener({ dir = defaultDirectory(), name = 'reference', onEvent = () => {}, onRemove = () => {},
-  onWarning = message => console.error(message), platform = process.platform, windows, net: network = net } = {}) {
+  onWarning = message => console.error(message) } = {}) {
   if (!/^[A-Za-z0-9_-]{1,32}$/.test(name)) throw new Error('Invalid renderer name (1..32 letters, digits, _ or -)');
-  let path, registration, ready = platform !== 'win32';
-  if (platform === 'win32') {
-    windows ??= (await import('../../plugins/sleight/lib/hand/windows-transport.mjs')).createWindowsTransport();
-  } else {
-    dir = resolve(dir);
-    await mkdir(dir, { recursive: true, mode: 0o700 });
-    const info = await lstat(dir);
-    if (!info.isDirectory() || info.isSymbolicLink() || info.uid !== process.getuid() || (info.mode & 0o7777) !== 0o700) {
-      throw new Error('Stream directory must be user-owned, not a symlink, mode 0700');
-    }
-    path = join(dir, name + '.sock');
-    if (Buffer.byteLength(path) > 103) throw new Error('Socket path exceeds macOS limit of 103 bytes; use a shorter directory or name');
+  dir = resolve(dir);
+  await mkdir(dir, { recursive: true, mode: 0o700 });
+  const info = await lstat(dir);
+  if (!info.isDirectory() || info.isSymbolicLink() || info.uid !== process.getuid() || (info.mode & 0o7777) !== 0o700) {
+    throw new Error('Stream directory must be user-owned, not a symlink, mode 0700');
   }
+  const path = join(dir, name + '.sock');
+  if (Buffer.byteLength(path) > 103) throw new Error('Socket path exceeds macOS limit of 103 bytes; use a shorter directory or name');
   const sessions = new Map(), clients = new Set();
   const lifetimes = new Map();
   let warned = false, closing;
@@ -113,15 +108,10 @@ export async function createCursorListener({ dir = defaultDirectory(), name = 'r
   const warn = () => {
     if (!warned) { warned = true; warning('Ignoring unsupported cursor stream version'); }
   };
-  const server = network.createServer(socket => {
+  const server = net.createServer(socket => {
     if (clients.size >= 16) { socket.destroy(); return; }
     clients.add(socket);
     socket.on('error', () => {});
-    if (!ready) {
-      // Keep control-only ACL probes alive until their native handle closes.
-      // Pre-publication clients never reach the parser, even after ready becomes true.
-      socket.on('close', () => clients.delete(socket)); socket.resume(); return;
-    }
     socket.on('close', () => {
       clients.delete(socket);
       for (const [session, life] of lifetimes) {
@@ -185,34 +175,22 @@ export async function createCursorListener({ dir = defaultDirectory(), name = 'r
       }
     });
   });
-  const serverError = error => warning(`Renderer server error: ${error.message}`);
   // Probe only after EADDRINUSE, and retry the bind exactly once after a refused connection.
-  if (platform === 'win32') {
-    server.on('error', serverError);
-    try { registration = await windows.listen(server, name); }
-    catch (error) { for (const client of clients) client.destroy(); throw error; }
-    for (const client of clients) client.destroy();
-    path = registration.path; ready = true;
-  } else {
-    try { server.listen(path); await once(server, 'listening'); }
-    catch (error) {
-      if (error.code !== 'EADDRINUSE') throw error;
-      await recoverSocket(path);
-      server.listen(path); await once(server, 'listening');
-    }
-    server.on('error', serverError);
-    try { await chmod(path, 0o600); }
-    catch (error) { await new Promise(resolve => server.close(resolve)); throw error; }
+  try { server.listen(path); await once(server, 'listening'); }
+  catch (error) {
+    if (error.code !== 'EADDRINUSE') throw error;
+    await recoverSocket(path);
+    server.listen(path); await once(server, 'listening');
   }
+  server.on('error', error => warning(`Renderer server error: ${error.message}`));
+  try { await chmod(path, 0o600); }
+  catch (error) { await new Promise(resolve => server.close(resolve)); throw error; }
   return { path, sessions, close() {
     return closing ||= new Promise((resolve, reject) => {
       for (const client of clients) client.destroy();
       for (const session of sessions.keys()) remove(session);
       // Node removes the Unix socket created by this server on close.
-      server.close(error => {
-        if (error) return reject(error);
-        Promise.resolve(registration?.remove()).then(resolve, reject);
-      });
+      server.close(error => error ? reject(error) : resolve());
     });
   } };
 }

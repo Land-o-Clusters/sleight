@@ -28,8 +28,6 @@ function browserTask(row, launchBrowser) {
       await acquireFixture(ctx, 'browser', () => launchBrowser(plan, {
         initialPage: { url: ctx.url, title: `Held-out ${row.kind} ${ctx.nonce}` },
       }));
-      // Transport collection is safe even when a permission stop forbids app cleanup.
-      ctx.disposeResources = () => ctx.browser.dispose?.();
     },
     prompt: ctx => row.prompt.replaceAll('{url}', ctx.url).replaceAll('{target}', ctx.cc.target.label),
     check: ctx => checkCCFixture(ctx.cc, ctx.answer), cleanup: async ctx => {

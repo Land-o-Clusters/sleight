@@ -1,4 +1,3 @@
-import { testChromiumExecutable, launchTestChromium } from './fixtures/chromium-isolated.mjs';
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { createContext, runInContext } from 'node:vm';
@@ -13,7 +12,8 @@ import { clickResultCode } from '../plugins/sleight/lib/tab-click-result.mjs';
 // FowlBrowser's MIT fixture pages are read from the installed clone, never copied or changed.
 const modulePath = join(homedir(), 'Library/Caches/sleight-bench/fowlbrowser/mcp/node_modules/playwright-core/index.mjs');
 const site = join(homedir(), 'Library/Caches/sleight-bench/fowlbrowser/test/forms/site');
-const executablePath = [1234, 1228].map(version => testChromiumExecutable({ revision: version, platform: 'darwin', arch: 'arm64' }))
+const executablePath = [1234, 1228].map(version => join(homedir(),
+  `Library/Caches/ms-playwright/chromium_headless_shell-${version}/chrome-headless-shell-mac-arm64/chrome-headless-shell`))
   .find(path => existsSync(path));
 
 test('FM3 real fixture isolated-world switch and checkout cover (owner only)', {
@@ -58,7 +58,7 @@ test('FM3 real fixture isolated-world switch and checkout cover (owner only)', {
   });
   await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
   t.after(() => new Promise(resolve => server.close(resolve)));
-  const browser = await launchTestChromium(chromium, { headless: true, executablePath });
+  const browser = await chromium.launch({ headless: true, executablePath });
   t.after(() => browser.close());
   const page = await browser.newPage(), session = await page.context().newCDPSession(page);
   const origin = `http://127.0.0.1:${server.address().port}`;

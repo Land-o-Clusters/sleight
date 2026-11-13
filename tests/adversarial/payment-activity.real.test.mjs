@@ -1,4 +1,3 @@
-import { testChromiumExecutable, launchTestChromium } from '../fixtures/chromium-isolated.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import http2 from 'node:http2';
@@ -136,13 +135,13 @@ test('F3: "Apply" that makes another owned tab send a WebSocket frame: one charg
 function certificate() {
   const dir = mkdtempSync(join(tmpdir(), 'sleight-h2-'));
   try {
-    execFileSync('openssl', ['req', '-x509', '-newkey', 'rsa:2048', '-nodes', '-keyout', join(dir, 'k.pem'), '-out', join(dir, 'c.pem'), '-days', '1', '-subj', '/CN=localhost'], { stdio: 'ignore', timeout: 60000, killSignal: 'SIGKILL' });
+    execFileSync('openssl', ['req', '-x509', '-newkey', 'rsa:2048', '-nodes', '-keyout', join(dir, 'k.pem'), '-out', join(dir, 'c.pem'), '-days', '1', '-subj', '/CN=localhost'], { stdio: 'ignore' });
     return { key: readFileSync(join(dir, 'k.pem')), cert: readFileSync(join(dir, 'c.pem')) };
   } catch { return undefined; } finally { rmSync(dir, { recursive: true, force: true }); }
 }
 function chromiumPath() {
   const spec = JSON.parse(readFileSync(new URL('../../plugins/sleight/vendor/playwright-core/browsers.json', import.meta.url))).browsers.find(x => x.name === 'chromium-headless-shell');
-  return testChromiumExecutable({ revision: spec.revision });
+  return join(homedir(), 'Library/Caches/ms-playwright', 'chromium_headless_shell-' + spec.revision, 'chrome-headless-shell-' + (process.platform === 'darwin' ? 'mac-' + process.arch : 'linux64'), 'chrome-headless-shell');
 }
 test('F4: a streaming request opened before the watch ends the refund: quiet false, verify false (a request that finished does not)', { skip, timeout: 60000 }, async t => {
   const tls = certificate();
@@ -156,7 +155,7 @@ test('F4: a streaming request opened before the watch ends the refund: quiet fal
     req.on('data', d => chunks.push(String(d))); req.on('end', () => res.end('ok'));
   });
   await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
-  const browser = await launchTestChromium(chromium, { headless: true, executablePath: chromiumPath() });
+  const browser = await chromium.launch({ headless: true, executablePath: chromiumPath() });
   t.after(async () => { await browser.close(); server.close(); server.closeAllConnections?.(); });
   const context = await browser.newContext({ ignoreHTTPSErrors: true }), tab = await context.newPage(), cdp = await context.newCDPSession(tab);
   trackPage(tab, { targets: () => cdp.send('Target.getTargets') });
@@ -212,7 +211,7 @@ test('F-B: the in-flight set drops what a closed page, a navigated frame, a deta
   server.on('connection', s => { sockets.add(s); s.on('close', () => sockets.delete(s)); });
   await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
   const origin = 'http://127.0.0.1:' + server.address().port;
-  const browser = await launchTestChromium(chromium, { headless: true, executablePath: chromiumPath() });
+  const browser = await chromium.launch({ headless: true, executablePath: chromiumPath() });
   t.after(async () => { for (const s of sockets) s.destroy(); await browser.close(); server.close(); });
   const results = {};
   async function scenario(label, expectedCount, run) {

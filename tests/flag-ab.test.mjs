@@ -1,4 +1,3 @@
-import { assertChildStatus } from './fixtures/child-status.mjs';
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
@@ -146,12 +145,12 @@ test('the score command reads a manifest and prints each flag with its verdict',
   }
   writeFileSync(join(dir, 'manifest.tsv'), lines.join('\n') + '\n');
   const script = fileURLToPath(new URL('../bench/flag-ab.mjs', import.meta.url));
-  const out = spawnSync(process.execPath, [script, 'score', '--manifest', join(dir, 'manifest.tsv')], { encoding: 'utf8', timeout: 60000, killSignal: 'SIGKILL' });
-  assertChildStatus(out, 0, out.stderr);
+  const out = spawnSync(process.execPath, [script, 'score', '--manifest', join(dir, 'manifest.tsv')], { encoding: 'utf8' });
+  assert.equal(out.status, 0, out.stderr);
   assert.match(out.stdout, /9 invocations/);
   assert.match(out.stdout, /skill-screenshot \(SLEIGHT_SCREENSHOT_READS=1\), commit abc12345[\s\S]*verdict: default on\./);
   assert.match(out.stdout, /compact-toolbars[\s\S]*verdict: no verdict\. short of 3 runs a side: textedit-replace-all \(off 0, on 0\)/);
-  const json = JSON.parse(spawnSync(process.execPath, [script, 'score', '--manifest', join(dir, 'manifest.tsv'), '--json'], { encoding: 'utf8', timeout: 60000, killSignal: 'SIGKILL' }).stdout);
+  const json = JSON.parse(spawnSync(process.execPath, [script, 'score', '--manifest', join(dir, 'manifest.tsv'), '--json'], { encoding: 'utf8' }).stdout);
   assert.equal(json.scores.find(s => s.flag === 'skill-screenshot').total.on, 106);
 });
 

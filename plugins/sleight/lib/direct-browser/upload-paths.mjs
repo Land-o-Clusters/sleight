@@ -67,7 +67,7 @@ export function assertMacUploadMetadata(output, uid, expected, roots = { home })
 export function checkUploadMetadata(paths, uid) {
   if (process.platform !== 'darwin') return;
   let output;
-  try { output = execFileSync('/bin/ls', ['-dlenO', '--', ...paths], { encoding: 'utf8', timeout: 2000, maxBuffer: 65536, env: { LC_ALL: 'C', PATH: '/usr/bin:/bin' }, killSignal: 'SIGKILL' }); }
+  try { output = execFileSync('/bin/ls', ['-dlenO', '--', ...paths], { encoding: 'utf8', timeout: 2000, maxBuffer: 65536, env: { LC_ALL: 'C', PATH: '/usr/bin:/bin' } }); }
   catch { throw Error(uploadRefusals.metadata); }
   assertMacUploadMetadata(output, uid, paths.length);
 }

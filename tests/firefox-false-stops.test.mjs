@@ -216,23 +216,6 @@ for (const [name, was, now] of [
 // S2/wikipedia:38: a read that filters the tree before printing it was counted as an action and refused as stale.
 const filtered = 'const s = await ff.getAXState();\nconst lines = s.split("\\n");\nnodeRepl.write(lines.slice(0, 3).join("\\n") + "\\n---\\n" + lines.filter(l => /Kilimanjaro|wikipedia|Wikipedia|metre|meter|m \\(|Mount/i.test(l)).slice(0, 40).join("\\n"));';
 
-import { parenthesizedReads, stateReads } from './fixtures/sa1r-filtered-reads.mjs';
-import { assertRecordedReads } from './fixtures/sa1r-recorded-reads.mjs';
-test('SA1R: all 77 recorded cells preserve the pre-parser filtered reads', t => {
-  t.diagnostic(JSON.stringify(assertRecordedReads(isFilteredRead)));
-});
-for (const [name, code] of [...parenthesizedReads, ...stateReads]) {
-  test(`SA1R: pure filtered read remains accepted: ${name}`, () => assert.equal(isFilteredRead(code), true));
-}
-for (const code of [
-  'const s = await app.getAXState(); nodeRepl.write((await (app.getAXState)()).slice(0, 100));',
-  'nodeRepl.write((await app.getAXState()).filter(x => app.click(1)));',
-  'nodeRepl.write((await app.click(1)).slice(0, 100));',
-  'const s = await app.getAXStateAndScreenshot(); s.state.click(1);',
-  'const s = await app.getAXStateAndScreenshot(); nodeRepl.write(s["state"].split("\\n"));',
-  'const s = await app.getAXStateAndScreenshot(); s.state = "changed";',
-]) test(`SA1R: wrapped actions and indirect reads stay refused: ${code}`, () => assert.equal(isFilteredRead(code), false));
-
 test('FOC: a getAXState read that filters its tree with string methods is read-only', () => {
   assert.equal(isFilteredRead(filtered), true);
   assert.equal(isFilteredRead('const s = await ff.getAXState({ disableDiffing: true }); nodeRepl.write(s.split("\\n").filter(l => l.includes("button")).join("\\n"));'), true);
@@ -271,24 +254,6 @@ for (const [name, code] of [
 });
 
 // Through the guard: the read before the click carries the focus line the root rule compares with.
-for (const [name, code] of [
-  ['regex and string desynchronization', 'const s = await ff.getAXState(); return /"/, await ff.click({ x: 1 }), /"/;'],
-  ['regex expression sequence', 'const s = await ff.getAXState(); /"/, await ff.click({ x: 1 }), /"/;'],
-  ['division after an update', 'let n = 1; const s = await ff.getAXState(); n++ / await ff.click({ x: 1 }) / 2;'],
-  ['regex testing an action', 'return /x/.test(await ff.click({}));'],
-  ['division and a return regex', 'const s = await ff.getAXState(); const n = (1) / 2; return /x/.test(await ff.click({}));'],
-  ['parenthesized read callee', 'await (ff.getAXState)();'],
-  ['sequence of awaits', 'await ff.getAXState(), await ff.click();'],
-  ['arrow action without await', 'const s = await ff.getAXState(); [1].map(x => ff.click());'],
-  ['print wrapping an action', 'nodeRepl.write(await ff.click());'],
-  ['async IIFE', 'const s = await ff.getAXState(); (async () => ff.click())();'],
-  ['labelled action', 'const s = await ff.getAXState(); label: await ff.click();'],
-  ['invalid JavaScript', 'const s = await ff.getAXState(); const = ;'],
-  ['overlong code', 'const s = await ff.getAXState();' + ' '.repeat(4000)],
-]) test(`SA1H F5: ${name} never bypasses the stale-window check`, () => {
-  assert.equal(isFilteredRead(code), false);
-});
-
 function rootFixture({ before, after }) {
   let clicked = false;
   const events = [];

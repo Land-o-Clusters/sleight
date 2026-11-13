@@ -1,4 +1,3 @@
-import { assertChildStatus } from './fixtures/child-status.mjs';
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { mkdtempSync, readFileSync, readdirSync, renameSync, rmSync, writeFileSync } from 'node:fs';
@@ -50,8 +49,8 @@ function assertCoordinatorLock(coordinator, expected) {
   const code = `import {DatabaseSync} from 'node:sqlite'; const db=new DatabaseSync(process.argv[1]);
     try {db.exec('PRAGMA busy_timeout=0; BEGIN IMMEDIATE'); console.log('won'); db.exec('ROLLBACK');}
     catch(error) {if(error.errcode!==5)throw error; console.log('busy');} finally {db.close();}`;
-  const child = spawnSync(process.execPath, ['--input-type=module', '-e', code, coordinator], { encoding: 'utf8', timeout: 10000, killSignal: 'SIGKILL' });
-  assertChildStatus(child, 0, child.error?.message ?? child.stderr);
+  const child = spawnSync(process.execPath, ['--input-type=module', '-e', code, coordinator], { encoding: 'utf8', timeout: 10000 });
+  assert.equal(child.status, 0, child.error?.message ?? child.stderr);
   assert.equal(child.stdout.trim(), expected);
 }
 test('second holder is refused with its name and remaining time; reads have a narrow grammar', t => {

@@ -17,7 +17,7 @@
   },
   "timedOut": false,
   "cancelled": false,
-  "stdout": "\nresults: <private-evidence>/plugin-arm/bench/results/2026-10-10T05-58-09-446Z-dry.json\n",
+  "stdout": "\nresults: ~/Projects/sleight-wt/plugin-arm/bench/results/2026-10-10T05-58-09-446Z-dry.json\n",
   "stderr": "",
   "groupClean": true,
   "raw": {
@@ -42,13 +42,13 @@
                 "name": "sleight",
                 "version": "1.1.0",
                 "extent": "package-directory",
-                "source": "<private-evidence>/plugin-arm/plugins/sleight",
+                "source": "~/Projects/sleight-wt/plugin-arm/plugins/sleight",
                 "commit": "332e3ca0260d7eee0b003882d95d8b64ec431dd3",
                 "dirty": false,
                 "packageHash": "3d7a5e94dc63f491889e15a4b7f7caea187a02250c063a6d6cfdc8cd0e09adcf"
               }
             ],
-            "executable": "<private-evidence>/plugin-arm/plugins/sleight/bin/sleight-mcp"
+            "executable": "~/Projects/sleight-wt/plugin-arm/plugins/sleight/bin/sleight-mcp"
           }
         }
       }

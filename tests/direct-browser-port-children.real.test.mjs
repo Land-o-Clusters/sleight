@@ -1,4 +1,3 @@
-import { testChromiumExecutable, readTestDevToolsPort, launchTestChromiumContext, closeTestChromium } from './fixtures/chromium-isolated.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createServer } from 'node:http';
@@ -14,7 +13,7 @@ const skip=process.env.SLEIGHT_LIVE_DOM_TEST!=='1'&&'DevTools port real-page pro
 test('port guard continues false matches and protects related targets before their first request',{skip,timeout:90000},async t=>{
   const {chromium}=await import('../plugins/sleight/vendor/playwright-core/index.mjs');
   const spec=JSON.parse(readFileSync(new URL('../plugins/sleight/vendor/playwright-core/browsers.json',import.meta.url))).browsers.find(b=>b.name==='chromium-headless-shell');
-  const executablePath=testChromiumExecutable({ revision: spec.revision });
+  const executablePath=join(homedir(),'Library/Caches/ms-playwright','chromium_headless_shell-'+spec.revision,'chrome-headless-shell-'+(process.platform==='darwin'?'mac-'+process.arch:'linux64'),'chrome-headless-shell');
   assert.ok(existsSync(executablePath),'pinned headless browser required');
   const root=trackTemp(realpathSync(mkdtempSync(join(tmpdir(),'sleight-port-'))));
   let context,browser,filter,socket,port;
@@ -44,18 +43,14 @@ test('port guard continues false matches and protects related targets before the
     res.end(`<title>Owned port fixture</title><a target="_blank" href="${url}">Link</a><form target="endpoint-form" action="${url}"><button>Submit</button></form><script>window.probe=()=>fetch('${url}',{mode:'no-cors'}).then(()=>'loaded',()=>'blocked');</script>`);
   });
   t.after(async()=>{
-    try { await closeTestChromium(context, async () => {
-      try {
-        if(filter)assert.equal(await filter.dispose(),true,'filter and related-target watchers collected'); await browser?.close();
-        if(socket&&socket.readyState!==3)await new Promise(resolve=>{socket.addEventListener('close',resolve,{once:true});socket.close();});
-      } finally { await context?.close(); }
-    }); } finally { server.closeAllConnections();await new Promise(resolve=>server.close(resolve));rmSync(root,{recursive:true,force:true});assert.equal(existsSync(root),false); }
+    try{if(filter)assert.equal(await filter.dispose(),true,'filter and related-target watchers collected');await browser?.close();if(socket&&socket.readyState!==3)await new Promise(resolve=>{socket.addEventListener('close',resolve,{once:true});socket.close();});}
+    finally{await context?.close();server.closeAllConnections();await new Promise(resolve=>server.close(resolve));rmSync(root,{recursive:true,force:true});assert.equal(existsSync(root),false);}
     t.diagnostic('Cleanup: owned pages and browser closed, filter listener and raw socket closed, foreign fixture untouched, HTTP server and profile collected.');
   });
   await new Promise(resolve=>server.listen(0,'127.0.0.1',resolve));
-  context=await launchTestChromiumContext(chromium, root,{headless:true,executablePath,args:['--remote-debugging-port=0','--site-per-process','--host-resolver-rules=MAP frame.test 127.0.0.1','--no-proxy-server'],viewport:null});
+  context=await chromium.launchPersistentContext(root,{headless:true,executablePath,args:['--remote-debugging-port=0','--site-per-process','--host-resolver-rules=MAP frame.test 127.0.0.1','--no-proxy-server'],viewport:null});
   const foreign=context.pages()[0];await foreign.setContent('<title>Foreign untouched</title><p>Private synthetic fixture</p>');
-  const active=(await readTestDevToolsPort(root));port=Number(active[0]);
+  const active=readFileSync(join(root,'DevToolsActivePort'),'utf8').trim().split('\n');port=Number(active[0]);
   socket=new WebSocket('ws://127.0.0.1:'+port+active[1]);
   socket.addEventListener('message',event=>{const frame=JSON.parse(event.data);if(frame.id){const p=pending.get(frame.id);pending.delete(frame.id);if(frame.error)p.reject(Error(frame.error.message));else p.resolve(frame.result);}else for(const fn of listeners)fn(frame);});
   await new Promise((resolve,reject)=>{socket.addEventListener('open',resolve,{once:true});socket.addEventListener('error',reject,{once:true});});

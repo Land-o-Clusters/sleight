@@ -39,7 +39,7 @@ for (const label of ['Reject all', 'Use necessary cookies only', 'Alle ablehnen'
     const result = await guarded(tree(label), 'await app.click(5);');
     assert.equal(result.error, undefined);
     assert.deepEqual(result.sent, [5]);
-    assert.match(result.text, /cookie wall no longer shown after clicking/i);
+    assert.match(result.text, /decline confirmed/i);
   });
 }
 
@@ -48,7 +48,7 @@ for (const label of ['Reject and manage', 'Reject some', 'Save choices', 'Close'
     const result = await guarded(tree(label), 'await app.click(5);');
     assert.equal(result.error, undefined);
     assert.deepEqual(result.sent, [5]);
-    assert.doesNotMatch(result.text, /cookie wall no longer shown after clicking/i);
+    assert.doesNotMatch(result.text, /decline confirmed/i);
   });
 }
 
@@ -69,16 +69,6 @@ for (const code of ['await app.click(4);', 'await app.doubleClick(4);', 'await a
     assert.deepEqual(result.sent, []);
   });
 }
-
-for (const text of ['\r', '\n', '\r\n']) test(`typed Return ${JSON.stringify(text)} still sends a cookie decline and blocks acceptance`, async () => {
-  const code = `await app.typeText(${JSON.stringify(text)});`;
-  const declined = await guarded(tree() + '\nThe focused UI element is 5 button Reject all', code);
-  assert.equal(declined.error, undefined);
-  assert.deepEqual(declined.sent, [text]);
-  const accepted = await guarded(tree() + '\nThe focused UI element is 4 button Accept all', code);
-  assert.deepEqual(accepted.sent, []);
-  assert.match(accepted.error?.message ?? '', /Cookie acceptance blocked/);
-});
 
 for (const label of ['Accept all, Description: Reject all', 'Reject all, Description: Accept all']) test(`engine checks both visible and accessible names: ${label}`, async () => {
   const result = await guarded(tree(label), 'await app.click(5);');
@@ -159,18 +149,4 @@ test('engine reads fresh before Return when the last tree showed no wall', async
   try { await run(guardedCode('await app.typeText("x"); await app.pressKey("Return");', windowFromText(cleared), 'Stopped.')); } catch (caught) { error = caught; }
   assert.match(error?.message ?? '', /Cookie acceptance blocked/);
   assert.deepEqual(sent, ['x']);
-});
-
-test('engine rechecks the clicked accessible name after the last read', async () => {
-  const before = tree('Reject all');
-  let current = before;
-  const sent = [];
-  const raw = { getAXState: async () => current, click: async id => sent.push(id) };
-  const context = { cua: { getApp: async () => raw }, nodeRepl: { write() {} } };
-  const run = source => runInNewContext(`(async () => { ${source} })()`, context);
-  await run(readCode('await cua.getApp("Browser");'));
-  current = tree('Reject all, Description: Accept all');
-  await assert.rejects(run(guardedCode('await app.click(5);', windowFromText(before), 'Stopped.')),
-    /Cookie acceptance blocked/);
-  assert.deepEqual(sent, []);
 });

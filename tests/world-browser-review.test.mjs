@@ -1,4 +1,3 @@
-import { assertChildStatus } from './fixtures/child-status.mjs';
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
@@ -17,8 +16,8 @@ test('runner-dependent tests name their missing pinned cache requirement', t => 
   const env = { ...process.env, HOME: home }; delete env.NODE_TEST_CONTEXT;
   const run = spawnSync(process.execPath, ['--test', '--test-reporter=tap', '--test-name-pattern', 'both.*round arms', fileURLToPath(import.meta.url)], {
     encoding: 'utf8', env,
-   timeout: 60000, killSignal: 'SIGKILL' });
-  assertChildStatus(run, 0, run.stdout + run.stderr);
+  });
+  assert.equal(run.status, 0, run.stdout + run.stderr);
   assert.match(run.stdout, /pinned FowlBrowser cache is absent/);
   assert.match(run.stdout, /skipped 2/);
 });
@@ -43,12 +42,12 @@ function temp(t) {
 }
 function runner(t) {
   const dir = temp(t);
-  const original = spawnSync('/usr/bin/git', ['-C', join(homedir(), 'Library/Caches/sleight-bench/fowlbrowser'), 'show', '6a12d60:tools/rounds.mjs'], { encoding: 'utf8', maxBuffer: 4 * 1024 * 1024, timeout: 30000, killSignal: 'SIGKILL' });
-  assertChildStatus(original, 0, original.stderr);
+  const original = spawnSync('/usr/bin/git', ['-C', join(homedir(), 'Library/Caches/sleight-bench/fowlbrowser'), 'show', '6a12d60:tools/rounds.mjs'], { encoding: 'utf8', maxBuffer: 4 * 1024 * 1024 });
+  assert.equal(original.status, 0, original.stderr);
   mkdirSync(join(dir, 'tools'));
   writeFileSync(join(dir, 'tools/rounds.mjs'), original.stdout);
-  const applied = spawnSync('/usr/bin/git', ['apply', join(root, 'bench/fowl/sleight-surface.patch')], { cwd: dir, encoding: 'utf8', timeout: 30000, killSignal: 'SIGKILL' });
-  assertChildStatus(applied, 0, applied.stderr);
+  const applied = spawnSync('/usr/bin/git', ['apply', join(root, 'bench/fowl/sleight-surface.patch')], { cwd: dir, encoding: 'utf8' });
+  assert.equal(applied.status, 0, applied.stderr);
   return { dir, file: join(dir, 'tools/rounds.mjs') };
 }
 
@@ -57,8 +56,8 @@ test('both round arms use explicit 5.5 model IDs and the token price in their re
   writeFileSync(tasks,JSON.stringify(['sleight','fowlbrowser'].map(surface=>({...task,name:surface,surface}))));
   for(const alias of ['haiku','sonnet','opus']) {
     const run=spawnSync(process.execPath,[file,'--tasks',tasks,'--world','--dry-run','--model',alias],
-      {encoding:'utf8',env:{...process.env,SLEIGHT_REPO:root}, timeout: 60000, killSignal: 'SIGKILL' });
-    assertChildStatus(run,0,run.stderr);
+      {encoding:'utf8',env:{...process.env,SLEIGHT_REPO:root}});
+    assert.equal(run.status,0,run.stderr);
     for(const plan of JSON.parse(run.stdout)) assert.equal(plan.args[plan.args.indexOf('--model')+1],`claude-${alias}-5-5`);
   }
   const previous=process.env.SLEIGHT_REPO; process.env.SLEIGHT_REPO=root;
@@ -124,8 +123,8 @@ test('world dry-run gives every Claude arm the same prefix, isolation, version a
   const config = join(dir, 'rounds.json');
   writeFileSync(config, JSON.stringify({ devtools: { command: '/fixture/devtools', env: { chrome: {} } } }));
   const run = spawnSync(process.execPath, [file, '--tasks', tasks, '--codex-entry', entry, '--world', '--dry-run', '--model', 'claude-haiku-5-5', '--effort', 'high', '--out', join(dir, 'never')],
-    { encoding: 'utf8', env: { ...process.env, SLEIGHT_REPO: root, FOWLBROWSER_ROUNDS_CONFIG: config }, timeout: 60000, killSignal: 'SIGKILL' });
-  assertChildStatus(run, 0, run.stderr);
+    { encoding: 'utf8', env: { ...process.env, SLEIGHT_REPO: root, FOWLBROWSER_ROUNDS_CONFIG: config } });
+  assert.equal(run.status, 0, run.stderr);
   const plans = JSON.parse(run.stdout);
   assert.equal(plans.length, names.length);
   assert.equal(new Set(plans.map(p => p.prompt.replaceAll(p.task,'<task>'))).size, 1);
@@ -193,8 +192,8 @@ test('unsupported task pairs are written before any remote or browser connection
   const tasks = join(dir, 'tasks.json');
   writeFileSync(tasks, JSON.stringify([{ ...task, surface: 'claude-cu' }, { ...task, name: 'native', browser: 'native', surface: 'playwright-mcp' }]));
   const out = join(dir, 'out');
-  const run = spawnSync(process.execPath, [file, '--tasks', tasks, '--remote', 'never-connect.invalid', '--out', out, '--world'], { encoding: 'utf8', timeout: 5000, env: { ...process.env, SLEIGHT_REPO: root }, killSignal: 'SIGKILL' });
-  assertChildStatus(run, 0, run.stderr);
+  const run = spawnSync(process.execPath, [file, '--tasks', tasks, '--remote', 'never-connect.invalid', '--out', out, '--world'], { encoding: 'utf8', timeout: 5000, env: { ...process.env, SLEIGHT_REPO: root } });
+  assert.equal(run.status, 0, run.stderr);
   const rows = JSON.parse(readFileSync(join(out, 'results.json'), 'utf8'));
   assert.equal(rows.length, 2);
   for (const row of rows) {

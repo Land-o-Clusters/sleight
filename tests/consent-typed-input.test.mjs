@@ -1,4 +1,3 @@
-import { assertChildStatus } from './fixtures/child-status.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
@@ -55,10 +54,10 @@ test('real modal and handoff events route typed choices only after field focus w
   const dir = registerTemp(t, trackTemp(mkdtempSync(join(tmpdir(), 'sleight-typed-input-'))));
   const swift = join(dir, 'main.swift'), binary = join(dir, 'fixture');
   writeFileSync(swift, 'import AppKit\nimport Foundation\nimport CoreFoundation\nimport QuartzCore\nimport Carbon.HIToolbox\nimport ObjectiveC\nimport Darwin\nimport os.log\n' + blocks.join('\n') + readFileSync(new URL('./fixtures/consent-typed-input.swift', import.meta.url), 'utf8'));
-  const built = spawnSync('/usr/bin/xcrun', ['swiftc', '-module-cache-path', swiftModuleCache(), swift, '-o', binary], { encoding: 'utf8', timeout: 600000, killSignal: 'SIGKILL' });
-  assertChildStatus(built, 0, built.stderr);
-  const run = spawnSync(binary, [], { encoding: 'utf8', timeout: 15000, killSignal: 'SIGKILL' });
-  assertChildStatus(run, 0, `${run.error ?? run.signal ?? ''}\n${run.stderr}${run.stdout}`);
+  const built = spawnSync('/usr/bin/xcrun', ['swiftc', '-module-cache-path', swiftModuleCache(), swift, '-o', binary], { encoding: 'utf8', timeout: 600000 });
+  assert.equal(built.status, 0, built.stderr);
+  const run = spawnSync(binary, [], { encoding: 'utf8', timeout: 15000 });
+  assert.equal(run.status, 0, `${run.error ?? run.signal ?? ''}\n${run.stderr}${run.stdout}`);
   assert.match(run.stderr, /sleight consent refused: CONSENT_TOO_SOON/);
   assert.match(run.stderr, /sleight consent refused: PERSON_INPUT_REQUIRED/);
   for (const path of ['current-event', 'hid']) {

@@ -1,4 +1,3 @@
-import { assertChildStatus } from './fixtures/child-status.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
@@ -80,20 +79,20 @@ test('dry run has no children, files, hold access or capture on import/CLI', t =
   for (const cmd of ['node', 'xcrun', 'swiftc', 'open', 'osascript', 'ffmpeg', 'caffeinate']) writeFileSync(join(trap, cmd), '#!/bin/sh\nexit 99\n', { mode: 0o700 });
   const result = spawnSync(process.execPath, ['bench/demo/capture.mjs', '--dry-run', '--night', night], {
     encoding: 'utf8', timeout: 10000, env: { ...process.env, PATH: trap },
-   killSignal: 'SIGKILL' });
-  assertChildStatus(result, 0, result.stderr); assert.equal(existsSync(night), false);
+  });
+  assert.equal(result.status, 0, result.stderr); assert.equal(existsSync(night), false);
   for (const line of ['ScreenCaptureKit', '2 MB', 'caffeinate', 'resume', 'settings', 'synthetic', 'owner-away', 'ffmpeg']) assert.ok(result.stdout.includes(line), line);
   assert.equal(result.stdout.includes('undefined'), false);
 });
 test('live launch requires explicit away assertion before platform, paths or children', t => {
   const dir = world(t), night = join(dir, 'not-created');
-  const result = spawnSync(process.execPath, ['bench/demo/capture.mjs', '--night', night], { encoding: 'utf8', timeout: 5000, killSignal: 'SIGKILL' });
-  assertChildStatus(result, 2); assert.match(result.stderr, /owner-away/); assert.equal(existsSync(night), false);
+  const result = spawnSync(process.execPath, ['bench/demo/capture.mjs', '--night', night], { encoding: 'utf8', timeout: 5000 });
+  assert.equal(result.status, 2); assert.match(result.stderr, /owner-away/); assert.equal(existsSync(night), false);
 });
 test('live resume control cannot write in the ledger or an arbitrary folder', t => {
   const dir = world(t), night = join(dir, 'not-created');
-  const result = spawnSync(process.execPath, ['bench/demo/capture.mjs', '--owner-away', '--night', night], { encoding: 'utf8', timeout: 5000, killSignal: 'SIGKILL' });
-  assertChildStatus(result, 2); assert.equal(existsSync(night), false);
+  const result = spawnSync(process.execPath, ['bench/demo/capture.mjs', '--owner-away', '--night', night], { encoding: 'utf8', timeout: 5000 });
+  assert.equal(result.status, 2); assert.equal(existsSync(night), false);
 });
 test('unknown, repeated and incomplete options fail closed', () => {
   for (const args of [['--wat'], ['--night'], ['--owner-away', '--owner-away'], ['--night', '--dry-run']]) assert.throws(() => demo.parseArgs(args));

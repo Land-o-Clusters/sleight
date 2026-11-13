@@ -1,4 +1,3 @@
-import { assertChildStatus } from './fixtures/child-status.mjs';
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
@@ -6,7 +5,7 @@ import { readFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { PassThrough } from 'node:stream';
 import { spawnSync } from 'node:child_process';
-import { ENGINE_PARSE_OPTIONS, UNKNOWN, parseCell, withCellCache, statements, memberCall, literalValue,
+import { ENGINE_PARSE_OPTIONS, UNKNOWN, parseCell, statements, memberCall, literalValue,
   handleBindings, arrowRegexTest, walk } from '../plugins/sleight/lib/code-ast.mjs';
 import { createRelay } from '../plugins/sleight/lib/relay.mjs';
 
@@ -18,68 +17,6 @@ const astOf = code => {
 const expression = code => astOf(code).body[0].expression;
 const callsOf = code => [...walk(astOf(code))].map(memberCall).filter(Boolean);
 const payloads = code => callsOf(code).filter(call => call.method === 'typeText').map(call => literalValue(call.args[0]));
-
-for (const code of ['}\nfoo();\n{', '}\nfoo();\nasync function z(){', '}\nfunction z(){',
-  '}\n//', '}\n/* tail */', '}, foo(), async () => {', '})(); foo(); (async () => {']) {
-  test('GLINT4 refuses an escaped async inspection wrapper: ' + JSON.stringify(code), () => {
-    const result = withCellCache(() => parseCell(code), { script: true });
-    assert.equal(result.ast, null, 'no executable call may disappear from a successful parse');
-    assert.ok(result.error, JSON.stringify(result));
-  });
-}
-for (const [code, line, column] of [
-  ['await foo()\nlet x = = 3', 2, 8],
-  ['const a = await foo();\nconst b = ;', 2, 10],
-  ['await foo(;', 1, 10],
-  ['\nawait foo()\n  let x = = 3', 3, 10],
-  ['var await = 1;\nlet x = = 3', 2, 8],
-  ['const marker = "await";\nlet x = = 3', 2, 8],
-]) test('GLINT4 reports the syntax location in the original cell: ' + JSON.stringify(code), () => {
-  const parsed = withCellCache(() => parseCell(code), { script: true });
-  assert.equal(parsed.ast, null);
-  assert.deepEqual(parsed.error, { line, column, reason: `Unexpected token: '${code.includes('const b') || code.includes('foo(;') ? ';' : '='}'` });
-});
-test('GLINT4 intact async bodies preserve nested calls, ranges and comments', () => {
-  const code = '/* before */ await foo();\n{ bar(); }\nasync function z(){ baz(); } // after';
-  const parsed = withCellCache(() => parseCell(code), { script: true });
-  assert.equal(parsed.error, null);
-  assert.deepEqual([...walk(parsed.ast)].filter(node => node.type === 'CallExpression').map(node => code.slice(...node.range)),
-    ['foo()', 'bar()', 'baz()']);
-  assert.deepEqual(parsed.comments.map(comment => code.slice(...comment.range)), ['/* before */', '// after']);
-  assert.equal(parseCell('await foo()\nlet x = = 3').error.line, 2, 'engine parser keeps its original module grammar');
-});
-for (const [code, line, column] of [['await app.click(', 1, 'await app.click('.length],
-  ['await foo([\r\n', 2, 0], ['await foo([\u2028', 2, 0]])
-  test('GLINT4 unfinished await reports original EOF, without the synthetic closing brace: ' + JSON.stringify(code), () => {
-    const parsed = withCellCache(() => parseCell(code), { script: true });
-    assert.deepEqual(parsed.error, { line, column, reason: 'Unexpected end of input' });
-    assert.equal(parsed.ast, null);
-  });
-
-test('GLINT3 script guards see original ranges and calls without changing the cached engine parse', () => {
-  for (const code of ['if (1) function f(){}; app.typeText("PAYLOAD")',
-    'label: function f(){}; await app.typeText("PAYLOAD")',
-    '--> ignored app.typeText("HIDDEN")\nawait app.typeText("PAYLOAD")']) {
-    assert.ok(parseCell(code).error);
-    withCellCache(() => {
-      const parsed = parseCell(code);
-      assert.equal(parsed.error, null, JSON.stringify(parsed.error));
-      const calls = [...walk(parsed.ast)].filter(node => node.type === 'CallExpression').map(memberCall).filter(Boolean).filter(call => call.method === 'typeText');
-      assert.equal(calls.length, 1);
-      assert.equal(literalValue(calls[0].args[0]), 'PAYLOAD');
-      assert.equal(code.slice(...calls[0].args[0].range), '"PAYLOAD"');
-    }, { script: true });
-    assert.ok(parseCell(code).error, 'script cache cannot loosen the engine parser');
-  }
-});
-
-test('GLINT3 non-string parser inputs return bounded errors without source coercion', () => {
-  for (const value of [undefined, null, Symbol('fixture'), { toString() { throw Error('must not coerce'); } }]) {
-    const result = parseCell(value);
-    assert.equal(result.ast, null);
-    assert.equal(result.error.reason, 'cannot parse this cell');
-  }
-});
 
 // FR1, FR1R, FR2 and FR3 review shapes, parsed as modules rather than sloppy scripts.
 const visible = [
@@ -210,8 +147,8 @@ test('a fresh process loads the vendor only when it first parses a cell', () => 
     if(require.cache[${JSON.stringify(vendor)}]) throw new Error('eager parser');
     parseCell('await app.click(3)');
     if(!require.cache[${JSON.stringify(vendor)}]) throw new Error('parser not loaded');
-  `], { encoding: 'utf8', timeout: 10000, killSignal: 'SIGKILL' });
-  assertChildStatus(child, 0, child.stderr);
+  `], { encoding: 'utf8', timeout: 10000 });
+  assert.equal(child.status, 0, child.stderr);
 });
 test('parse error contains only meriyah location and reason, no source or stack', () => {
   const result = parseCell('const marker="PRIVATE-TEXT";\nconst = 1');

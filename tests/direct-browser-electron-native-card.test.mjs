@@ -1,4 +1,3 @@
-import { assertChildStatus } from './fixtures/child-status.mjs';
 // Constructed macOS paths are synthetic validation and redaction data, never allocation roots.
 const MAC_USERS = ['', 'Users', ''].join('/');
 import test from 'node:test';
@@ -100,16 +99,16 @@ let words: [Bool] = [
 ]
 print(samples.allSatisfy { $0 } && words.allSatisfy { $0 } ? "pass" : "fail \\(samples) \\(words)")
 `);
-  const built = spawnSync('/usr/bin/xcrun', ['swiftc', '-module-cache-path', swiftModuleCache(), swift, '-o', binary], { encoding: 'utf8', timeout: 600000, killSignal: 'SIGKILL' });
-  assertChildStatus(built, 0, built.stderr);
-  const run = spawnSync(binary, [], { encoding: 'utf8', timeout: 60000, killSignal: 'SIGKILL' }); assertChildStatus(run, 0, run.stderr); assert.equal(run.stdout.trim(), 'pass', run.stdout);
+  const built = spawnSync('/usr/bin/xcrun', ['swiftc', '-module-cache-path', swiftModuleCache(), swift, '-o', binary], { encoding: 'utf8' });
+  assert.equal(built.status, 0, built.stderr);
+  const run = spawnSync(binary, [], { encoding: 'utf8' }); assert.equal(run.status, 0, run.stderr); assert.equal(run.stdout.trim(), 'pass', run.stdout);
 });
 
 test('the full consent host still compiles with the app cards, without launching UI', { skip: macCommandSkip('xcrun') }, t => {
   const dir = registerTemp(t, trackTemp(realpathSync(mkdtempSync(join(tmpdir(), 'sleight-native-app-host-')))));
   const built = spawnSync('/usr/bin/xcrun', ['swiftc', '-module-cache-path', swiftModuleCache(),
-    new URL('../plugins/sleight/lib/direct-browser/native/consent-host.swift', import.meta.url).pathname, '-o', join(dir, 'consent-host')], { encoding: 'utf8', timeout: 600000, killSignal: 'SIGKILL' });
-  assertChildStatus(built, 0, built.stderr);
+    new URL('../plugins/sleight/lib/direct-browser/native/consent-host.swift', import.meta.url).pathname, '-o', join(dir, 'consent-host')], { encoding: 'utf8' });
+  assert.equal(built.status, 0, built.stderr);
 });
 
 test('operation cards show scope first and label a session app grant accurately without UI', { skip: macCommandSkip('xcrun') }, t => {
@@ -127,8 +126,8 @@ let valid = app.body.hasPrefix(scope + "\\n\\n") && app.allow == "Allow this ses
   && payment.body.contains("$268") && payment.allow == "Allow once"
 print(valid ? "pass" : "fail")
 `);
-  const built = spawnSync('/usr/bin/xcrun', ['swiftc', '-module-cache-path', swiftModuleCache(), swift, '-o', binary], { encoding: 'utf8', timeout: 600000, killSignal: 'SIGKILL' });
-  assertChildStatus(built, 0, built.stderr);
-  const run = spawnSync(binary, [], { encoding: 'utf8', timeout: 60000, killSignal: 'SIGKILL' });
-  assertChildStatus(run, 0, run.stderr); assert.equal(run.stdout.trim(), 'pass');
+  const built = spawnSync('/usr/bin/xcrun', ['swiftc', '-module-cache-path', swiftModuleCache(), swift, '-o', binary], { encoding: 'utf8' });
+  assert.equal(built.status, 0, built.stderr);
+  const run = spawnSync(binary, [], { encoding: 'utf8' });
+  assert.equal(run.status, 0, run.stderr); assert.equal(run.stdout.trim(), 'pass');
 });

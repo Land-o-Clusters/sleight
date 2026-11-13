@@ -1,4 +1,3 @@
-import { assertChildStatus } from './fixtures/child-status.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync, mkdtempSync, mkdirSync, writeFileSync } from 'node:fs';
@@ -34,8 +33,8 @@ test('the actual wrapper auth block admits a Haiku Chrome round without reading 
     '--tasks', tasks, '--surface', 'claude-in-chrome'], {
     encoding: 'utf8', env: { HOME: dir, REPO: new URL('..', import.meta.url).pathname, PATH: process.env.PATH,
       MODEL: 'claude-haiku-5-5', SURFACE: 'claude-in-chrome', TASKS: '' },
-   timeout: 60000, killSignal: 'SIGKILL' });
-  assertChildStatus(result, 0, result.stderr);
+  });
+  assert.equal(result.status, 0, result.stderr);
   assert.equal(result.stdout, 'account');
 });
 test('model aliases select explicit 5.5 IDs and the last option wins in the round plan', () => {
@@ -118,8 +117,8 @@ test('spend reads raw result events instead of rounded or forged Markdown dollar
 });
 test('the standalone dry plan is side-effect free and rounds.sh uses it before its cache or key', () => {
   const module = new URL('../bench/fowl/accounting.mjs', import.meta.url).pathname;
-  const run = spawnSync(process.execPath, [module, '--plan', '--surface', 'sleight', '--model', 'haiku'], { encoding: 'utf8', timeout: 60000, killSignal: 'SIGKILL' });
-  assertChildStatus(run, 0, run.stderr);
+  const run = spawnSync(process.execPath, [module, '--plan', '--surface', 'sleight', '--model', 'haiku'], { encoding: 'utf8' });
+  assert.equal(run.status, 0, run.stderr);
   assert.equal(JSON.parse(run.stdout).model, 'claude-haiku-5-5');
   const wrapper = readFileSync(new URL('../bench/fowl/rounds.sh', import.meta.url), 'utf8');
   assert.ok(wrapper.indexOf('--plan') < wrapper.indexOf('[ -d "$DIR/.git" ]'));

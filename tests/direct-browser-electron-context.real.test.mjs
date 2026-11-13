@@ -1,4 +1,3 @@
-import { testChromiumExecutable, launchTestChromium } from './fixtures/chromium-isolated.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { existsSync, readFileSync, mkdtempSync, realpathSync, writeFileSync, rmSync, mkdirSync } from 'node:fs';
@@ -21,12 +20,13 @@ const html = `<main><form id="payment"><p data-payment-item="Fixture item">Item:
 async function fixture(t, text, { rootOffset = '' } = {}) {
   const { chromium } = await import('../plugins/sleight/vendor/playwright-core/index.mjs');
   const spec = JSON.parse(readFileSync(new URL('../plugins/sleight/vendor/playwright-core/browsers.json', import.meta.url))).browsers.find(b => b.name === 'chromium-headless-shell');
-  const executablePath = testChromiumExecutable({ revision: spec.revision });
+  const platform = process.platform === 'darwin' ? 'mac-' + process.arch : 'linux64';
+  const executablePath = join(homedir(), 'Library/Caches/ms-playwright', 'chromium_headless_shell-' + spec.revision, 'chrome-headless-shell-' + platform, 'chrome-headless-shell');
   assert.ok(existsSync(executablePath), 'pinned headless Chromium required; host tests must not skip');
   const dir = realpathSync(mkdtempSync(join(realpathSync(tmpdir()), 'epv3-app-'))); t.after(() => rmSync(dir, { recursive: true, force: true }));
   mkdirSync(join(dir, 'app')); mkdirSync(join(dir, 'elsewhere'));
   for (const name of ['app/a.html', 'app/b.html', 'elsewhere/c.html']) writeFileSync(join(dir, name), html);
-  const browser = await launchTestChromium(chromium, { headless: true, executablePath });
+  const browser = await chromium.launch({ headless: true, executablePath });
   t.after(async () => { await browser.close(); });
   const page = await (await browser.newContext()).newPage(); await page.goto(pathToFileURL(join(dir, 'app/a.html')).href);
   page.getByRef = ref => page.locator('#' + ref);

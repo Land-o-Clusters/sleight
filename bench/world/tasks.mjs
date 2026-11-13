@@ -58,7 +58,7 @@ async function requireColdApp(ctx, app, checkKey) {
   if (!result.groupClean || result.exit?.code !== 1) throw new Error(`World ${app} fixture requires ${app} to be closed before setup`);
 }
 
-function calculator(task, open, popupSmoke = false) {
+function calculator(task, open) {
   const retained = genericTask(task, { open });
   const prepare = ctx => {
     ctx.left = 11 + randomBytes(1)[0] % 70; ctx.right = task.id === 'calculator-menu' ? 2 : 11 + randomBytes(1)[0] % 70;
@@ -73,20 +73,17 @@ function calculator(task, open, popupSmoke = false) {
       if (task.id === 'calculator-menu') {
         ctx.calculatorModeBefore = calculatorMode(before);
         if (!['basic', 'scientific'].includes(ctx.calculatorModeBefore)) throw new Error('WORLD_CALCULATOR_MODE_UNAVAILABLE');
-        if (popupSmoke && ctx.calculatorModeBefore !== 'basic') throw new Error('WORLD_CALCULATOR_BASIC_REQUIRED');
         ctx.expectedCalculatorMode = ctx.calculatorModeBefore === 'scientific' ? 'basic' : 'scientific';
       }
       do { prepare(ctx); } while (ctx.expectedCalculator === ctx.calculatorBefore);
     },
-    prompt: ctx => popupSmoke ? 'In Calculator, use Glide for one attempt only. Read the window, then click its Mode popup by the delivered element number and print the returned expanded menu. In the next cell, click Scientific by its number in that delivered menu. Read once to confirm Scientific mode, then stop. Use no menu compound, keyboard shortcut, coordinate click, retry or arithmetic.'
-      : task.id === 'calculator-menu' ? `In Calculator, choose ${ctx.expectedCalculatorMode === 'basic' ? 'Basic' : 'Scientific'} mode from the View menu and clear the input. Compute ${ctx.left} multiplied by itself. Leave the result displayed in that mode and reply with that number.`
+    prompt: ctx => task.id === 'calculator-menu' ? `In Calculator, choose ${ctx.expectedCalculatorMode === 'basic' ? 'Basic' : 'Scientific'} mode from the View menu and clear the input. Compute ${ctx.left} multiplied by itself. Leave the result displayed in that mode and reply with that number.`
       : `In Calculator, clear the input, then calculate ${ctx.left} multiplied by ${ctx.right} by clicking its buttons. Leave the result displayed and reply with that number.`,
     check: async ctx => {
       try {
         const state = await currentCalculator(ctx), value = calculatorValue(state);
         if (task.id === 'calculator-menu' && (!ctx.expectedCalculatorMode || ctx.calculatorModeBefore === ctx.expectedCalculatorMode ||
           calculatorMode(state) !== ctx.expectedCalculatorMode)) return 'WORLD_CALCULATOR_MODE_MISMATCH';
-        if (popupSmoke) return true;
         return value === ctx.expectedCalculator && ctx.calculatorBefore !== value || 'WORLD_CALCULATOR_DISPLAY_MISMATCH';
       } catch (error) { return `WORLD_CALCULATOR_DISPLAY_UNAVAILABLE: ${String(error?.message ?? error).slice(0, 300)}`; }
     },
@@ -172,9 +169,7 @@ function textTask(id, open) {
       'textedit-insert-line': `In ${source}, append a second line "second ${ctx.nonce}" with a final newline. Save using Command-S.`,
       'textedit-replace-save': `Replace the complete contents of ${source} with "replacement ${ctx.nonce}" followed by one newline. Save the file.`,
     };
-    return `In TextEdit, use only these fixture documents. ${instructions[id]} Leave them open for cleanup.` +
-      (ctx.check4RecordWindowFrames && id === 'textedit-window-drag' ?
-        ` For this recording, use this short sequence. Select the target by its exact title with select_window, then acquire a fresh handle with cua.getApp("TextEdit") and print its full getAXState({disableDiffing:true}). If coordinate drag will need a target screenshot, capture it in that same call and print the full AX state with its Window header beside the image. Never return an image-only reply. Do not prepare a target caret. Next select the source by title, acquire a new sourceApp handle and print its full getAXState({disableDiffing:true}). In the next js call, use that same sourceApp and the just-observed element ID to selectText(ID, "move-${ctx.nonce}"). Never reacquire between that read and the numeric-element action. Immediately before the local drag tool call, call select_window on the source fixture by title. Its reply records both fixture window frames. Then use local drag with app com.apple.TextEdit, from "the current text selection", and explicit windowId and toWindowId from those receipts; coordinate endpoints are allowed on that next drag only, inside the target frame at its blank final line. Save each document by select_window title followed by a js call that begins with a fresh, uniquely named cua.getApp("TextEdit") handle and calls pressKey("super+s") on it. Every select_window invalidates older handles, so reacquire after each selection before any later js call. For whitespace cleanup, use keyboard shortcuts or freshly observed element IDs and selectText with two arguments. Never use coordinates on a JavaScript app handle. Never use a file URL as a window selector. Keep both fixture windows in their original positions.` : '');
+    return `In TextEdit, use only these fixture documents. ${instructions[id]} Leave them open for cleanup.`;
   }, capture: (ctx, response) => { if (id === 'textedit-window-drag') ctx.methodAudit = response.methodAudit; }, check: ctx => {
     if (id === 'textedit-window-drag' && (!ctx.methodAudit?.complete || !ctx.methodAudit.drag || ctx.methodAudit.replacement)) return 'WORLD_DRAG_METHOD_UNPROVEN';
     try { return ctx.documents.every((path, index) => readFileSync(path, 'utf8') === ctx.expectedText[index]) || 'WORLD_TEXT_MISMATCH'; }
@@ -193,36 +188,15 @@ function textPDF(text) {
   return body + `xref\n0 6\n0000000000 65535 f \n` + offsets.slice(1).map(offset => `${String(offset).padStart(10, '0')} 00000 n \n`).join('') +
     `trailer\n<< /Size 6 /Root 1 0 R >>\nstartxref\n${start}\n%%EOF\n`;
 }
-function scrollPDF(answer) {
-  const objects = ['<< /Type /Catalog /Pages 2 0 R >>', '', '<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>'];
-  const kids = [];
-  for (let page = 1; page <= 12; page++) {
-    const pageID = objects.length + 1, contentID = pageID + 1;
-    kids.push(`${pageID} 0 R`);
-    const text = page === 12 ? answer : `Fixture page ${page}, scroll to the final page`;
-    const stream = `BT /F1 18 Tf 72 720 Td (${text}) Tj ET\n`;
-    objects.push(`<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Contents ${contentID} 0 R /Resources << /Font << /F1 3 0 R >> >> >>`,
-      `<< /Length ${Buffer.byteLength(stream)} >>\nstream\n${stream}endstream`);
-  }
-  objects[1] = `<< /Type /Pages /Kids [${kids.join(' ')}] /Count 12 >>`;
-  let body = '%PDF-1.4\n'; const offsets = [];
-  for (const [index, object] of objects.entries()) { offsets.push(Buffer.byteLength(body)); body += `${index + 1} 0 obj\n${object}\nendobj\n`; }
-  const start = Buffer.byteLength(body);
-  return body + `xref\n0 ${objects.length + 1}\n0000000000 65535 f \n` + offsets.map(offset => `${String(offset).padStart(10, '0')} 00000 n \n`).join('') +
-    `trailer\n<< /Size ${objects.length + 1} /Root 1 0 R >>\nstartxref\n${start}\n%%EOF\n`;
-}
-function previewTask(open, earlyScroll = false) {
+function previewTask(open) {
   const preview = {
-    id: earlyScroll ? 'preview-early-scroll' : 'preview-read', app: 'Preview', ...(earlyScroll ? { heldOut: true } : {}), prepare: ctx => {
+    id: 'preview-read', app: 'Preview', prepare: ctx => {
       ctx.document = join(ctx.dir, `Read-${ctx.nonce}.pdf`); ctx.readback = `Readback ${randomBytes(12).toString('hex')}`;
-      writeFileSync(ctx.document, earlyScroll ? scrollPDF(ctx.readback) : textPDF(ctx.readback)); ctx.beforeHash = hash(ctx.document);
+      writeFileSync(ctx.document, textPDF(ctx.readback)); ctx.beforeHash = hash(ctx.document);
     },
     setup: async ctx => { preview.prepare(ctx); await acquireFixture(ctx, 'preview', () => open(ctx, {
-      app: 'Preview', bundle: 'com.apple.Preview', target: ctx.document, token: basename(ctx.document), mode: 'document',
-      placement: { slot: 0, count: 1 } })); },
-    prompt: ctx => earlyScroll ? `In Preview, use only ${ctx.document}. After acquiring its window, make your first action a downward scroll in the document. ` +
-      'Continue scrolling to the final page. Use scroll gestures, without search, page selection or navigation shortcuts. Read the single line on that final page. Reply with exactly that line, without changing or saving the PDF. Leave it open.'
-      : `In Preview, read the single line on the page of ${ctx.document}. Reply with exactly that line, without changing or saving the PDF. Leave it open.`,
+      app: 'Preview', bundle: 'com.apple.Preview', target: ctx.document, token: basename(ctx.document), mode: 'document' })); },
+    prompt: ctx => `In Preview, read the single line on the page of ${ctx.document}. Reply with exactly that line, without changing or saving the PDF. Leave it open.`,
     check: ctx => { try { return ctx.answer.trim() === ctx.readback && hash(ctx.document) === ctx.beforeHash || 'WORLD_PREVIEW_READ_MISMATCH'; } catch { return 'WORLD_PREVIEW_UNAVAILABLE'; } },
     cleanup: closeFixtures,
   };
@@ -250,8 +224,7 @@ function browserTask(id, open) {
     check: ctx => checkBrowserFixture(ctx.worldPage, ctx.answer), cleanup: closeFixtures };
 }
 
-export function getWorldTasks({ defaults, real, open = openFixture,
-  calculatorPopupSmoke = process.env.SLEIGHT_CALCULATOR_POPUP_SMOKE === '1' }) {
+export function getWorldTasks({ defaults, real, open = openFixture }) {
   const original = ['calculator-click', 'calculator-menu', 'textedit-save', 'textedit-edit', 'textedit-drag', 'chess-drag'].map(id => {
     const task = defaults.find(task => task.id === id);
     if (id.startsWith('calculator-')) return calculator(task, open);
@@ -268,14 +241,11 @@ export function getWorldTasks({ defaults, real, open = openFixture,
     } };
     return retained;
   });
-  if (calculatorPopupSmoke) original.push({
-    ...calculator(defaults.find(task => task.id === 'calculator-menu'), open, true), id: 'calculator-popup-smoke',
-  });
   const retained = ['preview-pdf', 'finder-files', 'textedit-calculator', 'word-edit', 'excel-edit'].map(id =>
     id === 'textedit-calculator' ? crossCalculatorTask(open) : real.find(task => task.id === id));
   const apps = ['vscode-edit', 'slack-post', 'spotify-play'].map(id => real.find(task => task.id === id));
   const added = ['finder-rename', 'finder-move', 'finder-create-folder'].map(id => finderTask(id, open)).concat(
-    ['textedit-two-windows', 'textedit-window-drag', 'textedit-replace-save', 'textedit-replace-all', 'textedit-insert-line'].map(id => textTask(id, open)), previewTask(open), previewTask(open, true));
+    ['textedit-two-windows', 'textedit-window-drag', 'textedit-replace-save', 'textedit-replace-all', 'textedit-insert-line'].map(id => textTask(id, open)), previewTask(open));
   // The held-out document tasks run only by name (--tasks), never in a pass without it.
   return [...original, ...retained, ...apps, ...added, ...browserKinds.map(id => browserTask(id, open)), ...heldOutTasks(open), ...ccHeldOutTasks(open), mailToSheetTask(open), ...wholeThreadTasks(), ...consentWallTasks()].map(task => ({ ...task, fixtureLifecycle: true,
     allowedApps: task.allowedApps ?? (task.id === 'textedit-calculator' ? ['TextEdit', 'Calculator'] : [task.app]).flatMap(app => fixtureApps[app] ?? []),

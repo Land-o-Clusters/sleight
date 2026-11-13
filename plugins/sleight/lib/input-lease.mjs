@@ -8,7 +8,6 @@ import { join } from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
 import { isDocumentRead } from './document-scope.mjs';
 import { isInventoryRead } from './inventory-read.mjs';
-import { parseModule } from '../vendor/meriyah/dist/meriyah.min.mjs';
 
 export const LEASE_MS = 30000;
 const validKey = key => typeof key === 'string' && /^[a-f0-9]{64}$/.test(key);
@@ -37,86 +36,67 @@ const PURE_METHODS = new Set(['split', 'slice', 'join', 'filter', 'map', 'trim',
   'replace', 'toLowerCase', 'startsWith', 'endsWith', 'substring', 'concat', 'some']);
 const READ_METHODS = ['getAXState', 'getAXStateAndScreenshot', 'getScreenshot'];
 export function isFilteredRead(code) {
-  if (typeof code !== 'string' || code.length > 4000) return false;
-  let ast, comments = false;
-  try {
-    // Use the cell parser's module goal. An illegal top-level return refuses too.
-    ast = parseModule(code, { next: true, preserveParens: true, disableWebCompat: true,
-      onComment: () => { comments = true; } });
-  } catch { return false; }
-  if (comments) return false;
-  const locals = new Set(), handles = new Set();
-  // Inventory bindings before checking reads: even a later declaration or a
-  // callback parameter must not shadow a handle or nodeRepl.
-  const inventory = node => {
-    if (!node || typeof node !== 'object') return;
-    if (node.type === 'VariableDeclarator' && node.id.type === 'Identifier') locals.add(node.id.name);
-    if (node.type === 'ArrowFunctionExpression') for (const param of node.params) {
-      if (param.type === 'Identifier') locals.add(param.name);
-    }
-    if (node.type === 'AwaitExpression' && node.argument.type === 'CallExpression') {
-      const callee = node.argument.callee;
-      if (callee.type === 'MemberExpression' && !callee.computed && callee.object.type === 'Identifier' &&
-          READ_METHODS.includes(callee.property.name)) handles.add(callee.object.name);
-    }
-    for (const value of Object.values(node)) {
-      if (Array.isArray(value)) value.forEach(inventory);
-      else if (value && typeof value === 'object') inventory(value);
-    }
-  };
-  inventory(ast);
-  if (!handles.size || locals.has('nodeRepl') || [...handles].some(name => locals.has(name))) return false;
-  let reads = 0;
-  const options = args => args.length === 0 || args.length === 1 && args[0].type === 'ObjectExpression' &&
-    args[0].properties.every(p => p.type === 'Property' && p.kind === 'init' && !p.method && !p.shorthand && !p.computed &&
-      p.key.type === 'Identifier' && ['disableDiffing', 'emit'].includes(p.key.name) &&
-      p.value.type === 'Literal' && typeof p.value.value === 'boolean');
-  const expression = node => {
-    if (!node) return false;
-    switch (node.type) {
-      case 'Literal': return true; // Meriyah has already separated regexes from executable expressions.
-      case 'ParenthesizedExpression': return expression(node.expression);
-      case 'Identifier': return !handles.has(node.name) && (locals.has(node.name) || node.name === 'undefined');
-      case 'ArrayExpression': return node.elements.every(element => element === null || expression(element));
-      case 'UnaryExpression': return ['!', '~', '+', '-', 'typeof'].includes(node.operator) && expression(node.argument);
-      case 'BinaryExpression': case 'LogicalExpression': return expression(node.left) && expression(node.right);
-      case 'ConditionalExpression': return expression(node.test) && expression(node.consequent) && expression(node.alternate);
-      case 'AwaitExpression': {
-        const call = node.argument, callee = call.callee;
-        if (call.type !== 'CallExpression' || call.optional || callee.type !== 'MemberExpression' || callee.optional ||
-            callee.computed || callee.object.type !== 'Identifier' || !handles.has(callee.object.name) ||
-            !READ_METHODS.includes(callee.property.name) || !options(call.arguments)) return false;
-        reads++; return true;
-      }
-      case 'MemberExpression':
-        // .state is the tree in getAXStateAndScreenshot's read result. Receivers
-        // still have to be pure data expressions; handles and unknown calls refuse.
-        return !node.computed && !node.optional && ['length', 'state'].includes(node.property.name) && expression(node.object);
-      case 'CallExpression': {
-        const callee = node.callee;
-        if (node.optional || callee.type !== 'MemberExpression' || callee.optional || callee.computed) return false;
-        if (callee.object.type === 'Identifier' && callee.object.name === 'nodeRepl') {
-          return ['write', 'emitImage'].includes(callee.property.name) && node.arguments.every(expression);
+  if (typeof code !== 'string' || code.length > 4000 || code.includes('`')) return false;
+  // Strings and regular expression literals become placeholders, so the calls inside them aren't seen as calls.
+  let source = '', last = '';
+  for (let i = 0; i < code.length;) {
+    const c = code[i];
+    if (c === '"' || c === "'") {
+      let j = i + 1;
+      while (j < code.length && code[j] !== c) { if (code[j] === '\\') j++; if (code[j] === '\n') return false; j++; }
+      if (j >= code.length) return false;
+      source += '""'; last = '"'; i = j + 1;
+    } else if (c === '/') {
+      if (code[i + 1] === '/' || code[i + 1] === '*') return false;
+      // A slash after an operand divides; after punctuation it can only start a regular expression.
+      if (last === '' || '(,=:[!&|?{};><+-*%~^'.includes(last)) {
+        let j = i + 1, inClass = false;
+        while (j < code.length && (code[j] !== '/' || inClass)) {
+          if (code[j] === '\\') j++; else if (code[j] === '[') inClass = true; else if (code[j] === ']') inClass = false;
+          if (code[j] === '\n') return false;
+          j++;
         }
-        if (!PURE_METHODS.has(callee.property.name) || !expression(callee.object)) return false;
-        return node.arguments.every(arg => {
-          // Pure expression callbacks retain the recorded filter/map reads.
-          // No async body, block, default parameter or callback handle alias.
-          if (arg.type !== 'ArrowFunctionExpression') return expression(arg);
-          return !arg.async && arg.params.every(p => p.type === 'Identifier') && expression(arg.body);
-        });
-      }
-      default: return false; // Includes computed, indirect and parenthesized callees, functions and templates.
+        if (j >= code.length) return false;
+        j++;
+        while (/[a-z]/i.test(code[j] ?? '')) j++;
+        source += '\u0001'; last = 'R'; i = j;
+      } else { source += c; last = c; i++; }
+    } else { source += c; if (!/\s/.test(c)) last = c; i++; }
+  }
+  if (/\b(?:function|class|new|import|eval|with|while|for|do|if|try|throw|delete|void|yield|async|globalThis|window|this|require|process|constructor|prototype|__proto__)\b/.test(source)) return false;
+  if (/\.\s*[\w$]+\s*(?:[-+*\/|&]|\?\?)?=(?!=)/.test(source) || /\]\s*=(?!=)/.test(source)) return false;
+  // The handle may appear only as the receiver of a direct awaited read: passing `ff.click` to map, destructuring it
+  // or indexing it would reach an action without a call site named click.
+  const handles = new Set();
+  const readCall = new RegExp(String.raw`\bawait\s+([A-Za-z_$][\w$]*)\.(?:${READ_METHODS.join('|')})\(\s*(?:\{\s*(?:(?:disableDiffing|emit)\s*:\s*(?:true|false)\s*,?\s*)*\})?\s*\)`, 'g');
+  const body = source.replace(readCall, (_, handle) => { handles.add(handle); return 'await \u0002'; });
+  const reads = [...body.matchAll(/\bawait \u0002/g)].length;
+  if (!reads || reads !== [...body.matchAll(/\bawait\b/g)].length) return false;
+  if (/[{}]/.test(body) || /[\w$)\]"\u0001\u0002]\s*\[/.test(body) || /\b(?:const|let|var)\s*[^A-Za-z_$\s]/.test(body)) return false;
+  const locals = new Set([...body.matchAll(/\b(?:const|let|var)\s+([A-Za-z_$][\w$]*)/g)].map(m => m[1]));
+  for (const m of body.matchAll(/(?<![\w$.])([A-Za-z_$][\w$]*)\s*=>/g)) locals.add(m[1]);
+  for (const m of body.matchAll(/\(([^()]*)\)\s*=>/g)) {
+    for (const param of m[1].split(',').map(x => x.trim()).filter(Boolean)) { if (!/^[A-Za-z_$][\w$]*$/.test(param)) return false; locals.add(param); }
+  }
+  if (locals.has('nodeRepl') || [...handles].some(handle => locals.has(handle))) return false;
+  for (const m of body.matchAll(/(?<![\w$])[A-Za-z_$][\w$]*/g)) {
+    if (body.slice(0, m.index).trimEnd().endsWith('.')) continue;
+    if (!['await', 'return', 'const', 'let', 'var', 'true', 'false', 'null', 'undefined', 'nodeRepl'].includes(m[0]) && !locals.has(m[0])) return false;
+  }
+  for (const m of body.matchAll(/\(/g)) {
+    const before = body.slice(0, m.index).replace(/\s+$/, '');
+    const name = /[A-Za-z_$][\w$]*$/.exec(before)?.[0];
+    if (name === undefined) {
+      if (/[)\]"\u0001\u0002.]$/.test(before)) return false;
+      continue;
     }
-  };
-  const allowed = ast.body.every(statement => {
-    if (statement.type === 'VariableDeclaration') return statement.declarations.every(d =>
-      d.id.type === 'Identifier' && d.init && expression(d.init));
-    if (statement.type === 'ExpressionStatement') return expression(statement.expression);
-    if (statement.type === 'ReturnStatement') return !statement.argument || expression(statement.argument);
-    return false;
-  });
-  return allowed && reads > 0;
+    const rest = before.slice(0, before.length - name.length).replace(/\s+$/, '');
+    if (!rest.endsWith('.')) { if (name === 'await' || name === 'return') continue; return false; }
+    const object = /([A-Za-z_$][\w$]*)$/.exec(rest.slice(0, -1).replace(/\s+$/, ''))?.[1];
+    if (name === 'write' || name === 'emitImage') { if (object !== 'nodeRepl') return false; continue; }
+    if (!PURE_METHODS.has(name)) return false;
+  }
+  return true;
 }
 
 // Only literal, standalone reads pass without a lease. Arbitrary JS is treated

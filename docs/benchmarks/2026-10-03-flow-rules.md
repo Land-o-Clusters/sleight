@@ -40,7 +40,7 @@ TextEdit, other key layouts, clipboard transfers and runtime-built strings were 
 
 ## Site selectors, 2026-10-09
 
-Worktree `<private-evidence>/doctor-flow`, branch `codex/doctor-flow`, base `7644809`.
+Worktree `~/Projects/sleight-wt/doctor-flow`, branch `codex/doctor-flow`, base `7644809`.
 Site tests use native Window/URL and Browser tab headers recorded by the existing fixture tests.
 Host cases cover exact matches and subdomain boundaries. Other cases check source values after
 navigation, separate tab and locator observations, missing headers, navigation URLs and typing tails.

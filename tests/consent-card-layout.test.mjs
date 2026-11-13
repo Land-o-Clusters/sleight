@@ -7,17 +7,16 @@ import { previewConsentCards, previewOrdinaryCards } from '../scripts/preview-co
 import { macCommandSkip } from './requirements.mjs';
 import { registerTemp, trackTemp } from '../scripts/temp-leftovers.mjs';
 
-test('JXA cards stay session or once only under F1 and keep flow geometry', { skip: macCommandSkip('osascript') }, t => {
+test('ordinary approval labels fit without changing flow or review geometry', { skip: macCommandSkip('osascript') }, t => {
   const directory = registerTemp(t, trackTemp(mkdtempSync(join(tmpdir(), 'sleight-ordinary-layout-'))));
   const cards = previewOrdinaryCards(directory);
   const labels = Object.fromEntries(cards.map(card => [card.mode, card.buttons.toSorted((a, b) => a.x - b.x).map(button => button.title)]));
   assert.deepEqual(labels.approval, ["Don't allow", 'Allow this session']);
-  assert.deepEqual(labels.always, ["Don't allow", 'Allow this session']);
+  assert.deepEqual(labels.always, ["Don't allow", 'Allow this session', 'Always allow']);
   assert.deepEqual(labels.once, ["Don't allow", 'Allow once'], 'body text cannot turn a one-action grant into a session label');
-  assert.deepEqual(labels['always-once'], ["Don't allow", 'Allow once']);
+  assert.deepEqual(labels['always-once'], ["Don't allow", 'Allow once', 'Always allow']);
   assert.deepEqual(labels.flow, ["Don't allow", 'Allow once']);
-  // SA1A moved review decisions to client forms because JXA cannot verify a person's input.
-  assert.deepEqual(labels.review, ["Don't allow", 'Allow once']);
+  assert.deepEqual(labels.review, ['Later', 'Undo', 'Keep']);
   for (const card of cards) {
     assert.equal(card.visible, false);
     for (const button of card.buttons) {
@@ -25,7 +24,7 @@ test('JXA cards stay session or once only under F1 and keep flow geometry', { sk
       assert.equal(button.y, 20);
     }
   }
-  for (const card of cards.filter(card => card.mode === 'flow')) {
+  for (const card of cards.filter(card => ['flow', 'review'].includes(card.mode))) {
     assert.equal(card.width, 680); assert.equal(card.height, 481);
   }
 });

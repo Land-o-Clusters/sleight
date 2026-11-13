@@ -1,4 +1,3 @@
-import { assertChildStatus } from './fixtures/child-status.mjs';
 // Constructed macOS paths are synthetic validation and redaction data, never allocation roots.
 const MAC_USERS = ['', 'Users', ''].join('/');
 // The agent-first install harness (bench/agent-install.mjs, 1.4.0 row H6), over fixtures: no session, no model, no app.
@@ -151,13 +150,13 @@ test('the guard runs as a hook process: deny JSON on stdout and a log line', () 
   try {
     const log = join(dir, 'guard.jsonl');
     const env = { PATH: process.env.PATH, HOME: process.env.HOME, AGENT_INSTALL_GUARD_LOG: log, AGENT_INSTALL_ROOTS: JSON.stringify([dir]) };
-    const run = spawnSync(process.execPath, [SELF, '--guard'], { input: JSON.stringify({ tool_name: 'Bash', tool_input: { command: 'osascript -e 1' } }), env, encoding: 'utf8', timeout: 60000, killSignal: 'SIGKILL' });
-    assertChildStatus(run, 0);
+    const run = spawnSync(process.execPath, [SELF, '--guard'], { input: JSON.stringify({ tool_name: 'Bash', tool_input: { command: 'osascript -e 1' } }), env, encoding: 'utf8' });
+    assert.equal(run.status, 0);
     assert.equal(JSON.parse(run.stdout).hookSpecificOutput.permissionDecision, 'deny');
     assert.equal(JSON.parse(readFileSync(log, 'utf8')).findings[0].rule, 'osascript');
-    const quiet = spawnSync(process.execPath, [SELF, '--guard'], { input: JSON.stringify({ tool_name: 'Bash', tool_input: { command: 'ls' } }), env, encoding: 'utf8', timeout: 60000, killSignal: 'SIGKILL' });
+    const quiet = spawnSync(process.execPath, [SELF, '--guard'], { input: JSON.stringify({ tool_name: 'Bash', tool_input: { command: 'ls' } }), env, encoding: 'utf8' });
     assert.equal(quiet.stdout, '');
-    const empty = spawnSync(process.execPath, [SELF, '--guard'], { input: '', env, encoding: 'utf8', timeout: 60000, killSignal: 'SIGKILL' });
+    const empty = spawnSync(process.execPath, [SELF, '--guard'], { input: '', env, encoding: 'utf8' });
     assert.equal(JSON.parse(empty.stdout).hookSpecificOutput.permissionDecision, 'deny');
   } finally { rmSync(dir, { recursive: true, force: true }); }
 });
@@ -322,13 +321,13 @@ test('shims refuse, log, and pass allowed host subcommands through; defaults ski
     assert.equal(statSync(join(plan.shims, 'sudo')).mode & 0o777, 0o700);
     assert.equal(readFileSync(join(plan.zdot, '.zprofile'), 'utf8'), `export PATH='${plan.shims}':"$PATH"\n`);
     const log = join(dir, 'shim.log'), env = { PATH: '/usr/bin:/bin', AGENT_INSTALL_SHIM_LOG: log };
-    const sh = (name, ...args) => spawnSync('/bin/sh', [join(plan.shims, name), ...args], { env, encoding: 'utf8', timeout: 60000, killSignal: 'SIGKILL' });
-    assertChildStatus(sh('sudo', '-v'), 126);
+    const sh = (name, ...args) => spawnSync('/bin/sh', [join(plan.shims, name), ...args], { env, encoding: 'utf8' });
+    assert.equal(sh('sudo', '-v').status, 126);
     assert.equal(sh('claude', 'plugin', 'list').stdout, 'plugin list\n');
-    assertChildStatus(sh('claude', '-p', 'hi'), 126);
-    assertChildStatus(sh('claude', 'auth', 'status', '--x'), 126);
-    assertChildStatus(sh('defaults', '-currentHost', 'write', 'x', 'k', 'v'), 126);
-    assertChildStatus(sh('defaults', 'import', 'x', 'f'), 126);
+    assert.equal(sh('claude', '-p', 'hi').status, 126);
+    assert.equal(sh('claude', 'auth', 'status', '--x').status, 126);
+    assert.equal(sh('defaults', '-currentHost', 'write', 'x', 'k', 'v').status, 126);
+    assert.equal(sh('defaults', 'import', 'x', 'f').status, 126);
     assert.equal(readFileSync(log, 'utf8'), 'sudo\t-v\nclaude\t-p hi\nclaude\tauth status --x\ndefaults\t-currentHost write x k v\ndefaults\timport x f\n');
   } finally { rmSync(dir, { recursive: true, force: true }); }
 });

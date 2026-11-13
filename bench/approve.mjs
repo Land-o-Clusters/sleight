@@ -36,17 +36,11 @@ export function benchmarkDecision(e, env = process.env) {
   const apps = speedApps ?? raceApps ?? (env.BENCH_SUITE === 'world' ? worldApps(env) : env.BENCH_SUITE === 'battery' ? approvedApps(env.BENCH_OWNER_PRESENT === '1') :
     [...BENCH_APPS, ...(env.BENCH_SUITE === 'real' ? REAL_APPS : []),
     ...(env.BENCH_SUITE === 'real' && env.BENCH_OWNER_PRESENT === '1' ? ownerPresentApps : [])]);
-  const properties = e.requested_schema?.properties ?? {};
-  const remember = Object.hasOwn(properties, 'remember');
-  const remembered = properties.remember?.enum;
-  const sessionForm = remember && Object.keys(properties).join() === 'remember' && Array.isArray(remembered) &&
-    remembered.includes('This session') && Array.isArray(e.requested_schema.required ?? []) &&
-    (e.requested_schema.required ?? []).every(key => key === 'remember');
-  const choices = properties.choice?.enum ?? [];
+  const choices = e.requested_schema?.properties?.choice?.enum ?? [];
   const supported = (!choices.length || choices.includes('session') || choices.includes('once')) &&
     (!generic || (e.requested_schema?.required ?? []).every(key => key === 'choice' && choices.length));
-  if (servers.includes(e.mcp_server_name) && apps.includes(app) && (remember ? sessionForm : supported) && e.mode !== 'url') {
-    const content = remember ? { remember: 'This session' } : choices.length ? { choice: choices.includes('session') ? 'session' : 'once' } : {};
+  if (servers.includes(e.mcp_server_name) && apps.includes(app) && supported && e.mode !== 'url') {
+    const content = choices.length ? { choice: choices.includes('session') ? 'session' : 'once' } : {};
     return { hookSpecificOutput: { hookEventName: 'Elicitation', action: 'accept', content } };
   }
   if (generic) return { hookSpecificOutput: { hookEventName: 'Elicitation', action: 'decline' } };

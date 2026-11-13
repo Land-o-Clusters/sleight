@@ -1,8 +1,14 @@
+import { trackTemp } from '../scripts/temp-leftovers.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createRequire } from 'node:module';
+import { mkdtempSync, openSync, readFileSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { spawnSync } from 'node:child_process';
+import { createTurnRecording } from '../plugins/sleight/lib/turn-recording.mjs';
 import { fixture, skip } from './fixtures/cr4-real.mjs';
-import { savedGrade } from './fixtures/recording-grade.mjs';
+import { gradeUnreadable } from './fixtures/recording-grade.mjs';
 import { captureRecordingFrame } from '../plugins/sleight/lib/direct-browser/recording.mjs';
 
 const require = createRequire(import.meta.url);
@@ -26,8 +32,28 @@ function different(frame, expected, box) {
   }
   return count;
 }
-// The saved GIF is compared 2 pixels in from the leak box's edges.
-const gradeSaved = (t, frame, expected, box) => savedGrade(t, frame, expected, box, 2);
+async function gradeSaved(t, frame, expected, box) {
+  const dir = trackTemp(mkdtempSync(join(tmpdir(), 'sleight-g13c-grade-'))), path = join(dir, 'actions.gif');
+  t.after(() => rmSync(dir, { recursive: true, force: true }));
+  const recorder = createTurnRecording({ current: () => true, capture: async () => frame,
+    createFile: () => ({ path, fd: openSync(path, 'wx', 0o600) }) });
+  await recorder.capture({ state: {} }); await recorder.end();
+  const result = spawnSync('python3', ['-c', `from PIL import Image
+import sys,json,math
+w,h,box=json.loads(sys.argv[2]); raw=sys.stdin.buffer.read(); p=Image.open(sys.argv[1]).convert('RGB')
+s=min(1,640/w,480/h); left=(640-math.floor(w*s))//2; top=(480-math.floor(h*s))//2; recovered=0
+for y in range(math.ceil((box['y']+2)*s)+top,math.floor((box['y']+box['height']-2)*s)+top):
+ for x in range(math.ceil((box['x']+2)*s)+left,math.floor((box['x']+box['width']-2)*s)+left):
+  at=(min(h-1,math.floor((y-top)/s))*w+min(w-1,math.floor((x-left)/s)))*4
+  r,g,b=raw[at:at+3]; rgb=(round((r>>5)*255/7),round((g>>5)*255/7),round((b>>6)*255/3))
+  recovered+=p.getpixel((x,y))!=rgb
+print(recovered)
+assert recovered==0,('saved GIF differs from masked reference',recovered)
+`, path, JSON.stringify([frame.width, frame.height, box])], { input: expected, encoding: 'utf8' });
+  assert.equal(result.status, 0, result.stderr);
+  t.diagnostic(`saved GIF: ${result.stdout.trim()} pixels differ from the masked reference`);
+  gradeUnreadable(t, frame, readFileSync(path), box);
+}
 const qr = '<svg xmlns="http://www.w3.org/2000/svg" width="128" height="128"><rect width="128" height="128" fill="white"/>' +
   Array.from({ length: 64 * 64 }, (_, i) => (i * 17 + Math.floor(i / 64) * 7) % 11 < 5 ? `<rect x="${i % 64 * 2}" y="${Math.floor(i / 64) * 2}" width="2" height="2"/>` : '').join('') + '</svg>';
 const media = `<img id=leak width=128 height=128 src="data:image/svg+xml,${encodeURIComponent(qr)}">`;

@@ -48,7 +48,7 @@ test('task is read-only Settings > General > About, with the system bundle ID, a
   { skip: macCommandSkip('plutil') || (!existsSync('/System/Applications/iPhone Mirroring.app/Contents/Info.plist') && 'iPhone Mirroring is not installed') }, () => {
   const task = getTask();
   const bundle = execFileSync('/usr/bin/plutil', ['-extract', 'CFBundleIdentifier', 'raw',
-    '/System/Applications/iPhone Mirroring.app/Contents/Info.plist'], { encoding: 'utf8', timeout: 30000, killSignal: 'SIGKILL' }).trim();
+    '/System/Applications/iPhone Mirroring.app/Contents/Info.plist'], { encoding: 'utf8' }).trim();
   assert.equal(task.app, 'iPhone Mirroring');
   assert.equal(task.bundle, bundle);
   assert.equal(task.bundle, 'com.apple.ScreenContinuity');

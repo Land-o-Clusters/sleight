@@ -1,52 +1,15 @@
 import { lineCommentEnd, isLineTerminator } from '../lib/code-line-terminators.mjs';
 // A literal-command guard, not a shell sandbox. Never evaluate shell text or
 // inspect scripts on disk. Opaque programs remain subject to the host's policy.
-export const shellGuardReason = "sleight's shell guard for this turn blocked a launch that could take focus. Use sleight tools. For headless, use a new empty directory: --user-data-dir=<path>, or Firefox --no-remote --profile <path>. SLEIGHT_SHELL_GUARD=0 turns this guard off.";
+export const shellGuardReason = "sleight's shell guard for this turn blocked a launch that could take focus. Use browser_open for a background tab or sleight tools for apps. Headless browser runs are allowed. Set SLEIGHT_SHELL_GUARD=0 to turn this guard off.";
 
 // Browser aliases identify CLI headless support, not app-specific UI behavior.
 const headlessBrowser = /^(?:(?:google[ -])?chrome(?:[ -](?:stable|beta|unstable|canary|for testing))?|chromium(?:-browser)?|chromium-headless-shell|chrome-headless-shell|helium|firefox(?:[ -](?:esr|nightly))?|msedge|microsoft edge(?: (?:beta|dev|canary))?|brave(?:-browser| browser)?|opera)$/i;
-const guiLauncher = /^(?:open|xdg-open|sensible-browser|osascript|safari|vivaldi|arc)$/i;
+const guiLauncher = /^(?:open|xdg-open|sensible-browser|osascript|safari)$/i;
 const shell = /^(?:(?:ba|z|da|k)?sh|fish|csh|tcsh)$/;
 const python = /^python(?:\d+(?:\.\d+)*)?$/;
 const interpreter = /^(?:python(?:\d+(?:\.\d+)*)?|node(?:js)?|perl|ruby|osascript|swift)$/;
-const runtimePlatform = typeof process === 'undefined' ? undefined : process.platform;
-
-// The mod must supply platform in its sandbox, where Node globals do not exist.
-// Keep scan state local so concurrent turns cannot change one another's dialect.
-function scanShell(input, platform, initialDepth = 0, paths = {}) {
-// Literal resolution only, including in the mod sandbox without Node globals.
-// A shell directory change makes relative resolution uncertain. Profile names
-// (-P) can select an existing Firefox profile, so only path flags qualify.
-const absolute = value => typeof value === 'string' && /^(?:\/|[a-z]:[\\/])/i.test(value);
-const cwd = /\b(?:cd|pushd|popd|chroot)\b|(?:^|\s)(?:-C|--chdir|-execdir|-okdir)/.test(input) ? undefined : paths.cwd;
-function separateProfile(value, option) {
-  if (option === '-P') return false;
-  if (/^(?:~(?=\/|$)|\$HOME(?=\/|$)|\$\{HOME\}(?=\/|$))/.test(value)) {
-    if (!absolute(paths.home) || /\bHOME=/.test(input)) return false;
-    value = value.replace(/^(?:~|\$HOME|\$\{HOME\})/, () => paths.home);
-  }
-  if (/[\p{Cc}\p{Cf}$`*?{}]/u.test(value) || value.startsWith('~')) return false;
-  // A relative profile path resolves against the shell's working directory,
-  // which an earlier cd in the same session may have moved into the real
-  // profile root, so only an absolute or home-based path qualifies.
-  if (!absolute(value)) return false;
-  const parts = [];
-  for (const part of value.replace(/\\/g, '/').split('/')) {
-    if (part === '..') parts.pop();
-    else if (part && part !== '.') parts.push(part);
-  }
-  // Case-insensitive comparison also covers the usual macOS filesystem. Match
-  // any home prefix, so a literal absolute path needs no HOME lookup.
-  const resolved = '/' + parts.join('/').toLowerCase();
-  return !/\/library\/application support\/(?:google\/chrome(?: (?:beta|canary|dev))?|chromium|microsoft edge(?: (?:beta|dev|canary))?|bravesoftware\/brave-browser(?:-beta|-nightly)?|com\.operasoftware\.opera(?:next|developer)?|opera|vivaldi|arc|helium|net\.imput\.helium|firefox\/profiles)(?:\/|$)/.test(resolved);
-}
-const base = word => {
-  const name = word.split(/[\\/]/).at(-1);
-  return platform === 'win32' || /\.exe$/i.test(name) ? name.replace(/\.exe$/i, '').toLowerCase() : name;
-};
-const windowsHost = /^(?:driver-host|cursor-host|person-host)$/i;
-const windowsLauncher = /^(?:explorer|mshta|wscript|cscript|invoke-item|ii)$/i;
-const powershell = /^(?:powershell|pwsh)$/i;
+const base = word => word.split('/').at(-1);
 
 // Tokenize literal source, without executing it or reading imported code. Keep
 // strings atomic so parentheses and process names in data cannot create calls.
@@ -120,9 +83,6 @@ function launcherStringDenied(command, depth = 0) {
       name = base(words[i++] ?? '');
     }
     if (launcher.test(name)) return true;
-    if (windowsHost.test(name) || windowsLauncher.test(name) ||
-        /^(?:start-process|saps|rundll32)$/i.test(name) || powershell.test(name) || name === 'cmd' ||
-        platform === 'win32' && name === 'start') return deniedCommand(words.slice(i - 1), depth + 1, false);
     if (!shell.test(name)) return false;
     for (; i < words.length; i++) {
       const option = /^-[^-]*?c(.*)$/s.exec(words[i]);
@@ -266,7 +226,7 @@ function lex(source, expansionOnly = false, extractHeredocs = true, stopAtParen 
     if (!expansionOnly && !quote && ['((', '[[', '$[', '$(('].some(start => source.startsWith(start, i))) {
       uncertain = true; extractHeredocs = false;
     }
-    if (c === '\\' && quote !== "'" && platform !== 'win32') {
+    if (c === '\\' && quote !== "'") {
       const next = source[++i] ?? '';
       if (next !== '\n') {
         quoted = true;
@@ -355,35 +315,6 @@ function deniedCommand(words, depth, stdinSource, heredocs = [], consumerOnly = 
   while (words.length && (/^[A-Za-z_][\w]*=/.test(words[0]) || ['!', 'then', 'do', 'else', 'elif', 'if', 'while', 'until'].includes(words[0]))) words = words.slice(1);
   if (!words.length) return false;
   const name = base(words[0]), args = words.slice(1);
-  if (powershell.test(name) || name === 'cmd') {
-    if (consumerOnly) return true;
-    for (let i = 0; i < args.length; i++) {
-      // Stop interpreting options at a script file. Its contents are opaque.
-      if (powershell.test(name) && /^-(?:file|f)$/i.test(args[i])) return false;
-      if (powershell.test(name) && args[i].length > 1 && '-encodedcommand'.startsWith(args[i].toLowerCase())) return true;
-      if (name === 'cmd' && /^\/[ck]$/i.test(args[i]))
-        return scanShell(args.slice(i + 1).join(' '), 'win32', depth + 1, paths);
-      if (powershell.test(name) && /^-(?:command|c)$/i.test(args[i]))
-        return source(args.slice(i + 1).join(' '), depth + 1, heredocs);
-    }
-    return false;
-  }
-  if (!consumerOnly && (windowsHost.test(name) || windowsLauncher.test(name))) return true;
-  if (!consumerOnly && name === 'rundll32' && /(?:^|[\\/])(?:url\.dll(?:,|$)|shell32\.dll\s*,\s*ShellExec_RunDLL(?:\s|$))/i.test(args.join(' '))) return true;
-  if (/^(?:start-process|saps)$/i.test(name) || platform === 'win32' && name === 'start') {
-    if (consumerOnly) return false;
-    let at = 0;
-    // cmd's first quoted argument is a title. Empty titles survive lexing.
-    if (name === 'start' && args[at] === '') at++;
-    while (at < args.length && /^(?:\/b|\/wait|-wait|-nonewwindow)$/i.test(args[at])) at++;
-    if (/^-filepath$/i.test(args[at] ?? '')) at++;
-    const executable = args[at++];
-    if (!executable || !headlessBrowser.test(base(executable))) return true;
-    // PowerShell's literal ArgumentList is an argv list, not a shell body.
-    const rest = name === 'start' ? args.slice(at) : args.slice(at).filter(arg => !/^-argumentlist$/i.test(arg)).flatMap(arg =>
-      lex(arg.replace(/^,+|,+$/g, ''), false, false).tokens.filter(token => token.text !== undefined).map(token => token.text.replace(/^,+|,+$/g, '')));
-    return command([executable, ...rest], depth + 1, stdinSource, heredocs);
-  }
   if (name === 'command' && args.some(arg => /^-[vV]+$/.test(arg)) &&
     args.filter(arg => arg.startsWith('-')).every(arg => /^-[vV]+$/.test(arg) || arg === '--')) return false;
   if (consumerOnly && ['xargs', 'eval', 'su', 'parallel', 'watch', 'source', '.'].includes(name)) return true;
@@ -453,29 +384,8 @@ function deniedCommand(words, depth, stdinSource, heredocs = [], consumerOnly = 
     // Only a browser with known CLI support gets a headless exemption. Flags
     // after --, strings containing a flag, and --headless=false grant nothing.
     const flags = args.slice(0, args.indexOf('--') < 0 ? args.length : args.indexOf('--'));
-    const firefox = /^firefox(?:[ -]|$)/i.test(name);
-    const profile = options => {
-      const values = flags.flatMap((arg, i) => {
-        // Chromium takes a switch value only after '='; a bare --user-data-dir
-        // is empty and the next word is a URL, so only Firefox reads a separate word.
-        if (options.includes(arg)) return [{ value: firefox ? flags[i + 1] ?? '' : '', option: arg }];
-        const option = options.find(option => arg.startsWith(option + '='));
-        return option ? [{ value: arg.slice(option.length + 1), option }] : [];
-      });
-      return values.length > 0 && values.every(({ value, option }) => value.trim() && !value.startsWith('-') && separateProfile(value, option));
-    };
-    const options = firefox ? ['--profile', '-profile', '-P'] : ['--user-data-dir'];
-    // Browsers accept other spellings (Chromium's -user-data-dir and Windows
-    // /user-data-dir, Firefox's case-insensitive --PROFILE and -p), and the last
-    // one wins. Any spelling the check above doesn't read as its own option grants nothing.
-    const stray = flags.some((arg, i) => /^(?:-{1,2}|\/)(?:user-data-dir|profile|p)(?:=|$)/i.test(arg) &&
-      !options.some(option => arg === option || arg.startsWith(option + '=')) && !options.includes(flags[i - 1]));
-    const isolated = !stray && (/^firefox(?:[ -]|$)/i.test(name)
-      ? flags.includes('--no-remote') && profile(['--profile', '-profile', '-P'])
-      : profile(['--user-data-dir']));
-    return !(browser && (args.length === 1 && ['--version', '--help'].includes(args[0]) ||
-      isolated && !flags.some(arg => arg.startsWith('--headless=') && !/^--headless=(?:new|old|true)$/.test(arg)) &&
-      flags.some(arg => /^--headless(?:=(?:new|old|true))?$/.test(arg))));
+    return !(browser && !flags.some(arg => arg.startsWith('--headless=') && !/^--headless=(?:new|old|true)$/.test(arg)) &&
+      (flags.some(arg => /^--headless(?:=(?:new|old|true))?$/.test(arg)) || args.length === 1 && ['--version', '--help'].includes(args[0])));
   }
   if (interpreter.test(name)) {
     const stdinDenied = () => Boolean(stdinSource || heredocs.some(doc => launcherPayloadDenied(doc.body, name)));
@@ -616,17 +526,6 @@ function deniedSource(source, depth = 0, inheritedHeredocs = [], allowData = tru
   return false;
 }
 
-return deniedSource(input, initialDepth);
-}
-
-function scanPlatform(input, platform, paths) {
-  if (platform === 'darwin' || platform === 'linux') return scanShell(input, platform, 0, paths);
-  // Windows Bash is Git Bash. A failed host probe must also retain POSIX
-  // escaping, so neither interpretation may hide a literal launcher.
-  return scanShell(input, 'darwin', 0, paths) || scanShell(input, 'win32', 0, paths);
-}
-
 export function shellLaunchDenied(event) {
-  return ['Bash', 'PowerShell', 'Monitor'].includes(event?.tool) && typeof event.command === 'string' &&
-    scanPlatform(event.command, event.platform ?? runtimePlatform, event);
+  return event?.tool === 'Bash' && typeof event.command === 'string' && deniedSource(event.command);
 }

@@ -1,4 +1,3 @@
-import { assertChildStatus } from './fixtures/child-status.mjs';
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
@@ -76,8 +75,8 @@ for (const [name, failure] of [
     relay.dispose(); streams.forEach(stream => stream.destroy());
     Module._load = original;
     assert.equal(parseCell('1').error, null);
-  `], { encoding: 'utf8', timeout: 15_000, killSignal: 'SIGKILL' });
-  assertChildStatus(child, 0, child.stderr);
+  `], { encoding: 'utf8', timeout: 15_000 });
+  assert.equal(child.status, 0, child.stderr);
 });
 
 test('doctor line names the actual Node runtime and loaded parser', () => {
@@ -114,8 +113,8 @@ test('duplicate-binding diagnostics are capped at 200 characters and strip contr
       assert.ok(!/[\\p{Cc}\\p{Cf}\\p{Zl}\\p{Zp}]/u.test(error.reason));
     }
     assert.deepEqual(parseCell('CONTROL').error, {line:0, column:0, reason:'Duplicate binding end'});
-  `], { encoding: 'utf8', timeout: 10_000, killSignal: 'SIGKILL' });
-  assertChildStatus(child, 0, child.stderr);
+  `], { encoding: 'utf8', timeout: 10_000 });
+  assert.equal(child.status, 0, child.stderr);
 });
 
 test('raw CR in a string retains escape guidance', () => {

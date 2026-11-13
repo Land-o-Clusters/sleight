@@ -1,6 +1,6 @@
 # Preapproved apps, 2026-10-04
 
-Branch `codex/user-preapproved-apps`, worktree `<private-evidence>/user-preapproved-apps`.
+Branch `codex/user-preapproved-apps`, worktree `~/Projects/sleight-wt/user-preapproved-apps`.
 Claude Code 2.1.289, Sonnet 5.5, medium effort, engine 26.930.31730. Each launched session used an
 empty temporary folder and this branch's MCP server. The driver disabled built-in tools and approval
 hooks.
@@ -76,7 +76,7 @@ across 18 files. `bench/run.mjs` was not run.
 
 The user reported that cancellation failed with `kill EPERM` in two of nine full checks,
 while the test passed alone. The fix started from `origin/main` at `f35565c` in
-`<private-evidence>/preapproved-group-exit`, on `codex/preapproved-group-exit`.
+`~/Projects/sleight-wt/preapproved-group-exit`, on `codex/preapproved-group-exit`.
 After the owned leader exits, an `ESRCH` or `EPERM` response now marks its group as collected.
 Later cleanup skips that group. Permission errors before leader exit and other errors still fail.
 

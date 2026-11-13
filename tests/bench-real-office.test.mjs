@@ -33,7 +33,7 @@ function save(ctx, parts) {
     mkdirSync(dirname(join(stage, name)), { recursive: true });
     writeFileSync(join(stage, name), data);
   }
-  execFileSync('/usr/bin/zip', ['-q', ctx.officePath, ...Object.keys(parts)], { cwd: stage, timeout: 30000, killSignal: 'SIGKILL' });
+  execFileSync('/usr/bin/zip', ['-q', ctx.officePath, ...Object.keys(parts)], { cwd: stage });
 }
 
 // Construct the transport here, independently of the production ZIP writer.
@@ -214,15 +214,15 @@ test('Office prepares nonce-scoped documents that fail until edited and never ov
   for (const task of tasks.officeTasks) {
     const ctx = ctxFor(t);
     await task.prepare(ctx);
-    const integrity = execFileSync('/usr/bin/unzip', ['-t', ctx.officePath], { encoding: 'utf8', timeout: 30000, killSignal: 'SIGKILL' });
+    const integrity = execFileSync('/usr/bin/unzip', ['-t', ctx.officePath], { encoding: 'utf8' });
     assert.match(integrity, /No errors detected/);
     const main = task.id === 'word-edit' ? 'word/document.xml' : task.id === 'excel-edit' ? 'xl/workbook.xml' : 'ppt/presentation.xml';
-    const document = execFileSync('/usr/bin/unzip', ['-p', ctx.officePath, main], { encoding: 'utf8', timeout: 30000, killSignal: 'SIGKILL' });
+    const document = execFileSync('/usr/bin/unzip', ['-p', ctx.officePath, main], { encoding: 'utf8' });
     assert.match(document, /document|workbook|presentation/);
     if (task.id === 'powerpoint-edit') {
-      const theme = execFileSync('/usr/bin/unzip', ['-p', ctx.officePath, 'ppt/theme/theme1.xml'], { encoding: 'utf8', timeout: 30000, killSignal: 'SIGKILL' });
+      const theme = execFileSync('/usr/bin/unzip', ['-p', ctx.officePath, 'ppt/theme/theme1.xml'], { encoding: 'utf8' });
       assert.match(theme, /themeElements/);
-      const props = execFileSync('/usr/bin/unzip', ['-p', ctx.officePath, 'ppt/presProps.xml'], { encoding: 'utf8', timeout: 30000, killSignal: 'SIGKILL' });
+      const props = execFileSync('/usr/bin/unzip', ['-p', ctx.officePath, 'ppt/presProps.xml'], { encoding: 'utf8' });
       assert.match(props, /presentationPr/);
     }
     assert.ok(ctx.officePath.startsWith(ctx.dir + '/'));

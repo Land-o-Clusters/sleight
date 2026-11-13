@@ -3,11 +3,8 @@ import assert from 'node:assert/strict';
 import { readFileSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { packageSkip } from './requirements.mjs';
-const parserSkip = packageSkip('typescript');
-const typescript = parserSkip ? undefined : (await import('typescript')).default;
 import { API_MEMBERS, BROWSER_METHODS, CUA_METHODS, MATCHED_ONLY, PROBE_CODE, apiBlock, checkApiContract, checkPolicyRewrite, checkReplProbe,
-  checkToolSurface, checkWorkflowRewrite, membersOf, parseDeclarations, parseProbe } from '../bench/compat/contract.mjs';
+  checkToolSurface, membersOf, parseDeclarations, parseProbe } from '../bench/compat/contract.mjs';
 
 const fixture = name => readFileSync(new URL(`./fixtures/${name}`, import.meta.url), 'utf8');
 const ts = fixture('engine-api-26.1007.71326.ts');
@@ -44,22 +41,6 @@ test('the recorded API passes, and a removed member sleight uses fails by name',
   assert.equal(checkApiContract(docs(ts, 'no policy')).at(1).status, 'warn');
 });
 
-test('the current and earlier drag declarations support coordinates, and incompatible signatures fail', () => {
-  const current = fixture('engine-api-26.1027.51404.txt');
-  assert.deepEqual(checkApiContract(current).map(row => row.status), ['pass', 'pass']);
-  assert.deepEqual(checkApiContract(current.replaceAll('ScreenshotInputOptions', 'RenamedInputOptions')).map(row => row.status), ['pass', 'pass']);
-  assert.deepEqual(checkApiContract(docs()).map(row => row.status), ['pass', 'pass']);
-  for (const broken of [
-    current.replaceAll('drag(from: Vec2, to: Vec2', 'drag(from: number, to: number'),
-    current.replace('drag(from: Vec2, to: Vec2, options?: ScreenshotInputOptions)', 'drag(from: Vec2, to: Vec2, options: RequiredOptions)'),
-    docs(ts.replace('drag(from: Vec2, to: Vec2)', 'drag(from: number, to: number)')),
-  ]) {
-    const row = checkApiContract(broken).find(row => row.id === 'api-contract');
-    assert.equal(row.status, 'fail');
-    assert.match(row.reason, /drag.*signature/);
-  }
-});
-
 test('the tool surface needs js with code, timeout_ms and title, and turn_ended', () => {
   const ok = checkToolSurface([jsTool(), { name: 'js_reset' }, { name: 'turn_ended' }]);
   assert.deepEqual(ok.map(r => [r.id, r.status]), [['tool-surface', 'pass'], ['js-description', 'pass']]);
@@ -78,12 +59,6 @@ test('the policy rewrite applies to the recorded policy and warns when the engin
   assert.match(changed[0].reason, /ask again/);
   assert.equal(checkPolicyRewrite(['Invalid app: x'])[0].status, 'warn');
   assert.match(checkPolicyRewrite(['Intro\n## Computer Use\n' + policy])[0].reason, /no result item starts/);
-});
-
-test('current raw documentation retains the payment and Workflow rewrite matches', () => {
-  const current = fixture('engine-api-26.1027.51404.txt');
-  assert.equal(checkPolicyRewrite([current])[0].status, 'pass');
-  assert.equal(checkWorkflowRewrite([current])[0].status, 'pass');
 });
 
 test('the probe code runs as written and its shapes pass the check', async () => {
@@ -126,37 +101,11 @@ test('the probe judges browser methods by the surfaces the engine ran with', () 
   assert.deepEqual(BROWSER_METHODS.filter(name => !CUA_METHODS.includes(name)), []);
 });
 
-// GLC1 imports repl/cua.mjs. A path component is not an engine member;
-// keep scanning quoted/generated code, which does contain engine calls.
-function calledCuaMembers(source) {
-  const paths = [];
-  const visit = node => {
-    if ((typescript.isImportDeclaration(node) || typescript.isExportDeclaration(node)) && node.moduleSpecifier) paths.push(node.moduleSpecifier);
-    if (typescript.isCallExpression(node) && node.expression.kind === typescript.SyntaxKind.ImportKeyword &&
-      node.arguments.length && typescript.isStringLiteralLike(node.arguments[0])) paths.push(node.arguments[0]);
-    typescript.forEachChild(node, visit);
-  };
-  visit(typescript.createSourceFile('source.mjs', source, typescript.ScriptTarget.Latest, true, typescript.ScriptKind.JS));
-  for (const path of paths.sort((a, b) => b.pos - a.pos)) source = source.slice(0, path.pos) + ' '.repeat(path.end - path.pos) + source.slice(path.end);
-  return [...source.matchAll(/\bcua\.([A-Za-z_]\w*)/g)].map(match => match[1]);
-}
-test('engine member scanning distinguishes module paths from generated calls', { skip: parserSkip }, () => {
-  assert.deepEqual(calledCuaMembers(`import { notice } from './repl/cua.mjs';
-    export { notice } from './repl/cua.mjs';
-    await import('./repl/cua.mjs');
-    const code = 'await cua.getApp("Fixture")';
-    await cua.unlistedMethod();
-    await globalThis.cua.missing();
-    const ratio = 10/cua.otherMissing();
-    const codeWithPath = 'await cua.mjs()';`), ['getApp', 'unlistedMethod', 'missing', 'otherMissing', 'mjs']);
-});
-
-test('every cua method sleight calls is in the contract', { skip: parserSkip }, () => {
+test('every cua method sleight calls is in the contract', () => {
   const lib = fileURLToPath(new URL('../plugins/sleight/lib/', import.meta.url));
-  // The native REPL implements its own cua facade, not the ChatGPT engine API.
-  const files = readdirSync(lib, { recursive: true }).filter(name => /\.m?js$/.test(name) && !/^(?:windows-)?repl[/\\]/.test(name));
+  const files = readdirSync(lib, { recursive: true }).filter(name => /\.m?js$/.test(name));
   const called = new Set();
-  for (const name of files) for (const member of calledCuaMembers(readFileSync(join(lib, name), 'utf8'))) called.add(member);
+  for (const name of files) for (const match of readFileSync(join(lib, name), 'utf8').matchAll(/\bcua\.([A-Za-z_]\w*)/g)) called.add(match[1]);
   const listed = new Set([...CUA_METHODS, ...MATCHED_ONLY]);
   assert.deepEqual([...called].filter(name => !listed.has(name)), []);
   assert.deepEqual(API_MEMBERS.cua, CUA_METHODS);

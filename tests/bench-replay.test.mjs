@@ -24,19 +24,6 @@ const { nativePlan } = await import('../bench/replay/fixtures.mjs');
 const { workerSwitches } = await import('../bench/replay/switches.mjs');
 
 const fixture = name => readFileSync(new URL(`./fixtures/replay/${name}.jsonl`, import.meta.url), 'utf8');
-
-test('replay waits at idle boundaries with no iteration deadline and aborts waits as 130', async () => {
-  let held = true, waits = 0;
-  const control = runner.replayControl({ hold: () => held, wait: async () => { waits++; held = false; }, log() {} });
-  try {
-    await control.boundary();
-    assert.equal(waits, 1); assert.equal(control.signal.aborted, false);
-    await control.beforeCall();
-  } finally { control.dispose(); }
-  const interrupted = runner.replayControl({ hold: () => true, wait: async () => interrupted.abort(Error('operator stop')), log() {} });
-  try { await assert.rejects(interrupted.boundary(), error => error.exitCode === 130); }
-  finally { interrupted.dispose(); }
-});
 const nativeHeader = 'Window: "Fixture", App: TextEdit.\n';
 const observeNative = (mapper, before, after) => mapper.observe(nativeHeader + before, nativeHeader + after, { code: 'await app.getAXState()' }, { server: 'plugin:sleight:computer', name: 'js' });
 
@@ -256,9 +243,7 @@ test('load results selects one row and requires retained transcript evidence', (
     writeFileSync(file, JSON.stringify({ stamp: 'one', suite: 'world', results: [{ arm: 'sleight', task: 'textedit-window-drag', run: 1 }, { arm: 'sleight', task: 'textedit-window-drag', run: 2 }] }));
     assert.throws(() => loadRecording(file, { task: 'textedit-window-drag', evidence }), /exactly one/);
     assert.equal(loadRecording(file, { task: 'textedit-window-drag', run: 1, evidence }).calls.length, 2);
-    assert.equal(loadRecording(file, { task: 'textedit-window-drag', run: 1, evidence: dir }).calls.length, 2);
-    const missing = join(dir, 'missing'); mkdirSync(missing);
-    assert.throws(() => loadRecording(file, { task: 'textedit-window-drag', run: 1, evidence: missing }), /Transcript missing/);
+    assert.throws(() => loadRecording(file, { task: 'textedit-window-drag', run: 1, evidence: dir }), /Transcript missing/);
   } finally { rmSync(dir, { recursive: true }); }
 });
 
@@ -382,7 +367,7 @@ test('worktree comparison plans alternate the same recording across two identifi
       mkdirSync(join(path, 'bench/turbo'), { recursive: true });
       writeFileSync(join(path, 'plugins/sleight/lib/launch.mjs'), 'export async function run({ approvalStorage, paymentCardFactory } = {}) {}');
       writeFileSync(join(path, 'bench/turbo/v3-server.mjs'), '// offline fixture');
-      const git = args => execFileSync('/usr/bin/git', ['-C', path, ...args], { stdio: 'pipe', timeout: 30000, killSignal: 'SIGKILL' });
+      const git = args => execFileSync('/usr/bin/git', ['-C', path, ...args], { stdio: 'pipe' });
       git(['init']); git(['add', '--', 'plugins/sleight/lib/launch.mjs', 'bench/turbo/v3-server.mjs']);
       git(['-c', 'user.name=Offline test', '-c', 'user.email=offline@example.invalid', '-c', 'commit.gpgsign=false', 'commit', '-m', 'Offline build fixture', '--', 'plugins/sleight/lib/launch.mjs', 'bench/turbo/v3-server.mjs']);
       return path;
@@ -399,7 +384,7 @@ test('worktree comparison plans alternate the same recording across two identifi
       await assert.rejects(main([dir, '--plan', '--old-worktree', '.']), /both --old-worktree and --new-worktree/);
       await assert.rejects(main([dir, '--plan', '--old-worktree', '.', '--new-worktree', '.', '--compare', 'SLEIGHT_DP2=0']), /cannot combine/);
       await assert.rejects(main([dir, '--plan', '--old-worktree', dir, '--new-worktree', '.']), /Git worktree/);
-      await assert.rejects(main([dir, '--plan', '--old-worktree', builds[0], '--new-worktree', builds[0]]), /distinct worktrees/);
+      await assert.rejects(main([dir, '--plan', '--old-worktree', '.', '--new-worktree', '.']), /distinct worktrees/);
     } finally { console.log = log; }
   } finally { rmSync(dir, { recursive: true }); }
 });
@@ -412,10 +397,10 @@ test('native replay shim loads the selected build with empty approvals and no pa
       console.log(JSON.stringify({ build: 'old fixture', grants: approvalStorage.load().list(),
         cardSuppressed: paymentCardFactory() === undefined, directBrowser, turbo: process.env.SLEIGHT_TURBO }));
     }`);
-    const output = execFileSync(process.execPath, ['bench/replay/server.mjs', '--worktree', dir], { encoding: 'utf8', timeout: 60000, killSignal: 'SIGKILL' });
+    const output = execFileSync(process.execPath, ['bench/replay/server.mjs', '--worktree', dir], { encoding: 'utf8' });
     assert.deepEqual(JSON.parse(output), { build: 'old fixture', grants: [], cardSuppressed: true, turbo: '0' });
     writeFileSync(join(dir, 'plugins/sleight/lib/launch.mjs'), 'export async function run() { console.log("unsafe launcher ran"); }');
-    assert.throws(() => execFileSync(process.execPath, ['bench/replay/server.mjs', '--worktree', dir], { encoding: 'utf8', stdio: 'pipe', timeout: 60000, killSignal: 'SIGKILL' }), error => {
+    assert.throws(() => execFileSync(process.execPath, ['bench/replay/server.mjs', '--worktree', dir], { encoding: 'utf8', stdio: 'pipe' }), error => {
       assert.equal(error.stdout, ''); assert.match(error.stderr, /requires SR2 launcher injection/); return true;
     });
   } finally { rmSync(dir, { recursive: true }); }

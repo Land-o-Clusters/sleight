@@ -1,4 +1,3 @@
-import { platformPaths, platformJoin } from './platform/paths.mjs';
 // Grok Bot's local shell reaches one relay over a private, same-user Unix socket.
 import { randomUUID } from 'node:crypto';
 import { DatabaseSync } from 'node:sqlite';
@@ -25,7 +24,7 @@ const approvalError = app => new Error(`sleight: approval not answered for ${app
 const pendingApprovalError = status => status.state === 'preparing'
   ? new Error(`sleight: approval preparation for ${approvalLabel(status.app)} did not finish before the deadline; no approval was granted. Tell the user and do not retry.`)
   : approvalError(status.app);
-export const socketDirectory = () => platformJoin()(platformPaths().cache, 'shell');
+export const socketDirectory = () => dirname(join(userInfo().homedir, SOCKET_FILE));
 
 // Caller settings must never weaken a persistent session's guards or load caller code.
 export function sessionEnvironment(env = process.env) {

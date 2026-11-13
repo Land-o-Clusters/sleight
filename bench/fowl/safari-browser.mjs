@@ -49,8 +49,7 @@ export async function prepareSafariBridge(root, { spawnBrowser = spawn, timeoutM
       fileURLToPath(new URL('./safari-helper.swift', import.meta.url)), '-o', executable], { timeout: 60000 });
   } finally { rmSync(cache, { recursive: true, force: true }); }
   const child = spawnBrowser(executable, [], { stdio: ['pipe', 'pipe', 'pipe'] });
-  let pending, failure, stderr = '', exited = false;
-  child.once('close', () => { exited = true; });
+  let pending, failure, stderr = '';
   const closed = new Promise(resolve => child.once('close', resolve));
   const fail = error => { failure = error; pending?.reject(error); child.stdin.end(); };
   child.once('error', fail);
@@ -80,19 +79,9 @@ export async function prepareSafariBridge(root, { spawnBrowser = spawn, timeoutM
     },
     async close() {
       child.stdin.end();
-      const collected = async () => {
-        if (exited) return true;
-        let timer;
-        try { return await Promise.race([closed.then(() => true), new Promise(resolve => { timer = setTimeout(() => resolve(false), timeoutMs); })]); }
-        finally { clearTimeout(timer); }
-      };
-      try {
-        if (await collected()) return;
-        child.kill('SIGTERM');
-        if (await collected()) return;
-        child.kill('SIGKILL');
-        if (!await collected()) throw Error('BENCH_BROWSER_CLEANUP_UNPROVED');
-      } finally { lines.close(); }
+      let timer;
+      try { await Promise.race([closed, new Promise((_, reject) => { timer = setTimeout(() => reject(Error('BENCH_BROWSER_CLEANUP_UNPROVED')), timeoutMs); })]); }
+      finally { clearTimeout(timer); lines.close(); }
     },
   };
 }
@@ -304,17 +293,14 @@ export async function launchSafari(plan, { spawnBrowser, listProcesses, timeoutM
         unavailableGraders: ['retention', 'handoff', 'completed downloads', 'device viewport'] };
     }
   };
-  browser.dispose = async () => { await bridge?.close(); };
   browser.stop = async () => {
     if (stopped) return stopped;
     let collectionError;
-    try { if (running) await quitCurrent(); }
-    catch (error) { collectionError = error; }
-    // Collect the transport even when Safari quit is unproved. The receipt and
-    // fixture root stay available, and callers retain the live lock in that case.
-    try { await bridge?.close(); }
-    catch (error) { throw Error('BENCH_BROWSER_CLEANUP_UNPROVED', { cause: error }); }
-    if (running) throw collectionError ?? Error('BENCH_BROWSER_CLEANUP_UNPROVED');
+    if (running) {
+      try { await quitCurrent(); }
+      catch (error) { if (running) throw error; collectionError = error; }
+    }
+    try { await bridge?.close(); } catch (error) { throw Error('BENCH_BROWSER_CLEANUP_UNPROVED', { cause: error }); }
     rmSync(root, { recursive: true });
     stopped = { browserClosed: true, profileDeleted: false, harnessDeleted: true };
     if (collectionError) throw collectionError;

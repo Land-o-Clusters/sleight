@@ -4,7 +4,6 @@
 // no app content and opens no pipe. The app it names is made up, and the debugger store is a file in the same folder.
 //   node bench/electron-consent-run.mjs --receipt <path to a new .json file>
 // Each step prints the button to click. A different click is recorded as a mismatch, not an error.
-import { helperCompileArgs } from '../plugins/sleight/lib/direct-browser/host-cache.mjs';
 import { spawn, spawnSync } from 'node:child_process';
 import { mkdtempSync, realpathSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -71,23 +70,13 @@ export async function runConsentRun({ ui, directory, say = console.log, wait = 2
   return { version: 1, finished: new Date().toISOString(), cards, passed: steps.every(step => step.ok), steps };
 }
 
-export function compileConsentRun(directory, run = spawnSync) {
-  const binary = join(directory, 'consent-host');
-  const built = run('/usr/bin/xcrun', helperCompileArgs('consent-host', {
-    sources: [fileURLToPath(new URL('../plugins/sleight/lib/direct-browser/native/consent-host.swift', import.meta.url))],
-    binary, moduleCache: swiftModuleCache(),
-  }), { encoding: 'utf8', timeout: 300000, killSignal: 'SIGKILL' });
-  if (built.status !== 0) throw Error(built.stderr || 'CONSENT_RUN_COMPILE_FAILED');
-  return binary;
-}
-
 if (process.argv[1] === fileURLToPath(import.meta.url)) {
   const at = process.argv.indexOf('--receipt'), receipt = at > 0 ? process.argv[at + 1] : undefined;
   if (!receipt || !isAbsolute(receipt)) { console.error('usage: node bench/electron-consent-run.mjs --receipt <absolute path of a new .json file>'); process.exit(2); }
   const directory = realpathSync(mkdtempSync(join(tmpdir(), 'sleight-consent-run-')));
-  let binary;
-  try { binary = compileConsentRun(directory); }
-  catch (error) { console.error(error.message); process.exit(1); }
+  const binary = join(directory, 'consent-host');
+  const built = spawnSync('/usr/bin/xcrun', ['swiftc', '-module-cache-path', swiftModuleCache(), fileURLToPath(new URL('../plugins/sleight/lib/direct-browser/native/consent-host.swift', import.meta.url)), '-o', binary], { encoding: 'utf8' });
+  if (built.status !== 0) { console.error(built.stderr); process.exit(1); }
   const child = spawn(binary, [], { env: { PATH: '/usr/bin:/bin', LANG: 'en_US.UTF-8' }, stdio: ['pipe', 'pipe', 'ignore'] });
   const ui = createUiChannel({ read: child.stdout, write: child.stdin, onLoss: () => { console.error('consent host closed'); } });
   console.log('A sleight menu bar item appears. Open it, choose "Review sleight request", and click the button named in each step.');

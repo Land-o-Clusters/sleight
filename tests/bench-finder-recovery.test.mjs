@@ -1047,8 +1047,7 @@ for (const extra of [false, true]) test(`R2 cleanup preserves baseline fixture-r
     closeButton: (w, guard) => { guard(); closed.push(w); windows = windows.filter(item => item !== w); } };
   const request = { fixtureRoot: '/fixture', target: '/fixture/current', finderOwnership: {
     schema: 'finder-role-baseline-v1', baseline: [{ reference: baseline, role: 'AXWindow' }], created: [owned] } };
-  if (extra) assert.throws(() => s.closeFinderFixtureWindows(owned, request, {}, api), /replacement window ownership unconfirmed/);
-  else s.closeFinderFixtureWindows(owned, request, {}, api);
+  s.closeFinderFixtureWindows(owned, request, {}, api);
   assert.ok(windows.includes(baseline));
   assert.ok(!closed.includes(baseline));
   if (extra) assert.ok(windows.includes(unknown));
@@ -1233,10 +1232,10 @@ test('R5 identity lookup latency cannot turn an immediate AX error into timeout 
 test('R2 setup recovery leaves extra windows alone after the retained window disappears', () => {
   const s = source(), owned = {}, extra = {}, request = { bundle: 'com.apple.finder', mode: 'folder',
     finderOwnership: { schema: 'finder-role-baseline-v1', baseline: [], created: [owned] } };
-  assert.throws(() => s.recoverSetup(owned, request, {
+  assert.equal(s.recoverSetup(owned, request, {
     exists: () => false, finderRole: () => 'AXWindow', windows: () => [extra], equal: (a, b) => a === b,
     closeButton: () => assert.fail('preserve an extra window without creation proof'),
-  }, {}), /replacement window ownership unconfirmed/);
+  }, {}), 'closed retained fixture');
 });
 
 test('R3 default acquisition retains the exact synthetic task lock after Finder cleanup fails', async t => {

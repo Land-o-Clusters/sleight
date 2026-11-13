@@ -1,4 +1,3 @@
-import { assertChildStatus } from './fixtures/child-status.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import * as fs from 'node:fs';
@@ -33,8 +32,8 @@ for (const command of ['sleight hand status', 'sleight turbo status', 'sleight p
   test('shell allows ' + command, async () => assert.equal(await deny(command), false));
 }
 for (const op of ['menu', 'link', 'unlink']) test(op + ' refuses outside an own terminal before any command work', () => {
-  const run = spawnSync(process.execPath, [launch, op], { encoding: 'utf8', env: process.env, timeout: 10000, killSignal: 'SIGKILL' });
-  assertChildStatus(run, 3, run.stderr); assert.equal(run.stdout, ''); assert.match(run.stderr, /run it yourself in a terminal/);
+  const run = spawnSync(process.execPath, [launch, op], { encoding: 'utf8', env: process.env, timeout: 10000 });
+  assert.equal(run.status, 3, run.stderr); assert.equal(run.stdout, ''); assert.match(run.stderr, /run it yourself in a terminal/);
 });
 function fixture(t) {
   const home = root(t), config = path.join(home, 'config'), recorded = path.join(config, "plugins/cache/fixture/sleight/old plugin's copy");
@@ -57,19 +56,19 @@ test('shim resolves the current install, a moved update, missing record fallback
   assert.equal(managedShim(f.home), true); assert.equal(fs.readlinkSync(path.join(f.home, '.local/bin/sleight')), '.sleight-shim-v1'); assert.match(settingsDoctorLine(f.home, { PATH: path.join(f.home, '.local/bin') }), /Settings: sleight menu/);
   assert.ok(output.includes('export PATH="$HOME/.local/bin:$PATH"\n'));
   const command = path.join(f.home, '.local/bin/sleight');
-  const run = () => spawnSync(command, ['menu', 'argument with spaces', "a'b"], { encoding: 'utf8', env: { ...process.env, HOME: f.home, CLAUDE_CONFIG_DIR: f.config }, timeout: 10000, killSignal: 'SIGKILL' });
+  const run = () => spawnSync(command, ['menu', 'argument with spaces', "a'b"], { encoding: 'utf8', env: { ...process.env, HOME: f.home, CLAUDE_CONFIG_DIR: f.config }, timeout: 10000 });
   for (const name of ['current plugin', "updated plugin's copy"]) {
     const install = f.make(name); f.record([{ scope: 'user', installPath: install }]);
-    const result = run(); assertChildStatus(result, 0, result.stderr);
+    const result = run(); assert.equal(result.status, 0, result.stderr);
     assert.deepEqual(result.stdout.trim().split('\n'), [path.join(install, 'bin/sleight-mcp'), 'menu', 'argument with spaces', "a'b"]);
   }
   const project = f.make('project install'); f.record([{ scope: 'project', installPath: project }]);
   assert.equal(run().stdout.split('\n')[0], path.join(f.recorded, 'bin/sleight-mcp'));
   f.record([]); assert.equal(run().stdout.split('\n')[0], path.join(f.recorded, 'bin/sleight-mcp'));
   fs.unlinkSync(path.join(f.config, 'plugins/installed_plugins.json'));
-  assertChildStatus(run(), 0);
+  assert.equal(run().status, 0);
   fs.rmSync(f.recorded, { recursive: true });
-  const missing = run(); assertChildStatus(missing, 1); assert.match(missing.stderr, /no installed sleight launcher found/);
+  const missing = run(); assert.equal(missing.status, 1); assert.match(missing.stderr, /no installed sleight launcher found/);
 });
 test('resolver rejects ambiguous or relative records and uses the recorded fallback', t => {
   const f = fixture(t), install = f.make('current');
@@ -201,10 +200,10 @@ for owns in [false, true] {
 let data = try! JSONSerialization.data(withJSONObject: SettingsMenuPlan(menuOnly: true).json)
 FileHandle.standardOutput.write(data)
 `);
-  const built = spawnSync('/usr/bin/xcrun', ['swiftc', '-module-cache-path', swiftModuleCache(), swift, '-o', bin], { encoding: 'utf8', timeout: 600000, killSignal: 'SIGKILL' });
-  assertChildStatus(built, 0, built.stderr);
+  const built = spawnSync('/usr/bin/xcrun', ['swiftc', '-module-cache-path', swiftModuleCache(), swift, '-o', bin], { encoding: 'utf8' });
+  assert.equal(built.status, 0, built.stderr);
   const bank = path.join(dir, 'private'); fs.mkdirSync(bank, { mode: 0o700 });
-  const result = spawnSync(bin, [path.join(bank, 'menu-presence.lock')], { encoding: 'utf8', timeout: 60000, killSignal: 'SIGKILL' }); assertChildStatus(result, 0, result.stderr);
+  const result = spawnSync(bin, [path.join(bank, 'menu-presence.lock')], { encoding: 'utf8' }); assert.equal(result.status, 0, result.stderr);
   assert.deepEqual(JSON.parse(result.stdout), { pause: false, resume: false, quit: true, drawsCursor: false, extraRows: ['Quit Menu'] });
   assert.match(source, /if plan\.pause &&/); assert.match(source, /if plan\.quit \{/);
   assert.match(source, /func quitMenu[\s\S]*?guard settingsMenu, personMenuActivation\(sender\)/);
@@ -214,15 +213,15 @@ FileHandle.standardOutput.write(data)
 test('full consent host compiles and dumps the menu-only plan before creating an application', { skip: macCommandSkip('xcrun') }, t => {
   const dir = root(t), binary = path.join(dir, 'consent-host');
   const file = new URL('../plugins/sleight/lib/direct-browser/native/consent-host.swift', import.meta.url).pathname;
-  const built = spawnSync('/usr/bin/xcrun', ['swiftc', '-module-cache-path', swiftModuleCache(), file, '-o', binary], { encoding: 'utf8', timeout: 600000, killSignal: 'SIGKILL' });
-  assertChildStatus(built, 0, built.stderr);
+  const built = spawnSync('/usr/bin/xcrun', ['swiftc', '-module-cache-path', swiftModuleCache(), file, '-o', binary], { encoding: 'utf8' });
+  assert.equal(built.status, 0, built.stderr);
   t.diagnostic(`hostBytes=${fs.statSync(binary).size}`);
-  const result = spawnSync(binary, ['--settings-menu-dump'], { encoding: 'utf8', timeout: 10000, killSignal: 'SIGKILL' });
-  assertChildStatus(result, 0, result.stderr);
+  const result = spawnSync(binary, ['--settings-menu-dump'], { encoding: 'utf8', timeout: 10000 });
+  assert.equal(result.status, 0, result.stderr);
   assert.deepEqual(JSON.parse(result.stdout), { pause: false, resume: false, quit: true, drawsCursor: false, extraRows: ['Quit Menu'] });
   const input = spawnSync(binary, ['--cursor-menu-dump'], { encoding: 'utf8', timeout: 10000,
-    input: JSON.stringify({ hand: 'picker', nonce: 'a'.repeat(64), op: 'input-check' }) + '\n', killSignal: 'SIGKILL' });
-  assertChildStatus(input, 0, input.stderr);
+    input: JSON.stringify({ hand: 'picker', nonce: 'a'.repeat(64), op: 'input-check' }) + '\n' });
+  assert.equal(input.status, 0, input.stderr);
   assert.deepEqual(JSON.parse(input.stdout), { hardware: true, synthetic: false, keyboard: true, return: true, enter: true,
     otherKey: false, unhighlighted: false, old: false, future: false, mouseDown: false, wrongWindow: false, ax: false, axMethodsRefused: true, absent: false });
   assert.ok(source.indexOf('if arguments == ["--settings-menu-dump"]') < source.indexOf('let app = NSApplication.shared'));
@@ -235,8 +234,8 @@ test('the PATH shim retains the launcher terminal gate for menu and link', async
   await linkCommand('link', [], { home, recorded, ask: async () => true, out: () => {} });
   for (const op of ['menu', 'link']) {
     const run = spawnSync(path.join(home, '.local/bin/sleight'), [op], { encoding: 'utf8', timeout: 10000,
-      env: { ...process.env, HOME: home, CLAUDE_CONFIG_DIR: home }, killSignal: 'SIGKILL' });
-    assertChildStatus(run, 3, run.stderr); assert.equal(run.stdout, '');
+      env: { ...process.env, HOME: home, CLAUDE_CONFIG_DIR: home } });
+    assert.equal(run.status, 3, run.stderr); assert.equal(run.stdout, '');
   }
 });
 
@@ -274,16 +273,16 @@ test('shim refuses changed bytes and unsafe or missing integrity receipts before
   const receipt = path.join(f.home, 'Library/Application Support/sleight/settings-link.json');
   const original = fs.readFileSync(shim), saved = fs.readFileSync(receipt);
   const run = () => spawnSync(command, ['menu'], { encoding: 'utf8', timeout: 10000,
-    env: { ...process.env, HOME: f.home, CLAUDE_CONFIG_DIR: f.config }, killSignal: 'SIGKILL' });
+    env: { ...process.env, HOME: f.home, CLAUDE_CONFIG_DIR: f.config } });
   fs.appendFileSync(shim, '# tampered\n');
-  assertChildStatus(run(), 1); assert.match(run().stderr, /shim integrity/);
+  assert.equal(run().status, 1); assert.match(run().stderr, /shim integrity/);
   fs.writeFileSync(shim, original); fs.chmodSync(receipt, 0o644);
-  assertChildStatus(run(), 1); fs.chmodSync(receipt, 0o600);
-  fs.unlinkSync(receipt); assertChildStatus(run(), 1);
+  assert.equal(run().status, 1); fs.chmodSync(receipt, 0o600);
+  fs.unlinkSync(receipt); assert.equal(run().status, 1);
   const other = path.join(f.home, 'receipt'); fs.writeFileSync(other, saved, { mode: 0o600 }); fs.symlinkSync(other, receipt);
-  assertChildStatus(run(), 1);
+  assert.equal(run().status, 1);
   fs.unlinkSync(receipt); fs.writeFileSync(receipt, saved, { mode: 0o600 });
-  assertChildStatus(run(), 0);
+  assert.equal(run().status, 0);
   assert.match(settingsDoctorLine(f.home, { PATH: '/usr/bin:/bin' }), /Settings: sleight-mcp menu/);
 });
 test('a forged /tmp install record cannot replace the recorded install', t => {
@@ -297,8 +296,8 @@ test('link declines EOF and handles an orphan shim without a raw EEXIST error', 
   const f = fixture(t), module = new URL('../plugins/sleight/lib/settings-link.mjs', import.meta.url).href;
   const eof = spawnSync(process.execPath, ['--input-type=module', '-e',
     `import {linkCommand} from ${JSON.stringify(module)}; process.exitCode=await linkCommand('link',[],${JSON.stringify({home:f.home,recorded:f.recorded})});`],
-    { encoding: 'utf8', input: '', timeout: 10000, env: { ...process.env, HOME: f.home, CLAUDE_CONFIG_DIR: f.config }, killSignal: 'SIGKILL' });
-  assertChildStatus(eof, 0, eof.stderr); assert.match(eof.stdout, /No command created/);
+    { encoding: 'utf8', input: '', timeout: 10000, env: { ...process.env, HOME: f.home, CLAUDE_CONFIG_DIR: f.config } });
+  assert.equal(eof.status, 0, eof.stderr); assert.match(eof.stdout, /No command created/);
   await linkCommand('link', [], { ...f, ask: async () => true, out: () => {} });
   fs.unlinkSync(path.join(f.home, '.local/bin/sleight'));
   const output = [];
@@ -386,10 +385,10 @@ precondition(poll.item.isVisible)
 precondition(poll.menuRetry == nil, "successful registration stops polling")
 print("retries=1 pause-preserved=1")
 `);
-  const built = spawnSync('/usr/bin/xcrun', ['swiftc', '-module-cache-path', swiftModuleCache(), swift, '-o', bin], { encoding: 'utf8', timeout: 600000, killSignal: 'SIGKILL' });
-  assertChildStatus(built, 0, built.stderr);
+  const built = spawnSync('/usr/bin/xcrun', ['swiftc', '-module-cache-path', swiftModuleCache(), swift, '-o', bin], { encoding: 'utf8' });
+  assert.equal(built.status, 0, built.stderr);
   const bank = path.join(dir, 'private'); fs.mkdirSync(bank, { mode: 0o700 });
-  const result = spawnSync(bin, [path.join(bank, 'menu-presence.lock')], { encoding: 'utf8', timeout: 10000, killSignal: 'SIGKILL' });
-  assertChildStatus(result, 0, result.stderr);
+  const result = spawnSync(bin, [path.join(bank, 'menu-presence.lock')], { encoding: 'utf8', timeout: 10000 });
+  assert.equal(result.status, 0, result.stderr);
   assert.equal(result.stdout.trim(), 'retries=1 pause-preserved=1');
 });

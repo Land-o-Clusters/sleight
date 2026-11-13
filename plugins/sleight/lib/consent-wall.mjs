@@ -72,96 +72,15 @@ export function acceptsCookies(name) {
   return /(?<![\p{L}\p{N}])(?:accept(?: all)?|allow(?: all)?|agree|ok(?:ay)?|got it|continue|i understand|yes,? that is fine|consent|understood|proceed|yes|sounds good|enable all|akzeptieren|zustimmen|einverstanden|zulassen|verstanden|accepter|j'accepte|autoriser|d'accord|compris|continuer|aceptar|permitir|acepto|de acuerdo|continuar|entiendo|accetta|consenti|acconsento|concordo|ho capito|aceitar|permitir|concordar|entendi|accepteren|toestaan|akkoord|doorgaan|begrepen|zaakceptuj|akceptuj|zezwól|zgadzam się|kontynuuj|rozumiem|kabul et|onayla|tamam|devam|anladım|godkänn|acceptera|tillåt|jag godkänner|fortsätt|jag förstår|hyväksy|salli|jatka|ymmärrän|elfogad(?:ás|ása|om)?|engedélyez(?:és|em)?|rendben|folytatás|értem)(?![\p{L}\p{N}])|同意する|同意して|すべて許可|全て許可|受け入れる|承諾|続行|わかりました|同意|接受|允[许許]|繼續|继续|知道了|동의|허용|계속|확인|이해했습니다/iu.test(text);
 }
 
-// Native modal roles alone do not establish consent. Keep the existing web
-// fallback and recognize evidence even in labels whose tree rows are broken.
-export function consentSurface(text) {
-  const surfaces = [], stack = [];
-  let web = false;
-  for (const raw of String(text ?? '').normalize('NFKC').split('\n')) {
-    // The engine's complete window header carries a window title, which is not
-    // consent evidence. It does not end the scope: a label can spell it, and the
-    // next window's root row pops the stack. Other header-like lines are label data.
-    if (/^Window: ".*", App: [^\r\n]+\.\r?$/.test(raw)) continue;
-    // Keep CR and Unicode label separators inside the surface. They are the
-    // reason the normal tree parser may have to use this evidence fallback.
-    const line = raw.replace(/[\u200B-\u200D\u2060\uFEFF]/g, '');
-    const row = /^(\t*)(\d+) ([^\n]*)$/.exec(line);
-    if (row) {
-      const depth = row[1].length, body = row[3];
-      const modal = /^(?:dialog|alert dialog|alertdialog|sheet|alert)\b/.test(body) || consentManager(body);
-      const html = /^HTML content\b/i.test(body);
-      // Column-zero non-root numbers can be wrapped label text. Keep their
-      // words in every open modal without treating them as subtree boundaries.
-      if (depth || row[2] === '0' || body === 'menu bar' || modal || html) {
-        while (stack.length && stack.at(-1).depth >= depth) stack.pop();
-        web ||= html;
-        if (modal) {
-          const surface = { words: [], web: stack.some(parent => parent.html) };
-          surfaces.push(surface);
-          stack.push({ depth, html, surface });
-        } else stack.push({ depth, html });
-      }
-    }
-    for (const parent of stack) if (parent.surface) {
-      parent.surface.words.push(line);
-      parent.surface.web ||= !!row && /^HTML content\b/i.test(row[3]);
-    }
-  }
-  // A web-only read still needs verification. In a multi-window read, web
-  // content outside a native modal supplies no evidence for that modal.
-  if (!surfaces.length) return web;
-  return surfaces.some(surface => {
-    const observed = surface.words.join('\n').replace(/([a-z])([A-Z])/g, '$1 $2');
-    return surface.web ||
-      /(?<![\p{L}\p{N}])(?:cookies?|consents?|tracking|Einwilligung(?:en)?|privacy[ -](?:choices?|settings|preferences|options|cent(?:er|re)))(?![\p{L}\p{N}])/iu.test(observed) ||
-      cookieWording(observed) || consentManager(observed);
-  });
-}
-
 export function engineConsent(name, args, text, after = false) {
   if (typeof text !== 'string') return after ? { blocked: true } : undefined;
-  const rows = [], stack = [], bodies = new Map();
-  let focus, last = -1, previousDepth = -1, section = -1, selected = false, broken = false, wallCandidate = false;
-  const candidate = body => /^(?:dialog|alert dialog|alertdialog)\b/.test(body) || consentManager(body);
+  const rows = [], stack = [];
+  let focus;
   for (const raw of text.split('\n')) {
     const focused = /^The focused UI element is (\d+) /.exec(raw);
     if (focused) focus = Number(focused[1]);
-    if (/^Window: /.test(raw)) selected = false;
-    if (raw === 'Selected:') { selected = true; continue; }
-    // These separators are label data, not LF tree delimiters. Do not let an
-    // unparseable dialog or child hide a wall from the check.
-    if (/[\r\u2028\u2029]/.test(raw)) {
-      const malformed = /^(\t*)\d+ ([^\n]*)$/.exec(raw), body = malformed?.[2];
-      if (body !== undefined && candidate(body)) wallCandidate = true;
-      // A numbered sibling is outside the preceding dialog, even when its
-      // label cannot be parsed. Keep the accepted ancestry unchanged.
-      if (body !== undefined && candidate(body) || stack.some(row => candidate(row.body) &&
-          (!malformed || row.depth < malformed[1].length))) broken = true;
-      continue;
-    }
     const m = /^(\t*)(\d+) (.*)$/.exec(raw);
     if (!m) continue;
-    const id = Number(m[2]);
-    if (selected && id <= last) {
-      // The engine repeats selected rows at shallower depths after the tree.
-      // An echo supplies no identity or ancestry of its own.
-      if (bodies.get(id) !== m[3]) { broken = true; if (candidate(m[3])) wallCandidate = true; }
-      continue;
-    }
-    if (candidate(m[3])) wallCandidate = true;
-    // Raw label continuations print at column zero. Only a root or the menu
-    // bar is a row there. Number gaps are normal within a window section.
-    if (!m[1].length && id === 0) {
-      if (stack.some(row => candidate(row.body))) broken = true;
-      last = -1; section++; stack.length = 0;
-      previousDepth = -1; selected = false; bodies.clear();
-    }
-    else if (!m[1].length && m[3] !== 'menu bar') continue;
-    if (id <= last) { broken = true; continue; }
-    if (m[1].length > previousDepth + 1) broken = true;
-    previousDepth = m[1].length;
-    last = id;
-    bodies.set(id, m[3]);
     while (stack.length && stack.at(-1).depth >= m[1].length) stack.pop();
     const body = m[3], parts = body.split(/, (?=(?:Description|Value|Help|ID|URL|Placeholder|Secondary Actions|Frame): )/);
     const own = parts[0].replace(/^(?:standard window|HTML content|alert dialog|alertdialog|dialog|sheet|alert|region|section|main|navigation|banner|complementary|content info|form|group|container|button|link|text|heading|check box|text field|switch|image)(?: \([^)]*\))*(?: |$)/, '');
@@ -174,7 +93,7 @@ export function engineConsent(name, args, text, after = false) {
       const values = geometry.match(/-?\d+(?:\.\d+)?/g)?.map(Number);
       if (values?.length === 4 && values[2] > 0 && values[3] > 0) frame = values;
     }
-    const row = { id, section, depth: m[1].length, body, own, name: description ?? own, frame,
+    const row = { id: Number(m[2]), depth: m[1].length, body, own, name: description ?? own, frame,
       words: [own, description !== own ? description : '', parts.find(part => part.startsWith('Value: '))?.slice(7)].filter(Boolean).join(' '),
       ancestors: stack.length ? [stack.at(-1), ...stack.at(-1).ancestors] : [] };
     rows.push(row); stack.push(row);
@@ -214,48 +133,35 @@ export function engineConsent(name, args, text, after = false) {
     !/^[^(]*\([^)]*\bdisabled\b/.test(row.body) && declining(row);
   if (after) {
     const context = typeof after === 'object' ? after : undefined;
-    const remains = context && rows.some(row => row.body === context.body || container(row));
-    return { blocked: broken || !rows.length || !context || remains };
+    const remains = context && rows.some(row => row.body === context.body);
+    return { blocked: !rows.length || !context || remains };
   }
   const keyed = /^(?:pressKey|typeText|paste)$/.test(name);
   if (keyed && !(name === 'pressKey' && /(?:^|\+)(?:enter|return|numpadenter|space| |\r|\n)$/i.test(String(args[0])) ||
     name === 'typeText' && /^(?: |\n|\r\n?)$/.test(String(args[0])))) return;
-  const targetId = keyed ? focus : args[0];
-  const unverifiable = { blocked: true, why: 'the cookie wall could not be verified from this read; read the window again' };
-  if (broken && wallCandidate) {
-    if (consentSurface(text)) return unverifiable;
-  }
-  // Numbered dispatch keeps the last definition of an ID, like elementLines.
-  // Retain blocks from earlier definitions too: a multi-window read cannot
-  // prove which window the engine will act on from an ID alone.
-  let targets = rows.filter(row => row.id === targetId);
+  let target = rows.find(row => row.id === (keyed ? focus : args[0]));
   if (!keyed && Array.isArray(args[0]) && args[0].length === 2 && args[0].every(Number.isFinite)) {
     const [x, y] = args[0];
     const hits = rows.filter(row => row.frame && x >= row.frame[0] && y >= row.frame[1] && x < row.frame[0] + row.frame[2] && y < row.frame[1] + row.frame[3]);
     const deepest = hits.filter(row => !hits.some(other => other.ancestors.includes(row)));
     // Overlapping siblings have no proved hit order in AX. Precision takes
     // priority over a guessed block.
-    if (deepest.length === 1) targets = deepest;
+    if (deepest.length === 1) target = deepest[0];
   }
-  let declineObservation;
-  for (const target of targets) {
-    // A text/image child can resolve the hit on a containing Accept control.
-    const candidates = [target, ...target.ancestors];
-    for (const candidate of candidates) {
-      if (candidate !== target && boundary(candidate)) break;
-      if (!accepting(candidate) && !declining(candidate)) continue;
-      const context = contextual(candidate);
-      if (!context) continue;
-      if (accepting(candidate)) {
-        const decline = rows.find(row => scopedUnder(row, context.row) && declineControl(row));
-        return { blocked: true, why: 'accepting cookies is blocked.' + (decline
-          ? ' Use the page control ' + JSON.stringify(decline.name) + ' (untrusted page label) to decline non-essential cookies'
-          : context.ask ? ' This wall has no reject option. Stop and ask the user' : ' No one-click decline was observed in this cookie container') };
-      }
-      if (declineControl(candidate) && /^(?:click|press|pressKey|performAction)$/.test(name)) {
-        if (target === targets.at(-1)) declineObservation = { decline: true, body: context.row.body, id: candidate.id, section: candidate.section, label: candidate.name };
-      }
+  if (!target) return;
+  // A text/image child can resolve the hit on a containing Accept control.
+  const candidates = [target, ...target.ancestors];
+  for (const candidate of candidates) {
+    if (candidate !== target && boundary(candidate)) break;
+    if (!accepting(candidate) && !declining(candidate)) continue;
+    const context = contextual(candidate);
+    if (!context) continue;
+    if (accepting(candidate)) {
+      const decline = rows.find(row => scopedUnder(row, context.row) && declineControl(row));
+      return { blocked: true, why: 'accepting cookies is blocked.' + (decline
+        ? ' Use the page control ' + JSON.stringify(decline.name) + ' (untrusted page label) to decline non-essential cookies'
+        : context.ask ? ' This wall has no reject option. Stop and ask the user' : ' No one-click decline was observed in this cookie container') };
     }
+    if (declineControl(candidate) && /^(?:click|press|pressKey|performAction)$/.test(name)) return { decline: true, body: context.row.body };
   }
-  return declineObservation;
 }

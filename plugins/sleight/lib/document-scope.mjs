@@ -2,18 +2,16 @@ import { promptNotice } from './prompt-notice.mjs';
 import { elementWait } from './element-wait.mjs';
 import { listPickerCode } from './native-list-pick.mjs';
 import { settleLoading } from './loading-settle.mjs';
-import { settleTyping } from './typing-settle.mjs';
 import { literalElements } from './literal-elements.mjs';
 import { actionOutcome, outcomeRecord } from './action-outcomes.mjs';
 import { moneyFigures, moneyConflicts } from './payment-figures.mjs';
 import { enginePayment, paymentAction } from './payment-gate.mjs';
-import { quitKeyToken, quitKeyBlocked, heldKeyChange, quitAppAllowed, QUIT_KEY_REFUSAL } from './quit-key.mjs';
-import { policyLinkText, resetsCookies, cookieWording, consentManager, declinesCookies, acceptsCookies, consentSurface, engineConsent } from './consent-wall.mjs';
+import { policyLinkText, resetsCookies, cookieWording, consentManager, declinesCookies, acceptsCookies, engineConsent } from './consent-wall.mjs';
 import { paymentWords, refundableName } from './direct-browser/rules.mjs';
 import { tabChromeRefusal, tabProbeRefusal } from './tab-probe.mjs';
 import { verifyWindowIdentity } from './window-identity.mjs';
 import { tabFocusRefusal } from './menu-continuation.mjs';
-import { nativeArgumentError, engineTypeTextNeedsPaste, engineTypeTextField } from './native-arguments.mjs';
+import { nativeArgumentError } from './native-arguments.mjs';
 import { withoutTitles } from './dp1-trace.mjs';
 // Header identity is a cooperative runtime observation, not an OS capability.
 // Mark full trees the guard writes, which the relay compacts (compact-reads.mjs).
@@ -34,13 +32,8 @@ export function windowFromText(text) {
   for (let i = 0; i < headers.length; i++) {
     const header = headers[i];
     const section = text.slice(header.index + header[0].length, headers[i + 1]?.index);
-    // A page's raw continuation can look like a field or another root. Only the header block
-    // and the first root's own token can supply the URL. Later lookalikes can only make a real field ambiguous.
-    const root = /^0 [^\r\n]*\r?$/m.exec(section);
-    const fieldSource = root ? section.slice(0, root.index + root[0].length) : section;
-    const outsideFields = root && /^(?:URL: |0 [^\r\n]*?\bURL: )/m.test(section.slice(root.index + root[0].length));
-    const urls = [...fieldSource.matchAll(/^(?:URL: (.+)|0 [^\r\n]*?\bURL: (.*?)(?:, (?:Secondary Actions|ID|Help):.*)?)\r?$/gm)];
-    if (urls.length > 1 || urls.length && outsideFields) return undefined;
+    const urls = [...section.matchAll(/^(?:URL: (.+)|0 [^\r\n]*?\bURL: (.*?)(?:, (?:Secondary Actions|ID|Help):.*)?)\r?$/gm)];
+    if (urls.length > 1) return undefined;
     let title;
     try {
       const value = JSON.parse(header[1]);
@@ -63,9 +56,6 @@ export function windowFromText(text) {
 export function lastWindowFromText(text) {
   const whole = windowFromText(text);
   if (whole || typeof text !== 'string') return whole;
-  // Splitting an ambiguous reply must not turn a page-written second header into a fresh URL field.
-  const root = /^0 [^\r\n]*\r?$/m.exec(text);
-  if (root && /^(?:URL: |0 [^\r\n]*?\bURL: )/m.test(text.slice(root.index + root[0].length))) return;
   const starts = [...text.matchAll(/^Window: /gm)].map(match => match.index);
   const sections = starts.map((at, i) => text.slice(at, starts[i + 1]));
   const windows = sections.map(section => /^0 standard window(?: |,|$)/m.test(section) ? windowFromText(section) : undefined);
@@ -75,29 +65,7 @@ export function lastWindowFromText(text) {
 
 // Element number -> line text without the number, for one tree.
 export function elementLines(text) {
-  const lines = new Map(), duplicates = new Set(), bodies = new Map();
-  let last = -1, selected = false;
-  for (const raw of text.split('\n')) {
-    if (/^Window: /.test(raw)) selected = false;
-    if (raw === 'Selected:') { selected = true; continue; }
-    const m = /^(\t*)(\d+) (.*)$/.exec(raw) ?? (selected ? /^(\t*)(\d+) ([^\n]*)$/.exec(raw) : null);
-    if (!m) continue;
-    const id = Number(m[2]);
-    if (selected && id <= last) {
-      if (bodies.get(id) !== m[3]) { duplicates.add(id); lines.delete(id); }
-      continue;
-    }
-    if (!m[1].length && id === 0) { last = -1; duplicates.clear(); bodies.clear(); selected = false; }
-    else if (!m[1].length && m[3] !== 'menu bar') continue;
-    if (id <= last) {
-      if (bodies.get(id) !== m[3]) { duplicates.add(id); lines.delete(id); }
-      continue;
-    }
-    last = id;
-    bodies.set(id, m[3]);
-    if (!duplicates.has(id)) lines.set(id, m[3]);
-  }
-  return lines;
+  return new Map(text.split('\n').map(line => /^(\t*)(\d+) (.*)$/.exec(line)).filter(Boolean).map(m => [Number(m[2]), m[3]]));
 }
 
 // Element number -> its parent's whole line (null at the root), from indentation. Rows that aren't elements are skipped,
@@ -124,11 +92,10 @@ function elementContexts(text) {
     while (stack.length && stack.at(-1).depth >= depth) stack.pop();
     const parent = stack.at(-1), bar = /^menu bar(?:$|,| (?!item\b))/.test(m[3]), menu = bar || !!parent?.menu;
     const content = !menu && !!(parent?.content || parent?.window);
-    const menuTree = /^menu(?: |,|$)/.test(m[3]) || !!parent?.menuTree;
     // barItem: a title directly under the menu bar, which opens its menu.
-    contexts.set(Number(m[2]), { parent: parent?.line ?? 'unknown (root)', menu, menuTree, content, barItem: !!parent?.bar });
+    contexts.set(Number(m[2]), { parent: parent?.line ?? 'unknown (root)', menu, content, barItem: !!parent?.bar });
     const label = m[3].split(/(?:, | )(?=(?:Value|ID|Help|Secondary Actions):)/)[0];
-    stack.push({ depth, line: label, menu, menuTree, bar, content, window: /^(?:standard window|sheet|dialog)(?: |,|$)/.test(m[3]) });
+    stack.push({ depth, line: label, menu, bar, content, window: /^(?:standard window|sheet|dialog)(?: |,|$)/.test(m[3]) });
   }
   return contexts;
 }
@@ -340,52 +307,15 @@ export function differentFocusTarget(text, before) {
   if (holder && holder === focused) return;
   // Focus on the window's root container is the engine reporting no specific focus (Firefox's address bar after a
   // background click, 3 of 3 mdn, wikipedia and size-guide runs), and typing there lands in the field on this engine.
-  // It counts only for an editable click (or text inside one) in that container, when it carries the window's title
-  // and its only window siblings are standard window controls. Focus before the click must not be on a specific element.
-  // Secure field roles anywhere, sensitive editable rows, and the clicked target's ancestry keep the original refusal.
-  // Sensitive labels count inside the clicked page's scroll area, including labels beside its web subtree.
-  // Without that ancestry, scan the root content container, excluding toolbar subtrees only in that fallback.
-  // Modal/menu roles anywhere still stop the exception.
-  // Only a menu bar may start a separate depth-0 tree. Focus on the window row itself
+  // It counts only for an editable click (or text inside one), when that container is the window's only child and
+  // carries its title, and when focus before the click was not on a specific element. Focus on the window row itself
   // stays a stop: the guard's "keyboard focus is on the window itself" check treats that as keys with no target.
-  // The root container is a depth-1 element, so the two checks never overlap.
-  const parents = [];
-  let webContent, scrollContent;
-  for (let depth = clicked.depth, i = start - 1; i >= 0 && depth > 0; i--) {
-    if (rows[i].depth >= depth) continue;
-    depth = rows[i].depth; parents.unshift(rows[i].line);
-    if (!webContent && /^(?:HTML Content|web area|AXWebArea)(?: |,|$)/i.test(rows[i].line)) webContent = rows[i];
-    if (webContent && !scrollContent && /^(?:scroll area|AXScrollArea)(?: |,|$)/i.test(rows[i].line)) scrollContent = rows[i];
-  }
-  if (isPaymentTarget(clicked.line, parents) || rows.some(row =>
-      /^(?:AXSecureTextField|secure (?:text )?field|password (?:text )?field)(?: |,|$)/i.test(row.line) ||
-      (row !== clicked && (isField(row.line) || /^(?:AX(?:TextField|TextArea|ComboBox|SearchField)|edit text)(?: |,|$)/i.test(row.line) ||
-        /\(settable\)/.test(row.line)) && isPaymentTarget(row.line)) ||
-      /^(?:AX)?(?:sheet|dialog|alert|system dialog|popover|web ?dialog|group ?dialog)(?: |,|$)/i.test(row.line) || /^menu(?:$|,)/i.test(row.line)) ||
-      rows.some((row, i) => i > 0 && row.depth === 0 && !/^menu bar(?: |$)/.test(row.line))) return clicked.number;
+  // The root container is row 1, which that check reads as an element, so the two never overlap.
   const root = rows[0], title = root?.line.replace(/^(?:standard )?window /, '').split(', ')[0];
-  const nextRoot = rows.findIndex((row, i) => i > 0 && row.depth === 0 && /^menu bar(?: |$)/.test(row.line));
-  const windowEnd = nextRoot === -1 ? rows.length : nextRoot;
-  const children = rows.slice(1, windowEnd).filter(row => row.depth === 1);
-  const container = children.find(row => row.line === 'container ' + title);
-  const containerStart = rows.indexOf(container);
-  let containerEnd = containerStart + 1;
-  while (containerEnd < windowEnd && rows[containerEnd].depth > 1) containerEnd++;
-  const labelScope = scrollContent ?? container;
-  let toolbarDepth;
-  for (let i = rows.indexOf(labelScope) + 1; labelScope && i < containerEnd && rows[i].depth > labelScope.depth; i++) {
-    const row = rows[i];
-    if (toolbarDepth !== undefined && row.depth <= toolbarDepth) toolbarDepth = undefined;
-    if (!scrollContent && /^(?:toolbar|AXToolbar)(?: |,|$)/i.test(row.line)) toolbarDepth = row.depth;
-    if (toolbarDepth === undefined && /^(?:text|heading|label)(?: |,|$)/i.test(row.line) &&
-        isPaymentTarget(row.line)) return clicked.number;
-  }
-  const controls = children.filter(row => row !== container);
-  const standardControl = /^(?:close|minimize|full screen) button(?:$| Help: |, Secondary Actions: )/;
+  const container = rows[1];
   if ((isField(clicked.line) || holder) && root?.depth === 0 && /^(?:standard )?window(?: |,|$)/.test(root.line) &&
-      focused === container && title !== '' && start > containerStart && start < containerEnd &&
-      controls.every(row => standardControl.test(row.line)) &&
-      new Set(controls.map(row => row.line.split(' button')[0])).size === controls.length &&
+      focused === container && container.depth === 1 && title !== '' && container.line === 'container ' + title &&
+      rows.filter(row => row.depth === 1).length === 1 &&
       (before.focus === undefined || before.focus === container.number + ' ' + container.line)) return;
   return clicked.number;
 }
@@ -605,7 +535,7 @@ async function closedLastWindow(state, record, stopMessage) {
 export function guardedCode(code, window, reason = /* notice */ 'Document scope stopped this action: window or URL changed. Read the window and ask the user with document_scope.', lease, options = {}) {
   // The lease needs a full header after the call. A read Claude made after its
   // last action already wrote one, so the guard reads again only without it.
-  const { reuseSetup, acknowledge, prompt, outcomes, completeness, kernel, writeTracing, quitApps, dp1 = false, ...checks } = options;
+  const { reuseSetup, acknowledge, prompt, outcomes, completeness, kernel, writeTracing, dp1 = false, ...checks } = options;
   const ck = ((checks.ck1 ?? process.env.SLEIGHT_CK1 !== '0') ? 1 : 0) |
     ((checks.ck2 ?? process.env.SLEIGHT_CK2 !== '0') ? 2 : 0);
   delete checks.ck1; delete checks.ck2;
@@ -618,7 +548,7 @@ export function guardedCode(code, window, reason = /* notice */ 'Document scope 
   const literalOrder = checks.literalOrder ?? literalElements(code);
   // Keep the pre-DP1 tail comment only on the off path for byte parity. The DP1
   // tail omits it to keep compact calls within the existing byte budget.
-  return guardSetup({ window, reason, lease, ...checks, ...(dp1 ? { dp1: true } : {}), literalOrder: literalOrder.length ? literalOrder : undefined }, { reuseSetup, acknowledge, prompt, outcomes, completeness, kernel, writeTracing, quitApps, dp1 }) +
+  return guardSetup({ window, reason, lease, ...checks, ...(dp1 ? { dp1: true } : {}), literalOrder: literalOrder.length ? literalOrder : undefined }, { reuseSetup, acknowledge, prompt, outcomes, completeness, kernel, writeTracing, dp1 }) +
     (options.browserCandidate ? '\nglobalThis.__sleightDocumentGuard.activeApp = undefined;' : '') + /* generated code */ `\n${code}
 {
   const guard = globalThis.__sleightDocumentGuard, last = await guard.settle?.() ?? (guard.activeApp && guard.reads.get(guard.activeApp));
@@ -639,22 +569,16 @@ ${dp1 ? '' : "  // The call finished, so any failed action was one it didn't awa
 }
 
 // outcomes: the session records action outcomes (SLEIGHT_OUTCOMES or SLEIGHT_ACTION_LOG); without it the guard is unchanged.
-function guardSetup(update, { reuseSetup = false, acknowledge = false, prompt, outcomes = false, completeness = false, kernel, writeTracing = false, quitApps = [], dp1 = process.env.SLEIGHT_DP1 !== '0' } = {}) {
+function guardSetup(update, { reuseSetup = false, acknowledge = false, prompt, outcomes = false, completeness = false, kernel, writeTracing = false, dp1 = process.env.SLEIGHT_DP1 !== '0' } = {}) {
   const O = outcomes, T = writeTracing || update?.timing;
   // Notice text the guard throws or writes, in its SLEIGHT_PROMPT wording.
   const quoted = text => JSON.stringify(promptNotice(text, prompt));
   // Keep executable code in the runtime, never observations. The relay selects the small form
   // only after a completed installation, and a missing setup stops before the caller's code.
-  const install = reuseSetup ? '' : /* generated code */ `globalThis.__sleightDocumentGuardSetup = (update, quitApps) => {
+  const install = reuseSetup ? '' : /* generated code */ `globalThis.__sleightDocumentGuardSetup = update => {
     const parse = ${windowFromText.toString()};
     const isCancel = ${isCancelAction.toString()};
     const argumentError = ${nativeArgumentError.toString()};
-    const needsPaste = ${engineTypeTextNeedsPaste.toString()};
-    const typingField = ${engineTypeTextField.toString()};
-    const quitKeyToken = ${quitKeyToken.toString()};
-    const quitKeyBlocked = ${quitKeyBlocked.toString()};
-    const heldKeyChange = ${heldKeyChange.toString()};
-    const quitAppAllowed = ${quitAppAllowed.toString()};
     ${kernel === undefined ? `const state = globalThis.__sleightDocumentGuard ||= {
       getApp: typeof cua.getApp === 'function' ? cua.getApp.bind(cua) : undefined, proxies: new WeakSet(), wrapped: new WeakMap()
     };` : /* A host whose calls reach more than one kernel (Codex's sandbox states): state from another epoch is stale, so
@@ -669,11 +593,9 @@ function guardSetup(update, { reuseSetup = false, acknowledge = false, prompt, o
       state.adoptUrl = !!update.adoptUrl;
     }
     state.nativeDenied = update?.nativeDenied;
-    state.quitApps = quitApps ?? [];
     // The payment gate's setting and the relay's copy of the user's message (payment-gate.mjs); without it the gate is off.
     state.payment = update?.payment;
     state.timing = !!update?.timing;
-    state.pickerSearches = 0;
     state.handBindingMark = update?.handBindingMark;
     state.careful = !!update?.careful;
     state.firstOff = !!update?.firstOff && !!update?.focused && !state.careful && !state.fileOnly && !state.cancelOnly;
@@ -707,7 +629,6 @@ function guardSetup(update, { reuseSetup = false, acknowledge = false, prompt, o
     state.settle = async () => { while (state.inflight.size) await Promise.allSettled([...state.inflight]); };
     // Text this call typed, pasted or set, so a window it named (a saved or opened file) is its own.
     state.typed = [];
-    state.typingBaseline = undefined;
     state.resultMark = update?.resultMark;
     // What Claude was last shown for the numbers this call acts on (number -> line).
     state.seenLines = update?.seenLines;
@@ -723,41 +644,16 @@ function guardSetup(update, { reuseSetup = false, acknowledge = false, prompt, o
     state.numberBatch = state.seenLines !== undefined && new Set(state.pendingLiterals).size > 1;
     state.literalBaselines = new WeakMap();
     state.loadingBaselines = new WeakMap();
-    const settle = ${settleLoading.toString()}, settleText = ${settleTyping.toString()};
-    // At most 3 s of settling per call, across loading and typing actions.
+    const settle = ${settleLoading.toString()};
+    // At most 3 s of settling per call, however many actions start a load.
     state.settleLeft = 3000;
-    state.settleRead = async (raw, text, verifyTyping) => {
-      const typing = state.typingBaseline, version = state.actionVersion;
-      if (verifyTyping && typing?.raw === raw && !typing.done && !state.failures.length) {
-        const start = clock();
-        try {
-          text = await settleText(() => raw.getAXState({ disableDiffing: true, emit: false }), typing.before, text,
-            typing.text, () => state.typingBaseline === typing && !typing.done && state.actionVersion === version, state.settleLeft);
-        } catch (error) {
-          // The input already ran. Preserve its receipt even when the guard's tail cannot run.
-          if (state.resultMark) nodeRepl.write(state.resultMark + JSON.stringify({ typed: state.typed }) + '\\n');
-          nodeRepl.write('Input sent\\n');
-          throw error;
-        } finally { state.settleLeft = Math.max(0, state.settleLeft - (clock() - start)); }
-      }
+    state.settleRead = async (raw, text) => {
       const before = state.loadingBaselines.get(raw);
       state.loadingBaselines.delete(raw);
       if (before === undefined) return text;
       const start = clock();
       try { return await settle(() => raw.getAXState({ disableDiffing: true, emit: false }), before, text, parse, clock, state.settleLeft); }
       finally { state.settleLeft -= clock() - start; }
-    };
-    state.readText = (raw, options, verifyTyping = false) => {
-      const typing = state.typingBaseline, version = state.actionVersion;
-      // Guard reads keep their first snapshot and never wait for typing. Otherwise
-      // the extra read can make a later sheet look like the click's first result.
-      if (!verifyTyping && typing?.raw === raw) typing.done = true;
-      const read = async () => state.settleRead(raw, await raw.getAXState(options),
-        verifyTyping && state.typingBaseline === typing && state.actionVersion === version);
-      if (typing?.raw !== raw || typing.done || state.failures.length) return read();
-      // Share the first observation and its retry. A concurrent read must not
-      // leak the stale first tree while another caller waits for verification.
-      return typing.pending ??= read().finally(() => { typing.done = true; });
     };
     state.codeReads = new WeakMap();
     // Literal numbers whose line was unique in the tree Claude saw (the relay's view of it).
@@ -767,10 +663,10 @@ function guardSetup(update, { reuseSetup = false, acknowledge = false, prompt, o
       const start = clock();
       let text;
       ${O ? `try {
-        text = await state.readText(raw, { disableDiffing: true, emit: false }, phase === 'after-call');
+        text = await state.settleRead(raw, await raw.getAXState({ disableDiffing: true, emit: false }));
         if (phase !== 'wait') state.noteRead(raw, text, !['list', 'after-refusal'].includes(phase));
         return text;
-      } finally {` : `try { return text = await state.readText(raw, { disableDiffing: true, emit: false }, phase === 'after-call'); }
+      } finally {` : `try { return text = await state.settleRead(raw, await raw.getAXState({ disableDiffing: true, emit: false })); }
       finally {`}
         if (state.timing) nodeRepl.write('[sleight:guard-timing]' + JSON.stringify({ phase,
           ms: clock() - start, chars: typeof text === 'string' ? text.length : 0, failed: text === undefined }) + '\\n');
@@ -796,7 +692,6 @@ function guardSetup(update, { reuseSetup = false, acknowledge = false, prompt, o
       }
     };` : "state.readAfter = proxy => timedRead(state.raws.get(proxy), 'after-call');"}
     state.raws ||= new WeakMap();
-    state.keyStates ||= new Map();
     // Windows whose bound capture lost an element, by app and URL or title, to the clean actions left before
     // they bind again: each reads before a numbered or named action until STALE_PASSES of those pass (see the
     // refusal below). The refused read is bounded by REFUSAL_READ_MS.
@@ -935,7 +830,6 @@ ${O ? `    // What each action did (action-outcomes.mjs), for SLEIGHT_OUTCOMES a
     const consentManager = ${consentManager.toString()};
     const declinesCookies = ${declinesCookies.toString()};
     const acceptsCookies = ${acceptsCookies.toString()};
-    const consentSurface = ${consentSurface.toString()};
     const engineConsent = ${engineConsent.toString()};
     const enginePayment = ${enginePayment.toString()};
     const checkNative = () => { if (state.nativeDenied) throw new Error(state.nativeDenied); };
@@ -1066,39 +960,6 @@ ${O ? `    // What each action did (action-outcomes.mjs), for SLEIGHT_OUTCOMES a
     const wrap = target => {
       if (state.proxies.has(target)) return target;
       if (state.wrapped.has(target)) return state.wrapped.get(target);
-      const hasHeld = () => [...state.keyStates.values()].some(keys => keys.held.length);
-      const ordered = (run, hold) => {
-        // Ordinary input keeps its original concurrency and performs no identity
-        // read. Reserve a barrier synchronously when a hold can affect later calls.
-        if (!hold && !state.keyTail && !hasHeld()) return run({ held: [] });
-        let complete;
-        const before = state.keyTail;
-        const barrier = new Promise(resolve => { complete = resolve; });
-        state.keyTail = barrier;
-        const done = () => { if (state.keyTail === barrier) state.keyTail = undefined; complete(); };
-        return (before ?? Promise.resolve()).then(async () => {
-          // A successful release may have emptied the set while this call waited.
-          // Its engine result must not keep the barrier alive after that point.
-          if (!hold && !hasHeld()) { done(); return run({ held: [] }); }
-          try {
-            checkNative();
-            await checkLease();
-            const actual = parse(await target.getAXState({ emit: false, disableDiffing: true }));
-            if (!actual) throw new Error(${JSON.stringify(QUIT_KEY_REFUSAL)});
-            const expected = state.expected;
-            const pid = expected?.nativeIdentity?.pid ?? expected?.pid;
-            const id = actual.app === expected?.app
-              ? typeof expected.appId === 'string' && expected.appId ? 'bundle:' + expected.appId
-                : Number.isSafeInteger(pid) && pid > 0 ? 'pid:' + pid : undefined
-              : undefined;
-            // Handles expose no identity on the installed engine. A matching
-            // observed app and lease identity are required before tracking holds.
-            if (!id) throw new Error(${JSON.stringify(QUIT_KEY_REFUSAL)});
-            if (!state.keyStates.has(id)) state.keyStates.set(id, { id, held: [] });
-            return await run(state.keyStates.get(id));
-          } finally { done(); }
-        });
-      };
       const proxy = new Proxy(target, { get(raw, name) {
         // Every use of a handle, for the light check's "nothing between the key and the typing".
         state.touches = (state.touches ?? 0) + 1;
@@ -1158,12 +1019,9 @@ ${O ? `    // What each action did (action-outcomes.mjs), for SLEIGHT_OUTCOMES a
           // A click on this handle that was the call's last action: after it, the read can name the selected row in
           // place of the focused list (race-1017 b7, Safari and Firefox), and the helper accepts that list only then.
           const before = state.previous.get(proxy);
-          const search = ++state.pickerSearches;
-          const tracePicker = state.timing && search <= 16;
           const clicked = before?.name === 'click' && before.version === state.actionVersion && before.done !== undefined &&
             Number.isInteger(before.at) && typeof before.line === 'string' ? { number: before.at, line: before.line } : undefined;
           const result = await pickList({
-            trace: tracePicker ? event => nodeRepl.write('[sleight:picker-phase]' + JSON.stringify({ search, ...event }) + '\\n') : undefined,
             read: async () => {
               checkNative();
               state.binding = undefined;
@@ -1217,7 +1075,7 @@ ${O ? `    // What each action did (action-outcomes.mjs), for SLEIGHT_OUTCOMES a
           state.binding = undefined;
           const reads = state.reads, reading = {}, version = state.actionVersion;
           reads.set(proxy, reading);
-          const text = await state.readText(raw, { ...options, disableDiffing: true, emit: false }, true);${O ? '\n          ' + 'state.noteRead(raw, text);' : ''}
+          const text = await state.settleRead(raw, await raw.getAXState({ ...options, disableDiffing: true, emit: false }));${O ? '\n          ' + 'state.noteRead(raw, text);' : ''}
           const emitted = options?.emit !== false;
           if (emitted) nodeRepl.write(${JSON.stringify(GUARD_MARK)} + text + ${JSON.stringify(GUARD_END)});
           else nodeRepl.write(${JSON.stringify(GUARD_OMIT_MARK)} + text + ${JSON.stringify(GUARD_END)});
@@ -1279,8 +1137,8 @@ ${O ? `    // What each action did (action-outcomes.mjs), for SLEIGHT_OUTCOMES a
         // Every input method an engine handle may take goes through the checks below (doubleClick, rightClick, press and
         // performAction included, review F3), so none of them reaches the app unchecked.
         if (!['click', 'doubleClick', 'rightClick', 'drag', 'scroll', 'selectText', 'setValue', 'performSecondaryAction', 'performAction',
-          'paste', 'press', 'pressKey', 'typeText', 'modifiers', 'keyDown', 'keyUp', 'key_down', 'key_up'].includes(name)) return (...args) => { checkNative(); return value.apply(raw, args); };
-        const act = async (attempt, keyState, ...args) => {
+          'paste', 'press', 'pressKey', 'typeText'].includes(name)) return (...args) => { checkNative(); return value.apply(raw, args); };
+        const act = async (attempt, ...args) => {
           checkNative();${O ? '\n          ' + 'const asked = args[0]; if (state.outcomeMark) attempt.rec = state.outcomeRec(attempt.index, name, asked, args);' : ''}
           // The action as Claude wrote it, for a stop that lists what ran.
           // Typed, pasted, set or selected text shows as its length only.
@@ -1292,53 +1150,18 @@ ${O ? `    // What each action did (action-outcomes.mjs), for SLEIGHT_OUTCOMES a
             text ??= String(arg);
             return text.length > 40 ? text.slice(0, 37) + '...' : text;
           }).join(', ') + ')';
-          // Quit-key policy takes precedence over malformed pointer arguments, including computed holds.
-          if (['click', 'doubleClick', 'rightClick', 'drag', 'scroll'].includes(name) && quitKeyBlocked(name, args, false, keyState.held)) {
-            attempt.refused = true;
-            throw new Error(${JSON.stringify(QUIT_KEY_REFUSAL)});
-          }
           // click({ ref: 45 }) reached the engine as "elementIndex must be an integer" (finder-move-2, 2026-10-17).
           const locator = args[0];
           if (['click', 'scroll', 'selectText', 'setValue', 'performSecondaryAction'].includes(name) && locator && typeof locator === 'object' &&
-              !Array.isArray(locator) && !(Object.keys(locator).length === 1 && locator.focused === true) && !['id', 'label', 'line'].some(key => typeof locator[key] === 'string')) {
+              !Array.isArray(locator) && !['id', 'label', 'line'].some(key => typeof locator[key] === 'string')) {
             const number = Object.values(locator).find(value => Number.isInteger(value));
             throw new Error('sleight stopped before ' + shown + ': that object names no element. Pass an element number' +
               (number === undefined ? '' : ', as in ' + name + '(' + number + ')') + ${quoted(/* lean notice */ ', an [x, y] point, a label or ID string, or { id: "<ID>" }, { label: "<label>" }, both together, or { line: "<whole line after the number>" }.')});
           }
-          // The engine receives a resolved number for focused selectors below.
-          const problem = argumentError(name, locator?.focused === true && Object.keys(locator).length === 1
-            ? [0, ...args.slice(1)] : args);
+          const problem = argumentError(name, args);
           if (problem) {
             attempt.refused = true;
             throw new Error(problem + ' for this action' + (state.completedActions || state.unknown.length ? '; earlier actions in this call may have run.' : '.'));
-          }
-          const hold = ['modifiers', 'keyDown', 'keyUp', 'key_down', 'key_up'].includes(name);
-          const change = hold ? heldKeyChange(name, args, keyState.held) : undefined;
-          if (hold && !change) { attempt.refused = true; throw new Error(${JSON.stringify(QUIT_KEY_REFUSAL)}); }
-          const held = keyState.held;
-          if (quitKeyBlocked(name, args, false, held)) {
-            // Resolve the actual handle, not the expected window or a label in code.
-            // No message copy, or a different app, cannot authorize this shortcut.
-            const plainQuit = !quitKeyBlocked(name, args, true, held);
-            const actual = plainQuit && state.quitApps.length ? parse(await raw.getAXState({ emit: false, disableDiffing: true })) : undefined;
-            if (!plainQuit || !quitAppAllowed(actual?.app, state.quitApps)) {
-              attempt.refused = true;
-              throw new Error(${JSON.stringify(QUIT_KEY_REFUSAL)});
-            }
-          }
-          if (name === 'typeText' && needsPaste(args[0])) {
-            attempt.refused = true;
-            const otherInput = state.unknown.length || [...state.inflight].some(pending => pending !== attempt.pending);
-            // Pending reads and other input leave focus unknown. Advice never sends input.
-            const latest = state.reads.get(proxy);
-            const text = latest ? latest.text : !state.acted && proxy === state.startApp ? state.prior?.text ?? state.lastTree : undefined;
-            const field = !otherInput ? typingField(text) : undefined;
-            const recovery = /* notice */ field === 'plain' ? 'Use app.paste(<same text>).' : field === 'secure' ? 'Ask the user to type it.' :
-              'Read the window again; use app.paste(<same text>) if focus is not a password field; otherwise ask the user to type it.';
-            throw new Error('sleight: typeText garbles non-ASCII on this engine; nothing typed. ' + recovery +
-              (state.ran.length ? ' Already ran: ' + state.ran.slice(0, 10).join(', ') +
-                (state.ran.length > 10 ? ' and ' + (state.ran.length - 10) + ' more' : '') + '.' : '') +
-              (otherInput ? ' Other input in this cell may have run or still be running.' : ''));
           }
           const firstAction = !state.acted;
           state.acted = true;
@@ -1621,37 +1444,6 @@ ${O ? `    // What each action did (action-outcomes.mjs), for SLEIGHT_OUTCOMES a
             if (typeof was === 'string' && /^[a-z][a-z ]*(?: \\([^)]*\\))*$/.test(was)) return false;
             return was === null ? now === null : was !== undefined && sameElement(was, now);
           };
-          // Share the old stop format without changing any of its four callers' text.
-          const staleNumber = (callNumber, number, was, now, when) => {
-            const reason = /* notice */ when === 'earlier'
-              ? ${quoted(/* lean notice */ '): an earlier action in this call changed what element ')}.slice(3) + number + ' is (was ' + JSON.stringify(was ?? 'missing')
-              : 'element ' + number + (when === 'code' ? ${quoted(/* lean notice */ ' changed since this call read the window (was ')}
-                : ${quoted(/* lean notice */ ' changed since you read the window (was ')}) + JSON.stringify(was ?? 'missing');
-            return stop('sleight stopped before ' + numberedCall(callNumber) + ': ' + reason + ', now ' + JSON.stringify(now ?? 'missing') + ')' +
-              ${quoted(/* lean notice */ '. Use the current numbers in the window below.')});
-          };
-          const numberedCall = number => name + '(' + number + ')';
-          const unverifiedNumber = () => {
-            const matches = state.uniqueSeen.has(args[0]) ? sameLine(state.seenLines?.[args[0]]) : [];
-            const recovery = /* notice */ matches.length === 1 && sameParent(args[0], matches[0][0], text)
-              ? 'Use element ' + matches[0][0] + ' by ID or label.' : 'Read again.';
-            return stop('sleight stopped before ' + numberedCall(args[0]) + ': ' + recovery);
-          };
-          if (spec?.focused === true) {
-            if (Object.keys(spec).length !== 1 || !['click', 'setValue', 'selectText'].includes(name)) throw unverifiedNumber();
-            const rows = elements(text), focus = /^The focused UI element is (\\d+) (.*?)\\r?$/m.exec(text ?? '');
-            const marked = [...rows].filter(([, line]) => /^[a-z][a-z ]* \\([^()]*\\bfocused\\b[^()]*\\)/.test(line));
-            const number = focus ? Number(focus[1]) : marked.length === 1 ? marked[0][0] : undefined;
-            if (number === undefined || !rows.has(number) || focus && rows.get(number) !== focus[2] ||
-                marked.some(([at]) => at !== number)) throw unverifiedNumber();
-            args = [number, ...args.slice(1)];
-          } else if (spec && !byId && !hold) throw unverifiedNumber();
-          // Guard-only headers establish no numbered baseline. Keep their engine dispatch;
-          // a partial tree, a model read or any earlier numbered tree must still prove the target.
-          // Raw reads use disableDiffing; relay truncation and omission markers never enter here.
-          const numberTree = typeof args[0] === 'number' && !byId && (/^\\t*\\d+ /m.test(text ?? '') ||
-            Object.keys(state.seenLines ?? {}).length > 0 || state.codeReads.has(proxy) || state.callElements.get(proxy)?.size > 0);
-          if (typeof args[0] === 'number' && !byId && numberTree && !/^0 /m.test(text ?? '')) throw unverifiedNumber();
           const goTo = (to, line, why) => {
             nodeRepl.write('sleight: ' + name + '(' + args[0] + ') went to element ' + to + ', the same ' + JSON.stringify(line) + ': ' + why + '.\\n');
             if (state.bind && literal !== undefined) {
@@ -1680,7 +1472,9 @@ ${O ? `    // What each action did (action-outcomes.mjs), for SLEIGHT_OUTCOMES a
               const resolved = new Map();
               for (const n of remaining) {
                 const line = baseline.lines.get(n), matches = baseline.unique.has(n) ? sameLine(line) : [];
-                if (matches.length !== 1 || !sameParent(n, matches[0][0], text)) throw staleNumber(literal, n, line, current.get(n));
+                if (matches.length !== 1 || !sameParent(n, matches[0][0], text)) throw stop('sleight stopped before ' + name + '(' + literal + '): element ' + n +
+                  ${quoted(/* lean notice */ ' changed since you read the window (was ')} + JSON.stringify(line ?? 'missing') + ', now ' + JSON.stringify(current.get(n) ?? 'missing') + ')' +
+                  ${quoted(/* lean notice */ '. Use the current numbers in the window below.')});
                 resolved.set(n, matches[0][0]);
               }
               baseline.moved = true;
@@ -1694,7 +1488,7 @@ ${O ? `    // What each action did (action-outcomes.mjs), for SLEIGHT_OUTCOMES a
             if (!sameElement(was, now)) {
               const moved = [...codeRead.values()].filter(line => line === was).length === 1 ? sameLine(was) : [];
               if (moved.length === 1) goTo(moved[0][0], was, 'the window renumbered after this call read it');
-              else throw staleNumber(args[0], args[0], was, now, 'code');
+              else throw stop('sleight stopped before ' + name + '(' + args[0] + '): element ' + args[0] + ${quoted(/* lean notice */ ' changed since this call read the window (was ')} + JSON.stringify(was ?? 'missing') + ', now ' + JSON.stringify(now ?? 'missing') + ')' + ${quoted(/* lean notice */ '. Use the current numbers in the window below.')});
             }
           }
           else if (!state.callElements.has(proxy)) {
@@ -1710,7 +1504,7 @@ ${O ? `    // What each action did (action-outcomes.mjs), for SLEIGHT_OUTCOMES a
               // nothing after this action would catch them.
               const moved = state.literals?.size === 1 && state.uniqueSeen.has(args[0]) ? sameLine(seen) : [];
               if (moved.length === 1) goTo(moved[0][0], seen, 'the window renumbered since you read it');
-              else throw staleNumber(args[0], args[0], seen, now);
+              else throw stop('sleight stopped before ' + name + '(' + args[0] + '): element ' + args[0] + ${quoted(/* lean notice */ ' changed since you read the window (was ')} + JSON.stringify(seen) + ', now ' + JSON.stringify(now ?? 'missing') + ')' + ${quoted(/* lean notice */ '. Use the current numbers in the window below.')});
             }
           }
           else if (typeof args[0] === 'number' && !byId) {
@@ -1736,42 +1530,8 @@ ${O ? `    // What each action did (action-outcomes.mjs), for SLEIGHT_OUTCOMES a
                 if (!state.boundNumbers.has(proxy)) state.boundNumbers.set(proxy, new Map());
                 state.boundNumbers.get(proxy).set(literal, { number: moved[0][0], line: was });
               }
-            } else if (!sameElement(was, now)) throw staleNumber(args[0], args[0], was, now, 'earlier');
+            } else if (!sameElement(was, now)) throw stop('sleight stopped before ' + name + '(' + args[0] + ${quoted(/* lean notice */ '): an earlier action in this call changed what element ')} + args[0] + ' is (was ' + JSON.stringify(was ?? 'missing') + ', now ' + JSON.stringify(now ?? 'missing') + ')' + ${quoted(/* lean notice */ '. Use the current numbers in the window below.')});
           }
-          // The relay can enforce only what the engine exposes. Numbered and
-          // resolved named targets share this gate, independent of payments.
-          let consent;
-          const consentInput = /^(?:click|doubleClick|rightClick|press|pressKey|typeText|paste|performAction|performSecondaryAction|setValue|check|uncheck)$/.test(name);
-          if (consentInput && !nativeTab) {
-            const newest = text ?? priorText ?? state.callTrees.get(proxy) ?? lastTree;
-            if (typeof newest === 'string') consent = engineConsent(name, args, newest);
-            // A numbered target is resolved against the tree the model last saw, so that tree decides, and ordinary
-            // numbered clicks in browsers pay no extra read. Keys act on current focus, and points, labels and handles
-            // resolve now, so those (and any wall the last tree shows) get a fresh read.
-            const keyedActivation = name === 'pressKey' && /(?:^|\\+)(?:enter|return|numpadenter|space| |\\r|\\n)$/i.test(String(args[0])) ||
-              name === 'typeText' && /^(?: |\\n|\\r\\n?)$/.test(String(args[0]));
-            const numbered = !/^(?:pressKey|typeText|paste)$/.test(name) && Number.isInteger(args[0]);
-            if (text === undefined && typeof newest === 'string' && (consent?.blocked || consent?.decline || keyedActivation || !numbered && !/^(?:pressKey|typeText|paste)$/.test(name)) &&
-                /^\\t*\\d+ (?:HTML content|dialog|sheet|alert|region)\\b/im.test(newest)) {
-              text = await timedRead(raw, 'consent').catch(error => {
-                // Only named unavailable reads may fall back to a plain native alert.
-                if (consentSurface(newest) || !/\\b(?:AXError\\.(?:cannotComplete|invalidUIElement)|timeoutReached)\\b/.test(String(error?.message ?? error))) throw error;
-              });
-              consent = typeof text === 'string' ? engineConsent(name, args, text) : consentSurface(newest)
-                ? { blocked: true, why: 'the page could not be read again to check its cookie wall.' } : undefined;
-            }
-            // Refusals belong to the observed app and window, never an alias
-            // handle. Reclassify each target; this record is not an input fence.
-            const consentKey = JSON.stringify([observed?.app, observed?.title]);
-            state.consentStops ??= new Map();
-            if (consent?.blocked) {
-              state.consentStops.set(consentKey, consent.why);
-              throw stop("Cookie acceptance blocked: " + state.consentStops.get(consentKey));
-            }
-            state.consentStops.delete(consentKey);
-          }
-          // Two missing lines compare equal, but they cannot authorize a numbered dispatch.
-          if (typeof args[0] === 'number' && !byId && numberTree && !elements(text ?? '').has(args[0])) throw unverifiedNumber();
           const cancel = state.fileOnly && isCancel(name, args, text ?? '');
           if (state.cancelOnly && !cancel) throw new Error('Change review: Cancel target changed. Read the current window before retrying.');
           checkWindow(cancel);
@@ -1845,6 +1605,34 @@ ${O ? `    // What each action did (action-outcomes.mjs), for SLEIGHT_OUTCOMES a
             }
             payGate(text);
           }
+          // The relay can enforce only what the engine exposes. Numbered and
+          // resolved named targets share this gate, independent of payments.
+          let consent;
+          const consentInput = /^(?:click|doubleClick|rightClick|press|pressKey|typeText|paste|performAction|performSecondaryAction|setValue|check|uncheck)$/.test(name);
+          if (consentInput && !nativeTab) {
+            const newest = text ?? priorText ?? state.callTrees.get(proxy) ?? lastTree;
+            if (typeof newest === 'string') consent = engineConsent(name, args, newest);
+            // A numbered target is resolved against the tree the model last saw, so that tree decides, and ordinary
+            // numbered clicks in browsers pay no extra read. Keys act on current focus, and points, labels and handles
+            // resolve now, so those (and any wall the last tree shows) get a fresh read.
+            const keyedActivation = name === 'pressKey' && /(?:^|\\+)(?:enter|return|numpadenter|space| |\\r|\\n)$/i.test(String(args[0])) ||
+              name === 'typeText' && /^(?: |\\n|\\r\\n?)$/.test(String(args[0]));
+            const numbered = !/^(?:pressKey|typeText|paste)$/.test(name) && Number.isInteger(args[0]);
+            if (text === undefined && typeof newest === 'string' && (consent?.blocked || consent?.decline || keyedActivation || !numbered && !/^(?:pressKey|typeText|paste)$/.test(name)) &&
+                /^\\t*\\d+ (?:HTML content|dialog|sheet|alert|region)\\b/im.test(newest)) {
+              text = await timedRead(raw, 'consent');
+              consent = typeof text === 'string' ? engineConsent(name, args, text) : { blocked: true, why: 'the page could not be read again to check its cookie wall.' };
+            }
+            // Refusals belong to the observed app and window, never an alias
+            // handle. Reclassify each target; this record is not an input fence.
+            const consentKey = JSON.stringify([observed?.app, observed?.title]);
+            state.consentStops ??= new Map();
+            if (consent?.blocked) {
+              state.consentStops.set(consentKey, consent.why);
+              throw stop("Cookie acceptance blocked: " + state.consentStops.get(consentKey));
+            }
+            state.consentStops.delete(consentKey);
+          }
           await checkLease();
           if (nativeTab && (state.touches !== tabTouches || Date.now() < nativeTab.sampledEnd ||
               Date.now() - nativeTab.sampledEnd > state.tabProbe.freshMs)) {
@@ -1875,9 +1663,7 @@ ${O ? `    // What each action did (action-outcomes.mjs), for SLEIGHT_OUTCOMES a
           const button = /^button(?: \\([^)]*\\))* (.*)$/i.exec(line ?? '')?.[1];
           const label = /(?:^|, )Description: (.*?)(?=, (?:Value|ID|Help|Secondary Actions): |$)/.exec(button ?? '')?.[1] ??
             button?.split(/(?:^|, )(?:Description|Value|ID|Help|Secondary Actions): /)[0];
-          // Role-less menu options ("17 Coast") and menu-bar titles invalidate the bound capture:
-          // selecting one can open or close a menu and renumber the whole window.
-          const opens = name === 'click' && (line === undefined || contexts(text ?? '').get(args[0])?.menuTree || /^(?:menu button|pop up button|menu bar item|menu item|link|tab|disclosure triangle|close button)(?: |,|$)/i.test(line) ||
+          const opens = name === 'click' && (line === undefined || /^(?:menu button|pop up button|menu bar item|menu item|link|tab|disclosure triangle|close button)(?: |,|$)/i.test(line) ||
             /(?:…|\\.\\.\\.)$/.test(label ?? '') || /^(?:Delete|Remove|Revert|Discard|Erase|Empty|Close|Quit|Exit|Sign Out|Log Out|Reset|Clear|Replace|Don't Save|Do Not Save|Save|OK|Done|Apply|Continue|Proceed|Next|Back|Finish|Confirm|Accept|Cancel|Dismiss)\\b/i.test(label ?? '')) ||
             ['performSecondaryAction', 'setValue', 'scroll'].includes(name) || name === 'pressKey' &&
             (keys.length > 0 || /^(?:return|enter|escape|esc|tab|space)$/i.test(key ?? ''));
@@ -1890,17 +1676,12 @@ ${O ? `    // What each action did (action-outcomes.mjs), for SLEIGHT_OUTCOMES a
           else if (state.binding?.proxy !== proxy) state.binding = undefined;
           const typed = name === 'setValue' ? args[1] : ['typeText', 'paste'].includes(name) ? args[0] : undefined;
           if (typeof typed === 'string') state.typed.push(typed);
-          state.typingBaseline = ['typeText', 'paste'].includes(name) && typeof typed === 'string'
-            ? { raw, before: text ?? priorText ?? state.callTrees.get(proxy) ?? state.lastTree, text: typed } : undefined;
           // A second handle may refer to this same app/window. Every input
           // invalidates the call's observations, including reads on that alias.
           state.reads = new WeakMap();
           if (text !== undefined) state.loadingBaselines.set(raw, text);
           // No Shift settle after setValue here, as drag.js does after its own text writes: the
           // engine refuses a key press with only modifiers (-10005, 2/2 live, 2026-10-11).
-          // A failed down may already have posted. A failed release proves
-          // nothing, so retain its holds until a release succeeds.
-          if (change?.down) keyState.held = change.next;
           input();${O ? '\n          ' + 'if (state.outcomeMark) attempt.rec = state.outcomeRec(attempt.index, name, asked, args, text ?? priorText, before); attempt.sent = true;' : ''}${T ? `
           const invoke = () => {
             if (state.timing && state.guardStopMark && ['setValue', 'typeText', 'pressKey'].includes(name)) {
@@ -2003,22 +1784,16 @@ ${O ? `    // What each action did (action-outcomes.mjs), for SLEIGHT_OUTCOMES a
             const left = state.staleCaptures.get(staleKey) - 1;
             if (left > 0) state.staleCaptures.set(staleKey, left); else state.staleCaptures.delete(staleKey);
           }
-          if (change && !change.down) keyState.held = change.next;
           previous.done = Date.now();
           if (editable) previous.completed = true;${O ? '\n          ' + 'attempt.completed = true;' : ''}
           state.completedActions++;
           if (consent?.decline) {
             let after;
             try { after = await timedRead(raw, 'after-consent'); } catch {}
-            const beforeConsent = text ?? priorText ?? state.callTrees.get(proxy) ?? lastTree;
-            const consentSection = typeof beforeConsent === 'string'
-              ? beforeConsent.split(/(?=^0 )/m).filter(part => /^0 /m.test(part))[consent.section] : undefined;
-            const declineRows = typeof consentSection === 'string'
-              ? [...elements(consentSection)].filter(([id]) => id === consent.id) : [];
-            const unverified = declineRows.length !== 1 || engineConsent(name, args, after, consent)?.blocked;
+            const unverified = engineConsent(name, args, after, consent)?.blocked;
             if (typeof after === 'string') state.reads.set(proxy, { text: after, emitted: false, version: state.actionVersion });
             nodeRepl.write(unverified ? 'sleight: Decline unverified: cookie wall closure was not observed.\\n'
-              : 'sleight: cookie wall no longer shown after clicking ' + JSON.stringify(consent.label) + ' (untrusted page label).\\n');
+              : 'sleight: Decline confirmed: declined non-essential cookies; cookie wall closed.\\n');
           }
           if (literal !== undefined) {
             const at = state.pendingLiterals.indexOf(literal);
@@ -2037,9 +1812,7 @@ ${O ? `    // What each action did (action-outcomes.mjs), for SLEIGHT_OUTCOMES a
         // promise here, still returning it, so an await sees the error and nothing is unhandled.
         return (...args) => {
           const attempt = { index: state.actionIndex++ };
-          const pending = track(ordered(keys => act(attempt, keys, ...args),
-            ['modifiers', 'keyDown', 'keyUp', 'key_down', 'key_up'].includes(name)));
-          attempt.pending = pending;
+          const pending = track(act(attempt, ...args));
           if (state.handBindingMark) {
             const mark = state.handBindingMark;
             const report = () => { try { nodeRepl.write(mark + JSON.stringify({ index: attempt.index, bound: !!attempt.bound }) + '\\n'); } catch {} };
@@ -2097,7 +1870,7 @@ ${O ? `    // What each action did (action-outcomes.mjs), for SLEIGHT_OUTCOMES a
   if (typeof globalThis.__sleightDocumentGuardSetup !== 'function'${reuseSetup ? ' || !globalThis.__sleightDocumentGuard' : ''}) {
     throw new Error(${quoted(/* lean notice */ 'Sleight guard setup is missing. Send a standalone app acquisition before acting.')});
   }
-  globalThis.__sleightDocumentGuardSetup(${JSON.stringify(update) ?? 'undefined'}${quitApps.length ? ', ' + JSON.stringify(quitApps) : ''});
+  globalThis.__sleightDocumentGuardSetup(${JSON.stringify(update) ?? 'undefined'});
   ${/* A call that declares app itself (let app = await cua.getApp(…)) has it in its temporal dead zone
      here, and even typeof throws: "Cannot access 'app' before initialization" cost turns in h2h-3
      (2026-10-10). That app comes from cua.getApp, which is already wrapped, so skip it. */

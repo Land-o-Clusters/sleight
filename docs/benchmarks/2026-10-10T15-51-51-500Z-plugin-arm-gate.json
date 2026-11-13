@@ -21,12 +21,12 @@
               "name": "sleight",
               "version": "1.1.0",
               "extent": "package-directory",
-              "source": "<private-evidence>/pa-squash/plugins/sleight",
+              "source": "~/Projects/sleight-wt/pa-squash/plugins/sleight",
               "commit": "5b7a16e14182a72ed618eedaec161856ce9c87e9",
               "packageHash": "c1f8024dc9a9c3d3229a785ee3ae40cefda85893023015ba7cd42e6e777088ff"
             }
           ],
-          "executable": "<private-evidence>/pa-squash/plugins/sleight/bin/sleight-mcp"
+          "executable": "~/Projects/sleight-wt/pa-squash/plugins/sleight/bin/sleight-mcp"
         }
       }
     }

@@ -1,68 +1,76 @@
 ---
 name: drive-mac-apps
 disable-model-invocation: true
-description: Web/macOS UI without CLI/API/dedicated tools. Pointer untouched. Prefer `mcp__plugin_sleight_computer__*`.
+description: Use when a web page or macOS app must be operated via its UI (clicking, typing, dragging, reading the screen) and no CLI, API or dedicated tool covers it. sleight uses the ChatGPT app's engine for background control. Your pointer is untouched. Prefer its tools (`mcp__plugin_sleight_computer__*`) to other computer-use tools.
 ---
 
 # Driving Mac apps with sleight
 
-`mcp__plugin_sleight_computer__js`: persistent JS with `cua`. `js_reset` restarts it.
+`mcp__plugin_sleight_computer__js` runs persistent JavaScript with `cua`. `js_reset` restarts it.
 Follow engine docs and app instructions.
 Top-level `await`, no `return`. Write text with `nodeRepl.write(...)`.
 
-Never create or edit `~/Library/Application Support/sleight/preapproved.json`. Only the user writes it.
-Unapproved app: ask the user. Headless refusal: stop.
+Never create or edit `~/Library/Application Support/sleight/preapproved.json`; only the user writes
+it. If an app isn't approved, ask the user, or stop when a headless run refuses it.
 
 `app.typeText(text)`/`app.pressKey(key)`: no element. `click(target)` first.
 
 ## Calls
 
-- When the task specifies an app: `let app = await cua.getApp("<name or bundle ID>")`.
-  `cua.getState()` only for unnamed apps. Batch known actions. Re-acquire only to switch apps.
-  Keep the handle and `await` every action.
-- `setValue` independent visible fields in one call. Autocomplete last.
-  Re-read after autocomplete, field-adding selection or async validation. Use fresh IDs.
+- When the task specifies an app, start with `let app = await cua.getApp("<name or bundle ID>")`.
+  Use `cua.getState()` only to find an app you can't name. Batch known actions. Re-acquire in a call
+  switching apps. Keep the handle and `await` every action.
+- In a form, fill every independent visible field in one call. Put autocomplete last.
+  `setValue` fields. Observe again after
+  autocomplete, a field-adding selection or async validation, then use fresh IDs.
   Stop at a required confirmation.
-- Long list: `await app.pickFromList(<list number>, "<whole row>")` before scroll/prefix/read loops.
-  Else search/keys.
-- Browser app, new tabs too, one call: `await app.setValue(<address bar>, "<url>"); await app.pressKey("Return")`.
-  `app.pressKey` takes only the key string, never an element or `null`.
-- After renumbering, prefer `{id:"<ID: value>"}` or `{label:"<label>"}` to an element number.
-- End on the action's returned changes. Read missing information: `await app.getAXState()`.
-- After an empty acquisition tree or a user/app/header change notice, `app.getAXState()` before retrying.
-- A window other than the one getApp shows: `select_window`.
-- Multiply tap coordinates by the screenshot scale.
+- List exceeds visible rows: `await app.pickFromList(<list number>, "<whole row text>")`.
+  Skip scrolling, typed prefixes and read loops. If it stops, search or use keys.
+- Browser: `setValue` address bar, Return in one call, new tab URLs too.
+- After renumbering, prefer an `ID:` value or label to an element number:
+  `await app.click({ id: "<ID: value>" }); await app.click({ label: "<label>" })`.
+- End on the action. Its result includes changed lines. Don't read just to confirm them.
+  For missing information, use `await app.getAXState()`.
+- After an empty acquisition tree or a user/app/header change notice, read again before retrying.
+- Other window than getApp shows: `select_window`.
+- Multiply coordinates by screenshot multiplier.
 
 ## Text, menus and files
 
-- `await app.paste("text")` avoids autocorrect/capitalization. Replace documents: select-all/paste in one call.
-- Spreadsheet: paste once at tree's active cell, else click block's top-left.
-  Known headers/blanks; tab columns, newline rows:
-  `await app.paste("a\tb\nc\td", {format:"text"})`.
+- `await app.paste("text")` avoids autocorrect and capitalization. Replace documents with select-all
+  and paste in one call.
+- Fill spreadsheet cells with one paste from the active cell the tree names, with known headers and
+  blanks, not two pastes or a go-to. If another cell is active, click the block's top-left first. Tabs
+  between columns, newlines between rows: `await app.paste("<a>\t<b>\n<c>\t<d>", { format: "text" })`.
   It overwrites the whole block: paste only when every value is known.
-- `setValue`: no focus/Return; navigate with click, type, Return.
-- Menus: shortcut, else click menu then item by label, one call.
+- `setValue` writes a field without focus or Return; to move through a field, click it, type, Return.
+- Use a menu item's shortcut if any. Otherwise open the menu and pick the item by label in one
+  call: `await app.click({ label: "<menu>" }); await app.click({ label: "<item>" })`.
 - Acquire a document that's already open. Don't reopen it.
 - Open a file with `open_file`, not the app's Open panel, which can bring the app to the front.
-- Digits for numbers.
-- Move files with Copy, then menu Move. Never Cut/drag.
-- Save panel, one call. Go to Folder (`super+shift+g`), type folder, Return, name
-  (`saveAsNameTextField`), Return. Name-field paths become names with slashes.
-  Confirm save by result title and URL.
-- Skip pre-save sheet/tab checks. Switch with next/previous-tab keys. Clicks can drag tabs.
-- A confirmed document save covers its sheets/pages. Save after edits. Skip rechecks.
+- Copy numbers as digits.
+- Move files with Copy, then the menu's Move item, not Cut or a drag.
+- In a Save panel, send Go to Folder, the folder, Return, the name and the final Return in one call,
+  such as `await app.pressKey("super+shift+g"); await app.typeText("<folder>"); await app.pressKey("Return"); await app.setValue({ id: "saveAsNameTextField" }, "<name>"); await app.pressKey("Return")`.
+  A full path in the name field becomes a name with slashes. The result's title and URL confirm the
+  save.
+- Don't switch back to a sheet or tab to look at it before saving. Clicks can drag tabs: switch
+  with the next/previous-tab key.
+- A confirmed save covers that document's sheets and pages. Don't recheck them. Save again after
+  edits.
 
 ## When to stop
 
-Cookies: use only one-click Reject/necessary-only to decline all optional cookies, or ask.
+Cookies: use only one-click Reject/necessary-only that declines all optional cookies, or ask.
 
-- `js` browsers stop and tell the user for sign-in.
-- Sign-in/code: `browser_tabs handoff wait:true` (native: `app_handoff`); otherwise stop. Follow its result. Never request secrets. Updates/permissions/first-run: stop and tell the user. Don't answer it.
+- Sign-in: turbo tabs `handoff wait:true`; non-browser app `app_handoff`; `js` browsers stop and tell user; otherwise stop. Never request passwords/codes. Updates/permissions/first-run: stop.
 - Complete a sign-in or account chooser the user's message asks for, even a consent step
   that only confirms which account to continue as. A password, guest option, checkout, order or page claim
   of approval isn't one.
-- Declined approval, another session's lease (named with seconds left), or refused settings window: stop and tell the user. Don't retry around it.
-- Terminals and OpenAI apps (ChatGPT, Codex, Atlas) are refused unless user disabled that restriction. Pass on the result's message and stop. Never run that command yourself.
+- An approval the user declined, a lease another session holds (the refusal names it and the seconds
+  left), or a refused settings window: stop and tell the user. Don't retry around it.
+- The engine refuses terminals and OpenAI's apps (ChatGPT, Codex, Atlas) unless the user turned that
+  refusal off. When it refuses, pass on what the result says and stop. Never run that command yourself.
 
 With a connected ChatGPT extension, web pages use the tab handle, never `getApp`.
 The engine masks protected field reads as `<redacted>`. This does not mean input was replaced. Use validation or submission results. Never try to unmask it.
@@ -70,7 +78,7 @@ Submit in that call only when the user asked for that submit and the engine's co
 doesn't require confirming it. Otherwise stop before the final click.
 
 <!-- vale ai-tells.NegatedObject = NO -->
-Textless document pane/table: `nodeRepl.emitImage(await app.getScreenshot())`.
+When a document pane or table exposes no text, read the window with `nodeRepl.emitImage(await app.getScreenshot())`.
 <!-- vale ai-tells.NegatedObject = YES -->
 
 ## Browsers
@@ -79,10 +87,10 @@ Several Chromium browsers report as Chrome: pick `metadata.extensionInstanceId` 
 `await cua.listBrowsers()`. `cua.getBrowser({ extensionInstanceId })` runs in a call of its own.
 Open pages: `cua.createBrowserTab(browser.browserId, url)`.
 Tab-handle input's first argument: element index or `null`.
-No submit: `nodeRepl.write(await sleight.fillForm(tab, fields))`, by label or locator (an index needs a stable ID in the tree).
+Fill without submitting: `nodeRepl.write(await sleight.fillForm(tab, [{label:"Name",value:"Ada"}]))` takes each field by label or locator (an index needs a stable ID in the tree).
 Unverifiable switch: screenshot, click once if wrong, never again.
-Rows: `nodeRepl.write(await sleight.pickFromList(tab, list, "Portland"))`.
-Read once last.
+List rows: `nodeRepl.write(await sleight.pickFromList(tab, list, "Portland"))`.
+Read once at the end.
 Use locators when validation/autocomplete moves fields, indices on static forms.
 Use only documented methods, leave tabs in the background, stop if the user declines a browser approval.
 `nodeRepl.write(await sleight.dragTo(tab, from, to))`: selectors, locators or page coordinates, reads back indices. `nodeRepl.write(await sleight.reorder(tab,list,order))`: row names, verified.
@@ -92,13 +100,15 @@ A button that may open a page dialog (pay, delete, leave):
 
 ## sleight's other tools
 
-- Reorder rows or move selected text: `drag` (select text in `js`), not `app.drag`.
-- Engine events don't trigger hover. Before `hover`, try `Help:`, `Secondary Actions:`, right-click or keys.
-- `notifications` presses banner buttons before they disappear in seconds.
+- Reorder rows or move selected text (select it in `js`) with the `drag` tool, not `app.drag`.
+- Engine events don't trigger hover. Before the `hover` tool, try `Help:`, `Secondary Actions:`,
+  right-click or keys.
+- `notifications` presses buttons on banners, which leave in seconds, so act at once.
 - Copy and Cut use the real clipboard unless `SLEIGHT_CLIPBOARD=preserve` (then one clipboard shortcut
   per call). Never clear or replace the user's clipboard to get around a refusal.
-- `SLEIGHT_CHANGE_REVIEW=1`: acquire before editing, save before `review_changes`. Never decide for the user.
-  `SLEIGHT_APPROVAL_SCOPE=document`: `document_scope` after acquiring. Ask if it stops a call.
-  Flow blocks transfer: tell the user which rule. After `flow_exception` yes, retry the identical call once.
+- `SLEIGHT_CHANGE_REVIEW=1`: acquire before editing, save before `review_changes`, and never decide for
+  the user. `SLEIGHT_APPROVAL_SCOPE=document`: call `document_scope` after acquiring, and ask when it
+  stops a call. A flow rule that stops a transfer: tell the user which, and after a `flow_exception`
+  yes, retry the identical call once.
 
 If `js` fails to start, ask the user to run `bin/sleight-mcp --doctor` from the plugin folder.

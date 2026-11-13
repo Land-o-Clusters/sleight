@@ -15,8 +15,8 @@ test('native Chess fixture accepts the owned private temporary path before Found
   try {
     const helper = join(dir, 'fixture');
     // Parallel native tests can spend over 60 s in cold module compilation.
-    execFileSync('swiftc', ['-module-cache-path', swiftModuleCache(), '-o', helper, 'bench/chess-drag-fixture.swift'], { timeout: 600000, killSignal: 'SIGKILL' });
-    const request = args => JSON.parse(execFileSync(helper, [JSON.stringify(args)], { encoding: 'utf8', timeout: 60000, killSignal: 'SIGKILL' }));
+    execFileSync('swiftc', ['-module-cache-path', swiftModuleCache(), '-o', helper, 'bench/chess-drag-fixture.swift'], { timeout: 180000 });
+    const request = args => JSON.parse(execFileSync(helper, [JSON.stringify(args)], { encoding: 'utf8' }));
     const check = path => request({ op: 'path-check', path });
     const owned = `${MAC_TMP}/sleight-chess-stacked-test/target.game`;
     assert.equal(check(owned).ok, true);

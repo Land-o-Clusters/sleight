@@ -1,7 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import { join, dirname, basename } from 'node:path';
 import { homedir } from 'node:os';
-import { fileURLToPath } from 'node:url';
 import { mkdirSync } from 'node:fs';
 import { getTasks } from '../tasks.mjs';
 import { genericTask } from '../generic-task.mjs';
@@ -13,7 +12,6 @@ import { observePermission } from '../real-permission.mjs';
 import { dragMethodAudit } from '../world/method-check.mjs';
 import { TargetMapper } from './mapping.mjs';
 import { assertReplayArguments } from './allowlist.mjs';
-import { isNativeSelection, windowReceipts } from './frames.mjs';
 
 // This phase has no host effects and must finish before lock ownership changes.
 export function prepareReplay(recording, dir, mapper = new TargetMapper()) {
@@ -24,14 +22,9 @@ export function prepareReplay(recording, dir, mapper = new TargetMapper()) {
     if (markers.size > 1) throw Error('Recording names multiple gate windows');
     return { mapper };
   }
-  // The read-only frame observer admits nonce documents only in the benchmark namespace.
-  // Keep that namespace inside this iteration's owned bank, without widening the observer's filter.
-  const hasFrames = recording.calls.some(call => isNativeSelection(call) && call.result?.content?.some(block =>
-    block.type === 'text' && windowReceipts(block.text).some(row => row.frame)));
-  const fixtureDir = hasFrames ? join(dir, 'sleight-bench', 'replay', 'fixture') : dir;
-  const native = nativePlan(recording, fixtureDir);
-  mapper.addString(native.oldDir, fixtureDir);
-  if (/^\/(?:var|tmp)\//.test(native.oldDir)) mapper.addString('/private' + native.oldDir, fixtureDir);
+  const native = nativePlan(recording, dir);
+  mapper.addString(native.oldDir, dir);
+  if (/^\/(?:var|tmp)\//.test(native.oldDir)) mapper.addString('/private' + native.oldDir, dir);
   return { mapper, native };
 }
 
@@ -43,18 +36,6 @@ export function nativePlan(recording, dir) {
   if (!supported.includes(task.id)) throw Error(`Native fixture ${task.id} is not reproducible by replay; random operands, real accounts and external documents require a saved fixture manifest`);
   const text = JSON.stringify(calls.map(c => c.arguments));
   const paths = [...text.matchAll(/(?:\/[^\s"\\]+)*\/sleight-bench\/[^\s"\\]+\/[^\s"\\]+\/((?:Source-|Target-)?[a-f0-9]{8}(?:-drag|-edit)?\.txt)/g)].map(m => m[0]);
-  // Title-based selection need not repeat the fixture path in its arguments. Only the native tool's
-  // successful receipt can supply that path, never arbitrary JavaScript output or document text.
-  for (const call of calls.filter(c => isNativeSelection(c) && !c.result?.isError))
-    for (const block of call.result?.content ?? []) if (block.type === 'text') for (const row of windowReceipts(block.text)) {
-      try {
-        if (row.target.appId !== 'com.apple.TextEdit') continue;
-        const url = new URL(row.target.url);
-        if (url.protocol !== 'file:' || url.hostname || url.search || url.hash || url.href !== row.target.url) continue;
-        const path = fileURLToPath(url);
-        if (basename(path) === row.target.title && /^\/(?:[^/]+\/)*sleight-bench\/[^/]+\/[^/]+\/(?:Source-|Target-)?[a-f0-9]{8}(?:-drag|-edit)?\.txt$/.test(path)) paths.push(path);
-      } catch { /* Missing or invalid local fixture identity cannot establish a path. */ }
-    }
   const folders = [...new Set(paths.map(p => dirname(p).replace(/^\/private(?=\/(?:var|tmp)\/)/, '')))];
   if (folders.length !== 1) throw Error('Native recording needs exactly one owned fixture directory');
   const nonces = [...new Set(paths.map(p => /(?:Source-|Target-)?([a-f0-9]{8})(?:-drag|-edit)?\.txt$/.exec(basename(p))?.[1]).filter(Boolean))];
@@ -82,10 +63,8 @@ export async function withNative(recording, { dir, mapper, signal, abort, drive,
         BENCH_WORLD_TASKS: JSON.stringify([recording.task.id]) }, servers: null });
       await beforeCall();
       const transcript = replay.calls.flatMap(row => [
-        { message: { content: [{ type: 'tool_use', id: row.id,
-          name: row.server === 'plugin:sleight:computer' ? `mcp__plugin_sleight_computer__${row.name}` : row.name, input: row.arguments }] } },
-        { message: { content: [{ type: 'tool_result', tool_use_id: row.id,
-          is_error: !row.result || row.result.isError === true, content: row.result?.content }] } },
+        { message: { content: [{ type: 'tool_use', id: row.id, name: row.name, input: row.arguments }] } },
+        { message: { content: [{ type: 'tool_result', tool_use_id: row.id, is_error: row.result?.isError ?? true }] } },
       ]).map(JSON.stringify).join('\n');
       return { code: replay.verdict === 'pass' ? 0 : 1, groupClean: true, out: { result: '' }, methodAudit: dragMethodAudit(transcript) };
     } });

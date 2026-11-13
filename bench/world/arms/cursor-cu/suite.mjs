@@ -8,7 +8,6 @@ import { armPaths, composerPlan, CURSOR_PIN, guardLive, DESKTOP_BLOCKERS } from 
 import { inspectBundle, readLoginReadiness, setupPlan } from './setup.mjs';
 import { runDesktop } from './run.mjs';
 import { DesktopDriver } from './desktop.mjs';
-import { waitForBenchmark, benchmarkStopCode } from '../../../hold.mjs';
 import { scrubCursor } from './scrub.mjs';
 
 export function parseOptions(argv) {
@@ -54,27 +53,23 @@ export async function runCursorPlan(plan, { signal, ...options } = {}) {
 export async function nativeMain(argv, runtime = {}) {
   const args = parseOptions(argv), plan = nativePlan(args);
   if (args['dry-run']) { (runtime.print ?? console.log)(JSON.stringify(scrubCursor(plan), null, 2)); return plan; }
-  // Validate owner flags before any hold or host reads. Recheck the lock after the wait.
-  guardLive({ ownerAway: plan.ownerAway, ownerSaysCursorFree: plan.ownerSaysCursorFree }, { exists: () => false });
+  (runtime.guard ?? guardLive)({ ownerAway: plan.ownerAway, ownerSaysCursorFree: plan.ownerSaysCursorFree });
+  await (runtime.preflight ?? (p => new DesktopDriver().preflight(p)))({ paths: armPaths(), ownerSaysCursorFree: plan.ownerSaysCursorFree });
+  (runtime.inspect ?? inspectBundle)(armPaths().app);
+  const readiness = await (runtime.readiness ?? readLoginReadiness)(undefined, { ownerSaysCursorFree: plan.ownerSaysCursorFree });
+  if (!readiness.authStored) throw Error('Cursor owner login missing; keep the installed signed-in Cursor running');
+  if (existsSync(plan.out)) throw Error('Cursor result output already exists');
+  const { acquireLiveLock } = await import('../../../live-lock.mjs');
+  const { executeRealTask } = await import('../../../real-run.mjs');
+  const { observePermission } = await import('../../../real-permission.mjs');
+  const release = await (runtime.lock ?? acquireLiveLock)();
   const controller = new AbortController(), abort = () => controller.abort();
   for (const s of ['SIGINT', 'SIGTERM', 'SIGHUP']) process.on(s, abort);
-  let release;
   const results = []; let clean = true;
   try {
-    await waitForBenchmark({ signal: controller.signal, ...runtime.hold });
-    (runtime.guard ?? guardLive)({ ownerAway: plan.ownerAway, ownerSaysCursorFree: plan.ownerSaysCursorFree }, { checkHold: false });
-    await (runtime.preflight ?? ((p, options) => new DesktopDriver().preflight(p, options)))({ paths: armPaths(), ownerSaysCursorFree: plan.ownerSaysCursorFree }, { signal: controller.signal });
-    (runtime.inspect ?? inspectBundle)(armPaths().app);
-    const readiness = await (runtime.readiness ?? readLoginReadiness)(undefined, { ownerSaysCursorFree: plan.ownerSaysCursorFree });
-    if (!readiness.authStored) throw Error('Cursor owner login missing; keep the installed signed-in Cursor running');
-    if (existsSync(plan.out)) throw Error('Cursor result output already exists');
-    const { acquireLiveLock } = await import('../../../live-lock.mjs');
-    const { executeRealTask } = await import('../../../real-run.mjs');
-    const { observePermission } = await import('../../../real-permission.mjs');
-    release = await (runtime.lock ?? acquireLiveLock)(undefined, { signal: controller.signal });
     const all = getTasks('world');
     for (const row of plan.runs) {
-      await waitForBenchmark({ signal: controller.signal, held: runtime.held, ...runtime.hold });
+      if ((runtime.held ?? (() => existsSync('/tmp/sleight-hold')))()) throw Error('sleight-hold appeared');
       const task = all.find(t => t.id === row.task);
       const ctx = { dir: join(armPaths().workspace, `fixture-${randomUUID()}`), nonce: randomUUID().slice(0, 8), ownerAway: true, stopOnAppDialog: true };
       const result = await (runtime.execute ?? executeRealTask)(task, ctx, { signal: controller.signal, lockHeld: true,
@@ -100,8 +95,8 @@ export async function nativeMain(argv, runtime = {}) {
     }
   } finally {
     for (const s of ['SIGINT', 'SIGTERM', 'SIGHUP']) process.removeListener(s, abort);
-    if (release && clean) await release();
-    else if (release) console.error('Cursor cleanup unverified; live lock retained');
+    if (clean) await release();
+    else console.error('Cursor cleanup unverified; live lock retained');
   }
   const failed = results.length !== plan.runs.length || results.some(r => !r.passed);
   if (failed) process.exitCode = 1;
@@ -111,17 +106,7 @@ export async function nativeMain(argv, runtime = {}) {
 export async function chromeMain(argv, runtime = {}) {
   const args = parseOptions(argv);
   if (args.surface !== 'cursor-cu' || args['real-browser'] !== 'chrome') throw Error('Cursor race requires --surface cursor-cu --real-browser chrome');
-  if (!args['dry-run']) {
-    const admission = { ownerAway: args['owner-away'], ownerSaysCursorFree: !!args['owner-says-cursor-free'] };
-    guardLive(admission, { exists: () => false });
-    const controller = new AbortController(), abort = () => controller.abort();
-    for (const s of ['SIGINT', 'SIGTERM', 'SIGHUP']) process.on(s, abort);
-    try {
-      await waitForBenchmark({ signal: controller.signal, ...runtime.hold });
-      guardLive(admission, { checkHold: false });
-      await new DesktopDriver().preflight({ paths: armPaths(), ownerSaysCursorFree: admission.ownerSaysCursorFree }, { signal: controller.signal });
-    } finally { for (const s of ['SIGINT', 'SIGTERM', 'SIGHUP']) process.off(s, abort); }
-  }
+  if (!args['dry-run']) { guardLive({ ownerAway: args['owner-away'], ownerSaysCursorFree: !!args['owner-says-cursor-free'] }); await new DesktopDriver().preflight({ paths: armPaths(), ownerSaysCursorFree: !!args['owner-says-cursor-free'] }); }
   const { runRealGate } = await import('../../../fowl/real-gate.mjs');
   // The task definitions live in the repository, so dry plans work before a Fowl clone exists.
   const tasks = JSON.parse(readFileSync(new URL('../../tasks/fowlbrowser.json', import.meta.url), 'utf8'));
@@ -139,5 +124,5 @@ if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.ur
     if (mode === '--chrome') await chromeMain(argv);
     else if (mode === '--native') await nativeMain(argv);
     else throw Error('choose --native or --chrome');
-  } catch (error) { console.error(error.message); process.exitCode = benchmarkStopCode(error) ?? 1; }
+  } catch (error) { console.error(error.message); process.exitCode = 1; }
 }

@@ -2,55 +2,16 @@ import { setTouch, restoreTouch } from './touch.mjs';
 // Reset and release remove emulation so the tab follows its current window and system preferences.
 const original = new WeakMap();
 
-function layoutSize({ cssLayoutViewport } = {}) {
-  const { clientWidth: width, clientHeight: height } = cssLayoutViewport ?? {};
-  return Number.isInteger(width) && Number.isInteger(height) && width > 0 && height > 0 ? { width, height } : null;
-}
-
 async function innerSize(page) {
   let session, timer;
   try {
     session = await page.context().newCDPSession(page);
-    const metrics = await Promise.race([session.send('Page.getLayoutMetrics'),
+    const { cssLayoutViewport } = await Promise.race([session.send('Page.getLayoutMetrics'),
       new Promise((_, reject) => { timer = setTimeout(() => reject(Error('size read timed out')), 1500); })]);
-    return layoutSize(metrics);
+    const { clientWidth: width, clientHeight: height } = cssLayoutViewport ?? {};
+    return Number.isInteger(width) && Number.isInteger(height) && width > 0 && height > 0 ? { width, height } : null;
   } catch { return null; }
   finally { clearTimeout(timer); await session?.detach().catch(() => {}); }
-}
-
-async function settledSize(session, override, baseline) {
-  let measured = null, previous = null, expired = false, timer, poll, wake;
-  const stableRead = override && baseline && baseline.width === override.width && baseline.height === override.height;
-  // One deadline also bounds a stalled CDP read. Reuse the clearing session;
-  // neither page getters nor foreground activation are needed.
-  const deadline = new Promise(resolve => {
-    timer = setTimeout(() => {
-      expired = true;
-      resolve({ measured, settled: false });
-      clearTimeout(poll); wake?.();
-    }, 1000);
-  });
-  const read = async () => {
-    while (!expired) {
-      let next;
-      try { next = layoutSize(await session.send('Page.getLayoutMetrics')); }
-      catch (error) {
-        const message = typeof error === 'string' ? error : typeof error?.message === 'string' ? error.message : '';
-        if (/\b(?:Target closed|has been closed|Session closed|Session has been detached)\b/i.test(message))
-          return { measured: null, settled: false };
-        // Retry transient read failures within the deadline.
-      }
-      if (expired) break;
-      measured = next ?? measured;
-      if (next && (override && (next.width !== override.width || next.height !== override.height)
-        || stableRead && previous && next.width === previous.width && next.height === previous.height))
-        return { measured, settled: true };
-      previous = next;
-      await new Promise(resolve => { wake = resolve; poll = setTimeout(resolve, stableRead ? 40 : 20); });
-    }
-  };
-  try { return await Promise.race([read(), deadline]); }
-  finally { clearTimeout(timer); clearTimeout(poll); }
 }
 
 async function cssSize(page, size) {
@@ -76,12 +37,7 @@ async function restoreSizeAndMedia(page, { release = false } = {}) {
   const owner = impl?.delegate?._mainFrameSession?._client;
   const session = owner ?? await page.context().newCDPSession(page);
   try {
-    let preClear;
     if (Object.hasOwn(saved, 'size')) {
-      if (!release) {
-        try { preClear = layoutSize(await session.send('Page.getLayoutMetrics')); }
-        catch { /* Fall back to the saved measured override. */ }
-      }
       await session.send('Emulation.clearDeviceMetricsOverride');
       // Forget the pinned Playwright's cache too, including its same-size fast path.
       impl?._setEmulatedSize?.(undefined);
@@ -98,12 +54,9 @@ async function restoreSizeAndMedia(page, { release = false } = {}) {
         reducedMotion: 'no-override', forcedColors: 'no-override', contrast: 'no-override' };
     }
     original.delete(page);
-    const result = !release && Object.hasOwn(saved, 'size')
-      ? await settledSize(session, preClear ?? saved.override, preClear ? saved.size : null) : null;
-    const measured = result?.measured;
+    const measured = !release && Object.hasOwn(saved, 'size') ? await innerSize(page) : null;
     return (release ? 'viewport overrides cleared' : measured
       ? `viewport restored to ${measured.width}x${measured.height}` : 'viewport restored')
-      + (result && !result.settled ? '; layout had not settled' : '')
       + (saved.size === null ? '; previous size unknown' : '') + (saved.media ? '; media cleared' : '');
   } finally { if (!owner) await session.detach().catch(() => {}); }
 }
@@ -132,10 +85,7 @@ export async function setViewport(page, { width, height, color_scheme, reduced_m
   if (width !== undefined && !Object.hasOwn(saved, 'size')) saved.size = before;
   let sizeNote;
   if (width !== undefined) {
-    // Keep a measured fallback if the reset's pre-clear read fails.
-    saved.override = null;
     const measured = await cssSize(page, { width, height });
-    saved.override = measured;
     sizeNote = `viewport ${measured ? measured.width + 'x' + measured.height : width + 'x' + height}`
     + (before && saved.size ? process.env.SLEIGHT_MT !== '0'
       ? ` (was ${before.width}x${before.height}; a viewport step with no size restores it). [offscreen] means outside this viewport; [partly offscreen] means cut off by it.`

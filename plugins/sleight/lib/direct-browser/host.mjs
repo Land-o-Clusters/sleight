@@ -1,22 +1,13 @@
 import { createHash, randomBytes } from 'node:crypto';
-import { closeSync, constants, existsSync, fstatSync, futimesSync, lstatSync, openSync, readdirSync, realpathSync, readFileSync, mkdirSync, mkdtempSync, writeFileSync, chmodSync, renameSync, rmSync } from 'node:fs';
+import { closeSync, constants, existsSync, fstatSync, lstatSync, openSync, readdirSync, realpathSync, readFileSync, mkdirSync, mkdtempSync, writeFileSync, chmodSync, renameSync, rmSync } from 'node:fs';
 import { spawn, execFile, execFileSync } from 'node:child_process';
-import { rm } from 'node:fs/promises';
 import { Socket } from 'node:net';
 import { userInfo } from 'node:os';
 import { dirname, isAbsolute, join, normalize } from 'node:path';
 import { promisify } from 'node:util';
-import { setTimeout as delay } from 'node:timers/promises';
 import { fileURLToPath } from 'node:url';
 import { immutableJSON } from './ipc.mjs';
 import { runOnceMore } from './transient.mjs';
-import { darwinEnvironment } from '../platform/paths.mjs';
-import { defaultHelperCache, ordinary, helperSourceHashes, helperBuildKey, helperBuildRecipes, helperCompileArgs, helperSettingsFlags, nativeHelpersBuilt, handInventory, handHostBuilt,
-  scheduleHelperCacheCleanup } from './host-cache.mjs';
-import { helperToolchainKey, helperCompileFailure, helperCompileDuration } from './host-cache.mjs';
-import { createUiChannel } from './ui-channel.mjs';
-import { compilerDiagnostics, compilerDiagnosticLine } from './compiler-diagnostics.mjs';
-export { nativeHelpersBuilt, handHostBuilt, createUiChannel };
 
 // Fixed entry. The installed loader supplies source acceptance outside model or
 // project input. Only this local compiler can issue a native launch receipt.
@@ -24,26 +15,15 @@ const sources = fileURLToPath(new URL('./native/', import.meta.url)).replace(/\/
 const nativeBuilds = new WeakMap();
 const helperSources = { 'peer-host': 'peer-host.c', 'consent-host': 'consent-host.swift' };
 const digest = bytes => createHash('sha256').update(bytes).digest('hex');
-// Long backoff is for deterministic compiler diagnostics covered by the source
-// and toolchain keys. Resource, policy and transport failures can clear in place.
-function compileFailureCaptured(error) {
-  if (error.killed || error.signal || error.code !== 1 || error.message === 'HOST_SOURCE_MISMATCH') return false;
-  const diagnostics = compilerDiagnostics(error.stderr);
-  // A frontend crash can accompany a deterministic diagnostic. Its bare crash
-  // header still invalidates long backoff for this attempt under memory load.
-  if (/^(?:swiftc:\s*)?(?:Killed:\s*\d+|Segmentation fault\b|Abort trap\b|Stack dump\b)/im.test(String(error.stderr ?? ''))) return false;
-  const transient = /signal\s+\d+|\bkilled\b|segmentation fault|abort trap|out of memory|stack dump|no space left on device|disk (?:is )?full|disk quota exceeded|permission denied|operation not permitted|resource temporarily unavailable|too many open files|input\/output error|(?:license.*(?:not.*accept|not.*agree|expired)|(?:not.*accept|not.*agree).*license)/i;
-  // Swift quotes types and parameter names. Those names can resemble license
-  // failures; preserve quotes only around known environment-error messages.
-  const quotedCause = /^(?:signal\s+\d+|killed:\s*\d+|segmentation fault:\s*\d+|abort trap:\s*\d+|out of memory|stack dump:|no space left on device|disk (?:is )?full|disk quota exceeded|permission denied|operation not permitted|resource temporarily unavailable|too many open files|input\/output error|(?:the )?xcode license\b|license agreements?\b|you have not agreed\b)/i;
-  const cause = line => line.replace(/'[^']*'|"[^"]*"/g, quoted => {
-    const message = quoted.slice(1, -1);
-    return quotedCause.test(message) ? message : '';
-  });
-  return diagnostics.length > 0 && !diagnostics.some(line => transient.test(cause(line)));
-}
 const processProviders = new WeakSet();
 export const isNativeProcessProvider = value => typeof value === 'function' && processProviders.has(value);
+function ordinary(path, mode) {
+  const stat = lstatSync(path);
+  if (!stat.isFile() || stat.isSymbolicLink() || realpathSync(path) !== path ||
+      stat.mode & 0o022 || stat.uid !== process.getuid() && stat.uid !== 0 ||
+      mode !== undefined && (stat.uid !== process.getuid() || (stat.mode & 0o777) !== mode)) throw Error('HOST_PACKAGE_MISMATCH');
+  return readFileSync(path);
+}
 function privateDirectory(path) {
   const stat = lstatSync(path);
   if (!isAbsolute(path) || normalize(path) !== path || !stat.isDirectory() || stat.isSymbolicLink() ||
@@ -77,67 +57,29 @@ function validateBuild(build) {
   for (const name of Object.keys(build.binaries))
     if (digest(ordinary(join(build.directory, name), 0o700)) !== build.binaries[name]) throw Error('HOST_PACKAGE_MISMATCH');
 }
-function touchBuild(build) {
-  build.lastUsedAt = Date.now();
-  // Last use is advisory. A failed marker write must preserve a verified build.
-  try {
-    const fd = openSync(build.directory, constants.O_RDONLY | constants.O_DIRECTORY | constants.O_NOFOLLOW);
-    try {
-      const stat = fstatSync(fd), named = lstatSync(build.directory);
-      if (!stat.isDirectory() || stat.uid !== process.getuid() || (stat.mode & 0o777) !== 0o700 ||
-          stat.dev !== named.dev || stat.ino !== named.ino) throw Error('HOST_CACHE_UNSAFE');
-      const now = new Date(build.lastUsedAt); futimesSync(fd, now, now);
-    } finally { closeSync(fd); }
-  } catch {}
-}
 function executable(name, receipt) {
-  let build = nativeBuilds.get(receipt);
+  const build = nativeBuilds.get(receipt);
   if (process.platform !== 'darwin' || !build || build.node !== process.version || !Object.hasOwn(build.binaries, name)) throw Error('DISTRIBUTION_ACCEPTANCE_REQUIRED');
-  try { validateBuild(build); }
+  try { validateBuild(build); return join(build.directory, name); }
   catch { throw Error('HOST_PACKAGE_MISMATCH'); }
-  // Selection happens at launch, never by replacing a running host or its bank.
-  if (name === 'consent-host' && build.recipe === 'default') {
-    try {
-      const directory = join(build.cacheRoot, helperBuildKey(build.sources, 'optimized')), record = join(directory, 'build.json');
-      const bytes = ordinary(record, 0o600), data = JSON.parse(bytes);
-      if (data.protocol !== 1 || data.arch !== process.arch || JSON.stringify(data.sources) !== JSON.stringify(build.sources) ||
-          JSON.stringify(data.recipes) !== JSON.stringify(helperBuildRecipes(build.sources, 'optimized')) ||
-          Object.keys(data.binaries ?? {}).sort().join() !== Object.keys(build.binaries).sort().join()) throw Error('HOST_PACKAGE_MISMATCH');
-      const next = { ...build, directory, record, binaries: data.binaries, recordHash: digest(bytes), recipe: 'optimized' };
-      validateBuild(next); build = next; nativeBuilds.set(receipt, build);
-    } catch { /* Keep the already verified default recipe until a complete upgrade is available. */ }
-  }
-  if (Date.now() - build.lastUsedAt >= 3600000) {
-    build.lastUsedAt = Date.now();
-    setImmediate(() => touchBuild(build)).unref();
-  }
-  return join(build.directory, name);
 }
-export const environment = darwinEnvironment;
+export const environment = () => ({ PATH: '/usr/bin:/bin', LANG: 'en_US.UTF-8' });
 // A cached binary's compile path is temporary. Resolve the card asset from the installed trusted JS package instead.
 export const consentEnvironment = () => ({ ...environment(),
   SLEIGHT_BUILTIN_CHARACTERS: fileURLToPath(new URL('../../characters/', import.meta.url)).replace(/\/$/, ''),
   SLEIGHT_CONSENT_ICON: fileURLToPath(new URL('../../assets/icon.png', import.meta.url)) });
 
 // A cold module cache rebuilds AppKit's modules: over 120 s at load 31 to 38 (2026-10-14), so first use allows 300 s.
-async function compileNative({ name, source, binary, moduleCache, bank, signal, recipe = 'optimized', background = false, automatic = false }) {
-  const sealed = name === 'consent-host' && existsSync(join(bank, 'SealedSettings.swift'));
-  const settingsFlags = helperSettingsFlags(sealed);
-  if (sealed) {
-    const combined = join(bank, 'settings-consent.swift');
-    writeFileSync(combined, Buffer.concat([readFileSync(join(bank, 'SealedSettings.swift')), Buffer.from('\n'), readFileSync(source)]), { mode: 0o600, flag: 'wx' });
-    source = combined;
-  }
-  const args = helperCompileArgs(name, { sources: [source], binary, moduleCache, settingsFlags, recipe });
+async function compileNative({ name, source, binary, moduleCache, signal }) {
+  const args = name === 'peer-host' ? ['clang', '-Wall', '-Werror', '-fmodules-cache-path=' + moduleCache, source, '-lbsm', '-o', binary]
+    : ['swiftc', '-module-cache-path', moduleCache, source, '-o', binary];
   // Abort can reject before close. Keep the bank and lock until the compiler has closed its pipes.
   await new Promise((resolve, reject) => {
     signal?.throwIfAborted();
     let failure, stderr = '';
     // swiftc starts swift-frontend children that inherit its pipes. Own the whole
     // group so a deadline or turn abort cannot leave a compiler using the bank.
-    const child = spawn(background || automatic ? '/usr/bin/nice' : '/usr/bin/xcrun',
-      background || automatic ? ['-n', background ? '20' : '10', '/usr/bin/xcrun', ...args] : args,
-      { env: environment(), detached: true, stdio: ['ignore', 'pipe', 'pipe'] });
+    const child = spawn('/usr/bin/xcrun', args, { env: environment(), detached: true, stdio: ['ignore', 'pipe', 'pipe'] });
     const stop = error => {
       failure ??= error;
       if (child.pid) {
@@ -146,21 +88,6 @@ async function compileNative({ name, source, binary, moduleCache, bank, signal, 
       }
     };
     const abort = () => stop(Object.assign(Error('Native helper build aborted.'), { name: 'AbortError', code: 'ABORT_ERR' }));
-    // Any session exit can interrupt first-use compilation. Stop this compiler
-    // group, then preserve the host's handlers or Node's default exit.
-    const shutdown = new Map();
-    process.once('exit', abort);
-    for (const name of ['SIGINT', 'SIGTERM', 'SIGHUP']) {
-      const hostHandlesSignal = process.listenerCount(name) > 0;
-      const handler = () => {
-        abort();
-        if (!hostHandlesSignal && process.listenerCount(name) === 1) {
-          process.off(name, handler);
-          process.kill(process.pid, name);
-        }
-      };
-      shutdown.set(name, handler); process.on(name, handler);
-    }
     const timer = setTimeout(() => stop(Object.assign(Error('Native helper build timed out.'), { killed: true })), 300000);
     signal?.addEventListener('abort', abort, { once: true });
     if (signal?.aborted) abort();
@@ -175,13 +102,33 @@ async function compileNative({ name, source, binary, moduleCache, bank, signal, 
     child.once('error', error => stop(error));
     child.once('close', (code, killedBy) => {
       clearTimeout(timer); signal?.removeEventListener('abort', abort);
-      process.off('exit', abort);
-      for (const [name, handler] of shutdown) process.off(name, handler);
       if (code !== 0 || killedBy) failure ??= Object.assign(Error('Native helper compiler failed.'), { code, signal: killedBy });
       if (failure && killedBy) failure.signal ??= killedBy;
       if (failure) { failure.stderr = stderr; reject(failure); } else resolve();
     });
   });
+}
+
+function helperSourceHashes(inventory, selectedSources = helperSources) {
+  const hashes = {};
+  for (const name of Object.values(selectedSources)) {
+    const entries = inventory.files.filter(file => file.path === 'native/' + name || file.path?.endsWith('/native/' + name));
+    if (entries.length !== 1 || !/^[a-f0-9]{64}$/.test(entries[0].sha256 ?? '')) throw Error('DISTRIBUTION_ACCEPTANCE_REQUIRED');
+    hashes[name] = entries[0].sha256;
+  }
+  return hashes;
+}
+const helperBuildKey = hashes => digest(JSON.stringify({ protocol: 1, arch: process.arch, sources: hashes }));
+const defaultHelperCache = () => join(userInfo().homedir, 'Library/Caches/sleight/turbo-host');
+
+// Read-only: whether the helpers for this receipt are already compiled. Doctor uses it. It never builds or validates a binary.
+export function nativeHelpersBuilt({ inventory, cacheRoot = defaultHelperCache() } = {}) {
+  try {
+    const hashes = helperSourceHashes(inventory), directory = join(cacheRoot, helperBuildKey(hashes));
+    const data = JSON.parse(readFileSync(join(directory, 'build.json'), 'utf8'));
+    return data.protocol === 1 && data.arch === process.arch && JSON.stringify(data.sources) === JSON.stringify(hashes) &&
+      Object.keys(helperSources).every(name => lstatSync(join(directory, name)).isFile());
+  } catch { return false; }
 }
 
 // The build lock is a private folder holding its owner's pid, process start and creation time. A session killed mid-compile
@@ -195,7 +142,7 @@ function processStart(pid) {
     process.kill(pid, 0);
   } catch (error) { return error.code === 'EPERM' ? Infinity : undefined; }
   try {
-    const text = execFileSync('/bin/ps', ['-o', 'lstart=', '-p', String(pid)], { env: environment(), timeout: 2000, encoding: 'utf8', killSignal: 'SIGKILL' }).trim();
+    const text = execFileSync('/bin/ps', ['-o', 'lstart=', '-p', String(pid)], { env: environment(), timeout: 2000, encoding: 'utf8' }).trim();
     return Date.parse(text) || Infinity;
   } catch { return Infinity; }
 }
@@ -237,102 +184,22 @@ function releaseLock(lock) {
   } catch {}
 }
 
-async function discardModuleCache(directory) {
-  // Compiler inputs are unnecessary at runtime. Failure leaves the verified build usable; a cache hit retries later.
-  try { await rm(join(directory, 'module-cache'), { recursive: true, force: true }); } catch {}
-}
-
 // Internal loader options, never exposed as tool arguments. Compile staged exact
 // source bytes and publish the bank only after both artifacts pass validation.
-const upgrades = new Map();
-function scheduleOptimizedBuild(task) {
-  // Give the default host its first launch before using idle CPU for the upgrade.
-  const timer = setTimeout(task, 1000); timer.unref();
-  return () => clearTimeout(timer);
-}
-const optimizationRetryMs = 24 * 3600000;
-function optimizationBackoff(cacheRoot, key) {
-  try {
-    privateDirectory(cacheRoot);
-    const path = join(cacheRoot, key + '.failed.json');
-    if (lstatSync(path).size > 1024) return false;
-    const marker = JSON.parse(ordinary(path, 0o600));
-    const age = Date.now() - marker.failedAt;
-    return marker.key === key && Number.isSafeInteger(marker.failedAt) && marker.failedAt > 0 && age >= 0 && age < optimizationRetryMs;
-  } catch { return false; }
-}
-function rememberOptimizationFailure(cacheRoot, key) {
-  const partial = join(cacheRoot, key + '.failed-' + randomBytes(6).toString('hex'));
-  try {
-    privateDirectory(cacheRoot);
-    writeFileSync(partial, JSON.stringify({ key, failedAt: Date.now() }), { mode: 0o600, flag: 'wx' });
-    renameSync(partial, join(cacheRoot, key + '.failed.json'));
-  } catch { /* Failure memory must not affect the verified default host. */ }
-  finally { try { rmSync(partial, { force: true }); } catch {} }
-}
-function rememberCompileFailure(cacheRoot, key, toolchain, stderr) {
-  const partial = join(cacheRoot, key + '.startup-failed-' + randomBytes(6).toString('hex'));
-  try {
-    privateDirectory(cacheRoot);
-    const diagnostic = compilerDiagnosticLine(stderr);
-    writeFileSync(partial, JSON.stringify({ key, toolchain, failedAt: Date.now(), code: 'HOST_COMPILE_FAILED', diagnostic }), { mode: 0o600, flag: 'wx' });
-    renameSync(partial, join(cacheRoot, key + '.startup-failed.json'));
-  } catch { /* Diagnostics must preserve the original build outcome. */ }
-  finally { try { rmSync(partial, { force: true }); } catch {} }
-}
-export async function prepareNativeHelpers(options = {}, selectedSources = helperSources) {
-  if ((options.recipe && options.recipe !== 'auto') || !Object.hasOwn(selectedSources, 'consent-host')) return prepareHelpers(options, selectedSources);
-  // Cache-only still performs all source, recipe and binary checks before issuing a receipt.
-  const optimized = await prepareHelpers({ ...options, recipe: 'optimized', cacheOnly: true,
-    onProgress: event => { if (event.status === 'ready') options.onProgress?.(event); } }, selectedSources);
-  if (optimized.status === 'ready' || options.signal?.aborted) return optimized;
-  const built = await prepareHelpers({ ...options, recipe: 'default' }, selectedSources);
-  if (built.status !== 'ready') return built;
-  // Only a long-lived owner opts in and supplies its lifetime. CLI preparations
-  // neither schedule a timer nor start a compiler after their command returns.
-  const signal = options.upgradeSignal;
-  if (!signal || signal.aborted) return built;
-  const upgradeKey = built.directory;
-  const key = helperBuildKey(helperSourceHashes(options.inventory, selectedSources), 'optimized');
-  if (!upgrades.has(upgradeKey) && !optimizationBackoff(dirname(upgradeKey), key)) {
-    const owner = {};
-    upgrades.set(upgradeKey, owner);
-    let running = false, cancel;
-    const finish = () => {
-      signal.removeEventListener('abort', aborted);
-      if (upgrades.get(upgradeKey) === owner) upgrades.delete(upgradeKey);
-    };
-    const aborted = () => { if (!running) { if (typeof cancel === 'function') cancel(); finish(); } };
-    signal.addEventListener('abort', aborted, { once: true });
-    const schedule = options.scheduleUpgrade ?? scheduleOptimizedBuild;
-    try { cancel = schedule(async () => {
-      if (signal.aborted) { finish(); return; }
-      running = true;
-      try {
-        if ((options.compile ?? compileNative) === compileNative && !await (options.tools ?? appleToolsPresent)()) return;
-        await prepareHelpers({ ...options, signal, recipe: 'optimized', background: true, onProgress: options.onUpgradeProgress }, selectedSources);
-      } catch { /* A failed optional upgrade leaves the foreground recipe usable. */ }
-      finally { finish(); }
-    }); } catch { finish(); }
-    if (signal.aborted) aborted();
-  }
-  return built;
-}
+export function prepareNativeHelpers(options = {}) { return prepareHelpers(options, helperSources); }
 // PDF parsing is compiled only on its first read, with the same accepted-source and private-bank checks.
 export function preparePdfHelper(options = {}) { return prepareHelpers(options, { 'pdf-host': 'pdf-host.swift' }); }
 async function prepareHelpers({ inventory, cacheRoot = defaultHelperCache(),
-  sourceRoot = sources, compile = compileNative, onProgress = () => {}, signal,
-  recipe = 'optimized', background = false, cacheOnly = false, automatic = false, waitForBuild = false,
-  toolchain = helperToolchainKey } = {}, selectedSources) {
+  sourceRoot = sources, compile = compileNative, onProgress = () => {}, signal } = {}, selectedSources) {
   if (inventory?.accepted !== true || inventory.protocol !== 1 || inventory.helperMode !== 'source' ||
       inventory.node !== process.version || !Array.isArray(inventory.files)) throw Error('DISTRIBUTION_ACCEPTANCE_REQUIRED');
-  const hashes = helperSourceHashes(inventory, selectedSources), recipes = helperBuildRecipes(hashes, recipe);
-  const started = Date.now(), key = helperBuildKey(hashes, recipe);
+  const hashes = helperSourceHashes(inventory, selectedSources);
+  const started = Date.now(), key = helperBuildKey(hashes);
   let stage = 'sources', helper;
   const scrub = value => String(value).split(cacheRoot).join('<helper-cache>').split(sourceRoot).join('<helper-sources>')
     .split(userInfo().homedir).join('~').replace(/\u001b\[[0-9;]*m/g, '').slice(0, 4096);
   const detail = () => ({ stage, ...helper ? { helper, compiler: helper === 'peer-host' ? 'clang' : 'swiftc', timeoutMs: 300000 } : {},
-    cacheRoot: cacheRoot.split(userInfo().homedir).join('~'), key, recipe, sources: hashes, elapsedMs: Date.now() - started });
+    cacheRoot: cacheRoot.split(userInfo().homedir).join('~'), key, sources: hashes, elapsedMs: Date.now() - started });
   const progress = extra => { try { onProgress({ ...detail(), ...extra }); } catch {} };
   const unavailable = (code, extra = {}) => {
     const diagnostic = Object.freeze({ ...detail(), ...extra });
@@ -342,9 +209,8 @@ async function prepareHelpers({ inventory, cacheRoot = defaultHelperCache(),
         : 'Turbo native helpers are unavailable. Keep using the engine path.' });
   };
   if (process.platform !== 'darwin') return unavailable('NATIVE_HELPERS_UNAVAILABLE');
-  let bank, locked = false, compilerKey, compileStart, expectedCompileMs;
-  // A background optimization must never hold up a foreground default/PDF/Glide build.
-  const lock = join(cacheRoot, recipe === 'optimized' && Object.hasOwn(selectedSources, 'consent-host') ? key + '.lock' : 'build.lock');
+  let bank, locked = false;
+  const lock = join(cacheRoot, 'build.lock');
   try {
     signal?.throwIfAborted();
     const bytes = sourceBytes(sourceRoot, hashes);
@@ -353,100 +219,40 @@ async function prepareHelpers({ inventory, cacheRoot = defaultHelperCache(),
     const directory = join(cacheRoot, key), record = join(directory, 'build.json');
     const cached = () => {
       const contents = ordinary(record, 0o600), data = JSON.parse(contents);
-      if (data.protocol !== 1 || data.arch !== process.arch || JSON.stringify(data.sources) !== JSON.stringify(hashes) ||
-          JSON.stringify(data.recipes) !== JSON.stringify(recipes)) throw Error();
+      if (data.protocol !== 1 || data.arch !== process.arch || JSON.stringify(data.sources) !== JSON.stringify(hashes)) throw Error();
       if (!data.binaries || Object.keys(data.binaries).sort().join(',') !== Object.keys(selectedSources).sort().join(',')) throw Error();
-      const build = { cacheRoot, directory, record, sourceRoot, sources: hashes, binaries: data.binaries, recordHash: digest(contents), node: process.version, recipe };
+      const build = { cacheRoot, directory, record, sourceRoot, sources: hashes, binaries: data.binaries, recordHash: digest(contents), node: process.version };
       validateBuild(build);
-      // Directory mtime records last use across sessions, separately from acceptance.
-      touchBuild(build);
       const receipt = Object.freeze({}); nativeBuilds.set(receipt, build);
-      return Object.freeze({ status: 'ready', directory, record, receipt, recipe });
+      return Object.freeze({ status: 'ready', directory, record, receipt });
     };
-    const maintain = (result, retryModules = false) => scheduleHelperCacheCleanup({ cacheRoot, key,
-      cleanup: retryModules ? () => discardModuleCache(directory) : undefined, processes: async () => {
-      const binary = executable('peer-host', result.receipt);
-      const { stdout } = await promisify(execFile)(binary, ['--cache-processes'], {
-        env: environment(), timeout: 5000, maxBuffer: 4 * 1024 * 1024 });
-      return JSON.parse(stdout);
-    } });
-    try {
-      const result = cached();
-      maintain(result, true); progress({ status: 'ready', cached: true }); return result;
-    } catch {}
-    if (cacheOnly) return unavailable('HOST_RECIPE_NOT_CACHED');
-    compilerKey = automatic ? toolchain() : undefined;
-    expectedCompileMs = automatic ? helperCompileDuration({ cacheRoot, toolchain: compilerKey }) : undefined;
-    const backoff = () => automatic && helperCompileFailure({ cacheRoot, key, toolchain: compilerKey });
-    let failure = backoff();
-    if (failure?.retryAfterMs > 0) { stage = 'backoff'; return unavailable('HOST_COMPILE_BACKOFF', failure); }
-    if (background && optimizationBackoff(cacheRoot, key)) return unavailable('HOST_OPTIMIZATION_BACKOFF');
+    try { const result = cached(); progress({ status: 'ready', cached: true }); return result; } catch {}
     stage = 'lock'; progress();
-    const deadline = performance.now() + 600000;
-    while (!takeLock(lock)) {
-      if (!waitForBuild || performance.now() >= deadline) return unavailable('HOST_BUILD_BUSY');
-      // The other process may publish before dropping its lock. Verify the whole
-      // bank again rather than granting input from a lock or an unchecked file.
-      await delay(250, undefined, { signal });
-      signal?.throwIfAborted();
-      try {
-        const result = cached();
-        maintain(result, true); progress({ status: 'ready', cached: true }); return result;
-      } catch {}
-    }
+    if (!takeLock(lock)) return unavailable('HOST_BUILD_BUSY');
     locked = true;
-    // Another process may have published between the first lookup and this lock.
-    try {
-      const result = cached();
-      maintain(result, true); progress({ status: 'ready', cached: true }); return result;
-    } catch {}
-    failure = backoff();
-    if (failure?.retryAfterMs > 0) { stage = 'backoff'; return unavailable('HOST_COMPILE_BACKOFF', failure); }
-    if (background && optimizationBackoff(cacheRoot, key)) return unavailable('HOST_OPTIMIZATION_BACKOFF');
     bank = mkdtempSync(join(cacheRoot, 'build-')); chmodSync(bank, 0o700);
-    writeFileSync(join(bank, 'owner.json'), JSON.stringify({ pid: process.pid, started: ownStart(), created: Date.now() }), { mode: 0o600, flag: 'wx' });
     const moduleCache = join(bank, 'module-cache'); mkdirSync(moduleCache, { mode: 0o700 });
     const binaries = {};
-    if (bytes['../../mac-driver/native/SealedSettings.swift'])
-      writeFileSync(join(bank, 'SealedSettings.swift'), bytes['../../mac-driver/native/SealedSettings.swift'], { mode: 0o600, flag: 'wx' });
-    compileStart = performance.now();
     for (const [name, filename] of Object.entries(selectedSources)) {
       signal?.throwIfAborted();
-      stage = 'compile'; helper = name; progress({ expectedCompileMs });
+      stage = 'compile'; helper = name; progress();
       const source = join(bank, filename), binary = join(bank, name);
       writeFileSync(source, bytes[filename], { mode: 0o600, flag: 'wx' });
-      await compile({ name, source, binary, moduleCache, bank, signal, recipe, background, automatic });
+      await compile({ name, source, binary, moduleCache, bank, signal });
       signal?.throwIfAborted();
       chmodSync(binary, 0o700); binaries[name] = digest(ordinary(binary, 0o700));
       if (digest(ordinary(source, 0o600)) !== hashes[filename]) throw Error('HOST_SOURCE_MISMATCH');
     }
-    const compileMs = performance.now() - compileStart;
     stage = 'publish'; helper = undefined; progress();
     sourceBytes(sourceRoot, hashes);
-    writeFileSync(join(bank, 'build.json'), JSON.stringify({ protocol: 1, arch: process.arch, sources: hashes, recipes, binaries }), { mode: 0o600, flag: 'wx' });
+    writeFileSync(join(bank, 'build.json'), JSON.stringify({ protocol: 1, arch: process.arch, sources: hashes, binaries }), { mode: 0o600, flag: 'wx' });
     // Replacement is limited to our validated private bank, never a linked or
     // external directory. Running processes retain their old executable inode.
     try { privateDirectory(directory); rmSync(directory, { recursive: true }); }
     catch (error) { if (error.code !== 'ENOENT') throw error; }
     renameSync(bank, directory); bank = undefined;
-    const result = cached();
-    if (automatic && compileMs > 0 && compileMs <= 600000) {
-      const partial = join(cacheRoot, 'startup-compile-' + randomBytes(6).toString('hex'));
-      try {
-        writeFileSync(partial, JSON.stringify({ toolchain: compilerKey, compileMs }), { mode: 0o600, flag: 'wx' });
-        renameSync(partial, join(cacheRoot, 'startup-compile.json'));
-      } catch { /* Estimates never affect a verified publication. */ }
-      finally { try { rmSync(partial, { force: true }); } catch {} }
-    }
-    try { rmSync(join(cacheRoot, key + '.failed.json'), { force: true }); } catch {}
-    try { rmSync(join(cacheRoot, key + '.startup-failed.json'), { force: true }); } catch {}
-    // Neither launch validation nor the helpers read compiler modules. Keep only runtime artifacts after publication.
-    await discardModuleCache(directory);
-    maintain(result); progress({ status: 'ready', cached: false }); return result;
+    const result = cached(); progress({ status: 'ready', cached: false }); return result;
   } catch (error) {
-    if (automatic && stage === 'compile' && error.name !== 'AbortError' && !signal?.aborted && compileFailureCaptured(error))
-      rememberCompileFailure(cacheRoot, key, compilerKey, error.stderr);
-    if (background && stage === 'compile' && error.name !== 'AbortError') rememberOptimizationFailure(cacheRoot, key);
     return unavailable(['HOST_CACHE_UNSAFE', 'HOST_SOURCE_MISMATCH'].includes(error.message) ? error.message : 'NATIVE_HELPERS_UNAVAILABLE', {
       ...error.name === 'AbortError' ? { errorCode: 'ABORT_ERR' } : typeof error.code === 'string' ? { errorCode: error.code } : {},
       ...Number.isInteger(error.code) ? { exitCode: error.code } : {},
@@ -454,7 +260,7 @@ async function prepareHelpers({ inventory, cacheRoot = defaultHelperCache(),
       ...error.stderr ? { stderr: scrub(error.stderr) } : {},
     });
   } finally {
-    if (bank) try { rmSync(bank, { recursive: true, force: true }); } catch {}
+    if (bank) rmSync(bank, { recursive: true, force: true });
     if (locked) releaseLock(lock);
   }
 }
@@ -510,6 +316,72 @@ export function createNativeProcessProvider(receipt) {
   processProviders.add(provider); return provider;
 }
 
+// Pure private channel parser. read/write are inherited pipes of the selected
+// child, never a local socket, page bridge or model endpoint. Tests inject streams
+// solely to test framing/replay logic, not to claim native-user authentication.
+export function createUiChannel({ read, write, onLoss = () => {}, discardOldNonce = false }) {
+  const nonce = randomBytes(32).toString('hex'), pending = new Map(), retired = new Map(), events = new WeakSet();
+  const retire = (id, record) => { retired.set(id, record); if (retired.size > 256) retired.delete(retired.keys().next().value); };
+  let buffer = '', closed = false;
+  const lose = () => { if (closed) return; closed = true; pending.clear(); onLoss(); };
+  read.on('data', chunk => {
+    try {
+      buffer += chunk;
+      if (Buffer.byteLength(buffer) > 131072) throw Error();
+      let end;
+      while ((end = buffer.indexOf('\n')) >= 0) {
+        const raw = immutableJSON(JSON.parse(buffer.slice(0, end))); buffer = buffer.slice(end + 1);
+        // A successor worker inherits the same session pipe. Only a reply to its fresh nonce can authenticate.
+        if (discardOldNonce && raw?.nonce !== nonce && /^[0-9a-f]{64}$/.test(raw?.nonce ?? '')) continue;
+        const old = retired.get(raw.id);
+        if (old?.dismissed && raw.nonce === nonce && Object.keys(raw).length === 3 && old.choices.includes(raw.choice)) continue;
+        const record = pending.get(raw.id);
+        if (!record || raw.nonce !== nonce || Object.keys(raw).length !== 3 ||
+            !record.choices.includes(raw.choice) || Date.now() >= record.deadline) throw Error();
+        pending.delete(raw.id); retire(raw.id, record);
+        const event = Object.freeze({ id: raw.id, choice: raw.choice, action: raw.choice,
+          selection: record.selection });
+        events.add(event); Promise.resolve(record.deliver(event)).catch(lose);
+      }
+    } catch { lose(); }
+  });
+  read.on('end', lose); read.on('error', lose); write.on('error', lose);
+  const channel = Object.freeze({
+    present(id, data, choices, deliver, { selection, deadline = Date.now() + 30000 } = {}) {
+      for (const [key, record] of pending) if (Date.now() >= record.deadline || data?.status && record.status) pending.delete(key);
+      if (closed || pending.has(id) || pending.size >= 32 || typeof id !== 'string' ||
+          !Array.isArray(choices) || !choices.length || typeof deliver !== 'function' ||
+          !Number.isFinite(deadline) || deadline <= Date.now() || deadline > Date.now() + 300000) throw Error('TRUSTED_UI_UNAVAILABLE');
+      const frame = immutableJSON({ id, nonce, data, choices, deadline });
+      if (Buffer.byteLength(JSON.stringify(frame)) > 65536) throw Error('TRUSTED_UI_UNAVAILABLE');
+      pending.set(id, { choices: [...choices], deliver, status: data?.status,
+        selection: selection && immutableJSON(selection), deadline });
+      write.write(JSON.stringify(frame) + '\n');
+    },
+    authenticate(event) { if (!event || !events.has(event)) return false; events.delete(event); return !closed; },
+    dismiss(id) {
+      if (closed) return;
+      const record = pending.get(id) ?? retired.get(id);
+      if (!record || record.dismissed) return;
+      pending.delete(id); retire(id, { ...record, dismissed: true });
+      write.write(JSON.stringify({ id, nonce, dismiss: true }) + '\n');
+    },
+    revoke() { pending.clear(); },
+    close() { lose(); write.end(); },
+  });
+  return channel;
+}
+
+// The ghost hand runs the consent host's binary with --hand, from the same build and cache. Its inventory is the helper sources
+// on disk, hashed now: the hand only draws, so it needs no turbo acceptance, and its handle can start only the hand, never the
+// consent channel or the peer helper. A build for one serves the other when the sources match.
+function handInventory(sourceRoot) {
+  return { accepted: true, protocol: 1, node: process.version, helperMode: 'source',
+    files: Object.values(helperSources).map(name => ({ path: 'native/' + name, sha256: digest(ordinary(join(sourceRoot, name))) })) };
+}
+export function handHostBuilt({ cacheRoot = defaultHelperCache(), sourceRoot = sources } = {}) {
+  try { return nativeHelpersBuilt({ inventory: handInventory(sourceRoot), cacheRoot }); } catch { return false; }
+}
 // Whether Apple's command-line tools are installed, asked through xcode-select: xcrun without them opens macOS's install
 // dialog, which a background build must never put in front of the person.
 export async function appleToolsPresent({ run = promisify(execFile), exists = existsSync } = {}) {
@@ -522,11 +394,11 @@ export async function appleToolsPresent({ run = promisify(execFile), exists = ex
 }
 export const handCursorStyles = Object.freeze(['glove', 'ring', 'seam', 'sprite']);
 async function handBuild({ cacheRoot = defaultHelperCache(), sourceRoot = sources, compile = compileNative,
-  tools = appleToolsPresent, onProgress, signal, recipe, scheduleUpgrade, onUpgradeProgress, upgradeSignal } = {}) {
+  tools = appleToolsPresent, onProgress, signal } = {}) {
   let inventory;
   try { inventory = handInventory(sourceRoot); } catch { return Object.freeze({ status: 'unavailable', code: 'HOST_SOURCE_MISMATCH' }); }
   if (!nativeHelpersBuilt({ inventory, cacheRoot }) && !await tools()) return Object.freeze({ status: 'unavailable', code: 'APPLE_TOOLS_MISSING' });
-  const built = await prepareNativeHelpers({ inventory, cacheRoot, sourceRoot, compile, tools, onProgress, signal, recipe, scheduleUpgrade, onUpgradeProgress, upgradeSignal });
+  const built = await prepareNativeHelpers({ inventory, cacheRoot, sourceRoot, compile, onProgress, signal });
   return built.status === 'ready' ? built : Object.freeze({ status: built.status, code: built.code, detail: built.detail });
 }
 export async function prepareHandHost(options = {}) {

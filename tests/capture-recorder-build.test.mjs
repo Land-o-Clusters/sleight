@@ -1,4 +1,3 @@
-import { assertChildStatus } from './fixtures/child-status.mjs';
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
@@ -15,13 +14,13 @@ test('capture recorder compiles and refuses bad plans before any capture call', 
   const dir = registerTemp(t, mkdtempSync(join(tmpdir(), 'sleight-capture-recorder-')));
   const binary = join(dir, 'capture-recorder');
   const build = spawnSync('/usr/bin/xcrun', ['swiftc', '-module-cache-path', swiftModuleCache(),
-    'bench/capture/recorder.swift', '-o', binary], { encoding: 'utf8', timeout: 600000, killSignal: 'SIGKILL' });
-  assertChildStatus(build, 0, build.stderr);
+    'bench/capture/recorder.swift', '-o', binary], { encoding: 'utf8', timeout: 240000 });
+  assert.equal(build.status, 0, build.stderr);
   // The source never builds a whole-display filter (display minus some windows or apps).
   assert.doesNotMatch(readFileSync('bench/capture/recorder.swift', 'utf8'), /excludingWindows|excludingApplications/);
 
-  const usage = spawnSync(binary, [], { encoding: 'utf8', timeout: 5000, killSignal: 'SIGKILL' });
-  assertChildStatus(usage, 2);
+  const usage = spawnSync(binary, [], { encoding: 'utf8', timeout: 5000 });
+  assert.equal(usage.status, 2);
   assert.equal(JSON.parse(usage.stdout).error, 'usage');
 
   const out = join(dir, 'out');
@@ -47,8 +46,8 @@ test('capture recorder compiles and refuses bad plans before any capture call', 
   for (const [extra, code] of cases) {
     const path = join(dir, 'plan.json');
     writeFileSync(path, JSON.stringify({ ...base, ...extra }));
-    const run = spawnSync(binary, ['record', path], { encoding: 'utf8', timeout: 5000, killSignal: 'SIGKILL' });
-    assertChildStatus(run, 2, `${JSON.stringify(extra)}: ${run.stdout}${run.stderr}`);
+    const run = spawnSync(binary, ['record', path], { encoding: 'utf8', timeout: 5000 });
+    assert.equal(run.status, 2, `${JSON.stringify(extra)}: ${run.stdout}${run.stderr}`);
     assert.equal(JSON.parse(run.stdout).error, code, JSON.stringify(extra));
     assert.equal(existsSync(join(dir, 'sync.json')), false);
   }
@@ -56,12 +55,12 @@ test('capture recorder compiles and refuses bad plans before any capture call', 
   const valid = join(dir, 'valid.json');
   writeFileSync(valid, JSON.stringify({ ...base, scale: 2, duration: 16,
     streams: [{ name: 'take', windows: [11, 12, 13], composite: true, crop: 'first', followOwners: true }] }));
-  const checked = spawnSync(binary, ['validate', valid], { encoding: 'utf8', timeout: 5000, killSignal: 'SIGKILL' });
-  assertChildStatus(checked, 0, checked.stdout + checked.stderr);
+  const checked = spawnSync(binary, ['validate', valid], { encoding: 'utf8', timeout: 5000 });
+  assert.equal(checked.status, 0, checked.stdout + checked.stderr);
   assert.deepEqual(JSON.parse(checked.stdout), { ok: true, streams: 1, scale: 2, captureStarted: false });
 
-  const codecs = spawnSync(binary, ['codecs'], { encoding: 'utf8', timeout: 20000, killSignal: 'SIGKILL' });
-  assertChildStatus(codecs, 0, codecs.stderr);
+  const codecs = spawnSync(binary, ['codecs'], { encoding: 'utf8', timeout: 20000 });
+  assert.equal(codecs.status, 0, codecs.stderr);
   const reply = JSON.parse(codecs.stdout);
   assert.equal(reply.ok, true);
   assert.equal(typeof reply.prores422hq, 'boolean');

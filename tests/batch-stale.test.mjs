@@ -58,7 +58,7 @@ for (const browser of [false, true]) {
 
   for (const [name, shifted] of [
     ['same-label ambiguity', [[21, 'June 4'], [22, 'June 9'], [23, 'June 9']]],
-    ['same-label ambiguity on an unchanged later number', [[12, 'June 9'], [21, 'June 4'], [23, 'June 9']]],
+    ['same-label ambiguity on an unchanged later number', [[21, 'June 4'], [12, 'June 9'], [23, 'June 9']]],
     ['missing later date', [[21, 'June 4']]],
   ]) test(`${kind}: ${name} stops before any remaining input`, async () => {
     const f = fixture([original, shifted]);

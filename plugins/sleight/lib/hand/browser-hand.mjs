@@ -13,153 +13,9 @@ import { createHandSettingReader, handSettingReader, cursorDrawing } from './set
 import { appendFileSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { join } from 'node:path';
-import { exposure, createRetryMarks, transferMark } from './planner.mjs';
+import { exposure } from './planner.mjs';
 import { trustedLocatorRead } from '../direct-browser/trusted-dom.mjs';
 import { cursorRecord, cursorReason, cursorStep } from './events.mjs';
-import { randomBytes } from 'node:crypto';
-import { retainTrustedNode } from '../direct-browser/trusted-dom.mjs';
-import { latestBrowserLayout, watchBrowserLayout, retainLayoutNode, mapBrowserLayout, withBrowserLayoutRequest, browserLayoutRequest } from '../direct-browser/geometry-observation.mjs';
-
-// Parent-only collection adapter. Worker IPC carries no geometry capability.
-// The parent must supply capture-bound native window/transform evidence; the
-// predictive planner below and its cached metrics cannot supply that evidence.
-export async function createBrowserGeometryProducer({ client, channel, windowEvidence = () => undefined } = {}) {
-  channel ??= (await import('./client.mjs')).privateHandGeometry(client);
-  if (!channel) return;
-  let turn, ending = false, closed = false, revision = 0, pendingHolds = 0, inputBarrier = 0, startedInput = false, lostInput = false;
-  const watched = new Map(), references = new Map(), holders = new Set(), bindings = new WeakMap(), windows = new Map(), pendingInput = new Set();
-  const acquisitions = new Map(), seen = new WeakSet();
-  const clear = (keepTurn = false) => {
-    revision++;
-    for (const stop of watched.values()) stop();
-    for (const holder of holders) { try { Promise.resolve(holder.identity.release()).catch(() => {}); } catch {} }
-    watched.clear(); references.clear(); holders.clear(); windows.clear(); pendingInput.clear(); acquisitions.clear();
-    if (!keepTurn) turn = undefined;
-    ending = keepTurn; inputBarrier = 0; startedInput = false; lostInput = false;
-  };
-  const live = () => {
-    if (turn && channel.state.turn !== turn) clear();
-    return !closed && !ending && turn && channel.state.turn === turn && !channel.state.poisoned;
-  };
-  function collect(page, observation, interval) {
-    if (!live() || channel.state.pending || pendingInput.size || lostInput) return false;
-    let evidence;
-    try { evidence = windowEvidence(observation, page); } catch { return false; }
-    // Async window lookups would sample a later generation. Never await them.
-    if (evidence?.then) return false;
-    const ledger = channel.state.admitted, inventory = [];
-    for (const ref of ledger) {
-      const record = references.get(ref.seq);
-      if (!record || record.page !== page || !record.held) return false;
-      inventory.push({ seq: ref.seq, held: record.held });
-    }
-    const mapped = mapBrowserLayout(observation, inventory, evidence);
-    if (!mapped || !interval || interval.start < inputBarrier) return false;
-    const key = `${mapped.pid}:${mapped.windowId}`, prior = windows.get(key);
-    if (ledger.some(ref => ref.pid !== mapped.pid || ref.windowId !== mapped.windowId || references.get(ref.seq)?.windowKey !== key)) return false;
-    if (prior && (prior.page !== page || prior.processStart !== mapped.processStart)) return false;
-    if (!prior && (ledger.length || startedInput || windows.size >= 128 || channel.state.after !== -1)) return false;
-    const ticket = channel.capture(interval);
-    if (!ticket) return false;
-    const incarnation = prior?.incarnation ?? randomBytes(16).toString('hex');
-    const contentGeneration = prior ? prior.generation + Number(prior.semantic !== mapped.semantic) : 0;
-    const sent = channel.certify(ticket, { pid: mapped.pid, windowId: mapped.windowId, incarnation,
-      contentGeneration, mode: prior ? 'layout' : 'baseline',
-      bounds: mapped.bounds, references: mapped.references });
-    if (sent !== false) windows.set(key, { incarnation, page, processStart: mapped.processStart, generation: contentGeneration, semantic: mapped.semantic });
-    return sent;
-  }
-  return Object.freeze({
-    beginTurn(logicalTurn) {
-      live();
-      if (closed || turn) return false;
-      const queued = channel.beginTurn(logicalTurn);
-      if (queued !== false) { turn = logicalTurn; ending = false; revision++; }
-      return queued;
-    },
-    watch(page) {
-      if (!live() || watched.has(page) || watched.size >= 128) return false;
-      const stop = watchBrowserLayout(page, observation => {
-        const request = acquisitions.get(page);
-        if (request && browserLayoutRequest(observation) === request.token && !seen.has(observation)) {
-          if (request.observation) request.failed = true;
-          request.observation = observation;
-        }
-        seen.add(observation);
-      });
-      if (!stop) return false;
-      watched.set(page, stop); return true;
-    },
-    // Wrap the parent's existing snapshot request, including its IPC round trip.
-    // Worker performance.now() values have a different origin and are never used
-    // for freshness. Reused or unsolicited observations cannot get new stamps.
-    async acquire(page, request) {
-      const prior = acquisitions.get(page);
-      if (prior) prior.failed = true;
-      const acquisition = { revision, failed: Boolean(prior), token: Object.freeze({}) };
-      if (live() && watched.has(page) && !prior) acquisitions.set(page, acquisition);
-      const start = performance.now();
-      try {
-        const result = await withBrowserLayoutRequest(page, acquisition.token, request);
-        const end = performance.now();
-        try {
-          if (acquisitions.get(page) === acquisition && !acquisition.failed && acquisition.revision === revision && acquisition.observation)
-            collect(page, acquisition.observation, { start, end });
-        } catch { /* Observation failure cannot change the snapshot result. */ }
-        return result;
-      } finally {
-        if (acquisitions.get(page) === acquisition) acquisitions.delete(page);
-      }
-    },
-    async hold(page, handle) {
-      if (!live() || !watched.has(page) || holders.size + pendingHolds >= 512) return;
-      const windowKeys = [...windows].filter(([, value]) => value.page === page).map(([key]) => key);
-      if (windowKeys.length !== 1) return;
-      const version = revision, observed = latestBrowserLayout(page);
-      pendingHolds++;
-      let identity;
-      try {
-        identity = await retainTrustedNode(handle);
-        if (!live() || revision !== version || latestBrowserLayout(page) !== observed || holders.size >= 512) { await identity.release(); return; }
-        const held = retainLayoutNode(observed, identity);
-        if (!held) { await identity.release(); return; }
-        const token = Object.freeze({}), holder = { token, held, identity, page, revision, windowKey: windowKeys[0] };
-        bindings.set(token, holder); holders.add(holder); return token;
-      } catch { if (identity) await identity.release(); }
-      finally { pendingHolds--; }
-    },
-    admit(frame, prefix, { page, held } = {}) {
-      if (!live()) return false;
-      const seq = channel.admit(frame, prefix);
-      if (seq !== false) {
-        const holder = bindings.get(held);
-        references.set(seq, { page, held: frame.kind !== 'drag' && holder?.revision === revision && holder.page === page ? holder.held : undefined, windowKey: holder?.windowKey });
-        pendingInput.add(seq);
-      }
-      return seq;
-    },
-    inputStarted() {
-      if (!live()) return;
-      startedInput = true;
-      if (pendingInput.size >= 512) { lostInput = true; return; }
-      const token = Object.freeze({}); pendingInput.add(token); return token;
-    },
-    inputFinished(seq) {
-      if (!live() || !pendingInput.delete(seq)) return false;
-      inputBarrier = performance.now(); return true;
-    },
-    invalidate(reason) { return live() ? channel.invalidate(reason) : false; },
-    endTurn() {
-      live();
-      if (!turn || ending || channel.state.pending) return false;
-      const queued = channel.endTurn();
-      if (queued !== false) clear(true);
-      return queued;
-    },
-    close() { clear(); closed = true; },
-    get state() { live(); return { turn, ending, references: references.size, held: holders.size, windows: windows.size, pendingInput: pendingInput.size }; },
-  });
-}
 
 const KINDS = { click: 'click', check: 'click', uncheck: 'click', select: 'click', navigate: 'click', type: 'type', press: 'key', drag: 'drag', scroll: 'scroll' };
 const EVENT_KINDS = { ...KINDS, select: 'select', navigate: 'navigate', paste: 'type', hover: 'move', move: 'move', back: 'navigate', forward: 'navigate', reload: 'navigate', upload: 'select' };
@@ -217,8 +73,7 @@ export function planBrowserFrame({ op, text, box, toBox, metrics: m, geometry, i
     (to ? exposure(to, geometry.window, geometry.windows, geometry.displays, ignorePids) : undefined);
   if (reason) return { skip: reason };
   const beats = kind === 'type' ? Math.max(1, Math.min(MAX_TYPE_BEATS, typeof text === 'string' ? text.length : 3)) : 1;
-  return { frame: { kind, pid: geometry.window.pid, windowId: geometry.window.windowId, at,
-    windowRect: [geometry.window.bounds.X, geometry.window.bounds.Y, geometry.window.bounds.Width, geometry.window.bounds.Height], path: to ? [at, to] : [at], delayMs: 0, beats } };
+  return { frame: { kind, pid: geometry.window.pid, windowId: geometry.window.windowId, at, path: to ? [at, to] : [at], delayMs: 0, beats } };
 }
 
 const boxOf = async locator => {
@@ -231,8 +86,7 @@ const withTimeout = (promise, ms) => {
 
 export function createBrowserHand({ client, loadClient = () => import('./client.mjs'), clientOptions = {}, locate,
   readMetrics = page => trustedLocatorRead(page.locator('html'), pageMetrics), trace = () => {}, now = () => performance.now(),
-  defer = fn => setImmediate(fn), env = process.env, setting = handSettingReader(env), events, record = cursorRecord,
-  geometryProducer, geometryContext = () => undefined } = {}) {
+  defer = fn => setImmediate(fn), env = process.env, setting = handSettingReader(env), events, record = cursorRecord } = {}) {
   setting = createHandSettingReader({ setting });
   if (env.SLEIGHT_HAND === '0' || !(setting().enabled || setting().stream || setting().record_runs) || typeof locate !== 'function') return undefined;
   let closed = false, resolved = client ?? undefined, loading;
@@ -246,10 +100,6 @@ export function createBrowserHand({ client, loadClient = () => import('./client.
     try { if (events) events.action(record); else resolved?.event?.(record); } catch {}
   };
   // The window's geometry for a burst of steps: one helper run per window position every 1.5 s, shared while it runs.
-  const retries = createRetryMarks({ now }), pageIds = new WeakMap(); let pageNumber = 0;
-  const pageId = page => { if (!page || typeof page !== 'object') return; if (!pageIds.has(page)) pageIds.set(page, ++pageNumber); return pageIds.get(page); };
-  const waiters = new Set();
-  const status = (state, detail) => { try { if (events) events.status(state, { detail }); else resolved?.status?.(state, { detail }); } catch {} };
   let cached;
   function geometryFor(bounds) {
     const key = [bounds.X, bounds.Y, bounds.Width, bounds.Height].join(',');
@@ -273,51 +123,29 @@ export function createBrowserHand({ client, loadClient = () => import('./client.
     if (!live()) return;
     const planned = planBrowserFrame({ op, text, box, toBox, metrics, geometry, ignorePids: [resolved?.pid].filter(Number.isSafeInteger) });
     if (planned?.skip) return skip(planned.skip);
-    if (geometryProducer?.state.turn !== token.geometryTurn) return skip('no-geometry');
     if (planned?.frame) {
       let label, wrap;
       if (token.cursor) try {
         const scale = zoomOf(metrics) * (metrics.vv?.scale > 0 ? metrics.vv.scale : 1);
         const rect = box && [planned.frame.at[0] - box.width * scale / 2, planned.frame.at[1] - box.height * scale / 2, box.width * scale, box.height * scale];
-        token.record = record({ frame: planned.frame, action: { kind: EVENT_KINDS[op], retry: token.record?.retry, transfer: token.record?.transfer, role, inputType, title, description,
+        token.record = record({ frame: planned.frame, action: { kind: EVENT_KINDS[op], role, inputType, title, description,
           rect, secure: EVENT_KINDS[op] === 'type' && !inputType }, geometry, labels: events?.labels ?? setting().labels ?? 'off' });
         label = token.record.label; wrap = token.record.rect;
-        if (!geometryProducer?.state.turn) publish(token, 'aim');
-        publish(token, 'act'); token.shown = true;
+        publish(token, 'aim'); publish(token, 'act'); token.shown = true;
         if (token.ended) publish(token, token.failed ? 'failed' : 'done');
       } catch {}
-      try {
-        const frame = { ...planned.frame, ...token.record?.retry === true ? { retry: true } : {}, ...token.record?.transfer ? { transfer: token.record.transfer } : {}, ...token.cursor?.say ? { say: token.cursor.say } : {}, ...cursorDrawing(setting()) ? { ...label ? { label } : {}, ...wrap ? { rect: wrap } : {} } : {} };
-        if (geometryProducer?.state.turn) {
-          token.geometrySequence = geometryProducer.admit(frame, token.geometryContext?.prefix, { page, held: token.geometryContext?.held });
-          if (token.ended && token.geometrySequence !== false) geometryProducer.inputFinished(token.geometrySequence);
-        } else resolved?.send(frame);
-        trace('hand-shown', { op, kind: planned.frame.kind });
-      } catch {}
+      try { resolved?.send({ ...planned.frame, ...token.cursor?.say ? { say: token.cursor.say } : {}, ...cursorDrawing(setting()) ? { ...label ? { label } : {}, ...wrap ? { rect: wrap } : {} } : {} }); trace('hand-shown', { op, kind: planned.frame.kind }); } catch {}
     }
   }
   return {
     // input: { op, page, locator, to, ref, text }, as act.mjs has them when the step's input starts.
-    pageWait() {
-      if (closed || !stream()) return () => {};
-      let shown = false;
-      const timer = setTimeout(() => { waiters.delete(stop); if (!closed) { shown = true; status('thinking', 'page'); } }, 2000);
-      timer.unref?.();
-      const stop = () => { clearTimeout(timer); waiters.delete(stop); if (shown && !closed) status('thinking'); };
-      waiters.add(stop); return stop;
-    },
     step(input) {
       try {
         if (closed || !input || !EVENT_KINDS[input.op]) return;
-        const token = { geometryTurn: geometryProducer?.state.turn };
-        if (geometryProducer?.state.turn) {
-          token.geometryInput = geometryProducer.inputStarted?.();
-          token.geometryContext = geometryContext(input);
-        }
+        const token = {};
         if (stream()) try {
           token.cursor = cursorStep();
-          token.record = record({ action: { kind: EVENT_KINDS[input.op], retry: retries.mark(EVENT_KINDS[input.op], pageId(input.page), input.ref),
-            transfer: input.op === 'press' ? transferMark(input.key) : undefined, role: input.role, inputType: input.inputType, secure: EVENT_KINDS[input.op] === 'type' && !input.inputType } });
+          token.record = record({ action: { kind: EVENT_KINDS[input.op], role: input.role, inputType: input.inputType, secure: EVENT_KINDS[input.op] === 'type' && !input.inputType } });
         } catch {}
 
         if (!setting().enabled && !setting().stream) {
@@ -330,8 +158,6 @@ export function createBrowserHand({ client, loadClient = () => import('./client.
     finish(token, failed = false) {
       if (!token || token.ended) return;
       token.ended = true; token.failed = failed;
-      if (token.geometryInput) geometryProducer?.inputFinished(token.geometryInput);
-      if (token.geometrySequence !== undefined && token.geometrySequence !== false) geometryProducer?.inputFinished(token.geometrySequence);
       if (token.shown && !token.skipped) publish(token, failed ? 'failed' : 'done');
     },
     skipped(input, reason = 'unplanned') {
@@ -339,7 +165,7 @@ export function createBrowserHand({ client, loadClient = () => import('./client.
       const token = { cursor: cursorStep(), record: cursorRecord({ action: { kind: EVENT_KINDS[input.op], secure: true } }) };
       publish(token, 'skipped', reason);
     },
-    close() { closed = true; for (const stop of waiters) stop(); retries.clear(); try { resolved?.close(); } catch {} },
+    close() { closed = true; try { resolved?.close(); } catch {} },
   };
 }
 
@@ -376,7 +202,6 @@ export function workerHandClient(channel, pid, { env = process.env, setting = ha
   };
   return { get enabled() { return live() && sharedUi && setting().enabled === true; }, pid,
     send(frame) { if (sharedUi && live() && setting().enabled) try { channel.send({ version: 3, hand: frame }); } catch {} },
-    status(state, detail) { if (live()) try { channel.send({ version: 3, cursorStatus: { state, ...detail } }); } catch {} },
     event(record) { if (live() && (setting().stream || setting().record_runs || cursorDrawing(setting()))) try { channel.send({ version: 3, cursor: record }); } catch {} },
     close() {} };
 }

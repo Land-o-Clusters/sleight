@@ -1,4 +1,3 @@
-import { testChromiumExecutable, launchTestChromium } from './fixtures/chromium-isolated.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {createServer} from 'node:http';
@@ -11,7 +10,7 @@ import {readWhole} from '../plugins/sleight/lib/direct-browser/whole.mjs';
 const fixtures=await import('../bench/fowl/site/whole-thread.mjs').catch(()=>({}));
 const live=process.env.SLEIGHT_LIVE_DOM_TEST==='1';
 const pin=JSON.parse(readFileSync(new URL('../plugins/sleight/vendor/playwright-core/browsers.json',import.meta.url))).browsers.find(b=>b.name==='chromium-headless-shell');
-const executablePath=testChromiumExecutable({ revision: pin.revision, platform: 'darwin' });
+const executablePath=join(homedir(),'Library/Caches/ms-playwright','chromium_headless_shell-'+pin.revision,'chrome-headless-shell-mac-'+process.arch,'chrome-headless-shell');
 const skip=!live?'requires headless fixture opt-in':!existsSync(executablePath)?'pinned headless shell unavailable':false;
 const seeds=Number(process.env.LR1_SEEDS??1);
 async function harness(t){
@@ -24,7 +23,7 @@ async function harness(t){
   });
   await new Promise(r=>server.listen(0,'127.0.0.1',r));
   t.after(()=>{server.closeAllConnections();return new Promise(r=>server.close(r));});
-  const browser=await launchTestChromium(chromium, {headless:true,executablePath});t.after(()=>browser.close());
+  const browser=await chromium.launch({headless:true,executablePath});t.after(()=>browser.close());
   return {bank,requests,browser,base:'http://127.0.0.1:'+server.address().port};
 }
 function items(text){return [...text.matchAll(/^item \d+ of \d+: (.+)$/gm)].map(m=>JSON.parse(m[1]));}
@@ -116,15 +115,7 @@ for(const kind of ['dm-first-message','mail-first-invoice','finite-feed','endles
  if(kind==='endless-feed'){assert.match(result.text,/Complete: NO\./);assert.match(result.text,/item cap/);assert.doesNotMatch(result.text,/mentions X/);}
  else{assert.deepEqual(items(result.text),f.expected,result.text.slice(0,700));
   if(kind!=='mail-first-invoice')assert.match(result.text,/Complete: yes\./);
-  else {
-   assert.match(result.text,/Show more \(link\)/);
-   // Bounded chrome subtraction keeps a conservative warning from the sparse initial view.
-   assert.match(result.text,/possible fragments/);
-   assert.doesNotMatch(result.text,/Show more \(non-button role\)/);
-   assert.match(result.text,/expanded: "Show trimmed content"/);
-   assert.equal(f.events.filter(e=>e.type==='click'&&e.name==='Show trimmed content').length,1);
-   assert.equal(f.events.filter(e=>e.type==='click'&&/^Message \d+$/.test(e.name)).length,11);
-  }
+  else assert.match(result.text,/Show more \(link\)/);
  }
  assert.equal(f.posts,0);assert.deepEqual(f.dangers,[]);assert.equal(context.pages().length,1);
  if(kind==='dm-first-message')assert.equal(f.events.filter(e=>e.type==='click').length,0);

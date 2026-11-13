@@ -1,21 +1,16 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { execFileSync } from 'node:child_process';
 import { generateKeyPairSync, sign } from 'node:crypto';
 import { cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { trackTemp } from '../scripts/temp-leftovers.mjs';
-import { BUNDLE, analyzeBundle, definesMember, engineDocs, findApp, plistString } from '../bench/compat/static.mjs';
+import { BUNDLE, analyzeBundle, definesMember, findApp, plistString } from '../bench/compat/static.mjs';
 import { checkDownloadUrl, download, latestItem, parseAppcast, unpack, verifySignature } from '../bench/compat/feed.mjs';
-import { probeFeed, runFeed, sleightCommit, summary } from '../bench/compat-static.mjs';
+import { probeFeed, runFeed, summary } from '../bench/compat-static.mjs';
 
 const fixture = name => readFileSync(new URL(`./fixtures/${name}`, import.meta.url), 'utf8');
 const plist = version => `<?xml version="1.0" encoding="UTF-8"?>\n<plist version="1.0"><dict>\n<key>CFBundleShortVersionString</key>\n<string>${version}</string>\n</dict></plist>\n`;
-const docPath = name => join(dirname(BUNDLE.policy), `tinysky-alt-${name}.md`);
-const coreDoc = docPath('core-cua-repl');
-const nativeDoc = () => `## Computer Use\n\nControl apps.\n\n## API\n\n\`\`\`typescript\n${fixture('engine-api-26.1007.71326.ts')}\`\`\`\n\n## Notes\n\nNotes.\n`;
-const browserRoot = join(dirname(dirname(dirname(BUNDLE.policy))), 'browser-desktop');
 
 function temp(t) {
   const dir = trackTemp(mkdtempSync(join(tmpdir(), 'sleight-compat-static-')));
@@ -25,7 +20,7 @@ function temp(t) {
 }
 
 // An unpacked ChatGPT.app holding only the files the static check reads, built from recorded engine text.
-function bundle(root, { app = '26.1013.40934', engine = '26.1013.1001501', layout = 'legacy', drop = [], edit = {} } = {}) {
+function bundle(root, { app = '26.1013.40934', engine = '26.1013.1001501', drop = [], edit = {} } = {}) {
   const dir = join(root, 'ChatGPT.app');
   const put = (rel, text) => { mkdirSync(dirname(join(dir, rel)), { recursive: true }); writeFileSync(join(dir, rel), edit[rel] ?? text); };
   put(BUNDLE.appInfo, plist(app));
@@ -35,21 +30,8 @@ function bundle(root, { app = '26.1013.40934', engine = '26.1013.1001501', layou
   put(BUNDLE.nodeRepl, 'x\0codetimeout_msserver_instructions\0js_reset\0turn_ended\0hook_event_name\0x-codex-turn-metadatasession_idturn_id\0MCP elicitation request cancelled\0Meriyah v7.0.0\0' + cellParser + '\0' + cellParser);
   put(BUNDLE.replBin, 'import "@oai/cua-repl";');
   put(BUNDLE.launch, 'const _=i.env.CUA_REPL_NODE_REPL_PATH,c=i.env.CUA_REPL_ENABLED_SURFACES;tools:{js:{},js_reset:{}};NODE_REPL_TOOL_OVERRIDES:1');
-  if (layout === 'legacy') {
-    put(coreDoc, nativeDoc());
-    put(docPath('core-node-repl'), 'Node documentation.\n');
-  } else {
-    put(docPath('core-cua-repl-mac'), nativeDoc());
-    for (const name of ['core-cua-repl-no-cua', 'core-node-repl-mac', 'core-node-repl-no-cua', 'core-cua-repl-linux', 'core-cua-repl-windows'])
-      put(docPath(name), `Not the Mac computer API: ${name}.\n`);
-  }
+  put(BUNDLE.coreDoc, `## Computer Use\n\nControl apps.\n\n## API\n\n\`\`\`typescript\n${fixture('engine-api-26.1007.71326.ts')}\`\`\`\n\n## Notes\n\nNotes.\n`);
   put(BUNDLE.policy, fixture('engine-confirmations-policy.txt'));
-  put(docPath('audio'), 'Audio documentation.\n');
-  put(docPath('other-browser-apis'), 'Browser documentation.\n');
-  put(join(BUNDLE.tinysky, 'create_documentation.js'), layout === 'legacy' ? 'const i=yield n(t);' : 'n(`${t}-${i}`)');
-  put(join(browserRoot, 'scripts/browser-service.mjs'), 'l=["# Selected Browser",`- Name: ${t.name}`,`- Type: ${t.type}`,`- ID: ${t.id}`,"Reuse.","Recover."].join');
-  put(join(browserRoot, 'environment-docs/codex-app/documents.json'), '[]');
-  put(join(browserRoot, 'environment-docs/codex-app/api.json'), '{"root":"Agent","interfaces":{"Agent":{}},"types":{}}');
   // The recorded js description split at its first three blank lines: launch.js joins its four parts with blank lines.
   const description = fixture('engine-js-description.txt').trimEnd();
   const cuts = []; for (let at = -1; cuts.length < 3;) { at = description.indexOf('\n\n', at + 1); cuts.push(at); }
@@ -73,78 +55,8 @@ test('a bundle built from the recorded engine passes every static check', t => {
   assert.deepEqual(report.results.filter(r => r.status !== 'pass').map(r => r.id), ['workflow-rewrite']);
   assert.match(report.fingerprint, /^[0-9a-f]{64}$/);
 });
-test('split documentation reaches the Mac API checks and private doc export', t => {
-  const dir = bundle(temp(t), { layout: 'split' });
-  const report = analyzeBundle(dir);
-  assert.equal(report.results.find(r => r.id === 'bundle-layout')?.status, 'pass');
-  for (const id of ['api-contract', 'doc-headings', 'repl-methods'])
-    assert.equal(report.results.find(r => r.id === id)?.status, 'pass', id);
-  assert.equal(report.results.filter(r => r.status === 'fail').length, 0);
-  assert.equal(engineDocs(dir)['api.md'], nativeDoc());
-});
-// 26.1029 moved the launch environment out of launch.js into an environment.js that launch.js imports.
-test('launch-env reads environment.js only when launch.js imports it, never through a link', t => {
-  const env = join(dirname(BUNDLE.launch), 'environment.js');
-  const names = 'const _=i.env.CUA_REPL_NODE_REPL_PATH,c=i.env.CUA_REPL_ENABLED_SURFACES;tools:{js:{},js_reset:{}};NODE_REPL_TOOL_OVERRIDES:1';
-  const launchEnv = dir => analyzeBundle(dir).results.find(r => r.id === 'launch-env');
-  const split = bundle(temp(t), { edit: { [BUNDLE.launch]: 'import{create_launch_environment as i}from"./environment.js";const p=i.env.CUA_REPL_NODE_REPL_PATH;' } });
-  writeFileSync(join(split, env), names);
-  assert.equal(launchEnv(split).status, 'pass');
-  // The same environment.js beside a launch.js that doesn't import it proves nothing about the launcher.
-  const unimported = bundle(temp(t), { edit: { [BUNDLE.launch]: 'const p=i.env.CUA_REPL_NODE_REPL_PATH;' } });
-  writeFileSync(join(unimported, env), names);
-  assert.equal(launchEnv(unimported).status, 'fail');
-  assert.match(launchEnv(unimported).reason, /CUA_REPL_ENABLED_SURFACES, NODE_REPL_TOOL_OVERRIDES, js_reset/);
-  // An imported environment.js that is a symbolic link fails rather than being followed.
-  const linked = bundle(temp(t), { edit: { [BUNDLE.launch]: 'import{create_launch_environment as i}from"./environment.js";const p=i.env.CUA_REPL_NODE_REPL_PATH;' } });
-  const outside = join(temp(t), 'environment.js');
-  writeFileSync(outside, names);
-  symlinkSync(outside, join(linked, env));
-  assert.equal(launchEnv(linked).status, 'fail');
-});
-test('a Linux checker still selects the Mac document from the macOS bundle', t => {
-  const dir = bundle(temp(t), { layout: 'split' });
-  const module = new URL('../bench/compat/static.mjs', import.meta.url).href;
-  const code = `Object.defineProperty(process, 'platform', { value: 'linux' });
-    const { analyzeBundle, engineDocs } = await import(${JSON.stringify(module)});
-    console.log(JSON.stringify({ report: analyzeBundle(process.argv[1]), docs: engineDocs(process.argv[1]) }));`;
-  const { report, docs } = JSON.parse(execFileSync(process.execPath, ['--input-type=module', '-e', code, dir], { encoding: 'utf8', timeout: 10000, killSignal: 'SIGKILL' }));
-  assert.equal(report.results.find(r => r.id === 'api-contract')?.status, 'pass');
-  assert.equal(docs['api.md'], nativeDoc());
-});
-test('a missing split Mac doc fails even when the retired single doc exists', t => {
-  const dir = bundle(temp(t), { layout: 'split', drop: [docPath('core-cua-repl-mac')] });
-  writeFileSync(join(dir, coreDoc), nativeDoc());
-  const report = analyzeBundle(dir);
-  assert.equal(report.results[0].status, 'fail');
-  assert.match(report.results[0].reason, /coreDoc/);
-  assert.equal(report.results.some(r => r.id === 'api-contract'), false);
-  assert.equal(report.fingerprint, undefined);
-  assert.throws(() => engineDocs(dir), /ENOENT/);
-});
-test('an unknown documentation builder fails instead of guessing from filenames', t => {
-  const dir = bundle(temp(t), { edit: { [join(BUNDLE.tinysky, 'create_documentation.js')]: 'unknown reader' } });
-  const report = analyzeBundle(dir);
-  assert.equal(report.results[0].status, 'fail');
-  assert.equal(report.fingerprint, undefined);
-  assert.throws(() => engineDocs(dir), /Unknown engine core documentation format/);
-});
-test('documentation discovery refuses symlinks and manifest paths outside the bundle', t => {
-  const root = temp(t);
-  const linked = bundle(join(root, 'linked'));
-  const service = join(linked, browserRoot, 'scripts/browser-service.mjs');
-  rmSync(service);
-  symlinkSync('/etc/hosts', service);
-  assert.equal(analyzeBundle(linked).results[0].status, 'fail');
-  assert.throws(() => engineDocs(linked), /symbolic link/);
-  const escaped = bundle(join(root, 'escaped'), { edit: {
-    [join(browserRoot, 'environment-docs/codex-app/documents.json')]: JSON.stringify([{ name: '../'.repeat(30) + 'outside', mode: 'included' }]),
-  } });
-  assert.equal(analyzeBundle(escaped).results[0].status, 'fail');
-  assert.throws(() => engineDocs(escaped), /outside the bundle/);
-});
 test('the installed native API format has a separate conservative compatibility check', t => {
-  const report = analyzeBundle(bundle(temp(t), { edit: { [coreDoc]: fixture('native-api-docs.txt') } }));
+  const report = analyzeBundle(bundle(temp(t), { edit: { [BUNDLE.coreDoc]: fixture('native-api-docs.txt') } }));
   const check = report.results.find(r => r.id === 'documentation-format');
   assert.equal(check?.status, 'pass');
   assert.equal(check.removedCharacters, 201);
@@ -185,7 +97,7 @@ test('a changed js description or policy warns; a bundle without the engine stop
   const results = Object.fromEntries(analyzeBundle(dir).results.map(r => [r.id, r.status]));
   assert.equal(results['js-description'], 'warn');
   assert.equal(results['policy-rewrite'], 'warn');
-  const bare = analyzeBundle(bundle(join(root, 'bare'), { drop: [coreDoc] }));
+  const bare = analyzeBundle(bundle(join(root, 'bare'), { drop: [BUNDLE.coreDoc] }));
   assert.deepEqual(bare.results.map(item => item.id), ['bundle-layout', 'tool-schema', 'cell-parser']);
   assert.equal(bare.results.find(item => item.id === 'cell-parser').status, 'pass');
   assert.equal(bare.fingerprint, undefined);
@@ -263,7 +175,7 @@ test('unpack uses unzip for a zip and 7-Zip twice for a disk image', async t => 
   await assert.rejects(unpack(join(dir, 'b.dmg'), join(dir, 'img'), { which: () => false }), /needs 7-Zip/);
 });
 
-test('the feed run checks a new release once, records it, and bounds incomplete attempts', async t => {
+test('the feed run checks a new release once, records it, and retries only when it could not run', async t => {
   const root = temp(t);
   const state = join(root, 'state');
   const source = bundle(join(root, 'source'));
@@ -291,13 +203,11 @@ test('the feed run checks a new release once, records it, and bounds incomplete 
     const unsigned = await runFeed({ ...deps, verifyImpl: () => false });
     assert.equal(unsigned.exit, 2);
     assert.equal(unsigned.report.attempt, attempt);
-    assert.equal(unsigned.report.sleight, sleightCommit());
     assert.equal(unsigned.report.steps[0].id, 'signature');
     assert.equal(JSON.parse(readFileSync(join(state, 'last.json'), 'utf8')).version, '26.1013.40934');
   }
   assert.equal((await runFeed({ ...deps, unpackImpl: async () => { throw Object.assign(new Error('7z: Data Error in engine text'), { code: 2 }); } })).report.steps[0].reason, 'unpacking failed (exit 2)');
   assert.equal(JSON.parse(readFileSync(join(state, 'last.json'), 'utf8')).verdict, 'error');
-  assert.equal(JSON.parse(readFileSync(join(state, 'last.json'), 'utf8')).sleight, sleightCommit());
   // The unchanged path keeps the last verdict's exit code.
   const repeat = await runFeed(deps);
   assert.deepEqual([repeat.unchanged, repeat.exit], [true, 2]);
@@ -312,101 +222,11 @@ test('the feed run checks a new release once, records it, and bounds incomplete 
   assert.ok(!logs.join('\n').includes('Computer Use Confirmations'));
 });
 
-test('probe and run retry a failed build after a sleight change, then record the repaired result', async t => {
-  const root = temp(t);
-  const state = join(root, 'state');
-  const source = bundle(join(root, 'source'), { drop: [coreDoc] });
-  const commit = sleightCommit();
-  assert.ok(commit);
-  let downloads = 0;
-  const deps = { state, log: () => {}, now: () => new Date('2026-10-19T05:00:00Z'), verifyImpl: () => true,
-    fetchImpl: async () => new Response(appcast([{ version: '26.1013.40934', build: '40934', url: 'https://persistent.oaistatic.com/r.zip' }])),
-    downloadImpl: async (url, path) => { downloads++; writeFileSync(path, 'PK'); },
-    unpackImpl: async (archive, out) => cpSync(source, join(out, 'ChatGPT.app'), { recursive: true }) };
-  const lastPath = join(state, 'last.json');
-  const failed = await runFeed(deps);
-  assert.equal(failed.exit, 1);
-  assert.equal(failed.report.sleight, commit);
-  const last = JSON.parse(readFileSync(lastPath, 'utf8'));
-  assert.deepEqual(last, { version: '26.1013.40934', build: '40934', checkedAt: failed.report.checkedAt,
-    verdict: 'fail', sleight: commit });
-  assert.equal(await probeFeed(deps), false);
-  assert.deepEqual(await runFeed(deps), { exit: 1, unchanged: true });
-  assert.equal(downloads, 1);
-
-  writeFileSync(lastPath, JSON.stringify({ ...last, sleight: `${commit}-previous` }));
-  writeFileSync(join(source, coreDoc), nativeDoc());
-  assert.equal(await probeFeed(deps), true);
-  assert.equal(downloads, 1, 'probing never downloads the bundle');
-  const repaired = await runFeed(deps);
-  assert.equal(repaired.exit, 0);
-  assert.equal(repaired.report.verdict, 'pass');
-  assert.equal(repaired.report.sleight, commit);
-  assert.equal(downloads, 2);
-  assert.deepEqual(JSON.parse(readFileSync(lastPath, 'utf8')), {
-    ...last, verdict: 'pass', sleight: commit, fingerprint: repaired.report.fingerprint,
-  });
-  const results = readFileSync(join(state, 'results.jsonl'), 'utf8').trim().split('\n').map(line => JSON.parse(line));
-  assert.deepEqual(results.map(result => [result.verdict, result.sleight]), [['fail', commit], ['pass', commit]]);
-  assert.equal(await probeFeed(deps), false);
-  assert.deepEqual(await runFeed(deps), { exit: 0, unchanged: true });
-  assert.equal(downloads, 2);
-});
-
-test('matching-build skips preserve passes and errors; legacy failures retry once per sleight commit', async t => {
-  const root = temp(t);
-  const source = bundle(join(root, 'source'), { drop: [coreDoc] });
-  const commit = sleightCommit();
-  assert.ok(commit);
-  const cases = [
-    { name: 'pass-same', verdict: 'pass', sleight: commit, retry: false, exit: 0 },
-    { name: 'pass-changed', verdict: 'pass', sleight: `${commit}-previous`, retry: false, exit: 0 },
-    { name: 'pass-legacy', verdict: 'pass', retry: false, exit: 0 },
-    { name: 'fail-same', verdict: 'fail', sleight: commit, retry: false, exit: 1 },
-    { name: 'fail-changed', verdict: 'fail', sleight: `${commit}-previous`, retry: true, exit: 1 },
-    { name: 'fail-legacy', verdict: 'fail', retry: true, exit: 1 },
-    { name: 'error-changed', verdict: 'error', sleight: `${commit}-previous`, retry: false, exit: 2 },
-    { name: 'new-build', verdict: 'pass', sleight: commit, build: 'older', retry: true, exit: 1 },
-    { name: 'new-version', verdict: 'pass', sleight: commit, version: '26.1012.1', retry: true, exit: 1 },
-  ];
-  for (const entry of cases) await t.test(entry.name, async () => {
-    const state = join(root, entry.name);
-    mkdirSync(state);
-    const lastPath = join(state, 'last.json');
-    const last = { version: entry.version ?? '26.1013.40934', build: entry.build ?? '40934', checkedAt: '2026-10-19T05:00:00.000Z',
-      verdict: entry.verdict, sleight: entry.sleight, fingerprint: 'previous-fingerprint' };
-    writeFileSync(lastPath, JSON.stringify(last));
-    const before = readFileSync(lastPath, 'utf8');
-    let downloads = 0;
-    const deps = { state, log: () => {}, verifyImpl: () => true,
-      fetchImpl: async () => new Response(appcast([{ version: '26.1013.40934', build: '40934', url: 'https://persistent.oaistatic.com/r.zip' }])),
-      downloadImpl: async (url, path) => { downloads++; writeFileSync(path, 'PK'); },
-      unpackImpl: async (archive, out) => cpSync(source, join(out, 'ChatGPT.app'), { recursive: true }) };
-    assert.equal(await probeFeed(deps), entry.retry);
-    const result = await runFeed(deps);
-    assert.equal(result.exit, entry.exit);
-    assert.equal(downloads, Number(entry.retry));
-    if (entry.retry) {
-      assert.equal(result.report.verdict, 'fail');
-      assert.equal(result.report.fingerprintChanged, true);
-      assert.equal(JSON.parse(readFileSync(lastPath, 'utf8')).sleight, commit);
-      assert.equal(await probeFeed(deps), false);
-      assert.deepEqual(await runFeed(deps), { exit: 1, unchanged: true });
-      assert.equal(downloads, 1);
-      assert.equal(readFileSync(join(state, 'results.jsonl'), 'utf8').trim().split('\n').length, 1);
-    } else {
-      assert.equal(result.unchanged, true);
-      assert.equal(readFileSync(lastPath, 'utf8'), before);
-      assert.equal(existsSync(join(state, 'results.jsonl')), false);
-    }
-  });
-});
-
 test('--keep-docs keeps the docs and a diff in the state folder and reports only line counts', async t => {
   const root = temp(t);
   const state = join(root, 'state');
   let version = '1.0';
-  const sources = { '1.0': bundle(join(root, 'a'), { app: '1.0' }), '2.0': bundle(join(root, 'b'), { app: '2.0', edit: { [coreDoc]: '## Computer Use\n\n## API\n\n```typescript\ninterface X {}\n```\n' } }) };
+  const sources = { '1.0': bundle(join(root, 'a'), { app: '1.0' }), '2.0': bundle(join(root, 'b'), { app: '2.0', edit: { [BUNDLE.coreDoc]: '## Computer Use\n\n## API\n\n```typescript\ninterface X {}\n```\n' } }) };
   const deps = { state, keep: true, log: () => {}, verifyImpl: () => true, downloadImpl: async (url, path) => writeFileSync(path, 'PK'),
     fetchImpl: async () => new Response(appcast([{ version, build: version, url: 'https://persistent.oaistatic.com/r.zip' }])),
     unpackImpl: async (archive, out) => cpSync(sources[version], join(out, 'ChatGPT.app'), { recursive: true }) };

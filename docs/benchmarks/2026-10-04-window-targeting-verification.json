@@ -1,6 +1,6 @@
 {
   "branch": "codex/window-targeting",
-  "worktree": "<private-evidence>/window-targeting",
+  "worktree": "~/Projects/sleight-wt/window-targeting",
   "base": "562f423",
   "requestedBaseIncluded": "7540224",
   "checks": [

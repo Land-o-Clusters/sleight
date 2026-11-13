@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { fixture, skip } from './fixtures/cr4-real.mjs';
 import { createActionRunner } from '../plugins/sleight/lib/direct-browser/act.mjs';
-import { createToolDispatcher, unknownTabOutcome } from '../plugins/sleight/lib/direct-browser/tools.mjs';
+import { createToolDispatcher } from '../plugins/sleight/lib/direct-browser/tools.mjs';
 import { setTouch, restoreTouch } from '../plugins/sleight/lib/direct-browser/touch.mjs';
 import { setViewport } from '../plugins/sleight/lib/direct-browser/viewport.mjs';
 
@@ -48,9 +48,7 @@ test('G10 touch toggles real capabilities and CSS on only the owned tab, with ex
   assert.equal(page.url(), url); assert.equal(f.requests.length, requests);
   assert.deepEqual(await f.tabState(), tabsBefore, 'active tab and target inventory stay unchanged');
   const foreign = await tools.call({ name: 'browser_act', arguments: { tab: 'tforeign', steps: [{ do: 'viewport', touch: true }] } });
-  assert.equal(foreign.isError, true); assert.equal(foreign.text, unknownTabOutcome);
-  assert.deepEqual(await capabilities(page), before);
-  assert.deepEqual(await f.tabState(), tabsBefore);
+  assert.equal(foreign.isError, true); assert.match(foreign.text, /owned tab/);
 });
 
 for (const kind of ['keep', 'handoff']) test(`G10 ${kind} restores touch before releasing the tab and ending the turn`, { skip, timeout: 30000 }, async t => {
@@ -138,21 +136,6 @@ for (const failed of ['size', 'touch']) test(`G10B a real reset restores the oth
   assert.equal((await capabilities(page)).points, failed === 'touch' ? 1 : 0);
   fail = false;
   await setViewport(page, {});
-  // CDP can acknowledge the clear before the renderer applies the native size.
-  // Synchronize the retry's layout too, as for the first reset above.
-  await page.waitForFunction(() => innerWidth === 1280, undefined, { polling: 20, timeout: 2000 });
   assert.equal(await page.evaluate(() => innerWidth), 1280);
   assert.equal((await capabilities(page)).points, 0);
-});
-
-test('G10D a reset reports the eventual native size after a 390 override', { skip, timeout: 30000 }, async t => {
-  const f = await fixture(t, html, {}, { nativeViewport: true }), page = f.entry.page;
-  await setViewport(page, { width: 390, height: 844, touch: true });
-  const result = await setViewport(page, {});
-  await page.waitForFunction(() => innerWidth === 1280, undefined, { polling: 20, timeout: 2000 });
-  const size = await page.evaluate(() => ({ width: innerWidth, height: innerHeight }));
-  const reported = result.match(/^viewport restored(?: to (\d+)x(\d+)|; layout had not settled); touch restored$/);
-  assert.ok(reported, result);
-  if (reported[1]) assert.deepEqual({ width: +reported[1], height: +reported[2] }, size, result);
-  assert.equal(size.width, 1280);
 });

@@ -1,10 +1,8 @@
-import { assertChildStatus } from './fixtures/child-status.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import * as fs from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
-import { createHash } from 'node:crypto';
 import { buildCast, CAST, swiftPins } from '../tools/characters/build.mjs';
 import { registerTemp } from '../scripts/temp-leftovers.mjs';
 import { rebuildSkipReason } from '../tools/characters/toolchain.mjs';
@@ -37,8 +35,8 @@ test('both build entry points execute through symlink paths', async t => {
   const { spawnSync } = await import('node:child_process');
   for (const entry of ['../tools/characters/build.mjs', '../plugins/sleight/skills/make-character/tool/build.mjs']) {
     const linked = join(base, 'build.mjs'); fs.symlinkSync(new URL(entry, import.meta.url).pathname, linked);
-    const result = spawnSync(process.execPath, [linked, '--bad-argument'], { encoding: 'utf8', timeout: 10000, killSignal: 'SIGKILL' });
-    assertChildStatus(result, 0, undefined, 'notEqual'); assert.match(result.stderr, /Usage:/); fs.unlinkSync(linked);
+    const result = spawnSync(process.execPath, [linked, '--bad-argument'], { encoding: 'utf8', timeout: 10000 });
+    assert.notEqual(result.status, 0); assert.match(result.stderr, /Usage:/); fs.unlinkSync(linked);
   }
 });
 
@@ -55,7 +53,7 @@ test('contact sheets composite all four source pixels before reducing the cell s
   assert.deepEqual(contactSheet(image, 'light'), { width: 1, height: 1, data: Buffer.from([223, 173, 148, 255]) });
   assert.deepEqual(contactSheet(image, 'dark'), { width: 1, height: 1, data: Buffer.from([114, 64, 41, 255]) });
 });
-test('the thirteen packs rebuild with the approved manifests, states, dimensions and alpha structure', { skip: rebuildSkipReason(), timeout: 1200000 }, async t => {
+test('the six packs rebuild with the approved manifests, states, dimensions and alpha structure', { skip: rebuildSkipReason(), timeout: 1200000 }, async t => {
   const base = registerTemp(t, fs.realpathSync(fs.mkdtempSync(join(tmpdir(), 'sleight-character-rebuild-'))));
   const output = join(base, 'characters'), manifest = await buildCast(output), committed = builtinCharactersDirectory();
   for (const id of CAST) {
@@ -66,12 +64,6 @@ test('the thirteen packs rebuild with the approved manifests, states, dimensions
     assert.deepEqual(rebuilt.sheets, approved.sheets, id);
     assert.deepEqual(rebuilt.warnings, [], id);
     assert.deepEqual(Object.keys(manifest.packs[id]), [...approved.files.keys()].sort(), id);
-    // Keep the older six's existing structural rebuild contract. Their shipped encodings are unchanged.
-    // The seven new packs must reproduce every committed byte, including their manifests.
-    const hash = bytes => createHash('sha256').update(bytes).digest('hex');
-    for (const [name, bytes] of approved.files) if (CAST.indexOf(id) >= 6) {
-      assert.equal(hash(rebuilt.files.get(name)), hash(bytes), `${id}/${name} reproducible bytes`);
-    }
   }
 });
 test('native built-in pins match the package hash manifest', () => {

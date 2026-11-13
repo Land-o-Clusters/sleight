@@ -2,7 +2,7 @@
   "attempt": 5,
   "recordedAt": "2026-10-04T13:54:54Z",
   "command": "sh bench/window-targeting.sh docs/benchmarks/2026-10-04-window-targeting-attempt-5.json",
-  "worktree": "<private-evidence>/window-targeting",
+  "worktree": "~/Projects/sleight-wt/window-targeting",
   "result": "Canceled while waiting for the shared live-check lock. The Node harness had not started.",
   "nodeHarnessStarted": false,
   "fixtureActionsStarted": false,

@@ -13,7 +13,6 @@ import { terminalConfirm } from './terminal-confirm.mjs';
 import { acquireRoutineLock, clearRoutineLock, processStartTime, aliveProcess, sameProcessStart } from './routine-lock.mjs';
 import { notification as showNotification } from './notification.mjs';
 import { windowFromText, windowMatches } from './document-scope.mjs';
-import { readSettingsBytes, settingsFilePresent, SETTINGS_BUILD_POLICY } from './sealed-settings.mjs';
 
 const execute = promisify(execFile);
 const LAUNCHER = fileURLToPath(new URL('./routine-launcher.mjs', import.meta.url));
@@ -223,11 +222,11 @@ export class RoutineStore {
   load(id) {
     if (!ID.test(id)) throw new Error('invalid routine ID');
     const directory = ordinary(join(this.root, id));
-    const saved = JSON.parse(readSettingsBytes(ordinary(join(directory, 'routine.json'))));
-    const script = JSON.parse(readSettingsBytes(ordinary(join(directory, 'script.json'))));
+    const saved = JSON.parse(readFileSync(ordinary(join(directory, 'routine.json')), 'utf8'));
+    const script = JSON.parse(readFileSync(ordinary(join(directory, 'script.json')), 'utf8'));
     const plan = this.plan(script, `${saved.seconds}s`);
     if (plan.id !== id) throw new Error('saved routine changed; remove it and add the reviewed script again');
-    return { ...saved, ...plan, script, paused: settingsFilePresent(join(directory, 'paused.json')) };
+    return { ...saved, ...plan, script, paused: existsSync(join(directory, 'paused.json')) };
   }
   paths(id) {
     if (!ID.test(id)) throw new Error('invalid routine ID');
@@ -256,17 +255,13 @@ export class RoutineStore {
   async install(plan, script, options) {
     ordinary(plan.directory); ordinary(plan.plistPath); ordinary(plan.logPath);
     if (existsSync(plan.directory) || existsSync(plan.plistPath)) throw new Error('routine already exists; remove it explicitly before reinstalling');
-    const marker = '/* settings build policy */ false';
-    const launcher = readFileSync(LAUNCHER, 'utf8');
-    if (launcher.split(marker).length !== 2) throw new Error('settings build policy marker must occur exactly once');
-    const stampedLauncher = launcher.replace(marker, '/* settings build policy */ ' + SETTINGS_BUILD_POLICY.enforce);
     privateDir(dirname(plan.directory)); privateDir(dirname(plan.plistPath)); privateDir(dirname(plan.logPath));
     mkdirSync(plan.directory, { mode: 0o700 });
     try {
       ordinary(plan.launcherPath);
       const temporary = ordinary(`${plan.launcherPath}.${process.pid}.tmp`);
       try {
-        writeFileSync(temporary, stampedLauncher, { flag: 'wx', mode: 0o600 });
+        writeFileSync(temporary, readFileSync(LAUNCHER), { flag: 'wx', mode: 0o600 });
         renameSync(temporary, plan.launcherPath);
       } finally { rmSync(temporary, { force: true }); }
       writeFileSync(join(plan.directory, 'script.json'), json(script), { flag: 'wx', mode: 0o600 });

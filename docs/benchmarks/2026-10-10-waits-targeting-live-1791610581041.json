@@ -199,7 +199,7 @@
     {
       "appId": "com.apple.TextEdit",
       "attemptsStart": 5,
-      "error": "Command failed: /usr/bin/osascript -l JavaScript <private-evidence>/waits-targeting/bench/waits-targeting-fixture.js {\"op\":\"documents\"}\n<private-evidence>/waits-targeting/bench/waits-targeting-fixture.js: execution error: Error: Error: exception raised by object: Invalid parameter not satisfying: bundleIdentifier != nil (-2700)\n",
+      "error": "Command failed: /usr/bin/osascript -l JavaScript ~/Projects/sleight-wt/waits-targeting/bench/waits-targeting-fixture.js {\"op\":\"documents\"}\n~/Projects/sleight-wt/waits-targeting/bench/waits-targeting-fixture.js: execution error: Error: Error: exception raised by object: Invalid parameter not satisfying: bundleIdentifier != nil (-2700)\n",
       "cleanup": true
     }
   ],

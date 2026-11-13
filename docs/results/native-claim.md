@@ -41,7 +41,7 @@ No pair within 20% of sleight is short of 5 runs.
 - 197 runs counted, from 48 results files dated 2026-10-17 to 2026-10-18, on the tester's account login (auth `login`).
 - Expected time is the mean seconds per attempt divided by the pass rate (`bench/claim-score.mjs`). A failed run adds its time to the mean and lowers the rate. A task an arm never passed has no expected time, and that arm then has no total. Median and range are over passing runs, and p90 (nearest rank) appears only at 5 or more runs.
 - The rules come from [LAWS](../status/LAWS.md). Each arm gets 3 runs per task, or 5 where sleight and another arm are within 20% (the difference over the slower expected time). "Fastest" needs the lowest expected time on a majority of tasks and the lowest total, with those 5 runs in place. Otherwise the wording is "completed every task, fastest on N". A task counts as lost when another arm has the lower expected time or a faster passing run.
-- Rows come from `<private-evidence>/app-claim/native-results-1018b` with the exclusions in `bench/claim-exclusions.json`. Scoring starts at file stamp `2026-10-17T04-03`, and the reason given is `overnight claim run on the release build (ef833641 plus the Chess drag fix 1933db78); earlier runs measured older builds`.
+- Rows come from `~/Projects/sleight-wt/app-claim/native-results-1018b` with the exclusions in `bench/claim-exclusions.json`. Scoring starts at file stamp `2026-10-17T04-03`, and the reason given is `overnight claim run on the release build (ef833641 plus the Chess drag fix 1933db78); earlier runs measured older builds`.
 - The results files don't record sleight's commit or the Codex CLI version.
 
 | Arm | Model ids in the runs | Effort | Versions recorded | ChatGPT engine and UTC dates |

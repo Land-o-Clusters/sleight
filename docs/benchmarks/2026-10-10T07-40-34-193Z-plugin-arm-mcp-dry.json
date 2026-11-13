@@ -18,7 +18,7 @@
   },
   "timedOut": false,
   "cancelled": false,
-  "stdout": "Claude arms run on the API key: $0.86 of the $200 monthly cap spent.\n\nresults: <private-evidence>/plugin-arm/bench/results/2026-10-10T07-40-34-423Z-dry.json\n",
+  "stdout": "Claude arms run on the API key: $0.86 of the $200 monthly cap spent.\n\nresults: ~/Projects/sleight-wt/plugin-arm/bench/results/2026-10-10T07-40-34-423Z-dry.json\n",
   "stderr": "DRY mcp:sleight-plain calculator-click #1 0s\n",
   "groupClean": true,
   "raw": {
@@ -43,12 +43,12 @@
                 "name": "sleight",
                 "version": "1.1.0",
                 "extent": "package-directory",
-                "source": "<private-evidence>/plugin-arm/plugins/sleight",
+                "source": "~/Projects/sleight-wt/plugin-arm/plugins/sleight",
                 "commit": "18a8ccb8ea24620fe8f478904d3527e68e5237ce",
                 "packageHash": "fe09594f2cbaa4ce53a61906da4f6c032e8297c49fac2210ee66423a64cffe4c"
               }
             ],
-            "executable": "<private-evidence>/plugin-arm/plugins/sleight/bin/sleight-mcp"
+            "executable": "~/Projects/sleight-wt/plugin-arm/plugins/sleight/bin/sleight-mcp"
           }
         },
         "discovery": {

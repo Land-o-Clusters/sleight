@@ -1,4 +1,3 @@
-import { assertChildStatus } from './fixtures/child-status.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
@@ -154,9 +153,9 @@ host.activeAsk!.panel.answer("continue")
 precondition(host.focus.presented == ["debugger", "relaunch", "debugger"] && host.focus.dismissals == 3)
 print("pass")
 `);
-  const built = spawnSync('/usr/bin/xcrun', ['swiftc', '-module-cache-path', join(dir, 'cache'), swift, '-o', binary], { encoding: 'utf8', timeout: 600000, killSignal: 'SIGKILL' });
-  assertChildStatus(built, 0, built.stderr);
-  const result = spawnSync(binary, [], { encoding: 'utf8', timeout: 10000, killSignal: 'SIGKILL' });
-  assertChildStatus(result, 0, result.stderr);
+  const built = spawnSync('/usr/bin/xcrun', ['swiftc', '-module-cache-path', join(dir, 'cache'), swift, '-o', binary], { encoding: 'utf8', timeout: 120000 });
+  assert.equal(built.status, 0, built.stderr);
+  const result = spawnSync(binary, [], { encoding: 'utf8', timeout: 10000 });
+  assert.equal(result.status, 0, result.stderr);
   assert.equal(result.stdout.trim(), 'pass');
 });

@@ -1,14 +1,14 @@
-import { benchEvidencePath } from '../runtime-options.mjs';
 // Read-only inventory. This module never imports a live runner or prepares fixtures.
 import { execFileSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { readFileSync } from 'node:fs';
+import { homedir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { getTasks } from '../tasks.mjs';
 
 export const ROOT = resolve(fileURLToPath(new URL('../..', import.meta.url)));
-export const EVIDENCE = benchEvidencePath('race-1017');
+export const EVIDENCE = join(homedir(), 'Projects/sleight-wt/race-1017');
 export const HARNESS_PATHS = ['bench', 'scripts', 'package.json', 'package-lock.json'];
 export const NATIVE = 'textedit-edit,finder-rename,finder-create-folder,textedit-two-windows,textedit-window-drag,textedit-replace-save,textedit-insert-line,word-memo,word-brief,textedit-notes-table'.split(',');
 export const sha = value => createHash('sha256').update(value).digest('hex');

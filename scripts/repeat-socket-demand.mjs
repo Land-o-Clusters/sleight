@@ -1,14 +1,14 @@
 // Offline SD1 stress check: node scripts/repeat-socket-demand.mjs RUNS PARALLEL
 import { spawn } from 'node:child_process';
-import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { setTimeout as delay } from 'node:timers/promises';
-import { benchGateOpen } from '../bench/runtime-options.mjs';
 
 const [runs, parallel] = process.argv.slice(2).map(Number);
 if (!Number.isInteger(runs) || runs < 1 || runs > 100 || !Number.isInteger(parallel) || parallel < 1 || parallel > 3) {
   throw new Error('Usage: node scripts/repeat-socket-demand.mjs RUNS(1..100) PARALLEL(1..3)');
 }
+const gate = join(process.env.HOME, 'Projects/sleight-wt/ledger/vc/night/lanes-may-test');
 const directory = mkdtempSync('/private/tmp/sleight-demand-repeat-');
 const active = new Set(), results = [];
 let next = 0, interrupted = false;
@@ -22,7 +22,7 @@ function signalGroup(child, signal) {
   catch (err) { if (err.code !== 'ESRCH') throw err; }
 }
 async function run(index) {
-  while (!benchGateOpen() && !interrupted) await delay(1000);
+  while (!existsSync(gate) && !interrupted) await delay(1000);
   if (interrupted) return;
   const config = mkdtempSync('/tmp/lane-claude-');
   const started = performance.now();

@@ -7,7 +7,7 @@ import { PassThrough } from 'node:stream';
 
 test('relay startup waits for clipboard recovery before constructing runtime resources', async () => {
   const sentinel = Error('recovery remains unconfirmed'); let recovery = 0;
-  await assert.rejects(run({ sweepClipboard: () => {}, recoverClipboard: async () => { recovery++; throw sentinel; },
+  await assert.rejects(run({ recoverClipboard: async () => { recovery++; throw sentinel; },
     healthHelperFactory: () => assert.fail('runtime must wait for recovery') }), error => error === sentinel);
   assert.equal(recovery, 1);
 });

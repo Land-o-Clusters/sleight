@@ -11,7 +11,6 @@ import { createCDPFilter } from './cdp-filter.mjs';
 import { createNativeProcessProvider, isNativeProcessProvider } from './host.mjs';
 import { proofKey, proveRunningCode, signedBrowserAt, writeClass } from './executable-trust.mjs';
 import { retryCodes, runOnceMore } from './transient.mjs';
-import { selectedBrowserId } from './browser-identity.mjs';
 
 const fail = code => { throw Error(code); };
 const ordinaryObject = value => value && typeof value === 'object' && !Array.isArray(value);
@@ -151,7 +150,7 @@ export async function createSelectedConnection({ config, nativeReceipt, processM
   const identity = Object.freeze(await retryCodes(observe, ['STALE_INSTANCE', 'SELECTED_ENDPOINT_UNPROVED'], { delayMs: retryDelay })),
     identityJSON = JSON.stringify(identity);
   const browserIncarnation = 'p' + createHash('sha256').update(identityJSON).digest('hex');
-  const selectedBrowser = selectedBrowserId(config);
+  const selectedBrowser = 'b' + createHash('sha256').update(root + '\0' + application).digest('hex').slice(0, 32);
   const endpoint = validateEndpoint('ws://127.0.0.1:' + identity.file.port + identity.file.browserPath);
   let socket, opened = false, fenced = false, attempted = false, closeIssued = false, closeConfirmed = false, opening, closing;
   let finishOpen, failOpen;

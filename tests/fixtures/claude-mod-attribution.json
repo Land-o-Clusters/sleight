@@ -1,7 +1,0 @@
-{
-  "version": "2.1.309",
-  "runs": 4,
-  "source": "MB1 probe, 2026-11-01; shape only, no live ids or user text",
-  "mod": { "prefix": "toolu_plugin_", "tailLength": 32, "alphabet": "0123456789abcdef" },
-  "modelPrefixes": ["toolu_", "toolu_bdrk_", "toolu_vrtx_", "toolu_patch_", "toolu_serve_"]
-}

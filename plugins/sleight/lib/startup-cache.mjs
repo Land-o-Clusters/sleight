@@ -1,4 +1,3 @@
-import { platformPaths, platformJoin } from './platform/paths.mjs';
 import { closeSync, constants, fstatSync, lstatSync, mkdirSync, openSync, readSync, readdirSync, readFileSync, renameSync, rmSync, writeFileSync } from 'node:fs';
 import { createHash, randomUUID } from 'node:crypto';
 import { homedir } from 'node:os';
@@ -35,7 +34,7 @@ export function startupIdentity(server, pluginRoot, env = process.env) {
   } catch { return; } // Cache setup must not fail an otherwise usable engine.
 }
 
-export function createStartupCache({ identity, directory = platformJoin()(platformPaths({ home: process.platform === 'win32' ? undefined : homedir() }).cache, 'handshakes') } = {}) {
+export function createStartupCache({ identity, directory = join(homedir(), 'Library/Caches/sleight/handshakes') } = {}) {
   if (!identity) return;
   function safeDirectory() {
     const stat = lstatSync(directory);

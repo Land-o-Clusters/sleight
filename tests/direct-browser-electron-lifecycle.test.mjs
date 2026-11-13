@@ -1,4 +1,3 @@
-import { assertChildStatus } from './fixtures/child-status.mjs';
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { PassThrough, Writable } from 'node:stream';
@@ -250,14 +249,14 @@ test('synthetic 1/4/13 clients: separate cold, warm reconnect and dispatch distr
   }
 });
 
-const python = spawnSync('python3', ['--version'], { encoding: 'utf8', timeout: 60000, killSignal: 'SIGKILL' });
+const python = spawnSync('python3', ['--version'], { encoding: 'utf8' });
 test('fake child validates launcher descriptors, EOF, recipe refusal and safe cleanup', {
   skip: python.status === 0 ? false : 'python3 is unavailable',
 }, () => {
   const result = spawnSync('python3', [new URL('./fixtures/fake-electron.py', import.meta.url).pathname, '--self-test'], {
     encoding: 'utf8', timeout: 10000, env: { PATH: process.env.PATH, PYTHONDONTWRITEBYTECODE: '1' },
-   killSignal: 'SIGKILL' });
-  assertChildStatus(result, 0, result.stderr + result.stdout);
+  });
+  assert.equal(result.status, 0, result.stderr + result.stdout);
   assert.match(result.stdout, /launcher checks passed/);
 });
 
@@ -268,8 +267,8 @@ for (const mode of ['after-profile', 'after-owner', 'replaced-profile', 'replace
   }, () => {
     const result = spawnSync('python3', [new URL('./fixtures/fake-electron.py', import.meta.url).pathname, '--cleanup-test', mode], {
       encoding: 'utf8', timeout: 10000, env: { PATH: process.env.PATH, PYTHONDONTWRITEBYTECODE: '1' },
-     killSignal: 'SIGKILL' });
-    assertChildStatus(result, 0, result.stderr + result.stdout);
+    });
+    assert.equal(result.status, 0, result.stderr + result.stdout);
     assert.match(result.stdout, /cleanup checks passed:/);
   });
 }

@@ -1,4 +1,3 @@
-import { testChromiumExecutable, launchTestChromium } from './fixtures/chromium-isolated.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createServer } from 'node:http';
@@ -10,7 +9,9 @@ import { createJobFixture, gradeJob, jobHandler, jobKinds } from '../bench/world
 
 const pin = JSON.parse(readFileSync(new URL('../plugins/sleight/vendor/playwright-core/browsers.json', import.meta.url)))
   .browsers.find(browser => browser.name === 'chromium-headless-shell');
-const executablePath = testChromiumExecutable({ revision: pin.revision });
+const platform = process.platform === 'darwin' ? 'mac-' + process.arch : 'linux64';
+const executablePath = join(homedir(), 'Library/Caches/ms-playwright', 'chromium_headless_shell-' + pin.revision,
+  'chrome-headless-shell-' + platform, 'chrome-headless-shell');
 const skip = process.env.SLEIGHT_LIVE_DOM_TEST !== '1' ? 'requires headless DOM opt-in' : !existsSync(executablePath) && 'pinned headless shell absent';
 
 async function openFixture(t, kind, { seed = 'real-page-bf1', colorScheme = 'light', reducedMotion = 'no-preference', pausedRaf = false } = {}) {
@@ -23,7 +24,7 @@ async function openFixture(t, kind, { seed = 'real-page-bf1', colorScheme = 'lig
   });
   await new Promise((resolve, reject) => { server.once('error', reject); server.listen(0, '127.0.0.1', resolve); });
   origin = `http://127.0.0.1:${server.address().port}`;
-  browser = await launchTestChromium(chromium, { headless: true, executablePath });
+  browser = await chromium.launch({ headless: true, executablePath });
   const page = await browser.newPage({ viewport: { width: 1200, height: 900 }, colorScheme, reducedMotion });
   if (pausedRaf) await page.addInitScript(() => { window.requestAnimationFrame = () => 1; window.cancelAnimationFrame = () => {}; });
   const errors = []; page.on('pageerror', error => errors.push(error.message));

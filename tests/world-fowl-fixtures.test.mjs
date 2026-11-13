@@ -1,4 +1,3 @@
-import { assertChildStatus } from './fixtures/child-status.mjs';
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { existsSync, mkdtempSync, readFileSync, closeSync } from 'node:fs';
@@ -129,8 +128,8 @@ test('both public CLI dry runs emit the complete matrix without touching the req
     const out = join(root, 'absent');
     const result = spawnSync(process.execPath, [new URL(module, import.meta.url).pathname, '--dry-run', '--runs', '5',
       '--model', 'haiku', '--effort', 'high', '--out', out, ...(module.includes('handoff') ? ['--world'] : [])],
-    { encoding: 'utf8', timeout: 10000, maxBuffer: 4 * 1024 * 1024, killSignal: 'SIGKILL' });
-    assertChildStatus(result, 0, result.stderr);
+    { encoding: 'utf8', timeout: 10000, maxBuffer: 4 * 1024 * 1024 });
+    assert.equal(result.status, 0, result.stderr);
     const plan = module.includes('handoff') ? result.stdout.trim().split('\n').map(line => JSON.parse(line)) : JSON.parse(result.stdout).rows;
     assert.equal(plan.length, count);
     assert.equal(existsSync(out), false);
@@ -174,8 +173,8 @@ test('the grader reads its answer key from an inherited descriptor, outside the 
       if (!gradeFixture({ task, site, expected, answer: JSON.stringify(expected) }).ok) throw Error('private answer failed');
       if (gradeFixture({ task, site, expected, answer: '{}'}).ok) throw Error('wrong answer passed');
       if (readFixtureExpected({ worldFixture: 'file-upload' }) !== undefined) throw Error('mismatched key accepted');
-    `], { cwd: new URL('..', import.meta.url), encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe', fd], timeout: 60000, killSignal: 'SIGKILL' });
-    assertChildStatus(result, 0, result.stderr);
+    `], { cwd: new URL('..', import.meta.url), encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe', fd] });
+    assert.equal(result.status, 0, result.stderr);
   } finally { closeSync(fd); }
 });
 

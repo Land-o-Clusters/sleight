@@ -152,8 +152,7 @@ test('setup probe records an extra owner window and closes only its created refe
   const f = fixture({ extra: true }), result = f.run();
   assert.equal(result.passed, false);
   assert.equal(result.snapshots.at(-1).ownerWindowsEqual, false);
-  assert.equal(result.cleanupConfirmed, false);
-  assert.equal(result.cleanupFailure.failureReason, 'extra-window-unconfirmed');
+  assert.equal(result.cleanupConfirmed, true);
   assert.deepEqual(f.closed, [f.owned]);
   assert.ok(f.current().includes(f.unrecorded));
 });

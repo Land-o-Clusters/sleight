@@ -163,8 +163,7 @@ test('CK1 reports a completed read when a predicted binding is replaced by fresh
 });
 
 for (const prior of ['setValue(2, "owner")', 'typeText("owner")']) test(`CK2 checks payment ancestors above the parent after ${prior.split('(')[0]}`, async () => {
-  const nest = text => text.replace(/^(\t+)(\d+) /gm, (_, tabs, id) => '\t' + tabs + (Number(id) + 1) + ' ')
-    .replace('\n\t\t2 container Contact', '\n\t1 container Billing\n\t\t2 container Contact');
+  const nest = text => text.replace('\n\t1 container Contact', '\n\t9 container Billing\n\t\t1 container Contact').replaceAll('\n\t\t2 ', '\n\t\t\t2 ').replaceAll('\n\t\t3 ', '\n\t\t\t3 ').replaceAll('\n\t\t4 ', '\n\t\t\t4 ');
   const f = fixture({ first: nest(plainBefore), next: nest(plainAfter) });
-  await assert.rejects(f.run(`await app.${prior.replace('setValue(2,', 'setValue(3,')}; await app.setValue(4, "value");`, { bind: prior.startsWith('setValue') }), /changed what element/);
+  await assert.rejects(f.run(`await app.${prior}; await app.setValue(3, "value");`, { bind: prior.startsWith('setValue') }), /changed what element/);
 });

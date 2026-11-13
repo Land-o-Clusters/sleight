@@ -431,7 +431,7 @@
     ]
   },
   "fuzzDisagreements": {
-    "file": "private evidence, not published",
+    "file": "~/Projects/sleight-wt/ledger/vc/ca1-evidence/fuzz-disagreements.jsonl.gz",
     "records": 118682,
     "bytes": 2213974,
     "sha256": "c3ad55c89b198471089a63c34a95698af7e5fa2d4bfbef5413002049eb1d4f37",
@@ -530,7 +530,7 @@
     ]
   },
   "statementDifferences": {
-    "file": "private evidence, not published",
+    "file": "~/Projects/sleight-wt/ledger/vc/ps3-evidence/statement-differences.jsonl.gz",
     "records": 6314,
     "bytes": 617139,
     "sha256": "4f9a56441a3a161458fa804eb42a57f88201cbc966203f0ac37da44aa1b9edf9",

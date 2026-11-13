@@ -1,4 +1,3 @@
-import { assertChildStatus } from './fixtures/child-status.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { mkdirSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
@@ -108,11 +107,11 @@ test('the offline CLI emits text or JSON and refuses unknown flags', t => {
   writeFileSync(join(dir, 'task/events.jsonl'), [call('a', 10), result('a', 110, 'tab.PRIVATE is not a function')].map(JSON.stringify).join('\n'));
   const cli = new URL('../bench/fowl/error-census.mjs', import.meta.url).pathname;
   for (const json of [false, true]) {
-    const ran = spawnSync(process.execPath, [cli, dir, ...(json ? ['--json'] : [])], { encoding: 'utf8', timeout: 60000, killSignal: 'SIGKILL' });
-    assertChildStatus(ran, 0, ran.stderr);
+    const ran = spawnSync(process.execPath, [cli, dir, ...(json ? ['--json'] : [])], { encoding: 'utf8' });
+    assert.equal(ran.status, 0, ran.stderr);
     assert.ok(!ran.stdout.includes('PRIVATE'));
     if (json) assert.equal(JSON.parse(ran.stdout).rounds[0].total, 1);
     else assert.match(ran.stdout, /invented-api.*1/);
   }
-  assertChildStatus(spawnSync(process.execPath, [cli, '--unknown'], { encoding: 'utf8', timeout: 60000, killSignal: 'SIGKILL' }), 1);
+  assert.equal(spawnSync(process.execPath, [cli, '--unknown'], { encoding: 'utf8' }).status, 1);
 });

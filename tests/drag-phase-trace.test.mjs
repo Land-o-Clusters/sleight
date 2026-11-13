@@ -1,4 +1,3 @@
-import { assertChildStatus } from './fixtures/child-status.mjs';
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { EventEmitter } from 'node:events';
@@ -23,8 +22,8 @@ test('native JXA emits phase JSON on stderr with monotonic milliseconds and no a
       return 'ok';
     }
   `;
-  const result = spawnSync('osascript', ['-l', 'JavaScript', '-e', probe], { encoding: 'utf8', timeout: 10000, killSignal: 'SIGKILL' });
-  assertChildStatus(result, 0, result.stderr);
+  const result = spawnSync('osascript', ['-l', 'JavaScript', '-e', probe], { encoding: 'utf8', timeout: 10000 });
+  assert.equal(result.status, 0, result.stderr);
   assert.equal(result.stdout.trim(), 'ok');
   const events = result.stderr.trim().split('\n').map(line => {
     assert.ok(line.startsWith(prefix), line);

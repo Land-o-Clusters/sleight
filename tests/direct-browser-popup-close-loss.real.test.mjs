@@ -1,4 +1,3 @@
-import { testChromiumExecutable, readTestDevToolsPort, launchTestChromiumContext, closeTestChromium } from './fixtures/chromium-isolated.mjs';
 // A sign-in popup that closes itself must not cost turbo its connection (fowl loss study item 4, 2026-10-18).
 // Real headless Chromium behind the production selected connection, filter, page registry and tool runtime.
 // Only the process-proof providers are synthetic (the headless shell writes no SingletonLock).
@@ -17,7 +16,8 @@ import { snapshot, acknowledgeSnapshot } from '../plugins/sleight/lib/direct-bro
 
 const vendor = new URL('../plugins/sleight/vendor/playwright-core/', import.meta.url);
 const spec = JSON.parse(readFileSync(new URL('browsers.json', vendor))).browsers.find(b => b.name === 'chromium-headless-shell');
-const executable = testChromiumExecutable({ revision: spec.revision });
+const executable = join(homedir(), 'Library/Caches/ms-playwright', 'chromium_headless_shell-' + spec.revision,
+  'chrome-headless-shell-' + (process.platform === 'darwin' ? 'mac-' + process.arch : 'linux64'), 'chrome-headless-shell');
 const skip = process.env.SLEIGHT_LIVE_DOM_TEST !== '1' ? 'real Chromium qualification belongs to the host runner'
   : !existsSync(executable) ? 'the pinned headless Chromium is missing' : false;
 
@@ -46,12 +46,8 @@ async function fixture(t) {
   t.after(async () => {
     active = false;
     try {
-      await closeTestChromium(context, async () => {
-        try {
-          await runtime?.end().catch(() => {}); await browser?.close().catch(() => {}); await filter?.dispose().catch(() => {});
-          await listener?.close().catch(() => {}); await selected?.disconnect(selected.session).catch(() => {});
-        } finally { await context?.close(); }
-      });
+      await runtime?.end().catch(() => {}); await browser?.close().catch(() => {}); await filter?.dispose().catch(() => {});
+      await listener?.close().catch(() => {}); await selected?.disconnect(selected.session).catch(() => {}); await context?.close().catch(() => {});
     } finally {
       for (const socket of sockets) socket.destroy();
       if (server.listening) await new Promise(resolve => server.close(resolve));
@@ -61,8 +57,8 @@ async function fixture(t) {
   });
   await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
   origin = 'http://127.0.0.1:' + server.address().port;
-  context = await launchTestChromiumContext(chromium, root, { executablePath: executable, headless: true, args: ['--remote-debugging-port=0'], viewport: null });
-  const port = (await readTestDevToolsPort(root))[0], pid = process.pid, start = Date.now() - 600000;
+  context = await chromium.launchPersistentContext(root, { executablePath: executable, headless: true, args: ['--remote-debugging-port=0'], viewport: null });
+  const port = readFileSync(join(root, 'DevToolsActivePort'), 'utf8').trim().split('\n')[0], pid = process.pid, start = Date.now() - 600000;
   symlinkSync(hostname() + '-' + pid, join(root, 'SingletonLock'));
   selected = await createSelectedConnection({ config: { profileRoot: root, executable }, testDependencies: {
     processMetadata: async () => ({ uid: process.getuid(), pid, start, incarnation: `p${pid}-s${start}-u1` }),

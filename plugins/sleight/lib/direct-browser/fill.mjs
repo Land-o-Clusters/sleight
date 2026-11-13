@@ -410,7 +410,7 @@ export function createFillFields({ check, runSteps, backgroundClick = guardedCli
               if (from < 0 || current.length !== names.length) throw new FieldError('list changed; read it before continuing');
               if (from !== j) {
                 if (isV3Context(ctx)) await send((checked, target) => ctx.dragTo(target, children.nth(j)), 'drag', children.nth(from));
-                else throw Error('TRUSTED_TURN_REQUIRED');
+                else await send(() => children.nth(from).dragTo(children.nth(j), options), 'drag');
               }
             }
             if (!stopReason() && JSON.stringify(await loc.evaluate(order, undefined, options)) !== JSON.stringify(value)) throw new FieldError('order did not match; read the list');

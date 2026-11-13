@@ -1,4 +1,3 @@
-import { assertChildStatus } from './fixtures/child-status.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { mkdtempSync, rmSync, writeFileSync, mkdirSync } from 'node:fs';
@@ -108,11 +107,11 @@ test('native and race scorer CLIs expose --agent-seconds and preserve default sc
     writeFileSync(join(round, 'results.json'), JSON.stringify([{ task: { name: 'mdn' }, surface: 'cursor-cu', wallMs: 10000, agentSeconds: 2,
       successfulBrowserCalls: 1, outcome: { ok: true } }]));
     for (const opt of [[], ['--agent-seconds']]) {
-      const native = spawnSync(process.execPath, ['bench/claim-score.mjs', '--results', results, '--rules', rules, '--json', ...opt], { encoding: 'utf8', timeout: 60000, killSignal: 'SIGKILL' });
-      assertChildStatus(native, 0, native.stderr); const n = JSON.parse(native.stdout);
+      const native = spawnSync(process.execPath, ['bench/claim-score.mjs', '--results', results, '--rules', rules, '--json', ...opt], { encoding: 'utf8' });
+      assert.equal(native.status, 0, native.stderr); const n = JSON.parse(native.stdout);
       assert.equal(n.table.sleight.x.mean, opt.length ? 2 : 10);
-      const race = spawnSync(process.execPath, ['bench/fowl/race-score.mjs', round, '--json', ...opt], { encoding: 'utf8', timeout: 60000, killSignal: 'SIGKILL' });
-      assertChildStatus(race, 0, race.stderr); const r = JSON.parse(race.stdout);
+      const race = spawnSync(process.execPath, ['bench/fowl/race-score.mjs', round, '--json', ...opt], { encoding: 'utf8' });
+      assert.equal(race.status, 0, race.stderr); const r = JSON.parse(race.stdout);
       assert.equal(r.browsers.chrome.table['cursor-cu'].mdn.mean, opt.length ? 2 : 10);
       if (opt.length) { assert.match(n.timing, /agentSeconds/); assert.match(r.timing, /agentSeconds/); }
     }

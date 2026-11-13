@@ -1,4 +1,3 @@
-import { assertChildStatus } from './fixtures/child-status.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { chmodSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
@@ -11,9 +10,7 @@ import { fileURLToPath } from 'node:url';
 
 test('benchmark imports and non-parser guards work when TypeScript cannot resolve', () => {
   const modules = ['../bench/remote-approval-guard.mjs', '../bench/world/method-check.mjs',
-    '../bench/code-ast/oracle.mjs', '../bench/code-ast/statement-oracle.mjs', './requirements.mjs',
-    '../bench/replay/launcher-contract.mjs', '../bench/replay/mapping.mjs', '../bench/replay/allowlist.mjs',
-    '../bench/hand/check4-fixtures.mjs', '../bench/prompt-budget.mjs', '../bench/sf5-acquisition-count.mjs', '../scripts/compound-replay.mjs']
+    '../bench/code-ast/oracle.mjs', '../bench/code-ast/statement-oracle.mjs', './requirements.mjs']
     .map(path => new URL(path, import.meta.url).href);
   const child = spawnSync(process.execPath, ['--input-type=module', '-e', `
     import { registerHooks } from 'node:module';
@@ -22,27 +19,17 @@ test('benchmark imports and non-parser guards work when TypeScript cannot resolv
       if (name === 'typescript') throw Object.assign(Error('missing test parser'), { code: 'MODULE_NOT_FOUND' });
       return next(name, context);
     } });
-    const [guard, world, oracle, statements, requirements, launcher, mapping, allowlist, fixtures, budget, acquisitions, compound] = await Promise.all(${JSON.stringify(modules)}.map(url => import(url)));
+    const [guard, world, oracle, statements, requirements] = await Promise.all(${JSON.stringify(modules)}.map(url => import(url)));
     assert.equal(requirements.packageSkip('typescript'), 'needs the typescript dependency');
     assert.equal(guard.remoteGuardDecision({ tool_name: 'other' }), false);
     assert.equal(guard.remoteGuardDecision({ tool_name: 'mcp__plugin_sleight_computer__turn_ended',
       tool_input: { sleight_resume: true } }), true);
     assert.deepEqual(oracle.astCalls(null), []);
-    assert.deepEqual(mapping.elements('1 button Save').map(row => row.id), [1]);
-    assert.doesNotThrow(() => allowlist.assertReplayArguments({ app: 'TextEdit' }));
-    assert.equal(fixtures.recordedCoverage({ calls: [] }).crossWindowDrag, false);
-    assert.deepEqual(compound.recordedCompoundCalls(''), []);
-    for (const call of [() => launcher.requireReplayLauncher('/fixture'), () => new mapping.TargetMapper().code(''),
-      () => mapping.refreshCode({ code: '' }), () => allowlist.assertReplayArguments({ code: '' }),
-      () => budget.noticeInventory(), () => compound.compoundRecordedClicks(''),
-      () => acquisitions.countTranscript([{ type: 'assistant', message: { content: [
-        { type: 'tool_use', id: '1', name: 'mcp__plugin_sleight_computer__js', input: { code: 'await cua.getApp("TextEdit")' } }
-      ] } }])]) assert.throws(call, { code: 'MODULE_NOT_FOUND' });
     for (const call of [() => oracle.typescriptCalls(''), () => statements.justifyResult('', 'statements', { spans: [] }),
       () => world.dragMethodAudit(''), () => guard.remoteGuardDecision({ tool_name: 'mcp__plugin_sleight_computer__js',
         tool_input: { code: 'await app.getAXState()' } })]) assert.throws(call, { code: 'MODULE_NOT_FOUND' });
-  `], { encoding: 'utf8', timeout: 10000, killSignal: 'SIGKILL' });
-  assertChildStatus(child, 0, child.stderr);
+  `], { encoding: 'utf8', timeout: 10000 });
+  assert.equal(child.status, 0, child.stderr);
 });
 
 test('every parser-dependent test skips when TypeScript resolution is blocked', t => {
@@ -53,15 +40,13 @@ test('every parser-dependent test skips when TypeScript resolution is blocked', 
       return next(name, context);
     } });
   `);
-  const files = ['code-ast-oracle', 'statement-oracle', 'code-ast-batch', 'remote-approval-live', 'shell-guard', 'turn-stats-mod',
-    'bench-replay-ch4', 'bench-replay-fixture-receipts', 'compat-contract', 'compound-labels', 'compound-replay',
-    'hand-check4-fixtures', 'sf5-acquisition-count', 'prompt-budget']
+  const files = ['code-ast-oracle', 'statement-oracle', 'code-ast-batch', 'remote-approval-live', 'shell-guard', 'turn-stats-mod']
     .map(name => new URL(`./${name}.test.mjs`, import.meta.url));
   const env = { ...process.env };
   delete env.NODE_TEST_CONTEXT;
   const child = spawnSync(process.execPath, ['--import', preload, '--test', '--test-concurrency=1', '--test-reporter=tap',
-    ...files.map(fileURLToPath)], { env, encoding: 'utf8', timeout: 30000, killSignal: 'SIGKILL' });
-  assertChildStatus(child, 0, child.stdout + child.stderr);
+    ...files.map(fileURLToPath)], { env, encoding: 'utf8', timeout: 30000 });
+  assert.equal(child.status, 0, child.stdout + child.stderr);
   assert.match(child.stdout, /^# fail 0$/m);
   assert.match(child.stdout, /# SKIP needs the typescript dependency/);
   const counts = Object.fromEntries(['tests', 'pass', 'fail', 'skipped'].map(key =>

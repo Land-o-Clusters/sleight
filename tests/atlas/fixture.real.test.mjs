@@ -1,4 +1,3 @@
-import { testChromiumExecutable, launchTestChromium } from '../fixtures/chromium-isolated.mjs';
 // Shared atlas harness. Only the host runner may launch these headless fixtures.
 import assert from 'node:assert/strict';
 import { createServer } from 'node:http';
@@ -27,7 +26,9 @@ export async function atlas(t, groups) {
   const pin = JSON.parse(readFileSync(new URL('../../plugins/sleight/vendor/playwright-core/browsers.json', import.meta.url)))
     .browsers.find(b => b.name === 'chromium-headless-shell');
   assert.equal(pin.revision, '1248', 'atlas qualification pins Chromium revision 1248');
-  const executablePath = testChromiumExecutable({ revision: pin.revision });
+  const platform = process.platform === 'darwin' ? 'mac-' + process.arch : 'linux64';
+  const executablePath = join(homedir(), 'Library/Caches/ms-playwright', 'chromium_headless_shell-' + pin.revision,
+    'chrome-headless-shell-' + platform, 'chrome-headless-shell');
   assert.ok(existsSync(executablePath), 'host qualification needs pinned Chromium; no dependency skips');
   const routes = new Map(), sockets = new Set();
   const server = createServer((req, res) => {
@@ -46,7 +47,7 @@ export async function atlas(t, groups) {
   const tables = new Map();
   try {
     const runtime = loadPlaywrightCore({ turbo: true });
-    browser = await launchTestChromium(runtime.inprocess.playwright.chromium, { headless: true, executablePath });
+    browser = await runtime.inprocess.playwright.chromium.launch({ headless: true, executablePath });
     assert.equal(browser.version(), pin.browserVersion);
     t.diagnostic('AT1 runtime ' + JSON.stringify({ chromium: browser.version(), revision: pin.revision, playwright: '1.64.0', headless: true }));
     for (const [group, cases] of groups) {

@@ -1,4 +1,3 @@
-import { MOD_META } from './fixtures/mod-attribution.mjs';
 import { test } from './macos-only.mjs';
 import assert from 'node:assert/strict';
 import { PassThrough } from 'node:stream';
@@ -225,12 +224,9 @@ test('pause and resume during text-save preflight cannot admit a new internal pr
   assert.match(JSON.stringify(h.received), /Paused by the user/);
 });
 
-for (const observed of [
-  { status: 'mismatch', error: 'the native window changed' },
-  { status: 'mismatch', error: 'native window identity is unavailable' },
-]) test(`a confirmed native mismatch during preflight still stops before writing: ${observed.error}`, async t => {
+test('a confirmed native mismatch during preflight still stops before writing', async t => {
   const h = fixture(t, { prepareTextWrite: (target, current) => prepareTextWrite(target, current, {
-    identity: async () => observed, run: async () => ({ ok: true }),
+    identity: async () => ({ status: 'mismatch', error: 'the native window changed' }), run: async () => ({ ok: true }),
   }) });
   h.call(1, 'await app.setValue(2, "updated"); await app.pressKey("cmd+s");');
   await tick();
@@ -247,22 +243,6 @@ test('incomplete identity metadata is unavailable and keeps the original guarded
   assert.equal(h.sent.length, 1);
   assert.equal(h.sent[0].id, 1);
   assert.match(h.sent[0].params.arguments.code, /await app\.setValue\(2, "updated"\)/);
-  assert.match(h.sent[0].params.arguments.code, /await app\.pressKey\("cmd\+s"\)/);
-  assert.equal(h.settled.length, 0);
-});
-
-test('ambiguous identity preflight keeps the original guarded write and save', async t => {
-  const h = fixture(t, { prepareTextWrite: (target, current) => prepareTextWrite(target, current, {
-    identity: async () => ({ ...target, status: 'ok', matches: 2, epoch: 'helper', window: 1, pid: 321, processStart: 42 }),
-    run: async () => ({ ok: true }),
-  }) });
-  h.call(1, 'await app.setValue(2, "updated"); await app.pressKey("cmd+s");');
-  await tick();
-  assert.equal(h.sent.length, 1);
-  assert.equal(h.sent[0].id, 1);
-  assert.match(h.sent[0].params.arguments.code, /await app\.setValue\(2, "updated"\)/);
-  assert.match(h.sent[0].params.arguments.code, /await app\.pressKey\("cmd\+s"\)/);
-  assert.equal(h.settled.length, 0);
 });
 
 test('a changed process reported by the native settle still prevents saving', async t => {
@@ -320,7 +300,7 @@ test('stop and resume cannot revive a save waiting for its settle helper', async
   h.call(1, 'await app.setValue(2, "updated"); await app.pressKey("super+s");');
   h.reply(h.sent.at(-1).id); await tick();
   const end = (id, args) => h.clientIn.write(JSON.stringify({ jsonrpc: '2.0', id, method: 'tools/call',
-    params: { name: 'turn_ended', _meta: MOD_META, arguments: args } }) + '\n');
+    params: { name: 'turn_ended', arguments: args } }) + '\n');
   end(2, { sleight_stop: true }); assert.equal(current(), false);
   await new Promise(resolve => setTimeout(resolve, 10));
   end(3, { sleight_resume: true }); finish(); await tick();

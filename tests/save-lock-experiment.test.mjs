@@ -1,4 +1,3 @@
-import { assertChildStatus } from './fixtures/child-status.mjs';
 // Constructed macOS paths are synthetic validation and redaction data, never allocation roots.
 const MAC_TMP = ['', 'private', 'tmp'].join('/');
 const MAC_USERS = ['', 'Users', ''].join('/');
@@ -211,8 +210,8 @@ test('Open panel stages are never captured and evidence drops panel frames', () 
 test('dry-run prints the Open-panel plus engine-save plan and does not take the live lock', () => {
   const lock = '/tmp/sleight-live.lock';
   const before = existsSync(lock);
-  const result = spawnSync(process.execPath, [runner, '--dry-run'], { encoding: 'utf8', timeout: 60000, killSignal: 'SIGKILL' });
-  assertChildStatus(result, 0, result.stderr);
+  const result = spawnSync(process.execPath, [runner, '--dry-run'], { encoding: 'utf8' });
+  assert.equal(result.status, 0, result.stderr);
   const plan = JSON.parse(result.stdout);
   assert.equal(plan.dryRun, true);
   assert.equal(plan.lock, false);
@@ -237,8 +236,8 @@ test('dry-run prints the Open-panel plus engine-save plan and does not take the 
 });
 
 test('delivery-check dry-run names typed keys, engine Cmd+S, and a 2 s save bound', () => {
-  const result = spawnSync(process.execPath, [runner, '--dry-run', '--delivery-check'], { encoding: 'utf8', timeout: 60000, killSignal: 'SIGKILL' });
-  assertChildStatus(result, 0, result.stderr);
+  const result = spawnSync(process.execPath, [runner, '--dry-run', '--delivery-check'], { encoding: 'utf8' });
+  assert.equal(result.status, 0, result.stderr);
   const plan = JSON.parse(result.stdout);
   assert.equal(plan.deliveryCheck, true);
   assert.equal(plan.steps.saveWithinMs, 2000);

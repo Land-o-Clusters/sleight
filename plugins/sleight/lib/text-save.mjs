@@ -49,9 +49,8 @@ export async function prepareTextWrite(target, current, { identity, run }) {
   let checked;
   try { checked = verifyWindowIdentity(target, observed); }
   catch (error) {
-    // Fixed identity steps still allow unavailable metadata to use the guarded call.
     error.textSaveStop = observed?.status === 'mismatch' ||
-      !/^Input lease: (?:step=[a-z-]+ )?(?:native window identity is unavailable|window identity is ambiguous)/.test(error.message);
+      !/^Input lease: (?:native window identity is unavailable|window identity is ambiguous)/.test(error.message);
     throw error;
   }
   if (!current()) throw new Error('Text save was stopped before settling.');

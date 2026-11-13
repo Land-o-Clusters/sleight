@@ -130,7 +130,7 @@ test('a publisher crash cannot leave future inventory refreshes locked out', asy
   mkdirSync(`${f.file}.publish`); // An abandoned directory from the earlier lock implementation.
   const code = `import {DatabaseSync} from 'node:sqlite'; const db=new DatabaseSync(process.argv[1]);
     db.exec('BEGIN IMMEDIATE'); process.exit(0);`;
-  execFileSync(process.execPath, ['--input-type=module', '-e', code, `${f.file}.publish.sqlite`], { timeout: 60000, killSignal: 'SIGKILL' });
+  execFileSync(process.execPath, ['--input-type=module', '-e', code, `${f.file}.publish.sqlite`]);
   await selectSurfaces(f.server(), {}, f.options).refresh();
   const next = f.server(); selectSurfaces(next, {}, f.options);
   assert.equal(next.env.CUA_REPL_ENABLED_SURFACES, 'browser,computer');
@@ -145,7 +145,7 @@ test('unsafe cache files fail closed without following links or reading special 
     () => symlinkSync(positive, f.file),
     () => writeFileSync(f.file, Buffer.alloc(2048)),
     () => { writeFileSync(f.file, valid); chmodSync(f.file, 0o666); },
-    () => execFileSync('/usr/bin/mkfifo', [f.file], { timeout: 30000, killSignal: 'SIGKILL' }),
+    () => execFileSync('/usr/bin/mkfifo', [f.file]),
   ]) {
     rmSync(f.file, { force: true }); prepare();
     const server = f.server(); selectSurfaces(server, {}, f.options);

@@ -1,26 +1,13 @@
-import { test, describe } from 'node:test';
-import { localBackendSkip, localBackends, nativeLocal } from './fixtures/mac-driver-tools.mjs';
+import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import vm from 'node:vm';
 
-for (const backend of localBackends) describe(backend, { skip: localBackendSkip(backend) }, () => {
 const window = (pid, onScreen, extra = {}) => ({ onScreen, info: { kCGWindowOwnerPID: pid, kCGWindowLayer: 0, kCGWindowAlpha: 1,
   kCGWindowBounds: { Width: 600, Height: 400 }, ...extra } });
 
 function probe({ trusted = true, error = 0, count = 1, apps = ['com.apple.TextEdit'], name = 'TextEdit', timeoutError = 0, hidden = false,
-  minimized = [], cg = [window(42, true)], fullScreen = false, spaces, connection = 7, bindThrows = false, processStart = 1 } = {}) {
-  if (backend === 'driver') {
-    const calls = [], preceding = [];
-    const fixture = { trusted, error, timeoutError, fullScreen, spaces, connection, bindThrows,
-      cg: cg.map(w => ({ ...w.info, kCGWindowIsOnscreen: w.onScreen })),
-       apps: apps.map(appId => ({ appId, name, path: '/System/Applications/TextEdit.app', pid: 42, hidden, processStart,
-        tree: { AXWindows: Array.from({ length: count }, (_, i) => ({ AXMinimized: minimized[i] === true })) } })) };
-    return { calls, run: (app, deadlineSeconds = 0.5) => {
-      const args = { app, deadlineSeconds }, f = nativeLocal('app-health.js', args, fixture, preceding);
-      preceding.push({ script: 'app-health.js', args, fixture }); calls.push(...f.events); return f.result;
-    } };
-  }
+  minimized = [], cg = [window(42, true)], fullScreen = false, spaces, connection = 7, bindThrows = false } = {}) {
   const calls = [];
   const $ = value => value;
   const array = values => ({ count: values.length, objectAtIndex: i => values[i],
@@ -33,7 +20,6 @@ function probe({ trusted = true, error = 0, count = 1, apps = ['com.apple.TextEd
     AXIsProcessTrusted: () => trusted,
     NSWorkspace: { sharedWorkspace: { frontmostApplication: { processIdentifier: 9, isNil: () => false }, runningApplications: array(apps.map(id => ({
       localizedName: name, bundleIdentifier: id, bundleURL: { path: '/System/Applications/TextEdit.app' }, processIdentifier: 42, hidden,
-      launchDate: { timeIntervalSince1970: processStart },
       valueForKeyPath(key) { return key.split('.').reduce((value, part) => value?.[part], this); },
     }))) } },
     kCGWindowListOptionOnScreenOnly: 1, kCGWindowListOptionAll: 0, kCGWindowListExcludeDesktopElements: 16,
@@ -60,18 +46,6 @@ function probe({ trusted = true, error = 0, count = 1, apps = ['com.apple.TextEd
   vm.runInContext(readFileSync(new URL('../plugins/sleight/lib/app-health.js', import.meta.url), 'utf8'), context);
   return { run: (selector, deadlineSeconds) => JSON.parse(context.run([JSON.stringify(selector), JSON.stringify(deadlineSeconds)])), calls };
 }
-test('read health carries process start and existing server numbers for identity baseline reuse', () => {
-  const p = probe({ processStart: 17, cg: [window(42, true, { kCGWindowNumber: 11 }), window(99, true, { kCGWindowNumber: 22 })] });
-  const observed = p.run('TextEdit');
-  assert.equal(observed.pid, 42);
-  assert.equal(observed.processStart, 17);
-  assert.deepEqual(observed.windowNumbers, [11]);
-  for (const processStart of [undefined, null, 0, 'invalid']) {
-    const invalid = probe({ processStart: processStart === undefined ? NaN : processStart }).run('TextEdit');
-    assert.equal(invalid.status, 'responding');
-    assert.equal('processStart' in invalid, false);
-  }
-});
 test('a longer diagnostic probe applies its requested AX deadline', () => {
   const p = probe();
   assert.equal(p.run('TextEdit', 3).status, 'responding');
@@ -151,6 +125,4 @@ test('spaceWindows counts the windows a Space holds, leaving out ordered-out one
   assert.equal(broken.calls.filter(c => c[0] === 'bind').length, 1);
   // A probe that times out on AX still reports it, like the other counts.
   assert.equal(probe({ error: -25204, cg: [shown, hidden], spaces: { 311216: [4], 311209: [] } }).run('TextEdit').spaceWindows, 1);
-});
-
 });

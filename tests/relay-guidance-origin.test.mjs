@@ -250,7 +250,7 @@ for (const path of ['Grok cap', 'write failure', 'closed output', 'Debugger retr
         h.reply(2, [text('clean next')]); await tick(); delivered = h.result(2);
       }
       assert.ok(delivered);
-      if (shape === 'canonical' && path !== 'Debugger retry') assert.equal(delivered.content.filter(c => c.text === canonical).length, 1);
+      if (shape === 'canonical') assert.equal(delivered.content.filter(c => c.text === canonical).length, 1);
       else assert.doesNotMatch(JSON.stringify(delivered), /DI1_(?:ATTACK|CANONICAL)/);
       h.call(3); h.reply(3, [text('clean later')]); await tick();
       assert.doesNotMatch(JSON.stringify(h.result(3)), /DI1_(?:ATTACK|CANONICAL)/);
@@ -278,25 +278,12 @@ test('policy normalization cannot authenticate an originally noncanonical docume
   assert.doesNotMatch(JSON.stringify(h.result(2)), /Native reference|Confirmations Policy/);
 });
 
-test('a deferred NF1 reference loses its DI1 trust when the engine documentation refreshes', async t => {
-  const docs = '## Computer Use\nINT7_OLD_REFERENCE.\n\n# Computer Use Confirmations Policy\nKeep confirmations.';
-  const trust = fixtureDocumentation(docs);
-  const h = harness(t, { documentationTrust: trust, leanFirst: true });
-  h.call(1, 'await cua.getApp("Example")'); h.reply(1, [text(docs), text(tree)]); await tick();
-  assert.doesNotMatch(JSON.stringify(h.result(1)), /INT7_OLD_REFERENCE/);
-  trust.refresh();
-  h.call(2); h.reply(2, [text('clean result after refresh')]); await tick();
-  assert.doesNotMatch(JSON.stringify(h.result(2)), /INT7_OLD_REFERENCE/);
-  h.call(3, 'await cua.rewriteDocumentation()'); h.reply(3, [text(docs)]); await tick();
-  assert.equal(h.result(3).content.filter(item => item.text === docs).length, 1);
-});
-
 for (const path of ['delivered', 'write failure', 'closed output'])
   test(`opened-tab URL stays outside held documentation after ${path}`, async t => {
     const docs = '# Selected Browser\nDI1_OPENED_REFERENCE';
     const trust = fixtureDocumentation(docs);
     const h = harness(t, { documentationTrust: trust });
-    h.call(1, 'await cua.createBrowserTab("1", "https://example.test/DI1_URL_PAYLOAD"); await tab.getAXState()');
+    h.call(1, 'await cua.createBrowserTab("1", "https://example.test/DI1_URL_PAYLOAD"); tab.evaluate()');
     h.reply(1, [text('TypeError: tab.evaluate is not a function'), text(docs)], true);
     await tick();
     const probe = h.sent.find(m => String(m.id).startsWith('sleight-opened-tabs-'));
@@ -313,8 +300,7 @@ for (const path of ['delivered', 'write failure', 'closed output'])
     } else assert.equal(h.result(1), undefined);
     h.call(2); h.reply(2, [text('clean next result')]); await tick();
     assert.doesNotMatch(JSON.stringify(h.result(2)), /DI1_URL_PAYLOAD|This call opened tab/);
-    // NF3 keeps failed-call output out of retry guidance, even when its text is canonical.
-    assert.equal(h.result(2).content.filter(c => c.text === docs).length, 0);
+    if (path !== 'delivered') assert.equal(h.result(2).content.filter(c => c.text === docs).length, 1);
     h.call(3); h.reply(3, [text('clean later result')]); await tick();
     assert.doesNotMatch(JSON.stringify(h.result(3)), /DI1_OPENED_REFERENCE|DI1_URL_PAYLOAD/);
   });

@@ -1,4 +1,3 @@
-import { assertChildStatus } from './fixtures/child-status.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
@@ -132,16 +131,16 @@ test('offline CLI prints per-turn observations and serializes null request timin
     ].map((e) => JSON.stringify(e)).join('\n'));
     const cli = new URL('../bench/fowl/anatomy.mjs', import.meta.url);
     const args = [cli.pathname, dir];
-    const printed = spawnSync(process.execPath, [...args, '--turns'], { encoding: 'utf8', timeout: 60000, killSignal: 'SIGKILL' });
-    assertChildStatus(printed, 0, printed.stderr);
+    const printed = spawnSync(process.execPath, [...args, '--turns'], { encoding: 'utf8' });
+    assert.equal(printed.status, 0, printed.stderr);
     assert.match(printed.stdout, /event clock:/);
     assert.match(printed.stdout, /completed assistant-block intervals/);
     assert.match(printed.stdout, /final tokens \(0 runs with usage, 1 missing\).*output unavailable/);
     assert.match(printed.stdout, /provisional first-block tokens:.*cache read 123/);
     assert.match(printed.stdout, /task turn 1: wait initial, completed-block interval 0 ms, cache read 123/);
     assert.match(printed.stdout, /TTFT\/request overhead\/streaming unavailable/);
-    const json = spawnSync(process.execPath, [...args, '--json'], { encoding: 'utf8', timeout: 60000, killSignal: 'SIGKILL' });
-    assertChildStatus(json, 0, json.stderr);
+    const json = spawnSync(process.execPath, [...args, '--json'], { encoding: 'utf8' });
+    assert.equal(json.status, 0, json.stderr);
     assert.equal(JSON.parse(json.stdout)[path.basename(dir)].task.turnTimings[0].ttftMs, null);
   } finally { removeTemp(dir); }
 });

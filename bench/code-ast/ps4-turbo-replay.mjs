@@ -1,4 +1,3 @@
-import { benchEvidencePath } from '../runtime-options.mjs';
 // Inspect saved Chrome/Helium cells. Caller code is parsed, never executed.
 // The page guards are unchanged in PS4. Pins make this a baseline audit, not a
 // qualification claim for a future AST replacement of those guards.
@@ -7,13 +6,14 @@ import { createHash } from 'node:crypto';
 import { createReadStream, lstatSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { createInterface } from 'node:readline';
 import { join } from 'node:path';
+import { homedir } from 'node:os';
 import { evaluateWrite } from '../../plugins/sleight/lib/evaluate-write.mjs';
 import { withoutPageCallbacks } from '../../plugins/sleight/lib/page-callbacks.mjs';
 import { unawaitedAction } from '../../plugins/sleight/lib/relay.mjs';
 import { parseCell, walk, memberCall } from '../../plugins/sleight/lib/code-ast.mjs';
 
 const digest = source => createHash('sha256').update(source).digest('hex');
-const root = benchEvidencePath('race-1017');
+const root = join(homedir(), 'Projects/sleight-wt/race-1017');
 const before = '2026-10-28T07:28:00Z';
 const pins = {
   'evaluate-write.mjs': '375161e8e87fcc65054c428152fc5dbbffc38e2506fb4de2f6027a73471564f6',
@@ -105,7 +105,7 @@ for (const [browser, count] of Object.entries(counts)) {
   assert.ok(count.cells > 0, browser + ' cells');
   assert.ok(count.turboCalls > 0, browser + ' turbo coverage');
 }
-const result = { base: 'c9fb85bb', before, bank: '<private-evidence>/race-1017', counts, malformed, assessment,
+const result = { base: 'c9fb85bb', before, bank: '~/Projects/sleight-wt/race-1017', counts, malformed, assessment,
   manifest: manifest.digest('hex'), outputDigest: outputs.digest('hex'), sourcePins: pins,
   awaitSectionSha256: digest(awaitSection), changedGuardModules: 0, pageGuardMigrationQualified: false,
   note: 'Unchanged-guard baseline audit. No parser replacement of either page guard was qualified.' };

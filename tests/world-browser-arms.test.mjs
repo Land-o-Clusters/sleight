@@ -1,4 +1,3 @@
-import { assertChildStatus } from './fixtures/child-status.mjs';
 // Constructed macOS paths are synthetic validation and redaction data, never allocation roots.
 const MAC_TMP = ['', 'private', 'tmp'].join('/');
 import { test } from 'node:test';
@@ -73,8 +72,8 @@ test('each setup script pins its packages and dry-run writes nothing', (t) => {
     const target = join(parent, surface);
     const script = join(root, 'bench/world/arms', surface, 'setup.sh');
     assert.ok(existsSync(script), surface);
-    const run = spawnSync('/bin/sh', [script, '--dry-run', target], { encoding: 'utf8', timeout: 60000, killSignal: 'SIGKILL' });
-    assertChildStatus(run, 0, run.stderr);
+    const run = spawnSync('/bin/sh', [script, '--dry-run', target], { encoding: 'utf8' });
+    assert.equal(run.status, 0, run.stderr);
     assert.equal(existsSync(target), false);
     const plan = JSON.parse(run.stdout);
     if (surface === 'claude-cu') assert.equal(plan.supported, true);
@@ -95,12 +94,12 @@ test('the patched runner dry-runs every new surface without spawning an agent or
   if (!existsSync(join(cache, '.git'))) return t.skip('pinned FowlBrowser cache is absent');
   const dir = trackTemp(mkdtempSync(join(tmpdir(), 'sleight-world-runner-')));
   t.after(() => rmSync(dir, { recursive: true, force: true }));
-  const original = spawnSync('/usr/bin/git', ['-C', cache, 'show', '6a12d60:tools/rounds.mjs'], { encoding: 'utf8', maxBuffer: 4 * 1024 * 1024, timeout: 30000, killSignal: 'SIGKILL' });
-  assertChildStatus(original, 0, original.stderr);
+  const original = spawnSync('/usr/bin/git', ['-C', cache, 'show', '6a12d60:tools/rounds.mjs'], { encoding: 'utf8', maxBuffer: 4 * 1024 * 1024 });
+  assert.equal(original.status, 0, original.stderr);
   mkdirSync(join(dir, 'tools'));
   writeFileSync(join(dir, 'tools/rounds.mjs'), original.stdout);
-  const apply = spawnSync('/usr/bin/git', ['apply', join(root, 'bench/fowl/sleight-surface.patch')], { cwd: dir, encoding: 'utf8', timeout: 30000, killSignal: 'SIGKILL' });
-  assertChildStatus(apply, 0, apply.stderr);
+  const apply = spawnSync('/usr/bin/git', ['apply', join(root, 'bench/fowl/sleight-surface.patch')], { cwd: dir, encoding: 'utf8' });
+  assert.equal(apply.status, 0, apply.stderr);
   const patched = readFileSync(join(dir, 'tools/rounds.mjs'), 'utf8');
   const grader = source => source.slice(source.indexOf('export function gradeSite('), source.indexOf('export function gradeSite(') + 1500);
   assert.equal(grader(patched), grader(original.stdout));
@@ -112,8 +111,8 @@ test('the patched runner dry-runs every new surface without spawning an agent or
   for (const surface of surfaces) {
     const output = join(dir, 'never-written', surface);
     const run = spawnSync(process.execPath, [join(dir, 'tools/rounds.mjs'), '--surface', surface, '--tasks', tasks, '--out', output, '--model', 'haiku', '--effort', 'high', '--dry-run', '--chrome-device-file', deviceFile, '--chrome-local-state', localState],
-      { cwd: tmpdir(), encoding: 'utf8', env: { ...process.env, SLEIGHT_REPO: root }, timeout: 60000, killSignal: 'SIGKILL' });
-    assertChildStatus(run, 0, run.stderr);
+      { cwd: tmpdir(), encoding: 'utf8', env: { ...process.env, SLEIGHT_REPO: root } });
+    assert.equal(run.status, 0, run.stderr);
     const plan = JSON.parse(run.stdout)[0];
     assert.equal(existsSync(output), false);
     if (surface === 'claude-cu') {

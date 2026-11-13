@@ -1,25 +1,10 @@
-import { test, describe, before } from 'node:test';
-import { localBackendSkip, localBackends, nativeLocal, localInputFixture, prepareNativeToolsFixture } from './fixtures/mac-driver-tools.mjs';
+import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import vm from 'node:vm';
 
-for (const backend of localBackends) describe(backend, { skip: localBackendSkip(backend) }, () => {
-before(() => { if (backend === 'driver') prepareNativeToolsFixture(); });
 const source = readFileSync(new URL('../plugins/sleight/lib/menubar.js', import.meta.url), 'utf8');
 function fixture(idle) {
-  if (backend === 'driver') {
-    const calls = [], saved = { x: 400, y: 500 }; let elapsed = 0;
-    return { calls, saved, elapsed: () => elapsed, click: () => {
-      let values = [], idleError = false;
-      try { values = Array.from({ length: 21 }, (_, i) => idle(i / 2)); } catch { idleError = true; }
-      const input = localInputFixture();
-      const f = nativeLocal('real-click', input.args, { ...input.fixture, idle: values, idleError, logGeometry: true, saved,
-        clickPID: 42 });
-      calls.push(...f.events); elapsed = f.elapsed;
-      if (!f.result.ok) throw new Error(f.result.error);
-    } };
-  }
   const calls = [], saved = { x: 400, y: 500 };
   let time = 0;
   const native = {
@@ -87,6 +72,4 @@ test('menu bar does not click if reading recent human input fails', () => {
   const f = fixture(() => { throw new Error('input state unavailable'); });
   assert.throws(f.click, /input state unavailable/);
   assert.deepEqual(f.calls.map(c => c[0]), ['idle']);
-});
-
 });

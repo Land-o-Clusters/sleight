@@ -113,7 +113,7 @@
             "task": "safari-form",
             "run": 1,
             "passed": false,
-            "reason": "Fixture setup failed: <private-evidence>/real-use-tasks/bench/real-fixture.js: execution error: Error: Error: Fixture menu item unavailable or ambiguous (-2700)",
+            "reason": "Fixture setup failed: ~/Projects/sleight-wt/real-use-tasks/bench/real-fixture.js: execution error: Error: Error: Fixture menu item unavailable or ambiguous (-2700)",
             "fixtureDiagnostics": [
               {
                 "app": "Safari",
@@ -137,7 +137,7 @@
             "task": "safari-form",
             "run": 2,
             "passed": false,
-            "reason": "Fixture setup failed: <private-evidence>/real-use-tasks/bench/real-fixture.js: execution error: Error: Error: Fixture menu item unavailable or ambiguous (-2700)",
+            "reason": "Fixture setup failed: ~/Projects/sleight-wt/real-use-tasks/bench/real-fixture.js: execution error: Error: Error: Fixture menu item unavailable or ambiguous (-2700)",
             "fixtureDiagnostics": [
               {
                 "app": "Safari",
@@ -161,7 +161,7 @@
             "task": "safari-form",
             "run": 3,
             "passed": false,
-            "reason": "Fixture setup failed: <private-evidence>/real-use-tasks/bench/real-fixture.js: execution error: Error: Error: Fixture menu item unavailable or ambiguous (-2700)",
+            "reason": "Fixture setup failed: ~/Projects/sleight-wt/real-use-tasks/bench/real-fixture.js: execution error: Error: Error: Fixture menu item unavailable or ambiguous (-2700)",
             "fixtureDiagnostics": [
               {
                 "app": "Safari",
@@ -372,7 +372,7 @@
             "task": "preview-pdf",
             "run": 1,
             "passed": false,
-            "reason": "Fixture setup failed: <private-evidence>/real-use-tasks/bench/real-fixture.js: execution error: Error: Error: Fixture application readiness unconfirmed (-2700)",
+            "reason": "Fixture setup failed: ~/Projects/sleight-wt/real-use-tasks/bench/real-fixture.js: execution error: Error: Error: Fixture application readiness unconfirmed (-2700)",
             "cleanupError": "Launched Preview quit unconfirmed",
             "fixtureDiagnostics": [
               {
@@ -430,7 +430,7 @@
             "task": "preview-pdf",
             "run": 1,
             "passed": false,
-            "reason": "Fixture setup failed: <private-evidence>/real-use-tasks/bench/real-fixture.js: execution error: Error: Error: Fixture application readiness unconfirmed (-2700)",
+            "reason": "Fixture setup failed: ~/Projects/sleight-wt/real-use-tasks/bench/real-fixture.js: execution error: Error: Error: Fixture application readiness unconfirmed (-2700)",
             "fixtureDiagnostics": [
               {
                 "app": "Preview",
@@ -453,7 +453,7 @@
             "task": "preview-pdf",
             "run": 2,
             "passed": false,
-            "reason": "Fixture setup failed: <private-evidence>/real-use-tasks/bench/real-fixture.js: execution error: Error: Error: Fixture application readiness unconfirmed (-2700)",
+            "reason": "Fixture setup failed: ~/Projects/sleight-wt/real-use-tasks/bench/real-fixture.js: execution error: Error: Error: Fixture application readiness unconfirmed (-2700)",
             "fixtureDiagnostics": [
               {
                 "app": "Preview",
@@ -669,7 +669,7 @@
             "task": "textedit-calculator",
             "run": 1,
             "passed": false,
-            "reason": "Fixture setup failed: <private-evidence>/real-use-tasks/bench/real-fixture.js: execution error: Error: Error: Fixture application readiness unconfirmed (-2700)",
+            "reason": "Fixture setup failed: ~/Projects/sleight-wt/real-use-tasks/bench/real-fixture.js: execution error: Error: Error: Fixture application readiness unconfirmed (-2700)",
             "fixtureDiagnostics": [
               {
                 "app": "TextEdit",
@@ -692,7 +692,7 @@
             "task": "textedit-calculator",
             "run": 2,
             "passed": false,
-            "reason": "Fixture setup failed: <private-evidence>/real-use-tasks/bench/real-fixture.js: execution error: Error: Error: Fixture application readiness unconfirmed (-2700)",
+            "reason": "Fixture setup failed: ~/Projects/sleight-wt/real-use-tasks/bench/real-fixture.js: execution error: Error: Error: Fixture application readiness unconfirmed (-2700)",
             "fixtureDiagnostics": [
               {
                 "app": "TextEdit",
@@ -715,7 +715,7 @@
             "task": "textedit-calculator",
             "run": 3,
             "passed": false,
-            "reason": "Fixture setup failed: <private-evidence>/real-use-tasks/bench/real-fixture.js: execution error: Error: Error: Fixture application readiness unconfirmed (-2700)",
+            "reason": "Fixture setup failed: ~/Projects/sleight-wt/real-use-tasks/bench/real-fixture.js: execution error: Error: Error: Fixture application readiness unconfirmed (-2700)",
             "fixtureDiagnostics": [
               {
                 "app": "TextEdit",
@@ -804,7 +804,7 @@
       "passed": false,
       "modelStarted": false,
       "seconds": null,
-      "reason": "Fixture setup failed: <private-evidence>/real-use-tasks/bench/real-fixture.js: execution error: Error: Error: Fixture menu item unavailable or ambiguous (-2700)",
+      "reason": "Fixture setup failed: ~/Projects/sleight-wt/real-use-tasks/bench/real-fixture.js: execution error: Error: Error: Fixture menu item unavailable or ambiguous (-2700)",
       "cleanupError": null
     },
     {
@@ -815,7 +815,7 @@
       "passed": false,
       "modelStarted": false,
       "seconds": null,
-      "reason": "Fixture setup failed: <private-evidence>/real-use-tasks/bench/real-fixture.js: execution error: Error: Error: Fixture menu item unavailable or ambiguous (-2700)",
+      "reason": "Fixture setup failed: ~/Projects/sleight-wt/real-use-tasks/bench/real-fixture.js: execution error: Error: Error: Fixture menu item unavailable or ambiguous (-2700)",
       "cleanupError": null
     },
     {
@@ -826,7 +826,7 @@
       "passed": false,
       "modelStarted": false,
       "seconds": null,
-      "reason": "Fixture setup failed: <private-evidence>/real-use-tasks/bench/real-fixture.js: execution error: Error: Error: Fixture menu item unavailable or ambiguous (-2700)",
+      "reason": "Fixture setup failed: ~/Projects/sleight-wt/real-use-tasks/bench/real-fixture.js: execution error: Error: Error: Fixture menu item unavailable or ambiguous (-2700)",
       "cleanupError": null
     },
     {
@@ -870,7 +870,7 @@
       "passed": false,
       "modelStarted": false,
       "seconds": null,
-      "reason": "Fixture setup failed: <private-evidence>/real-use-tasks/bench/real-fixture.js: execution error: Error: Error: Fixture application readiness unconfirmed (-2700)",
+      "reason": "Fixture setup failed: ~/Projects/sleight-wt/real-use-tasks/bench/real-fixture.js: execution error: Error: Error: Fixture application readiness unconfirmed (-2700)",
       "cleanupError": "Launched Preview quit unconfirmed"
     },
     {
@@ -881,7 +881,7 @@
       "passed": false,
       "modelStarted": false,
       "seconds": null,
-      "reason": "Fixture setup failed: <private-evidence>/real-use-tasks/bench/real-fixture.js: execution error: Error: Error: Fixture application readiness unconfirmed (-2700)",
+      "reason": "Fixture setup failed: ~/Projects/sleight-wt/real-use-tasks/bench/real-fixture.js: execution error: Error: Error: Fixture application readiness unconfirmed (-2700)",
       "cleanupError": null
     },
     {
@@ -892,7 +892,7 @@
       "passed": false,
       "modelStarted": false,
       "seconds": null,
-      "reason": "Fixture setup failed: <private-evidence>/real-use-tasks/bench/real-fixture.js: execution error: Error: Error: Fixture application readiness unconfirmed (-2700)",
+      "reason": "Fixture setup failed: ~/Projects/sleight-wt/real-use-tasks/bench/real-fixture.js: execution error: Error: Error: Fixture application readiness unconfirmed (-2700)",
       "cleanupError": null
     },
     {
@@ -936,7 +936,7 @@
       "passed": false,
       "modelStarted": false,
       "seconds": null,
-      "reason": "Fixture setup failed: <private-evidence>/real-use-tasks/bench/real-fixture.js: execution error: Error: Error: Fixture application readiness unconfirmed (-2700)",
+      "reason": "Fixture setup failed: ~/Projects/sleight-wt/real-use-tasks/bench/real-fixture.js: execution error: Error: Error: Fixture application readiness unconfirmed (-2700)",
       "cleanupError": null
     },
     {
@@ -947,7 +947,7 @@
       "passed": false,
       "modelStarted": false,
       "seconds": null,
-      "reason": "Fixture setup failed: <private-evidence>/real-use-tasks/bench/real-fixture.js: execution error: Error: Error: Fixture application readiness unconfirmed (-2700)",
+      "reason": "Fixture setup failed: ~/Projects/sleight-wt/real-use-tasks/bench/real-fixture.js: execution error: Error: Error: Fixture application readiness unconfirmed (-2700)",
       "cleanupError": null
     },
     {
@@ -958,7 +958,7 @@
       "passed": false,
       "modelStarted": false,
       "seconds": null,
-      "reason": "Fixture setup failed: <private-evidence>/real-use-tasks/bench/real-fixture.js: execution error: Error: Error: Fixture application readiness unconfirmed (-2700)",
+      "reason": "Fixture setup failed: ~/Projects/sleight-wt/real-use-tasks/bench/real-fixture.js: execution error: Error: Error: Fixture application readiness unconfirmed (-2700)",
       "cleanupError": null
     },
     {

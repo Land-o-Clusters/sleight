@@ -1,10 +1,10 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
+import { homedir } from 'node:os';
 import { join } from 'node:path';
 import { describe } from 'node:test';
 import { packageSkip } from './requirements.mjs';
-import { retainedBank } from './helpers/retained-bank.mjs';
 
 describe('offline replay with the source parser', { skip: packageSkip('typescript') }, async () => {
 const { replayCalls } = await import('../bench/replay/engine.mjs');
@@ -190,23 +190,20 @@ test('an error at the check target cannot use the old campaign exemption', async
   assert.equal(campaignEvidence([a, b], loadCheck('DP1'), { candidate: 'A', baseline: 'B' }).verdict, 'diverge');
 });
 
-const bank = retainedBank('race-1017/evidence-replay-dp1c', ['1-A/trace.jsonl']);
-const evidence = bank.path;
-const recordingBank = retainedBank('p131-int/bench/results/2026-10-19T20-41-28-692Z.json');
-const retainedRecording = recordingBank.path;
+const evidence = join(homedir(), 'Projects/sleight-wt/race-1017/evidence-replay-dp1c');
 test('the CLI wires switch comparisons to continuation and leaves single-arm plans strict', {
-  skip: recordingBank.skip,
+  skip: !existsSync(loadCheck('DP1').source.replace(/^~/, homedir())) && 'Retained DP1 recording is not installed',
 }, async t => {
   t.mock.method(console, 'log', () => {});
-  const single = await main(['--check', 'DP1', retainedRecording, '--plan']);
-  const paired = await main(['--check', 'DP1', retainedRecording, '--env', 'SLEIGHT_DP1=1', '--compare', 'SLEIGHT_DP1=0', '--plan']);
+  const single = await main(['--check', 'DP1', '--plan']);
+  const paired = await main(['--check', 'DP1', '--env', 'SLEIGHT_DP1=1', '--compare', 'SLEIGHT_DP1=0', '--plan']);
   assert.equal(single.comparison, 'recording');
   assert.equal(paired.comparison, 'switches');
   assert.deepEqual(paired.roles, { candidate: 'A', baseline: 'B' });
 });
 
 test('all ten retained DP1c open_file results continue offline while retaining their text differences', {
-  skip: bank.skip,
+  skip: !existsSync(join(evidence, '1-A/trace.jsonl')) && 'Retained DP1c evidence is not installed',
 }, async () => {
   for (let n = 1; n <= 10; n++) {
     const variant = n % 2 ? 'A' : 'B';
@@ -226,9 +223,10 @@ test('all ten retained DP1c open_file results continue offline while retaining t
 });
 
 test('the retained six-call DP1 stream uses the fresh acquired handle after changed open_file wording', {
-  skip: bank.skip || recordingBank.skip,
+  skip: (!existsSync(join(evidence, '1-A/trace.jsonl')) || !existsSync(loadCheck('DP1').source.replace(/^~/, homedir())))
+    && 'Retained DP1c evidence is not installed',
 }, async () => {
-  const spec = loadCheck('DP1'), rec = loadRecording(retainedRecording, spec);
+  const spec = loadCheck('DP1'), rec = loadRecording(spec.source.replace(/^~/, homedir()), spec);
   const first = readFileSync(join(evidence, '1-A/trace.jsonl'), 'utf8').trim().split('\n').map(JSON.parse).find(r => r.event === 'call');
   const prepared = prepareReplay(rec, first.arguments.path.replace(/\/[^/]+$/, ''));
   let fed = 0;

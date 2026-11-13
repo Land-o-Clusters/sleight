@@ -1,4 +1,3 @@
-import { assertChildStatus } from './fixtures/child-status.mjs';
 // VC7, the agent cursor's live-check harness: every pure part, the dry runs, and the scripted frames through the real host's
 // --ring-plan-dump (no window). Nothing here opens an app, shows a panel or captures the screen.
 import test from 'node:test';
@@ -22,7 +21,7 @@ import { recordPlan, panelWindow, asideName, parseArgs as recordArgs } from '../
 import { perTask, speedVerdict, speedRule, t975, perTaskMarkdown, runSide, runCostPass, compareSides, parseArgs as passArgs, resumeKey, dryRunPlan as passPlan } from '../bench/hand/cost-pass.mjs';
 import { hostStyle } from '../bench/hand/cost-sampler.mjs';
 import { prepareCaptureStep, nightSteps, estimate, overheadMin, timeoutMs, outcome, childEnv, strays, descendants, orphanedLock, launchedApps, resultLine, HOLD_WAIT_MS, LOCK_WAIT_MS, summaryMarkdown, parseArgs as nightArgs, TARGET_MIN } from '../bench/hand/vc7-night.mjs';
-import { hostArgs, commonArgs, liveRefusal, compileArgs, playRect, quitFixture, HOST_SOURCE } from '../bench/hand/vc7-live.mjs';
+import { hostArgs, commonArgs, liveRefusal, compileArgs, playRect, quitFixture } from '../bench/hand/vc7-live.mjs';
 import { handWire, runCaptureTest, underLiveLock } from '../bench/hand/h5-capture.mjs';
 import { EventEmitter } from 'node:events';
 
@@ -93,9 +92,9 @@ test('the synthetic character installs at 0700 and 0600 under the private tmp fo
 });
 
 const HOST_KEYS = {
-  act: [['hand', 'nonce', 'seq', 'kind', 'pid', 'windowId', 'at', 'path', 'delayMs', 'beats'], ['label', 'rect', 'caretX', 'windowRect']],
-  aim: [['hand', 'nonce', 'seq', 'kind', 'pid', 'windowId', 'at'], ['rect', 'holdMs', 'label', 'windowRect']],
-  status: [['hand', 'nonce', 'seq', 'state', 'pid', 'windowId'], ['at', 'ok', 'windowRect']],
+  act: [['hand', 'nonce', 'seq', 'kind', 'pid', 'windowId', 'at', 'path', 'delayMs', 'beats'], ['label', 'rect', 'caretX']],
+  aim: [['hand', 'nonce', 'seq', 'kind', 'pid', 'windowId', 'at'], ['rect', 'holdMs', 'label']],
+  status: [['hand', 'nonce', 'seq', 'state', 'pid', 'windowId'], ['at', 'ok']],
   hide: [['hand', 'nonce'], []],
   character: [['hand', 'nonce', 'seq', 'id', 'sheet', 'extra', 'cell', 'table'], []],
 };
@@ -110,10 +109,8 @@ test('the scripted sequence: 30 actions in order with aims 250 ms ahead, statuse
   const { steps, lengthMs } = autoSequence({ pid: 42, windowId: 7, rect, count: 30, spacingMs: 1300 });
   assert.equal(steps.filter(s => s.type === 'act').length, 30);
   assert.equal(steps.filter(s => s.type === 'aim').length, 30);
-  assert.equal(steps.filter(s => s.type === 'status' && s.args.ok === true).length, 30);
-  assert.deepEqual(steps.filter(s => s.type === 'status' && s.args.state === 'thinking').map(s => s.args.state), Array(4).fill('thinking'));
-  assert.equal(steps.at(-1).args.state, 'done'); assert.equal(Object.hasOwn(steps.at(-1).args, 'ok'), false);
-  assert.equal(lengthMs, 29 * 1300 + 1000);
+  assert.deepEqual(steps.filter(s => s.type === 'status').map(s => s.args.state), [...Array(4).fill('thinking'), 'done']);
+  assert.equal(lengthMs, 29 * 1300 + 900);
   assert.deepEqual([...new Set(steps.filter(s => s.type === 'act').map(s => s.args.kind))].sort(), [...KINDS].sort());
   for (const s of steps.filter(s => s.type !== 'status')) {
     assert.ok(s.args.at[0] >= rect.x && s.args.at[0] <= rect.x + rect.width && s.args.at[1] >= rect.y && s.args.at[1] <= rect.y + rect.height);
@@ -124,7 +121,6 @@ test('the scripted sequence: 30 actions in order with aims 250 ms ahead, statuse
   assert.equal(written.length, steps.length);
   const frames = lines.map(l => JSON.parse(l));
   assert.ok(frames.every(hostAccepts), 'every frame has exactly the host\'s keys');
-  assert.ok(frames.every(f => JSON.stringify(f.windowRect) === '[100,100,600,400]'));
   assert.deepEqual(frames.map(f => f.seq), frames.map((_, i) => i), 'one increasing seq');
   assert.ok(frames.filter(f => f.caretX !== undefined).every(f => ['type', 'key'].includes(f.kind)));
   assert.ok(frames.filter(f => f.ok !== undefined).every(f => f.state === 'done'));
@@ -545,10 +541,8 @@ test('shared live pieces: host flags as the relay passes them, the product\'s co
   assert.throws(() => hostArgs({ style: 'pet' }), /unknown cursor style/);
   assert.throws(() => hostArgs({ capture: 'shown' }), /hidden or visible/);
   assert.deepEqual(compileArgs('/s.swift', '/b', '/c'), ['swiftc', '-module-cache-path', '/c', '/s.swift', '-o', '/b']);
-  assert.deepEqual(compileArgs(HOST_SOURCE, '/b', '/c'), ['swiftc', '-O', '-module-cache-path', '/c', HOST_SOURCE, '-o', '/b']);
   const hostSource = readFileSync(join(root, 'plugins/sleight/lib/direct-browser/host.mjs'), 'utf8');
-  assert.match(hostSource, /helperCompileArgs\(name, \{ sources: \[source\], binary, moduleCache, settingsFlags, recipe \}\)/, 'the product uses the shared compiler recipe');
-  assert.match(hostSource, /const sealed = name === 'consent-host' && existsSync\(join\(bank, 'SealedSettings\.swift'\)\)/, 'only consent-host gets settings flags');
+  assert.match(hostSource, /\['swiftc', '-module-cache-path', moduleCache, source, '-o', binary\]/, 'the product builds the host the same way');
   assert.throws(() => commonArgs(['--out']), /--out needs a path/);
   assert.equal(commonArgs(['--owner-away', '--host', '/h']).host, '/h');
   assert.equal(liveRefusal({ ownerAway: false, hold: false }, 'X').code, 2);
@@ -568,11 +562,9 @@ test('every VC7 script\'s --dry-run exits 0, prints its plan and opens nothing',
     ['bench/hand/cost-pass.mjs', ['--cursor-style', 'ring', '--rounds', '5'], /30 runs/],
     ['bench/hand/vc7-night.mjs', ['--night', night], /estimate \d+ min of steps plus about \d+ min of quiet gaps \(target under 90\)/],
   ]) {
-    const run = spawnSync(process.execPath, [join(root, script), ...args, '--dry-run'], { cwd: root, encoding: 'utf8', timeout: 120000, killSignal: 'SIGKILL' });
-    assertChildStatus(run, 0, `${script}: ${run.stderr}`);
+    const run = spawnSync(process.execPath, [join(root, script), ...args, '--dry-run'], { cwd: root, encoding: 'utf8', timeout: 120000 });
+    assert.equal(run.status, 0, `${script}: ${run.stderr}`);
     assert.match(run.stdout, /dry run/, script);
-    assert.doesNotMatch(run.stdout, /no -O/, script);
-    if (script.endsWith('vc7-night.mjs')) assert.match(run.stdout, /xcrun swiftc -O -module-cache-path/);
     assert.match(run.stdout, expect, script);
   }
   assert.equal(existsSync(join(night, 'vc7-state.json')), false, 'the dry run writes no state');
@@ -581,12 +573,12 @@ test('every VC7 script\'s --dry-run exits 0, prints its plan and opens nothing',
 // The scripted frames through the real host's planner on a simulated clock: no application, panel or layer is made.
 test('capture helper display refusal selftest draws nothing and needs no display query', { skip: macCommandSkip('xcrun') }, () => {
   const dir = trackTemp(realpathSync(mkdtempSync(join(tmpdir(), 'vc7-preflight-test-')))), helper = join(dir, 'capture-helper');
-  const built = spawnSync('/usr/bin/xcrun', ['swiftc', '-module-cache-path', swiftModuleCache(), join(root, 'bench/hand/capture.swift'), '-o', helper], { encoding: 'utf8', timeout: 600000, killSignal: 'SIGKILL' });
-  assertChildStatus(built, 0, built.stderr);
+  const built = spawnSync('/usr/bin/xcrun', ['swiftc', '-module-cache-path', swiftModuleCache(), join(root, 'bench/hand/capture.swift'), '-o', helper], { encoding: 'utf8', timeout: 300000 });
+  assert.equal(built.status, 0, built.stderr);
   for (const [state, expected] of [[{ asleep: false, locked: false }, null], [{ asleep: true, locked: false }, 'display-asleep'],
     [{ asleep: false, locked: true }, 'screen-locked'], [{ asleep: false }, 'screen-lock-state-unknown']]) {
-    const p = spawnSync(helper, ['--display-selftest'], { input: JSON.stringify(state), encoding: 'utf8', timeout: 5000, killSignal: 'SIGKILL' });
-    assertChildStatus(p, 0, p.stderr); assert.deepEqual(JSON.parse(p.stdout), { reason: expected, windowsCreated: 0 });
+    const p = spawnSync(helper, ['--display-selftest'], { input: JSON.stringify(state), encoding: 'utf8', timeout: 5000 });
+    assert.equal(p.status, 0, p.stderr); assert.deepEqual(JSON.parse(p.stdout), { reason: expected, windowsCreated: 0 });
   }
 });
 
@@ -595,8 +587,8 @@ function buildHost(t) {
   if (binary) return binary;
   const dir = trackTemp(realpathSync(mkdtempSync(join(tmpdir(), 'sleight-vc7-host-'))));
   const output = join(dir, 'consent-host');
-  const built = spawnSync('/usr/bin/xcrun', compileArgs(HOST_SOURCE, output, swiftModuleCache()), { encoding: 'utf8', timeout: 600000, killSignal: 'SIGKILL' });
-  assertChildStatus(built, 0, built.stderr);
+  const built = spawnSync('/usr/bin/xcrun', ['swiftc', '-module-cache-path', swiftModuleCache(), join(root, 'plugins/sleight/lib/direct-browser/native/consent-host.swift'), '-o', output], { encoding: 'utf8' });
+  assert.equal(built.status, 0, built.stderr);
   binary = output;
   return binary;
 }
@@ -607,8 +599,8 @@ test('the host\'s planner accepts every scripted frame for ring and seam and dra
   const input = steps.map(s => JSON.stringify({ dumpClock: s.atMs / 1000 }) + '\n' + wire[s.type](s.args)).join('') + JSON.stringify({ dumpClock: 120 }) + '\n';
   for (const style of ['ring', 'seam']) {
     const run = spawnSync(buildHost(t), ['--ring-plan-dump', `--cursor-style=${style}`, '--clip=0,0,1000,1000'], { input, encoding: 'utf8', timeout: 60000, maxBuffer: 1 << 28,
-      env: { PATH: '/usr/bin:/bin', LANG: 'en_US.UTF-8' }, killSignal: 'SIGKILL' });
-    assertChildStatus(run, 0, `${style}: exit ${run.status} (65 is a refused frame) ${run.stderr}`);
+      env: { PATH: '/usr/bin:/bin', LANG: 'en_US.UTF-8' } });
+    assert.equal(run.status, 0, `${style}: exit ${run.status} (65 is a refused frame) ${run.stderr}`);
     const effects = run.stdout.trim().split('\n').map(l => JSON.parse(l));
     const draws = effects.filter(e => e.effect === 'draw');
     assert.ok(draws.length >= 30, `${style}: ${draws.length} draws`);
@@ -623,9 +615,9 @@ test('a host with the sprite renderer accepts the synthetic character (skips on 
   const installed = installSyntheticCharacter();
   t.after(() => rmSync(installed.root, { recursive: true, force: true }));
   const run = spawnSync(host, ['--check-character'], { input: JSON.stringify(characterWire(installed, { nonce, seq: 0 })) + '\n', encoding: 'utf8', timeout: 30000,
-    env: { PATH: '/usr/bin:/bin', ...characterEnv(installed.root) }, killSignal: 'SIGKILL' });
+    env: { PATH: '/usr/bin:/bin', ...characterEnv(installed.root) } });
   if (run.status === 64) { t.skip('this host has no --check-character (the sprite renderer, VC4, is not merged)'); return; }
-  assertChildStatus(run, 0, run.stderr);
+  assert.equal(run.status, 0, run.stderr);
   const answer = JSON.parse(run.stdout.trim().split('\n').at(-1));
   assert.deepEqual([answer.id, answer.loaded, answer.reason, answer.warnings], [SYNTHETIC_ID, true, null, []]);
 });

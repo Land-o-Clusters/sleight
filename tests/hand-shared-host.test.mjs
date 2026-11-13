@@ -1,4 +1,3 @@
-import { assertChildStatus } from './fixtures/child-status.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { mkdtempSync, readFileSync, realpathSync, writeFileSync } from 'node:fs';
@@ -9,7 +8,6 @@ import { trackTemp } from '../scripts/temp-leftovers.mjs';
 import { macCommandSkip } from './requirements.mjs';
 import { swiftModuleCache } from '../bench/swift-cache.mjs';
 import { runSharedHost as shared } from './fixtures/shared-consent-host.mjs';
-import { helperCompileArgs } from '../plugins/sleight/lib/direct-browser/host-cache.mjs';
 
 // The shared host: one consent-host process per session serves the hand (stdin, toggle events on stdout) and turbo's consent
 // channel (fd 3 in, fd 4 out). --channels-selftest runs the production parsers with menus, cards and drawing suppressed.
@@ -20,10 +18,8 @@ function build() {
   if (built) return built;
   const dir = trackTemp(realpathSync(mkdtempSync(join(tmpdir(), 'sleight-shared-host-'))));
   const binary = join(dir, 'consent-host');
-  const result = spawnSync('/usr/bin/xcrun', helperCompileArgs('consent-host', {
-    sources: [sourcePath], binary, moduleCache: swiftModuleCache(),
-  }), { encoding: 'utf8', timeout: 600000, killSignal: 'SIGKILL' });
-  assertChildStatus(result, 0, result.stderr);
+  const result = spawnSync('/usr/bin/xcrun', ['swiftc', '-module-cache-path', swiftModuleCache(), sourcePath, '-o', binary], { encoding: 'utf8' });
+  assert.equal(result.status, 0, result.stderr);
   return (built = binary);
 }
 const handNonce = 'a'.repeat(64), consentNonce = 'c'.repeat(64);
@@ -122,9 +118,9 @@ _ = guarded.run(abort: { aborts += 1 }) { 1 }
 check(aborts == 1 && !guarded.active, "a card that ends by itself is not aborted")
 print("pass")
 `);
-  const compiled = spawnSync('/usr/bin/xcrun', ['swiftc', '-module-cache-path', swiftModuleCache(), swift, '-o', binary], { encoding: 'utf8', timeout: 600000, killSignal: 'SIGKILL' });
-  assertChildStatus(compiled, 0, compiled.stderr);
-  assert.equal(spawnSync(binary, [], { encoding: 'utf8', timeout: 60000, killSignal: 'SIGKILL' }).stdout.trim(), 'pass');
+  const compiled = spawnSync('/usr/bin/xcrun', ['swiftc', '-module-cache-path', swiftModuleCache(), swift, '-o', binary], { encoding: 'utf8' });
+  assert.equal(compiled.status, 0, compiled.stderr);
+  assert.equal(spawnSync(binary, [], { encoding: 'utf8' }).stdout.trim(), 'pass');
 });
 
 test('a usage value the host can\'t admit drops only the usage row: the frame stands and the hand-only host keeps running', { skip }, async () => {
@@ -138,16 +134,16 @@ test('a usage value the host can\'t admit drops only the usage row: the frame st
 
 test('--consent needs its two descriptors, and the arguments stay strict', { skip }, () => {
   const binary = build();
-  const run = args => spawnSync(binary, ['--channels-selftest', ...args], { input: '', encoding: 'utf8', timeout: 30000, env: { PATH: '/usr/bin:/bin' }, killSignal: 'SIGKILL' });
-  assertChildStatus(run(['--hand', '--consent']), 64, 'no fd 3 or 4');
+  const run = args => spawnSync(binary, ['--channels-selftest', ...args], { input: '', encoding: 'utf8', timeout: 30000, env: { PATH: '/usr/bin:/bin' } });
+  assert.equal(run(['--hand', '--consent']).status, 64, 'no fd 3 or 4');
   for (const args of [['--hand', '--consent', '--capture=visible'], ['--hand', '--consent', '--consent'], ['--consent'], ['--hand-dump', '--consent'], ['--hand', '--menu', '--consent'], ['--hand', '--consent', '--menu'], ['--hand-dump', '--menu'], ['--hand', '--menu', '--capture=hidden']]) {
-    assertChildStatus(run(args), 64, args.join(' '));
+    assert.equal(run(args).status, 64, args.join(' '));
   }
 });
 
 test('the dump renders every hookup frame as a template image', { skip }, () => {
-  const result = spawnSync(build(), ['--channels-selftest', '--hand-dump'], { encoding: 'utf8', timeout: 30000, env: { PATH: '/usr/bin:/bin' }, killSignal: 'SIGKILL' });
-  assertChildStatus(result, 0, result.stderr);
+  const result = spawnSync(build(), ['--channels-selftest', '--hand-dump'], { encoding: 'utf8', timeout: 30000, env: { PATH: '/usr/bin:/bin' } });
+  assert.equal(result.status, 0, result.stderr);
   assert.deepEqual(JSON.parse(result.stdout).hookup, { frames: 10, rendered: 10, template: true, seconds: 0.8 });
 });
 

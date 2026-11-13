@@ -1,5 +1,3 @@
-import { testChromiumExecutable, readTestDevToolsPort, launchTestChromiumContext } from './fixtures/chromium-isolated.mjs';
-import { modCall } from './fixtures/mod-attribution.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createServer } from 'node:http';
@@ -17,7 +15,7 @@ const skip=process.env.SLEIGHT_LIVE_DOM_TEST!=='1'&&'installed real pages requir
 for (const loss of ['close','parent','ui']) test('installed v3 real local tools and '+loss+' cleanup use the production worker path', {skip,timeout:90000},async t=>{
   const {chromium}=await import('../plugins/sleight/vendor/playwright-core/index.mjs');
   const spec=JSON.parse(readFileSync(new URL('../plugins/sleight/vendor/playwright-core/browsers.json',import.meta.url))).browsers.find(b=>b.name==='chromium-headless-shell');
-  const executable=testChromiumExecutable({ revision: spec.revision });
+  const executable=join(homedir(),'Library/Caches/ms-playwright','chromium_headless_shell-'+spec.revision,'chrome-headless-shell-'+(process.platform==='darwin'?'mac-'+process.arch:'linux64'),'chrome-headless-shell');
   assert.ok(existsSync(executable),'pinned headless browser must exist');
   const root=trackTemp(realpathSync(mkdtempSync(join(tmpdir(),'sleight-v7b-installed-')))),receiptPath=join(root,'receipt.json');
   const posts=[];
@@ -31,9 +29,9 @@ for (const loss of ['close','parent','ui']) test('installed v3 real local tools 
     finally {await context?.close();server.closeAllConnections();await new Promise(resolve=>server.close(resolve));rmSync(root,{recursive:true,force:true});assert.equal(existsSync(root),false);}
   });
   await new Promise(resolve=>server.listen(0,'127.0.0.1',resolve));
-  context=await launchTestChromiumContext(chromium, root,{headless:true,executablePath:executable,args:['--remote-debugging-port=0'],viewport:null});
+  context=await chromium.launchPersistentContext(root,{headless:true,executablePath:executable,args:['--remote-debugging-port=0'],viewport:null});
   const foreign=context.pages()[0];await foreign.setContent('<title>Foreign untouched</title><p>Private fixture</p>');
-  const port=(await readTestDevToolsPort(root));
+  const port=readFileSync(join(root,'DevToolsActivePort'),'utf8').trim().split('\n');
   bridge=await createV3Bridge({startupTimeoutMs:15000,timeoutMs:15000},{readConfig:()=>({}),acceptPackage:()=>({current:()=>true}),
     forkWorker(_path,_args,options){child=fork(new URL('./fixtures/v3-installed-worker.mjs',import.meta.url),['ws://127.0.0.1:'+port[0]+port[1],receiptPath],{...options,stdio:['ignore','ignore','inherit','ipc','pipe']});exited=new Promise(resolve=>child.once('exit',(code,signal)=>resolve({code,signal})));return child;}});
   child.stdio[4].on('data',()=>{});
@@ -41,7 +39,7 @@ for (const loss of ['close','parent','ui']) test('installed v3 real local tools 
   const clientIn=new PassThrough(),clientOut=new PassThrough(),serverIn=new PassThrough(),serverOut=new PassThrough(),replies=new Map();
   clientOut.on('data',bytes=>{for(const line of bytes.toString().trim().split('\n')){const msg=JSON.parse(line);replies.set(msg.id,msg);}});
   relay=createRelay({clientIn,clientOut,serverIn,serverOut,...prepared,changeReview:false});let serial=0;
-  const request=async(method,params)=>{const id=++serial;clientIn.write(JSON.stringify(modCall({id,method,params}))+'\n');const until=Date.now()+20000;while(!replies.has(id)&&Date.now()<until)await new Promise(resolve=>setTimeout(resolve,10));assert.ok(replies.has(id),'relay result '+id);return replies.get(id).result;};
+  const request=async(method,params)=>{const id=++serial;clientIn.write(JSON.stringify({id,method,params})+'\n');const until=Date.now()+20000;while(!replies.has(id)&&Date.now()<until)await new Promise(resolve=>setTimeout(resolve,10));assert.ok(replies.has(id),'relay result '+id);return replies.get(id).result;};
   const listing=request('tools/list',{});serverOut.write(JSON.stringify({id:serial,result:{tools:[{name:'js',description:'engine',inputSchema:{type:'object'}}]}})+'\n');
   assert.ok((await listing).tools.some(x=>x.name==='js'));
   for(const name of ['browser_open','browser_read','browser_act','browser_fill','browser_tabs'])assert.ok(replies.get(serial).result.tools.some(x=>x.name===name));

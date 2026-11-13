@@ -1,4 +1,3 @@
-import { assertChildStatus } from './fixtures/child-status.mjs';
 // Constructed macOS paths are synthetic validation and redaction data, never allocation roots.
 const MAC_TMP = ['', 'private', 'tmp'].join('/');
 // SLEIGHT_BENCH_HAND: arms keep the ghost hand off unless the runner asks for it (H6 cost pass, H8 hidden-tab check), and
@@ -102,15 +101,15 @@ test('H8: hidden-tab skips and no draws pass; a draw fails; no hand events say w
 test('H8: --run refuses without --owner-away before it checks or starts anything; reading a trace needs no flag', async () => {
   const { spawnSync } = await import('node:child_process');
   const script = join(root, 'bench/hand/h8-hidden-tab.mjs');
-  const run = spawnSync(process.execPath, [script, '--run', '--out', '/nonexistent/h8'], { encoding: 'utf8', timeout: 20000, killSignal: 'SIGKILL' });
-  assertChildStatus(run, 2);
+  const run = spawnSync(process.execPath, [script, '--run', '--out', '/nonexistent/h8'], { encoding: 'utf8', timeout: 20000 });
+  assert.equal(run.status, 2);
   assert.match(run.stderr, /pass --owner-away/);
   const dir = mkdtempSync(join(tmpdir(), 'h8-read-'));
   try {
     const { writeFileSync } = await import('node:fs');
     writeFileSync(join(dir, 'trace-7.jsonl'), line('hand-skipped', { op: 'click', reason: 'hidden-tab' }) + '\n');
-    const read = spawnSync(process.execPath, [script, dir], { encoding: 'utf8', timeout: 20000, killSignal: 'SIGKILL' });
-    assertChildStatus(read, 0, read.stderr);
+    const read = spawnSync(process.execPath, [script, dir], { encoding: 'utf8', timeout: 20000 });
+    assert.equal(read.status, 0, read.stderr);
     assert.equal(JSON.parse(read.stdout).verdict, 'pass');
   } finally { rmSync(dir, { recursive: true, force: true }); }
 });

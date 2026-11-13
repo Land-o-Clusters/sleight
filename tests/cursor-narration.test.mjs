@@ -1,4 +1,3 @@
-import { MOD_META } from './fixtures/mod-attribution.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { chmodSync, mkdtempSync, realpathSync, writeFileSync } from 'node:fs';
@@ -177,7 +176,7 @@ test('private frames bind bubble text to real Claude Code toolUseId metadata wit
     cursor: { close() {}, narration: 'bubbles', status: (state, detail) => statuses.push({ state, ...detail }) }, actionLog: { request: m => logs.push(JSON.stringify(m)) } });
   t.after(() => relay.close());
   for (const [id, say] of [[1, 'First menu.'], [2, 'Second menu.']]) {
-    clientIn.write(JSON.stringify({ jsonrpc: '2.0', id: 'say-' + id, method: 'tools/call', params: { name: 'turn_ended', _meta: MOD_META,
+    clientIn.write(JSON.stringify({ jsonrpc: '2.0', id: 'say-' + id, method: 'tools/call', params: { name: 'turn_ended',
       arguments: { sleight_say: { toolUseId: 'toolu_' + id, text: say } } } }) + '\n');
     clientIn.write(JSON.stringify({ jsonrpc: '2.0', id, method: 'tools/call', params: { name: 'js', arguments: { code: '1+1' },
       _meta: { 'claudecode/toolUseId': 'toolu_' + id } } }) + '\n');

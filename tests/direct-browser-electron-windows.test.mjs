@@ -130,10 +130,10 @@ test('real JXA: the birth string matches launch.py\'s for this process, and scre
   try {
     const script = join(dir, 'probe.js');
     writeFileSync(script, source + `\nfunction run() { return JSON.stringify([processBirth(${process.pid}), screenScale({ x: 0, y: 0, width: 10, height: 10 })]); }`);
-    const [birth, scale] = JSON.parse(execFileSync('/usr/bin/osascript', ['-l', 'JavaScript', script], { encoding: 'utf8', timeout: 20000, killSignal: 'SIGKILL' }));
+    const [birth, scale] = JSON.parse(execFileSync('/usr/bin/osascript', ['-l', 'JavaScript', script], { encoding: 'utf8', timeout: 20000 }));
     const expected = execFileSync('python3', ['-I', '-c', 'import importlib.util, sys\nspec = importlib.util.spec_from_file_location("launch", sys.argv[1])\n' +
       'module = importlib.util.module_from_spec(spec); spec.loader.exec_module(module); print(module.process_birth(int(sys.argv[2])))', launchPy, String(process.pid)],
-    { encoding: 'utf8', timeout: 20000, killSignal: 'SIGKILL' }).trim();
+    { encoding: 'utf8', timeout: 20000 }).trim();
     assert.match(birth, /^\d+\.\d{6}$/);
     assert.equal(birth, expected);
     assert.ok(Number.isFinite(scale) && scale > 0);

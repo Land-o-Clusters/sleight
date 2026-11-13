@@ -1,4 +1,3 @@
-import { testChromiumExecutable, readTestDevToolsPort, launchTestChromiumContext, closeTestChromium } from './fixtures/chromium-isolated.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { mkdtempSync, readFileSync, realpathSync, rmSync, existsSync } from 'node:fs';
@@ -12,7 +11,9 @@ import { createCDPFilter } from '../plugins/sleight/lib/direct-browser/cdp-filte
 const live = process.env.SLEIGHT_LIVE_DOM_TEST === '1';
 const vendor = new URL('../plugins/sleight/vendor/playwright-core/', import.meta.url);
 const spec = JSON.parse(readFileSync(new URL('browsers.json', vendor))).browsers.find(b => b.name === 'chromium-headless-shell');
-const executable = testChromiumExecutable({ revision: spec.revision });
+const platform = process.platform === 'darwin' ? 'mac-' + process.arch : 'linux64';
+const executable = join(homedir(), 'Library/Caches/ms-playwright', 'chromium_headless_shell-' + spec.revision,
+  'chrome-headless-shell-' + platform, 'chrome-headless-shell');
 
 // Only sleight-arch's host runner executes the headless fixture. Opted-in runs
 // fail if Chromium is missing; a skipped page test never qualifies V1.
@@ -24,23 +25,19 @@ test('real Chromium over filtered CDP hides foreign tabs, owns background create
   const root = trackTemp(realpathSync(mkdtempSync(join(tmpdir(), 'sleight-v3-cdp-'))));
   let context, socket, filter, bridge, browser, filterCollected = false;
   t.after(async () => {
-    try { await closeTestChromium(context, async () => {
-      try {
-        await browser?.close();
-        if (filter) { filterCollected = await filter.dispose(); assert.equal(filterCollected, true, 'filter routes must detach before raw connection closure'); }
-      } finally {
-        try {
-          await bridge?.close();
-          if (socket && socket.readyState !== 3) await new Promise(resolve => { socket.once('close', resolve); socket.terminate(); });
-        } finally { await context?.close(); }
-      }
-    }); } finally {
+    try {
+      await browser?.close();
+      if (filter) { filterCollected = await filter.dispose(); assert.equal(filterCollected, true, 'filter routes must detach before raw connection closure'); }
+    } finally {
+      await bridge?.close();
+      if (socket && socket.readyState !== 3) await new Promise(resolve => { socket.once('close', resolve); socket.terminate(); });
+      await context?.close();
       rmSync(root, { recursive: true, force: true });
       assert.equal(existsSync(root), false);
+      t.diagnostic('Cleanup: browserClosed=true profileDeleted=true socketsClosed=true filterCollected=' + filterCollected);
     }
-    t.diagnostic('Cleanup: browserClosed=true profileDeleted=true socketsClosed=true filterCollected=' + filterCollected);
   });
-  context = await launchTestChromiumContext(chromium, root, { executablePath: executable, headless: true,
+  context = await chromium.launchPersistentContext(root, { executablePath: executable, headless: true,
     args: ['--remote-debugging-port=0', '--site-per-process'], viewport: null });
   const first = context.pages()[0], foreign = await context.newPage();
   await first.setContent('<title>Owned local fixture</title><button>Owned</button>');
@@ -50,7 +47,7 @@ test('real Chromium over filtered CDP hides foreign tabs, owns background create
   const cookies = await context.cookies(cookieURL);
   const ownerCDP = await context.newCDPSession(first);
   const { targetInfo: owner } = await ownerCDP.send('Target.getTargetInfo'); await ownerCDP.detach();
-  const port = (await readTestDevToolsPort(root));
+  const port = readFileSync(join(root, 'DevToolsActivePort'), 'utf8').trim().split('\n');
   const { ws } = createRequire(import.meta.url)(new URL('lib/utilsBundle.js', vendor).pathname);
   socket = new ws('ws://127.0.0.1:' + port[0] + port[1]);
   const pending = new Map(), listeners = new Set();

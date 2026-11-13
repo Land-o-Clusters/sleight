@@ -16,7 +16,7 @@
     "{\"enabledPlugins\":{\"sleight@sleight\":false}}",
     "--strict-mcp-config",
     "--mcp-config",
-    "{\"mcpServers\":{\"sleight\":{\"command\":\"<private-evidence>/blocked-apps/plugins/sleight/bin/sleight-mcp\",\"env\":{\"SLEIGHT_BLOCKED_APPS\":\"1\",\"SLEIGHT_APPROVAL_PROMPT\":\"dialog\",\"SLEIGHT_TRACE\":\"~tmp/sleight-blocked-live-cYOGDE/trace\"}}}}",
+    "{\"mcpServers\":{\"sleight\":{\"command\":\"~/Projects/sleight-wt/blocked-apps/plugins/sleight/bin/sleight-mcp\",\"env\":{\"SLEIGHT_BLOCKED_APPS\":\"1\",\"SLEIGHT_APPROVAL_PROMPT\":\"dialog\",\"SLEIGHT_TRACE\":\"~tmp/sleight-blocked-live-cYOGDE/trace\"}}}}",
     "--tools",
     "",
     "--allowedTools",

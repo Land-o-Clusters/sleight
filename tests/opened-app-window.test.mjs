@@ -20,24 +20,14 @@ function fixture(t, options = {}) {
   const sent = [], received = [], selections = [], leases = [], drags = [], invalidRequests = [], actions = [], censuses = [];
   let current, broken = false, epoch = 1, focusOverride;
   const observations = [], released = [], active = new Set();
-  const windows = ['Source', 'Target'].map((name, i) => ({ AXTitle: `${name}.txt`, AXDocument: `file://${root}/${name}.txt`, AXWindowNumber: 11 + i, AXPosition: { x: i * 400, y: 20 }, AXSize: { width: 300, height: 200 } }));
-  const list = values => ({ count: values.length, objectAtIndex: i => values[i],
-    filteredArrayUsingPredicate: ({ args }) => list(values.filter(row => row.kCGWindowOwnerPID === args[0] && row.kCGWindowLayer === 0)) });
+  const windows = ['Source', 'Target'].map((name, i) => ({ AXTitle: `${name}.txt`, AXDocument: `file://${root}/${name}.txt`, AXWindowNumber: 11 + i }));
+  const list = values => ({ count: values.length, objectAtIndex: i => values[i] });
   const axApp = { AXWindows: list(windows) };
   let context;
-  const running = { processIdentifier: 7, bundleIdentifier: appId, terminated: false, launchDate: { timeIntervalSince1970: 1 } };
   const resetIdentity = () => {
     const $ = Object.assign(value => value, {
-      NSPredicate: { predicateWithFormatArgumentArray: (format, args) => ({ format, args }) },
       NSUUID: { UUID: { UUIDString: `fixture-${epoch++}` } }, AXIsProcessTrusted: () => true,
-      NSRunningApplication: { runningApplicationsWithBundleIdentifier: () => list([running]), runningApplicationWithProcessIdentifier: () => running },
-      kCGWindowListOptionAll: 0, kCGWindowListExcludeDesktopElements: 16,
-      CGWindowListCopyWindowInfo: () => list(windows.map((window, i) => ({ kCGWindowOwnerPID: 7, kCGWindowLayer: 0,
-        kCGWindowNumber: 11 + i, kCGWindowName: window.AXTitle, kCGWindowBounds: { X: i * 400, Y: 20, Width: 300, Height: 200 },
-        objectForKey: key => key === 'kCGWindowOwnerPID' ? 7 : null }))),
-      AXValueGetValue: (value, _type, bytes) => { bytes.value = value; return !!value; },
-      NSMutableData: { dataWithLength: () => { const bytes = {}; return { bytes, mutableBytes: bytes }; } },
-      NSValue: { valueWithBytesObjCType: bytes => ({ pointValue: bytes.value, sizeValue: bytes.value }) },
+      NSRunningApplication: { runningApplicationsWithBundleIdentifier: () => list([{ processIdentifier: 7, launchDate: { timeIntervalSince1970: 1 } }]) },
       AXUIElementCreateApplication: () => { axApp.AXFocusedWindow = windows[focusOverride ?? (current?.title === 'Source.txt' ? 0 : 1)]; return axApp; },
       AXUIElementSetMessagingTimeout: () => 0,
       AXUIElementCopyAttributeValue: (el, key, out) => { if (el[key] === undefined) return -25205; out[0] = el[key]; return 0; },
@@ -74,7 +64,7 @@ function fixture(t, options = {}) {
       const observed = broken ? { status: 'unknown' } : JSON.parse(context.run([JSON.stringify(target)]));
       return { ...observed, ...options.nativeMutation };
     },
-    localTools: { tools: [{ name: 'open_file', inputSchema: { type: 'object' } }, { name: 'select_window', inputSchema: { type: 'object' } }, { name: 'drag', inputSchema: { type: 'object' } }],
+    localTools: { tools: [{ name: 'open_file' }, { name: 'select_window' }, { name: 'drag' }],
       target: async () => options.resolved ?? { appId, app, pid: 7 },
       selectionWindow: async target => { censuses.push(target); return options.selection ?? { ok: true, target: { ...window('Source'), windowNumber: 11 }, pid: 7 }; },
       call: async (name, args, approve) => {
@@ -145,9 +135,7 @@ for (const root of ['0 Table, Secondary Actions: Cancel\n\t1 menu Secondary Acti
     const inputLease = new InputLease({ directory, holder: 'OH4' });
     t.after(() => { inputLease.close(); rmSync(directory, { recursive: true, force: true }); });
     const h = fixture(t, { execute: true, inputLease,
-      tree: current => child ? childTree({ ...current, url: undefined }, root)
-        .replace('\t\t19 Replace...', root.includes('1 menu') ? '\t\t19 Replace...' : '\t19 button Replace...') +
-        '\n\t20 button Table\n\t47 button Table...' : undefined });
+      tree: current => child ? childTree({ ...current, url: undefined }, root) + '\n\t5 button Table\n\t47 button Table...' : undefined });
     const source = await h.open('Source');
     assert.ok(!(await h.call('menu', 'js', { code: `let app = ${source}; await app.click(1);` })).isError);
     child = true;
@@ -159,8 +147,8 @@ for (const root of ['0 Table, Secondary Actions: Cancel\n\t1 menu Secondary Acti
       ['run1-258', 'await app.performSecondaryAction(1, "Cancel"); "closed";'],
       ['run1-292', 'await app.performSecondaryAction(1, "Cancel"); let s = await app.getAXState(); s;'],
       ['run1-308', `await ${source}.getAXState();`],
-      ['run2-85', `await ${source}.click(20);`],
-      ['run2-99', 'await app.click(20);'],
+      ['run2-85', `await ${source}.click(5);`],
+      ['run2-99', 'await app.click(5);'],
       ['run2-106', 'await app.performSecondaryAction(1, "Cancel"); nodeRepl.write("cancelled");'],
       ['run2-112', 'await app.pressKey("Escape"); nodeRepl.write("closed");'],
       ['run2-121', 'await app.performSecondaryAction(0, "Cancel"); nodeRepl.write("cancelled");'],
@@ -598,7 +586,7 @@ test('WD6 an opened handle acting on Target cannot supply Source as the drag def
   assert.ok(!(await h.call('drag', 'drag', { app, from: [10, 20], to: [20, 98] })).isError);
   assert.equal(h.drags[0].windowId, undefined);
   assert.equal(h.drags[0].toWindowId, undefined);
-  assert.equal(h.observations.filter(o => o.allowUnfocused).length, 0, 'ordinary lease binding adds no opened-hint selection');
+  assert.equal(h.observations.length, 0);
 });
 
 for (const options of [{ decline: true }, { wrongRead: true }, { wrongNumber: true }, { unfocusedSelection: true },
@@ -610,7 +598,7 @@ for (const options of [{ decline: true }, { wrongRead: true }, { wrongNumber: tr
     assert.ok(!result.isError, JSON.stringify(result));
     assert.ok(h.sent.some(msg => msg.id === 'action'));
     assert.equal(h.selections.length, 0);
-    assert.equal(h.observations.filter(o => o.allowUnfocused).length, 0, 'ordinary lease binding adds no opened-hint selection');
+    assert.equal(h.observations.length, 0);
   });
 }
 
@@ -656,7 +644,7 @@ test('WD6 an explicit coordinate drag source overrides the opened hint', async t
   await h.call('drag', 'drag', { app, windowId: 12, toWindowId: 11, from: [10, 20], to: [30, 40] });
   assert.equal(h.drags[0].windowId, 12);
   assert.equal(h.drags[0].toWindowId, 11);
-  assert.equal(h.observations.filter(o => o.allowUnfocused).length, 0, 'ordinary lease binding adds no opened-hint selection');
+  assert.equal(h.observations.length, 0);
 });
 
 test('OH4 reset clears the advisory opened drag hint', async t => {
@@ -665,7 +653,7 @@ test('OH4 reset clears the advisory opened drag hint', async t => {
   await h.call('reset', 'js_reset', {});
   await h.call('drag', 'drag', { app, from: [10, 20], to: [30, 40] });
   assert.equal(h.drags[0].windowId, undefined);
-  assert.equal(h.observations.filter(o => o.allowUnfocused).length, 0, 'ordinary lease binding adds no opened-hint selection');
+  assert.equal(h.observations.length, 0);
 });
 
 for (const read of ['acquisition', 'opened handle']) test(`OH5 a later ${read} of Target clears the opened Source hint`, async t => {

@@ -19,7 +19,7 @@
   "timedOut": false,
   "cancelled": false,
   "stdout": "",
-  "stderr": "node:fs:2914\n    return binding.writeFileUtf8(\n                   ^\n\nError: EPERM: operation not permitted, open '<private-evidence>/plugin-arm/bench/results/2026-10-10T07-39-46-456Z-dry.json'\n    at writeFileSync (node:fs:2914:20)\n    at save (file://<private-evidence>/plugin-arm/bench/run.mjs:323:3)\n    at file://<private-evidence>/plugin-arm/bench/run.mjs:535:5\n    at ModuleJob.run (node:internal/modules/esm/module_job:447:25)\n    at async node:internal/modules/esm/loader:646:26\n    at async asyncRunEntryPointWithESMLoader (node:internal/modules/run_main:101:5) {\n  errno: -1,\n  code: 'EPERM',\n  syscall: 'open',\n  path: '<private-evidence>/plugin-arm/bench/results/2026-10-10T07-39-46-456Z-dry.json'\n}\n\nNode.js v26.4.0\n",
+  "stderr": "node:fs:2914\n    return binding.writeFileUtf8(\n                   ^\n\nError: EPERM: operation not permitted, open '~/Projects/sleight-wt/plugin-arm/bench/results/2026-10-10T07-39-46-456Z-dry.json'\n    at writeFileSync (node:fs:2914:20)\n    at save (file://~/Projects/sleight-wt/plugin-arm/bench/run.mjs:323:3)\n    at file://~/Projects/sleight-wt/plugin-arm/bench/run.mjs:535:5\n    at ModuleJob.run (node:internal/modules/esm/module_job:447:25)\n    at async node:internal/modules/esm/loader:646:26\n    at async asyncRunEntryPointWithESMLoader (node:internal/modules/run_main:101:5) {\n  errno: -1,\n  code: 'EPERM',\n  syscall: 'open',\n  path: '~/Projects/sleight-wt/plugin-arm/bench/results/2026-10-10T07-39-46-456Z-dry.json'\n}\n\nNode.js v26.4.0\n",
   "groupClean": true,
   "traces": [],
   "transcripts": [],

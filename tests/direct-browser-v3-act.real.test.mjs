@@ -1,4 +1,3 @@
-import { testChromiumExecutable, launchTestChromium } from './fixtures/chromium-isolated.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createServer } from 'node:http';
@@ -21,10 +20,12 @@ async function fixture(t, html, runnerOptions = {}) {
   t.after(() => { for (const socket of sockets) socket.destroy(); return new Promise(resolve => server.close(resolve)); });
   const spec = JSON.parse(readFileSync(new URL('../plugins/sleight/vendor/playwright-core/browsers.json', import.meta.url)))
     .browsers.find(b => b.name === 'chromium-headless-shell');
-  const executablePath = testChromiumExecutable({ revision: spec.revision });
+  const platform = process.platform === 'darwin' ? 'mac-' + process.arch : 'linux64';
+  const executablePath = join(homedir(), 'Library/Caches/ms-playwright', 'chromium_headless_shell-' + spec.revision,
+    'chrome-headless-shell-' + platform, 'chrome-headless-shell');
   // Missing dependencies fail the opt-in host run. They never turn qualification into a skip.
   const runtime = loadPlaywrightCore({ turbo: true });
-  const browser = await launchTestChromium(runtime.inprocess.playwright.chromium, { headless: true, executablePath });
+  const browser = await runtime.inprocess.playwright.chromium.launch({ headless: true, executablePath });
   t.after(() => browser.close());
   const page = await browser.newPage({ viewport: { width: 1000, height: 800 } });
   await page.goto('http://127.0.0.1:' + server.address().port);
@@ -55,7 +56,7 @@ async function fixture(t, html, runnerOptions = {}) {
   return { page, tab, run, ref, checks };
 }
 
-test('real v3 actions fill, press, select, check, uncheck and hover, then refuse legacy drag', { skip }, async t => {
+test('real v3 actions fill, press, select, check, uncheck, hover, drag and resize', { skip }, async t => {
   const f = await fixture(t, `<label>Name<input id="name"></label><label>Choice<select id="choice"><option>A</option><option>B</option></select></label>
     <label><input id="toggle" type="checkbox">Enable</label><button id="hover" onmouseover="this.textContent='Hovered'">Hover here</button>
     <div id="from" draggable="true" role="button" style="padding:30px" ondragstart="event.dataTransfer.setData('text/plain','dragged')">Source</div>
@@ -65,30 +66,11 @@ test('real v3 actions fill, press, select, check, uncheck and hover, then refuse
     { do: 'check', ref: await f.ref('Enable') }, { do: 'uncheck', ref: await f.ref('Enable') },
     { do: 'hover', ref: await f.ref('Hover here') }, { do: 'drag', ref: await f.ref('Source'), to: await f.ref('Destination') },
     { do: 'viewport', width: 390, height: 844 }, { do: 'wait', ref: await f.ref('Name') }], {});
-  assert.equal(result.stoppedAt, 7, result.lines.join('\n'));
-  assert.match(result.lines[6], /TRUSTED_TURN_REQUIRED/);
-  assert.match(result.lines[7], /not reached/); assert.match(result.lines[8], /not reached/);
+  assert.equal(result.stoppedAt, null, result.lines.join('\n'));
   assert.equal(await f.page.locator('#name').inputValue(), 'Example');
   assert.equal(await f.page.locator('#choice').inputValue(), 'B'); assert.equal(await f.page.locator('#toggle').isChecked(), false);
-  assert.equal(await f.page.locator('#hover').textContent(), 'Hovered'); assert.equal(await f.page.locator('#to').textContent(), 'Destination');
-  assert.deepEqual(f.page.viewportSize(), { width: 1000, height: 800 }); assert.ok(result.observe.text);
-});
-
-test('real v3 resize and wait complete in one batch after a delayed reveal', { skip }, async t => {
-  const f = await fixture(t, '<button id="ready">Ready after resize</button>');
-  const ref = await f.ref('Ready after resize');
-  await f.page.evaluate(() => {
-    const ready = document.querySelector('#ready'); ready.hidden = true;
-    window.addEventListener('resize', () => setTimeout(() => { ready.hidden = false; }, 100), { once: true });
-  });
-  const result = await f.run(f.tab, [{ do: 'viewport', width: 390, height: 844 }, { do: 'wait', ref }], {});
-  assert.equal(result.stoppedAt, null, result.lines.join('\n'));
-  assert.equal(result.lines.length, 2);
-  assert.match(result.lines[0], /viewport 390x844/);
-  assert.doesNotMatch(result.lines[1], /not reached|not run|failed/);
-  assert.deepEqual(await f.page.evaluate(() => [innerWidth, innerHeight]), [390, 844]);
-  assert.equal(await f.page.locator('#ready').isVisible(), true);
-  assert.deepEqual(f.checks.map(({ kind }) => kind), ['viewport', 'wait']);
+  assert.equal(await f.page.locator('#hover').textContent(), 'Hovered'); assert.equal(await f.page.locator('#to').textContent(), 'dragged');
+  assert.deepEqual(f.page.viewportSize(), { width: 390, height: 844 }); assert.ok(result.observe.text);
 });
 
 test('real v3 navigation stops a batch before touching the next document', { skip }, async t => {

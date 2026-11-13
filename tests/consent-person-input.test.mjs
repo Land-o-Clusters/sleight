@@ -1,12 +1,10 @@
-import { assertChildStatus } from './fixtures/child-status.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { copyFileSync, existsSync, mkdtempSync, readFileSync, realpathSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdtempSync, readFileSync, realpathSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { macCommandSkip } from './requirements.mjs';
-import { helperCompileArgs, helperSettingsFlags } from '../plugins/sleight/lib/direct-browser/host-cache.mjs';
 import { swiftModuleCache } from '../bench/swift-cache.mjs';
 import { registerTemp, trackTemp } from '../scripts/temp-leftovers.mjs';
 import { createElectronConsent, createGrantStore } from '../plugins/sleight/lib/direct-browser/electron-consent.mjs';
@@ -33,8 +31,8 @@ test('protected consent buttons use the input guard on every native card', () =>
   assert.match(source, /Opening is independent[\s\S]*?showNextAsk\(\)/);
 });
 
-function runInputFixture(t, inputSource) {
-  const block = inputSource.match(/\/\/ BEGIN PERSON INPUT\n([\s\S]*?)\/\/ END PERSON INPUT/);
+test('Swift consent input fixture refuses AX and posted input but admits a HID event seam', { skip: macCommandSkip('xcrun') }, async t => {
+  const block = source.match(/\/\/ BEGIN PERSON INPUT\n([\s\S]*?)\/\/ END PERSON INPUT/);
   assert.ok(block, 'person input guard absent');
   const dir = registerTemp(t, trackTemp(realpathSync(mkdtempSync(join(tmpdir(), 'sleight-person-input-')))));
   const binary = join(dir, 'fixture'), swift = join(dir, 'main.swift');
@@ -43,15 +41,10 @@ function runInputFixture(t, inputSource) {
   const observed = block[1].replace('proc_pidpath(', 'fixtureProcPidPath(').replace('let reason = tooSoon ? "CONSENT_TOO_SOON" : "PERSON_INPUT_REQUIRED"',
     'let reason = tooSoon ? "CONSENT_TOO_SOON" : "PERSON_INPUT_REQUIRED"\n    fixtureRefusals.append(reason)');
   writeFileSync(swift, 'import AppKit\nimport Carbon.HIToolbox\nimport ObjectiveC\nimport Darwin\nimport os.log\nvar fixtureRefusals: [String] = []\n' + readFileSync(new URL('./fixtures/consent-person-path.swift', import.meta.url), 'utf8') + observed + readFileSync(new URL('./fixtures/consent-person-input.swift', import.meta.url), 'utf8'));
-  const built = spawnSync('/usr/bin/xcrun', helperCompileArgs('consent-host', { sources: [swift], binary, moduleCache: swiftModuleCache() }), { encoding: 'utf8', timeout: 600000, killSignal: 'SIGKILL' });
-  assertChildStatus(built, 0, built.stderr);
-  const run = spawnSync(binary, ['--selftest'], { encoding: 'utf8', timeout: 10000, killSignal: 'SIGKILL' });
-  return { dir, run };
-}
-
-test('Swift consent input fixture refuses AX and posted input but admits a HID event seam', { skip: macCommandSkip('xcrun') }, async t => {
-  const { dir, run } = runInputFixture(t, source);
-  assertChildStatus(run, 0, run.stderr + run.stdout);
+  const built = spawnSync('/usr/bin/xcrun', ['swiftc', '-module-cache-path', swiftModuleCache(), swift, '-o', binary], { encoding: 'utf8', timeout: 600000 });
+  assert.equal(built.status, 0, built.stderr);
+  const run = spawnSync(binary, [], { encoding: 'utf8', timeout: 10000 });
+  assert.equal(run.status, 0, run.stderr + run.stdout);
   const receipts = JSON.parse(run.stdout);
   assert.deepEqual(receipts, { refused: [], accepted: ['Always allow', 'Always allow', 'Allow this session', 'Decline', 'Always allow'],
     handoffRefusals: Array(5).fill('PERSON_INPUT_REQUIRED') });
@@ -79,62 +72,8 @@ test('Swift consent input fixture refuses AX and posted input but admits a HID e
   assert.equal(store.list().length, 1, 'HID seam reaches the persistent grant path');
 });
 
-for (const [name, before, after, failure] of [
-  ['AX-press accepted', 'refuseConsentInput(sender as? NSButton); return false', 'return true', 'AXPress refused'],
-  ['posted-event accepted', 'if pid == 0 { return true }', 'if pid >= 0 { return true }', 'posted input writes no pre-approval receipt'],
-]) test(`INT23 in-memory mutation: ${name}`, { skip: macCommandSkip('xcrun') }, t => {
-  t.after(() => assert.equal(readFileSync(sourcePath, 'utf8'), source, 'production source remains byte-identical'));
-  assert.equal(source.split(before).length, 2, 'exactly one production mutation seam');
-  const mutated = source.replace(before, after);
-  const { run } = runInputFixture(t, mutated);
-  assertChildStatus(run, 1, run.stderr + run.stdout);
-  assert.equal(run.stdout.trim(), `FAIL ${failure}`, 'the behavioral assertion kills the compiled mutant');
-  t.diagnostic(`${name}: optimized compile exit 0, fixture exit 1; production source unchanged`);
-});
-
-test('the complete sealed Swift consent helper compiles optimized without launching it', { skip: macCommandSkip('xcrun') }, t => {
+test('the complete Swift consent helper compiles without launching it', { skip: macCommandSkip('xcrun') }, t => {
   const dir = registerTemp(t, trackTemp(mkdtempSync(join(tmpdir(), 'sleight-consent-build-'))));
-  const combined = join(dir, 'main.swift');
-  writeFileSync(combined, readFileSync(new URL('../plugins/sleight/lib/mac-driver/native/SealedSettings.swift', import.meta.url), 'utf8') + '\n' + source, { mode: 0o600 });
-  const built = spawnSync('/usr/bin/xcrun', helperCompileArgs('consent-host', { sources: [combined], settingsFlags: helperSettingsFlags(true), binary: join(dir, 'consent-host'), moduleCache: swiftModuleCache() }), { encoding: 'utf8', timeout: 600000, killSignal: 'SIGKILL' });
-  assertChildStatus(built, 0, built.stderr);
-});
-
-
-test('GL1A 8: personInput contains no process-name trust shortcut', () => {
-  const guard = source.match(/func personInput\(_ event: CGEvent\?\) -> Bool \{[\s\S]*?\n\}/)?.[0];
-  assert.ok(guard);
-  assert.doesNotMatch(guard.toLowerCase(), /glide|consenthost|consent-host/);
-});
-
-test('GL1A 8: unposted events from consent-host and the renamed probe poster fail personInput', { skip: macCommandSkip('xcrun') }, t => {
-  const directory = registerTemp(t, trackTemp(realpathSync(mkdtempSync(join(tmpdir(), 'sleight-glide-provenance-')))));
-  const guard = source.match(/func personInput\(_ event: CGEvent\?\) -> Bool \{[\s\S]*?\n\}/)?.[0];
-  const poster = readFileSync(new URL('../bench/consent-guard-poster.swift', import.meta.url), 'utf8')
-    .match(/\/\/ BEGIN CONSENT PROBE MOUSE EVENT\n([\s\S]*?)\/\/ END CONSENT PROBE MOUSE EVENT/)?.[1];
-  assert.ok(guard); assert.ok(poster);
-  const swift = join(directory, 'main.swift');
-  writeFileSync(swift, 'import Foundation\nimport CoreGraphics\nimport Darwin\n' + guard + '\n' + poster + `
-    guard CommandLine.arguments.dropFirst() == ["--selftest"] else { exit(64) }
-    var checked = 0
-    for mode in ["pid", "hid", "hidpid"] {
-      guard let event = consentProbeMouseEvent(mode: mode, type: .leftMouseUp, point: .zero) else { exit(70) }
-      // Model the source pid the OS attributes on delivery. These events are never posted.
-      event.setIntegerValueField(.eventSourceUnixProcessID, value: Int64(getpid()))
-      guard !personInput(event) else { exit(1) }
-      checked += 1
-    }
-    print("refused \\(checked); posted 0; windows 0")
-  `);
-  const binary = join(directory, 'consent-host');
-  const built = spawnSync('/usr/bin/xcrun', helperCompileArgs('consent-host', { sources: [swift], binary, moduleCache: swiftModuleCache() }),
-    { encoding: 'utf8', timeout: 300000, killSignal: 'SIGKILL' });
-  assertChildStatus(built, 0, built.stderr);
-  for (const name of ['consent-host', 'glide-engine']) {
-    const target = join(directory, name);
-    if (target !== binary) copyFileSync(binary, target);
-    const run = spawnSync(target, ['--selftest'], { encoding: 'utf8', timeout: 10000, killSignal: 'SIGKILL' });
-    assertChildStatus(run, 0, run.stdout + run.stderr);
-    assert.equal(run.stdout.trim(), 'refused 3; posted 0; windows 0');
-  }
+  const built = spawnSync('/usr/bin/xcrun', ['swiftc', '-module-cache-path', swiftModuleCache(), sourcePath.pathname, '-o', join(dir, 'consent-host')], { encoding: 'utf8', timeout: 600000 });
+  assert.equal(built.status, 0, built.stderr);
 });

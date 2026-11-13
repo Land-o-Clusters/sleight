@@ -48,7 +48,7 @@ export function discoverNativeBrowsers({ run = execFileSync } = {}) {
         if (url && !url.isNil()) apps.push(ObjC.unwrap(url.lastPathComponent).replace(/\\.app$/, ''));
       }
       JSON.stringify(apps);`;
-    const apps = JSON.parse(run('/usr/bin/osascript', ['-l', 'JavaScript', '-e', script], { encoding: 'utf8', timeout: 2000, maxBuffer: 262144, stdio: ['ignore', 'pipe', 'pipe'], killSignal: 'SIGKILL' }));
+    const apps = JSON.parse(run('/usr/bin/osascript', ['-l', 'JavaScript', '-e', script], { encoding: 'utf8', timeout: 2000, maxBuffer: 262144, stdio: ['ignore', 'pipe', 'pipe'] }));
     return Array.isArray(apps) && apps.every(app => typeof app === 'string' && app) ? apps : [];
   } catch { return []; }
 }

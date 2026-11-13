@@ -1,7 +1,7 @@
 {
   "base": "c9fb85bb",
   "before": "2026-10-28T07:28:00Z",
-  "bank": "<private-evidence>/race-1017",
+  "bank": "~/Projects/sleight-wt/race-1017",
   "counts": {
     "chrome": {
       "files": 1060,

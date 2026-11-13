@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtemp, rmdir, rm, stat, writeFile, unlink, rename, symlink } from 'node:fs/promises';
+import { mkdtemp, rmdir, rm, stat, writeFile, unlink } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { acquireLiveLock } from '../bench/live-lock.mjs';
@@ -65,33 +65,6 @@ test('interrupting a lock wait leaves the other holder intact', async t => {
   const next = acquireLiveLock(path, { wait: true, signal: controller.signal });
   const rejection = assert.rejects(next, { name: 'AbortError' });
   controller.abort(); await rejection;
-  assert.ok((await stat(path)).isDirectory());
-  await release();
-});
-
-test('an old release refuses a replacement directory and a symlink to the original inode', async t => {
-  const bank = trackTemp(await mkdtemp(join(tmpdir(), 'sleight-live-lock-test-')));
-  t.after(() => rm(bank, { recursive: true, force: true }));
-  const path = join(bank, 'lock'), retained = join(bank, 'retained');
-  const oldRelease = await acquireLiveLock(path);
-  await rename(path, retained);
-  const replacementRelease = await acquireLiveLock(path);
-  await assert.rejects(oldRelease(), /ownership changed/);
-  assert.ok((await stat(path)).isDirectory());
-  await replacementRelease();
-  await symlink(retained, path);
-  await assert.rejects(oldRelease(), /ownership changed/);
-  assert.ok((await stat(retained)).isDirectory());
-});
-
-test('a completed release cannot remove a later holder on repeated close', async t => {
-  const bank = trackTemp(await mkdtemp(join(tmpdir(), 'sleight-live-lock-test-')));
-  t.after(() => rm(bank, { recursive: true, force: true }));
-  const path = join(bank, 'lock');
-  const oldRelease = await acquireLiveLock(path);
-  await oldRelease();
-  const release = await acquireLiveLock(path);
-  await oldRelease();
   assert.ok((await stat(path)).isDirectory());
   await release();
 });

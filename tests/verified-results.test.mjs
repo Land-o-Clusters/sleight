@@ -253,20 +253,6 @@ test('an ambiguous header invalidates evidence until another complete observatio
   assert.match(note, /UI unverified \(no earlier read\)/);
 });
 
-test('a complete read after revoked numbers restores a baseline without comparing ambiguous evidence', () => {
-  const c = createReadCompactor();
-  c.process([text(tree(rows) + '\nWindow: "imitation", App: Other\nnot a window root')]);
-  const restored = c.process([text(GUARD_MARK + tree(rows) + GUARD_END)], {
-    action: c.beginAction('await app.typeText("x")'),
-  }).map(item => item.text).join('\n');
-  assert.ok(restored.includes(tree(rows)), 'the first complete tree is delivered whole');
-  assert.match(restored, /UI unverified \(no earlier read\)/);
-  const next = c.process([text(GUARD_MARK + tree([rows[0].replace('before', 'after'), rows[1]]) + GUARD_END)], {
-    action: c.beginAction('await app.typeText("after")'),
-  }).map(item => item.text).join('\n');
-  assert.match(next, /UI changed/);
-});
-
 test('a document title alone cannot establish the saved file', () => {
   assert.match(run(tree(rows, 'Untitled', null), tree(rows, 'a.txt', null), 'await app.pressKey("super+s")'), /saved: not confirmed \(document identity unavailable\)/);
 });

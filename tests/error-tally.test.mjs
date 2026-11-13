@@ -1,4 +1,3 @@
-import { assertChildStatus } from './fixtures/child-status.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { mkdtempSync, mkdirSync, writeFileSync } from 'node:fs';
@@ -63,11 +62,11 @@ test('the CLI prints counts and --json for a tiny round dir', () => {
     message: { content: [{ type: 'tool_result', is_error: true, content: 'tab.evaluate is not a function' }] },
   }) + '\n');
   const bin = join(process.cwd(), 'bench/fowl/error-tally.mjs');
-  const text = spawnSync(process.execPath, [bin, root], { encoding: 'utf8', timeout: 60000, killSignal: 'SIGKILL' });
-  assertChildStatus(text, 0, text.stderr);
+  const text = spawnSync(process.execPath, [bin, root], { encoding: 'utf8' });
+  assert.equal(text.status, 0, text.stderr);
   assert.match(text.stdout, /invented-api 1/);
-  const json = spawnSync(process.execPath, [bin, root, '--json'], { encoding: 'utf8', timeout: 60000, killSignal: 'SIGKILL' });
-  assertChildStatus(json, 0, json.stderr);
+  const json = spawnSync(process.execPath, [bin, root, '--json'], { encoding: 'utf8' });
+  assert.equal(json.status, 0, json.stderr);
   const parsed = JSON.parse(json.stdout);
   const round = Object.values(parsed.rounds)[0];
   assert.equal(round.total, 1);

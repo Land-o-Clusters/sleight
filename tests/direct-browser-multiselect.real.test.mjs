@@ -6,30 +6,14 @@ import { join } from 'node:path';
 import { fixture, skip } from './fixtures/cr4-real.mjs';
 import { createFillFields } from '../plugins/sleight/lib/direct-browser/fill.mjs';
 import { createActionRunner, inspectTarget } from '../plugins/sleight/lib/direct-browser/act.mjs';
-import { backgroundClick, newHook, hookSource, hookProof, hookOpen } from '../plugins/sleight/lib/direct-browser/page.mjs';
+import { backgroundClick } from '../plugins/sleight/lib/direct-browser/page.mjs';
 import { snapshot, acknowledgeSnapshot, snapshotRefBinding } from '../plugins/sleight/lib/direct-browser/snapshot.mjs';
 
-async function setup(t, html, observeTabs = false, stubbornFocus = false) {
-  let dropHook; t.after(async () => dropHook?.());
+async function setup(t, html, observeTabs = false) {
   const f = await fixture(t, html, {}, { observeTabs }), { page } = f.entry;
   await page.waitForLoadState('load');
-  let click = backgroundClick;
-  if (stubbornFocus) {
-    // Chromium releases real iframe focus on native blur. Inject only a failed blur
-    // to exercise the persistent-focus refusal with the production captured getter.
-    const hook = newHook(), source = hookSource(hook);
-    const blur = 'const nativeBlur = globalThis.HTMLElement?.prototype.blur;';
-    assert.ok(source.includes(blur), 'production blur adapter');
-    const held = source.replace(blur, 'const nativeBlur = function () {};');
-    for (const frame of page.frames()) assert.equal(await frame.evaluate(held), true);
-    dropHook = async () => {
-      for (const frame of page.frames()) if (!frame.isDetached())
-        hookOpen(hook, await frame.evaluate(({ key, proof }) => window[key].off(proof), { key: hook.key, proof: hookProof(hook, 'off') }));
-    };
-    click = (tab, locator, input, options) => backgroundClick({ ...tab, hook }, locator, input, options);
-  }
-  const runSteps = createActionRunner({ check: () => 'allow', snapshot, backgroundClick: click });
-  const fill = createFillFields({ check: () => 'allow', runSteps, backgroundClick: click, inspectElement: inspectTarget });
+  const runSteps = createActionRunner({ check: () => 'allow', snapshot, backgroundClick });
+  const fill = createFillFields({ check: () => 'allow', runSteps, inspectElement: inspectTarget });
   const ref = async selector => {
     // Deliver public refs as the worker does. A private locator snapshot neither
     // acknowledges delivery nor preserves the full page's latest ref listing.
@@ -150,18 +134,13 @@ for (const child of ['<a href="/landed">Japanese</a>', '<button>Japanese</button
     assert.deepEqual((await f.tabState()).filter(tab => tab.active).map(tab => tab.id), before.filter(tab => tab.active).map(tab => tab.id));
   });
 
-for (const modifier of ['cmd', 'ctrl', 'fill']) test('real modified option refuses card-frame focus when native blur fails: ' + modifier, { skip, timeout: 30000 }, async t => {
-  const f = await setup(t, '<iframe id="card" srcdoc="<input>"></iframe>' + aria, true, true);
+for (const modifier of ['cmd', 'ctrl', 'fill']) test('real modified option refuses persistent card-frame focus: ' + modifier, { skip, timeout: 30000 }, async t => {
+  const f = await setup(t, '<iframe id="card" srcdoc="<input>"></iframe>' + aria, true);
   const ref = await f.ref('[role="option"]:last-child'), before = await f.tabState();
   await f.page.evaluate(() => {
     window.inputs = 0;
     for (const event of ['keydown', 'pointerdown', 'click']) window.addEventListener(event, () => inputs++);
-    const frame = document.getElementById('card'), input = frame.contentDocument.querySelector('input');
-    input.focus();
-    // Focus the real child input. A page's shadow getter must not hide it.
-    if (Object.getOwnPropertyDescriptor(Document.prototype, 'activeElement').get.call(document) !== frame)
-      throw Error('fixture did not focus its nested input');
-    Object.defineProperty(document, 'activeElement', { configurable: true, get: () => document.body });
+    Object.defineProperty(document, 'activeElement', { configurable: true, get: () => document.getElementById('card') });
   });
   if (modifier === 'fill') assert.equal((await f.fill('#languages', ['English', 'Portuguese (Brazil)', 'Japanese'])).rows[0].status, 'failed');
   else assert.match((await f.runSteps(f.entry, [{ do: 'click', ref, modifier }], {})).lines[0], /focus is held inside a frame/);

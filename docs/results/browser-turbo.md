@@ -438,7 +438,7 @@ The arms that use the engine ran on one engine version, 26.1023.50603. A version
 - The scorer takes one sleight build set at a time (the folder label, such as `sleight-r` or `sleight-b3-r`) with every usable competitor round in the same browser, so two sleight builds are never pooled. A set is scored once it has 3 runs of every task.
 - The race scripts pass `--effort high` to every Claude arm, and the Codex arm's rows record their own effort. Every Claude arm ran the pinned Claude Code on the tester's account login, each in its own config.
 
-Rounds come from `<private-evidence>/race-1017, ~/Library/Caches/sleight-bench/evidence/fw1-e51c52a-haiku, ~/Library/Caches/sleight-bench/evidence/fw1-e51c52a-opus`. Folders without `results.json` are still running and are left out, and there were none.
+Rounds come from `~/Projects/sleight-wt/race-1017, ~/Library/Caches/sleight-bench/evidence/fw1-e51c52a-haiku, ~/Library/Caches/sleight-bench/evidence/fw1-e51c52a-opus`. Folders without `results.json` are still running and are left out, and there were none.
 
 Sets left out because they don't yet have 3 runs of every task:
 

@@ -1,10 +1,4 @@
 {
-  "Claude Code": {
-    "false": "73df4777f6ebd85de5ddbad4d75f8316f5044bea2b3031150cdd0673478de66b",
-    "true": "73df4777f6ebd85de5ddbad4d75f8316f5044bea2b3031150cdd0673478de66b"
-  },
-  "Codex": {
-    "false": "73df4777f6ebd85de5ddbad4d75f8316f5044bea2b3031150cdd0673478de66b",
-    "true": "73df4777f6ebd85de5ddbad4d75f8316f5044bea2b3031150cdd0673478de66b"
-  }
+  "Claude Code": { "false": "234e9f433637bd9e288bdb76ae8b49d2639163ff7672d162b838847be91f9df4", "true": "234e9f433637bd9e288bdb76ae8b49d2639163ff7672d162b838847be91f9df4" },
+  "Codex": { "false": "234e9f433637bd9e288bdb76ae8b49d2639163ff7672d162b838847be91f9df4", "true": "234e9f433637bd9e288bdb76ae8b49d2639163ff7672d162b838847be91f9df4" }
 }

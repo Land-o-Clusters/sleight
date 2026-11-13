@@ -1,6 +1,6 @@
 {
   "id": "MS1",
-  "source": "<private-evidence>/race-1017/chrome-sleight-turbo-rel131-r2/form-settings",
+  "source": "~/Projects/sleight-wt/race-1017/chrome-sleight-turbo-rel131-r2/form-settings",
   "switch": null, "tool": "browser_fill", "argumentPattern": "Japanese|pt-BR|Portuguese",
   "comparison": "worktrees",
   "resultIncludes": "Japanese[^\\n]*selected|selected[^\\n]*Japanese",

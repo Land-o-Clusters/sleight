@@ -5,11 +5,7 @@ import { join } from 'node:path';
 import { setTimeout as delay } from 'node:timers/promises';
 import { defaultDirectory, isMain } from './listen.mjs';
 
-export async function discoverSockets(dir = defaultDirectory(), { platform = process.platform, windows } = {}) {
-  if (platform === 'win32') {
-    windows ??= (await import('../../plugins/sleight/lib/hand/windows-transport.mjs')).createWindowsTransport();
-    return (await windows.discover()).map(e => e.path);
-  }
+export async function discoverSockets(dir = defaultDirectory()) {
   try {
     const info = await lstat(dir);
     if (!info.isDirectory() || info.isSymbolicLink() || info.uid !== process.getuid() || (info.mode & 0o7777) !== 0o700) return [];
@@ -24,18 +20,14 @@ export async function discoverSockets(dir = defaultDirectory(), { platform = pro
   } catch (error) { if (error.code === 'ENOENT') return []; throw error; }
 }
 
-async function connect(path, network, validate = async () => true, timeoutMs = 1000) {
+async function connect(path) {
   return new Promise(resolve => {
-    const socket = network.createConnection(path);
+    const socket = net.createConnection(path);
     // Dead or unresponsive renderers cannot hold the replay open.
-    const timeout = setTimeout(() => socket.destroy(), timeoutMs);
+    const timeout = setTimeout(() => socket.destroy(), 1000);
     socket.on('error', () => {});
     socket.on('data', () => {}); // The protocol has no reply channel.
-    socket.once('connect', async () => {
-      try { if (!await validate() || socket.destroyed) return socket.destroy(); }
-      catch { socket.destroy(); return; }
-      clearTimeout(timeout); resolve(socket);
-    });
+    socket.once('connect', () => { clearTimeout(timeout); resolve(socket); });
     socket.once('close', () => { clearTimeout(timeout); resolve(null); });
   });
 }
@@ -50,7 +42,7 @@ async function write(socket, line) {
   });
 }
 
-export async function replayFile({ file, dir = defaultDirectory(), speed = 1, sleep = delay, platform = process.platform, windows, net: network = net }) {
+export async function replayFile({ file, dir = defaultDirectory(), speed = 1, sleep = delay }) {
   if (!Number.isFinite(speed) || speed <= 0) throw new Error('Replay speed must be a positive number');
   const lines = (await readFile(file, 'utf8')).split(/\r?\n/).filter(line => line.trim());
   // Validate all timestamps before connecting or sending any data.
@@ -59,13 +51,7 @@ export async function replayFile({ file, dir = defaultDirectory(), speed = 1, sl
     if (!Number.isFinite(event.ts)) throw new Error(`Missing timestamp on line ${i + 1}`);
     return { line, ts: event.ts };
   });
-  let entries;
-  if (platform === 'win32') {
-    windows ??= (await import('../../plugins/sleight/lib/hand/windows-transport.mjs')).createWindowsTransport();
-    entries = await windows.discover();
-  } else entries = (await discoverSockets(dir)).map(path => ({ path }));
-  const sockets = (await Promise.all(entries.map(entry => connect(entry.path, network,
-    platform === 'win32' ? () => windows.validate(entry) : undefined, platform === 'win32' ? 5000 : 1000)))).filter(Boolean);
+  const sockets = (await Promise.all((await discoverSockets(dir)).map(connect))).filter(Boolean);
   try {
     for (let i = 0; i < records.length; i++) {
       if (i) {

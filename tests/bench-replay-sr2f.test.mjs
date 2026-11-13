@@ -2,12 +2,12 @@
 const MAC_TMP = ['', 'private', 'tmp'].join('/');
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
+import { homedir } from 'node:os';
 import { join } from 'node:path';
 import { deflateSync } from 'node:zlib';
 import { describe } from 'node:test';
 import { packageSkip } from './requirements.mjs';
-import { retainedBank } from './helpers/retained-bank.mjs';
 
 describe('offline replay with the source parser', { skip: packageSkip('typescript') }, async () => {
 const { TargetMapper, divergence, comparisonResult } = await import('../bench/replay/mapping.mjs');
@@ -117,10 +117,9 @@ test('later numeric actions use fresh full trees, compact diffs and mapping read
   assert.equal(replay.calls.length, 5);
 });
 
-const bank = retainedBank('race-1017/evidence-replay-dp1b', ['1-A/trace.jsonl']);
-const evidence = bank.path;
+const evidence = join(homedir(), 'Projects/sleight-wt/race-1017/evidence-replay-dp1b');
 test('retained DP1 first-call images match structurally while changed notices still diverge', {
-  skip: bank.skip,
+  skip: !existsSync(join(evidence, '1-A/trace.jsonl')) && 'Retained DP1 evidence is not installed',
 }, () => {
   for (let iteration = 1; iteration <= 5; iteration++) for (const variant of ['A', 'B']) {
     const folder = `${2 * iteration - (variant === 'A' ? 1 : 0)}-${variant}`;

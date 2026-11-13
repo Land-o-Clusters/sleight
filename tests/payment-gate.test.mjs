@@ -38,59 +38,6 @@ const site = '127.0.0.1:5413', payNow = 'button Pay now';
 const paid = { site, shown: '$268.00', control: payNow, modal: false, payment: true };
 const spent = { site, shown: '$268.00', control: payNow, modal: false, at: NOW - 1000 };
 
-test('SA1B honest recorded payment fixtures keep their allow count', t => {
-  const cases = [[beforePay, 88], [luna, 86], [sol, 97]];
-  const allowed = cases.filter(([tree, id]) => enginePayment('click', [id], tree, gate('requested', named))?.allowed === 'message').length;
-  t.diagnostic(`honest recorded payment fixtures: ${allowed}/${cases.length} allow`);
-  assert.equal(allowed, 3);
-});
-
-for (const [figure, currency] of [['$1.304', '$'], ['$1,304', '$'], ['1.304 €', 'EUR'], ['EUR 1,304', 'EUR']])
-  test(`SA1O namedAmount alone keeps the smaller user reading: ${figure}`, () => {
-    assert.deepEqual(namedAmount('Pay ' + figure + ' with the card'), { amount: '1.304', currency, display: figure });
-  });
-
-test('SA1O namedAmount does not invent an amount from adjacent numbers', () => {
-  assert.deepEqual(namedAmount('Pay $5 20 minutes later with the card'), {});
-});
-
-for (const total of ['$5.00 1000 USD', '$5.00 1000 dollars', '$5,00 1000 USD',
-  'USD 5.00 250 EUR', '$5.00 1 000 USD'])
-  test(`SA1O serialized engine refuses adjacent figures: ${total}`, async () => {
-    const tree = after(beforePay.replace(/\$[\d,.]+/g, '$5.00'), 88, '999 text Total ' + total);
-    const payment = gate('requested', 'Pay $5.00 with the card');
-    assert.equal(enginePayment('click', [88], tree, payment)?.why, 'over');
-    const result = await guarded(tree, 'await app.click(88);', payment);
-    assert.deepEqual(result.clicked, []);
-    assert.match(result.error?.message ?? '', /sleight stopped this payment/);
-  });
-
-// Under-reading a total must not let the matching five-euro item authorize the checkout.
-for (const [total, currency, item] of [
-  ['1.304 €', 'EUR', '5,00 €'], ['1 304,00 €', 'EUR', '5,00 €'],
-  ['1\u202f304,00 €', 'EUR', '5,00 €'], ["1'304.00 CHF", 'CHF', 'CHF 5.00'],
-  ['$1.2 million', 'USD', '$5.00'], ['€1,2 Mio.', 'EUR', '5,00 €'],
-  ['₹5 lakh', 'INR', '₹5.00'], ['5 k €', 'EUR', '5,00 €'],
-  ['1.304 567 €', 'EUR', '5,00 €'], ['1.20 million', 'USD', '$5.00'],
-]) test(`SA1B engine asks before a larger or unreadable total: ${total}`, async () => {
-  const tree = after(beforePay.replace(/\$[\d,.]+/g, item), 88, '999 text Total ' + total);
-  const payment = gate('requested', null, false, { message: { amount: '5', currency } });
-  assert.equal(enginePayment('click', [88], tree, payment)?.why, 'over');
-  const result = await guarded(tree, 'await app.click(88);', payment);
-  assert.deepEqual(result.clicked, [], 'serialized engine guard sends no click');
-  assert.match(result.error?.message ?? '', /sleight stopped this payment/);
-});
-
-test('SA1P explicit ambiguous user amounts ask even with a matching page', () => {
-  const tree = total => ['1 standard window Checkout', '\t2 HTML content Checkout, URL: https://shop.invalid/checkout',
-    '\t\t3 text field Card number', '\t\t4 text Total ' + total, '\t\t6 button Place order'].join('\n');
-  const payment = gate('requested', 'Pay 1.304 € with the test card');
-  assert.equal(enginePayment('click', [6], tree('1.304,00 €'), payment)?.why, 'over');
-  assert.equal(enginePayment('click', [6], tree('1,30 €'), payment)?.why, 'mismatch');
-  assert.equal(enginePayment('click', [6], tree('1.305,00 €'), payment)?.why, 'over');
-  assert.equal(enginePayment('click', [6], tree('1.304,00 €'), gate('requested', null, false, { message: { amount: '1.304', currency: 'EUR' } }))?.why, 'over');
-});
-
 test('the Sol action is stopped: Pay now on the unpriced checkout, with no copy of the message or one that names no amount', () => {
   assert.deepEqual(enginePayment('click', [88], beforePay, gate('requested', null)), { why: 'nocopy', shown: '$268.00', site, control: payNow, modal: false, payment: true });
   assert.equal(enginePayment('click', [88], beforePay, gate('requested', prompt))?.why, 'none');
@@ -328,8 +275,7 @@ test("the relay's copy of the message lasts one user turn, counts its payments a
 async function guarded(tree, code, payment, mark) {
   const clicked = [], written = [];
   const raw = { getAXState: async () => tree, click: async number => { clicked.push(number); }, doubleClick: async number => { clicked.push('double ' + number); },
-    performAction: async number => { clicked.push('action ' + number); }, pressKey: async key => { clicked.push('key ' + key); },
-    typeText: async text => { clicked.push('text ' + text); } };
+    performAction: async number => { clicked.push('action ' + number); }, pressKey: async key => { clicked.push('key ' + key); } };
   const context = { cua: { getApp: async () => raw }, nodeRepl: { write(text) { written.push(text); } } };
   const run = source => runInNewContext(`(async () => { ${source} })()`, context);
   await run(readCode('await cua.getApp("Firefox");'));
@@ -338,17 +284,6 @@ async function guarded(tree, code, payment, mark) {
   const records = written.join('').split('\n').filter(line => mark && line.startsWith(mark)).map(line => JSON.parse(line.slice(mark.length)));
   return { clicked, error, records };
 }
-
-for (const text of ['\r', '\n', '\r\n']) test(`typed Return ${JSON.stringify(text)} still sends a named payment and stops an unpriced payment`, async () => {
-  const code = `await app.typeText(${JSON.stringify(text)});`;
-  const tree = focus(beforePay, '88 button Pay now');
-  const allowed = await guarded(tree, code, gate('requested', named));
-  assert.equal(allowed.error, undefined);
-  assert.deepEqual(allowed.clicked, ['text ' + text]);
-  const stopped = await guarded(tree, code, gate('requested', prompt));
-  assert.deepEqual(stopped.clicked, []);
-  assert.match(stopped.error?.message ?? '', /sleight stopped this payment/);
-});
 
 test('the guard stops the click before the engine gets it, and lets the named payment through', async () => {
   const stopped = await guarded(beforePay, 'await app.click({ label: "Pay now" });', gate('requested', null));
@@ -796,113 +731,3 @@ for (const presence of [{ idleSeconds: 999, locked: false }, { idleSeconds: 0, l
   f.call('again', 'await app.click(88)'); await f.settle();
   assert.deepEqual(f.update('again').payment.allow, { site, shown: '$268.00', control: payNow });
 });
-
-for (const separator of ['.', ',', ' ', '\u202f', '\u00a0'])
-  test(`SA1P serialized engine asks for ambiguous user amount: ${JSON.stringify(separator)}`, async () => {
-    const raw = '1' + separator + '304';
-    const tree = after(beforePay.replace(/\$[\d,.]+/g, '$1,304.00'), 88, '999 text field Amount, Value: ' + raw);
-    assert.equal(namedAmount('Pay $' + raw + ' with the card').amount, '1.304');
-    for (const display of [undefined, '$' + raw, raw + ' USD']) {
-      const payment = display === undefined ? gate('requested', null, false, { message: { amount: raw, currency: 'USD' } })
-        : gate('requested', 'Pay ' + display + ' with the card');
-      assert.equal(enginePayment('click', [88], tree, payment)?.why, separator === ',' ? undefined : 'over');
-      const result = await guarded(tree, 'await app.click(88);', payment);
-      assert.deepEqual(result.clicked, separator === ',' ? [88] : []);
-      if (separator !== ',') assert.match(result.error?.message ?? '', /sleight stopped this payment/);
-    }
-  });
-
-const { paymentFigureSweep } = await import('./fixtures/payment-figure-sweep.mjs');
-for (const { text, amount } of paymentFigureSweep)
-  test(`SA1P serialized engine sweep: ${JSON.stringify(text)}`, async () => {
-    const tree = after(beforePay.replace(/\$[\d,.]+/g, '$' + amount), 88, '999 text ' + text);
-    const payment = gate('requested', 'Pay $' + amount + ' with the card');
-    assert.equal(enginePayment('click', [88], tree, payment)?.why, 'over');
-    const result = await guarded(tree, 'await app.click(88);', payment);
-    assert.deepEqual(result.clicked, []);
-    assert.match(result.error?.message ?? '', /sleight stopped this payment/);
-  });
-
-const { sa1tAsks, metadataRows, groupingCases } = await import('./fixtures/payment-figure-sweep.mjs');
-for (const { text, amount } of sa1tAsks) test(`SA1T serialized engine asks: ${JSON.stringify(text)}`, async () => {
-  const tree = after(beforePay.replace(/\$[\d,.]+/g, '$' + amount), 88, '999 text ' + text);
-  const payment = gate('requested', 'Pay $' + amount + ' with the card');
-  assert.equal(enginePayment('click', [88], tree, payment)?.why, 'over');
-  const result = await guarded(tree, 'await app.click(88);', payment);
-  assert.deepEqual(result.clicked, []);
-  assert.match(result.error?.message ?? '', /sleight stopped this payment/);
-});
-for (const { raw, total, allow } of groupingCases) test(`SA1T serialized engine grouping ${raw} against ${total}`, async () => {
-  const tree = beforePay.replace(/\$[\d,.]+/g, total);
-  const payment = gate('requested', 'Pay $' + raw + ' with the card');
-  assert.equal(enginePayment('click', [88], tree, payment)?.allowed, allow ? 'message' : undefined);
-  if (!allow) assert.equal(enginePayment('click', [88], tree, payment)?.why, 'over');
-  const result = await guarded(tree, 'await app.click(88);', payment);
-  assert.deepEqual(result.clicked, allow ? [88] : []);
-  if (!allow) assert.match(result.error?.message ?? '', /sleight stopped this payment/);
-});
-for (const row of metadataRows) test(`SA1V serialized engine metadata: ${row}`, async () => {
-  const tree = after(beforePay.replace(/\$[\d,.]+/g, '$5.00'), 88, '999 text ' + row);
-  const result = await guarded(tree, 'await app.click(88);', gate('requested', 'Pay $5.00 with the card'));
-  assert.deepEqual(result.clicked, []);
-  assert.match(result.error?.message ?? '', /sleight stopped this payment/);
-});
-test('SA1T honest recorded amounts keep both allow controls and the lower-amount stop', t => {
-  const cases = [[beforePay, 88], [luna, 86], [sol, 97]];
-  for (const raw of ['$268.00', '$268', '$267.00']) {
-    const allowed = cases.filter(([tree, id]) => enginePayment('click', [id], tree, gate('requested', 'Pay ' + raw + ' with the card'))?.allowed === 'message').length;
-    t.diagnostic(raw + ': ' + allowed + '/3 allow');
-    assert.equal(allowed, raw === '$267.00' ? 0 : 3);
-  }
-});
-
-const { hashCases, currencyHashCases } = await import('./fixtures/payment-sa1z.mjs');
-for (const [text, allow] of [...hashCases, ...currencyHashCases]) test(`SA1Z serialized engine ${allow ? 'allows' : 'asks'}: ${text}`, async () => {
-  const tree = after(beforePay.replace(/\$[\d,.]+/g, '$5.00'), 88, '999 text ' + text);
-  const payment = gate('requested', 'Pay $5.00 with the card');
-  assert.equal(enginePayment('click', [88], tree, payment)?.allowed, allow ? 'message' : undefined);
-  const result = await guarded(tree, 'await app.click(88);', payment);
-  assert.deepEqual(result.clicked, allow ? [88] : []);
-  if (!allow) assert.match(result.error?.message ?? '', /sleight stopped this payment/);
-});
-
-const { sa1vAsks, sa1vUnits } = await import('./fixtures/payment-figure-sweep.mjs');
-for (const [rows, allow] of [[sa1vAsks, false], [sa1vUnits, true]])
-  for (const text of rows) test(`SA1V serialized engine ${allow ? 'allows' : 'asks'}: ${text}`, async () => {
-    const tree = after(beforePay.replace(/\$[\d,.]+/g, '$5.00'), 88, '999 text ' + text);
-    const payment = gate('requested', 'Pay $5.00 with the card');
-    assert.equal(enginePayment('click', [88], tree, payment)?.allowed, allow ? 'message' : undefined);
-    const result = await guarded(tree, 'await app.click(88);', payment);
-    assert.deepEqual(result.clicked, allow ? [88] : []);
-    if (!allow) assert.match(result.error?.message ?? '', /sleight stopped this payment/);
-  });
-for (const raw of ['$1.304', '$1.200']) test(`SA1V never asks for an ambiguous user reading: ${raw}`, async () => {
-  const tree = beforePay.replace(/\$[\d,.]+/g, raw.replace('.', ',') + '.00');
-  const payment = gate('never', 'Pay ' + raw + ' with the card');
-  assert.equal(enginePayment('click', [88], tree, payment)?.why, 'none');
-  const result = await guarded(tree, 'await app.click(88);', payment);
-  assert.deepEqual(result.clicked, []);
-  assert.match(result.error?.message ?? '', /sleight stopped this payment/);
-});
-
-const { joinedDecimals, conflictingCurrencies, compatibleCurrencies } = await import('./fixtures/payment-sa1x.mjs');
-for (const [texts, allow] of [[[...joinedDecimals, ...conflictingCurrencies], false], [compatibleCurrencies, true]])
-  for (const text of texts) test(`SA1X serialized engine ${allow ? 'allows' : 'asks'}: ${text}`, async () => {
-    const currency = allow && text.includes('€') ? '€' : '$';
-    const tree = after(beforePay.replace(/\$[\d,.]+/g, currency + '5.00'), 88, '999 text ' + text);
-    const payment = gate('requested', 'Pay ' + currency + '5.00 with the card');
-    assert.equal(enginePayment('click', [88], tree, payment)?.allowed, allow ? 'message' : undefined);
-    const result = await guarded(tree, 'await app.click(88);', payment);
-    assert.deepEqual(result.clicked, allow ? [88] : []);
-    if (!allow) assert.match(result.error?.message ?? '', /sleight stopped this payment/);
-  });
-for (const quoted of ['1304円', '1304 yen']) for (const total of ['$1,304.00', '1304円', '1304 yen', 'JPY 1304', '¥1304', 'CNY 1304'])
-  test(`SA1X never yen quote ${quoted} on ${total}`, async () => {
-    const tree = beforePay.replace(/\$[\d,.]+/g, total);
-    const payment = gate('never', 'Pay ' + quoted + ' with the card');
-    const allow = /(?:円|yen|JPY)/.test(total);
-    assert.equal(enginePayment('click', [88], tree, payment)?.allowed, allow ? 'never' : undefined);
-    const result = await guarded(tree, 'await app.click(88);', payment);
-    assert.deepEqual(result.clicked, allow ? [88] : []);
-    if (!allow) assert.match(result.error?.message ?? '', /sleight stopped this payment/);
-  });

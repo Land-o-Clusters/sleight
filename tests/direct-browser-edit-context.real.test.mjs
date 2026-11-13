@@ -1,4 +1,3 @@
-import { testChromiumExecutable, launchTestChromiumContext } from './fixtures/chromium-isolated.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createServer } from 'node:http';
@@ -7,7 +6,7 @@ import { homedir, tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { keepTemp, removeTemp } from '../scripts/temp-leftovers.mjs';
 
-const enabled = (process.env.SLEIGHT_EDIT_CONTEXT_REAL_TEST ?? process.env.SLEIGHT_LIVE_DOM_TEST) === '1';
+const enabled = process.env.SLEIGHT_EDIT_CONTEXT_REAL_TEST === '1';
 const skip = !enabled && 'run the fixed bench/edit-context-real-check.mjs runner for owned headless Chromium';
 const controller = new AbortController();
 const editorName = 'Fixture document editor';
@@ -102,7 +101,9 @@ test('real native EditContext acquisition and input remain bound to the delivere
     assert.equal(typeof snapshots.keyboardRefBinding, 'function', 'native keyboard ref acquisition must be integrated');
     const pin = JSON.parse(readFileSync(new URL('../plugins/sleight/vendor/playwright-core/browsers.json', import.meta.url)))
       .browsers.find(browser => browser.name === 'chromium-headless-shell');
-    const executablePath = testChromiumExecutable({ revision: pin.revision });
+    const platform = process.platform === 'darwin' ? 'mac-' + process.arch : 'linux64';
+    const executablePath = join(homedir(), 'Library/Caches/ms-playwright', 'chromium_headless_shell-' + pin.revision,
+      'chrome-headless-shell-' + platform, 'chrome-headless-shell');
     assert.ok(existsSync(executablePath), 'the pinned headless Chromium is required; an enabled run must not skip');
     const bank = mkdtempSync(join(realpathSync(tmpdir()), 'sleight-edit-context-real-'));
     const sockets = new Set(), routes = new Map();
@@ -127,7 +128,7 @@ test('real native EditContext acquisition and input remain bound to the delivere
     try {
       await new Promise((resolve, reject) => { server.once('error', reject); server.listen(0, '127.0.0.1', resolve); });
       const runtime = loadPlaywrightCore({ turbo: true });
-      context = await launchTestChromiumContext(runtime.inprocess.playwright.chromium, join(bank, 'profile'), {
+      context = await runtime.inprocess.playwright.chromium.launchPersistentContext(join(bank, 'profile'), {
         executablePath, headless: true, viewport: { width: 1000, height: 800 },
       });
       launched = true;

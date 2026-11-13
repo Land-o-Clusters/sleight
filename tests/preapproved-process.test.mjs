@@ -5,24 +5,6 @@ import childProcess from 'node:child_process';
 import { EventEmitter } from 'node:events';
 import { PassThrough } from 'node:stream';
 import { syncBuiltinESMExports } from 'node:module';
-import os from 'node:os';
-
-test('load is sampled at spawn and leader exit, before descendant collection', async t => {
-  const { close } = ownedProcess(t);
-  let samples = 0;
-  t.mock.method(os, 'loadavg', () => ++samples === 1 ? [12, 9, 8] : [5, 4, 3]);
-  t.mock.method(os, 'cpus', () => Array(10).fill({}));
-  syncBuiltinESMExports();
-  const pending = runOwned('fixture', []);
-  assert.equal(samples, 1);
-  close(1, null, false);
-  assert.equal(samples, 2);
-  for (let i = 0; i < 800; i++) { await Promise.resolve(); t.mock.timers.tick(20); }
-  const result = await pending;
-  assert.deepEqual(result.stamps.loadStart, [12, 9, 8]);
-  assert.deepEqual(result.stamps.loadEnd, [5, 4, 3]);
-  assert.equal(result.stamps.loadCores, 10); assert.equal(samples, 2);
-});
 
 function ownedProcess(t) {
   t.mock.timers.enable({ apis: ['setTimeout', 'Date'], now: 1000 });

@@ -13,7 +13,6 @@ import { registerTemp, trackTemp } from '../scripts/temp-leftovers.mjs';
 
 const document = 'Window: "report.txt", App: Fixture Editor.\n0 standard window report.txt, URL: file:///tmp/report.txt\n\t1 menu bar\n\t\t2 File, ID: file-menu\n\t3 button Other';
 const menu = 'Window: "report.txt", App: Fixture Editor.\n0 File, Secondary Actions: Cancel, Pick\n\t1 menu Secondary Actions: Cancel\n\t\t4 Save, ID: save-item';
-const menuURL = url => url ? menu.replace('\n0 ', `\nURL: ${url}\n0 `) : menu;
 const other = 'Window: "Other", App: Other Editor.\n0 standard window Other\n\t1 button Next';
 const target = { appId: 'org.test.editor', app: 'Fixture Editor', title: 'report.txt', url: 'file:///tmp/report.txt' };
 const tick = () => new Promise(resolve => setTimeout(resolve, 1));
@@ -188,7 +187,7 @@ test('TC1: an unconfirmed selected menu still refuses Save', async t => {
 for (const change of ['window', 'focus']) for (const cancel of ['await app.pressKey("Escape");', 'await app.click(5);']) {
   test(`TC1: selected Cancel retains native ${change} protection: ${cancel}`, async t => {
     const h = await fixture(t, { confirm: false });
-    h.setText(menuURL(target.url) + '\n\t5 button Cancel');
+    h.setText(menu + `\nURL: ${target.url}\n\t5 button Cancel`);
     await h.call('app = await cua.getApp("Fixture Editor");');
     if (change === 'window') h.native.windowNumber = 23;
     else h.native.status = 'mismatch';
@@ -240,7 +239,7 @@ for (const cancel of ['await app.pressKey("Escape");', 'await app.click(5);']) {
   for (const url of ['file:///tmp/report.txt', 'file:///tmp/elsewhere/report.txt', null]) {
     test(`TC1R: selected Cancel ${url === null ? 'admits an omitted URL with native ownership proof' : 'requires equal URLs on both sides'}: ${url}, ${cancel}`, async t => {
       const h = await fixture(t, { confirm: false });
-      h.setText(menuURL(url) + '\n\t5 button Cancel');
+      h.setText(menu + (url ? `\nURL: ${url}` : '') + '\n\t5 button Cancel');
       await h.call('app = await cua.getApp("Fixture Editor");');
       const result = await h.call(cancel);
       assert.equal(!!result.isError, url !== null && url !== target.url, JSON.stringify(result));
@@ -259,7 +258,7 @@ for (const cancel of ['await app.pressKey("Escape");', 'await app.click(5);']) {
   }
   test(`TC1R: Cancel refuses a URL when the selection has none: ${cancel}`, async t => {
     const h = await fixture(t, { confirm: false, selectedTarget: { ...target, url: null, windowNumber: 22 } });
-    h.setText(menuURL(target.url) + '\n\t5 button Cancel');
+    h.setText(menu + `\nURL: ${target.url}\n\t5 button Cancel`);
     await h.call('app = await cua.getApp("Fixture Editor");');
     const result = await h.call(cancel);
     assert.equal(result.isError, true, JSON.stringify(result));

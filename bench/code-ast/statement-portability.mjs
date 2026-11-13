@@ -1,12 +1,12 @@
 // Run parity from a temporary source tree with no .git directory or history.
 import { spawnSync } from 'node:child_process';
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
-import { tmpdir } from 'node:os';
+import { homedir, tmpdir } from 'node:os';
 import { dirname, join, relative } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { benchGateOpen } from '../runtime-options.mjs';
 
-while (!benchGateOpen() || existsSync('/tmp/sleight-hold')) await new Promise(resolve => setTimeout(resolve, 60000));
+const gate = join(homedir(), 'Projects/sleight-wt/ledger/vc/night/lanes-may-test');
+while (!existsSync(gate) || existsSync('/tmp/sleight-hold')) await new Promise(resolve => setTimeout(resolve, 60000));
 const root = fileURLToPath(new URL('../../', import.meta.url));
 const directory = mkdtempSync(join(tmpdir(), 'lane-ps3-portability-'));
 const copied = new Set();

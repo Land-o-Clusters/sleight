@@ -1,4 +1,3 @@
-import { assertChildStatus } from './fixtures/child-status.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
@@ -12,14 +11,14 @@ import { characterFrame } from '../plugins/sleight/lib/hand/character-frame.mjs'
 
 test('demo characters decode and the seven recipes validate in the production host without windows', { skip: macCommandSkip('xcrun') }, t => {
   const dir = registerTemp(t, privateWork()), host = join(dir, 'consent-host');
-  const built = spawnSync('/usr/bin/xcrun', ['swiftc', '-module-cache-path', swiftModuleCache(), 'plugins/sleight/lib/direct-browser/native/consent-host.swift', '-o', host], { encoding: 'utf8', timeout: 600000, killSignal: 'SIGKILL' });
-  assertChildStatus(built, 0, built.stderr);
+  const built = spawnSync('/usr/bin/xcrun', ['swiftc', '-module-cache-path', swiftModuleCache(), 'plugins/sleight/lib/direct-browser/native/consent-host.swift', '-o', host], { encoding: 'utf8', timeout: 600000 });
+  assert.equal(built.status, 0, built.stderr);
   const nonce = 'a'.repeat(64), pet = makePet(dir);
   const env = { ...process.env, SLEIGHT_CURSOR_TEST: '1', SLEIGHT_CURSOR_CHARACTERS_ROOT: pet.root, SLEIGHT_BUILTIN_CHARACTERS: builtinCharactersDirectory() };
   for (const pack of [checkBuiltinCharacter('tsugi'), checkBuiltinCharacter('kit'), pet.pack]) {
     const frame = characterFrame(pack, { nonce, seq: 1, resolve: resolveCharacterStates, perch: pack !== pet.pack });
-    const checked = spawnSync(host, ['--check-character'], { input: JSON.stringify(frame) + '\n', encoding: 'utf8', env, timeout: 15000, killSignal: 'SIGKILL' });
-    assertChildStatus(checked, 0, checked.stderr); assert.equal(JSON.parse(checked.stdout).loaded, true, checked.stdout);
+    const checked = spawnSync(host, ['--check-character'], { input: JSON.stringify(frame) + '\n', encoding: 'utf8', env, timeout: 15000 });
+    assert.equal(checked.status, 0, checked.stderr); assert.equal(JSON.parse(checked.stdout).loaded, true, checked.stdout);
   }
   for (const id of ['01-ring', '02-states', '03-tsugi', '03-kit', '04-narration', '05-picker', '06-import']) {
     let seq = 0;
@@ -33,8 +32,8 @@ test('demo characters decode and the seven recipes validate in the production ho
     }
     const result = spawnSync(host, ['--ring-plan-dump', '--cursor-style=ring', '--clip=0,0,800,640'], {
       input: rows.map(r => JSON.stringify(r)).join('\n') + '\n', encoding: 'utf8', env, timeout: 15000,
-     killSignal: 'SIGKILL' });
-    assertChildStatus(result, 0, `${id}: ${result.stderr}`);
+    });
+    assert.equal(result.status, 0, `${id}: ${result.stderr}`);
     const output = result.stdout.trim().split('\n').map(JSON.parse);
     assert.ok(output.some(r => r.effect === 'draw'), id);
     if (id === '04-narration') assert.ok(output.some(r => r.bubble?.text?.includes('blue tile')), result.stdout);
@@ -52,8 +51,8 @@ test('demo characters decode and the seven recipes validate in the production ho
   }
   const glides = spawnSync(host, ['--ring-plan-dump', '--cursor-style=ring', '--clip=0,0,800,640'], {
     input: aims.map(r => JSON.stringify(r)).join('\n') + '\n', encoding: 'utf8', env, timeout: 15000, maxBuffer: 16 << 20,
-   killSignal: 'SIGKILL' });
-  assertChildStatus(glides, 0, `${glides.error ?? ''} ${glides.signal ?? ''} ${glides.stderr}`);
+  });
+  assert.equal(glides.status, 0, `${glides.error ?? ''} ${glides.signal ?? ''} ${glides.stderr}`);
   const aimPlans = glides.stdout.trim().split('\n').map(JSON.parse).filter(r => r.effect === 'draw' && r.state === 'aim');
   assert.equal(aimPlans.length, 3, glides.stdout);
   for (const plan of aimPlans.slice(1)) assert.ok(plan.animations.some(a => a.keyPath === 'position'), JSON.stringify(plan));

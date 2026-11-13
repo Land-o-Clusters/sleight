@@ -3,7 +3,12 @@ import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { escapeLabel } from './direct-browser/consent-ui.mjs';
 
-import { cardText } from './card-text.mjs';
+// AppKit renders plain text. Escape directional controls and bound every untrusted visible field in UTF-8 bytes.
+function cardText(value) {
+  const text = String(value).replace(/[\u202a-\u202e\u2066-\u2069]/g, char => `\\u${char.charCodeAt(0).toString(16)}`);
+  return Buffer.byteLength(text) <= 2048 ? text
+    : Buffer.from(text).subarray(0, 2020).toString('utf8').replace(/\uFFFD$/, '') + '\n[request truncated]';
+}
 
 // sleight's own payment card for the engine-path payment gate (payment-gate.mjs): the consent host's operation sheet, the one
 // turbo's payment confirmations use (direct-browser/consent-ui.mjs and host.mjs). LAWS: trusted confirmations use sleight's own

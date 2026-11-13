@@ -35,7 +35,7 @@ Worktree mode compares A's live result with B's live result at every recorded ca
 Inputs can be a race task folder containing `run.json` and `events.jsonl`, or a native results file:
 
 ```sh
-node bench/replay/run.mjs /path/to/evidence/race-1017/safari-sleight-b10-r3/form-checkout --plan
+node bench/replay/run.mjs ~/Projects/sleight-wt/race-1017/safari-sleight-b10-r3/form-checkout --plan
 node bench/replay/run.mjs RESULTS.json --task textedit-window-drag --arm sleight --run 1 --evidence RETAINED_TASK_FOLDER --plan
 ```
 

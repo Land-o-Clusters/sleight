@@ -42,55 +42,6 @@
       "perch.webp": "9fa4762b1fc93afcc5335329d6bc0f11bc0f1ef21620427dca76c4d1e4d532d3",
       "preview.png": "053e54e67972c564d22d235f6b6cbf8f7de234f35bb593df480308a380290409",
       "sheet.webp": "2d503eaa2794eef137d860ad7d2775f2d08c590948043e9ca678cc0a76d403eb"
-    },
-    "mabel": {
-      "character.json": "2ee98652bd759291ea4476a6bb05debf73a08e6aa2f9a2315f46ca43e5c51da0",
-      "extra.webp": "9d578ad6e9bff979f41840a908b480046e6f92b6047b141372d9298bf11e1bd5",
-      "perch.webp": "7d37e5990c992ab59e81ceae7e65c97b38a6bc703502b2175bfe05f262fc1676",
-      "preview.png": "85cb88d2df2fc05b2d775ed7b19286e3305bcfae72febb873eed262c4f017159",
-      "sheet.webp": "c6b1781d87eec0bcc9d0698e14f1e2a6b46f1b8603939dce6d4ad693696b9111"
-    },
-    "biscuit": {
-      "character.json": "5bf7148d5f260a6678b6f782a4777b2a287c586698c8375952584d2614752c47",
-      "extra.webp": "f525ec76f5332b46331b929ee91c200270b53125103df66748bf05bee1e27980",
-      "perch.webp": "92bb7e76414277a95ab506f08b23f1922dc66acf3371ec5d8a78b1193640438a",
-      "preview.png": "6f2b6f7e26ad7cf504ef1f60a71c81742dd373e480aa776711fb111ff669af8b",
-      "sheet.webp": "ae2a3ae25f068a45d672c56062c42f55d4ef404d4553ac74170907983f3ae6ce"
-    },
-    "rudy": {
-      "character.json": "9046a288b10bf51fbd6edb32b37e637d8c69c0eb0e230fe0bebad2f8cd52852f",
-      "extra.webp": "b4801d2da6fab3c94fec31eceaae8aaa390fe50f03a8daa38596e083e291d88c",
-      "perch.webp": "73a9fba524b017416f98e5b552da0f14eb6f2fdef49654245fde92afe0387c30",
-      "preview.png": "c17bffd80c18af3570b690237a886053d4f9042b01e7851e63aae35aa750d0b5",
-      "sheet.webp": "859b0a4390009a79af7f47c363d1cf0ec70b9350f2ac9a8e5abe1667903eb614"
-    },
-    "mo": {
-      "character.json": "2c1d286650c0927d9d57924be580f2813e6bc12c583b07bc234e0d20d965ae69",
-      "extra.webp": "451b05afc285ca616c019b761c06aa3c6da41e5cda7071d0f7824bf918ba6f72",
-      "perch.webp": "bf16c30acc098faaff33f717e85c889080da369a0056ee16712ea81f53c5d069",
-      "preview.png": "2527e1f593c7b30de78efd433d07e33fe2a5e35a927928e982df8ad045f5bbbf",
-      "sheet.webp": "8502e25e8f1a70ab163e9d992fb6d7b5e17a89287f7b1500b3c4f76ff8bd8daa"
-    },
-    "dennis": {
-      "character.json": "91ac4980d5e92fe0a0f696fc875f80315aa203286aceda4de59c55d9f793a55d",
-      "extra.webp": "abb0de5aa718b58090c2a70456fdb395fe9190e2a8155bcc38be863f008f0e4d",
-      "perch.webp": "af6aadc769230f0429dc8346e46f15fc021cc956af68bebb51d36724128e6849",
-      "preview.png": "88c644dfc4759168a0fbcdbaa2735462e1810bd8d589e9a8272bb30c9e7766bf",
-      "sheet.webp": "c54e6c36677ea79b6fc26c11b8f870a49d1d0ea7bd525d7b592c3c8d2040ca25"
-    },
-    "nana": {
-      "character.json": "a63eb28465782fc81846a7a91ba076ace7f48683446a8a5929e842e7db06fd9f",
-      "extra.webp": "5c49d2d67a131d8c0ec62bfeb33f48421093a905ba1429ca0ab22a6b0107fea4",
-      "perch.webp": "82ab7f94219732e590f4f59b8e70372cbb2353b68ab78ff01000ed6bd736c514",
-      "preview.png": "3f782d82c96c3d4f200e2bae47b6da00e06bba97736c937ce6e583c6c815704b",
-      "sheet.webp": "e3d3eff282fa7b51770b1c81a67a01ddd1f7786cabdcf95530e9d5933f6025d6"
-    },
-    "hal": {
-      "character.json": "f3304162cba0ebf7b5d74688caed5180d13e53ae23afa63552ec305fd2ddb5cc",
-      "extra.webp": "bc2eaf3f740c4c30506ad5759ffd82d3e16fb1de518c0d0ae6e7e987b8e9efad",
-      "perch.webp": "fb1b5c9a40b19c2b63f4f75fd23a29299efc462ae2793e52a5d3ce1540c5f87a",
-      "preview.png": "9bd2414682c3ccbaf0e639584956f8e36dbbe1e379b71762794158211d8369bd",
-      "sheet.webp": "d5e7b54c1abf8543112816dbaae78c70ca377aefcdb891bdccd269704eb51874"
     }
   }
 }

@@ -7,14 +7,13 @@ import { notification } from './notification.mjs';
 import { transcriptPath } from './replay.mjs';
 import { terminalConfirm } from './terminal-confirm.mjs';
 import { randomUUID } from 'node:crypto';
-import { processStartTime, sameProcessStart } from './routine-lock.mjs';
+import { processStartTime } from './routine-lock.mjs';
 import { claimWatchNotice, queueWatchNotice, retireWatch, sweepRetiredWatches, withWatchLifecycle } from './routine-launcher.mjs';
-import { readSettingsBytes } from './sealed-settings.mjs';
 
 export function watchPlan(query, every, options = {}) {
   return schedulePlan(watchQuery(query), every, { ...options, kind: 'watch' });
 }
-const readJSON = path => JSON.parse(readSettingsBytes(ordinary(path)));
+const readJSON = path => JSON.parse(readFileSync(ordinary(path), 'utf8'));
 function save(path, value) {
   ordinary(path);
   const temporary = ordinary(path + '.' + randomUUID() + '.tmp');
@@ -170,7 +169,7 @@ export class WatchStore extends RoutineStore {
         if (this.now() >= Date.parse(plan.expires)) return await this.retire(id, { ok: false, error: 'WATCH_EXPIRED' });
         const boot = this.boot();
         if (!boot || !plan.boot) throw Error('WATCH_BOOT_UNAVAILABLE');
-        if (!sameProcessStart(plan.boot, boot)) return await this.retire(id, { ok: false, error: 'WATCH_REBOOTED' });
+        if (boot !== plan.boot) return await this.retire(id, { ok: false, error: 'WATCH_REBOOTED' });
         if (scheduled && existsSync(paused)) {
           await this.notice(id);
           return { ok: false, paused: true };

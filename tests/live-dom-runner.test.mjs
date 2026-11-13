@@ -33,7 +33,7 @@ async function fixture(t, options = {}) {
         const worktree = args.at(-2);
         for (const path of request.tests) {
           await mkdir(join(worktree, path, '..'), { recursive: true });
-          await writeFile(join(worktree, path), options.headedSource ? 'chromium' + '.launch({ headless: false });' : 'import { test } from "node:test"; test("fixture", () => {});');
+          await writeFile(join(worktree, path), options.headedSource ? 'chromium.launch({ headless: false });' : 'import { test } from "node:test"; test("fixture", () => {});');
         }
         if (options.symlinkTest) {
           await rm(join(worktree, request.tests[0]));

@@ -1,4 +1,3 @@
-import { assertChildStatus } from './fixtures/child-status.mjs';
 // Constructed macOS paths are synthetic validation and redaction data, never allocation roots.
 const MAC_USERS = ['', 'Users', ''].join('/');
 import { test } from 'node:test';
@@ -221,8 +220,8 @@ test('CLI reads only linked benchmark transcripts, imports turn-study and publis
     calls: [{ classes: ['spilled-result'], attributableMs: 2000 }] }] }));
   const out = spawnSync(process.execPath, ['bench/battery-report.mjs', '--results', join(dir, 'results.json'),
     '--codex-sessions', join(dir, 'codex'), '--projects', join(dir, 'projects'), '--turn-study', join(dir, 'study.json'),
-    '--json', join(dir, 'out.json'), '--table', join(dir, 'out.md')], { encoding: 'utf8', timeout: 60000, killSignal: 'SIGKILL' });
-  assertChildStatus(out, 0, out.stderr);
+    '--json', join(dir, 'out.json'), '--table', join(dir, 'out.md')], { encoding: 'utf8' });
+  assert.equal(out.status, 0, out.stderr);
   const r = JSON.parse(readFileSync(join(dir, 'out.json')));
   assert.equal(r.coverage.matchedTranscripts, 3);
   assert.equal(r.coverage.studyRuns, 1);
@@ -267,8 +266,8 @@ test('task catalog resolves harness rows with no bundle ID and preserves setup s
   writeFileSync(join(dir, 'catalog.json'), JSON.stringify({ runs: [{ task: 'fixture-read', bundle: apps[0] }] }));
   const out = spawnSync(process.execPath, ['bench/battery-report.mjs', '--results', join(dir, 'results.json'),
     '--catalog', join(dir, 'catalog.json'), '--projects', join(dir, 'absent'), '--codex-sessions', join(dir, 'absent'),
-    '--json', join(dir, 'out.json')], { encoding: 'utf8', timeout: 60000, killSignal: 'SIGKILL' });
-  assertChildStatus(out, 0, out.stderr);
+    '--json', join(dir, 'out.json')], { encoding: 'utf8' });
+  assert.equal(out.status, 0, out.stderr);
   const r = JSON.parse(readFileSync(join(dir, 'out.json')));
   assert.equal(r.inputRows[0].app, apps[0]);
   assert.equal(r.inputRows[0].setup, 'clean');

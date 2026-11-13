@@ -77,11 +77,7 @@ export function mc1Fixture() {
     }
     class HTMLSelectElement extends Element { get type() { return 'select-one'; } get form() { return null; } get multiple() { return false; } }
     class HTMLLabelElement extends Element { constructor(parent) { super('label', {}, parent); } get control() { return this.target; } }
-    class HTMLCollection { get length() { return 0; } }
     class Document extends Node {
-      get scripts() { return new HTMLCollection(); }
-      get activeElement() { return this.focused ?? null; }
-      set activeElement(value) { this.focused = value; }
       get URL() { return 'https://fixture.invalid/'; }
       get defaultView() { return window; }
       get body() { return this.nodes[0]; }
@@ -99,12 +95,11 @@ export function mc1Fixture() {
     }
     const observers = [];
     const window = new EventTarget(), document = new Document();
-    document.designMode = 'off';
-    Object.defineProperty(window, 'parent', { get() { return window; } });
-    window.top = window; window.open = () => null;
+    document.scripts = []; document.designMode = 'off';
+    window.parent = window; window.top = window; window.open = () => null;
     window.getComputedStyle = el => ({ visibility: el.hidden ? 'hidden' : 'visible', display: 'block', position: 'static' });
     window.requestAnimationFrame = fn => setTimeout(fn, 1);
-    Object.assign(globalThis, { window, document, Node, NodeList, Element, HTMLElement: Element, Document, HTMLCollection,
+    Object.assign(globalThis, { window, document, Node, NodeList, Element, HTMLElement: Element, Document,
       HTMLInputElement, HTMLButtonElement, HTMLLabelElement, HTMLSelectElement,
       Event, MouseEvent, KeyboardEvent, EventTarget, MutationObserver, innerHeight: 600, innerWidth: 800,
       navigator: { userActivation: { isActive: true } } });

@@ -1,6 +1,6 @@
 # TextEdit spacing and unnamed menu controls
 
-Branch `codex/drag-polish`, worktree `<private-evidence>/text-drag-menu-names`, 2026-10-04.
+Branch `codex/drag-polish`, worktree `~/Projects/sleight-wt/text-drag-menu-names`, 2026-10-04.
 
 ## Design and safety
 

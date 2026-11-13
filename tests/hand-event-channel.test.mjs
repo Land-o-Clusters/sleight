@@ -55,7 +55,7 @@ test('replaced FIFO or symlink is rejected and cleanup leaves replacement untouc
     const moved = slot.path + '.original';
     renameSync(slot.path, moved);
     if (kind === 'symlink') symlinkSync(moved, slot.path);
-    else (await import('node:child_process')).execFileSync('/usr/bin/mkfifo', ['-m', '600', slot.path], { timeout: 30000, killSignal: 'SIGKILL' });
+    else (await import('node:child_process')).execFileSync('/usr/bin/mkfifo', ['-m', '600', slot.path]);
     assert.throws(() => channel.poll(), /identity|symlink/);
     assert.equal(channel.cleanup().ok, false);
     assert.ok(lstatSync(slot.path));

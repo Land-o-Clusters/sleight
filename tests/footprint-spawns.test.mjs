@@ -181,8 +181,6 @@ test('the actual JXA session loader dispatches health, target and tap requests w
     NSData: { dataWithBytesLength: (ptr, n) => ({ base64EncodedStringWithOptions: () => ptr.subarray(0, n).toString('base64') }) },
     malloc: n => Buffer.alloc(n), free() {}, CGGetEventTapList: (_max, _list, count) => { count.writeUInt32LE(0); return 0; },
   });
-  $.getppid = () => 42; $.poll = () => 1;
-  $.NSData.alloc = { initWithBase64EncodedStringOptions: text => ({ mutableCopy: { mutableBytes: Buffer.from(text, 'base64') } }) };
   const context = vm.createContext({ $, ObjC: { import() {}, unwrap: value => value, bindFunction() {} }, Ref: () => [] });
   vm.runInContext(readFileSync(new URL('app-health.js', lib), 'utf8'), context);
   context.run(['--session', '/fixture']);
@@ -199,7 +197,7 @@ test('explicit surfaces preserve the requested backends without a discovery proc
 
 test('a desktop PNG that already fits is forwarded without loading a pixel decoder', async () => {
   const shot = png;
-  const frame = await pane(snapshotCode('Calculator', 46, 13, false, 'a'.repeat(32)), shot, () => { throw new Error('unneeded decoder'); });
+  const frame = await pane(snapshotCode('Calculator', 46, 13, false), shot, () => { throw new Error('unneeded decoder'); });
   assert.equal(frame.width, 1); assert.equal(frame.height, 2);
   assert.equal(frame.columns, 13); assert.equal(frame.rows, 13, 'desktop log layout keeps the same frame reservation');
   assert.equal(frame.cells, undefined);
@@ -208,7 +206,7 @@ test('a desktop PNG that already fits is forwarded without loading a pixel decod
 
 test('a desktop JPEG with metadata segments is forwarded without decoding its pixels', async () => {
   const shot = jpeg;
-  const frame = await pane(snapshotCode('Calculator', 46, 13, false, 'a'.repeat(32)), shot, () => { throw new Error('unneeded decoder'); });
+  const frame = await pane(snapshotCode('Calculator', 46, 13, false), shot, () => { throw new Error('unneeded decoder'); });
   assert.equal(frame.width, 1); assert.equal(frame.height, 1);
   assert.deepEqual(frame.image, { mime: 'image/jpeg', base64: shot.toString('base64') });
 });
@@ -216,7 +214,7 @@ test('a desktop JPEG with metadata segments is forwarded without decoding its pi
 test('terminal snapshots retain their pixel colors and half-block cells', async () => {
   // The codec boundary returns the two pixels in the fixture. Check the pane's cell packing.
   const load = async () => ({ PNG: { sync: { read: () => ({ width: 1, height: 2, data: Buffer.from([255, 0, 0, 255, 0, 0, 255, 255]) }) } } });
-  const frame = await pane(snapshotCode('Calculator', 1, 1, true, 'a'.repeat(32)), png, load);
+  const frame = await pane(snapshotCode('Calculator', 1, 1, true), png, load);
   assert.equal(frame.image, undefined);
   assert.equal(frame.columns, 1); assert.equal(frame.rows, 1);
   const cells = Buffer.from(frame.cells, 'base64');
@@ -226,7 +224,7 @@ test('terminal snapshots retain their pixel colors and half-block cells', async 
 test('invalid dimensions fall back to the decoder instead of producing an invalid desktop frame', async () => {
   const shot = Buffer.from(png);
   shot.writeUInt32BE(0, 16);
-  await assert.rejects(pane(snapshotCode('Calculator', 46, 13, false, 'a'.repeat(32)), shot, () => { throw new Error('decoder fallback'); }), /decoder fallback/);
+  await assert.rejects(pane(snapshotCode('Calculator', 46, 13, false), shot, () => { throw new Error('decoder fallback'); }), /decoder fallback/);
 });
 
 test('oversized desktop images still resize to fit the MCP frame budget', { skip:
@@ -238,7 +236,7 @@ test('oversized desktop images still resize to fit the MCP frame budget', { skip
   for (let i = 0; i < data.length; i++) { seed ^= seed << 13; seed ^= seed >>> 17; seed ^= seed << 5; data[i] = seed & 255; }
   const shot = PNG.sync.write({ width: 128, height: 128, data });
   assert.ok(shot.length > 12000, 'fixture must exceed the unchanged base64 budget');
-  const frame = await pane(snapshotCode('Calculator', 46, 13, false, 'a'.repeat(32)), shot);
+  const frame = await pane(snapshotCode('Calculator', 46, 13, false), shot);
   assert.equal(frame.width, 128); assert.equal(frame.height, 128);
   assert.equal(frame.image.mime, 'image/jpeg');
   assert.ok(frame.image.base64.length <= 16000);

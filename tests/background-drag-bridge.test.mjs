@@ -1,4 +1,3 @@
-import { assertChildStatus } from './fixtures/child-status.mjs';
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
@@ -18,8 +17,8 @@ test('production JXA builder round-trips private coordinates without posting or 
       });
       return JSON.stringify(events);
     }`;
-  const probe = spawnSync('/usr/bin/osascript', ['-l', 'JavaScript', '-e', source], { encoding: 'utf8', timeout: 15000, killSignal: 'SIGKILL' });
-  assertChildStatus(probe, 0, probe.stderr);
+  const probe = spawnSync('/usr/bin/osascript', ['-l', 'JavaScript', '-e', source], { encoding: 'utf8', timeout: 15000 });
+  assert.equal(probe.status, 0, probe.stderr);
   const events = JSON.parse(probe.stdout);
   for (const [index, e] of events.entries()) {
     assert.equal(e.type, [1, 2, 6][index]); assert.deepEqual(e.screen, { x: 120, y: 130 });

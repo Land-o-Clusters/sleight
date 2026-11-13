@@ -1,4 +1,3 @@
-import { assertChildStatus } from './fixtures/child-status.mjs';
 // Constructed macOS paths are synthetic validation and redaction data, never allocation roots.
 const MAC_USERS = ['', 'Users', ''].join('/');
 import { test } from 'node:test';
@@ -111,8 +110,8 @@ test('owner account apps are explicit, read-only and require owner-present', () 
   assert.throws(() => speedPlan({ ids: ['unknown'] }), /unknown/);
 });
 test('CLI dry-run returns before importing live runtime, spawning children or writing files', () => {
-  const r = spawnSync(process.execPath, ['bench/app-speed-map.mjs', '--dry-run'], { encoding: 'utf8', cwd: new URL('..', import.meta.url), timeout: 60000, killSignal: 'SIGKILL' });
-  assertChildStatus(r, 0, r.stderr); assert.equal(JSON.parse(r.stdout).runs, 10);
+  const r = spawnSync(process.execPath, ['bench/app-speed-map.mjs', '--dry-run'], { encoding: 'utf8', cwd: new URL('..', import.meta.url) });
+  assert.equal(r.status, 0, r.stderr); assert.equal(JSON.parse(r.stdout).runs, 10);
   const source = readFileSync(new URL('../bench/app-speed-map.mjs', import.meta.url), 'utf8');
   assert.ok(source.indexOf('if (plan.dryRun)') < source.indexOf("import('./app-speed-map-live.mjs')"));
 });
@@ -241,8 +240,8 @@ test('uppercase exception text cannot become a published failure code', async ()
 });
 test('AM1 approval uses the requested app catalog without pretending the owner is present', () => {
   const input = { mcp_server_name:'plugin:sleight:computer', message:'Allow Computer Use to use "Spotify"?', requested_schema:{properties:{choice:{enum:['session','always','decline']}},required:['choice']} };
-  const run = (message, present = '') => spawnSync(process.execPath, ['bench/approve.mjs'], {cwd:new URL('..',import.meta.url), input:JSON.stringify({...input,message}),encoding:'utf8',env:{...process.env,BENCH_SUITE:'app-speed-map',BENCH_OWNER_PRESENT:present,BENCH_HOOK_LOG:'',BENCH_ARM_SERVERS:'["plugin:sleight:computer"]'}, timeout: 60000, killSignal: 'SIGKILL' });
-  const spotify = run(input.message); assertChildStatus(spotify,0,spotify.stderr);
+  const run = (message, present = '') => spawnSync(process.execPath, ['bench/approve.mjs'], {cwd:new URL('..',import.meta.url), input:JSON.stringify({...input,message}),encoding:'utf8',env:{...process.env,BENCH_SUITE:'app-speed-map',BENCH_OWNER_PRESENT:present,BENCH_HOOK_LOG:'',BENCH_ARM_SERVERS:'["plugin:sleight:computer"]'}});
+  const spotify = run(input.message); assert.equal(spotify.status,0,spotify.stderr);
   assert.equal(JSON.parse(spotify.stdout).hookSpecificOutput.action,'accept');
   assert.equal(JSON.parse(spotify.stdout).hookSpecificOutput.content.choice,'session');
   assert.equal(JSON.parse(run('Allow Computer Use to use "Slack"?').stdout).hookSpecificOutput.action,'decline');
@@ -378,8 +377,8 @@ test('the CLI dry run includes the simulation and never spawns a child or writes
       for (const name of ['mkdirSync','writeFileSync','appendFileSync','rmdirSync','rmSync','unlinkSync','mkdtempSync']) fs[name] = () => { throw Error('write forbidden'); };
       require('node:module').syncBuiltinESMExports();`);
     const r = spawnSync(process.execPath, ['--require', guard, 'bench/app-speed-map.mjs', '--dry-run', '--apps', 'vscode,word', '--runs', '1'],
-      { encoding: 'utf8', cwd: new URL('..', import.meta.url), timeout: 60000, killSignal: 'SIGKILL' });
-    assertChildStatus(r, 0, r.stderr);
+      { encoding: 'utf8', cwd: new URL('..', import.meta.url) });
+    assert.equal(r.status, 0, r.stderr);
     const out = JSON.parse(r.stdout);
     assert.equal(out.runs, 1);
     assert.equal(out.simulation.cells.length, 3);
@@ -546,7 +545,7 @@ test('acquisition retries only an engine that says it is busy, at most twice, an
     const report = await runSpeedMap(speedPlan({ ids: ['textedit'], runs: 1 }), r);
     const row = report.rows.find(item => item.mode === 'sequential');
     assert.equal(row.acquireRetries, expected.retries, text);
-    assertChildStatus(row, expected.status, text);
+    assert.equal(row.status, expected.status, text);
   }
 });
 

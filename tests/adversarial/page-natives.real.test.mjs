@@ -713,31 +713,23 @@ test('renaming an iframe element\'s name attribute does not rename its window, s
 
 // F3. A page raising a window it opened from another origin: nothing in the page or in CDP stops it, so the result says it can.
 const r4Pop = "<!doctype html><title>pop</title><script>window.__ev=[];for(const t of ['focus','blur','visibilitychange','pagehide','resize'])addEventListener(t,()=>__ev.push(t),true);const f=window.focus;window.focus=function(){__ev.push('focus-called');return f.apply(this,arguments)}<\/script>";
-function assertPopupRaiseWarning(result) {
-  // Pin the trusted receipt line, its cross-origin destination and opener.
-  // A matching phrase in the untrusted page snapshot must not satisfy this.
-  const match = /^1 click e\d+: opened background tab (t\w+) at http:\/\/localhost:\d+ \(opener t\w+\); the page can bring it forward on its own$/.exec(result.text.split('\n')[0]);
-  assert.ok(match, first(result));
-  return match[1];
-}
 test('a cross-origin popup the page can raise with focus() is listed in the result, and sleight sends no focus command (F3)', { skip, timeout: 90000 }, async t => {
   const { b, f, result, extra } = await attack(t, { wait: 2500, routes: { '/pop': r4Pop },
     script: `go.onclick=()=>{const w=window.open(${R4_XO}+'/pop');setTimeout(()=>{try{w.focus()}catch(e){}},1200)}`,
     probe: async (g, bank) => { const events = []; for (const p of bank.host.pages()) if (p.url().endsWith('/pop')) events.push(await p.evaluate(() => window.__ev)); return events; } });
-  assertPopupRaiseWarning(result);
+  assert.match(result.text, /Tab t\w+ \(opened by this page, another origin\) can be raised to the foreground by the page/, first(result));
   t.diagnostic('active tabs after the opener called focus(): ' + (await b.tabState()).filter(x => x.active).map(x => x.url.replace(b.origin, '')).join(', '));
   assert.deepEqual(extra.flat(), [], 'the popup\'s own document sees no focus call and no event when the opener raises it, so no hook there can stop it');
   assert.deepEqual(b.wire.filter(x => ['Page.bringToFront', 'Target.activateTarget', 'Browser.setWindowBounds'].includes(x.method)), []);
   assert.deepEqual(dangerHits(f), []);
 });
 test('a second click that makes the page call focus() on its cross-origin sign-in popup says the page can raise it (F3)', { skip, timeout: 90000 }, async t => {
-  const { f, b, result } = await attack(t, { body: '<button id="go2" type="button">Sign in again</button>', wait: 1500,
+  const { f, b } = await attack(t, { body: '<button id="go2" type="button">Sign in again</button>', wait: 1500,
     script: `window.__p=null;const si=()=>{if(window.__p&&!window.__p.closed){window.__p.focus();return}window.__p=window.open(${R4_XO}+'/idp','idp','width=480,height=640')};go.onclick=si;go2.onclick=si`,
     routes: { '/idp': '<!doctype html><title>idp</title><h1>IdP</h1><button id="b">Allow</button>' } });
-  const popup = assertPopupRaiseWarning(result);
   await pause(1500);
   const second = await f.act([{ do: 'click', ref: f.ref('Sign in again', await f.read()) }]);
-  assert.match(second.text.split('\n')[0], new RegExp('^1 click e\\d+: [^\\n]+; the page can bring ' + popup + ' forward on its own$'), first(second));
+  assert.match(second.text, /can be raised to the foreground by the page at any time, and sleight cannot block or detect that/, first(second));
   assert.deepEqual(b.wire.filter(x => ['Page.bringToFront', 'Target.activateTarget', 'Browser.setWindowBounds'].includes(x.method)), []);
 });
 test('a same-origin sign-in popup is not listed and its focus() raises nothing (F3 control)', { skip, timeout: 90000 }, async t => {
@@ -746,23 +738,23 @@ test('a same-origin sign-in popup is not listed and its focus() raises nothing (
     routes: { '/idp': '<!doctype html><title>idp</title><h1>IdP</h1><button id="b">Allow</button>' } });
   await pause(1500);
   const second = await f.act([{ do: 'click', ref: f.ref('Sign in again', await f.read()) }]);
-  assert.doesNotMatch(second.text, /can be raised|the page can bring (?:it|t\w+) forward on its own/, first(second));
+  assert.doesNotMatch(second.text, /can be raised/, first(second));
   await f.safe({ settle: 300 });
 });
 test('a cross-origin popup that does not call focus() stays in the background and is still listed (F3 control)', { skip, timeout: 90000 }, async t => {
   const { f, result } = await attack(t, { wait: 2000, script: `go.onclick=()=>{window.open(${R4_XO}+'/landed')}` });
-  assertPopupRaiseWarning(result);
+  assert.match(result.text, /can be raised to the foreground by the page/, first(result));
   await f.safe({ settle: 300 });
 });
 
 test('a cross-origin popup opened with noopener gives the page no handle, so it is not listed (F3 control)', { skip, timeout: 90000 }, async t => {
   const { f, result } = await attack(t, { wait: 2000, script: `go.onclick=()=>{window.open(${R4_XO}+'/landed','_blank','noopener')}` });
-  assert.doesNotMatch(result.text, /can be raised|the page can bring (?:it|t\w+) forward on its own/, first(result));
+  assert.doesNotMatch(result.text, /can be raised/, first(result));
   await f.safe({ settle: 300 });
 });
 test('a cross-origin target=_blank link (noopener by default) is not listed either (F3 control)', { skip, timeout: 90000 }, async t => {
   const { f, result } = await attack(t, { wait: 1500, body: `<a id="a" href="http://localhost:1/x" target="_blank">elsewhere</a>`, script: `a.href=${R4_XO}+'/landed'`, steps: click('elsewhere') });
-  assert.doesNotMatch(result.text, /can be raised|the page can bring (?:it|t\w+) forward on its own/, first(result));
+  assert.doesNotMatch(result.text, /can be raised/, first(result));
   await f.safe({ settle: 300 });
 });
 

@@ -167,7 +167,7 @@ ChatGPT restarts were absent. The final prose check passed all 34 files with no 
 
 ## Optional doctor app read, 2026-10-09
 
-Worktree `<private-evidence>/doctor-flow`, branch `codex/doctor-flow`, base `7644809`.
+Worktree `~/Projects/sleight-wt/doctor-flow`, branch `codex/doctor-flow`, base `7644809`.
 The first baseline `npm test` exited 1: the sandbox denied local test sockets and the generated
 hover fixture directory. The required full check was then run with host access.
 The first doctor test run failed all seven new app assertions (exit 1). The next run
@@ -205,7 +205,7 @@ exit 0). Review closed the app inventory and private-error findings after the re
 ## Doctor user-list approvals, 2026-10-09
 
 Branch `codex/doctor-preapproved` starts at `origin/pane/auto-mode` commit `11a2893`, in
-`<private-evidence>/doctor-flow`. The architect's live check after the first merge found that
+`~/Projects/sleight-wt/doctor-flow`. The architect's live check after the first merge found that
 doctor skipped Calculator despite its entry in the owner's pre-approved list. Doctor had a separate
 elicitation handler that declined every request, without loading that list.
 

@@ -1,10 +1,8 @@
-import { MOD_META } from './fixtures/mod-attribution.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { PassThrough } from 'node:stream';
 import { parseTypedApps, isPresent, predictApps, upfrontAsk, remoteApprovalNotice, physicalApprovalNotice } from '../plugins/sleight/lib/remote-approvals.mjs';
 import { createRelay } from '../plugins/sleight/lib/relay.mjs';
-import { createGlideStopSession } from '../plugins/sleight/lib/mac-driver/stop.mjs';
 import { remoteApprovalOptions } from '../plugins/sleight/lib/launch.mjs';
 
 const apps = [
@@ -28,8 +26,6 @@ for (const [state, origin, expected] of [
   [{ idleSeconds: 0, locked: false }, 'composer', true], [{ idleSeconds: 119.99, locked: false }, undefined, true],
   [{ idleSeconds: 120, locked: false }, 'composer', false], [{ idleSeconds: 0, locked: true }, 'composer', false],
   [{ idleSeconds: 0, locked: false }, 'bridge', false], [{}, undefined, true],
-  [{ idleSeconds: 0, locked: false }, 'desktop', true], [{ idleSeconds: 120, locked: false }, 'desktop', false],
-  [{ idleSeconds: 0, locked: true }, 'desktop', false], [{}, 'desktop', true],
   [{ idleSeconds: -1, locked: false }, undefined, true], [{ idleSeconds: Infinity, locked: false }, undefined, true],
 ]) test(`presence ${JSON.stringify(state)} ${origin}`, () => assert.equal(isPresent(state, origin), expected));
 
@@ -52,7 +48,7 @@ function harness(t, options = {}) {
     remoteApprovals: { presence: async () => ({ idleSeconds: 0, locked: false }), catalog: async () => ({ apps, defaults: { 'mailto:': 'com.apple.mail' } }) },
     stderr: { write: text => logs.push(text) }, ...options });
   t.after(() => { relay.dispose(); streams.forEach(s => s.destroy()); });
-  return { client, server, logs, close: () => relay.close(), call: msg => clientIn.write(JSON.stringify(msg.params?.name === 'turn_ended' ? { ...msg, params: { ...msg.params, _meta: Object.hasOwn(msg.params, '_meta') ? msg.params._meta : MOD_META } } : msg) + '\n'), engine: msg => serverOut.write(JSON.stringify(msg) + '\n') };
+  return { client, server, logs, close: () => relay.close(), call: msg => clientIn.write(JSON.stringify(msg) + '\n'), engine: msg => serverOut.write(JSON.stringify(msg) + '\n') };
 }
 const tick = () => new Promise(r => setImmediate(r));
 const card = (id, app = 'com.apple.TextEdit', extra = {}) => {
@@ -61,21 +57,21 @@ const card = (id, app = 'com.apple.TextEdit', extra = {}) => {
     message: `Allow Computer Use to use "${name}"?`, _meta: { connector_id: 'computer-use', tool_params: { app },
       tool_params_display: [{ name: 'app', value: name }], persist: ['session', 'always'], riskLevel: 'low' }, ...extra } };
 };
-async function user(h, text, origin = 'bridge', id = 1, meta) {
+async function user(h, text, origin = 'bridge', id = 1) {
   h.call({ id: 'bootstrap', method: 'tools/call', params: { name: 'turn_ended', arguments: { sleight_turbo: { event: 'bootstrap' } } } });
   await tick();
   const envelope = JSON.parse(h.client.find(m => m.id === 'bootstrap').result.content[0].text).sleightTurbo;
-  h.call({ id, method: 'tools/call', params: { name: 'turn_ended', _meta: meta === null ? {} : meta ?? MOD_META, arguments: { sleight_turbo: { ...envelope, event: 'begin', turn: 'user-' + id, text, origin, turbo: false } } } });
+  h.call({ id, method: 'tools/call', params: { name: 'turn_ended', arguments: { sleight_turbo: { ...envelope, event: 'begin', turn: 'user-' + id, text, origin, turbo: false } } } });
   await tick(); return envelope;
 }
 
-for (const origin of ['composer', 'bridge', 'desktop']) for (const panel of [false, true])
+for (const origin of ['composer', 'bridge']) for (const panel of [false, true])
 test(`remote approvals off keeps approvals physical for ${origin}, panel=${panel}`, async t => {
   let reads = 0, asks = 0;
   const options = remoteApprovalOptions({ SLEIGHT_REMOTE_APPROVALS: '0' }, async () => {
     reads++; return { locked: true, idleSeconds: 999 };
   });
-  const h = harness(t, { ...options, desktopTurns: true, ask: panel ? () => { asks++; return new Promise(() => {}); } : undefined });
+  const h = harness(t, { ...options, ask: panel ? () => { asks++; return new Promise(() => {}); } : undefined });
   await user(h, 'allow TextEdit', origin);
   h.call({ id: 10, method: 'tools/call', params: { name: 'js', arguments: { code: 'await cua.getApp("TextEdit")' } } });
   h.engine(card('physical')); await tick(); await tick();
@@ -84,61 +80,6 @@ test(`remote approvals off keeps approvals physical for ${origin}, panel=${panel
   assert.equal(h.server.some(row => row.id === 'physical'), false, 'typed permission and away state grant no approval');
   assert.equal(h.client.some(row => row.id === 10), false, 'approval still waits at the Mac');
   if (!panel) assert.ok(h.client.some(row => row.id === 'physical' && row.method === 'elicitation/create'));
-});
-
-for (const desktopTurns of [false, true]) for (const origin of ['desktop', 'sdk', 'task-notification', 'scheduled-trigger',
-  'peer', 'peer-send-message', 'projects-relay', 'coordinator', 'observer', 'auto-continuation', 'channel', 'plugin'])
-test(`relay origin gate ${origin}, desktopTurns=${desktopTurns}`, async t => {
-  const h = harness(t, { desktopTurns });
-  await user(h, 'allow TextEdit', origin);
-  assert.equal(h.client.find(row => row.id === 1).result.isError, !(origin === 'desktop' && desktopTurns));
-  h.engine(card('gate')); await tick();
-  assert.equal(h.server.find(row => row.id === 'gate')?.result?.action === 'accept', origin === 'desktop' && desktopTurns);
-});
-
-test('relay refuses desktop by default', async t => {
-  const previous = process.env.SLEIGHT_DESKTOP_TURNS;
-  let h;
-  try { delete process.env.SLEIGHT_DESKTOP_TURNS; h = harness(t); }
-  finally {
-    if (previous === undefined) delete process.env.SLEIGHT_DESKTOP_TURNS;
-    else process.env.SLEIGHT_DESKTOP_TURNS = previous;
-  }
-  await user(h, 'allow TextEdit', 'desktop');
-  assert.equal(h.client.find(row => row.id === 1).result.isError, true);
-});
-
-for (const variant of ['plain-session', 'high-risk', 'once', 'always'])
-test(`desktop allow text grants only low-risk session app access: ${variant}`, async t => {
-  let persistentWrites = 0;
-  const h = harness(t, { desktopTurns: true, approvalScope: variant === 'once' ? 'once' : 'session',
-    alwaysAllow: () => { persistentWrites++; },
-    remoteApprovals: { presence: async () => ({ idleSeconds: 999, locked: false }), catalog: async () => ({ apps }) } });
-  await user(h, 'allow TextEdit\nPay $268.00 and submit the form.', 'desktop');
-  const c = card('desktop-scope');
-  if (variant === 'high-risk') c.params._meta.riskLevel = 'high';
-  if (variant === 'always') c.params._meta.persist = ['always'];
-  h.engine(c); await tick(); await tick();
-  const result = h.server.find(row => row.id === 'desktop-scope')?.result;
-  if (variant === 'plain-session') assert.deepEqual(result, { action: 'accept', content: {}, _meta: { persist: 'session' } });
-  else assert.notEqual(result?.action, 'accept');
-  assert.equal(persistentWrites, 0);
-});
-
-for (const [presence, present] of [
-  [{ idleSeconds: 0, locked: false }, true], [{ idleSeconds: 120, locked: false }, false],
-  [{ idleSeconds: 0, locked: true }, false], [undefined, true],
-]) test(`desktop presence follows Mac metadata: ${JSON.stringify(presence)}`, async t => {
-  let asks = 0;
-  const h = harness(t, { desktopTurns: true, ask: () => { asks++; return new Promise(() => {}); },
-    remoteApprovals: { presence: async () => presence, catalog: async () => ({ apps }) } });
-  await user(h, 'open TextEdit', 'desktop');
-  const remote = JSON.parse(h.client.find(row => row.id === 1).result.content[0].text).sleightRemote;
-  assert.equal(remote.context, present ? undefined : upfrontAsk([apps[0]]));
-  h.call({ id: 10, method: 'tools/call', params: { name: 'js', arguments: { code: 'await cua.getApp("TextEdit")' } } });
-  h.engine(card('presence')); await tick();
-  assert.equal(asks, 1, 'the physical card remains available for a late answer');
-  assert.equal(h.server.find(row => row.id === 'presence')?.result?.action, present ? undefined : 'decline');
 });
 
 test('accepted mod begin emits only origin, never prompt text or the binding envelope', async t => {
@@ -171,13 +112,13 @@ test('authenticated allow TextEdit approves a real engine card, with no dialog o
   assert.ok(!h.server.some(m => m.method === 'tools/call'), 'user text never reaches the engine');
 });
 
-for (const panel of [false, true]) test(`away mod-less TextEdit card keeps approval on the Mac, native panel=${panel}`, async t => {
+for (const panel of [false, true]) test(`away real TextEdit card returns the remote phrase, native panel=${panel}`, async t => {
   const h = harness(t, { ask: panel ? () => new Promise(() => {}) : undefined,
     remoteApprovals: { presence: async () => ({ idleSeconds: 999, locked: false }), catalog: async () => ({ apps }) } });
   h.call({ id: 10, method: 'tools/call', params: { name: 'js', arguments: { code: 'await cua.getApp("TextEdit")' } } });
   h.engine(card('real-away')); await tick();
   assert.equal(h.server.find(m => m.id === 'real-away')?.result.action, 'decline');
-  assert.equal(h.client.find(m => m.id === 10)?.result.content[0].text, physicalApprovalNotice);
+  assert.equal(h.client.find(m => m.id === 10)?.result.content[0].text, remoteApprovalNotice('TextEdit'));
 });
 
 for (const variant of ['different-id', 'missing-app', 'ambiguous', 'no-catalog', 'catalog-error', 'high-risk', 'forbidden']) {
@@ -277,7 +218,7 @@ test('away untyped card refuses waiting call immediately while a late click gran
   assert.equal(asks, 1);
   assert.equal(h.server.find(m => m.id === 'away').result.action, 'decline');
   const refused = h.client.find(m => m.id === 10);
-  assert.equal(refused.result.isError, true); assert.equal(refused.result.content[0].text, physicalApprovalNotice);
+  assert.equal(refused.result.isError, true); assert.equal(refused.result.content[0].text, remoteApprovalNotice('TextEdit'));
   accept('accept'); await tick();
   assert.equal(h.server.filter(m => m.id === 'away').length, 1, 'late click never resumes the refused engine request');
   h.engine({ id: 10, result: { isError: true, content: [{ type: 'text', text: 'declined' }] } });
@@ -531,7 +472,7 @@ test('a retained app card does not block a later away local confirmation', async
   let asks = 0;
   const h = harness(t, { ask: () => { asks++; return new Promise(() => {}); },
     remoteApprovals: { presence: async () => ({ idleSeconds: 999, locked: false }), catalog: async () => ({ apps }) },
-    localTools: { tools: [{ name: 'fixture_consent', inputSchema: { type: 'object', additionalProperties: false } }], call: async (_name, _args, approve) => ({ content: [{ type: 'text', text: String(await approve(['fixture'], 'Confirm?', { once: true })) }] }) },
+    localTools: { tools: [{ name: 'fixture_consent' }], call: async (_name, _args, approve) => ({ content: [{ type: 'text', text: String(await approve(['fixture'], 'Confirm?', { once: true })) }] }) },
   });
   h.engine(card('unanswered')); await tick();
   h.call({ id: 10, method: 'tools/call', params: { name: 'fixture_consent', arguments: {} } }); await tick(); await tick();
@@ -612,7 +553,7 @@ test('a second away card never sends a second reply for an already refused call'
   h.engine(card('c1')); await settle();
   h.engine(card('c2', 'com.apple.Safari')); await settle();
   const replies = h.client.filter(m => m.id === 11);
-  assert.equal(replies.length, 1); assert.equal(replies[0].result.content[0].text, physicalApprovalNotice);
+  assert.equal(replies.length, 1); assert.match(replies[0].result.content[0].text, /TextEdit/);
 });
 
 test('a present client card still offers Always, and choosing it writes the pre-approved list', async t => {
@@ -624,51 +565,4 @@ test('a present client card still offers Always, and choosing it writes the pre-
   h.call({ jsonrpc: '2.0', id: el.id, result: { action: 'accept', content: { remember: 'Always' } } }); await settle();
   assert.deepEqual(written, [['com.apple.TextEdit', 'low']]);
   assert.equal(h.server.find(m => m.id === 'c1').result.action, 'accept');
-});
-
-
-test('the Glide engine Stop latch resets only on an attributed new prompt', async t => {
-  for (const route of ['person-boundary', 'legacy-begin'])
-  for (const [id, origin, expected] of [
-    [undefined, 'composer', 0], ['toolu_forged', 'composer', 0],
-    ['toolu_plugin_' + 'a'.repeat(32), 'composer', 1],
-    ['toolu_plugin_' + 'a'.repeat(32), 'bridge', 1],
-    ['toolu_plugin_' + 'a'.repeat(32), 'desktop', 0],
-    ['toolu_plugin_' + 'a'.repeat(32), 'task-notification', 0],
-    ['toolu_plugin_' + 'a'.repeat(32), 'plugin', 0],
-  ]) {
-    let resets = 0;
-    const session = createGlideStopSession();
-    let reported;
-    const collected = new Promise(resolve => { reported = resolve; });
-    const h = harness(t, { nativeMac: true, modHost: () => true, desktopTurns: true,
-      nativeSession: { ...session, userPrompt() { resets++; return session.userPrompt(); }, setPolicy() {} },
-      stopGraceMs: 1, stopEngine: async () => { await session.settled(); return { collected: true }; },
-      restartEngine: async () => { throw Error('no fixture call should restart the helper'); },
-      inspectRelease: async () => ({ ok: true }), onStopReported: reported,
-    });
-    h.call({ id: 'person-stop', method: 'tools/call', params: { name: 'turn_ended', arguments: { sleight_stop: true } } });
-    assert.equal((await collected).engine, 'exited and collected');
-    assert.throws(session.check, { code: 'USER_STOPPED' }, 'an actual Stop precedes the prompt');
-    for (const args of [{}, { sleight_resume: true }, { sleight_stop: true }, { sleight_turbo: { event: 'bootstrap' } }]) {
-      h.call({ id: 'model-frame', method: 'tools/call', params: { name: 'turn_ended', arguments: args, _meta: {} } });
-      await tick();
-      assert.throws(session.check, { code: 'USER_STOPPED' }, 'model frames retain Stop');
-      assert.equal(resets, 0);
-    }
-    const meta = id ? { 'claudecode/toolUseId': id } : null;
-    if (route === 'legacy-begin') await user(h, 'Continue the fixture task', origin, 1, meta);
-    else {
-      h.call({ id: 1, method: 'tools/call', params: { name: 'turn_ended',
-        arguments: { sleight_person_prompt: origin }, _meta: meta ?? {} } });
-      await tick();
-    }
-    assert.equal(resets, expected, `${route}:${id}:${origin}`);
-    if (expected) assert.doesNotThrow(session.check, 'the attributed person prompt clears Stop');
-    else assert.throws(session.check, { code: 'USER_STOPPED' }, 'all other prompts retain Stop');
-    h.call({ id: 2, method: 'tools/call', params: { name: 'turn_ended', arguments: {} } });
-    h.call({ id: 3, method: 'tools/call', params: { name: 'js_reset', arguments: {} } });
-    await tick();
-    assert.equal(resets, expected, 'end and reset cannot resume input');
-  }
 });

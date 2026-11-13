@@ -59,7 +59,7 @@ test('FD3D real named recovery allows HTTP upgrade and www variants without exte
   const certDir = trackTemp(mkdtempSync(join(tmpdir(), 'sleight-fd3d-tls-')));
   t.after(() => rmSync(certDir, { recursive: true, force: true }));
   execFileSync('openssl', ['req', '-x509', '-newkey', 'rsa:2048', '-nodes', '-keyout', join(certDir, 'key.pem'),
-    '-out', join(certDir, 'cert.pem'), '-days', '1', '-subj', '/CN=localhost'], { stdio: 'ignore', timeout: 60000, killSignal: 'SIGKILL' });
+    '-out', join(certDir, 'cert.pem'), '-days', '1', '-subj', '/CN=localhost'], { stdio: 'ignore' });
   const sockets = new Set(), served = [];
   const tls = createTLSServer({ key: readFileSync(join(certDir, 'key.pem')), cert: readFileSync(join(certDir, 'cert.pem')) }, (request, response) => {
     served.push(request.url); response.end(content);

@@ -1,4 +1,3 @@
-import { assertChildStatus } from './fixtures/child-status.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { existsSync, mkdirSync, mkdtempSync, readFileSync } from 'node:fs';
@@ -282,9 +281,9 @@ for (const surface of ['codex', 'injected-watcher']) test(`the gate ${surface ==
 
 test('the AX helper compiles, refuses a bad pid and presses nothing', { skip: macCommandSkip('swiftc') }, t => {
   const dir = temporary(t), binary = join(dir, 'chrome-allow');
-  const built = spawnSync('/usr/bin/swiftc', ['-module-cache-path', swiftModuleCache(), new URL('../bench/fowl/chrome-allow.swift', import.meta.url).pathname, '-o', binary], { encoding: 'utf8', timeout: 600000, killSignal: 'SIGKILL' });
-  assertChildStatus(built, 0, built.stderr);
+  const built = spawnSync('/usr/bin/swiftc', ['-module-cache-path', swiftModuleCache(), new URL('../bench/fowl/chrome-allow.swift', import.meta.url).pathname, '-o', binary], { encoding: 'utf8', timeout: 120000 });
+  assert.equal(built.status, 0, built.stderr);
   for (const args of [[], ['windows'], ['windows', '1'], ['press', '1'], ['bogus', '99999']]) {
-    assert.equal(JSON.parse(spawnSync(binary, args, { encoding: 'utf8', timeout: 10000, killSignal: 'SIGKILL' }).stdout).ok, false, args.join(' '));
+    assert.equal(JSON.parse(spawnSync(binary, args, { encoding: 'utf8', timeout: 10000 }).stdout).ok, false, args.join(' '));
   }
 });

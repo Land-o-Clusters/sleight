@@ -124,7 +124,7 @@ export function createTabProbe({ directory, observe, intervalMs = 10, timeoutMs 
       const call = { id, path: stem + '.obs', requests, target, mode, samples: 0, until: now() + 10000 };
       calls.set(id, call);
       const started = performance.now();
-      try { execFileSync('/usr/bin/mkfifo', ['-m', '600', ...requests], { stdio: 'pipe', timeout: 1000, killSignal: 'SIGKILL' }); }
+      try { execFileSync('/usr/bin/mkfifo', ['-m', '600', ...requests], { stdio: 'pipe', timeout: 1000 }); }
       catch (error) {
         call.failed = true;
         return { target, mode, channel: 'read-fifo', failure: failure('request-create', error) };

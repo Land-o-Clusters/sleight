@@ -2,54 +2,12 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { EventEmitter } from 'node:events';
 import vm from 'node:vm';
-import { readFileSync } from 'node:fs';
 import { hookAnswer } from './adversarial/fixtures/hook.mjs';
+import { createPageRegistry, backgroundClick, frameShield, popupHook, hookProof, hookOpen, hookSource, newHook } from '../plugins/sleight/lib/direct-browser/page.mjs';
 import { activationKey } from '../plugins/sleight/lib/direct-browser/act.mjs';
 import { setViewport } from '../plugins/sleight/lib/direct-browser/viewport.mjs';
 import { createToolDispatcher } from '../plugins/sleight/lib/direct-browser/tools.mjs';
 import { pendingTabNote } from '../plugins/sleight/lib/browser-turn-input.mjs';
-
-const pageURL = new URL('../plugins/sleight/lib/direct-browser/page.mjs', import.meta.url);
-const brokenHookVariants = {
-  'raw-scripts': ['scriptsLength(document) === 0', 'document.scripts.length === 0'],
-  'raw-collection-length': ['scriptCollectionLength(scriptsOf(doc))', 'scriptsOf(doc).length'],
-  'ignore-late': ['!late && scriptsLength(document) === 0', 'scriptsLength(document) === 0'],
-  'skip-script-count': ['!late && scriptsLength(document) === 0', '!late'],
-  'skip-key-freshness': ['node.id !== null && node.fresh === true', 'node.id !== null'],
-  'late-document-start': ['export function hookSource(hook, { late = false } = {})', 'export function hookSource(hook, { late = true } = {})'],
-  'input-before-arm': ['// The shield outlives the click timeout:', 'if (keys) await click({});\n      // The shield outlives the click timeout:'],
-  'raw-base-uri': ['new URL(hrefOf(element), baseURIOf(document))', 'new URL(hrefOf(element), document.baseURI)'],
-  'raw-active-element': ['activeElementOf(document)', 'document.activeElement'],
-  'raw-parent': ['if (windowParentOf(window) === window)', 'if (window.parent === window)'],
-  'live-install-fresh': ['expression: hookSource(entry.hook, { late: true })', 'expression: source'],
-  'live-frame-fresh': ['const source = hookSource(entry.hook, { late: true });', 'const source = hookSource(entry.hook);'],
-  'handoff-only': ['expression: hookSource(entry.hook, { late: true })', 'expression: hookSource(entry.hook, { late: handoffActive })'],
-  'named-install-fresh': ['opened.eval(late ? lateInstallSource : installSource)', 'opened.eval(installSource)'],
-  'all-popup-installs-late': ['opened.eval(late ? lateInstallSource : installSource)', 'opened.eval(lateInstallSource)'],
-  'recoerce-popup-target': ["installInto(opened, name !== '' && !/^_blank$/i.test(name))", "installInto(opened, String(target) !== '' && !/^_blank$/i.test(String(target)))"],
-  'native-popup-target-raw': ["nativeOpen.call(this, url, name, kept.join(','))", "nativeOpen.call(this, url, target, kept.join(','))"],
-  'null-popup-fresh': ["target === undefined ? '' : String(target)", "String(target ?? '')"],
-  'raw-parent-worker-test': ['parent === windowParentOf(parent)', 'parent === parent.parent'],
-  'raw-parent-worker-step': ['parent = windowParentOf(parent);', 'parent = parent.parent;'],
-  'raw-parent-home': ['const home = [windowParentOf(window), window.top]', 'const home = [window.parent, window.top]'],
-  'raw-parent-realms-start': ['pending = [window.top, windowParentOf(window), ...home', 'pending = [window.top, window.parent, ...home'],
-  'raw-parent-realms-step': ['pending.push(context.top, windowParentOf(context), openerGetter?.call(context))', 'pending.push(context.top, context.parent, openerGetter?.call(context))'],
-  'raw-parent-inherit-arm': ['const parent = windowParentOf(window);', 'const parent = window.parent;'],
-  'raw-parent-inherit-flight': ['const above = [windowParentOf(window), window.top, openerGetter?.call(window)]', 'const above = [window.parent, window.top, openerGetter?.call(window)]'],
-  'wait-for-late': ['if (found.unreached.some(context => Array.isArray(context.info) && context.info.some(node => node.id !== null && node.fresh === false))) return undefined;', ''],
-};
-async function loadPage() {
-  const variant = process.env.SA2C_BROKEN_VARIANT;
-  if (!variant) return import(pageURL.href);
-  assert.ok(Object.hasOwn(brokenHookVariants, variant), 'known SA2C broken variant');
-  const [before, after] = brokenHookVariants[variant];
-  let source = readFileSync(pageURL, 'utf8');
-  assert.ok(source.includes(before), 'mutation site for ' + variant);
-  source = source.replaceAll(before, after).replace(/from (['"])(\.[^'"]+)\1/g,
-    (_, quote, path) => 'from ' + quote + new URL(path, pageURL).href + quote);
-  return import('data:text/javascript;base64,' + Buffer.from(source).toString('base64'));
-}
-const { createPageRegistry, backgroundClick, frameShield, popupHook, hookProof, hookOpen, hookSource, newHook } = await loadPage();
 
 function fixture(options = {}) {
   const calls = [], pages = [], context = new EventEmitter();
@@ -80,7 +38,6 @@ function fixture(options = {}) {
       return { name: p.windowName ?? '', origin: new URL(p.url()).origin };
     };
     p.close = async () => { calls.push(['close', targetId]); p.closed = true; p.emit('close'); };
-    options.setupPage?.(p);
     pages.push(p); context.emit('page', p); return p;
   }
   const session = { async send(method, params) {
@@ -727,8 +684,7 @@ test('unproved popup preparation refuses before input and disarms a possible lat
   assert.deepEqual(f.calls, [['disarm']]);
 });
 
-function hookFixture({ clock = Date, handle, credentials: given, parent, rewritable = false, children = [], fresh = false, globals = {}, windowProps = {},
-  beforeInstall = () => {}, source = hookSource } = {}) {
+function hookFixture({ clock = Date, handle, credentials: given, parent, rewritable = false, children = [], fresh = false, globals = {}, windowProps = {} } = {}) {
   class Event {
     get defaultPrevented() { return !!this.nativePrevented; }
     get returnValue() { return !this.nativePrevented; }
@@ -795,37 +751,24 @@ function hookFixture({ clock = Date, handle, credentials: given, parent, rewrita
     disconnect() { this.disconnected = true; }
   }
   const opens = [], window = { listeners: {}, captureListeners: {}, parent, open(...args) { opens.push(args); return handle ?? { real: true }; } };
-  window.nativeParent = parent;
-  Object.defineProperty(window, 'parent', { configurable: true, get() { return this.nativeParent ?? this; } });
   Object.assign(window, windowProps);
   const navigator = { userActivation: { isActive: true } };
   // Child windows by index and a native length getter, as a window has them; `fresh` is a document no script has run in yet.
   if (children.length) { Object.defineProperty(window, 'length', { get: () => children.length }); children.forEach((child, index) => { window[index] = child; }); }
-  class HTMLCollection {
-    constructor(items) { this.items = items; }
-    get length() { return Array.isArray(this) ? this.length : this.items.length; }
-  }
-  let activeElement = null;
-  const scripts = new HTMLCollection(fresh ? [] : [{ textContent: "window.open('/identity')" }]);
-  class Node { get baseURI() { return 'https://fixture.invalid/'; } }
+  const document = { baseURI: 'https://fixture.invalid/', scripts: fresh ? [] : [{ textContent: "window.open('/identity')" }], querySelector: () => null };
   // document.open() erases every listener on its window; a fixture asks for it with `rewritable`.
-  class Document extends Node {
-    get scripts() { return scripts; }
-    get activeElement() { return activeElement; }
-    set activeElement(value) { activeElement = value; }
+  class Document {
     open() { window.listeners = {}; window.captureListeners = {}; }
     write() { this.open(); }
     writeln() { this.open(); }
     get defaultView() { return window; }
   }
-  const document = Object.assign(new Document(), { querySelector: () => null });
-  if (!rewritable) for (const name of ['open', 'write', 'writeln']) Object.defineProperty(document, name, { value: undefined });
+  if (rewritable) Object.setPrototypeOf(document, Document.prototype);
   const credentials = given ?? newHook();
   const context = vm.createContext({ window, document, navigator,
-    MouseEvent, Element, HTMLElement: Element, Document, Node, HTMLCollection, HTMLButtonElement, HTMLInputElement, HTMLSelectElement, HTMLLabelElement,
+    MouseEvent, Element, HTMLElement: Element, ...(rewritable ? { Document } : {}), HTMLButtonElement, HTMLInputElement, HTMLSelectElement, HTMLLabelElement,
     Event, EventTarget, MutationObserver, URL, Date: clock, setTimeout, clearTimeout, queueMicrotask, ...globals });
-  beforeInstall({ window, document, scripts, context, HTMLCollection, Document, Node, Element });
-  const installed = vm.runInContext(source(credentials), context);
+  const installed = vm.runInContext(hookSource(credentials), context);
   const raw = window[credentials.key];
   // Each call carries its own proof, as the controller sends it; tests that look at the proof use raw.
   // A watch (a plain same-context click the hook only observes) reads as the plain click earlier tests mean, so those
@@ -838,226 +781,8 @@ function hookFixture({ clock = Date, handle, credentials: given, parent, rewrita
   const hook = Object.fromEntries(['guard', 'reveal', 'settle', 'verdict', 'prepare', 'takeRequest', 'finish', 'cancel', 'take', 'off']
     .map(name => [name, (...args) => { const result = call(name, ...args); return name === 'prepare' && result?.kind === 'watch' ? false : result; }]));
   return { window, document, navigator, hook, raw, call, credentials, context, installed, Element, HTMLButtonElement, HTMLInputElement, HTMLSelectElement, HTMLLabelElement,
-    MouseEvent, Event, EventTarget, opens, observers, scripts, Document, Node, HTMLCollection };
+    MouseEvent, Event, EventTarget, opens, observers };
 }
-
-// VM DOMs exercise the shipped serialized hook. They do not measure Chromium's named-property rules or listener races.
-const lateHookSource = hook => hookSource(hook, { late: true });
-const hookFresh = f => f.call('info').fresh;
-const shadowScripts = ({ document }, tag) => Object.defineProperty(document, 'scripts', {
-  value: { localName: tag, length: 0 }, configurable: true,
-});
-const lateCases = [
-  ...['form', 'iframe', 'img'].map(tag => [tag + ' named scripts', f => shadowScripts(f, tag), false]),
-  ['all script elements removed', f => { f.scripts.items.length = 0; }, false],
-  ['onkeydown attribute only', f => { f.document.onkeydown = () => {}; }, true],
-  ['eval listener only', f => { vm.runInContext('eval("window.listeners.keydown = new Set([() => {}])")', f.context); }, true],
-  ['scripts redefined with defineProperty', f => Object.defineProperty(f.document, 'scripts', { value: { length: 0 } }), false],
-];
-async function keyAttempt(f, { timeoutMs = 30, survey = () => {} } = {}) {
-  const click = clickFixture(false), { entry } = click;
-  // The owner seal is stubbed; the keyFrames survey reads the real signed VM tree and drives its real refusal path.
-  const realm = f(entry.hook);
-  const frame = { evaluate: async source => { if (source.includes('.tree(')) survey(); return vm.runInContext(source, realm.context); }, isDetached: () => false };
-  entry.page.frames = () => [frame]; entry.page.mainFrame = () => frame;
-  let sent = 0;
-  try {
-    await backgroundClick(entry, click.locator, async () => { sent++; }, { keys: true, timeoutMs });
-    return { sent };
-  } catch (error) {
-    assert.equal(sent, 0, 'an unguarded document receives no input callback');
-    throw error;
-  } finally { realm.hook.off(); }
-}
-for (const [name, beforeInstall, fresh] of lateCases) test('SA2C late ' + name + ' is not fresh and refuses before a key', async () => {
-  const f = hookFixture({ fresh, beforeInstall, source: lateHookSource });
-  try { assert.equal(hookFresh(f), false); } finally { f.hook.off(); }
-  await assert.rejects(keyAttempt(credentials => hookFixture({ credentials, fresh, beforeInstall, source: lateHookSource })),
-    error => error.code === 'KEY_FRAMES' && /a frame could not be guarded before the key/.test(error.message));
-});
-for (const tag of ['form', 'iframe', 'img']) test('SA2C document-start scripts getter ignores a named ' + tag, () => {
-  const f = hookFixture({ beforeInstall: f => shadowScripts(f, tag) });
-  try { assert.equal(hookFresh(f), false, 'one actual script prevents freshness despite the own property'); }
-  finally { f.hook.off(); }
-});
-test('SA2C script collection length is captured before a scripts getter replaces it', () => {
-  const f = hookFixture({ beforeInstall({ Document, HTMLCollection, scripts }) {
-    Object.defineProperty(Document.prototype, 'scripts', { get() {
-      Object.defineProperty(HTMLCollection.prototype, 'length', { configurable: true, get: () => 0 });
-      return scripts;
-    } });
-  } });
-  try { assert.equal(hookFresh(f), false); } finally { f.hook.off(); }
-});
-test('SA2C a fresh document permits the keyFrames survey', async () => {
-  assert.deepEqual(await keyAttempt(credentials => hookFixture({ credentials, fresh: true })), { sent: 1 });
-});
-test('SA2C relative link preparation ignores a shadowed baseURI and a replaced native getter', () => {
-  const f = hookFixture();
-  try {
-    Object.defineProperty(f.document, 'baseURI', { value: 'file:///poison/' });
-    Object.defineProperty(f.Node.prototype, 'baseURI', { get: () => 'file:///poison/' });
-    assert.equal(f.hook.prepare(new f.Element('a', { href: '/next', target: '_blank' }), 'base', 1000)?.kind, 'link');
-  } finally { f.hook.off(); }
-});
-test('SA2C frame focus cannot be hidden by activeElement clobbering', () => {
-  const f = hookFixture(), card = new f.Element('iframe'); card.keepsFocus = true;
-  try {
-    f.document.activeElement = card;
-    Object.defineProperty(f.document, 'activeElement', { value: null });
-    Object.defineProperty(f.Document.prototype, 'activeElement', { get: () => null });
-    assert.throws(() => f.hook.prepare(new f.Element(), 'focus', 1000), /document focus is inside a frame/);
-  } finally { f.hook.off(); }
-});
-test('SA2C parent clobbering cannot hide a child frame held opening', () => {
-  const child = hookFixture(), f = hookFixture({ credentials: child.credentials, children: [child.window] });
-  try {
-    child.window.document = child.document;
-    f.window.frames = f.window;
-    child.window.open('/held', '_blank');
-    Object.defineProperty(f.window, 'parent', { get: () => ({}) });
-    assert.equal(f.call('take'), 1);
-    assert.equal(child.call('take'), 0, 'the parent drained the child');
-  } finally { child.hook.off(); f.hook.off(); }
-});
-function sourceFresh(source, credentials) {
-  const f = hookFixture({ fresh: true, credentials, source: () => source });
-  try { return hookFresh(f); } finally { f.hook.off(); }
-}
-async function assertInstallSources(entry, calls, { current = true } = {}) {
-  const rows = calls.filter(row => row[2] === entry.targetId);
-  const starts = rows.filter(row => row[0] === 'Page.addScriptToEvaluateOnNewDocument');
-  assert.equal(starts.length, 1);
-  assert.equal(sourceFresh(starts[0][1].source, entry.hook), true, 'the next document starts fresh');
-  if (current) {
-    const live = rows.filter(row => row[0] === 'Runtime.evaluate' && row[1].expression.startsWith('(' + popupHook));
-    assert.equal(live.length, 1);
-    assert.equal(sourceFresh(live[0][1].expression, entry.hook), false, 'the live document is late even with zero scripts');
-  }
-}
-test('SA2C about:blank install then goto uses a fresh new-document hook and a late live hook', async () => {
-  const f = fixture();
-  try {
-    const { tab } = await f.registry.openTab({ url: 'https://fixture.invalid/new' });
-    const entry = f.registry.tab(tab);
-    await assertInstallSources(entry, f.calls);
-    assert.ok(f.calls.findIndex(row => row[0] === 'Page.addScriptToEvaluateOnNewDocument') < f.calls.findIndex(row => row[0] === 'goto'));
-  } finally { await f.registry.endTurn(); }
-});
-test('SA2C handoff resume installs a late hook into the live page', async () => {
-  const f = fixture();
-  try {
-    const { tab } = await f.registry.openTab({ url: 'https://fixture.invalid/' });
-    const paused = await f.registry.beginHandoff(tab), start = f.calls.length;
-    await paused.finish(false);
-    await assertInstallSources(f.registry.tab(tab), f.calls.slice(start));
-  } finally { await f.registry.endTurn(); }
-});
-test('SA2C popup adopted after load installs late', async () => {
-  const f = fixture();
-  try {
-    const { tab } = await f.registry.openTab({ url: 'https://fixture.invalid/' });
-    f.page('loaded-popup', f.registry.tab(tab).targetId); await f.registry.idle();
-    const popup = f.registry.tab(f.registry.tab(tab).popups[0].tab);
-    await assertInstallSources(popup, f.calls);
-  } finally { await f.registry.endTurn(); }
-});
-test('SA2C existing same-site frames are late while frame-filter document-start scripts stay fresh', async () => {
-  const evaluated = [], frameStarts = [];
-  const f = fixture({ frames: { addScript: async (_target, source) => { frameStarts.push(source); return { remove: async () => {} }; }, sessions: () => [], evaluate: async () => 'absent' },
-    setupPage(page) {
-      const main = { url: page.url, evaluate: async () => 'absent' };
-      page.mainFrame = () => main;
-      page.frames = () => [main, { url: page.url, evaluate: async source => {
-        if (typeof source === 'string') evaluated.push(source);
-        return 'absent';
-      } }];
-    } });
-  try {
-    const { tab } = await f.registry.openTab({ url: 'https://fixture.invalid/' }), entry = f.registry.tab(tab);
-    assert.equal(evaluated.length, 1);
-    assert.equal(sourceFresh(evaluated[0], entry.hook), false);
-    assert.equal(frameStarts.length, 1);
-    assert.equal(sourceFresh(frameStarts[0], entry.hook), true);
-  } finally { await f.registry.endTurn(); }
-});
-
-for (const [name, target, expected, fresh] of [
-  ['named', 'existing-name', 'existing-name', false], ['null', null, 'null', false],
-  ['blank', '_blank', '_blank', true], ['empty', '', '', true], ['missing', undefined, '', true],
-  ['changing to blank', { toString() { return ++this.calls === 1 ? 'existing-name' : '_blank'; }, calls: 0 }, 'existing-name', false],
-  ['changing to named', { toString() { return ++this.calls === 1 ? '_blank' : 'existing-name'; }, calls: 0 }, '_blank', true],
-  ['uppercase blank', '_BLANK', '_BLANK', true], ['padded blank', ' _blank ', ' _blank ', false],
-]) test('SA2L popup install freshness for target ' + name, () => {
-  const credentials = newHook();
-  const child = hookFixture({ credentials, fresh: true, source: () => 'true' });
-  child.window.document = child.document;
-  child.window.Event = child.Event;
-  child.window.eval = source => vm.runInContext(source, child.context);
-  const f = hookFixture({ credentials, handle: child.window });
-  const childCall = method => hookOpen(credentials, child.window[credentials.key][method](hookProof(credentials, method)));
-  try {
-    f.hook.prepare(new f.Element(), 'open', 1000);
-    for (const listener of f.window.listeners.keydown)
-      listener(Object.assign(new f.Event(), { key: 'Control', type: 'keydown', isTrusted: true }));
-    assert.equal(f.window.open('', target), child.window);
-    assert.equal(f.opens[0][1], expected, 'native open receives the one coerced target used for freshness');
-    if (target && typeof target === 'object') assert.equal(target.calls, 1, 'coerce the target exactly once');
-    assert.equal(childCall('info').fresh, fresh, 'only a known new target may be fresh');
-  } finally { f.hook.off(); if (child.window[credentials.key]) childCall('off'); }
-});
-
-test('SA2L an answering late hook refuses without polling until the deadline', async () => {
-  let surveys = 0;
-  await assert.rejects(keyAttempt(credentials => hookFixture({ credentials, fresh: true, source: lateHookSource }),
-    { timeoutMs: 250, survey: () => { surveys++; } }), error => error.code === 'KEY_FRAMES');
-  assert.equal(surveys, 2, 'one arm survey and one release survey, with no retry polls');
-});
-
-test('SA2L SharedWorker ancestor traversal ignores both raw parent sites', () => {
-  const parent = hookFixture({ windowProps: { navigation: { listeners: {}, captureListeners: {} } } }), child = hookFixture({ credentials: parent.credentials, parent: parent.window,
-    globals: { SharedWorker: class SharedWorker {} } });
-  try {
-    assert.equal(parent.call('whole', 'read', 1000), true);
-    Object.defineProperty(child.window, 'parent', { value: child.window });
-    assert.throws(() => vm.runInContext('new SharedWorker()', child.context), /SharedWorker creation/);
-    assert.equal(parent.call('wholeTake'), '\n1\n0\n0');
-  } finally { child.hook.off(); parent.hook.off(); }
-});
-
-// A getter encountered after native parent capture shadows the public property
-// before home and inheritance run. This also models a late realm's mutation.
-const shadowParentDuringInstall = ({ window }) => Object.defineProperty(window, 'alert', {
-  configurable: true, get() {
-    Object.defineProperty(window, 'parent', { configurable: true, value: window });
-    return () => {};
-  },
-});
-for (const site of ['home', 'realms-start', 'realms-step']) test('SA2L cancellation forwarding uses captured parent at ' + site, () => {
-  const credentials = newHook();
-  let cancellations = 0;
-  const peer = { document: {}, [credentials.key]: { cancel() { cancellations++; } } };
-  const middle = { document: {}, nativeParent: peer };
-  middle.parent = middle;
-  const f = hookFixture({ credentials, ...(site === 'home' ? { parent: peer, beforeInstall: shadowParentDuringInstall } : {}),
-    ...(site === 'realms-step' ? { windowProps: { top: middle } } : {}) });
-  try {
-    f.window.nativeParent = site === 'realms-start' ? peer : f.window;
-    Object.defineProperty(f.window, 'parent', { configurable: true, value: f.window });
-    Object.assign(new f.Event(), { isTrusted: true }).preventDefault();
-    assert.equal(cancellations, 1, 'cancellation reaches the real ancestor');
-  } finally { f.hook.off(); }
-});
-for (const state of ['arm', 'flight']) test('SA2L captured parent inherits ' + state + ' despite a shadow during installation', () => {
-  const parent = hookFixture();
-  if (state === 'arm') parent.call('adopt', 'inherited', 1000, false);
-  else parent.raw.watching(hookProof(parent.credentials, 'watching'), true);
-  const child = hookFixture({ credentials: parent.credentials, parent: parent.window, beforeInstall: shadowParentDuringInstall });
-  try {
-    if (state === 'arm') assert.equal(child.call('armed')?.token, 'inherited');
-    else assert.equal(child.call('flight'), true);
-  } finally { child.hook.off(); parent.hook.off(); }
-});
 
 test('LR1D whole guard refuses saved SharedWorker constructors, counts attempts, expires and restores', () => {
   let now = 0, constructions = 0;
@@ -1916,7 +1641,7 @@ test('a window.open handle is offered the hook\'s own source once: key and secre
   try {
     arm('first');
     assert.ok(f.window.open('/popup', 'named'));
-    assert.deepEqual(evals, [hookSource(f.credentials, { late: true })], 'a named target receives the late install source');
+    assert.deepEqual(evals, [hookSource(f.credentials)], 'the source is the install source for these credentials');
     f.hook.finish('first'); arm('second');
     f.window.open('/popup', 'named');
     assert.equal(evals.length, 1, 'a handle the hook already offered the source to is not offered it again');

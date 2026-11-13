@@ -1,4 +1,3 @@
-import { testChromiumExecutable, readTestDevToolsPort, launchTestChromiumContext, closeTestChromium } from '../../fixtures/chromium-isolated.mjs';
 import assert from 'node:assert/strict';
 import { createServer } from 'node:http';
 import { existsSync, readFileSync, mkdtempSync, mkdirSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
@@ -47,8 +46,9 @@ function browserPaths() {
   const spec = name => JSON.parse(readFileSync(new URL('../../../plugins/sleight/vendor/playwright-core/browsers.json', import.meta.url))).browsers.find(b => b.name === name);
   const cache = join(homedir(), 'Library/Caches/ms-playwright'), mac = process.platform === 'darwin';
   return {
-    shell: testChromiumExecutable({ revision: spec('chromium-headless-shell').revision }),
-    full: mac ? testChromiumExecutable({ headless: false, revision: spec('chromium').revision })
+    shell: join(cache, 'chromium_headless_shell-' + spec('chromium-headless-shell').revision,
+      'chrome-headless-shell-' + (mac ? 'mac-' + process.arch : 'linux64'), 'chrome-headless-shell'),
+    full: mac ? join(cache, 'chromium-' + spec('chromium').revision, 'chrome-mac-' + process.arch, 'Google Chrome for Testing.app/Contents/MacOS/Google Chrome for Testing')
       : join(cache, 'chromium-' + spec('chromium').revision, 'chrome-linux64/chrome'),
   };
 }
@@ -90,20 +90,19 @@ export async function bank(t, { observeTabs = false } = {}) {
     } };
   t.after(async () => {
     const cleanup = [];
-    try { await closeTestChromium(host, async () => {
-      try {
-        if (runtime) { const receipt = await runtime.end(); assert.deepEqual(receipt.cleanup, []); cleanup.push('runtime'); }
-        if (filter) { await filter.dispose(); cleanup.push('filter'); }
-        await browser?.close();
-        if (socket && socket.readyState !== 3) await new Promise(resolve => { socket.addEventListener('close', resolve, { once: true }); socket.close(); });
-        cleanup.push('raw socket');
-      } finally { await host?.close(); }
-    }); } finally {
+    try {
+      if (runtime) { const receipt = await runtime.end(); assert.deepEqual(receipt.cleanup, []); cleanup.push('runtime'); }
+      if (filter) { await filter.dispose(); cleanup.push('filter'); }
+      await browser?.close();
+      if (socket && socket.readyState !== 3) await new Promise(resolve => { socket.addEventListener('close', resolve, { once: true }); socket.close(); });
+      cleanup.push('raw socket');
+    } finally {
+      await host?.close();
       for (const s of sockets) s.destroy();
       await new Promise(resolve => server.close(resolve));
       rmSync(root, { recursive: true, force: true }); assert.equal(existsSync(root), false);
+      t.diagnostic('AD1 cleanup: owned headless browser/pages, raw socket, filter, HTTP sockets/server and private profile collected; ' + cleanup.join(', '));
     }
-    t.diagnostic('AD1 cleanup: owned headless browser/pages, raw socket, filter, HTTP sockets/server and private profile collected; ' + cleanup.join(', '));
   });
   await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
   const origin = 'http://127.0.0.1:' + server.address().port;
@@ -115,7 +114,7 @@ export async function bank(t, { observeTabs = false } = {}) {
     writeFileSync(join(extension, 'worker.js'), 'chrome.runtime.onInstalled.addListener(() => {});');
     args.push('--disable-extensions-except=' + extension, '--load-extension=' + extension);
   }
-  host = await launchTestChromiumContext(chromium, root, { headless: true, executablePath, args, viewport: { width: 900, height: 800 },
+  host = await chromium.launchPersistentContext(root, { headless: true, executablePath, args, viewport: { width: 900, height: 800 },
     ...(observeTabs ? { channel: 'chromium', ignoreDefaultArgs: ['--disable-extensions'] } : {}) });
   // The harness's own Playwright sees every page of this disposable browser. With no dialog listener it
   // would dismiss page dialogs before the tool under test can answer them, which production never does.
@@ -126,7 +125,7 @@ export async function bank(t, { observeTabs = false } = {}) {
   const foreignCdp = await host.newCDPSession(foreign), foreignId = (await foreignCdp.send('Target.getTargetInfo')).targetInfo.targetId;
   const foreignFocus = await foreign.evaluate(() => document.hasFocus());
   const activeBefore = (await tabState()).filter(x => x.active).map(x => x.id);
-  const active = (await readTestDevToolsPort(root)); port = Number(active[0]);
+  const active = readFileSync(join(root, 'DevToolsActivePort'), 'utf8').trim().split('\n'); port = Number(active[0]);
   const endpoint = 'ws://127.0.0.1:' + port + active[1]; socket = new WebSocket(endpoint);
   socket.addEventListener('message', event => {
     const frame = JSON.parse(event.data);

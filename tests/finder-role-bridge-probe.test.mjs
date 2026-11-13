@@ -1,4 +1,3 @@
-import { assertChildStatus } from './fixtures/child-status.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { existsSync, readFileSync } from 'node:fs';
@@ -135,9 +134,9 @@ test('bridge calibration refuses arguments before imports or string construction
 });
 
 test('macOS fixed-string bridge calibration validates native object routes', { skip: process.platform !== 'darwin' }, () => {
-  const child = spawnSync('/usr/bin/osascript', ['-l', 'JavaScript', fileURLToPath(script)], { encoding: 'utf8', timeout: 10000, killSignal: 'SIGKILL' });
+  const child = spawnSync('/usr/bin/osascript', ['-l', 'JavaScript', fileURLToPath(script)], { encoding: 'utf8', timeout: 10000 });
   assert.equal(child.error, undefined);
-  assertChildStatus(child, 0, child.stderr);
+  assert.equal(child.status, 0, child.stderr);
   const result = JSON.parse(child.stdout);
   assert.equal(result.importState, 'available');
   assert.deepEqual(result.constants, { roleAttributeEqual: 'yes', windowRoleEqual: 'yes' });

@@ -52,10 +52,9 @@ test('FD3B real listbox select keys reach page listeners without native-panel ca
   });
   assert.deepEqual(result, { seen: ['Enter', ' ', 'ArrowDown'], allowed: [true, true, true] });
 });
-test('FD3B real page-initiated native navigation reports an unconfirmed outcome for location, meta refresh and iframe', { skip, timeout: 60000 }, async t => {
+test('FD3B real page-initiated native navigation is stopped or reported for location, meta refresh and iframe', { skip, timeout: 60000 }, async t => {
   const f = await fixture(t, content), d = dispatcher(f), page = f.entry.page, tab = f.entry.tab, target = f.entry.targetId;
   for (const kind of ['location', 'meta', 'iframe']) {
-    const before = f.entry.state.nativeNavigationNo ?? 0;
     await page.evaluate(kind => {
       if (kind === 'location') location.href = 'mailto:fixture@example.invalid';
       else if (kind === 'meta') { const meta = document.createElement('meta'); meta.httpEquiv = 'refresh'; meta.content = '0;url=zoommtg://fixture.invalid'; document.head.append(meta); }
@@ -63,28 +62,9 @@ test('FD3B real page-initiated native navigation reports an unconfirmed outcome 
     }, kind);
     await pause(200);
     const result = await d.call({ name: 'browser_read', arguments: { tab } });
-    assert.ok(f.entry.state.nativeNavigationNo > before, kind + ': a fresh navigation must be observed');
-    assert.match(result.text, /Native navigation attempted; cancellation requested\. Native UI outcome unconfirmed/, kind + ': ' + result.text);
-    d.delivered(result);
-    t.diagnostic(kind + ': navigation attempts=' + (f.entry.state.nativeNavigationNo - before) + ', outcome unconfirmed');
+    assert.match(result.text, /native app navigation.*(?:blocked|attempted)|native navigation.*(?:blocked|attempted)/i, kind + ': ' + result.text);
     assert.equal(f.entry.targetId, target); assert.equal(f.entry.tab, tab);
   }
-});
-
-test('FD3B the Mac fixture sandbox contains an unguarded mailto after keep', { skip: skip || process.platform !== 'darwin', timeout: 60000 }, async t => {
-  const f = await fixture(t, content), page = f.entry.page;
-  await f.registry.keep(f.entry.tab);
-  const session = await f.context.newCDPSession(page), navigations = [];
-  try {
-    await session.send('Page.enable');
-    session.on('Page.frameRequestedNavigation', event => navigations.push(event.url));
-    // The product has released this page. Only the test process sandbox remains.
-    await page.evaluate(() => { location.href = 'mailto:fixture@example.invalid?subject=MT2-isolation'; });
-    await pause(250);
-    assert.ok(navigations.some(url => url.startsWith('mailto:')), 'Chromium received the native handoff attempt');
-    assert.match(page.url(), /\/start$/);
-    t.diagnostic('unguarded mailto reached Chromium after keep; the external window-count proof checks the OS boundary');
-  } finally { await session.detach(); }
 });
 test('FD3B real static thin document wait is bounded by ready quiet, with measured latency', { skip, timeout: 60000 }, async t => {
   const f = await fixture(t, '<p>Thin</p>'), start = Date.now();

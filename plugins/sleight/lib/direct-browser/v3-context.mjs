@@ -1,5 +1,3 @@
-import { selectRuntime } from '../runtime-choice.mjs';
-import { strictTextRefusal, isClipboardChord } from '../mac-driver/preserve.mjs';
 import { fileURLToPath } from 'node:url';
 import { createClipboardPasteSession, createNativeClipboardIO } from '../clipboard.mjs';
 import { randomUUID } from 'node:crypto';
@@ -13,9 +11,7 @@ import { createUserFileProvider, stageUserUploads } from './files.mjs';
 import { uploadRefusalMessage } from './upload-paths.mjs';
 import { createConsentUi } from './consent-ui.mjs';
 import { isAppBinding } from './electron-identity.mjs';
-import { quitKeyBlocked, quitAppAllowed, requestedQuitApps, QUIT_KEY_REFUSAL } from '../quit-key.mjs';
 import { moneyFigures, moneyConflicts } from '../payment-figures.mjs';
-import { pointDragSteps } from './points.mjs';
 
 const bindings = new WeakMap(), contexts = new WeakSet();
 const text = value => typeof value === 'string' && value.trim().length > 0 && value.length <= 4096;
@@ -483,8 +479,7 @@ export function readPaymentPage(el, lenient, read = (node, key) => { const value
       chosenCache.set(a, yes); return yes;
     };
     const push = (text, owner, picked = false) => {
-      // moneyFigures owns Unicode normalization, including preserving № as a reference marker.
-      let t = String(text ?? '').replace(/[­​-‏⁠﻿]/g, '').replace(/\s+/g, ' ').trim(); if (!t) return;
+      let t = String(text ?? '').normalize('NFKC').replace(/[­​-‏⁠﻿]/g, '').replace(/\s+/g, ' ').trim(); if (!t) return;
       if (!picked) for (let a = owner; a; a = up(a)) { if (chosenNode(a)) { picked = true; break; } if (a === root) break; }
       if (picked) t = '\uE000' + t + '\uE001';
       let block = owner; while (block && /^(?:inline(?:-.*)?|contents)$/.test(gs(block).display)) block = up(block);
@@ -545,7 +540,7 @@ export function readPaymentPage(el, lenient, read = (node, key) => { const value
     const tag = read(el, 'localName'), isField = ['input', 'select', 'textarea'].includes(tag);
     const own = [read(el, 'getAttribute')('aria-label'), isField ? undefined : read(el, 'textContent'), isField ? undefined : read(el, 'getAttribute')('value'),
       tag === 'input' && /^(?:submit|button|image|reset)$/.test(read(el, 'type')) ? read(el, 'value') : undefined].filter(Boolean);
-    return parts.join('').split('\n').concat(own.map(t => String(t).replace(/\s+/g, ' ').trim()));
+    return parts.join('').split('\n').concat(own.map(t => String(t).normalize('NFKC').replace(/\s+/g, ' ').trim()));
   };
   const field = (key, figures = true) => {
     if (!root) return;
@@ -568,7 +563,7 @@ export function readPaymentPage(el, lenient, read = (node, key) => { const value
       for (const line of visibleText(root).split('\n')) { const match = label.exec(line.trim()); if (match) values.push(match[1].trim()); }
     }
     if (key === 'amount' && values.length === 1) {
-      // The field must be safe even if the user quotes it exactly. Compare its smaller reading with every larger page figure.
+      // Anything rendered that shows a different payable figure (LOOSE) leaves the terms ambiguous.
       if (figures) { const lines = looseLines(); if (!lines || moneyConflicts(lines, values[0], field('currency'))) return; }
     }
     return values.length === 1 && values[0].length <= 4096 && !hidden.some(value => value && value !== values[0]) ? values[0] : undefined;
@@ -598,17 +593,12 @@ function dialogTerms(message) {
 // app is the trusted adapter's Electron binding (createAppBinding), never tool JSON or page data. With it the
 // document identity is typed (app document or real HTTPS origin) and the app's debugger grant must stay current.
 // Without it only HTTP(S) frames pass, as before.
-export function createV3Context({ binding, browser, application, app, ui, confirmPayments, clipboardIO, strictText, now = Date.now } = {}) {
+export function createV3Context({ binding, browser, app, ui, confirmPayments, clipboardIO, now = Date.now } = {}) {
   const bound = bindings.get(binding);
   if (app !== undefined && !isAppBinding(app)) throw Error('TRUSTED_TURN_REQUIRED');
   if (!bound || !(app ? app.current() && app.session === bound.message.session && (app.turn === null || app.turn === bound.message.turn) : text(browser))) throw Error('TRUSTED_TURN_REQUIRED');
-  strictText ??= selectRuntime() === 'own';
-  // Strict routing retains no clipboard IO object, even an injected one.
-  if (strictText) clipboardIO = undefined;
   const never = (confirmPayments ?? process.env.SLEIGHT_CONFIRM_PAYMENTS) === 'never';
   const requested = requestedPayment(bound.message.text), documents = new Map(), targets = new WeakMap(), held = new Set();
-  const quitApps = requestedQuitApps(bound.message.text);
-  const allowQuitShortcut = () => current() && [app?.instance?.name, app?.instance?.bundleId, application].some(name => quitAppAllowed(name, quitApps));
   const watched = new Map();
   const uploads = new WeakMap(), offered = new Map(), tickets = new Map(), pending = new Map();
   let closed = false, live, sequence = 0, dialogOwner, uploadRefusal, pasteSession;
@@ -781,14 +771,12 @@ export function createV3Context({ binding, browser, application, app, ui, confir
     } catch (error) { record?.keyboardBinding?.retire?.(); throw error; }
   }
   const ctx = Object.freeze({ session: bound.message.session, turn: bound.message.turn, userMessage: ruleContext.userMessage,
-    allowQuitShortcut,
     exportTurn: binding,
     consent, files, prepareTarget: prepare, paymentTerms: target => targets.get(target) ? target.terms : undefined,
     async check(kind, target, { fieldOnly = false } = {}) {
       try {
         if (!current()) return refused();
         target.do = kind;
-        if (kind === 'press' && quitKeyBlocked('pressKey', [target.key], allowQuitShortcut())) return { verdict: 'refuse', message: QUIT_KEY_REFUSAL };
         if (kind === 'press' && keyClass(target.key).kind === 'unknown') return { verdict: 'refuse', message: 'Unsupported key. Use Enter, Space, Tab, Escape, Backspace, Delete, Home, End, PageUp, PageDown, an arrow, F1-F12 or one character, with Alt, Control, Meta or Shift if needed. Use the engine browser path if needed.' };
         if (kind !== 'dialog') { dialogOwner = undefined; expirePaymentDialog(ruleContext); }
         if (kind === 'dialog') {
@@ -835,7 +823,6 @@ export function createV3Context({ binding, browser, application, app, ui, confir
       if (!dialogOwner.dialog) { dialogOwner = undefined; expirePaymentDialog(ruleContext); }
     },
     async pressTarget(target, key, options, keys) {
-      if (strictText && isClipboardChord(key)) throw strictTextRefusal();
       const record = targets.get(target);
       if (!current() || !record?.doc.valid || !await trustedRead(record.handle, samePageDocument, record.doc.handle) ||
           !await focusProved(record.handle, false, record.closed) || !current()) throw Error(focusRequired);
@@ -861,9 +848,6 @@ export function createV3Context({ binding, browser, application, app, ui, confir
       } finally { for (let i = down - 1; i >= 0; i--) await keyboard.up(names[i]); }
     },
     async pasteTarget(target, value, guarded) {
-      // Browser TSV/editor paste semantics have no qualified direct adapter.
-      // Refuse at resolution, before focus, page events, guards or board access.
-      if (strictText) throw strictTextRefusal();
       // Electron has no page shield. Keep its existing native paste route.
       if (app) throw Error('Paste in an app uses the native app.paste path.');
       const ready = async () => {
@@ -954,7 +938,7 @@ export function createV3Context({ binding, browser, application, app, ui, confir
       const source = targets.get(target);
       if (!source || !current() || !source.doc.valid) throw Error('TRUSTED_TARGET_REQUIRED');
       const endpoint = { page: target.page, locator: destination, ref: target.ref, state: target.state, do: 'drag' };
-      let down = false, landed = false, from;
+      let down = false;
       try {
         const verdict = await ctx.check('drag', endpoint);
         if (verdict.verdict !== 'allow') throw Error('TRUSTED_TARGET_REQUIRED');
@@ -962,40 +946,13 @@ export function createV3Context({ binding, browser, application, app, ui, confir
         if (end.frame !== source.frame || end.doc !== source.doc) throw Error('TRUSTED_TARGET_REQUIRED');
         // ElementHandle has no dragTo. Its hover uses Playwright actionability
         // on the pinned node, and the mouse belongs only to this owned page.
-        const hoverPoint = async handle => {
-          if (!current() || !source.doc.valid) throw Error('TRUSTED_TARGET_REQUIRED');
-          await handle.hover({ timeout: 1000 });
-          // The pinned in-process Playwright mouse holds the actionability-checked
-          // viewport point. Save it before another hover can scroll the page.
-          const point = target.page._connection?.toImpl?.(target.page)?.mouse?._currentPoint?.();
-          const saved = { x: point?.x, y: point?.y }, box = await handle.boundingBox();
-          if (!current() || !source.doc.valid || !Number.isFinite(saved.x) || !Number.isFinite(saved.y) ||
-              !box || ![box.x, box.y, box.width, box.height].every(Number.isFinite) || box.width <= 0 || box.height <= 0 ||
-              saved.x < box.x || saved.x >= box.x + box.width || saved.y < box.y || saved.y >= box.y + box.height)
-            throw Error('TRUSTED_TARGET_REQUIRED');
-          return saved;
-        };
-        const to = await hoverPoint(end.handle); from = await hoverPoint(source.handle);
+        await end.handle.hover({ timeout: 1000 }); await source.handle.hover({ timeout: 1000 });
         if (!current() || !source.doc.valid) throw Error('TRUSTED_TARGET_REQUIRED');
         await target.page.mouse.down(); down = true;
-        // Pointer-driven grips need a path while held, not two hovers at the
-        // same destination. Keep native mouse input for HTML5 drag data too.
-        const steps = pointDragSteps(from, to);
-        for (let i = 1; i <= steps; i++) {
-          if (!current() || !source.doc.valid) throw Error('TRUSTED_TARGET_REQUIRED');
-          await target.page.mouse.move(from.x + (to.x - from.x) * i / steps, from.y + (to.y - from.y) * i / steps);
-        }
-        await hoverPoint(end.handle); await hoverPoint(end.handle);
-        landed = true;
+        await end.handle.hover({ timeout: 1000 }); await end.handle.hover({ timeout: 1000 });
       } finally {
-        try {
-          if (down) {
-            // A failed final hover leaves the pointer over an unverified drop
-            // zone. Return to the saved source point before releasing it.
-            try { if (!landed) await target.page.mouse.move(from.x, from.y); }
-            finally { await target.page.mouse.up(); }
-          }
-        } finally { await ctx.releaseTarget(endpoint); }
+        if (down) await target.page.mouse.up();
+        await ctx.releaseTarget(endpoint);
       }
     },
     async releaseTarget(target) {

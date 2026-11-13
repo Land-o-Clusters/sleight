@@ -5,12 +5,10 @@ import { userInfo } from 'node:os';
 import { join, resolve, dirname } from 'node:path';
 import { spawn, execFile } from 'node:child_process';
 import { promisify } from 'node:util';
-import { fileURLToPath, pathToFileURL } from 'node:url';
+import { fileURLToPath } from 'node:url';
 import { randomUUID, createHash } from 'node:crypto';
 
 // Kept self-contained because launchd runs a copy of this module without its neighbours.
-// The installer stamps this literal from SETTINGS_BUILD_POLICY, without adding imports to each tick.
-const settingsEnforcement = /* settings build policy */ false;
 function ordinary(path) {
   for (let at = resolve(path); dirname(at) !== at; at = dirname(at)) {
     try { if (lstatSync(at).isSymbolicLink()) throw Error('scheduled storage refuses symlinks'); }
@@ -191,38 +189,12 @@ async function missingInstallTick(id, error, options) {
   if (existsSync(directory)) await retireMissingInstall(id, options);
 }
 
-// Resolve through the installed CLI, because launchd runs this file without adjacent plugin modules.
-export async function verifyScheduledSettings(bin, home, id, kind, { load = url => import(url), enforce = settingsEnforcement } = {}) {
-  if (!enforce) return;
-  let seals, view;
-  try {
-    seals = await load(pathToFileURL(join(dirname(bin), '../lib/sealed-settings.mjs')).href);
-    view = seals.verifySettings();
-  }
-  catch { throw Error('SETTINGS_UNTRUSTED'); }
-  if (!view.enforcing) throw Error('SETTINGS_UNTRUSTED');
-  const prefix = `${kind}s/${id}/`;
-  const required = ['routine-launcher.mjs', prefix + 'script.json', prefix + 'routine.json'];
-  const rows = view.entries().filter(row => row.file === 'routine-launcher.mjs' || row.file.startsWith(prefix));
-  for (const row of rows) { const note = seals.settingsSealNote(row); if (note) process.stderr.write(note + '\n'); }
-  if (view.enforcing && [...new Set([...required, ...rows.map(row => row.file)])].some(file => {
-    const row = view.get(file); return row.state !== 'trusted' && !(row.state === 'absent' && !required.includes(file));
-  })) throw Error('SETTINGS_UNTRUSTED');
-}
 export async function launchRoutine(id, { home = userInfo().homedir, notify = notifyFailure, spawnChild = spawn, kind = 'routine',
-  launchctl = bootout, now = Date.now, verify = verifyScheduledSettings } = {}) {
+  launchctl = bootout, now = Date.now } = {}) {
   let directory;
   try {
     if (!/^[a-f0-9]{20}$/.test(id ?? '')) throw new Error('invalid routine ID');
     if (!['routine', 'watch'].includes(kind)) throw new Error('invalid scheduled task kind');
-    let bin, installError;
-    try { bin = resolveInstall(home); }
-    catch (error) { if (kind !== 'watch') throw error; installError = error; }
-    if (bin) {
-      // Verify before reading or changing watch lifecycle files.
-      try { await verify(bin, home, id, kind); }
-      catch (error) { if (error.message === 'SETTINGS_UNTRUSTED') throw error; }
-    }
     if (kind === 'watch') {
       directory = ordinary(join(home, 'Library/Application Support/sleight/watches', id));
       const wasRetiring = existsSync(watchPaths(home, id).marker);
@@ -236,8 +208,11 @@ export async function launchRoutine(id, { home = userInfo().homedir, notify = no
       }
       // The installed CLI must still see paused watches so expiry and reboot cleanup can run.
     }
-    if (installError) {
-      await missingInstallTick(id, installError, { home, directory, launchctl, notify, now }); return 1;
+    let bin;
+    try { bin = resolveInstall(home); }
+    catch (error) {
+      if (kind !== 'watch') throw error;
+      await missingInstallTick(id, error, { home, directory, launchctl, notify, now }); return 1;
     }
     if (kind === 'watch') rmSync(ordinary(join(directory, 'launcher-health.json')), { force: true });
     const child = spawnChild(bin, [kind, 'run-now', id, '--scheduled'], { stdio: 'inherit' });
@@ -245,7 +220,7 @@ export async function launchRoutine(id, { home = userInfo().homedir, notify = no
   } catch (error) {
     process.stderr.write(`sleight: current plugin install or registry unavailable: ${error.message}\n`);
     try {
-      if (kind !== 'watch' || error.message === 'SETTINGS_UNTRUSTED') await notify(`Current plugin install or registry unavailable: ${error.message}`);
+      if (kind !== 'watch') await notify(`Current plugin install or registry unavailable: ${error.message}`);
     }
     catch (failure) { process.stderr.write(`sleight: notification failed: ${failure.message}\n`); }
     return 1;

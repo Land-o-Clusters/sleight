@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { PassThrough } from 'node:stream';
-import { mkdtempSync, readFileSync } from 'node:fs';
+import { mkdtempSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { runInNewContext } from 'node:vm';
@@ -135,36 +135,4 @@ test('after an action retitles the same app\'s window, the number check uses the
   f.reply('open', GUARD_MARK + 'Window: "First sheet", App: First.\n0 standard window\n\t2 button Sheet OK', 'fixture.first');
   const { update } = f.act('await first.click(2)');
   assert.deepEqual(update.seenLines, { 2: 'button Sheet OK' });
-});
-
-test('final result budgeting refuses native numbers it removed before forwarding input', t => {
-  const f = fixture(t);
-  f.call('large', 'await first.getAXState()');
-  f.reply('large', 'Window: "First", App: First.\n0 standard window\n' +
-    Array.from({ length: 2000 }, (_, i) => `\t${i + 1} button ${'label '.repeat(10)}${i}`).join('\n'), 'fixture.first');
-  const { forwarded, stopped } = f.act('await first.click(2000)');
-  assert.equal(forwarded, undefined);
-  assert.equal(stopped.result.isError, true);
-  assert.deepEqual(stopped.result.content, [{ type: 'text', text: "Input lease: element 2000 may be stale. Numbers in this window changed since your last full read, and 2000 isn't one you've seen since. Use a number from a + line in the latest result, or read the whole window with getAXState({ disableDiffing: true }) first." }]);
-});
-
-test('ordinary relay options stop the recorded Safari number after a menu choice renumbers the page', async t => {
-  const recording = JSON.parse(readFileSync(new URL('fixtures/dropdown-stale-number.json', import.meta.url)));
-  const f = fixture(t);
-  f.call('safari', 'let safari = await cua.getApp("fixture.safari")');
-  f.reply('safari', recording.before, 'fixture.safari');
-  const { update, stopped } = f.act('await safari.click(17); await safari.click(13);');
-  assert.ok(update, stopped?.result?.content?.[0]?.text);
-  assert.equal(update.bind, true);
-  assert.equal(update.seenLines[13], 'pop up button (disabled, collapsed) Workshop, Value: Choose a region first, Secondary Actions: Expand');
-  const calls = [];
-  let selected = false;
-  const raw = { getAXState: async () => { calls.push('read'); return selected ? recording.after : recording.before; },
-    click: async number => { calls.push(number); selected = true; } };
-  const { guardedCode } = await import('../plugins/sleight/lib/document-scope.mjs');
-  const { lease: _lease, ...checks } = update;
-  const context = { app: raw, cua: { getApp: async () => raw }, nodeRepl: { write() {} } };
-  await assert.rejects(runInNewContext(`(async () => { ${guardedCode('await app.click(17); await app.click(13);', update.window, update.reason, undefined, checks)} })()`, context),
-    /sleight stopped before click\(13\)/);
-  assert.deepEqual(calls, ['read', 17, 'read']);
 });

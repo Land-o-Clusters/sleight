@@ -2,26 +2,13 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { webBrowsers } from '../bench/tasks-web.mjs';
 import { execFileSync } from 'node:child_process';
-import { benchmarkDecision } from '../bench/approve.mjs';
-
-test('remember forms return only the session choice and reject unsupported required fields', () => {
-  const e = { mcp_server_name: 'plugin:sleight:computer', message: 'Allow Computer Use to use "Calculator"?', mode: 'form',
-    requested_schema: { type: 'object', properties: { remember: { type: 'string', enum: ['This session', 'Always'] } }, required: ['remember'] } };
-  assert.deepEqual(benchmarkDecision(e, {}).hookSpecificOutput.content, { remember: 'This session' });
-  for (const schema of [
-    { properties: { remember: { enum: ['Always'] } } },
-    { properties: { remember: { enum: ['This session'] }, secret: {} } },
-    { properties: { remember: { enum: ['This session'] } }, required: ['secret'] },
-    { properties: { choice: { enum: ['session'] }, remember: { enum: ['This session'] } } },
-  ]) assert.equal(benchmarkDecision({ ...e, requested_schema: schema }, {}), undefined);
-});
 
 const approve = (message, suite = 'default', extra = {}) => {
   const input = { mcp_server_name: 'plugin:sleight:computer', message };
   const env = { ...process.env, BENCH_SUITE: suite, ...extra };
   if (!('BENCH_OWNER_PRESENT' in extra)) delete env.BENCH_OWNER_PRESENT;
   const output = execFileSync(process.execPath, ['bench/approve.mjs'], { cwd: new URL('..', import.meta.url),
-    env, input: JSON.stringify(input), encoding: 'utf8', timeout: 60000, killSignal: 'SIGKILL' });
+    env, input: JSON.stringify(input), encoding: 'utf8' });
   return output ? JSON.parse(output).hookSpecificOutput.action : null;
 };
 test('benchmark menu approvals cover the original apps and exclude unapproved targets', () => {

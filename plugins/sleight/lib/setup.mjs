@@ -23,17 +23,15 @@ function chatgptApp(env = process.env) {
 
 function appVersion(app) {
   const plist = join(app, 'Contents/Info.plist');
-  const readers = [
-    ['/usr/bin/plutil', ['-extract', 'CFBundleShortVersionString', 'raw', plist]],
-    ['/usr/bin/defaults', ['read', plist, 'CFBundleShortVersionString']],
-  ];
-  // Try both readers in order. Report a timeout only when no reader returned a version.
-  const timedOut = [];
-  for (const [command, args] of readers) {
-    try { return { version: execFileSync(command, args, { encoding: 'utf8', timeout: 30000, killSignal: 'SIGKILL' }).trim() }; }
-    catch (error) { if (error.code === 'ETIMEDOUT') timedOut.push(command.split('/').at(-1)); }
+  try {
+    return execFileSync('/usr/bin/plutil', ['-extract', 'CFBundleShortVersionString', 'raw', plist],
+      { encoding: 'utf8' }).trim();
+  } catch {
+    try {
+      return execFileSync('/usr/bin/defaults', ['read', plist, 'CFBundleShortVersionString'],
+        { encoding: 'utf8' }).trim();
+    } catch { return undefined; }
   }
-  return timedOut.length ? { timeout: timedOut.join(' and ') } : {};
 }
 
 export function serverFromChatGPTApp({ app, env = process.env, home = homedir() } = {}) {
@@ -47,7 +45,7 @@ export function serverFromChatGPTApp({ app, env = process.env, home = homedir() 
   }
   const codexHome = env.CODEX_HOME || join(home, '.codex');
   return {
-    version: appVersion(chatgpt).version || 'bundle',
+    version: appVersion(chatgpt) || 'bundle',
     configPath: repl,
     command: node,
     args: [repl],
@@ -96,17 +94,9 @@ export async function setup({
   execFile = execFileAsync,
 } = {}) {
   const app = chatgptApp(env);
-  if (!existsSync(app)) {
-    log('ChatGPT.app not found. Install the ChatGPT desktop app from https://chatgpt.com/download/ and run setup again.');
-    return 1;
-  }
-  const { version, timeout } = appVersion(app);
-  if (timeout) {
-    log(`ChatGPT.app version check timed out (${timeout}, 30 seconds). Wait a moment, then run setup again.`);
-    return 1;
-  }
+  const version = existsSync(app) ? appVersion(app) : undefined;
   if (!version) {
-    log(`Could not read ChatGPT.app version at ${app}. Check the app installation and run setup again.`);
+    log('ChatGPT.app not found. Install the ChatGPT desktop app from https://chatgpt.com/download/ and run setup again.');
     return 1;
   }
   log(`ChatGPT.app ${version} at ${app}`);

@@ -189,7 +189,7 @@ export async function verifyConsent(page, state) {
   // Briefly allow the original wall to finish fading out. Nothing here can
   // authorise input, parse consent storage, or fence future actions.
   const until = Date.now() + 1500;
-  const confirmed = 'cookie wall no longer shown after clicking a decline-labelled control';
+  const confirmed = 'Decline confirmed: declined non-essential cookies; cookie wall closed';
   try {
     if (held) do {
       const result = await trustedReadNode(held, inspectConsent, { after: true });

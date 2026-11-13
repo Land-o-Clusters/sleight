@@ -1,4 +1,3 @@
-import { benchEvidencePath } from '../runtime-options.mjs';
 import { createHash } from 'node:crypto';
 import { createReadStream, lstatSync, readdirSync } from 'node:fs';
 import { createInterface } from 'node:readline';
@@ -6,7 +5,7 @@ import { join } from 'node:path';
 import { homedir } from 'node:os';
 
 export const DEFAULT_CLAUDE = join(homedir(), 'Library/Caches/sleight-bench/evidence');
-export const DEFAULT_CODEX = benchEvidencePath('race-1017');
+export const DEFAULT_CODEX = join(homedir(), 'Projects/sleight-wt/race-1017');
 
 function* files(root, name, depth = 0) {
   if (depth > 8 || lstatSync(root).isSymbolicLink()) return;

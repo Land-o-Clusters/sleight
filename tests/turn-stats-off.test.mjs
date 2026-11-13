@@ -1,4 +1,3 @@
-import { MOD_META } from './fixtures/mod-attribution.mjs';
 // Observe the real classifier at its function entry, without production test hooks.
 import test, { mock } from 'node:test';
 import assert from 'node:assert/strict';
@@ -31,9 +30,9 @@ test('stats off, untagged and internal calls skip textKinds; an admitted call en
     const clientIn = new PassThrough(), clientOut = new PassThrough(), serverIn = new PassThrough(), serverOut = new PassThrough();
     const relay = createRelay({ clientIn, clientOut, serverIn, serverOut, changeReview: false, modHost: () => mod });
     try {
-      if (opened) clientIn.write(JSON.stringify({ id: 'begin', method: 'tools/call', params: { name: 'turn_ended', _meta: MOD_META,
+      if (opened) clientIn.write(JSON.stringify({ id: 'begin', method: 'tools/call', params: { name: 'turn_ended',
         arguments: { sleight_stats_begin: 'turn' } } }) + '\n');
-      if (tag === 'private-skip') clientIn.write(JSON.stringify({ id: 'skip', method: 'tools/call', params: { name: 'turn_ended', _meta: MOD_META,
+      if (tag === 'private-skip') clientIn.write(JSON.stringify({ id: 'skip', method: 'tools/call', params: { name: 'turn_ended',
         arguments: { sleight_stats_skip: 'toolu_child' } } }) + '\n');
       clientIn.write(JSON.stringify({ id: 1, method: 'tools/call', params: { name: 'js',
         arguments: { code: 'nodeRepl.write(1)', ...(tag ? { sleight_stats: tag } : {}) },

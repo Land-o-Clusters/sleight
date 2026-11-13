@@ -71,11 +71,6 @@ Turbo drives Chrome and Helium directly. It is on by default after you enable Ch
 
 From the installed plugin folder, you run `./bin/sleight-mcp turbo on` (Chrome first, then Helium), `./bin/sleight-mcp turbo on --browser helium` to choose Helium, or `./bin/sleight-mcp turbo off` to opt out until you turn it on again ([settings](docs/settings.md#turbo)).
 
-## In development: 1.6.0 characters
-
-Mabel the cat, Biscuit the dog, Rudy the duck and Mo the sloth join Dennis, Nana and Hal in the Cursor menu's Everyday group. Tsugi, Shizu, Bit, Kit, Yori and Tab appear in Anime. The cursor stays off until you turn it on. Choose Character Size in that menu, or run `sleight-mcp cursor size small`, `medium` or `stage`. Medium is the default. Small and stage are opt-in sizes. Stage draws a larger character on a safe window edge and shrinks while you work. Built-ins show medium art while their stage strips render on first use. Front-sit is off.
-
-A saved cast can allocate a character per session. One session per display may use stage size. These are current defaults pending owner decisions. Appearance, capture exclusion and performance need live qualification. See [cursor settings](docs/settings.md#agent-cursor), [limits](docs/known-problems.md#the-pointer-drags-and-hover) and the [changelog](CHANGELOG.md) for earlier changes.
 ## New in 1.5.0
 
 - Turbo reads include screenshots, motion frames, whole threads, PDFs and structured tables. Paste and download steps work on observed controls and links.

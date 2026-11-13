@@ -3,8 +3,7 @@
 // so it works on Linux. Results name only sleight's own contract items: nothing from the engine's files is printed.
 import { createHash } from 'node:crypto';
 import { existsSync, lstatSync, readdirSync, readFileSync, statSync } from 'node:fs';
-import { dirname, isAbsolute, join, relative, resolve, sep } from 'node:path';
-import { loadInstalledDocumentation } from '../../plugins/sleight/lib/canonical-documentation.mjs';
+import { join } from 'node:path';
 import { HELPER_REL, MODULES_REL, NODE_REL, NODE_REPL_REL, REPL_REL } from '../../plugins/sleight/lib/setup.mjs';
 import { engineJsVariant } from '../../plugins/sleight/lib/tool-description.mjs';
 import { API_MEMBERS, CUA_METHODS, checkApiContract, checkPolicyRewrite, checkWorkflowRewrite, jsDescriptionResult } from './contract.mjs';
@@ -20,7 +19,7 @@ export const BUNDLE = {
   replBin: REPL_REL,
   launch: join(OAI, 'cua-repl/dist/lib/js/oai_js_cua_repl/src/launch.js'),
   instructions: join(OAI, 'cua-repl/instructions'),
-  coreDocs: join(OAI, 'cua/docs'),
+  coreDoc: join(OAI, 'cua/docs/tinysky-alt-core-cua-repl.md'),
   policy: join(OAI, 'cua/docs/tinysky-alt-confirmations.md'),
   tinysky: join(OAI, 'cua/dist/lib/js/oai_js_cua/src/tinysky_alt'),
   plugin: 'Contents/Resources/plugins/openai-bundled/plugins/unified-computer-use',
@@ -73,7 +72,7 @@ export function symlinksIn(app) {
       else if (entry.isDirectory()) visit(join(rel, entry.name), true);
     }
   };
-  for (const [key, rel] of Object.entries(BUNDLE)) visit(rel, ['instructions', 'coreDocs', 'tinysky', 'plugin'].includes(key) && existsSync(join(app, rel)));
+  for (const [key, rel] of Object.entries(BUNDLE)) visit(rel, ['instructions', 'tinysky', 'plugin'].includes(key) && existsSync(join(app, rel)));
   return [...found];
 }
 
@@ -82,13 +81,10 @@ export function analyzeBundle(app) {
   const links = symlinksIn(app);
   if (links.length) return { results: [result('bundle-layout', 'fail', `refusing ${links.length} symbolic links among the files it reads`)], fingerprint: undefined };
   const missing = Object.entries(BUNDLE).filter(([, rel]) => !existsSync(join(app, rel))).map(([key]) => key);
-  let docs, documentationFailure;
-  try { docs = engineDocs(app); }
-  catch (error) { missing.push('coreDoc'); documentationFailure = `; engine documentation unavailable (${error.code ?? error.name})`; }
   const appVersion = existsSync(join(app, BUNDLE.appInfo)) ? safeVersion(plistString(read(app, BUNDLE.appInfo), 'CFBundleShortVersionString')) : undefined;
   // The helper's version is what `sleight-mcp --doctor` prints as "Codex computer-use <version>".
   const engineVersion = existsSync(join(app, BUNDLE.helperInfo)) ? safeVersion(plistString(read(app, BUNDLE.helperInfo), 'CFBundleShortVersionString')) : undefined;
-  results.push(missing.length ? result('bundle-layout', 'fail', `missing ${missing.join(', ')}${documentationFailure ?? ''}`) : result('bundle-layout', 'pass'));
+  results.push(missing.length ? result('bundle-layout', 'fail', `missing ${missing.join(', ')}`) : result('bundle-layout', 'pass'));
   if (!missing.includes('nodeRepl')) {
     const binary = readFileSync(join(app, BUNDLE.nodeRepl)).toString('latin1');
     const absent = NODE_REPL_STRINGS.filter(name => !binary.includes(name));
@@ -113,18 +109,12 @@ export function analyzeBundle(app) {
   } catch (error) { results.push(result('engine-plugin', 'fail', `unreadable plugin config (${error.code ?? error.name})`)); }
 
   if (!missing.includes('launch')) {
-    let launch = read(app, BUNDLE.launch);
-    // Since 26.1029 launch.js imports the environment it builds from environment.js beside it. Read that file only when
-    // launch.js imports it, and never through a symbolic link.
-    const environment = join(dirname(BUNDLE.launch), 'environment.js');
-    if (/from\s*["']\.\/environment\.js["']/.test(launch) && existsSync(join(app, environment))) {
-      if (lstatSync(join(app, environment)).isSymbolicLink()) launch = '';
-      else launch += `\n${read(app, environment)}`;
-    }
+    const launch = read(app, BUNDLE.launch);
     const absent = LAUNCH_STRINGS.filter(name => !launch.includes(name));
     results.push(absent.length ? result('launch-env', 'fail', `cua-repl's launcher no longer mentions ${absent.join(', ')}`) : result('launch-env', 'pass'));
   }
-  const coreDoc = docs['api.md'], policy = docs['confirmations.md'];
+  const coreDoc = read(app, BUNDLE.coreDoc);
+  const policy = existsSync(join(app, BUNDLE.policy)) ? read(app, BUNDLE.policy) : '';
   // The engine sends both files in one first result, so the headings are checked across both.
   results.push(...checkApiContract(`${coreDoc.trimEnd()}\n\n${policy}`));
   results.push(checkDocumentationFormat(`${coreDoc.trimEnd()}\n\n${policy}`));
@@ -160,26 +150,7 @@ export function analyzeBundle(app) {
 
 // The engine's docs, for a private diff on the machine that runs the check (never printed or uploaded).
 export function engineDocs(app) {
-  const root = resolve(app);
-  // The shared loader also reads the browser manifest. Check each requested path before reading, including paths
-  // derived from that manifest, so a downloaded bundle cannot redirect discovery outside itself or through a link.
-  const readDoc = (file, encoding) => {
-    const rel = relative(root, file);
-    if (rel === '..' || rel.startsWith(`..${sep}`) || isAbsolute(rel))
-      throw Object.assign(Error('engine documentation path outside the bundle'), { code: 'OUTSIDE_BUNDLE' });
-    let path = root;
-    for (const part of ['', ...rel.split(sep)]) {
-      path = join(path, part);
-      if (lstatSync(path).isSymbolicLink())
-        throw Object.assign(Error('refusing symbolic link in engine documentation'), { code: 'SYMLINK' });
-    }
-    return readFileSync(file, encoding);
-  };
-  // This checker consumes a macOS app even on Linux CI. The builder selects the old or split layout; the checker
-  // always requests its Mac target, independently of the platform running Node. Nothing from the bundle executes.
-  const { coreNames } = loadInstalledDocumentation({ app: root, platform: 'darwin', read: readDoc });
-  return { 'api.md': readDoc(join(root, BUNDLE.coreDocs, `tinysky-alt-${coreNames[0]}.md`), 'utf8'),
-    'confirmations.md': readDoc(join(root, BUNDLE.policy), 'utf8') };
+  return { 'api.md': read(app, BUNDLE.coreDoc), 'confirmations.md': existsSync(join(app, BUNDLE.policy)) ? read(app, BUNDLE.policy) : '' };
 }
 
 // The unpacked ChatGPT.app under an extraction folder: the shallowest .app holding the engine's node.

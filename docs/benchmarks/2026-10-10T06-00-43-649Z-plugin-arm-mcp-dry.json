@@ -17,7 +17,7 @@
   },
   "timedOut": false,
   "cancelled": false,
-  "stdout": "\nresults: <private-evidence>/plugin-arm/bench/results/2026-10-10T06-00-46-776Z-dry.json\n",
+  "stdout": "\nresults: ~/Projects/sleight-wt/plugin-arm/bench/results/2026-10-10T06-00-46-776Z-dry.json\n",
   "stderr": "DRY mcp:sleight-plain calculator-click #1 0s\n",
   "groupClean": true,
   "raw": {
@@ -42,13 +42,13 @@
                 "name": "sleight",
                 "version": "1.1.0",
                 "extent": "package-directory",
-                "source": "<private-evidence>/plugin-arm/plugins/sleight",
+                "source": "~/Projects/sleight-wt/plugin-arm/plugins/sleight",
                 "commit": "332e3ca0260d7eee0b003882d95d8b64ec431dd3",
                 "dirty": false,
                 "packageHash": "fe3b422879bf512657bf4d64ec845a2f016c6beae57eb5857dd8fea4ca70ea10"
               }
             ],
-            "executable": "<private-evidence>/plugin-arm/plugins/sleight/bin/sleight-mcp"
+            "executable": "~/Projects/sleight-wt/plugin-arm/plugins/sleight/bin/sleight-mcp"
           }
         },
         "discovery": {

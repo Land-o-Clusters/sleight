@@ -20,13 +20,13 @@
       "command": "node bench/plugin-arm-proof.mjs plugin-dry",
       "exitCode": 1,
       "modelStarted": false,
-      "reason": "EPERM writing the result in <private-evidence>/plugin-arm/docs/benchmarks from the ordinary sandbox"
+      "reason": "EPERM writing the result in ~/Projects/sleight-wt/plugin-arm/docs/benchmarks from the ordinary sandbox"
     },
     {
       "command": "node bench/plugin-arm-proof.mjs mcp-live",
       "exitCode": 1,
       "modelStarted": false,
-      "reason": "EPERM writing the result in <private-evidence>/plugin-arm/docs/benchmarks from the ordinary sandbox"
+      "reason": "EPERM writing the result in ~/Projects/sleight-wt/plugin-arm/docs/benchmarks from the ordinary sandbox"
     }
   ],
   "privacy": {

@@ -63,12 +63,11 @@ if [ -n "$REAL" ]; then
   # RC is 1 until the runner is seen to succeed, so a round that is killed never reads as a pass in hub_refresh.
   RC=1
   # The runner is a background child, so a TERM, INT or HUP to this shell is passed on to it, and this shell waits for its cleanup.
-  stop_child() { if [ -n "${CHILD:-}" ]; then kill -"$1" "$CHILD" 2>/dev/null || true; wait "$CHILD" 2>/dev/null || true; fi; exit 130; }
+  stop_child() { kill -"$1" "$CHILD" 2>/dev/null || true; wait "$CHILD" 2>/dev/null || true; exit 130; }
   trap 'stop_child INT' INT; trap 'stop_child TERM' TERM; trap 'stop_child HUP' HUP
   env -i HOME="$HOME" USER="$USER" PATH="$PATH" TMPDIR="${TMPDIR:-/tmp}" LANG="${LANG:-en_US.UTF-8}" \
     ${FOWLBROWSER_ROUNDS_CONFIG:+FOWLBROWSER_ROUNDS_CONFIG="$FOWLBROWSER_ROUNDS_CONFIG"} \
-    SLEIGHT_REPO="$REPO" ${SLEIGHT_TRACE:+SLEIGHT_TRACE="$SLEIGHT_TRACE"} ${SLEIGHT_TS3:+SLEIGHT_TS3="$SLEIGHT_TS3"} ${SLEIGHT_FS:+SLEIGHT_FS="$SLEIGHT_FS"} ${SLEIGHT_SF4:+SLEIGHT_SF4="$SLEIGHT_SF4"} ${SLEIGHT_RS+SLEIGHT_RS="$SLEIGHT_RS"} \
-    ${SLEIGHT_HOLD_WAIT_MAX_MS:+SLEIGHT_HOLD_WAIT_MAX_MS="$SLEIGHT_HOLD_WAIT_MAX_MS"} ${SLEIGHT_HOLD_RETRIES:+SLEIGHT_HOLD_RETRIES="$SLEIGHT_HOLD_RETRIES"} \
+    SLEIGHT_REPO="$REPO" ${SLEIGHT_TRACE:+SLEIGHT_TRACE="$SLEIGHT_TRACE"} ${SLEIGHT_TS3:+SLEIGHT_TS3="$SLEIGHT_TS3"} ${SLEIGHT_FS:+SLEIGHT_FS="$SLEIGHT_FS"} ${SLEIGHT_RS+SLEIGHT_RS="$SLEIGHT_RS"} \
     ${SLEIGHT_BENCH_HAND:+SLEIGHT_BENCH_HAND="$SLEIGHT_BENCH_HAND"} ${SLEIGHT_BROWSER_CORE:+SLEIGHT_BROWSER_CORE="$SLEIGHT_BROWSER_CORE"} ${AS3_WINDOW_PROMPT:+AS3_WINDOW_PROMPT="$AS3_WINDOW_PROMPT"} \
     ${SLEIGHT_WORKFLOW_DOCS:+SLEIGHT_WORKFLOW_DOCS="$SLEIGHT_WORKFLOW_DOCS"} ${SLEIGHT_LB12:+SLEIGHT_LB12="$SLEIGHT_LB12"} ${SLEIGHT_MT:+SLEIGHT_MT="$SLEIGHT_MT"} \
     ${SLEIGHT_MC1:+SLEIGHT_MC1="$SLEIGHT_MC1"} ${SLEIGHT_REMOTE_APPROVALS:+SLEIGHT_REMOTE_APPROVALS="$SLEIGHT_REMOTE_APPROVALS"} node tools/rounds.mjs "$@" --model "$MODEL" &

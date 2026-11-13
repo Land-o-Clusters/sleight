@@ -1,6 +1,5 @@
 #!/usr/bin/env node
 // C10, the companion to VC7 for the combined 1.5.0 release. Import and --dry-run have no live side effects.
-import { helperCompileArgs } from '../../plugins/sleight/lib/direct-browser/host-cache.mjs';
 import { spawn } from 'node:child_process';
 import { createHash, randomBytes } from 'node:crypto';
 import { existsSync, lstatSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, realpathSync, renameSync, rmSync, writeFileSync } from 'node:fs';
@@ -11,16 +10,9 @@ import { setTimeout as sleep } from 'node:timers/promises';
 import { acquireLiveLock } from '../live-lock.mjs';
 import { createInputDetector } from './owner-watch.mjs';
 import { PrioritySpawner, priorityPlan } from './c10-priority.mjs';
-import { benchOutputPath } from '../runtime-options.mjs';
 
 export const ROOT = fileURLToPath(new URL('../../', import.meta.url)).replace(/\/$/, '');
-export async function compileC10Helpers(children, { root = ROOT, bin, moduleCache, signal }) {
-  for (const [source, name] of [['plugins/sleight/lib/direct-browser/native/consent-host.swift', 'consent-host'], ['bench/hand/c10-fixture.swift', 'c10-fixture']]) {
-    signal.throwIfAborted();
-    await children.run('/usr/bin/xcrun', helperCompileArgs(name, { sources: [join(root, source)], binary: join(bin, name), moduleCache }), { timeout: 600000 });
-  }
-}
-const NIGHT = benchOutputPath('c10-night');
+const NIGHT = join(homedir(), 'Projects/sleight-wt/ledger/vc/night');
 const HOLD = '/tmp/sleight-hold', LOCK = '/tmp/sleight-live.lock';
 const reason = code => Object.assign(Error(code), { code });
 export const waitWithReason = (ms, signal) => sleep(ms, undefined, { signal }).catch(error => { throw error.cause ?? error; });
@@ -117,7 +109,7 @@ export function dryRunPlan({ root = ROOT, night = NIGHT } = {}) {
     'Start at normal priority: a private spawn service keeps fixture and host at priority 0, then only the controller sets priority 20.',
     `Resume: ${join(night, 'c10-state.json')}; passed and attended steps reuse only intact hashed evidence on the same HEAD. Leftover attempt folders move aside.`,
     'Identity: /usr/bin/git rev-parse HEAD; /usr/bin/git status --porcelain --untracked-files=normal (separate subprocesses).',
-    `Build serial: /usr/bin/xcrun swiftc -O -module-cache-path <private-temp>/modules ${join(root, 'plugins/sleight/lib/direct-browser/native/consent-host.swift')} -o <out>/bin/consent-host`,
+    `Build serial: /usr/bin/xcrun swiftc -module-cache-path <private-temp>/modules ${join(root, 'plugins/sleight/lib/direct-browser/native/consent-host.swift')} -o <out>/bin/consent-host`,
     `Build serial: /usr/bin/xcrun swiftc -module-cache-path <private-temp>/modules ${join(root, 'bench/hand/c10-fixture.swift')} -o <out>/bin/c10-fixture`,
     '<out>/bin/c10-fixture --preflight (no window, no prompt); then --serve <attempt-directory> <out>/bin/consent-host',
     '<out>/bin/consent-host --hand --capture=visible --cursor-style=sprite --menu (fixture frames only)',
@@ -375,7 +367,10 @@ export async function main(argv = process.argv.slice(2)) {
     await retryHeld(() => runPhase(async signal => {
       children.signal = signal;
       try {
-        await compileC10Helpers(children, { bin, moduleCache: cache, signal });
+        for (const [source, name] of [['plugins/sleight/lib/direct-browser/native/consent-host.swift', 'consent-host'], ['bench/hand/c10-fixture.swift', 'c10-fixture']]) {
+          signal.throwIfAborted();
+          await children.run('/usr/bin/xcrun', ['swiftc', '-module-cache-path', cache, join(ROOT, source), '-o', join(bin, name)], { timeout: 600000 });
+        }
       } finally { children.signal = controller.signal; }
     }, { signal: controller.signal }), { signal: controller.signal, wait: () => waitFor([HOLD, LOCK]) });
     const preflight = async () => JSON.parse(await children.run(join(bin, 'c10-fixture'), ['--preflight']));

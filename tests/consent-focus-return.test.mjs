@@ -1,4 +1,3 @@
-import { assertChildStatus } from './fixtures/child-status.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { mkdtempSync, readFileSync, realpathSync, writeFileSync } from 'node:fs';
@@ -121,8 +120,8 @@ check(cardTarget(unlaunched)?.pid == nil && cardTarget(unlaunched)?.bundle == "c
 check(cardTarget(alert) == nil, "no target")
 print("pass")
 `);
-  const built = spawnSync('/usr/bin/xcrun', ['swiftc', '-module-cache-path', swiftModuleCache(), swift, '-o', binary], { encoding: 'utf8', timeout: 600000, killSignal: 'SIGKILL' });
-  assertChildStatus(built, 0, built.stderr);
-  const run = spawnSync(binary, [], { encoding: 'utf8', timeout: 10000, killSignal: 'SIGKILL' });
+  const built = spawnSync('/usr/bin/xcrun', ['swiftc', '-module-cache-path', swiftModuleCache(), swift, '-o', binary], { encoding: 'utf8', timeout: 180000 });
+  assert.equal(built.status, 0, built.stderr);
+  const run = spawnSync(binary, [], { encoding: 'utf8', timeout: 10000 });
   assert.equal(run.stdout.trim(), 'pass', run.stdout + run.stderr);
 });

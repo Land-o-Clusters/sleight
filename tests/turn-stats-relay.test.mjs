@@ -1,4 +1,3 @@
-import { MOD_META } from './fixtures/mod-attribution.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { PassThrough } from 'node:stream';
@@ -15,7 +14,7 @@ function harness(t, options = {}) {
   const call = (id, name, args = {}, meta) => {
     const tagged = { ...args };
     if (tagged.sleight_stats === true) tagged.sleight_stats = 'turn-1';
-    return clientIn.write(JSON.stringify({ id, method: 'tools/call', params: { name, arguments: tagged, ...(name === 'turn_ended' ? { _meta: MOD_META } : meta ? { _meta: meta } : {}) } }) + '\n');
+    return clientIn.write(JSON.stringify({ id, method: 'tools/call', params: { name, arguments: tagged, ...(meta ? { _meta: meta } : {}) } }) + '\n');
   };
   const answer = (id, text = '') => serverOut.write(JSON.stringify({ id, result: { content: [{ type: 'text', text }] } }) + '\n');
   const begin = (turn = 'turn-1') => call('begin-' + turn, 'turn_ended', { sleight_stats_begin: turn });
@@ -54,7 +53,7 @@ test('only a mod turn-end request receives stats; ordinary results have no stats
 // calls count toward it, internal ones never do, and a frame with extra keys or no mod is refused.
 test('an opened turn counts untagged calls until its end; internal and pre-frame calls never count', t => {
   const h = harness(t);
-  const raw = (id, name, args) => h.clientIn.write(JSON.stringify({ id, method: 'tools/call', params: { name, arguments: args, ...(name === 'turn_ended' ? { _meta: MOD_META } : {}) } }) + '\n');
+  const raw = (id, name, args) => h.clientIn.write(JSON.stringify({ id, method: 'tools/call', params: { name, arguments: args } }) + '\n');
   raw(1, 'js', { code: 'nodeRepl.write(1)' }); h.answer(1, 'before any frame');
   raw(2, 'turn_ended', { sleight_stats_begin: 'turn-1', hook_event_name: 'Stop' });
   assert.equal(h.output.find(msg => msg.id === 2).result.isError, true, 'a frame with other keys is refused');
@@ -200,7 +199,7 @@ test('unconsumed private data is bounded and hook-event end clears it', t => {
 for (const args of [{ sleight_stats_begin: '' }, { sleight_stats_begin: 123 },
   { sleight_stats_begin: 'x'.repeat(129) }, { sleight_stats_begin: 'next', extra: true },
   { sleight_stats_begin: 'next', sleight_stats_skip: 'child' }, { sleight_stats_begin: 'closed' }])
-  test(`refused begin preserves the previous stats window: ${JSON.stringify(args)}`, t => {
+  test(`refused begin clears the previous stats window: ${JSON.stringify(args)}`, t => {
     const h = harness(t);
     h.call('close', 'turn_ended', { hook_event_name: 'Stop', sleight_stats: 'closed' }); h.answer('close');
     h.begin(); h.call(1, 'js', { code: 'nodeRepl.write(1)' }); h.answer(1, '1');
@@ -208,10 +207,10 @@ for (const args of [{ sleight_stats_begin: '' }, { sleight_stats_begin: 123 },
     assert.equal(h.output.find(msg => msg.id === 2).result.isError, true);
     h.call(3, 'js', { code: 'nodeRepl.write(2)' }); h.answer(3, '2');
     h.call(4, 'turn_ended', { hook_event_name: 'Stop', sleight_stats: true }); h.answer(4);
-    assert.equal(h.output.find(msg => msg.id === 4).result._meta['sleight/stats'].calls, 2);
+    assert.equal(h.output.find(msg => msg.id === 4).result._meta['sleight/stats'].calls, 1);
   });
 
-test('a notification begin neither replies nor reaches the engine and preserves the window', t => {
+test('a notification begin neither replies nor reaches the engine and clears the window', t => {
   const h = harness(t); h.begin();
   h.call(1, 'js', { code: 'nodeRepl.write(1)' }); h.answer(1, '1');
   const count = h.output.length;
@@ -220,7 +219,7 @@ test('a notification begin neither replies nor reaches the engine and preserves 
   assert.ok(!h.sent.some(msg => msg.params?.arguments?.sleight_stats_begin));
   h.call(2, 'js', { code: 'nodeRepl.write(2)' }); h.answer(2, '2');
   h.call(3, 'turn_ended', { hook_event_name: 'Stop', sleight_stats: true }); h.answer(3);
-  assert.equal(h.output.find(msg => msg.id === 3).result._meta['sleight/stats'].calls, 2);
+  assert.equal(h.output.find(msg => msg.id === 3).result._meta['sleight/stats'].calls, 1);
 });
 
 test('the delivered tool schemas never advertise sleight_stats', t => {

@@ -1,4 +1,3 @@
-import { assertChildStatus } from './fixtures/child-status.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { mkdtempSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
@@ -16,7 +15,7 @@ function fixture(t) {
 }
 const phase = (ms, name, turn, call) => JSON.stringify({ t: new Date(ms).toISOString(), direction: 'turbo-phase',
   msg: { phase: name, ...(turn === undefined ? {} : { turn }), ...(call === undefined ? {} : { call }) } });
-const cli = (...args) => spawnSync(process.execPath, [script.pathname, ...args], { encoding: 'utf8', timeout: 60000, killSignal: 'SIGKILL' });
+const cli = (...args) => spawnSync(process.execPath, [script.pathname, ...args], { encoding: 'utf8' });
 
 test('round split reports startup and final-turn intervals without changing the trace or exposing other fields', t => {
   const root = fixture(t), file = join(root, 'task', 'trace-42.jsonl');
@@ -29,7 +28,7 @@ test('round split reports startup and final-turn intervals without changing the 
     JSON.stringify({ t: new Date(400).toISOString(), direction: 'to-client', msg: { text: 'private page content' } }), '{broken'].join('\n');
   writeFileSync(file, text);
   const out = cli(root);
-  assertChildStatus(out, 0, out.stderr);
+  assert.equal(out.status, 0, out.stderr);
   const rows = JSON.parse(out.stdout), session = rows[0].sessions[0];
   assert.deepEqual(session.startup, { launchToSpawnMs: 10, spawnMs: 2, workerLoadMs: 10, helperCheckMs: 10,
     connectionSelectMs: 15, workerReadyMs: 48, registrationGapMs: 5 });
@@ -42,7 +41,7 @@ test('round split reports startup and final-turn intervals without changing the 
 
 test('old rounds without phase traces report missing evidence rather than zero duration', t => {
   const root = fixture(t), out = cli(root);
-  assertChildStatus(out, 0, out.stderr);
+  assert.equal(out.status, 0, out.stderr);
   assert.deepEqual(JSON.parse(out.stdout), [{ task: 'task', sessions: [], missing: 'no correlated turbo-phase trace; record SLEIGHT_TRACE for this task' }]);
 });
 
@@ -51,7 +50,7 @@ test('shared trace directories match only a complete session within the task lif
   writeFileSync(join(traces, 'trace-42.jsonl'), [phase(10, 'worker-spawn-start'), phase(100, 'first-call-admitted', 1)].join('\n'));
   writeFileSync(join(traces, 'trace-43.jsonl'), [phase(-20, 'worker-spawn-start'), phase(100, 'first-call-admitted', 1)].join('\n'));
   const out = cli(root, '--trace-dir', traces);
-  assertChildStatus(out, 0, out.stderr);
+  assert.equal(out.status, 0, out.stderr);
   const sessions = JSON.parse(out.stdout)[0].sessions;
   assert.deepEqual(sessions.map(row => row.trace), ['trace-42.jsonl']);
   assert.equal(sessions[0].startup.helperCheckMs, null);

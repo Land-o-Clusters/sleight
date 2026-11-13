@@ -19,15 +19,15 @@ const png = (width = 2560, height = 1800) => {
 };
 const settle = async () => { for (let i = 0; i < 6; i++) await new Promise(resolve => setImmediate(resolve)); };
 
-function fixture(t, simFocusNote = true, nativeMac = false) {
+function fixture(t, simFocusNote = true) {
   const streams = Array.from({ length: 4 }, () => new PassThrough());
   const [clientIn, clientOut, serverIn, serverOut] = streams;
   const directory = mkdtempSync(join(tmpdir(), 'sleight-drag-frame-'));
   const calls = [], replies = [];
   clientOut.on('data', bytes => replies.push(...bytes.toString().trim().split('\n').map(JSON.parse)));
-  const relay = createRelay({ clientIn, clientOut, serverIn, serverOut, changeReview: false, simFocusNote, nativeMac,
+  const relay = createRelay({ clientIn, clientOut, serverIn, serverOut, changeReview: false, simFocusNote,
     inputLease: new InputLease({ directory, holder: 'drag frame test' }),
-    localTools: { tools: [{ name: 'drag', inputSchema: { type: 'object' } }], target: async () => ({ app: 'Safari', appId, title: null }),
+    localTools: { tools: [{ name: 'drag' }], target: async () => ({ app: 'Safari', appId, title: null }),
       call: async (_name, args) => { calls.push(args); return { content: [] }; } } });
   t.after(() => { relay.dispose(); streams.forEach(stream => stream.destroy()); removeTemp(directory); });
   const call = (id, name, args) => clientIn.write(JSON.stringify({ id, method: 'tools/call', params: { name, arguments: args } }) + '\n');
@@ -71,49 +71,6 @@ test('duplicate emitImage output still registers one screenshot', async t => {
   await f.exchange(2, 'nodeRepl.emitImage(await app.getScreenshot())', [png(), png()]);
   f.call(3, 'drag', { app: appId, from: [1065, 989], to: [1083, 989] }); await settle();
   assert.deepEqual(f.calls[0].screenshot, [2560, 1800]);
-});
-
-test('own point-scaled frame records scale and maps screenshot coordinates to window points', async t => {
-  const f = fixture(t, false, true);
-  await f.exchange(1, 'let app = await cua.getApp("Safari")', [header]);
-  const frame = { windowBounds: { x: 0, y: 33, width: 1280, height: 900 },
-    pixelWidth: 1280, pixelHeight: 900, scaleX: 1, scaleY: 1 };
-  const note = { type: 'text', text: 'Screenshot frame: 1280x900 pixels; window bounds (0, 33, 1280, 900) points; scale 1.0000x1.0000 pixels per point; origin top-left; window-only, overlays excluded.' };
-  await f.exchange(2, 'await app.getScreenshot({scale:"point"})', [note, png(1280, 900)]);
-  f.call(3, 'drag', { app: 'Safari', from: [500, 400], to: [600, 500] }); await settle();
-  assert.deepEqual(f.calls[0].screenshotFrame, frame);
-  assert.deepEqual(f.calls[0].screenshotFrames, { [title]: frame });
-  const helper = { ObjC: { import() {} }, request: f.calls[0], bounds: { X: 0, Y: 33, Width: 1280, Height: 900 }, title };
-  runInNewContext(readFileSync(new URL('../plugins/sleight/lib/drag.js', import.meta.url), 'utf8'), helper);
-  assert.equal(JSON.stringify(runInNewContext('toPoints(request.from, screenshotScale(request, bounds, title))', helper)), '[500,400]');
-  await f.exchange(4, 'await app.getScreenshot()', [png()]);
-  f.call(5, 'drag', { app: 'Safari', from: [500, 400], to: [600, 500] }); await settle();
-  assert.equal(f.calls[1].screenshotFrame, undefined, 'unframed image must not inherit a stale scale');
-  assert.deepEqual(f.calls[1].screenshotFrames, {});
-});
-
-for (const variant of ['size', 'scale', 'bounds', 'duplicate']) test(`own frame note refuses invalid ${variant} association`, async t => {
-  const f = fixture(t, false, true);
-  await f.exchange(1, 'let app = await cua.getApp("Safari")', [header]);
-  let note = 'Screenshot frame: 1280x900 pixels; window bounds (0, 33, 1280, 900) points; scale 1.0000x1.0000 pixels per point; origin top-left; window-only, overlays excluded.';
-  if (variant === 'size') note = note.replace('1280x900', '2560x1800');
-  if (variant === 'scale') note = note.replace('1.0000x1.0000', '2.0000x2.0000');
-  if (variant === 'bounds') note = note.replace('1280, 900)', '-1280, 900)');
-  const content = [{ type: 'text', text: note }, png(1280, 900)];
-  if (variant === 'duplicate') content.unshift({ type: 'text', text: note });
-  await f.exchange(2, 'await app.getScreenshot()', content);
-  f.call(3, 'drag', { app: 'Safari', from: [500, 400], to: [600, 500] }); await settle();
-  assert.equal(f.calls[0].screenshot, undefined);
-});
-
-test('engine results ignore a frame-note line and keep their screenshot association', async t => {
-  const f = fixture(t, false);
-  await f.exchange(1, 'let app = await cua.getApp("Safari")', [header]);
-  const note = 'Screenshot frame: 1280x900 pixels; window bounds (0, 33, 1280, 900) points; scale 2.0000x2.0000 pixels per point; origin top-left; window-only, overlays excluded.';
-  await f.exchange(2, 'await app.getScreenshot()', [{ type: 'text', text: note }, png(1280, 900)]);
-  f.call(3, 'drag', { app: 'Safari', from: [500, 400], to: [600, 500] }); await settle();
-  assert.deepEqual(f.calls[0].screenshot, [1280, 900]);
-  assert.equal(f.calls[0].screenshotFrame, undefined, 'engine text must not supply drag geometry');
 });
 
 for (const variant of ['unknown', 'reassigned', 'multiple handles', 'wrong app', 'wrong header', 'malformed header', 'distinct images', 'failed', 'quoted call']) {

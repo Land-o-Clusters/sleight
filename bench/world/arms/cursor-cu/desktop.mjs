@@ -1,6 +1,5 @@
 // Attach through scoped Accessibility to the owner's existing Cursor session.
 import { existsSync } from 'node:fs';
-import { waitForBenchmark } from '../../../hold.mjs';
 import { inspectBundle, readLoginReadiness } from './setup.mjs';
 import { ordinaryPath, assertDesktopReady, requireOwnerFree } from './contract.mjs';
 import { profileState, pendingAppApprovals } from './state.mjs';
@@ -15,8 +14,8 @@ const wait = ms => new Promise(resolve => setTimeout(resolve, ms));
 export class DesktopDriver {
   constructor({ inspect = inspectBundle, readState = profileState, exists = existsSync,
     processes = inventory, ax = accessibility, calibrationReader = assertDesktopReady, readiness = readLoginReadiness, ui = new CursorUI(),
-    now = Date.now, pause = wait, operationTimeoutMs = 20000, hold = {} } = {}) {
-    Object.assign(this, { inspect, stateReader: readState, exists, processes, ax, calibrationReader, readiness, ui, now, pause, operationTimeoutMs, hold });
+    now = Date.now, pause = wait, operationTimeoutMs = 20000 } = {}) {
+    Object.assign(this, { inspect, stateReader: readState, exists, processes, ax, calibrationReader, readiness, ui, now, pause, operationTimeoutMs });
     this.helpers = [];
   }
   read(operation, label) { return bounded(operation, label, this.operationTimeoutMs); }
@@ -28,9 +27,8 @@ export class DesktopDriver {
     try { return await this.read(() => pending, label); }
     finally { controller.abort(); }
   }
-  async preflight(plan, { calibration = false, signal } = {}) {
+  async preflight(plan, { calibration = false } = {}) {
     requireOwnerFree(plan);
-    await waitForBenchmark({ held: () => this.exists('/tmp/sleight-hold'), signal, ...this.hold });
     this.paths = plan.paths;
     this.journal = new SelectionJournal(this.paths);
     this.journal.assertAbsent();

@@ -1,4 +1,3 @@
-import { assertChildStatus } from './fixtures/child-status.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { mkdtempSync, realpathSync, statSync } from 'node:fs';
@@ -15,11 +14,11 @@ function run(t, frames) {
     const dir = trackTemp(realpathSync(mkdtempSync(join(tmpdir(), 'sleight-pause-'))));
     const output = join(dir, 'host');
     const built = spawnSync('/usr/bin/xcrun', ['swiftc', '-module-cache-path', swiftModuleCache(),
-      new URL('../plugins/sleight/lib/direct-browser/native/consent-host.swift', import.meta.url).pathname, '-o', output], { encoding: 'utf8', timeout: 600000, killSignal: 'SIGKILL' });
-    assertChildStatus(built, 0, built.stderr); binary = output; t.diagnostic(`binaryBytes=${statSync(binary).size}`);
+      new URL('../plugins/sleight/lib/direct-browser/native/consent-host.swift', import.meta.url).pathname, '-o', output], { encoding: 'utf8', timeout: 120000 });
+    assert.equal(built.status, 0, built.stderr); binary = output; t.diagnostic(`binaryBytes=${statSync(binary).size}`);
   }
-  const result = spawnSync(binary, ['--pause-control-dump'], { encoding: 'utf8', input: frames.map(f => JSON.stringify(f)).join('\n') + '\n', timeout: 10000, killSignal: 'SIGKILL' });
-  assertChildStatus(result, 0, result.stderr);
+  const result = spawnSync(binary, ['--pause-control-dump'], { encoding: 'utf8', input: frames.map(f => JSON.stringify(f)).join('\n') + '\n', timeout: 10000 });
+  assert.equal(result.status, 0, result.stderr);
   return result.stdout.trim().split('\n').map(JSON.parse);
 }
 const options = { skip: macCommandSkip('xcrun') };
@@ -104,73 +103,4 @@ test('a delayed hit panel requires the same still-visible target bounds', option
   const expected = [0, 0, 800, 600];
   const rows = run(t, [expected, null, [20, 0, 800, 600], [0, 0, 700, 600]].map(observed => ({ validity: { expected, observed } })));
   assert.deepEqual(rows.map(r => r.current), [true, false, false, false]);
-});
-
-test('only the 16 pt badge hits at small, medium and stage sizes', options, t => {
-  const rows = run(t, [[96, 104], [192, 208], [320, 416]].map(size => ({ badgeCheck: size })));
-  for (const row of rows) {
-    assert.equal(row.badgeHit, true);
-    assert.equal(row.outsideHits, 0);
-    assert.equal(row.samples, 200);
-    assert.deepEqual(row.badgeSize, [16, 16]);
-  }
-});
-
-test('a synthetic drop onto a card cannot satisfy the shared hardware consent check', options, t => {
-  const [row] = run(t, [{ cardDropCheck: true }]);
-  assert.deepEqual(row, { canBecomeKey: false, canBecomeMain: false, acceptsFirstMouse: true, nonactivating: true,
-    syntheticAccepted: false, hardwareAccepted: true, answers: 0 });
-});
-
-test('badge drag pauses before hint, resumes after drop, and preserves an existing pause', options, t => {
-  const rows = run(t, [{ hintDragCheck: true }, { hintDragCheck: true, alreadyPaused: true },
-    { hintDragCheck: true, desktop: true }, { hintDragCheck: true, badDrop: true }]);
-  assert.deepEqual(rows[0].states, [true, false]);
-  assert.deepEqual(rows[0].hints.map(({ hand, pid, windowId, at }) => ({ hand, pid, windowId, at })),
-    [{ hand: 'hint', pid: 42, windowId: 77, at: [100, 200] }]);
-  assert.equal(rows[0].pausedAtHint, true); assert.equal(rows[0].active, false);
-  assert.deepEqual(rows[1].states, []); assert.equal(rows[1].paused, true);
-  assert.deepEqual(rows[2].states, [true, false]); assert.deepEqual(rows[2].hints, []);
-  assert.equal(rows[3].paused, true); assert.equal(rows[3].active, false); assert.deepEqual(rows[3].hints, []);
-  assert.equal(rows[3].finishes, 1); assert.equal(rows[3].cancelledTimers, 1);
-});
-
-test('an abandoned badge drag cancels after 30 seconds and an old timer cannot cancel a new drag', options, t => {
-  const [row] = run(t, [{ hintDragCheck: true, abandon: true }]);
-  assert.equal(row.timeoutSeconds, 30);
-  assert.equal(row.activeBeforeTimeout, true); assert.equal(row.activeAtTimeout, false);
-  assert.equal(row.activeAfterOldTimer, true); assert.equal(row.active, false);
-  assert.equal(row.paused, true); assert.deepEqual(row.hints, []);
-  assert.equal(row.finishes, 2); assert.equal(row.cancelledTimers, 2);
-});
-
-test('a consent card above a drop blocks the underlying app and a desktop drop names nothing', options, t => {
-  const [row] = run(t, [{ hintTargetCheck: true }]);
-  assert.deepEqual(row.app, { pid: 42, windowId: 77, at: [100, 200] });
-  assert.equal(row.card, null); assert.equal(row.desktop, null); assert.equal(row.overlay, null);
-});
-
-test('a badge installation belongs to its perch owner and hides with that owner', options, t => {
-  const [row] = run(t, [{ badgeLifetimeCheck: true }]);
-  assert.equal(row.pendingBefore, true); assert.equal(row.pendingAfterOtherOwner, true);
-  assert.equal(row.pendingAfterOwner, false); assert.equal(row.windows, 0);
-});
-
-test('queued actions and aims cannot cancel a drag before or after its pause commits', options, t => {
-  const [row] = run(t, [{ queuedDragCheck: true }]);
-  assert.deepEqual(row.active, [true, true]); assert.equal(row.hints, 1);
-  assert.equal(row.cleared, true); assert.equal(row.paused, false); assert.equal(row.windows, 0);
-});
-
-test('drag art stays outside the person window, pending targets and consent cards', options, t => {
-  const [row] = run(t, [{ dragArtCheck: true }]);
-  assert.deepEqual(row.allowed, [true, false, false, false]);
-});
-
-test('a failed pause cancels a held drag before expiry or rollback can leave it looking paused', options, t => {
-  const rows = run(t, [{ hintDragCheck: true, heldFailure: 'expire' }, { hintDragCheck: true, heldFailure: 'aborted' }]);
-  for (const row of rows) {
-    assert.equal(row.active, false); assert.equal(row.paused, false); assert.equal(row.failed, true);
-    assert.deepEqual(row.hints, []);
-  }
 });

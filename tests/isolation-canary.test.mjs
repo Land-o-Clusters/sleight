@@ -70,7 +70,7 @@ test('canary uses the private benchmark key file and excludes inherited auth tok
 test('the canary CLI defaults to a dry plan and never starts the absent pinned executable', () => {
   const name = `mcp:canary-${randomBytes(8).toString('hex')}`;
   const output = execFileSync(process.execPath, [new URL('../bench/world/isolation-canary.mjs', import.meta.url).pathname,
-    '--arm', name, '--marker', 'SLEIGHT_CANARY_PRIVATE_MARKER', '--arm-home', `${MAC_TMP}/absent-canary-cli`, '--dry-run'], { encoding: 'utf8', timeout: 60000, killSignal: 'SIGKILL' });
+    '--arm', name, '--marker', 'SLEIGHT_CANARY_PRIVATE_MARKER', '--arm-home', `${MAC_TMP}/absent-canary-cli`, '--dry-run'], { encoding: 'utf8' });
   const plan = JSON.parse(output);
   assert.equal(plan.dryRun, true);
   assert.equal(existsSync(plan.root), false);

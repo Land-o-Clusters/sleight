@@ -160,7 +160,7 @@ test('existing sensitive folders, tilde paths and Finder-hidden folders refuse',
   }
   if (process.platform === 'darwin') {
     const directory = path.join(root, 'FinderHidden'); fs.mkdirSync(directory);
-    execFileSync('/usr/bin/chflags', ['hidden', directory], { timeout: 60000, killSignal: 'SIGKILL' });
+    execFileSync('/usr/bin/chflags', ['hidden', directory]);
     for (const target of [directory, path.join(directory, 'table.csv')])
       assert.throws(() => writeDataExport(data(), { path: target }, context(`Export table to "${target}"`)), /hidden/);
     assert.deepEqual(fs.readdirSync(directory), []);

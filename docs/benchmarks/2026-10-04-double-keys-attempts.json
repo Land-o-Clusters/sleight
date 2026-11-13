@@ -1,6 +1,6 @@
 {
   "date": "2026-10-04",
-  "worktree": "<private-evidence>/double-keys",
+  "worktree": "~/Projects/sleight-wt/double-keys",
   "branch": "codex/double-keys",
   "base": "4409f1c9513cd3f51fd200de2da99ad0d956e4af",
   "liveReports": ["2026-10-04-double-keys-1791126272009.json", "2026-10-04-double-keys-1791127014039.json", "2026-10-04-double-keys-1791128043845.json", "2026-10-04-double-keys-1791130725653.json", "2026-10-04-double-keys-cleanup-1791134794409.json", "2026-10-04-double-keys-1791134909666.json"],

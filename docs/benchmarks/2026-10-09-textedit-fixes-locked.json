@@ -8,6 +8,6 @@
     "plugins/sleight/lib/drag.js": "56592ccd41a3c307a1f61ab5185dd5826ab92f485b73893a59c8a86296c61284"
   },
   "error": "Another live run holds /tmp/sleight-live.lock. Wait for it to finish.",
-  "publicationError": "Sandbox refused writing the report in <private-evidence>/textedit-fixes; recovered from the private report with apply_patch.",
+  "publicationError": "Sandbox refused writing the report in ~/Projects/sleight-wt/textedit-fixes; recovered from the private report with apply_patch.",
   "finished": "2026-10-10T02:17:17.501Z"
 }

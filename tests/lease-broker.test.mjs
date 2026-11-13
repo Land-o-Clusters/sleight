@@ -1,4 +1,3 @@
-import { assertChildStatus } from './fixtures/child-status.mjs';
 // Constructed macOS paths are synthetic validation and redaction data, never allocation roots.
 const MAC_TMP = ['', 'private', 'tmp'].join('/');
 import { test } from 'node:test';
@@ -32,7 +31,7 @@ async function broker(directory, now = () => 1000) {
 function cli(directory, request, time = 1000, mode = '') {
   const result = spawnSync(process.execPath, [fixture, directory, String(time), mode], {
     input: typeof request === 'string' ? request : JSON.stringify(request), encoding: 'utf8', timeout: 10000,
-   killSignal: 'SIGKILL' });
+  });
   assert.ifError(result.error);
   return { status: result.status, stdout: result.stdout, stderr: result.stderr };
 }
@@ -71,23 +70,23 @@ test('two independent CLI processes racing one window grant exactly one client',
   assert.equal(loser.ok, false);
   assert.match(loser.error, /Input lease/);
   const released = cli(directory, use('release', winner));
-  assertChildStatus(released, 0, released.stderr);
+  assert.equal(released.status, 0, released.stderr);
 });
 
 test('a crashed outside client leaves a lease that expires at 30 seconds and fences its old token', async t => {
   const directory = bank(t);
   const held = cli(directory, claim('crashed client'), 1000, 'crash');
-  assertChildStatus(held, 1, held.stderr);
+  assert.equal(held.status, 1, held.stderr);
   assert.match(held.stderr, /simulated outside-client crash/);
   assert.equal(JSON.parse(held.stdout).ok, true);
   const old = JSON.parse(held.stdout).lease;
-  assertChildStatus(cli(directory, claim('successor'), 30999), 1);
+  assert.equal(cli(directory, claim('successor'), 30999).status, 1);
   const acquired = cli(directory, claim('successor'), 31000);
-  assertChildStatus(acquired, 0, acquired.stderr);
+  assert.equal(acquired.status, 0, acquired.stderr);
   const next = JSON.parse(acquired.stdout).lease;
   assert.notEqual(next.token, old.token);
   const staleRelease = cli(directory, use('release', old), 31001);
-  assertChildStatus(staleRelease, 1);
+  assert.equal(staleRelease.status, 1);
   assert.match(JSON.parse(staleRelease.stdout).error, /ownership|expired/i);
   const request = await broker(directory, () => 31001);
   assert.equal(request({ operation: 'status', key: next.key }).lease.holder, 'successor');
@@ -163,24 +162,24 @@ test('invalid requests, path traversal and approval fields refuse before writing
 
 test('CLI emits one JSON reply and nonzero status for malformed, oversized and refused requests', t => {
   const directory = bank(t), acquired = cli(directory, claim());
-  assertChildStatus(acquired, 0, acquired.stderr);
+  assert.equal(acquired.status, 0, acquired.stderr);
   assert.equal(acquired.stdout.trim().split('\n').length, 1);
   const held = JSON.parse(acquired.stdout).lease;
   for (const invalid of ['{', '{}\n{}', ' '.repeat(16385), claim('contender')]) {
     const failed = cli(directory, invalid);
-    assertChildStatus(failed, 1, failed.stderr);
+    assert.equal(failed.status, 1, failed.stderr);
     const reply = JSON.parse(failed.stdout);
     assert.equal(reply.ok, false);
     assert.ok(reply.error);
     assert.equal(failed.stdout.includes(held.token), false);
   }
-  assertChildStatus(cli(directory, use('release', held)), 0);
+  assert.equal(cli(directory, use('release', held)).status, 0);
   // Exercise the public entry point without ever selecting the user's real store.
   const entry = fileURLToPath(new URL('../plugins/sleight/lib/lease-broker-cli.mjs', import.meta.url));
   for (const args of [[], ['--directory', directory]]) {
-    const result = spawnSync(process.execPath, [entry, ...args], { input: '{', encoding: 'utf8', timeout: 10000, killSignal: 'SIGKILL' });
+    const result = spawnSync(process.execPath, [entry, ...args], { input: '{', encoding: 'utf8', timeout: 10000 });
     assert.ifError(result.error);
-    assertChildStatus(result, 1, result.stderr);
+    assert.equal(result.status, 1, result.stderr);
     assert.ok(result.stdout, 'the public CLI must return JSON for invalid requests');
     assert.equal(JSON.parse(result.stdout).ok, false);
   }

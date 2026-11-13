@@ -11,9 +11,9 @@ const toG = ([x, y]) => [x / PX, (y - OY) / PX];
 const toC = ([x, y]) => [x * PX, y * PX + OY];
 
 class Grid {
-  constructor(w=GW,h=GH) { this.c = new Map(); this.w=w; this.h=h; }
+  constructor() { this.c = new Map(); }
   key(x, y) { return y * 64 + x; }
-  set(x, y, mat) { x = Math.round(x); y = Math.round(y); if (x < 0 || y < 0 || x >= this.w || y >= this.h) return; this.c.set(this.key(x, y), { x, y, mat }); }
+  set(x, y, mat) { x = Math.round(x); y = Math.round(y); if (x < 0 || y < 0 || x >= GW || y >= GH) return; this.c.set(this.key(x, y), { x, y, mat }); }
   get(x, y) { return this.c.get(this.key(x, y)); }
   ellipse(cx, cy, rx, ry, mat, test) {
     for (let y = Math.floor(cy - ry - 1); y <= cy + ry + 1; y++) for (let x = Math.floor(cx - rx - 1); x <= cx + rx + 1; x++) {
@@ -43,7 +43,7 @@ class Grid {
     const seen = new Set();
     if (outline) for (const p of [...this.c.values()]) for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
       const x = p.x + dx, y = p.y + dy, k = this.key(x, y);
-      if (x >= 0 && y >= 0 && x < this.w && y < this.h && !this.get(x, y) && !seen.has(k)) { seen.add(k); px.push([x, y, ink]); }
+      if (x >= 0 && y >= 0 && x < GW && y < GH && !this.get(x, y) && !seen.has(k)) { seen.add(k); px.push([x, y, ink]); }
     }
     return px;
   }
@@ -71,7 +71,6 @@ const EYES = {
 };
 
 export function renderPixel(D, pose) {
-  if(pose.stage) return renderStagePixel(D,pose);
   const doc = new Doc(192, 208), P = D.pal, ink = D.ink;
   const p = pose, t = Math.max(-1, Math.min(1, p.head.turn));
   const G = new Grid();
@@ -191,102 +190,4 @@ export function renderPixel(D, pose) {
   const fxPal = { white: '#ffffff', warm: FX.warm, cool: FX.cool, err: FX.err, ok: FX.ok, ink, gray: '#8b90a3', twinkle: FX.twinkle, cloud: FX.cloud, sweat: FX.sweat };
   const fx = toSvg(F.paint(fxPal, ink));
   return doc.wrap(body + fx);
-}
-
-// Bit stays on the same 6 px logical lattice, including the wider lying strip. No rotated SVG or resampling.
-function renderStagePixel(D,p) {
-  const {name,posture,frame:i,frames:n}=p.stage, wide=posture==='lie', G=new Grid(wide?53:32), F=new Grid(wide?53:32);
-  const is=s=>name===`stage-${s}`, wave=Math.sin(i/n*2*Math.PI), stride=Math.cos(i/n*2*Math.PI);
-  let cx=15.5,cy=19.5,rx=8.6,ry=10, hands=[[5,24],[26,24]], elbows, feet=[[11,31],[21,31]], knees;
-  let eyes=p.face.eyes,mouth='smile', look=[0,0], prop;
-  if(wide) {
-    cx=29;cy=is('sleep')?22:21;rx=14;ry=6;
-    feet=is('sleep')?[[8,24],[11,26]]:[[11,13-Math.round(wave*2)],[13,16+Math.round(wave*2)]];
-    knees=[[15,23],[17,25]]; elbows=[[38,25],[42,25]]; hands=[[40,24],[44,25]];
-    if(is('lie-reach')) hands[1]=[[44,25],[46,29],[47,31],[44,25]][i];
-    if(is('lie-peek')) {cx=31;hands=[[41,27],[46,27]];look=[1,1];}
-    if(is('sleep')) {eyes='closed';mouth='flat';}
-  } else if(posture==='sit') {
-    // Three-quarter seat: both legs over the edge to the viewer's left, one paw planted on the edge behind.
-    cx=16.5;cy=16.5;ry=7.5;rx=8;
-    const w=Math.round(wave);
-    knees=[[5,27],[10,26]];feet=[[6+w,31],[11-w,31]];
-    elbows=[[8,22],[27,21]];hands=[[10,24],[26,24]];
-    if(is('sit-notes')) {hands=[[7,24],[15+i%2,22]];elbows=[[7,22],[27,22]];prop='notes';look=[-1,1];}
-    if(is('think')) {hands=[[10,24],[24,20]];elbows=[[7,23],[27,22]];look=[1,-1];}
-    if(is('wait')) {hands=[[5,13],[28,13]];elbows=[[6,22],[27,22]];prop='card';}
-    if(is('cheer')) {
-      hands=i===2?[[5,16],[28,16]]:[[5,8],[28,8]];elbows=[[5,17],[28,17]];eyes='happy';mouth='grin';
-      if(i===1) {knees=[[6,25],[9,24]];feet=[[4,23],[7,21]];}
-    }
-    if(is('paused')) {hands=[[13,22],[21,22]];prop='mug';}
-    if(is('startle')) {cx=15.5;cy=15.5;hands=[[4,14],[28,14]];elbows=undefined;knees=[[8,24],[24,24]];feet=[[6,28],[26,28]];eyes='wide';mouth='o';F.glyph(28,4,['a','a','a','.','a'],'err');}
-  } else if(posture==='hang') {
-    cx+=Math.round(wave);cy=21;rx=7;ry=8;
-    hands=[[5,4],[26,4]];elbows=[[5,12],[26,12]];
-    knees=[[13,29],[19,29]];feet=[[13+Math.round(wave),32],[19+Math.round(wave),32]];
-    if(is('hang-peek')) {cx+=2;cy=17;elbows=[[3,8],[28,8]];knees=[[13,25],[19,25]];feet=[[13+Math.round(wave),28],[19+Math.round(wave),28]];look=[1,1];}
-  } else if(posture==='climb') {
-    cy=18;rx=7;ry=8;const step=Math.round(Math.sin((i+.5)/n*2*Math.PI)*3);
-    hands=[[4,7-step],[27,7+step]];elbows=[[6,15-step],[25,15+step]];
-    knees=[[7,25+step],[24,25-step]];feet=[[4,28+step],[27,28-step]];look=[1,-1];
-  } else if(posture==='run') {
-    cx=16;cy=18;ry=8;rx=8;const s=Math.round(stride*5);
-    feet=[[10-s,31-Math.max(0,-s)],[22+s,31-Math.max(0,s)]];knees=[[11-s/2,27],[21+s/2,26]];
-    hands=[[8+s,24],[23-s,15]];elbows=[[6,22],[26,23]];
-    if(is('carry')) {hands=[[9,25],[24,25]];prop='box';}
-  } else if(posture==='leap') {
-    const keys=[
-      [16,22,9,7,[[5,26],[27,26]],[[5,31],[27,31]]],
-      [16,17,7,9,[[4,8],[28,6]],[[4,30],[28,27]]],
-      [16,17,9,6,[[4,12],[28,9]],[[4,27],[27,24]]],
-      [17,22,9,7,[[4,25],[28,26]],[[4,31],[28,31]]],
-      [15.5,19.5,8.6,10,[[5,24],[26,24]],[[11,31],[21,31]]],
-    ];
-    [cx,cy,rx,ry,hands,feet]=keys[i];knees=[[10,26],[22,25]];eyes=i===2?'happy':'focus';
-  } else {
-    if(is('stand')) {feet=[[8,31],[21,31]];knees=[[10,27],[21,27]];hands=[[5,23],[26,24]];if(i===1) eyes='closed';}
-    if(is('point')) hands[1]=[[27,20],[28,16],[28,14]][i];
-    // A flinch: shell drops a row, paws up wide of the face, feet together.
-    if(is('wince')) {cy=20.5;hands=[[4,13],[28,13]];elbows=[[2,19],[29,19]];knees=[[13,28],[19,28]];feet=[[12,31],[20,31]];eyes=i<3?'squeeze':'open';mouth='wobble';F.glyph(27,9,['.a','aa','aa'],'cool');}
-    if(is('handoff')) {hands[0]=[[4,21],[3,19],[2,18],[5,24]][i];eyes='happy';}
-  }
-  const top=cy-ry, faceX=wide?cx+7:cx, faceY=Math.round(cy+(wide?0:1));
-  // Cable and plug remain an independent, stepped silhouette behind Bit's shell.
-  const tail=wide?[[cx-rx+2,cy],[10,20],[7,21],[6,19],[7,17]]:posture==='hang'?[[cx+5,cy+5],[26,27],[27,29],[25,30]]:[[cx+rx-2,cy+ry-2],[28,cy+6],[29,cy+3],[28,cy+1]];
-  for(let k=1;k<tail.length;k++) G.line(...tail[k-1],...tail[k],'cable');
-  const plug=tail.at(-1);G.rect(plug[0]-1,plug[1]-2,3,2,'plug');G.set(plug[0]-1,plug[1]-3,'plug');G.set(plug[0]+1,plug[1]-3,'plug');
-  // In the three-quarter seat the viewer-left leg is nearer, so its side is drawn last.
-  for(const j of posture==='sit'&&!is('startle')?[1,0]:[0,1]) {
-    const shoulder=[cx+(j?1:-1)*(rx-1),cy+1],el=elbows?.[j]??[(shoulder[0]+hands[j][0])/2,(shoulder[1]+hands[j][1])/2];
-    G.line(...shoulder,...el,'shell');G.line(...el,...hands[j],'shell');G.rect(hands[j][0]-.5,hands[j][1]-.5,2,2,'shell');
-    if(posture==='hang'||posture==='climb') G.line(hands[j][0]-1,hands[j][1]-1,hands[j][0]+1,hands[j][1]-1,'foot');
-    const hip=[cx+(j?1:-1)*4,cy+ry-1],knee=knees?.[j]??feet[j];G.line(...hip,...knee,'foot');G.line(...knee,...feet[j],'foot');G.ellipse(...feet[j],2,1.2,'foot');
-  }
-  for(const s of [-1,1]) {const ex=faceX+s*5.5,ey=top+1.2;G.ellipse(ex,ey,3.1,3.1,'shell');G.ellipse(ex,ey+.3,1.5,1.5,s<0?'earW':'earC');}
-  G.ellipse(cx,cy,rx,ry,'shell');
-  const seam=Math.round(faceX-.5),by=x=>Math.round(top+4.6-1.6*((x+.5-cx)/rx)**2);
-  G.ellipse(cx,cy,rx,ry,'btnW',(x,y)=>y<by(x)&&x<seam);
-  G.ellipse(cx,cy,rx,ry,'btnC',(x,y)=>y<by(x)&&x>seam);
-  G.ellipse(cx,cy,rx,ry,'seam',(x,y)=>y<by(x)&&x===seam);
-  G.ellipse(cx,cy,rx,ry,'rim',(x,y)=>y===by(x));
-  for(let j=0;j<3;j++) G.set(seam,Math.round(top+1)+j,(j+i)%2?'wheel':'wheelB');
-  for(const s of [-1,1]) {
-    const ex=Math.round(faceX+s*3.6-1+look[0]),ey=faceY-1+look[1];
-    if(eyes==='happy') G.glyph(ex-1,ey+1,['.a.','a.a'],'eye');
-    else if(eyes==='squeeze') G.glyph(ex,ey,s<0?['a..','.aa','a..']:['..a','aa.','..a'],'eye');
-    else G.glyph(ex,ey,EYES[eyes]??EYES.open,{a:'eye',b:'eyeHi'});
-  }
-  const mouths={smile:['a..a','.aa.'],grin:['aaaa','amma','.tt.'],flat:['.aa.'],o:['aa','aa'],wobble:['.a.a','a.a.']};
-  G.glyph(Math.round(faceX-1),faceY+3,mouths[mouth],{a:'mouth',m:'mouthIn',t:'tongue'});
-  // Lap props sit over the thighs, which now hang to the viewer's left.
-  if(prop==='notes') {G.rect(4,24,15,4,'board');G.rect(5,24,6,3,'card');G.rect(12,24,6,3,'card');G.line(15+i%2,24,18+i%2,20,'kb');}
-  if(prop==='card') {G.rect(6,23,14,5,'card');G.rect(7,24,1,3,'stripe');G.rect(9,24,9,1,'cardLine');G.rect(9,26,6,1,'cardLine');F.glyph(25,7,['aaa','..a','.aa','...','.a.'],'ink');}
-  if(prop==='box') {G.rect(10,23,13,7,'board');G.rect(15,23,2,7,'card');G.line(10,25,22,25,'cardLine');}
-  if(prop==='mug') {const y=i<3?24-i:22;G.rect(12,y,7,5,'card');G.line(19,y+1,21,y+1,'card');G.line(21,y+1,21,y+3,'card');G.line(19,y+3,21,y+3,'card');G.line(14,y-3,15,y-4,'gray');}
-  if(is('point')) G.line(...hands[1],hands[1][0]+1,hands[1][1]-2,'shell');
-  const anchors=at=>at==='head'?toC([faceX,top+2]):at==='hands'?toC([(hands[0][0]+hands[1][0])/2,(hands[0][1]+hands[1][1])/2]):
-    at==='tip.r'&&is('point')?toC([hands[1][0]+1,hands[1][1]-2]):toC(hands[at.endsWith('.l')?0:1]);
-  recordAnchors(anchors,{...p,lean:0,x:0,y:0,sx:1,sy:1});
-  return new Doc(wide?320:192,208).wrap(toSvg(G.paint(D.pal,D.ink))+toSvg(F.paint({ink:D.ink,err:FX.err,cool:FX.cool,gray:'#8b90a3'},D.ink)));
 }

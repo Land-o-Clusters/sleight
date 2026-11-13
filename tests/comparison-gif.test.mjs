@@ -174,7 +174,7 @@ test('concurrent output creation cannot be overwritten', async t => {
 });
 
 let installed = true;
-try { execFileSync('ffmpeg', ['-version'], { stdio: 'ignore', timeout: 60000, killSignal: 'SIGKILL' }); execFileSync('ffprobe', ['-version'], { stdio: 'ignore', timeout: 60000, killSignal: 'SIGKILL' }); }
+try { execFileSync('ffmpeg', ['-version'], { stdio: 'ignore' }); execFileSync('ffprobe', ['-version'], { stdio: 'ignore' }); }
 catch { installed = false; }
 
 test('synthetic clips render with spaces, pixel masks, honest GIF duration and no input metadata', { skip: !installed }, async t => {
@@ -185,23 +185,23 @@ test('synthetic clips render with spaces, pixel masks, honest GIF duration and n
       `color=c=${i ? 'blue' : 'red'}:s=160x120:r=10:d=3`,
       ...(i ? [] : ['-vf', "drawbox=x=0:y=0:w=iw:h=ih:color=yellow:t=fill:enable='gte(t,1.4)'"]),
       '-metadata', 'title=PRIVATE SYNTHETIC NAME',
-      '-c:v', 'ffv1', join(f.dir, r.file)], { timeout: 60000, killSignal: 'SIGKILL' });
+      '-c:v', 'ffv1', join(f.dir, r.file)]);
   }
   writeFileSync(f.path, JSON.stringify(f.value));
   const result = await buildComparison(f.path, f.output);
   assert.ok(result.bytes < 5_000_000);
   assert.equal(result.duration, 3);
   assert.equal(result.requiresHumanPreview, true);
-  const probe = JSON.parse(execFileSync('ffprobe', ['-v', 'error', '-show_format', '-show_streams', '-of', 'json', f.output], { timeout: 60000, killSignal: 'SIGKILL' }));
+  const probe = JSON.parse(execFileSync('ffprobe', ['-v', 'error', '-show_format', '-show_streams', '-of', 'json', f.output]));
   assert.ok(Math.abs(Number(probe.format.duration) - 3) <= 0.011);
   assert.equal(probe.streams[0].width, 1280);
   assert.equal(JSON.stringify(probe).includes('PRIVATE SYNTHETIC NAME'), false);
-  const raw = execFileSync('ffmpeg', ['-v', 'error', '-i', f.output, '-frames:v', '1', '-f', 'rawvideo', '-pix_fmt', 'rgb24', 'pipe:1'], { maxBuffer: 8_000_000, timeout: 60000, killSignal: 'SIGKILL' });
+  const raw = execFileSync('ffmpeg', ['-v', 'error', '-i', f.output, '-frames:v', '1', '-f', 'rawvideo', '-pix_fmt', 'rgb24', 'pipe:1'], { maxBuffer: 8_000_000 });
   const pixel = (x, y) => [...raw.subarray((y * 1280 + x) * 3, (y * 1280 + x) * 3 + 3)];
   assert.deepEqual(pixel(8, 72), [0, 0, 0]);
   assert.ok(pixel(150, 150)[0] > 200);
   const held = execFileSync('ffmpeg', ['-v', 'error', '-ss', '2.5', '-i', f.output, '-frames:v', '1', '-f', 'rawvideo',
-    '-pix_fmt', 'rgb24', 'pipe:1'], { maxBuffer: 8_000_000, timeout: 60000, killSignal: 'SIGKILL' });
+    '-pix_fmt', 'rgb24', 'pipe:1'], { maxBuffer: 8_000_000 });
   const offset = (150 * 1280 + 150) * 3;
   assert.ok(held[offset] > 200 && held[offset + 1] > 200,
     `completion frame must be yellow throughout its hold, got ${[...held.subarray(offset, offset + 3)]}`);
@@ -216,13 +216,13 @@ test('non-grid completion holds the true source frame without showing later fram
     execFileSync('ffmpeg', ['-hide_banner', '-loglevel', 'error', '-nostdin', '-y', '-f', 'lavfi', '-i',
       `color=c=${i ? 'blue' : 'red'}:s=160x120:r=20:d=3`,
       ...(i ? [] : ['-vf', "drawbox=x=0:y=0:w=iw:h=ih:color=yellow:t=fill:enable='eq(n,29)',drawbox=x=0:y=0:w=iw:h=ih:color=green:t=fill:enable='gt(n,29)'"]),
-      '-c:v', 'ffv1', join(f.dir, r.file)], { timeout: 60000, killSignal: 'SIGKILL' });
+      '-c:v', 'ffv1', join(f.dir, r.file)]);
   }
   writeFileSync(f.path, JSON.stringify(f.value));
   await buildComparison(f.path, f.output);
   const sample = time => {
     const raw = execFileSync('ffmpeg', ['-v', 'error', '-ss', String(time), '-i', f.output, '-frames:v', '1', '-f', 'rawvideo',
-      '-pix_fmt', 'rgb24', 'pipe:1'], { maxBuffer: 8_000_000, timeout: 60000, killSignal: 'SIGKILL' });
+      '-pix_fmt', 'rgb24', 'pipe:1'], { maxBuffer: 8_000_000 });
     return [...raw.subarray((150 * 1280 + 150) * 3, (150 * 1280 + 150) * 3 + 3)];
   };
   const before = sample(1.2);
@@ -241,13 +241,13 @@ test('non-grid start uses the frame covering measured zero without revealing the
     execFileSync('ffmpeg', ['-hide_banner', '-loglevel', 'error', '-nostdin', '-y', '-f', 'lavfi', '-i',
       `color=c=${i ? 'blue' : 'red'}:s=160x120:r=20:d=3`,
       ...(i ? [] : ['-vf', "drawbox=x=0:y=0:w=iw:h=ih:color=yellow:t=fill:enable='gte(n,5)'"]),
-      '-c:v', 'ffv1', join(f.dir, r.file)], { timeout: 60000, killSignal: 'SIGKILL' });
+      '-c:v', 'ffv1', join(f.dir, r.file)]);
   }
   writeFileSync(f.path, JSON.stringify(f.value));
   await buildComparison(f.path, f.output);
   for (const [time, isYellow] of [[0, false], [0.1, true]]) {
     const raw = execFileSync('ffmpeg', ['-v', 'error', '-ss', String(time), '-i', f.output, '-frames:v', '1', '-f', 'rawvideo',
-      '-pix_fmt', 'rgb24', 'pipe:1'], { maxBuffer: 8_000_000, timeout: 60000, killSignal: 'SIGKILL' });
+      '-pix_fmt', 'rgb24', 'pipe:1'], { maxBuffer: 8_000_000 });
     const offset = (150 * 1280 + 150) * 3;
     assert.ok(raw[offset] > 200);
     assert.equal(raw[offset + 1] > 200, isYellow, `frame at ${time} must respect the measured 0.23 start`);

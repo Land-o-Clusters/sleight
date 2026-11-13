@@ -2,29 +2,6 @@
 
 You don't need any of these. They change approvals, guards, receipts, review or experimental behavior.
 
-## Retained evidence tests
-
-Set `SLEIGHT_RETAINED_BANKS` to the parent directory containing the retained `race-1017`,
-`app-claim` and `p131-int` evidence directories to enable 10 historical checks in the test suite.
-When the variable is unset or a required file is missing, each affected test prints a skip reason.
-The old DP1 recording is also required by 2 checks. This variable only selects test evidence.
-
-## Native helper cache
-
-`~/Library/Caches/sleight/turbo-host` holds compiled native helpers and their build records.
-After a successful build, sleight removes its compiler module cache. Background pruning runs once
-per process. Each verified cache hit and publication attempts to refresh the build folder's last-use time.
-Continued helper use retries that refresh in the background at most once an hour per receipt.
-Marker failures leave verified builds usable.
-Cleanup keeps builds used within 24 hours, this process's current builds, the two most recently used
-builds and any running helpers. A temporary cache retained about 14 MB across three builds.
-Recent builds can add to that.
-Cache hits retry module-cache removal in the background without waiting for it.
-Cleanup removes staging folders older than one hour only when no process owns them. It keeps staging
-while any compiler or linker runs, even for another project, and when ownership is uncertain.
-The process scan omits missing or exited executables and permission refusals for another user.
-Other process-check failures skip pruning and staging cleanup. Older retained builds may still hold compiler modules.
-
 ## Front app after launch
 
 Front restoration is on by default. Set `SLEIGHT_FRONT_RESTORE=0` to turn it off for an A/B.
@@ -363,8 +340,7 @@ also ends the open turn. This releases engine turn resources; it does not cancel
 or quit an app.
 
 `SLEIGHT_IDLE_TURN_END_MS` changes that wait in milliseconds, and `0` disables it. Keep the default
-when your client has no turn hook. With `0` and no turn signal, a runtime clipboard stop lasts until session close.
-The wait restarts on each completed call, so several model turns
+when your client has no turn hook. The wait restarts on each completed call, so several model turns
 can share one engine turn. Approvals last for the server process,
 so a client that keeps one server across conversations also keeps its approval session.
 
@@ -457,9 +433,7 @@ The host compiles in the background on its first use after you enable it. That s
   the Ghost Hand row, [Permissions](#permissions), the [usage row](#stats) when the action log is on, Cursor, Settings & Help
   and the version. Cursor offers the rings, glove, installed characters and imports from your Codex pets.
 - `sleight-mcp hand capture hidden|visible` sets whether captures show the hand. `hidden`, the default, keeps it out of
-  every capture, your own screenshots and recordings included. `visible` lets your screenshots and recordings show it,
-  at every character size. The screenshots sleight takes for Claude can then show it too, and a medium or stage
-  character can cover part of the app there.
+  every capture, your own screenshots and recordings included. `visible` lets your screenshots and recordings show it.
   `SLEIGHT_HAND_CAPTURE=hidden|visible` in the server's environment takes precedence over the file.
 - `sleight-mcp hand status` prints the state, the capture mode and whether the host is compiled. `sleight-mcp --doctor`
   prints the same after its turbo section.
@@ -512,13 +486,12 @@ character id), `stream` (boolean) and `labels` (`off`, `role` or `title`). Witho
 The hand stays off until you turn it on. `stream` defaults to false. `labels` defaults to `off`. Only your user can own
 the file. Its mode must be `600`, and symlinks are refused. Invalid fields make it unsafe.
 
-The plugin includes 13 MIT characters. Mabel, Biscuit, Rudy, Mo, Dennis, Nana and Hal appear in Everyday. Tsugi, Shizu,
-Bit, Kit, Yori and Tab appear in Anime. `sleight-mcp cursor list` and the picker mark them as built-in. Pick one, or run
+The plugin includes Tsugi, Shizu, Bit, Kit, Yori and Tab, six original MIT characters. `sleight-mcp cursor list` and the
+Cursor picker show them first, marked as built-in. Pick one to select its sprite, or run
 `sleight-mcp cursor style sprite tsugi`. The plugin leaves your cursor settings unchanged until you pick a style.
 Built-ins stay inside the plugin, never in your characters folder, and cannot be removed. Imports must use a different
 ID. A built-in whose hash fails is skipped by the picker, with a `PROBLEM` line in doctor. Both built-ins and imports
-pass the same validator and sandboxed image decoder. Without a saved style, the glove remains the default. Sprites are
-hidden until selected.
+pass the same validator and sandboxed image decoder. The ring remains the default look. Sprites are hidden until selected.
 
 Use `sleight-mcp cursor style ring` for the branded ring, `style seam` for plain Split Seam, or `style glove` for the hand.
 `sleight-mcp cursor style sprite <character-id>` selects a character only after its installed files pass validation.
@@ -528,45 +501,7 @@ leaves its sprite hidden. Once the host is compiled, `cursor check <id>` also ru
 Every style draws only while the hand is on (`sleight-mcp hand on`). Style changes take effect in a new sleight session
 and keep the hand's on/off setting. `sleight-mcp cursor status` prints whether the hand is on (and why not, such as an
 unsafe file), the style, selected character, stream, labels and host compilation state.
-Claude's shell can run `cursor status`, `list` and `check`; it cannot run `style`, `size`, `lines`, `import` or `remove`.
-
-Choose Character Size in the Cursor submenu, or run `sleight-mcp cursor size small|medium|stage`. Medium is the default.
-Small uses a 96 by 104 pt character box. Medium uses 192 by 208 pt. Stage uses 36% of the display's usable height, clamped to
-288 to 480 pt. `sleight-mcp cursor size 315` saves a custom height in points; numbers from 104 to 560 are accepted,
-including decimals. The same `size` field in `hand.json` accepts these three names or a JSON number.
-Size choices keep the selected style and the hand's on/off setting. They affect sprites in running sessions after the
-settings recheck. A saved size takes precedence over the default. `cursor status` prints the effective size.
-
-Medium and stage use seats on the target window even when `perch` is false. Small follows the saved `perch` choice.
-Medium tries every seat, including screen edges, before falling back to small. Stage tries every seat at each rung,
-starting at full stage, then three-quarter stage, medium and small. A built-in selected at stage or numeric size keeps
-medium art while its stage strips render on first use, without a download. Later sessions reuse the validated private
-cache. A render failure keeps medium art. Imported packs without stage strips, including Codex pets, show at medium.
-The Stage menu row says so.
-With `stageAttention: true` (the default), stage shrinks to medium while you work in another window and returns after
-8 seconds without input. Set it to false in `hand.json` to keep the requested size, subject to placement
-limits. Front-sit is off, with no saved setting to enable it. These sizes, the attention rule, first-use rendering and
-import fallback are current defaults pending owner decisions. Stage performance and capture exclusion still need live
-qualification.
-
-A missing pack contributes no picker row, and other imports appear as individual rows. Selecting a character still requires
-a validated installed pack. An older import with one of the 13 reserved
-built-in IDs stays on disk, but the built-in takes precedence. Rename the import's ID before importing it again.
-
-`cast` in `hand.json` is a list of up to 32 different character IDs, such as
-`"cast": ["tsugi", "biscuit"]`. Each ID has 1 to 48 lowercase letters, digits or hyphens. An empty list or an omitted
-`cast` keeps the selected `character`. Install the packs before listing them in a cast. `cursor status` prints the list.
-With a nonempty cast, each new session takes the character used by the fewest live sessions, breaking ties in list
-order. It keeps that choice through cursor-host restarts. A picker choice updates that session's allocation. Sessions
-sharing a character receive different one-letter badges. This rotation is the current default pending owner review.
-
-One session per display may draw at stage size. Others draw at medium or smaller where placement requires it. A hidden
-or ended owner releases its display slot. Session receipts bind the allocation to the relay's PID and process start time
-in UTC. They are private files swept when their owner is gone. Coordination files stay on disk. Process exit releases
-their kernel locks. Legacy receipts remain blocked while a live process could own them. A dead PID, or a process that
-started more than 2 seconds after the receipt was written, permits recovery.
-
-Size, cast and attention fields follow the file's owner, mode and symlink checks. An invalid value makes the file unsafe.
+Claude's shell can run `cursor status`, `list` and `check`; it cannot run `style`, `lines`, `import` or `remove`.
 
 The sprite style reads `perch` and `lines` from the same file. With `perch: true` (default false) the character is drawn
 on the target window's top edge instead of beside the ring: `sleight-mcp cursor style sprite <character-id> --perch`
@@ -582,24 +517,6 @@ the glove. `SLEIGHT_HAND=0` disables both the built-in cursor and its public str
 [cursor protocol](design/cursor-protocol.md) to local renderers. Ring aim and status frames work without that stream.
 `labels: role` uses generic nouns. `labels: title` opts into element names, truncated to 40 characters and filtered for
 URLs and file paths. Names can still contain page content. Secure input has no label or character count.
-
-### Pointing and window chips
-
-Drag the character's 16 pt badge to point at a window. sleight pauses while you drag and resumes after the drop,
-preserving an existing pause. A window drop adds one hint to Claude's next tool result with the app owner and
-window number, plus the point. Window titles are excluded. Hints expire after 60 s, with at least 2 s between delivered
-hints and at most one per result. A corrected drop replaces pending advice during that cooldown. A failed mouse-up cancels the drag and keeps any
-committed pause. An unfinished drag cancels after 30 s. App access and consent still need their usual approvals.
-The hint behavior is implemented pending the owner's decision on UI input to Claude.
-
-Sprite mode shows approval, payment and page-wait cues, a retry mark for repeated planning, and a carry prop for a
-copy or cut followed by paste in another window within 30 s. These cues contain no clipboard or page text.
-
-A 22 pt chip above a changed window counts completed action records, up to 999 actions on each of 32 windows. It hides
-when there is no safe space outside the content. Chips expire 10 minutes after turn end. With `record_runs` on, your
-hardware click opens the local replay in your default browser at that window's first recorded event. With recording
-off, clicks pass through. Capture holds, screen lock and display sleep hide the chips. They refresh after the hold ends,
-unlock or wake, subject to the same placement checks. Appearance, physical dragging and capture exclusion need live checks.
 
 ### Narration
 
@@ -730,8 +647,6 @@ Read the intended window with a standalone `let app = await cua.getApp("TextEdit
 For a document with a `file://` URL, sleight saves a private copy before the first possible edit.
 Open dialogs and same-app sheets can proceed without a copy. If a file was first seen after an
 action, a fresh standalone read takes a later copy, and review shows where undo starts.
-Keep and Undo decisions use the client's form. If the client cannot show that form, the review remains pending.
-The JXA panel does not offer Keep or Undo. A native guarded review card is not available in 1.6.0.
 Call `review_changes` with `op: "list"` to see text diffs or size/date summaries, or `op: "review"`
 to choose Keep, Undo or Later for each document in sleight's prompt. Only your prompt response can
 decide. Undo restores the saved copy if the file still matches the last agent action, then you
@@ -804,10 +719,6 @@ says `cua.getState()` doesn't list windows. Every engine session reads it. On 10
 100.2 s, so it stays off. The browser's keyboard new-tab sentence, once behind the same switch, is on for everyone.
 
 ## Result size
-
-`SLEIGHT_GLIDE_COMPACT_READS=1` opts the Glide engine into changed lines on repeat reads. It is off by default.
-Evaluated code receives full trees. Use `disableDiffing:true` to request a full display for one read.
-Model turn counts and live latency with this switch remain unmeasured.
 
 `SLEIGHT_RESULT_TRIM=1` (under A/B) leaves a split acquisition's tree out of a result when the same
 call returned a newer full one. It tied the default (24.8 s against 23.8 s a run, 2026-10-11). It

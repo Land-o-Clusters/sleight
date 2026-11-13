@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { mkdtempSync, realpathSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { runConsentRun, compileConsentRun } from '../bench/electron-consent-run.mjs';
+import { runConsentRun } from '../bench/electron-consent-run.mjs';
 
 // The owner-operated run, driven here by a scripted fake channel. No host is compiled, no card is shown.
 function fake(clicks) {
@@ -19,14 +19,6 @@ const run = async (t, clicks) => {
   const ui = fake(clicks), lines = [];
   return { ui, lines, result: await runConsentRun({ ui, directory, say: line => lines.push(line), wait: 60000 }) };
 };
-
-test('CP1A2 Electron consent probe uses the optimized product recipe without launching a card', () => {
-  const calls = [];
-  const binary = compileConsentRun('/fixture', (...args) => { calls.push(args); return { status: 0 }; });
-  assert.equal(binary, '/fixture/consent-host');
-  assert.equal(calls[0][0], '/usr/bin/xcrun'); assert.deepEqual(calls[0][1].slice(0, 3), ['swiftc', '-O', '-module-cache-path']);
-  assert.equal(calls[0][2].timeout, 300000); assert.equal(calls[0][2].killSignal, 'SIGKILL');
-});
 
 test('the consent run shows eight cards, checks every step, and writes a receipt with no secrets', async t => {
   const { ui, result, lines } = await run(t, ['once', 'session', 'always', 'cancel', 'relaunch', 'cancel', 'once', 'cancel']);

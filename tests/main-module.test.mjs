@@ -1,4 +1,3 @@
-import { assertChildStatus } from './fixtures/child-status.mjs';
 // Entry points start when their script path reaches the module through a symlink (a symlinked ~/.claude, or /tmp on macOS).
 // Before 1.4.2 a plain path comparison made them exit 0 with no output there.
 import { test } from 'node:test';
@@ -35,10 +34,8 @@ test('the launcher answers a command when its plugin folder is reached through a
   const dir = scratch(t);
   symlinkSync(plugin, join(dir, 'sleight'));
   const home = join(dir, 'home');
-  const isolate = new URL('fixtures/isolated-user.mjs', import.meta.url).href;
-  const preload = 'data:text/javascript,' + encodeURIComponent(`import { isolateUser } from ${JSON.stringify(isolate)}; isolateUser(${JSON.stringify(home)});`);
-  const run = spawnSync(process.execPath, ['--import', preload, join(dir, 'sleight', 'lib', 'launch.mjs'), 'turbo-state'],
-    { encoding: 'utf8', env: { PATH: process.env.PATH, HOME: home }, timeout: 30_000, killSignal: 'SIGKILL' });
-  assertChildStatus(run, 0, run.stderr);
+  const run = spawnSync(process.execPath, [join(dir, 'sleight', 'lib', 'launch.mjs'), 'turbo-state'],
+    { encoding: 'utf8', env: { PATH: process.env.PATH, HOME: home }, timeout: 30_000 });
+  assert.equal(run.status, 0, run.stderr);
   assert.equal(typeof JSON.parse(run.stdout).enabled, 'boolean');
 });

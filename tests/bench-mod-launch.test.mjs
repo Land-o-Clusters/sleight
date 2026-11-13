@@ -1,4 +1,3 @@
-import { assertChildStatus } from './fixtures/child-status.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { existsSync, mkdtempSync, mkdirSync, readFileSync, writeFileSync, rmSync } from 'node:fs';
@@ -96,12 +95,12 @@ test('the rounds.sh patch isolates plugin launches for plain, combined and turbo
   const dir = mkdtempSync(join(tmpdir(), 'bm1-fowl-'));
   t.after(() => rmSync(dir, { recursive: true, force: true }));
   mkdirSync(join(dir, 'tools'));
-  const original = spawnSync('/usr/bin/git', ['-C', cache, 'show', '6a12d60:tools/rounds.mjs'], { encoding: 'utf8', timeout: 30000, killSignal: 'SIGKILL' });
-  assertChildStatus(original, 0, original.stderr);
+  const original = spawnSync('/usr/bin/git', ['-C', cache, 'show', '6a12d60:tools/rounds.mjs'], { encoding: 'utf8' });
+  assert.equal(original.status, 0, original.stderr);
   const file = join(dir, 'tools/rounds.mjs');
   writeFileSync(file, original.stdout);
-  const applied = spawnSync('/usr/bin/git', ['apply', join(repo, 'bench/fowl/sleight-surface.patch')], { cwd: dir, encoding: 'utf8', timeout: 30000, killSignal: 'SIGKILL' });
-  assertChildStatus(applied, 0, applied.stderr);
+  const applied = spawnSync('/usr/bin/git', ['apply', join(repo, 'bench/fowl/sleight-surface.patch')], { cwd: dir, encoding: 'utf8' });
+  assert.equal(applied.status, 0, applied.stderr);
   const before = process.env.SLEIGHT_REPO;
   process.env.SLEIGHT_REPO = repo;
   t.after(() => { if (before === undefined) delete process.env.SLEIGHT_REPO; else process.env.SLEIGHT_REPO = before; });

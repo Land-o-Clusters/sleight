@@ -1,6 +1,6 @@
 {
   "id": "CK2",
-  "source": "<private-evidence>/race-1017/safari-sleight-b10-r3/form-checkout",
+  "source": "~/Projects/sleight-wt/race-1017/safari-sleight-b10-r3/form-checkout",
   "switch": "SLEIGHT_CK2", "tool": "js", "argumentPattern": "setValue",
   "resultExcludes": "sleight stopped before|call failed|partial input possible",
   "traceIncludesAny": "went to element|remap",

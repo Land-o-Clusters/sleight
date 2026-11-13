@@ -1,10 +1,9 @@
 // Browser-group admission runs under the group's live lock, after its owned window exists.
-import { realpathSync } from 'node:fs';
+import { existsSync, realpathSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, isAbsolute } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { setTimeout as delay } from 'node:timers/promises';
-import { benchmarkHeld, waitForBenchmark } from '../hold.mjs';
 import { beginWindowControl } from '../pass-hygiene.mjs';
 import { countedCover, COVER_MIN, OVERLAY_OWNER } from './real-gate-grade.mjs';
 
@@ -40,28 +39,27 @@ function fixtureCover(window, roots) {
 }
 
 export async function waitForBrowserUncovered(pid, { roots = benchmarkFixtureRoots(), snapshot, act, log = console.log,
-  coverWaits = new Map(), signal, warn = console.error, held = benchmarkHeld, wait = ms => delay(ms, undefined, { signal }) } = {}) {
+  coverWaits = new Map(), signal, warn = console.error, held = () => existsSync('/tmp/sleight-hold'), wait = ms => delay(ms, undefined, { signal }) } = {}) {
   const closed = new Set();
-  const check = () => signal?.throwIfAborted();
-  const boundary = () => waitForBenchmark({ held, signal, wait, log: event => log({ event: 'benchmark-hold', message: event }) });
-  const read = async () => {
-    for (;;) {
-      await boundary();
-      const cover = browserCovers(await snapshot(), pid);
-      // A hold can outlive the observed windows. Read again after it clears.
-      if (await boundary()) continue;
-      log({ event: 'browser-group-cover', frame: cover.frame, covering: cover.covering.map(({ document, title, ...window }) => window) });
-      return cover;
-    }
+  const check = () => {
+    signal?.throwIfAborted();
+    if (held()) throw Error('Benchmark hold is active');
   };
-  admission: for (let waits = 0;; waits++) {
-    await boundary();
+  const read = async () => {
+    check();
+    const cover = browserCovers(await snapshot(), pid);
+    check();
+    log({ event: 'browser-group-cover', frame: cover.frame, covering: cover.covering.map(({ document, title, ...window }) => window) });
+    return cover;
+  };
+  for (let waits = 0;; waits++) {
+    check();
     let mustWait = false, pending = [];
     try {
       let cover = await read();
       if (!cover.covering.length) return;
       for (const window of cover.covering) {
-        if (await boundary()) { waits--; continue admission; }
+        check();
         const key = `${window.pid}:${window.start}:${window.id}`;
         if (closed.has(key) || !fixtureCover(window, roots)) { mustWait = true; continue; }
         const result = await act({ action: 'close', finderOnly: true, pid: window.pid, start: window.start,
@@ -75,7 +73,7 @@ export async function waitForBrowserUncovered(pid, { roots = benchmarkFixtureRoo
       if (!cover.covering.length) return;
       pending = [...new Set(cover.covering.map(coverKey))];
     } catch (error) { check(); log({ event: 'browser-group-cover-error', error: error.message }); }
-    await boundary();
+    check();
     // The map belongs to the round, so a persistent owner window cannot cost three minutes per task.
     if (waits === 3 || (pending.length && pending.every(key => (coverWaits.get(key) ?? 0) >= 3))) {
       log({ event: 'browser-group-cover-cap', waits, ...(waits < 3 && { reason: 'round-cover-budget' }) });

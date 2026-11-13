@@ -77,9 +77,6 @@ function signedFixture(t, mode = 0o775, sign = { verify: true, flags: LIVE_FLAGS
   const f = fixture(t), apps = join(f.root, 'Applications'), name = 'Signed Browser';
   const bundle = join(apps, `${name}.app`), executable = join(bundle, `Contents/MacOS/${name}`);
   mkdirSync(dirname(executable), { recursive: true }); writeFileSync(executable, 'synthetic'); chmodSync(executable, mode);
-  // A private temporary parent can inherit group wheel. This fixture exercises
-  // the primary-group allowance, so give its executable that group explicitly.
-  chownSync(executable, -1, process.getgid());
   const requirement = 'identifier "com.example.signed" and anchor apple generic and certificate leaf[subject.OU] = "ABCDE12345"';
   f.executable = executable; f.options.config.executable = executable; f.codesign = [];
   f.status = () => ({ ...f.metadata, flags: sign.flags, arch: 'arm64', cdhash: CDHASH });
@@ -169,8 +166,7 @@ test('real codesign and kernel status: a group-writable ad hoc signed bundle is 
   // A fresh inode each time: the kernel caches a signature per vnode, so rewriting a launched file in place would kill the next launch.
   const place = (program, path) => { rmSync(path, { force: true }); copyFileSync(program, path); };
   const sign = async (path, flags, program = '/bin/sleep') => { place(program, path);
-    await run('/usr/bin/codesign', ['-f', '-s', '-', '-i', 'com.sleight.test', ...(flags ? ['-o', flags] : []), path], { timeout: 10000 });
-    chownSync(path, -1, process.getgid()); chmodSync(path, 0o775); };
+    await run('/usr/bin/codesign', ['-f', '-s', '-', '-i', 'com.sleight.test', ...(flags ? ['-o', flags] : []), path], { timeout: 10000 }); chmodSync(path, 0o775); };
   const attempt = async (requirement = 'identifier "com.sleight.test"', afterStart) => {
     const child = spawn(executable, ['30'], { stdio: 'ignore' }), closed = once(child, 'close');
     try {

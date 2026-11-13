@@ -9,7 +9,6 @@ import { LIGHT_TIMING, createLightReturn, lightReturnCode, lightReturnEnabled } 
 import { createRelay } from '../plugins/sleight/lib/relay.mjs';
 import { InputLease } from '../plugins/sleight/lib/input-lease.mjs';
 import { removeTemp, trackTemp } from '../scripts/temp-leftovers.mjs';
-import { visibleTypingTree } from './helpers/visible-typing-fixture.mjs';
 
 const AsyncFunction = Object.getPrototypeOf(async function () {}).constructor;
 const dir = trackTemp(mkdtempSync(join(tmpdir(), 'sleight-light-return-')));
@@ -31,20 +30,19 @@ const ok = { status: 'ok', matches: 1, window: 1, title: expected.title, url: ex
 // to the key, doesn't depend on how long the scheduler takes to run its timers.
 function fixture({ native = () => ok, current = () => tree(), onKey = () => {}, arm = true, burstMs = 400, realistic = false, virtualClock = false } = {}) {
   const calls = [], output = [], observed = [];
-  let keyAt = 0, typed = '';
+  let keyAt = 0;
   const since = () => Date.now() - keyAt;
   let ticks = 0;
   const light = createLightReturn({ directory: dir, ...(virtualClock ? { now: () => keyAt + ++ticks } : {}),
     ...(realistic ? {} : { delayMs: 0, intervalMs: 4, burstMs, timing }),
     observe: async request => { observed.push(request); return native(since()); } });
-  const raw = { async getAXState(options) { calls.push(['read', options]); return visibleTypingTree(current(since()), typed); },
+  const raw = { async getAXState(options) { calls.push(['read', options]); return current(since()); },
     async getScreenshot() { calls.push(['screenshot']); return {}; } };
   for (const name of ['click', 'pressKey', 'typeText', 'paste', 'setValue']) raw[name] = async (...args) => {
     if (name === 'pressKey') keyAt = Date.now();
     if (name === 'pressKey' && arm) light.keyPressed(window.appId);
     calls.push([name, ...args]);
     if (name === 'pressKey') onKey(args[0]);
-    if (['typeText', 'paste'].includes(name)) typed += args[0];
   };
   const run = async (code, options = {}) => {
     const info = light.begin(1, window);
