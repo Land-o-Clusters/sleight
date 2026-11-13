@@ -23,17 +23,17 @@ test('click, double and right clicks at screenshot pixels land at global points 
   const { frames, skipped } = planHandFrames(base('await app.click([400, 196]); await app.doubleClick([0, 0]); await app.rightClick([1310, 842]);'));
   assert.deepEqual(skipped, []);
   assert.deepEqual(frames, [
-    { kind: 'click', pid: 321, windowId: 77, at: [300, 298], path: [[300, 298]], delayMs: 0, beats: 1 },
-    { kind: 'double', pid: 321, windowId: 77, at: [100, 200], path: [[100, 200]], delayMs: WRITE_MS, beats: 2 },
-    { kind: 'right', pid: 321, windowId: 77, at: [755, 621], path: [[755, 621]], delayMs: 2 * WRITE_MS, beats: 1 },
+    { kind: 'click', pid: 321, windowId: 77, windowRect: [BOUNDS.X, BOUNDS.Y, BOUNDS.Width, BOUNDS.Height], at: [300, 298], path: [[300, 298]], delayMs: 0, beats: 1 },
+    { kind: 'double', pid: 321, windowId: 77, windowRect: [BOUNDS.X, BOUNDS.Y, BOUNDS.Width, BOUNDS.Height], at: [100, 200], path: [[100, 200]], delayMs: WRITE_MS, beats: 2 },
+    { kind: 'right', pid: 321, windowId: 77, windowRect: [BOUNDS.X, BOUNDS.Y, BOUNDS.Width, BOUNDS.Height], at: [755, 621], path: [[755, 621]], delayMs: 2 * WRITE_MS, beats: 1 },
   ]);
 });
 
 test('a scroll and a drag use the same conversion, the drag with its whole path', () => {
   const { frames } = planHandFrames(base('await app.scroll([200, 500], "down", 3); await app.drag([100, 100], [300, 200]);'));
   assert.deepEqual(frames, [
-    { kind: 'scroll', pid: 321, windowId: 77, at: [200, 450], path: [[200, 450]], delayMs: 0, beats: 1 },
-    { kind: 'drag', pid: 321, windowId: 77, at: [150, 250], path: [[150, 250], [250, 300]], delayMs: WRITE_MS, beats: 1 },
+    { kind: 'scroll', pid: 321, windowId: 77, windowRect: [BOUNDS.X, BOUNDS.Y, BOUNDS.Width, BOUNDS.Height], at: [200, 450], path: [[200, 450]], delayMs: 0, beats: 1 },
+    { kind: 'drag', pid: 321, windowId: 77, windowRect: [BOUNDS.X, BOUNDS.Y, BOUNDS.Width, BOUNDS.Height], at: [150, 250], path: [[150, 250], [250, 300]], delayMs: WRITE_MS, beats: 1 },
   ]);
 });
 

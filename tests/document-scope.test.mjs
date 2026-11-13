@@ -20,7 +20,7 @@ test('setValue on a text area sends no modifier-only key, which the engine refus
   const window = { title: 'Fixture', app: 'Fixture Editor', url: null };
   const events = [];
   const raw = {
-    getAXState: async () => 'Window: "Fixture", App: Fixture Editor.\n0 standard window Fixture\n1 text entry area (settable) ID: body\n2 text field (settable) ID: name',
+    getAXState: async () => 'Window: "Fixture", App: Fixture Editor.\n0 standard window Fixture\n\t1 text entry area (settable) ID: body\n\t2 text field (settable) ID: name',
     setValue: async (id, value) => { events.push(['write', id, value]); return 'written'; },
     pressKey: async key => events.push(['key', key]),
   };
@@ -63,7 +63,7 @@ test('a Safari title with a raw inch mark is one window, and a different title i
 
 test('file-only guard refuses another file while cached read and cancel paths remain usable', async () => {
   const writes = [];
-  const raw = { getAXState: async () => 'Window: "b.txt", App: TextEdit\nURL: file:///tmp/b.txt\n63 button Cancel, ID: CancelButton',
+  const raw = { getAXState: async () => 'Window: "b.txt", App: TextEdit\nURL: file:///tmp/b.txt\n0 standard window b.txt\n\t63 button Cancel, ID: CancelButton',
     typeText: async text => writes.push(text), click: async id => writes.push(id), pressKey: async key => writes.push(key) };
   const context = { app: raw, cua: { getApp: async () => raw }, nodeRepl: { write() {} } };
   const expected = { title: 'a.txt', app: 'TextEdit', url: 'file:///tmp/a.txt' };
@@ -152,7 +152,8 @@ test('a bare read works after const app, and post-action state follows the acted
 
 test("Claude's read doubles as the guard's: one engine read per read, none extra after the call", async () => {
   const outputs = [], calls = [];
-  const raw = { getAXState: async options => { calls.push(options); return 'Window: "a.txt", App: TextEdit'; }, click: async () => calls.push('click') };
+  const snapshot = 'Window: "a.txt", App: TextEdit\n0 standard window a.txt\n\t3 button Target';
+  const raw = { getAXState: async options => { calls.push(options); return snapshot; }, click: async () => calls.push('click') };
   const context = { cua: { getApp: async () => raw }, nodeRepl: { write: text => outputs.push(text) } };
   const window = { title: 'a.txt', app: 'TextEdit', url: null };
   const run = code => runInNewContext(`(async () => { ${code} })()`, context);
@@ -169,12 +170,12 @@ test("Claude's read doubles as the guard's: one engine read per read, none extra
   calls.length = 0; outputs.length = 0;
   await run(guardedCode('const s = await app.getAXState({ emit: false }); nodeRepl.write(String(s.length));', window));
   assert.equal(calls.length, 1, 'an unemitted read needs no extra read');
-  assert.deepEqual(outputs, [GUARD_OMIT_MARK + 'Window: "a.txt", App: TextEdit' + GUARD_END, '30']);
+  assert.deepEqual(outputs, [GUARD_OMIT_MARK + snapshot + GUARD_END, String(snapshot.length)]);
 });
 
 test('a window that only gains a URL mid-call stays the same window, unless document scope or change review is on', async () => {
   let url = null;
-  const raw = { getAXState: async () => `Window: "Untitled 6", App: TextEdit.\n0 standard window Untitled 6${url ? `, URL: ${url}` : ''}`,
+  const raw = { getAXState: async () => `Window: "Untitled 6", App: TextEdit.\n0 standard window Untitled 6${url ? `, URL: ${url}` : ''}\n\t2 text field (settable) Body`,
     setValue: async () => { url = 'file:///tmp/Untitled%206.txt'; }, pressKey: async () => {} };
   const window = { title: 'Untitled 6', app: 'TextEdit', url: null };
   // careful: these check the read before a key, which the default skips after the first action.
@@ -323,7 +324,7 @@ test('an un-awaited action that fails leaves no unhandled rejection, and the cal
   const onUnhandled = reason => unhandled.push(reason);
   process.on('unhandledRejection', onUnhandled);
   try {
-    const app = { getAXState: async () => 'Window: "a.txt", App: TextEdit\nURL: file:///tmp/a.txt',
+    const app = { getAXState: async () => 'Window: "a.txt", App: TextEdit\nURL: file:///tmp/a.txt\n0 standard window a.txt\n\t9 button Target',
       click: async () => { throw new Error('element 9 is gone'); }, pressKey: async () => {} };
     const code = guardedCode('app.click(9); await new Promise(r => setTimeout(r, 5)); await app.pressKey("a");', { title: 'a.txt', app: 'TextEdit', url: 'file:///tmp/a.txt' });
     await runInNewContext(`(async () => { ${code} })()`, { app, cua: { getApp: async () => app }, setTimeout, nodeRepl: { write: text => output.push(text) } });

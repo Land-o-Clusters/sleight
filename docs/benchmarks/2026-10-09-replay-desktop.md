@@ -22,7 +22,7 @@ was taken. The pure replay helpers load with the mod.
 
 ## Runs
 
-All commands below ran in `~/Projects/sleight-wt/replay-desktop`. Failed development attempts
+All commands below ran in `<private-evidence>/replay-desktop`. Failed development attempts
 are included. No live app run started: the shared live lock was occupied at the live preflight.
 The hold file was absent at the check preflights. No permission prompt or app dialog was answered.
 

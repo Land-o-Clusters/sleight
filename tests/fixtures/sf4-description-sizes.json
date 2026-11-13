@@ -1,0 +1,128 @@
+[
+  {
+    "variant": "computer",
+    "dot": false,
+    "batch": true,
+    "lean": false,
+    "before": 988
+  },
+  {
+    "variant": "computer",
+    "dot": false,
+    "batch": true,
+    "lean": true,
+    "before": 1193
+  },
+  {
+    "variant": "computer",
+    "dot": false,
+    "batch": "merge",
+    "lean": false,
+    "before": 1107
+  },
+  {
+    "variant": "computer",
+    "dot": false,
+    "batch": "merge",
+    "lean": true,
+    "before": 1312
+  },
+  {
+    "variant": "computer",
+    "dot": false,
+    "batch": "nosavestop",
+    "lean": false,
+    "before": 941
+  },
+  {
+    "variant": "computer",
+    "dot": false,
+    "batch": "nosavestop",
+    "lean": true,
+    "before": 1146
+  },
+  {
+    "variant": "browser",
+    "dot": false,
+    "batch": true,
+    "lean": false,
+    "before": 1527
+  },
+  {
+    "variant": "browser",
+    "dot": false,
+    "batch": true,
+    "lean": true,
+    "before": 1732
+  },
+  {
+    "variant": "browser",
+    "dot": false,
+    "batch": "merge",
+    "lean": false,
+    "before": 1646
+  },
+  {
+    "variant": "browser",
+    "dot": false,
+    "batch": "merge",
+    "lean": true,
+    "before": 1851
+  },
+  {
+    "variant": "browser",
+    "dot": false,
+    "batch": "nosavestop",
+    "lean": false,
+    "before": 1480
+  },
+  {
+    "variant": "browser",
+    "dot": false,
+    "batch": "nosavestop",
+    "lean": true,
+    "before": 1685
+  },
+  {
+    "variant": "browser",
+    "dot": true,
+    "batch": true,
+    "lean": false,
+    "before": 1685
+  },
+  {
+    "variant": "browser",
+    "dot": true,
+    "batch": true,
+    "lean": true,
+    "before": 1890
+  },
+  {
+    "variant": "browser",
+    "dot": true,
+    "batch": "merge",
+    "lean": false,
+    "before": 1804
+  },
+  {
+    "variant": "browser",
+    "dot": true,
+    "batch": "merge",
+    "lean": true,
+    "before": 2009
+  },
+  {
+    "variant": "browser",
+    "dot": true,
+    "batch": "nosavestop",
+    "lean": false,
+    "before": 1638
+  },
+  {
+    "variant": "browser",
+    "dot": true,
+    "batch": "nosavestop",
+    "lean": true,
+    "before": 1843
+  }
+]

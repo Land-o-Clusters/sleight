@@ -1,8 +1,10 @@
 // Production shell launch and cleanup, with an offline engine and no host health probes.
+import './isolated-launcher-user.mjs';
 import { run } from '../../plugins/sleight/lib/launch.mjs';
+import { emptyApprovalStorage } from './preapproved-storage.mjs';
 import { createPaymentCard } from '../../plugins/sleight/lib/payment-card.mjs';
 import { appendFileSync } from 'node:fs';
-await run({ shellRoute: true, leaseDirectory: process.argv[2],
+await run({ shellRoute: true, leaseDirectory: process.argv[2], approvalStorage: emptyApprovalStorage,
   directBrowser: new Proxy({}, { get() { throw new Error('shell launcher touched the supplied directBrowser'); } }),
   paymentCardFactory: options => createPaymentCard({ ...options,
     timeoutMs: process.env.SLEIGHT_TEST_CARD_MODE === 'unanswered' ? 150 : 120000,

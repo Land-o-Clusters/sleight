@@ -2,7 +2,7 @@
 import { readFile as readText } from 'node:fs/promises';
 import { mkdtempSync, realpathSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { isAbsolute, join } from 'node:path';
 import { inspectReleaseVersion } from './release-version.mjs';
 import { isReleaseVersion } from '../plugins/sleight/lib/version.mjs';
 import { parseLinuxReceipt, runLinuxPreflight, runOwnedCommand } from './linux-preflight.mjs';
@@ -15,6 +15,8 @@ export const manifestFiles = Object.freeze([
   'plugins/sleight/.cursor-plugin/plugin.json', '.claude-plugin/marketplace.json',
   '.agents/plugins/marketplace.json', '.cursor-plugin/marketplace.json',
 ]);
+// The host smoke's fixed cases (scripts/host-smoke.mjs smokeCases, kept equal by its test). A shrunken list fails.
+export const hostSmokeCases = Object.freeze({ allowed: 15, refused: 7 });
 const shaPattern = /^(?:[a-f0-9]{40}|[a-f0-9]{64})$/;
 const validTag = tag => typeof tag === 'string' && tag.startsWith('v') && isReleaseVersion(tag.slice(1));
 const validRef = ref => typeof ref === 'string' && /^[A-Za-z0-9][A-Za-z0-9._/-]*$/.test(ref)
@@ -23,13 +25,14 @@ const placeholder = /\b(?:TODO|TBD|FIXME|XXX|CHANGEME)\b|\bv?X\.Y\.Z\b|\{\{[^}]+
 
 // No exception text, document text, runner output or private match is copied to the result.
 export async function preflight({ root = process.cwd(), mode = 'release', tag, version, historyBase = 'origin/main',
-  linuxRuntime = 'docker', runner, readFile = path => readText(path, 'utf8'), identity = privateIdentity(), privateTerms = [], privateTermsFile } = {}) {
+  linuxRuntime = 'docker', hostSmokeConfig, runner, readFile = path => readText(path, 'utf8'), identity = privateIdentity(), privateTerms = [], privateTermsFile } = {}) {
   const result = { ok: false, mode: mode === 'candidate' ? 'candidate' : 'release', releaseReady: false, failures: [] };
   const fail = (check, code, details = {}) => result.failures.push({ check, code, ...details });
   const requested = mode === 'release' && validTag(tag) ? tag.slice(1) : version;
   if (!['release', 'candidate'].includes(mode) || !isReleaseVersion(requested)
     || (mode === 'release' && (!validTag(tag) || version !== undefined))
     || (mode === 'candidate' && tag !== undefined) || !validRef(historyBase) || !['docker', 'colima'].includes(linuxRuntime)
+    || (hostSmokeConfig !== undefined && (typeof hostSmokeConfig !== 'string' || !isAbsolute(hostSmokeConfig)))
     || typeof runner !== 'function' || (privateTermsFile !== undefined && typeof privateTermsFile !== 'string')
     || (!privateTermsFile && (!Array.isArray(privateTerms) || !privateTerms.length
       || privateTerms.some(term => typeof term !== 'string' || !term.trim())))) {
@@ -159,6 +162,18 @@ export async function preflight({ root = process.cwd(), mode = 'release', tag, v
   if (history !== 'Release history scan: 0 added line(s) contain private identity data.') {
     fail('history', 'findings-or-invalid-summary'); return result;
   }
+  // The release tree's mod in a real Claude Code: ordinary new-path commands pass, protected writes refuse (1.6.0 incident).
+  const smoke = await run('host-smoke', hostSmokeConfig ? { configDir: hostSmokeConfig } : {});
+  if (smoke === null) return result;
+  try {
+    const summary = JSON.parse(smoke.split('\n').at(-1));
+    if (summary.ok !== true || summary.pluginVersion !== requested || summary.treeCommit !== head || summary.treeDirty !== false
+      || summary.allowed !== hostSmokeCases.allowed || summary.refused !== hostSmokeCases.refused
+      || summary.cases !== hostSmokeCases.allowed + hostSmokeCases.refused || summary.counts?.pass !== summary.cases
+      || summary.counts?.fail !== 0 || summary.counts?.inconclusive !== 0) throw Error();
+    result.hostSmoke = { cases: summary.cases, pass: summary.counts.pass,
+      claudeCode: /^\d+\.\d+\.\d+ \(Claude Code\)$/.test(summary.claudeCode ?? '') ? summary.claudeCode : null };
+  } catch { fail('host-smoke', 'invalid-smoke-summary'); return result; }
   const linux = await run('linux', { head });
   if (linux === null) return result;
   try {
@@ -193,9 +208,14 @@ export function createReviewedRunner(root, { execute = runOwnedCommand, signal, 
         if (!shaPattern.test(request.base ?? '') || !shaPattern.test(request.head ?? '')) throw Error('Invalid commits');
         args = ['merge-base', '--is-ancestor', request.base, request.head]; break;
       case 'hub': command = process.execPath; args = ['bench/results-hub.mjs', '--check']; timeout = 120_000; break;
+      // Live: headless Claude Code calls on an isolated logged-in config (the bench sleight arm unless one is named).
+      case 'host-smoke':
+        if (request.configDir !== undefined && (typeof request.configDir !== 'string' || !isAbsolute(request.configDir))) throw Error('Invalid config');
+        command = process.execPath; timeout = 20 * 60_000;
+        args = ['scripts/host-smoke.mjs', '--plugin-dir', join(root, 'plugins', 'sleight'), ...(request.configDir ? ['--config', request.configDir] : [])]; break;
       case 'cell-parser': command = process.execPath; args = ['bench/compat/parser.mjs']; break;
       case 'sources': args = ['ls-files', '--error-unmatch', '--', 'scripts/release-history-scan.mjs', 'scripts/linux-preflight.mjs', 'bench/results-hub.mjs',
-        'bench/compat/parser.mjs',
+        'bench/compat/parser.mjs', 'scripts/host-smoke.mjs', 'bench/preflight.mjs',
         ...(linuxRuntime === 'colima' ? ['scripts/linux-preflight-colima.mjs'] : [])]; break;
       case 'history':
         if (!/^(?:[a-f0-9]{40}|[a-f0-9]{64})\.\.(?:[a-f0-9]{40}|[a-f0-9]{64})$/.test(request.range ?? '')) throw Error('Invalid range');
@@ -239,7 +259,7 @@ export async function main(args = process.argv.slice(2), dependencies = {}) {
     const options = { linuxRuntime: 'docker' }, seen = new Set();
     for (let index = 0; index < args.length; index += 2) {
       const flag = args[index], value = args[index + 1];
-      if (!['--tag', '--candidate', '--history-base', '--private-terms', '--linux-runtime'].includes(flag)
+      if (!['--tag', '--candidate', '--history-base', '--private-terms', '--linux-runtime', '--host-smoke-config'].includes(flag)
         || seen.has(flag) || !value || value.startsWith('--')) throw Error();
       seen.add(flag);
       if (flag === '--tag') { options.mode = 'release'; options.tag = value; }
@@ -247,6 +267,7 @@ export async function main(args = process.argv.slice(2), dependencies = {}) {
       if (flag === '--history-base') options.historyBase = value;
       if (flag === '--private-terms') options.privateTermsFile = value;
       if (flag === '--linux-runtime') options.linuxRuntime = value;
+      if (flag === '--host-smoke-config') options.hostSmokeConfig = value;
     }
     if (seen.has('--tag') === seen.has('--candidate') || !seen.has('--private-terms') || !['docker', 'colima'].includes(options.linuxRuntime)) throw Error();
     const root = dependencies.root ?? process.cwd();

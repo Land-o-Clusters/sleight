@@ -15,7 +15,7 @@ const verdict = ({ issues, issuesOmitted, ...audit }) => audit;
 for (const [code, reason, expression] of [
   ['await cua.getApp({ windowId: 0 }).catch(e => null);', 'unknown-call', 'cua.getApp({ windowId: 0 }).catch(e => null)'],
   ['globalThis.srcApp = app;', 'property-assignment', 'globalThis.srcApp = app'],
-  ['const n = "x".codePointAt(0);', 'unknown-call', '"x".codePointAt(0)'],
+  ['const n = "x".unknownRead(0);', 'unknown-call', '"x".unknownRead(0)'],
 ]) test(`method audit identifies ${reason} without changing the grade: ${code}`, { skip }, () => {
   const transcript = drag + '\n' + call(code, 'inspection');
   const actual = explain(transcript);

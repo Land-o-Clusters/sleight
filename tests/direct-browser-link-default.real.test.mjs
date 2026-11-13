@@ -1,3 +1,4 @@
+import { testChromiumExecutable, launchTestChromiumContext, closeTestChromium } from './fixtures/chromium-isolated.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createServer } from 'node:http';
@@ -13,8 +14,7 @@ const { inprocess } = require('../plugins/sleight/vendor/playwright-core/lib/cor
 const spec = JSON.parse(readFileSync(new URL('../plugins/sleight/vendor/playwright-core/browsers.json', import.meta.url)))
   .browsers.find(b => b.name === 'chromium');
 const executable = process.platform === 'darwin'
-  ? join(homedir(), 'Library/Caches/ms-playwright', 'chromium-' + spec.revision, 'chrome-mac-' + process.arch,
-    'Google Chrome for Testing.app/Contents/MacOS/Google Chrome for Testing')
+  ? testChromiumExecutable({ headless: false, revision: spec.revision })
   : join(homedir(), 'Library/Caches/ms-playwright', 'chromium-' + spec.revision, 'chrome-linux64/chrome');
 const skip = process.env.SLEIGHT_LIVE_DOM_TEST !== '1' ? 'default-link qualification belongs to the host runner'
   : !existsSync(executable) ? 'pinned Chromium executable unavailable' : false;
@@ -46,7 +46,9 @@ test(`real new-tab link stays background-only with ${handler}`, {
   });
   server.on('connection', socket => { sockets.add(socket); socket.once('close', () => sockets.delete(socket)); });
   t.after(async () => {
-    try { await registry?.endTurn(); await context?.close(); }
+    try { await closeTestChromium(context, async () => {
+      try { await registry?.endTurn(); } finally { await context?.close(); }
+    }); }
     finally {
       for (const socket of sockets) socket.destroy();
       if (server.listening) await new Promise(resolve => server.close(resolve));
@@ -57,7 +59,7 @@ test(`real new-tab link stays background-only with ${handler}`, {
   });
   await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
   const origin = 'http://127.0.0.1:' + server.address().port;
-  context = await inprocess.playwright.chromium.launchPersistentContext(profile, { executablePath: executable, headless: true,
+  context = await launchTestChromiumContext(inprocess.playwright.chromium, profile, { executablePath: executable, headless: true,
     args: ['--remote-debugging-port=0', '--remote-debugging-address=127.0.0.1'] });
   const browser = context.browser(), session = await browser.newBrowserCDPSession(), calls = [];
   const send = session.send.bind(session);

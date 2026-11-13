@@ -15,9 +15,9 @@ import { claudeHostManifest } from './real-browser.mjs';
 
 // The sleight arm's MCP server gets an explicit env, so a trace the launching shell asked for stopped at the harness
 // (no relay trace in the 36 Firefox b3 runs, 2026-10-18). SLEIGHT_TRACE goes through, and SLEIGHT_TS3=1, SLEIGHT_FS=1 and
-// SLEIGHT_BROWSER_CORE=1 for their A/Bs, SLEIGHT_MC1=0|1, SLEIGHT_RS (including invalid values so they stay strict),
+// SLEIGHT_SF4=1 and SLEIGHT_BROWSER_CORE=1 for their A/Bs, SLEIGHT_MC1=0|1, SLEIGHT_RS (including invalid values so they stay strict),
 // and SLEIGHT_WORKFLOW_DOCS=0 (CC6's baseline); no other host variable does.
-const AB_FLAGS = ['SLEIGHT_TS3', 'SLEIGHT_FS', 'SLEIGHT_BROWSER_CORE'];
+const AB_FLAGS = ['SLEIGHT_TS3', 'SLEIGHT_FS', 'SLEIGHT_SF4', 'SLEIGHT_BROWSER_CORE'];
 export function traceEnv(host = process.env) {
   return { ...(typeof host.SLEIGHT_TRACE === 'string' && host.SLEIGHT_TRACE ? { SLEIGHT_TRACE: host.SLEIGHT_TRACE } : {}),
     ...Object.fromEntries(AB_FLAGS.filter(key => host[key] === '1').map(key => [key, '1'])),
@@ -113,7 +113,7 @@ export function realAgentSetup({ task, surface, dir, realBrowser, armHome, dryRu
   model = 'haiku', effort = 'high', settings = join(dir, 'settings.json'), mcpRoot, armRoot, chromeFiles }) {
   if (!REAL_SURFACES.includes(surface)) throw Error(`Unknown real-browser arm: ${surface}`);
   const browserName = { chrome: 'Chrome', helium: 'Helium', firefox: 'Firefox', safari: 'Safari' }[realBrowser.browser];
-  const prompt = task.prompt.replaceAll('{browser}', browserName).replaceAll('{repo}', repo).replaceAll('{out}', dir) +
+  const prompt = task.prompt.replaceAll('{sf4Marker}', encodeURIComponent(realBrowser.marker)).replaceAll('{browser}', browserName).replaceAll('{repo}', repo).replaceAll('{out}', dir) +
     `\n\nEnd your answer with one line starting with RESULT: that states ${task.result}.`;
   if (surface === 'cursor-cu') {
     if (realBrowser.browser !== 'chrome') throw Error('Cursor desktop qualification is Chrome only');
@@ -150,7 +150,8 @@ export function realAgentSetup({ task, surface, dir, realBrowser, armHome, dryRu
         ...(process.env.SLEIGHT_MT === '0' || process.env.SLEIGHT_MT === '1' ? { SLEIGHT_MT: process.env.SLEIGHT_MT } : {}) } })
     : nativeBrowserSetup({ surface, repo, dir, realBrowser, armHome, dryRun, env });
   // The engine arm identifies the window natively. The turbo arm cannot (its tools show tabs, not windows), so it gets its own tools' truth.
-  const fullPrompt = arm.promptPrefix + (engine ? windowPrompt(realBrowser, { browserCore: as3WindowPrompt }) : kind === 'sleight-turbo' ? turboWindowPrompt(realBrowser) : '') + prompt;
+  const sf4UnknownApp = engine && task.sf4UnknownApp === true;
+  const fullPrompt = arm.promptPrefix + (engine ? windowPrompt(realBrowser, { browserCore: as3WindowPrompt, unknownApp: sf4UnknownApp }) : kind === 'sleight-turbo' ? turboWindowPrompt(realBrowser) : '') + prompt;
   if (isCodexSleightSurface(surface)) return codexSleightBrowserSetup({ arm, prompt: fullPrompt, surface, kind, dir, realBrowser });
   // Pinned: the same login reported "default" at 17:03 and "auto" from 20:05 on 2026-10-17, and under auto Claude in
   // Chrome sent every page action to a prompt in Chrome that nobody answers. allowedTools still lists each arm's tools.
@@ -165,7 +166,7 @@ export function realAgentSetup({ task, surface, dir, realBrowser, armHome, dryRu
       ...(engine ? { PreToolUse: [{ matcher: 'mcp__plugin_sleight_computer__select_window', hooks: [{ type: 'command', timeout: 5,
         command: `node "${join(repo, 'bench/fowl/origin-hook.mjs')}"` }] }] } : {}) } } : arm.settings, env: { ...arm.env, ANTHROPIC_SMALL_FAST_MODEL: modelId(model) }, allowed: arm.allowed,
     ...(arm.chrome ? { chrome: arm.chrome } : {}),
-    metadata: { ...arm.metadata, browser: realBrowser.browser, profile: realBrowser.profileName || realBrowser.profileRoot,
+    metadata: { ...arm.metadata, ...(sf4UnknownApp ? { sf4UnknownApp: true } : {}), browser: realBrowser.browser, profile: realBrowser.profileName || realBrowser.profileRoot,
       profileMode: realBrowser.profileMode || 'fresh', ...(realBrowser.profileFolder ? { profileFolder: realBrowser.profileFolder } : {}),
       browserVersion: realBrowser.version ?? null, permissionMode: 'default', headless: false, focus: surface === 'sleight-turbo' ? 'host monitor' : 'not measured' } };
   return engine || surface === 'sleight-turbo' ? sleightPluginLaunch(plan) : plan;

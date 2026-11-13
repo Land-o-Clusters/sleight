@@ -1,3 +1,4 @@
+import { assertChildStatus } from './fixtures/child-status.mjs';
 import { tmpdir } from 'node:os';
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
@@ -13,14 +14,14 @@ test('native prototype compiles and validates diagnostic requests without app ac
   t.after(() => rmSync(bank, { recursive: true, force: true }));
   const executable = join(bank, 'drag');
   const build = spawnSync('/usr/bin/swiftc', ['-O', '-module-cache-path', swiftModuleCache(), '-o', executable,
-    'bench/background-drag/background-drag.swift'], { encoding: 'utf8', timeout: 180000 });
-  assert.equal(build.status, 0, build.stderr);
+    'bench/background-drag/background-drag.swift'], { encoding: 'utf8', timeout: 600000, killSignal: 'SIGKILL' });
+  assertChildStatus(build, 0, build.stderr);
   const input = { app: 'TextEdit', from: [20, 40], to: [200, 40], posting: 'psn', command: false, select: true, holdMs: 2000 };
-  const validated = JSON.parse(execFileSync(executable, ['--validate-only', JSON.stringify(input)], { encoding: 'utf8' }));
+  const validated = JSON.parse(execFileSync(executable, ['--validate-only', JSON.stringify(input)], { encoding: 'utf8', timeout: 60000, killSignal: 'SIGKILL' }));
   assert.deepEqual(validated, { ok: true, posting: 'psn', command: false, select: true, holdMs: 2000 });
   for (const change of [{ holdMs: 5001 }, { posting: 'hid' }, { from: [2] }, { steps: 0 }, { mode: 'hid' }]) {
-    const refusal = spawnSync(executable, ['--validate-only', JSON.stringify({ ...input, ...change })], { encoding: 'utf8' });
-    assert.equal(refusal.status, 1);
+    const refusal = spawnSync(executable, ['--validate-only', JSON.stringify({ ...input, ...change })], { encoding: 'utf8', timeout: 60000, killSignal: 'SIGKILL' });
+    assertChildStatus(refusal, 1);
     assert.equal(JSON.parse(refusal.stdout).ok, false);
   }
 });

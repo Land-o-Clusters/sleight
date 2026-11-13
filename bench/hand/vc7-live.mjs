@@ -7,6 +7,7 @@ import { homedir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { promisify } from 'node:util';
+import { helperCompileArgs } from '../../plugins/sleight/lib/direct-browser/host-cache.mjs';
 
 const execute = promisify(execFile);
 export const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '../..');
@@ -22,9 +23,9 @@ export const tilde = text => String(text).split(home).join('~');
 export const stamp = (date = new Date()) => date.toISOString().replace(/[:.]/g, '-');
 export const logsRoot = () => join(home, 'Library/Logs/sleight');
 
-/** The compiler command, as host.mjs builds the product's host (no -O), so costs match the shipped build. */
+/** Consent-host uses the product recipe; capture and recorder helpers keep their existing flags. */
 export function compileArgs(source, binary, moduleCache) {
-  return ['swiftc', '-module-cache-path', moduleCache, source, '-o', binary];
+  return helperCompileArgs(source === HOST_SOURCE ? 'consent-host' : 'benchmark-helper', { sources: [source], binary, moduleCache });
 }
 export async function compileSwift(source, binary) {
   const { swiftModuleCache } = await import('../swift-cache.mjs');
@@ -73,8 +74,8 @@ export async function spriteSupport(hostBin, frameLine, env) {
 }
 
 /** Starts a hand host; hosts (a Set) collects every child so a cleanup can kill what is left. */
-export async function startHandHost({ hostBin, capture, style, env = {}, hosts }) {
-  const child = spawn(hostBin, hostArgs({ capture, style }), { stdio: ['pipe', 'ignore', 'ignore'], env: { ...process.env, ...env } });
+export async function startHandHost({ hostBin, capture, style, env = {}, hosts, spawnChild = spawn, observationPipe = false }) {
+  const child = spawnChild(hostBin, hostArgs({ capture, style }), { stdio: ['pipe', 'ignore', 'ignore', ...observationPipe ? ['pipe', 'pipe'] : []], env: { ...process.env, ...env } });
   hosts?.add(child);
   await new Promise((ok, no) => { child.once('spawn', ok); child.once('error', no); });
   const exited = new Promise(r => child.once('exit', (code, signal) => r({ code, signal })));

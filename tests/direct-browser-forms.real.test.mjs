@@ -1,3 +1,4 @@
+import { testChromiumExecutable, launchTestChromium } from './fixtures/chromium-isolated.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createServer } from 'node:http';
@@ -12,9 +13,7 @@ const live = process.env.SLEIGHT_LIVE_DOM_TEST === '1';
 const cache = join(homedir(), 'Library/Caches/sleight-bench/fowlbrowser');
 const spec = JSON.parse(readFileSync(new URL('../plugins/sleight/vendor/playwright-core/browsers.json', import.meta.url)))
   .browsers.find(b => b.name === 'chromium-headless-shell');
-const platform = process.platform === 'darwin' ? 'mac-' + process.arch : 'linux64';
-const executable = join(homedir(), 'Library/Caches/ms-playwright', 'chromium_headless_shell-' + spec.revision,
-  'chrome-headless-shell-' + platform, 'chrome-headless-shell');
+const executable = testChromiumExecutable({ revision: spec.revision });
 const skip = !live ? 'opt-in real-page qualification belongs to sleight-arch' : !existsSync(executable)
   ? 'the pinned Chromium build is missing' : !existsSync(join(cache, 'test/forms/site/travel.html'))
     ? 'the read-only demo fixture source is missing' : false;
@@ -41,7 +40,7 @@ async function fixture(t, route, { retryGuard = false } = {}) {
   await new Promise((resolve, reject) => { server.once('error', reject); server.listen(0, '127.0.0.1', resolve); });
   origin = 'http://127.0.0.1:' + server.address().port;
   const { chromium } = await import('../plugins/sleight/vendor/playwright-core/index.mjs');
-  browser = await chromium.launch({ headless: true, executablePath: executable });
+  browser = await launchTestChromium(chromium, { headless: true, executablePath: executable });
   const page = await browser.newPage({ viewport: { width: 1200, height: 900 } });
   if (route === 'checkout') await page.route('**/payment.html?*', request => request.fulfill({
     contentType: 'text/html', body: readFileSync(join(cache, 'test/forms/site/payment.html'), 'utf8') }));
@@ -150,13 +149,29 @@ test('v3 real travel fills ordinary and dependent fields, chooses readonly dates
     checkIn: dates[0], checkOut: dates[1], adults: 1, children: 0, country: 'Japan', city: 'Osaka', airport: firstAirport, seat: '1A' });
 });
 
-test('v3 real settings fills closed switch, grouped multi-select, slider and reorder before one submit', { skip }, async t => {
-  const f = await fixture(t, 'settings'), order = ['Security', 'Mentions', 'Billing', 'Reminders', 'Product updates'];
-  await f.fill([['#reference', 'V5-SETTINGS'], ['#twoFactor', true], ['#languages', ['Japanese', 'Korean']], ['#volume', 72], ['#prio', order]], 'button[type="submit"]');
-  assert.deepEqual(await f.page.locator('#prio li').allTextContents(), order.map(v => '⋮⋮' + v));
+test('v3 real settings fills closed switch, grouped multi-select and slider before one submit', { skip }, async t => {
+  const f = await fixture(t, 'settings');
+  const before = await f.page.locator('#prio li').allTextContents();
+  await f.fill([['#reference', 'V5-SETTINGS'], ['#twoFactor', true], ['#languages', ['Japanese', 'Korean']], ['#volume', 72]], 'button[type="submit"]');
+  assert.deepEqual(await f.page.locator('#prio li').allTextContents(), before);
   await f.click('#do-save'); const post = await f.posted();
   assert.equal(post.path, '/submit/settings'); assert.equal(post.data.twoFactor, true); assert.equal(post.data.volume, 72);
-  assert.deepEqual(post.data.languages, ['ja', 'ko']); assert.deepEqual(post.data.priorities, order);
+  assert.deepEqual(post.data.languages, ['ja', 'ko']); assert.deepEqual(post.data.priorities, before.map(v => v.replace(/^⋮⋮/, '').trim()));
+});
+
+test('v3 real settings refuses legacy reorder without pointer input or submission', { skip }, async t => {
+  const f = await fixture(t, 'settings'), order = ['Security', 'Mentions', 'Billing', 'Reminders', 'Product updates'];
+  const before = await f.page.locator('#prio li').allTextContents();
+  await f.page.evaluate(() => { window.dragPresses = 0; document.addEventListener('pointerdown', () => window.dragPresses++); });
+  const ref = await f.ref('#prio'), submit = await f.ref('button[type="submit"]');
+  await f.page.ariaSnapshot({ mode: 'ai' });
+  const result = await f.fillFields(f.tab, [{ ref, value: order }], { submit }, f.ctx);
+  assert.equal(result.rows[0].status, 'failed');
+  assert.match(result.rows[0].reason, /field unavailable; read the page before retrying/);
+  assert.equal(result.submitted.status, 'not reached');
+  assert.deepEqual(await f.page.locator('#prio li').allTextContents(), before);
+  assert.equal(await f.page.evaluate(() => window.dragPresses), 0);
+  assert.equal(f.posts.length, 0);
 });
 
 test('v3 real settings sets the slider from a numeric string directly, with the page seeing input and change', { skip }, async t => {

@@ -1,10 +1,11 @@
+import { offlineDoctor } from './fixtures/preapproved-storage.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { chmodSync, lstatSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, symlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { registerTemp, trackTemp } from '../scripts/temp-leftovers.mjs';
-import { handConfigPath, handDoctorLines, handSetting, handStatusLines, readHandConfig } from '../plugins/sleight/lib/hand/settings.mjs';
+import { characterCastValid, handConfigPath, handDoctorLines, handSetting, handStatusLines, readHandConfig } from '../plugins/sleight/lib/hand/settings.mjs';
 import { handCommand } from '../plugins/sleight/lib/hand/command.mjs';
 import { writeHandSetting } from '../plugins/sleight/lib/hand/command.mjs';
 
@@ -40,10 +41,40 @@ function world(t) {
   return { home, path, lines, command, setting, write, output: () => lines.join('') };
 }
 
+test('size and cast validate strictly, survive unrelated writes and default to medium', t => {
+  const w = world(t);
+  assert.equal(w.setting().size, 'medium');
+  for (const size of ['small', 'medium', 'stage', 104, 315.5, 560]) {
+    w.write({ version: 1, enabled: true, size, cast: ['tsugi', 'biscuit'], stageAttention: false });
+    assert.equal(w.setting().size, size);
+    assert.deepEqual(w.setting().cast, ['tsugi', 'biscuit']);
+    assert.equal(w.setting().stageAttention, false);
+    writeHandSetting({ capture: 'visible' }, { path: w.path });
+    assert.equal(w.setting().size, size); assert.equal(w.setting().stageAttention, false);
+    assert.deepEqual(w.setting().cast, ['tsugi', 'biscuit']);
+  }
+  for (const extra of [...['large', '315', 103.99, 560.01, null, true, [], {}].map(size => ({ size })),
+    ...[null, 'tsugi', [null], [''], ['Tsugi'], ['../cat'], ['a'.repeat(49)], ['tsugi', 'tsugi'], Array.from({ length: 33 }, (_, i) => `cat-${i}`)].map(cast => ({ cast })),
+    ...[null, 'off', 0].map(stageAttention => ({ stageAttention }))]) {
+    w.write({ version: 1, enabled: true, ...extra });
+    assert.equal(readHandConfig(w.path).state, 'unsafe', JSON.stringify(extra));
+    w.write({ version: 1, enabled: true, size: 'medium' });
+    const before = readFileSync(w.path, 'utf8');
+    assert.throws(() => writeHandSetting(extra, { path: w.path }), /HAND_CONFIG_INVALID/);
+    assert.equal(readFileSync(w.path, 'utf8'), before);
+  }
+  for (const size of [NaN, Infinity, -Infinity]) assert.throws(() => writeHandSetting({ size }, { path: w.path }), /HAND_CONFIG_INVALID/);
+  assert.equal(characterCastValid(Array(1)), false);
+  for (const cast of [[], ['missing-pack'], Array.from({ length: 32 }, (_, i) => `cat-${i}`)]) {
+    writeHandSetting({ cast, stageAttention: true }, { path: w.path });
+    assert.deepEqual(w.setting().cast, cast); assert.equal(w.setting().stageAttention, true);
+  }
+});
+
 test('precedence: platform, explicit env 0 or 1, unsafe file, saved choice, then off by default', t => {
   const w = world(t);
-  assert.deepEqual(w.setting(), { enabled: false, reason: 'default', capture: 'hidden', captureReason: 'default', narration: 'off' });
-  assert.deepEqual(w.setting({ SLEIGHT_HAND: '1' }, 'linux'), { enabled: false, reason: 'platform', capture: 'hidden', captureReason: 'default', narration: 'off' });
+  assert.deepEqual(w.setting(), { enabled: false, reason: 'default', capture: 'hidden', captureReason: 'default', narration: 'off', size: 'medium' });
+  assert.deepEqual(w.setting({ SLEIGHT_HAND: '1' }, 'linux'), { enabled: false, reason: 'platform', capture: 'hidden', captureReason: 'default', narration: 'off', size: 'medium' });
   for (const value of ['', 'false', 'off', 'true', '2']) {
     assert.deepEqual([w.setting({ SLEIGHT_HAND: value }).enabled, w.setting({ SLEIGHT_HAND: value }).reason], [false, 'default'], value);
   }
@@ -58,6 +89,14 @@ test('precedence: platform, explicit env 0 or 1, unsafe file, saved choice, then
   assert.deepEqual([w.setting().enabled, w.setting().reason], [false, 'unsafe']);
   assert.equal(w.setting({ SLEIGHT_HAND: '0' }).reason, 'env');
   assert.deepEqual([w.setting({ SLEIGHT_HAND: '1' }).enabled, w.setting({ SLEIGHT_HAND: '1' }).reason], [true, 'env']);
+});
+
+test('unknown injected platforms stay off without reading settings or resolving paths', () => {
+  for (const platform of ['freebsd', 'windows', '', null]) {
+    assert.deepEqual(handSetting({ platform, path: '/unread-fixture', env: { SLEIGHT_HAND: '1' },
+      read: () => assert.fail('unsupported platforms never read settings') }),
+    { enabled: false, reason: 'platform', capture: 'hidden', captureReason: 'default', narration: 'off', size: 'medium' });
+  }
 });
 
 test('capture precedence: SLEIGHT_HAND_CAPTURE wins over the file, an unknown value keeps the panel hidden, default hidden', t => {
@@ -162,10 +201,12 @@ test('doctor and status lines name each state, and only an unsafe file or captur
 test('doctor prints the ghost hand section after turbo, read-only', async t => {
   const w = world(t), lines = [];
   const { doctor } = await import('../plugins/sleight/lib/launch.mjs');
-  const code = await doctor({ settings: () => [], env: { CODEX_HOME: '/no-such-sleight-home', SLEIGHT_CHATGPT_APP: '/no-such-ChatGPT.app' }, log: x => lines.push(x),
+  const code = await doctor({ ...offlineDoctor, settings: () => [], env: { CODEX_HOME: '/no-such-sleight-home', SLEIGHT_CHATGPT_APP: '/no-such-ChatGPT.app' }, log: x => lines.push(x),
+    runtime: () => ({ selected: 'engine', ok: true, lines: [] }), documentation: () => {},
+    permissions: () => [], codex: () => [], cursor: () => [], grok: () => [], grokbot: () => [],
     turbo: async () => ['turbo (direct browser path)'], hand: async () => handDoctorLines(w.setting(), false) });
   assert.equal(code, 1);
   assert.match(lines[0], /^sleight \d+\.\d+\.\d+$/);
-  assert.deepEqual(lines.slice(1, 4), ['turbo (direct browser path)', 'ghost hand', 'ok        hand: off (the default; sleight-mcp hand on turns it on)']);
+  assert.deepEqual(lines.slice(2, 5), ['turbo (direct browser path)', 'ghost hand', 'ok        hand: off (the default; sleight-mcp hand on turns it on)']);
   assert.throws(() => lstatSync(w.path), /ENOENT/);
 });

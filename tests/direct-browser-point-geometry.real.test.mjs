@@ -6,6 +6,73 @@ import { snapshot, acknowledgeSnapshot } from '../plugins/sleight/lib/direct-bro
 import { createActionRunner } from '../plugins/sleight/lib/direct-browser/act.mjs';
 import { backgroundClick } from '../plugins/sleight/lib/direct-browser/page.mjs';
 import { createV3Context, createV3TurnBinding } from '../plugins/sleight/lib/direct-browser/v3-context.mjs';
+import { resolvePoint } from '../plugins/sleight/lib/direct-browser/points.mjs';
+import { holdPointEvidence, withReplayDeadline } from './helpers/point-evidence-replay.mjs';
+
+test('FL4C hit has one deadline even when every native request replies', { skip, timeout: 20000 }, async t => {
+  const f = await fixture(t, '<button style="position:absolute;left:30px;top:30px;width:160px;height:60px">Plain</button>'), page = f.entry.page;
+  const read = await snapshot(page); assert.equal(acknowledgeSnapshot(page, read.number), true);
+  const impl = page.mainFrame()._connection.toImpl(page.mainFrame());
+  const client = impl._page.delegate._sessionForFrame(impl)._client, send = client._sendMayFail;
+  const trace = [];
+  client._sendMayFail = async function(method, params) {
+    const result = await send.call(this, method, params);
+    if (['DOM.getNodeForLocation', 'DOM.describeNode', 'DOM.resolveNode', 'Accessibility.getPartialAXTree', 'DOMDebugger.getEventListeners'].includes(method)) {
+      // Each reply arrives in 700 ms, well inside FL4's per-request limit.
+      await new Promise(resolve => setTimeout(resolve, 700)); trace.push(method);
+    }
+    return result;
+  };
+  t.after(() => { client._sendMayFail = send; t.diagnostic(JSON.stringify({ replyingEvidence: trace })); });
+  const start = performance.now();
+  await assert.rejects(withReplayDeadline(resolvePoint(page, { x: 70, y: 50, view: read.viewSignature }).then(async handle => {
+    await handle.dispose();
+  }), 10000), /Point geometry scan unavailable; use a control ref\./);
+  const ms = performance.now() - start;
+  assert.ok(ms < 7000, 'one 3000 ms deadline has 4000 ms of scheduling slack');
+  assert.ok(trace.length >= 3, 'several requests replied before expiry');
+  t.diagnostic(JSON.stringify({ hitDeadlineMs: Math.round(ms), replies: trace.length }));
+});
+
+test('FL4C hit refuses a held native hit-test reply', { skip, timeout: 15000 }, async t => {
+  const f = await fixture(t, '<canvas width="300" height="200"></canvas>'), page = f.entry.page;
+  const read = await snapshot(page); assert.equal(acknowledgeSnapshot(page, read.number), true);
+  const held = holdPointEvidence(t, page, method => method === 'DOM.getNodeForLocation');
+  const acquisition = resolvePoint(page, { x: 70, y: 50, view: read.viewSignature }); acquisition.catch(() => {});
+  try {
+    await assert.rejects(withReplayDeadline(acquisition, 10000), /Point geometry scan unavailable; use a control ref\./);
+    assert.equal(held.trace.length, 1);
+  } finally { held.release(); await assert.rejects(acquisition, /use a control ref/); }
+});
+
+test('FL4C hit collects a late utility geometry handle', { skip, timeout: 15000 }, async t => {
+  const f = await fixture(t, '<canvas width="300" height="200"></canvas>'), page = f.entry.page;
+  const read = await snapshot(page); assert.equal(acknowledgeSnapshot(page, read.number), true);
+  const impl = page.mainFrame()._connection.toImpl(page.mainFrame()), utility = await impl.utilityContext();
+  const evaluate = utility.evaluateExpressionHandle, handles = [];
+  let release, collected;
+  const held = new Promise(resolve => { release = resolve; });
+  const disposed = new Promise(resolve => { collected = resolve; });
+  utility.evaluateExpressionHandle = async function(...args) {
+    const handle = await evaluate.apply(this, args);
+    if (args[0].includes('function pointGeometry(')) {
+      const dispose = handle.dispose;
+      handle.dispose = async function() { await dispose.call(this); collected(); };
+      handles.push(handle); await held;
+    }
+    return handle;
+  };
+  t.after(() => { release(); utility.evaluateExpressionHandle = evaluate; });
+  const acquisition = resolvePoint(page, { x: 70, y: 50, view: read.viewSignature }); acquisition.catch(() => {});
+  try {
+    await assert.rejects(withReplayDeadline(acquisition, 10000), /Point geometry scan unavailable; use a control ref\./);
+    assert.equal(handles.length, 1);
+  } finally { release(); }
+  await withReplayDeadline(disposed, 10000);
+  const client = impl._page.delegate._sessionForFrame(impl)._client;
+  assert.equal(await client._sendMayFail('Runtime.getProperties', { objectId: handles[0]._objectId, ownProperties: true }), undefined);
+  await assert.rejects(acquisition, /use a control ref/);
+});
 
 async function setup(t, html, routes = {}) {
   const f = await fixture(t, html, routes), page = f.entry.page;

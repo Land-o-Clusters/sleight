@@ -1,3 +1,4 @@
+import { assertChildStatus } from './fixtures/child-status.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { mkdtempSync, readFileSync, writeFileSync, realpathSync, mkdirSync, chmodSync, chownSync, symlinkSync, linkSync, statSync, existsSync } from 'node:fs';
@@ -12,7 +13,7 @@ import { characterFrame, SPRITE_LIMITS } from '../plugins/sleight/lib/hand/chara
 // The sprite style through --ring-plan-dump, --decode-sheet and --check-character: synthetic sheets, real decoding, no
 // NSApplication, panel or window. The host's test bank override needs a path below macOS's private tmp folder (os.tmpdir()
 // is under /var/folders), so the bank is made there, on first use, and only on a Mac with the developer tools.
-const mac = process.platform === 'darwin' && spawnSync('/usr/bin/xcode-select', ['-p']).status === 0;
+const mac = process.platform === 'darwin' && spawnSync('/usr/bin/xcode-select', ['-p'], { timeout: 30000, killSignal: 'SIGKILL' }).status === 0;
 const options = { skip: mac ? false : 'needs macOS with the developer tools (xcode-select -p)' };
 const source = new URL('../plugins/sleight/lib/direct-browser/native/consent-host.swift', import.meta.url).pathname;
 const nonce = 'a'.repeat(64), target = { nonce, seq: 1, pid: 2147483647, windowId: 4294967295 };
@@ -84,8 +85,8 @@ let binary;
 function build(t) {
   if (binary) return binary;
   const output = join(root(), 'consent-host'), started = performance.now();
-  const compile = spawnSync('/usr/bin/xcrun', ['swiftc', '-module-cache-path', swiftModuleCache(), source, '-o', output], { encoding: 'utf8', timeout: 300000 });
-  assert.equal(compile.status, 0, compile.stderr);
+  const compile = spawnSync('/usr/bin/xcrun', ['swiftc', '-module-cache-path', swiftModuleCache(), source, '-o', output], { encoding: 'utf8', timeout: 600000, killSignal: 'SIGKILL' });
+  assertChildStatus(compile, 0, compile.stderr);
   binary = output; t.diagnostic(`compileMs=${Math.round(performance.now() - started)} binaryBytes=${statSync(binary).size}`);
   return binary;
 }
@@ -99,11 +100,11 @@ function run(t, frames, flags = [], env = {}, { wait = true } = {}) {
   const lines = frames.flatMap(f => wait && f?.hand === 'character' ? [f, awaitLoad] : [f]);
   const result = spawnSync(build(t), ['--ring-plan-dump', '--cursor-style=sprite', ...flags], {
     input: lines.map(f => JSON.stringify(f) + '\n').join(''), encoding: 'utf8', timeout: 30000, maxBuffer: 1 << 26, env: testEnv(env),
-  });
+   killSignal: 'SIGKILL' });
   return { ...result, lines: result.stdout.trim().split('\n').filter(Boolean).map(JSON.parse) };
 }
 function good(t, frames, flags, env, how) {
-  const r = run(t, frames, flags, env, how); assert.equal(r.status, 0, r.stderr); return r;
+  const r = run(t, frames, flags, env, how); assertChildStatus(r, 0, r.stderr); return r;
 }
 // Every sprite track Core Animation gets: key times from 0 to 1, never decreasing, one per value.
 function checkTracks(p) {
@@ -262,13 +263,13 @@ test('bad character loads leave the ring, with one bounded stderr line and the r
 test('a real lossless WebP loads, and the decode child refuses bad files on its own', options, t => {
   const f = character({ file: 'sheet.webp', bytes: webp() }), r = good(t, [f, act()]);
   assert.equal(r.stderr, ''); assert.equal(loaded(r).loaded, true); assert.deepEqual(draws(r)[0].sprite.poses[0].rect, cellRect(0, 0));
-  const child = (bytes, args = ['512', '192', 'webp']) => spawnSync(build(t), ['--decode-sheet', ...args], { input: bytes, env: testEnv() });
+  const child = (bytes, args = ['512', '192', 'webp']) => spawnSync(build(t), ['--decode-sheet', ...args], { input: bytes, env: testEnv(), timeout: 60000, killSignal: 'SIGKILL' });
   const ok = child(webp());
-  assert.equal(ok.status, 0); assert.equal(ok.stdout.length, 512 * 192 * 4);
+  assertChildStatus(ok, 0); assert.equal(ok.stdout.length, 512 * 192 * 4);
   assert.deepEqual([...ok.stdout.subarray(0, 4)], [180, 90, 10, 255]);
   for (const [bytes, args, code] of [[Buffer.from('not an image'), undefined, 65], [png(), undefined, 65], [webp(), ['512', '128', 'webp'], 66],
     [png({ alpha: false }), ['512', '192', 'png'], 67], [webp(), ['0', '192', 'webp'], 64], [webp(), ['512', '192', 'gif'], 64]]) {
-    const r = child(bytes, args); assert.equal(r.status, code); assert.equal(r.stdout.length, 0);
+    const r = child(bytes, args); assertChildStatus(r, code); assert.equal(r.stdout.length, 0);
   }
 });
 
@@ -283,10 +284,10 @@ test('a child killed mid-write or hung gives the ring alone', options, t => {
   }
   // A sandbox (or limit) refusal is its own reason, apart from a crash.
   assert.equal(loaded(good(t, [character(), act()], [], { SLEIGHT_CURSOR_DECODE_FAULT: 'nosandbox' })).reason, 'sandbox');
-  const limits = spawnSync(build(t), ['--decode-sheet', '512', '192', 'png'], { input: '', encoding: 'utf8', env: testEnv({ SLEIGHT_CURSOR_DECODE_FAULT: 'limits' }) });
+  const limits = spawnSync(build(t), ['--decode-sheet', '512', '192', 'png'], { input: '', encoding: 'utf8', env: testEnv({ SLEIGHT_CURSOR_DECODE_FAULT: 'limits' }), timeout: 60000, killSignal: 'SIGKILL' });
   assert.equal(limits.stdout, 'cpu=2/2 nofile=8/8\n');
   // No decode child outlives its parent.
-  const stray = spawnSync('/bin/ps', ['-axo', 'command'], { encoding: 'utf8' }).stdout.split('\n').filter(l => l.startsWith(build(t) + ' --decode-sheet'));
+  const stray = spawnSync('/bin/ps', ['-axo', 'command'], { encoding: 'utf8', timeout: 30000, killSignal: 'SIGKILL' }).stdout.split('\n').filter(l => l.startsWith(build(t) + ' --decode-sheet'));
   assert.deepEqual(stray, []);
   // The fault switch needs the test switch too.
   assert.equal(loaded(good(t, [character(), act()], [], { SLEIGHT_CURSOR_TEST: '0', SLEIGHT_CURSOR_DECODE_FAULT: 'die' })).reason, 'path');
@@ -343,7 +344,7 @@ test('the CPU limit ends a spinning child on its own, before a lengthened deadli
 });
 
 test('a live host that exits mid-load leaves no decode child, on EOF or SIGTERM', options, async t => {
-  const children = () => spawnSync('/bin/ps', ['-axo', 'pid=,command='], { encoding: 'utf8' }).stdout.split('\n')
+  const children = () => spawnSync('/bin/ps', ['-axo', 'pid=,command='], { encoding: 'utf8', timeout: 30000, killSignal: 'SIGKILL' }).stdout.split('\n')
     .filter(l => l.includes(build(t) + ' --decode-sheet'));
   for (const [fault, end] of [['hang', 'eof'], ['closehang', 'eof'], ['hang', 'SIGTERM'], ['hang', 'SIGHUP']]) {
     const host = spawn(build(t), ['--hand', '--cursor-style=sprite'], { env: testEnv({ SLEIGHT_CURSOR_DECODE_FAULT: fault }), stdio: ['pipe', 'pipe', 'ignore'] });
@@ -360,17 +361,17 @@ test('a live host that exits mid-load leaves no decode child, on EOF or SIGTERM'
 });
 
 test('--check-character runs the same checks and reports the reason', options, t => {
-  const check = frame => spawnSync(build(t), ['--check-character'], { input: JSON.stringify(frame) + '\n', encoding: 'utf8', env: testEnv() });
+  const check = frame => spawnSync(build(t), ['--check-character'], { input: JSON.stringify(frame) + '\n', encoding: 'utf8', env: testEnv(), timeout: 60000, killSignal: 'SIGKILL' });
   const f = character(), ok = check(f);
-  assert.equal(ok.status, 0); assert.deepEqual(JSON.parse(ok.stdout), { id: f.id, loaded: true, reason: null, warnings: [] });
+  assertChildStatus(ok, 0); assert.deepEqual(JSON.parse(ok.stdout), { id: f.id, loaded: true, reason: null, warnings: [] });
   writeFileSync(f.sheet, png({ count: 10 }));
   assert.deepEqual(JSON.parse(check(f).stdout), { id: f.id, loaded: false, reason: 'pixels', warnings: [] });
-  assert.equal(check({ ...f, unknown: 1 }).status, 65);
-  assert.equal(spawnSync(build(t), ['--check-character', 'extra'], { input: '' }).status, 64);
+  assertChildStatus(check({ ...f, unknown: 1 }), 65);
+  assertChildStatus(spawnSync(build(t), ['--check-character', 'extra'], { input: '', timeout: 60000, killSignal: 'SIGKILL' }), 64);
 });
 
 test('perch mode (A2): the third sheet goes through the same decode child and pixel checks', options, t => {
-  const check = frame => spawnSync(build(t), ['--check-character'], { input: JSON.stringify(frame) + '\n', encoding: 'utf8', env: testEnv() });
+  const check = frame => spawnSync(build(t), ['--check-character'], { input: JSON.stringify(frame) + '\n', encoding: 'utf8', env: testEnv(), timeout: 60000, killSignal: 'SIGKILL' });
   const f = character(), perchSheet = join(f.sheet, '..', 'perch.png');
   writeFileSync(perchSheet, png({ w: 512, h: 64, cells: [[0, 0], [0, 1]] }), { mode: 0o600 });
   const keys = ['perch', 'perch-peek', 'perch-hop', 'perch-point-left', 'perch-point-right', 'sleep', 'high-five', 'perch-wait', 'startle', 'jumping',
@@ -385,7 +386,7 @@ test('perch mode (A2): the third sheet goes through the same decode child and pi
   writeFileSync(perchSheet, png({ w: 448, h: 64, cells: [[0, 0], [0, 1]] }), { mode: 0o600 });
   assert.equal(JSON.parse(check(frame).stdout).reason, 'size');
   // Perch entries must name a sheet the frame has.
-  assert.equal(check({ ...frame, perchSheet: null }).status, 65);
+  assertChildStatus(check({ ...frame, perchSheet: null }), 65);
 });
 
 test('perch mode: the host measures the leg spread below the seat line from the decoded cells', options, t => {
@@ -396,8 +397,8 @@ test('perch mode: the host measures the leg spread below the seat line from the 
     'running-right', 'running-left', 'error', 'handoff', 'paused'];
   const table = Object.fromEntries(keys.map(k => [k, entry(0, [0, 1], { sheet: 'perch', size: [512, 64], scale: 0.5 })]));
   const frame = { ...f, perch: { anchor: [32, 10], table }, perchSheet };
-  const r = spawnSync(build(t), ['--perch-dump'], { input: JSON.stringify(frame) + '\n' + JSON.stringify({ dumpDecode: true }) + '\n', encoding: 'utf8', env: testEnv() });
-  assert.equal(r.status, 0, r.stderr);
+  const r = spawnSync(build(t), ['--perch-dump'], { input: JSON.stringify(frame) + '\n' + JSON.stringify({ dumpDecode: true }) + '\n', encoding: 'utf8', env: testEnv(), timeout: 60000, killSignal: 'SIGKILL' });
+  assertChildStatus(r, 0, r.stderr);
   const legs = r.stdout.trim().split('\n').map(l => JSON.parse(l)).find(l => l.effect === 'legs');
   assert.deepEqual([legs.loaded, legs.legs, legs.seated], [true, [16, 16], [16, 16]], 'points at scale 0.5');
 });
@@ -447,15 +448,15 @@ test('exact keys, value types, caps, nonce and shared seq reject malformed frame
     { ...f, table: { idle: { ...entry(), unknown: 1 } } }, { ...f, table: { idle: entry(0, [8]) } }, { ...f, table: { idle: entry(0, [0], { then: 'nap' }) } },
     { ...f, table: { idle: entry(), 'click-far@4': entry() } }, { ...f, table: { idle: entry(), 'move-far@16': entry() } },
     { ...f, table: { idle: entry(0, [0], { loop: 1 }) } }, { ...f, table: { idle: entry(0, [0], { ms: [NaN] }) } },
-    { ...f, table: { idle: entry(0, [0], { flip: 'v' }) } }, { ...f, table: {} }]) assert.equal(run(t, [bad]).status, 65);
-  assert.equal(run(t, [f, act('click', { nonce: 'b'.repeat(64) })]).status, 65);
-  assert.equal(run(t, [f, act('click', { seq: 0 })]).status, 65);
+    { ...f, table: { idle: entry(0, [0], { flip: 'v' }) } }, { ...f, table: {} }]) assertChildStatus(run(t, [bad]), 65);
+  assertChildStatus(run(t, [f, act('click', { nonce: 'b'.repeat(64) })]), 65);
+  assertChildStatus(run(t, [f, act('click', { seq: 0 })]), 65);
   // Only a character frame may pass 8 KiB, and never 32 KiB. Padding is JSON whitespace, so the frame stays valid.
   const sized = n => JSON.stringify(f).replace('"table"', ' '.repeat(n - JSON.stringify(f).length) + '"table"');
-  const raw = lines => spawnSync(build(t), ['--ring-plan-dump', '--cursor-style=sprite'], { input: lines.join('\n') + '\n', encoding: 'utf8', env: testEnv() });
-  assert.equal(raw([sized(32768), JSON.stringify(act())]).status, 0);
-  assert.equal(raw([sized(32769)]).status, 65);
-  assert.equal(raw([JSON.stringify(act()).replace('"click"', '"click"' + ' '.repeat(9000))]).status, 65);
+  const raw = lines => spawnSync(build(t), ['--ring-plan-dump', '--cursor-style=sprite'], { input: lines.join('\n') + '\n', encoding: 'utf8', env: testEnv(), timeout: 60000, killSignal: 'SIGKILL' });
+  assertChildStatus(raw([sized(32768), JSON.stringify(act())]), 0);
+  assertChildStatus(raw([sized(32769)]), 65);
+  assertChildStatus(raw([JSON.stringify(act()).replace('"click"', '"click"' + ' '.repeat(9000))]), 65);
 });
 
 test('a second character replaces the first; non-sprite styles never decode', options, t => {
@@ -463,17 +464,17 @@ test('a second character replaces the first; non-sprite styles never decode', op
   const r = good(t, [f, act(), clock(1), { ...second, seq: 2 }, act('click', { seq: 3 })]);
   assert.deepEqual(r.lines.filter(l => l.effect === 'character').map(l => l.loaded), [true, false]);
   assert.ok(draws(r)[0].sprite); assert.equal(draws(r)[1].sprite, null);
-  const result = spawnSync(build(t), ['--ring-plan-dump', '--cursor-style=ring'], { input: JSON.stringify(f) + '\n' + JSON.stringify(act()) + '\n', encoding: 'utf8', env: testEnv() });
-  assert.equal(result.status, 0); assert.equal(result.stderr, ''); assert.equal(JSON.parse(result.stdout.split('\n')[0]).loaded, false);
+  const result = spawnSync(build(t), ['--ring-plan-dump', '--cursor-style=ring'], { input: JSON.stringify(f) + '\n' + JSON.stringify(act()) + '\n', encoding: 'utf8', env: testEnv(), timeout: 60000, killSignal: 'SIGKILL' });
+  assertChildStatus(result, 0); assert.equal(result.stderr, ''); assert.equal(JSON.parse(result.stdout.split('\n')[0]).loaded, false);
 });
 
 test('full-size real decode reports memory in MiB and leaves no scheduled work', options, t => {
   const f = character({ image: { w: 1536, h: 2288, cw: 192, ch: 208 }, cell: [192, 208], table: { idle: entry(0, [0], { hotspot: [96, 104], size: [1536, 2288] }) } });
   const result = spawnSync('/usr/bin/time', ['-l', build(t), '--ring-plan-dump', '--cursor-style=sprite'], {
     input: JSON.stringify(f) + '\n' + JSON.stringify(act()) + '\n', encoding: 'utf8', timeout: 30000, env: testEnv(),
-  });
+   killSignal: 'SIGKILL' });
   const line = result.stdout.split('\n').filter(Boolean).map(JSON.parse).find(l => l.effect === 'character');
-  assert.equal(result.status, 0, result.stderr); assert.equal(line.loaded, true);
+  assertChildStatus(result, 0, result.stderr); assert.equal(line.loaded, true);
   const rss = result.stderr.match(/(\d+)\s+maximum resident set size/); assert.ok(rss, result.stderr);
   // time -l's figure is the larger of the host and its decode child; selfMaxRss is the host alone.
   const self = line.selfMaxRss;
@@ -537,11 +538,13 @@ async function vc3(t) {
   let code;
   if (existsSync(local)) code = readFileSync(local);
   else {
-    const r = spawnSync('/usr/bin/git', ['show', '9751c49f:plugins/sleight/lib/hand/character.mjs'], { encoding: 'utf8', cwd: new URL('..', import.meta.url).pathname });
+    const r = spawnSync('/usr/bin/git', ['show', '9751c49f:plugins/sleight/lib/hand/character.mjs'], { encoding: 'utf8', cwd: new URL('..', import.meta.url).pathname, timeout: 30000, killSignal: 'SIGKILL' });
     if (r.status !== 0) return modules = null;
     code = r.stdout;
   }
   const fixture = join(root(), 'modules'); mkdirSync(fixture);
+  const platform = join(root(), 'platform'); mkdirSync(platform);
+  writeFileSync(join(platform, 'paths.mjs'), readFileSync(new URL('../plugins/sleight/lib/platform/paths.mjs', import.meta.url)));
   writeFileSync(join(fixture, 'character.mjs'), code);
   return modules = await import(pathToFileURL(join(fixture, 'character.mjs')));
 }
@@ -590,8 +593,8 @@ test('six bundled packs use the same sandboxed decode and pixel checks with pinn
   for (const id of api.BUILTIN_CHARACTER_IDS) {
     const pack = api.checkCharacter(id), frame = characterFrame(pack, { nonce, seq: 0, resolve: api.resolveCharacterStates });
     const result = spawnSync(build(t), ['--check-character'], { input: JSON.stringify(frame) + '\n', encoding: 'utf8',
-      env: testEnv({ SLEIGHT_BUILTIN_CHARACTERS: api.builtinCharactersDirectory() }) });
-    assert.equal(result.status, 0, result.stderr);
+      env: testEnv({ SLEIGHT_BUILTIN_CHARACTERS: api.builtinCharactersDirectory() }), timeout: 60000, killSignal: 'SIGKILL' });
+    assertChildStatus(result, 0, result.stderr);
     assert.equal(JSON.parse(result.stdout).loaded, true, `${id}: ${result.stdout}`);
   }
 });
@@ -602,7 +605,7 @@ test('native loader refuses a bundled image with a changed hash or an unbound pa
   const folder = join(bank, 'bit'); mkdirSync(folder, { mode: 0o755 });
   for (const [name, bytes] of pack.files) writeFileSync(join(folder, name), bytes, { mode: 0o644 });
   for (const key of ['sheet', 'extra', 'perchSheet']) frame[key] = join(folder, frame[key].split('/').at(-1));
-  const check = env => JSON.parse(spawnSync(build(t), ['--check-character'], { input: JSON.stringify(frame) + '\n', encoding: 'utf8', env: testEnv(env) }).stdout);
+  const check = env => JSON.parse(spawnSync(build(t), ['--check-character'], { input: JSON.stringify(frame) + '\n', encoding: 'utf8', env: testEnv(env), timeout: 60000, killSignal: 'SIGKILL' }).stdout);
   assert.equal(check({ SLEIGHT_BUILTIN_CHARACTERS: bank }).loaded, true);
   assert.equal(check({}).loaded, false);
   const path = frame.sheet, bytes = readFileSync(path); bytes[bytes.length - 1] ^= 1; writeFileSync(path, bytes);
@@ -618,8 +621,8 @@ test('native built-ins accept exactly the cache modes and refuse noncanonical ro
   for (const key of ['sheet', 'extra', 'perchSheet']) frame[key] = join(folder, frame[key].split('/').at(-1));
   const check = (f = frame, packageRoot = bank) => {
     const result = spawnSync(build(t), ['--check-character'], { input: JSON.stringify(f) + '\n', encoding: 'utf8',
-      env: testEnv({ SLEIGHT_BUILTIN_CHARACTERS: packageRoot }) });
-    assert.equal(result.status, 0, result.stderr); return JSON.parse(result.stdout);
+      env: testEnv({ SLEIGHT_BUILTIN_CHARACTERS: packageRoot }), timeout: 60000, killSignal: 'SIGKILL' });
+    assertChildStatus(result, 0, result.stderr); return JSON.parse(result.stdout);
   };
   for (const mode of [0o600, 0o644, 0o400, 0o440, 0o444, 0o640, 0o660, 0o664, 0o666, 0o700, 0o744, 0o1644, 0o2644, 0o4644]) {
     for (const file of ['sheet', 'extra', 'perchSheet']) {

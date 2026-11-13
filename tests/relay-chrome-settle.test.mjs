@@ -9,6 +9,7 @@ import { mkdtempSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { trackTemp, removeTemp } from '../scripts/temp-leftovers.mjs';
+import { QUIT_KEY_REFUSAL } from '../plugins/sleight/lib/quit-key.mjs';
 
 const IPHONE = 'Window: "iPhone Mirroring", App: iPhone Mirroring.\n' +
   '0 standard window iPhone Mirroring, ID: iphone-mirroring-main, Secondary Actions: Raise\n' +
@@ -143,8 +144,99 @@ test('chrome-only scrolls become proportional content swipes on the observed han
       scroll: async (...args) => calls.push(args) },
   });
   assert.deepEqual(JSON.parse(JSON.stringify(calls)), [[[200, 500], 'constructor', 0.5]]);
+  const before = h.toServer.length;
+  js(h, 7, 'await app.scroll(1, {})'); await settle();
+  assert.equal(h.toServer.length, before);
+  const refused = h.toClient.find(m => m.id === 7);
+  assert.equal(refused.result.content[0].text, 'sleight: invalid native arguments. Engine App.scroll(<observed element number or [x, y]>, direction, pages?: number) e.g. scroll(23, "down", 1); nothing was sent.');
   assert.equal(flowRules.handles.get('app')?.app, 'Stream');
 });
+
+const pageCountRefusal = 'sleight: invalid native arguments. Engine App.scroll(<observed element number or [x, y]>, direction, pages?: number) e.g. scroll(23, "down", 1); nothing was sent.';
+
+function pngFrame() {
+  const png = Buffer.alloc(33);
+  png.writeUInt32BE(0x89504e47, 0); png.writeUInt32BE(0x0d0a1a0a, 4);
+  png.writeUInt32BE(400, 16); png.writeUInt32BE(1000, 20);
+  return png;
+}
+
+async function openChromeApp(h) {
+  js(h, 1, 'let app = await cua.getApp("Stream")'); await settle();
+  h.fromServer({ jsonrpc: '2.0', id: 1, result: { content: [
+    { type: 'text', text: IPHONE.replaceAll('iPhone Mirroring', 'Stream') }, image(pngFrame().toString('base64'))] } });
+  await settle();
+}
+
+test('SCR1C chrome-only scroll holds keep quit-key precedence before swipe lowering', async () => {
+  const h = harness();
+  await openChromeApp(h);
+  h.toServer.length = 0;
+  let id = 2;
+  for (const field of ['key', 'modifier', 'modifiers']) for (const pixels of [false, true]) {
+    const distance = { ...(pixels ? { pixels: 100 } : {}), [field]: field === 'modifiers' ? ['cmd', 'q'] : 'cmd+q' };
+    js(h, id, `await app.scroll([200, 500], "down", ${JSON.stringify(distance)});`);
+    await settle();
+    assert.deepEqual(h.toServer, []);
+    const result = h.toClient.find(message => message.id === id).result;
+    assert.equal(result.isError, true);
+    assert.equal(result.content[0].text, QUIT_KEY_REFUSAL);
+    id++;
+  }
+});
+
+test('a computed pixels object on a chrome-only window lowers to the same swipe', async () => {
+  const h = harness();
+  await openChromeApp(h);
+  const code = 'const distance = { pixels: 100 };\nawait app.scroll([200, 500], "right", distance)';
+  js(h, 2, code); await settle();
+  const sent = h.toServer.find(m => m.id === 2);
+  assert.ok(sent, JSON.stringify(h.toClient));
+  assert.notEqual(sent.params.arguments.code, code);
+  const calls = [];
+  await runInNewContext(`(async () => { ${sent.params.arguments.code} })()`, {
+    app: { drag: async (...args) => calls.push(['drag', ...args]), scroll: async (...args) => calls.push(['scroll', ...args]) },
+  });
+  assert.deepEqual(JSON.parse(JSON.stringify(calls)), [['drag', [250, 525], [150, 525]]]);
+});
+
+test('an unlowered inline getApp pixels scroll on a chrome-only window is refused before send', async () => {
+  const h = harness();
+  await openChromeApp(h);
+  const before = h.toServer.length;
+  js(h, 2, 'await (await cua.getApp("Stream")).scroll([200, 500], "right", { pixels: 100 })');
+  await settle();
+  assert.equal(h.toServer.length, before);
+  const refused = h.toClient.find(m => m.id === 2);
+  assert.equal(refused.result.isError, true);
+  assert.equal(refused.result.content[0].text, pageCountRefusal);
+  assert.equal(refused.result.content[0].text.length, 162);
+});
+
+test('a chrome-only cell that lowers one pixels scroll still refuses an unlowered pixels scroll', async () => {
+  const h = harness();
+  await openChromeApp(h);
+  const before = h.toServer.length;
+  js(h, 2, 'await app.scroll([200, 500], "right", { pixels: 100 });\nawait (await cua.getApp("Stream")).scroll([200, 500], "right", { pixels: 50 })');
+  await settle();
+  assert.equal(h.toServer.length, before);
+  const refused = h.toClient.find(m => m.id === 2);
+  assert.equal(refused.result.isError, true);
+  assert.equal(refused.result.content[0].text, pageCountRefusal);
+});
+
+for (const distance of ['{}', '{ pages: 2 }', '{ distance: 600 }']) {
+  test(`a chrome-only window refuses a non-pixel object distance before send: ${distance}`, async () => {
+    const h = harness();
+    await openChromeApp(h);
+    const before = h.toServer.length;
+    js(h, 2, `await app.scroll([200, 500], "down", ${distance})`);
+    await settle();
+    assert.equal(h.toServer.length, before, JSON.stringify(h.toServer.at(-1)));
+    const refused = h.toClient.find(m => m.id === 2);
+    assert.equal(refused.result.content[0].text, pageCountRefusal);
+  });
+}
 
 test('normal trees, other handles and text mentioning scroll keep the original behavior', async () => {
   const png = Buffer.alloc(33);

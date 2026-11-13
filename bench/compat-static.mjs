@@ -6,9 +6,9 @@
 //   node bench/compat-static.mjs --feed [--state DIR] [--force] [--keep-docs] [--report FILE]
 //   node bench/compat-static.mjs --probe [--state DIR]     prints changed or unchanged (and sets it as a GitHub output)
 //
-// --feed polls ChatGPT's update feed and does nothing more until the version changes. Then it downloads the release,
+// --feed polls ChatGPT's update feed. A new build or a failed check from an older sleight commit downloads the release,
 // checks its Sparkle signature, unpacks it, and checks the contract. --state (default ~/.local/state/sleight-compat)
-// keeps last.json and results.jsonl, which hold versions, dates and check names only. --keep-docs also keeps the
+// keeps last.json and results.jsonl, which hold versions, commits, dates and check names only. --keep-docs also keeps the
 // engine's API docs per version in <state>/docs and diffs them there; use it only on a private machine, since those docs
 // are OpenAI's text. Output and the report never contain engine text. Exit 0 on pass or no change, 1 on a failed
 // check, 2 when the check couldn't run (feed or download), which retries on the next run.
@@ -76,15 +76,21 @@ export const MAX_ATTEMPTS = 3;
 export const exitFor = verdict => (verdict === 'pass' ? 0 : verdict === 'fail' ? 1 : 2);
 const readJson = path => { try { return JSON.parse(readFileSync(path, 'utf8')); } catch { return undefined; } };
 
-// A checked release (pass or fail) is written to last.json and not checked again. A check that couldn't finish (bad
-// signature, unpack failure, full disk) retries on the next runs, and after MAX_ATTEMPTS it's recorded as an error so
+// A checked release is written to last.json. A failed check retries after the sleight commit changes. A pass, or a
+// failure on the same commit, stays checked. A check that couldn't finish (bad signature, unpack failure, full disk)
+// retries on the next runs, and after MAX_ATTEMPTS it's recorded as an error so
 // the same download doesn't repeat every hour. A failed download or feed read always retries.
+function alreadyChecked(last, item, commit) {
+  return last?.version === item.version && last?.build === item.build &&
+    !(last.verdict === 'fail' && commit && last.sleight !== commit);
+}
+
 // Is there a release the state folder hasn't recorded? Reads only the feed.
 export async function probeFeed({ state, feedUrl = FEED_URL, fetchImpl = fetch } = {}) {
   const last = readJson(join(state, 'last.json'));
   const item = latestItem(parseAppcast(await fetchText(feedUrl, { fetchImpl })));
   if (!item) return undefined;
-  return !(last?.version === item.version && last?.build === item.build);
+  return !alreadyChecked(last, item, sleightCommit());
 }
 
 export async function runFeed({ state, force = false, keep = false, feedUrl = FEED_URL, fetchImpl = fetch, now = () => new Date(),
@@ -99,7 +105,8 @@ export async function runFeed({ state, force = false, keep = false, feedUrl = FE
   if (!SAFE_VERSION.test(item.version) || (item.build !== undefined && !SAFE_VERSION.test(item.build))) {
     log('static compat: the update feed\'s version is not a plain version string'); return { exit: 2 };
   }
-  if (last?.version === item.version && last?.build === item.build && !force) {
+  const commit = sleightCommit();
+  if (alreadyChecked(last, item, commit) && !force) {
     log(`static compat: ChatGPT ${item.version} unchanged since ${last.checkedAt} (${last.verdict})`);
     return { exit: exitFor(last.verdict), unchanged: true };
   }
@@ -111,7 +118,7 @@ export async function runFeed({ state, force = false, keep = false, feedUrl = FE
     const archive = join(temp, 'release');
     try { await downloadImpl(item.url, archive, { fetchImpl }); }
     catch (error) { log(`static compat: download of ChatGPT ${item.version} failed (${/^(?:download|more than|refusing)/.test(error.message) ? error.message : error.name}); retrying next run`); return { exit: 2 }; }
-    const base = { checkedAt: now().toISOString(), source: 'static', appVersion: item.version, build: item.build, sleight: sleightCommit() };
+    const base = { checkedAt: now().toISOString(), source: 'static', appVersion: item.version, build: item.build, sleight: commit };
     const failed = (id, reason) => ({ ...base, verdict: 'error', attempt, steps: [{ id, status: 'error', reason }] });
     let verified = false;
     try { verified = verifyImpl(archive, item.edSignature); } catch {}
@@ -124,21 +131,21 @@ export async function runFeed({ state, force = false, keep = false, feedUrl = FE
       catch (error) { report = failed('unpack', /needs 7-Zip/.test(error.message) ? error.message : `unpacking failed${typeof error.code === 'number' ? ` (exit ${error.code})` : error.code ? ` (${error.code})` : ''}`); }
       if (!report && !app) report = failed('unpack', 'no ChatGPT.app with the engine in the download');
       if (!report) {
-        report = { ...checkApp(app, { now }), build: item.build };
+        report = { ...checkApp(app, { now }), build: item.build, sleight: commit };
         if (report.appVersion !== item.version) report.steps.push({ id: 'feed-version', status: 'warn', reason: `the feed says ${item.version}, the app says ${report.appVersion ?? 'no plain version'}` });
         report.fingerprintChanged = last?.fingerprint ? last.fingerprint !== report.fingerprint : null;
         if (keep) Object.assign(report, await keepDocs(state, report.appVersion ?? item.version, app));
       }
     }
   } catch (error) {
-    report = { checkedAt: now().toISOString(), source: 'static', appVersion: item.version, build: item.build, verdict: 'error', attempt,
+    report = { checkedAt: now().toISOString(), source: 'static', appVersion: item.version, build: item.build, sleight: commit, verdict: 'error', attempt,
       steps: [{ id: 'check', status: 'error', reason: `the check stopped (${error.code ?? error.name})` }] };
   } finally {
     rmSync(temp, { recursive: true, force: true });
   }
   appendFileSync(join(state, 'results.jsonl'), JSON.stringify(report) + '\n');
   if (report.verdict !== 'error' || attempt >= MAX_ATTEMPTS) {
-    writeJson(lastPath, { version: item.version, build: item.build, checkedAt: report.checkedAt, verdict: report.verdict, fingerprint: report.fingerprint });
+    writeJson(lastPath, { version: item.version, build: item.build, checkedAt: report.checkedAt, verdict: report.verdict, fingerprint: report.fingerprint, sleight: report.sleight });
     rmSync(attemptsPath, { force: true });
   } else writeJson(attemptsPath, { version: item.version, build: item.build, count: attempt });
   log(summary(report) + (report.verdict === 'error' ? `\n  attempt ${attempt} of ${MAX_ATTEMPTS}` : ''));

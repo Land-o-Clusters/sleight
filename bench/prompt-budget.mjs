@@ -3,7 +3,8 @@ import { upfrontAsk, remoteApprovalNotice, physicalApprovalNotice } from '../plu
 import { readFileSync, readdirSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { PassThrough } from 'node:stream';
-import ts from 'typescript';
+import { createRequire } from 'node:module';
+const require = createRequire(import.meta.url);
 import { skillRules, localToolDefinitions } from '../plugins/sleight/lib/launch.mjs';
 import { batchingDescription, createRelay, promptNotice, promptTool } from '../plugins/sleight/lib/relay.mjs';
 import { NATIVE_HANDOFF_TOOL } from '../plugins/sleight/lib/native-handoff.mjs';
@@ -11,10 +12,16 @@ import { FLOW_TOOL } from '../plugins/sleight/lib/flow-rules.mjs';
 import { engineBrowserOpen, engineOpenTool, withBrowserOpenFirst } from '../plugins/sleight/lib/engine-browser-open.mjs';
 import { turboFirstRules } from '../plugins/sleight/lib/turbo-first-rules.mjs';
 import { browserTools } from '../plugins/sleight/lib/direct-browser/tools.mjs';
+import { compactText } from '../plugins/sleight/lib/tool-description.mjs';
+import { FIRST_WINDOW_RULE, FIRST_WINDOW_LEAN_RULE } from '../plugins/sleight/lib/engine-app-docs.mjs';
+import { WINDOWS_REPL_DOCS, windowsReplTools } from '../plugins/sleight/lib/windows-repl/docs.mjs';
+import { WINDOWS_SAFETY_UNAVAILABLE, WINDOWS_REPL_NODE_UNSUPPORTED } from '../plugins/sleight/lib/windows-repl/client.mjs';
+import { WINDOWS_FORBIDDEN_NOTICES } from '../plugins/sleight/lib/blocked-apps-windows.mjs';
+import { WINDOWS_STUCK_ESCAPE_NOTE } from '../plugins/sleight/lib/windows-driver/safety.mjs';
 
 const firstRule = 'execute exactly one of the API calls shown below, optionally assigning its result to a variable. Do not add other API calls, waits, or snapshots to that invocation.';
 const skillPath = fileURLToPath(new URL('../plugins/sleight/skills/drive-mac-apps/SKILL.md', import.meta.url));
-const size = text => ({ characters: [...text].length, lines: text ? text.split('\n').length : 0 });
+const size = text => ({ characters: [...text].length, bytes: Buffer.byteLength(text), lines: text ? text.split('\n').length : 0 });
 
 function tools(prompt) {
   const clientIn = new PassThrough(), clientOut = new PassThrough(), serverIn = new PassThrough(), serverOut = new PassThrough();
@@ -43,6 +50,7 @@ function descriptions(value, path = '') {
 // Authored text with interpolated values as <value>: each branch of a choice on its own line, and a
 // promptNotice call in its SLEIGHT_PROMPT wording.
 function renderer(ast, prompt) {
+  const ts = require('typescript');
   return function render(node) {
     if (ts.isIdentifier(node) && node.text === 'undefined') return '';
     if (ts.isParenthesizedExpression(node)) return render(node.expression);
@@ -60,6 +68,7 @@ function renderer(ast, prompt) {
 // Each authored result template is counted once, including inactive safety paths.
 // Interpolated UI data is represented by <value>. Engine docs, screenshots and UI trees vary by run.
 export function noticeInventory(prompt, source = readFileSync(new URL('../plugins/sleight/lib/relay.mjs', import.meta.url), 'utf8')) {
+  const ts = require('typescript');
   const ast = ts.createSourceFile('relay.mjs', source, ts.ScriptTarget.Latest, true, ts.ScriptKind.JS);
   const entries = [], render = renderer(ast, prompt);
   function add(node, label) {
@@ -94,6 +103,7 @@ export function noticeInventory(prompt, source = readFileSync(new URL('../plugin
 }
 
 export function sharedNoticeInventory(prompt) {
+  const ts = require('typescript');
   const functions = {
     'browser-call.mjs': ['browserLeaseNote'],
     'read-failure.mjs': ['savePanelNote', 'offSpaceNote', 'readFailureAdvice'],
@@ -131,6 +141,24 @@ export function sharedNoticeInventory(prompt) {
   return entries;
 }
 
+// Host hook refusals are pinned with the notices hash. They aren't part of the relay's default/lean prompt totals.
+export function hookNoticeInventory() {
+  const ts = require('typescript');
+  const file = '../hooks/preapproved-write-guard.mjs';
+  const ast = ts.createSourceFile(file, readFileSync(new URL(`../plugins/sleight/lib/${file}`, import.meta.url), 'utf8'), ts.ScriptTarget.Latest, true);
+  const entries = [], render = renderer(ast);
+  const add = node => entries.push({ path: `${file}:${ast.getLineAndCharacterOfPosition(node.getStart()).line + 1}`, text: render(node) });
+  (function visit(node) {
+    if (ts.isVariableDeclaration(node)) {
+      if (node.name.getText(ast) === 'preapprovedWriteReason') add(node.initializer);
+      if (node.name.getText(ast) === 'WINDOWS_MATCHES')
+        for (const property of node.initializer.arguments[0].properties) add(property.initializer);
+    }
+    ts.forEachChild(node, visit);
+  })(ast);
+  return entries;
+}
+
 // Text a lib or guard-hook module marks as model-visible: an expression after a /* notice */ comment (or /* lean notice */
 // where sleight passes the text through promptNotice later), and in a template
 // after a /* generated code */ comment (code sleight sends to the engine), each Error, stop or nodeRepl.write
@@ -139,9 +167,10 @@ const libDir = new URL('../plugins/sleight/lib/', import.meta.url);
 // The mark sits in the trivia just before the expression (TypeScript calls a same-line comment trailing).
 const markedBy = (source, node, mark) => node.pos < node.end && source.slice(node.pos, node.getStart()).trimEnd().endsWith(mark);
 const VALUE = '__sleightBudgetValue__';
-export function taggedNoticeInventory(prompt) {
+export function taggedNoticeInventory(prompt, { windowsOnly = false } = {}) {
+  const ts = require('typescript');
   const entries = [], seen = new Set();
-  for (const file of [...readdirSync(libDir).filter(name => /\.m?js$/.test(name)).sort(), '../hooks/preapproved-write-guard.mjs']) {
+  for (const file of [...readdirSync(libDir).filter(name => /\.m?js$/.test(name) && /^windows-/.test(name) === windowsOnly).sort(), ...windowsOnly ? [] : ['../hooks/preapproved-write-guard.mjs', 'direct-browser/tools.mjs']]) {
     const source = readFileSync(new URL(file, libDir), 'utf8');
     if (!/\/\* (?:lean )?notice \*\/|\/\* generated code \*\//.test(source)) continue;
     const ast = ts.createSourceFile(file, source, ts.ScriptTarget.Latest, true, ts.ScriptKind.JS), render = renderer(ast, prompt);
@@ -182,25 +211,35 @@ export function budget(env = process.env) {
   const details = {}, turboFirst = {};
   for (const variant of variants) {
     const prompt = variant === 'lean' ? 'lean' : undefined;
+    // Always inventory both skills. Delivery-only settings such as SKILL=none
+    // must not suppress a source; forward only the wording experiments.
+    const skillEnv = { SLEIGHT_PROMPT: prompt, SLEIGHT_SF3: env.SLEIGHT_SF3,
+      SLEIGHT_LEAN_CALLS: env.SLEIGHT_LEAN_CALLS, SLEIGHT_SCREENSHOT_READS: env.SLEIGHT_SCREENSHOT_READS };
     const toolEntries = [...tools(prompt), ...(browserCore ? [engineOpenTool(prompt)] : [])].flatMap(tool => descriptions(tool, tool.name));
     const notices = noticeInventory(prompt), shared = sharedNoticeInventory(prompt), marked = taggedNoticeInventory(prompt);
     const metadata = readFileSync(skillPath, 'utf8').match(/^---\n[\s\S]*?\n---\n+/)[0];
-    const texts = [metadata + skillRules(skillPath, { SLEIGHT_PROMPT: prompt }), toolEntries.map(e => e.text).join('\n'),
+    const texts = [metadata + skillRules(skillPath, skillEnv), toolEntries.map(e => e.text).join('\n'),
       (browserCore ? withBrowserOpenFirst : text => text)(batchingDescription(firstRule, true, prompt)), notices.map(e => e.text).join('\n'), shared.map(e => e.text).join('\n'),
       marked.map(e => e.text).join('\n')];
     const browser = readFileSync(new URL('../plugins/sleight/skills/drive-mac-apps/BROWSERS.turbo-v3.md', import.meta.url), 'utf8')
       .trimEnd().replace('{browser}', 'bbench').replace('{application}', ' (Google Chrome)');
-    const full = skillRules(skillPath, { SLEIGHT_PROMPT: prompt }).replace(/## Browsers\n[\s\S]*?(?=\n## |$)/, browser + '\n');
+    const full = skillRules(skillPath, skillEnv).replace(/## Browsers\n[\s\S]*?(?=\n## |$)/, browser + '\n');
     const first = turboFirstRules(full), catalog = JSON.stringify(browserTools('bbench'));
     turboFirst[variant] = { catalog: size(catalog), rules: size(first), fullRules: size(full),
-      combined: size(catalog + '\n' + first), deferredCharacters: full.length - first.length };
+      combined: size(catalog + '\n' + first), withNativeHandoff: size(catalog + '\n' + first + JSON.stringify(NATIVE_HANDOFF_TOOL)), deferredCharacters: full.length - first.length };
     rows.forEach((row, i) => { row[variant] = size(texts[i]); });
     details[variant] = { tools: toolEntries.map(e => ({ source: e.path, ...size(e.text) })), notices: notices.map(e => ({ source: e.path, ...size(e.text) })), shared: shared.map(e => ({ source: e.path, ...size(e.text) })),
       marked: marked.map(e => ({ source: e.path, ...size(e.text) })) };
   }
   const total = Object.fromEntries(variants.map(variant => [variant, { characters: rows.reduce((sum, row) => sum + row[variant].characters, 0), lines: rows.reduce((sum, row) => sum + row[variant].lines, 0) }]));
   const upfront = upfrontAsk([{ name: 'Mail' }, { name: 'Word' }]), refusal = remoteApprovalNotice('TextEdit');
-  const conditional = { turboFirst, remoteApprovals: { ordinary: size(''),
+  const sf4 = { rule: size(FIRST_WINDOW_RULE), leanRule: size(FIRST_WINDOW_LEAN_RULE), descriptions: ['computer', 'browser'].flatMap(variant =>
+    [true, 'merge', 'nosavestop'].flatMap(batch => [false, true].map(lean => ({ variant, batch, lean,
+      off: size(compactText({ variant, dot: variant === 'browser' }, batch, lean)),
+      on: size(compactText({ variant, dot: variant === 'browser' }, batch, lean, false, { firstWindow: true })) })))) };
+  const conditional = { turboFirst, sf4, windowsRepl: { ordinary: size(''), startup: size(taggedNoticeInventory(undefined, { windowsOnly: true }).map(e => e.text).join('\n')), documentation: size(WINDOWS_REPL_DOCS), skill: size(skillRules(undefined, {}, 'win32') ?? ''),
+    tools: size(JSON.stringify(windowsReplTools())), safety: size(WINDOWS_SAFETY_UNAVAILABLE), runtime: size(WINDOWS_REPL_NODE_UNSUPPORTED),
+    admission: size([...Object.values(WINDOWS_FORBIDDEN_NOTICES), WINDOWS_STUCK_ESCAPE_NOTE].join('\n')) }, remoteApprovals: { ordinary: size(''),
     upfront: { text: upfront, ...size(upfront) }, refusal: { text: refusal, ...size(refusal) }, physical: { text: physicalApprovalNotice, ...size(physicalApprovalNotice) } } };
   return { rows, total, conditional, reductionPercent: 100 * (1 - total.lean.characters / total.default.characters), details };
 }

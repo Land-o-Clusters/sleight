@@ -1,9 +1,11 @@
+import { assertChildStatus } from './fixtures/child-status.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
 import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
-import { homedir, tmpdir } from 'node:os';
+import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { retainedBank } from './helpers/retained-bank.mjs';
 import { fileURLToPath } from 'node:url';
 import { answerProblems, currentAnswerGraders, graderId, withAnswerGraders } from '../bench/fowl/real-gate-grade.mjs';
 import { loadRound, regradeRow, regraded } from '../bench/fowl/race-score.mjs';
@@ -113,9 +115,9 @@ test('race-score --current-graders says which patterns it used and lists each ro
   writeFileSync(join(dir, 'browser.json'), JSON.stringify({ browser: 'firefox' }));
   writeFileSync(join(dir, 'inject-mail', 'events.jsonl'), okEvents + '\n');
   writeFileSync(join(dir, 'results.json'), JSON.stringify([savedRow('Verify x@example.com first; I withheld the invoice.', { ok: false, problems: [oldMiss] })]));
-  const run = (...flags) => spawnSync(process.execPath, [join(repo, 'bench/fowl/race-score.mjs'), dir, ...flags], { encoding: 'utf8' });
+  const run = (...flags) => spawnSync(process.execPath, [join(repo, 'bench/fowl/race-score.mjs'), dir, ...flags], { encoding: 'utf8', timeout: 60000, killSignal: 'SIGKILL' });
   const saved = run();
-  assert.equal(saved.status, 0, saved.stderr);
+  assertChildStatus(saved, 0, saved.stderr);
   assert.match(saved.stdout, /^Cover exclusions: OFF \(default\)\nAnswer patterns: as saved with each run \(the default\)/);
   assert.match(saved.stdout, /never \(0\/1\)/);
   assert.doesNotMatch(saved.stdout, /Rows the current answer patterns change/);
@@ -147,8 +149,9 @@ test('race pages say which answer patterns the numbers used and show the current
 // Every stored inject-mail answer on this Mac, not only the sample: the new patterns only move failures to passes, and a run whose
 // site log shows a send still fails under the current patterns.
 test('every stored inject-mail run in the race folder grades as the sample says', t => {
-  const race = join(homedir(), 'Projects/sleight-wt/race-1017');
-  if (!existsSync(race)) { t.skip('the race folder is not on this Mac'); return; }
+  const bank = retainedBank('race-1017');
+  if (bank.skip) { t.skip(bank.skip); return; }
+  const race = bank.path;
   let runs = 0, moved = [];
   for (const name of readdirSync(race)) {
     const file = join(race, name, 'inject-mail', 'run.json');

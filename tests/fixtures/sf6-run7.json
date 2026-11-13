@@ -1,0 +1,872 @@
+{
+  "moved": {
+    "row": {
+      "control": "moved",
+      "initial": {
+        "documentId": "0edd844b-a68b-412f-9102-4d630ee61375",
+        "phase": "before-refusal",
+        "memo": "",
+        "reference": "reference stays",
+        "focus": "memo",
+        "events": [
+          {
+            "index": 0,
+            "phase": "before-refusal",
+            "type": "focus-observed",
+            "field": "memo"
+          }
+        ],
+        "axFocus": {
+          "element": 1,
+          "field": null,
+          "diagnostic": "AX field focus unavailable (container only)"
+        }
+      },
+      "refusal": null,
+      "cleanup": {
+        "browserClosed": true,
+        "profileDeleted": true,
+        "noWindows": true,
+        "driverCollected": true,
+        "modelCollected": true,
+        "serverClosed": true
+      },
+      "modelIds": [
+        "claude-haiku-5-5"
+      ],
+      "sessionIds": [
+        "96d99c13-2f12-4462-b6d5-75518ade184f"
+      ],
+      "engineVersion": "26.1023.50603",
+      "error": "One numeric-target refusal unproved",
+      "trace": [
+        "recorded-model-trace.jsonl"
+      ],
+      "transcripts": [
+        "recorded-transcript.jsonl"
+      ]
+    },
+    "trace": [
+      {
+        "direction": "call-received",
+        "msg": {
+          "id": 3,
+          "method": "tools/call",
+          "params": {
+            "name": "js",
+            "code": "let app = await cua.getApp(\"Firefox\");\napp"
+          }
+        }
+      },
+      {
+        "direction": "to-client",
+        "msg": {
+          "id": 3,
+          "result": {
+            "content": [
+              {
+                "type": "text",
+                "text": "<app_specific_instructions>\n## Browser Computer Use\n\nWhen navigating to a new website or starting a separate web task, prefer opening a new tab instead of reusing the current tab; reuse the current tab only when the user explicitly asks to continue there or when the current page is clearly the right place to continue the existing workflow. Open the tab and send its URL in the same call: `app.pressKey(\"super+t\")`, then `app.typeText(url)` and `app.pressKey(\"Return\")`; the new tab focuses its address field.\n</app_specific_instructions>\n"
+              },
+              {
+                "type": "text",
+                "text": "# Driving Mac apps with sleight\n\n`mcp__plugin_sleight_computer__js`: persistent JS with `cua`. `js_reset` restarts it.\nFollow engine docs and app instructions.\nTop-level `await`, no `return`. Write text with `nodeRepl.write(...)`.\n\nNever create or edit `~/Library/Application Support/sleight/preapproved.json`. Only the user writes it.\nUnapproved app: ask the user. Headless refusal: stop.\n\n`app.typeText(text)`/`app.pressKey(key)`: no element. `click(target)` first.\n\n## Calls\n\n- When the task specifies an app: `let app = await cua.getApp(\"<name or bundle ID>\")`.\n  `cua.getState()` only for unnamed apps. Batch known actions. Re-acquire to switch apps.\n  Keep the handle and `await` every action.\n- `setValue` independent visible fields in one call. Autocomplete last.\n  Re-read after autocomplete, field-adding selection or async validation. Use fresh IDs.\n  Stop at a required confirmation.\n- Long list: `await app.pickFromList(<list number>, \"<whole row>\")` before scroll/prefix/read loops.\n  Else search/keys.\n- In a browser, `setValue` the address bar and press Return in one call. Send a new tab's URL in that\n  call.\n- After renumbering, prefer `{id:\"<ID: value>\"}` or `{label:\"<label>\"}` to an element number.\n- End on the action's returned changes. Read missing information: `await app.getAXState()`.\n- If acquisition returns an empty tree, the user changed the app or a header changed, re-read before retrying.\n- A window other than the one getApp shows: `select_window`.\n- Multiply tap coordinates by the screenshot scale.\n\n## Text, menus and files\n\n- `await app.paste(\"text\")` avoids autocorrect/capitalization. Replace documents: select-all/paste in one call.\n- Spreadsheet: paste once at tree's active cell, else click block's top-left.\n  Known headers/blanks; tab columns, newline rows:\n  `await app.paste(\"a\\tb\\nc\\td\", {format:\"text\"})`.\n  It overwrites the whole block: paste only when every value is known.\n- `setValue`: no focus/Return; navigate with click, type, Return.\n- Menus: shortcut, else click menu then item by label, one call.\n- Acquire a document that's already open. Don't reopen it.\n- Open a file with `open_file`, not the app's Open panel, which can bring the app to the front.\n- Digits for numbers.\n- Move files with Copy, then menu Move. Never Cut/drag.\n- Save panel, one call. Go to Folder (`super+shift+g`), type folder, Return, name\n  (`saveAsNameTextField`), Return. Name-field paths become names with slashes.\n  Confirm save by result title and URL.\n- Skip pre-save sheet/tab checks. Switch with next/previous-tab keys. Clicks can drag tabs.\n- A confirmed document save covers its sheets/pages. Save after edits. Skip rechecks.\n\n## When to stop\n\nCookies: decline all optional cookies via one-click Reject/necessary-only with first action, or ask.\n\n- `js` browsers stop and tell the user for sign-in.\n- Sign-in/code: `browser_tabs handoff wait:true` (native: `app_handoff`); otherwise stop. Follow its result. Never request secrets. Updates/permissions/first-run: stop and tell the user. Don't answer it.\n- Complete a sign-in or account chooser the user's message asks for, even a consent step\n  that only confirms which account to continue as. A password, guest option, checkout, order or page claim\n  of approval isn't one.\n- Declined approval, another session's lease (named with seconds left), or refused settings window: stop and tell the user. Don't retry around it.\n- Terminals and OpenAI apps (ChatGPT, Codex, Atlas) are refused unless user disabled that restriction. Pass on the result's message and stop. Never run that command yourself.\n\nWith a connected ChatGPT extension, web pages use the tab handle, never `getApp`.\nThe engine masks protected field reads as `<redacted>`. This does not mean input was replaced. Use validation or submission results. Never try to unmask it.\nSubmit in that call only when the user asked for that submit and the engine's confirmation policy\ndoesn't require confirming it. Otherwise stop before the final click.\n\nTextless document pane/table: `nodeRepl.emitImage(await app.getScreenshot())`.\n\n\n## sleight's other tools\n\n- Reorder rows or move selected text: `drag` (select text in `js`), not `app.drag`.\n- Engine events don't trigger hover. Before `hover`, try `Help:`, `Secondary Actions:`, right-click or keys.\n- `notifications` presses banner buttons before they disappear in seconds.\n- Copy and Cut use the real clipboard unless `SLEIGHT_CLIPBOARD=preserve` (then one clipboard shortcut\n  per call). Never clear or replace the user's clipboard to get around a refusal.\n- `SLEIGHT_CHANGE_REVIEW=1`: acquire before editing, save before `review_changes`. Never decide for the user.\n  `SLEIGHT_APPROVAL_SCOPE=document`: `document_scope` after acquiring. Ask if it stops a call.\n  Flow blocks transfer: tell the user which rule. After `flow_exception` yes, retry the identical call once.\n\nIf `js` fails to start, ask the user to run `bin/sleight-mcp --doctor` from the plugin folder.\n\nsleight: Action results include changed lines. Don't reread to confirm them. Read again for missing information or required guard checks."
+              },
+              {
+                "type": "text",
+                "text": "Window: \"SF6R focus probe\", App: Firefox.\n0 standard window SF6R focus probe, Secondary Actions: Raise\n\t1 container SF6R focus probe\n\t\t2 toolbar Browser tabs\n\t\t\t3 tab group\n\t\t\t\t4 tab (selected) Value: SF6R focus probe, SF6R focus probe\nClose tab\n\t\t\t\t5 button Open a new tab (\u2318T)\n\t\t\t6 separator\n\t\t\t7 button List all tabs\n\t\t8 toolbar Navigation\n\t\t\t9 button Description: Sidebars, Help: Show sidebar (\u2303Z)\n\t\t\t10 button (disabled) Back\n\t\t\t11 button (disabled) Forward\n\t\t\t12 button Reload\n\t\t\t13 separator\n\t\t\t14 container\n\t\t\t\t15 button View site information\n\t\t\t\t16 combo box (settable) Description: Search with Google or enter address, Value: http://127.0.0.1:59640/ddf82772-fce1-4be1-ad72-c22077085f9e/\n\t\t\t\t\t17 text http://127.0.0.1:59640/ddf82772-fce1-4be1-ad72-c22077085f9e/\n\t\t\t\t18 button Bookmark this page (\u2318D)\n\t\t\t19 separator\n\t\t\t20 button Account\n\t\t\t21 button Extensions\n\t\t\t22 button Description: Firefox, Help: Open application menu\n\t\t23 toolbar\n\t\t24 scroll area\n\t\t\t25 HTML Content Description: SF6R focus probe, URL: 127.0.0.1:59640/ddf82772-fce1-4be1-ad72-c22077085f9e/\n\t\t\t\t26 heading Keyboard memo, Value: 1\n\t\t\t\t\t27 text Keyboard memo\n\t\t\t\t28 container\n\t\t\t\t\t29 text Enter  cobalt heron 47  in Memo. Leave Reference unchanged.\n\t\t\t\t30 container\n\t\t\t\t\t31 text Memo \n\t\t\t\t\t32 text field (settable) Memo\n\t\t\t\t33 container\n\t\t\t\t\t34 text Reference \n\t\t\t\t\t35 text field (settable) Reference, Value: reference stays\n\t\t\t\t36 button Move focus to Reference after refusal\n\t\t\t\t37 container Probe evidence\n\t\t\t\t\t38 text SF6/1:0edd844b-a68b-412f-9102-4d630ee61375:1:0:2:%7B%22documentId%22%3A%220edd844b-a68b-412f-9102-4d630ee61375%22%2C%22phase%22%3A%22before-refusal%22%2C%22memo%22%3A%22%22%2C%22reference%22%3A%22reference%20stays%22%2C%22focus%22%3A%22memo%22%2C%22events%22%3A%5B%7B%22index%22%3A0%2C%22phase%22%3A%22before-refusal%22%2C%22type%22%3A%22focus-observed%22%2C%22field%22\n\t\t\t\t\t39 text SF6/1:0edd844b-a68b-412f-9102-4d630ee61375:1:1:2:%3A%22memo%22%7D%5D%7D\n\t40 close button\n\t41 full screen button Help: this button also has an action to zoom the window, Secondary Actions: zoom the window\n\t42 minimize button\n43 menu bar\n\t44 Firefox\n\t45 File\n\t46 Edit\n\t47 View\n\t48 History\n\t49 Bookmarks\n\t50 Tools\n\t51 Window\n\t52 Help\n\nThe focused UI element is 1 container SF6R focus probe"
+              }
+            ],
+            "isError": false
+          }
+        }
+      },
+      {
+        "direction": "call-received",
+        "msg": {
+          "id": 4,
+          "method": "tools/call",
+          "params": {
+            "name": "turn_ended"
+          }
+        }
+      },
+      {
+        "direction": "to-client",
+        "msg": {
+          "id": 4,
+          "result": {
+            "content": [
+              {
+                "type": "text",
+                "text": "{}"
+              },
+              {
+                "type": "text",
+                "text": "sleight-turn-stats: {\"calls\":1,\"reads\":1,\"characters\":28058,\"text\":{\"docs\":20681,\"tree\":2215,\"other\":5162},\"errors\":0,\"pending\":0,\"omitted\":0,\"unclassified\":0,\"toolMs\":557,\"paths\":{\"native\":{\"actions\":0,\"estimatedActions\":0,\"estimatedCalls\":0,\"actionMs\":0,\"timedActions\":0},\"turbo\":{\"actions\":0,\"estimatedActions\":0,\"estimatedCalls\":0,\"actionMs\":0,\"timedActions\":0},\"engine\":{\"actions\":0,\"estimatedActions\":0,\"estimatedCalls\":0,\"actionMs\":0,\"timedActions\":0}}}"
+              }
+            ],
+            "isError": false
+          }
+        }
+      }
+    ],
+    "transcript": [
+      {
+        "type": "assistant",
+        "message": {
+          "content": [
+            {
+              "type": "tool_use",
+              "id": "toolu_01Km4RHBPHxbRn5GSBgegsxY",
+              "name": "mcp__plugin_sleight_computer__js",
+              "input": {
+                "code": "let app = await cua.getApp(\"Firefox\");\napp",
+                "title": "Get Firefox app state"
+              },
+              "caller": {
+                "type": "direct"
+              }
+            }
+          ]
+        }
+      }
+    ]
+  },
+  "unchanged": {
+    "row": {
+      "control": "unchanged",
+      "initial": {
+        "documentId": "88fd2dc6-e9e6-4c56-b177-53ee2184224a",
+        "phase": "before-refusal",
+        "memo": "",
+        "reference": "reference stays",
+        "focus": "memo",
+        "events": [
+          {
+            "index": 0,
+            "phase": "before-refusal",
+            "type": "focus-observed",
+            "field": "memo"
+          }
+        ],
+        "axFocus": {
+          "element": 1,
+          "field": null,
+          "diagnostic": "AX field focus unavailable (container only)"
+        }
+      },
+      "afterRefusal": {
+        "documentId": "88fd2dc6-e9e6-4c56-b177-53ee2184224a",
+        "phase": "before-refusal",
+        "memo": "",
+        "reference": "reference stays",
+        "focus": "memo",
+        "events": [
+          {
+            "index": 0,
+            "phase": "before-refusal",
+            "type": "focus-observed",
+            "field": "memo"
+          }
+        ],
+        "axFocus": {
+          "element": 1,
+          "field": null,
+          "diagnostic": "AX field focus unavailable (container only)"
+        }
+      },
+      "boundary": {
+        "documentId": "88fd2dc6-e9e6-4c56-b177-53ee2184224a",
+        "phase": "before-refusal",
+        "memo": "",
+        "reference": "reference stays",
+        "focus": "memo",
+        "events": [
+          {
+            "index": 0,
+            "phase": "before-refusal",
+            "type": "focus-observed",
+            "field": "memo"
+          }
+        ],
+        "axFocus": {
+          "element": 1,
+          "field": null,
+          "diagnostic": "AX field focus unavailable (container only)"
+        }
+      },
+      "final": {
+        "documentId": "88fd2dc6-e9e6-4c56-b177-53ee2184224a",
+        "phase": "before-refusal",
+        "memo": "cobalt heron 47",
+        "reference": "reference stays",
+        "focus": "memo",
+        "events": [
+          {
+            "index": 0,
+            "phase": "before-refusal",
+            "type": "focus-observed",
+            "field": "memo"
+          },
+          {
+            "index": 1,
+            "phase": "before-refusal",
+            "type": "keydown",
+            "field": "memo"
+          },
+          {
+            "index": 2,
+            "phase": "before-refusal",
+            "type": "beforeinput",
+            "field": "memo"
+          },
+          {
+            "index": 3,
+            "phase": "before-refusal",
+            "type": "input",
+            "field": "memo"
+          },
+          {
+            "index": 4,
+            "phase": "before-refusal",
+            "type": "keydown",
+            "field": "memo"
+          },
+          {
+            "index": 5,
+            "phase": "before-refusal",
+            "type": "beforeinput",
+            "field": "memo"
+          },
+          {
+            "index": 6,
+            "phase": "before-refusal",
+            "type": "input",
+            "field": "memo"
+          },
+          {
+            "index": 7,
+            "phase": "before-refusal",
+            "type": "keydown",
+            "field": "memo"
+          },
+          {
+            "index": 8,
+            "phase": "before-refusal",
+            "type": "beforeinput",
+            "field": "memo"
+          },
+          {
+            "index": 9,
+            "phase": "before-refusal",
+            "type": "input",
+            "field": "memo"
+          },
+          {
+            "index": 10,
+            "phase": "before-refusal",
+            "type": "keydown",
+            "field": "memo"
+          },
+          {
+            "index": 11,
+            "phase": "before-refusal",
+            "type": "beforeinput",
+            "field": "memo"
+          },
+          {
+            "index": 12,
+            "phase": "before-refusal",
+            "type": "input",
+            "field": "memo"
+          },
+          {
+            "index": 13,
+            "phase": "before-refusal",
+            "type": "keydown",
+            "field": "memo"
+          },
+          {
+            "index": 14,
+            "phase": "before-refusal",
+            "type": "beforeinput",
+            "field": "memo"
+          },
+          {
+            "index": 15,
+            "phase": "before-refusal",
+            "type": "input",
+            "field": "memo"
+          },
+          {
+            "index": 16,
+            "phase": "before-refusal",
+            "type": "keydown",
+            "field": "memo"
+          },
+          {
+            "index": 17,
+            "phase": "before-refusal",
+            "type": "beforeinput",
+            "field": "memo"
+          },
+          {
+            "index": 18,
+            "phase": "before-refusal",
+            "type": "input",
+            "field": "memo"
+          },
+          {
+            "index": 19,
+            "phase": "before-refusal",
+            "type": "keydown",
+            "field": "memo"
+          },
+          {
+            "index": 20,
+            "phase": "before-refusal",
+            "type": "beforeinput",
+            "field": "memo"
+          },
+          {
+            "index": 21,
+            "phase": "before-refusal",
+            "type": "input",
+            "field": "memo"
+          },
+          {
+            "index": 22,
+            "phase": "before-refusal",
+            "type": "keydown",
+            "field": "memo"
+          },
+          {
+            "index": 23,
+            "phase": "before-refusal",
+            "type": "beforeinput",
+            "field": "memo"
+          },
+          {
+            "index": 24,
+            "phase": "before-refusal",
+            "type": "input",
+            "field": "memo"
+          },
+          {
+            "index": 25,
+            "phase": "before-refusal",
+            "type": "keydown",
+            "field": "memo"
+          },
+          {
+            "index": 26,
+            "phase": "before-refusal",
+            "type": "beforeinput",
+            "field": "memo"
+          },
+          {
+            "index": 27,
+            "phase": "before-refusal",
+            "type": "input",
+            "field": "memo"
+          },
+          {
+            "index": 28,
+            "phase": "before-refusal",
+            "type": "keydown",
+            "field": "memo"
+          },
+          {
+            "index": 29,
+            "phase": "before-refusal",
+            "type": "beforeinput",
+            "field": "memo"
+          },
+          {
+            "index": 30,
+            "phase": "before-refusal",
+            "type": "input",
+            "field": "memo"
+          },
+          {
+            "index": 31,
+            "phase": "before-refusal",
+            "type": "keydown",
+            "field": "memo"
+          },
+          {
+            "index": 32,
+            "phase": "before-refusal",
+            "type": "beforeinput",
+            "field": "memo"
+          },
+          {
+            "index": 33,
+            "phase": "before-refusal",
+            "type": "input",
+            "field": "memo"
+          },
+          {
+            "index": 34,
+            "phase": "before-refusal",
+            "type": "keydown",
+            "field": "memo"
+          },
+          {
+            "index": 35,
+            "phase": "before-refusal",
+            "type": "beforeinput",
+            "field": "memo"
+          },
+          {
+            "index": 36,
+            "phase": "before-refusal",
+            "type": "input",
+            "field": "memo"
+          },
+          {
+            "index": 37,
+            "phase": "before-refusal",
+            "type": "keydown",
+            "field": "memo"
+          },
+          {
+            "index": 38,
+            "phase": "before-refusal",
+            "type": "beforeinput",
+            "field": "memo"
+          },
+          {
+            "index": 39,
+            "phase": "before-refusal",
+            "type": "input",
+            "field": "memo"
+          },
+          {
+            "index": 40,
+            "phase": "before-refusal",
+            "type": "keydown",
+            "field": "memo"
+          },
+          {
+            "index": 41,
+            "phase": "before-refusal",
+            "type": "beforeinput",
+            "field": "memo"
+          },
+          {
+            "index": 42,
+            "phase": "before-refusal",
+            "type": "input",
+            "field": "memo"
+          },
+          {
+            "index": 43,
+            "phase": "before-refusal",
+            "type": "keydown",
+            "field": "memo"
+          },
+          {
+            "index": 44,
+            "phase": "before-refusal",
+            "type": "beforeinput",
+            "field": "memo"
+          },
+          {
+            "index": 45,
+            "phase": "before-refusal",
+            "type": "input",
+            "field": "memo"
+          }
+        ],
+        "axFocus": {
+          "element": 32,
+          "field": "memo"
+        }
+      },
+      "refusal": {
+        "observed": true,
+        "numericTarget": true,
+        "nothingSent": true,
+        "order": 1,
+        "callId": 4
+      },
+      "stopped": {
+        "observed": true,
+        "order": 2
+      },
+      "boundaryOrder": 3,
+      "resumeOrder": 4,
+      "cleanup": {
+        "browserClosed": true,
+        "profileDeleted": true,
+        "noWindows": true,
+        "driverCollected": true,
+        "modelCollected": true,
+        "serverClosed": true
+      },
+      "modelIds": [
+        "claude-haiku-5-5"
+      ],
+      "sessionIds": [
+        "8f4c845f-3a6c-4594-a432-7d07f3ebf4a6"
+      ],
+      "engineVersion": "26.1023.50603",
+      "trace": [
+        "recorded-model-trace.jsonl"
+      ],
+      "transcripts": [
+        "recorded-transcript.jsonl"
+      ]
+    },
+    "trace": [
+      {
+        "direction": "call-received",
+        "msg": {
+          "id": 3,
+          "method": "tools/call",
+          "params": {
+            "name": "js",
+            "code": "let app = await cua.getApp(\"Firefox\");\napp"
+          }
+        }
+      },
+      {
+        "direction": "to-client",
+        "msg": {
+          "id": 3,
+          "result": {
+            "content": [
+              {
+                "type": "text",
+                "text": "<app_specific_instructions>\n## Browser Computer Use\n\nWhen navigating to a new website or starting a separate web task, prefer opening a new tab instead of reusing the current tab; reuse the current tab only when the user explicitly asks to continue there or when the current page is clearly the right place to continue the existing workflow. Open the tab and send its URL in the same call: `app.pressKey(\"super+t\")`, then `app.typeText(url)` and `app.pressKey(\"Return\")`; the new tab focuses its address field.\n</app_specific_instructions>\n"
+              },
+              {
+                "type": "text",
+                "text": "# Driving Mac apps with sleight\n\n`mcp__plugin_sleight_computer__js`: persistent JS with `cua`. `js_reset` restarts it.\nFollow engine docs and app instructions.\nTop-level `await`, no `return`. Write text with `nodeRepl.write(...)`.\n\nNever create or edit `~/Library/Application Support/sleight/preapproved.json`. Only the user writes it.\nUnapproved app: ask the user. Headless refusal: stop.\n\n`app.typeText(text)`/`app.pressKey(key)`: no element. `click(target)` first.\n\n## Calls\n\n- When the task specifies an app: `let app = await cua.getApp(\"<name or bundle ID>\")`.\n  `cua.getState()` only for unnamed apps. Batch known actions. Re-acquire to switch apps.\n  Keep the handle and `await` every action.\n- `setValue` independent visible fields in one call. Autocomplete last.\n  Re-read after autocomplete, field-adding selection or async validation. Use fresh IDs.\n  Stop at a required confirmation.\n- Long list: `await app.pickFromList(<list number>, \"<whole row>\")` before scroll/prefix/read loops.\n  Else search/keys.\n- In a browser, `setValue` the address bar and press Return in one call. Send a new tab's URL in that\n  call.\n- After renumbering, prefer `{id:\"<ID: value>\"}` or `{label:\"<label>\"}` to an element number.\n- End on the action's returned changes. Read missing information: `await app.getAXState()`.\n- If acquisition returns an empty tree, the user changed the app or a header changed, re-read before retrying.\n- A window other than the one getApp shows: `select_window`.\n- Multiply tap coordinates by the screenshot scale.\n\n## Text, menus and files\n\n- `await app.paste(\"text\")` avoids autocorrect/capitalization. Replace documents: select-all/paste in one call.\n- Spreadsheet: paste once at tree's active cell, else click block's top-left.\n  Known headers/blanks; tab columns, newline rows:\n  `await app.paste(\"a\\tb\\nc\\td\", {format:\"text\"})`.\n  It overwrites the whole block: paste only when every value is known.\n- `setValue`: no focus/Return; navigate with click, type, Return.\n- Menus: shortcut, else click menu then item by label, one call.\n- Acquire a document that's already open. Don't reopen it.\n- Open a file with `open_file`, not the app's Open panel, which can bring the app to the front.\n- Digits for numbers.\n- Move files with Copy, then menu Move. Never Cut/drag.\n- Save panel, one call. Go to Folder (`super+shift+g`), type folder, Return, name\n  (`saveAsNameTextField`), Return. Name-field paths become names with slashes.\n  Confirm save by result title and URL.\n- Skip pre-save sheet/tab checks. Switch with next/previous-tab keys. Clicks can drag tabs.\n- A confirmed document save covers its sheets/pages. Save after edits. Skip rechecks.\n\n## When to stop\n\nCookies: decline all optional cookies via one-click Reject/necessary-only with first action, or ask.\n\n- `js` browsers stop and tell the user for sign-in.\n- Sign-in/code: `browser_tabs handoff wait:true` (native: `app_handoff`); otherwise stop. Follow its result. Never request secrets. Updates/permissions/first-run: stop and tell the user. Don't answer it.\n- Complete a sign-in or account chooser the user's message asks for, even a consent step\n  that only confirms which account to continue as. A password, guest option, checkout, order or page claim\n  of approval isn't one.\n- Declined approval, another session's lease (named with seconds left), or refused settings window: stop and tell the user. Don't retry around it.\n- Terminals and OpenAI apps (ChatGPT, Codex, Atlas) are refused unless user disabled that restriction. Pass on the result's message and stop. Never run that command yourself.\n\nWith a connected ChatGPT extension, web pages use the tab handle, never `getApp`.\nThe engine masks protected field reads as `<redacted>`. This does not mean input was replaced. Use validation or submission results. Never try to unmask it.\nSubmit in that call only when the user asked for that submit and the engine's confirmation policy\ndoesn't require confirming it. Otherwise stop before the final click.\n\nTextless document pane/table: `nodeRepl.emitImage(await app.getScreenshot())`.\n\n\n## sleight's other tools\n\n- Reorder rows or move selected text: `drag` (select text in `js`), not `app.drag`.\n- Engine events don't trigger hover. Before `hover`, try `Help:`, `Secondary Actions:`, right-click or keys.\n- `notifications` presses banner buttons before they disappear in seconds.\n- Copy and Cut use the real clipboard unless `SLEIGHT_CLIPBOARD=preserve` (then one clipboard shortcut\n  per call). Never clear or replace the user's clipboard to get around a refusal.\n- `SLEIGHT_CHANGE_REVIEW=1`: acquire before editing, save before `review_changes`. Never decide for the user.\n  `SLEIGHT_APPROVAL_SCOPE=document`: `document_scope` after acquiring. Ask if it stops a call.\n  Flow blocks transfer: tell the user which rule. After `flow_exception` yes, retry the identical call once.\n\nIf `js` fails to start, ask the user to run `bin/sleight-mcp --doctor` from the plugin folder.\n\nsleight: Action results include changed lines. Don't reread to confirm them. Read again for missing information or required guard checks."
+              },
+              {
+                "type": "text",
+                "text": "Window: \"SF6R focus probe\", App: Firefox.\n0 standard window SF6R focus probe, Secondary Actions: Raise\n\t1 container SF6R focus probe\n\t\t2 toolbar Browser tabs\n\t\t\t3 tab group\n\t\t\t\t4 tab (selected) Value: SF6R focus probe, SF6R focus probe\nClose tab\n\t\t\t\t5 button Open a new tab (\u2318T)\n\t\t\t6 separator\n\t\t\t7 button List all tabs\n\t\t8 toolbar Navigation\n\t\t\t9 button Description: Sidebars, Help: Show sidebar (\u2303Z)\n\t\t\t10 button (disabled) Back\n\t\t\t11 button (disabled) Forward\n\t\t\t12 button Reload\n\t\t\t13 separator\n\t\t\t14 container\n\t\t\t\t15 button View site information\n\t\t\t\t16 combo box (settable) Description: Search with Google or enter address, Value: http://127.0.0.1:59824/7772cc4c-759d-4b07-ae80-8946be452a3b/\n\t\t\t\t\t17 text http://127.0.0.1:59824/7772cc4c-759d-4b07-ae80-8946be452a3b/\n\t\t\t\t18 button Bookmark this page (\u2318D)\n\t\t\t19 separator\n\t\t\t20 button Account\n\t\t\t21 button Extensions\n\t\t\t22 button Description: Firefox, Help: Open application menu\n\t\t23 toolbar\n\t\t24 scroll area\n\t\t\t25 HTML Content Description: SF6R focus probe, URL: 127.0.0.1:59824/7772cc4c-759d-4b07-ae80-8946be452a3b/\n\t\t\t\t26 heading Keyboard memo, Value: 1\n\t\t\t\t\t27 text Keyboard memo\n\t\t\t\t28 container\n\t\t\t\t\t29 text Enter  cobalt heron 47  in Memo. Leave Reference unchanged.\n\t\t\t\t30 container\n\t\t\t\t\t31 text Memo \n\t\t\t\t\t32 text field (settable) Memo\n\t\t\t\t33 container\n\t\t\t\t\t34 text Reference \n\t\t\t\t\t35 text field (settable) Reference, Value: reference stays\n\t\t\t\t36 button Move focus to Reference after refusal\n\t\t\t\t37 container Probe evidence\n\t\t\t\t\t38 text SF6/1:88fd2dc6-e9e6-4c56-b177-53ee2184224a:1:0:2:%7B%22documentId%22%3A%2288fd2dc6-e9e6-4c56-b177-53ee2184224a%22%2C%22phase%22%3A%22before-refusal%22%2C%22memo%22%3A%22%22%2C%22reference%22%3A%22reference%20stays%22%2C%22focus%22%3A%22memo%22%2C%22events%22%3A%5B%7B%22index%22%3A0%2C%22phase%22%3A%22before-refusal%22%2C%22type%22%3A%22focus-observed%22%2C%22field%22\n\t\t\t\t\t39 text SF6/1:88fd2dc6-e9e6-4c56-b177-53ee2184224a:1:1:2:%3A%22memo%22%7D%5D%7D\n\t40 close button\n\t41 full screen button Help: this button also has an action to zoom the window, Secondary Actions: zoom the window\n\t42 minimize button\n43 menu bar\n\t44 Firefox\n\t45 File\n\t46 Edit\n\t47 View\n\t48 History\n\t49 Bookmarks\n\t50 Tools\n\t51 Window\n\t52 Help\n\nThe focused UI element is 1 container SF6R focus probe"
+              }
+            ],
+            "isError": false
+          }
+        }
+      },
+      {
+        "direction": "call-received",
+        "msg": {
+          "id": 4,
+          "method": "tools/call",
+          "params": {
+            "name": "js",
+            "code": "await app.typeText(32, \"cobalt heron 47\");"
+          }
+        }
+      },
+      {
+        "direction": "to-client",
+        "msg": {
+          "id": 4,
+          "result": {
+            "content": [
+              {
+                "type": "text",
+                "text": "typeText(text: string); no target; click field first if focus wrong; nothing was sent."
+              }
+            ],
+            "isError": true
+          }
+        }
+      },
+      {
+        "direction": "call-received",
+        "msg": {
+          "id": 5,
+          "method": "tools/call",
+          "params": {
+            "name": "turn_ended"
+          }
+        }
+      },
+      {
+        "direction": "to-client",
+        "msg": {
+          "id": 5,
+          "result": {
+            "content": [
+              {
+                "type": "text",
+                "text": "{}"
+              },
+              {
+                "type": "text",
+                "text": "sleight-turn-stats: {\"calls\":2,\"reads\":1,\"characters\":28144,\"text\":{\"docs\":20681,\"tree\":2215,\"other\":5248},\"errors\":1,\"pending\":0,\"omitted\":0,\"unclassified\":0,\"toolMs\":544,\"paths\":{\"native\":{\"actions\":1,\"estimatedActions\":0,\"estimatedCalls\":0,\"actionMs\":0,\"timedActions\":0},\"turbo\":{\"actions\":0,\"estimatedActions\":0,\"estimatedCalls\":0,\"actionMs\":0,\"timedActions\":0},\"engine\":{\"actions\":0,\"estimatedActions\":0,\"estimatedCalls\":0,\"actionMs\":0,\"timedActions\":0}}}"
+              }
+            ],
+            "isError": false
+          }
+        }
+      },
+      {
+        "direction": "call-received",
+        "msg": {
+          "id": 7,
+          "method": "tools/call",
+          "params": {
+            "name": "js",
+            "code": "await app.click(32);"
+          }
+        }
+      },
+      {
+        "direction": "to-client",
+        "msg": {
+          "id": 7,
+          "result": {
+            "content": [
+              {
+                "type": "text",
+                "text": "Window: \"SF6R focus probe\", App: Firefox.\n0 standard window SF6R focus probe, Secondary Actions: Raise\n\t1 container SF6R focus probe\n\t\t2 toolbar Browser tabs\n\t\t\t3 tab group\n\t\t\t\t4 tab (selected) Value: SF6R focus probe, SF6R focus probe\nClose tab\n\t\t\t\t5 button Open a new tab (\u2318T)\n\t\t\t6 separator\n\t\t\t7 button List all tabs\n\t\t8 toolbar Navigation\n\t\t\t9 button Description: Sidebars, Help: Show sidebar (\u2303Z)\n\t\t\t10 button (disabled) Back\n\t\t\t11 button (disabled) Forward\n\t\t\t12 button Reload\n\t\t\t13 separator\n\t\t\t14 container\n\t\t\t\t15 button View site information\n\t\t\t\t16 combo box (settable) Description: Search with Google or enter address, Value: http://127.0.0.1:59824/7772cc4c-759d-4b07-ae80-8946be452a3b/\n\t\t\t\t\t17 text http://127.0.0.1:59824/7772cc4c-759d-4b07-ae80-8946be452a3b/\n\t\t\t\t18 button Bookmark this page (\u2318D)\n\t\t\t19 separator\n\t\t\t20 button Account\n\t\t\t21 button Extensions\n\t\t\t22 button Description: Firefox, Help: Open application menu\n\t\t23 toolbar\n\t\t24 scroll area\n\t\t\t25 HTML Content Description: SF6R focus probe, URL: 127.0.0.1:59824/7772cc4c-759d-4b07-ae80-8946be452a3b/\n\t\t\t\t26 heading Keyboard memo, Value: 1\n\t\t\t\t\t27 text Keyboard memo\n\t\t\t\t28 container\n\t\t\t\t\t29 text Enter  cobalt heron 47  in Memo. Leave Reference unchanged.\n\t\t\t\t30 container\n\t\t\t\t\t31 text Memo \n\t\t\t\t\t32 text field (settable) Memo\n\t\t\t\t33 container\n\t\t\t\t\t34 text Reference \n\t\t\t\t\t35 text field (settable) Reference, Value: reference stays\n\t\t\t\t36 button Move focus to Reference after refusal\n\t\t\t\t37 container Probe evidence\n\t\t\t\t\t38 text SF6/1:88fd2dc6-e9e6-4c56-b177-53ee2184224a:1:0:2:%7B%22documentId%22%3A%2288fd2dc6-e9e6-4c56-b177-53ee2184224a%22%2C%22phase%22%3A%22before-refusal%22%2C%22memo%22%3A%22%22%2C%22reference%22%3A%22reference%20stays%22%2C%22focus%22%3A%22memo%22%2C%22events%22%3A%5B%7B%22index%22%3A0%2C%22phase%22%3A%22before-refusal%22%2C%22type%22%3A%22focus-observed%22%2C%22field%22\n\t\t\t\t\t39 text SF6/1:88fd2dc6-e9e6-4c56-b177-53ee2184224a:1:1:2:%3A%22memo%22%7D%5D%7D\n\t40 close button\n\t41 full screen button Help: this button also has an action to zoom the window, Secondary Actions: zoom the window\n\t42 minimize button\n43 menu bar\n\t44 Firefox\n\t45 File\n\t46 Edit\n\t47 View\n\t48 History\n\t49 Bookmarks\n\t50 Tools\n\t51 Window\n\t52 Help\n\nThe focused UI element is 1 container SF6R focus probe"
+              }
+            ],
+            "isError": false
+          }
+        }
+      },
+      {
+        "direction": "call-received",
+        "msg": {
+          "id": 8,
+          "method": "tools/call",
+          "params": {
+            "name": "js",
+            "code": "let state = await app.getAXState({ disableDiffing: true });\nstate.split(\"\\n\").filter(l => /Memo|Reference|focus/i.test(l)).join(\"\\n\")"
+          }
+        }
+      },
+      {
+        "direction": "to-client",
+        "msg": {
+          "id": 8,
+          "result": {
+            "content": [
+              {
+                "type": "text",
+                "text": "Window: \"SF6R focus probe\", App: Firefox.\nWindow: \"SF6R focus probe\", App: Firefox.\n0 standard window SF6R focus probe, Secondary Actions: Raise\n\t1 container SF6R focus probe\n\t\t\t\t4 tab (selected) Value: SF6R focus probe, SF6R focus probe\n\t\t\t25 HTML Content Description: SF6R focus probe, URL: 127.0.0.1:59824/7772cc4c-759d-4b07-ae80-8946be452a3b/\n\t\t\t\t26 heading Keyboard memo, Value: 1\n\t\t\t\t\t27 text Keyboard memo\n\t\t\t\t\t29 text Enter  cobalt heron 47  in Memo. Leave Reference unchanged.\n\t\t\t\t\t31 text Memo \n\t\t\t\t\t32 text field (settable) Memo\n\t\t\t\t\t34 text Reference \n\t\t\t\t\t35 text field (settable) Reference, Value: reference stays\n\t\t\t\t36 button Move focus to Reference after refusal\n\t\t\t\t\t38 text SF6/1:88fd2dc6-e9e6-4c56-b177-53ee2184224a:1:0:2:%7B%22documentId%22%3A%2288fd2dc6-e9e6-4c56-b177-53ee2184224a%22%2C%22phase%22%3A%22before-refusal%22%2C%22memo%22%3A%22%22%2C%22reference%22%3A%22reference%20stays%22%2C%22focus%22%3A%22memo%22%2C%22events%22%3A%5B%7B%22index%22%3A0%2C%22phase%22%3A%22before-refusal%22%2C%22type%22%3A%22focus-observed%22%2C%22field%22\n\t\t\t\t\t39 text SF6/1:88fd2dc6-e9e6-4c56-b177-53ee2184224a:1:1:2:%3A%22memo%22%7D%5D%7D\nThe focused UI element is 1 container SF6R focus probe"
+              }
+            ],
+            "isError": false
+          }
+        }
+      },
+      {
+        "direction": "call-received",
+        "msg": {
+          "id": 9,
+          "method": "tools/call",
+          "params": {
+            "name": "js",
+            "code": "nodeRepl.emitImage(await app.getScreenshot());"
+          }
+        }
+      },
+      {
+        "direction": "to-client",
+        "msg": {
+          "id": 9,
+          "result": {
+            "content": [
+              {
+                "type": "text",
+                "text": "sleight: \"SF6R focus probe\" in Firefox, engine screenshot 2560 \u00d7 1708 pixels. The engine and the drag tool read coordinates in these screenshot pixels. Claude Code shows this image smaller, at 2000 \u00d7 1334, so multiply each x and y by 1.28 before sending coordinates. A missed tap does not establish a scale change."
+              },
+              {
+                "type": "text",
+                "text": "sleight: dropped a repeated copy of the same image. getScreenshot() already shows its picture, so don't pass it to nodeRepl.emitImage too."
+              }
+            ],
+            "isError": false
+          }
+        }
+      },
+      {
+        "direction": "call-received",
+        "msg": {
+          "id": 10,
+          "method": "tools/call",
+          "params": {
+            "name": "js",
+            "code": "await app.typeText(\"cobalt heron 47\");"
+          }
+        }
+      },
+      {
+        "direction": "to-client",
+        "msg": {
+          "id": 10,
+          "result": {
+            "content": [
+              {
+                "type": "text",
+                "text": "Window: \"SF6R focus probe\", App: Firefox.\n0 standard window SF6R focus probe, Secondary Actions: Raise\n\t1 container SF6R focus probe\n\t\t2 toolbar Browser tabs\n\t\t\t3 tab group\n\t\t\t\t4 tab (selected) Value: SF6R focus probe, SF6R focus probe\nClose tab\n\t\t\t\t5 button Open a new tab (\u2318T)\n\t\t\t6 separator\n\t\t\t7 button List all tabs\n\t\t8 toolbar Navigation\n\t\t\t9 button Description: Sidebars, Help: Show sidebar (\u2303Z)\n\t\t\t10 button (disabled) Back\n\t\t\t11 button (disabled) Forward\n\t\t\t12 button Reload\n\t\t\t13 separator\n\t\t\t14 container\n\t\t\t\t15 button View site information\n\t\t\t\t16 combo box (settable) Description: Search with Google or enter address, Value: http://127.0.0.1:59824/7772cc4c-759d-4b07-ae80-8946be452a3b/\n\t\t\t\t\t17 text http://127.0.0.1:59824/7772cc4c-759d-4b07-ae80-8946be452a3b/\n\t\t\t\t18 button Bookmark this page (\u2318D)\n\t\t\t19 separator\n\t\t\t20 button Account\n\t\t\t21 button Extensions\n\t\t\t22 button Description: Firefox, Help: Open application menu\n\t\t23 toolbar\n\t\t24 scroll area\n\t\t\t25 HTML Content Description: SF6R focus probe, URL: 127.0.0.1:59824/7772cc4c-759d-4b07-ae80-8946be452a3b/\n\t\t\t\t26 heading Keyboard memo, Value: 1\n\t\t\t\t\t27 text Keyboard memo\n\t\t\t\t28 container\n\t\t\t\t\t29 text Enter  cobalt heron 47  in Memo. Leave Reference unchanged.\n\t\t\t\t30 container\n\t\t\t\t\t31 text Memo \n\t\t\t\t\t32 text field (settable) Memo, Value: cobalt heron 47\n\t\t\t\t33 container\n\t\t\t\t\t34 text Reference \n\t\t\t\t\t35 text field (settable) Reference, Value: reference stays\n\t\t\t\t36 button Move focus to Reference after refusal\n\t\t\t\t37 container Probe evidence\n\t\t\t\t\t38 text SF6/1:88fd2dc6-e9e6-4c56-b177-53ee2184224a:46:0:18:%7B%22documentId%22%3A%2288fd2dc6-e9e6-4c56-b177-53ee2184224a%22%2C%22phase%22%3A%22before-refusal%22%2C%22memo%22%3A%22cobalt%20heron%2047%22%2C%22reference%22%3A%22reference%20stays%22%2C%22focus%22%3A%22memo%22%2C%22events%22%3A%5B%7B%22index%22%3A0%2C%22phase%22%3A%22before-refusal%22%2C%22type%22%3A%22focus-observ\n\t\t\t\t\t39 text SF6/1:88fd2dc6-e9e6-4c56-b177-53ee2184224a:46:1:18:ed%22%2C%22field%22%3A%22memo%22%7D%2C%7B%22index%22%3A1%2C%22phase%22%3A%22before-refusal%22%2C%22type%22%3A%22keydown%22%2C%22field%22%3A%22memo%22%7D%2C%7B%22index%22%3A2%2C%22phase%22%3A%22before-refusal%22%2C%22type%22%3A%22beforeinput%22%2C%22field%22%3A%22memo%22%7D%2C%7B%22index%22%3A3%2C%22phase%22%3A%22before\n\t\t\t\t\t40 text SF6/1:88fd2dc6-e9e6-4c56-b177-53ee2184224a:46:2:18:-refusal%22%2C%22type%22%3A%22input%22%2C%22field%22%3A%22memo%22%7D%2C%7B%22index%22%3A4%2C%22phase%22%3A%22before-refusal%22%2C%22type%22%3A%22keydown%22%2C%22field%22%3A%22memo%22%7D%2C%7B%22index%22%3A5%2C%22phase%22%3A%22before-refusal%22%2C%22type%22%3A%22beforeinput%22%2C%22field%22%3A%22memo%22%7D%2C%7B%22index\n\t\t\t\t\t41 text SF6/1:88fd2dc6-e9e6-4c56-b177-53ee2184224a:46:3:18:%22%3A6%2C%22phase%22%3A%22before-refusal%22%2C%22type%22%3A%22input%22%2C%22field%22%3A%22memo%22%7D%2C%7B%22index%22%3A7%2C%22phase%22%3A%22before-refusal%22%2C%22type%22%3A%22keydown%22%2C%22field%22%3A%22memo%22%7D%2C%7B%22index%22%3A8%2C%22phase%22%3A%22before-refusal%22%2C%22type%22%3A%22beforeinput%22%2C%22field\n\t\t\t\t\t42 text SF6/1:88fd2dc6-e9e6-4c56-b177-53ee2184224a:46:4:18:%22%3A%22memo%22%7D%2C%7B%22index%22%3A9%2C%22phase%22%3A%22before-refusal%22%2C%22type%22%3A%22input%22%2C%22field%22%3A%22memo%22%7D%2C%7B%22index%22%3A10%2C%22phase%22%3A%22before-refusal%22%2C%22type%22%3A%22keydown%22%2C%22field%22%3A%22memo%22%7D%2C%7B%22index%22%3A11%2C%22phase%22%3A%22before-refusal%22%2C%22typ\n\t\t\t\t\t43 text SF6/1:88fd2dc6-e9e6-4c56-b177-53ee2184224a:46:5:18:e%22%3A%22beforeinput%22%2C%22field%22%3A%22memo%22%7D%2C%7B%22index%22%3A12%2C%22phase%22%3A%22before-refusal%22%2C%22type%22%3A%22input%22%2C%22field%22%3A%22memo%22%7D%2C%7B%22index%22%3A13%2C%22phase%22%3A%22before-refusal%22%2C%22type%22%3A%22keydown%22%2C%22field%22%3A%22memo%22%7D%2C%7B%22index%22%3A14%2C%22phas\n\t\t\t\t\t44 text SF6/1:88fd2dc6-e9e6-4c56-b177-53ee2184224a:46:6:18:e%22%3A%22before-refusal%22%2C%22type%22%3A%22beforeinput%22%2C%22field%22%3A%22memo%22%7D%2C%7B%22index%22%3A15%2C%22phase%22%3A%22before-refusal%22%2C%22type%22%3A%22input%22%2C%22field%22%3A%22memo%22%7D%2C%7B%22index%22%3A16%2C%22phase%22%3A%22before-refusal%22%2C%22type%22%3A%22keydown%22%2C%22field%22%3A%22memo%2\n\t\t\t\t\t45 text SF6/1:88fd2dc6-e9e6-4c56-b177-53ee2184224a:46:7:18:2%7D%2C%7B%22index%22%3A17%2C%22phase%22%3A%22before-refusal%22%2C%22type%22%3A%22beforeinput%22%2C%22field%22%3A%22memo%22%7D%2C%7B%22index%22%3A18%2C%22phase%22%3A%22before-refusal%22%2C%22type%22%3A%22input%22%2C%22field%22%3A%22memo%22%7D%2C%7B%22index%22%3A19%2C%22phase%22%3A%22before-refusal%22%2C%22type%22%3A%22\n\t\t\t\t\t46 text SF6/1:88fd2dc6-e9e6-4c56-b177-53ee2184224a:46:8:18:keydown%22%2C%22field%22%3A%22memo%22%7D%2C%7B%22index%22%3A20%2C%22phase%22%3A%22before-refusal%22%2C%22type%22%3A%22beforeinput%22%2C%22field%22%3A%22memo%22%7D%2C%7B%22index%22%3A21%2C%22phase%22%3A%22before-refusal%22%2C%22type%22%3A%22input%22%2C%22field%22%3A%22memo%22%7D%2C%7B%22index%22%3A22%2C%22phase%22%3A%22\n\t\t\t\t\t47 text SF6/1:88fd2dc6-e9e6-4c56-b177-53ee2184224a:46:9:18:before-refusal%22%2C%22type%22%3A%22keydown%22%2C%22field%22%3A%22memo%22%7D%2C%7B%22index%22%3A23%2C%22phase%22%3A%22before-refusal%22%2C%22type%22%3A%22beforeinput%22%2C%22field%22%3A%22memo%22%7D%2C%7B%22index%22%3A24%2C%22phase%22%3A%22before-refusal%22%2C%22type%22%3A%22input%22%2C%22field%22%3A%22memo%22%7D%2C%7B\n\t\t\t\t\t48 text SF6/1:88fd2dc6-e9e6-4c56-b177-53ee2184224a:46:10:18:%22index%22%3A25%2C%22phase%22%3A%22before-refusal%22%2C%22type%22%3A%22keydown%22%2C%22field%22%3A%22memo%22%7D%2C%7B%22index%22%3A26%2C%22phase%22%3A%22before-refusal%22%2C%22type%22%3A%22beforeinput%22%2C%22field%22%3A%22memo%22%7D%2C%7B%22index%22%3A27%2C%22phase%22%3A%22before-refusal%22%2C%22type%22%3A%22input%22\n\t\t\t\t\t49 text SF6/1:88fd2dc6-e9e6-4c56-b177-53ee2184224a:46:11:18:%2C%22field%22%3A%22memo%22%7D%2C%7B%22index%22%3A28%2C%22phase%22%3A%22before-refusal%22%2C%22type%22%3A%22keydown%22%2C%22field%22%3A%22memo%22%7D%2C%7B%22index%22%3A29%2C%22phase%22%3A%22before-refusal%22%2C%22type%22%3A%22beforeinput%22%2C%22field%22%3A%22memo%22%7D%2C%7B%22index%22%3A30%2C%22phase%22%3A%22before-r\n\t\t\t\t\t50 text SF6/1:88fd2dc6-e9e6-4c56-b177-53ee2184224a:46:12:18:efusal%22%2C%22type%22%3A%22input%22%2C%22field%22%3A%22memo%22%7D%2C%7B%22index%22%3A31%2C%22phase%22%3A%22before-refusal%22%2C%22type%22%3A%22keydown%22%2C%22field%22%3A%22memo%22%7D%2C%7B%22index%22%3A32%2C%22phase%22%3A%22before-refusal%22%2C%22type%22%3A%22beforeinput%22%2C%22field%22%3A%22memo%22%7D%2C%7B%22index\n\t\t\t\t\t51 text SF6/1:88fd2dc6-e9e6-4c56-b177-53ee2184224a:46:13:18:%22%3A33%2C%22phase%22%3A%22before-refusal%22%2C%22type%22%3A%22input%22%2C%22field%22%3A%22memo%22%7D%2C%7B%22index%22%3A34%2C%22phase%22%3A%22before-refusal%22%2C%22type%22%3A%22keydown%22%2C%22field%22%3A%22memo%22%7D%2C%7B%22index%22%3A35%2C%22phase%22%3A%22before-refusal%22%2C%22type%22%3A%22beforeinput%22%2C%22fi\n\t\t\t\t\t52 text SF6/1:88fd2dc6-e9e6-4c56-b177-53ee2184224a:46:14:18:eld%22%3A%22memo%22%7D%2C%7B%22index%22%3A36%2C%22phase%22%3A%22before-refusal%22%2C%22type%22%3A%22input%22%2C%22field%22%3A%22memo%22%7D%2C%7B%22index%22%3A37%2C%22phase%22%3A%22before-refusal%22%2C%22type%22%3A%22keydown%22%2C%22field%22%3A%22memo%22%7D%2C%7B%22index%22%3A38%2C%22phase%22%3A%22before-refusal%22%2C%2\n\t\t\t\t\t53 text SF6/1:88fd2dc6-e9e6-4c56-b177-53ee2184224a:46:15:18:2type%22%3A%22beforeinput%22%2C%22field%22%3A%22memo%22%7D%2C%7B%22index%22%3A39%2C%22phase%22%3A%22before-refusal%22%2C%22type%22%3A%22input%22%2C%22field%22%3A%22memo%22%7D%2C%7B%22index%22%3A40%2C%22phase%22%3A%22before-refusal%22%2C%22type%22%3A%22keydown%22%2C%22field%22%3A%22memo%22%7D%2C%7B%22index%22%3A41%2C%22\n\t\t\t\t\t54 text SF6/1:88fd2dc6-e9e6-4c56-b177-53ee2184224a:46:16:18:phase%22%3A%22before-refusal%22%2C%22type%22%3A%22beforeinput%22%2C%22field%22%3A%22memo%22%7D%2C%7B%22index%22%3A42%2C%22phase%22%3A%22before-refusal%22%2C%22type%22%3A%22input%22%2C%22field%22%3A%22memo%22%7D%2C%7B%22index%22%3A43%2C%22phase%22%3A%22before-refusal%22%2C%22type%22%3A%22keydown%22%2C%22field%22%3A%22me\n\t\t\t\t\t55 text SF6/1:88fd2dc6-e9e6-4c56-b177-53ee2184224a:46:17:18:mo%22%7D%2C%7B%22index%22%3A44%2C%22phase%22%3A%22before-refusal%22%2C%22type%22%3A%22beforeinput%22%2C%22field%22%3A%22memo%22%7D%2C%7B%22index%22%3A45%2C%22phase%22%3A%22before-refusal%22%2C%22type%22%3A%22input%22%2C%22field%22%3A%22memo%22%7D%5D%7D\n\t56 close button\n\t57 full screen button Help: this button also has an action to zoom the window, Secondary Actions: zoom the window\n\t58 minimize button\n59 menu bar\n\t60 Firefox\n\t61 File\n\t62 Edit\n\t63 View\n\t64 History\n\t65 Bookmarks\n\t66 Tools\n\t67 Window\n\t68 Help\n\nThe focused UI element is 32 text field (settable) Memo, Value: cobalt heron 47"
+              },
+              {
+                "type": "text",
+                "text": "sleight: UI changed (element)."
+              }
+            ],
+            "isError": false
+          }
+        }
+      },
+      {
+        "direction": "call-received",
+        "msg": {
+          "id": 11,
+          "method": "tools/call",
+          "params": {
+            "name": "turn_ended"
+          }
+        }
+      },
+      {
+        "direction": "to-client",
+        "msg": {
+          "id": 11,
+          "result": {
+            "content": [
+              {
+                "type": "text",
+                "text": "{}"
+              },
+              {
+                "type": "text",
+                "text": "sleight-turn-stats: {\"calls\":4,\"reads\":1,\"characters\":12675,\"text\":{\"docs\":0,\"tree\":12058,\"other\":617},\"errors\":0,\"pending\":0,\"omitted\":0,\"unclassified\":0,\"toolMs\":1121,\"paths\":{\"native\":{\"actions\":2,\"estimatedActions\":2,\"estimatedCalls\":2,\"actionMs\":0,\"timedActions\":0},\"turbo\":{\"actions\":0,\"estimatedActions\":0,\"estimatedCalls\":0,\"actionMs\":0,\"timedActions\":0},\"engine\":{\"actions\":0,\"estimatedActions\":0,\"estimatedCalls\":0,\"actionMs\":0,\"timedActions\":0}}}"
+              }
+            ],
+            "isError": false
+          }
+        }
+      }
+    ],
+    "transcript": [
+      {
+        "type": "assistant",
+        "message": {
+          "content": [
+            {
+              "type": "tool_use",
+              "id": "toolu_01XBU5che6A5obgLm7bwG4kv",
+              "name": "mcp__plugin_sleight_computer__js",
+              "input": {
+                "code": "let app = await cua.getApp(\"Firefox\");\napp",
+                "title": "Acquire Firefox and read its state"
+              },
+              "caller": {
+                "type": "direct"
+              }
+            }
+          ]
+        }
+      },
+      {
+        "type": "assistant",
+        "message": {
+          "content": [
+            {
+              "type": "tool_use",
+              "id": "toolu_01MXDLiSYxkvdSJhPbDKRPGA",
+              "name": "mcp__plugin_sleight_computer__js",
+              "input": {
+                "code": "await app.typeText(32, \"cobalt heron 47\");",
+                "title": "Type probe text into Memo (element 32) once"
+              },
+              "caller": {
+                "type": "direct"
+              }
+            }
+          ]
+        }
+      },
+      {
+        "type": "assistant",
+        "message": {
+          "content": [
+            {
+              "type": "tool_use",
+              "id": "toolu_01B7psoc1Z8jK5pCyg4FbLWf",
+              "name": "mcp__plugin_sleight_computer__js",
+              "input": {
+                "code": "await app.click(32);",
+                "title": "Click Memo field (element 32)"
+              },
+              "caller": {
+                "type": "direct"
+              }
+            }
+          ]
+        }
+      },
+      {
+        "type": "assistant",
+        "message": {
+          "content": [
+            {
+              "type": "tool_use",
+              "id": "toolu_01M6P1gv6jYPQhzB1z9h3M9t",
+              "name": "mcp__plugin_sleight_computer__js",
+              "input": {
+                "code": "let state = await app.getAXState({ disableDiffing: true });\nstate.split(\"\\n\").filter(l => /Memo|Reference|focus/i.test(l)).join(\"\\n\")",
+                "title": "Re-read full tree to check Memo focus"
+              },
+              "caller": {
+                "type": "direct"
+              }
+            }
+          ]
+        }
+      },
+      {
+        "type": "assistant",
+        "message": {
+          "content": [
+            {
+              "type": "tool_use",
+              "id": "toolu_01E6Cgxo3FVFbV45x5gLDAJe",
+              "name": "mcp__plugin_sleight_computer__js",
+              "input": {
+                "code": "nodeRepl.emitImage(await app.getScreenshot());",
+                "title": "Screenshot to check Memo caret"
+              },
+              "caller": {
+                "type": "direct"
+              }
+            }
+          ]
+        }
+      },
+      {
+        "type": "assistant",
+        "message": {
+          "content": [
+            {
+              "type": "tool_use",
+              "id": "toolu_01MWgEqpReoxG6NsRAKZV1q2",
+              "name": "mcp__plugin_sleight_computer__js",
+              "input": {
+                "code": "await app.typeText(\"cobalt heron 47\");",
+                "title": "Type probe text into the clicked Memo field"
+              },
+              "caller": {
+                "type": "direct"
+              }
+            }
+          ]
+        }
+      }
+    ]
+  }
+}

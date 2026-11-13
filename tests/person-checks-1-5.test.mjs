@@ -1,3 +1,4 @@
+import { assertChildStatus } from './fixtures/child-status.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { EventEmitter } from 'node:events';
@@ -88,8 +89,8 @@ test('strict arguments require owner presence and reject accidental benchmark/un
 });
 
 test('dry plan is inert even with Node denying subprocesses, writes and network', () => {
-  const result = spawnSync(process.execPath, ['--permission', '--allow-fs-read=*', runner, '--dry-run'], { encoding: 'utf8' });
-  assert.equal(result.status, 0, result.stderr);
+  const result = spawnSync(process.execPath, ['--permission', '--allow-fs-read=*', runner, '--dry-run'], { encoding: 'utf8', timeout: 60000, killSignal: 'SIGKILL' });
+  assertChildStatus(result, 0, result.stderr);
   const p = JSON.parse(result.stdout);
   assert.deepEqual(p, plan());
   assert.equal(p.checks.length, 8);
@@ -120,8 +121,8 @@ test('host compiles without launch and poster rejects invalid arguments before i
   assert.notEqual(binaries.sourceSha256, binaries.instrumentedSha256);
   // Invalid requests exit before permission inspection or event construction, even on an untrusted runner.
   for (const args of [[], ['bogus', '123'], ['key', '0'], ['key', '-1'], ['key', 'not-a-pid'], ['click', '123']]) {
-    const invalid = spawnSync(binaries.poster, args, { encoding: 'utf8', timeout: 10000 });
-    assert.equal(invalid.status, 1); assert.match(invalid.stderr, /^PERSON_CHECK_USAGE:/);
+    const invalid = spawnSync(binaries.poster, args, { encoding: 'utf8', timeout: 10000, killSignal: 'SIGKILL' });
+    assertChildStatus(invalid, 1); assert.match(invalid.stderr, /^PERSON_CHECK_USAGE:/);
     assert.equal(invalid.stdout, '');
   }
 });
@@ -402,4 +403,12 @@ test('saved mouse provenance uses only the delivered receipt, including refusal 
   assert.equal(missing.receivedEvent, null);
   assert.equal(missing.mouseDownReachedButton, false);
   assert.equal(missing.passed, false);
+});
+
+
+test('CP1A2 person-check compiler follows the optimized product recipe', t => {
+  const bank = registerTemp(t, trackTemp(mkdtempSync(join(tmpdir(), 'sleight-person-recipe-')))), calls = [];
+  compileOnly(bank, (file, args, options) => { calls.push({ file, args, options }); return { status: 0 }; });
+  assert.deepEqual(calls.map(c => c.args.includes('-O')), [true, false]);
+  assert.ok(calls.every(c => c.options.timeout === 300000 && c.options.killSignal === 'SIGKILL'));
 });

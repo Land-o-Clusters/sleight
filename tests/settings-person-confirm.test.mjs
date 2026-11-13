@@ -1,3 +1,4 @@
+import { assertChildStatus } from './fixtures/child-status.mjs';
 // VC10: high-stakes settings changes wait for macOS's own Touch ID or password sheet (lib/person-confirm.mjs, the consent
 // host's --confirm-person mode). Every confirmation here is injected or a stand-in evaluator: no test shows a real sheet. The
 // only real host runs are the --confirm-person-check mode, which prints the reason and exits.
@@ -28,6 +29,9 @@ const tempHome = t => registerTemp(t, realpathSync(mkdtempSync(join(tmpdir(), 's
 
 // Every high-stakes path the CLI has, with the key and the only argument text that reaches the sheet.
 const HIGH = [
+  [['replay', 'script.json'], { key: 'replay' }], [['replay'], { key: 'replay' }],
+  [['record', 'x.jsonl'], { key: 'record' }], [['record'], { key: 'record' }],
+  [['record', '--watch', 'com.example.App', 'out.json'], { key: 'record' }],
   [['turbo', 'on'], { key: 'turbo-on' }],
   [['turbo', 'on', '--browser', 'chrome'], { key: 'turbo-on', subject: 'Google Chrome' }],
   [['turbo', 'on', '--browser', 'helium'], { key: 'turbo-on', subject: 'Helium' }],
@@ -35,11 +39,11 @@ const HIGH = [
   [['turbo', 'app', 'on', 'com.microsoft.VSCode'], { key: 'turbo-app-on', subject: 'com.microsoft.VSCode' }],
   [['turbo', 'app', 'on', 'not a bundle id'], { key: 'turbo-app-on' }],
   [['permissions', 'unblock', 'com.example.App'], { key: 'permissions-unblock', subject: 'com.example.App' }],
-  [['permissions', 'unblock', 'https://example.com'], { key: 'permissions-unblock' }],
-  [['permissions', 'sites', 'only', 'https://example.com'], { key: 'permissions-sites' }],
-  [['permissions', 'sites', 'all'], { key: 'permissions-sites' }],
+  [['permissions', 'unblock', 'https://example.com'], { key: 'permissions-unblock-site', subject: 'https://example.com' }],
+  [['permissions', 'sites', 'only', 'https://example.com'], { key: 'permissions-sites-only', subject: '1' }],
+  [['permissions', 'sites', 'all'], { key: 'permissions-sites-all' }],
   [['permissions', 'repair'], { key: 'permissions-repair' }],
-  [['permissions', 'repair', '--discard'], { key: 'permissions-repair' }],
+  [['permissions', 'repair', '--discard'], { key: 'permissions-repair-discard' }],
   [['routine', 'add', 'script.json', '--every', '1h'], { key: 'routine-add' }],
   [['routine', 'unlock', 'r1'], { key: 'routine-unlock' }],
   [['watch', 'https://example.com', '--find', 'x', '--every', '1h'], { key: 'watch-add' }],
@@ -60,7 +64,7 @@ const LOW = [
   ['permissions', 'revoke', 'https://example.com'], ['allow', 'remove', 'TextEdit'], ['allow', 'remove', 'com.apple.TextEdit'],
 ];
 const READS = [['hand', 'status'], ['turbo', 'status'], ['permissions'], ['permissions', 'list'], ['allow', 'list'], ['routine', 'list'],
-  ['routine', 'run-now', 'r1'], ['watch', 'list'], ['watch', 'run-now', 'w1'], ['stats'], ['record', 'x.jsonl'], []];
+  ['routine', 'run-now', 'r1'], ['watch', 'list'], ['watch', 'run-now', 'w1'], ['stats'], []];
 
 test('every high-stakes form has its key, low-stakes and read-only forms have none', () => {
   for (const [args, expected] of HIGH) assert.deepEqual(highStakesChange(args), expected, args.join(' '));
@@ -68,6 +72,10 @@ test('every high-stakes form has its key, low-stakes and read-only forms have no
   for (const [args] of HIGH) assert.equal(typeof settingsCommand(args), 'string', `${args.join(' ')} also passes the terminal check first`);
   assert.equal(highStakesChange('turbo on'), undefined);
 });
+
+for (const [args, expected] of HIGH.filter(([args]) => args[0] === 'permissions')) {
+  test(`SA1H F8: binds ${args.join(' ')}`, () => assert.deepEqual(highStakesChange(args), expected));
+}
 
 test('the sheet text comes only from the host\'s table: every key and browser name here is in it', () => {
   const keys = new Set(HIGH.map(([, change]) => change.key));
@@ -77,6 +85,61 @@ test('the sheet text comes only from the host\'s table: every key and browser na
   const names = [.../const BROWSER_NAMES = \{([\s\S]*?)\};/.exec(confirmSource)[1].matchAll(/: '([^']+)'/g)].map(m => m[1]);
   const swiftNames = /let personConfirmBrowsers: Set<String> = \[([\s\S]*?)\]/.exec(hostSource)[1].match(/"[^"]+"/g).map(JSON.parse);
   assert.deepEqual([...new Set(names)].sort(), [...swiftNames].sort());
+});
+
+test('SA1H F8: Mac and Windows confirmation tables have the same keys', () => {
+  const mac = /let personConfirmReasons[^=]*= \[([\s\S]*?)\n\]/.exec(hostSource)[1];
+  const win = readFileSync(new URL('../plugins/sleight/lib/direct-browser/native/win/PersonHello.cs', import.meta.url), 'utf8');
+  const table = /Dictionary<string, string\[\]> Reasons[^=]*= new Dictionary<string, string\[\]> \{([\s\S]*?)\n    \};/.exec(win)[1];
+  const keys = [...new Set(HIGH.map(([args]) => highStakesChange(args).key))];
+  const macKeys = [...mac.matchAll(/^\s*"([\w-]+)":/gm)].map(m => m[1]);
+  const winKeys = [...table.matchAll(/\{ "([\w-]+)",/g)].map(m => m[1]);
+  assert.deepEqual(macKeys.sort(), winKeys.sort());
+  for (const key of keys) assert.ok(winKeys.includes(key), key);
+  for (const [source, pattern] of [[mac, /"permissions-repair-discard": \("erase every sleight block and site limit"/],
+    [table, /"permissions-repair-discard", new\[\] \{ "erase every sleight block and site limit"/]]) assert.match(source, pattern);
+});
+
+test('SA1R: sites all reasons describe the limit and preserve site blocks on both hosts', () => {
+  const reason = 'lift the limit to chosen sites; blocked sites stay blocked';
+  assert.ok(hostSource.includes(`"permissions-sites-all": ("${reason}", nil)`));
+  const win = readFileSync(new URL('../plugins/sleight/lib/direct-browser/native/win/PersonHello.cs', import.meta.url), 'utf8');
+  assert.ok(win.includes(`{ "permissions-sites-all", new[] { "${reason}" } }`));
+  for (const source of [hostSource, win]) assert.doesNotMatch(source, /"permissions-sites"\s*[:,]/, 'obsolete key has no caller');
+});
+
+test('SA1R: long confirmation notices bound origins without losing the site mode', async () => {
+  const origins = Array.from({ length: 256 }, (_, i) => `https://site${i}.test`);
+  const notices = [];
+  const line = await confirmationRefusal(['permissions', 'sites', 'only', ...origins], {
+    notice: text => notices.push(text), confirm: async () => 'cancelled',
+  });
+  assert.equal(notices.length, 1);
+  for (const text of [notices[0], line]) {
+    assert.match(text, /permissions sites only /);
+    assert.equal((text.match(/https:\/\/site\d+\.test/g) ?? []).length, 8);
+    assert.match(text, /https:\/\/site7\.test and 248 more/);
+    assert.doesNotMatch(text, /site8\.test|site255\.test/);
+  }
+  assert.match(notices[0], /\(256\)/, 'confirmation still binds the complete count');
+});
+
+test('SA1H F8: notices bind discard, site mode and a short origin list', async () => {
+  for (const args of [
+    ['permissions', 'repair', '--discard'], ['permissions', 'sites', 'all'],
+    ['permissions', 'sites', 'only', 'https://one.test', 'https://two.test'],
+    ['permissions', 'unblock', 'https://one.test'],
+  ]) {
+    const lines = [];
+    await confirmationRefusal(args, { notice: text => lines.push(text), confirm: async () => 'cancelled' });
+    for (const word of args) assert.ok(lines.join('').includes(word), `${word} in ${lines}`);
+  }
+  assert.deepEqual(highStakesChange(['permissions', 'sites', 'only', 'https://one.test', 'https://two.test']),
+    { key: 'permissions-sites-only', subject: '2' });
+  assert.deepEqual(highStakesChange(['permissions', 'sites', 'only', 'https://one.test', 'https://www.one.test.', 'https://one.test/path']),
+    { key: 'permissions-sites-only', subject: '1' }, 'the count uses the permissions writer\'s site equivalence');
+  assert.deepEqual(highStakesChange(['permissions', 'unblock', 'HTTPS://ONE.TEST:443/path']),
+    { key: 'permissions-unblock-site', subject: 'https://one.test' });
 });
 
 test('a pass lets the change through; every other answer refuses in one line that names why', async () => {
@@ -91,11 +154,11 @@ test('a pass lets the change through; every other answer refuses in one line tha
   };
   for (const [code, reason] of Object.entries(lines)) {
     assert.equal(await confirmationRefusal(['permissions', 'unblock', 'com.example.App'], { confirm: confirm(code) }),
-      `sleight: permissions unblock needs Touch ID or your password, so nothing changed. Reason: ${reason}.`);
+      `sleight: permissions unblock com.example.App needs Touch ID or your password, so nothing changed. Reason: ${reason}.`);
   }
   for (const code of ['unavailable', 'no helper']) {
     const line = await confirmationRefusal(['permissions', 'sites', 'all'], { confirm: confirm(code) });
-    assert.match(line, /^sleight: permissions sites needs Touch ID or your password, so nothing changed\. Reason: .+\. (?:Set a login password to make this change|Apple's command-line tools build it \(xcode-select --install\))\.$/);
+    assert.match(line, /^sleight: permissions sites all needs Touch ID or your password, so nothing changed\. Reason: .+\. (?:Set a login password to make this change|Apple's command-line tools build it \(xcode-select --install\))\.$/);
     assert.equal(line.split('\n').length, 1);
   }
   assert.equal(await confirmationRefusal(['turbo', 'on'], { confirm: async () => { throw Error('helper crashed'); } }), confirmationLine('turbo on', 'failed'));
@@ -358,7 +421,13 @@ test('the host source: the CLI mode runs before any window code, and the menu\'s
   const click = /@objc func permissionClick\(_ sender: NSMenuItem\) \{([\s\S]*?)\n {4}\}/.exec(hostSource)?.[1];
   assert.ok(click);
   assert.doesNotMatch(click, /confirmPerson/);
-  assert.equal((hostSource.match(/confirmPerson\(reason, evaluator: localAuthentication\(\)\)/g) ?? []).length, 1, 'only the CLI mode asks');
+  assert.equal((hostSource.match(/confirmPerson\(reason, evaluator: localAuthentication\(\)\)/g) ?? []).length, 2,
+    'the confirmation CLI and sealed settings intent bridge each own their sheet');
+  const settings = /func settingsAuthorizedIntentMain\([\s\S]*?\n\}\n/.exec(hostSource)?.[0];
+  assert.ok(settings);
+  assert.match(settings, /guard result == \.confirmed else/);
+  assert.match(settings, /if change.needsSheet \{ sheet\(change.reason\)/);
+  assert.match(settings, /finish \{ try store.commitIntent\(change, personConfirmed: false\) \}/);
   // LAContext appears only inside the seam's production evaluator.
   assert.equal((hostSource.match(/LAContext\(\)/g) ?? []).length, 1);
 });
@@ -369,10 +438,10 @@ test('Swift: the confirmation answers once per ask, times out, cancels, and buil
   const dir = registerTemp(t, realpathSync(mkdtempSync(join(tmpdir(), 'sleight-person-confirm-swift-'))));
   const swift = join(dir, 'main.swift'), binary = join(dir, 'fixture');
   writeFileSync(swift, 'import Foundation\nimport LocalAuthentication\n' + block + readFileSync(new URL('./fixtures/person-confirm.swift', import.meta.url), 'utf8'));
-  const built = spawnSync('/usr/bin/nice', ['-n', '20', '/usr/bin/xcrun', 'swiftc', '-module-cache-path', swiftModuleCache(), swift, '-o', binary], { encoding: 'utf8', timeout: 600000 });
-  assert.equal(built.status, 0, built.stderr);
-  const run = spawnSync(binary, [], { encoding: 'utf8', timeout: 20000 });
-  assert.equal(run.status, 0, run.stderr);
+  const built = spawnSync('/usr/bin/nice', ['-n', '20', '/usr/bin/xcrun', 'swiftc', '-module-cache-path', swiftModuleCache(), swift, '-o', binary], { encoding: 'utf8', timeout: 600000, killSignal: 'SIGKILL' });
+  assertChildStatus(built, 0, built.stderr);
+  const run = spawnSync(binary, [], { encoding: 'utf8', timeout: 20000, killSignal: 'SIGKILL' });
+  assertChildStatus(run, 0, run.stderr);
   const out = JSON.parse(run.stdout);
   assert.deepEqual(out.answers, { confirmed: [0], failed: [1], cancelled: [2], unavailable: [69], timeout: [3], late: [3], cancel: [2] });
   assert.deepEqual(out.cancels, { timeout: 1, late: 1, cancel: 1 }, 'a timeout or cancel withdraws the sheet');
@@ -387,15 +456,38 @@ test('Swift: the whole host compiles, and --confirm-person-check parses its argu
   const dir = registerTemp(t, realpathSync(mkdtempSync(join(tmpdir(), 'sleight-person-confirm-host-'))));
   const binary = join(dir, 'consent-host');
   const built = spawnSync('/usr/bin/nice', ['-n', '20', '/usr/bin/xcrun', 'swiftc', '-module-cache-path', swiftModuleCache(),
-    new URL('../plugins/sleight/lib/direct-browser/native/consent-host.swift', import.meta.url).pathname, '-o', binary], { encoding: 'utf8', timeout: 600000 });
-  assert.equal(built.status, 0, built.stderr);
-  const check = (...args) => spawnSync(binary, ['--confirm-person-check', ...args], { encoding: 'utf8', timeout: 10000 });
+    new URL('../plugins/sleight/lib/direct-browser/native/consent-host.swift', import.meta.url).pathname, '-o', binary], { encoding: 'utf8', timeout: 600000, killSignal: 'SIGKILL' });
+  assertChildStatus(built, 0, built.stderr);
+  const check = (...args) => spawnSync(binary, ['--confirm-person-check', ...args], { encoding: 'utf8', timeout: 10000, killSignal: 'SIGKILL' });
   // The first line is the self-report helperConfirm compares: this binary's own path and hash.
   const report = JSON.stringify({ path: binary, sha256: createHash('sha256').update(readFileSync(binary)).digest('hex') });
-  assert.deepEqual([check('turbo-on', 'Google Chrome').status, check('turbo-on', 'Google Chrome').stdout], [0, report + '\nturn on sleight turbo for Google Chrome\n']);
-  assert.equal(check('permissions-sites').stdout, report + '\nchange the sites sleight may act on\n');
-  for (const args of [[], ['nope'], ['permissions-revoke'], ['allow-remove'], ['turbo-on', 'Firefox'], ['permissions-unblock', 'com.example.App to stay safe'], ['turbo-on', 'Helium', 'x']]) {
+  const accepted = check('turbo-on', 'Google Chrome');
+  assertChildStatus(accepted, 0, accepted.stderr);
+  assert.equal(accepted.stdout, report + '\nturn on sleight turbo for Google Chrome\n');
+  assert.equal(check('owner-present-sitting').stdout, report + '\nstart a hands-off input check on this Mac\n');
+  assert.equal(check('owner-present-sitting', 'Helium').status, 64);
+  assertChildStatus(check('permissions-sites'), 64, 'obsolete reason key refuses');
+  for (const [args, reason] of [
+    [['replay'], 'run a saved script'], [['record'], 'record or convert a run'],
+    [['permissions-repair-discard'], 'erase every sleight block and site limit'],
+    [['permissions-repair'], "repair sleight's permissions file"],
+    [['permissions-sites-all'], 'lift the limit to chosen sites; blocked sites stay blocked'],
+    [['permissions-sites-only', '2'], 'limit sleight to 2 sites'],
+    [['permissions-sites-only', '256'], 'limit sleight to 256 sites'],
+    [['permissions-unblock-site', 'https://one.test:8443'], 'let sleight act on https://one.test:8443 again'],
+    [['permissions-unblock-site', 'http://[::1]:8080'], 'let sleight act on http://[::1]:8080 again'],
+  ]) {
+    const result = check(...args); assertChildStatus(result, 0, result.stderr);
+    assert.equal(result.stdout, report + '\n' + reason + '\n');
+  }
+  for (const args of [
+    ['permissions-sites-only'], ['permissions-unblock-site'],
+    ...['0', '257', '01', '1\n', 'approve every site'].map(n => ['permissions-sites-only', n]),
+    ...['https://one.test\n', 'https://one.test/path', 'https://user@one.test', 'https://one.test\u202e', 'Google Chrome', 'com.example.App'].map(s => ['permissions-unblock-site', s]),
+  ]) assertChildStatus(check(...args), 64, args.join(' '));
+  for (const args of [[], ['nope'], ['replay', 'script.json'], ['record', 'input.jsonl'], ['permissions-revoke'], ['allow-remove'], ['turbo-on', 'Firefox'], ['permissions-unblock', 'com.example.App to stay safe'], ['turbo-on', 'Helium', 'x']]) {
     const run = check(...args);
-    assert.deepEqual([run.status, run.stdout], [64, ''], args.join(' '));
+    assertChildStatus(run, 64, args.join(' '));
+    assert.equal(run.stdout, '', args.join(' '));
   }
 });

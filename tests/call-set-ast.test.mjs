@@ -40,7 +40,7 @@ test('unknown assignments clear a flow handle hint instead of retaining an app e
 for (const prefix of ['let editor = __sleightOpenedApp2;', 'let editor = await cua.getApp("Fixture");',
   'let editor = await cua.getApp({windowId: 2});', 'let app = await cua.getApp("Fixture"); let editor = app;']) {
   test(`native binding checks known mistakes: ${prefix}`, () => {
-    assert.match(nativeArgumentsProblem(prefix + ' editor["pressKey"]?.(2)'), /invalid native arguments/);
+    assert.equal(nativeArgumentsProblem(prefix + ' editor["pressKey"]?.(2)'), 'sleight: invalid native arguments. Engine App.pressKey(key: string, options?: PressKeyOptions); nothing was sent.');
   });
 }
 test('native partial options retain a known mistake beside an unknown expression', () => {
@@ -55,7 +55,7 @@ test('a browser binding and a reassigned native alias lose the native signature'
   assert.equal(nativeArgumentsProblem('let editor = await cua.getApp("Fixture"); editor = other; editor.pressKey(2)'), undefined);
 });
 test('a direct acquired receiver retains its native signature and flow destination', () => {
-  assert.match(nativeArgumentsProblem('(await cua.getApp("Fixture")).pressKey(2)'), /invalid native/);
+  assert.equal(nativeArgumentsProblem('(await cua.getApp("Fixture")).pressKey(2)'), 'sleight: invalid native arguments. Engine App.pressKey(key: string, options?: PressKeyOptions); nothing was sent.');
   const rules = new FlowRules({ version: 1, rules: [{ id: 'secret', kind: 'pattern', pattern: 'SECRET', destinations: ['Mail'] }] });
   assert.equal(rules.analyze('js', { code: '(await cua.getApp("Mail")).typeText("SECRET")' }, { app: 'Other' }).violations.length, 1);
 });

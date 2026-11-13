@@ -1,3 +1,4 @@
+import { assertChildStatus } from './fixtures/child-status.mjs';
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
@@ -80,8 +81,8 @@ test('Chrome hook CLI denies malformed input and configuration adds both tool ho
   const {dir,files}=fixture(t), state=path.join(dir,'gate.json');
   const hooks=chrome.chromeHooks(state,device);
   for(const event of ['PreToolUse','PostToolUse','PostToolUseFailure']) assert.ok(hooks[event][0].hooks[0].args[0].includes('chrome-hook.mjs'));
-  const run=spawnSync(process.execPath,[new URL('../bench/world/arms/chrome-hook.mjs',import.meta.url).pathname,state,device],{input:'{bad',encoding:'utf8'});
-  assert.equal(run.status,0,run.stderr);
+  const run=spawnSync(process.execPath,[new URL('../bench/world/arms/chrome-hook.mjs',import.meta.url).pathname,state,device],{input:'{bad',encoding:'utf8', timeout: 60000, killSignal: 'SIGKILL' });
+  assertChildStatus(run,0,run.stderr);
   assert.equal(JSON.parse(run.stdout).continue,false);
   const probe=chrome.chromeProbePlan({dir:path.join(dir,'probe'),armRoot:path.join(dir,'arms'),chromeFiles:files});
   assert.ok(probe.args.includes('--chrome'));
@@ -112,8 +113,8 @@ test('Chrome manifest backup survives an immediate harness exit', t => {
   const helper=new URL('../bench/world/arms/chrome.mjs',import.meta.url).href;
   const source=`import fs from 'node:fs'; import {withManifestBackup} from ${JSON.stringify(helper)};
     await withManifestBackup(process.argv[1],process.argv[2],async()=>{fs.writeFileSync(process.argv[1],'changed');process.exit(3);});`;
-  const run=spawnSync(process.execPath,['--input-type=module','-e',source,files.manifest,files.backupDir],{encoding:'utf8'});
-  assert.equal(run.status,3,run.stderr);
+  const run=spawnSync(process.execPath,['--input-type=module','-e',source,files.manifest,files.backupDir],{encoding:'utf8', timeout: 60000, killSignal: 'SIGKILL' });
+  assertChildStatus(run,3,run.stderr);
   assert.equal(fs.readFileSync(files.manifest,'utf8'),'owner manifest\n');
   assert.equal(fs.existsSync(path.join(files.backupDir,'active')),false);
 });

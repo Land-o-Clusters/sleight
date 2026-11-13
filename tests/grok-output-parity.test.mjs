@@ -1,13 +1,15 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
-import { readFileSync } from 'node:fs';
+import { readFileSync, writeFileSync } from 'node:fs';
 import { PassThrough } from 'node:stream';
 const { createRelay } = await import('../plugins/sleight/lib/relay.mjs');
 const { skillRules } = await import('../plugins/sleight/lib/launch.mjs');
 
 // Serialized client replies and engine approval answers captured at the GB13 tip, 1991d66d.
-const baseline = JSON.parse(readFileSync(new URL('fixtures/grok/other-host-output-hashes.json', import.meta.url)));
+// Re-pin with SLEIGHT_WRITE_PARITY=1, then rerun without it to check the saved fixture.
+const fixture = new URL('fixtures/grok/other-host-output-hashes.json', import.meta.url);
+const baseline = JSON.parse(readFileSync(fixture));
 const policy = readFileSync(new URL('fixtures/engine-confirmations-policy.txt', import.meta.url), 'utf8');
 const description = readFileSync(new URL('fixtures/engine-js-description.txt', import.meta.url), 'utf8').trimEnd();
 for (const host of ['Claude Code', 'Codex']) for (const dedupeRules of [false, true]) {
@@ -50,7 +52,12 @@ for (const host of ['Claude Code', 'Codex']) for (const dedupeRules of [false, t
     assert.ok(received.find(msg => msg.id === 1).result.content.some(item => item.text?.includes('# Driving Mac apps')));
     assert.ok(received.find(msg => msg.id === 4).result.content.some(item => item.text?.includes('tree lines omitted')));
     const wire = JSON.stringify({ received, approvals });
-    // HO1 pins serialized replies with the shorter app_handoff description.
-    assert.equal(createHash('sha256').update(wire).digest('hex'), baseline[host][String(dedupeRules)]);
+    // INT4 pins RB1's compact native guidance with TX1's stop rules and handoff wording.
+    const actual = createHash('sha256').update(wire).digest('hex');
+    if (process.env.SLEIGHT_WRITE_PARITY === '1') {
+      baseline[host][String(dedupeRules)] = actual;
+      writeFileSync(fixture, JSON.stringify(baseline, null, 2) + '\n');
+    }
+    assert.equal(actual, baseline[host][String(dedupeRules)]);
   });
 }

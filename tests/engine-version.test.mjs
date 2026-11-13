@@ -1,9 +1,11 @@
+import { assertChildStatus } from './fixtures/child-status.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
 import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
-import { homedir, tmpdir } from 'node:os';
+import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { retainedBank } from './helpers/retained-bank.mjs';
 import { fileURLToPath } from 'node:url';
 import { currentTimeline, dayRange, engineForRun, engineNote, refreshTimeline, engineMix, engineSpan, engineText, inferEngine, loadTimeline, passRowEngine, readEngine,
   stampMs, summarizeEngines, usesEngine } from '../bench/engine-version.mjs';
@@ -157,31 +159,32 @@ test('the CLI records a span into a round folder from a fixture engine folder', 
   mkdirSync(folder, { recursive: true });
   writeFileSync(join(folder, '.mcp.json'), JSON.stringify({ mcpServers: { cua_repl: { command: '/bin/true', args: [] } } }));
   const env = { ...process.env, CODEX_HOME: join(dir, 'codex'), SLEIGHT_CHATGPT_APP: join(dir, 'no-app') };
-  const cli = (...args) => spawnSync(process.execPath, [join(repo, 'bench/engine-version.mjs'), ...args], { env, encoding: 'utf8' });
+  const cli = (...args) => spawnSync(process.execPath, [join(repo, 'bench/engine-version.mjs'), ...args], { env, encoding: 'utf8', timeout: 60000, killSignal: 'SIGKILL' });
   const read = JSON.parse(cli().stdout);
   assert.deepEqual([read.version, read.chatgptApp], ['26.1013.40934', null]);
   // The start read creates the folder; the end read completes the span from the saved start.
-  assert.equal(cli('record', join(dir, 'out')).status, 0);
+  assertChildStatus(cli('record', join(dir, 'out')), 0);
   const started = JSON.parse(readFileSync(join(dir, 'out/engine.json'), 'utf8'));
   assert.deepEqual([started.version, started.changed, 'end' in started], ['26.1013.40934', null, false]);
   writeFileSync(join(dir, 'out/engine.json'), JSON.stringify({ ...started, start: { ...started.start, version: '26.1007.71326' } }));
-  assert.equal(cli('record', join(dir, 'out'), '--end').status, 0);
+  assertChildStatus(cli('record', join(dir, 'out'), '--end'), 0);
   const span = JSON.parse(readFileSync(join(dir, 'out/engine.json'), 'utf8'));
   assert.equal(span.changed, true);
   assert.deepEqual([span.start.version, span.end.version, span.startedAt], ['26.1007.71326', '26.1013.40934', started.startedAt]);
   // An end read with no start read never claims the version held for the whole run.
   mkdirSync(join(dir, 'late'));
-  assert.equal(cli('record', join(dir, 'late'), '--end').status, 0);
+  assertChildStatus(cli('record', join(dir, 'late'), '--end'), 0);
   const late = JSON.parse(readFileSync(join(dir, 'late/engine.json'), 'utf8'));
   assert.deepEqual([late.version, late.startedAt, late.startMissing, late.end.version], [null, null, true, '26.1013.40934']);
   assert.equal(engineForRun({ recorded: late, startMs: Date.parse('2026-10-15T00:00:00Z') }, timeline).provenance, 'inferred');
-  assert.equal(cli('record', join(dir, 'missing'), '--end').status, 2);
+  assertChildStatus(cli('record', join(dir, 'missing'), '--end'), 2);
   assert.equal(JSON.parse(cli('at', '2026-10-18T21:42:06Z', '2026-10-18T21:53:01Z').stdout).provenance, 'ambiguous');
 });
 
 test('the saved race rounds get per-task versions, with the round that spans the 2026-10-18 switch split three ways', t => {
-  const race = join(homedir(), 'Projects/sleight-wt/race-1017');
-  if (!existsSync(join(race, 'safari-lcu-r1/results.json'))) { t.skip('the race folder is not on this Mac'); return; }
+  const bank = retainedBank('race-1017', ['safari-lcu-r1/results.json']);
+  if (bank.skip) { t.skip(bank.skip); return; }
+  const race = bank.path;
   const round = loadRound(join(race, 'safari-lcu-r1'));
   const by = Object.fromEntries(round.rows.map(row => [row.task, row.engine]));
   assert.equal(by['form-travel'].version, '26.1007.71326');
@@ -204,8 +207,8 @@ test('rounds.sh records the engine into --out around a FowlBrowser runner round 
   const script = readFileSync(join(repo, 'bench/fowl/rounds.sh'), 'utf8');
   const tail = script.slice(script.indexOf('[ -z "$OUT" ] || node "$REPO/bench/engine-version.mjs" record'));
   const run = spawnSync('/bin/sh', ['-eu', '-c', `cd "${dir}"\n${tail}`, 'rounds-fixture', '--out', 'out', '--model', 'x'], { encoding: 'utf8',
-    env: { PATH: process.env.PATH, HOME: dir, USER: 'fixture', REPO: repo, OUT: 'out', MODEL: 'x', CODEX_HOME: join(dir, 'codex'), SLEIGHT_CHATGPT_APP: join(dir, 'no-app') } });
-  assert.equal(run.status, 3, run.stderr);
+    env: { PATH: process.env.PATH, HOME: dir, USER: 'fixture', REPO: repo, OUT: 'out', MODEL: 'x', CODEX_HOME: join(dir, 'codex'), SLEIGHT_CHATGPT_APP: join(dir, 'no-app') }, timeout: 60000, killSignal: 'SIGKILL' });
+  assertChildStatus(run, 3, run.stderr);
   const span = JSON.parse(readFileSync(join(dir, 'out/engine.json'), 'utf8'));
   assert.deepEqual([span.version, span.changed, span.start.version, span.end.version], ['26.1013.40934', false, '26.1013.40934', '26.1013.40934']);
   assert.ok(span.startedAt <= span.endedAt);

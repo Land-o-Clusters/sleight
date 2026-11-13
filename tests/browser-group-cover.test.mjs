@@ -10,7 +10,9 @@ after(() => rmSync(dir, { recursive: true, force: true }));
 const roots = [join(dir, 'sleight-bench')];
 mkdirSync(roots[0]);
 
-const module = await import('../bench/fowl/group-cover.mjs');
+const coverModule = await import('../bench/fowl/group-cover.mjs');
+const module = { ...coverModule, waitForBrowserUncovered: (pid, options) =>
+  coverModule.waitForBrowserUncovered(pid, { held: () => false, ...options }) };
 const frame = { x: 592, y: 166, width: 920, height: 436 };
 const browser = { pid: 50, start: 10, bundle: 'com.apple.Safari', id: 20, onScreen: true, layer: 0, frame };
 const finder = { pid: 26, start: 1, bundle: 'com.apple.finder', name: 'Finder', id: 9, onScreen: true, layer: 0,
@@ -115,14 +117,25 @@ test('engine overlays, Cua Driver, floating windows and sub-five-percent slivers
   assert.equal(boundary.covering[0].fraction, 0.05);
 });
 
-test('a hold appearing during a cover wait stops before another inspection or close', async () => {
-  let reads = 0, held = false;
-  await assert.rejects(module.waitForBrowserUncovered(50, { roots,
-    held: () => held, snapshot: async () => { reads++; return snapshot([{ ...finder, document: '' }, browser]); },
+test('a hold appearing during cover admission waits before another inspection or close', async () => {
+  let reads = 0, held = false, holdWaits = 0;
+  await module.waitForBrowserUncovered(50, { roots,
+    held: () => held, snapshot: async () => { assert.equal(held, false); return snapshot(++reads === 1 ? [{ ...finder, document: '' }, browser] : [browser]); },
     act: async () => assert.fail('owner close'), log() {},
-    wait: async () => { if (held) throw Error('hold was ignored'); held = true; },
-  }), /Benchmark hold is active/);
-  assert.equal(reads, 1);
+    wait: async ms => { if (ms === 60000) held = true; else { holdWaits++; held = false; } },
+  });
+  assert.equal(reads, 2);
+  assert.equal(holdWaits, 1);
+});
+
+test('a hold after a snapshot discards that snapshot before admitting a task', async () => {
+  let held = false, reads = 0, waits = 0;
+  await module.waitForBrowserUncovered(50, { roots, held: () => held,
+    snapshot: async () => { if (++reads === 1) held = true; return snapshot([browser]); },
+    act: async () => assert.fail('no fixture cover'), log() {},
+    wait: async ms => { assert.equal(ms, 1000); waits++; held = false; } });
+  assert.equal(waits, 1);
+  assert.equal(reads, 2);
 });
 
 test('fixture paths cannot escape through symlinks, dot traversal or missing symlink descendants', async () => {
@@ -210,7 +223,7 @@ test('real gate shares the cover budget between tasks and resets it between A an
     const rows = await runRealGate({ args: { surface: 'codex', 'real-browser': 'chrome', out },
       tasks: ['one', 'two'].map(name => ({ name, browser: 'chrome', prompt: 'Fixture in {browser}', result: 'done' })),
       runner: { gradeOutcome: () => ({ problems: [] }), gradeSite: () => ({ problems: [] }) },
-      runtime: { lockPath: join(dir, 'lock-' + round), admit: async () => {}, commits: () => ({}), readEngine: () => ({}),
+      runtime: { hold: { held: () => false }, lockPath: join(dir, 'lock-' + round), admit: async () => {}, commits: () => ({}), readEngine: () => ({}),
         startSites: async () => ({ close: async () => {} }), checkOwner: async () => ({ ok: true }),
         launchBrowser: async plan => ({ ...plan, pid: 50, stop: async () => ({ browserClosed: true, profileDeleted: true }) }),
         resetBrowser: async () => ({}), observeBrowser: async () => ({}),

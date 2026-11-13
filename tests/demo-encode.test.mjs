@@ -9,7 +9,7 @@ import { Children, encode, gifFits } from '../bench/demo/capture.mjs';
 import { verifyDrawing } from '../bench/demo/probes.mjs';
 import * as demo from '../bench/demo/capture.mjs';
 
-const ffmpeg = spawnSync('ffmpeg', ['-version'], { timeout: 3000, stdio: 'ignore' });
+const ffmpeg = spawnSync('ffmpeg', ['-version'], { timeout: 3000, stdio: 'ignore', killSignal: 'SIGKILL' });
 test('encoder cuts synthetic color frames to eight seconds at 2x without a screen or window', { skip: ffmpeg.status !== 0 }, async t => {
   const dir = registerTemp(t, mkdtempSync(join(tmpdir(), 'sleight-dm1-encode-'))), children = new Children(process.env);
   try {

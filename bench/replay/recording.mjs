@@ -61,12 +61,14 @@ export function loadRecording(input, { task, arm, run, evidence } = {}) {
   let row, metadata, folder, folders, transcript;
   if (input.endsWith('.json')) {
     metadata = json(input);
-    const rows = Array.isArray(metadata) ? metadata : metadata.results ?? (metadata.task ? [metadata] : undefined);
+    const rows = Array.isArray(metadata) ? metadata : metadata.results ??
+      (metadata.schema === 'sleight.check4-bench-result/1' && metadata.row ? [metadata.row] : metadata.task ? [metadata] : undefined);
     const selected = rows?.filter(r => (!task || (typeof r.task === 'string' ? r.task : r.task?.name) === task) &&
       (!arm || r.arm === arm || r.surface === arm) && (!run || r.run === run));
     if (selected?.length !== 1) throw Error('Select exactly one results row with --task, --arm and --run');
     row = selected[0];
     if (evidence) folder = resolve(evidence);
+    else if (metadata.schema === 'sleight.check4-bench-result/1') folder = dirname(input);
     else if (typeof row.task === 'object') folder = basename(input) === 'run.json' ? dirname(input) : join(dirname(input), row.task.name);
     else {
       if (!metadata.stamp) throw Error('Native results need a stamp or --evidence');
@@ -74,11 +76,15 @@ export function loadRecording(input, { task, arm, run, evidence } = {}) {
     }
   } else {
     folder = input.endsWith('.jsonl') ? dirname(input) : input;
-    row = existsSync(join(folder, 'run.json')) ? json(join(folder, 'run.json')) : undefined;
-    metadata = row;
+    if (existsSync(join(folder, 'bench-result.json'))) {
+      metadata = json(join(folder, 'bench-result.json'));
+      if (metadata.schema !== 'sleight.check4-bench-result/1' || !metadata.row) throw Error('Invalid check 4 benchmark receipt');
+      row = metadata.row;
+    } else { row = existsSync(join(folder, 'run.json')) ? json(join(folder, 'run.json')) : undefined; metadata = row; }
   }
+  if (metadata?.schema === 'sleight.check4-bench-result/1') metadata = { ...metadata, suite: 'world' };
   folders ??= [folder];
-  transcript = folders.flatMap(dir => [join(dir, 'events.jsonl'), join(dir, 'transcript.jsonl')]).find(existsSync);
+  transcript = folders.flatMap(dir => [join(dir, 'events.jsonl'), join(dir, 'transcript.jsonl'), join(dir, 'evidence/transcript.jsonl')]).find(existsSync);
   if (!transcript) throw Error(`Transcript missing in ${folders.join('; ')}; native transcripts are written by bench/driver.mjs to the benchmark home's evidence folder, with legacy temp recordings in sleight-real-evidence`);
   folder = dirname(transcript);
   const source = readFileSync(transcript, 'utf8'), calls = parseRecording(source);

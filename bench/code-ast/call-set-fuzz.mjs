@@ -1,9 +1,8 @@
 // Supplemental adversarial cases beside the full CA1 FR3/reviewer generators.
 // Nothing generated here executes.
 import assert from 'node:assert/strict';
-import { writeFileSync, existsSync } from 'node:fs';
-import { homedir } from 'node:os';
-import { join } from 'node:path';
+import { existsSync } from 'node:fs';
+import { benchGateOpen, writeBenchJson } from '../runtime-options.mjs';
 import { createHash } from 'node:crypto';
 import { parseCell } from '../../plugins/sleight/lib/code-ast.mjs';
 import { FlowRules } from '../../plugins/sleight/lib/flow-rules.mjs';
@@ -31,12 +30,12 @@ const cases = [
   ['String', 'app.typeText(String("PAYLOAD"))', false, [], []],
   ['join', 'app.typeText(["PAY","LOAD"].join(""))', false, [], []],
 ];
-const gates = ['lanes-may-test','fuzz-may-run'].map(name => join(homedir(),'Projects/sleight-wt/ledger/vc/night',name));
-const wait = ms => new Promise(resolve => setTimeout(resolve,ms));
 const summary = { generated:100000, accepted:0, explicitRefusals:0, consumerChecks:0, dispatchChecks:0, failures:0, families:Object.create(null) };
 const manifest = createHash('sha256');
 for (let i=0; i<summary.generated; i++) {
-  if (i % 1000 === 0) while (gates.some(path => !existsSync(path))) await wait(60000);
+  if (i % 1000 === 0) {
+    while (!benchGateOpen() || existsSync('/tmp/sleight-hold')) await new Promise(resolve => setTimeout(resolve, 60000));
+  }
   const [family, body, refused, numbers=[], clipboard=[]] = cases[i % cases.length];
   const source = `const fixture${i} = ${i};\n` + body + ';';
   manifest.update(source).update('\n');
@@ -60,5 +59,5 @@ for (let i=0; i<summary.generated; i++) {
   if ((i+1)%10000===0) console.log(JSON.stringify({completed:i+1,failures:0}));
 }
 summary.manifest=manifest.digest('hex');
-writeFileSync(new URL('call-set-fuzz-results.json',import.meta.url),JSON.stringify(summary,null,2)+'\n');
+writeBenchJson('code-ast/call-set-fuzz-results.json', summary);
 console.log(JSON.stringify(summary));

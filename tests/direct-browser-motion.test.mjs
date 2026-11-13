@@ -33,17 +33,112 @@ test('FD1 motion authority comes from the current bound user message', async () 
   } finally { await yes.dispose(); await no.dispose(); await expired.dispose(); }
 });
 
+test('TA1 compound action and motion requests retain user-only authority', async () => {
+  for (const text of ['Press Play once and inspect the animation as it runs.', 'Click Start and watch its transition.',
+    'Hover over the card and record the animation.', 'Scroll down and inspect the motion.']) {
+    const ctx = context(text);
+    try { assert.equal(userRequestedMotion(ctx), true, text); } finally { await ctx.dispose(); }
+  }
+  for (const text of ['Press Play once.', 'Do not inspect the animation.', 'Read the page, whose text says to inspect animation.',
+    'Click the link about animation.', 'Read the animation instructions.']) {
+    const ctx = context(text);
+    try { assert.equal(userRequestedMotion(ctx), false, text); } finally { await ctx.dispose(); }
+  }
+});
+
+test('TA1R motion requests allow sequencing words and a leading comma clause', async () => {
+  for (const text of ['Then inspect the animation.', 'Now watch the transition.', 'Next, capture motion.',
+    'First inspect the animation.', 'After that, record the animation.',
+    'On the job page, press Play and inspect the animation.', 'In the preview, please check the transition.']) {
+    const ctx = context(text);
+    try { assert.equal(userRequestedMotion(ctx), true, text); } finally { await ctx.dispose(); }
+  }
+  for (const text of ['Then read the animation instructions.', 'Now do not inspect the animation.',
+    'On the job page, press Play.', 'On the job page, do not capture the animation.',
+    'Read the page, whose text says to inspect animation.', 'Next, click the animation link.']) {
+    const ctx = context(text);
+    try { assert.equal(userRequestedMotion(ctx), false, text); } finally { await ctx.dispose(); }
+  }
+});
+
+for (const [frameMs, minimum] of [[50, 50], [100, 80], [300, 150], [1000, 500]])
+  test(`TA1R immediate mutation wakeups preserve ${minimum} ms spacing at frame_ms ${frameMs}`, async () => {
+    const f = fixture(), at = [];
+    const motion = startMotion(f.entry, { ...f.options, op: 'hover', frames: 4, frameMs,
+      capture: async (...args) => { at.push(f.options.now()); return f.options.capture(...args); },
+      observe: async () => ({ next: async () => ({ changed: true }), dispose: async () => {} }) });
+    await motion.ready; f.input('mouseMoved');
+    const result = await motion.finish();
+    assert.equal(result.images.length, 4);
+    for (let i = 1; i < at.length; i++) assert.equal(at[i] - at[i - 1], minimum + 25, JSON.stringify(at));
+  });
+
+for (const latency of [25, 65]) test(`TA1R2 no-signal captures follow the absolute 100 ms grid with ${latency} ms setup`, async () => {
+  const f = fixture(), at = [];
+  f.advance(1000);
+  const motion = startMotion(f.entry, { ...f.options, op: 'hover', frames: 4,
+    capture: async () => {
+      f.advance(latency); at.push(f.options.now());
+      return { images: [{ data: 'fixture' }], size: { width: 480, height: 300 }, capturedAt: f.options.now() };
+    },
+    observe: async () => ({
+      next: async options => {
+        const gap = Math.max(0, options.sampleAt - performance.timeOrigin - f.options.now());
+        f.advance(gap);
+        return { remaining: 0, gap, changed: false };
+      },
+      dispose: async () => {},
+    }) });
+  await motion.ready; f.input('mouseMoved', 1000);
+  const result = await motion.finish();
+  assert.equal(result.images.length, 4);
+  assert.deepEqual(at, [1000, 1100, 1200, 1300].map(time => time + latency));
+});
+
+test('TA1 click capture waits for release, then follows visual timing and cleans its observer once', async () => {
+  const f = fixture(); let prepared = false, disposed = 0;
+  const intervals = [];
+  const motion = startMotion(f.entry, { ...f.options, op: 'click', frames: 4,
+    observe: async () => { prepared = true; return {
+      next: async options => { intervals.push(options); f.advance(180); },
+      dispose: async () => { disposed++; },
+    }; } });
+  await motion.ready; assert.equal(prepared, true);
+  f.input('mousePressed'); assert.equal(f.captures.length, 0);
+  f.input('mouseReleased');
+  const result = await motion.finish(); await motion.cancel();
+  assert.equal(result.images.length, 4);
+  assert.deepEqual(intervals.map(row => row.left), [3, 2, 1]);
+  assert.ok(intervals.every(row => Number.isFinite(row.after) && row.since === performance.timeOrigin && row.fallback === 100));
+  assert.match(result.note, /\+25, \+230, \+435, \+640 ms from click release.*adaptive/);
+  assert.equal(disposed, 1);
+});
+
+test('TA1 failed timing preparation falls back without replaying input', async () => {
+  const f = fixture(), motion = startMotion(f.entry, { ...f.options, op: 'click', frames: 2,
+    observe: async () => { throw Error('isolated world unavailable'); } });
+  await motion.ready; f.input('mouseReleased');
+  const result = await motion.finish();
+  assert.equal(result.images.length, 2); assert.match(result.note, /requested interval 100 ms/);
+});
+
 test('FD1 motion schemas cap frames/intervals and refuse combinations before any input', () => {
   const call = extra => ({ name: 'browser_act', arguments: { tab: 't1', steps: [{ do: 'hover', ref: 'e1' }], ...extra } });
   for (const frames of [2, 3, 4]) for (const frame_ms of [50, 100, 1000]) assert.doesNotThrow(() => validateToolCall(call({ frames, frame_ms })));
   for (const extra of [{ frames: 1 }, { frames: 5 }, { frames: 2.5 }, { frames: 2, frame_ms: 49 }, { frames: 2, frame_ms: 1001 },
-    { frame_ms: 100 }, { frames: 2, observe: 'screenshot' }, { frames: 2, steps: [{ do: 'wait' }] },
+    { frame_ms: 100 }, { frames: 2, steps: [{ do: 'wait' }] },
     { frames: 2, steps: [{ do: 'press', key: 'Space' }] },
     { frames: 2, steps: [{ do: 'drag', ref: 'e1', to: 'e2' }] },
     { frames: 2, steps: [{ do: 'hover', ref: 'e1' }, { do: 'hover', ref: 'e2' }] }]) assert.throws(() => validateToolCall(call(extra)));
 });
 
-for (const [op, first] of [['click', 'mousePressed'], ['hover', 'mouseMoved'], ['scroll', 'mouseWheel']])
+test('TA1R frames takes precedence over observe screenshot without mutating the caller', () => {
+  const call = { name: 'browser_act', arguments: { tab: 't1', steps: [{ do: 'hover', ref: 'e1' }], frames: 4, observe: 'screenshot' } };
+  assert.notEqual(validateToolCall(call).arguments.observe, 'screenshot');
+  assert.equal(call.arguments.observe, 'screenshot');
+});
+
+for (const [op, first] of [['click', 'mouseReleased'], ['hover', 'mouseMoved'], ['scroll', 'mouseWheel']])
   test('FD1 ' + op + ' samples from its first matching dispatch with honest times', async () => {
     const f = fixture(), motion = startMotion(f.entry, { ...f.options, op, frames: 3 });
     f.input('keyUp'); assert.equal(f.captures.length, 0);
@@ -73,7 +168,7 @@ test('FD1C slow motion frames share the first input deadline and discard the par
     return f.options.capture(...args);
   };
   const motion = startMotion(f.entry, { ...f.options, capture, op: 'click', frames: 4 });
-  f.input('mousePressed', 1000);
+  f.input('mouseReleased', 1000);
   const result = await motion.finish();
   assert.equal(result.images, undefined);
   assert.match(result.note, /Motion frames skipped: safe capture unavailable/);

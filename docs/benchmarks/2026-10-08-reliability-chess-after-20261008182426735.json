@@ -5200,7 +5200,7 @@
         "content": [
           {
             "type": "text",
-            "text": "{\n \"error\": \"Command failed: osascript -l JavaScript ~/Projects/sleight-wt/reliability/plugins/sleight/lib/drag.js {\\\"app\\\":\\\"Chess\\\",\\\"windowId\\\":61021,\\\"from\\\":[654,655],\\\"to\\\":[654,527]}\\n\"\n}"
+            "text": "{\n \"error\": \"Command failed: osascript -l JavaScript <private-evidence>/reliability/plugins/sleight/lib/drag.js {\\\"app\\\":\\\"Chess\\\",\\\"windowId\\\":61021,\\\"from\\\":[654,655],\\\"to\\\":[654,527]}\\n\"\n}"
           }
         ],
         "isError": true
@@ -23369,7 +23369,7 @@
           "content": [
             {
               "type": "text",
-              "text": "{\n \"error\": \"Command failed: osascript -l JavaScript ~/Projects/sleight-wt/reliability/plugins/sleight/lib/drag.js {\\\"app\\\":\\\"Chess\\\",\\\"windowId\\\":61021,\\\"from\\\":[654,655],\\\"to\\\":[654,527]}\\n\"\n}"
+              "text": "{\n \"error\": \"Command failed: osascript -l JavaScript <private-evidence>/reliability/plugins/sleight/lib/drag.js {\\\"app\\\":\\\"Chess\\\",\\\"windowId\\\":61021,\\\"from\\\":[654,655],\\\"to\\\":[654,527]}\\n\"\n}"
             }
           ],
           "isError": true

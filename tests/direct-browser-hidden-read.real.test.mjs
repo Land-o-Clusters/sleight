@@ -1,3 +1,4 @@
+import { testChromiumExecutable, launchTestChromium } from './fixtures/chromium-isolated.mjs';
 // IN1's design boundary on a real page: Playwright resolves aria-ref against the latest aria snapshot taken in a frame,
 // whoever took it. A read the model never sees (a background prefetch that gets discarded) can retire a ref the model
 // already holds: a button that is briefly renamed during that read gets a new ref, and the old one stops resolving.
@@ -14,9 +15,7 @@ import { snapshot, acknowledgeSnapshot, snapshotRefBinding } from '../plugins/sl
 const live = process.env.SLEIGHT_LIVE_DOM_TEST === '1';
 const pin = JSON.parse(readFileSync(new URL('../plugins/sleight/vendor/playwright-core/browsers.json', import.meta.url)))
   .browsers.find(browser => browser.name === 'chromium-headless-shell');
-const platform = process.platform === 'darwin' ? 'mac-' + process.arch : 'linux64';
-const executablePath = join(homedir(), 'Library/Caches/ms-playwright', 'chromium_headless_shell-' + pin.revision,
-  'chrome-headless-shell-' + platform, 'chrome-headless-shell');
+const executablePath = testChromiumExecutable({ revision: pin.revision });
 const skip = !live ? 'real-page qualification belongs to sleight-arch host runner'
   : !existsSync(executablePath) ? 'pinned Chromium headless shell is unavailable' : false;
 
@@ -29,7 +28,7 @@ async function fixture(t) {
   server.on('connection', socket => { sockets.add(socket); socket.on('close', () => sockets.delete(socket)); });
   await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
   t.after(() => { for (const socket of sockets) socket.destroy(); return new Promise(resolve => server.close(resolve)); });
-  const browser = await chromium.launch({ headless: true, executablePath });
+  const browser = await launchTestChromium(chromium, { headless: true, executablePath });
   t.after(() => browser.close());
   const page = await browser.newPage();
   await page.goto('http://127.0.0.1:' + server.address().port);

@@ -36,6 +36,8 @@ test('watch.sh runs the compatibility watch with launchd\'s missing PATH entries
   assert.ok((await stat(join(h.root, 'Library/Logs/sleight'))).isDirectory());
   await h.run(['--force']);
   assert.deepEqual((await h.args()).args, ['--watch', '--force']);
+  await h.run(['--docs-only']);
+  assert.deepEqual((await h.args()).args, ['--watch', '--docs-only']);
 });
 
 test('watch.sh exits with the check\'s status', async t => {

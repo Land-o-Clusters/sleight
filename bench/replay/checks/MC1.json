@@ -1,6 +1,6 @@
 {
   "id": "MC1",
-  "source": "~/Projects/sleight-wt/race-1017/chrome-sleight-turbo-rel131-r2/form-checkout",
+  "source": "<private-evidence>/race-1017/chrome-sleight-turbo-rel131-r2/form-checkout",
   "switch": "SLEIGHT_MC1", "tool": "browser_act", "argumentPattern": "e44",
   "resultExcludes": "page changed during the click|not run|not reached",
   "assertion": "The shipping click sends input without the page-changed refusal loop."

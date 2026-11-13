@@ -371,36 +371,34 @@ for (const mode of [undefined, '0']) test(`MTb capability advice survives dispat
 for (const mode of [undefined, '0']) test(`MT descriptions and scroll guidance, switch=${mode}`, async () => withMT(mode, async () => {
   const tools = browserTools('bfixture'), descriptions = Object.fromEntries(tools.map(t => [t.name, t.description]));
   for (const tool of tools) assert.ok(tool.description.length <= 2048);
-  // HO1 retains the waiting handoff invocation in both description variants.
   assert.match(descriptions.browser_tabs, /handoff wait:true/);
-  // HO1 waits for the person before reading fresh.
-  assert.match(descriptions.browser_tabs, mode === '0' ? /here await Continue, reread/ : /here await user's Continue, reread/);
-  // HO1 ends away turns and asks for a reply after sign-in.
-  assert.match(descriptions.browser_tabs, /away end turn, ask user to sign in(?: and reply|\/reply)/);
-  // HO1 keeps the secret-request prohibition.
-  assert.match(descriptions.browser_tabs, /Never request secrets/);
+  if (mode !== '0') assert.match(descriptions.browser_tabs, /keep past turn/);
+  assert.match(descriptions.browser_tabs, /await Continue, reread/);
+  assert.match(descriptions.browser_tabs, /away end turn, ask user to sign in and reply/);
+  assert.match(descriptions.browser_tabs, /Never request secrets\./);
+  assert.match(descriptions.browser_tabs, /Hand off unasked payments/);
+  assert.match(descriptions.browser_tabs, /^Owned/);
+  assert.deepEqual(tools.find(tool => tool.name === 'browser_tabs').inputSchema.properties.do.enum, ['list', 'close', 'keep', 'handoff']);
   if (mode === '0') {
     assert.match(descriptions.browser_act, /Stops at boundaries or failure/);
     assert.match(descriptions.browser_fill, /Values are text, boolean, number or string array/);
     // HO1 preserves the legacy engine-tab boundary.
     assert.match(descriptions.browser_tabs, /No engine-path tabs/);
   } else {
-    assert.match(descriptions.browser_act, /Navigation, new tab, dialog, document load\/close, settle cap or failure stops the batch/);
+    assert.match(descriptions.browser_act, /Navigation, new tab, dialog, document load\/close, settle cap or failure/);
     assert.match(descriptions.browser_act, /later steps are not reached/);
     assert.match(descriptions.browser_fill, /Textbox: text\/number/);
-    assert.match(descriptions.browser_fill, /virtual list/);
+    assert.match(descriptions.browser_fill, /virtual lists/);
     // HO1 keeps the unrequested-payment handoff.
     assert.match(descriptions.browser_tabs, /Hand off unasked payments/);
     assert.match(descriptions.browser_fill, /checkbox\/switch\/radio: boolean/);
     assert.match(descriptions.browser_fill, /submit: observed ref only when user asked/);
-    // The schema advertises all four operations; keep's lifetime needs prose.
-    assert.deepEqual(tools.find(tool => tool.name === 'browser_tabs').inputSchema.properties.do.enum, ['list', 'close', 'keep', 'handoff']);
-    assert.match(descriptions.browser_tabs, /keep: open after turn/);
+    // HO1 preserves all four owned-tab operations.
+    assert.match(descriptions.browser_tabs, /Owned tabs: list\/close/);
   }
   assert.match(descriptions.browser_act, /Never blindly resend an uncertain submit\. click (?:accepts )?modifier:cmd\/ctrl\./);
   assert.doesNotMatch(descriptions.browser_act, /modifier:[^.]*shift|modifier:[^.]*alt/);
-  assert.match(descriptions.browser_fill, mode === '0' ? /For a multi-select, an array sets exactly those option texts; \[\] clears all\./
-    : /multi-select: all wanted texts \(\[\] clears\)/);
+  assert.match(descriptions.browser_fill, mode === '0' ? /For a multi-select, an array sets exactly those option texts; \[\] clears all\./ : /multi-select: all wanted texts \(\[\] clears\)/);
   assert.deepEqual(tools.find(tool => tool.name === 'browser_act').inputSchema.properties.steps.items.properties.modifier.enum, ['cmd', 'ctrl']);
   const { dispatcher, calls } = fixture();
   const result = await dispatcher.call({ name: 'browser_act', arguments: { tab: 't1', steps: [{ do: 'scroll', to: 'e1' }] } });
@@ -417,6 +415,8 @@ for (const mode of [undefined, '0']) test(`MT2 dispatcher failures preserve outc
   assert.deepEqual(refused, { isError: true, text: 'Read the target before input.' + hint });
   const uncertain = await make(Error('connection closed')).call({ name: 'browser_act', arguments: { tab: 't1', steps: [{ do: 'click', ref: 'e1' }] } });
   assert.deepEqual(uncertain, { isError: false, text: 'Operation outcome is unconfirmed. Read current state before deciding what remains; do not replay input blindly.' + hint });
+  const lostAfterStart = await make(Error('unknown or releasing owned tab')).call({ name: 'browser_act', arguments: { tab: 't1', steps: [{ do: 'click', ref: 'e1' }] } });
+  assert.deepEqual(lostAfterStart, uncertain, 'a failure after admission must keep the uncertain-input warning');
   const notRun = await make(Object.assign(Error('rule refused'), { notRun: true })).call({ name: 'browser_act', arguments: { tab: 't1', steps: [{ do: 'click', ref: 'e1' }] } });
   assert.deepEqual(notRun, { isError: true, text: 'rule refused. Nothing was sent.' });
 }));

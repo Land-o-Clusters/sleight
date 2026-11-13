@@ -7,6 +7,7 @@ import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { createInterface } from 'node:readline';
 import { trackTemp } from '../scripts/temp-leftovers.mjs';
+import { modCall } from './fixtures/mod-attribution.mjs';
 
 test('launcher bounds a hung call on EOF, collects its engine, then removes its lease', { timeout: 16000 }, async t => {
   const bank = trackTemp(await mkdtemp(join(tmpdir(), 'sleight-launcher-test-')));
@@ -76,8 +77,10 @@ test('launcher stays connected across stop and lazily initializes a new engine w
   });
   const receive = id => Promise.race([replies.has(id) ? Promise.resolve(replies.get(id)) : new Promise(resolve => waiters.set(id, resolve)),
     closed.then(() => { throw new Error('launcher disconnected: ' + stderr); })]);
-  const call = async (id, name, args) => { send({ id, method: 'tools/call', params: { name, arguments: args } }); return receive(id); };
-  send({ id: 0, method: 'initialize', params: { protocolVersion: '2025-06-18', capabilities: { elicitation: { form: {} } }, clientInfo: { name: 'test', version: '1' } } });
+  // /sleight stop and resume come only from Claude Code's mod (MB1): the client is claude-code and turn_ended carries the
+  // mod's attribution.
+  const call = async (id, name, args) => { send(modCall({ id, method: 'tools/call', params: { name, arguments: args } })); return receive(id); };
+  send({ id: 0, method: 'initialize', params: { protocolVersion: '2025-06-18', capabilities: { elicitation: { form: {} } }, clientInfo: { name: 'claude-code', version: '1' } } });
   await receive(0); send({ method: 'notifications/initialized' });
   assert.ok(!(await call(1, 'js', { code: 'let app = await cua.getApp("TextEdit")' })).result.isError);
   const stop = await call(2, 'turn_ended', { sleight_stop: true });

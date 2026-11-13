@@ -4,6 +4,8 @@
 // synchronous providers. An allow consumes payment authority immediately before
 // dispatch. target carries final element metadata, prior metadata, page-observed
 // {terms:{page:{item,amount,payee,currency?},method}}, and the owning tab state.
+import { moneyConflicts } from '../payment-figures.mjs';
+
 const allow = Object.freeze({ verdict: 'allow' });
 const refuse = (message, capability = false) => ({ verdict: 'refuse', message: message + (capability || process.env.SLEIGHT_MT === '0' ? ' Use the engine browser path if needed.' : '') });
 const payments = new WeakMap();
@@ -265,8 +267,14 @@ export function check(ctx, kind, target = {}) {
       ...(page?.currency !== undefined ? { currency: page.currency } : {}) });
     const complete = t => ['item', 'amount', 'payee', 'method'].every(key => text(t[key]));
     // The user's own message names this payment: item and method, and every other term it names matches.
+    const sameAmount = (user, page) => {
+      if (user === page) return true;
+      const raw = String(user).normalize('NFKC').replace(/\s/g, ' '), shown = String(page).normalize('NFKC').replace(/\s/g, ' ');
+      return /^[1-9]\d{0,2}([, '’])\d{3}$/.test(raw) && shown === raw + '.00';
+    };
     const named = t => user?.payment && ['item', 'method'].every(key => text(user.payment[key])) &&
-      ['item', 'method', 'amount', 'payee', 'currency'].every(key => user.payment[key] === undefined || user.payment[key] === t[key]);
+      ['item', 'method', 'amount', 'payee', 'currency'].every(key => user.payment[key] === undefined ||
+        (key === 'amount' ? sameAmount(user.payment[key], t[key]) : user.payment[key] === t[key]));
     const setting = ctx.confirmPayments ?? process.env.SLEIGHT_CONFIRM_PAYMENTS;
     let terms = termsOf(target.terms?.page);
     // 'never' (the user's opt-out): the figure check blanks the amount when a checkout shows a larger figure. For a payment the user's message
@@ -284,7 +292,9 @@ export function check(ctx, kind, target = {}) {
     }
     if (kind === 'dialog' && target.state.submitUnconfirmed && !sameDocument(bank.dialog, target)) return retry();
     const requestKey = user && JSON.stringify([user.session, user.turn, user.id]);
-    const requested = named(terms), strict = setting === 'always';
+    const requested = named(terms) && (setting !== 'never' ||
+      !moneyConflicts(['Total ' + terms.amount + ' ' + (terms.currency ?? '')], user.payment.amount, terms.currency, true));
+    const strict = setting === 'always';
     // One payment activation per user request, whichever kind of control it is: a script-driven button may be Apply or a
     // disguised charge, so it spends the same budget as the real submit. Past the budget, the user is asked through consume.
     if (!(requested && !strict && !bank.used.has(requestKey)) && ctx.consent?.consume(terms, target) !== true) return ask();

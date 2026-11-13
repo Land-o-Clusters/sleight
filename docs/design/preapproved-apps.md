@@ -7,9 +7,11 @@ path or provide entries through settings or environment variables.
 The loader resolves the OS account when loading, using its home and ignoring `HOME`.
 It checks owner, write permissions, regular
 file status and symlinks, opens with `O_NOFOLLOW`, then checks the open descriptor's identity and
-permissions again. A missing file doesn't grant approval. An invalid file stops startup. Version 1 has an
+permissions again. A missing, invalid or unsafe file grants nothing, and startup continues. The doctor,
+first tool result and Permissions menu explain how to repair an invalid file. Version 1 has an
 `apps` array of exact `app` identifiers and `riskLevel` ceilings (`low`, `medium`, `high`). Unknown
-fields, duplicate apps and wildcards are refused. The parsed map is private and unchanged until exit.
+fields and wildcards are refused. A `launchTeam` of `apple` or a 10-character Team ID, which 2.0 records, is
+accepted and grants nothing here. Duplicate apps use their lowest risk ceiling. Callers cannot mutate the parsed map.
 Ownership checks cannot distinguish the user from other processes running as that user. The skill
 forbids Claude creating or editing the list, but the loader cannot enforce that instruction.
 

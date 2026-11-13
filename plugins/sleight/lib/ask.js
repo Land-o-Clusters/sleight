@@ -12,10 +12,8 @@ ObjC.import('Cocoa');
 
 function run(argv) {
   const [question, detail, iconPath, seconds, mode, host, offer, scope] = argv;
-  // An app approval can offer "Always allow", which adds the app to the user's pre-approved list.
-  const always = mode === 'approval' && offer === 'always';
-  const review = mode === 'review';
-  const wide = review || mode === 'flow';
+  // No hardware-origin input guard: session/once only. Review decisions belong to the client's form.
+  const wide = mode === 'flow';
   // Scope comes from the launcher, never from words in the request or explanation.
   const allowLabel = mode === 'approval' && scope === 'session' ? 'Allow this session' : 'Allow once';
   const app = $.NSApplication.sharedApplication;
@@ -30,21 +28,13 @@ function run(argv) {
     name: 'SleightAskTarget',
     methods: {
       'allow:': { types: ['void', ['id']], implementation: finish('accept') },
-      'always:': { types: ['void', ['id']], implementation: finish('always') },
       'deny:': { types: ['void', ['id']], implementation: finish('decline') },
       'giveUp:': { types: ['void', ['id']], implementation: finish('cancel') },
-      'keep:': { types: ['void', ['id']], implementation: finish('keep') },
-      'undo:': { types: ['void', ['id']], implementation: finish('undo') },
     },
   });
   const target = $.SleightAskTarget.alloc.init;
 
-  const approvalButtonWidth = always ? Math.max(...["Don't allow", 'Always allow', allowLabel].map(text => {
-    const measured = $.NSButton.buttonWithTitleTargetAction(text, target, 'deny:');
-    measured.controlSize = $.NSControlSizeLarge;
-    return Math.ceil(measured.intrinsicContentSize.width) + 12;
-  })) : 0;
-  const W = wide ? 680 : Math.max(400, 112 + approvalButtonWidth * 3 + 16);
+  const W = wide ? 680 : 400;
   const PAD = 20;
   const ICON = 56;
   const TEXT_X = PAD + ICON + 16;
@@ -142,7 +132,7 @@ function run(argv) {
     content.addSubview(scroll);
   } else content.addSubview(body.field);
 
-  const buttonW = review || always ? (TEXT_W - 16) / 3 : (TEXT_W - 8) / 2;
+  const buttonW = (TEXT_W - 8) / 2;
   const button = (text, action, x) => {
     const b = $.NSButton.buttonWithTitleTargetAction(text, target, action);
     b.frame = $.NSMakeRect(x, PAD, buttonW, BUTTON_H);
@@ -150,11 +140,9 @@ function run(argv) {
     content.addSubview(b);
     return b;
   };
-  const deny = button(review ? 'Later' : "Don't allow", review ? 'giveUp:' : 'deny:', TEXT_X);
+  const deny = button("Don't allow", 'deny:', TEXT_X);
   deny.keyEquivalent = '\u001b';
-  if (review) button('Undo', 'undo:', TEXT_X + buttonW + 8);
-  const allow = button(review ? 'Keep' : allowLabel, review ? 'keep:' : 'allow:', TEXT_X + (buttonW + 8) * (review ? 2 : 1));
-  if (always) button('Always allow', 'always:', TEXT_X + (buttonW + 8) * 2);
+  const allow = button(allowLabel, 'allow:', TEXT_X + buttonW + 8);
   // macOS 26 fills a button with the accent color at primary prominence.
   if (allow.respondsToSelector('setTintProminence:')) allow.tintProminence = 3;
   else allow.bezelColor = $.NSColor.controlAccentColor;

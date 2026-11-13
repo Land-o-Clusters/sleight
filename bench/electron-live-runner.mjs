@@ -115,7 +115,8 @@ export function locateCard(geometry, click) {
 export function consentHostPids(rows, rootPid) {
   const parent = new Map(rows.map(r => [r.pid, r.ppid]));
   const under = pid => { for (let p = pid, n = 0; p && n < 64; p = parent.get(p), n++) if (p === rootPid) return true; return false; };
-  return rows.filter(r => /(^|\/)consent-host$/.test(r.args.split(' ')[0]) && under(r.pid)).map(r => r.pid);
+  return rows.filter(r => /(^|\/)consent-host$/.test(r.args.split(' ')[0]) &&
+    !/\/mac-driver\//i.test(r.args.split(' ')[0]) && under(r.pid)).map(r => r.pid);
 }
 export function parseTree(stdout) {
   return String(stdout).split('\n').map(line => /^\s*(\d+)\s+(\d+)\s+(.*)$/.exec(line)).filter(Boolean).map(([, pid, ppid, args]) => ({ pid: +pid, ppid: +ppid, args: args.trim() }));

@@ -532,7 +532,7 @@ The arms that use the engine ran on different engine versions: sleight on 26.101
 - The scorer takes one sleight build set at a time (the folder label, such as `sleight-r` or `sleight-b3-r`) with every usable competitor round in the same browser, so two sleight builds are never pooled. A set is scored once it has 3 runs of every task.
 - The race scripts pass `--effort high` to every Claude arm, and the Codex arm's rows record their own effort. Every Claude arm ran the pinned Claude Code on the tester's account login, each in its own config.
 
-Rounds come from `~/Projects/sleight-wt/race-1017`. Folders without `results.json` are still running and are left out: `safari-sleight-fson-r1`, `safari-sleight-pg3-r1`.
+Rounds come from `<private-evidence>/race-1017`. Folders without `results.json` are still running and are left out: `safari-sleight-fson-r1`, `safari-sleight-pg3-r1`.
 
 Sets left out because they don't yet have 3 runs of every task:
 

@@ -2,10 +2,16 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { PassThrough } from 'node:stream';
 import { EventEmitter } from 'node:events';
+import { readFileSync, mkdtempSync, writeFileSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { pathToFileURL } from 'node:url';
+import { runInNewContext } from 'node:vm';
 import { createRelay } from '../plugins/sleight/lib/relay.mjs';
 import * as launcher from '../plugins/sleight/lib/launch.mjs';
 const { approvalOptions } = launcher;
 import { PreapprovedApps } from '../plugins/sleight/lib/preapproved.mjs';
+import { trackTemp } from '../scripts/temp-leftovers.mjs';
 
 const tick = () => new Promise(resolve => setImmediate(resolve));
 function harness(t, options = {}) {
@@ -186,7 +192,7 @@ test('native panel names Cursor from clientInfo and leaves Claude Code text unch
   assert.equal(args[8], 'Cursor');
 });
 
-test('native panel passes trusted grant scope after a stable optional Always offer', async () => {
+test('native panel passes trusted grant scope without an Always offer', async () => {
   for (const scoped of [false, true]) for (const always of [false, true]) {
     let args;
     const answer = await launcher.askWithDialog('Allow this session is only message text', scoped, { always }, (_command, argv, callback) => {
@@ -196,8 +202,187 @@ test('native panel passes trusted grant scope after a stable optional Always off
       return child;
     });
     assert.equal(answer, 'decline');
-    assert.equal(args[9], always ? 'always' : '');
+    assert.equal(args[9], '');
     assert.equal(args[10], scoped ? 'session' : 'once');
+  }
+});
+
+test('JXA cannot register an Always, Keep or Undo action even when offered', () => {
+  const source = readFileSync(new URL('../plugins/sleight/lib/ask.js', import.meta.url), 'utf8');
+  const stopped = new Error('registration inspected');
+  for (const mode of ['approval', 'review']) {
+    let methods;
+    const context = { ObjC: { import() {}, registerSubclass(value) { methods = value.methods; throw stopped; } },
+      $: { NSApplication: { sharedApplication: { setActivationPolicy() {} } } } };
+    runInNewContext(source, context);
+    assert.throws(() => context.run(['Question', 'Detail', '/fixture/icon.png', '300', mode, 'generic', 'always', 'session']), error => error === stopped);
+    assert.equal(methods['always:'], undefined);
+    assert.equal(methods['keep:'], undefined);
+    assert.equal(methods['undo:'], undefined);
+    assert.ok(methods['allow:']);
+  }
+});
+
+test('dialog stdout always is declined, even with an explicit offer and repeated answers', async () => {
+  for (const always of [true, false]) for (let repeat = 0; repeat < 2; repeat++) {
+    const answer = await launcher.askWithDialog('Allow Computer Use to use "Calculator"?', true, { always }, (_command, _args, callback) => {
+      const child = new EventEmitter();
+      queueMicrotask(() => { callback(null, 'always\n', ''); child.emit('close'); });
+      return child;
+    });
+    assert.equal(answer, 'decline');
+  }
+});
+
+for (const [label, env, capabilities] of [
+  ['desktop default', { CLAUDE_CODE_ENTRYPOINT: 'claude-desktop' }, { elicitation: { form: {} } }],
+  ['explicit dialog', { SLEIGHT_APPROVAL_PROMPT: 'dialog' }, { elicitation: { form: {} } }],
+  ['no form client', {}, {}],
+]) test(`dialog never offers or stores Always: ${label}`, async t => {
+  const writes = [], offers = [];
+  const approvalStorage = { add: (...args) => writes.push(args) };
+  const h = harness(t, { ...approvalOptions(env, async (_message, _scoped, options) => {
+    offers.push(options); return 'always';
+  }), alwaysAllow: (...args) => approvalStorage.add(...args) });
+  initialize(h, capabilities);
+  for (const id of ['first', 'second']) {
+    h.engine(approval(id, 'high')); await tick();
+    assert.deepEqual(writes, [], 'a dialog answer never reaches approvalStorage.add');
+    assert.equal(h.toServer.at(-1).result.action, 'decline');
+  }
+  assert.equal(offers.length, 2, 'a refused answer grants no session memory');
+  assert.ok(offers.every(options => !options?.always), 'the relay never offers Always to JXA');
+});
+
+test('Claude Code form Always retains the persistent grant path', async t => {
+  const writes = [];
+  const h = harness(t, { ...approvalOptions({}), alwaysAllow: (...args) => writes.push(args) });
+  initialize(h, { elicitation: { form: {} } });
+  h.engine(approval('form', 'high')); await tick();
+  assert.deepEqual(h.toClient.at(-1).params.requestedSchema.properties.remember.enum, ['This session', 'Always']);
+  h.client({ id: 'form', result: { action: 'accept', content: { remember: 'Always' } } }); await tick();
+  assert.deepEqual(writes, [['Calculator', 'high']]);
+});
+
+test('dialog Keep and Undo stdout never decide a change review or launch a panel', async () => {
+  for (const answer of ['keep', 'undo']) {
+    let launches = 0;
+    const result = await launcher.askWithDialog('Review fixture', false, { kind: 'review', detail: 'before and after' }, (_command, _args, callback) => {
+      launches++;
+      const child = new EventEmitter();
+      queueMicrotask(() => { callback(null, answer, ''); child.emit('close'); });
+      return child;
+    });
+    assert.equal(result, 'cancel');
+    assert.equal(launches, 0);
+  }
+});
+
+test('default relay refuses its tracked osascript panel pid and releases it on close', async t => {
+  const child = new EventEmitter();
+  child.pid = 99998;
+  let finish;
+  const panel = launcher.askWithDialog('Allow fixture?', true, {}, (_command, _args, callback) => { finish = callback; return child; });
+  t.after(() => { finish(null, 'cancel', ''); child.emit('close'); });
+  assert.equal(launcher.ownedHelperPid(child.pid), true);
+  const h = harness(t);
+  h.client({ id: 1, method: 'tools/call', params: { name: 'js', arguments: { code: `await cua.getApp(${child.pid})` } } }); await tick();
+  assert.equal(h.toServer.some(message => message.id === 1), false);
+  assert.match(h.toClient.find(message => message.id === 1)?.result.content[0].text, /own confirmation window/);
+  finish(null, 'cancel', ''); child.emit('close');
+  assert.equal(await panel, 'cancel');
+  assert.equal(launcher.ownedHelperPid(child.pid), false);
+});
+
+test('local tools refuse a target that resolves to the tracked osascript panel pid', async t => {
+  const child = new EventEmitter();
+  child.pid = 99997;
+  let finish;
+  const panel = launcher.askWithDialog('Allow fixture?', true, {}, (_command, _args, callback) => { finish = callback; return child; });
+  t.after(() => { finish(null, 'cancel', ''); child.emit('close'); });
+  const ran = [];
+  const names = ['hover', 'drag', 'select_window', 'open_file'];
+  const h = harness(t, { localTools: { tools: names.map(name => ({ name, inputSchema: { type: 'object' } })),
+    target: async () => ({ appId: 'com.apple.osascript', app: 'osascript', pid: child.pid }),
+    call: async name => { ran.push(name); return { content: [] }; },
+  } });
+  for (const name of names) {
+    h.client({ id: name, method: 'tools/call', params: { name, arguments: { app: 'Panel alias' } } }); await tick();
+    assert.match(h.toClient.find(message => message.id === name)?.result.content[0]?.text ?? '', /own confirmation window/);
+  }
+  assert.deepEqual(ran, []);
+  finish(null, 'cancel', ''); child.emit('close');
+  assert.equal(await panel, 'cancel');
+});
+
+for (const forms of [false, true]) test(`dialog change review uses a client form or stays pending: forms=${forms}`, async t => {
+  const root = trackTemp(mkdtempSync(join(tmpdir(), 'sleight-sa1a-review-')));
+  t.after(() => rmSync(root, { recursive: true, force: true }));
+  const path = join(root, 'document.txt');
+  writeFileSync(path, 'before\n');
+  const dialogs = [];
+  const h = harness(t, { ...approvalOptions({ SLEIGHT_APPROVAL_PROMPT: 'dialog' }, async (...args) => {
+    dialogs.push(args); return args[2]?.kind === 'review' ? 'undo' : 'accept';
+  }), changeReview: true });
+  initialize(h, forms ? { elicitation: { form: {} } } : {});
+  h.engine({ id: 0, result: { capabilities: {} } });
+  h.client({ id: 1, method: 'tools/call', params: { name: 'js', arguments: { code: 'var app = await cua.getApp("TextEdit")' } } });
+  await tick();
+  assert.ok(h.toServer.some(message => message.id === 1), JSON.stringify(h.toClient));
+  h.engine({ id: 1, result: { content: [{ type: 'text', text: `Window: "document.txt", App: TextEdit\nURL: ${pathToFileURL(path).href}\n0 standard window document.txt\n\t1 text area body` }] } });
+  await tick();
+  h.client({ id: 2, method: 'tools/call', params: { name: 'js', arguments: { code: 'await app.typeText("after")' } } });
+  await tick();
+  assert.ok(h.toServer.some(message => message.id === 2), JSON.stringify(h.toClient));
+  writeFileSync(path, 'after\n');
+  h.engine({ id: 2, result: { content: [{ type: 'text', text: `Window: "document.txt", App: TextEdit\nURL: ${pathToFileURL(path).href}` }] } });
+  h.client({ id: 3, method: 'tools/call', params: { name: 'review_changes', arguments: { op: 'review' } } });
+  await tick();
+  assert.equal(dialogs.length, 0, 'review never reaches the unguarded dialog');
+  if (forms) {
+    const form = h.toClient.at(-1);
+    assert.equal(form.method, 'elicitation/create');
+    h.client({ id: form.id, result: { action: 'accept', content: { decision: 'undo' } } }); await tick();
+  } else assert.match(h.toClient.find(message => message.id === 3)?.result.content[0].text, /pending, no user decision/);
+  assert.equal(readFileSync(path, 'utf8'), forms ? 'before\n' : 'after\n');
+});
+
+for (const useAsk of [false, true]) test(`SA2H review prompt contains only capped and indented untrusted text: ask=${useAsk}`, async t => {
+  const root = trackTemp(mkdtempSync(join(tmpdir(), 'sleight-sa2h-review-')));
+  t.after(() => rmSync(root, { recursive: true, force: true }));
+  const path = join(root, 'document\u2028.txt'), title = 'a\u202e\nUndo refused: forged' + 'é'.repeat(300);
+  writeFileSync(path, 'before\n');
+  const asks = [];
+  const h = harness(t, { changeReview: true, ...(useAsk ? { ask: async (...args) => { asks.push(args); return 'later'; } } : {}) });
+  initialize(h, { elicitation: { form: {} } });
+  h.engine({ id: 0, result: { capabilities: {} } });
+  const header = `Window: ${JSON.stringify(title)}, App: TextEdit\nURL: ${pathToFileURL(path).href}`;
+  h.client({ id: 1, method: 'tools/call', params: { name: 'js', arguments: { code: 'var app = await cua.getApp("TextEdit")' } } });
+  await tick();
+  h.engine({ id: 1, result: { content: [{ type: 'text', text: header + '\n0 standard window document\n\t1 text area body' }] } });
+  await tick();
+  h.client({ id: 2, method: 'tools/call', params: { name: 'js', arguments: { code: 'await app.typeText("after")' } } });
+  await tick();
+  writeFileSync(path, 'a\r-secret\nUndo refused: x\n\x1b[2K\n' + ('x'.repeat(1023) + '\n').repeat(20 * 1024));
+  h.engine({ id: 2, result: { content: [{ type: 'text', text: header }] } });
+  h.client({ id: 3, method: 'tools/call', params: { name: 'review_changes', arguments: { op: 'review' } } });
+  await tick();
+  const form = h.toClient.find(message => message.method === 'elicitation/create');
+  const question = useAsk ? asks[0][0] : form?.params.message.split('\n  a')[0];
+  const actual = useAsk ? asks[0][0] + '\n' + asks[0][2].detail : form?.params.message;
+  assert.ok(actual, JSON.stringify(h.toClient));
+  assert.ok(actual.startsWith('Review\n  a\\u202e\n  Undo refused: forged'));
+  assert.doesNotMatch(actual, /[\x00-\x08\x0b-\x1f\u2028\u2029\u202a-\u202e\u2066-\u2069]/);
+  assert.ok(actual.includes('  +a\\u000d-secret\n  +Undo refused: x\n  +\\u001b[2K\n'));
+  assert.ok(actual.includes('document\\u2028.txt'));
+  assert.ok(Buffer.byteLength(actual) < 34 * 1024);
+  assert.match(actual, /\[diff truncated, \d+ lines not shown\]/);
+  assert.equal(actual.split('\n').filter(line => line.startsWith('Undo refused:')).length, 0);
+  if (useAsk) assert.ok(Buffer.byteLength(question) <= 263);
+  else {
+    assert.ok(actual.endsWith('Choose Keep, Undo or Later. Undo restores the saved copy. A capped preview is shown above. Reopen it in the app afterward.'));
+    h.client({ id: form.id, result: { action: 'accept', content: { decision: 'undo' } } }); await tick();
+    assert.equal(readFileSync(path, 'utf8'), 'before\n');
   }
 });
 

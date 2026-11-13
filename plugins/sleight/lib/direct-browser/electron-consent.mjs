@@ -4,6 +4,7 @@ import { dirname, isAbsolute, join, normalize } from 'node:path';
 import { canonical } from './authority.mjs';
 import { createConsentUi } from './consent-ui.mjs';
 import { UNLAUNCHED, appKey, createAppBinding, validateAppInstance } from './electron-identity.mjs';
+import { observeSettingsFile, readSettingsBytes, trustedSettingsContent } from '../sealed-settings.mjs';
 
 // The debugger is its own opt-in per app, separate from the engine's app approval (LAWS, 2026-10-14).
 // Three things come only from an authenticated click on a native card: a debugger grant, an Always
@@ -29,7 +30,7 @@ function validRecord(record) {
 // by hand, an old unsealed one or one with a changed field is not consent. put() needs a receipt that only an
 // authenticated Always click in createElectronConsent mints, and it burns that receipt.
 // Limit (docs/known-problems.md): a process running as this user can read the key file and seal its own record.
-export function createGrantStore({ path, keyPath } = {}) {
+export function createGrantStore({ path, keyPath, seals } = {}) {
   const absolute = value => isAbsolute(value) && normalize(value) === value && value.length <= 4096;
   if (path !== undefined && !absolute(path) || keyPath !== undefined && (path === undefined || !absolute(keyPath))) fail('INVALID_GRANT_STORE');
   const sealPath = path === undefined ? undefined : keyPath ?? join(dirname(path), 'grant-seal.key');
@@ -54,11 +55,21 @@ export function createGrantStore({ path, keyPath } = {}) {
   const sealOf = (secret, record) => createHmac('sha256', secret).update(canonical(record)).digest('base64url');
   function read() {
     if (path === undefined) return memory;
+    const verified = seals ?? observeSettingsFile(path);
+    if (verified?.enforcing) {
+      try {
+        const bytes = trustedSettingsContent(verified, 'electron-grants.json', 'grant');
+        if (bytes === undefined) return new Map();
+        const data = JSON.parse(bytes);
+        if (data.version !== 2 || !Array.isArray(data.grants) || data.grants.length > 4096) fail('GRANT_STORE_UNSAFE');
+        unsafe = false; return new Map(data.grants.map(entry => { const record = validRecord(entry.record); return [record.key, record]; }));
+      } catch { unsafe = true; return new Map(); }
+    }
     let stat;
     try { stat = lstatSync(path); } catch (error) { if (error.code === 'ENOENT') { unsafe = false; return new Map(); } unsafe = true; return new Map(); }
     try {
       if (!safeFile(path, stat) || stat.size > 1048576) fail('GRANT_STORE_UNSAFE');
-      const data = JSON.parse(readFileSync(path, 'utf8'));
+      const data = JSON.parse(readSettingsBytes(path));
       if (!data || data.version !== 2 || !Array.isArray(data.grants) || data.grants.length > 4096) fail('GRANT_STORE_UNSAFE');
       const secret = sealKey(false);
       const records = new Map();

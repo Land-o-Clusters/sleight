@@ -1,3 +1,4 @@
+import { assertChildStatus } from './fixtures/child-status.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { mkdtempSync, mkdirSync, readFileSync, writeFileSync, rmSync, existsSync, readdirSync, realpathSync } from 'node:fs';
@@ -66,8 +67,8 @@ test('queue has probe then 3 exact native/Chrome rounds, and native flags reach 
 test('queue dry-run cannot write, spawn, inspect host processes or touch control paths', () => {
   const f = fixture();
   try {
-    const r = spawnSync(process.execPath, ['--permission', '--allow-fs-read=*', 'bench/world/arms/cursor-cu/queue.mjs', f.script, '--dry-run'], { encoding: 'utf8' });
-    assert.equal(r.status, 0, r.stderr); assert.equal((r.stdout.match(/^# .* kind=/gm) ?? []).length, 7);
+    const r = spawnSync(process.execPath, ['--permission', '--allow-fs-read=*', 'bench/world/arms/cursor-cu/queue.mjs', f.script, '--dry-run'], { encoding: 'utf8', timeout: 60000, killSignal: 'SIGKILL' });
+    assertChildStatus(r, 0, r.stderr); assert.equal((r.stdout.match(/^# .* kind=/gm) ?? []).length, 7);
     assert.match(r.stdout, /no runners executed/); assert.match(r.stdout, /probe.mjs.*--owner-away/);
     assert.equal(existsSync(f.out), false);
   } finally { rmSync(f.dir, { recursive: true }); }
@@ -243,6 +244,35 @@ test('interrupted admission waits for its bounded host child instead of orphanin
   await new Promise(resolve => setImmediate(resolve)); assert.equal(finished, false);
   collect(); assert.equal(await running, 130);
   assert.equal(await admission(async () => {}), 0);
+});
+
+test('admission interrupts a hold on INT, TERM or HUP and maps hold limits', async () => {
+  const { waitForBenchmark } = await import('../bench/hold.mjs');
+  for (const event of ['SIGINT', 'SIGTERM', 'SIGHUP']) {
+    const counts = ['SIGINT', 'SIGTERM', 'SIGHUP'].map(s => process.listenerCount(s));
+    const rc = await admission(signal => waitForBenchmark({ signal, held: () => true,
+      wait: async () => { process.emit(event); throw Object.assign(Error('interrupt'), { name: 'AbortError' }); }, log() {} }));
+    assert.equal(rc, 130);
+    assert.deepEqual(['SIGINT', 'SIGTERM', 'SIGHUP'].map(s => process.listenerCount(s)), counts);
+  }
+  assert.equal(await admission(async () => { throw Object.assign(Error('hold cap'), { code: 'BENCH_HOLD_LIMIT' }); }), 75);
+  await assert.rejects(admission(async () => { throw Object.assign(Error('unrelated transport'), { name: 'AbortError' }); }), /unrelated transport/);
+});
+
+test('probe forwards its signal to read-only admission before starting any runner', async () => {
+  const controller = new AbortController(); controller.abort();
+  await assert.rejects(runProbe({ ownerAway: true, ownerSaysCursorFree: true }, { signal: controller.signal,
+    exists: () => false, preflight: async (_plan, options) => { assert.equal(options.signal, controller.signal); options.signal.throwIfAborted(); },
+    run: () => assert.fail('aborted probe started runner') }), { name: 'AbortError' });
+});
+
+test('calibration forwards its abort signal before acquiring the lock or opening UI', async () => {
+  const { calibrate } = await import('../bench/world/arms/cursor-cu/calibrate.mjs');
+  const controller = new AbortController(); controller.abort();
+  await assert.rejects(calibrate({ ownerSaysCursorFree: true }, { signal: controller.signal, exists: () => false,
+    guard() {}, driver: { preflight: async (_plan, options) => {
+      assert.equal(options.calibration, true); assert.equal(options.signal, controller.signal); options.signal.throwIfAborted();
+    }, open: () => assert.fail('opened UI') }, lock: () => assert.fail('acquired lock') }), { name: 'AbortError' });
 });
 
 test('probe --out plans attributable child banks; dry mode never inspects or writes', async () => {

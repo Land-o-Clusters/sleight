@@ -62,7 +62,7 @@ test('a confirmed save carries the receipt and an unconfirmed one does not', t =
     if (write) { writeFileSync(file, 'after!'); utimesSync(file, 2000, 2000); } else utimesSync(file, 1000, 1000);
     return c.process([text(GUARD_MARK + doc + GUARD_END)], { action }).find(item => /^sleight: /.test(item.text))?.text;
   };
-  assert.match(save(true), /saved: observed ".*a\.txt" \(its file on disk changed during this call\); on disk: 6 bytes, plain text\.$/);
+  assert.match(save(true), /saved: observed ".*a\.txt" \(its file on disk changed during this call\); on disk: 6 bytes, plain text; requested text: unverified \(save evidence only\)\.$/);
   const unconfirmed = save(false);
   assert.match(unconfirmed, /saved: not confirmed/);
   assert.doesNotMatch(unconfirmed, /on disk:/);
@@ -130,8 +130,8 @@ test('open rules keep every safety passage and drop what an open already did', (
     assert.doesNotMatch(short, /\n\n\n|## [^\n]*\n\n## /);
     if (!env.SLEIGHT_PROMPT) {
       assert.match(short, /`app\.typeText\(text\)`\/`app\.pressKey\(key\)`: no element\. `click\(target\)` first\./);
-      assert.doesNotMatch(short, /List exceeds visible rows/);
-      assert.match(short, /End on the action\./);
+      assert.doesNotMatch(short, /Long list:/);
+      assert.match(short, /End on the action's returned changes\. Read missing information: `await app\.getAXState\(\)`\./);
       assert.match(short, /app\.paste\("text"\)/);
       assert.match(short, /Submit in that call only when the user asked/);
     }
@@ -143,7 +143,7 @@ const tree = 'Window: "note.txt", App: Example.\n0 standard window note.txt\n\t1
 const rules = '# Rules\n\nNever create or edit preapproved.json.\n\n## Calls\n\n- When the task specifies an app, acquire it.\n- End on the action.\n\n## sleight\'s other tools\n\n- `notifications` presses buttons.\n\nIf `js` fails to start, run doctor.';
 for (const openRules of ['full', 'short']) test(`SLEIGHT_OPEN_RULES=${openRules} on an open_file result, then the first js result`, async t => {
   const h = harness(t, { documentationTrust: fixtureDocumentation(docs), openRules, firstCallRules: rules,
-    localTools: { tools: [{ name: 'open_file' }], call: async () => ({ content: [text('Opened note.txt.')],
+    localTools: { tools: [{ name: 'open_file', inputSchema: { type: 'object' } }], call: async () => ({ content: [text('Opened note.txt.')],
       _meta: { 'sleight/openedApp': 'org.example.editor' } }) } });
   h.send({ id: 1, method: 'tools/call', params: { name: 'open_file', arguments: { app: 'Example', path: '/tmp/note.txt' } } });
   await tick();

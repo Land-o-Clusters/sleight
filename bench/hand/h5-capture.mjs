@@ -28,6 +28,7 @@ import { fileURLToPath } from 'node:url';
 import { promisify } from 'node:util';
 import { compareFrames, classify, modeVerdict, decision, colourRule, SOURCES, TOLERANCE, MIN_HAND, CURSOR_STYLES } from './pixels.mjs';
 import { characterWire } from './synthetic-character.mjs';
+import { stageUnitFailure, stageFailureKind, stageRetryable } from './stage-progress.mjs';
 import { DOCUMENT_LAUNCH as LAUNCH_ARGS, hostArgs } from './vc7-live.mjs';
 
 const execute = promisify(execFile);
@@ -91,20 +92,23 @@ export function spots(rect) {
 
 /** The whole test against its boundary. deps: windows() → { front, windows }, capture(source, { hostPid, label }) → frame,
  *  hit(x, y) → pid or undefined, startHost(mode) → { pid, write(line), close() }, sleep(ms), log(line). */
-export async function runCaptureTest(deps, { target, samples = 5, tol = TOLERANCE, minHand = MIN_HAND, style = 'glove', character } = {}) {
+export async function runCaptureTest(deps, { target, samples = 5, tol = TOLERANCE, minHand = MIN_HAND, style = 'glove', character,
+  stageCase, panel } = {}) {
   const { log = () => {} } = deps;
   const coloured = colourRule(style);
   if (style === 'sprite' && !character) throw new Error('the sprite style needs a character');
   const report = { style, target: { pid: target.pid, id: target.id, bounds: target.bounds }, samples, tol, minHand, modes: {}, notes: [] };
   const listed = await deps.windows();
-  const region = pickRegion(target, listed.windows);
+  const region = stageCase ? stageCaptureRegion(target, panel, listed.windows) : pickRegion(target, listed.windows);
+  if (stageCase && region.covered) throw new Error(`stage capture refused: ${region.covered}`);
   const skipRegion = region.covered;
   if (skipRegion) report.notes.push(`region and hover captures skipped: ${skipRegion}`);
   const rect = region.rect ?? { x: target.bounds.x + 24, y: target.bounds.y + 60, width: target.bounds.width - 48, height: target.bounds.height - 84 };
   report.region = rect;
   const { points, body } = spots(rect);
   const sources = CAPTURE_ORDER.filter(s => !(skipRegion && s === 'region'));
-  const shot = (source, ctx) => deps.capture(source === 'hover' ? 'region' : source, { ...ctx, rect, target });
+  const shot = (source, ctx) => deps.capture(source === 'hover' ? 'region' : source,
+    { ...ctx, rect, target, ...(stageCase ? { includeStageExtent: true } : {}) });
 
   // Two baselines per path with no hand anywhere: the second gives the path's noise.
   log('baselines');
@@ -123,8 +127,7 @@ export async function runCaptureTest(deps, { target, samples = 5, tol = TOLERANC
   for (const mode of ['hidden', 'visible']) {
     log(`mode ${mode}`);
     const host = await deps.startHost(mode, style);
-    const wire = handWire();
-    if (character) host.write(wire.character(character));
+    let wire;
     let k = 0, last = points[0], timer;
     const ping = () => {
       const at = points[k++ % 2];
@@ -136,15 +139,33 @@ export async function runCaptureTest(deps, { target, samples = 5, tol = TOLERANC
     const record = async (source, label, take, { hide = false } = {}) => {
       const before = await deps.windows();
       // A region capture is taken only while nothing but the target and the hand is over the region, checked each time.
-      if (['region', 'hover'].includes(source) && covering(rect, target, before.windows, [host.pid]).length) {
+      const blocked = stageCase ? stageCaptureRegion(target, panel, before.windows, [host.pid]).covered
+        : covering(rect, target, before.windows, [host.pid]).length;
+      if (['region', 'hover', ...(stageCase ? ['composite'] : [])].includes(source) && blocked) {
         result.push({ source, sample: label, handUp: false, result: 'skipped', reason: 'covered', frontPid: before.front });
         return;
       }
-      let up = panelUp(before.windows, host.pid, target), frame, error;
+      const shown = windows => panelUp(windows, host.pid, stageCase ? { bounds: panel } : target);
+      const stageShown = async () => {
+        if (!stageCase) return true;
+        const observed = await deps.observeStage({ host });
+        return observed?.size === 'stage' && observed?.seat === stageCase && observed?.stageArt === true &&
+          ['x', 'y', 'width', 'height'].every(k => observed?.panel?.[k] === panel[k]);
+      };
+      let up = shown(before.windows) && await stageShown(), frame, error;
       if (hide) { host.write(wire.hide()); await deps.sleep(HOVER_WAIT_MS); }
-      try { frame = await take(); } catch (e) { error = String(e?.message ?? e).slice(0, 200); }
+      try { frame = await take(); } catch (e) {
+        if (stageCase && (!stageFailureKind(e) || !stageRetryable(stageFailureKind(e)))) throw e;
+        error = String(e?.message ?? e).slice(0, 200);
+      }
       const after = await deps.windows();
-      if (!hide) up = up && panelUp(after.windows, host.pid, target);
+      if (!hide) up = up && shown(after.windows) && await stageShown();
+      if (stageCase && frame && ['region', 'hover', 'composite'].includes(source)) {
+        const used = frame.captureRect;
+        if (!used || !['x', 'y', 'width', 'height'].every(k => Number.isFinite(used[k])) ||
+          used.x > panel.x || used.y > panel.y || used.x + used.width < panel.x + panel.width ||
+          used.y + used.height < panel.y + panel.height) { error = 'capture did not prove the full stage extent'; frame = undefined; }
+      }
       const point = body(last);
       const hitPid = hide ? undefined : await deps.hit(...point);
       const c = frame ? compareFrames(baseline[source], frame, { tol, coloured }) : { sizeMismatch: true, error };
@@ -155,6 +176,13 @@ export async function runCaptureTest(deps, { target, samples = 5, tol = TOLERANC
         ...(Number.isSafeInteger(hitPid) ? { hitPid } : {}), frontPid: before.front });
     };
     try {
+      wire = stageCase ? deps.stageWire() : handWire();
+      if (character) host.write(wire.character(character));
+      if (stageCase) {
+        const observed = await deps.configureStage({ host, wire, character, seat: stageCase, size: 'stage' });
+        if (observed?.size !== 'stage' || observed?.seat !== stageCase || observed?.stageArt !== true ||
+          JSON.stringify(observed?.panel) !== JSON.stringify(panel)) throw stageUnitFailure('prepare-refusal', 'stage setup did not prove the requested seat, art, size and capture bounds', observed);
+      }
       keepalive();
       await deps.sleep(1200); // the first frame's entry and glide
       for (let i = 1; i <= samples; i++) {
@@ -173,7 +201,7 @@ export async function runCaptureTest(deps, { target, samples = 5, tol = TOLERANC
       await host.close();
     }
     // The panel must be gone before the next mode's host starts.
-    for (let i = 0; i < 20 && panelUp((await deps.windows()).windows, host.pid, target); i++) await deps.sleep(250);
+    for (let i = 0; i < 20 && panelUp((await deps.windows()).windows, host.pid, stageCase ? { bounds: panel } : target); i++) await deps.sleep(250);
     const listed = result.filter(s => s.source === 'composite' && Number.isInteger(s.shareableHandWindows));
     report.modes[mode] = { ...modeVerdict(mode, result, { hostPid: host.pid }), hostPid: host.pid,
       // Whether ScreenCaptureKit listed the hand's panel as shareable content at all (sharingType none should hide it).
@@ -192,6 +220,31 @@ export async function runCaptureTest(deps, { target, samples = 5, tol = TOLERANC
   return report;
 }
 
+/** The stage panel can extend above the target. A region/composite control must include the whole panel, otherwise
+ * a zero only proves the test cropped the character out. Refuse every foreign window in that rectangle, even behind
+ * the target. The stage adapter honors includeStageExtent on composite captures. */
+export function stageCaptureRegion(target, panel, windows, ignorePids = []) {
+  const valid = r => r && ['x', 'y', 'width', 'height'].every(k => Number.isFinite(r[k])) && r.width > 0 && r.height > 0;
+  if (!valid(target?.bounds) || !valid(panel)) return { covered: 'missing stage panel bounds' };
+  const t = target.bounds, x = Math.floor(Math.min(t.x, panel.x)), y = Math.floor(Math.min(t.y, panel.y));
+  const rect = { x, y, width: Math.ceil(Math.max(t.x + t.width, panel.x + panel.width)) - x,
+    height: Math.ceil(Math.max(t.y + t.height, panel.y + panel.height)) - y };
+  if (windows.some(w => w.id !== target.id && !ignorePids.includes(w.pid) && w.alpha > 0 && intersects(rect, w.bounds))) {
+    return { covered: 'another window overlaps the stage capture extent' };
+  }
+  return { rect };
+}
+
+/** Integration boundary for ST4. configureStage must return the host's observed seat/size/panel, not the request.
+ * stageWire supplies its versioned character/aim frames. This function cannot relabel a small sprite as stage. */
+export async function runStageCaptureTest(deps, { target, seat, panel, character, samples = 5 } = {}) {
+  if (samples !== 5) throw new Error('stage H5 requires 5 samples per source');
+  if (!['edge-lie', 'front-sit'].includes(seat)) throw new Error('stage H5 seat must be edge-lie or front-sit');
+  if (typeof deps.configureStage !== 'function' || typeof deps.observeStage !== 'function' || typeof deps.stageWire !== 'function') throw new Error('stage H5 needs the ST4 host adapter');
+  const report = await runCaptureTest(deps, { target, samples, style: 'sprite', character, stageCase: seat, panel });
+  return { ...report, seat, size: 'stage' };
+}
+
 /** The command and arguments each real capture path runs. png and raw are file paths. */
 export function captureCommand(source, { target, rect, hostPid = 0, png, raw }) {
   if (source === 'region') return { tool: 'screencapture', args: ['-x', `-R${rectArg(rect)}`, png], decode: true }; // as hover.js
@@ -204,7 +257,7 @@ export function captureCommand(source, { target, rect, hostPid = 0, png, raw }) 
 
 export function readFrame(path, { width, height }) {
   const data = readFileSync(path);
-  if (data.length !== width * height * 4) throw new Error(`raw frame ${width} x ${height} has ${data.length} bytes`);
+  if (data.length !== width * height * 4) throw stageUnitFailure('capture', `raw frame ${width} x ${height} has ${data.length} bytes`);
   return { width, height, data };
 }
 
@@ -213,7 +266,7 @@ export const ENGINE_ACQUIRE = `var app = await cua.getApp(${JSON.stringify(TEXTE
 export const ENGINE_SHOT = 'await app.getScreenshot()';
 export function engineImage(result) {
   const image = (result?.content ?? []).filter(block => block?.type === 'image' && typeof block.data === 'string').at(-1);
-  if (!image) throw new Error('the engine returned no screenshot');
+  if (!image) throw stageUnitFailure('capture', 'the engine returned no screenshot');
   return { bytes: Buffer.from(image.data, 'base64'), extension: /jpe?g/.test(image.mimeType ?? '') ? 'jpg' : 'png' };
 }
 
@@ -231,10 +284,17 @@ export function parseArgs(argv) {
   const value = name => { const i = argv.indexOf(name); return i >= 0 ? argv[i + 1] : undefined; };
   const samples = Number(value('--samples') ?? 5);
   if (!Number.isInteger(samples) || samples < 3 || samples > 20) throw new Error('--samples must be a whole number from 3 to 20');
-  const style = value('--cursor-style') ?? 'glove';
+  const stageCase = value('--stage-case');
+  const character = value('--character');
+  if (argv.includes('--character') && (!character || character.startsWith('--'))) throw new Error('--character needs a path');
+  if (argv.includes('--stage-case') && !['edge-lie', 'front-sit'].includes(stageCase)) throw new Error('--stage-case must be edge-lie or front-sit');
+  if (stageCase && samples !== 5) throw new Error('--stage-case requires 5 samples');
+  const style = value('--cursor-style') ?? (stageCase ? 'sprite' : 'glove');
+  if (stageCase && style !== 'sprite') throw new Error('--stage-case requires sprite style');
   if (!CURSOR_STYLES.includes(style)) throw new Error(`--cursor-style must be one of ${CURSOR_STYLES.join(', ')}`);
   return { ownerAway: argv.includes('--owner-away'), samples, keepImages: argv.includes('--keep-images'), out: value('--out'), host: value('--host'),
-    helper: value('--helper'), receipt: value('--receipt'), style, dryRun: argv.includes('--dry-run') };
+    helper: value('--helper'), receipt: value('--receipt'), style, dryRun: argv.includes('--dry-run'),
+    ...(character ? { character } : {}), ...(stageCase ? { stageCase } : {}) };
 }
 
 export function summary(report) {
@@ -289,6 +349,13 @@ export async function underLiveLock({ acquire, signals = process, exit = code =>
 export function dryRunPlan(opts, { root = ROOT, out = '<out>' } = {}) {
   const host = tilde(opts.host ?? '<work>/consent-host'), helper = tilde(opts.helper ?? '<work>/capture-helper');
   const sprite = opts.style === 'sprite';
+  if (opts.stageCase) return [
+    `ST9/H5 stage ${opts.stageCase}, six sources, 5 samples, hidden and visible (dry run: nothing opened)`,
+    'Build the benchmark-only production renderer adapter and an owned fixture app. Expected time: about 6 minutes plus compilation. Opens one owned fixture window, a ring panel and a character panel.',
+    'Use stageWire and the real v1.1 loader; observe stage art, seat, size and actual panel bounds. Include the full stage panel in region and composite controls; refuse every foreign window in that extent.',
+    'Capture engine, hover, region, window-l, sck-window and composite. Hidden: 0 character pixels in all 30 samples; visible: retain every leak and require region/composite positive controls.',
+    'The adapter must honor includeStageExtent, capture holds and the shared wire nonce. Never label the small synthetic character as stage.',
+  ];
   return [
     `VC7/H5 capture test, cursor style ${opts.style}, ${opts.samples} samples per source and mode (dry run: nothing opened)`,
     '1. refuse with /tmp/sleight-hold present, take /tmp/sleight-live.lock (no wait)',
@@ -313,6 +380,14 @@ async function main(argv) {
   const out = resolve(opts.out ?? join(home, 'Library/Logs/sleight', `h5-${opts.style === 'glove' ? '' : `${opts.style}-`}${new Date().toISOString().replace(/[:.]/g, '-')}`));
   if (opts.dryRun) { console.log(dryRunPlan(opts, { out }).join('\n')); return 0; }
   if (!opts.ownerAway) { console.error('H5 opens a TextEdit window and shows the hand over it: pass --owner-away'); return 2; }
+  if (opts.stageCase) {
+    try {
+      const { runLiveStageCapture } = await import('./stage-live.mjs');
+      const report = await runLiveStageCapture(opts);
+      mkdirSync(out, { recursive: true }); writeFileSync(join(out, 'h5-report.json'), JSON.stringify(report, null, 2) + '\n');
+      console.log(summary(report)); return report.ok ? 0 : 1;
+    } catch (error) { console.error(`ST9 H5: ${error.message}`); return 2; }
+  }
   if (process.platform !== 'darwin') { console.error('macOS only'); return 2; }
   if (existsSync('/tmp/sleight-hold')) { console.error('/tmp/sleight-hold exists (another project\'s timed window): run later'); return 3; }
   const { acquireLiveLock } = await import('../live-lock.mjs');

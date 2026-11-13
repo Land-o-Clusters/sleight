@@ -108,6 +108,7 @@ function spaces(pid) {
   return {
     onScreen: cgWindows(true, pid),
     allWindows: all.length,
+    windowNumbers: all.map(w => w.id),
     spaceWindows: spaceWindows(all.map(w => w.id)),
     onlySavePanel: all.length > 0 && all.every(w => w.savePanel),
     savePanelWindowIds: all.filter(w => w.savePanel).map(w => w.id).filter(id => Number.isInteger(id) && id > 0),
@@ -125,11 +126,32 @@ function minimizedCount(windows) {
   return count;
 }
 
+// availableData alone can block forever if a different process retains the pipe
+// after this helper's parent dies. Poll stdin so idle sessions can notice adoption.
+function metadataSessionInput() {
+  ObjC.bindFunction('getppid', ['int', []]);
+  ObjC.bindFunction('poll', ['int', ['void*', 'unsigned int', 'int']]);
+  const parent = Number($.getppid());
+  const alive = () => parent > 1 && Number($.getppid()) === parent;
+  // Darwin pollfd: int fd=0, short events=POLLIN, short revents=0.
+  const descriptor = $.NSData.alloc.initWithBase64EncodedStringOptions('AAAAAAEAAAA=', 0).mutableCopy;
+  return { alive, ready() {
+    while (alive()) {
+      const ready = Number($.poll(descriptor.mutableBytes, 1, 100));
+      if (ready === 1) return alive();
+      if (ready !== 0) return false;
+    }
+    return false;
+  } };
+}
+
 // With an argument, one probe. Without, a long-lived helper: one JSON line in ({ id, app }), one out,
 // so a session spawns osascript once instead of on every app read (about 150 ms of CPU each).
 function run(argv) {
   if (argv[0] === '--accessibility-check') return JSON.stringify({ trusted: Boolean($.AXIsProcessTrusted()) });
   if (argv.length && argv[0] !== '--session') return JSON.stringify(probe(JSON.parse(argv[0]), argv[1] ? JSON.parse(argv[1]) : 0.5));
+  let session;
+  try { session = metadataSessionInput(); } catch { return ''; }
   // Load each operation once, in this helper's JavaScript context.
   const query = name => {
     const source = ObjC.unwrap($.NSString.stringWithContentsOfFileEncodingError(`${argv[1]}/${name}.js`, $.NSUTF8StringEncoding, null));
@@ -140,16 +162,19 @@ function run(argv) {
   const stdin = $.NSFileHandle.fileHandleWithStandardInput, stdout = $.NSFileHandle.fileHandleWithStandardOutput;
   let buffer = '';
   for (;;) {
+    if (!session.ready()) return '';
     const data = stdin.availableData;
     if (Number(data.length) === 0) return '';
     buffer += ObjC.unwrap($.NSString.alloc.initWithDataEncoding(data, $.NSUTF8StringEncoding));
     if (buffer.length > 131072) return '';
     let at;
     while ((at = buffer.indexOf('\n')) >= 0) {
+      if (!session.alive()) return '';
       const line = buffer.slice(0, at); buffer = buffer.slice(at + 1);
       // NSWorkspace learns of launched and quit apps through notifications that only a running run
       // loop delivers. Blocked on stdin, the helper saw Calculator as absent 3 s after it launched.
       $.NSRunLoop.currentRunLoop.runUntilDate($.NSDate.dateWithTimeIntervalSinceNow(0.005));
+      if (!session.alive()) return '';
       let reply;
       let request;
       try {
@@ -177,11 +202,14 @@ function probe(selector, deadlineSeconds = 0.5) {
   if (apps.length === 0) return { status: 'absent' };
   const target = apps[0];
   const pid = Number(target.processIdentifier), app = $.AXUIElementCreateApplication(pid);
+  const processStart = Number(target.launchDate?.timeIntervalSince1970);
   const { onlySavePanel, savePanelWindowIds, ...counts } = spaces(pid);
   // An accessory app (LSUIElement) lives in the menu bar; with no window open the engine can't
   // acquire it and times out (OpenUsage, 2 of 2, 2026-10-11).
   const menuBarOnly = Number(target.activationPolicy) === 1;
-  const space = { hidden: target.hidden === true, menuBarOnly, ...(menuBarOnly ? { app: ObjC.unwrap(target.localizedName) } : {}), ...counts };
+  const space = { hidden: target.hidden === true, menuBarOnly,
+    ...(Number.isFinite(processStart) && processStart > 0 ? { processStart } : {}),
+    ...(menuBarOnly ? { app: ObjC.unwrap(target.localizedName) } : {}), ...counts };
   if (Number($.AXUIElementSetMessagingTimeout(app, deadlineSeconds)) !== 0) return { status: 'unknown', ...space };
   const value = Ref();
   const error = Number($.AXUIElementCopyAttributeValue(app, $('AXWindows'), value));

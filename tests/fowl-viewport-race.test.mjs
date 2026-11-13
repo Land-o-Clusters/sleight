@@ -1,3 +1,4 @@
+import { assertChildStatus } from './fixtures/child-status.mjs';
 import test, { before, after } from 'node:test';
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
@@ -17,26 +18,26 @@ before(async () => {
   if (skip) return;
   dir = trackTemp(mkdtempSync(join(tmpdir(), 'sleight-viewport-race-')));
   for (const file of ['tools/rounds.mjs', 'test/demo/server.mjs']) {
-    const original = spawnSync('/usr/bin/git', ['-C', cache, 'show', `6a12d60:${file}`], { encoding: 'utf8' });
-    assert.equal(original.status, 0, original.stderr);
+    const original = spawnSync('/usr/bin/git', ['-C', cache, 'show', `6a12d60:${file}`], { encoding: 'utf8', timeout: 30000, killSignal: 'SIGKILL' });
+    assertChildStatus(original, 0, original.stderr);
     mkdirSync(join(dir, file, '..'), { recursive: true });
     writeFileSync(join(dir, file), original.stdout);
   }
   for (const args of [['init', '-q'], ['add', 'tools/rounds.mjs', 'test/demo/server.mjs']]) {
-    const result = spawnSync('/usr/bin/git', args, { cwd: dir, encoding: 'utf8' });
-    assert.equal(result.status, 0, result.stderr);
+    const result = spawnSync('/usr/bin/git', args, { cwd: dir, encoding: 'utf8', timeout: 30000, killSignal: 'SIGKILL' });
+    assertChildStatus(result, 0, result.stderr);
   }
   const applied = spawnSync('/usr/bin/git', ['apply', join(root, 'bench/fowl/viewport-fixture.patch'),
-    join(root, 'bench/fowl/sleight-surface.patch')], { cwd: dir, encoding: 'utf8' });
-  assert.equal(applied.status, 0, applied.stderr);
+    join(root, 'bench/fowl/sleight-surface.patch')], { cwd: dir, encoding: 'utf8', timeout: 30000, killSignal: 'SIGKILL' });
+  assertChildStatus(applied, 0, applied.stderr);
   script = readFileSync(join(dir, 'test/demo/server.mjs'), 'utf8').match(/const PAGE_SCRIPT = `<script>\n([\s\S]*?)<\/script>`;/)[1];
   ({ gradeViewport } = await import(pathToFileURL(join(dir, 'tools/rounds.mjs'))));
 });
 after(() => removeTemp(dir));
 
 test('the round wrapper applies and recognizes both patches in the shared fixture cache', { skip }, () => {
-  const diff = spawnSync('/usr/bin/git', ['diff'], { cwd: dir, encoding: 'utf8' });
-  assert.equal(diff.status, 0, diff.stderr);
+  const diff = spawnSync('/usr/bin/git', ['diff'], { cwd: dir, encoding: 'utf8', timeout: 30000, killSignal: 'SIGKILL' });
+  assertChildStatus(diff, 0, diff.stderr);
   const patches = ['viewport-fixture.patch', 'sleight-surface.patch'];
   assert.equal(diff.stdout, patches.map(file => readFileSync(join(root, 'bench/fowl', file), 'utf8')).join(''));
   const wrapper = readFileSync(join(root, 'bench/fowl/rounds.sh'), 'utf8');

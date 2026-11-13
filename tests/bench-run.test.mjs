@@ -12,6 +12,7 @@ import { BENCH_APPS, REAL_APPS, getTasks } from '../bench/tasks.mjs';
 import { selectSuiteTasks, assertShopSmokeRuns } from '../bench/shop.mjs';
 import { privateMailResult, publicPrivateMailRow, publicPrivateMailRows } from '../bench/private-mail.mjs';
 import { privateDriverEnvironment } from '../bench/driver.mjs';
+import { waitForBenchmark, runTaskWithHold, benchmarkStopCode } from '../bench/hold.mjs';
 import { guardGenericOperation } from '../bench/generic-approval.mjs';
 import { genericSettings } from '../bench/plugin-arm.mjs';
 import { sleightPluginLaunch } from '../bench/sleight-plugin-launch.mjs';
@@ -30,8 +31,63 @@ import { codexExecPlan } from '../bench/codex-arm.mjs';
 import { engineSpan } from '../bench/engine-version.mjs';
 import { benchHand } from '../bench/hand/bench-hand.mjs';
 import { evidenceRoots } from '../bench/evidence.mjs';
+import { routeRuntimeArms } from '../bench/runtime-arm.mjs';
+import { loadReceipt, loadWarnings } from '../bench/load.mjs';
+import { loadCheck4Bench, check4BenchDescriptor, delegatedCheck4Lock, writeCheck4BenchResult } from '../bench/hand/check4-bench.mjs';
 const parserSkip = packageSkip('typescript');
 const { dragMethodAudit } = parserSkip ? {} : await import('../bench/world/method-check.mjs');
+
+test('result rows retain driver spawn/exit load and the summary identifies overloaded attempts', async () => {
+  for (const suite of ['real', 'default']) {
+    const result = await runner({ suite, drive: true, outcome: { passed: true } });
+    assert.equal(result.error, undefined);
+    const rows = result.saved.at(-1).results;
+    assert.equal(rows.length, 3);
+    for (const row of rows) {
+      assert.deepEqual(row.loadStart, [11, 9, 8]); assert.deepEqual(row.loadEnd, [3, 2, 1]);
+      assert.equal(row.loadCores, 10); assert.equal(row.loadExceededCores, true);
+    }
+    assert.equal(result.logs.filter(line => /LOAD: sleight\/fixture #\d.*10 cores/.test(line)).length, 3);
+  }
+});
+
+test('Codex and interactive result rows preserve the same process load receipt', async () => {
+  const stamps = { loadStart: [1, 2, 3], loadEnd: [12, 2, 3], loadCores: 10 };
+  for (const arm of ['codex', 'claude-cu']) {
+    const result = await runner({ suite: 'world', arm, drive: true, extraArgs: ['--owner-away'],
+      codexResult: { stamps }, driverOut: { stamps }, outcome: { passed: true } });
+    assert.equal(result.error, undefined);
+    for (const row of result.saved.at(-1).results) {
+      assert.deepEqual(row.loadEnd, [12, 2, 3]); assert.equal(row.loadExceededCores, true);
+    }
+    assert.equal(result.logs.filter(line => line.startsWith('LOAD: ')).length, 3);
+  }
+});
+
+test('Check 4 bench runs use their private descriptor, config, evidence, PIDs and final cleanup receipt', async () => {
+  const dir = join(MAC_TMP, 'check4-fixture'), check4Config = { dir, task: 'calculator-click',
+    armDir: join(dir, 'arm'), loginConfig: join(dir, 'existing-benchmark-login'), evidence: join(dir, 'evidence'), pids: join(dir, 'pids.json') };
+  const task = { id: 'calculator-click', app: 'Calculator', fixtureLifecycle: true, allowedApps: ['Calculator'],
+    prompt: () => 'fixture', check: () => true };
+  for (const outcome of [{ passed: true }, { passed: false, reason: 'wrong answer' }, { passed: false, cleanupError: 'unproved' }]) {
+    const result = await runner({ suite: 'world', check4Config, rounds: 1, tasks: [task], drive: true, outcome,
+      extraArgs: ['--owner-away', '--tasks', 'calculator-click'], leases: [{ pid: 42 }],
+      auth: { mode: 'login', env: {}, unset: [] }, base: { SLEIGHT_BENCH_HAND: '1', CLAUDE_CONFIG_DIR: join(dir, 'launcher-config') } });
+    assert.equal(result.error, undefined);
+    assert.ok(result.calls.includes('delegated lock')); assert.ok(result.calls.includes('delegated release'));
+    assert.equal(result.calls.includes('lock'), false); assert.equal(result.calls.includes('unlock'), false);
+    const descriptor = [...result.files.values()].find(v => v.mcpServers?.['plugin:sleight:computer'])?.mcpServers['plugin:sleight:computer'];
+    assert.equal(descriptor.args[0], '/fixture/bench/hand/check4-server.mjs');
+    assert.equal(descriptor.args[1], join(dir, 'bench-config.json'));
+    assert.equal(result.versionEnvs[0].CLAUDE_CONFIG_DIR, check4Config.loginConfig);
+    assert.equal(result.driverOptions[0].evidenceDir, check4Config.evidence);
+    assert.ok(result.envs.every(env => env.CLAUDE_CONFIG_DIR === check4Config.loginConfig));
+    assert.ok(result.envs.every(env => env.SLEIGHT_HAND === '1'));
+    assert.deepEqual(result.files.get(check4Config.pids).pids, [42]);
+    assert.equal(result.check4Receipts.at(-1).row.passed, outcome.passed);
+    assert.equal(result.check4Receipts.at(-1).cleanupConfirmed, !outcome.cleanupError);
+  }
+});
 
 test('native driver and image retention use the durable benchmark evidence home', async () => {
   const armHome = join(tmpdir(), 'bench-durable-home');
@@ -130,16 +186,18 @@ test('a refused dry run prints one JSON document with its configuration errors',
 
 // Execute the actual runner body with inert dependencies. Runner filesystem and
 // process operations stay fake; the harness owns only its temporary path bank.
-async function runner({ hygieneResult = { leftWindows: [], errors: [] }, hygieneError, hygieneReceiptsOnly = false, hygieneBoundaryError, hygieneTracking, extraArgs = [], suite = 'real', arm = 'sleight', outcome = {}, taps = [], throws = false, base = {}, drive = false, leases = [], fixtureStates = [], unlockError, setupOnly = false, privateMail = false, fixtureLifecycle = false, ownerName = '', auth, keySource = 'none', spend = () => 0, holdAfterPreflight = false, dryRun = false, preparationError, extraServer, driverOut = {}, calculatorGate = false, calculatorFailureAt, cleanArms = false, footprint = { cpuSeconds: 0, group: {}, outside: {} }, codexServers, tasks, worldVersion = '2.1.289', loginError, socketError, daemonError, daemonStopError, declinedPrompts = [], sleightHomeServers = ['plugin_sleight_computer'], codexResult = {}, engineReads = ['26.1013.40934'] } = {}) {
+async function runner({ hygieneResult = { leftWindows: [], errors: [] }, hygieneError, hygieneReceiptsOnly = false, hygieneBoundaryError, hygieneTracking, extraArgs = [], check4Config, rounds = 3, suite = 'real', arm = 'sleight', outcome = {}, taps = [], throws = false, base = {}, drive = false, leases = [], fixtureStates = [], unlockError, setupOnly = false, privateMail = false, fixtureLifecycle = false, ownerName = '', auth, keySource = 'none', spend = () => 0, holdAfterPreflight = false, holdDuringTask = false, holdOptions = {}, boundaryStopAt = 0, boundaryStopCode = 130, dryRun = false, preparationError, extraServer, driverOut = {}, calculatorGate = false, calculatorFailureAt, cleanArms = false, footprint = { cpuSeconds: 0, group: {}, outside: {} }, codexServers, tasks, worldVersion = '2.1.289', loginError, socketError, daemonError, daemonStopError, declinedPrompts = [], sleightHomeServers = ['plugin_sleight_computer'], codexResult = {}, engineReads = ['26.1013.40934'] } = {}) {
   if (!auth) {
     auth = { mode: suite === 'world' ? 'api' : 'login', env: {}, unset: [], spent: 0, capUsd: 200 };
     if (suite === 'world') keySource = 'ANTHROPIC_API_KEY';
   }
   const calls = [], saved = [], envs = [], tailScopes = [], directories = [], hubRefreshes = [];
+  const check4Receipts = [], versionEnvs = [];
   const logs = [], driverOptions = [], codexRuns = [], files = new Map(), commands = [], codexConfigs = [], contexts = [];
   const temp = trackTemp(mkdtempSync(join(tmpdir(), 'bench-run-test-')));
   const lockPath = join(temp, 'live.lock'), holdPath = join(temp, 'sleight-hold');
-  let preflightDone = false, calculatorObservations = 0, engineReadCount = 0;
+  let holdCleared = false, taskHold = false;
+  let preflightDone = false, calculatorObservations = 0, engineReadCount = 0, boundaryCalls = 0;
   const source = readFileSync(new URL('../bench/run.mjs', import.meta.url), 'utf8')
     .replace(/^#!.*\n/, '').replace(/^import .*;\n/gm, '').replaceAll('import.meta.url', '"file:///fixture/bench/run.mjs"')
     // Give the pass and each lifecycle context an isolated path before execution.
@@ -151,11 +209,25 @@ async function runner({ hygieneResult = { leftWindows: [], errors: [] }, hygiene
   if (privateMail) Object.assign(task, { id: 'mimestream-label', app: 'Mimestream', privateMail: true,
     privateExpected: () => 'private answer', privateTerms: () => ['private label'] });
   const sandbox = {
-    process: { argv: ['node', 'run', '--suite', suite, '--arm', arm, '--runs', '3', ...(setupOnly ? ['--setup-only'] : []), ...(dryRun ? ['--dry-run'] : []), ...(calculatorGate ? ['--calculator-gate'] : []), ...(cleanArms ? ['--clean-arms'] : []), ...extraArgs], env: base, on() {}, once() {} },
+    process: { argv: ['node', 'run', '--suite', suite, '--arm', arm, '--runs', String(rounds), ...(setupOnly ? ['--setup-only'] : []), ...(dryRun ? ['--dry-run'] : []), ...(calculatorGate ? ['--calculator-gate'] : []), ...(cleanArms ? ['--clean-arms'] : []), ...extraArgs], env: base, on() {}, once() {} },
     console: { log: text => logs.push(text), error: text => logs.push(text) }, AbortController, AbortSignal, setTimeout, clearTimeout, setInterval, clearInterval,
-    lockPath,
+    lockPath, benchmarkStopCode, routeRuntimeArms, check4BenchDescriptor, loadReceipt, loadWarnings,
+    loadCheck4Bench: (path, options) => check4Config ? check4Config : loadCheck4Bench(path, options),
+    delegatedCheck4Lock: () => { calls.push('delegated lock'); return async () => calls.push('delegated release'); },
+    writeCheck4BenchResult: (config, value) => { if (config) check4Receipts.push(structuredClone(value)); },
+    waitForBenchmark: options => {
+      if (++boundaryCalls === boundaryStopAt) throw Object.assign(Error('boundary stopped'),
+        boundaryStopCode === 75 ? { code: 'BENCH_HOLD_LIMIT', exitCode: 75 } : { name: 'AbortError', exitCode: 130, signal: { aborted: true } });
+      return waitForBenchmark({ ...options, held: () => sandbox.existsSync(holdPath),
+        wait: async () => { calls.push('hold wait'); holdCleared = true; }, log() {} });
+    },
+    runTaskWithHold: (operation, options) => runTaskWithHold(operation, { ...options, ...holdOptions,
+      held: () => sandbox.existsSync(holdPath), boundary: options => sandbox.waitForBenchmark(options) }),
+    benchmarkHeld: () => sandbox.existsSync(holdPath),
     basename: path => path.split('/').at(-1), dirname, join, fileURLToPath: () => '/fixture/bench/run.mjs', homedir: () => '/owner', tmpdir: () => `${MAC_TMP}/unit`,
-    existsSync: path => path === holdPath ? holdAfterPreflight && preflightDone : true, realpathSync: path => path, mkdirSync: path => directories.push(path), rmdirSync(path) { assert.equal(path, lockPath); }, statSync: path => { assert.equal(path, lockPath); return { dev: 1, ino: 1 }; },
+    existsSync: path => path === holdPath ? ((holdAfterPreflight && preflightDone) || taskHold) && !holdCleared : true, realpathSync: path => path, mkdirSync: path => directories.push(path),
+    chmodSync(path, mode) { assert.ok(directories.includes(path)); assert.equal(mode, 0o700); },
+    rmdirSync(path) { assert.equal(path, lockPath); }, statSync: path => { assert.equal(path, lockPath); return { dev: 1, ino: 1 }; },
     writeFileSync: (path, value) => { files.set(path, JSON.parse(value)); saved.push(JSON.parse(value)); }, randomBytes: () => ({ toString: () => 'nonce' }),
     readFileSync: path => {
       assert.ok(['/fixture/bench/settings.json', '/fixture/bench/private-settings.json'].includes(path));
@@ -170,7 +242,7 @@ async function runner({ hygieneResult = { leftWindows: [], errors: [] }, hygiene
     pruneRunImages: options => calls.push(['image retention', options]), evidenceRoots,
     beginPassHygiene: async () => {
       calls.push('window baseline');
-      const handle = { get hygieneError() { return hygieneTracking; }, betweenTasks: async () => { calls.push('hygiene boundary'); if (hygieneBoundaryError) throw new Error(hygieneBoundaryError); }, trackLaunch: async (apps, operation) => { calls.push(['tracked setup', apps]); return operation(); }, finish: async options => { calls.push(['window hygiene', options]); return hygieneResult; } };
+      const handle = { get hygieneError() { return hygieneTracking; }, betweenTasks: async () => { calls.push('hygiene boundary'); if (hygieneBoundaryError) throw new Error(hygieneBoundaryError); }, trackLaunch: async (apps, operation) => { calls.push(['tracked setup', apps]); return operation(); }, finish: async options => { calls.push(['window hygiene', options]); return { ...hygieneResult, ...(options.deferVisible?.() && { deferred: true, resume: { launched: options.launched } }) }; } };
       if (hygieneError) throw Object.assign(new Error(hygieneError), hygieneReceiptsOnly && { receiptsOnly: handle });
       return handle;
     },
@@ -205,8 +277,8 @@ async function runner({ hygieneResult = { leftWindows: [], errors: [] }, hygiene
     guardGenericOperation: (operation, options) => guardGenericOperation(operation, { ...options, stopFile: undefined, held: () => false }),
     genericTask: task => { calls.push('retained setup'); return task; },
     publishPrivateMailResults: (_path, value, options) => { calls.push('private audit'); assert.ok(options.terms.every(term => term === 'private label')); saved.push(JSON.parse(value)); },
-    execFileSync(command, args) {
-      if (args?.[0] === '--version') return worldVersion + ' (Claude Code)';
+    execFileSync(command, args, options) {
+      if (args?.[0] === '--version') { versionEnvs.push(options.env); return worldVersion + ' (Claude Code)'; }
       if (command === '/usr/bin/git' && args.includes('HEAD')) return 'c0ffee1234\n';
       if (command === '/usr/bin/git' && args.includes('status')) return ' M bench/run.mjs\n';
       if (command === '/usr/bin/git') throw new Error('outside repo');
@@ -230,7 +302,8 @@ async function runner({ hygieneResult = { leftWindows: [], errors: [] }, hygiene
     watchAppWindows: app => { calls.push(['watch app', app]); return async () => ({ samples: 1, onScreen: app === 'Mail' ? 0 : 1, offScreenOnly: app === 'Mail' ? 1 : 0, none: 0 }); },
     acquireLiveLock: async () => { calls.push('lock'); return async () => { calls.push('unlock'); if (unlockError) throw new Error(unlockError); }; },
     runTiming: () => ({}), traceTiming: () => ({}), withStamps: timing => timing, observePermission: () => { if (dryRun) assert.fail('no host permission observation in initialization-only discovery'); return false; },
-    assertCalculatorReady: async () => {
+    assertCalculatorReady: async options => {
+      assert.equal(options.held(), false, 'hold overlap belongs to the task sampler');
       assert.ok(calls.includes('lock'), 'Calculator observation requires the shared lock');
       calls.push('Calculator observation');
       if (++calculatorObservations === calculatorFailureAt) throw new Error('Calculator has no visible window on the current Space');
@@ -242,7 +315,8 @@ async function runner({ hygieneResult = { leftWindows: [], errors: [] }, hygiene
       preflightDone = true;
       return { groupClean: true };
     },
-    runDriver: async (_command, args, options) => { commands.push(_command); calls.push(['driver', ...args]); envs.push(options.env); driverOptions.push(options); options.onSpawn?.(1234); return { code: 0, out: { total_cost_usd: 0.25, ...driverOut }, groupClean: true }; },
+    runDriver: async (_command, args, options) => { commands.push(_command); calls.push(['driver', ...args]); envs.push(options.env); driverOptions.push(options); if (holdDuringTask && driverOptions.length === 1) taskHold = true; options.onSpawn?.(1234); return { code: 0, out: { total_cost_usd: 0.25, ...driverOut }, groupClean: true,
+      stamps: { loadStart: [11, 9, 8], loadEnd: [3, 2, 1], loadCores: 10 } }; },
     cleanupContained: realCleanupContained,
     releaseFixtureLock,
     mergeArmHooks: realMergeArmHooks,
@@ -258,6 +332,7 @@ async function runner({ hygieneResult = { leftWindows: [], errors: [] }, hygiene
         try { await options.permissionCheck(); } catch (error) { options.stop(); return { passed: false, observerError: error.message, reason: error.message }; }
       }
       const response = drive ? await options.drive('task', ctx, {}) : {};
+      if (holdDuringTask) assert.equal(await options.permissionCheck(), false);
       return { passed: false, groupClean: true, ...response, ...outcome };
     },
   };
@@ -265,7 +340,7 @@ async function runner({ hygieneResult = { leftWindows: [], errors: [] }, hygiene
   try { await runInNewContext(`(async () => { ${source}\n})()`, sandbox); } catch (caught) { error = caught; }
   finally { rmSync(temp, { recursive: true, force: true }); }
   const plan = logs.filter(text => typeof text === 'string' && text.startsWith('{')).map(text => JSON.parse(text)).at(-1);
-  return { hubRefreshes, calls, saved, plan, envs, tailScopes, directories, error, logs, driverOptions, codexRuns, codexConfigs, files, commands, contexts, lockPath, exitCode: sandbox.process.exitCode, engineReadCount };
+  return { check4Receipts, versionEnvs, hubRefreshes, calls, saved, plan, envs, tailScopes, directories, error, logs, driverOptions, codexRuns, codexConfigs, files, commands, contexts, lockPath, exitCode: sandbox.process.exitCode, engineReadCount };
 }
 
 test('confirmed fixtures release the outer lock exactly once after cleanup tails and daemon stop', async () => {
@@ -998,11 +1073,69 @@ test('API credential preflight applies to generic and sleight arms alike', async
   }
 });
 
-test('a hold appearing during preflight stops before a task driver', async () => {
+test('a hold appearing during preflight waits before a task driver', async () => {
   const result = await runner({ suite: 'default', arm: 'mcp:rival', holdAfterPreflight: true });
-  assert.equal(result.error, undefined); assert.equal(result.exitCode, 1);
-  assert.equal(result.driverOptions.length, 0);
-  assert.match(result.saved.at(-1).results[0].reason, /sleight-hold/);
+  assert.equal(result.error, undefined);
+  assert.ok(result.calls.includes('hold wait'));
+  assert.equal(result.calls.filter(call => call === 'real run').length, 3);
+  assert.ok(result.calls.indexOf('hold wait') < result.calls.indexOf('real run'));
+  assert.ok(!result.saved.at(-1).results.some(row => row.observerError));
+});
+
+test('native boundary stops use 75 or 130 and collect an acquired lock once', async () => {
+  for (const boundaryStopCode of [75, 130]) for (const boundaryStopAt of [1, 2, 3]) {
+    const result = await runner({ suite: 'default', arm: 'mcp:rival', boundaryStopCode, boundaryStopAt });
+    assert.equal(result.error, undefined);
+    assert.equal(result.exitCode, boundaryStopCode);
+    assert.equal(result.calls.filter(call => call === 'unlock').length, boundaryStopAt === 1 ? 0 : 1);
+    assert.equal(result.driverOptions.length, 0);
+  }
+});
+
+test('native held retry limit saves excluded evidence and leaves no scored held attempt', async () => {
+  const result = await runner({ suite: 'default', arm: 'mcp:rival', holdDuringTask: true,
+    holdOptions: { retries: 0 }, drive: true, outcome: { passed: true } });
+  assert.equal(result.error, undefined); assert.equal(result.exitCode, 75);
+  assert.equal(result.driverOptions.length, 1);
+  assert.equal(result.saved.at(-1).results.length, 0);
+  assert.equal(result.saved.at(-1).heldAttempts.length, 1);
+  assert.equal(result.calls.filter(call => call === 'unlock').length, 0);
+  assert.equal(result.tailScopes.length, 0);
+  const hygiene = result.calls.find(call => call[0] === 'window hygiene');
+  assert.equal(hygiene[1].deferVisible(), true);
+  assert.equal(result.saved.at(-1).cleanupDeferred.reason, 'benchmark hold');
+  assert.ok(result.saved.some(row => row.version === 1 && row.lock && row.hygiene));
+});
+
+test('a later boundary stop preserves an earlier failed task exit code', async () => {
+  const result = await runner({ suite: 'default', arm: 'mcp:rival', boundaryStopAt: 4, boundaryStopCode: 75,
+    drive: true, outcome: { passed: false } });
+  assert.equal(result.error, undefined);
+  assert.equal(result.exitCode, 1);
+  assert.equal(result.driverOptions.length, 1);
+});
+
+test('native task hold finishes collection, excludes that attempt, then retries with fresh paths', async () => {
+  const result = await runner({ suite: 'default', arm: 'mcp:rival', holdDuringTask: true, drive: true, outcome: { passed: true } });
+  assert.equal(result.error, undefined);
+  assert.equal(result.exitCode, undefined);
+  assert.equal(result.driverOptions.length, 4);
+  const saved = result.saved.at(-1);
+  assert.equal(saved.results.length, 3);
+  assert.equal(saved.heldAttempts.length, 1);
+  assert.equal(saved.heldAttempts[0].excluded, 'benchmark hold overlapped task');
+  assert.match(result.contexts[1].dir, /-hold-2$/);
+  assert.equal(result.calls.filter(call => call === 'unlock').length, 1);
+});
+
+test('a hold cannot turn native cleanup failure into a retry or release the uncertain lock', async () => {
+  const result = await runner({ suite: 'default', arm: 'mcp:rival', holdDuringTask: true, drive: true,
+    outcome: { cleanupError: 'fixture unproved' }, fixtureStates: [{ fixtureLockUnconfirmed: true }] });
+  assert.equal(result.error, undefined);
+  assert.equal(result.driverOptions.length, 1);
+  assert.equal(result.saved.at(-1).heldAttempts.length, 0);
+  assert.equal(result.calls.includes('unlock'), false);
+  assert.equal(result.exitCode, 1);
 });
 
 test('generic dry discovery records commands without a model, live lock or host fixture', async () => {

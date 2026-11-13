@@ -54,6 +54,6 @@ There is no filesystem lock against a writer racing the final rename.
 Restoring bytes does not refresh an open app buffer, so reopen the document
 before further edits or autosave can overwrite the restored file. macOS copies
 preserve file contents, permissions, resource forks, ACLs and extended attributes.
-Large diffs can exceed the 16 MiB preview limit and then refuse review.
+Large diffs show a capped 32 KiB preview with an omitted-line count. Undo restores the complete saved copy.
 Read/cancel recognition covers the narrow calls above. Runtime-built calls may
 be treated as edits. Dialog actions that open a file need a fresh read before editing it.

@@ -7,11 +7,12 @@
 # Before every round it waits while /tmp/sleight-hold, /tmp/sleight-live.lock or $O/pause exists. It never creates or
 # removes any of them. Rounds go to $O/as3-ao-<browser>-<off|on|on-prompt>-r<n> (relay trace beside each as .trace), the log to
 # $O/as3-ab.log, and the score of everything under $O/as3-ao-* to $O/as3-score.txt at the end. A round folder that already
-# holds results.json is kept, so a stopped block resumes where it was.
+# holds results.json and a successful round receipt is kept. Stopped rounds are archived on resume.
 # AS3_OUT, AS3_RUNNER, AS3_HOLD, AS3_LOCK and AS3_POLL exist for the offline test (tests/as3-ab.test.mjs).
 set -u
 R=$(cd "$(dirname "$0")/../.." && pwd)
-O=${AS3_OUT:-$HOME/Projects/sleight-wt/race-1017}
+EVIDENCE_ROOT=${SLEIGHT_BENCH_EVIDENCE_DIR:-$R/bench/results/evidence}
+O=${AS3_OUT:-$EVIDENCE_ROOT/race-1017}
 N=${AS3_ROUNDS:-5}
 RUNNER=${AS3_RUNNER:-$R/bench/fowl/rounds.sh}
 HOLD=${AS3_HOLD:-/tmp/sleight-hold}
@@ -31,7 +32,19 @@ race() { # browser off|on|on-prompt round
   out=$O/as3-ao-$1-$2-r$3; core=0; prompt=0
   [ "$2" = off ] || core=1
   [ "$2" != on-prompt ] || prompt=1
-  [ -e "$out/results.json" ] && { echo "$(basename "$out") kept $(now)" >> "$LOG"; return 0; }
+  [ -e "$out/results.json" ] && [ -e "$out/round.rc" ] && [ "$(cat "$out/round.rc")" = complete ] &&
+    { echo "$(basename "$out") kept $(now)" >> "$LOG"; return 0; }
+  gate
+  if [ -e "$out" ]; then
+    bank=1
+    archive=$O/as3-stopped/$(basename "$out")
+    while [ -e "$archive-$bank" ]; do bank=$((bank + 1)); done
+    mkdir -p "$O/as3-stopped" || exit 1
+    # Keep excluded attempts outside the scorer's as3-ao-* glob.
+    mv "$out" "$archive-$bank" || exit 1
+    [ ! -e "$out.log" ] || mv "$out.log" "$archive-$bank.log" || exit 1
+    [ ! -e "$out.trace" ] || mv "$out.trace" "$archive-$bank.trace" || exit 1
+  fi
   rc=1; try=0
   while [ $try -lt 60 ]; do
     try=$((try + 1)); gate
@@ -39,14 +52,18 @@ race() { # browser off|on|on-prompt round
     env DISABLE_AUTOUPDATER=1 SLEIGHT_NO_HUB=1 SLEIGHT_BROWSER_CORE=$core AS3_WINDOW_PROMPT=$prompt SLEIGHT_TRACE="$out.trace" "$RUNNER" --world --real-browser "$1" \
       --surface sleight --model haiku --effort high --tasks "$TASKS" --out "$out" > "$out.log" 2>&1
     rc=$?
+    # Limits and interruption leave every partial artifact in place and stop this block.
+    case "$rc" in 75|130) echo "$(basename "$out") stop $rc $(now)" >> "$LOG"; exit "$rc" ;; esac
     # Another round took the lock or the hold came on between the wait and the start, or Safari was still open: wait again.
-    if grep -q -e 'EEXIST.*sleight-live.lock' -e 'Benchmark hold is active' "$out.log" ||
+    if grep -q 'EEXIST.*sleight-live.lock' "$out.log" ||
       grep -q 'Quit safari before starting this round' "$out/failure.json" 2>/dev/null; then
       rm -rf "$out"; sleep "$POLL"; continue
     fi
     break
   done
   echo "$(basename "$out") exit $rc $(now)" >> "$LOG"
+  # A completed round may contain task failures (rc 1). Keep those results for scoring.
+  case "$rc" in 0|1) echo complete > "$out/round.rc" ;; *) exit "$rc" ;; esac
 }
 echo "as3-ab start $(now) build $(git -C "$R" rev-parse --short HEAD 2>/dev/null || echo unknown) rounds $N" >> "$LOG"
 n=1

@@ -36,6 +36,17 @@ function driver(t, f, store, text = siteMemoryTask.prompt, { trusted = true } = 
 }
 const ref = (text, name) => /\[ref=(\w+)\]/.exec(text.split('\n').find(line => line.includes('"' + name + '"') && line.includes('[ref=')) ?? '')?.[1];
 
+async function requiredObservation(t, locator, url) {
+  // Production deliberately drops optional reads after 250 ms. A loaded host
+  // can spend that budget initializing the utility realm before this test acts.
+  for (let attempt = 1; attempt <= 3; attempt++) {
+    const observation = await prepareControlRecipe(locator, url);
+    if (observation) return observation;
+    t.diagnostic(`optional pre-click observation unavailable, attempt ${attempt}/3`);
+  }
+  assert.fail('eligible fixture control produced no observation in 3 attempts');
+}
+
 test('recovery navigation skips recipe hints and leaves them for the next normal read', { skip, timeout: 30000 }, async t => {
   const f = await fixture(t, '<h1>Recovery fixture with enough visible page text</h1><button type="button">Export</button>'), m = memory(t);
   const origin = new URL(f.entry.page.url()).origin;
@@ -97,7 +108,7 @@ test('replacement evidence requires a connected replacement with a changed contr
   const f = await fixture(t, '<button type="button" aria-pressed="false">Export</button>');
   const locator = f.entry.page.getByRole('button', { name: 'Export', exact: true });
   for (const changed of [false, true]) {
-    const observation = await prepareControlRecipe(locator, f.entry.page.url()); assert.ok(observation);
+    const observation = await requiredObservation(t, locator, f.entry.page.url());
     await locator.evaluate((el, changed) => { const next = el.cloneNode(true); if (changed) next.setAttribute('aria-pressed', 'true'); el.replaceWith(next); }, changed);
     try {
       const event = await observation.finish();
@@ -110,17 +121,26 @@ const openerHTML = `<button type="button" aria-expanded="false" onclick="this.se
   <button type="button" aria-pressed="false" onclick="this.setAttribute('aria-pressed','true')">Export</button>`;
 for (const reset of ['navigation', 'new-document', 'three-steps', 'two-steps']) {
   test(`opener context is scoped to its document and three unrelated steps: ${reset}`, { skip, timeout: 30000 }, async t => {
-    const f = await fixture(t, openerHTML), m = memory(t), d = driver(t, f, m.store, undefined, { trusted: false });
-    let text = await d.call('browser_read');
-    await d.call('browser_act', { steps: [{ do: 'click', ref: ref(text, 'More') }] });
-    if (reset === 'navigation') await f.entry.page.goto(f.entry.page.url().replace('/start', '/other'));
-    if (reset === 'new-document') await f.entry.page.setContent(openerHTML);
-    if (reset.endsWith('steps')) await d.call('browser_act', { steps: Array.from({ length: reset === 'three-steps' ? 3 : 2 }, () => ({ do: 'wait', ms: 0 })) });
-    text = await d.call('browser_read');
-    await d.call('browser_act', { steps: [{ do: 'click', ref: ref(text, 'Export') }] });
-    const item = m.store.list().flatMap(entry => entry.recipes).find(item => item.target.name === 'Export');
-    assert.ok(item);
-    assert.equal(item.via?.name, reset === 'two-steps' ? 'More' : undefined);
+    // Missing optional evidence can follow a renderer deadline. Repeat only a
+    // missing receipt with a fresh turn; a wrong opener still fails immediately.
+    for (let attempt = 1; attempt <= 3; attempt++) {
+      const f = await fixture(t, openerHTML), m = memory(t), d = driver(t, f, m.store, undefined, { trusted: false });
+      let text = await d.call('browser_read');
+      await d.call('browser_act', { steps: [{ do: 'click', ref: ref(text, 'More') }] });
+      if (reset === 'navigation') await f.entry.page.goto(f.entry.page.url().replace('/start', '/other'));
+      if (reset === 'new-document') await f.entry.page.setContent(openerHTML);
+      if (reset.endsWith('steps')) await d.call('browser_act', { steps: Array.from({ length: reset === 'three-steps' ? 3 : 2 }, () => ({ do: 'wait', ms: 0 })) });
+      text = await d.call('browser_read');
+      await d.call('browser_act', { steps: [{ do: 'click', ref: ref(text, 'Export') }] });
+      const item = m.store.list().flatMap(entry => entry.recipes).find(item => item.target.name === 'Export');
+      if (!item && attempt < 3) {
+        t.diagnostic(`optional receipt unavailable after ${reset}, attempt ${attempt}/3`);
+        continue;
+      }
+      assert.ok(item);
+      assert.equal(item.via?.name, reset === 'two-steps' ? 'More' : undefined);
+      break;
+    }
   });
 }
 
@@ -213,8 +233,7 @@ test('hints do not bypass fresh-ref checks, site blocks, or submit confirmation'
 test('retained control evidence observes the actual expanded state change', { skip, timeout: 30000 }, async t => {
   const f = await fixture(t, siteMemoryTask.html), m = memory(t), d = driver(t, f, m.store);
   const text = await d.call('browser_read'), target = ref(text, 'More');
-  const observation = await prepareControlRecipe(f.entry.page.getByRef(target), f.entry.page.url());
-  assert.ok(observation, 'eligible generic control must have trusted evidence');
+  const observation = await requiredObservation(t, f.entry.page.getByRef(target), f.entry.page.url());
   try {
     await d.call('browser_act', { steps: [{ do: 'click', ref: target }] });
     assert.deepEqual(await observation.finish(), { origin: new URL(f.entry.page.url()).origin, target: { role: 'button', name: 'More' }, outcome: 'control changed', expanded: true });

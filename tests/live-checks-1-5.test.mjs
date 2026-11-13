@@ -1,3 +1,4 @@
+import { assertChildStatus } from './fixtures/child-status.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { mkdtempSync, readFileSync } from 'node:fs';
@@ -37,8 +38,8 @@ test('dry run lists all fourteen caps and has no runtime, hold, lock or publicat
 test('actual CLI dry plan runs with writes, lock/hold access, children and sockets forbidden', () => {
   for (const browser of ['chrome', 'helium']) {
     const child = spawnSync(process.execPath, ['--import', fileURLToPath(new URL('./fixtures/lc1-dry-guard.mjs', import.meta.url)),
-      fileURLToPath(new URL('../bench/live-checks-1-5.mjs', import.meta.url)), '--browser', browser, '--dry-run'], { encoding: 'utf8' });
-    assert.equal(child.status, 0, child.stderr);
+      fileURLToPath(new URL('../bench/live-checks-1-5.mjs', import.meta.url)), '--browser', browser, '--dry-run'], { encoding: 'utf8', timeout: 60000, killSignal: 'SIGKILL' });
+    assertChildStatus(child, 0, child.stderr);
     const report = JSON.parse(child.stdout);
     assert.equal(report.browser, browser); assert.equal(report.checks.length, 14); assert.equal(report.lock, false);
   }

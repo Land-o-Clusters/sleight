@@ -1,7 +1,7 @@
 # Exact window selection, October 4
 
 Branch: `codex/window-targeting`, rebased onto `562f423` (includes `7540224`). Worktree:
-`~/Projects/sleight-wt/window-targeting`.
+`<private-evidence>/window-targeting`.
 
 The revised branch removes unsupported `windowId` guidance and routine window
 notes. `select_window` matches one exact title or AXDocument file URL, applies

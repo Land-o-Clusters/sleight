@@ -20,13 +20,13 @@ import { createAppTargets } from '../plugins/sleight/lib/direct-browser/electron
 const here = fileURLToPath(new URL('.', import.meta.url));
 const launch = join(here, '../plugins/sleight/lib/direct-browser/electron/launch.py'), fake = join(here, 'fixtures/fake-electron.py');
 const fixture = join(here, 'fixtures/electron-host-process.mjs');
-const python = spawnSync('python3', ['-c', 'import os,sys;print(os.path.realpath(sys.executable))'], { encoding: 'utf8' });
+const python = spawnSync('python3', ['-c', 'import os,sys;print(os.path.realpath(sys.executable))'], { encoding: 'utf8', timeout: 60000, killSignal: 'SIGKILL' });
 const skip = python.status !== 0 ? 'python3 is unavailable' : process.platform === 'win32' ? 'POSIX launch primitive unavailable' : false;
 const BUILD = 'keeper-fixture';
 const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
 const until = async (check, label, ms = 10000) => { const start = Date.now(); while (!await check()) { if (Date.now() - start > ms) throw Error('timed out waiting for ' + label); await sleep(20); } };
 const alive = pid => { if (!pid) return false; try { process.kill(pid, 0); return true; } catch { return false; } };
-const pgid = pid => Number(spawnSync('/bin/ps', ['-o', 'pgid=', '-p', String(pid)], { encoding: 'utf8' }).stdout.trim());
+const pgid = pid => Number(spawnSync('/bin/ps', ['-o', 'pgid=', '-p', String(pid)], { encoding: 'utf8', timeout: 30000, killSignal: 'SIGKILL' }).stdout.trim());
 
 function environment() {
   const root = realpathSync(mkdtempSync(join(tmpdir(), 'ekeep-')));
@@ -271,7 +271,7 @@ except (socket.timeout, ConnectionResetError):
     pass
 print(json.dumps({'received': received.decode('utf-8', 'replace'), 'fds': len(fds)}))
 `;
-const foreign = (path, mode) => JSON.parse(spawnSync('python3', ['-I', '-c', FOREIGN, path, mode], { encoding: 'utf8', timeout: 10000 }).stdout);
+const foreign = (path, mode) => JSON.parse(spawnSync('python3', ['-I', '-c', FOREIGN, path, mode], { encoding: 'utf8', timeout: 10000, killSignal: 'SIGKILL' }).stdout);
 
 test('nothing else obtains the pipe: the keeper refuses while the host lives, refuses a wrong proof after, and passes no descriptor', { skip }, async () => {
   const e = environment(), secret = randomBytes(32);

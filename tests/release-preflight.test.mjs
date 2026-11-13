@@ -1,3 +1,4 @@
+import { assertChildStatus } from './fixtures/child-status.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { cpSync, mkdtempSync, mkdirSync, readFileSync, realpathSync, rmSync, writeFileSync, existsSync } from 'node:fs';
@@ -7,6 +8,7 @@ import { tmpdir } from 'node:os';
 import { EventEmitter } from 'node:events';
 import { trackTemp } from '../scripts/temp-leftovers.mjs';
 import { runContainerChecks, runOwnedCommand } from '../scripts/linux-preflight.mjs';
+import { runBudget } from '../scripts/linux-preflight-colima.mjs';
 import { preflight, main, createReviewedRunner, manifestFiles } from '../scripts/release-preflight.mjs';
 
 const head = 'a'.repeat(40), base = 'b'.repeat(40);
@@ -14,6 +16,18 @@ const identity = { home: '/home/private-fixture', username: 'private-fixture' };
 const tap = '# tests 2\n# suites 0\n# pass 2\n# fail 0\n# cancelled 0\n# skipped 0\n# todo 0\n';
 const ok = stdout => ({ status: 0, stdout, collected: true });
 const parserReceipt = JSON.stringify({ id: 'cell-parser', status: 'pass', version: '7.0.0' });
+const smokeSummary = (fields = {}) => JSON.stringify({ ok: true, claudeCode: '2.1.309 (Claude Code)', pluginVersion: '1.4.1',
+  treeCommit: head, treeDirty: false, counts: { pass: 22, fail: 0, inconclusive: 0 }, allowed: 15, refused: 7, cases: 22, seconds: 25,
+  out: '/tmp/smoke.json', ...fields });
+
+test('Linux release documentation states the current execution and cleanup caps', () => {
+  for (const name of ['linux-preflight', 'release-preflight']) {
+    const text = readFileSync(new URL(`../docs/${name}.md`, import.meta.url), 'utf8');
+    for (const minutes of [30, 32, 38, 46]) assert.match(text, new RegExp(`\\b${minutes}[- ]minute`), name);
+    assert.doesNotMatch(text, /20-minute/, name);
+    assert.match(text, /eight[- ]minute/, name);
+  }
+});
 
 // A6 calls the real A5 checkout and receipt producer; replace only process execution.
 function processBoundary(root, overrides = {}) {
@@ -23,6 +37,7 @@ function processBoundary(root, overrides = {}) {
     calls.push({ command, args, options });
     if (command === process.execPath && args[0] === 'bench/results-hub.mjs') return ok('');
     if (command === process.execPath && args[0] === 'bench/compat/parser.mjs') return ok(parserReceipt);
+    if (command === process.execPath && args[0] === 'scripts/host-smoke.mjs') return ok(smokeSummary());
     if (command === process.execPath && args[0] === 'scripts/release-history-scan.mjs') {
       return ok('Release history scan: 0 added line(s) contain private identity data.\n');
     }
@@ -73,7 +88,8 @@ function fixture(overrides = {}) {
     if (overrides[request.step]) return overrides[request.step](request);
     if (request.step === 'linux') return reviewed(request);
     return { status: 0, stdout: { head, base, tag: head, status: '', sources: '', ancestor: '',
-      'cell-parser': parserReceipt, history: 'Release history scan: 0 added line(s) contain private identity data.\n' }[request.step] };
+      'cell-parser': parserReceipt, history: 'Release history scan: 0 added line(s) contain private identity data.\n',
+      'host-smoke': `pass write-new\n${smokeSummary()}\n` }[request.step] };
   };
   files.set('private-terms.json', '["Private Fixture Name"]');
   const options = { root, mode: 'release', tag: 'v1.4.1', identity, runner, privateTerms: ['Private Fixture Name'],
@@ -104,7 +120,7 @@ test('actual release checks all manifests, tag, history and Linux, then rechecks
   assert.equal(result.ok, true);
   assert.equal(result.releaseReady, true);
   assert.equal(result.head, head);
-  assert.deepEqual(steps(calls), ['status', 'head', 'status', 'head', 'tag', 'base', 'ancestor', 'sources', 'cell-parser', 'hub', 'history', 'linux', 'status', 'head', 'tag']);
+  assert.deepEqual(steps(calls), ['status', 'head', 'status', 'head', 'tag', 'base', 'ancestor', 'sources', 'cell-parser', 'hub', 'history', 'host-smoke', 'linux', 'status', 'head', 'tag']);
   assert.equal(calls.find(c => c.step === 'history').range, `${base}..${head}`);
 });
 
@@ -235,7 +251,7 @@ test('missing or malformed source files fail with fixed locations, never excepti
 });
 
 test('each command failure stops all subsequent execution and preserves its exit status', async () => {
-  for (const step of ['status', 'head', 'tag', 'base', 'ancestor', 'sources', 'cell-parser', 'hub', 'history', 'linux']) {
+  for (const step of ['status', 'head', 'tag', 'base', 'ancestor', 'sources', 'cell-parser', 'hub', 'history', 'host-smoke', 'linux']) {
     const { options, calls } = fixture({ [step]: () => ({ status: 17, stdout: identity.home, stderr: identity.username }) });
     const result = await preflight(options);
     assert.equal(result.ok, false, step);
@@ -292,25 +308,25 @@ test('a hub check that crashes or cannot run is a hub-error, never stale-output,
 
 test('the committed hub output is fresh, and a data file that moved on without its pages fails the same check', () => {
   const hub = new URL('../bench/results-hub.mjs', import.meta.url).pathname;
-  const run = (...extra) => spawnSync(process.execPath, [hub, '--render-only', '--hub-only', '--check', ...extra], { encoding: 'utf8' });
-  assert.equal(run().status, 0, run().stdout);
+  const run = (...extra) => spawnSync(process.execPath, [hub, '--render-only', '--hub-only', '--check', ...extra], { encoding: 'utf8', timeout: 60000, killSignal: 'SIGKILL' });
+  assertChildStatus(run(), 0, run().stdout);
   const results = new URL('../docs/results', import.meta.url).pathname;
   const copy = mkdtempSync(join(tmpdir(), 'hub-stale-'));
   try {
     cpSync(results, copy, { recursive: true });
-    assert.equal(run('--out', copy).status, 0);
+    assertChildStatus(run('--out', copy), 0);
     const file = join(copy, 'data/validation.json'), data = JSON.parse(readFileSync(file, 'utf8'));
     data.studies[0].cells[0].expected += 1;
     writeFileSync(file, JSON.stringify(data));
     const stale = run('--out', copy);
-    assert.equal(stale.status, 1);
+    assertChildStatus(stale, 1);
     assert.match(stale.stdout, /would change data\/validation\.json/);
     assert.match(stale.stdout, /would change validation\.md/);
     // A crash is not a stale tree: no "would change" line, so the preflight reports it as hub-error.
     const empty = mkdtempSync(join(tmpdir(), 'hub-crash-'));
     try {
       const crashed = run('--out', empty);
-      assert.equal(crashed.status, 1);
+      assertChildStatus(crashed, 1);
       assert.doesNotMatch(crashed.stdout, /^would change /m);
     } finally { rmSync(empty, { recursive: true, force: true }); }
   } finally { rmSync(copy, { recursive: true, force: true }); }
@@ -321,16 +337,16 @@ test('release hub collection rejects stale data even when every page matches tha
   const hub = join(root, 'bench/results-hub.mjs');
   const readme = readFileSync(join(root, 'README.md'), 'utf8');
   const out = mkdtempSync(join(tmpdir(), 'hub-collect-check-'));
-  const run = (...args) => spawnSync(process.execPath, [hub, '--hub-only', '--out', out, ...args], { encoding: 'utf8' });
+  const run = (...args) => spawnSync(process.execPath, [hub, '--hub-only', '--out', out, ...args], { encoding: 'utf8', timeout: 60000, killSignal: 'SIGKILL' });
   try {
     cpSync(join(root, 'docs/results'), out, { recursive: true });
     const file = join(out, 'data/release-passes.json'), data = JSON.parse(readFileSync(file, 'utf8'));
     data.runs[0].seconds += 1;
     writeFileSync(file, JSON.stringify(data));
-    assert.equal(run('--render-only').status, 0);
-    assert.equal(run('--render-only', '--check').status, 0, 'render consistency alone accepts stale data');
+    assertChildStatus(run('--render-only'), 0);
+    assertChildStatus(run('--render-only', '--check'), 0, 'render consistency alone accepts stale data');
     const checked = run('--check', '--wt', join(out, 'no-external-banks'));
-    assert.equal(checked.status, 1);
+    assertChildStatus(checked, 1);
     assert.match(checked.stdout, /would change data\/release-passes\.json/);
     assert.equal(readFileSync(join(root, 'README.md'), 'utf8'), readme, 'temp output never rewrites the root README');
   } finally { rmSync(out, { recursive: true, force: true }); }
@@ -418,7 +434,7 @@ test('reviewed runner owns fixed Git/history argv and throwaway config cleanup',
     ['rev-parse', '--verify', 'refs/tags/v1.4.1^{commit}'],
     ['rev-parse', '--verify', 'origin/main^{commit}'],
     ['merge-base', '--is-ancestor', base, head],
-    ['ls-files', '--error-unmatch', '--', 'scripts/release-history-scan.mjs', 'scripts/linux-preflight.mjs', 'bench/results-hub.mjs', 'bench/compat/parser.mjs'],
+    ['ls-files', '--error-unmatch', '--', 'scripts/release-history-scan.mjs', 'scripts/linux-preflight.mjs', 'bench/results-hub.mjs', 'bench/compat/parser.mjs', 'scripts/host-smoke.mjs', 'bench/preflight.mjs'],
     ['bench/compat/parser.mjs'],
     ['bench/results-hub.mjs', '--check'],
     ['scripts/release-history-scan.mjs', `${base}..${head}`],
@@ -498,7 +514,7 @@ test('reviewed Linux runner calls actual helper on this host and rejects wrong c
   const { options, boundary } = fixture();
   const runner = createReviewedRunner(options.root, { execute: boundary.execute });
   const produced = await runner({ step: 'linux', head });
-  assert.equal(produced.status, 0);
+  assertChildStatus(produced, 0);
   const receipt = JSON.parse(produced.stdout);
   assert.equal(receipt.commit, head);
   assert.equal(receipt.counts.tests, 2);
@@ -540,7 +556,7 @@ test('A6 signal channel waits for actual helper cancellation and confirmed Docke
   }) });
   const runner = createReviewedRunner(options.root, { execute: boundary.execute, signal: controller.signal });
   const result = await runner({ step: 'linux', head });
-  assert.notEqual(result.status, 0);
+  assertChildStatus(result, 0, undefined, 'notEqual');
   assert.equal(JSON.parse(result.stdout).cleanupConfirmed, true);
   assert.deepEqual(boundary.calls.filter(c => c.command === 'docker').slice(-2).map(c => c.args[0]), ['rm', 'container']);
 });
@@ -558,10 +574,12 @@ async function colimaFixture(t, overrides = {}) {
   }
   f.files.set('bench/results-hub.mjs', '// tracked fixture source\n');
   f.files.set('bench/compat/parser.mjs', '// tracked fixture source\n');
+  f.files.set('scripts/host-smoke.mjs', '// tracked fixture source\n');
+  f.files.set('bench/preflight.mjs', '// tracked fixture source\n');
   const env = { PATH: process.env.PATH, HOME: termsBank, GIT_CONFIG_GLOBAL: '/dev/null', GIT_CONFIG_NOSYSTEM: '1' };
   const git = async args => {
     const result = await runOwnedCommand('/usr/bin/git', args, { cwd: root, env });
-    assert.equal(result.status, 0, result.stderr); return result.stdout.trim();
+    assertChildStatus(result, 0, result.stderr); return result.stdout.trim();
   };
   await git(['init', '--quiet']); await git(['add', '--', '.']);
   await git(['-c', 'user.name=Fixture', '-c', 'user.email=fixture@example.invalid', 'commit', '--quiet', '-m', 'Fixture']);
@@ -576,11 +594,18 @@ async function colimaFixture(t, overrides = {}) {
     if (command === process.execPath) {
       if (originalArgs[0] === 'bench/results-hub.mjs') return ok('');
       if (originalArgs[0] === 'bench/compat/parser.mjs') return ok(parserReceipt);
+      if (originalArgs[0] === 'scripts/host-smoke.mjs') return ok(smokeSummary({ treeCommit: commit }));
       assert.equal(originalArgs[0], 'scripts/release-history-scan.mjs');
       return ok('Release history scan: 0 added line(s) contain private identity data.\n');
     }
     const args = command === 'docker' && originalArgs[0] === '--host' ? originalArgs.slice(2) : originalArgs;
     if (options.env?.COLIMA_HOME) { control = dirname(options.env.COLIMA_HOME); banks.add(trackTemp(control)); }
+    if (command === 'limactl') {
+      assert.equal(state, 'Stopped');
+      assert.deepEqual(args, ['stop', '--force', `colima-${profile}`]);
+      assert.equal(options.env.LIMA_HOME, join(control, 'l'));
+      return ok('');
+    }
     if (command === 'colima') {
       if (args[0] === 'list') return ok(state ? JSON.stringify({ name: profile, status: state,
         arch: 'aarch64', cpus: 2, memory: 4294967296, disk: 10737418240, runtime: 'docker' }) : '');
@@ -656,8 +681,8 @@ test('explicit Docker runtime keeps the original fixed source gate and Docker ro
   const { options, boundary } = fixture();
   const runner = createReviewedRunner(options.root, { execute: boundary.execute, linuxRuntime: 'docker' });
   await runner({ step: 'sources' });
-  assert.deepEqual(boundary.calls[0].args, ['ls-files', '--error-unmatch', '--', 'scripts/release-history-scan.mjs', 'scripts/linux-preflight.mjs', 'bench/results-hub.mjs', 'bench/compat/parser.mjs']);
-  assert.equal((await runner({ step: 'linux', head })).status, 0);
+  assert.deepEqual(boundary.calls[0].args, ['ls-files', '--error-unmatch', '--', 'scripts/release-history-scan.mjs', 'scripts/linux-preflight.mjs', 'bench/results-hub.mjs', 'bench/compat/parser.mjs', 'scripts/host-smoke.mjs', 'bench/preflight.mjs']);
+  assertChildStatus(await runner({ step: 'linux', head }), 0);
   assert.equal(boundary.calls.some(call => call.command === 'colima'), false);
 });
 
@@ -668,7 +693,7 @@ test('A6 Colima CLI owns actual producers, requires tracked helper and rechecks 
   assert.equal(result.ok, true); assert.equal(result.releaseReady, false); assert.equal(result.linux.commit, f.commit);
   assert.equal(output.join('').includes(f.root), false);
   const sources = f.calls.find(call => call.args[0] === 'ls-files' && call.args.includes('--error-unmatch'));
-  assert.deepEqual(sources.args, ['ls-files', '--error-unmatch', '--', 'scripts/release-history-scan.mjs', 'scripts/linux-preflight.mjs', 'bench/results-hub.mjs', 'bench/compat/parser.mjs', 'scripts/linux-preflight-colima.mjs']);
+  assert.deepEqual(sources.args, ['ls-files', '--error-unmatch', '--', 'scripts/release-history-scan.mjs', 'scripts/linux-preflight.mjs', 'bench/results-hub.mjs', 'bench/compat/parser.mjs', 'scripts/host-smoke.mjs', 'bench/preflight.mjs', 'scripts/linux-preflight-colima.mjs']);
   assert.ok(f.calls.some(call => call.command === 'colima' && call.args[0] === 'delete'));
   assert.deepEqual(f.calls.slice(-2).map(call => call.args), [
     ['status', '--porcelain=v1', '--untracked-files=all'], ['rev-parse', '--verify', 'HEAD^{commit}'],
@@ -695,7 +720,7 @@ test('Colima Linux success cannot pass failed or uncollected VM teardown', async
 
 test('Colima composite deadline failure survives a passing Linux receipt and completed VM cleanup', async t => {
   let now = Date.now(); t.mock.method(Date, 'now', () => now);
-  const f = await colimaFixture(t, { attached() { now += 17 * 60_000; } }), output = [];
+  const f = await colimaFixture(t, { attached() { now += runBudget; } }), output = [];
   assert.equal(await main(f.args, { root: f.root, execute: f.execute, log: text => output.push(text) }), 1);
   assert.equal(JSON.parse(readFileSync(join(f.control(), 'linux-receipt.json'))).exitCode, 0);
   assert.equal(JSON.parse(readFileSync(join(f.control(), 'vm-cleanup.json'))).cleanupConfirmed, true);
@@ -730,4 +755,76 @@ test('A6 Colima cancellation waits for VM cleanup with one OS signal owner', asy
   release(); assert.equal(await result, 1);
   assert.equal(JSON.parse(readFileSync(join(f.control(), 'vm-cleanup.json'))).cleanupConfirmed, true);
   assert.equal(signals.listenerCount('SIGINT'), 0); assert.equal(signals.listenerCount('SIGTERM'), 0);
+});
+
+// The host smoke itself is live-only (scripts/host-smoke.mjs); these cover its wiring with a fake runner.
+test('host smoke runs on the release tree after history and before Linux, with the named config', async () => {
+  const { options, calls } = fixture();
+  const result = await preflight({ ...options, hostSmokeConfig: '/fixture/arm/claude' });
+  assert.equal(result.ok, true);
+  const order = steps(calls);
+  assert.ok(order.indexOf('history') < order.indexOf('host-smoke') && order.indexOf('host-smoke') < order.indexOf('linux'));
+  assert.deepEqual(calls.find(call => call.step === 'host-smoke'), { step: 'host-smoke', configDir: '/fixture/arm/claude' });
+  assert.deepEqual(result.hostSmoke, { cases: 22, pass: 22, claudeCode: '2.1.309 (Claude Code)' });
+  const plain = fixture();
+  assert.equal((await preflight({ ...plain.options, mode: 'candidate', tag: undefined, version: '1.4.1' })).ok, true);
+  assert.deepEqual(plain.calls.find(call => call.step === 'host-smoke'), { step: 'host-smoke' });
+});
+
+test('a failing, inconclusive or foreign host smoke fails the release before Linux without echoing its output', async () => {
+  const failed = fixture({ 'host-smoke': () => ({ status: 1, stdout: `fail bash-mkdir-new ${identity.home}\n${smokeSummary({ ok: false })}` }) });
+  const result = await preflight(failed.options);
+  assert.equal(result.ok, false);
+  assert.deepEqual(result.failures, [{ check: 'host-smoke', code: 'command-failed', exitCode: 1 }]);
+  assert.equal(steps(failed.calls).includes('linux'), false);
+  assert.equal(JSON.stringify(result).includes(identity.home), false);
+  for (const stdout of [smokeSummary({ ok: false }), smokeSummary({ pluginVersion: '1.4.0' }), smokeSummary({ treeCommit: base }),
+    smokeSummary({ treeCommit: null }), smokeSummary({ treeDirty: true }), smokeSummary({ treeDirty: null }),
+    smokeSummary({ counts: { pass: 21, fail: 0, inconclusive: 1 } }), smokeSummary({ counts: { pass: 22, fail: 0, inconclusive: 1 } }),
+    smokeSummary({ cases: 0, counts: { pass: 0, fail: 0, inconclusive: 0 } }), `${identity.home} not JSON`, '',
+    // A shrunken or reshuffled case list: every case passing is not enough.
+    smokeSummary({ refused: 0, allowed: 15, cases: 15, counts: { pass: 15, fail: 0, inconclusive: 0 } }),
+    smokeSummary({ allowed: 16, refused: 6 }), smokeSummary({ allowed: undefined }), smokeSummary({ refused: '7' }),
+    smokeSummary({ cases: 23, counts: { pass: 23, fail: 0, inconclusive: 0 } })]) {
+    const { options, calls } = fixture({ 'host-smoke': () => ({ status: 0, stdout }) });
+    const checked = await preflight(options);
+    assert.equal(checked.ok, false, stdout);
+    assert.deepEqual(checked.failures, [{ check: 'host-smoke', code: 'invalid-smoke-summary' }], stdout);
+    assert.equal(steps(calls).includes('linux'), false);
+    assert.equal(JSON.stringify(checked).includes(identity.home), false);
+  }
+  const odd = fixture({ 'host-smoke': () => ({ status: 0, stdout: smokeSummary({ claudeCode: identity.home }) }) });
+  const checked = await preflight(odd.options);
+  assert.equal(checked.ok, true);
+  assert.equal(checked.hostSmoke.claudeCode, null);
+  for (const hostSmokeConfig of ['relative/claude', '', 7]) {
+    const { options, calls } = fixture();
+    assert.deepEqual((await preflight({ ...options, hostSmokeConfig })).failures, [{ check: 'arguments', code: 'invalid-options' }]);
+    assert.deepEqual(calls, []);
+  }
+});
+
+test('reviewed runner starts the host smoke on the release tree plugin, with a long budget and no shell', async () => {
+  const calls = [];
+  const runner = createReviewedRunner('/fixture', { execute: (command, args, options) => { calls.push({ command, args, options }); return ok(''); } });
+  await runner({ step: 'host-smoke', configDir: '/fixture/arm/claude' });
+  await runner({ step: 'host-smoke' });
+  assert.deepEqual(calls.map(call => [call.command, ...call.args]), [
+    [process.execPath, 'scripts/host-smoke.mjs', '--plugin-dir', '/fixture/plugins/sleight', '--config', '/fixture/arm/claude'],
+    [process.execPath, 'scripts/host-smoke.mjs', '--plugin-dir', '/fixture/plugins/sleight']]);
+  for (const { options } of calls) {
+    assert.equal(options.cwd, '/fixture');
+    assert.equal(options.shell, false);
+    assert.equal(options.timeout, 20 * 60_000);
+  }
+  for (const configDir of ['relative/claude', '', 7, null]) await assert.rejects(runner({ step: 'host-smoke', configDir }));
+  assert.equal(calls.length, 2);
+});
+
+test('the CLI passes --host-smoke-config through once and rejects a repeat', async () => {
+  const { options, calls } = fixture();
+  const terms = ['--private-terms', join(options.root, 'private-terms.json')];
+  assert.equal(await main(['--candidate', '1.4.1', ...terms, '--host-smoke-config', '/fixture/arm/claude'], { ...options, log: () => {} }), 0);
+  assert.equal(calls.find(call => call.step === 'host-smoke').configDir, '/fixture/arm/claude');
+  assert.equal(await main(['--candidate', '1.4.1', ...terms, '--host-smoke-config', '/a', '--host-smoke-config', '/b'], { ...options, log: () => {} }), 1);
 });

@@ -1,3 +1,4 @@
+import { assertChildStatus } from './fixtures/child-status.mjs';
 // Constructed macOS paths are synthetic validation and redaction data, never allocation roots.
 const MAC_TMP = ['', 'private', 'tmp'].join('/');
 const MAC_USERS = ['', 'Users', ''].join('/');
@@ -65,8 +66,8 @@ test('task allowlist survives adapter and CLI serialization instead of inheritin
   assert.equal(setup.env.BENCH_CU_ALLOWED_APPS, '["Fixture Editor","Fixture Viewer"]');
   assert.equal(setup.args[setup.args.indexOf('--allowed-apps') + 1], '["Fixture Editor","Fixture Viewer"]');
   const dry = spawnSync(process.execPath, [new URL('../bench/world/arms/claude-cu/interactive.mjs', import.meta.url).pathname,
-    '--arm-dir', p.armDir, '--prompt', p.prompt, '--allowed-apps', '["Fixture Editor"]'], { encoding: 'utf8' });
-  assert.equal(dry.status, 0, dry.stderr);
+    '--arm-dir', p.armDir, '--prompt', p.prompt, '--allowed-apps', '["Fixture Editor"]'], { encoding: 'utf8', timeout: 60000, killSignal: 'SIGKILL' });
+  assertChildStatus(dry, 0, dry.stderr);
   assert.deepEqual(JSON.parse(dry.stdout).plan.allowedApps, ['Fixture Editor']);
 });
 test('browser adapter selects only its task browser from the benchmark allowlist', () => {
@@ -318,8 +319,8 @@ test('task fixture identities and explicit grants survive adapter, CLI and hooks
     task: { ...task, allowedGrants: ['clipboardRead', 'clipboardWrite'] } });
   assert.deepEqual(JSON.parse(setup.env.BENCH_CU_ALLOWED_APPS), ['TextEdit', 'com.apple.TextEdit', 'Calculator', 'com.apple.calculator']);
   assert.deepEqual(JSON.parse(setup.env.BENCH_CU_ALLOWED_GRANTS), ['clipboardRead', 'clipboardWrite']);
-  const dry = spawnSync(process.execPath, setup.args.filter(value => !['--run', '--parent-lock'].includes(value)), { encoding: 'utf8' });
-  assert.equal(dry.status, 0, dry.stderr);
+  const dry = spawnSync(process.execPath, setup.args.filter(value => !['--run', '--parent-lock'].includes(value)), { encoding: 'utf8', timeout: 60000, killSignal: 'SIGKILL' });
+  assertChildStatus(dry, 0, dry.stderr);
   const plan = JSON.parse(dry.stdout).plan;
   assert.deepEqual(plan.allowedApps, ['TextEdit', 'com.apple.TextEdit', 'Calculator', 'com.apple.calculator']);
   assert.deepEqual(plan.allowedGrants, ['clipboardRead', 'clipboardWrite']);
@@ -371,8 +372,8 @@ for (const event of ['PermissionRequest', 'PreToolUse']) {
 
 test('permission hook malformed stdin fails closed with exit 2 and a deny reason', () => {
   const result = spawnSync(process.execPath, [new URL('../bench/world/arms/claude-cu/permission.mjs', import.meta.url).pathname],
-    { input: '{', encoding: 'utf8' });
-  assert.equal(result.status, 2);
+    { input: '{', encoding: 'utf8', timeout: 60000, killSignal: 'SIGKILL' });
+  assertChildStatus(result, 2);
   assert.match(result.stderr, /denied.*malformed/i);
   assert.equal(result.stdout, '');
 });
@@ -380,8 +381,8 @@ test('permission hook malformed stdin fails closed with exit 2 and a deny reason
 for (const [name, input] of [['oversized stdin', ' '.repeat(65537)], ['non-object stdin', 'null'], ['unknown hook event', '{}']]) {
   test(`permission hook ${name} fails closed`, () => {
     const result = spawnSync(process.execPath, [new URL('../bench/world/arms/claude-cu/permission.mjs', import.meta.url).pathname],
-      { input, encoding: 'utf8' });
-    assert.equal(result.status, 2);
+      { input, encoding: 'utf8', timeout: 60000, killSignal: 'SIGKILL' });
+    assertChildStatus(result, 2);
     assert.match(result.stderr, /denied/i);
     assert.equal(result.stdout, '');
   });
@@ -403,8 +404,8 @@ for (const failure of ['throw new Error("fixture crash")', 'Promise.reject(new E
     const path = new URL('../bench/world/arms/claude-cu/permission.mjs', import.meta.url);
     const result = spawnSync(process.execPath, ['--input-type=module', '-e',
       `process.argv[1] = ${JSON.stringify(path.pathname)}; await import(${JSON.stringify(path.href)}); ${failure};`],
-    { input: '', encoding: 'utf8' });
-    assert.equal(result.status, 2);
+    { input: '', encoding: 'utf8', timeout: 60000, killSignal: 'SIGKILL' });
+    assertChildStatus(result, 2);
     assert.match(result.stderr, /denied.*hook failure/i);
     assert.equal(result.stdout, '');
   });
@@ -420,8 +421,8 @@ test('prepared permission hook allows only bound computer-use calls within the t
   const command = settings.hooks.PermissionRequest[0].hooks[0].command;
   const invoke = (tool, input, extra = {}) => {
     const result = spawnSync(command, { shell: true, input: JSON.stringify({ hook_event_name: 'PermissionRequest',
-      session_id: p.sessionId, cwd: p.cwd, tool_name: tool, tool_input: input, ...extra }), env: p.env, encoding: 'utf8' });
-    assert.equal(result.status, 0, result.stderr);
+      session_id: p.sessionId, cwd: p.cwd, tool_name: tool, tool_input: input, ...extra }), env: p.env, encoding: 'utf8', timeout: 60000, killSignal: 'SIGKILL' });
+    assertChildStatus(result, 0, result.stderr);
     return JSON.parse(result.stdout).hookSpecificOutput.decision.behavior;
   };
   assert.equal(invoke('mcp__computer-use__request_access', { apps: ['Fixture Editor'] }), 'allow');

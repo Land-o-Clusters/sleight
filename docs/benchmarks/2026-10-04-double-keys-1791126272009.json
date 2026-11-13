@@ -6,7 +6,7 @@
   "trials": [],
   "records": [],
   "engineVersion": "26.930.31730",
-  "error": "Command failed: /usr/bin/osascript -l JavaScript ~/Projects/sleight-wt/double-keys/bench/double-keys-fixture.js open /private/tmp/sleight-double-keys-tCVZ84/double-keys.txt Calculator\n~/Projects/sleight-wt/double-keys/bench/double-keys-fixture.js: execution error: Error: Error: Application can't be found. (-2700)\n",
+  "error": "Command failed: /usr/bin/osascript -l JavaScript <private-evidence>/double-keys/bench/double-keys-fixture.js open /private/tmp/sleight-double-keys-tCVZ84/double-keys.txt Calculator\n<private-evidence>/double-keys/bench/double-keys-fixture.js: execution error: Error: Error: Application can't be found. (-2700)\n",
   "cleanup": [],
   "finished": "2026-10-04T15:04:32.009Z"
 }

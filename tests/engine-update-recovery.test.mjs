@@ -1,3 +1,4 @@
+import { modCall } from './fixtures/mod-attribution.mjs';
 // Constructed macOS paths are synthetic validation and redaction data, never allocation roots.
 const MAC_TMP = ['', 'private', 'tmp'].join('/');
 import test from 'node:test';
@@ -46,7 +47,7 @@ function fixture(t, options = {}) {
   let asks = 0, stops = 0, starts = 0, changed = false;
   const fresh = () => {
     const serverIn = new PassThrough(), serverOut = new PassThrough(), sent = [], turnEnds = []; // turnEnds: collections done when each turn_ended arrived
-    const reply = msg => serverOut.write(JSON.stringify({ jsonrpc: '2.0', ...msg }) + '\n');
+    const reply = msg => serverOut.write(JSON.stringify(modCall({ jsonrpc: '2.0', ...msg })) + '\n');
     serverIn.on('data', bytes => {
       for (const line of bytes.toString().trim().split('\n')) {
         const msg = JSON.parse(line); sent.push(msg);
@@ -72,7 +73,7 @@ function fixture(t, options = {}) {
     ...options.relay,
   });
   t.after(() => relay.dispose());
-  const send = msg => clientIn.write(JSON.stringify({ jsonrpc: '2.0', ...msg }) + '\n');
+  const send = msg => clientIn.write(JSON.stringify(modCall({ jsonrpc: '2.0', ...msg })) + '\n');
   send({ id: 'init', method: 'initialize', params: { protocolVersion: '2025-06-18', capabilities: {} } });
   send({ method: 'notifications/initialized' });
   return { relay, replies, engines, send, replace: () => { changed = true; },

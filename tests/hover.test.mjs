@@ -1,3 +1,4 @@
+import { assertChildStatus } from './fixtures/child-status.mjs';
 // Constructed macOS paths are synthetic validation and redaction data, never allocation roots.
 const MAC_TMP = ['', 'private', 'tmp'].join('/');
 import { test } from 'node:test';
@@ -5,7 +6,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import vm from 'node:vm';
 import { execFile, spawnSync } from 'node:child_process';
-import { callLocalTool, HOVER_TOOL, runScript } from '../plugins/sleight/lib/launch.mjs';
+import { callLocalTool, HOVER_TOOL, runScript } from './fixtures/local-tools.mjs';
 
 // Run the same controller osascript runs, without sending native input.
 function controller() {
@@ -144,7 +145,7 @@ test('local hover denial has no effect, and success returns screenshot plus dura
   assert.equal(effects, 1);
   assert.equal(JSON.parse(allowed.content[0].text).takeoverMs, 1800);
   assert.deepEqual(allowed.content[1], { type: 'image', data: 'PNG', mimeType: 'image/png' });
-  const failed = await callLocalTool('hover', { app: 'TextEdit' }, async () => true,
+  const failed = await callLocalTool('hover', { app: 'TextEdit', at: [1, 2] }, async () => true,
     async () => ({ ok: false, takeoverMs: 200, error: 'capture failed' }));
   assert.equal(failed.isError, true);
   assert.equal(JSON.parse(failed.content[0].text).takeoverMs, 200);
@@ -155,8 +156,8 @@ test('benchmark approval admits hover only for its three apps and expected serve
   for (const app of ['Calculator', 'TextEdit', 'Chess', 'Mail', 'DragProbe']) {
     for (const server of ['plugin:sleight:computer', 'other']) {
       const child = spawnSync(process.execPath, [hook.pathname], { encoding: 'utf8',
-        input: JSON.stringify({ mcp_server_name: server, message: `Allow Claude to hover in ${app}? It moves your pointer briefly.` }) });
-      assert.equal(child.status, 0);
+        input: JSON.stringify({ mcp_server_name: server, message: `Allow Claude to hover in ${app}? It moves your pointer briefly.` }), timeout: 60000, killSignal: 'SIGKILL' });
+      assertChildStatus(child, 0);
       assert.equal(Boolean(child.stdout), server === 'plugin:sleight:computer' && ['Calculator', 'TextEdit', 'Chess'].includes(app));
     }
   }

@@ -1,3 +1,4 @@
+import { testChromiumExecutable, launchTestChromiumContext, closeTestChromium } from './fixtures/chromium-isolated.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createServer } from 'node:http';
@@ -13,8 +14,7 @@ const require = createRequire(import.meta.url);
 const { inprocess } = require('../plugins/sleight/vendor/playwright-core/lib/coreBundle.js');
 const spec = JSON.parse(readFileSync(new URL('../plugins/sleight/vendor/playwright-core/browsers.json', import.meta.url))).browsers.find(b => b.name === 'chromium');
 const executable = process.platform === 'darwin'
-  ? join(homedir(), 'Library/Caches/ms-playwright', 'chromium-' + spec.revision, 'chrome-mac-' + process.arch,
-    'Google Chrome for Testing.app/Contents/MacOS/Google Chrome for Testing')
+  ? testChromiumExecutable({ headless: false, revision: spec.revision })
   : join(homedir(), 'Library/Caches/ms-playwright', 'chromium-' + spec.revision, 'chrome-linux64/chrome');
 const skip = process.env.SLEIGHT_LIVE_DOM_TEST !== '1' ? 'opt-in popup qualification belongs to sleight-arch'
   : !existsSync(executable) ? 'the pinned Chromium executable is missing' : false;
@@ -70,7 +70,9 @@ async function fixture(t) {
   });
   server.on('connection', socket => { sockets.add(socket); socket.on('close', () => sockets.delete(socket)); });
   t.after(async () => {
-    try { await registry?.endTurn(); await browser?.close(); await launched?.close(); }
+    try { await closeTestChromium(launched, async () => {
+      try { await registry?.endTurn(); await browser?.close(); } finally { await launched?.close(); }
+    }); }
     finally {
       for (const socket of sockets) socket.destroy();
       if (server.listening) await new Promise(resolve => server.close(resolve));
@@ -81,7 +83,7 @@ async function fixture(t) {
   });
   await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
   origin = 'http://127.0.0.1:' + server.address().port;
-  launched = await inprocess.playwright.chromium.launchPersistentContext(profile, { headless: true, executablePath: executable,
+  launched = await launchTestChromiumContext(inprocess.playwright.chromium, profile, { headless: true, executablePath: executable,
     viewport: { width: 1200, height: 900 }, args: ['--remote-debugging-port=0', '--remote-debugging-address=127.0.0.1'] });
   // One Playwright driver owns this disposable browser. A second driver can
   // compete over popup auto-attachment and leave the new target paused.

@@ -1,3 +1,5 @@
+import { assertChildStatus } from './fixtures/child-status.mjs';
+import { benchEvidencePath } from '../bench/runtime-options.mjs';
 import { commandSkip } from './requirements.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
@@ -14,7 +16,7 @@ const moduleURL = new URL('../bench/validation/validation-140.mjs', import.meta.
 // Removing the driver-only admission or dropping a recorded build must break these cases.
 async function driverFixture() {
   const dir = mkdtempSync(join(tmpdir(), 'vp6-driver-'));
-  const git = (...args) => execFileSync('/usr/bin/git', ['-C', dir, ...args], { encoding: 'utf8' }).trim();
+  const git = (...args) => execFileSync('/usr/bin/git', ['-C', dir, ...args], { encoding: 'utf8', timeout: 30000, killSignal: 'SIGKILL' }).trim();
   git('init', '-q'); git('config', 'user.name', 'Fixture'); git('config', 'user.email', 'fixture@example.invalid');
   for (const path of ['plugins/sleight', 'bench/validation', 'tests']) mkdirSync(join(dir, path), { recursive: true });
   for (const path of ['plugins/sleight/product.mjs', 'bench/task.mjs', 'bench/validation/driver.mjs', 'tests/validation-140.test.mjs'])
@@ -274,14 +276,14 @@ test('offline scorer checks actual model evidence, not just the driver receipt',
       writeFileSync(join(dir, `${side}.receipt.json`), JSON.stringify({ safe: true, build, harnessHash: 'hh', engine: 'e', result }));
     }
     writeFileSync(join(dir, 'full-check.receipt.json'), JSON.stringify({ build: 'b', code: 0 }));
-    let got = spawnSync(process.execPath, [moduleURL.pathname, '--score', '--out', dir], { encoding: 'utf8' });
-    assert.equal(got.status, 0, got.stderr);
+    let got = spawnSync(process.execPath, [moduleURL.pathname, '--score', '--out', dir], { encoding: 'utf8', timeout: 60000, killSignal: 'SIGKILL' });
+    assertChildStatus(got, 0, got.stderr);
     assert.match(got.stdout, /A rounds: .*A\.json/);
     const changed = JSON.parse((await import('node:fs')).readFileSync(join(dir, 'B.json')));
     changed.results[0].models = ['opus'];
     writeFileSync(join(dir, 'B.json'), JSON.stringify(changed));
-    got = spawnSync(process.execPath, [moduleURL.pathname, '--score', '--out', dir], { encoding: 'utf8' });
-    assert.notEqual(got.status, 0, 'edited model evidence was counted as a complete comparison');
+    got = spawnSync(process.execPath, [moduleURL.pathname, '--score', '--out', dir], { encoding: 'utf8', timeout: 60000, killSignal: 'SIGKILL' });
+    assertChildStatus(got, 0, 'edited model evidence was counted as a complete comparison', 'notEqual');
   } finally { rmSync(dir, { recursive: true, force: true }); }
 });
 
@@ -290,8 +292,8 @@ test('zsh plan and invalid invocation never create output or run a child benchma
   try {
     const command = new URL('../bench/validation/validate-140.command', import.meta.url).pathname;
     assert.ok(existsSync(command), 'validation command is missing');
-    const got = spawnSync('/bin/zsh', [command, '--plan', '--data', fixtureData, '--out', dir], { encoding: 'utf8' });
-    assert.equal(got.status, 0, got.stderr);
+    const got = spawnSync('/bin/zsh', [command, '--plan', '--data', fixtureData, '--out', dir], { encoding: 'utf8', timeout: 60000, killSignal: 'SIGKILL' });
+    assertChildStatus(got, 0, got.stderr);
     const plan = JSON.parse(got.stdout);
     assert.ok(plan.rounds.length >= 30);
     assert.equal(plan.live, false);
@@ -299,38 +301,39 @@ test('zsh plan and invalid invocation never create output or run a child benchma
       ['smoke-red', 'survey-p09', 'survey-p10', 'ao-moss-color', 'ao-cheapest-mug']);
     assert.deepEqual(plan.groups.find(g => g.id === 'race-safari').both.filter(t => t === 'demoid'), ['demoid']);
     assert.deepEqual(readdirSync(dir), []);
-    const bad = spawnSync('/bin/zsh', [command, '--b-build'], { encoding: 'utf8' });
-    assert.notEqual(bad.status, 0);
+    const bad = spawnSync('/bin/zsh', [command, '--b-build'], { encoding: 'utf8', timeout: 60000, killSignal: 'SIGKILL' });
+    assertChildStatus(bad, 0, undefined, 'notEqual');
     assert.deepEqual(readdirSync(dir), []);
   } finally { rmSync(dir, { recursive: true, force: true }); }
 });
 
-test('validation data precedence is explicit argument, environment, then the external default', async () => {
+test('validation data precedence is explicit argument, environment, then the neutral default', async () => {
   const { validationDataDir } = await import('../bench/validation/data.mjs');
   assert.equal(validationDataDir('/fixture/explicit', { SLEIGHT_VALIDATION_DATA: '/fixture/env' }), '/fixture/explicit');
   assert.equal(validationDataDir(undefined, { SLEIGHT_VALIDATION_DATA: '/fixture/env' }), '/fixture/env');
-  assert.equal(validationDataDir(undefined, {}), join(homedir(), 'Projects/sleight-wt/race-1017/validation-140'));
+  assert.equal(validationDataDir(undefined, {}), benchEvidencePath('race-1017/validation-140', {}));
+  assert.equal(validationDataDir(undefined, { SLEIGHT_BENCH_EVIDENCE_DIR: '/fixture/evidence' }), '/fixture/evidence/race-1017/validation-140');
   assert.equal(validationDataDir('~/fixture', {}), join(homedir(), 'fixture'));
 });
 
 test('planner reads only the selected data directory and refuses missing data or stale build pins', () => {
   const env = { ...process.env, SLEIGHT_VALIDATION_DATA: fixtureData };
-  let got = spawnSync(process.execPath, [moduleURL.pathname, '--plan'], { encoding: 'utf8', env });
-  assert.equal(got.status, 0, got.stderr);
+  let got = spawnSync(process.execPath, [moduleURL.pathname, '--plan'], { encoding: 'utf8', env, timeout: 60000, killSignal: 'SIGKILL' });
+  assertChildStatus(got, 0, got.stderr);
   const plan = JSON.parse(got.stdout);
   assert.equal(plan.groups.find(g => g.id === 'native').a[0], '~/fixture/native-r1.json');
-  assert.equal(plan.out, join(homedir(), 'Projects/sleight-wt/race-1017/validation-140-runs'));
+  assert.equal(plan.out, benchEvidencePath('race-1017/validation-140-runs'));
   got = spawnSync(process.execPath, [moduleURL.pathname, '--plan', '--data', fixtureData], {
     encoding: 'utf8', env: { ...env, SLEIGHT_VALIDATION_DATA: '/fixture/missing' },
-  });
-  assert.equal(got.status, 0, got.stderr);
-  got = spawnSync(process.execPath, [moduleURL.pathname, '--plan', '--data', '/fixture/missing'], { encoding: 'utf8', env });
-  assert.notEqual(got.status, 0, 'Missing selected data fell back to the private default');
-  got = spawnSync(process.execPath, [moduleURL.pathname, '--plan', '--b-build', 'stale'], { encoding: 'utf8', env });
-  assert.notEqual(got.status, 0);
+   timeout: 60000, killSignal: 'SIGKILL' });
+  assertChildStatus(got, 0, got.stderr);
+  got = spawnSync(process.execPath, [moduleURL.pathname, '--plan', '--data', '/fixture/missing'], { encoding: 'utf8', env, timeout: 60000, killSignal: 'SIGKILL' });
+  assertChildStatus(got, 0, 'Missing selected data fell back to the private default', 'notEqual');
+  got = spawnSync(process.execPath, [moduleURL.pathname, '--plan', '--b-build', 'stale'], { encoding: 'utf8', env, timeout: 60000, killSignal: 'SIGKILL' });
+  assertChildStatus(got, 0, undefined, 'notEqual');
   assert.match(got.stderr, /Audit B build differs/);
-  got = spawnSync(process.execPath, [moduleURL.pathname, '--data'], { encoding: 'utf8', env });
-  assert.notEqual(got.status, 0);
+  got = spawnSync(process.execPath, [moduleURL.pathname, '--data'], { encoding: 'utf8', env, timeout: 60000, killSignal: 'SIGKILL' });
+  assertChildStatus(got, 0, undefined, 'notEqual');
 });
 
 test('classification imports without reading private data and its CLI honors the selected directory', async () => {
@@ -338,8 +341,8 @@ test('classification imports without reading private data and its CLI honors the
   assert.equal(typeof (await import(classifier)).classify, 'function');
   const got = spawnSync(process.execPath, [classifier.pathname, '--data', '/fixture/classification-missing'], {
     encoding: 'utf8', env: { ...process.env, SLEIGHT_VALIDATION_DATA: fixtureData },
-  });
-  assert.notEqual(got.status, 0);
+   timeout: 60000, killSignal: 'SIGKILL' });
+  assertChildStatus(got, 0, undefined, 'notEqual');
   assert.match(got.stderr, /fixture\/classification-missing\/validation-140-a\.json/);
 });
 
@@ -455,15 +458,15 @@ test('deferred plan keeps every group and round, names deferrals, and estimates 
 
 test('plan CLI accepts explicit deferral and rejects empty, unknown, or conflicting selections', () => {
   const args = [moduleURL.pathname, '--plan', '--data', fixtureData];
-  const got = spawnSync(process.execPath, [...args, '--defer-groups', 'release-opus'], { encoding: 'utf8' });
-  assert.equal(got.status, 0, got.stderr);
+  const got = spawnSync(process.execPath, [...args, '--defer-groups', 'release-opus'], { encoding: 'utf8', timeout: 60000, killSignal: 'SIGKILL' });
+  assertChildStatus(got, 0, got.stderr);
   const plan = JSON.parse(got.stdout);
   assert.deepEqual(plan.deferredGroups, ['release-opus']);
   assert.equal(plan.rounds.filter(r => r.group === 'release-opus').length, 2);
   for (const flags of [['--defer-groups', 'typo'], ['--defer-groups', ','], ['--defer-groups', 'native,'],
     ['--only-groups', 'release-opus'], ['--defer-groups', 'native', '--only-groups', 'release-opus']]) {
-    const bad = spawnSync(process.execPath, [...args, ...flags], { encoding: 'utf8' });
-    assert.notEqual(bad.status, 0, flags.join(' '));
+    const bad = spawnSync(process.execPath, [...args, ...flags], { encoding: 'utf8', timeout: 60000, killSignal: 'SIGKILL' });
+    assertChildStatus(bad, 0, flags.join(' '), 'notEqual');
   }
 });
 
@@ -668,8 +671,8 @@ test('resume archive refuses symlink banks and never moves finished evidence', a
 
 test('resume CLI rejects ambiguous or incomplete requests without starting validation', () => {
   for (const flags of [['--resume'], ['--plan', '--resume'], ['--score', '--resume'], ['--resume', '--out', '/fixture/missing']]) {
-    const got = spawnSync(process.execPath, [moduleURL.pathname, ...flags], { encoding: 'utf8' });
-    assert.notEqual(got.status, 0);
+    const got = spawnSync(process.execPath, [moduleURL.pathname, ...flags], { encoding: 'utf8', timeout: 60000, killSignal: 'SIGKILL' });
+    assertChildStatus(got, 0, undefined, 'notEqual');
     assert.match(got.stderr, /--resume requires|--run requires/);
   }
 });

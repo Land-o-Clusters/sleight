@@ -1,0 +1,248 @@
+{
+  "schema": "sleight.typing-focus-regression/1",
+  "windowsBuild": 26300,
+  "kitCommit": "0974f8b115987f62de1eb2c1f37ca1858c739919",
+  "kitManifestSha256": "2909bab5364f0d7df841bab63e50b282935d51bcfe2c5aa8542c8f24dcb7f24f",
+  "notepad": {
+    "version": "11.2607.14.0",
+    "native": [
+      {
+        "guiOk": true,
+        "focus": "23134538",
+        "active": "28901522",
+        "thread": 9648,
+        "className": "Notepad",
+        "hwnd": "28901522"
+      },
+      {
+        "guiOk": true,
+        "focus": "23134538",
+        "active": "28901522",
+        "thread": 9648,
+        "className": "Microsoft.UI.Content.DesktopChildSiteBridge",
+        "hwnd": "24118364"
+      },
+      {
+        "guiOk": true,
+        "focus": "23134538",
+        "active": "28901522",
+        "thread": 9648,
+        "className": "InputSiteWindowClass",
+        "hwnd": "11666594"
+      },
+      {
+        "guiOk": true,
+        "focus": "23134538",
+        "active": "28901522",
+        "thread": 9648,
+        "className": "Microsoft.UI.Content.DesktopChildSiteBridge",
+        "hwnd": "16254150"
+      },
+      {
+        "guiOk": true,
+        "focus": "23134538",
+        "active": "28901522",
+        "thread": 9648,
+        "className": "InputSiteWindowClass",
+        "hwnd": "7734428"
+      },
+      {
+        "guiOk": true,
+        "focus": "23134538",
+        "active": "28901522",
+        "thread": 9648,
+        "className": "InputNonClientPointerSource",
+        "hwnd": "4915960"
+      },
+      {
+        "guiOk": true,
+        "focus": "23134538",
+        "active": "28901522",
+        "thread": 8684,
+        "className": "NotepadTextBox",
+        "hwnd": "8520878"
+      },
+      {
+        "guiOk": true,
+        "focus": "23134538",
+        "active": "28901522",
+        "thread": 8684,
+        "className": "RichEditD2DPT",
+        "hwnd": "23134538"
+      },
+      {
+        "guiOk": true,
+        "focus": "23134538",
+        "active": "28901522",
+        "thread": 9648,
+        "className": "Microsoft.UI.Content.DesktopChildSiteBridge",
+        "hwnd": "18088084"
+      },
+      {
+        "guiOk": true,
+        "focus": "23134538",
+        "active": "28901522",
+        "thread": 9648,
+        "className": "InputSiteWindowClass",
+        "hwnd": "7734476"
+      },
+      {
+        "guiOk": true,
+        "focus": "23134538",
+        "active": "28901522",
+        "thread": 9648,
+        "className": "Microsoft.UI.Content.DesktopChildSiteBridge",
+        "hwnd": "25034884"
+      },
+      {
+        "guiOk": true,
+        "focus": "23134538",
+        "active": "28901522",
+        "thread": 9648,
+        "className": "InputSiteWindowClass",
+        "hwnd": "26411578"
+      },
+      {
+        "guiOk": true,
+        "focus": "23134538",
+        "active": "28901522",
+        "thread": 9648,
+        "className": "Microsoft.UI.Content.DesktopChildSiteBridge",
+        "hwnd": "17826608"
+      },
+      {
+        "guiOk": true,
+        "focus": "23134538",
+        "active": "28901522",
+        "thread": 9648,
+        "className": "InputSiteWindowClass",
+        "hwnd": "13042790"
+      }
+    ],
+    "focused": [
+      {
+        "patterns": [
+          "ValuePatternIdentifiers.Pattern",
+          "TextPatternIdentifiers.Pattern"
+        ],
+        "hwnd": 23134538,
+        "depth": 2,
+        "type": 50030,
+        "className": "RichEditD2DPT",
+        "enabled": true,
+        "focused": true,
+        "password": false
+      },
+      {
+        "patterns": [],
+        "hwnd": 7734476,
+        "depth": 2,
+        "type": 50033,
+        "className": "InputSiteWindowClass",
+        "enabled": true,
+        "focused": true,
+        "password": false
+      },
+      {
+        "patterns": [],
+        "hwnd": 26411578,
+        "depth": 2,
+        "type": 50033,
+        "className": "InputSiteWindowClass",
+        "enabled": true,
+        "focused": true,
+        "password": false
+      },
+      {
+        "patterns": [],
+        "hwnd": 13042790,
+        "depth": 2,
+        "type": 50033,
+        "className": "InputSiteWindowClass",
+        "enabled": false,
+        "focused": true,
+        "password": false
+      }
+    ],
+    "driver": {
+      "focusedElement": null,
+      "partialTree": false,
+      "focusedRows": [
+        {
+          "depth": 2,
+          "index": 2,
+          "role": "text entry area"
+        },
+        {
+          "depth": 2,
+          "index": 4,
+          "role": "group"
+        },
+        {
+          "depth": 2,
+          "index": 12,
+          "role": "group"
+        },
+        {
+          "depth": 2,
+          "index": 30,
+          "role": "group"
+        }
+      ]
+    }
+  },
+  "wpf": {
+    "native": [
+      {
+        "guiOk": true,
+        "focus": "9110694",
+        "active": "9110694",
+        "thread": 11636,
+        "className": "HwndWrapper[receiver.exe;;85124bcd-b1da-4086-9881-dd1a2198017e]",
+        "hwnd": "9110694"
+      }
+    ],
+    "controls": [
+      {
+        "patterns": [
+          "WindowPatternIdentifiers.Pattern",
+          "TransformPatternIdentifiers.Pattern",
+          "SynchronizedInputPatternIdentifiers.Pattern"
+        ],
+        "hwnd": 9110694,
+        "depth": 0,
+        "type": 50032,
+        "className": "Window",
+        "enabled": true,
+        "focused": true,
+        "password": false
+      },
+      {
+        "patterns": [
+          "ValuePatternIdentifiers.Pattern",
+          "ScrollPatternIdentifiers.Pattern",
+          "TextPatternIdentifiers.Pattern",
+          "SynchronizedInputPatternIdentifiers.Pattern"
+        ],
+        "hwnd": 0,
+        "depth": 1,
+        "type": 50004,
+        "className": "TextBox",
+        "enabled": true,
+        "focused": false,
+        "password": false
+      }
+    ],
+    "driver": {
+      "focusedElement": 0,
+      "partialTree": false,
+      "focusedRows": [
+        {
+          "depth": 0,
+          "index": 0,
+          "role": "standard window"
+        }
+      ]
+    }
+  }
+}

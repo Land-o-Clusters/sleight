@@ -1,3 +1,4 @@
+import { platformPaths, platformJoin } from './platform/paths.mjs';
 import { closeSync, constants, fstatSync, lstatSync, mkdirSync, openSync, readSync, renameSync, rmSync, writeFileSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { dirname, join } from 'node:path';
@@ -39,7 +40,8 @@ export function firstClientCallRefresh(cache, { delayMs = 60000 } = {}) {
 
 // Cache only the inventory outcome, never browser profiles, tabs or approvals. Refresh every
 // automatic session, but keep its initial description fixed until the next session.
-export function createSurfaceCache(server, { file = join(homedir(), 'Library/Caches/sleight/extensions.json'),
+// macOS default: ~/Library/Caches/sleight/extensions.json (the platform cache directory).
+export function createSurfaceCache(server, { file = platformJoin()(platformPaths({ home: process.platform === 'win32' ? undefined : homedir() }).cache, 'extensions.json'),
   now = Date.now, discover = discoverExtensions } = {}) {
   const engine = createHash('sha256').update(JSON.stringify([server.version, server.command, server.args])).digest('hex');
   let cached;

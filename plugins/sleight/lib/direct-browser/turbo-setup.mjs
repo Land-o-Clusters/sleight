@@ -2,6 +2,7 @@
 // launcher calls ensureTurboConfig at startup. `sleight-mcp turbo on|off|status` and the doctor section use the
 // rest. The file's format and checks belong to installed-config.mjs and session-host.mjs, and this module builds
 // the file from their constants and then proves it with their own readers before and after writing.
+import { observeSettingsFile, readSettingsBytes } from '../sealed-settings.mjs';
 import { closeSync, constants, existsSync, fchmodSync, fsyncSync, lstatSync, mkdirSync, openSync, readFileSync, realpathSync,
   renameSync, unlinkSync, writeSync } from 'node:fs';
 import { randomBytes } from 'node:crypto';
@@ -9,7 +10,7 @@ import { userInfo } from 'node:os';
 import { basename, dirname, isAbsolute, join, normalize } from 'node:path';
 import { INSTALLED_ENTRIES, INSTALLED_PLUGIN_ROOT, acceptedInstalledPackage, installedConfigPath, readInstalledConfig,
   readInstalledConfigFile, sha256Hex, validateEnabledConfig } from './installed-config.mjs';
-import { packageFiles } from './session-host.mjs';
+import { createPackageInventory, packageFiles } from './session-host.mjs';
 import { nativeHelpersBuilt } from './host.mjs';
 import { browserChoices, browserDefinitions, qualifiedBrowserNames } from './browsers.mjs';
 import { signedBrowserAt, verifiedOnDisk, writeClass } from './executable-trust.mjs';
@@ -171,10 +172,11 @@ export function compareVersions(a, b) {
 /** The sidecar, under the same checks as turbo.json. Anything missing or off reads as no owner, which keeps today's rewrite. */
 export function readOwner(configPath, uid = process.getuid()) {
   const path = ownerPath(configPath);
+  observeSettingsFile(path);
   try {
     const stat = lstatSync(path);
     if (!stat.isFile() || stat.isSymbolicLink() || realpathSync(path) !== path || stat.uid !== uid || (stat.mode & 0o777) !== 0o600 || stat.size > 8192) return undefined;
-    const data = JSON.parse(readFileSync(path, 'utf8'));
+    const data = JSON.parse(readSettingsBytes(path));
     if (!data || typeof data !== 'object' || Array.isArray(data) || Object.keys(data).sort().join() !== OWNER_KEYS.join() || data.version !== 1 ||
         data.sleight !== null && !(typeof data.sleight === 'string' && VERSION_TEXT.test(data.sleight)) || typeof data.pluginRoot !== 'string' ||
         data.pluginRoot.length > MAX_ROOT_LENGTH || !isAbsolute(data.pluginRoot) ||
@@ -197,7 +199,7 @@ function writeOwner(configPath, pluginRoot, uid) {
 const OWNER_UNWRITTEN = 'The turbo-owner.json note that keeps another copy of sleight from rewriting this receipt could not be saved, so a second copy on this Mac may rewrite it at its own start.';
 
 /** The copy that issued turbo.json's receipt, when that is another copy still installed and unchanged: the sidecar matches
- *  the file's bytes and the receipt still validates against that copy's folder. The newer copy wins: an owner with a lower
+ *  the file's bytes and the inventory still matches that copy's folder. The newer copy wins: an owner with a lower
  *  plugin.json version than this copy never counts, so an update takes the receipt over even when Claude Code's .orphaned_at
  *  marker on the old version folder is missing. Same or higher version, or a version that can't be compared, leaves it,
  *  unless that marker is there (a hint that only ever hands the receipt over, never withholds it). */
@@ -205,12 +207,19 @@ export function liveOtherOwner({ configPath, pluginRoot, data, uid = process.get
   const owner = readOwner(configPath, uid);
   if (!owner || owner.pluginRoot === pluginRoot) return undefined;
   try {
-    if (sha256Hex(readFileSync(configPath)) !== owner.sha256) return undefined;
+    if (sha256Hex(readSettingsBytes(configPath, () => readFileSync(configPath))) !== owner.sha256) return undefined;
     const order = compareVersions(pluginVersion(owner.pluginRoot) ?? owner.sleight, pluginVersion(pluginRoot));
     if (order !== null && order < 0 || existsSync(join(owner.pluginRoot, '.orphaned_at'))) return undefined;
-    acceptedInstalledPackage(data, { pluginRoot: owner.pluginRoot });
-    return owner;
-  } catch { return undefined; }
+    // Absence permits handover even if this validator cannot read the owner's receipt format.
+    try { lstatSync(owner.pluginRoot); } catch (error) { return error.code === 'ENOENT' ? undefined : owner; }
+    let inventory;
+    try {
+      // Ownership is independent of the Node runtime that issued the receipt. This copy still uses the
+      // unmodified strict validator before loading or writing any config; this inventory only prevents a write.
+      inventory = createPackageInventory({ root: owner.pluginRoot, receipt: { ...data?.receipt, node: process.version } });
+    } catch { return owner; } // An unfamiliar receipt is not evidence that its installed owner changed.
+    return inventory.current() ? owner : undefined;
+  } catch { return owner; }
 }
 
 const shellWord = text => /^[\w@%+=:,./-]+$/.test(text) ? text : `'${text.replaceAll("'", "'\\''")}'`;
@@ -251,7 +260,7 @@ export function ensureTurboConfig({ configPath = installedConfigPath(), pluginRo
     if (seen.state === 'opted-out') return done({ action: 'skipped', state: 'opted-out' });
     if (seen.state === 'unsafe') return done({ action: 'skipped', state: 'unsafe',
       message: 'turbo.json is not safe to read (a link, or another owner or mode), so turbo stays off. Delete it and run sleight-mcp turbo on.' });
-    if (seen.reason === 'package-changed') {
+    if (seen.state === 'stale') {
       const owner = liveOtherOwner({ configPath, pluginRoot, data: seen.data, uid });
       if (owner) return done({ action: 'skipped', state: 'stale', reason: 'RECEIPT_FOR_OTHER_PACKAGE', owner: owner.pluginRoot,
         message: otherOwnerMessage(owner, pluginRoot, browserIdFor(seen.data, home, apps)) });
@@ -286,7 +295,7 @@ export function turboDiagnosis({ configPath = installedConfigPath(), pluginRoot 
   const helpers = seen.state === 'current' ? nativeHelpersBuilt({ inventory: seen.data.receipt, ...(helperCache ? { cacheRoot: helperCache } : {}) }) : undefined;
   const problem = browser ? executableProblem(browser.executable) : undefined;
   const found = browser ? undefined : detectBrowser({ home, apps });
-  const owner = seen.reason === 'package-changed' ? liveOtherOwner({ configPath, pluginRoot, data: seen.data }) : undefined;
+  const owner = seen.state === 'stale' ? liveOtherOwner({ configPath, pluginRoot, data: seen.data }) : undefined;
   return { state: seen.state, reason: owner ? 'RECEIPT_FOR_OTHER_PACKAGE' : seen.reason, enabled: seen.state === 'current', browser, browsers,
     executableProblem: problem, port, helpers, detected: found, owner: owner && { ...owner, move: moveCommand(pluginRoot, browser?.id) } };
 }

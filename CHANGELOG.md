@@ -1,5 +1,226 @@
 # Changelog
 
+## 1.6.1 (2026-11-13)
+
+In Claude Code, 1.6.0 refused every Bash command and every Write or Edit whose path did not exist yet, such as
+`echo x > /tmp/new`, `mkdir -p /tmp/newdir` or a new file, with "sleight cannot resolve this protected path". `2>&1`
+was refused too, because the guard read `&1` as a file named `1`. Claude Code's file check rejects a missing path with
+an error whose only mention of ENOENT is in its message, and the guard read that as unknown metadata. It now
+recognizes that error as a missing path and skips descriptor redirections such as `2>&1`. Writes to sleight's
+settings, install and approval files are still refused, and so are dangling links and every other file error.
+
+One file check slower than 100 ms also made every later check in that command unknown. Each check now has 750 ms and
+each command 2.5 s (the host answered in under 2 ms at load 23), and a check that runs out refuses only that command.
+The guard now also counts `<>` and zsh's `>!`, `>>|`, `>&|` and related forms as writes, and refuses a redirection
+run into an operator the guard doesn't know, such as `>!|sh`.
+
+The guard now reads quoting, comments, `$(...)`, backticks and heredoc bodies with one tokenizer. Before, an apostrophe
+in an unquoted heredoc body, an ANSI-C `$'...'` quote or a `#` glued to `$(...)` could hide a later write to sleight's
+settings, as it could in 1.5.2. Piping unknown input into `sh` with a redirection after it, such as `| sh 2>&1`, and
+`eval` of a pipe into `sh` are refused. Ordinary multi-line commands, `eval "$(tool init)"`, arithmetic shifts such as
+`$((1<<3))` and quoted commit-message heredocs stay allowed. A `git commit` or `gh pr create` message holding a word
+such as `cursor`, `link` or `record` beside `$(...)` is no longer refused, as it was in 1.5.2.
+
+## 1.6.0 (2026-11-12)
+
+- sleight connects to Claude Code before building turbo's helpers for the first browser request.
+- sleight starts again after the Codex update that moved the ChatGPT engine into the ChatGPT app. Codex now leaves a
+  disabled entry in its plugin cache whose command is a bare `node` with no arguments, and sleight stopped at startup
+  with "server runtime missing: node". A cached entry that is disabled, or whose command is a bare name rather than a
+  path, now falls back to the engine bundled in the ChatGPT app.
+- The ChatGPT engine 26.1103.41825 gave its `js` tool a schema that accepts either code or a completion summary.
+  Claude Code 2.1.289 drops a tool whose schema starts with `oneOf`, so the model had no `js` tool. sleight now lists `js` with
+  both fields optional, and a call that mixes the two is sent in its code form. A call with neither gets a short error
+  from sleight. The ChatGPT engine still checks every call against its own schema.
+- The preapproved apps list accepts the `launchTeam` field that 2.0 builds record and grants nothing from it, so a
+  list a 2.0 build wrote no longer makes every app ask. A `launchTeam` of another type or shape still rejects the list.
+- Require Claude Code's mod attribution for typed app approvals and trusted user-turn bindings.
+- JXA approval panels now offer session-only app approvals. They reject Always replies, and tool calls refuse their
+  tracked process IDs. Change review uses client forms and remains pending without form support.
+- The Claude Code pane validates snapshot frames against a per-call token and bounds their dimensions and payloads.
+  App attribution accepts relay notices before a matching window header. Pane text and toasts strip display controls.
+
+### Mac runtime preview
+
+- The Glide engine's first result prints one copy of the window tree instead of three (Calculator: 54.3 KB to 18.8 KB).
+  A control that moved to a new number binds when the rows before it, its ancestors and any dialog are unchanged.
+  A click on a menu item presses it by its title path without opening menus. A click on a menu title refuses and points
+  to the menu compound. Apple-menu and session commands such as Shut Down need the user's request.
+- The Glide engine starts building its helper when the server starts, and a call made during the build waits for it
+  instead of timing out. Action results contain the lines that changed since the last full tree. A cell with several
+  actions lists what each one did (sent, partly sent, refused or unknown). Reads collapse the Apple menu and every
+  submenu, so the model is not sent recent file names.
+- `SLEIGHT_RUNTIME=own` opts into the Glide engine preview through MCP. The ChatGPT engine stays the default.
+  Reads use a persistent Swift helper and JavaScript worker. Without ChatGPT, Node 25 or later and Xcode command-line
+  tools are required. The installed preview enables input through a validated parent capability. Doctor prepares the
+  helper and reports its host's Accessibility and Screen Recording grants without requesting them or taking screenshots.
+- App, process-start and window identity bind native reads and input admission. Element numbers require a tree delivered
+  to the model. Structured document text appears beside that tree, within a 4,000 UTF-16-unit cap, outside logs and drag evidence.
+- In the Glide engine, window guards refuse off-Space, minimized, hidden, unverified and partial full-screen windows.
+  Clipboard guards refuse identified Copy/Cut routes, even requested Copy, and report change count without reading or restoring contents.
+  Native picker and form/drag helpers inspect each step through parent policy and pause checks. Save preparation stops before Save.
+- Failures retain delivery and retry guidance. A lost visual event clears the hand without replaying input.
+  Renderer recovery leaves saved attributes alone. Same-read cleanup checks its own enable.
+- MCP initialization and tool discovery respond before helper compilation. Calls share one preparation and charge its
+  wait to their timeout. A preparation failure keeps discovery available and reports its cause until the server restarts.
+- When the relay's Node lacks the worker's permission flags, the Glide engine selects an installed Node 25 or later.
+  It rechecks the executable before each worker fork. Doctor reports refused candidates. Selection has a 6 s total budget.
+- The Glide engine classifies process ancestry and window safety metadata before access. It honors saved app grants
+  for the exact bundle ID at any stored risk ceiling after policy passes without a warning. Terminals and OpenAI apps
+  remain refused even when the ChatGPT engine's forbidden-target override is set.
+- App and window listings remain available when another window has no matching accessibility tree. Failed host
+  ancestry lookups can retry, while acquiring an unverified window still refuses before reading its content.
+- App acquisition prefers a verified standard window over a dialog and no longer fails identity checks on valid
+  native numeric bounds. Identity and focus refusals specify the failed check with a fixed `step=` field.
+- Typing yields between complete strokes within the 400 ms activation interval. Focus reads allow up to 100 ms within
+  the remaining budgets, and clear-focus timeouts retry within 150 ms. Partial failures retain the delivered character count.
+- Typing and a save shortcut can share one JavaScript cell without an extra read to repair the handle. TextEdit typed
+  and saved the exact line in 3 of 3 live runs. Password-manager access refused in all 3. Later failures distinguish
+  an unsent action from earlier completed input.
+- Menu-item label and enabled-state updates after typing allow the next action. Changed menu roots, selection gains,
+  sheets, dialogs, alerts, popovers and floating windows stop input. Routine menu-bar titles keep their compact form.
+
+### Windows preview
+
+- Windows has its own UI Automation driver and JavaScript worker, with app approval and identity checks outside the worker.
+  It reads running windows, tries control patterns and uses posted messages for supported background input, with no
+  foreground fallback. Windows Hello or the account password protects high-stakes settings (untested on Windows).
+- Paste sends at most 4,000 UTF-16 units to a proved writable native Edit or RichEdit control without using the clipboard.
+  Ambiguous hits and unsupported modifier chords refuse. Capture has PrintWindow, Windows.Graphics.Capture and BitBlt
+  fallbacks. One live run in a Windows 11 ARM64 virtual machine passed 5 of 5 unattended checks, covering Notepad
+  type/save and Explorer read, refusals of Edge by name and a terminal, and a declined approval. Physical Escape and
+  concurrent typing need a person at the machine and haven't run. Speed is unmeasured.
+- Windows browser turbo remains unavailable until peer verification and trusted consent are connected. Windows uses
+  its own skill, separate from the Mac skill.
+- The consent card compiles with Windows' in-box C# 5 compiler. Browser names, executable names and AUMIDs return
+  `BROWSER_TARGET_REFUSED`. Title-only guesses retain `WINDOW_NOT_FOUND`.
+- Owned popups with an empty desktop ID can use a verified same-process owner's current desktop. An unpackaged
+  Explorer process with a hidden CoreWindow can pass normal admission. Packaged frame hosts remain refused.
+- Identity errors report a fixed probe step. Lease-helper errors distinguish timeout, exit, spawn and reply failures.
+  The first gate request gets 30 s for cold startup, and later requests get 10 s.
+
+### Native tools and browsers
+
+- Native leases bind WindowServer identity with a 600 ms input check. A replaced window needs fresh proof on reread.
+  Menu choices invalidate numbers. Quit shortcuts require a request, including Hyper and held modifiers.
+  Drag cleanup retries Shift release once and preserves an uncertain drop outcome.
+- The ChatGPT engine's typeText refuses non-ASCII text after 9/9 garbled trials, with paste guidance or a reread for unknown focus.
+  Typing checks share a 3 s settle budget per call. Guard-only reads skip typing verification.
+- Firefox root-container focus evidence follows 3/3 background-click trials. Secure roles, sensitive labels and modals
+  keep the refusal. Guidance reuses handles until an app switch. Experimental form/first-window guidance stays off.
+- Safari multiline tree trimming keeps labels intact and revokes hidden numbers, including duplicated numbers. Offline
+  replay fits 6/6 saved overflows. Live savings are unmeasured. Deferred docs wait through failures. Save receipts distinguish saved files from verified text.
+- Turbo ref drags send intermediate moves, stay inside the viewport and check release. Motion captures sample short
+  animation phases. Viewport reset waits for native layout. Whole-thread reads retain partial warnings when content
+  may be missing. Page callback inspection uses parser scopes and refuses unproved indirect evaluation.
+- Native browser guidance shows address-bar `setValue` followed by `app.pressKey("Return")` in one call, with no element
+  or `null` argument to the key call. One five-task Safari smoke run passed 5 of 5 with 0 invalid key calls, against 6 in the run before
+  it, which ran with different windows covering Safari.
+- Filtered native reads use the JavaScript parser to prove that a changed-window exception doesn't send input. Pure
+  parenthesized reads and screenshot-state filtering remain supported. Unknown calls retain the stale-window refusal.
+- Site limits use URL and web-area evidence from the current window subtree. Conflicting evidence or an expired
+  consent cannot prove a site. On the ChatGPT engine path, site-limited browser input without a window URL asks before
+  proceeding. Answers expire after observed process, URL/title or permission changes.
+- Cookie-wall checks reject conflicting numbered rows, retain identical selected-row echoes and read sparse trees
+  within their window section. After a decline, results report observed wall closure without claiming a cookie-storage check.
+- A native alert with no cookie or consent wording in its own dialog is no longer refused as an unverifiable cookie wall.
+  Word's "already open elsewhere" alert had been refused twice in one run. Consent wording inside the dialog, a web
+  dialog, or a failed reread with earlier consent evidence still stops input.
+- Payment checks keep grouped figures together, use the larger reading for an ambiguous page amount and the smaller
+  reading for a bare user amount. Unreadable magnitudes ask. Currency prefixes and percentages cannot hide larger charges.
+- With `SLEIGHT_CONFIRM_PAYMENTS=never`, an ambiguous user amount still asks once on native and turbo paths.
+  Unambiguous native amounts retain cent rounding. Turbo retains exact trusted-term matching.
+- Turbo refuses Enter, Space and paste through hooks installed into already loaded pages, popups, frames and reused
+  named windows until navigation. It reports the refusal without waiting for the full timeout. Script, focus, link
+  and parent inspection uses captured DOM getters.
+- A second sleight copy keeps turbo off while its receipt belongs to another unchanged copy, including across Node versions
+  or an unfamiliar receipt format. Explicit `turbo on` can transfer ownership.
+- Saved-file actions recognize the new identity diagnostics and retain their guarded fallback for unavailable metadata.
+  Confirmed identity mismatches still stop before writing.
+
+### Settings guard and helpers
+
+- The settings shell guard closes protected-path parsing gaps and accepts ordinary relative outputs after unknown
+  directory changes. An earlier fixture run wrongly refused 2 of 455 ordinary commands and allowed 451 of 3,907 bypass
+  commands. The bypass count after later fixes is unmeasured. The guard remains
+  a best-effort command-text barrier beside person-only settings confirmation.
+- Verified helper builds survive marker failures. Cache cleanup keeps current builds, the newest 2, running helpers
+  and builds used within 24 h. Last-use refresh runs at most hourly. Debug-log failures no longer fail lifecycle cleanup.
+  Compatibility checks accept split docs and retry failed builds after a sleight update.
+- Permission confirmations distinguish discarding saved permissions from lifting a site limit. Site selection and
+  unblocking a site also have their own reasons. Limited-site cards bind the full count. Terminal notices show up to
+  8 origins and the number omitted.
+- Launcher replay and recording require a person's local terminal session started at least 10 s earlier. They also ask for Touch ID,
+  Windows Hello or the account password. Claude's shell is directed to the current session's replay tool.
+- The mod's Record action converts saved transcripts through a separate helper that cannot start live driving.
+  Stopped replay handoffs omit the saved window listing and return a labelled error summary capped at 300 characters.
+- The Claude Code write guard covers bundled ChatGPT engine files, scheduled routines and watches, and Windows
+  settings paths. Preapproval and permission readers refuse hard links, including links added after a cached read.
+- The driving-turn shell fence also covers local app tools, native handoffs, browser-tab calls and, in offline tests only, Monitor.
+  Headless browsers need explicit profile isolation flags and a path outside known default profiles. Symlink resolution
+  and directory emptiness remain unchecked.
+- Review previews escape controls used for display and indent untrusted text. Title and path fields cap at 256 bytes,
+  and diffs at 32 KiB with an omitted-line count. Undo verifies snapshot content and preserves changed parked documents.
+- Launcher traces use private 0700 directories and new 0600 files. Unsafe paths disable optional tracing while startup
+  continues.
+- Mac startup expires clipboard snapshots from another boot or older than 10 minutes, including legacy snapshots,
+  without restoring them. A busy paste reservation leaves them untouched.
+- JavaScript errors and refusals settle on older Node REPL contracts instead of waiting for a cell timeout.
+  Errors from an ended cell cannot reject a later cell.
+
+### Characters and stage mode
+
+- Mabel, Biscuit, Rudy, Mo, Dennis, Nana and Hal join the six original MIT characters. The picker groups characters
+  under Everyday and Anime. Their new IDs are reserved. Older imports stay on disk but need a new ID before reimport.
+- Character Size accepts small, medium, stage or a custom height from 104 to 560 pt. Medium is the default; small and
+  stage are opt-in, and saved sizes are preserved. Stage uses 36% of usable display height, clamped to 288 to 480 pt,
+  and shrinks to medium while the person works in another window.
+- Built-ins render their strips for stage on first use without a download, showing medium art while rendering or after failure.
+  The private cache is validated before reuse. Imported packs without stage art stay at medium.
+- Format v1.1 accepts 21 stage states with sandboxed strip validation, lazy decoding and a 24 MiB decoded cache.
+- A nonempty cast allocates the least-used character per session and keeps it through cursor-host restarts. Shared
+  characters have distinct letter badges. One session per display may draw at stage size.
+- Medium and stage characters follow `hand capture visible` like small ones, so your recordings can show them. Hidden,
+  the default, still keeps every size out of captures.
+- Drag the 16 pt badge to point at a window. sleight pauses during the drag, preserves an existing pause and sends one
+  title-free hint in the next tool result. Hints expire after 60 s, with at least 2 s between deliveries.
+- Approval, payment, page-wait, retry and transfer cues use closed fields without page or clipboard text. Window chips
+  count completed action records and can open a recorded replay on a hardware click. Chips redraw after capture holds,
+  unlock and display wake, without waiting for another action, and keep their 10-minute turn-end expiry.
+- Repeated actions replay their character reactions after the previous reaction parks. Unchanged paused and sleep
+  poses keep their installed animation and clock. Paused geometry checks slow to 2 s once motion parks.
+- Microphone observation waits for Core Audio changes, with a 30 s safety census and listener rebuild after sleep or
+  service restart. Only a successful active-input reading hides the character. Real microphone notification delivery
+  remains unmeasured. Silent playback process-list delivery passed 20 of 20 starts within 250 ms.
+- Panels for characters omit transparent margins while retaining logical seating and protection. Offline bitmap comparison
+  found 0 differences in 14,688 cases. Panel relocation hides old art before changing the frame. Decoder cleanup waits
+  for a child-exit event while retaining its deadlines.
+- Window-edge corrections of at most 2 pt reposition the character, badge and bubble without restarting animation.
+  The correction stays within the last full placement's anchor. Larger moves keep hide/return behavior, and target-area
+  protection retains its 0.01 pt check. A covered window no longer adds a second movement wait before return.
+- The character memory limit is 160 MiB for the whole process tree, including the microphone worker. Recorded peaks
+  were about 119 MiB at small, 151 to 158 MiB at medium and 149 to 150 MiB at stage. These include the cost fixture.
+
+### Handoff and worker cleanup
+
+- Local tools recheck browser handoff before each new helper. A refused drag skips input release and focus restoration;
+  an already-running helper returns its real result. Started drags retain cleanup after unknown termination.
+- Lost turbo workers get bounded close, TERM and KILL attempts while their spawned process identity matches.
+  Missing identity leaves cleanup and card dismissal unproved.
+
+### Qualification still pending
+
+- The Glide engine has 3 of 3 TextEdit type/save checks, with full runtime qualification, physical Stop, locked sessions,
+  Space behavior and renderer recovery still pending. There is no measured parity or speed claim against the ChatGPT
+  engine. Windows' 5-check run leaves its physical-input sitting and complete native qualification pending.
+- Front-sit is off. The character's added WindowServer CPU is over the 3-point limit at every size while content
+  behind it changes, and for small on a quiet screen. On a quiet screen,
+  medium added 0.6 to 1.2 points, stage 0.4 to 1.3 and small 7.7 to 9.1. While content behind it changed, medium added
+  3.33 to 3.77, stage 3.27 to 3.59 and small 3.28 to 3.69. Medium is the default. Small and stage are opt-in.
+  Badge dragging, hardware menu selection, stage screenshot exclusion and frame pacing still need qualification.
+- The release A/B against 1.5.1 ran first rounds only. AS-3 Safari missed its gate in one bank and native in
+  another. The full record is in [Validation](docs/results/validation.md).
+
 ## 1.5.2 (2026-11-11)
 
 - sleight starts again after the Codex update of 2026-11-10 that moved the ChatGPT engine into the ChatGPT app. Codex now

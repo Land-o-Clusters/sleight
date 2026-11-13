@@ -1,3 +1,4 @@
+import { assertChildStatus } from './fixtures/child-status.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import * as fs from 'node:fs';
@@ -18,8 +19,8 @@ function build(t) {
   const bank = trackTemp(fs.realpathSync(fs.mkdtempSync(join(tmpdir(), 'sleight-sharing-native-')))); binary = join(bank, 'host');
   const source = new URL('../plugins/sleight/lib/direct-browser/native/consent-host.swift', import.meta.url);
   assert.match(fs.readFileSync(source, 'utf8'), /if arguments.first == "--check-character"/);
-  const result = spawnSync('/usr/bin/xcrun', ['swiftc', '-module-cache-path', join(bank, 'module-cache'), source.pathname, '-o', binary], { encoding: 'utf8', timeout: 300000 });
-  assert.equal(result.status, 0, result.stderr); t.diagnostic(`binaryBytes=${fs.statSync(binary).size}`); return binary;
+  const result = spawnSync('/usr/bin/xcrun', ['swiftc', '-module-cache-path', join(bank, 'module-cache'), source.pathname, '-o', binary], { encoding: 'utf8', timeout: 600000, killSignal: 'SIGKILL' });
+  assertChildStatus(result, 0, result.stderr); t.diagnostic(`binaryBytes=${fs.statSync(binary).size}`); return binary;
 }
 const mac = { skip: process.platform !== 'darwin' && 'requires macOS sandboxed image decoder' };
 const example = new URL('../examples/character-marketplace/plugins/example-bit/sleight-characters/example-bit/', import.meta.url);
@@ -31,8 +32,8 @@ test('plugin group rows with warnings pass the actual native menu parser in dump
       skipped: [{ id: 'bit', reason: 'built-in character id is reserved' }] },
       { pluginId: 'Claude plugins', reason: 'plugins folder resolves outside the user home', packs: [] }], installed: [{ id: 'done', name: 'x'.repeat(48) + '🐭', builtin: true }] });
     const result = spawnSync(build(t), ['--cursor-menu-dump'], { input: JSON.stringify({ hand: 'picker', nonce: 'a'.repeat(64), op: 'catalog', rows }) + '\n',
-      encoding: 'utf8', timeout: 30000 });
-    assert.equal(result.status, 0, result.stderr); assert.deepEqual(JSON.parse(result.stdout).rows, rows);
+      encoding: 'utf8', timeout: 30000, killSignal: 'SIGKILL' });
+    assertChildStatus(result, 0, result.stderr); assert.deepEqual(JSON.parse(result.stdout).rows, rows);
   }
 });
 
@@ -41,8 +42,8 @@ test('native menu parser refuses malformed skipped rows without drawing UI', mac
   for (const malformed of [{ ...row, key: 'b'.repeat(64) }, { ...row, reason: 'bad\u202ereason' },
     { ...row, reason: 'x'.repeat(1001) }, { ...row, title: 'x'.repeat(61) }]) {
     const result = spawnSync(build(t), ['--cursor-menu-dump'], { input: JSON.stringify({ hand: 'picker', nonce: 'a'.repeat(64),
-      op: 'catalog', rows: [{ title: 'Plugin', children: [malformed] }] }) + '\n', encoding: 'utf8', timeout: 30000 });
-    assert.equal(result.status, 65, JSON.stringify({ malformed, stdout: result.stdout, stderr: result.stderr }));
+      op: 'catalog', rows: [{ title: 'Plugin', children: [malformed] }] }) + '\n', encoding: 'utf8', timeout: 30000, killSignal: 'SIGKILL' });
+    assertChildStatus(result, 65, JSON.stringify({ malformed, stdout: result.stdout, stderr: result.stderr }));
   }
   t.diagnostic('malformedSkippedRows=4 refused=4');
 });
@@ -80,6 +81,8 @@ test('the minimal installed generator builds WebP and PNG, including encode fail
   fs.mkdirSync(join(installed, 'lib/hand'), { recursive: true });
   fs.cpSync(new URL('../plugins/sleight/skills/make-character/tool/', import.meta.url), join(installed, 'skills/make-character/tool'), { recursive: true });
   fs.copyFileSync(new URL('../plugins/sleight/lib/hand/character.mjs', import.meta.url), join(installed, 'lib/hand/character.mjs'));
+  fs.mkdirSync(join(installed, 'lib/platform'));
+  fs.copyFileSync(new URL('../plugins/sleight/lib/platform/paths.mjs', import.meta.url), join(installed, 'lib/platform/paths.mjs'));
   assert.equal(fs.existsSync(join(bank, 'tools')), false);
   const generator = join(installed, 'skills/make-character/tool'), design = join(bank, 'my-character.mjs');
   fs.writeFileSync(design, fs.readFileSync(join(generator, 'cast/tsugi.mjs'), 'utf8').replace("id: 'tsugi'", "id: 'my-character'"));
@@ -88,8 +91,8 @@ test('the minimal installed generator builds WebP and PNG, including encode fail
   fs.writeFileSync(join(failedPath, 'cwebp'), '#!/bin/sh\nif [ "$1" = "-version" ]; then echo 1.6.0; exit 0; fi\nexit 1\n', { mode: 0o700 });
   for (const [mode, encoding, path] of [['webp', 'webp'], ['png', 'png', emptyPath], ['encode-failed', 'png', failedPath]]) {
     const output = join(bank, mode), result = spawnSync(process.execPath, [join(generator, 'build.mjs'), '--design', design, '--out', output],
-      { cwd: bank, env: { ...process.env, ...path ? { PATH: path } : {} }, encoding: 'utf8', timeout: 120000 });
-    assert.equal(result.status, 0, result.stderr); assert.match(result.stdout, /19\/19 states/);
+      { cwd: bank, env: { ...process.env, ...path ? { PATH: path } : {} }, encoding: 'utf8', timeout: 120000, killSignal: 'SIGKILL' });
+    assertChildStatus(result, 0, result.stderr); assert.match(result.stdout, /19\/19 states/);
     const pack = loadCharacter(join(output, 'my-character'), { shared: true });
     assert.equal(pack.manifest.id, 'my-character'); assert.equal(pack.resolved.filter(s => s.own).length, 19);
     assert.equal(pack.manifest.sheet, `sheet.${encoding}`);

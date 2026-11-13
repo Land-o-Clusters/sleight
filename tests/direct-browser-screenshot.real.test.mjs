@@ -1,3 +1,4 @@
+import { testChromiumExecutable, launchTestChromium, launchTestChromiumContext } from './fixtures/chromium-isolated.mjs';
 import { trackTemp } from '../scripts/temp-leftovers.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
@@ -13,9 +14,7 @@ import { createActionRunner } from '../plugins/sleight/lib/direct-browser/act.mj
 
 const pin = JSON.parse(readFileSync(new URL('../plugins/sleight/vendor/playwright-core/browsers.json', import.meta.url)))
   .browsers.find(browser => browser.name === 'chromium-headless-shell');
-const platform = process.platform === 'darwin' ? 'mac-' + process.arch : 'linux64';
-const executablePath = join(homedir(), 'Library/Caches/ms-playwright', 'chromium_headless_shell-' + pin.revision,
-  'chrome-headless-shell-' + platform, 'chrome-headless-shell');
+const executablePath = testChromiumExecutable({ revision: pin.revision });
 const skip = process.env.SLEIGHT_LIVE_DOM_TEST !== '1' && 'needs SLEIGHT_LIVE_DOM_TEST=1 (headless fixtures only)';
 
 async function fixture(t, html, { routes = {}, dpr = 1, width = 1440, height = 900, nativeDpr, zoom = 1 } = {}) {
@@ -37,14 +36,13 @@ async function fixture(t, html, { routes = {}, dpr = 1, width = 1440, height = 9
     profile = trackTemp(mkdtempSync('/tmp/sleight-fd1b-zoom-'));
     mkdirSync(join(profile, 'Default'));
     writeFileSync(join(profile, 'Default/Preferences'), JSON.stringify({ partition: { default_zoom_level: { x: Math.log(zoom) / Math.log(1.2) } } }));
-    const fullExecutable = join(homedir(), 'Library/Caches/ms-playwright', 'chromium-' + pin.revision,
-      'chrome-' + platform, 'Google Chrome for Testing.app/Contents/MacOS/Google Chrome for Testing');
+    const fullExecutable = testChromiumExecutable({ headless: false, revision: pin.revision });
     assert.ok(existsSync(fullExecutable), 'pinned full Chromium must be installed for browser zoom');
-    context = await chromium.launchPersistentContext(profile, { headless: true, executablePath: fullExecutable, viewport: null,
+    context = await launchTestChromiumContext(chromium, profile, { headless: true, executablePath: fullExecutable, viewport: null,
       args: ['--site-per-process', '--force-device-scale-factor=' + nativeDpr, '--window-size=' + width + ',' + height] });
     browser = context.browser();
   } else {
-    browser = await chromium.launch({ headless: true, executablePath, args: ['--site-per-process'] });
+    browser = await launchTestChromium(chromium, { headless: true, executablePath, args: ['--site-per-process'] });
     context = await browser.newContext({ viewport: { width, height }, deviceScaleFactor: dpr });
   }
   const page = await context.newPage();

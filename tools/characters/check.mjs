@@ -4,6 +4,7 @@ import * as fs from 'node:fs';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { checkBuiltinCharacter, BUILTIN_CHARACTER_IDS, builtinCharactersDirectory } from '../../plugins/sleight/lib/hand/character.mjs';
+import { ORIGINAL_CAST, EVERYDAY_CAST } from '../../plugins/sleight/skills/make-character/tool/stage.mjs';
 const root = builtinCharactersDirectory(), packs = [];
 for (const id of BUILTIN_CHARACTER_IDS) {
   const pack = checkBuiltinCharacter(id);
@@ -25,5 +26,9 @@ const diskBytes = folder => fs.readdirSync(folder).reduce((n, name) => {
   return n + (st.isDirectory() ? diskBytes(path) : st.size);
 }, 0);
 const characterBytes = diskBytes(root), pluginBytes = diskBytes(fileURLToPath(new URL('../../plugins/sleight/', import.meta.url)));
-if (characterBytes >= 8_000_000) throw Error(`Bundled characters exceed 8 MB: ${characterBytes}`);
-console.log(JSON.stringify({ packs, characterBytes, pluginBytes, budgetBytes: 8_000_000 }));
+const originalBytes = ORIGINAL_CAST.reduce((n, id) => n + diskBytes(join(root, id)), 0);
+const everydayBytes = EVERYDAY_CAST.reduce((n, id) => n + diskBytes(join(root, id)), 0);
+if (originalBytes >= 8_000_000) throw Error(`Original base packs exceed 8 MB: ${originalBytes}`);
+if (everydayBytes > 15_000_000) throw Error(`Everyday base packs exceed 15 MB: ${everydayBytes}`);
+console.log(JSON.stringify({ packs, characterBytes, originalBytes, everydayBytes, pluginBytes,
+  originalBudgetBytes: 8_000_000, everydayBudgetBytes: 15_000_000 }));

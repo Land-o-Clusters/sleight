@@ -1,6 +1,6 @@
 # Two-engine typing investigation (2026-10-04)
 
-Worktree: `~/Projects/sleight-wt/double-keys`, branch `codex/double-keys`.
+Worktree: `<private-evidence>/double-keys`, branch `codex/double-keys`.
 Base: `4409f1c`. The owner stepped away on 2026-10-04 and authorized foreground trials.
 The duplicate-keystroke cause remains unknown. Plugin behavior is unchanged.
 

@@ -1,3 +1,5 @@
+import { assertChildStatus } from './fixtures/child-status.mjs';
+import { launchTestChromium } from './fixtures/chromium-isolated.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { chmodSync, linkSync, lstatSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, symlinkSync, truncateSync, writeFileSync } from 'node:fs';
@@ -338,10 +340,10 @@ test('shell guard allows literal run reads and refuses clear, extra args and opa
 });
 test('actual launcher routes malformed runs commands to usage and refuses headless clear', () => {
   const launcher = new URL('../plugins/sleight/lib/launch.mjs', import.meta.url);
-  const bad = spawnSync(process.execPath, [launcher.pathname, 'runs', 'list', 'extra'], { env: process.env, encoding: 'utf8' });
-  assert.equal(bad.status, 3); // Extra arguments fail closed at the person gate before dispatch.
-  const clear = spawnSync(process.execPath, [launcher.pathname, 'runs', 'clear'], { env: process.env, encoding: 'utf8' });
-  assert.equal(clear.status, 3); assert.match(clear.stderr, /run it yourself in a terminal/);
+  const bad = spawnSync(process.execPath, [launcher.pathname, 'runs', 'list', 'extra'], { env: process.env, encoding: 'utf8', timeout: 60000, killSignal: 'SIGKILL' });
+  assertChildStatus(bad, 3); // Extra arguments fail closed at the person gate before dispatch.
+  const clear = spawnSync(process.execPath, [launcher.pathname, 'runs', 'clear'], { env: process.env, encoding: 'utf8', timeout: 60000, killSignal: 'SIGKILL' });
+  assertChildStatus(clear, 3); assert.match(clear.stderr, /run it yourself in a terminal/);
 });
 
 // Synthetic PNG data, never a screen capture. CRCs keep the fixture valid for the system decoder.
@@ -364,7 +366,7 @@ test('converter refuses malformed and oversized image headers without capture', 
 });
 
 test('headless Chromium renders the local replay under CSP without errors or network requests', {
-  skip: process.env.SLEIGHT_RUN_VIEWER_BROWSER !== '1', timeout: 15000,
+  skip: (process.env.SLEIGHT_RUN_VIEWER_BROWSER ?? process.env.SLEIGHT_LIVE_DOM_TEST) !== '1', timeout: 15000,
 }, async t => {
   const { chromium } = await import('../plugins/sleight/vendor/playwright-core/index.mjs');
   const { dir } = world(t), path = join(dir, 'replay.html');
@@ -373,7 +375,7 @@ test('headless Chromium renders the local replay under CSP without errors or net
   writeFileSync(path, buildRunHTML([event(), { v: 'sleight.run/1', type: 'screenshot', ts: now, window: action().window, image },
     action({ say: '<img src=x onerror=steal()>', label: 'button' }),
     { v: 'sleight.run/1', type: 'recording', state: 'stopped', reason: 'file size limit reached', ts: now }]), { mode: 0o600 });
-  const browser = await chromium.launch({ headless: true });
+  const browser = await launchTestChromium(chromium, { headless: true });
   try {
     const page = await browser.newPage(), errors = [], requests = [];
     page.on('console', msg => { if (msg.type() === 'error') errors.push(msg.text()); });

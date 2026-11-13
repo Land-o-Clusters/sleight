@@ -17,7 +17,7 @@
   },
   "timedOut": false,
   "cancelled": false,
-  "stdout": "\nresults: ~/Projects/sleight-wt/plugin-arm/bench/results/2026-10-10T05-33-43-683Z-dry.json\n",
+  "stdout": "\nresults: <private-evidence>/plugin-arm/bench/results/2026-10-10T05-33-43-683Z-dry.json\n",
   "stderr": "",
   "groupClean": true,
   "raw": {

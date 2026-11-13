@@ -114,11 +114,13 @@ test('the card is located from the consent host\'s own windows: glove, menu, car
   assert.deepEqual(locateCard(null, 'Always allow'), { glove: null, menu: null, review: null, alert: null, button: null, ax: false });
 });
 
-test('only consent hosts under this run count, never the owner\'s own sleight session\'s host', () => {
+test('GL1A 14: only consent hosts under this run count, never the owner\'s own sleight session\'s host', () => {
   const rows = parseTree([
     '  100     1 node bench/electron-live-runner.mjs --owner-away',
     '  110   100 node bench/electron-qualification-worker.mjs',
     `  111   110 ${MAC_USERS}x/Library/Caches/sleight/turbo-host/abc/consent-host`,
+    `  112   110 ${MAC_USERS}x/Library/Caches/sleight/turbo-host/mac-driver/k2/glide-engine`,
+    `  113   110 ${MAC_USERS}x/Library/Caches/sleight/turbo-host/mac-driver/k0/consent-host`,
     '  200     1 claude',
     `  211   200 ${MAC_USERS}x/Library/Caches/sleight/turbo-host/abc/consent-host --shared`,
     '  120   100 claude -p',

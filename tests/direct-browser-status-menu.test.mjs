@@ -1,3 +1,4 @@
+import { assertChildStatus } from './fixtures/child-status.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync, writeFileSync, mkdtempSync, realpathSync } from 'node:fs';
@@ -138,6 +139,12 @@ check(permissionRows(permissionsData(payload)!, now: 8200) == [.grant("Fixture �
   .info("Turn Turbo Off… or sleight-mcp turbo off stops turbo"), .revokeAll, .separator, .block("Never Act in Editor", target: "com.example.editor"), .separator, .info("Blocked: Blocked App"),
   .info("Blocked: https://blocked.example"), .info("Acts only on: https://a.example"), .info("sleight-mcp permissions changes these"),
   .separator, .info("ChatGPT's own Always allow list: in ChatGPT's settings")], "permission rows")
+let recovery: [String: Any] = ["grants": [Any](), "blocked": [Any](), "problems": ["Preapproved apps ignored. Rename preapproved.json and allow apps again."]]
+check(permissionRows(permissionsData(recovery)!, now: 0).contains(.info("Preapproved apps ignored. Rename preapproved.json and allow apps again.")), "repair advice is an info row")
+for badProblems in [[String(repeating: "x", count: 201)], ["one", "two", "three", "four"], ["bad\\nline"], "text"] as [Any] {
+    var bad = recovery; bad["problems"] = badProblems
+    check(permissionsData(bad) == nil, "unsafe repair advice refused")
+}
 // Turbo's row only points to Turn Turbo Off…: no Revoke, and no Revoke All when it is the only row.
 check(permissionRows(permissionsData(["grants": [["title": "Helium", "detail": "turbo", "used": NSNull(), "target": "turbo"]], "blocked": [Any]()])!, now: 0) ==
   [.info("Helium · turbo · not used yet"), .info("Turn Turbo Off… or sleight-mcp turbo off stops turbo"),
@@ -192,8 +199,8 @@ check(withHand(statusRows(["status": "connected"], ["disconnect", "turbo-off"])!
 check(handRows(enabled: true, version: "1.4.0") == [.toggle("Ghost Hand", choice: "hand-toggle", on: true), .separator, .help, .separator, .footer("sleight 1.4.0")], "no usage, no row")
 print("pass")
 `);
-  const built = spawnSync('/usr/bin/xcrun', ['swiftc', '-module-cache-path', swiftModuleCache(), swift, '-o', binary], { encoding: 'utf8' });
-  assert.equal(built.status, 0, built.stderr);
-  const run = spawnSync(binary, [], { encoding: 'utf8' });
+  const built = spawnSync('/usr/bin/xcrun', ['swiftc', '-module-cache-path', swiftModuleCache(), swift, '-o', binary], { encoding: 'utf8', timeout: 600000, killSignal: 'SIGKILL' });
+  assertChildStatus(built, 0, built.stderr);
+  const run = spawnSync(binary, [], { encoding: 'utf8', timeout: 60000, killSignal: 'SIGKILL' });
   assert.equal(run.stdout.trim(), 'pass', run.stdout);
 });

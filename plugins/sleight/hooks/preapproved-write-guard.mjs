@@ -2,11 +2,20 @@ const directorySuffix = '/library/application support/sleight';
 // grant-seal.key seals the Electron Always records in electron-grants.json; writing it would forge consent. hand.json is the
 // user's ghost hand opt-out. permissions.json holds the apps and sites the user told sleight never to act in. turbo-owner.json
 // names the copy that issued turbo.json's receipt, which decides whether a startup may move it.
-const suffixes = ['preapproved.json', 'turbo.json', 'turbo-apps.json', 'turbo-owner.json', 'electron-grants.json', 'grant-seal.key', 'hand.json', 'permissions.json', 'menu-presence.lock', 'menu-session.lock', 'settings-link.json'].map(filename => `${directorySuffix}/${filename}`);
+// Keep the sealed names and scheduled folders in sync with sealed-settings.mjs (tested by sa1d-security).
+const settingsNames = ['preapproved.json', 'preapproved.json.lock', 'preapproved.json.lock.reclaim', 'turbo.json', 'turbo-apps.json', 'turbo-owner.json', 'electron-grants.json', 'grant-seal.key', 'hand.json', 'permissions.json', 'menu-presence.lock', 'menu-session.lock', 'settings-link.json', 'routine-launcher.mjs'];
+const scheduledFolders = ['routines', 'watches'];
+const suffixes = settingsNames.map(filename => `${directorySuffix}/${filename}`);
+const settingsChild = name => settingsNames.includes(name) || scheduledFolders.some(folder => name === folder || name.startsWith(folder + '/'));
 const shimSuffixes = ['/.local/bin/sleight', '/.local/bin/.sleight-shim-v1'];
+const inlineSuffixes = [...suffixes, ...shimSuffixes].map(suffix => ({
+  pattern: new RegExp(suffix.replaceAll('.', '\\.'), 'i'), length: suffix.length,
+}));
 const mutations = new Set(['Write', 'Edit', 'MultiEdit', 'NotebookEdit']);
 export const guardUnavailableReason = /* notice */ 'sleight guard unavailable. The tool call was refused.';
-export const guardPathReason = /* notice */ 'sleight cannot resolve this path safely. HOME, CLAUDE_CONFIG_DIR or filesystem metadata is unavailable.';
+export const guardPathReason = /* notice */ 'sleight cannot resolve this protected path. Its directory or filesystem metadata is unknown.';
+// Claude Code's mod sandbox has no Node globals. The mod supplies the host platform explicitly.
+const runtimePlatform = typeof process === 'undefined' ? undefined : process.platform;
 const folded = path => path.normalize('NFC').toLowerCase();
 // Everything under these folders is sleight's own code: the helper cache (the consent host that answers sleight's cards and
 // its Touch ID confirmation, built from source) and installed copies of the plugin in Claude Code's, Codex's and Cursor's
@@ -16,21 +25,40 @@ const folded = path => path.normalize('NFC').toLowerCase();
 // links its plugins folder to the real cache, so a plugins folder under sleight-bench never counts as the bench's own; the
 // arm loads sleight with --plugin-dir, so nothing there needs writing.
 const TREES = [/\/library\/caches\/sleight(?:\/|$)/, /\/plugins\/cache\/[^/]+\/sleight(?:\/|$)/];
+const ENGINE_TREE = /\/plugins\/cache\/openai-bundled(?:\/|$)/;
+// Account-based Windows helper root, including hashed builds and person-run-* copies. Environment spellings are hints
+// in command text only; this never reads an environment variable to select authority.
+const windowsCachePath = path => folded(normalize(path.replace(/\\/g, '/')));
+const WINDOWS_CACHE = /(?:\/appdata\/local|^%localappdata%|^\$\{?(?:env:)?localappdata\}?)\/sleight\/turbo-host(?:\/|$)/;
+const WINDOWS_SETTINGS = /(?:\/appdata\/local|^%localappdata%|^\$\{?(?:env:)?localappdata\}?)\/sleight(?:\/(.*))?$/;
 // What each refusal names, so the person knows which protected folder the command reached.
 export const PROTECTED = Object.freeze({
   unresolved: 'unresolved path',
+  unknownDirectory: 'unknown directory before a write to a protected name',
+  oversized: 'oversized protected command',
   settings: "sleight's settings files (~/Library/Application Support/sleight)",
   cache: "sleight's helper cache (~/Library/Caches/sleight)",
+  windowsCache: "sleight's helper cache (%LOCALAPPDATA%/sleight/turbo-host)",
+  windowsSettings: "sleight's settings files (%LOCALAPPDATA%/sleight)",
+  engine: 'the bundled computer-use engine folder (plugins/cache/openai-bundled)',
   install: 'an installed copy of the sleight plugin',
   aboveSleight: "a folder that holds sleight's settings or helper cache",
   aboveInstall: 'a folder that holds an installed copy of sleight',
   launcher: "sleight's settings through its launcher",
+  replay: 'the replay tool',
   shim: /* notice */ "sleight's managed PATH command (~/.local/bin/sleight)",
 });
-const protectedLiteral = path => {
-  const value = folded(normalize(path));
+const protectedLiteral = (path, { platform = runtimePlatform } = {}) => {
+  if (platform === 'win32' && WINDOWS_CACHE.test(windowsCachePath(path))) return PROTECTED.windowsCache;
+  if (platform === 'win32') {
+    const match = WINDOWS_SETTINGS.exec(windowsCachePath(path));
+    if (match && (!match[1] || settingsChild(match[1]))) return PROTECTED.windowsSettings;
+  }
+  const value = folded(normalize(platform === 'win32' ? path.replace(/\\/g, '/') : path));
   if (suffixes.some(suffix => value.endsWith(suffix)) || value.endsWith(directorySuffix)) return PROTECTED.settings;
+  if (scheduledFolders.some(folder => value.includes(`${directorySuffix}/${folder}/`) || value.endsWith(`${directorySuffix}/${folder}`))) return PROTECTED.settings;
   if (shimSuffixes.some(suffix => value.endsWith(suffix))) return PROTECTED.shim;
+  if (ENGINE_TREE.test(value)) return PROTECTED.engine;
   return TREES[0].test(value) ? PROTECTED.cache : TREES[1].test(value) ? PROTECTED.install : undefined;
 };
 // Literally under <home>/Library/Caches/sleight-bench, before any link is resolved.
@@ -77,7 +105,10 @@ const normalize = path => {
 // True when the path is sleight's settings folder or helper cache, or a folder above one, so deleting, moving or changing it
 // reaches the protected files.
 // Without the home folder, only ~ spellings can be judged.
-const above = (path, home) => {
+const above = (path, home, platform) => {
+  const windows = platform === 'win32' ? windowsCachePath(path) : '', windowsRoot = home && windowsCachePath(`${home}/AppData/Local/sleight/turbo-host`);
+  if (/^(?:%localappdata%|\$\{?localappdata\}?|\$env:localappdata)(?:\/sleight)?$/.test(windows)) return PROTECTED.aboveSleight;
+  if (windowsRoot && /^[a-z]:\//.test(windows) && (windows === windowsRoot || windowsRoot.startsWith(windows.endsWith('/') ? windows : windows + '/'))) return PROTECTED.aboveSleight;
   const root = home ?? '/~', value = folded(normalize(path.replace(/^(?:~|\$HOME|\$\{HOME\})(?=\/|$)/, () => root)));
   if (value.startsWith('/') && shimSuffixes.map(suffix => folded(normalize(root + suffix)))
     .some(file => file.startsWith(value === '/' ? '/' : value + '/'))) return PROTECTED.shim;
@@ -96,19 +127,27 @@ async function aboveInstall(path, { stat, home, configDir } = {}) {
     .replace(/^(?:\$CLAUDE_CONFIG_DIR|\$\{CLAUDE_CONFIG_DIR\})(?=\/|$)/, () => configDir ?? '/$CLAUDE_CONFIG_DIR'));
   const value = folded(expanded);
   if (!value.startsWith('/')) return undefined;
-  const exists = async target => { try { return !!(await stat?.(target))?.realPath; } catch { return false; } };
+  // True, false, or null when the stat was unknown (timed out or failed): then the guard cannot decide and refuses.
+  const exists = async target => { try { const info = await stat?.(target); return info?.unknown ? null : !!info?.realPath; } catch { return false; } };
+  const label = found => found === null ? PROTECTED.unresolved : found ? PROTECTED.aboveInstall : undefined;
   const roots = [...HOSTS.map(host => ({ root: `${home ?? '/~'}/${host}`, always: true })), ...configDir ? [{ root: configDir, always: false }] : []];
   for (const { root, always } of roots) {
     const cache = folded(normalize(`${root}/plugins/cache`));
-    if ((value === cache || cache.startsWith(value === '/' ? '/' : value + '/')) && (always || await exists(`${root}/plugins/cache`))) return PROTECTED.aboveInstall;
+    if (value === cache || cache.startsWith(value === '/' ? '/' : value + '/')) {
+      const found = label(always || await exists(`${root}/plugins/cache`));
+      if (found) return found;
+    }
     const rest = value.startsWith(cache + '/') ? value.slice(cache.length + 1) : undefined;
-    if (rest && !rest.includes('/') && (rest === 'sleight' || await exists(`${expanded}/sleight`))) return PROTECTED.aboveInstall;
+    if (rest && !rest.includes('/')) {
+      const found = label(rest === 'sleight' || await exists(`${expanded}/sleight`));
+      if (found) return found;
+    }
   }
   return undefined;
 }
 // The label for a path, ancestors included when the command reaches what is under it.
 const literalLabel = async (path, options, ancestor) => {
-  const label = protectedLiteral(path) ?? (ancestor ? above(path, options?.home) ?? await aboveInstall(path, options) : undefined);
+  const label = protectedLiteral(path, options) ?? (ancestor ? above(path, options?.home, options?.platform ?? runtimePlatform) ?? await aboveInstall(path, options) : undefined);
   return [PROTECTED.install, PROTECTED.aboveInstall].includes(label) && await benchExempt(path, options) ? undefined : label;
 };
 
@@ -120,11 +159,11 @@ async function protectedPath(path, options, ancestor = false) {
   if (literal) return literal;
   if (home) path = path.replace(/^(?:~|\$HOME|\$\{HOME\})(?=\/|$)/, () => home);
   if (options?.configDir) path = path.replace(/^(?:\$CLAUDE_CONFIG_DIR|\$\{CLAUDE_CONFIG_DIR\})(?=\/|$)/, () => options.configDir);
-  let resolved = (await stat(path.startsWith('/') ? '/' : '.').catch(() => undefined))?.realPath;
-  // An unavailable root cannot establish that an alias is outside the protected
-  // trees. Refuse instead of allowing a tool the host may still execute.
+  const windows = (options?.platform ?? runtimePlatform) === 'win32' && /^[a-z]:[\\/]/i.test(path);
+  if (windows) path = path.replace(/\\/g, '/');
+  let resolved = (await stat(windows ? path.slice(0, 3) : path.startsWith('/') ? '/' : '.').catch(() => undefined))?.realPath;
   if (!resolved) return PROTECTED.unresolved;
-  for (const part of path.split('/').filter(Boolean)) {
+  for (const part of (windows ? path.slice(3) : path).split('/').filter(Boolean)) {
     const next = `${resolved.replace(/\/$/, '')}/${part}`;
     const info = await stat(next).catch(() => undefined);
     if (info && typeof info.realPath !== 'string') return PROTECTED.unresolved;
@@ -134,35 +173,192 @@ async function protectedPath(path, options, ancestor = false) {
   return literalLabel(resolved, options, ancestor);
 }
 
-// Only literal shell names and operators, never eval or shell expansion. Keep
-// operators inside quotes as text, and join quoted/escaped pieces of a word.
-function shellWords(command) {
-  const words = [];
-  let word = '', quote = '', active = false, quotes = 0, escapes = false, bare = false;
-  const flush = () => {
-    if (active) words.push({ text: word, ...escapes || quotes > 1 || quotes && bare ? { joined: true } : {} });
-    word = ''; active = false; quotes = 0; escapes = false; bare = false;
-  };
-  for (let i = 0; i < command.length; i++) {
-    const c = command[i];
-    if (c === '\\' && quote !== "'") {
-      const escaped = command[++i] ?? '';
-      if (escaped !== '\n') { active = true; escapes = true; word += escaped; }
+const SUFFIXED_REDIRECTS = new Set(['>!', '>>!', '>>|', '>&!', '>&|', '>>&!', '>>&|']);
+// One tokenizer owns shell quoting, comments, substitutions and heredoc boundaries.
+// Its words carry the same quote metadata as argv checks; attached collections carry
+// executable expansion source and heredoc data. No consumer scans raw quote state.
+function shellWords(command, depth = 0) {
+  const sigAfter = k => { while (command[k] === '\\' && command[k + 1] === '\n') k += 2; return k; };
+  function scan(start, limit, end = '', mode = 'shell', level = depth) {
+    const words = [];
+    words.substitutions = []; words.bodies = []; words.sources = []; words.ambiguous = level > 8;
+    let word = '', quote = '', quoteType = '', active = false, quotes = 0, escapes = false, bare = false, comment = false;
+    let delimiter, parens = 0, brackets = 0, headerStart = 0, i = start;
+    const pending = [];
+    const flush = () => {
+      if (!active) return;
+      const token = { text: word, ...quotes === 1 && !bare ? { quoted: true, literal: quoteType === "'" } : {},
+        ...escapes || quotes > 1 || quotes && bare ? { joined: true } : {}, ...comment ? { comment: true } : {} };
+      words.push(token);
+      if (delimiter) {
+        pending.push({ delimiter: word, tabs: delimiter === '<<-', quoted: quotes > 0 || escapes });
+        delimiter = undefined;
+      }
+      word = ''; quoteType = ''; active = false; quotes = 0; escapes = false; bare = false;
+    };
+    const merge = child => {
+      words.ambiguous ||= child.ambiguous;
+      words.substitutions.push(...child.substitutions);
+      words.bodies.push(...child.bodies); words.sources.push(...child.sources);
+    };
+    const operatorChars = (c, at) => ';&|<>()'.includes(c) || '{}'.includes(c) && !active && /[\s;&|()]|^$/.test(command[sigAfter(at + 1)] ?? '');
+    for (; i < limit && !words.ambiguous; i++) {
+      const c = command[i];
+      // Backtick source has one shell-defined escape pass before it is shell code.
+      // Quotes in that source do not change where its closing backtick is found.
+      if (mode === 'backtick') {
+        if (c === '`') return { words, cursor: i + 1, source: word };
+        if (c === '\\' && ['$', '`', '\\', '\n'].includes(command[i + 1])) {
+          const next = command[++i]; if (next !== '\n') word += next;
+        } else word += c;
+        continue;
+      }
+      // Heredoc data has no shell quote/comment syntax. Only unescaped expansions
+      // execute; quoted delimiters never enter this mode.
+      const body = mode === 'heredoc';
+      if (body && c === '\\' && ['$', '`', '\\', '\n'].includes(command[i + 1])) { i++; continue; }
+      if (!body && comment && c !== '\n' && !operatorChars(c, i)) { word += c; active = true; bare = true; continue; }
+      if (!body && quote === 'ansi') {
+        if (c === "'") quote = '';
+        else if (c === '\\') {
+          const match = /^(?:x([\da-fA-F]{1,2})|u([\da-fA-F]{4})|U([\da-fA-F]{8})|([0-7]{1,3}))/.exec(command.slice(i + 1));
+          if (match) {
+            const point = parseInt(match[1] ?? match[2] ?? match[3] ?? match[4], match[4] ? 8 : 16);
+            word += point <= 0x10ffff ? String.fromCodePoint(point) : '\ufffd'; i += match[0].length;
+          } else {
+            const escaped = command[++i] ?? '';
+            word += ({ n: '\n', r: '\r', t: '\t', a: '\x07', b: '\b', f: '\f', v: '\v', '\\': '\\', "'": "'", '"': '"' })[escaped] ?? '\\' + escaped;
+          }
+        } else word += c;
+        continue;
+      }
+      if (!body && quote === "'") { if (c === "'") quote = ''; else word += c; continue; }
+      if (!body && !comment && c === '\\') {
+        if (quote === '"' && !['$', '`', '"', '\\', '\n'].includes(command[i + 1])) { word += c; continue; }
+        const escaped = command[++i] ?? '';
+        if (escaped !== '\n') { active = true; escapes = true; word += escaped; }
+        continue;
+      }
+      // Arithmetic frames share expansion handling with shell source, but shifts
+      // and comparisons inside them are expressions rather than redirections.
+      const arithmetic = mode === 'arithmetic';
+      const arithmeticEnd = !comment && (c === '$' && command.startsWith('((', i + 1) ||
+        !body && !quote && !active && !arithmetic && command.startsWith('((', i)) ? '))' :
+        !comment && c === '$' && command[i + 1] === '[' ? ']' : undefined;
+      if (arithmeticEnd) {
+        if (delimiter) { words.ambiguous = true; break; }
+        const child = scan(i + (c === '$' ? arithmeticEnd === ']' ? 2 : 3 : 2), limit, arithmeticEnd, 'arithmetic', level + 1);
+        merge(child.words);
+        word += command.slice(i, child.cursor); active = true; bare ||= !quote;
+        i = child.cursor - 1; continue;
+      }
+      if (!comment && (c === '`' || (c === '$' || !body && !quote && !arithmetic && (c === '<' || c === '>')) && command[i + 1] === '(')) {
+        if (delimiter) { words.ambiguous = true; break; }
+        const backtick = c === '`', codeStart = i + (backtick ? 1 : 2);
+        const child = scan(codeStart, limit, backtick ? '`' : ')', backtick ? 'backtick' : 'shell', level + 1);
+        merge(child.words);
+        const source = backtick ? child.source : command.slice(codeStart, child.cursor - 1);
+        if (source === undefined || child.words.ambiguous) { words.ambiguous = true; break; }
+        if (backtick) merge(shellWords(source, level + 1));
+        words.substitutions.push(source);
+        // Preserve expansion spelling in the outer argv. Its code is checked with
+        // this tokenizer in its own scope, never as the outer command's words.
+        word += command.slice(i, child.cursor); active = true; bare ||= !quote;
+        i = child.cursor - 1; continue;
+      }
+      if (arithmetic && !quote) {
+        if (parens === 0 && brackets === 0 && command.startsWith(end, i)) return { words, cursor: i + end.length };
+        if (c === '(') parens++;
+        else if (c === ')') { if (parens === 0) { words.ambiguous = true; break; } parens--; }
+        if (c === '[') brackets++;
+        else if (c === ']') { if (brackets === 0) { words.ambiguous = true; break; } brackets--; }
+        // zsh closes an arithmetic frame at its terminator even inside a quote, where bash keeps reading the quote, so
+        // the two shells disagree about what runs after it. A quote inside arithmetic is ambiguous.
+        if (["'", '"'].includes(c)) { words.ambiguous = true; break; }
+        word += c; active = true; continue;
+      }
+      if (body) continue;
+      if (quote) { if (c === quote) quote = ''; else word += c; continue; }
+      if (!comment && c === '$' && ["'", '"'].includes(command[i + 1])) {
+        quoteType = command[++i]; quote = quoteType === "'" ? 'ansi' : '"'; active = true; quotes++; continue;
+      }
+      if (!comment && (c === "'" || c === '"')) { quote = c; quoteType = c; active = true; quotes++; continue; }
+      if (!comment && end === ')' && c === ')' && parens === 0) {
+        flush(); words.ambiguous ||= !!delimiter || pending.length > 0;
+        return { words, cursor: i + 1 };
+      }
+      if (!comment && end === ')') { if (c === '(') parens++; else if (c === ')') parens--; }
+      if (c === '\n') {
+        flush(); comment = false;
+        if (delimiter) { words.ambiguous = true; break; }
+        // A header's interpreter consumes its heredoc as source, even if quoted.
+        const sourceHeader = pending.length > 0 && words.slice(headerStart).some(token => !token.operator && !token.comment &&
+          (SHELLS.has(token.text.split('/').at(-1)) || INTERPRETERS.test(token.text.split('/').at(-1))));
+        let at = words.length - 1;
+        while (at >= 0 && words[at].comment) at--;
+        if (!(words[at]?.operator && ['|', '|&', '&&', '||'].includes(words[at].text))) words.push({ text: ';', operator: true });
+        headerStart = words.length;
+        let cursor = i + 1;
+        for (const doc of pending.splice(0)) {
+          const bodyStart = cursor;
+          let bodyEnd = cursor, terminated = false;
+          while (cursor < limit) {
+            const lineStart = cursor;
+            let line = '', more;
+            do {
+              const newline = command.indexOf('\n', cursor), next = newline < 0 || newline >= limit ? limit : newline;
+              const part = command.slice(cursor, next);
+              const slashes = /\\+$/.exec(part)?.[0].length ?? 0;
+              more = !doc.quoted && slashes % 2 === 1 && next < limit;
+              line += more ? part.slice(0, -1) : part;
+              cursor = next < limit ? next + 1 : next;
+            } while (more && cursor < limit);
+            if ((doc.tabs ? line.replace(/^\t+/, '') : line) === doc.delimiter) { bodyEnd = lineStart; terminated = true; break; }
+            bodyEnd = cursor;
+          }
+          const source = command.slice(bodyStart, bodyEnd);
+          if (sourceHeader) words.sources.push(source);
+          if (doc.quoted) words.bodies.push(source);
+          else {
+            const expansions = scan(bodyStart, bodyEnd, '', 'heredoc', level + 1).words;
+            merge(expansions);
+          }
+          if (!terminated) words.ambiguous = true;
+        }
+        i = cursor - 1; continue;
+      }
+      if (/\s/.test(c)) { flush(); continue; }
+      if (operatorChars(c, i)) {
+        flush();
+        if (delimiter) { words.ambiguous = true; break; }
+        // Comment operators are read literally. Looking through a continuation
+        // here would skip the newline that must end the comment.
+        const next = k => comment ? k : sigAfter(k);
+        const at1 = next(i + 1), at2 = next(at1 + 1);
+        const c1 = command[at1] ?? '', c2 = command[at2] ?? '';
+        let operator = c, last = i;
+        if (c === '<' && c1 === '<' && c2 === '<') { operator = '<<<'; last = at2; }
+        else if (['>>', '>|', '>&', '<&', '<>', '<<', '&&', '||', '|&'].includes(c + c1)) { operator = c + c1; last = at1; }
+        if (operator === '<<' && command[next(last + 1)] === '-') { last = next(last + 1); operator = '<<-'; }
+        if (operator === '>>' && command[next(last + 1)] === '&') { last = next(last + 1); operator += '&'; }
+        const suffixAt = next(last + 1);
+        if (SUFFIXED_REDIRECTS.has(operator + (command[suffixAt] ?? ''))) { last = suffixAt; operator += command[suffixAt]; }
+        const opaque = /^(?:>|<>)/.test(operator) && '!|&'.includes(command[next(last + 1)] ?? 'x');
+        words.push({ text: operator, operator: true, ...opaque ? { opaque: true } : {}, ...comment ? { comment: true } : {} });
+        if (!comment && ['<<', '<<-'].includes(operator)) delimiter = operator;
+        i = last; continue;
+      }
+      // active is the significant word state after removing continuations. A #
+      // after an operator, including ), < and >, begins a comment; one glued to
+      // a word or a substitution remains part of that word.
+      if (c === '#' && !active) comment = true;
+      word += c; active = true; bare = true;
     }
-    else if (quote) { if (c === quote) quote = ''; else word += c; }
-    else if (c === "'" || c === '"') { quote = c; active = true; quotes++; }
-    else if (c === '\n') { flush(); words.push({ text: ';', operator: true }); }
-    else if (/\s/.test(c)) flush();
-    else if (';&|<>()'.includes(c)) {
-      flush();
-      const pair = c + (command[i + 1] ?? '');
-      const operator = ['>>', '>|', '>&', '<<', '&&', '||', '|&'].includes(pair) ? (i++, pair) : c;
-      words.push({ text: operator, operator: true });
-    }
-    else { word += c; active = true; bare = true; }
+    flush();
+    words.ambiguous ||= !!quote || !!delimiter || pending.length > 0 || !!end;
+    return { words, cursor: i };
   }
-  flush();
-  return words;
+  return scan(0, command.length).words;
 }
 
 // Commands a find -exec runs that change or remove what it finds.
@@ -170,8 +366,56 @@ const FIND_WRITERS = new Set(['rm', 'mv', 'cp', 'ln', 'chmod', 'chown', 'chgrp',
   'python', 'python3', 'node', 'ruby', 'xargs', 'dd', 'install', 'rsync', 'ditto', 'touch', 'shred', 'srm']);
 // A path with glob or brace characters names whatever its folder holds that matches; the folder decides.
 const globFolder = path => /[*?[{]/.test(path) ? path.slice(0, path.search(/[*?[{]/)).replace(/\/[^/]*$/, '') : undefined;
-const PROTECTED_NAME = /(?:preapproved|turbo|turbo-apps|turbo-owner|electron-grants|hand|permissions|settings-link)\.json|grant-seal\.key|menu-(?:presence|session)\.lock|\.sleight-shim-v1/i;
-const launcher = name => ['sleight', 'sleight-mcp', 'launch.mjs', '.sleight-shim-v1'].includes(name);
+const PROTECTED_NAME = /(?:preapproved|turbo|turbo-apps|turbo-owner|electron-grants|hand|permissions|settings-link)\.json|routine-launcher\.mjs|grant-seal\.key|menu-(?:presence|session)\.lock|\.sleight-shim-v1/i;
+// 18 times the largest pre-GD3 corpus command (3,606 characters). Above this UTF-16 limit, only a literal read allowlist runs.
+// This bounds parser work even without a protected-name hint; the hook also denies on a host-enforced timeout.
+export const MAX_PROTECTED_COMMAND = 65536;
+const protectedNames = [...settingsNames, ...scheduledFolders, 'sleight', 'sleight-mcp', 'launch.mjs', '.sleight-shim-v1'];
+// The candidate names have fixed small lengths. This wildcard walk has at most name.length retries per pattern character.
+function globNamesProtected(pattern, name) {
+  let i = 0, j = 0, star = -1, retry = 0;
+  while (j < name.length) {
+    if (pattern[i] === '?' || pattern[i] === name[j]) { i++; j++; }
+    else if (pattern[i] === '*') { star = i++; retry = j; }
+    else if (star >= 0) { i = star + 1; j = ++retry; }
+    else return false;
+  }
+  while (pattern[i] === '*') i++;
+  return i === pattern.length;
+}
+function oversizedProtectedCommand(command) {
+  if (command.length <= MAX_PROTECTED_COMMAND) return false;
+  // Fold literal concatenation, continuations, ANSI octal/hex and Unicode escapes before looking for names.
+  const decoded = command.replace(/\\(?:u\{([\da-f]{1,6})\}|([0-7]{1,3}))/gi, (match, unicode, octal) => {
+    const point = parseInt(unicode ?? octal, unicode ? 16 : 8);
+    return point <= 0x10ffff ? String.fromCodePoint(point) : match;
+  });
+  // Test before folding out backticks, which can execute code while constructing any path.
+  if (/`/.test(command)) return true;
+  const text = folded(unescaped(decoded)).replace(/[`^+]/g, ''), compact = text.replace(/\s/g, '');
+  if (sourceProtectedTarget(compact) || /sleight|sleigh~|launch\.mjs|appdata|turbo-host|powershell|pwsh|frombase64string|invoke-expression/.test(compact)) return true;
+  // Opaque expansions can construct any protected name. Fail closed without evaluating assignments or substitutions.
+  if (/[$`]|%[^%]*%/.test(text)) return true;
+  for (const token of text.split(/[\s/;|&()<>=]+/)) {
+    if (!/[*?\[{]/.test(token)) continue;
+    let pattern = '';
+    for (let i = 0; i < token.length; i++) {
+      if (token[i] === '[' || token[i] === '{') {
+        const end = token.indexOf(token[i] === '[' ? ']' : '}', i + 1);
+        // An unfinished bracket or brace is literal shell text. Stop searching the rest of this token once.
+        if (end < 0) { pattern += token.slice(i); break; }
+        pattern += token[i] === '[' ? '?' : '*'; i = end;
+      } else pattern += token[i];
+    }
+    if (protectedNames.some(name => globNamesProtected(pattern, name))) return true;
+  }
+  // Do not infer safety from absent protected names. An ancestor, decoder or arbitrary program needs no such name.
+  // Permit only a single literal data/read command, optionally after one inert comment-padding line. No expansion,
+  // redirection, pipeline, command separator, wrapper, assignment or executable option is admitted by this grammar.
+  const literal = command.replace(/^#+\r?\n/, '').trim();
+  return !/^(?:echo|printf|cat)[ \t]+[\w ./:%="'\[\]*?\\-]+$/.test(literal);
+}
+const launcher = name => ['sleight', 'sleight-mcp', 'launch.mjs', '.sleight-shim-v1'].includes(name.toLowerCase());
 const commandArgument = value => value.replace(/^['"]+|[;&|)'"]+$/g, '');
 // True when the words run the launcher's command with arguments `allowed` refuses (by default anything but status), as
 // separate words or inside a -c string, where the arguments run to the next shell operator.
@@ -186,7 +430,7 @@ function launcherToggle(words, command, allowed = statusOnly) {
   }
   return words.some(word => {
     if (!/\s/.test(word)) return false;
-    const hit = /(?<![\w.-])(?:\S*\/)?(?:sleight-mcp|\.sleight-shim-v1|launch\.mjs)(?=[\s'"]|$)/.exec(word);
+    const hit = /(?<![\w.-])(?:sleight-mcp|\.sleight-shim-v1|launch\.mjs)(?=[\s'"]|$)/.exec(word);
     // A script string that runs the launcher through xargs gives it arguments from input the guard doesn't see.
     if (hit && /(?<![\w-])xargs(?![\w-])[^;&\n]*$/.test(word.slice(0, hit.index))) return true;
     return !!hit && [...word.slice(hit.index).matchAll(new RegExp(`(?<![\\w-])${command}(?![\\w-])([^;&|)\\n]*)`, 'g'))]
@@ -198,14 +442,12 @@ const listingOnly = rest => rest.length === 0 || rest.length === 1 && rest[0] ==
 // The launcher's commands that change what sleight may do, each with the forms Claude's shell may run.
 const cursorReads = rest => ['list', 'check', 'status'].includes(rest[0]);
 const LAUNCHER_COMMANDS = [['turbo', statusOnly, 'turbo.json'], ['hand', statusOnly, 'hand.json'], ['cursor', cursorReads, 'hand.json'],
-  ['permissions', listingOnly, 'permissions.json'], ...['menu', 'link', 'unlink'].map(word => [word, () => false, 'hand.json'])];
-// Fail closed. A Bash command that names the launcher (sleight, sleight-mcp or launch.mjs) beside one of these subcommand words passes
-// only as a plain direct invocation of a read-only form: literal arguments, and no expansion, substitution, glob, brace,
-// redirection, heredoc, subshell, xargs, parallel or eval anywhere in it. Any other spelling is refused, except read-only
-// tools (grep, cat, git log) that can't run anything. The guard doesn't try to read what the shell would make of it.
-const LAUNCHER_NAME = /(?<![\w.-])(?:sleight-mcp|launch\.mjs)(?![\w.-])|(?:^|[^\w.-])\.sleight-shim-v1(?![\w.-])|\/\.local\/bin\/sleight(?![\w./:-])/;
-const launcherText = text => LAUNCHER_NAME.test(text) || /(?<![\w./-])sleight(?![\w./:-])/.test(text);
-const SUBCOMMAND = /(?<![\w-])(?:hand|turbo|permissions|cursor|menu|link|unlink)(?![\w.-])/; // not turbo.json or hand.json
+  ['permissions', listingOnly, 'permissions.json'], ...['menu', 'link', 'unlink', 'replay', 'record'].map(word => [word, () => false, 'hand.json'])];
+// Fail closed on launcher segments and executable shell text. Other pipelines' read/print arguments cannot change
+// the launcher's argv. The guard never evaluates expansions or reads scripts on disk.
+const LAUNCHER_NAME = /(?<![\w.-])(?:sleight-mcp|launch\.mjs)(?![\w.-])|(?:^|[^\w.-])\.sleight-shim-v1(?![\w.-])|\/\.local\/bin\/sleight(?![\w./:-])/i;
+const launcherText = text => LAUNCHER_NAME.test(text) || /(?<![\w./-])sleight(?![\w./:-])/i.test(text);
+const SUBCOMMAND = /(?<![\w-])(?:hand|turbo|permissions|cursor|menu|link|unlink|replay|record)(?![\w.-])/; // not turbo.json or hand.json
 const INPUT_RUNNERS = String.raw`(?<![\w-])(?:\w*args|parallel|eval|source)(?![\w-])`;
 const EXPANDS = String.raw`[$` + '`' + String.raw`*?[\]{}]`;
 // With the launcher named but no subcommand word: text that could still make one.
@@ -228,8 +470,27 @@ const PREFIX_OPTIONS = {
   caffeinate: { flags: ['-d', '-i', '-m', '-s', '-u'], args: ['-t', '-w'] },
   command: { flags: ['-p', '-v', '-V'], args: [] },
   exec: { flags: ['-c', '-l'], args: ['-a'] },
+  builtin: { flags: [], args: [] },
+  busybox: { flags: [], args: [] },
+  doas: { flags: ['-n', '-s', '-L'], args: ['-u', '-C'] },
+  xargs: { flags: ['-0', '-r', '-t', '-p', '-x', '--null', '--no-run-if-empty', '--verbose'],
+    args: ['-I', '-J', '-L', '-n', '-P', '-s', '-E', '-a', '--replace', '--max-lines', '--max-args', '--max-procs', '--max-chars', '--eof', '--arg-file'] },
+  arch: { flags: ['-arm64', '-arm64e', '-x86_64', '-i386'], args: [] },
+  taskpolicy: { flags: ['-b', '-B', '-s', '-a', '-x', '-X'], args: ['-c', '-t', '-d', '-g', '-l', '-p', '-m', '-j', '-S', '-P'] },
+  script: { flags: ['-a', '-d', '-e', '-F', '-k', '-q', '-r'], args: ['-t'], positional: true },
+  chroot: { flags: [], args: ['--userspec', '--groups'], positional: true },
+  setsid: { flags: ['-c', '-f', '-w', '--ctty', '--fork', '--wait'], args: [] },
+  unbuffer: { flags: ['-p'], args: [] },
+  noglob: { flags: [], args: [] },
+  nocorrect: { flags: [], args: [] },
+  lockf: { flags: ['-k', '-n', '-s'], args: ['-t'], positional: true },
+  'sandbox-exec': { flags: [], args: ['-f', '-p', '-D'] },
+  watch: { flags: ['-d', '-e', '-g', '-t', '-x', '--differences', '--errexit', '--chgexit', '--no-title', '--exec'], args: ['-n', '--interval'] },
+  'reattach-to-user-namespace': { flags: ['-l'], args: [] },
 };
-const PREFIXES = new Set(Object.keys(PREFIX_OPTIONS));
+for (const name of ['timeout', 'nice', 'env', 'stdbuf', 'time', 'xargs']) PREFIX_OPTIONS['g' + name] = PREFIX_OPTIONS[name];
+const PREFIXES = new Set(Object.keys(PREFIX_OPTIONS).filter(name => !['xargs', 'gxargs'].includes(name)));
+const WRITER_PREFIXES = new Set([...PREFIXES, 'xargs', 'gxargs']);
 const READ_PREFIXES = new Set(['env', 'nohup', 'time', 'timeout']);
 // The index after a prefix's options, or -1 for an option the guard doesn't know.
 function prefixEnd(segment, i, options) {
@@ -244,26 +505,38 @@ function prefixEnd(segment, i, options) {
     return -1;
   }
   if (options.duration) { if (!/^\d+(?:\.\d+)?[smhd]?$/.test(word(i) ?? '')) return -1; i++; }
+  if (options.positional) { if (word(i) === undefined) return -1; i++; }
   return i;
 }
 // The segment's command word, after assignments and prefixes such as env or nohup (with their known options).
 // assigned: an assignment came first, which can change what the command word runs (PATH, GIT_PAGER).
 function commandWord(segment, prefixes = PREFIXES) {
-  let assigned = false;
+  let assigned = false, xargs = false, keyword = false;
+  const outputs = [];
   for (let i = 0; i < segment.length;) {
+    // Redirections may precede the command (curl u | >/dev/null sh).
+    if (/^\d+$/.test(segment[i].text) && segment[i + 1]?.operator && /^[<>]/.test(segment[i + 1].text)) { i++; continue; }
+    if (segment[i].operator && /^[<>]/.test(segment[i].text)) {
+      if (!segment[i + 1] || segment[i + 1].operator) return { unreadable: true };
+      i += 2; continue;
+    }
     if (segment[i].operator) return { unreadable: true };
     const text = segment[i].text, name = text.split('/').at(-1);
+    if (!segment[i].quoted && !segment[i].joined && /^(?:!|if|then|elif|else|do|while|until|coproc)$/.test(text)) { keyword = true; i++; continue; }
+    if (!segment[i].quoted && text === 'function') { keyword = true; i += 2; continue; }
     if (/^[A-Za-z_]\w*=/.test(text)) { assigned = true; i++; continue; }
     if (prefixes.has(name)) {
+      xargs ||= name === 'xargs' || name === 'gxargs';
       i = prefixEnd(segment, i + 1, PREFIX_OPTIONS[name]);
-      if (i < 0) return { unreadable: true };
+      if (i < 0) return { unreadable: true, xargs, opaque: name === 'script', outputs };
+      if (name === 'script') outputs.push(segment[i - 1].text);
       continue;
     }
-    return { index: i, unreadable: UNREADABLE_WORD.test(text) || segment[i].joined === true, assigned };
+    return { index: i, unreadable: UNREADABLE_WORD.test(text) || segment[i].joined === true, assigned, xargs, keyword, outputs };
   }
-  return { assigned };
+  return { assigned, xargs };
 }
-const READ_FORMS = ['hand status', 'turbo status', 'permissions', 'permissions list', 'cursor list', 'cursor status', 'runs list'];
+const READ_FORMS = ['--doctor', 'hand status', 'turbo status', 'permissions', 'permissions list', 'cursor list', 'cursor status', 'runs list'];
 const readForm = args => args.length === 3 && args[0] === 'runs' && args[1] === 'open' && /^\d{4}-\d{2}-\d{2}-[a-f0-9]{32}$/.test(args[2]) || READ_FORMS.includes(args.join(' ')) || args.length === 3 && args[0] === 'cursor' && args[1] === 'check' && /^[\w-]{1,64}$/.test(args[2]);
 // The launcher run directly, or by node with -- options, with literal arguments in a read form. at is its first word.
 function launcherReadForm(plain, at) {
@@ -272,10 +545,20 @@ function launcherReadForm(plain, at) {
 }
 const SHELLS = new Set(['sh', 'bash', 'zsh', 'dash', 'ksh', 'fish', 'csh', 'tcsh']);
 const INTERPRETERS = /^(?:python[\d.]*|node|ruby|perl|php|osascript|swift|lua|tclsh|deno|bun|expect)$/;
+const INLINE_FLAG = /^-(?:[a-zA-Z]*[ceEprRF]|-eval|-print)(?:=|$)/;
 const shellScript = (words, at) => {
   if (!SHELLS.has(words[at]?.split('/').at(-1))) return undefined;
-  const flag = words.findIndex((word, k) => k > at && /^-[a-zA-Z]*c[a-zA-Z]*$/.test(word));
-  return flag > at && words.slice(at + 1, flag).every(word => /^-[a-zA-Z]+$/.test(word)) ? words[flag + 1] ?? '' : null;
+  let source = false;
+  for (let i = at + 1; i < words.length; i++) {
+    const word = words[i];
+    if (word === '--') return source ? words[i + 1] ?? '' : null;
+    if (/^-[a-zA-Z]*c[a-zA-Z]*$/.test(word)) source = true;
+    // A trailing o/O consumes the next word even when this cluster also sets -c.
+    if (['-o', '-O', '+o', '+O', '--rcfile', '--init-file'].includes(word) || /^[+-][a-zA-Z]+[oO]$/.test(word)) { i++; continue; }
+    if (/^[+-]/.test(word)) continue;
+    return source ? word : null;
+  }
+  return source ? '' : null;
 };
 // A shell or interpreter beside a subcommand word passes only when it runs the launcher's read form literally:
 // node /x/lib/launch.mjs hand status, or sh -c with exactly that script and nothing after it.
@@ -293,7 +576,7 @@ function runsLauncherReadForm(segment, index) {
 // that run another program or write a file make the tool something else.
 const READ_TOOLS = new Set(['grep', 'egrep', 'fgrep', 'rg', 'cat', 'head', 'tail', 'wc', 'ls', 'file', 'stat', 'diff']);
 const GIT_READS = new Set(['log', 'show', 'diff', 'grep', 'blame', 'status']);
-const RUNS_COMMAND = /^--(?:pre|pre-glob|filter|view|pager|open-files-in-pager|output|ext-diff|exec)(?:=|$)/;
+const RUNS_COMMAND = /^--(?:pre|pre-glob|filter|view|pager|open-files-in-pager|output|ext-diff|exec|hostname-bin)(?:=|$)/;
 function readTool(segment) {
   const { index, unreadable, assigned } = commandWord(segment, READ_PREFIXES);
   if (index === undefined || unreadable || assigned) return false;
@@ -303,6 +586,186 @@ function readTool(segment) {
   // git grep -O opens a pager command.
   return name === 'git' && GIT_READS.has(args[0] === '--no-pager' ? args[1] : args[0]) && !args.some(word => /^-O/.test(word));
 }
+// Drop shell redirections and their optional fd prefixes while preserving argument quote metadata.
+function shellArgv(segment, at) {
+  const argv = [];
+  for (let i = at; i < segment.length; i++) {
+    if (segment[i].operator && /^[<>]/.test(segment[i].text)) { i++; continue; }
+    if (/^\d+$/.test(segment[i].text) && segment[i + 1]?.operator && /^[<>]/.test(segment[i + 1].text)) continue;
+    argv.push(segment[i]);
+  }
+  return argv;
+}
+// One forward scan. Delimited patterns and replacements are skipped once, so long flag strings cannot backtrack.
+function sedEffects(text) {
+  let i = 0, executes = false;
+  const writes = [];
+  const delimited = (delimiter, pattern = false) => {
+    let bracket = false, first = false;
+    while (i < text.length) {
+      const c = text[i++];
+      if (c === '\\') i++;
+      else if (pattern && c === '[' && !bracket) { bracket = true; first = true; }
+      else if (bracket) {
+        if (c === ']' && !first) bracket = false;
+        if (c !== '^' || !first) first = false;
+      } else if (c === delimiter) return;
+    }
+  };
+  const filename = () => {
+    const start = i;
+    while (i < text.length && !/[;\n}]/.test(text[i])) i++;
+    const path = text.slice(start, i).trim();
+    if (path) writes.push(path);
+  };
+  while (i < text.length) {
+    // Addresses, ranges, negation and group separators precede a command.
+    while (i < text.length) {
+      const c = text[i];
+      if (/[\s;{}\d$,!~+]/.test(c)) { i++; continue; }
+      if (c === '/') { i++; delimited('/', true); continue; }
+      if (c === '\\' && i + 1 < text.length) { i++; delimited(text[i++], true); continue; }
+      break;
+    }
+    const op = text[i++];
+    if (op === 'e') { executes = true; filename(); }
+    else if (op === 'w' || op === 'W') filename();
+    else if (op === 's' || op === 'y') {
+      const delimiter = text[i++];
+      if (!delimiter) break;
+      delimited(delimiter, true); delimited(delimiter);
+      while (i < text.length && !/[;\n}]/.test(text[i])) {
+        const flag = text[i++];
+        if (op === 's' && flag === 'e') executes = true;
+        if (op === 's' && (flag === 'w' || flag === 'W')) { filename(); break; }
+      }
+    } else {
+      // Other commands cannot execute text. Their operands end at the next command separator.
+      while (i < text.length && !/[;\n{}]/.test(text[i])) {
+        if (text[i] === '\\') i++;
+        i++;
+      }
+    }
+  }
+  return { executes, writes };
+}
+const sedExecutes = text => sedEffects(text).executes;
+// getopt accepts every unique long-option prefix. Conservatively recognize even an ambiguous writing prefix.
+const longOption = (arg, option) => arg.startsWith('--') && arg.length > 2 && option.startsWith(arg.split('=')[0]);
+const sedInPlace = arg => /^-[^-]*[iI]/.test(arg) || longOption(arg, '--in-place');
+function sedData(segment, index) {
+  const args = shellArgv(segment, index + 1), scripts = [], files = [];
+  let inPlace = false, options = true;
+  for (let i = 0; i < args.length; i++) {
+    const word = args[i], text = word.text;
+    if (options && text === '--') { options = false; continue; }
+    if (options && /^-[^-]*f|^--file(?:=|$)/.test(text)) return false;
+    if (options && ['-n', '-E', '-r', '--quiet', '--silent', '--regexp-extended'].includes(text)) continue;
+    if (options && sedInPlace(text)) {
+      inPlace = true;
+      if (['-i', '-I', '-ni', '-nI', '-Ei', '-EI'].includes(text) && (args[i + 1]?.text === '' || args[i + 1]?.text.startsWith('.'))) i++;
+      continue;
+    }
+    if (options && ['-e', '--expression'].includes(text)) { if (!args[++i]) return false; scripts.push(args[i]); continue; }
+    if (options && text.startsWith('--expression=')) { scripts.push({ ...word, text: text.slice(13) }); continue; }
+    if (options && text.startsWith('-')) return false;
+    if (!scripts.length) scripts.push(word); else files.push(word);
+    options = false;
+  }
+  return scripts.length > 0 && scripts.every(word => !word.operator && !sedExecutes(word.text) &&
+    (word.literal || word.quoted ? word.literal || !/\$|`/.test(word.text) : !EXPANDING_WORD.test(word.text))) &&
+    (!inPlace || files.every(word => !word.joined && !EXPANDING_WORD.test(word.text)));
+}
+// These fixed command words treat arguments as data. Shell substitutions are checked separately, and shellWritePaths
+// still checks every output destination. Runner options keep tools such as rg and sort outside this exemption.
+function dataTool(segment) {
+  const { index, unreadable, assigned } = commandWord(segment, new Set());
+  if (index === undefined || unreadable || assigned) return false;
+  const plain = segment.map(word => word.text), name = plain[index].split('/').at(-1), args = plain.slice(index + 1);
+  if (args.some(word => RUNS_COMMAND.test(word) || word.startsWith('--') && word.length > 2 &&
+    '--compress-program'.startsWith(word.split('=')[0]))) return false;
+  // sed's e command and s///e flag execute text; -f loads a script the guard cannot inspect. Its w and -i writes
+  // remain data operations here, with destinations checked by shellWritePaths.
+  if (name === 'sed') return sedData(segment, index);
+  // Commit and PR message arguments are data; their substitutions are still
+  // checked as executable source, and output paths retain the write checks.
+  if (name === 'git' && args[0] === 'commit' || name === 'gh' && args[0] === 'pr' && args[1] === 'create') return true;
+  return READ_TOOLS.has(name) || ['echo', 'printf', 'sort', 'uniq', 'jq'].includes(name);
+}
+// Output operands that are not shell redirections. Keep option arguments out of uniq's positional operands.
+function argumentWritePaths(name, args) {
+  const paths = [];
+  if (name === 'sort' || name === 'shuf') for (let i = 0; i < args.length; i++) {
+    const arg = args[i];
+    if (arg === '--') break;
+    if (longOption(arg, '--output')) paths.push(arg.includes('=') ? arg.slice(arg.indexOf('=') + 1) : args[++i]);
+    else if (arg === '-o') paths.push(args[++i]);
+    else if (/^-[^-]*o/.test(arg)) {
+      const tail = arg.slice(arg.indexOf('o') + 1);
+      paths.push(tail || args[++i]);
+    }
+  }
+  if (name === 'csplit') for (let i = 0; i < args.length; i++) {
+    const arg = args[i];
+    if (arg === '--') break;
+    if (longOption(arg, '--prefix')) paths.push(arg.includes('=') ? arg.slice(arg.indexOf('=') + 1) : args[++i]);
+    else if (/^-f/.test(arg)) paths.push(arg.slice(2) || args[++i]);
+  }
+  if (name === 'uniq') {
+    const operands = [];
+    let options = true;
+    for (let i = 0; i < args.length; i++) {
+      const arg = args[i];
+      if (options && arg === '--') { options = false; continue; }
+      if (options && ['--skip-fields', '--skip-chars', '--check-chars'].some(option => longOption(arg, option))) {
+        if (!arg.includes('=')) i++;
+        continue;
+      }
+      if (options && ['-f', '-s', '-w'].includes(arg)) { i++; continue; }
+      if (options && /^-[^-]*[fsw]$/.test(arg)) { i++; continue; }
+      if (options && arg.startsWith('-') && arg !== '-') continue;
+      operands.push(arg);
+    }
+    if (operands.length > 1) paths.push(operands[1]);
+  }
+  if (name === 'file' && args.some(arg => /^-[^-]*C/.test(arg) || arg === '--compile')) {
+    for (let i = 0; i < args.length; i++) {
+      const arg = args[i];
+      if (arg === '--') break;
+      if (arg === '-m' || arg === '--magic-file') paths.push(args[++i]);
+      else if (arg.startsWith('--magic-file=')) paths.push(arg.slice(13));
+      else if (/^-[^-]*m/.test(arg)) paths.push(arg.slice(arg.indexOf('m') + 1) || args[++i]);
+    }
+    // With no -m, file compiles the default database in the current directory.
+    if (!paths.length) paths.push('magic.mgc');
+  }
+  return paths.filter(path => typeof path === 'string');
+}
+function substitutionWriter(segment) {
+  const { index } = commandWord(segment);
+  if (index === undefined) return false;
+  const name = segment[index].text.split('/').at(-1), args = shellArgv(segment, index + 1).map(word => word.text);
+  const redirects = segment.flatMap((word, at) => word.operator && /^(?:>|<>)/.test(word.text) && segment[at + 1] ? [segment[at + 1].text] : []);
+  const outputs = argumentWritePaths(name, args);
+  const writes = redirects.length || outputs.length || ['tee', 'truncate', 'touch'].includes(name) ||
+    name === 'sed' && args.some(arg => sedInPlace(arg) || sedEffects(arg).writes.length);
+  if (!writes) return false;
+  // GD1's requested dated documentation log remains allowed. Only plain literal document redirects get this exception.
+  const documentLog = ['echo', 'printf'].includes(name) && !outputs.length && redirects.length &&
+    redirects.every(path => /^[\w./-]+\.(?:md|txt|log)$/.test(path) && !path.split('/').includes('..') && !CONFIG.test(folded(normalize(path)))) &&
+    !segment.some(word => LAUNCHER_NAME.test(word.text));
+  return !documentLog;
+}
+function sourceProtectedTarget(source) {
+  const text = folded(unescaped(source));
+  if (ENGINE_TREE.test(text)) return PROTECTED.engine;
+  if (PROTECTED_NAME.test(text) || /permissions-command\.mjs|preapproved\.mjs/.test(text) ||
+      /application\s*support/.test(text) && /sleight/.test(text)) return PROTECTED.settings;
+  if (/library[\s/]*caches/.test(text) && /sleight/.test(text)) return PROTECTED.cache;
+  if (/plugins[\s/]*cache/.test(text) && /sleight/.test(text)) return PROTECTED.install;
+  if (/\.local[\s/]*bin[\s/]*sleight/.test(text)) return PROTECTED.shim;
+  return undefined;
+}
 // A read tool's segment passes only when nothing in the command can run something else: no output redirection,
 // subshell, find -exec or substitution anywhere.
 function readOnly(command, words) {
@@ -311,13 +774,19 @@ function readOnly(command, words) {
 }
 // After a pipe: a segment that runs its input as code (git log --format=%s | sh) or as arguments (| xargs, | parallel).
 function runsInput(segment) {
-  const { index } = commandWord(segment);
-  if (index === undefined) return false;
+  segment = segment.filter(word => !word.comment);
+  const { index, unreadable } = commandWord(segment);
+  if (index === undefined) return 'code';
   const plain = segment.map(word => word.text), name = plain[index].split('/').at(-1), args = plain.slice(index + 1);
+  // sh 2>&1, sh > out.log, sh # note and the ) closing (curl u | sh) leave sh reading its input as code.
+  const argv = shellArgv(segment, index + 1).filter(word => !word.operator && !word.comment).map(word => word.text);
   if (['eval', 'source', '.'].includes(name)) return 'code';
   if (/^\w*args$|^parallel$/.test(name)) return 'arguments';
-  if (SHELLS.has(name)) return args.includes('-s') || !args.some(arg => /^-[a-zA-Z]*c[a-zA-Z]*$/.test(arg) || !arg.startsWith('-')) ? 'code' : false;
-  if (INTERPRETERS.test(name)) return args.includes('-') || !args.some(arg => /^-(?:c|e|m|p|E|-eval|-print)(?:=|$)/.test(arg) || !arg.startsWith('-')) ? 'code' : false;
+  if (unreadable) return 'code';
+  if (name === 'sed' && args.some(arg => /^-[^-]*f|^--file(?:=|$)/.test(arg) ||
+      sedExecutes(arg.replace(/^--expression=/, '').replace(/^-[nEr]*e/, '')))) return 'code';
+  if (SHELLS.has(name)) return argv.includes('-s') || !argv.some(arg => /^-[a-zA-Z]*c[a-zA-Z]*$/.test(arg) || !arg.startsWith('-')) ? 'code' : false;
+  if (INTERPRETERS.test(name)) return argv.includes('-') || !argv.some(arg => /^-(?:c|e|m|p|E|-eval|-print)(?:=|$)/.test(arg) || !arg.startsWith('-')) ? 'code' : false;
   return false;
 }
 function runsSubcommand(segment) {
@@ -335,78 +804,158 @@ function segmentNamesLauncher(segment, depth = 0) {
   if (index === undefined) return segment.some(word => !word.operator && LAUNCHER_NAME.test(word.text));
   const plain = segment.map(word => word.text), name = plain[index].split('/').at(-1);
   const hardName = segment.some(word => !word.operator && LAUNCHER_NAME.test(word.text));
+  const script = shellScript(shellArgv(segment, index).map(word => word.text), 0);
+  const codeAt = typeof script === 'string' ? plain.indexOf(script, index + 1) : -1;
+  // The tokenizer already removes quoting, escapes and redirection operators. Inspect every remaining word,
+  // including redirect targets and words after +/- options, rather than guessing which argument is the script.
+  // A shell's -c source is parsed below as code, with its own command and data words.
+  if (SHELLS.has(name) || INTERPRETERS.test(name)) {
+    if (segment.some((word, at) => at !== codeAt && !word.operator && launcher(word.text.split('/').at(-1)))) return true;
+  }
   if (!hardName && SHELLS.has(name)) {
-    const script = shellScript(plain, index);
-    if (typeof script !== 'string') return false;
-    const segments = [[]];
-    for (const word of shellWords(script)) {
-      if (word.operator && [';', '&', '&&', '||', '|', '|&'].includes(word.text)) segments.push([]);
-      else segments.at(-1).push(word);
+    if (typeof script === 'string') {
+      const segments = [[]];
+      for (const word of shellWords(script)) {
+        if (word.operator && [';', '&', '&&', '||', '|', '|&'].includes(word.text)) segments.push([]);
+        else segments.at(-1).push(word);
+      }
+      return segments.some(segment => segmentNamesLauncher(segment, depth + 1));
     }
-    return segments.some(segment => segmentNamesLauncher(segment, depth + 1));
+    return false;
   }
   if (name === 'node') { let at = index + 1; while (plain[at]?.startsWith('--')) at++; if (launcher(plain[at]?.split('/').at(-1) ?? '')) return true; }
   // -c/-e source is code, unlike commit messages, path operands and node --test arguments.
-  const code = INTERPRETERS.test(name) && plain.slice(index + 1).some(word => /^-(?:[a-zA-Z]*[ceE]|-eval)(?:=|$)/.test(word));
+  const code = INTERPRETERS.test(name) && plain.slice(index + 1).some(word => INLINE_FLAG.test(word));
   const dataArguments = readTool(segment) || ['echo', 'printf', 'git', 'gh', 'npm'].includes(name) || INTERPRETERS.test(name) && !code;
   return segment.some((word, i) => !word.operator &&
     (dataArguments && i !== index ? LAUNCHER_NAME.test(word.text) : (i === index ? launcherText(name) || LAUNCHER_NAME.test(word.text) : launcherText(word.text))));
 }
-function launcherRefused(command, depth = 0) {
-  if (depth > 8) return true;
-  const words = shellWords(command), texts = [command, ...words.map(word => word.text)];
-  // Pipelines split on ; & && || and newline; their segments on | and |&. Subshell parentheses stay in the segment.
+// Pipelines split on ; & && || and newline; their segments on | and |&. Subshell parentheses stay in the segment.
+function pipelinesOf(words) {
   const pipelines = [[[]]];
   for (const word of words) {
+    if (word.comment) continue;
     if (word.operator && [';', '&', '&&', '||'].includes(word.text)) pipelines.push([[]]);
     else if (word.operator && ['|', '|&'].includes(word.text)) pipelines.at(-1).push([]);
     else pipelines.at(-1).at(-1).push(word);
   }
+  return pipelines;
+}
+function launcherRefused(command, depth = 0, inheritedSub = false, parsed, platform = runtimePlatform) {
+  if (depth > 8) return true;
+  const words = parsed?.words ?? shellWords(command);
+  if (words.ambiguous && platform !== 'win32') return true;
+  // An expansion in a data argument can execute code even though the outer command cannot.
+  const context = inheritedSub || SUBCOMMAND.test(command) || LAUNCHER_NAME.test(command);
+  for (const code of words.substitutions) {
+    const refusal = launcherRefused(code, depth + 1, context, undefined, platform);
+    if (refusal) return refusal;
+  }
+  if ((parsed?.sources ?? words.sources).some(source => {
+    if (!parsed?.sourcesChecked && sourceProtectedTarget(source)) return true;
+    // A subcommand word alone is ordinary program data. Retain the existing
+    // conservative boundary for joined literals and expansions in interpreter
+    // source, which can construct launcher names in another language.
+    if (launcherText(command)) return true;
+    const sourceWords = shellWords(source);
+    // Per line: a subcommand word on one line and a glob or quote join on another (`cur.execute('select * from t')`
+    // after `conn.cursor()`) is ordinary program text.
+    if (source.split('\n').some(line => SUBCOMMAND.test(line) && shellWords(line).some(word => !word.operator &&
+      (word.joined || EXPANDING_WORD.test(word.text))))) return true;
+    // Across lines, a launcher name split into joined literals (`'sl' . 'eight-mcp'`) beside a subcommand word
+    // anywhere in the source still refuses.
+    if (SUBCOMMAND.test(source) && /sleight|launch\.?mjs/i.test(source.replace(/[\s'"`.+,()[\]{}\\]/g, ''))) return true;
+    const text = unescaped(source);
+    // Dequoting cannot create a launcher word unless its letters are present after unescaping. Preserve the token-level
+    // boundary check when they are, including literal quote characters that unescaped removes from between words.
+    return launcherText(text) || /sleight|launch\.mjs/i.test(text) &&
+      sourceWords.some(word => launcherText(word.text) || launcher(word.text.split('/').at(-1)));
+  })) return true;
+  const texts = [command, ...words.map(word => word.text)];
+  const pipelines = pipelinesOf(words);
   const named = texts.some(text => LAUNCHER_NAME.test(text)) || pipelines.flat().some(segment => segmentNamesLauncher(segment));
-  const sub = texts.some(text => SUBCOMMAND.test(text)) || pipelines.flat().some(runsSubcommand);
+  const sub = inheritedSub || texts.some(text => SUBCOMMAND.test(text)) || pipelines.flat().some(runsSubcommand);
   // Piped text run as code can be anything. Piped text as xargs arguments refuses once the launcher or a subcommand shows.
   for (const pipeline of pipelines) for (const segment of pipeline.slice(1)) {
-    const runs = segment.length && runsInput(segment);
+    const runs = runsInput(segment);
     if (runs === 'code' || runs === 'arguments' && (named || sub)) return true;
   }
+  // eval parses joined arguments again. Plain initialization substitutions remain
+  // allowed; other dynamic eval arguments have unknown source and refuse.
+  for (const segment of pipelines.flat()) {
+    const { index } = commandWord(segment);
+    if (index === undefined || segment[index].text.split('/').at(-1) !== 'eval') continue;
+    const args = shellArgv(segment, index + 1).filter(word => !word.operator && !word.comment);
+    const code = args.map(word => word.text).join(' ');
+    if (/[$`]/.test(code)) {
+      const initialization = args.length === 1 && !args[0].literal &&
+        /^\$\([^$`]*\)$/.test(code) && !sourceProtectedTarget(code);
+      if (!initialization) return true;
+    } else if (launcherRefused(code, depth + 1, inheritedSub, undefined, platform)) return true;
+  }
   const reads = readOnly(command, words);
-  const launcherSegments = pipelines.flat().filter(segment => segmentNamesLauncher(segment));
-  // Only read tools name the launcher: nothing here can run it, so the command-wide rule is off.
-  const exempt = named && reads && launcherSegments.every(readTool);
-  if (named && !exempt && texts.some(text => (sub ? UNPLAIN : GENERATES).test(text))) return true;
   for (const pipeline of pipelines) {
-    const pipeSub = pipeline.flat().some(word => !word.operator && SUBCOMMAND.test(word.text)) || pipeline.some(runsSubcommand);
+    const pipeSub = inheritedSub || pipeline.flat().some(word => !word.operator && SUBCOMMAND.test(word.text)) || pipeline.some(runsSubcommand);
     for (const segment of pipeline) {
       if (!segment.length || reads && readTool(segment)) continue;
       const segNamed = segmentNamesLauncher(segment);
-      const segSub = segment.some(word => !word.operator && SUBCOMMAND.test(word.text)) || runsSubcommand(segment);
+      const segSub = inheritedSub || segment.some(word => !word.operator && SUBCOMMAND.test(word.text)) || runsSubcommand(segment);
       const { index, unreadable } = commandWord(segment);
-      // A command word the guard can't read beside a subcommand word may be the launcher under another spelling.
-      if (unreadable && pipeSub) return true;
-      if (index === undefined) { if (segNamed && segSub) return true; continue; }
+      let launchAt = index;
+      if (SHELLS.has(segment[index]?.text.split('/').at(-1)) || INTERPRETERS.test(segment[index]?.text.split('/').at(-1) ?? ''))
+        launchAt = segment.findIndex((word, at) => at > index && !word.operator && launcher(word.text.split('/').at(-1)));
+      if (launcher(segment[launchAt]?.text.split('/').at(-1) ?? '') &&
+          ['replay', 'record'].includes(shellArgv(segment, launchAt + 1)[0]?.text)) return PROTECTED.replay;
       const plain = segment.map(word => word.text);
-      const script = shellScript(plain, index);
-      if (!segNamed && typeof script === 'string' && plain.at(-1) === script) {
-        if (launcherRefused(script, depth + 1)) return true;
-        continue;
+      const script = index === undefined ? undefined : shellScript(shellArgv(segment, index).map(word => word.text), 0);
+      if (typeof script === 'string') {
+        const refusal = launcherRefused(script, depth + 1, inheritedSub, undefined, platform);
+        if (refusal) return refusal;
       }
-      if (segSub) {
+      const data = dataTool(segment);
+      if (data && (segSub || named) && substitutionWriter(segment) &&
+          segment.some((word, at) => !word.literal && (/\$\(|`/.test(word.text) ||
+            word.text === '$' && segment[at + 1]?.operator && segment[at + 1].text === '('))) return true;
+      if (named && !data && segment.some(word => GENERATES.test(word.text))) return true;
+      // Expansion checks follow the segment naming the launcher. Other pipelines' patterns and print arguments cannot
+      // change its argv. Keep the old conservative rule for reads that name a launcher file as an operand.
+      if (segNamed && !(reads && readTool(segment)) && segment.some(word => (segSub ? UNPLAIN : GENERATES).test(word.text))) return true;
+      // A command word the guard can't read beside a subcommand word may be the launcher under another spelling.
+      if (unreadable && (pipeSub || named)) return true;
+      if (index === undefined) { if (segNamed && segSub) return true; continue; }
+      // The launcher is not a heredoc consumer in any supported read form.
+      if (segNamed && segment.some(word => word.operator && word.text === '<<')) return true;
+      if (typeof script === 'string' && plain.at(-1) === script && !segNamed) continue;
+      if (segSub && !data) {
         // Beside a subcommand word, every word is plain: no expansion, glob, brace or joined quoting.
         if (segment.some(word => !word.operator && (word.joined || EXPANDING_WORD.test(word.text)))) return true;
         const name = plain[index].split('/').at(-1);
         if (SHELLS.has(name) || INTERPRETERS.test(name)) {
+          if (segment.some(word => /^[<>]\(/.test(word.text))) return true;
+          // Inline programs can construct the launcher from adjacent string pieces. Keep that conservative refusal,
+          // while allowing literal programs that only print a subcommand word.
+          const inline = INTERPRETERS.test(name) && plain.slice(index + 1).some(word => INLINE_FLAG.test(word));
+          if (inline && plain.slice(index + 1).some(word => /sleight|launch\.mjs/i.test(unescaped(word)))) return true;
           if (name === 'node' && plain[index + 1] === '--test' && !segNamed) continue;
+          // Only segments with no launcher word may use the ordinary-program exemption. Options and fd redirects
+          // do not make an ordinary script or literal inline program into a launcher. Expansions were refused above.
+          const scriptWord = shellArgv(segment, index + 1).find(word => !/^[+-]/.test(word.text));
+          if (!segNamed && scriptWord && !scriptWord.operator) continue;
           if (!runsLauncherReadForm(segment, index)) return true; continue;
         }
       }
       if (script === null && named && sub) return true;
-      if (script !== undefined) { if (script !== null && launcherRefused(script, depth + 1)) return true; continue; }
-      if (!(named && sub) || !segNamed) continue;
+      if (script !== undefined) continue;
+      if (!segNamed || !sub && !plain.includes('--doctor')) continue;
       // A direct invocation: the launcher itself, or node with its options and then the launcher.
       let at = index;
       if (plain[at].split('/').at(-1) === 'node') { at++; while (plain[at]?.startsWith('--')) at++; }
       if (!launcher(plain[at]?.split('/').at(-1) ?? '')) return true;
       const args = plain.slice(at + 1);
+      if (args[0] === '--doctor') {
+        // Redirections are shell syntax, not doctor arguments. The expansion and protected-path checks still apply.
+        if (!readForm(shellArgv(segment, at + 1).map(word => word.text))) return true;
+      }
       if (args.some(arg => arg.startsWith('~') || LAUNCHER_NAME.test(arg))) return true;
       if ((args[0] === 'runs' || args.some(arg => SUBCOMMAND.test(arg))) && !readForm(args)) return true;
     }
@@ -414,20 +963,239 @@ function launcherRefused(command, depth = 0) {
   return false;
 }
 
-function shellWritePaths(command, initialDirectory, depth = 0) {
-  if (depth > 8) return [];
-  const paths = [], segments = [{ words: [] }];
-  let directory = initialDirectory;
-  for (const word of shellWords(command)) {
+// PowerShell and cmd have too many ways to assemble a path to recognize write shapes. Fail closed on state-name hints,
+// env traversal and wildcard path words instead. Only a single literal reader is exempt. This courtesy barrier cannot
+// see a script file's contents or isolate arbitrary programs running as the same user.
+const WINDOWS_CACHE_TEXT = /localappdata|localapplicationdata|appdata|appdat~/i;
+const WINDOWS_HELPER_NAME = /sleight|sleigh~|turbo-host/i;
+const WINDOWS_PATH_HINT = /appdata|appdat~|(?:^|[/:])local(?:\/|$)|sleight|sleigh~|turbo-host|\$\{?env:|\benv:|%[^%\s]+%|~|\$\{?(?:home|profile)\b|userprofile|(?:^|[^a-z0-9_])[a-z]:\/users(?:\/|$)|(?:^|\/)(?:mnt\/|cygdrive\/)?[a-z]\/users(?:\/|$)/i;
+const RELATIVE_ROOT = /^(?:-[\w-]+:)?\.{1,2}\//;
+const WINDOWS_MATCHES = Object.freeze({
+  name: "names sleight's helper folder",
+  helperHint: 'has a sleight helper-name hint',
+  appdata: 'has a local app-data folder hint',
+  wildcard: 'has a wildcard in a word with a path hint',
+  traversal: 'combines an environment path with parent traversal',
+  substitution: 'uses cmd variable substitution',
+  encoded: 'uses an encoded PowerShell command flag',
+  decoded: 'invokes a decoded PowerShell expression',
+});
+const WINDOWS_READERS = new Set(['cat', 'type', 'dir', 'ls', 'get-content', 'gc', 'get-item', 'gi', 'get-childitem', 'gci', 'test-path', 'get-filehash']);
+// Keep quoted arguments atomic: a git message containing "pwsh -e" is data. Backslashes are literal on Windows.
+function windowsCommandWords(command) {
+  const words = [];
+  let text = '', quote = '', quoted = false, bare = false;
+  const flush = () => { if (text) words.push({ text, quoted: quoted && !bare }); text = ''; quoted = false; bare = false; };
+  for (const c of command.replace(/[`^+]/g, '')) {
+    if (quote) { if (c === quote) quote = ''; else text += c; }
+    else if (c === '"' || c === "'") { quote = c; quoted = true; }
+    else if (/[\r\n;&|()<>{}]/.test(c)) { flush(); words.push({ text: c, operator: true }); }
+    else if (/\s/.test(c)) flush();
+    else { text += c; bare = true; }
+  }
+  flush();
+  return words;
+}
+function windowsEncodedCommand(command, depth = 0) {
+  // Escape ticks join letters in PowerShell; paired ticks can also run a POSIX substitution.
+  // Neither reading may hide a guarded shell name or flag from the other.
+  // A continuation joins even a split shell name. Escaped quotes are literal characters, never quote delimiters.
+  command = command.replace(/`\r?\n/g, '').replace(/`["']/g, '');
+  const stripped = windowsEncodedWords(command, depth);
+  if (stripped) return stripped;
+  const grouped = command.replace(/`([^`\r\n]*\s[^`\r\n]*)`/g, '($1)');
+  return grouped !== command ? windowsEncodedWords(grouped, depth) : undefined;
+}
+function windowsEncodedWords(command, depth) {
+  if (depth > 8) return WINDOWS_MATCHES.encoded;
+  const words = windowsCommandWords(command);
+  const basename = word => word.replace(/\\/g, '/').split('/').at(-1).toLowerCase().replace(/\.exe$/, '');
+  const dataCommands = new Set(['echo', 'write-host', 'write-output', 'git', 'printf', 'winget', 'choco', 'scoop', 'brew', 'which', 'get-command']);
+  const runners = new Set(['cmd', 'iex', 'invoke-expression', 'runas', 'wmic', 'schtasks', 'start', 'start-process', 'conhost', 'wsl', 'call']);
+  const encodedFlag = arg => {
+    const flag = /^[-/]([a-z]+)(?=[:,\s]|$)/i.exec(arg)?.[1].toLowerCase();
+    return !!flag && (flag === 'ec' || 'encodedcommand'.startsWith(flag));
+  };
+  let first, segmentStart = 0, parenDepth = 0;
+  const code = [];
+  for (let i = 0; i < words.length; i++) {
+    const word = words[i];
+    if (word.operator) {
+      if (word.text === '(') parenDepth++;
+      if (word.text === ')') parenDepth = Math.max(0, parenDepth - 1);
+      if (!('()'.includes(word.text) && runners.has(first))) first = undefined;
+      segmentStart = i + 1; continue;
+    }
+    first ??= basename(word.text);
+    // A lookup's output inside a group can become the program invoked after that group.
+    if (dataCommands.has(first) && parenDepth === 0) continue;
+    if (!word.quoted) code.push(word.text);
+    // Known runners execute quoted command strings. Arbitrary quoted arguments stay data.
+    if (word.quoted && runners.has(first) && /\s/.test(word.text)) {
+      const match = windowsEncodedCommand(word.text, depth + 1);
+      if (match) return match;
+    }
+    const name = basename(word.text), powershell = /^(?:powershell|pwsh)$/.test(name);
+    if (!powershell || word.quoted && i !== segmentStart && !runners.has(first)) continue;
+    for (let j = i + 1; j < words.length; j++) {
+      // Parentheses also surround Start-Process -ArgumentList arrays.
+      if (words[j].operator) { if ('()'.includes(words[j].text)) continue; break; }
+      const arg = words[j].text;
+      if (encodedFlag(arg)) return WINDOWS_MATCHES.encoded;
+      // Only shell command arguments are parsed again, never arbitrary quoted text.
+      if (/^[-/]c(?:ommand)?$|^\/k$/i.test(arg) && words[j + 1] && !words[j + 1].operator) {
+        const match = windowsEncodedCommand(words[j + 1].text, depth + 1);
+        if (match) return match;
+        break;
+      }
+      // The text barrier also refuses encoded-shaped script arguments after -File, without reading the file.
+      // Start-Process joins -ArgumentList strings and comma-separated arrays into the child's command line.
+      if (/[\s,]/.test(arg)) {
+        const match = windowsEncodedCommand(`${name} ${arg.replace(/,/g, ' ')}`, depth + 1);
+        if (match) return match;
+      }
+    }
+  }
+  const expression = code.join(' ');
+  return /\b(?:iex|invoke-expression)\b/i.test(expression) && /\bGetString\b/i.test(expression) &&
+    /\bFromBase64String\b/i.test(expression) ? WINDOWS_MATCHES.decoded : undefined;
+}
+function windowsLiteralRead(command) {
+  if (/[\r\n;&|<>`({]/.test(command)) return false;
+  // Match whole words with at most one outer quote pair. Never join quote pieces or interpret backslashes as escapes.
+  const words = [], token = /\s*(?:"([^"\r\n]*)"|'([^'\r\n]*)'|([^\s'"]+))(?=\s|$)/y;
+  let at = 0;
+  while (at < command.length && command.slice(at).trim()) {
+    token.lastIndex = at;
+    const match = token.exec(command);
+    if (!match) return false;
+    words.push(match[1] ?? match[2] ?? match[3]); at = token.lastIndex;
+  }
+  const executable = words.shift()?.toLowerCase(), args = words;
+  if (!executable || !args.length) return false;
+  if (args.some(word => {
+    const literal = word.replace(/\$env:LOCALAPPDATA|\$LOCALAPPDATA|%LOCALAPPDATA%/gi, 'LOCALAPPDATA');
+    return /[$%`^+;&|<>()[\]{}'"*?\r\n]/.test(literal) || RUNS_COMMAND.test(word);
+  })) return false;
+  return WINDOWS_READERS.has(executable) || READ_TOOLS.has(executable) ||
+    executable === 'git' && GIT_READS.has(args[0] === '--no-pager' ? args[1] : args[0]) && !args.some(word => /^-O/.test(word));
+}
+function windowsCacheWrite(command) {
+  const text = command.replace(/[`^'"+]/g, '').replace(/\\+/g, '/').toLowerCase();
+  const encoded = windowsEncodedCommand(command);
+  if (encoded) return encoded;
+  if (windowsLiteralRead(command)) return undefined;
+  if (/sleight\/turbo-host(?:\/|\b)/.test(text)) return WINDOWS_MATCHES.name;
+  if (WINDOWS_HELPER_NAME.test(text)) return WINDOWS_MATCHES.helperHint;
+  // APPDATA is Roaming. Only traversal or an additional Local hint makes that variable relevant here.
+  const withoutRoaming = text.replace(/\$(?:\{(?:env:)?appdata\}|(?:env:)?appdata\b)|%appdata%/g, 'roaming');
+  if (WINDOWS_CACHE_TEXT.test(withoutRoaming) || withoutRoaming !== text && /\blocal\b/.test(text)) return WINDOWS_MATCHES.appdata;
+  if (text.includes('..') && /\$env:|%[^%\s]+%|~/.test(text)) return WINDOWS_MATCHES.traversal;
+  // Require a complete cmd substitution, not git's %h:%s format placeholders. Git formats are data.
+  const gitFormat = /^\s*git(?:\.exe)?\s+(?:--no-pager\s+)?(?:log|show)\b/i.test(command) &&
+    windowsCommandWords(command).every(word => !word.operator);
+  const withoutGitFormats = gitFormat ? command.replace(/--(?:format|pretty)(?:=|\s+)(?:"[^"\r\n]*"|'[^'\r\n]*')/gi, '') : command;
+  if (windowsPercentSubstitution(withoutGitFormats.replace(/[`^'"+]/g, ''))) return WINDOWS_MATCHES.substitution;
+  // Attached options such as -Path:C:\Users\* count only when that same word carries a path hint.
+  if (text.split(/\s+/).some(word => /[*?\[]/.test(word) && (WINDOWS_PATH_HINT.test(word) ||
+    RELATIVE_ROOT.test(word) && (/[*?\[]/.test(word.slice(0, word.lastIndexOf('/'))) || /\/[a-z0-9_-]{1,4}[*?]$/i.test(word))))) return WINDOWS_MATCHES.wildcard;
+  return undefined;
+}
+
+// getopt permits options after operands. Consume value options before choosing the destination.
+function copyArguments(name, args) {
+  const operands = [], targets = [], linkDestinations = [];
+  let links = false, paxRead = false, paxWrite = false;
+  const shortValues = name === 'install' ? 'tSmog' : name === 'rsync' ? 'eB' : name === 'pax' ? 'bfopsx' : 'tS';
+  const longValues = ['--target-directory', '--suffix', '--mode', '--owner', '--group', '--strip-program', '--context', '--backup'];
+  let options = true;
+  for (let i = 0; i < args.length; i++) {
+    const arg = args[i];
+    if (options && arg === '--') { options = false; continue; }
+    if (options && arg.startsWith('--')) {
+      // macOS cp has no long options; GNU cp accepts prefixes, including --li and --sym.
+      if (name === 'cp' && ['--link', '--symbolic-link'].some(option => longOption(arg, option))) links = true;
+      if (name === 'rsync' && longOption(arg, '--copy-links')) links = true;
+      if (name === 'rsync' && longOption(arg, '--link-dest')) {
+        links = true;
+        linkDestinations.push(arg.includes('=') ? arg.slice(arg.indexOf('=') + 1) : args[++i]);
+        continue;
+      }
+      const option = longValues.find(option => longOption(arg, option));
+      // --backup takes an optional attached value, never the next operand.
+      if (option && option !== '--backup') {
+        const value = arg.includes('=') ? arg.slice(arg.indexOf('=') + 1) : args[++i];
+        if (option === '--target-directory') targets.push(value);
+      }
+      continue;
+    }
+    if (options && arg.startsWith('-') && arg !== '-') {
+      for (let at = 1; at < arg.length; at++) {
+        if (name === 'cp' && 'ls'.includes(arg[at]) || name === 'rsync' && 'HL'.includes(arg[at])) links = true;
+        if (name === 'pax') { links ||= arg[at] === 'l'; paxRead ||= arg[at] === 'r'; paxWrite ||= arg[at] === 'w'; }
+        if (shortValues.includes(arg[at])) {
+          const value = arg.slice(at + 1) || args[++i];
+          if (arg[at] === 't') targets.push(value);
+          break;
+        }
+      }
+      continue;
+    }
+    if (arg) operands.push(arg);
+  }
+  return { operands, targets, links, linkDestinations, passThrough: paxRead && paxWrite };
+}
+// Examine each percent-delimited field once, including a missing closing percent.
+function windowsPercentSubstitution(text) {
+  let start = text.indexOf('%');
+  while (start >= 0) {
+    const end = text.indexOf('%', start + 1);
+    if (end < 0) return false;
+    const field = text.slice(start + 1, end), name = /^[a-z_]\w*:/i.exec(field);
+    if (name && !/[\r\n]/.test(field)) {
+      const body = field.slice(name[0].length);
+      if (body.startsWith('~') && body.length > 1 || body.includes('=')) return true;
+    }
+    start = end;
+  }
+  return false;
+}
+
+// Unknown cwd alone does not refuse ordinary build outputs. These names can reach the protected table or startup config.
+function unknownDirectoryTarget(path) {
+  if (ENGINE_TREE.test(folded(path.replace(/\\/g, '/')))) return true;
+  const parts = folded(path.replace(/\\/g, '/')).split('/').filter(Boolean);
+  const name = parts.at(-1);
+  return protectedNames.includes(name) || parts.some(part => ['sleight', '.claude', '.codex', '.cursor', '.local', '.zshrc.d'].includes(part) ||
+    /^\.(?:zshrc|zshenv|zprofile|zlogin|bashrc|bash_profile|profile|envrc)$/.test(part)) ||
+    parts.some(part => /[*?\[{]/.test(part) && protectedNames.some(name => globNamesProtected(part.replace(/\[[^\]]*\]/g, '?').replace(/\{[^}]*\}/g, '*'), name)));
+}
+// Redirections that open their target for writing: bash's, <> (read-write) and zsh's >>& and clobbering forms.
+const WRITE_REDIRECTS = new Set(['>', '>>', '>|', '>&', '<>', '>!', '>>!', '>&!', '>&|', '>>|', '>>&', '>>&!', '>>&|']);
+function shellWritePaths(command, initialDirectory, depth = 0, platform = runtimePlatform, parsedWords, initialCheck) {
+  if (depth > 8) return [{ path: '.', unresolved: true, opaque: true }];
+  const paths = [], segments = [{ words: [] }], words = parsedWords ?? shellWords(command);
+  if (words.some(word => word.opaque)) paths.push({ path: '.', unresolved: true, opaque: true });
+  // The whole-command read check is invariant across segments. Re-tokenizing it for every heredoc line is quadratic.
+  const reads = readOnly(command, words);
+  let directory = initialDirectory, directoryStack, directoryCheck = initialCheck, successfulCd, conditionalCd = false, scopeDepth = 0;
+  const created = new Set();
+  const cdpath = words.some((word, at) => /^CDPATH\+?=/.test(word.text) && !word.quoted || word.text === 'CDPATH' && ['export', 'typeset', 'declare'].includes(words[at - 1]?.text));
+  const homeAssigned = words.some(word => /^HOME\+?=/.test(word.text));
+  const subshells = [];
+  for (const word of words) {
     const previous = segments.at(-1);
-    if (word.operator && [';', '&', '|', '|&', '&&', '||', '(', ')'].includes(word.text)) {
-      segments.push({ words: [], piped: word.text === '|' ? previous.words : undefined });
+    if (word.operator && [';', '&', '|', '|&', '&&', '||', '(', ')', '{', '}'].includes(word.text)) {
+      segments.push({ words: [], boundary: word.text, piped: word.text === '|' ? previous.words : undefined });
     } else previous.words.push(word);
   }
   // ancestor: the command also reaches what is under the path (rm -r, mv, find -delete, chmod -R), so a parent folder counts.
   const add = (path, literalOnly = false, ancestor = false) => {
-    if (typeof path !== 'string') return;
-    paths.push({ path: directory && !/^(?:\/|~|\$HOME|\$\{HOME\})/.test(path) ? `${directory}/${path}` : path, literalOnly, ancestor });
+    if (typeof path !== 'string' || path === '-') return;
+    const relative = !/^(?:\/|~|\$HOME|\$\{HOME\}|\$CLAUDE_CONFIG_DIR|\$\{CLAUDE_CONFIG_DIR\})/.test(path);
+    paths.push({ path: directory && relative ? `${directory}/${path}` : path, literalOnly, ancestor,
+      ...relative && directoryCheck ? { directoryCheck, relativePath: path } : {},
+      ...directory === null && relative ? { unresolved: true } : {} });
   };
   const destination = (target, sources, contents = false) => {
     if (typeof target !== 'string') return;
@@ -436,29 +1204,66 @@ function shellWritePaths(command, initialDirectory, depth = 0) {
     add(target, false, contents || /\/\.local(?:\/bin)?\/?$/i.test(target));
     for (const source of sources) add(`${target}/${source.split('/').filter(Boolean).at(-1)}`, false, true);
   };
-  for (const { words: segment, piped } of segments) {
-    const texts = [];
+  for (let segmentIndex = 0; segmentIndex < segments.length; segmentIndex++) {
+    const { words: segment, piped, boundary } = segments[segmentIndex];
+    const nextBoundary = segments[segmentIndex + 1]?.boundary;
+    if (boundary === '&&' && successfulCd) ({ directory, directoryCheck } = successfulCd);
+    else if (conditionalCd && boundary !== '&&') { directory = null; directoryCheck = undefined; conditionalCd = false; }
+    if (boundary === '{') scopeDepth++;
+    if (boundary === '}') scopeDepth = Math.max(0, scopeDepth - 1);
+    successfulCd = undefined;
+    // A persistent directory stack makes nested scope saves constant-time, even after many pushd commands.
+    if (boundary === '(') subshells.push({ directory, directoryCheck, stack: directoryStack });
+    if (boundary === ')') {
+      const parent = subshells.pop();
+      directory = parent ? parent.directory : null;
+      directoryCheck = parent?.directoryCheck;
+      directoryStack = parent?.stack;
+    }
+    const texts = [], textWords = [];
     for (let i = 0; i < segment.length; i++) {
       if (segment[i].operator) {
         const operator = segment[i].text;
         const target = segment[++i];
-        if (['>', '>>', '>|', '>&'].includes(operator) && target && !target.operator) add(target.text);
-      } else texts.push(segment[i].text);
+        // 2>&1, >&2 and >&- copy or close a descriptor and name no file. >& with any other word writes that file, 1- too:
+        // zsh writes >&1- to a file named 1-, where bash moves the descriptor.
+        const descriptor = operator === '>&' && /^(?:\d+|-)$/.test(target?.text ?? '');
+        if (WRITE_REDIRECTS.has(operator) && target && !target.operator && !descriptor) {
+          add(target.text);
+          // bash reads >!name as a write to a file named !name.
+          if (operator.endsWith('!')) add('!' + target.text);
+        }
+      } else if (!(/^\d+$/.test(segment[i].text) && segment[i + 1]?.operator && /^[<>]/.test(segment[i + 1].text))) { texts.push(segment[i].text); textWords.push(segment[i]); }
     }
     const allWords = [...texts];
-    let xargs = false;
-    while (texts.length) {
-      if (/^[A-Za-z_][A-Za-z_0-9]*=/.test(texts[0])) { texts.shift(); continue; }
-      const prefix = texts[0].split('/').at(-1);
-      if (!['env', 'command', 'sudo', 'time', 'nohup', 'xargs'].includes(prefix)) break;
-      xargs ||= prefix === 'xargs'; texts.shift();
-      while (texts[0]?.startsWith('-')) {
-        const flag = texts.shift();
-        if (['-u', '--unset', '-I', '-n', '-P'].includes(flag)) texts.shift();
+    const parsed = commandWord(textWords, WRITER_PREFIXES);
+    // Reserved words may follow negation and time. Inspect the command position, excluding its data arguments.
+    for (const word of textWords.slice(0, parsed.index === undefined ? 1 : parsed.index + 1)) {
+      if (word.quoted || word.joined) continue;
+      if (['if', 'for', 'while', 'until', 'select', 'case'].includes(word.text)) scopeDepth++;
+      else if (['fi', 'done', 'esac'].includes(word.text)) scopeDepth = Math.max(0, scopeDepth - 1);
+    }
+    const xargs = parsed.xargs;
+    parsed.outputs?.forEach(path => add(path));
+    if (parsed.opaque) { paths.push({ path: '.', unresolved: true, opaque: true }); continue; }
+    if (parsed.index === undefined) {
+      // Unknown wrapper options cannot establish a safe command word. Treat every possible target conservatively.
+      allWords.filter(text => text && !text.startsWith('-')).forEach(path => add(path, false, true));
+      continue;
+    }
+    texts.splice(0, parsed.index);
+    const name = texts.shift()?.split('/').at(-1);
+    const executable = ['bsdtar', 'xar'].includes(name) ? 'tar' : name === 'chdir' ? 'cd' : /^g(?:sed|cp|mv|install|tee|dd|truncate|ln|touch|rm|chmod|chown|chgrp|sort|uniq|unlink|shred|mkdir|find|split|tar|shuf|csplit|rmdir|mktemp|link|patch|awk|wget)$/.test(name) ? name.slice(1) : name;
+    const operands = texts.filter(text => text && !text.startsWith('-'));
+    if (executable === 'sed') for (const arg of texts) sedEffects(arg.replace(/^--expression=/, '').replace(/^-[nEr]*e/, '')).writes.forEach(path => add(path));
+    argumentWritePaths(executable, texts).forEach(path => add(path));
+    if (executable === 'tar' && (texts.some(arg => longOption(arg, '--create') || /^-[a-zA-Z]*c/.test(arg)) || /^[a-zA-Z]*c/.test(texts[0] ?? ''))) {
+      for (let at = 0; at < texts.length; at++) {
+        const arg = texts[at];
+        if (longOption(arg, '--file')) add(arg.includes('=') ? arg.slice(arg.indexOf('=') + 1) : texts[++at]);
+        else if (/^-[^-]*f/.test(arg) || at === 0 && /^[a-zA-Z]*f/.test(arg)) add(arg.slice(arg.indexOf('f') + 1) || texts[++at]);
       }
     }
-    const executable = texts.shift()?.split('/').at(-1);
-    const operands = texts.filter(text => text && !text.startsWith('-'));
     // `sleight-mcp turbo on|off` writes turbo.json for the user, so a model's shell may not run it. Position-free on purpose:
     // env, nohup, timeout, interpreter flags and sh -c strings all reach it. Only `turbo status` passes. When in doubt, deny.
     // `hand on|off|capture` writes hand.json the same way, and only `hand status` passes. Character writes and the cursor
@@ -466,30 +1271,88 @@ function shellWritePaths(command, initialDirectory, depth = 0) {
     // can't read (a variable, a substitution, xargs input) is refused. `permissions block|unblock|revoke|sites` change what
     // sleight may do, and only the listing passes.
     // A read-only tool's segment can't run the launcher (grep -n hand .../launch.mjs, file .../sleight-mcp hand).
-    const reading = readOnly(command, shellWords(command)) && readTool(segment);
-    for (const [command, allowed, file] of LAUNCHER_COMMANDS) {
-      if (!reading && launcherToggle(allWords, command, allowed)) add(`~/Library/Application Support/sleight/${file}`, true);
+    if (allWords.some(word => word.includes('sleight') || word.includes('launch.mjs'))) {
+      if (!(reads && readTool(segment))) for (const [command, allowed, file] of LAUNCHER_COMMANDS) {
+        if (launcherToggle(allWords, command, allowed)) add(`~/Library/Application Support/sleight/${file}`, true);
+      }
     }
     if (xargs && piped) operands.push(...piped.filter(word => !word.operator).map(word => word.text));
-    if (executable === 'cd') {
+    if (platform !== 'win32' && ['eval', 'source', '.', 'trap'].includes(executable)) {
+      if (executable === 'eval') {
+        if (texts.some(text => /[$`]/.test(text)) && sourceProtectedTarget(texts.join(' '))) add('~/Library/Application Support/sleight', true);
+        if (texts.length && !texts.some(text => /[$`]/.test(text))) {
+          texts.forEach(path => add(path, false, true));
+          paths.push(...shellWritePaths(texts.join(' '), directory, depth + 1, platform, undefined, directoryCheck));
+        } else if (texts.some(text => /[$`]/.test(text)) && !texts.some(text => text.includes('$(') || text.includes('`')) &&
+          !(texts.at(-1) === '$' && nextBoundary === '(')) paths.push({ path: '.', unresolved: true, opaque: true });
+      } else if (executable === 'trap') {
+        if (sourceProtectedTarget(texts.join(' '))) add('~/Library/Application Support/sleight', true);
+        if (texts[0] && !['-', '-p', '-l'].includes(texts[0])) paths.push(...shellWritePaths(texts[0], null, depth + 1, platform));
+      } else if (!texts[0] || /[$`*?]|^\/dev\/|^[<>]\(/.test(texts[0]) || nextBoundary === '(') paths.push({ path: '.', unresolved: true, opaque: true });
+      else if (unknownDirectoryTarget(texts[0])) add(texts[0], false, true);
+      // Sourced or evaluated code can change cwd. A trap's body can run after later directory changes too.
+      directory = null; directoryCheck = undefined;
+    } else if (SHELLS.has(executable) && segment.some(word => word.operator && word.text === '<<<')) {
+      // A here-string is shell source, with the same cwd and destination checks as a -c script.
+      const at = segment.findIndex(word => word.operator && word.text === '<<<');
+      const body = segment[at + 1]?.text;
+      if (body) paths.push(...shellWritePaths(body, directory, depth + 1, platform, undefined, directoryCheck));
+    }
+    if (executable === 'cd' || executable === 'pushd') {
       const next = operands[0];
-      if (next) directory = /^(?:\/|~|\$HOME|\$\{HOME\})/.test(next) || !directory ? next : `${directory}/${next}`;
-    } else if (['bash', 'sh', 'zsh'].includes(executable) && texts.some(text => /^-[a-zA-Z]*c[a-zA-Z]*$/.test(text))) {
+      if (executable === 'pushd') directoryStack = { directory, directoryCheck, next: directoryStack };
+      const unknown = texts.some(arg => arg === '-' || /^[-+]\d|^-n/.test(arg)) || executable === 'pushd' && !next ||
+        next && /[$`*?[{]|^~[^/]|\n/.test(next.replace(/^\$(?:HOME|\{HOME\})(?=\/|$)/, '~')) ||
+        operands.length > 1 || cdpath || homeAssigned && (!next || /^(?:~|\$HOME|\$\{HOME\})/.test(next)) ||
+        parsed.keyword || scopeDepth > 0 || ['{', '}'].includes(boundary) || segment.some(word => word.operator && word.text === '(');
+      if (unknown) directory = null;
+      else if (!next) directory = '~';
+      else if (/^(?:\/|~|\$HOME|\$\{HOME\})/.test(next)) directory = next;
+      else if (directory !== null) directory = directory ? `${directory}/${next}` : next;
+      // A long cwd makes every following resolution expensive. Unknown relative writes fail closed instead.
+      if (directory?.length > 1024) directory = null;
+      directoryCheck = directory === null ? undefined : { path: directory, created: created.has(normalize(directory)), previous: next && !/^(?:\/|~|\$HOME|\$\{HOME\})/.test(next) ? directoryCheck : undefined };
+      successfulCd = { directory, directoryCheck };
+      // In `A || cd B && write`, write can run after A succeeded and cd B was skipped.
+      if (boundary === '||') successfulCd = { directory: null };
+      if (['&&', '||'].includes(boundary)) conditionalCd = true;
+      // A cd in a conditional, pipeline or background job cannot establish the parent's cwd for a later command.
+      if (['&&', '||', '&', '|', '|&'].includes(boundary) || ['&', '|', '|&'].includes(nextBoundary)) {
+        directory = null; directoryCheck = undefined;
+        if (['&', '|', '|&'].includes(boundary) || ['&', '|', '|&'].includes(nextBoundary) || scopeDepth > 0 || parsed.keyword) successfulCd = undefined;
+        if (executable === 'pushd') directoryStack = undefined;
+      }
+    } else if (executable === 'popd') {
+      directory = texts.length || !directoryStack ? null : directoryStack.directory;
+      directoryCheck = texts.length ? undefined : directoryStack?.directoryCheck;
+      directoryStack = directoryStack?.next;
+      if (parsed.keyword || scopeDepth > 0 || ['{', '}', '&&', '||', '&', '|', '|&'].includes(boundary) || ['&', '|', '|&'].includes(nextBoundary)) {
+        directory = null; directoryCheck = undefined; directoryStack = undefined;
+      }
+    } else if (SHELLS.has(executable) && texts.some(text => /^-[a-zA-Z]*c[a-zA-Z]*$/.test(text))) {
       // -c alone or in a flag group (-lc, -ic): the script is the next word.
-      paths.push(...shellWritePaths(texts[texts.findIndex(text => /^-[a-zA-Z]*c[a-zA-Z]*$/.test(text)) + 1] ?? '', directory, depth + 1));
-    } else if (['cp', 'install', 'rsync', 'ln'].includes(executable)) {
-      // A hard link creates a second write path to the same executable or receipt. Refuse it at creation, before its
-      // later spelling can lose the protected filename. Folder symlinks reach the protected descendants too.
-      if (executable === 'ln') operands.slice(0, -1).forEach(path => add(path, false, true));
-      const target = texts.findIndex(text => text === '-t' || text === '--target-directory');
-      destination(target >= 0 ? texts[target + 1] : operands.at(-1), operands.slice(0, -1), executable === 'rsync' ||
-        executable === 'cp' && texts.some(arg => /^-[^-]*[Rr]/.test(arg)) && operands.slice(0, -1).some(arg => arg.endsWith('/')));
-      const attached = texts.find(text => text.startsWith('--target-directory='));
-      if (attached) destination(attached.slice('--target-directory='.length), operands);
-    } else if (['rm', 'unlink'].includes(executable)) operands.forEach(path => add(path, false, true));
-    else if (executable === 'mv') {
-      operands.forEach((path, at) => add(path, false, at < operands.length - 1));
-      destination(operands.at(-1), operands.slice(0, -1));
+      const source = shellScript([executable, ...texts], 0) ?? '';
+      if (xargs && piped && source.includes('{}')) { const target = sourceProtectedTarget(piped.map(word => word.text).join(' ')); if (target) add('~/Library/Application Support/sleight', true); }
+      paths.push(...shellWritePaths(source, directory, depth + 1, platform, undefined, directoryCheck));
+      // A missing quoting layer can split "Application Support" into operands. Check the intact spelling for writers.
+      const leading = source.trimStart().replace(/^(?:(?:sh|bash|zsh|dash|ksh|fish|csh|tcsh)\s+-[a-zA-Z]+\s+["']?)+/, '');
+      if (/^(?:touch|tee|cp|mv|rm|sed|chmod|dd|truncate|ln)\s/.test(leading) && sourceProtectedTarget(command)) add('~/Library/Application Support/sleight', true);
+    } else if (SHELLS.has(executable) && texts.some(text => /^[<>]\(/.test(text))) {
+      if (sourceProtectedTarget(command)) add('~/Library/Application Support/sleight', true);
+    } else if (['cp', 'install', 'rsync', 'ln', 'mv'].includes(executable)) {
+      const copyWords = xargs && piped ? [...texts, ...piped.filter(word => !word.operator).map(word => word.text)] : texts;
+      const { operands: files, targets, links, linkDestinations } = copyArguments(executable, copyWords);
+      if (executable === 'ln' || links) files.slice(0, targets.length ? files.length : -1).forEach(path => add(path, false, true));
+      linkDestinations.forEach(path => add(path, false, true));
+      if (executable === 'mv') files.forEach((path, at) => add(path, false, at < files.length - 1 || targets.length > 0));
+      const contents = executable === 'rsync' || executable === 'cp' && texts.some(arg => /^-[^-]*[Rr]/.test(arg)) && files.slice(0, -1).some(arg => arg.endsWith('/'));
+      if (targets.length) targets.forEach(target => destination(target, files, contents));
+      else destination(files.at(-1), files.slice(0, -1), contents);
+    } else if (['rm', 'unlink', 'shred', 'mkdir', 'rmdir', 'mktemp'].includes(executable)) {
+      operands.forEach(path => add(path, false, !['mkdir', 'mktemp'].includes(executable)));
+      if (executable === 'mktemp') operands.filter(path => path.includes('/')).forEach(path => add(path.slice(0, path.lastIndexOf('/')), false, true));
+      if (executable === 'mkdir' && directory && scopeDepth === 0 && !['||', '|', '|&', '&'].includes(boundary))
+        operands.filter(path => !/[$`*?{]/.test(path)).forEach(path => created.add(normalize(path.startsWith('/') ? path : directory + '/' + path)));
     }
     else if (['chmod', 'chown', 'chgrp', 'chflags'].includes(executable)) operands.forEach(path => add(path, false, texts.some(arg => /^-[^-]*R/.test(arg))));
     else if (executable === 'find' && texts.some((arg, at) => arg === '-delete' ||
@@ -499,20 +1362,116 @@ function shellWritePaths(command, initialDirectory, depth = 0) {
       const roots = texts.slice(start, end < 0 ? texts.length : end);
       for (const root of roots.length ? roots : ['.']) add(root, false, true);
       if (texts.some(arg => PROTECTED_NAME.test(arg))) add('~/Library/Application Support/sleight', true);
-    } else if (executable === 'tar' && /^-?[a-zA-Z]*x|^--extract$|^--get$/.test(texts[0] ?? '') || executable === 'tar' && texts.some(arg => /^-[a-zA-Z]*x/.test(arg))) {
-      // An archive unpacked into a folder can write any file under it.
-      const at = texts.findIndex(arg => arg === '-C' || arg === '--directory');
-      if (at >= 0) add(texts[at + 1], false, true);
-      texts.filter(arg => arg.startsWith('--directory=')).forEach(arg => add(arg.slice('--directory='.length), false, true));
-    } else if (executable === 'unzip' && texts.includes('-d')) add(texts[texts.indexOf('-d') + 1], false, true);
+    } else if (executable === 'tar' && (texts.some(arg => longOption(arg, '--extract') || longOption(arg, '--get') || /^-[a-zA-Z]*x/.test(arg)) || /^[a-zA-Z]*x/.test(texts[0] ?? ''))) {
+      // An archive unpacked into a folder can write any file under it. Long-option prefixes count too.
+      for (let i = 0; i < texts.length; i++) {
+        const arg = texts[i];
+        if (longOption(arg, '--directory') || longOption(arg, '--cd') || longOption(arg, '--one-top-level')) add(arg.includes('=') ? arg.slice(arg.indexOf('=') + 1) : texts[++i], false, true);
+        else if (/^-[^-]*C/.test(arg)) add(arg.slice(arg.indexOf('C') + 1) || texts[++i], false, true);
+      }
+      if (texts.some(arg => longOption(arg, '--transform') || longOption(arg, '--xform')) && sourceProtectedTarget(texts.join(' '))) add('~/Library/Application Support/sleight', true);
+    } else if (executable === 'cpio') {
+      const creates = texts.some(arg => /^-[^-]*o/.test(arg) || longOption(arg, '--create'));
+      let passThrough = false, links = false;
+      for (let at = 0; at < texts.length; at++) {
+        const arg = texts[at];
+        if (arg === '--') break;
+        if (longOption(arg, '--pass-through')) passThrough = true;
+        if (longOption(arg, '--link')) links = true;
+        if (/^-[^-]/.test(arg)) for (let flag = 1; flag < arg.length; flag++) {
+          passThrough ||= arg[flag] === 'p'; links ||= arg[flag] === 'l';
+          // These cpio options consume the rest of this word or the next one, never more flags.
+          if ('CDFHILOR'.includes(arg[flag])) { if (flag === arg.length - 1) at++; break; }
+        }
+        if (['--block-size', '--file', '--format', '--owner', '--pattern-file', '--directory', '--rsh-command']
+          .some(option => longOption(arg, option) && !arg.includes('='))) at++;
+      }
+      for (let at = 0; at < texts.length; at++) {
+        const arg = texts[at];
+        if (arg === '--') break;
+        if (longOption(arg, '--directory')) add(arg.includes('=') ? arg.slice(arg.indexOf('=') + 1) : texts[++at], false, true);
+        else if (/^-[^-]*D/.test(arg)) add(arg.slice(arg.indexOf('D') + 1) || texts[++at], false, true);
+        else if (creates && longOption(arg, '--file')) add(arg.includes('=') ? arg.slice(arg.indexOf('=') + 1) : texts[++at]);
+        else if (creates && /^-[^-]*[FO]/.test(arg)) { const pos = arg.search(/[FO]/); add(arg.slice(pos + 1) || texts[++at]); }
+      }
+      // Pass-through link mode creates aliases of names read from stdin. Inspect visible pipe operands as sources;
+      // a list loaded from a file or generated by opaque code remains outside this literal-path check.
+      if (passThrough && links && piped) for (const word of piped) {
+        if (!word.operator) for (const path of word.text.split(/[\n\0]/)) add(path, false, true);
+      }
+    } else if (executable === 'ar' && /^-?[a-z]*[rdqms][a-z]*$/i.test(texts[0] ?? '')) add(operands[0] === texts[0] ? operands[1] : operands[0]);
+    else if (executable === 'hdiutil' && texts[0] === 'create') operands.slice(1).forEach(path => add(path));
+    else if (['7z', '7za', '7zz'].includes(executable)) {
+      for (const arg of texts) if (arg.startsWith('-o')) add(arg.slice(2), false, true);
+      if (['a', 'u'].includes(texts[0])) add(operands[1]);
+    } else if (['zip', 'pax'].includes(executable)) {
+      if (executable === 'zip') {
+        add(operands[0]);
+        for (let at = 0; at < texts.length; at++) {
+          const arg = texts[at];
+          if (longOption(arg, '--out')) add(arg.includes('=') ? arg.slice(arg.indexOf('=') + 1) : texts[++at]);
+          else if (arg.startsWith('-O')) add(arg.slice(2) || texts[++at]);
+        }
+      } else {
+        const { operands: files, links, passThrough } = copyArguments('pax', texts);
+        if (passThrough) {
+          if (links) files.slice(0, -1).forEach(path => add(path, false, true));
+          destination(files.at(-1), files.slice(0, -1), true);
+        } else if (texts.some(arg => /^-[^-]*w/.test(arg))) {
+          for (let at = 0; at < texts.length; at++) if (/^-[^-]*f/.test(texts[at])) add(texts[at].slice(texts[at].indexOf('f') + 1) || texts[++at]);
+        }
+      }
+    } else if (executable === 'unzip') {
+      for (let at = 0; at < texts.length; at++) if (/^-[^-]*d/.test(texts[at])) add(texts[at].slice(texts[at].indexOf('d') + 1) || texts[++at], false, true);
+    }
     else if (executable === 'ditto') add(operands.at(-1), false, true);
     else if (['curl', 'wget'].includes(executable)) {
-      texts.forEach((arg, at) => { if (['-o', '--output', '-O', '--output-document'].includes(arg)) add(texts[at + 1]); });
-      texts.filter(arg => /^--output(?:-document)?=/.test(arg)).forEach(arg => add(arg.slice(arg.indexOf('=') + 1)));
+      const writeOut = format => { for (const match of (format ?? '').matchAll(/%output\{(?:>>)?([^}]+)\}/g)) add(match[1]); };
+      const executeOutput = value => {
+        const match = /^(logfile|dir_prefix|output_document|hsts_file|warc_file|rejected_log)=(.*)$/s.exec(value ?? '');
+        if (match) add(match[2], false, match[1] === 'dir_prefix');
+      };
+      for (let i = 0; i < texts.length; i++) {
+        const arg = texts[i], directoryOption = executable === 'curl' ? '--output-dir' : '--directory-prefix';
+        const fileOption = executable === 'curl' ? '--output' : '--output-document';
+        const extraFiles = executable === 'curl' ? ['--cookie-jar', '--trace', '--trace-ascii', '--stderr', '--libcurl', '--dump-header', '--etag-save', '--hsts', '--alt-svc', '--ssl-sessions'] : ['--append-output', '--output-file', '--save-cookies', '--hsts-file', '--warc-file', '--rejected-log'];
+        const directory = longOption(arg, directoryOption), file = longOption(arg, fileOption);
+        if (executable === 'curl' && (arg === '-w' || longOption(arg, '--write-out') || /^-w./.test(arg))) {
+          const format = arg === '-w' || arg === '--write-out' ? texts[++i] : arg.startsWith('--') ? arg.slice(arg.indexOf('=') + 1) : arg.slice(2);
+          writeOut(format);
+        } else if (executable === 'wget' && (arg === '-e' || arg.startsWith('-e') || longOption(arg, '--execute'))) {
+          const value = arg === '-e' || arg === '--execute' ? texts[++i] : arg.startsWith('--') ? arg.slice(arg.indexOf('=') + 1) : arg.slice(2);
+          executeOutput(value);
+        } else if (directory || file) add(arg.includes('=') ? arg.slice(arg.indexOf('=') + 1) : texts[++i], false, directory);
+        else if (extraFiles.some(option => longOption(arg, option))) add(arg.includes('=') ? arg.slice(arg.indexOf('=') + 1) : texts[++i]);
+        else if (executable === 'curl' && /^-[^-]/.test(arg)) {
+          for (let at = 1; at < arg.length; at++) {
+            if (arg[at] === 'w') { writeOut(arg.slice(at + 1) || texts[++i]); break; }
+            if ('AbdeEFHKmQrtTuUxXyYz'.includes(arg[at])) { if (!arg.slice(at + 1)) i++; break; }
+            if ('oDc'.includes(arg[at])) { add(arg.slice(at + 1) || texts[++i]); break; }
+            if (arg[at] === 'O') {
+              // -O takes no value. Retain the old conservative operand check without consuming --output-dir.
+              if (texts[i + 1] && !texts[i + 1].startsWith('-')) add(texts[i + 1]);
+            }
+          }
+        }
+        else if (executable === 'wget' && /^-[^-]/.test(arg)) {
+          for (let at = 1; at < arg.length; at++) {
+            if ('oOaP'.includes(arg[at])) { add(arg.slice(at + 1) || texts[++i], false, arg[at] === 'P'); break; }
+            if (arg[at] === 'e') { executeOutput(arg.slice(at + 1) || texts[++i]); break; }
+            if ('tTiU'.includes(arg[at])) { if (!arg.slice(at + 1)) i++; break; }
+          }
+        }
+      }
+    } else if (executable === 'git' && texts[0] === 'clone') {
+      const target = operands.at(-1); add(target, false, true);
+      if (directory && target && operands.length >= 3 && !/[$`*?{]/.test(target) && scopeDepth === 0 && !['||', '|', '|&', '&'].includes(boundary)) created.add(normalize(target.startsWith('/') ? target : directory + '/' + target));
     } else if (executable === 'git' && ['checkout', 'restore', 'apply'].includes(texts[0])) operands.slice(1).forEach(path => add(path));
     else if (executable === 'patch') operands.forEach(path => add(path));
-    else if (['tee', 'truncate', 'touch'].includes(executable) ||
-      (['sed', 'perl'].includes(executable) && texts.some(arg => /^-[^-]*i/.test(arg))) ||
+    else if (['tee', 'truncate', 'touch', 'split', 'link', 'csplit', 'shuf'].includes(executable) ||
+      (executable === 'sed' && (texts.some(sedInPlace) || texts.some(text => /\$\(|`/.test(text)))) ||
+      (executable === 'awk' && texts.some(arg => arg === 'inplace' || arg === '-iinplace' || arg === '--include=inplace')) ||
+      (executable === 'perl' && texts.some(arg => /^-[^-]*i/.test(arg))) ||
       (executable === 'defaults' && ['write', 'delete', 'import'].includes(texts[0]))) operands.forEach(path => add(path));
     else if (executable === 'plutil' && texts.some(arg => ['-replace', '-insert', '-remove', '-convert'].includes(arg))) {
       add(texts.includes('-o') ? texts[texts.indexOf('-o') + 1] : operands.at(-1));
@@ -523,27 +1482,189 @@ function shellWritePaths(command, initialDirectory, depth = 0) {
       const option = texts[flag], source = ['-c', '-e', '--eval'].includes(option) || executable === 'perl' ? texts[flag + 1] ?? '' : option.replace(/^(?:-[ce]|--eval=)/, '');
       // Code that loads sleight's own writers can change permissions.json or the always list without naming either file.
       if (/\b(?:permissions-command|preapproved)\.mjs\b/i.test(source)) { add('~/Library/Application Support/sleight', true); continue; }
-      const writes = /\bopen\s*\([^)]*,\s*(?:mode\s*=\s*)?['"][wax][+bt]*['"]|\b(?:writeFile(?:Sync)?|appendFile(?:Sync)?|unlink(?:Sync)?|rename(?:Sync)?|copyFile(?:Sync)?|rm(?:Sync)?|remove|truncate|File\.write)\s*\(|\b(?:unlink|rename|chmod|chown|rmtree|move|symlink)\b/;
-      if (!writes.test(source)) continue;
-      // Inline code is scanned as text only, never passed to the filesystem resolver.
-      for (const match of source.matchAll(/(?:~|\$\{?HOME\}?|\/|\.{1,2}\/)[^'"`;\n()<>|]*?(?:(?:preapproved|turbo|turbo-apps|turbo-owner|electron-grants|hand|permissions|settings-link)\.json|menu-(?:presence|session)\.lock|\.sleight-shim-v1|grant-seal\.key|\/sleight(?=['"`;,)\s]|$)|\/(?:library\/caches|plugins\/cache\/[^/'"`;\n()<>|]+)\/sleight(?![\w.-])(?:\/[^'"`;\n()<>|]*)?|\/library\/caches\/sleight-bench\/[^'"`;\n()<>|]*)|\b(?:(?:preapproved|turbo|turbo-apps|turbo-owner|electron-grants|hand|permissions|settings-link)\.json|menu-(?:presence|session)\.lock|\.sleight-shim-v1|grant-seal\.key)\b/gi)) add(match[0], true);
+      // The first open( in each disjoint closing-parenthesis span decides whether any later mode can match.
+      // This preserves the old open([^)]*, mode) language, including '(' in quoted paths, without repeated suffix scans.
+      const writes = /\b(?:writeFile(?:Sync)?|appendFile(?:Sync)?|unlink(?:Sync)?|rename(?:Sync)?|copyFile(?:Sync)?|rm(?:Sync)?|remove|truncate|File\.write)\s*\(|\b(?:unlink|rename|chmod|chown|rmtree|move|symlink)\b/.test(source) ||
+        source.split(')').some(span => {
+          const open = /\bopen\s*\(/.exec(span);
+          return open && /,\s*(?:mode\s*=\s*)?['"][wax][+bt]*['"]/.test(span.slice(open.index + open[0].length));
+        });
+      if (!writes) continue;
+      // Maximal disjoint spans are scanned once. Never restart a suffix search at every slash or tilde.
+      for (const span of source.matchAll(/[^'"`;\n()<>|]+/g)) {
+        const text = span[0], root = /[a-z]:[\\/]|%LOCALAPPDATA%[\\/]|\$env:LOCALAPPDATA[\\/]|~|\$\{?HOME\}?|\/|\.{1,2}\//i.exec(text);
+        const name = PROTECTED_NAME.exec(text);
+        if (name) add(text.slice(root && root.index < name.index ? root.index : name.index, name.index + name[0].length), true);
+        if (root) {
+          // A preceding ordinary filename must not hide a later protected suffix in the same span.
+          for (const { pattern, length } of inlineSuffixes) {
+            const at = text.search(pattern);
+            if (at >= root.index) add(text.slice(root.index, at + length), true);
+          }
+          const tree = /\/(?:library\/(?:caches|application support)|plugins\/cache\/[^/'"`;\n()<>|]+)\/sleight(?=\/|\s|$)/i.exec(text);
+          if (tree) add(text.slice(root.index, tree.index + tree[0].length), true);
+          const path = text.slice(root.index).trimEnd();
+          if (/sleight|sleight-bench/i.test(path)) add(path, true);
+        }
+      }
     }
   }
   return paths;
 }
 
-/** The protected folder (a PROTECTED label) a file or shell tool call would change, or undefined. */
+// A stat rejection for a path that is not there. Claude Code 2.1.309's $.fs.stat rejects with a HooksError that has no
+// code or errno and ends its message "failed: ENOENT" (tests/fixtures/host-fs-stat-2.1.309.json). Node's errors carry
+// code. Only ENOENT and ENOTDIR count, and the path is cut from the message first so a name can't supply the word.
+const MISSING_ERRNO = /^(?:ENOENT|ENOTDIR)$/;
+function missingPath(error, path) {
+  if (typeof error?.code === 'string' || typeof error?.errno === 'string') return MISSING_ERRNO.test(error.code ?? error.errno);
+  const message = typeof error?.message === 'string' ? error.message.split(path).join('') : '';
+  const names = message.match(/\bE[A-Z]{2,}\b/g) ?? [];
+  return names.length > 0 && names.every(name => MISSING_ERRNO.test(name));
+}
+
+// The host answered stat in 0.06 to 1.45 ms at load 4 and 23 (2026-11-12, 60 calls per path kind). A stat that
+// takes STAT_MS is unknown for its path only. Once DECISION_MS passes, every stat left in the decision is unknown.
+const STAT_MS = 750, DECISION_MS = 2500;
+
+/** The protected target or matched shell text rule, or undefined. */
 export async function preapprovedWriteTarget(input, options) {
+  const timers = [];
+  try { return await writeTarget(input, options, timers); } finally { for (const timer of timers) timer?.cancel?.(); }
+}
+
+async function writeTarget(input, options, timers) {
   const { tool } = input;
+  const shell = tool === 'Bash' || tool === 'PowerShell';
+  // Missing paths are distinct from unavailable metadata. The mod supplies its host clock; Node callers may use the
+  // ordinary timer fallback. The decision deadline starts with the first stat, so a command with no write path has none.
+  let exhausted = false, unavailable = false, degraded = false, deadline;
+  if (typeof options?.stat === 'function') {
+    const stat = options.stat, cache = new Map(), pending = new Set();
+    const after = options.after ?? (typeof setTimeout === 'function' ? (ms, fn) => {
+      const timer = setTimeout(fn, ms); return { cancel: () => clearTimeout(timer) };
+    } : undefined);
+    const unknown = { unknown: true };
+    const expire = () => { unavailable = true; for (const finish of [...pending]) finish(unknown); };
+    const answer = path => {
+      // The hook always passes cwd, even when unavailable. Callers omitting it retain their stat provider's contract.
+      if (!/^(?:\/|[a-z]:[\\/])/i.test(path)) {
+        if ('cwd' in options && !options.cwd) return Promise.resolve(unknown);
+        if (options.cwd) path = options.cwd.replace(/[\\/]$/, '') + '/' + path;
+      }
+      if (cache.has(path)) return cache.get(path);
+      if (cache.size >= 2048) { exhausted = true; return Promise.resolve(unknown); }
+      if (unavailable || !after) return Promise.resolve(unknown);
+      if (!deadline) {
+        try { deadline = after(DECISION_MS, expire) ?? {}; timers.push(deadline); } catch { unavailable = true; }
+        if (unavailable) return Promise.resolve(unknown);
+      }
+      const result = new Promise(resolve => {
+        let settled = false, timer;
+        const finish = info => {
+          if (settled) return;
+          settled = true; pending.delete(finish);
+          // Settle first: a host clock's cancellation can throw or reenter.
+          resolve(info);
+          timer?.cancel?.();
+        };
+        pending.add(finish);
+        try {
+          timer = after(STAT_MS, () => finish(unknown));
+          Promise.resolve().then(() => stat(path)).then(finish, error => {
+            if (missingPath(error, path)) finish(undefined);
+            else { unavailable = true; finish(unknown); }
+          });
+        } catch { unavailable = true; finish(unknown); }
+      });
+      cache.set(path, result);
+      return result;
+    };
+    // An unknown stat can only make the answer stricter: a decision that saw one ends in a refusal, whichever reader
+    // (protectedPath, aboveInstall, benchExempt, directoryExists) treated it as missing.
+    options = { ...options, stat: path => answer(path).then(info => { if (info === unknown) degraded = true; return info; }) };
+  }
   let paths;
   if (mutations.has(tool)) {
     paths = [input.file_path, input.notebook_path, ...(Array.isArray(input.edits) ? input.edits.map(edit => edit?.file_path) : [])];
-  } else if (tool === 'Bash' && typeof input.command === 'string') {
-    if (launcherRefused(input.command)) return PROTECTED.launcher;
-    paths = shellWritePaths(input.command);
+  } else if (shell && typeof input.command === 'string') {
+    // This bounded lexical check runs before substitutions, heredocs, tokenization or filesystem probes.
+    if (input.command.length > MAX_PROTECTED_COMMAND) return oversizedProtectedCommand(input.command) ? PROTECTED.oversized : undefined;
+    // PowerShell's escape tick is not a POSIX command substitution. Keep its
+    // existing dedicated path/encoded-command checks and tokenization policy.
+    const parsePlatform = tool === 'PowerShell' ? 'win32' : options?.platform ?? runtimePlatform;
+    const rootWords = shellWords(input.command);
+    const commands = [{ command: input.command, words: rootWords }];
+    if (tool === 'Bash') for (const command of rootWords.substitutions) commands.push({ command, words: shellWords(command) });
+    paths = [];
+    for (const { command, words } of commands) {
+      const sources = words.sources;
+      for (const source of sources) {
+        const target = sourceProtectedTarget(source);
+        if (target) return target;
+      }
+      if (words.ambiguous && parsePlatform !== 'win32') return PROTECTED.unresolved;
+      // Heredoc bodies are separate data; opaque redirects in comments retain
+      // their conservative refusal without changing the executable token stream.
+      if (words.some(word => word.opaque)) return PROTECTED.unresolved;
+      const launcherRefusal = launcherRefused(command, 0, false, { words, sources, sourcesChecked: true }, parsePlatform);
+      if (launcherRefusal) return launcherRefusal === PROTECTED.replay ? PROTECTED.replay : PROTECTED.launcher;
+      if ((options?.platform ?? runtimePlatform) === 'win32') {
+        const match = windowsCacheWrite(command);
+        if (match) return match;
+      } else if (tool === 'PowerShell') {
+        const encoded = windowsEncodedCommand(command);
+        if (encoded) return encoded;
+        // POSIX PowerShell has cmdlets and aliases the Bash write parser cannot recognize. Keep Bash unchanged.
+        const text = command.replace(/[`^'"+]/g, '');
+        const reading = windowsLiteralRead(command.replace(/\$\{HOME\}|\$HOME\b/gi, '/home'));
+        // PowerShell can resolve wildcard cache names and Set-Location separately from the write cmdlet.
+        const libraryGlob = /[*?\[]/.test(text) && /\blibrary\/(?:caches|application(?:\s|\\|[*?\[]))/i.test(text);
+        if (!reading && (/sleight|application support/i.test(text) || PROTECTED_NAME.test(text) || libraryGlob)) return PROTECTED.settings;
+      }
+      const data = words;
+      for (const body of data.bodies) { const target = sourceProtectedTarget(body); if (target) return target; }
+      paths.push(...shellWritePaths(command, options && 'cwd' in options ? options.cwd ?? null : undefined, 0, options?.platform, words));
+    }
   } else return undefined;
+  const checkedDirectories = new WeakMap();
+  const directoryExists = async check => {
+    const pending = [];
+    while (check && !checkedDirectories.has(check)) { pending.push(check); check = check.previous; }
+    let exists = !check || checkedDirectories.get(check);
+    for (const node of pending.reverse()) {
+      const expanded = node.path.replace(/^(?:~|\$HOME|\$\{HOME\})(?=\/|$)/, () => options?.home ?? '/~');
+      try {
+        const parentTraversal = /(?:^|\/)\.\.(?:\/|$)/.test(expanded);
+        const info = exists && (node.created && !parentTraversal ? { realPath: expanded } : await options?.stat?.(expanded));
+        exists = typeof info?.realPath === 'string' && info.realPath.length > 0;
+        // cd -L normalizes parents before resolving links, while realpath resolves links first. A disagreement is unknown.
+        if (exists && parentTraversal) {
+          const logical = await options?.stat?.(normalize(expanded));
+          exists = typeof logical?.realPath === 'string' && normalize(logical.realPath) === normalize(info.realPath);
+        }
+        node.realPath = info?.realPath;
+      } catch { exists = false; }
+      checkedDirectories.set(node, exists);
+    }
+    return exists;
+  };
   for (const candidate of paths) {
-    const { path, literalOnly, ancestor } = tool === 'Bash' ? candidate : { path: candidate };
+    if (shell && candidate.unresolved) {
+      // Explicit opaque-program sentinels refuse independently of cwd. Relative writes use the name-limited rule.
+      if (candidate.opaque || unknownDirectoryTarget(candidate.path)) return candidate.opaque ? PROTECTED.unresolved : PROTECTED.unknownDirectory;
+      continue;
+    }
+    if (shell && candidate.directoryCheck && !await directoryExists(candidate.directoryCheck)) {
+      if (unknownDirectoryTarget(candidate.relativePath ?? candidate.path)) return PROTECTED.unknownDirectory;
+      continue;
+    }
+    const { literalOnly, ancestor } = shell ? candidate : {};
+    let path = shell ? candidate.path : candidate;
+    if (shell && candidate.directoryCheck?.realPath) {
+      const { directoryCheck: check } = candidate;
+      if (path.startsWith(check.path + '/')) path = check.realPath + path.slice(check.path.length);
+    }
     if (typeof path !== 'string') continue;
     // A short-name write through an opaque shell root may be the managed executable. This concerns write targets only;
     // product names in arguments, messages and ordinary paths never enter this branch.
@@ -552,23 +1673,33 @@ export async function preapprovedWriteTarget(input, options) {
     // Read-only shell operands never enter this list, so an unset HOME permits ls.
     if (!options?.home && /^(?:~|\$HOME|\$\{HOME\})(?=\/|$)/.test(path) ||
         !options?.configDir && /^(?:\$CLAUDE_CONFIG_DIR|\$\{CLAUDE_CONFIG_DIR\})(?=\/|$)/.test(path)) return PROTECTED.unresolved;
-    if (tool === 'Bash') {
+    if (shell) {
       const literal = await literalLabel(path, options, ancestor);
       if (literal) return literal;
       const folder = globFolder(path), inFolder = folder && await literalLabel(folder, options, ancestor);
       if (inFolder) return inFolder;
+      if (folder && PROTECTED_NAME.test(path) && /application(?:\s|\\)*support/i.test(path)) return PROTECTED.settings;
       // Inline code's paths stay text, except under sleight-bench, where the arm's links make the real target count.
-      if ((literalOnly || /\s/.test(path) || path.length >= 512) && !underBench(path, options?.home)) continue;
+      if ((literalOnly || path.length >= 512) && !underBench(path, options?.home)) continue;
     }
     const label = await protectedPath(path, options, ancestor);
+    if (exhausted) return PROTECTED.unresolved;
     if (label) return label;
   }
-  return undefined;
+  return exhausted || degraded ? PROTECTED.unresolved : undefined;
 }
 export const preapprovedWriteDenied = async (input, options) => !!await preapprovedWriteTarget(input, options);
 /** The refusal Claude gets, naming what the call reached. */
-export const preapprovedWriteReason = label => label === PROTECTED.unresolved
+export const preapprovedWriteReason = label => label === PROTECTED.unknownDirectory
+  ? 'Unknown directory before a write to a protected name. Use an absolute ordinary path.'
+  : label === PROTECTED.unresolved
   ? guardPathReason
+  : label === PROTECTED.oversized
+  ? `This command exceeds ${MAX_PROTECTED_COMMAND} characters and is outside the literal read-only allowance. Split it into smaller commands.`
+  : label === PROTECTED.replay
+  ? 'Use the replay tool in this session. The shell cannot start a separate replay or recording.'
+  : Object.values(WINDOWS_MATCHES).includes(label)
+  ? `This command ${label}. Only the user changes sleight's helper cache. Ask them to make this change.`
   : `Only the user changes ${label}. Ask them to make this change.`;
 
 // SLEIGHT_ACTION_LOG and SLEIGHT_OUTCOMES are the user's switches. Claude's file and shell tools may not set them where
@@ -600,6 +1731,7 @@ export function loggingSwitchWriteDenied(input) {
   const { command } = input, candidates = [command, unescaped(command), unescaped(command, false), unescaped(command, 'js')];
   // Keep the raw spelling and argument spaces too: folding adjacent literals can join separate shell arguments.
   if (candidates.some(text => /\blaunchctl\s+setenv\b|\bclaude\s+(?:mcp|config)\b/.test(text))) return true;
+  if (command.length > MAX_PROTECTED_COMMAND) return oversizedProtectedCommand(command) || CONFIG_TEXT.test(folded(unescaped(command)));
   // A write to a config file, or an interpreter or editor tool run with one named: reads such as grep pass.
   return shellWritePaths(command).some(({ path }) => CONFIG.test(folded(normalize(path)))) ||
     // Each test on its own spelling: a fold that reaches the path can join the interpreter's name onto the argument before it

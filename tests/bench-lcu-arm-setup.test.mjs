@@ -19,7 +19,7 @@ function tempDir(t) {
 
 function gitRepo(t) {
   const repo = tempDir(t);
-  execFileSync('/usr/bin/git', ['-C', repo, 'init', '-q']);
+  execFileSync('/usr/bin/git', ['-C', repo, 'init', '-q'], { timeout: 30000, killSignal: 'SIGKILL' });
   return repo;
 }
 

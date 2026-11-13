@@ -26,7 +26,7 @@ try {
 }
 const bank = trackTemp(mkdtempSync(join(tmpdir(), 'sleight-preapproved-live-')));
 const cwd = join(bank, 'empty'); mkdirSync(cwd);
-const trace = join(bank, 'trace'); mkdirSync(trace);
+const trace = join(bank, 'trace'); mkdirSync(trace, { mode: 0o700 });
 const config = { mcpServers: { sleight: { command: join(root, 'plugins/sleight/bin/sleight-mcp'),
   env: { SLEIGHT_APPROVAL_PROMPT: 'client', SLEIGHT_TRACE: auditOnly ? '' : trace } } } };
 const prompt = auditRead ? 'Use only sleight js and Calculator. First call exactly: let app = await cua.getApp("com.apple.calculator"). ' +

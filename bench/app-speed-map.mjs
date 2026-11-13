@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 import { resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { runtimeName } from './runtime-arm.mjs';
 
 const catalog = [
   ['vscode', 'Visual Studio Code', 'com.microsoft.VSCode', 'Electron/CEF', 'workspace'],
@@ -34,7 +35,7 @@ export function speedPlan({ ids, runs = 10, ownerPresent = false, concurrentApp 
     if (concurrentApp === 'textedit' && ids && !ids.includes('textedit')) concurrentApp = apps[0].id;
     else throw Error('concurrent app must be selected');
   }
-  return { dryRun, runs, concurrency: 4, concurrentApp, ownerPresent, apps: apps.map(app => ({ ...app, readOnly: ownerPresent || app.readOnly })),
+  return { dryRun, runtime: runtimeName(), runs, concurrency: 4, concurrentApp, ownerPresent, apps: apps.map(app => ({ ...app, readOnly: ownerPresent || app.readOnly })),
     excluded: catalog.filter(app => !apps.includes(app)).map(app => ({ id: app.id, reason: app.ownerPresent && !ownerPresent ? 'requires --owner-present' : 'not selected' })),
     phases: ['acquire', 'first explicit full read', 'warm full read', 'unique scroll-area action', 'full readback'],
     concurrentPhases: ['acquire', 'first explicit full read', 'warm full read'],
@@ -152,7 +153,7 @@ const failures = new Set(['HOLD', 'TREE_UNAVAILABLE', 'FIXTURE_IDENTITY', 'ENGIN
   'NO_UNIQUE_SCROLL_AREA', 'CLEANUP_UNCONFIRMED', 'SESSION_CLEANUP_UNCONFIRMED', 'FOCUS_CHANGED', 'APP_ALREADY_RUNNING',
   'FIXTURE_NOT_OPEN', 'FIXTURE_SETUP_FAILED', 'LOCAL_CONTAINER_RECEIPT_REQUIRED', 'LOCAL_CONTAINER_UNQUALIFIED', 'MACOS_REQUIRED', 'INVALID_OPTIONS',
   'CONFLICTING_OWNER_BOUNDARY', 'OWNER_BOUNDARY_REQUIRED', 'BROWSER_PROFILE_RECEIPT_REQUIRED', 'OUTPUT_OUTSIDE_BENCH_RESULTS', 'OUTPUT_SYMLINK', 'OUTPUT_ALREADY_EXISTS', 'TEMP_CLEANUP_UNCONFIRMED']);
-const failureCode = error => failures.has(error?.message) ? error.message : 'READ_FAILED';
+const failureCode = error => /^(RUNTIME_ABSENT|INVALID_RUNTIME)(?=:|$)/.exec(error?.message ?? '')?.[1] ?? (failures.has(error?.message) ? error.message : 'READ_FAILED');
 // A failed engine call keeps only AX codes and fixed error kinds, never its text.
 const errorKinds = ['not scrollable', 'not found', 'timed out', 'timeout', 'invalid', 'unsupported', 'denied', 'lease', 'stale', 'covered',
   'offscreen', 'not visible', 'approval', 'busy', 'cannot complete'];
@@ -364,7 +365,8 @@ export function speedMarkdown(report) {
   const crashes = crashed.length ? '\nEngine helper crash reports written during the cells (SkyComputerUseService, any client): ' +
     crashed.map(row => `${row.app} ${row.mode} ${row.helperCrashes}`).join(', ') + '. sleight resends a read that met a crash once, so a crash can ' +
     'show up as a slower acquisition instead of a failure.\n' : '';
-  return '# App-class speed map\n\nTimes in ms, median / p90 (nearest rank). Counts describe the first explicit full read. ' +
+  return '# App-class speed map\n\n' + (report.runtime ? `Runtime: ${report.runtime}. Build: ${report.runtimeBuild?.sourceSha256 ?? report.runtimeBuild?.version ?? 'unknown'}.\n\n` : '') +
+    'Times in ms, median / p90 (nearest rank). Counts describe the first explicit full read. ' +
     'Only complete trials contribute to these summaries. Setup wait runs from the return of the open command to an identified fixture window. ' +
     'Cohort lifecycle includes session startup, reads and cleanup.\n\n' +
     (background.length ? table(background) : '') + crashes +

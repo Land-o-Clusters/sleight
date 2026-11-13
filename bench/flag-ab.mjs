@@ -1,8 +1,9 @@
 #!/usr/bin/env node
+import { benchEvidencePath } from './runtime-options.mjs';
 // Flag A/Bs (g3, 2026-10-19): each opt-in flag alone against the same build without it, on held-out native tasks that
 // reach the flag's code. bench/flag-ab.command runs the plan and writes a manifest, and `score` reads it back.
 //   node bench/flag-ab.mjs plan [--rounds 5] [--start 1] [--arms preview-read,office]
-//   node bench/flag-ab.mjs score [--legacy] [--manifest ~/Projects/sleight-wt/race-1017/flags-manifest.tsv] [--min-runs 3] [--json]
+//   node bench/flag-ab.mjs score [--legacy] [--manifest /path/to/evidence/race-1017/flags-manifest.tsv] [--min-runs 3] [--json]
 // A plan line is one bench/run.mjs invocation: round, arm, side, runs, tasks, env (tab-separated, explicit zero for "off").
 // Verdict, per flag over its tasks' summed expected time (mean seconds per attempt over the pass rate, as claim-score):
 //   default on   faster than off by more than one standard error, no task with a lower pass rate, and no task more than
@@ -11,7 +12,6 @@
 //   remove       not faster at all
 //   no verdict   a task short of --min-runs on a side, or rows from more than one commit or a dirty tree
 import { readFileSync } from 'node:fs';
-import { homedir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -174,7 +174,7 @@ if (process.argv[1] === fileURLToPath(import.meta.url)) {
     const lines = plan({ rounds: Number(arg('--rounds') ?? 5), start: Number(arg('--start') ?? 1), arms: arg('--arms')?.split(',') });
     for (const l of lines) console.log([l.round, l.arm, l.side, l.runs, l.tasks, l.env].join('\t'));
   } else if (command === 'score') {
-    const manifest = arg('--manifest') ?? join(homedir(), 'Projects/sleight-wt/race-1017/flags-manifest.tsv');
+    const manifest = arg('--manifest') ?? benchEvidencePath('race-1017/flags-manifest.tsv');
     const entries = readManifest(readFileSync(manifest, 'utf8'));
     const reasons = JSON.parse(readFileSync(join(root, 'bench/claim-exclusions.json'), 'utf8')).reasons;
     const legacy = process.argv.includes('--legacy') || entries.some(entry => entry.arm === 'confirmations');

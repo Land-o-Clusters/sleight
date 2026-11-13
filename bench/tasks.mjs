@@ -166,7 +166,11 @@ export const REAL_APPS = [...webBrowsers.flatMap(({ app, bundle }) => [app, bund
   'Slack', 'com.tinyspeck.slackmacgap', 'Discord', 'com.hnc.Discord',
   'WhatsApp', 'net.whatsapp.WhatsApp',
   // Spotify, for the claim's app task: search, play and pause one track (owner, 2026-10-18).
-  'Spotify', 'com.spotify.client'];
+  'Spotify', 'com.spotify.client',
+  // UTM, for the Windows VM sitting (owner, 2026-10-30).
+  'UTM', 'com.utmapp.UTM',
+  // RT25's owned witness, session cards only (owner, 2026-11-01).
+  'RT25 Probe Witness', 'org.sleight.bench.rt25-witness'];
 
 // simctl from Xcode, even when xcode-select points at the Command Line Tools.
 const XCODE = '/Applications/Xcode.app/Contents/Developer';

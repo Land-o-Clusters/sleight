@@ -4,6 +4,7 @@
 // outline filter adds a 1.5 px rim around the whole silhouette, so outer lines read about twice as heavy.
 import { Doc, f, path, g, ellD, rrD, starD, capsuleD, smoothD, lockD, leafD, leafSidesD, cel, outlineUnderlay, rot, RAD, clamp, lerp } from '../lib/svg.mjs';
 import { recordAnchors } from '../lib/poses.mjs';
+import { stageRig } from '../lib/stage-rig.mjs';
 import { drawFx, sweatDrop, FX } from '../lib/fx.mjs';
 
 // CoreSVG (sips) drops these multi-path clip groups. Luminance masks preserve the
@@ -22,6 +23,7 @@ const buildOf = D => ({ ...CHIBI, ...D.build });
 const sideSign = s => (s === 'l' ? -1 : 1);
 
 export function renderAnime(D, pose, { proof } = {}) {
+  if (pose.stage) return renderStageAnime(D, pose);
   const doc = new Doc(192, 208);
   if (proof) doc.hairProof = [];
   const p = temper(D, pose);
@@ -89,6 +91,44 @@ export function renderAnime(D, pose, { proof } = {}) {
   return doc.wrap(g(fxBack + character + fxFront, { transform: root }));
 }
 
+function renderStageAnime(D, pose) {
+  const p = temper(D, pose), B = buildOf(D), R = stageRig(D, p, B), doc = new Doc(R.width, 208);
+  p.face=temper(D,p).face; // Stage reactions choose expressions before the design's calm/adult substitutions.
+  const L = [-2.6, -2.6], t = p.head.turn, ink = D.ink;
+  const headT = `translate(${f(R.head[0])},${f(R.head[1])}) rotate(${f(p.head.tilt)}) scale(${f(B.head)})`;
+  const H = {doc,D,t,pitch:0,ink,hl:rot(L,-p.head.tilt),face:p.face,sweat:R.fx.filter(x=>x.type==='sweat')};
+  const hair = HAIR[D.hair.style](H);
+  let back = g(hair.back,{transform:headT}), body = '';
+  if (D.tail) {
+    const posture = p.stage.posture;
+    const tail = {base:[R.hip[0]+10,R.hip[1]-2],ang:posture==='lie'?-80:posture==='hang'?105:posture==='run'?-75:50,
+      scale:posture==='hang'?0.8:posture==='lie'?1.2:1.1};
+    back += drawTail(doc,D,{...p,stageTail:tail},B,0,L);
+  }
+  for (const s of R.legOrder) {
+    const leg = R.legs[s], k = B.limb;
+    body += cel(doc,capsuleD(...leg.hip,...leg.knee,7.6*k,6*k),D.legs.pants,{shift:L});
+    body += cel(doc,capsuleD(...leg.knee,...leg.foot,6*k,5*k),D.legs.pants,{shift:L});
+    body += cel(doc,ellD(...leg.foot,8.2,5,leg.toe),D.legs.shoes,{shift:L,
+      light:[ellD(leg.foot[0]-2,leg.foot[1]-1.5,2.6,1.4,leg.toe)]});
+  }
+  body += cel(doc,capsuleD(R.head[0],R.head[1]+27*B.head,...R.sh,6.2*B.limb,6.6*B.limb),D.neck??D.skin,{shift:L});
+  body += g(OUTFIT[D.outfit.style](doc,D,{t:0,bt:0,headX:96,L,B,seated:p.stage.posture==='sit'}),{transform:R.torso});
+  // Far arms sit behind the face; the reaching hands and props are drawn in front.
+  body += drawArm(doc,D,R.arms.l,L)+drawArm(doc,D,R.arms.r,L);
+  body += g(drawHead(H,hair),{transform:headT});
+  // A pen, pad, transfer box and mug belong to the character, never to app content.
+  body += R.props.map(x=>drawProp(doc,D,x)).join('');
+  for(const s of ['l','r']) {
+    const A=R.arms[s];
+    if(A.hc[1]>R.head[1]+20*B.head || p.stage.posture==='hang') body+=drawHand(doc,D,A,[-A.d2[1],A.d2[0]],L);
+  }
+  const all=back+body;
+  const character=outlineUnderlay(all,{ink,rim:D.rim??1.5,sticker:D.sticker??0,stickerColor:D.stickerColor??'#fff'})+all;
+  recordAnchors(R.anchor,{...p,lean:0,x:0,y:0,sx:1,sy:1});
+  return doc.wrap(drawFx(R.fx,R.anchor,ink,'back')+character+drawFx(R.fx,R.anchor,ink,'front'));
+}
+
 /** Per-design calm-down: expression swaps and default eyes. Motion energy is applied by the poses via ctx.E. */
 function temper(D, pose) {
   const p = structuredClone(pose), map = D.expr ?? {};
@@ -123,6 +163,7 @@ function drawHand(doc, D, A, n, L) {
   const inward = n[0] * -A.sg + n[1] * 0.3 > 0 ? n : [-n[0], -n[1]];
   const o = { shift: L, lw: 1.2, line: sk.line };
   switch (A.hand) {
+    case 'grip': return cel(doc,ellD(x,y,5.6,5),sk,o)+path(`M${f(x-3)},${f(y-4)}v-3q3,-3 6,0v3`,{fill:'none',stroke:sk.line,'stroke-width':2.2,'stroke-linecap':'round'});
     case 'fist': return cel(doc, ellD(x, y, 5.6, 5.4, phi), sk, o) + path(`M${f(x + inward[0] * 1.5 - d[0] * 1)},${f(y + inward[1] * 1.5 - d[1] * 1)}l${f(d[0] * 3)},${f(d[1] * 3)}`, { stroke: sk.line, 'stroke-width': 1, 'stroke-linecap': 'round' });
     case 'point': return cel(doc, capsuleD(x + d[0] * 2, y + d[1] * 2, x + d[0] * 11.5, y + d[1] * 11.5, 2.5, 2.1), sk, o) + cel(doc, ellD(x, y, 5.3, 5.1, phi), sk, o);
     case 'thumb': return cel(doc, ellD(x, y, 5.8, 5.6, phi), sk, o) + cel(doc, capsuleD(x + inward[0] * 1.2, y - 2.5, x + inward[0] * 1.2, y - 10.5, 2.7, 2.3), sk, o);
@@ -299,9 +340,9 @@ function foxMuzzle(doc, D, t, pitch, faceD) {
 }
 function drawTail(doc, D, p, B, t, L) {
   const sway = -p.lean * 1.8 + p.x * 1.5 - p.y * 1.2 + (p.arms.r.a - p.arms.l.a) * 0.04;
-  const base = [CX + 14 + 2 * t, B.hipY - 2], ang = 28 + sway;
+  const base = p.stageTail?.base ?? [CX + 14 + 2 * t, B.hipY - 2], ang = p.stageTail?.ang ?? 28 + sway;
   const pts = [[0, -4], [13, -12], [25, -28], [30, -45], [25, -60], [15, -60], [9, -46], [2, -28], [-5, -10], [-3, 4]];
-  const tr = ([x, y]) => { const [u, v] = rot([x, y], ang); return [base[0] + u, base[1] + v]; };
+  const tr = ([x, y]) => { const [u, v] = rot([x, y], ang), sc=p.stageTail?.scale??1; return [base[0] + u*sc, base[1] + v*sc]; };
   const d = smoothD(pts.map(tr));
   const id = doc.id('tl'); doc.def(`<clipPath id="${id}"><path d="${d}"/></clipPath>`);
   const tipCut = [[-20, -44], [40, -40], [40, -80], [-20, -80]].map(tr);
@@ -441,8 +482,19 @@ const OUTFIT = {
     }
     return s;
   },
-  longcoat(doc, D, { t, bt, headX, L }) {
+  longcoat(doc, D, { t, bt, headX, L, seated=false }) {
     const O = D.outfit, zo = 6 * bt;
+    if(seated) {
+      // The coat folds onto the thighs instead of concealing both dangling shins. The seat is three-quarter with
+      // the legs to the viewer's left, so the hem drapes further on that side and tucks under the hip on the right.
+      const d=`M${CX-12},103Q${CX},99 ${CX+12},103Q${CX+21},107 ${CX+21},117L${CX+23},140L${CX+26},152Q${CX-2},161 ${CX-36},159L${CX-25},140L${CX-21},117Q${CX-21},107 ${CX-12},103Z`;
+      return cel(doc,d,O.body,{shift:L,shade:[`M${CX},130L${CX+26},152L${CX-2},161Z`]})+
+        cel(doc,`M${CX-8.5},103H${CX+8.5}L${CX},129Z`,O.shirt,{shift:L,lw:1.1})+
+        path(`M${CX},129L${CX-3},158M${CX-25},141Q${CX},146 ${CX+23},141`,{fill:'none',stroke:D.ink,'stroke-width':1.1})+
+        [136,151].map(y=>path(ellD(CX+5.5,y,1.7),{fill:O.accent.base,stroke:D.ink,'stroke-width':.9})).join('')+
+        cel(doc,`M${CX},108L${CX-6},104.5V111.5Z`,O.accent,{shift:L,lw:1})+
+        cel(doc,`M${CX},108L${CX+6},104.5V111.5Z`,O.accent,{shift:L,lw:1});
+    }
     const d = `M${CX - 12},103C${CX - 4},101 ${CX + 4},101 ${CX + 12},103C${CX + 18},104.5 ${CX + 20.5},108 ${CX + 21},115L${CX + 31},175Q${CX + 32},181 ${CX + 26},181L${CX - 26},181Q${CX - 32},181 ${CX - 31},175L${CX - 21},115C${CX - 20.5},108 ${CX - 18},104.5 ${CX - 12},103Z`;
     let s = cel(doc, d, O.body, { shift: L, shade: [ellD(headX, 104, 16, 6), `M${f(CX + zo)},128L${f(CX + 2 + zo)},182L${f(CX + 40)},182L${f(CX + 40)},128Z`], light: [`M${CX - 21},119L${CX - 18},119L${CX - 23},176L${CX - 28.5},176Z`] });
     s += cel(doc, `M${f(CX - 8.5 + zo)},103L${f(CX + 8.5 + zo)},103L${f(CX + zo)},129Z`, O.shirt, { shift: L, lw: 1.1 });
@@ -459,6 +511,14 @@ const OUTFIT = {
 // ---------- props (body space) ----------
 function drawProp(doc, D, x) {
   const ink = D.ink, L = [-2.5, -2.5];
+  if(x.type==='notes') return g(cel(doc,rrD(-24,-13,48,26,2),{base:'#fffdf5',shade:'#ded8ce',line:ink},{shift:L})+
+    path('M0,-12V12M-18,-5H-5M5,-5H18M-18,1H-5M5,1H16',{stroke:'#9aa5bd','stroke-width':1.2})+
+    path(`M${f(8+(x.writing%3)*3)},-4l8,-17`,{stroke:'#313b63','stroke-width':3,'stroke-linecap':'round'}),{transform:`translate(${x.x} ${x.y}) rotate(-8)`});
+  if(x.type==='box') return g(cel(doc,rrD(-25,-19,50,38,2),{base:'#d9ac79',shade:'#bb8756',line:'#795136'},{shift:L})+
+    path('M-5,-19H5V19H-5Z',{fill:'#f7dfb4'})+path('M-25,-4H25',{stroke:'#a26f44','stroke-width':1.2}),{transform:`translate(${x.x} ${x.y})`});
+  if(x.type==='mug') return g(path('M10,-7h5q9,8 0,15h-5',{fill:'none',stroke:ink,'stroke-width':3})+
+    cel(doc,rrD(-13,-12,26,25,4),{base:'#f1ebe1',shade:'#c9c2b9',line:ink},{shift:L})+
+    path('M-5,-17q-5,-5 0,-10M4,-17q-5,-5 0,-10',{fill:'none',stroke:'#aaa8b3','stroke-width':1.3,'stroke-linecap':'round'}),{transform:`translate(${x.x} ${x.y})`});
   if (x.type === 'keyboard') {
     const P = D.props?.keyboard ?? { base: '#2c3352', shade: '#1e2440', light: '#434c75', line: ink };
     let s = cel(doc, rrD(x.x - 31, x.y - 7, 62, 15, 3.5), P, { shift: [0, -2.5] });

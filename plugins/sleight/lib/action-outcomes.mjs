@@ -22,7 +22,7 @@ const age = path => {
 function ownerNames() {
   const names = [];
   try { names.push(userInfo().username); } catch {}
-  try { names.push(execFileSync('/usr/bin/id', ['-F'], { encoding: 'utf8', timeout: 1000, stdio: ['ignore', 'pipe', 'ignore'] }).trim()); } catch {}
+  try { names.push(execFileSync('/usr/bin/id', ['-F'], { encoding: 'utf8', timeout: 1000, stdio: ['ignore', 'pipe', 'ignore'], killSignal: 'SIGKILL' }).trim()); } catch {}
   return names;
 }
 
@@ -37,7 +37,7 @@ export function actionOutcome(recs, before, after) {
     'column header', 'static text', 'text', 'heading', 'image', 'group', 'toolbar', 'list', 'table', 'outline', 'web area', 'window']
     .sort((a, b) => b.length - a.length);
   const FIELDS = 'Description|Value|ID|Help|Secondary Actions|URL|Placeholder|Details|Selected text';
-  const FIELD = Object.fromEntries(['Description', 'Value', 'ID'].map(key => [key, new RegExp('(?:^|, )' + key + ': ?(.*?)(?=, (?:' + FIELDS + '): |$)')]));
+  const FIELD = Object.fromEntries(['Description', 'Value', 'ID'].map(key => [key, new RegExp('(?:^|, )' + key + ': ?([\\s\\S]*?)(?=, (?:' + FIELDS + '): |$)')]));
   const TITLE_END = new RegExp('(?:^|, )(?:' + FIELDS + '):');
   const cap = (text, n = 40) => text.length > n ? text.slice(0, n - 1) + '…' : text;
   // Names show only when they are generic control words. Tab, link, menu item and window names can be titles, page text or
@@ -71,19 +71,30 @@ export function actionOutcome(recs, before, after) {
   };
   const view = text => {
     if (typeof text !== 'string') return;
+    if ([...text.matchAll(/^Window: /gm)].length !== 1) return;
     const header = /^Window: (.*), App: (.+?)\.?\r?$/m.exec(text);
     if (!header) return;
     const els = new Map();
-    let focus;
+    let focus, current, body;
+    const finish = separator => {
+      if (current !== undefined) els.set(current, separator ? body.replace(/\n$/, '') : body);
+    };
     for (const line of text.split('\n')) {
-      const m = /^\t*(\d+) (.*?)\r?$/.exec(line);
-      if (m) { els.set(Number(m[1]), m[2]); continue; }
+      const m = /^\t*(\d+) ([^\n]*)$/.exec(line);
+      if (m) { finish(false); current = Number(m[1]); body = m[2]; continue; }
       const f = /^The focused UI element is (\d+) (.*?)\r?$/.exec(line);
-      if (f) focus = { n: Number(f[1]), body: f[2] };
+      if (f) { finish(true); focus = { n: Number(f[1]), body: f[2] }; current = undefined; }
+      // One newline separates element rows. All earlier newlines belong to this AX value,
+      // including blank lines before the next numbered element. Never trim or fold their case.
+      else if (current !== undefined && /\bValue:/.test(body)) body += '\n' + line;
     }
+    // The focus summary has one blank separator; a read without it has one terminal newline.
+    // Remove only that framing newline before storing the last element's value.
+    finish(text.endsWith('\n'));
     let title;
     try { title = JSON.parse(header[1]); } catch { title = header[1].replace(/^"|"$/g, ''); }
-    return { title: String(title), app: header[2], url: /\bURL: (\S+)/.exec(els.get(0) ?? '')?.[1] ?? '', els, focus };
+    return { title: String(title), app: header[2], url: /\bURL: (\S+)/.exec(els.get(0) ?? '')?.[1] ?? '', els, focus,
+      incomplete: /…\(\d+\)|sleight: (?:lines changed|no change since)/.test(text) };
   };
   const label = d => d.role + (d.name ? ' ' + shown(d.name) : '');
   const key = d => d.role + '|' + (d.id || d.name);
@@ -133,11 +144,14 @@ export function actionOutcome(recs, before, after) {
       // Only a single-line control's own value, never a text area's or a secure field's, and never typed text.
       const shown = !/^(?:typeText|paste)$/.test(rec.a) && !old.secure && !now.secure &&
         /^(?:text field|search text field|search field|combo box|slider|stepper|incrementor|value indicator|pop up button|date field|time field)$/.test(now.role) &&
-        (now.value ?? '').length <= 40;
+        (now.value ?? '').length <= 40 && !/[\r\n]/.test(now.value ?? '');
       // A secure field shows bullets, so whether it holds what was set is unknown.
-      const want = typeof rec.want === 'string' && !old.secure && !now.secure ? { m: now.value === rec.want } : {};
+      const want = typeof rec.want === 'string' && !old.secure && !now.secure &&
+        !a.incomplete && !b.incomplete && a.app === b.app && a.title === b.title && a.url === b.url &&
+        key(now) === key(old) && now.value !== undefined
+        ? { m: now.value === rec.want } : {};
       if (toggle && on(old) !== on(now)) facts.push({ o: 'state', d: on(now) ? toggle[0] : toggle[1] });
-      else if (old.value !== now.value || want.m) facts.push({ o: 'value', ...want, ...(shown ? { d: now.value ?? '' } : {}) });
+      else if (old.value !== now.value || want.m !== undefined) facts.push({ o: 'value', ...want, ...(shown ? { d: now.value ?? '' } : {}) });
       for (const flag of ['selected', 'expanded', 'disabled']) {
         if (!toggle && old.flags.includes(flag) !== now.flags.includes(flag)) facts.push({ o: 'state', d: (now.flags.includes(flag) ? '' : 'not ') + flag });
       }

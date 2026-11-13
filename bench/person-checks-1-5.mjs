@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 // Fixture-only owner checks. Importing this module does nothing; --dry-run has no side effects.
 import { spawn, spawnSync } from 'node:child_process';
+import { helperCompileArgs } from '../plugins/sleight/lib/direct-browser/host-cache.mjs';
 import { createHash, randomUUID } from 'node:crypto';
 import { lstatSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -99,8 +100,8 @@ export function compileOnly(directory, run = spawnSync) {
     sourceSha256: createHash('sha256').update(readFileSync(hostSource)).digest('hex'),
     instrumentedSha256: createHash('sha256').update(source).digest('hex') };
   for (const [input, output] of [[swift, binaries.host], [fileURLToPath(posterSource), binaries.poster]]) {
-    const result = run('/usr/bin/xcrun', ['swiftc', '-module-cache-path', join(directory, 'cache'), input, '-o', output],
-      { encoding: 'utf8', timeout: 300000, maxBuffer: 1024 * 1024 });
+    const result = run('/usr/bin/xcrun', helperCompileArgs(output === binaries.host ? 'consent-host' : 'probe-poster', { sources: [input], binary: output, moduleCache: join(directory, 'cache') }),
+      { encoding: 'utf8', timeout: 300000, killSignal: 'SIGKILL', maxBuffer: 1024 * 1024 });
     if (result.status !== 0) throw Error(`PERSON_CHECK_COMPILE_FAILED: ${result.error?.message ?? result.stderr}`);
   }
   return binaries;
@@ -336,7 +337,7 @@ export async function main(args = process.argv.slice(2)) {
     if (access.status !== 0 || access.stdout.trim() !== 'true') throw Error('POST_EVENT_ACCESS_REQUIRED: the posted-input checks need post-event access for the process running this script. No permission was requested and no card was shown.');
     return binaries;
   };
-  const invoke = args => spawnSync(binaries.poster, args, { encoding: 'utf8', timeout: 10000 });
+  const invoke = args => spawnSync(binaries.poster, args, { encoding: 'utf8', timeout: 10000, killSignal: 'SIGKILL' });
   try {
     if (options.compileOnly) { binaries = compileOnly(directory); console.log('production host with receipts and poster compiled; neither launched'); return 0; }
     console.error('Fixture cards only. Allow about 10 minutes. No real sign-in, app approval or payment. Ctrl-C stops the pass.');

@@ -1,0 +1,121 @@
+{
+  "source": "SF6P 2026-10-30, ce6a8718; selected journal records, no inferred final snapshot",
+  "moved": {
+    "snapshots": [
+      {
+        "order": 4,
+        "at": "2026-10-30T03:11:08.931Z",
+        "event": "snapshot",
+        "index": 1,
+        "snapshot": {
+          "phase": "before-refusal",
+          "memo": "",
+          "reference": "reference stays",
+          "focus": "memo",
+          "events": []
+        }
+      },
+      {
+        "order": 11,
+        "at": "2026-10-30T03:11:25.082Z",
+        "event": "snapshot",
+        "index": 2,
+        "snapshot": {
+          "phase": "before-refusal",
+          "memo": "",
+          "reference": "reference stays",
+          "focus": "memo",
+          "events": []
+        }
+      },
+      {
+        "order": 18,
+        "at": "2026-10-30T03:11:28.906Z",
+        "event": "snapshot",
+        "index": 3,
+        "snapshot": {
+          "phase": "after-refusal",
+          "memo": "",
+          "reference": "reference stays",
+          "focus": "reference",
+          "events": []
+        }
+      }
+    ],
+    "refusal": {
+      "observed": true,
+      "numericTarget": true,
+      "nothingSent": true,
+      "order": 1,
+      "callId": 4
+    },
+    "stopped": {
+      "observed": true,
+      "order": 2
+    },
+    "boundaryOrder": 3,
+    "cleanup": {
+      "browserClosed": true,
+      "profileDeleted": true,
+      "noWindows": true,
+      "driverCollected": true,
+      "modelCollected": true,
+      "serverClosed": true
+    },
+    "axReads": [
+      {
+        "stage": "1",
+        "code": "await sf6Driver.getAXState({disableDiffing:true});",
+        "result": {
+          "content": [
+            {
+              "type": "text",
+              "text": "Window: \"SF6R focus probe\", App: Firefox.\n\t\t\t25 HTML Content Description: SF6R focus probe, URL: 127.0.0.1:51226/4a7dc661-6276-417e-afaf-9965b243314e/\n38 text {\n  \"phase\": \"before-refusal\",\n  \"memo\": \"\",\n  \"reference\": \"reference stays\",\n  \"focus\": \"memo\",\n  \"events\": []\n}"
+            }
+          ]
+        }
+      },
+      {
+        "stage": "2",
+        "code": "await sf6Driver.getAXState({disableDiffing:true});",
+        "result": {
+          "content": [
+            {
+              "type": "text",
+              "text": "Window: \"SF6R focus probe\", App: Firefox.\n\t\t\t25 HTML Content Description: SF6R focus probe, URL: 127.0.0.1:51226/4a7dc661-6276-417e-afaf-9965b243314e/\n38 text {\n  \"phase\": \"before-refusal\",\n  \"memo\": \"\",\n  \"reference\": \"reference stays\",\n  \"focus\": \"memo\",\n  \"events\": []\n}"
+            }
+          ]
+        }
+      },
+      {
+        "stage": "4",
+        "code": "await sf6Driver.getAXState({disableDiffing:true});",
+        "result": {
+          "content": [
+            {
+              "type": "text",
+              "text": "Window: \"SF6R focus probe\", App: Firefox.\n\t\t\t25 HTML Content Description: SF6R focus probe, URL: 127.0.0.1:51226/4a7dc661-6276-417e-afaf-9965b243314e/\n38 text {\n  \"phase\": \"after-refusal\",\n  \"memo\": \"\",\n  \"reference\": \"reference stays\",\n  \"focus\": \"reference\",\n  \"events\": []\n}"
+            }
+          ]
+        }
+      }
+    ]
+  },
+  "unchanged": {
+    "acquire": {
+      "order": 2,
+      "at": "2026-10-30T03:12:00.183Z",
+      "event": "driver-acquire",
+      "stage": "1",
+      "result": {
+        "isError": true,
+        "content": [
+          {
+            "type": "text",
+            "text": "This step needs the user at the Mac. Approval requires physical input. The card remains open."
+          }
+        ]
+      }
+    }
+  }
+}

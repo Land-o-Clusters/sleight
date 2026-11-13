@@ -129,7 +129,7 @@
           "task": "safari-form",
           "run": 1,
           "passed": false,
-          "reason": "Fixture setup failed: ~/Projects/sleight-wt/real-use-tasks/bench/real-fixture.js: execution error: Error: Error: AX fixture read failed: -25204 (-2700)",
+          "reason": "Fixture setup failed: <private-evidence>/real-use-tasks/bench/real-fixture.js: execution error: Error: Error: AX fixture read failed: -25204 (-2700)",
           "cleanupError": "Owned fixture window cleanup unconfirmed",
           "fixtureDir": "<temp>/sleight-bench/2026-10-09T00-59-54-312Z/sleight-safari-form-1",
           "models": []

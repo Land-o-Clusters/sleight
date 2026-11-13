@@ -1,3 +1,4 @@
+import { assertChildStatus } from './fixtures/child-status.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { mkdtempSync, readFileSync, existsSync, statSync, rmSync, readdirSync, realpathSync } from 'node:fs';
@@ -141,13 +142,13 @@ test('Swift approval press pins exact English session title and scopes UI contro
 
 test('a child crash after setting leaves the original selection journal and blocks a new process', t => {
   const dir = mkdtempSync(join(realpathSync(tmpdir()), 'cu2r-crash-')); t.after(() => rmSync(dir, { recursive: true, force: true }));
-  const r = spawnSync(process.execPath, ['tests/fixtures/cursor-cu-crash.mjs', dir], { encoding: 'utf8', timeout: 5000 });
-  assert.equal(r.status, 23, r.stderr);
+  const r = spawnSync(process.execPath, ['tests/fixtures/cursor-cu-crash.mjs', dir], { encoding: 'utf8', timeout: 5000, killSignal: 'SIGKILL' });
+  assertChildStatus(r, 23, r.stderr);
   const paths = armPaths({ home: dir });
   assert.deepEqual(JSON.parse(readFileSync(join(paths.root, 'owner-selection-journal.json'))).selection, previous);
   assert.deepEqual(JSON.parse(readFileSync(join(dir, 'simulated-selection.json'))), RUN_SELECTION);
-  const next = spawnSync(process.execPath, ['tests/fixtures/cursor-cu-crash.mjs', dir, 'restart'], { encoding: 'utf8', timeout: 5000 });
-  assert.equal(next.status, 24, next.stderr);
+  const next = spawnSync(process.execPath, ['tests/fixtures/cursor-cu-crash.mjs', dir, 'restart'], { encoding: 'utf8', timeout: 5000, killSignal: 'SIGKILL' });
+  assertChildStatus(next, 24, next.stderr);
 });
 
 test('explicit recovery verifies recorded selection and accessibility before clearing a leftover', async t => {

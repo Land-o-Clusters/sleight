@@ -4,6 +4,7 @@ import { PassThrough } from 'node:stream';
 import { createRelay } from '../plugins/sleight/lib/relay.mjs';
 import { createSessionPause, PAUSED_NOTE, NATIVE_PAUSE_CUT_NOTE } from '../plugins/sleight/lib/session-pause.mjs';
 import { createCursorEvents } from '../plugins/sleight/lib/hand/events.mjs';
+import { productModule } from './fixtures/runtime-helper-inspection.mjs';
 
 const tick = () => new Promise(resolve => setImmediate(resolve));
 function harness(t, extra = {}) {
@@ -27,7 +28,7 @@ test('pause epochs stop the rest of an old call even after a resume', () => {
 
 test('a paused relay refuses every engine, turbo, Electron and local tool before dispatch', async t => {
   let local = 0;
-  const h = harness(t, { turboUnavailable: 'off', localTools: { tools: [{ name: 'menu_bar' }], call() { local++; } } });
+  const h = harness(t, { turboUnavailable: 'off', localTools: { tools: [{ name: 'menu_bar', inputSchema: { type: 'object' } }], call() { local++; } } });
   h.pause.set(true);
   const names = ['js', 'js_reset', 'browser_open', 'browser_read', 'browser_act', 'browser_fill', 'browser_tabs', 'menu_bar', 'replay', 'open_file'];
   names.forEach((name, i) => h.call(i + 1, name, {}));
@@ -43,13 +44,43 @@ test('sessions are independent and a human resume admits fresh calls', t => {
   a.pause.set(false); a.call(3); assert.equal(a.sent.length, 1);
 });
 
-test('pause emits a sticky public status and sends it to the host', t => {
-  const records = [], host = [], cursor = createCursorEvents({ setting: () => ({ enabled: true, style: 'ring', stream: true }), sink: { write() {}, close() {} }, onEvent: e => records.push(e) });
+function assertPausedStatuses(t, events = createCursorEvents, terminal = 'done') {
+  const records = [], host = [], cursor = events({ setting: () => ({ enabled: true, style: 'ring', stream: true }), sink: { write() {}, close() {} }, onEvent: e => records.push(e) });
   cursor.connectHost({ cursor: e => host.push(e) });
   const h = harness(t, { cursor });
-  h.pause.set(true); cursor.status('done'); cursor.status('thinking');
+  h.pause.set(true); cursor.status('done', { call: 'a'.repeat(32) }); cursor.status('thinking');
   assert.equal(records.at(-1).state, 'paused'); assert.equal(host.at(-1).state, 'paused');
+  // CR2A permits real turn boundaries to release retained targets while paused.
+  cursor.status(terminal);
+  assert.equal(records.at(-1).state, terminal); assert.equal(host.at(-1).state, terminal);
+  const count = records.length;
+  cursor.status('thinking'); cursor.status('waiting'); cursor.status('done', { call: 'b'.repeat(32) });
+  assert.equal(records.length, count); assert.equal(h.pause.paused, true);
+  h.call(1); assert.equal(h.sent.length, 0);
+  assert.equal(h.replies.at(-1).result.content[0].text, PAUSED_NOTE);
   h.pause.set(false); assert.equal(records.at(-1).state, 'idle');
+  h.call(2); assert.equal(h.sent.length, 1);
+}
+
+test('pause keeps call statuses sticky but forwards turn boundaries without resuming input', t => {
+  for (const terminal of ['done', 'handback']) assertPausedStatuses(t, createCursorEvents, terminal);
+});
+
+test('pause status assertions catch suppressed boundaries and unguarded call statuses', async t => {
+  const guard = "if (paused && state !== 'paused' && !turnEnd) return;";
+  for (const [variant, replacement] of [
+    ['suppress-turn-boundaries', "if (paused && state !== 'paused') return;"],
+    ['unguarded-call-status', '/* broken: pause guard removed */'],
+  ]) {
+    const broken = await productModule('hand/events.mjs', source => {
+      assert.equal(source.split(guard).length, 2);
+      return source.replace(guard, replacement);
+    });
+    for (const terminal of ['done', 'handback']) {
+      assert.throws(() => assertPausedStatuses(t, broken.createCursorEvents, terminal), { code: 'ERR_ASSERTION' }, `${variant}: ${terminal}`);
+    }
+    t.diagnostic(`broken variant=${variant}, caught boundary cases=2`);
+  }
 });
 
 test('a pause clicked during startup is published when the relay subscribes', t => {
@@ -91,7 +122,7 @@ test('an in-flight native action may finish but its next approval is declined, e
 
 test('a local action waiting for its target stops before input when paused', async t => {
   let targetReady, actions = 0;
-  const h = harness(t, { localTools: { tools: [{ name: 'hover' }], target: () => new Promise(resolve => { targetReady = resolve; }),
+  const h = harness(t, { localTools: { tools: [{ name: 'hover', inputSchema: { type: 'object' } }], target: () => new Promise(resolve => { targetReady = resolve; }),
     async call() { actions++; return { content: [] }; } } });
   h.call(1, 'hover', { app: 'Editor' }); await tick();
   assert.equal(typeof targetReady, 'function');
@@ -101,7 +132,7 @@ test('a local action waiting for its target stops before input when paused', asy
 
 test('a completed local pause does not decline later native approvals after resume', async t => {
   let ready;
-  const h = harness(t, { localTools: { tools: [{ name: 'hover' }],
+  const h = harness(t, { localTools: { tools: [{ name: 'hover', inputSchema: { type: 'object' } }],
     target: () => new Promise(resolve => { ready = resolve; }), async call() { return { content: [] }; } } });
   h.call(1, 'hover', { app: 'Editor' }); await tick();
   h.pause.set(true); h.pause.set(false); ready({ app: 'Editor', appId: 'org.test.editor' }); await tick();
@@ -133,7 +164,7 @@ test('a lost pause control names both recovery paths', t => {
 test('foreground drag cannot dispatch until the host clears its panel', async t => {
   let release, actions = 0;
   const h = harness(t, { pauseHost: { activity() {}, clearForAction: () => new Promise(resolve => { release = resolve; }) },
-    localTools: { tools: [{ name: 'drag' }], target: async () => ({ app: 'Editor', appId: 'org.test.editor' }),
+    localTools: { tools: [{ name: 'drag', inputSchema: { type: 'object' } }], target: async () => ({ app: 'Editor', appId: 'org.test.editor' }),
       async call() { actions++; return { content: [] }; } } });
   h.call(1, 'drag', { app: 'Editor', windowId: 77 }); await tick();
   assert.equal(actions, 0); assert.equal(typeof release, 'function'); release(true); await tick(); assert.equal(actions, 1);
@@ -143,7 +174,7 @@ test('a drag clears again after its waiting approval before dispatching pointer 
   const cursor = createCursorEvents({ setting: () => ({ stream: true }), sink: { write() {}, close() {} }, onEvent: event => records.push(event) });
   const h = harness(t, { cursor, ask: async () => { order.push('approved'); return 'accept'; },
     pauseHost: { activity() {}, clearForAction: () => new Promise(resolve => { order.push('clear'); releases.push(resolve); }) },
-    localTools: { tools: [{ name: 'drag' }], target: async () => ({ app: 'Editor', appId: 'org.test.editor' }),
+    localTools: { tools: [{ name: 'drag', inputSchema: { type: 'object' } }], target: async () => ({ app: 'Editor', appId: 'org.test.editor' }),
       async call(_name, _args, approve) {
         if (await approve(['drag', 'Editor'], 'Allow drag?')) order.push('pointer-input');
         return { content: [] };

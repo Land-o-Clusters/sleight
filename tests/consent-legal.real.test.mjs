@@ -54,7 +54,7 @@ for (const decline of declines) test(`turbo observes one-click decline: ${declin
   assert.match(blocked, /accepting cookies is blocked/);
   assert.ok(blocked.includes(JSON.stringify(decline)));
   assert.doesNotMatch(blocked, /Stop and ask/);
-  assert.match(await f.act(decline), /Decline confirmed/);
+  assert.match(await f.act(decline), /cookie wall no longer shown after clicking/);
 });
 test('turbo reset instructions do not hide an independent cookie-use sentence', { skip, timeout: 30000 }, async t => {
   const f = await setup(t, html('role="dialog"', 'We use cookies. You can remove cookies in your browser.'));

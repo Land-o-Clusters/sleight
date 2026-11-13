@@ -1,3 +1,4 @@
+import { testChromiumExecutable, launchTestChromium } from './fixtures/chromium-isolated.mjs';
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { createServer } from 'node:http';
@@ -10,8 +11,7 @@ import { createToolDispatcher } from '../plugins/sleight/lib/direct-browser/tool
 const pin = JSON.parse(readFileSync(new URL('../plugins/sleight/vendor/playwright-core/browsers.json', import.meta.url)))
   .browsers.find(browser => browser.name === 'chromium');
 const executablePath = process.platform === 'darwin'
-  ? join(homedir(), 'Library/Caches/ms-playwright', 'chromium-' + pin.revision, 'chrome-mac-' + process.arch,
-    'Google Chrome for Testing.app/Contents/MacOS/Google Chrome for Testing')
+  ? testChromiumExecutable({ headless: false, revision: pin.revision })
   : join(homedir(), 'Library/Caches/ms-playwright', 'chromium-' + pin.revision, 'chrome-linux64/chrome');
 const skip = process.env.SLEIGHT_LIVE_DOM_TEST !== '1' ? 'needs SLEIGHT_LIVE_DOM_TEST=1 through the host runner'
   : !existsSync(executablePath) ? 'pinned Chromium headless shell is unavailable' : false;
@@ -21,7 +21,7 @@ test('five-tool dispatcher routes an owned local form and collects page resource
   const records = new Map();
   try {
     await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
-    browser = await chromium.launch({ headless: true, executablePath }); context = await browser.newContext();
+    browser = await launchTestChromium(chromium, { headless: true, executablePath }); context = await browser.newContext();
     const pages = { async openTab({ url }) {
       const page = await context.newPage(); await page.goto(url);
       records.set('t1', { page, state: { snapshotNo: 0, submitUnconfirmed: false } }); return { tab: 't1' };

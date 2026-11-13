@@ -20,7 +20,7 @@ async function open(t, { flag = '0', autoFlag, window = tree, openedFile, failSh
   const relay = createRelay({ clientIn, clientOut, serverIn, serverOut, changeReview, warmRepl, ...relayOptions,
     ask: async message => { approvals.push(message); return 'accept'; },
     inputLease: { acquire: target => { leases.push(target); return 'lease'; }, renew() {}, release() {}, close() {} },
-    localTools: { tools: [{ name: 'open_file' }], target: async () => ({ appId: 'org.example.editor', app: 'Example Editor' }),
+    localTools: { tools: [{ name: 'open_file', inputSchema: { type: 'object' } }], target: async () => ({ appId: 'org.example.editor', app: 'Example Editor' }),
       call: async (_name, _args, approve) => {
         if (!await approve(['open_file', 'Example Editor'], 'Allow opening?')) throw Error('declined');
         return failOpen ? { isError: true, content: [{ type: 'text', text: 'Open refused.' }] }

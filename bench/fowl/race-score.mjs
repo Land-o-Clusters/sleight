@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+import { benchEvidencePath } from '../runtime-options.mjs';
 // Scores the browser race from real-gate round folders with bench/claim-score.mjs's rules: per browser, arm and task the
 // passes/runs, expected seconds (mean attempt / pass rate), median and range of passes, p90 at 5 runs, the pairs within 20%
 // of sleight that still need 5 runs, and per browser how many tasks each arm is fastest on and its total.
@@ -20,7 +21,6 @@
 // for rows whose saved patterns differ; the output says which patterns it used and lists every row that changed.
 //   node bench/fowl/race-score.mjs [round folders or <dir>/<prefix>*] [--json] [--mark] [--exclude-covered] [--current-graders]
 import { existsSync, readdirSync, readFileSync, statSync, writeFileSync } from 'node:fs';
-import { homedir } from 'node:os';
 import { basename, dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { SAME_MODEL, claim, sameModel, score } from '../claim-score.mjs';
@@ -29,7 +29,7 @@ import { ANSWER_GRADER_FILE, answerProblems, browserEvidence, coverEvidence, cov
   raceProblems, runErrorClass, runnerGradesAnswer } from './real-gate-grade.mjs';
 import { currentTimeline, dayRange, engineForRun, engineMix, engineNote, engineText, loadTimeline, summarizeEngines } from '../engine-version.mjs';
 
-const DEFAULT = join(homedir(), 'Projects/sleight-wt/race-1017/*');
+const DEFAULT = benchEvidencePath('race-1017/*');
 const readJson = file => { try { return JSON.parse(readFileSync(file, 'utf8')); } catch { return undefined; } };
 const readText = file => { try { return readFileSync(file, 'utf8'); } catch { return ''; } };
 const birthMs = file => { try { return statSync(file).birthtimeMs; } catch { return undefined; } };

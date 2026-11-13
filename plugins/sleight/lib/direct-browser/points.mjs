@@ -436,9 +436,60 @@ function pointGeometry(el, point, read) {
 }
 pointGeometry.helpers = [actionable, pointTarget, pointScopes, guardedPointWords, pointKind, pointWords, pointNameExcluded, paymentProviderFrame];
 
-async function assertPointGeometry(leaf, frame, point) {
+// One deadline covers the entire hit, including utility reads and cleanup.
+// Refusal stops sibling chains. Handles arriving afterward are only released.
+function pointReadScope() {
+  const unavailable = () => Error('Point geometry scan unavailable; use a control ref.');
+  const resources = new Map();
+  let stopped = false, reject;
+  const ended = new Promise((_, fail) => { reject = fail; });
+  ended.catch(() => {});
+  const collect = (value, dispose) => {
+    try { return Promise.resolve(dispose(value)); }
+    catch (error) { return Promise.reject(error); }
+  };
+  const stop = () => {
+    if (stopped) return;
+    stopped = true; clearTimeout(timer); reject(unavailable());
+    for (const [value, dispose] of resources) collect(value, dispose).catch(() => {});
+    resources.clear();
+  };
+  const timer = setTimeout(stop, 3000);
+  return {
+    stop,
+    run(work, dispose) {
+      if (stopped) throw unavailable();
+      const pending = Promise.resolve(work()).then(value => {
+        if (dispose) {
+          if (stopped) collect(value, dispose).catch(() => {});
+          else resources.set(value, dispose);
+        }
+        if (stopped) throw unavailable();
+        return value;
+      });
+      return Promise.race([pending, ended]);
+    },
+    async release(value) {
+      const dispose = resources.get(value);
+      if (!dispose) return;
+      resources.delete(value);
+      // A dispose that fails (a navigation racing the click) is swallowed, as base did; the deadline still refuses.
+      await Promise.race([collect(value, dispose).catch(() => {}), ended]);
+    },
+    keep(value) { resources.delete(value); },
+  };
+}
+
+const disposePointHandle = handle => handle.dispose();
+function pointEvidence(scope, client, method, params) {
+  return scope.run(() => client._sendMayFail(method, params), method === 'DOM.resolveNode'
+    ? result => result?.object?.objectId && client._sendMayFail('Runtime.releaseObject', { objectId: result.object.objectId })
+    : undefined);
+}
+
+async function assertPointGeometry(leaf, frame, point, scope) {
   let geometry;
-  try { geometry = await trustedHandle(leaf, pointGeometry, point); }
+  try { geometry = await scope.run(() => trustedHandle(leaf, pointGeometry, point), disposePointHandle); }
   catch (error) {
     // Utility-world evaluation errors carry stacks. Only our fixed refusals may
     // cross this boundary; page text and executable details stay private.
@@ -447,18 +498,19 @@ async function assertPointGeometry(leaf, frame, point) {
   }
   let nodes;
   try {
-    nodes = await geometry.internalGetProperties();
+    nodes = await scope.run(() => geometry.internalGetProperties(),
+      nodes => Promise.allSettled([...nodes.values()].map(node => node.dispose())));
     const client = sessionOf(implOf(frame))?._client;
     if (!client || nodes.size > 129) throw Error('Point geometry scan unavailable; use a control ref.');
     // The first node is the intended target, whose computed accessible name
     // can include CSS content or an associated label outside the point's box.
     // Other nodes need opaque-root and listener checks too. No query runs JS.
-    const results = await Promise.allSettled([...nodes.entries()].map(async ([key, node]) => {
-      const described = await client._sendMayFail('DOM.describeNode', { objectId: node._objectId });
+    const inspect = async ([key, node]) => {
+      const described = await pointEvidence(scope, client, 'DOM.describeNode', { objectId: node._objectId });
       if (!described?.node?.backendNodeId) throw Error('Point geometry scan unavailable; use a control ref.');
-      const excluded = await trustedReadNode(node, pointNameExcluded);
+      const excluded = await scope.run(() => trustedReadNode(node, pointNameExcluded));
       if (key === 'target' && !excluded) {
-        const tree = await client._sendMayFail('Accessibility.getPartialAXTree', {
+        const tree = await pointEvidence(scope, client, 'Accessibility.getPartialAXTree', {
           backendNodeId: described.node.backendNodeId, fetchRelatives: false,
         });
         const subject = tree?.nodes?.find(row => row.backendDOMNodeId === described.node.backendNodeId);
@@ -475,27 +527,38 @@ async function assertPointGeometry(leaf, frame, point) {
       // Listeners belong to their registration world. A utility-world object
       // hides MAIN-world listeners, so resolve the native id in the default
       // world for this CDP-only query. No MAIN-world JavaScript is evaluated.
-      const resolved = await client._sendMayFail('DOM.resolveNode', { backendNodeId: described.node.backendNodeId });
+      const resolved = await pointEvidence(scope, client, 'DOM.resolveNode', { backendNodeId: described.node.backendNodeId });
       const objectId = resolved?.object?.objectId;
       if (!objectId) throw Error('Point geometry scan unavailable; use a control ref.');
       try {
-        const listeners = await client._sendMayFail('DOMDebugger.getEventListeners', { objectId, depth: 1, pierce: false });
+        const listeners = await pointEvidence(scope, client, 'DOMDebugger.getEventListeners', { objectId, depth: 1, pierce: false });
         if (!Array.isArray(listeners?.listeners)) throw Error('Point geometry scan unavailable; use a control ref.');
         const action = listeners.listeners.some(listener => /^(click|dblclick|auxclick|submit|mouse.*|pointer.*|touch.*|drag.*|drop)$/.test(listener.type));
         if (!action) return false;
         if (described.node.shadowRoots?.some(root => root.shadowRootType === 'closed')) return true;
-        return key.startsWith('covered') || await trustedReadNode(node, namedPointAction);
-      } finally { await client._sendMayFail('Runtime.releaseObject', { objectId }); }
-    }));
+        return key.startsWith('covered') || await scope.run(() => trustedReadNode(node, namedPointAction));
+      } finally { await scope.release(resolved); }
+    };
+    // A known payment needs no further evidence to refuse. In particular, an
+    // unrelated stalled listener query cannot hold that refusal open.
+    if (!nodes.has('target')) throw Error('Point geometry scan unavailable; use a control ref.');
+    const entries = [...nodes.entries()];
+    const checks = entries.map(entry => inspect(entry).then(
+      value => ({ status: 'fulfilled', value }), reason => ({ status: 'rejected', reason })));
+    const target = await checks[entries.findIndex(([key]) => key === 'target')];
+    const results = target.status === 'rejected' || target.value ? [target] : await Promise.all(checks);
     const failed = results.find(result => result.status === 'rejected');
     if (failed) {
       const refusal = String(failed.reason?.message).match(/covered by (?:[a-z][a-z0-9-]{0,39}|element); use its ref/)?.[0];
       throw Error(refusal ?? 'Point geometry scan unavailable; use a control ref.');
     }
     if (results.some(result => result.value)) throw Error('covered by element; use its ref');
+  } catch (error) {
+    scope.stop();
+    throw error;
   } finally {
-    if (nodes) await Promise.allSettled([...nodes.values()].map(node => node.dispose()));
-    await geometry.dispose();
+    await scope.release(nodes);
+    await scope.release(geometry);
   }
 }
 function sameHit(el, expected, read) { return el === expected && read(el, 'isConnected') === true; }
@@ -504,21 +567,24 @@ function pointTarget(el, unused, read) { return actionable(el, unused, read) ?? 
 pointTarget.helpers = [actionable, pointNameExcluded];
 
 async function hit(page, point) {
-  const main = implOf(page.mainFrame()), reply = await sessionOf(main)?._client?._sendMayFail('DOM.getNodeForLocation', {
-    x: Math.floor(point.x), y: Math.floor(point.y), includeUserAgentShadowDOM: false,
-  });
-  if (!reply?.backendNodeId) throw Error('No page element at the point.');
-  const frame = page.frames().find(frame => implOf(frame)?._id === reply.frameId);
-  if (!frame) throw Error('Point frame unavailable; use a control ref.');
-  const leaf = await resolveClosedHandle({ frame, backendNodeId: reply.backendNodeId });
-  let node;
+  const scope = pointReadScope();
   try {
-    await assertPointGeometry(leaf, frame, point);
-    node = await trustedHandle(leaf, pointTarget);
-    const impl = implOf(frame), described = await sessionOf(impl)._client._sendMayFail('DOM.describeNode', { objectId: node._objectId });
+    const main = implOf(page.mainFrame()), reply = await scope.run(() => sessionOf(main)?._client?._sendMayFail('DOM.getNodeForLocation', {
+      x: Math.floor(point.x), y: Math.floor(point.y), includeUserAgentShadowDOM: false,
+    }));
+    if (!reply?.backendNodeId) throw Error('No page element at the point.');
+    const frame = page.frames().find(frame => implOf(frame)?._id === reply.frameId);
+    if (!frame) throw Error('Point frame unavailable; use a control ref.');
+    const leaf = await scope.run(() => resolveClosedHandle({ frame, backendNodeId: reply.backendNodeId }), disposePointHandle);
+    await assertPointGeometry(leaf, frame, point, scope);
+    const node = await scope.run(() => trustedHandle(leaf, pointTarget), disposePointHandle);
+    const impl = implOf(frame), described = await pointEvidence(scope, sessionOf(impl)._client, 'DOM.describeNode', { objectId: node._objectId });
     if (!described?.node?.backendNodeId) throw stale();
-    return await resolveClosedHandle({ frame, backendNodeId: described.node.backendNodeId });
-  } finally { try { await node?.dispose(); } catch {} await leaf.dispose().catch(() => {}); }
+    const result = await scope.run(() => resolveClosedHandle({ frame, backendNodeId: described.node.backendNodeId }), disposePointHandle);
+    await scope.release(node); await scope.release(leaf);
+    scope.keep(result);
+    return result;
+  } finally { scope.stop(); }
 }
 
 export async function resolvePoint(page, point, cache) {

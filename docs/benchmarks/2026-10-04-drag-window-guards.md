@@ -1,6 +1,6 @@
 # TextEdit window selection and lost text
 
-Branch `codex/drag-polish`, worktree `~/Projects/sleight-wt/text-drag-menu-names`, 2026-10-04.
+Branch `codex/drag-polish`, worktree `<private-evidence>/text-drag-menu-names`, 2026-10-04.
 This follows architect review of `a01e3d8`. The spacing and menu names remain on the branch.
 
 ## Findings and changes

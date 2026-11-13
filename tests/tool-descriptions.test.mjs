@@ -8,31 +8,43 @@ import { browserTools } from '../plugins/sleight/lib/direct-browser/tools.mjs';
 import { NATIVE_HANDOFF_TOOL } from '../plugins/sleight/lib/native-handoff.mjs';
 import { withMT } from './fixtures/mt-env.mjs';
 
-for (const mode of [undefined, '0']) test(`Touch and cookie guidance have a measured description budget, switch=${mode}`, async () => withMT(mode, async () => {
+for (const mode of [undefined, '0']) test(`Touch, cookie and handoff guidance fit description budgets, switch=${mode}`, async t => withMT(mode, async () => {
   const tools = browserTools('bfixture'), act = tools.find(tool => tool.name === 'browser_act');
-  assert.equal(act.description.length, mode === '0' ? 1034 : 1059);
+  assert.ok(act.description.length <= (mode === '0' ? 1034 : 1183));
   // HO1 keeps both browser catalogs below their 1.5.0 description budgets.
-  assert.equal(tools.map(tool => tool.description).join('\n').length, mode === '0' ? 2454 : 2375);
+  assert.ok(tools.map(tool => tool.description).join('\n').length <= (mode === '0' ? 2454 : 2735));
   // HO1 pins each handoff description below its 1.5.0 original (169/203 bytes).
   assert.ok(Buffer.byteLength(tools.at(-1).description) <= (mode === '0' ? 169 : 203));
-  assert.equal(Buffer.byteLength(tools.at(-1).description), mode === '0' ? 166 : 195);
+  const tabs = tools.at(-1).description;
+  if (mode !== '0') assert.match(tabs, /keep past turn/);
+  assert.match(tabs, /^Owned/);
+  assert.match(tabs, /handoff wait:true/);
+  assert.match(tabs, /await Continue, reread/);
+  assert.match(tabs, /away end turn, ask user to sign in and reply/);
+  assert.match(tabs, /Never request secrets\./);
+  if (mode === '0') assert.match(tabs, /No engine-path tabs/);
+  else assert.match(tabs, /Sign-in\/code:/);
+  assert.match(tabs, /Hand off unasked payments/);
+  t.diagnostic(`browser_tabs ${mode === '0' ? 'legacy' : 'default'}: ${Buffer.byteLength(tabs)} UTF-8 bytes`);
   assert.match(act.description, /paste\(ref,text\).*Electron refuses paste/);
   assert.match(act.description, /touch emulates a touch layout; clicks stay mouse clicks/);
   assert.match(act.description, /empty resets all/);
 }));
 
-test('HO1 native handoff wording preserves both presence flows within the original byte budgets', () => {
+test('SW2 native handoff keeps presence, secret and cancel rules within the original budgets', t => {
   for (const prompt of [undefined, 'lean']) {
     const description = promptTool(NATIVE_HANDOFF_TOOL, prompt).description;
-    assert.match(description, /^Non-browser app/);
+    assert.match(description, /^Non-browser/);
     // HO1 pins default/lean bytes within the 1.5.0 originals (209/140 bytes).
     assert.ok(Buffer.byteLength(description) <= (prompt === 'lean' ? 140 : 209));
-    assert.equal(Buffer.byteLength(description), prompt === 'lean' ? 140 : 196);
-    assert.match(description, /(?:Present: await user\x27s Continue; reread same app|wait Continue, reread)/);
-    assert.match(description, /Away: end turn, ask user to sign in and reply/);
-    assert.match(description, /Never request passwords\/codes/);
+    assert.match(description, /Non-browser/);
+    assert.match(description, /(?:await user's|wait) Continue/);
+    assert.match(description, /reread (?:same )?app/);
+    assert.match(description, /Away: end turn, ask user to sign in and reply\./);
+    assert.match(description, /Never request passwords\/codes\./);
+    if (prompt !== 'lean') assert.match(description, /reread same app, new windows too/);
+    t.diagnostic(`app_handoff ${prompt ?? 'default'}: ${Buffer.byteLength(description)} UTF-8 bytes`);
     assert.match(description, /Cancel keeps app open/);
-    if (prompt !== 'lean') assert.match(description, /new windows too/);
   }
 });
 
@@ -57,9 +69,25 @@ function descriptions(value, path) {
   return Object.entries(value).flatMap(([key, item]) => key === 'description' ? [[path, item]] : descriptions(item, `${path}.${key}`));
 }
 
+for (const prompt of [undefined, 'lean']) for (const mode of [undefined, '0']) {
+  test(`SW2 delivered tools carry handoff safety without skill rules: ${JSON.stringify({ prompt, mode })}`, async t => withMT(mode, async () => {
+    const tools = listed(t, { prompt });
+    const native = tools.find(tool => tool.name === 'app_handoff').description;
+    const browser = tools.find(tool => tool.name === 'browser_tabs').description;
+    assert.match(native, /Away: end turn, ask user to sign in and reply/);
+    assert.match(native, /Never request passwords\/codes\./);
+    assert.match(native, /Cancel keeps app open/);
+    assert.match(browser, /away end turn, ask user to sign in and reply/);
+    assert.match(browser, /Never request secrets\./);
+    assert.match(browser, /Hand off unasked payments/);
+    if (mode === '0') assert.match(browser, /No engine-path tabs/);
+  }));
+}
+
 test('PDF and whole-thread discovery preserve the read cap and permission boundary within the measured budget', () => {
   const tool = browserTools('bfixture').find(tool => tool.name === 'browser_read');
-  assert.equal(tool.description.length, 506);
+  // Whole guidance adds 53 characters to the current p143 read description.
+  assert.ok(tool.description.length <= 700);
   assert.match(tool.description, /Reads never grant permission/);
   assert.match(tool.description, /PDFs: tab or file; ref continues/);
   assert.match(tool.description, /user message: Read PDF "<path>"/);

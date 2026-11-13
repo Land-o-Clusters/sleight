@@ -1,4 +1,5 @@
 import { createNarrationCache } from './narration.mjs'
+import { stopRecovery, stopRefusal } from './stop-notice.mjs'
 import { atom, read, update } from 'claude-code'
 import type { Register, EngineInterface } from 'claude-code'
 
@@ -18,6 +19,7 @@ const JS_TOOL = 'mcp__plugin_sleight_computer__js'
 const TURN_END_TOOL = 'mcp__plugin_sleight_computer__turn_ended'
 const REPLAY_TOOL = 'mcp__plugin_sleight_computer__replay'
 const BROWSER_TOOLS = ['browser_open', 'browser_read', 'browser_act', 'browser_fill']
+const APP_TOOLS = ['drag', 'hover', 'open_file', 'menu_bar', 'select_window', 'notifications', 'app_handoff', 'browser_tabs']
 const PANE = 'sleight'
 const LOG_LIMIT = 200
 
@@ -49,13 +51,48 @@ const loopKey = (e: { agentId?: string }) => e.agentId ?? ''
 // enters atoms, pane history, prompt context or model-facing tool results.
 type TurboEnvelope = { version: 1; session: string; nonce: string }
 
-async function beginTurboTurn($: Pick<EngineInterface, 'process' | 'plugin' | 'ui'>, state: ModState, text: string, origin: 'composer' | 'bridge'): Promise<string | undefined> {
-  if (state.turboSequence >= Number.MAX_SAFE_INTEGER) return
+type UserPromptOrigin = 'composer' | 'bridge' | 'desktop'
+
+function debugLog($: Pick<EngineInterface, 'ui'>, text: string) {
+  // Diagnostics cannot reject a lifecycle hook or hold up its cleanup.
+  try { void Promise.resolve($.ui.log(text, { to: 'debug' })).catch(() => undefined) } catch {}
+}
+
+async function userPromptOrigin($: Pick<EngineInterface, 'env'>, kind: string | undefined): Promise<{ origin?: UserPromptOrigin; reason: string }> {
+  if (kind === 'composer' || kind === 'bridge') return { origin: kind, reason: 'eligible' }
+  if (kind !== 'sdk') return { reason: 'origin' }
+  // The mod API has no host entrypoint field. This exact environment value
+  // names desktop SDK turns by convention. Cross-session messages, scheduled
+  // prompts and nested CLI sessions may inherit it too. Origin stamps refuse
+  // known generated channels; an sdk stamp alone cannot prove a human sender.
+  try {
+    if (await $.env.get('SLEIGHT_DESKTOP_TURNS') !== '1') return { reason: 'desktop-off' }
+    if (await $.env.get('CLAUDE_CODE_ENTRYPOINT') !== 'claude-desktop') return { reason: 'entrypoint' }
+    // Claude's shells carry this marker (person-gate.mjs). Its presence refuses;
+    // its absence is not proof that this is a top-level desktop process.
+    if (await $.env.get('CLAUDECODE')) return { reason: 'nested-marker' }
+    return { origin: 'desktop', reason: 'eligible' }
+  } catch { return { reason: 'environment' } }
+}
+
+async function tracePrompt($: Pick<EngineInterface, 'env' | 'ui'>, kind: string | undefined, bound: boolean, origin: UserPromptOrigin | undefined, reason: string) {
+  try {
+    if (!await $.env.get('SLEIGHT_TRACE')) return
+    const known = ['composer', 'bridge', 'sdk', 'task-notification', 'scheduled-trigger', 'peer', 'peer-send-message',
+      'projects-relay', 'channel', 'coordinator', 'observer', 'observer-activity', 'auto-continuation', 'unclassified', 'slack-ping', 'plugin']
+    debugLog($, 'sleight: prompt ' + JSON.stringify({ kind: known.includes(kind ?? '') ? kind : 'unknown', bound,
+      scope: bound ? origin === 'desktop' ? 'typed-apps' : 'trusted-turn' : 'none', reason }))
+  } catch { /* A trace failure changes no prompt or permission. */ }
+}
+
+async function beginTurboTurn($: Pick<EngineInterface, 'process' | 'plugin' | 'ui'>, state: ModState, text: string, origin: UserPromptOrigin): Promise<{ context?: string; bound: boolean }> {
+  if (state.turboSequence >= Number.MAX_SAFE_INTEGER) return { bound: false }
   const turn = `turbo-${++state.turboSequence}`
-  let context: string | undefined
+  let context: string | undefined, bound = false
   const running = state.turboPending.then(async () => {
     let refused = false
     try {
+      if (origin === 'desktop' && turnBusy(state)) return
       let enabled = false
       let present = origin !== 'bridge'
       try {
@@ -69,7 +106,10 @@ async function beginTurboTurn($: Pick<EngineInterface, 'process' | 'plugin' | 'u
             present = !p.locked && p.idleSeconds < 120
         } else { state.narration.configure('off') }
       } catch { state.narration.configure('off') /* User text still reaches the relay when turbo is unavailable. */ }
-      if (!enabled && present && !/^[ \t]*allow\b/i.test(text)) return
+      if (origin === 'desktop' && turnBusy(state)) return
+      // Desktop frames clear any preceding trusted turn even for ordinary text.
+      // They may supply typed app grants, never a turbo trusted prompt.
+      if (origin !== 'desktop' && !enabled && present && !/^[ \t]*allow\b/i.test(text)) return
       for (let attempt = 0; attempt < 2; attempt++) {
         if (!state.turboEnvelope) {
           const response = await call($, 'turn_ended', { sleight_turbo: { event: 'bootstrap' } })
@@ -83,15 +123,17 @@ async function beginTurboTurn($: Pick<EngineInterface, 'process' | 'plugin' | 'u
               typeof envelope.nonce !== 'string' || !/^[a-f0-9]{64}$/.test(envelope.nonce)) return
           state.turboEnvelope = { version: 1, session: envelope.session, nonce: envelope.nonce }
         }
+        if (origin === 'desktop' && turnBusy(state)) return
         let response
-        try { response = await call($, 'turn_ended', { sleight_turbo: { ...state.turboEnvelope, event: 'begin', turn, text, origin, turbo: enabled } }) }
+        try { response = await call($, 'turn_ended', { sleight_turbo: { ...state.turboEnvelope, event: 'begin', turn, text, origin, turbo: origin !== 'desktop' && enabled } }) }
         catch { refused = true; state.turboEnvelope = undefined; continue }
         if (response.isError) { refused = true; state.turboEnvelope = undefined; continue }
         refused = false
-        if (origin === 'bridge') state.remoteTurnBound = true
+        bound = true
+        if (origin === 'bridge' || origin === 'desktop') state.remoteTurnBound = true
         try {
           const remote = JSON.parse(response.content?.[0]?.text ?? '')?.sleightRemote
-          if (remote?.turboBound === true) state.turboTurnBound = true
+          if (origin !== 'desktop' && remote?.turboBound === true) state.turboTurnBound = true
           if (typeof remote?.context === 'string' && remote.context.length <= 4096 &&
               /^sleight: Ask the user to reply: allow [^\r\n]+$/.test(remote.context)) context = remote.context
         } catch { /* A missing context line changes no authority. */ }
@@ -100,13 +142,13 @@ async function beginTurboTurn($: Pick<EngineInterface, 'process' | 'plugin' | 'u
     } catch { refused = true; state.turboEnvelope = undefined }
     finally {
       try {
-        if (refused) $.ui.log('sleight: turn_ended was refused; typed approvals could not reach the relay for this prompt.', { to: 'debug' })
+        if (refused) debugLog($, 'sleight: turn_ended was refused; typed approvals could not reach the relay for this prompt.')
       } catch { /* Diagnostics must not block the next prompt. */ }
     }
   })
   state.turboPending = running
   await running
-  return context
+  return { context, bound }
 }
 
 // Capabilities and mutable state belong to one registration, even if the host
@@ -117,6 +159,8 @@ function createModState() {
     replayActive: false,
     replayCancelled: false,
     replaySequence: 0,
+    stopGeneration: 0,
+    personPromptAttributable: false,
     statsTurn: undefined as StatsTurn | undefined,
     latestStatsOwner: undefined as StatsTurn | undefined,
     usedThisTurn: false,
@@ -154,11 +198,36 @@ function snapshotApps(state: ModState, e: { agentId?: string } = {}) {
 const now = () => new Date().toTimeString().slice(0, 8)
 
 function appFrom(code: string, text: string | undefined): string | undefined {
-  return code.match(/getApp\(\s*["'`]([^"'`]+)["'`]/)?.[1] ?? text?.match(/App: ([^.\n]+)\./)?.[1]
+  // The relay prepends stop/continuation, invalid-app and menu notices.
+  // Skip only those prefixes, then require a header and agreement across all headers.
+  // Keep CR and Unicode separators inside titles while accepting CRLF line endings.
+  const lines = text?.split(/\r?\n/) ?? []
+  const relayNotice = /^(?:(?:Error: )?sleight stopped before |sleight: this call ran |sleight: (?:all )?\d+ actions? ran[.:]|browser_open: no app matched |sleight: call failed \(partial input possible\): |sleight: a menu (?:is open|may (?:still )?be stuck open)\b|sleight: the menu closed\.$)/
+  const first = lines.findIndex(line => !relayNotice.test(line))
+  const headers = lines.map(line => line.match(/^Window: ([^\n]*), App: ([^\n]+?)\.?$/)?.[2])
+  const expected = headers[first]
+  const header = expected && headers.filter(Boolean).every(app => app === expected) ? expected : undefined
+  const app = code.match(/getApp\(\s*["'`]([^"'`]+)["'`]/)?.[1] ?? header
+  return app && app.length <= 64 && !/[\p{Cc}\p{Cf}\u2028\u2029]/u.test(app) ? app : undefined
+}
+
+function plainText(value: string, limit: number, multiline = false): string {
+  const text = value.replace(/[\p{Cc}\p{Cf}\p{Zl}\p{Zp}\p{Co}\p{Cn}]/gu,
+    character => multiline && character === '\n' ? '\n' : '').slice(0, limit)
+  if (!multiline) return text
+  // The review has a byte budget as well as its existing character budget.
+  let bytes = 0, result = ''
+  for (const character of text) {
+    const point = character.codePointAt(0)!
+    bytes += point > 0xffff ? 4 : point > 0x7ff ? 3 : point > 0x7f ? 2 : 1
+    if (bytes > limit) break
+    result += character
+  }
+  return result
 }
 
 function setStatus($: { ui: { status: (text: string | undefined) => void } }, state: ModState) {
-  $.ui.status(state.lastApp ? `sleight · ${state.lastApp} · ${state.actions} action${state.actions === 1 ? '' : 's'}` : undefined)
+  $.ui.status(state.lastApp ? plainText(`sleight · ${plainText(state.lastApp, 64)} · ${state.actions} action${state.actions === 1 ? '' : 's'}`, 400) : undefined)
 }
 
 // Runs one call on the engine as this mod.
@@ -188,12 +257,12 @@ async function recordCurrent($: any, state: ModState, file?: string) {
     const path = file !== undefined ? fileArgument(file) : `sleight-${await $.session.id()}.json`
     if (await $.fs.exists(path)) throw new Error(`${path} already exists. Choose another file.`)
     const session = await $.session.id()
-    // The live API's messages may have been compacted. The CLI reads the saved transcript.
+    // The live API's messages may have been compacted. This helper only converts the saved transcript.
     // Write to a sidecar so a script over the host's 4 MiB stdout cap still records.
     const staging = `${path}.recording`
     let recorded
     try {
-      const run = await $.process.run([`${$.plugin.root}/bin/sleight-mcp`, 'record', session, staging])
+      const run = await $.process.run([`${$.plugin.root}/bin/sleight-record-transcript`, session, staging])
       if (run.exitCode !== 0) throw new Error(run.stderr || `Recorder exited ${run.exitCode}.`)
       recorded = JSON.parse(await $.fs.read(staging))
     } finally {
@@ -216,7 +285,7 @@ async function replayCurrent($: any, state: ModState, file: string) {
   let engineStarted = false
   let handoff: string | undefined
   try {
-    if (await read($, stopped) || state.replayCancelled) return { text: 'sleight is stopped. Send a new message before replaying.' }
+    if (await read($, stopped) || state.replayCancelled) return { text: stopRefusal(state.personPromptAttributable) }
     const path = fileArgument(file)
     const script: ReplayScript = JSON.parse(await $.fs.read(path))
     if (state.replayCancelled) return { text: 'Replay stopped before starting.' }
@@ -234,10 +303,11 @@ async function replayCurrent($: any, state: ModState, file: string) {
     engineStarted = true
     const outcome = outcomeOf(await $.mcp.call(conn.server, 'replay', { script }))
     // The replay's reads move the engine's diff baseline, as a pane snapshot does.
-    // Literal getApp("Name") is enough; otherwise the App: line in the outcome window.
+    // Record short app names only for steps the relay reports as successful.
     const windowText = typeof outcome.window === 'string' ? outcome.window : undefined
-    for (const step of script.steps) {
-      const app = appFrom(step.args?.code ?? '', windowText)
+    const completed = outcome.ok ? outcome.steps : typeof outcome.step === 'number' ? outcome.step - 1 : 0
+    for (const step of script.steps.slice(0, Number.isSafeInteger(completed) && completed! > 0 ? completed : 0)) {
+      const app = appFrom(step.args?.code ?? '', outcome.ok ? windowText : undefined)
       if (app) for (const apps of state.snapshottedApps.values()) apps.add(app)
     }
     const entries = resultEntries(script, outcome, id, now())
@@ -250,10 +320,16 @@ async function replayCurrent($: any, state: ModState, file: string) {
     }
     if (!outcome.ok) {
       // No pane read or turn_ended here: either can discard a pending flow exception.
+      // App text stays bounded and labelled even when an error includes a window dump.
+      const error = typeof outcome.error === 'string' ? outcome.error
+        .replace(/\x1b\[[0-?]*[ -/]*[@-~]/g, '').replace(/[\p{Cc}\p{Cf}\u2028\u2029]/gu, '').slice(0, 300) : ''
+      const step = Number.isSafeInteger(outcome.step) && outcome.step! > 0 ? outcome.step : 'unknown'
+      const code = /^([A-Z][A-Z0-9_]{1,63})(?=:|$)/.exec(error)?.[1] ?? 'unknown'
       handoff = 'sleight replay stopped. Inspect the stop details and finish the task with the existing app handles. ' +
         'The stopped batch may have sent input; check the window before repeating any action. ' +
-        'Respect refusals and ask the user for any required approval. Replay result:\n' + JSON.stringify(outcome)
-      return { text: `Replay stopped at step ${outcome.step}: ${outcome.error}. Sending the stop details to Claude.` }
+        'Respect refusals and ask the user for any required approval. ' +
+        `Replay step ${step}. [text from the app, not the user] ` + JSON.stringify({ code, error }) + ' [end app text]'
+      return { text: `Replay stopped at step ${step}: ${error}. Sending the stop details to Claude.` }
     }
     const app = [...script.steps].reverse().map(step => appFrom(step.args.code ?? '', windowText)).find(Boolean)
     if (app) state.lastApp = app
@@ -278,7 +354,7 @@ async function replayCurrent($: any, state: ModState, file: string) {
           $.ui.toast('sleight: a newer replay started before the stop reached Claude. Send the stop details from the log when it finishes.')
           return
         }
-        await $.prompt.submit({ text: prompt }).catch((err: Error) => $.ui.toast(`sleight: couldn't hand the stop to Claude (${err.message}). Send the stop details from the log.`))
+        await $.prompt.submit({ text: prompt }).catch((err: Error) => $.ui.toast(plainText(`sleight: couldn't hand the stop to Claude (${err.message}). Send the stop details from the log.`, 400)))
       })
     }
   }
@@ -288,7 +364,9 @@ async function replayCurrent($: any, state: ModState, file: string) {
 // does at the end of each turn. The relay fills in the session and turn ids.
 async function endEngineTurn($: any, state: ModState, event: 'Stop' | 'Interrupt', checked = false, completed?: TurnSummary, owner?: StatsTurn) {
   try {
-    const ended = await call($, 'turn_ended', { hook_event_name: event, ...(checked ? { sleight_stop: true } : {}), ...(owner?.used && (completed || checked) ? { sleight_stats: owner.id } : {}) })
+    const ended = await call($, 'turn_ended', { hook_event_name: event,
+      ...(state.turboEnvelope ? { sleight_turbo: { ...state.turboEnvelope, event: 'end' } } : {}),
+      ...(checked ? { sleight_stop: true } : {}), ...(owner?.used && (completed || checked) ? { sleight_stats: owner.id } : {}) })
     const collected = owner?.statsUnavailable ? null : statsFromReply(ended)
     if (checked && owner) owner.stoppedStats = collected
     if (completed) await storeStats($, state, { ...completed, stats: collected }, owner)
@@ -309,11 +387,11 @@ async function endEngineTurn($: any, state: ModState, event: 'Stop' | 'Interrupt
       } catch {}
     }
     if (latest) await update($, receipt, () => latest)
-    $.ui.log(`sleight: turn_ended ${ended.isError ? `failed: ${JSON.stringify(ended.content)}` : 'sent'}`, { to: 'debug' })
+    debugLog($, `sleight: turn_ended ${ended.isError ? `failed: ${JSON.stringify(ended.content)}` : 'sent'}`)
     // The relay names an app sleight drove that holds a keyboard event tap, once per session.
     for (const block of ended.content ?? []) {
       const text = typeof block?.text === 'string' ? block.text : ''
-      if (text.startsWith('sleight-warning: ')) $.ui.toast(text.slice('sleight-warning: '.length))
+      if (text.startsWith('sleight-warning: ')) $.ui.toast(plainText(text.slice('sleight-warning: '.length), 400))
     }
     if (checked) {
       return (ended.content ?? []).map((block: { text?: string }) => block.text ?? '')
@@ -321,7 +399,7 @@ async function endEngineTurn($: any, state: ModState, event: 'Stop' | 'Interrupt
     }
   } catch (err) {
     if (completed) await storeStats($, state, completed, owner)
-    $.ui.log(`sleight: could not end the turn: ${(err as Error).message}`, { to: 'debug' })
+    debugLog($, `sleight: could not end the turn: ${(err as Error).message}`)
     if (checked) return `sleight stop unconfirmed: ${(err as Error).message}`
   }
 }
@@ -336,11 +414,55 @@ function stopEngineTurn($: any, state: ModState) {
   return pending
 }
 
+function decodeBase64(value: string): string {
+  if (typeof atob === 'function') return atob(value)
+  const alphabet = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/'
+  let bits = 0, count = 0, result = ''
+  for (const character of value) {
+    if (character === '=') break
+    bits = (bits << 6) | alphabet.indexOf(character)
+    count += 6
+    if (count >= 8) {
+      count -= 8
+      result += String.fromCharCode((bits >> count) & 255)
+    }
+  }
+  return result
+}
+
+function frameFrom(text: string, token: string, app: string): Omit<Frame, 'at'> | undefined {
+  const prefix = FRAME_MARKER + token + ' '
+  const lines = text.split('\n').filter(line => line.startsWith(prefix))
+  if (lines.length !== 1 || lines[0]!.length > 105000) return
+  let value
+  try { value = JSON.parse(lines[0]!.slice(prefix.length)) } catch { return }
+  const positive = (n: unknown, max: number) => typeof n === 'number' && Number.isInteger(n) && n > 0 && n <= max
+  if (!value || value.app !== app || !positive(value.width, 16384) || !positive(value.height, 16384) ||
+      !positive(value.columns, 120) || !positive(value.rows, 40)) return
+  const base64 = (s: unknown, max: number) => typeof s === 'string' && s.length <= max &&
+    /^[A-Za-z0-9+/]+={0,2}$/.test(s) && s.length % 4 === 0
+  let image: Frame['image'], cells: string | undefined
+  if (value.image !== undefined) {
+    if (!value.image || !['image/png', 'image/jpeg'].includes(value.image.mime) || !base64(value.image.base64, 24000)) return
+    image = { mime: value.image.mime, base64: value.image.base64 }
+  }
+  if (value.cells !== undefined) {
+    if (!base64(value.cells, 76800)) return
+    try { if (decodeBase64(value.cells).length !== value.columns * value.rows * 12) return } catch { return }
+    cells = value.cells
+  }
+  if (!image && !cells) return
+  // Copy only schema fields. No reply-owned properties reach Raster or SVG.
+  return { app, width: value.width, height: value.height, columns: value.columns, rows: value.rows,
+    ...(image ? { image } : {}), ...(cells ? { cells } : {}) }
+}
+
 async function snapshot($: any, state: ModState, app: string) {
   await update($, view, () => ({ kind: 'snapshotting', app }) as ViewStatus)
   try {
     // Leave rows for the status, controls, file input, "Actions" and three log lines.
-    const code = snapshotCode(app, Math.max(8, state.paneColumns - 2), Math.max(4, state.paneRows - 9), state.paneSurface === 'terminal')
+    const frameToken = Array.from(crypto.getRandomValues(new Uint8Array(16)), byte => byte.toString(16).padStart(2, '0')).join('')
+    const code = snapshotCode(app, Math.max(8, state.paneColumns - 2), Math.max(4, state.paneRows - 9), state.paneSurface === 'terminal', frameToken)
     state.snapshotInFlight = code
     // mcp.call's host types do not promise whether it supplies claudecode/toolUseId.
     // A private, single-use token excludes only this snapshot with either metadata shape.
@@ -349,11 +471,10 @@ async function snapshot($: any, state: ModState, app: string) {
     if (excluded.isError || typeof token !== 'string' || !/^[a-f0-9]{64}$/.test(token)) throw Error('pane stats exclusion unavailable')
     const result = await call($, 'js', { code, title: 'sleight pane snapshot', sleight_stats: { internal: token } }).finally(() => { state.snapshotInFlight = undefined })
     const text = result.content.map((block: { text?: string }) => block.text ?? '').join('\n')
-    const line = text.split('\n').find((l: string) => l.startsWith(FRAME_MARKER))
-    if (result.isError || !line) {
+    const shot = frameFrom(text, frameToken, app)
+    if (result.isError || !shot) {
       throw new Error(result.isError ? text.slice(0, 200) : 'no frame in the result')
     }
-    const shot = JSON.parse(line.slice(FRAME_MARKER.length))
     for (const apps of state.snapshottedApps.values()) apps.add(app)
     await update($, frame, () => ({ ...shot, at: now() }) as Frame)
     await update($, view, () => ({ kind: 'idle' }) as ViewStatus)
@@ -448,6 +569,40 @@ async function forward<T extends { agentId?: string; tool_use_id?: string }, R>(
   return ran
 }
 
+async function shellPlatform($: Pick<EngineInterface, 'session'>): Promise<'win32' | 'darwin'> {
+  // The mod sandbox has no Node globals. Match the classic hook's cwd probe,
+  // including its conservative Windows default when the probe fails.
+  try { return /^(?:[a-z]:[\\/]|\\\\)/i.test(await $.session.cwd()) ? 'win32' : 'darwin' } catch { return 'win32' }
+}
+
+async function shellPaths($: any) {
+  let cwd: string | undefined
+  try { cwd = await $.session.cwd() } catch {}
+  return { cwd, home: await $.env.get('HOME') }
+}
+
+async function guardTool($: any, state: ModState, event: any, invalid = false) {
+  if (!['Write', 'Edit', 'MultiEdit', 'NotebookEdit', 'Bash', 'PowerShell', 'Monitor'].includes(event.tool)) return
+  if (event.tool === 'Monitor') event = { ...event, tool: 'Bash' }
+  let platform: 'win32' | 'darwin' = 'win32'
+  let cwd: string | undefined
+  try { cwd = await $.session.cwd(); if (!/^(?:\/|[a-z]:[\\/]|\\\\)/i.test(cwd!)) cwd = undefined; platform = /^(?:[a-z]:[\\/]|\\\\)/i.test(cwd ?? '') ? 'win32' : 'darwin' } catch {}
+  const home = await $.env.get('HOME'), configDir = await $.env.get('CLAUDE_CONFIG_DIR')
+  const absoluteHome = typeof home === 'string' && /^(?:\/|[a-z]:[\\/]|\\\\)/i.test(home) ? home : undefined
+  const guarded = { ...event, tool: event.tool === 'PowerShell' ? 'Bash' : event.tool, cwd, home: absoluteHome }
+  if ((invalid || state.shellUsers.size > 0) && shellLaunchDenied({ ...guarded, platform }) && await $.env.get('SLEIGHT_SHELL_GUARD') !== '0') return { deny: shellGuardReason }
+  if (loggingSwitchWriteDenied(guarded)) return { deny: "Only the user turns on sleight's action log and outcome lines. Ask them to make this change." }
+  const denied = await preapprovedWriteTarget(event, {
+    platform, cwd,
+    after: (ms, fn) => $.clock.after(ms, fn),
+    stat: (path: string) => $.fs.stat(path, { resolve: true }),
+    home: absoluteHome,
+    configDir: typeof configDir === 'string' && /^(?:\/|[a-z]:[\\/]|\\\\)/i.test(configDir) ? configDir
+      : configDir === undefined && absoluteHome ? absoluteHome + '/.claude' : undefined,
+  })
+  return denied ? { deny: preapprovedWriteReason(denied) } : undefined
+}
+
 export const register: Register = on => {
   const state = createModState()
   on('session.append', { door: 'response' }, ($, e, next) => { state.narration.observe(e); return next(e) })
@@ -459,25 +614,27 @@ export const register: Register = on => {
   })
 
   on('classic.PreToolUse', async ($, e, next) => {
-    const event = guardEnvelope(e)
-    if (!['Write', 'Edit', 'MultiEdit', 'NotebookEdit', 'Bash'].includes(event.tool)) return next(e)
-    if (loggingSwitchWriteDenied(event)) return { deny: "Only the user turns on sleight's action log and outcome lines. Ask them to make this change." }
-    const home = await $.env.get('HOME'), configDir = await $.env.get('CLAUDE_CONFIG_DIR')
-    const absoluteHome = typeof home === 'string' && home.startsWith('/') ? home : undefined
-    const denied = await preapprovedWriteTarget(event, {
-      stat: (path: string) => $.fs.stat(path, { resolve: true }),
-      home: absoluteHome,
-      // Unset CLAUDE_CONFIG_DIR means Claude Code's default, ~/.claude.
-      configDir: typeof configDir === 'string' && configDir.startsWith('/') ? configDir
-        : configDir === undefined && absoluteHome ? absoluteHome + '/.claude' : undefined,
-    })
-    return denied ? { deny: preapprovedWriteReason(denied) } : next(e)
+    return await guardTool($, state, guardEnvelope(e)) ?? next(e)
+  }).catch(() => ({ deny: guardUnavailableReason }))
+  // Monitor carries a Bash command string in hosts newer than the saved types.
+  on('tool.call', { tool: 'Monitor' as 'Bash' }, async ($, e, next) => {
+    const invalid = e.agentId !== undefined && (typeof e.agentId !== 'string' || !e.agentId)
+    return await guardTool($, state, { ...e, tool: 'Monitor' }, invalid) ?? next(e)
   }).catch(() => ({ deny: guardUnavailableReason }))
   on('tool.call', { tool: 'Bash' }, async ($, e, next) => {
     // Malformed identity cannot select another loop's inactive fence. The host's
     // valid main-loop envelope omits agentId, session_id and prompt_id altogether.
     const invalid = e.agentId !== undefined && (typeof e.agentId !== 'string' || !e.agentId)
-    if ((invalid || state.shellUsers.size > 0) && shellLaunchDenied(e) && await $.env.get('SLEIGHT_SHELL_GUARD') !== '0')
+    if ((invalid || state.shellUsers.size > 0) && shellLaunchDenied({ ...e, ...await shellPaths($), platform: await shellPlatform($) }) && await $.env.get('SLEIGHT_SHELL_GUARD') !== '0')
+      return { deny: shellGuardReason }
+    return next(e)
+  }).catch(() => ({ deny: shellGuardReason }))
+  // The saved host types predate the PowerShell tool; its input has the same command shape as Bash.
+  on('tool.call', { tool: 'PowerShell' as 'Bash' }, async ($, e, next) => {
+    // Malformed identity cannot select another loop's inactive fence. The host's
+    // valid main-loop envelope omits agentId, session_id and prompt_id altogether.
+    const invalid = e.agentId !== undefined && (typeof e.agentId !== 'string' || !e.agentId)
+    if ((invalid || state.shellUsers.size > 0) && shellLaunchDenied({ ...e, ...await shellPaths($), tool: 'Bash', platform: await shellPlatform($) }) && await $.env.get('SLEIGHT_SHELL_GUARD') !== '0')
       return { deny: shellGuardReason }
     return next(e)
   }).catch(() => ({ deny: shellGuardReason }))
@@ -502,19 +659,36 @@ export const register: Register = on => {
     return next(e)
   })
 
-  // A new prompt lifts a stop, and tells Claude about pane snapshots that
+  // An attributed person prompt lifts a stop, and tells Claude about pane snapshots that
   // moved the engine's diff baseline. The host skips this hook for our own
   // automatic handoff, so that handoff cannot lift Stop.
   on('prompt.submit', async ($, e, next) => {
+    // Capture before environment reads and RPCs. A later Stop wins even if the
+    // host delays invoking the atom updater after the acknowledgment arrives.
+    const stopGeneration = state.stopGeneration
     // Child prompts consume only their own baseline notice and never lift Stop.
     const child = (e as { agentId?: string }).agentId !== undefined
-    if (!child && await read($, stopped)) {
+    let decision = child ? { reason: 'child', origin: undefined } : await userPromptOrigin($, e.origin?.kind)
+    const person = decision.origin === 'composer' || decision.origin === 'bridge'
+    if (!child && e.origin?.kind === 'sdk') state.personPromptAttributable = false
+    // The host-protected mod call attributes a person boundary independently of
+    // turbo, presence and typed approvals. It carries no prompt text.
+    const personBoundary = person && state.stopGeneration === stopGeneration ? await call($, 'turn_ended', { sleight_person_prompt: decision.origin }).catch(() => undefined) : undefined
+    if (personBoundary && !personBoundary.isError && await read($, stopped) && state.stopGeneration === stopGeneration) {
       // A failed collection keeps the relay alive. Lift its closing flag only at this user boundary.
       await call($, 'turn_ended', { sleight_resume: true }).catch(() => undefined)
     }
-    if (!child) await update($, stopped, () => false)
-    const approvalNote = !child && (e.origin?.kind === 'composer' || e.origin?.kind === 'bridge')
-        ? await beginTurboTurn($, state, e.text, e.origin.kind) : undefined
+    if (personBoundary && !personBoundary.isError && state.stopGeneration === stopGeneration) state.personPromptAttributable = true
+    if (personBoundary && !personBoundary.isError)
+      await update($, stopped, value => state.stopGeneration === stopGeneration ? false : value)
+    // Preserve the base composer/bridge contract, including mid-turn delivery.
+    // Only the new desktop mapping requires an idle main loop, checked again
+    // after environment reads so turn.start cannot race the provenance check.
+    if (decision.origin === 'desktop' && (e.turnId !== undefined || turnBusy(state)))
+      decision = { reason: e.turnId !== undefined ? 'mid-turn' : 'busy', origin: undefined }
+    const binding: { context?: string; bound: boolean } = decision.origin ? await beginTurboTurn($, state, e.text, decision.origin) : { bound: false }
+    await tracePrompt($, e.origin?.kind, binding.bound, decision.origin, binding.bound ? 'accepted' : decision.origin ? 'not-bound' : decision.reason)
+    const approvalNote = binding.context
     if (approvalNote) e = { ...e, context: [...(e.context ?? []), approvalNote] }
     const pendingApps = snapshotApps(state, e as { agentId?: string })
     if (pendingApps.size === 0) return next(e)
@@ -546,7 +720,7 @@ export const register: Register = on => {
     if (next.origin?.plugin === 'sleight') return next(e)
     if (state.replayActive) return { deny: 'A replay is running. Wait for it to stop before sending another tool call.' }
     if (await read($, stopped)) {
-      return { deny: 'The user stopped sleight with /sleight stop. Do not use it again until they ask.' }
+      return { deny: stopRefusal(state.personPromptAttributable) }
     }
     state.usedThisTurn = true
     state.shellUsers.add(loopKey(e))
@@ -562,7 +736,9 @@ export const register: Register = on => {
     }
     await update($, log, list => [...list, entry].slice(-LOG_LIMIT))
     const ran = await forward($, state, e, owner, next)
-    const app = appFrom(code, ran.text)
+    const content = (ran.result as { content?: { type?: string; text?: string }[] } | undefined)?.content
+    const app = appFrom(code, ran.text ?? (Array.isArray(content)
+      ? content.filter(block => block?.type === 'text' && typeof block.text === 'string').map(block => block.text).join('\n') : undefined))
     if (app) state.lastApp = app
     state.actions++
     const status: LogEntry['status'] = ran.deny !== undefined ? 'refused' : ran.isError ? 'error' : 'done'
@@ -576,23 +752,25 @@ export const register: Register = on => {
   on('tool.call', { tool: REPLAY_TOOL as never }, async ($, e, next) => {
     const owner = state.statsTurn
     if (next.origin?.plugin === 'sleight') return next(e)
-    if (await read($, stopped)) return { deny: 'The user stopped sleight with /sleight stop. Do not use it again until they ask.' }
+    if (await read($, stopped)) return { deny: stopRefusal(state.personPromptAttributable) }
     if (state.replayActive) return { deny: 'A replay is running. Wait for it to stop before sending another tool call.' }
     state.usedThisTurn = true
     state.shellUsers.add(loopKey(e))
     return forward($, state, e, owner, next)
   })
 
-  // Compact browser verbs are session work too. The fixed completion hook must
-  // fence turbo even when the turn never called native JS. Log only the verb,
+  // Browser verbs and local app tools are session work too. The completion hook
+  // must fence turns that never called native JS. Log only the verb,
   // keeping field values and page content out of the pane's action history.
-  for (const name of BROWSER_TOOLS) on('tool.call', { tool: `mcp__plugin_sleight_computer__${name}` as never }, async ($, e, next) => {
+  for (const name of [...BROWSER_TOOLS, ...APP_TOOLS]) on('tool.call', { tool: `mcp__plugin_sleight_computer__${name}` as never }, async ($, e, next) => {
     const owner = state.statsTurn
     if (next.origin?.plugin === 'sleight') return next(e)
-    if (await read($, stopped)) return { deny: 'The user stopped sleight with /sleight stop. Do not use it again until they ask.' }
+    if (await read($, stopped)) return { deny: stopRefusal(state.personPromptAttributable) }
     if (state.replayActive) return { deny: 'A replay is running. Wait for it to stop before sending another tool call.' }
-    state.usedThisTurn = true
     state.shellUsers.add(loopKey(e))
+    // These tools historically do not own turn stats or engine cleanup.
+    if (APP_TOOLS.includes(name)) return next(e)
+    state.usedThisTurn = true
     if ((e as { agentId?: string }).agentId !== undefined) return forward($, state, e, owner, next)
     const entry: LogEntry = { id: (e as { tool_use_id: string }).tool_use_id, title: name, status: 'running', at: now() }
     await update($, log, list => [...list, entry].slice(-LOG_LIMIT))
@@ -654,9 +832,13 @@ export const register: Register = on => {
 
   on('command.run', { command: 'sleight' }, async ($, e) => {
     const args = e.args.trim()
-    if (args === 'stats') return { text: turnStatsText(await read($, stats)) }
-    if (args === 'record' || args.startsWith('record ')) return recordCurrent($, state, args.slice(6).trim() || undefined)
+    if (args === 'stats') return { text: plainText(turnStatsText(await read($, stats)), 4096) }
+    if (args === 'record' || args.startsWith('record ')) {
+      const result = await recordCurrent($, state, args.slice(6).trim() || undefined)
+      return { text: plainText(result.text, 400) }
+    }
     if (e.args.trim() === 'stop') {
+      state.stopGeneration++
       if (state.replayActive) state.replayCancelled = true
       await update($, stopped, () => true)
       state.usedThisTurn = false
@@ -667,10 +849,13 @@ export const register: Register = on => {
       $.ui.status('sleight · stopped')
       // The interrupted call usually ends Claude's turn at once (desktop app, 2026-10-11), so Esc
       // is only for a turn that goes on without sleight.
-      return { text: `${receipt} If Claude keeps working, press Esc to end its turn.` }
+      return { text: plainText(`${receipt} If Claude keeps working, press Esc to end its turn.`, 400) }
     }
     await $.ui.open({ id: PANE, title: 'sleight' })
-    if (args === 'replay' || args.startsWith('replay ')) return replayCurrent($, state, args.slice(6))
+    if (args === 'replay' || args.startsWith('replay ')) {
+      const result = await replayCurrent($, state, args.slice(6))
+      return { text: plainText(result.text, 400) }
+    }
     // `/sleight do this` opens the pane and sends "do this" to Claude, as if
     // typed on its own line. The engine refuses a submit from inside this hook
     // (the prompt would wait on the command submitting it), so it goes out
@@ -682,7 +867,7 @@ export const register: Register = on => {
       // sleight tools and Claude used the shell instead (2026-10-08).
       await $.mcp.connect(SERVER).catch(() => undefined)
       $.prompt.submit({ text: prompt, asUser: true }).catch(err => {
-        $.ui.toast(`sleight: couldn't send your prompt (${(err as Error).message}). Send it on its own line.`)
+        $.ui.toast(plainText(`sleight: couldn't send your prompt (${(err as Error).message}). Send it on its own line.`, 400))
       })
     })
     return { text: 'sleight pane opened. Sending your prompt to Claude.' }
@@ -714,9 +899,9 @@ export const register: Register = on => {
         const source =
           `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}">` +
           `<image href="data:${shot.image.mime};base64,${shot.image.base64}" width="${width}" height="${height}"/></svg>`
-        return <Svg source={source} alt={`Screenshot of ${shot.app}`} width={width} height={height} />
+        return <Svg source={source} alt={`Screenshot of ${plainText(shot.app, 64)}`} width={width} height={height} />
       }
-      return <Text dimColor>{`${shot.app}: picture not shown on this surface. Press Refresh.`}</Text>
+      return <Text dimColor>{plainText(`${plainText(shot.app, 64)}: picture not shown on this surface. Press Refresh.`, 400)}</Text>
     })()
 
     const statusLine =
@@ -734,7 +919,7 @@ export const register: Register = on => {
     return (
       <Box flexDirection="column">
         {picture}
-        <Text dimColor>{isStopped ? 'Stopped until your next message.' : statusLine}</Text>
+        <Text dimColor>{plainText(isStopped ? `Stopped. ${stopRecovery(state.personPromptAttributable, true)}` : statusLine, 400)}</Text>
         <Box flexDirection="row">
           <Button
             key="refresh"
@@ -751,11 +936,12 @@ export const register: Register = on => {
             label="Stop"
             hotkey="s"
             onPress={() => {
+              state.stopGeneration++
               if (state.replayActive) state.replayCancelled = true
               void update($, stopped, () => true)
               state.usedThisTurn = false
               state.shellUsers.clear()
-              void stopEngineTurn($, state).then(receipt => $.ui.toast(receipt ?? 'sleight stop unconfirmed'))
+              void stopEngineTurn($, state).then(receipt => $.ui.toast(plainText(receipt ?? 'sleight stop unconfirmed', 400)))
               $.ui.status('sleight · stopped')
             }}
           />
@@ -767,24 +953,24 @@ export const register: Register = on => {
         <Box flexDirection="row">
           <Button key="replay" label="Replay file" onPress={async () => {
             const result = await replayCurrent($, state, await read($, replayFile))
-            $.ui.toast(result.text)
+            $.ui.toast(plainText(result.text, 400))
           }} />
           <Button key="record" label="Record session" onPress={async () => {
             const result = await recordCurrent($, state, await read($, replayFile))
-            $.ui.toast(result.text)
+            $.ui.toast(plainText(result.text, 400))
           }} />
         </Box>
         {/* Text, not a Link: Claude Code 2.1.288 refuses a file:// href and then draws nothing (CI, 2026-10-11). */}
-        {latest?.path?.startsWith('/') && <Text>Latest receipt: {latest.path}</Text>}
+        {latest?.path?.startsWith('/') && <Text>Latest receipt: {plainText(latest.path, 400)}</Text>}
         {latest?.unavailable && <Text>Receipt unavailable; the private file could not be written.</Text>}
-        {latest?.review && <Text>{latest.review}</Text>}
-        {latestStats && <Text>{turnStatsText(latestStats)}</Text>}
+        {latest?.review && <Text>{plainText(latest.review, 32100, true)}</Text>}
+        {latestStats && <Text>{plainText(turnStatsText(latestStats), 4096)}</Text>}
         <Text bold>Actions</Text>
         {entries.length === 0 && <Text dimColor>None yet.</Text>}
         {/* Newest first, so the latest action stays visible however short the pane is. */}
         {entries.slice(-room).reverse().map(entry => (
           <Text dimColor={entry.status === 'done'} wrap="truncate-end">
-            {`${mark[entry.status]} ${entry.at} ${entry.app ? `${entry.app}: ` : ''}${entry.title}`}
+            {`${mark[entry.status]} ${plainText(entry.at, 8)} ${entry.app ? `${plainText(entry.app, 64)}: ` : ''}${plainText(entry.title, 80)}`}
           </Text>
         ))}
       </Box>

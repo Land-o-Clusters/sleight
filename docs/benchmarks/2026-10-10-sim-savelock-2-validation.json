@@ -58,7 +58,7 @@
       "command": "node bench/textedit-save-lock-cleanup.mjs docs/benchmarks/2026-10-10-save-lock-1791610854988.json --inspect-only",
       "environment": "sandbox",
       "exit": 1,
-      "reason": "EPERM writing receipt in ~/Projects/sleight-wt/sim-savelock; stopped under hold before lock or AX"
+      "reason": "EPERM writing receipt in <private-evidence>/sim-savelock; stopped under hold before lock or AX"
     },
     {
       "command": "node bench/textedit-save-lock-cleanup.mjs docs/benchmarks/2026-10-10-save-lock-1791610854988.json --inspect-only",

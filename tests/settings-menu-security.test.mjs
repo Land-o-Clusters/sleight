@@ -5,6 +5,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { preapprovedWriteTarget, PROTECTED } from '../plugins/sleight/hooks/preapproved-write-guard.mjs';
 import { registerTemp, trackTemp } from '../scripts/temp-leftovers.mjs';
+import { hostDiskStat } from './fixtures/host-fs-stat.mjs';
 // A synthetic macOS home for validation, never a filesystem allocation root.
 const home = ['', 'Users', 'fixture'].join('/');
 const options = { home, stat: async path => ({ realPath: path }) };
@@ -35,7 +36,7 @@ test('write guard resolves file and folder aliases to the shim', async t => {
   fs.writeFileSync(join(root, '.local/bin/.sleight-shim-v1'), 'fixture');
   fs.symlinkSync(join(root, '.local/bin/.sleight-shim-v1'), join(root, 'alias'));
   fs.symlinkSync(join(root, '.local/bin'), join(root, 'folder'));
-  const opts = { home: root, stat: async path => ({ realPath: fs.realpathSync(path) }) };
+  const opts = { home: root, stat: hostDiskStat };
   for (const path of [join(root, 'alias'), join(root, 'folder/.sleight-shim-v1')]) {
     assert.ok(await preapprovedWriteTarget({ tool: 'Write', file_path: path }, opts));
     assert.ok(await preapprovedWriteTarget({ tool: 'Bash', command: `tee '${path}'` }, opts));

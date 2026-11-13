@@ -1,3 +1,4 @@
+import { assertChildStatus } from './fixtures/child-status.mjs';
 // VC5S: the launcher refuses a settings-changing command unless a person started it in a terminal (lib/person-gate.mjs).
 // Every chain here is injected; the only real ps calls are the read-only smoke walk at the end.
 import test from 'node:test';
@@ -28,6 +29,7 @@ const WRITES = [
   ['allow', 'remove', 'TextEdit'],
   ['routine', 'add', 'script.json', '--every', '1h'], ['routine', 'remove', 'r1'], ['routine', '--remove', 'r1'], ['routine', 'unlock', 'r1'],
   ['watch', 'https://example.com', '--find', 'x', '--every', '1h'], ['watch', 'record', 't.jsonl', '--every', '1h'], ['watch', 'remove', 'w1'], ['watch', 'unlock', 'w1'],
+  ['record', 'x.jsonl'], ['record', '--watch', 'com.example.App', 'out.json'], ['replay', 'x.json'], ['record'], ['replay'],
   // Forms the modules would reject as usage are refused too, so a writer added later is covered before anyone lists it.
   ['hand'], ['turbo'], ['cursor'], ['hand', 'status', 'extra'], ['permissions', 'frobnicate'],
 ];
@@ -36,9 +38,9 @@ const READS = [
   ['permissions'], ['permissions', 'list'], ['permissions', 'memory'], ['permissions', 'memory', 'list'],
   ['allow', 'list'], ['routine', 'list'], ['routine', 'run-now', 'r1'], ['watch', 'list'], ['watch', 'notes'], ['watch', 'run-now', 'w1', '--scheduled'],
 ];
-// Launcher commands outside the gate: the server, --doctor, stats, replays and the shell route.
+// Launcher commands outside the gate: the server, --doctor, stats and the shell route.
 const UNGATED = [[], ['--doctor'], ['--doctor', 'TextEdit'], ['stats'], ['turbo-state'], ['setup', '--dry-run'], ['session'], ['js', '1'], ['js_reset'],
-  ['record', 'x.jsonl'], ['replay', 'x.json'], ['--socket-relay']];
+  ['--socket-relay']];
 
 test('every settings-changing form is named for the refusal, and every read or ungated form is not', () => {
   for (const args of WRITES) assert.equal(typeof settingsCommand(args), 'string', args.join(' '));
@@ -47,6 +49,26 @@ test('every settings-changing form is named for the refusal, and every read or u
   assert.equal(settingsCommand(['turbo', 'app', 'on', 'com.example.app']), 'turbo app on');
   assert.equal(settingsCommand(['permissions', 'memory', 'clear', 'all']), 'permissions memory clear');
   assert.equal(settingsCommand(['cursor', 'style\u001b[2J', 'ring']), 'cursor style2J', 'control characters never reach the line');
+});
+
+test('SA1R: permission notices cap origins at eight and retain every flag word', () => {
+  for (const count of [8, 9, 256]) {
+    const origins = Array.from({ length: count }, (_, i) => `https://site${i}.test`);
+    const args = ['permissions', 'sites', 'only', '--before', ...origins, '--discard', '--after'];
+    const expected = ['permissions', 'sites', 'only', '--before', ...origins.slice(0, 8), '--discard', '--after',
+      ...(count > 8 ? ['and', String(count - 8), 'more'] : [])].join(' ');
+    assert.equal(settingsCommand(args), expected);
+    assert.ok(settingsRefusal(args, { stdin: pipe, stdout: pipe }).includes(expected));
+  }
+  // A leading space still counts toward the cap: URL parsing trims it, so it is still a valid origin (sa1r review).
+  const spaced = Array.from({ length: 256 }, (_, i) => ` https://site${i}.test`);
+  const line = settingsCommand(['permissions', 'sites', 'only', ...spaced]);
+  assert.match(line, / and 248 more$/);
+  assert.ok(line.length < 400, `bounded line, got ${line.length} characters`);
+  assert.equal(settingsCommand(['permissions', 'repair', '--discard']), 'permissions repair --discard');
+  assert.equal(settingsCommand(['permissions', 'unblock', 'https://one.test']), 'permissions unblock https://one.test');
+  assert.equal(settingsCommand(['permissions', 'sites', 'only', 'https://one.test\n\u202e', '--flag\n']),
+    'permissions sites only https://one.test --flag');
 });
 
 test('the refusal is one line that names the reason, with exit code 3 from the launcher', () => {
@@ -58,8 +80,8 @@ test('the refusal is one line that names the reason, with exit code 3 from the l
   for (const code of ['no tty', 'no terminal app', 'unknown ancestor', 'session', 'orphaned', 'too deep']) assert.equal(refusalLine('hand on', code), start + 'not started from a terminal app.');
   for (const code of ['ps failed', 'unreadable', undefined, 'anything']) assert.equal(refusalLine('hand on', code), start + 'check failed.');
   // permissions frobnicate writes nothing even if the gate were missing, so the real launcher is safe to run here.
-  const run = spawnSync(process.execPath, [launch, 'permissions', 'frobnicate'], { encoding: 'utf8', timeout: 30000 });
-  assert.equal(run.status, 3, run.stderr);
+  const run = spawnSync(process.execPath, [launch, 'permissions', 'frobnicate'], { encoding: 'utf8', timeout: 30000, killSignal: 'SIGKILL' });
+  assertChildStatus(run, 3, run.stderr);
   assert.equal(run.stderr, refusalLine('permissions frobnicate', 'no terminal') + '\n');
   assert.equal(run.stdout, '');
 });
@@ -194,7 +216,7 @@ test('a terminal under a non-ASCII home folder passes by its bundle path', () =>
 });
 
 test('ps runs with LC_ALL=C, and the gate passes its session-age bar to the walk', () => {
-  const source = readFileSync(new URL('../plugins/sleight/lib/person-gate.mjs', import.meta.url), 'utf8');
+  const source = readFileSync(new URL('../plugins/sleight/lib/platform/darwin-ancestry.mjs', import.meta.url), 'utf8');
   assert.match(source, /export const systemPs = \(argv, timeout\) => run\('\/bin\/ps', argv, timeout, \{ \.\.\.process\.env, LC_ALL: 'C' \}\);/);
   assert.match(source, /run\('\/usr\/sbin\/lsof', \['-a', '-p', String\(pid\), '-d', 'txt', '-Fn'\], timeout\)\)/, 'lsof keeps the person\'s locale');
   const seen = [];

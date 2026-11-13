@@ -1,0 +1,489 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "sleight.windows-driver-sitting/1",
+  "title": "Windows driver sitting report",
+  "description": "validateResult in driver-sitting.mjs is authoritative, including summary recomputation and focus checks. Invalid reports preserve measurements for diagnosis and may violate this schema. UC3F evidence is an owner-collected guest observation bundle, not authenticated telemetry. validateResult also checks fixed case names, per-case sample counts, every observation, measurement-only cost counts and any registered cost bounds.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [ "schema", "mode", "revision", "phase", "requestedRuns", "environment", "configuration", "macReferenceMs", "steps", "discovery", "verdict", "limitations" ],
+  "properties": {
+    "schema": { "const": "sleight.windows-driver-sitting/1" },
+    "mode": { "const": "vm" },
+    "revision": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{40}$"
+    },
+    "phase": {
+      "enum": [ "all", "build", "inventory", "core", "toolkit", "capture", "dpi", "safety" ]
+    },
+    "requestedRuns": { "type": "integer", "minimum": 1, "maximum": 20 },
+    "verdict": {
+      "enum": [ "passed-phase", "failed", "incomplete", "invalid" ]
+    },
+    "limitations": {
+      "type": "array",
+      "items": { "type": "string" }
+    },
+    "environment": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [ "platform", "arch", "node", "osRelease" ],
+      "properties": {
+        "platform": { "const": "win32" },
+        "arch": {
+          "enum": [ "arm64", "x64", "ia32" ]
+        },
+        "node": { "type": "string" },
+        "osRelease": { "type": "string" }
+      }
+    },
+    "configuration": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [ "dpi", "origin", "size" ],
+      "properties": {
+        "dpi": {
+          "enum": [ 100, 125, 150, 200 ]
+        },
+        "origin": {
+          "enum": [ "standard", "negative" ]
+        },
+        "size": {
+          "enum": [ "compact", "large" ]
+        }
+      }
+    },
+    "macReferenceMs": {
+      "const": { "idleRead": 48, "postInputRead": 416, "warmWrite": 72 }
+    },
+    "discovery": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [ "target", "windowId", "pid" ],
+        "properties": {
+          "target": {
+            "enum": [ "notepad", "notepad-untitled", "calculator", "edge", "wpf", "terminal", "elevated-candidate", "cover" ]
+          },
+          "windowId": {
+            "type": "string",
+            "pattern": "^[1-9][0-9]*$"
+          },
+          "pid": { "type": "integer", "minimum": 1 }
+        }
+      }
+    },
+    "steps": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [ "id", "phase", "trials", "summary" ],
+        "properties": {
+          "id": { "type": "string" },
+          "phase": {
+            "enum": [ "build", "core", "capture", "toolkit", "dpi", "safety", "runner" ]
+          },
+          "trials": {
+            "type": "array",
+            "minItems": 1,
+            "maxItems": 20,
+            "items": { "$ref": "#/$defs/trial" }
+          },
+          "summary": { "$ref": "#/$defs/summary" },
+          "focus": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [ "status" ],
+            "properties": {
+              "status": {
+                "enum": [ "pass", "fail" ]
+              },
+              "code": { "type": "string" },
+              "transitions": { "const": 0 },
+              "clicks": { "const": 0 },
+              "durationMs": { "$ref": "#/$defs/number" }
+            }
+          }
+        },
+        "allOf": [
+          {
+            "if": {
+              "properties": {
+                "id": {
+                  "enum": [ "person-idle", "person-key-before", "person-key-during", "lock-refused", "lock-during-type", "screensaver-refused", "session-switch-refused", "uac-refused", "uac-hint", "escape-stop-hardware", "escape-ignored-injected", "escape-ignored-posted", "cancel-frame", "direct-launch-terminal", "direct-launch-override", "browser-refused-edge", "browser-refused-firefox", "browser-refused-renamed", "checkpoint-cost" ]
+                }
+              }
+            },
+            "then": {
+              "properties": {
+                "phase": { "const": "safety" },
+                "trials": {
+                  "maxItems": 1,
+                  "items": {
+                    "if": {
+                      "properties": {
+                        "status": { "const": "pass" }
+                      }
+                    },
+                    "then": {
+                      "required": [ "evidence" ]
+                    }
+                  }
+                }
+              }
+            }
+          }
+        ]
+      }
+    }
+  },
+  "$defs": {
+    "number": { "type": "number", "minimum": 0 },
+    "timing": {
+      "type": [ "number", "null" ],
+      "minimum": 0
+    },
+    "summary": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [ "trials", "pass", "fail", "skip", "p50Ms", "p90Ms", "passP50Ms", "passP90Ms", "wallP50Ms", "wallP90Ms", "settleP50Ms", "settleP90Ms", "settleModes", "batchP50Ms", "batchP90Ms" ],
+      "properties": {
+        "trials": { "type": "integer", "minimum": 1, "maximum": 20 },
+        "pass": { "type": "integer", "minimum": 0 },
+        "fail": { "type": "integer", "minimum": 0 },
+        "skip": { "type": "integer", "minimum": 0 },
+        "p50Ms": { "$ref": "#/$defs/timing" },
+        "p90Ms": { "$ref": "#/$defs/timing" },
+        "passP50Ms": { "$ref": "#/$defs/timing" },
+        "passP90Ms": { "$ref": "#/$defs/timing" },
+        "wallP50Ms": { "$ref": "#/$defs/timing" },
+        "wallP90Ms": { "$ref": "#/$defs/timing" },
+        "settleP50Ms": { "$ref": "#/$defs/timing" },
+        "settleP90Ms": { "$ref": "#/$defs/timing" },
+        "batchP50Ms": { "$ref": "#/$defs/timing" },
+        "batchP90Ms": { "$ref": "#/$defs/timing" },
+        "settleModes": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "event-quiet": { "type": "integer", "minimum": 0 },
+            "poll-stable": { "type": "integer", "minimum": 0 },
+            "cap": { "type": "integer", "minimum": 0 },
+            "budget": { "type": "integer", "minimum": 0 },
+            "unknown": { "type": "integer", "minimum": 0 }
+          }
+        }
+      }
+    },
+    "trial": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [ "status" ],
+      "properties": {
+        "status": {
+          "enum": [ "pass", "fail", "skip" ]
+        },
+        "note": { "type": "string" },
+        "code": {
+          "type": "string",
+          "pattern": "^[A-Z][A-Z0-9_]{0,79}$"
+        },
+        "route": { "type": "string" },
+        "changed": { "type": "boolean" },
+        "negativeMonitor": { "type": "boolean" },
+        "elapsedMs": { "$ref": "#/$defs/number" },
+        "operationMs": { "$ref": "#/$defs/number" },
+        "settleMs": { "$ref": "#/$defs/number" },
+        "settleSamples": { "type": "integer", "minimum": 0 },
+        "settleTimings": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/number" }
+        },
+        "settleModes": {
+          "type": "array",
+          "items": {
+            "enum": [ "event-quiet", "poll-stable", "cap", "budget", "unknown" ]
+          }
+        },
+        "driverMs": { "$ref": "#/$defs/number" },
+        "lines": { "$ref": "#/$defs/number" },
+        "width": { "$ref": "#/$defs/number" },
+        "height": { "$ref": "#/$defs/number" },
+        "monitorWidth": { "$ref": "#/$defs/number" },
+        "monitorHeight": { "$ref": "#/$defs/number" },
+        "displayWidthFraction": { "$ref": "#/$defs/number" },
+        "displayHeightFraction": { "$ref": "#/$defs/number" },
+        "pngBytes": { "$ref": "#/$defs/number" },
+        "dpi": { "$ref": "#/$defs/number" },
+        "batchMs": { "$ref": "#/$defs/number" },
+        "nativePass": { "$ref": "#/$defs/number" },
+        "nativeFail": { "$ref": "#/$defs/number" },
+        "contentRequests": { "$ref": "#/$defs/number" },
+        "decisions": { "$ref": "#/$defs/number" },
+        "originX": { "type": "number" },
+        "originY": { "type": "number" },
+        "clickX": { "$ref": "#/$defs/number" },
+        "clickY": { "$ref": "#/$defs/number" },
+        "evidence": { "$ref": "#/$defs/evidence" },
+        "costs": { "$ref": "#/$defs/costs" }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "status": {
+                "enum": [ "pass", "fail" ]
+              }
+            }
+          },
+          "then": {
+            "required": [ "elapsedMs" ]
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "status": { "const": "fail" }
+            }
+          },
+          "then": {
+            "required": [ "code" ]
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "status": { "const": "skip" }
+            }
+          },
+          "then": {
+            "required": [ "note" ]
+          }
+        }
+      ]
+    },
+    "observation": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "postedMessages": { "type": "integer", "minimum": 0 },
+        "patternCalls": { "type": "integer", "minimum": 0 },
+        "typed": { "type": "integer", "minimum": 0 },
+        "requestedUnits": { "type": "integer", "minimum": 0 },
+        "keyLeadMs": { "type": "number", "minimum": 0 },
+        "uiaFetches": { "type": "integer", "minimum": 0 },
+        "captures": { "type": "integer", "minimum": 0 },
+        "locked": { "type": "integer", "minimum": 0 },
+        "unlocked": { "type": "integer", "minimum": 0 },
+        "finalReads": { "type": "integer", "minimum": 0 },
+        "inputWhilePrompt": { "type": "integer", "minimum": 0 },
+        "stackedPrompts": { "type": "integer", "minimum": 0 },
+        "nextPosts": { "type": "integer", "minimum": 0 },
+        "nextPatternCalls": { "type": "integer", "minimum": 0 },
+        "escapeStops": { "type": "integer", "minimum": 0 },
+        "hookEvents": { "type": "integer", "minimum": 0 },
+        "cards": { "type": "integer", "minimum": 0 },
+        "leases": { "type": "integer", "minimum": 0 },
+        "contentReads": { "type": "integer", "minimum": 0 },
+        "postsAfterStop": { "type": "integer", "minimum": 0 },
+        "lastInputUnchanged": { "type": "boolean" },
+        "refused": { "type": "boolean" },
+        "effectObserved": { "type": "boolean" },
+        "typingTarget": { "enum": ["word", "wpf"] },
+        "keyUpsDelivered": { "type": "boolean" },
+        "ok": { "type": "boolean" },
+        "firstAfterUnlockPassed": { "type": "boolean" },
+        "resumedWithoutRestart": { "type": "boolean" },
+        "firstCall": { "type": "boolean" },
+        "falseSecureRefusal": { "type": "boolean" },
+        "secureDesktopSeen": { "type": "boolean" },
+        "swallowed": { "type": "boolean" },
+        "injectedFlag": { "type": "boolean" },
+        "jobReplyMatched": { "type": "boolean" },
+        "cancelReplyMatched": { "type": "boolean" },
+        "override": { "type": "boolean" },
+        "readPassed": { "type": "boolean" },
+        "originalFilenamePreserved": { "type": "boolean" },
+        "productNamePreserved": { "type": "boolean" },
+        "stopMs": { "type": "number", "minimum": 0 },
+        "flagMs": { "type": "number", "minimum": 0 },
+        "elapsedMs": { "type": "number", "minimum": 0 },
+        "elapsedUs": { "type": "number", "minimum": 0 },
+        "code": {
+          "enum": [ "PERSON_TOOK_OVER", "SCREEN_LOCKED", "SECURE_DESKTOP_ACTIVE", "USER_STOPPED", "BROWSER_TARGET_REFUSED", "FORBIDDEN_TARGET", "FORBIDDEN_SETTINGS" ]
+        },
+        "nextCode": { "const": "USER_STOPPED" },
+        "reason": {
+          "enum": [ "person-active", "session-locked", "screensaver", "session-disconnected", "secure-desktop", "escape", "cancel" ]
+        },
+        "delivery": {
+          "enum": [ "not-sent", "sent-unverified" ]
+        },
+        "retry": {
+          "enum": [ "safe", "read-first" ]
+        },
+        "unhealthy": { "const": false },
+        "source": {
+          "enum": [ "scheduled-sendinput", "owner-keyboard", "qemu-display", "stuck-menu-escape", "scheduled-direct", "parent" ]
+        },
+        "replyMode": {
+          "enum": [ "cap", "budget", "deadline" ]
+        }
+      }
+    },
+    "evidence": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [ "cases" ],
+      "properties": {
+        "cases": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 7,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [ "id", "samples" ],
+            "properties": {
+              "id": {
+                "enum": [ "notepad", "calculator", "background-word", "scheduled-key", "typing", "read", "capture", "action", "unlocked-action", "wts-query", "flags", "screensaver", "switch", "prompt", "idle-probe", "idle-action", "raised-prompt", "hardware", "injected", "posted", "cancel-first", "job-first", "direct-terminal", "parent-terminal", "direct-settings", "parent-settings", "name", "hwnd", "wpf", "renamed", "session-probe", "lock-check", "desktop-check", "person-input", "budget-check", "hook-install", "hook-remove", "hook-callback" ]
+              },
+              "samples": {
+                "type": "array",
+                "minItems": 0,
+                "maxItems": 1000,
+                "items": { "$ref": "#/$defs/observation" }
+              }
+            }
+          }
+        },
+        "measurementOnly": { "const": "bounds not registered" },
+        "plannedUtc": { "type": "string", "format": "date-time" },
+        "startedUtc": { "type": "string", "format": "date-time" }
+      }
+    },
+    "costs": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [ "session-probe", "lock-check", "desktop-check", "person-input", "budget-check", "hook-install", "hook-remove", "hook-callback" ],
+      "properties": {
+        "session-probe": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [ "p50Ms", "p90Ms" ],
+          "properties": {
+            "count": {"type": "integer", "minimum": 0, "maximum": 100},
+            "plannedCount": {"type": "integer", "minimum": 1, "maximum": 100},
+            "p50Ms": {"type": ["number", "null"], "minimum": 0},
+            "p90Ms": {"type": ["number", "null"], "minimum": 0}
+          }
+        },
+        "lock-check": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [ "p50Ms", "p90Ms" ],
+          "properties": {
+            "count": {"type": "integer", "minimum": 0, "maximum": 100},
+            "plannedCount": {"type": "integer", "minimum": 1, "maximum": 100},
+            "p50Ms": {"type": ["number", "null"], "minimum": 0},
+            "p90Ms": {"type": ["number", "null"], "minimum": 0}
+          }
+        },
+        "desktop-check": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [ "p50Ms", "p90Ms" ],
+          "properties": {
+            "count": {"type": "integer", "minimum": 0, "maximum": 100},
+            "plannedCount": {"type": "integer", "minimum": 1, "maximum": 100},
+            "p50Ms": {"type": ["number", "null"], "minimum": 0},
+            "p90Ms": {"type": ["number", "null"], "minimum": 0}
+          }
+        },
+        "person-input": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [ "p50Ms", "p90Ms" ],
+          "properties": {
+            "count": {"type": "integer", "minimum": 0, "maximum": 100},
+            "plannedCount": {"type": "integer", "minimum": 1, "maximum": 100},
+            "p50Ms": {"type": ["number", "null"], "minimum": 0},
+            "p90Ms": {"type": ["number", "null"], "minimum": 0}
+          }
+        },
+        "budget-check": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [ "p50Ms", "p90Ms" ],
+          "properties": {
+            "count": {"type": "integer", "minimum": 0, "maximum": 100},
+            "plannedCount": {"type": "integer", "minimum": 1, "maximum": 100},
+            "p50Ms": {"type": ["number", "null"], "minimum": 0},
+            "p90Ms": {"type": ["number", "null"], "minimum": 0}
+          }
+        },
+        "hook-install": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [ "p50Ms", "p90Ms" ],
+          "properties": {
+            "count": {"type": "integer", "minimum": 0, "maximum": 100},
+            "plannedCount": {"type": "integer", "minimum": 1, "maximum": 100},
+            "p50Ms": {"type": ["number", "null"], "minimum": 0},
+            "p90Ms": {"type": ["number", "null"], "minimum": 0}
+          }
+        },
+        "hook-remove": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [ "p50Ms", "p90Ms" ],
+          "properties": {
+            "count": {"type": "integer", "minimum": 0, "maximum": 100},
+            "plannedCount": {"type": "integer", "minimum": 1, "maximum": 100},
+            "p50Ms": {"type": ["number", "null"], "minimum": 0},
+            "p90Ms": {"type": ["number", "null"], "minimum": 0}
+          }
+        },
+        "hook-callback": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [ "p99Us" ],
+          "properties": {
+            "count": {"type": "integer", "minimum": 0, "maximum": 100},
+            "plannedCount": {"type": "integer", "minimum": 1, "maximum": 100},
+            "p99Us": {"type": ["number", "null"], "minimum": 0}
+          }
+        }
+      }
+    },
+    "evidenceBundle": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [ "schema", "revision", "rows" ],
+      "properties": {
+        "schema": { "const": "sleight.windows-uc3f-evidence/1" },
+        "revision": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{40}$"
+        },
+        "rows": {
+          "type": "array",
+          "maxItems": 19,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [ "id", "evidence" ],
+            "properties": {
+              "id": {
+                "enum": [ "person-idle", "person-key-before", "person-key-during", "lock-refused", "lock-during-type", "screensaver-refused", "session-switch-refused", "uac-refused", "uac-hint", "escape-stop-hardware", "escape-ignored-injected", "escape-ignored-posted", "cancel-frame", "direct-launch-terminal", "direct-launch-override", "browser-refused-edge", "browser-refused-firefox", "browser-refused-renamed", "checkpoint-cost" ]
+              },
+              "evidence": { "$ref": "#/$defs/evidence" }
+            }
+          }
+        }
+      }
+    }
+  }
+}

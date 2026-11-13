@@ -97,7 +97,7 @@ test('an app handle getState becomes getAXState; cua, browsers and unrelated nam
 
 function opener(t, result, options = {}) {
   const calls = [];
-  const h = harness(t, { localTools: { tools: [{ name: 'open_file' }], call: async (...args) => { calls.push(args); return result; } }, ...options });
+  const h = harness(t, { localTools: { tools: [{ name: 'open_file', inputSchema: { type: 'object' } }], call: async (...args) => { calls.push(args); return result; } }, ...options });
   h.local(1, 'open_file', { app: 'Example', path: '/tmp/note.txt' });
   return { ...h, calls };
 }

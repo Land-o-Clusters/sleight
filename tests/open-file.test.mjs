@@ -1,11 +1,14 @@
-import test, { after } from 'node:test';
+import test, { after, describe } from 'node:test';
+import { localBackendSkip, localBackends, nativeLocal } from './fixtures/mac-driver-tools.mjs';
+import { createMacDriverTools } from '../plugins/sleight/lib/mac-driver/tools.mjs';
 import assert from 'node:assert/strict';
 import { mkdtempSync, mkdirSync, symlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { callLocalTool, localToolDefinitions, openDocument } from '../plugins/sleight/lib/launch.mjs';
+import { callLocalTool as scriptCall, localToolDefinitions, openDocument as scriptOpen } from '../plugins/sleight/lib/launch.mjs';
 import { removeTemp, trackTemp } from '../scripts/temp-leftovers.mjs';
 
+for (const backend of localBackends) describe(backend, { skip: localBackendSkip(backend) }, () => {
 const dir = trackTemp(mkdtempSync(join(tmpdir(), 'sleight-open-file-')));
 after(() => removeTemp(dir));
 const file = join(dir, 'note.txt');
@@ -15,6 +18,17 @@ const IDS = { TextEdit: 'com.apple.TextEdit', 'com.apple.TextEdit': 'com.apple.T
   'My Term': 'com.googlecode.iterm2', ChatGPT: 'com.openai.chat', 'Python Launcher': 'org.python.PythonLauncher' };
 const resolve = async name => IDS[name] ?? '';
 const message = result => result.content[0].text;
+function adapter(options = {}) {
+  return createMacDriverTools({ ...options, resolve, driver: { ping: async () => ({}), request: async (method, { args }) => {
+    assert.equal(method, 'localTool');
+    const f = nativeLocal(args[0], args[1], {});
+    if (f.result.ok && args[1].op === 'open') await options.exec?.('/usr/bin/open', ['-g', '-b', args[1].appId, args[1].path]);
+    return f.result;
+  } } });
+}
+const openDocument = backend === 'script' ? scriptOpen : (args, options) => adapter(options).openDocument(args, options);
+const callLocalTool = backend === 'script' ? scriptCall : (name, args, approve) => adapter().call(name, args, approve);
+
 
 test('open_file opens an existing file with the app left in the background', async () => {
   const { calls, exec } = recorder();
@@ -73,4 +87,6 @@ test('open_file asks once per app and stops when the user declines', async () =>
   assert.match(asked[0][1], /^Allow Claude to open files in TextEdit\? /);
   assert.ok(localToolDefinitions({}).some(tool => tool.name === 'open_file'));
   assert.ok(!localToolDefinitions({ SLEIGHT_OPEN_FILE: '0' }).some(tool => tool.name === 'open_file'));
+});
+
 });

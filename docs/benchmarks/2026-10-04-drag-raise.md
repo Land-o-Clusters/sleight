@@ -1,6 +1,6 @@
 # Named-window drag checks, 2026-10-04
 
-Branch: `codex/drag-raise`, worktree: `~/Projects/sleight-wt/text-drag-menu-names`.
+Branch: `codex/drag-raise`, worktree: `<private-evidence>/text-drag-menu-names`.
 The full benchmark was not run. These checks use the production relay and its
 benchmark allowlist for Chess. App-driving runs hold `/tmp/sleight-live.lock`.
 

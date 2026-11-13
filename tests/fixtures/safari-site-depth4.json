@@ -1,0 +1,4 @@
+{
+  "source": "race-1017/safari-sleight-fsoff-r1/form-settings/events.jsonl",
+  "text": "Window: \"sleight benchmark — Settings · Relaybox\", App: Safari.\n0 standard window sleight benchmark — Settings · Relaybox, ID: SafariWindow?IsSecure=false&UUID=38902F98-B1F4-4A0C-BB25-B9371EE479D1, Secondary Actions: Raise\n\t1 split group\n\t\t2 splitter (disabled, settable, float) -1\n\t\t3 tab group\n\t\t\t4 scroll area\n\t\t\t\t5 HTML content Description: Settings · Relaybox, URL: 127.0.0.1:5413/settings"
+}

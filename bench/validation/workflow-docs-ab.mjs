@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 // WF3 runs both flag settings on one candidate. The existing harnesses own fixtures and the live lock.
 // Default mode only prints a plan. Runtime injection is an import-only seam for offline tests.
+import { waitForBenchmark, benchmarkStopCode } from '../hold.mjs';
 import { spawn, execFileSync } from 'node:child_process';
 import { createHash, randomUUID } from 'node:crypto';
 import { appendFileSync, existsSync, lstatSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
@@ -83,15 +84,15 @@ export function makeWorkflowPlan({ build, engine, out, pins }) {
 // No inherited experiment flags, API credentials, Claude identity or loader controls.
 export function workflowEnvironment(side, host = process.env) {
   if (!['docs0', 'default'].includes(side)) throw Error('Unknown WF3 side');
-  return { ...Object.fromEntries(['PATH', 'HOME', 'USER', 'LOGNAME', 'TMPDIR', 'LANG', 'LC_ALL', 'TERM']
+  return { ...Object.fromEntries(['PATH', 'HOME', 'USER', 'LOGNAME', 'TMPDIR', 'LANG', 'LC_ALL', 'TERM', 'SLEIGHT_HOLD_WAIT_MAX_MS', 'SLEIGHT_HOLD_RETRIES']
     .filter(key => typeof host[key] === 'string').map(key => [key, host[key]])),
     DISABLE_AUTOUPDATER: '1', DISABLE_TELEMETRY: '1', DO_NOT_TRACK: '1', SLEIGHT_BENCH_HAND: '0', SLEIGHT_NO_HUB: '1',
     SLEIGHT_TURBO: '0', SLEIGHT_SURFACES: 'computer',
     ...(side === 'docs0' ? { SLEIGHT_WORKFLOW_DOCS: '0' } : {}) };
 }
 
-export function productionGate(out, exists = existsSync) {
-  if (exists('/tmp/sleight-hold')) throw Error('Benchmark hold is active');
+export async function productionGate(out, exists = existsSync, options = {}) {
+  await waitForBenchmark({ ...options, held: () => exists('/tmp/sleight-hold') });
   if (exists('/tmp/sleight-live.lock')) throw Error('Live lock is held; never remove it from this driver');
   if (exists(join(out, 'pause'))) throw Error('WF3 pause is active');
 }
@@ -191,7 +192,7 @@ export function workflowSummary(plan, rows) {
 
 export async function runWorkflow(plan, { ownerAway = false, runtime = {} } = {}) {
   const rt = { now: () => new Date(), verifyPins: verifySources,
-    readEngine: () => readEngine({ env: workflowEnvironment('default') }), gate: productionGate,
+    readEngine: () => readEngine({ env: workflowEnvironment('default') }), gate: (out, options) => productionGate(out, existsSync, options),
     run: child, collect: collectWorkflow, ...runtime };
   if (!(rt.now().getTime() >= Date.parse(RESET))) throw Error(`WF3 waits for quota reset ${RESET}`);
   if (!ownerAway) throw Error('WF3 live runs require --owner-away after the owner confirms an away window');
@@ -200,21 +201,21 @@ export async function runWorkflow(plan, { ownerAway = false, runtime = {} } = {}
   if (JSON.stringify(expected) !== JSON.stringify(plan)) throw Error('WF3 plan changed');
   const controller = new AbortController();
   const stop = () => controller.abort(Error('WF3 interrupted; preserve partial evidence'));
-  const verify = () => {
+  const verify = async () => {
     controller.signal.throwIfAborted(); rt.verifyPins(plan);
     if (rt.readEngine().version !== plan.engine) throw Error('Pinned engine changed or is unavailable');
-    rt.gate(plan.out);
+    await rt.gate(plan.out, { signal: controller.signal, ...runtime.hold });
   };
-  outputParents(plan.out); outsideGit(plan.out); verify();
-  if (existsSync(plan.out)) throw Error('Output already exists; choose a fresh --out, never rewrite evidence');
-  mkdirSync(dirname(plan.out), { recursive: true, mode: 0o700 });
-  mkdirSync(plan.out, { mode: 0o700 });
-  save(join(plan.out, 'plan.json'), plan);
   for (const event of ['SIGINT', 'SIGTERM', 'SIGHUP']) process.on(event, stop);
-  const rows = [];
+  const rows = []; let created = false;
   try {
+    outputParents(plan.out); outsideGit(plan.out); await verify();
+    if (existsSync(plan.out)) throw Error('Output already exists; choose a fresh --out, never rewrite evidence');
+    mkdirSync(dirname(plan.out), { recursive: true, mode: 0o700 });
+    mkdirSync(plan.out, { mode: 0o700 }); created = true;
+    save(join(plan.out, 'plan.json'), plan);
     for (const round of plan.rounds) {
-      verify();
+      await verify();
       const stem = join(plan.out, round.id), log = `${stem}.log`;
       const invocation = roundCommand(round, ROOT, stem);
       const receipt = { ...round, build: plan.build, engine: plan.engine, pins: plan.pins,
@@ -225,7 +226,7 @@ export async function runWorkflow(plan, { ownerAway = false, runtime = {} } = {}
         Object.assign(receipt, rt.collect(round, plan, log));
         if (!receipt.safe) throw Error('Unproved cleanup; preserve the production harness lock and fixture');
         rows.push(...receipt.rows.map(row => ({ ...row, group: round.group, side: round.side, round: round.n })));
-        verify();
+        await verify();
       } catch (error) { receipt.safe = false; receipt.error = error.message; throw error; }
       finally { receipt.finishedAt = rt.now().toISOString(); save(`${stem}.receipt.json`, receipt); }
     }
@@ -233,7 +234,7 @@ export async function runWorkflow(plan, { ownerAway = false, runtime = {} } = {}
     save(join(plan.out, 'summary.json'), summary);
     return summary;
   } catch (error) {
-    save(join(plan.out, 'failure.json'), { message: error.message, completedTasks: rows.length, at: rt.now().toISOString() });
+    if (created) save(join(plan.out, 'failure.json'), { message: error.message, completedTasks: rows.length, at: rt.now().toISOString() });
     throw error;
   } finally { for (const event of ['SIGINT', 'SIGTERM', 'SIGHUP']) process.off(event, stop); }
 }
@@ -259,5 +260,5 @@ export async function main(args = process.argv.slice(2)) {
 
 if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
   try { process.exitCode = await main(); }
-  catch (error) { console.error(`WF3 stopped: ${error.message}`); process.exitCode = 1; }
+  catch (error) { console.error(`WF3 stopped: ${error.message}`); process.exitCode = benchmarkStopCode(error) ?? 1; }
 }

@@ -12,13 +12,13 @@ export const GROK_RESULT_LIMIT = 20000;
 
 // The final serialized result includes content wrappers, metadata and base64 images. Keep safety
 // prose whole. An output that can't fit after tree trimming becomes an explicit delivery failure.
-export function grokResult(result, onUndelivered) {
+export function grokResult(result, onUndelivered, onTreeTrim) {
   const fits = value => Buffer.byteLength(JSON.stringify(value)) <= GROK_RESULT_LIMIT;
   if (fits(result)) return result;
   let out = { ...result };
   if (Array.isArray(out.content)) {
     for (let limit = 16000; limit >= 0; limit -= 2000) {
-      out.content = trimResultTrees(out.content, limit, true);
+      out.content = trimResultTrees(out.content, limit, true, onTreeTrim);
       if (fits(out)) return out;
     }
   }
@@ -101,9 +101,63 @@ const wire = (text) => Buffer.byteLength(JSON.stringify(text)) - 2;
 const wireSize = (content) => content.reduce((n, c) => n + (c.type === 'text' ? wire(c.text) : 0), 0);
 const WIRE_MARGIN = 2500;
 
-// Stop at prose, including a refusal immediately below a tree. Firefox also emits bare `Close tab` rows,
-// and MDN has blank lines before indented rows. Include our own omission note for repeated byte-cap passes.
-const TREE = /^(?:Window: |Browser tab: )[^\n]+\n(?:[+~-] )?\d+ [^\n]*(?:\n(?:(?:[+~-] )?\t*\d+ [^\n]*|Close tab|sleight: \d+ (?:browser )?tree lines omitted[^\n]*)|\n(?=\n+(?:[+~-] )?\t+\d+ ))*/gm;
+const TREE_ROW = /^(?:[+~-] )?\t*(\d+) /;
+const OMISSION = /^sleight: (\d+) (?:browser )?tree lines omitted\b/;
+const TREE_BOUNDARY = /^(?:The focused UI element|Computer Use\b)/;
+
+// A row owns the continuation island up to the next row. Never cut that island on
+// a physical line boundary. Unknown trailing prose stays outside the span, with
+// its preceding row, since it could be either a label or a caller's output.
+// Numbers increase in engine trees. Numeric label continuations can repeat a
+// number, so only increasing numbers start removable row groups.
+function resultTrees(text) {
+  const lines = text.split('\n'), offsets = [0], trees = [];
+  for (const line of lines) offsets.push(offsets.at(-1) + line.length + 1);
+  for (let i = 0; i < lines.length - 1; i++) {
+    if (!/^(?:Window: |Browser tab: )[^\n]+$/.test(lines[i]) || !/^(?:[+~-] )?\d+ /.test(lines[i + 1])) continue;
+    const start = i, root = i + 1, rows = [];
+    let j = root, end = root + 1, lastRow = root, previous = 0, lastNumber = -1, tailOmission;
+    for (; j < lines.length; j++) {
+      const line = lines[j], omission = OMISSION.exec(line), row = TREE_ROW.exec(line);
+      if (j > root && TREE_BOUNDARY.test(line)) break;
+      // A new header needs its own unindented root. A Window line in a
+      // multiline label does not transfer ownership of the following rows.
+      if (j > root && /^(?:Window: |Browser tab: )/.test(line) && /^(?:[+~-] )?0 /.test(lines[j + 1] ?? '')) break;
+      if (row && Number(row[1]) > lastNumber) {
+        const number = Number(row[1]);
+        if (j > root) rows.push({ start: j, number });
+        lastNumber = number; lastRow = j; tailOmission = undefined; end = j + 1;
+      } else if (omission) {
+        tailOmission ??= j;
+      } else if (line === 'Close tab' && tailOmission === undefined) end = j + 1;
+    }
+    // An omission counts only at the tail. Unknown suffixes and their owning
+    // row stay whole even when a focus or refusal boundary follows them.
+    if (tailOmission !== undefined && lines.slice(end, tailOmission).some(line => line !== '')) {
+      end = lastRow; tailOmission = undefined;
+    } else if (tailOmission !== undefined) {
+      end = tailOmission + 1;
+      previous = Number(OMISSION.exec(lines[tailOmission])[1]);
+    } else if (lines.slice(end, j).some(line => line !== '')) {
+      end = lastRow;
+    }
+    const bodyRows = rows.filter(row => row.start < end);
+    const headEnd = bodyRows[0]?.start ?? end;
+    const clean = (from, to) => {
+      const kept = [];
+      for (let k = from; k < to; k++) {
+        if (k !== tailOmission) kept.push(lines[k]);
+      }
+      return kept.join('\n');
+    };
+    if (end > root) trees.push({ start: offsets[start], end: offsets[end] - 1,
+      head: clean(start, headEnd), previous,
+      rows: bodyRows.map((row, k) => ({ number: row.number,
+        text: clean(row.start, bodyRows[k + 1]?.start ?? end) })) });
+    i = Math.max(root, j - 1);
+  }
+  return trees;
+}
 
 // A one-line item is a tree row that arrived as its own content item (a continued call's head, 381 items), which no
 // regex over one item can see as a tree. Runs of them behind a one-line header are joined so they trim like any tree.
@@ -124,40 +178,56 @@ function joinTreeItems(content) {
 // Trees are trimmed oldest first, from their last row, so the final page (the one Claude asked for, with its answer near
 // the top) is cut last and keeps its head. `force` returns the shortest result the trees allow when the limit is out of
 // reach, since a result Claude Code rejects (126,517 characters, 2026-10-18) costs a whole re-read.
-function trimResultTrees(content, limit, force = false) {
+function trimResultTrees(content, limit, force = false, onTreeTrim) {
   let excess = size(content) - limit, wireExcess = wireSize(content) - (limit + WIRE_MARGIN);
   if (excess <= 0 && wireExcess <= 0) return content;
   const joined = joinTreeItems(content);
+  const trimmed = [];
   const out = joined.map(c => {
     if ((excess <= 0 && wireExcess <= 0) || c.type !== 'text' || /^(?:## Computer Use|# Other Browser APIs|# Computer Use Confirmations Policy|# Browser Safety|# API Reference)\n/.test(c.text)) return c;
-    const text = c.text.replace(TREE, tree => {
-      if (excess <= 0 && wireExcess <= 0) return tree;
-      const lines = tree.split('\n');
-      const previous = /^sleight: (\d+) (?:browser )?tree lines omitted\b/.exec(lines.at(-1));
-      const previousNote = previous ? lines.pop() : undefined;
-      const total = lines.length + Number(previous?.[1] ?? 0);
+    let text = '', pos = 0;
+    for (const span of resultTrees(c.text)) {
+      text += c.text.slice(pos, span.start); pos = span.end;
+      const tree = c.text.slice(span.start, span.end);
+      if (excess <= 0 && wireExcess <= 0) { text += tree; continue; }
+      const rows = [...span.rows], hidden = [];
+      let omitted = span.previous;
       let compactNote = false;
-      const note = () => `\nsleight: ${total - lines.length} tree lines omitted` + (compactNote ? '.' :
+      const note = () => `\nsleight: ${omitted} tree lines omitted` + (compactNote ? '.' :
         ' to keep the result and engine docs within the size limit. Use a filtered read for missing information.');
-      let gone = previousNote ? previousNote.length + 1 : 0, goneWire = previousNote ? wire(previousNote) + 2 : 0;
+      const base = [span.head, ...rows.map(row => row.text)].join('\n');
+      let gone = tree.length - base.length, goneWire = wire(tree) - wire(base);
       const short = () => { const n = note(); return gone - n.length < excess || goneWire - wire(n) < wireExcess; };
-      while (lines.length > 2 && short()) { const line = lines.pop(); gone += line.length + 1; goneWire += wire(line) + 2; }
+      while (rows.length && short()) {
+        const row = rows.pop();
+        // Revoke numeric imitations inside a removed label too. They must not
+        // survive as usable numbers in a baseline that parsed physical lines.
+        for (const match of row.text.matchAll(/^(?:[+~-] )?\t*(\d+) /gm)) hidden.push(Number(match[1]));
+        omitted += row.text.split('\n').length;
+        gone += row.text.length + 1; goneWire += wire(row.text) + 2;
+      }
       // Policy can leave less room than the omission advice itself needs. Keep the header and root,
       // and shorten only that advice after every removable row has gone.
       if (short()) compactNote = true;
-      const out = lines.join('\n') + note();
+      const out = [span.head, ...rows.map(row => row.text)].join('\n') + note();
+      // Tiny trees can cost more in omission advice than they save.
+      if (out.length >= tree.length || wire(out) >= wire(tree)) { text += tree; continue; }
       excess -= tree.length - out.length;
       wireExcess -= wire(tree) - wire(out);
-      return out;
-    });
+      trimmed.push({ tree, hidden });
+      text += out;
+    }
+    text += c.text.slice(pos);
     return text === c.text ? c : { ...c, text };
   });
-  return excess > 0 || wireExcess > 0 ? (force ? out : content) : out;
+  if ((excess > 0 || wireExcess > 0) && !force) return content;
+  for (const { tree, hidden } of trimmed) onTreeTrim?.(tree, hidden, out);
+  return out;
 }
 
 export function createResultBudget({ platform = process.platform, limit = RESULT_LIMIT, fullDocs = process.env.SLEIGHT_ENGINE_DOCS === 'full',
   leanDocs = process.env.SLEIGHT_ENGINE_DOCS === 'lean', minDocs = process.env.SLEIGHT_ENGINE_DOCS === 'min',
-  documentationTrust = createDocumentationTrust(), validateDocumentation = true, trustedDocumentation = documentationTrust.trusted } = {}) {
+  documentationTrust = createDocumentationTrust(), validateDocumentation = true, trustedDocumentation = documentationTrust.trusted, onTreeTrim } = {}) {
   let pending = null;
   let browserFirst, nativeDocs, nativeDelivered = false;
   const requests = new Map();
@@ -203,7 +273,7 @@ export function createResultBudget({ platform = process.platform, limit = RESULT
       // Spend the tree's rows before delaying reference text; policy and caller prose stay whole.
       // With no reference to delay, the trees are all there is to give.
       const deferrable = out.some(c => trustedDocumentation(c) && c.type === 'text' && BROWSER_DOCS.test(c.text) && c.text.includes(REFERENCE));
-      out = trimResultTrees(trimBrowserResults(out, '', { limit, countDocs: true }), limit, !deferrable);
+      out = trimResultTrees(trimBrowserResults(out, '', { limit, countDocs: true }), limit, !deferrable, onTreeTrim);
       if (size(out) <= limit) return out;
       out = out.map((c) => {
         if (pending || !trustedDocumentation(c) || c.type !== 'text' || !BROWSER_DOCS.test(c.text)) return c;
@@ -212,7 +282,7 @@ export function createResultBudget({ platform = process.platform, limit = RESULT
         pending = { ...c, text: c.text.slice(at + 1) };
         return { ...c, text: `${c.text.slice(0, at)}\n\nsleight: the browser API reference (${pending.text.length} characters) follows at the start of your next result, to keep this one under Claude Code's size limit. Until then, use only the methods named above.` };
       });
-      return trimResultTrees(trimBrowserResults(out, '', { limit, countDocs: true }), limit, true);
+      return trimResultTrees(trimBrowserResults(out, '', { limit, countDocs: true }), limit, true, onTreeTrim);
     },
   };
 }

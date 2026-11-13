@@ -1,3 +1,4 @@
+import { assertChildStatus } from './fixtures/child-status.mjs';
 // The native claim's GPT arms (ROADMAP 4b): sleight inside Codex against Codex out of the box, on the 9 claim tasks plus VS Code,
 // Slack and Spotify. Config isolation, the proxy's answers for those apps, and what a run records from Codex's own events.
 // No app, Codex, model or login is touched: Codex is a script that prints a recorded event stream.
@@ -44,8 +45,8 @@ test('with the default homes, the arm\'s Codex home lists only sleight\'s server
     console.log(JSON.stringify({ home: CODEX_SLEIGHT_HOME, codexHome: CODEX_HOME, setup, planned: config.servers, servers: codexConfigServers(CODEX_SLEIGHT_HOME),
       refused, refusedSetup: ensureCodexSleightHome({ home: join(process.env.HOME, '.codex') }) }));`;
   const run = join(home, 'run'); mkdirSync(run);
-  const child = spawnSync(process.execPath, ['--input-type=module', '-e', script], { encoding: 'utf8', env: { PATH: process.env.PATH, HOME: home, RUN_DIR: run } });
-  assert.equal(child.status, 0, child.stderr);
+  const child = spawnSync(process.execPath, ['--input-type=module', '-e', script], { encoding: 'utf8', env: { PATH: process.env.PATH, HOME: home, RUN_DIR: run }, timeout: 60000, killSignal: 'SIGKILL' });
+  assertChildStatus(child, 0, child.stderr);
   const out = JSON.parse(child.stdout);
   assert.deepEqual([out.home, out.codexHome], [join(home, '.codex-bench-sleight'), bench]);
   assert.equal(out.setup.ok, true);

@@ -17,7 +17,7 @@ const namedKey = /^(?:return|enter|escape|tab|space|backspace|delete|left|right|
 function ownerNames() {
   const names = [userInfo().username];
   // Once per enabled journal, never per call. Failure still leaves title redaction on.
-  try { names.push(execFileSync('/usr/bin/id', ['-F'], { encoding: 'utf8', timeout: 1000, stdio: ['ignore', 'pipe', 'ignore'] }).trim()); } catch {}
+  try { names.push(execFileSync('/usr/bin/id', ['-F'], { encoding: 'utf8', timeout: 1000, stdio: ['ignore', 'pipe', 'ignore'], killSignal: 'SIGKILL' }).trim()); } catch {}
   return names;
 }
 const digest = value => createHash('sha256').update(value).digest('base64');

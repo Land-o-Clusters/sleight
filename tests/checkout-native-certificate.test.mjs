@@ -8,9 +8,10 @@ const source = readFileSync(new URL('../plugins/sleight/lib/window-identity.js',
 function fixture({ tickMs = 0, collide = false } = {}) {
   let time = 0, equalCalls = 0;
   const hashes = new Map();
-  const list = values => ({ count: values.length, objectAtIndex: i => values[i] });
+  const list = values => ({ count: values.length, objectAtIndex: i => values[i],
+    filteredArrayUsingPredicate: ({ args }) => list(values.filter(row => row.kCGWindowOwnerPID === args[0] && row.kCGWindowLayer === 0)) });
   const node = (AXRole, more = {}) => ({ AXRole, AXChildren: list([]), ...more });
-  const window = node('AXWindow', { AXTitle: 'Before', AXSubrole: 'AXStandardWindow', AXWindowNumber: 22 });
+  const window = node('AXWindow', { AXTitle: 'Before', AXSubrole: 'AXStandardWindow', AXWindowNumber: 22, AXPosition: { x: 0, y: 20 }, AXSize: { width: 300, height: 200 } });
   const tab = node('AXRadioButton', { AXValue: 1 });
   const tabs = node('AXTabGroup', { AXChildren: list([tab]) });
   const field = node('AXComboBox', { AXIdentifier: 'urlbar-input', AXEnabled: true, settable: true });
@@ -22,9 +23,18 @@ function fixture({ tickMs = 0, collide = false } = {}) {
   const menu = node('AXMenuBar');
   const app = { AXWindows: list([window]), AXFocusedWindow: window, AXFocusedUIElement: field, AXMenuBar: menu };
   const reads = [];
+  const running = { processIdentifier: 123, bundleIdentifier: 'org.test.browser', terminated: false, launchDate: { timeIntervalSince1970: 1 } };
   const $ = value => value;
-  Object.assign($, { NSUUID: { UUID: { UUIDString: 'epoch' } }, AXIsProcessTrusted: () => true,
-    NSRunningApplication: { runningApplicationsWithBundleIdentifier: () => list([{ processIdentifier: 123, launchDate: { timeIntervalSince1970: 1 } }]) },
+  Object.assign($, { NSPredicate: { predicateWithFormatArgumentArray: (format, args) => ({ format, args }) },
+    NSUUID: { UUID: { UUIDString: 'epoch' } }, AXIsProcessTrusted: () => true,
+    NSRunningApplication: { runningApplicationsWithBundleIdentifier: () => list([running]), runningApplicationWithProcessIdentifier: () => running },
+    kCGWindowListOptionAll: 0, kCGWindowListExcludeDesktopElements: 16,
+    CGWindowListCopyWindowInfo: () => list([{ kCGWindowOwnerPID: 123, kCGWindowLayer: 0, kCGWindowNumber: 22,
+      kCGWindowName: window.AXTitle, kCGWindowBounds: { X: 0, Y: 20, Width: 300, Height: 200 },
+      objectForKey: key => key === 'kCGWindowOwnerPID' ? 123 : null }]),
+    AXValueGetValue: (value, _type, bytes) => { bytes.value = value; return !!value; },
+    NSMutableData: { dataWithLength: () => { const bytes = {}; return { bytes, mutableBytes: bytes }; } },
+    NSValue: { valueWithBytesObjCType: bytes => ({ pointValue: bytes.value, sizeValue: bytes.value }) },
     AXUIElementCreateApplication: () => app, AXUIElementSetMessagingTimeout: () => 0,
     AXUIElementCopyAttributeValue: (element, name, ref) => {
       reads.push([element, name]); time += tickMs;

@@ -1942,7 +1942,7 @@
           "cpuSeconds": 0.63,
           "realSeconds": 0.89,
           "stderr": "real 0.89\nuser 0.54\nsys 0.09\n",
-          "root": "~/Projects/sleight-wt/footprint-spawns",
+          "root": "<private-evidence>/footprint-spawns",
           "started": "2026-10-10T01:31:53.386Z",
           "load": [
             5.6083984375,
@@ -2214,7 +2214,7 @@
           "cpuSeconds": 0.61,
           "realSeconds": 0.86,
           "stderr": "real 0.86\nuser 0.53\nsys 0.08\n",
-          "root": "~/Projects/sleight-wt/footprint-spawns",
+          "root": "<private-evidence>/footprint-spawns",
           "started": "2026-10-10T01:31:54.270Z",
           "load": [
             5.6083984375,
@@ -2930,7 +2930,7 @@
           "cpuSeconds": 0.61,
           "realSeconds": 0.86,
           "stderr": "real 0.86\nuser 0.53\nsys 0.08\n",
-          "root": "~/Projects/sleight-wt/footprint-spawns",
+          "root": "<private-evidence>/footprint-spawns",
           "started": "2026-10-10T01:31:57.465Z",
           "load": [
             5.4794921875,

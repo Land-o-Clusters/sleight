@@ -1,0 +1,231 @@
+Window: "Calculator", App: Calculator.
+0 standard window Calculator, ID: main, Secondary Actions: raise
+	1 container
+		2 split group ID: main, SidebarNavigationSplitView
+			3 splitter (disabled, collapsed, settable, float) Value: -1
+			4 container
+				5 container (focused) ID: CalculatorKeypadView
+					6 scroll area ID: StandardInputView;value:7, Secondary Actions: scroll left by a page, scroll right by a page, scroll up by a page, scroll down by a page, Copy
+						7 text Description: Edit field, Value: 7
+					8 button Description: Delete, Help: Delete the last digit or operation entered (long press to delete all), ID: Delete
+					9 button Description: Clear, ID: Clear
+					10 button Description: Percent, ID: Percent
+					11 button Description: Divide, ID: Divide
+					12 button Description: 7, ID: Seven
+					13 button Description: 8, ID: Eight
+					14 button Description: 9, ID: Nine
+					15 button Description: Multiply, ID: Multiply
+					16 button Description: 4, ID: Four
+					17 button Description: 5, ID: Five
+					18 button Description: 6, ID: Six
+					19 button Description: Subtract, ID: Subtract
+					20 button Description: 1, ID: One
+					21 button Description: 2, ID: Two
+					22 button Description: 3, ID: Three
+					23 button Description: Add, ID: Add
+					24 button Description: Change Sign, Help: Change sign of a value, ID: Negate
+					25 button Description: 0, ID: Zero
+					26 button Description: Point, ID: Decimal
+					27 button Description: Equals, ID: Equals
+	28 toolbar Secondary Actions: show menu
+		29 button Description: Show Sidebar, Help: Show Sidebar, Secondary Actions: increment, decrement, delete, show menu, cancel
+		30 button Description: Mode, Help: Change Calculator mode, ID: Mode: basic; unitConversion: false, Secondary Actions: increment, decrement, delete, show menu, cancel, Move previous, Remove from toolbar
+	31 close button
+	32 zoom button (disabled) Secondary Actions: show menu
+		33 container
+			34 container
+	35 minimize button
+36 menu bar (collapsed) Secondary Actions: cancel
+	37 Apple
+		38 menu (collapsed) Secondary Actions: cancel
+			39 menu item (selectable, collapsed) About This Mac, ID: _aboutThisMacRequested:
+			40 menu item (selectable, collapsed) System Information, ID: _systemInformationRequested:
+			41 menu item (disabled, selectable, collapsed)
+			42 menu item (selectable, collapsed) System Settings…, ID: _systemSettingsRequested:
+			43 menu item (selectable, collapsed) App Store, ID: _appStoreRequested:
+			44 menu item (disabled, selectable, collapsed)
+			45 menu item (selectable, collapsed) Recent Items, ID: _recentsRequested:
+				46 menu (collapsed) Secondary Actions: cancel
+					47 menu item (disabled, selectable, collapsed) Applications
+					48 menu item (selectable, collapsed) Calculator, ID: _recentItemRequested:
+					49 menu item (selectable, collapsed) Show “Calculator” in Finder, ID: _recentItemRequested:
+					50 menu item (selectable, collapsed) Claude, ID: _recentItemRequested:
+					51 menu item (selectable, collapsed) Show “Claude” in Finder, ID: _recentItemRequested:
+					52 menu item (selectable, collapsed) Firefox, ID: _recentItemRequested:
+					53 menu item (selectable, collapsed) Show “Firefox” in Finder, ID: _recentItemRequested:
+					54 menu item (selectable, collapsed) Messages, ID: _recentItemRequested:
+					55 menu item (selectable, collapsed) Show “Messages” in Finder, ID: _recentItemRequested:
+					56 menu item (selectable, collapsed) Microsoft Error Reporting, ID: _recentItemRequested:
+					57 menu item (selectable, collapsed) Show “Microsoft Error Reporting” in Finder, ID: _recentItemRequested:
+					58 menu item (selectable, collapsed) Microsoft Word, ID: _recentItemRequested:
+					59 menu item (selectable, collapsed) Show “Microsoft Word” in Finder, ID: _recentItemRequested:
+					60 menu item (selectable, collapsed) News, ID: _recentItemRequested:
+					61 menu item (selectable, collapsed) Show “News” in Finder, ID: _recentItemRequested:
+					62 menu item (selectable, collapsed) Safari, ID: _recentItemRequested:
+					63 menu item (selectable, collapsed) Show “Safari” in Finder, ID: _recentItemRequested:
+					64 menu item (selectable, collapsed) Terminal, ID: _recentItemRequested:
+					65 menu item (selectable, collapsed) Show “Terminal” in Finder, ID: _recentItemRequested:
+					66 menu item (selectable, collapsed) TextEdit, ID: _recentItemRequested:
+					67 menu item (selectable, collapsed) Show “TextEdit” in Finder, ID: _recentItemRequested:
+					68 menu item (disabled, selectable, collapsed)
+					69 menu item (disabled, selectable, collapsed) Documents
+					70 menu item (selectable, collapsed) Memo-acda03e0.docx, ID: _recentItemRequested:
+					71 menu item (selectable, collapsed) Show “Memo-acda03e0.docx” in Finder, ID: _recentItemRequested:
+					72 menu item (selectable, collapsed) Notes-8afec5b0.rtf, ID: _recentItemRequested:
+					73 menu item (selectable, collapsed) Show “Notes-8afec5b0.rtf” in Finder, ID: _recentItemRequested:
+					74 menu item (selectable, collapsed) Source-5f86c5ac.txt, ID: _recentItemRequested:
+					75 menu item (selectable, collapsed) Show “Source-5f86c5ac.txt” in Finder, ID: _recentItemRequested:
+					76 menu item (selectable, collapsed) Source-45053106.txt, ID: _recentItemRequested:
+					77 menu item (selectable, collapsed) Show “Source-45053106.txt” in Finder, ID: _recentItemRequested:
+					78 menu item (selectable, collapsed) Source-ae00665e.txt, ID: _recentItemRequested:
+					79 menu item (selectable, collapsed) Show “Source-ae00665e.txt” in Finder, ID: _recentItemRequested:
+					80 menu item (selectable, collapsed) Source-d0523b47.txt, ID: _recentItemRequested:
+					81 menu item (selectable, collapsed) Show “Source-d0523b47.txt” in Finder, ID: _recentItemRequested:
+					82 menu item (selectable, collapsed) Source-f71cec7a.txt, ID: _recentItemRequested:
+					83 menu item (selectable, collapsed) Show “Source-f71cec7a.txt” in Finder, ID: _recentItemRequested:
+					84 menu item (selectable, collapsed) Source-f9202a94.txt, ID: _recentItemRequested:
+					85 menu item (selectable, collapsed) Show “Source-f9202a94.txt” in Finder, ID: _recentItemRequested:
+					86 menu item (selectable, collapsed) Target-5f86c5ac.txt, ID: _recentItemRequested:
+					87 menu item (selectable, collapsed) Show “Target-5f86c5ac.txt” in Finder, ID: _recentItemRequested:
+					88 menu item (selectable, collapsed) Target-ae00665e.txt, ID: _recentItemRequested:
+					89 menu item (selectable, collapsed) Show “Target-ae00665e.txt” in Finder, ID: _recentItemRequested:
+					90 menu item (disabled, selectable, collapsed)
+					91 menu item (disabled, selectable, collapsed) Servers
+					92 menu item (selectable, collapsed) Macintosh HD, ID: _recentItemRequested:
+					93 menu item (selectable, collapsed) Recovery, ID: _recentItemRequested:
+					94 menu item (disabled, selectable, collapsed)
+					95 menu item (selectable, collapsed) Clear Menu, ID: _clearRecentItemsRequested:
+			96 menu item (disabled, selectable, collapsed)
+			97 menu item (selectable, collapsed) Force Quit…, ID: _forceQuitPanelRequested:
+			98 menu item (selectable, collapsed) Force Quit Calculator, ID: _forceQuitRequested:
+			99 menu item (disabled, selectable, collapsed)
+			100 menu item (disabled, selectable, collapsed) Sleep, ID: _sleepRequested:
+			101 menu item (selectable, collapsed) Restart…, ID: _restartRequested:
+			102 menu item (selectable, collapsed) Restart, ID: _restartNowRequested:
+			103 menu item (selectable, collapsed) Shut Down…, ID: _shutDownRequested:
+			104 menu item (selectable, collapsed) Shut Down, ID: _shutDownNowRequested:
+			105 menu item (disabled, selectable, collapsed)
+			106 menu item (selectable, collapsed) Lock Screen, ID: _lockScreenRequested:
+			107 menu item (selectable, collapsed) Log Out Chris Menendez…, ID: _logOutRequested:
+			108 menu item (selectable, collapsed) Log Out Chris Menendez, ID: _logOutNowRequested:
+			109 menu item (disabled, selectable, collapsed)
+	110 Calculator
+		111 menu (collapsed) Secondary Actions: cancel
+			112 menu item (selectable, collapsed) About Calculator, ID: menuAction:
+			113 menu item (disabled, selectable, collapsed)
+			114 menu item (selectable, collapsed) Services
+				115 menu (collapsed) Secondary Actions: cancel
+					116 menu item (selectable, collapsed) Activity Monitor, ID: _processRequest:
+					117 menu item (selectable, collapsed) Allocations & Leaks, ID: _processRequest:
+					118 menu item (selectable, collapsed) File Activity, ID: _processRequest:
+					119 menu item (selectable, collapsed) System Trace, ID: _processRequest:
+					120 menu item (selectable, collapsed) Time Profile Active Application, ID: _processRequest:
+					121 menu item (selectable, collapsed) Time Profile App Under Mouse, ID: _processRequest:
+					122 menu item (selectable, collapsed) Time Profile Entire System, ID: _processRequest:
+					123 menu item (selectable, collapsed) Toggle Instruments Recording, ID: _processRequest:
+					124 menu item (selectable, collapsed) Services Settings…, ID: _configureServicesMenu:
+			125 menu item (disabled, selectable, collapsed)
+			126 menu item (selectable, collapsed) Hide Calculator, ID: hide:
+			127 menu item (selectable, collapsed) Hide Others, ID: hideOtherApplications:
+			128 menu item (disabled, selectable, collapsed) Show All, ID: unhideAllApplications:
+			129 menu item (disabled, selectable, collapsed)
+			130 menu item (selectable, collapsed) Quit Calculator, ID: terminate:
+	131 Edit
+		132 menu (collapsed) Secondary Actions: cancel
+			133 menu item (disabled, selectable, collapsed) Undo, ID: undo:
+			134 menu item (disabled, selectable, collapsed) Redo, ID: redo:
+			135 menu item (disabled, selectable, collapsed)
+			136 menu item (disabled, selectable, collapsed) Cut, ID: cut:
+			137 menu item (disabled, selectable, collapsed) Copy, ID: copy:
+			138 menu item (disabled, selectable, collapsed) Paste, ID: paste:
+			139 menu item (disabled, selectable, collapsed) Delete, ID: delete:
+			140 menu item (disabled, selectable, collapsed) Select All, ID: selectAll:
+			141 menu item (disabled, selectable, collapsed)
+			142 menu item (selectable, collapsed) AutoFill, ID: _NSMenuItemAutoFillIdentifier
+				143 menu (collapsed) Secondary Actions: cancel
+					144 menu item (disabled, selectable, collapsed) Contact…, ID: _handleInsertFromContactsCommand:
+					145 menu item (disabled, selectable, collapsed) Passwords…, ID: _handleInsertFromPasswordsCommand:
+					146 menu item (disabled, selectable, collapsed) Credit Card…, ID: _handleInsertFromCreditCardsCommand:
+	147 View
+		148 menu (collapsed) Secondary Actions: cancel
+			149 menu item (disabled, selectable, collapsed)
+			150 menu item (selectable, collapsed) Basic, ID: menuAction:
+			151 menu item (selectable, collapsed) Scientific, ID: menuAction:
+			152 menu item (selectable, collapsed) Programmer, ID: menuAction:
+			153 menu item (disabled, selectable, collapsed)
+			154 menu item (selectable, collapsed) Math Notes, ID: menuAction:
+			155 menu item (disabled, selectable, collapsed)
+			156 menu item (selectable, collapsed) Convert, ID: menuAction:
+			157 menu item (selectable, collapsed) RPN Mode, ID: menuAction:
+			158 menu item (disabled, selectable, collapsed)
+			159 menu item (selectable, collapsed) Show Thousands Separator, ID: menuAction:
+			160 menu item (selectable, collapsed) Decimal Places, ID: ID(id: 101)
+				161 menu (collapsed) Secondary Actions: cancel
+					162 menu item (selectable, collapsed) 0, ID: menuAction:
+					163 menu item (selectable, collapsed) 1, ID: menuAction:
+					164 menu item (selectable, collapsed) 2, ID: menuAction:
+					165 menu item (selectable, collapsed) 3, ID: menuAction:
+					166 menu item (selectable, collapsed) 4, ID: menuAction:
+					167 menu item (selectable, collapsed) 5, ID: menuAction:
+					168 menu item (selectable, collapsed) 6, ID: menuAction:
+					169 menu item (selectable, collapsed) 7, ID: menuAction:
+					170 menu item (selectable, collapsed) 8, ID: menuAction:
+					171 menu item (selectable, collapsed) 9, ID: menuAction:
+					172 menu item (selectable, collapsed) 10, ID: menuAction:
+					173 menu item (selectable, collapsed) 11, ID: menuAction:
+					174 menu item (selectable, collapsed) 12, ID: menuAction:
+					175 menu item (selectable, collapsed) 13, ID: menuAction:
+					176 menu item (selectable, collapsed) 14, ID: menuAction:
+					177 menu item (selectable, collapsed) 15, ID: menuAction:
+			178 menu item (disabled, selectable, collapsed)
+			179 menu item (selectable, collapsed) Show History, ID: menuAction:
+			180 menu item (disabled, selectable, collapsed) Enter Full Screen, ID: toggleFullScreen:
+	181 Window
+		182 menu (collapsed) Secondary Actions: cancel
+			183 menu item (disabled, selectable, collapsed) Close, ID: performClose:
+			184 menu item (selectable, collapsed) Close All, ID: closeAll:
+			185 menu item (disabled, selectable, collapsed) Minimize, ID: performMiniaturize:
+			186 menu item (selectable, collapsed) Minimize All, ID: miniaturizeAll:
+			187 menu item (disabled, selectable, collapsed) Zoom, ID: performZoom:
+			188 menu item (disabled, selectable, collapsed) Zoom All, ID: zoomAll:
+			189 menu item (disabled, selectable, collapsed) Fill, ID: _zoomFill:
+			190 menu item (disabled, selectable, collapsed) Center, ID: _zoomCenter:
+			191 menu item (disabled, selectable, collapsed)
+			192 menu item (selectable, collapsed) Move & Resize
+				193 menu (collapsed) Secondary Actions: cancel
+					194 menu item (disabled, selectable, collapsed) Halves
+					195 menu item (disabled, selectable, collapsed) Left, ID: _zoomLeft:
+					196 menu item (disabled, selectable, collapsed) Right, ID: _zoomRight:
+					197 menu item (disabled, selectable, collapsed) Top, ID: _zoomTop:
+					198 menu item (disabled, selectable, collapsed) Bottom, ID: _zoomBottom:
+					199 menu item (disabled, selectable, collapsed)
+					200 menu item (disabled, selectable, collapsed) Quarters
+					201 menu item (disabled, selectable, collapsed) Top Left, ID: _zoomTopLeft:
+					202 menu item (disabled, selectable, collapsed) Top Right, ID: _zoomTopRight:
+					203 menu item (disabled, selectable, collapsed) Bottom Left, ID: _zoomBottomLeft:
+					204 menu item (disabled, selectable, collapsed) Bottom Right, ID: _zoomBottomRight:
+					205 menu item (disabled, selectable, collapsed)
+					206 menu item (disabled, selectable, collapsed) Arrange
+					207 menu item (disabled, selectable, collapsed) Left & Right, ID: _zoomLeftAndRight:
+					208 menu item (disabled, selectable, collapsed) Left & Quarters, ID: _zoomLeftThreeUp:
+					209 menu item (disabled, selectable, collapsed) Right & Left, ID: _zoomRightAndLeft:
+					210 menu item (disabled, selectable, collapsed) Right & Quarters, ID: _zoomRightThreeUp:
+					211 menu item (disabled, selectable, collapsed) Top & Bottom, ID: _zoomTopAndBottom:
+					212 menu item (disabled, selectable, collapsed) Top & Quarters, ID: _zoomTopThreeUp:
+					213 menu item (disabled, selectable, collapsed) Bottom & Top, ID: _zoomBottomAndTop:
+					214 menu item (disabled, selectable, collapsed) Bottom & Quarters, ID: _zoomBottomThreeUp:
+					215 menu item (disabled, selectable, collapsed) Quarters, ID: _zoomQuarters:
+					216 menu item (disabled, selectable, collapsed)
+					217 menu item (disabled, selectable, collapsed) Return to Previous Size, ID: _zoomUntile:
+			218 menu item (disabled, selectable, collapsed) Full Screen Tile
+			219 menu item (disabled, selectable, collapsed)
+			220 menu item (disabled, selectable, collapsed)
+			221 menu item (selectable, collapsed) Bring All to Front, ID: arrangeInFront:
+			222 menu item (selectable, collapsed) Arrange in Front, ID: alternateArrangeInFront:
+			223 menu item (disabled, selectable, collapsed) Remove Window from Set, ID: _removeWindowFromStageManagerSet:
+			224 menu item (disabled, selectable, collapsed)
+			225 menu item (selectable, collapsed) Always on Top, ID: menuAction:
+	226 Help
+		227 menu (collapsed) Secondary Actions: cancel
+			228 menu item (selectable, collapsed) Calculator Help, ID: showHelp:
+The focused UI element is 5 container (focused) ID: CalculatorKeypadView

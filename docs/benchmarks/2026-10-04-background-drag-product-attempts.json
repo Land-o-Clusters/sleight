@@ -1,6 +1,6 @@
 {
   "branch": "codex/background-drag-product",
-  "worktree": "~/Projects/sleight-wt/background-drag-product",
+  "worktree": "<private-evidence>/background-drag-product",
   "base": "5782453",
   "date": "2026-10-04",
   "attempts": [
@@ -13,7 +13,7 @@
       "exitCode": 0
     },
     {
-      "command": "git worktree add -b codex/background-drag-product ~/Projects/sleight-wt/background-drag-product origin/main",
+      "command": "git worktree add -b codex/background-drag-product <private-evidence>/background-drag-product origin/main",
       "exitCode": 0
     },
     {

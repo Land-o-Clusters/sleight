@@ -7,10 +7,12 @@ import { tmpdir } from 'node:os';
 import { removeTemp, trackTemp } from '../scripts/temp-leftovers.mjs';
 import { guardedCode } from '../plugins/sleight/lib/document-scope.mjs';
 import { guardStopMark, takeGuardStop } from '../plugins/sleight/lib/menu-continuation.mjs';
+import { visibleTypingTree } from './helpers/visible-typing-fixture.mjs';
 
 const window = { title: 'Draft', app: 'Fixture Editor', url: null };
 function fixture({ role = 'text field', focused = true, readDelay = 0, afterClickRead = () => {}, failClick = false } = {}) {
-  let now = 1000, clicked = false;
+  let now = 1000, clicked = false, typed = '';
+  const snapshot = text => visibleTypingTree(text, typed);
   const events = [], waits = [], output = [], reads = [], mark = guardStopMark();
   const raw = {
     getAXState: async options => {
@@ -18,12 +20,12 @@ function fixture({ role = 'text field', focused = true, readDelay = 0, afterClic
       if (clicked) { now += readDelay; afterClickRead(); }
       const field = `${role} Description: Query, ID: query`;
       const other = 'combo box (settable) Description: Other, ID: other';
-      return `Window: "Draft", App: Fixture Editor.\n0 standard window Draft\n\t1 ${field}\n\t2 ${other}` +
-        (clicked ? `\n\nThe focused UI element is ${focused ? '1 ' + field : '2 ' + other}` : '');
+      return snapshot(`Window: "Draft", App: Fixture Editor.\n0 standard window Draft\n\t1 ${field}\n\t2 ${other}` +
+        (clicked ? `\n\nThe focused UI element is ${focused ? '1 ' + field : '2 ' + other}` : ''));
     },
     click: async n => { now += 80; events.push(['click', now, n]); if (failClick) throw Error('click failed'); clicked = true; },
-    typeText: async text => { events.push(['typeText', now, text]); return 'typed'; },
-    paste: async text => { events.push(['paste', now, text]); return 'pasted'; },
+    typeText: async text => { events.push(['typeText', now, text]); typed += text; return 'typed'; },
+    paste: async text => { events.push(['paste', now, text]); typed += text; return 'pasted'; },
     pressKey: async key => events.push(['key', now, key]),
   };
   const context = createContext({ app: raw, other: { ...raw }, cua: { getApp: async () => raw },
@@ -31,7 +33,7 @@ function fixture({ role = 'text field', focused = true, readDelay = 0, afterClic
     setTimeout: (resolve, ms) => { waits.push(ms); now += ms; resolve(); } });
   const run = (code, options = {}, lease) => runInContext(`(async () => { ${guardedCode(code, window, undefined, lease, { guardStopMark: mark, ...options })} })()`, context,
     { importModuleDynamically: constants.USE_MAIN_CONTEXT_DEFAULT_LOADER });
-  return { run, context, raw, events, waits, reads, output, mark };
+  return { run, context, raw, events, waits, reads, output, mark, snapshot };
 }
 
 for (const role of ['text field', 'text area', 'text entry area', 'search field', 'search text field', 'combo box (settable)']) {
@@ -157,7 +159,7 @@ for (const method of ['typeText', 'paste']) for (const [label, rows, focus, allo
   const read = f.raw.getAXState;
   let reads = 0;
   f.raw.getAXState = async options => ++reads === 1 ? read(options) :
-    `Window: "Draft", App: Fixture Editor.\n0 standard window Draft\n${rows}` + (focus ? `\n\nThe focused UI element is ${focus}` : '');
+    f.snapshot(`Window: "Draft", App: Fixture Editor.\n0 standard window Draft\n${rows}` + (focus ? `\n\nThe focused UI element is ${focus}` : ''));
   const run = f.run(`await app.click(1); await app.${method}("query");`, { quietEdits: true });
   if (allowed) {
     await run;

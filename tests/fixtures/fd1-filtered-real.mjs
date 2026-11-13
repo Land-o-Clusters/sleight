@@ -1,3 +1,4 @@
+import { testChromiumExecutable, readTestDevToolsPort, launchTestChromiumContext, closeTestChromium } from './chromium-isolated.mjs';
 import assert from 'node:assert/strict';
 import { createServer } from 'node:http';
 import { readFileSync, mkdtempSync, realpathSync, rmSync, existsSync } from 'node:fs';
@@ -15,9 +16,7 @@ export const skip = process.env.SLEIGHT_LIVE_DOM_TEST !== '1' && 'needs SLEIGHT_
 export async function fixture(t, html, { message = 'Inspect the animation after each requested action.', routes = {} } = {}) {
   const pin = JSON.parse(readFileSync(new URL('../../plugins/sleight/vendor/playwright-core/browsers.json', import.meta.url)))
     .browsers.find(b => b.name === 'chromium-headless-shell');
-  const platform = process.platform === 'darwin' ? 'mac-' + process.arch : 'linux64';
-  const executablePath = join(homedir(), 'Library/Caches/ms-playwright', 'chromium_headless_shell-' + pin.revision,
-    'chrome-headless-shell-' + platform, 'chrome-headless-shell');
+  const executablePath = testChromiumExecutable({ revision: pin.revision });
   assert.ok(existsSync(executablePath), 'pinned headless Chromium must be installed');
   const profile = mkdtempSync(join(realpathSync(tmpdir()), 'sleight-fd1-'));
   const server = createServer((request, response) => {
@@ -27,12 +26,15 @@ export async function fixture(t, html, { message = 'Inspect the animation after 
   let context, socket, browser, filter, registry, runtime, current = true;
   t.after(async () => {
     try {
-      current = false;
-      if (runtime) assert.deepEqual((await runtime.end()).cleanup, []);
-      await browser?.close();
-      if (filter) assert.equal(await filter.dispose(), true, 'owned CDP sessions must detach');
-      if (socket && socket.readyState !== 3) await new Promise(resolve => { socket.once('close', resolve); socket.terminate(); });
-      await context?.close();
+      await closeTestChromium(context, async () => {
+        try {
+          current = false;
+          if (runtime) assert.deepEqual((await runtime.end()).cleanup, []);
+          await browser?.close();
+          if (filter) assert.equal(await filter.dispose(), true, 'owned CDP sessions must detach');
+          if (socket && socket.readyState !== 3) await new Promise(resolve => { socket.once('close', resolve); socket.terminate(); });
+        } finally { await context?.close(); }
+      });
     } finally {
       server.closeAllConnections(); if (server.listening) await new Promise(resolve => server.close(resolve));
       rmSync(profile, { recursive: true, force: true });
@@ -41,11 +43,11 @@ export async function fixture(t, html, { message = 'Inspect the animation after 
     t.diagnostic('Cleanup: owned headless browser closed, CDP sessions/socket collected, fixture server closed, private profile removed.');
   });
   await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
-  context = await chromium.launchPersistentContext(profile, { executablePath, headless: true,
+  context = await launchTestChromiumContext(chromium, profile, { executablePath, headless: true,
     args: ['--remote-debugging-port=0', '--remote-debugging-address=127.0.0.1', '--site-per-process'], viewport: { width: 1200, height: 800 } });
   const sentinel = context.pages()[0];
   await sentinel.goto('about:blank');
-  const [port, path] = readFileSync(join(profile, 'DevToolsActivePort'), 'utf8').trim().split('\n');
+  const [port, path] = (await readTestDevToolsPort(profile));
   const endpoint = 'ws://127.0.0.1:' + port + path;
   const { ws } = createRequire(import.meta.url)('../../plugins/sleight/vendor/playwright-core/lib/utilsBundle.js');
   socket = new ws(endpoint);
@@ -62,7 +64,7 @@ export async function fixture(t, html, { message = 'Inspect the animation after 
   socket.on('close', () => { for (const wait of pending.values()) wait.reject(Error('fixture closed')); pending.clear(); });
   const upstream = { sessionId: 'root', on: (_name, fn) => listeners.add(fn), off: (_name, fn) => listeners.delete(fn),
     send(method, params = {}, route = 'root') {
-      wire.push({ method, route, type: params.type, requestId: params.requestId }); const id = ++serial;
+      wire.push({ method, route, type: params.type, x: params.x, y: params.y, requestId: params.requestId }); const id = ++serial;
       return new Promise((resolve, reject) => {
         pending.set(id, { resolve, reject });
         socket.send(JSON.stringify({ id, method, params, ...(route === 'root' ? {} : { sessionId: route }) }));

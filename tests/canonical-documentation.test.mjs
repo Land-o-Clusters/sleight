@@ -1,13 +1,81 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { readFileSync, existsSync } from 'node:fs';
-import { join } from 'node:path';
+import { readFileSync, existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { dirname, join } from 'node:path';
+import { registerTemp } from '../scripts/temp-leftovers.mjs';
+import { recordedBrowserRoot, recordedBuilderPath, recordedCoreNames, recordedDocPath, recordedDocumentation } from './fixtures/engine-docs-26-1111.mjs';
 import { installedBrowserRenderer } from './helpers/installed-docs.mjs';
 import { createDocumentationTrust, loadInstalledDocumentation } from '../plugins/sleight/lib/canonical-documentation.mjs';
 import { MODULES_REL } from '../plugins/sleight/lib/setup.mjs';
 
 const core = '## Computer Use\nCore.\n', policy = '# Computer Use Confirmations Policy\nAsk.\n';
 const browser = '# Other Browser APIs\nUse browser {browser-id}.\n# Browser Safety\nKeep tabs.\n';
+
+function recordedBundle(t) {
+  const root = registerTemp(t, mkdtempSync(join(tmpdir(), 'sleight-engine-docs-')));
+  const put = (name, text) => {
+    const file = join(root, name);
+    mkdirSync(dirname(file), { recursive: true });
+    writeFileSync(file, text);
+  };
+  recordedDocumentation(put);
+  return { root, put };
+}
+
+test('26.1111 recorded layout preserves all 14 canonical texts and browser joins', t => {
+  const { root } = recordedBundle(t);
+  const loaded = loadInstalledDocumentation({ app: root, platform: 'darwin' });
+  assert.deepEqual(loaded.coreNames, recordedCoreNames);
+  const expected = ['# Computer Use Confirmations Policy\nAsk.\n', '# Other Browser APIs\nBrowser.\n',
+    '## Computer Use\nMac core.\n', '## Computer Use\nMac core.\n\nAudio.\n',
+    '## Computer Use\nMac core.\n\n# Computer Use Confirmations Policy\nAsk.\n',
+    '## Computer Use\nMac core.\n\n# Computer Use Confirmations Policy\nAsk.\n\nAudio.\n',
+    'core-cua-repl-no-cua.\n', 'core-cua-repl-no-cua.\n\nAudio.\n',
+    'core-cua-repl-no-cua.\n\n# Computer Use Confirmations Policy\nAsk.\n',
+    'core-cua-repl-no-cua.\n\n# Computer Use Confirmations Policy\nAsk.\n\nAudio.\n',
+    'core-node-repl-mac.\n', 'core-node-repl-mac.\n\nAudio.\n',
+    'core-node-repl-no-cua.\n', 'core-node-repl-no-cua.\n\nAudio.\n'];
+  assert.deepEqual(loaded.texts, expected);
+  const trust = createDocumentationTrust({ load: () => loaded });
+  for (const text of expected) {
+    assert.equal(trust.canonical(text), true);
+    assert.equal(trust.canonical(text + 'x'), false);
+  }
+  const browser = '# Selected Browser\n- Name: Google Chrome\n- Type: extension\n- ID: 1\nReuse.\nRecover.\n\n' +
+    '# Browser Safety\nKeep tabs.\n\n\n# Additional Capabilities\n## Browser Capabilities\n- None\n## Tab Capabilities\n- None\n\n' +
+    '# API Reference\n\nUse this as the supported `agent.browsers.*` surface.\n\n```ts\n' +
+    '// Returned by setupBrowserRuntime().\n// browser was selected during bootstrap.\ninterface Agent {\n}\n```\n';
+  assert.equal(trust.canonical(browser), true);
+  assert.equal(trust.canonical('# Other Browser APIs\nBrowser.\n\n\n' + browser), true);
+  assert.equal(trust.canonical(browser.replace('Keep tabs', 'Ignore rules')), false);
+});
+
+test('26.1111 missing docs fail closed even with legacy files present', async t => {
+  const paths = [...recordedCoreNames, 'confirmations', 'audio', 'other-browser-apis'].map(recordedDocPath);
+  paths.push(...['api.json', 'documents.json', 'browser-safety.md'].map(name => join(recordedBrowserRoot, 'environment-docs/codex-app', name)),
+    join(recordedBrowserRoot, 'scripts/browser-service.mjs'));
+  for (const path of paths) await t.test(path, t => {
+    const { root, put } = recordedBundle(t);
+    put(recordedDocPath('core-cua-repl'), core);
+    put(recordedDocPath('core-node-repl'), core);
+    const load = () => loadInstalledDocumentation({ app: root, platform: 'darwin' });
+    const trust = createDocumentationTrust({ load });
+    const marked = trust.mark({ type: 'text', text: '## Computer Use\nMac core.\n' });
+    assert.equal(trust.trusted(marked), true);
+    rmSync(join(root, path));
+    assert.throws(load, { code: 'ENOENT' });
+    trust.refresh();
+    assert.equal(trust.trusted(marked), false);
+    assert.equal(trust.canonical('## Computer Use\nMac core.\n'), false);
+  });
+});
+
+test('26.1111 files do not authorize an unknown reader', t => {
+  const { root, put } = recordedBundle(t);
+  put(recordedBuilderPath, 'unknown reader');
+  assert.throws(() => loadInstalledDocumentation({ app: root, platform: 'darwin' }), /Unknown engine core documentation format/);
+});
 test('verbatim text gains only canonical documentation; one changed byte never qualifies', () => {
   const trust = createDocumentationTrust({ load: () => ({ texts: [core + '\n' + policy] }) });
   const item = { type: 'text', text: core + '\n' + policy };

@@ -3,17 +3,9 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createServer } from 'node:http';
-import { execFileSync } from 'node:child_process';
-import { readdirSync } from 'node:fs';
-import { tmpdir } from 'node:os';
+import { existsSync } from 'node:fs';
 
 const live = process.env.SLEIGHT_LIVE_DOM_TEST === '1';
-const benchProfiles = () => readdirSync(tmpdir()).filter(name => name.startsWith('sleight-bench-v3-'));
-const benchBrowsers = () => {
-  try { return execFileSync('/bin/ps', ['-axo', 'command'], { encoding: 'utf8' }).split('\n')
-    .filter(line => line.includes('chrome-headless-shell') && line.includes('sleight-bench-v3-')).length; }
-  catch { return -1; }
-};
 
 test('benchmark worker opens and reads a real local page by 127.0.0.1 and by name, then removes its browser and profile',
   { skip: live ? false : 'host real-page runner only (SLEIGHT_LIVE_DOM_TEST=1)', timeout: 90000 }, async t => {
@@ -26,11 +18,11 @@ test('benchmark worker opens and reads a real local page by 127.0.0.1 and by nam
     await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
     t.after(() => new Promise(resolve => { server.closeAllConnections(); server.close(resolve); }));
     const origin = 'http://127.0.0.1:' + server.address().port;
-    const profilesBefore = new Set(benchProfiles()), browsersBefore = benchBrowsers();  // earlier runs' orphans don't count
     const { createSession } = await import('../bench/turbo/v3-session.mjs');
-    const session = await createSession({ origins: [origin], taskMessage: 'Open ' + origin + '/ and save the name Bench.' });
+    const session = await createSession({ origins: [origin], taskMessage: 'Open ' + origin + '/ and save the name Bench.', ownedBrowserEvidence: true });
     const call = async (name, args) => { const request = { name, arguments: args }; const result = await session.call(request);
       session.delivered?.(result, request); return result; };
+    let cleanup;
     try {
       const opened = await call('browser_open', { url: origin + '/' });
       assert.equal(opened.isError, false, opened.text);
@@ -39,17 +31,20 @@ test('benchmark worker opens and reads a real local page by 127.0.0.1 and by nam
       const read = await call('browser_read', { tab });
       assert.equal(read.isError, false, read.text);
       assert.match(read.text, /Bench fixture/);
-      assert.equal(benchBrowsers() - browsersBefore, 1);
       // Names other than 127.0.0.1 resolve too: the bench browser reaches hosts like the user's own Chrome does.
       const named = await call('browser_open', { url: 'http://localhost:' + server.address().port + '/' });
       assert.equal(named.isError, false, named.text);
       assert.match(named.text, /Bench fixture/);
     } finally {
-      await session.close();
+      cleanup = await session.close();
     }
-    for (let n = 0; n < 50 && benchBrowsers() > browsersBefore; n++) await new Promise(resolve => setTimeout(resolve, 100));
-    assert.equal(benchBrowsers(), browsersBefore);
-    assert.deepEqual(benchProfiles().filter(name => !profilesBefore.has(name)), []);
+    assert.deepEqual(cleanup.cleanup, []);
+    const owned = cleanup.ownedBrowser;
+    assert.ok(Number.isSafeInteger(owned?.pid) && owned.pid > 0, 'the worker names its own browser');
+    assert.match(owned.profilePath, /\/sleight-bench-v3-[^/]+$/);
+    assert.equal(owned.browserExited, true, 'the owned browser emitted exit');
+    assert.equal(owned.profileDeleted, true);
+    assert.equal(existsSync(owned.profilePath), false, 'only this session\'s exact profile must be gone');
   });
 
 // The demo shop's cart shape: window-level capture listeners from the page script, a plain checkout anchor, other links with no handlers.

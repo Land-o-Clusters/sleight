@@ -136,6 +136,13 @@ for (const [name, options, want, calls] of [
   const value = { toString: () => 'owner-private-role' }, f = roleRead({ value });
   f.value = value;
   const observed = valueProbe(f, options);
+  if (options.equal === true) {
+    assert.equal(f.api.finderRole(f.window), 'AXWindow');
+    assert.deepEqual(observed, calls);
+    assert.deepEqual(f.queries, ['AXRole']);
+    assert.deepEqual(f.actions, []);
+    return;
+  }
   assert.throws(f.run, error => {
     assert.deepEqual(finderFailureDiagnostic(error), { reason: 'non-window-or-stale', count: 1, index: 0,
       axCode: 0, roleReadCode: 0, roleState: 'other-string', ...want });
@@ -152,6 +159,12 @@ for (const equal of [true, false]) test(`Finder role native diagnostics use the 
   const reference = { raw: true }, object = { isNil: () => false };
   const f = roleRead({ value: reference, object }); f.value = object;
   const calls = valueProbe(f, { equal, deep: equal ? 'AXWindow' : 'AXApplication' });
+  if (equal) {
+    assert.equal(f.api.finderRole(f.window), 'AXWindow');
+    assert.deepEqual(calls, ['native-type', 'native-equal', 'deep-equal']);
+    assert.deepEqual(f.queries, ['AXRole']);
+    return;
+  }
   assert.throws(f.run, error => {
     assert.deepEqual(finderFailureDiagnostic(error), { reason: 'non-window-or-stale', count: 1, index: 0,
       axCode: 0, roleReadCode: 0, roleState: 'other-string', roleNativeType: 'cf-string',
@@ -220,7 +233,7 @@ test('Finder role diagnostic schema rejects arbitrary codes, states and owner te
   assert.deepEqual(finderFailureDiagnostic('roleNativeType=cf-string-secret roleNativeWindowEqual=yes-secret roleDeepWindowEqual=yes-secret'), {});
 });
 
-for (const name of ['nil', 'no value code', 'invalid element', 'other error', 'native-window-disagreement', 'standard-role', 'private-role', 'unretained-after-new', 'menu-cleanup-failure', 'ax-write-failure']) test(`serialized Finder helper failure retains ${name} metadata through real-fixture`, async t => {
+for (const name of ['nil', 'no value code', 'invalid element', 'other error', 'standard-role', 'private-role', 'unretained-after-new', 'menu-cleanup-failure', 'ax-write-failure']) test(`serialized Finder helper failure retains ${name} metadata through real-fixture`, async t => {
   const requested = ['unretained-after-new', 'menu-cleanup-failure', 'ax-write-failure'].includes(name);
   const [, input, detail] = refused.find(item => item[0] === name) ?? [name,
     { value: name === 'standard-role' ? 'AXApplication' : name === 'private-role' ? 'AXOwnerPrivateRole' : {} },

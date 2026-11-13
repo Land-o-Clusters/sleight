@@ -15,14 +15,25 @@ ObjC.import('ApplicationServices');
 
 const ELEMENT_LIMIT = 3000, WALK_MS = 400;
 
+function systemOverlay(pid) {
+  try {
+    const app = $.NSRunningApplication.runningApplicationWithProcessIdentifier(pid);
+    if (!app || app.isNil() || Number(app.activationPolicy) === 0) return false;
+    const path = ObjC.unwrap(app.bundleURL.path);
+    return typeof path === 'string' && path.startsWith('/System/Library/');
+  } catch (_) { return false; }
+}
 function cgWindows(onScreenOnly) {
   const options = onScreenOnly ? $.kCGWindowListOptionOnScreenOnly : $.kCGWindowListOptionAll;
   const list = ObjC.castRefToObject($.CGWindowListCopyWindowInfo(options | $.kCGWindowListExcludeDesktopElements, 0));
-  const out = [];
+  const out = [], overlayApps = new Map();
   for (let i = 0; i < Number(list.count); i++) {
-    const w = list.objectAtIndex(i);
+    const w = list.objectAtIndex(i), pid = ObjC.unwrap(w.objectForKey('kCGWindowOwnerPID'));
+    if (!overlayApps.has(pid)) overlayApps.set(pid, systemOverlay(pid));
     out.push({ id: ObjC.unwrap(w.objectForKey('kCGWindowNumber')), pid: ObjC.unwrap(w.objectForKey('kCGWindowOwnerPID')),
       layer: ObjC.unwrap(w.objectForKey('kCGWindowLayer')), owner: ObjC.unwrap(w.objectForKey('kCGWindowOwnerName')) || '',
+      alpha: ObjC.unwrap(w.objectForKey('kCGWindowAlpha')),
+      systemOverlay: overlayApps.get(pid),
       bounds: ObjC.deepUnwrap(w.objectForKey('kCGWindowBounds')) });
   }
   return out; // front to back
@@ -166,7 +177,23 @@ function byBounds(bounds) {
 function run(argv) {
   try {
     const request = JSON.parse(argv[0]);
+    if (request.hint) {
+      const { pid, windowId, at } = request.hint;
+      if (!Number.isSafeInteger(pid) || pid <= 0 || !Number.isSafeInteger(windowId) || windowId <= 0 ||
+          !Array.isArray(at) || at.length !== 2 || !at.every(v => Number.isFinite(v) && Math.abs(v) <= 100000)) return JSON.stringify({ ok: false });
+      const win = cgWindows(true).find(w => w.id === windowId && w.pid === pid && w.layer === 0);
+      const b = win?.bounds;
+      if (!b || at[0] < b.X || at[0] >= b.X + b.Width || at[1] < b.Y || at[1] >= b.Y + b.Height) return JSON.stringify({ ok: false });
+      return JSON.stringify({ ok: true, app: win.owner, pid, windowId });
+    }
     if (request.bounds) return JSON.stringify(byBounds(request.bounds));
+    if (request.area === true) {
+      const running = findApp(request);
+      if (!running) return JSON.stringify({ ok: false, error: 'app not running or ambiguous' });
+      const pid = Number(running.processIdentifier);
+      const window = Number.isSafeInteger(request.windowNumber) && cgWindows(true).find(w => w.pid === pid && w.id === request.windowNumber && w.layer === 0);
+      return JSON.stringify({ ok: true, pid, ...window ? { window: { pid, windowId: window.id, bounds: window.bounds } } : {} });
+    }
     if (!$.AXIsProcessTrusted()) return JSON.stringify({ ok: false, error: 'accessibility not granted' });
     const running = findApp(request);
     if (!running) return JSON.stringify({ ok: false, error: 'app not running or ambiguous' });

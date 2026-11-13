@@ -3,6 +3,21 @@ import { runInNewContext } from 'node:vm';
 import assert from 'node:assert/strict';
 import { typedTextReceipt, typingReceiptCall, typingReceiptCode, withoutTypingReceipt } from '../plugins/sleight/lib/typed-text-receipt.mjs';
 import { GUARD_MARK, GUARD_END } from '../plugins/sleight/lib/document-scope.mjs';
+import { engineTypeTextNeedsPaste } from '../plugins/sleight/lib/native-arguments.mjs';
+
+for (const [name, text, expected] of [
+  ['printable ASCII', Array.from({ length: 95 }, (_, i) => String.fromCharCode(i + 32)).join(''), false],
+  ['empty text', '', false], ['tab and newline', 'A\tB\n1\t2', false],
+  ['accent', 'café', true], ['CJK', '日本', true], ['emoji', '🙂', true],
+  ['combining mark', 'cafe\u0301', true], ['non-breaking space', 'a\u00a0b', true],
+  ['smart quotes', '“text”', true], ['carriage return', '\r', false], ['CRLF', '\r\n', false],
+  ['mixed whitespace', 'a\r\nb\tc\nd', false],
+  ['en dash', 'a–b', true], ['ZWJ emoji', '👨‍👩‍👧', true], ['BOM', '\ufeff', true],
+  ['lone high surrogate', '\ud800', true], ['lone low surrogate', '\udc00', true],
+  ['NUL', '\0', true], ['escape', '\x1b', true], ['DEL', '\x7f', true],
+]) test(`engine typing character rule: ${name}`, () => {
+  assert.equal(engineTypeTextNeedsPaste(text), expected);
+});
 
 // The study's document-focused, unchanged table-typing shape, with generic fixture names.
 const tree = 'Window: "Draft", App: Example.\n0 standard window Draft\n\t1 text entry area Body, Value: existing\nThe focused UI element is 1 text entry area Body';

@@ -3,6 +3,7 @@ import { homedir } from 'node:os';
 import { join, dirname, resolve } from 'node:path';
 import { randomUUID } from 'node:crypto';
 import { execFileSync } from 'node:child_process';
+import { DatabaseSync } from 'node:sqlite';
 
 export const clipboardSnapshotLimit = 32 * 1024 * 1024;
 export const clipboardSnapshotLifetimeMs = 10 * 60 * 1000;
@@ -14,7 +15,7 @@ const memoryOnlyTypes = new Set([transient, 'org.nspasteboard.ConcealedType', 'c
   'application/x-nspasteboard-concealed-type', 'com.trolltech.anymime.application--x-nspasteboard-concealed-type']);
 export const memoryOnlyClipboard = items => items.some(reps => reps.some(rep => memoryOnlyTypes.has(rep.type)));
 export function readClipboardBootSession(run = execFileSync) {
-  const value = run('/usr/sbin/sysctl', ['-n', 'kern.boottime'], { encoding: 'utf8', timeout: 1000, maxBuffer: 4096 });
+  const value = run('/usr/sbin/sysctl', ['-n', 'kern.boottime'], { encoding: 'utf8', timeout: 1000, maxBuffer: 4096, killSignal: 'SIGKILL' });
   const match = /^\{\s*sec\s*=\s*(\d+),\s*usec\s*=\s*(\d+)\s*\}/.exec(value);
   if (!match) throw snapshotError();
   return match[1] + ':' + match[2];
@@ -23,9 +24,10 @@ export function excludeClipboardSnapshotsFromBackup(directory, run = execFileSyn
   // Binary plist string "com.apple.backupd", the metadata xattr's value.
   const value = '62706c69737430305f1011636f6d2e6170706c652e6261636b75706408000000000000010100000000000000010000000000000000000000000000001c';
   run('/usr/bin/xattr', ['-wx', 'com.apple.metadata:com_apple_backup_excludeItem', value, directory],
-    { timeout: 1000, stdio: 'ignore' });
+    { timeout: 1000, stdio: 'ignore', killSignal: 'SIGKILL' });
 }
 const snapshotName = name => /^snapshot-[0-9a-f-]{36}\.bin$/.test(name);
+const legacySnapshotName = name => /^runtime-snapshot-[0-9a-f-]{36}\.bin$/.test(name);
 const snapshotError = () => Error('Clipboard snapshot is unsafe, invalid or exceeds 32 MiB; nothing was staged.');
 const empty = items => !items.length || items.every(reps => !reps.length);
 export const restoredClipboardItems = original => empty(original) ? [] : original.map(reps => reps.some(rep => rep.type === transient)
@@ -125,7 +127,7 @@ export function createClipboardSnapshotStore({ directory = join(homedir(), 'Libr
     syncDirectory();
   };
   const remove = token => {
-    if (!snapshotName(token?.name)) throw snapshotError();
+    if (!snapshotName(token?.name) && !legacySnapshotName(token?.name)) throw snapshotError();
     checkDirectory();
     const path = join(directory, token.name);
     const fd = openSync(path, constants.O_RDWR | constants.O_NOFOLLOW | constants.O_NONBLOCK);
@@ -147,7 +149,7 @@ export function createClipboardSnapshotStore({ directory = join(homedir(), 'Libr
   };
   return Object.freeze({
     directory,
-    hasSnapshots() { return checkDirectory() && readdirSync(directory).some(snapshotName); },
+    hasSnapshots({ legacy = false } = {}) { return checkDirectory() && readdirSync(directory).some(name => snapshotName(name) || legacy && legacySnapshotName(name)); },
     protect() { if (checkDirectory()) protectDirectory(); },
     save(record) {
       if (memoryOnlyClipboard(record.original)) return;
@@ -164,9 +166,9 @@ export function createClipboardSnapshotStore({ directory = join(homedir(), 'Libr
       finally { closeSync(fd); }
       return token;
     },
-    list() {
+    list({ legacy = false } = {}) {
       if (!checkDirectory()) return [];
-      return readdirSync(directory).filter(snapshotName).map(name => {
+      return readdirSync(directory).filter(name => snapshotName(name) || legacy && legacySnapshotName(name)).map(name => {
         let fd;
         try {
           fd = openSync(join(directory, name), constants.O_RDONLY | constants.O_NOFOLLOW | constants.O_NONBLOCK);
@@ -191,6 +193,45 @@ export function createClipboardSnapshotStore({ directory = join(homedir(), 'Libr
     },
     remove,
   });
+}
+
+// Delete-only expiry, including when the selected runtime cannot use a clipboard
+// helper. Legacy inventory is enabled only here, never for restoration. It uses
+// the same validated metadata and boot/age rules; no pasteboard IO is constructed.
+export function sweepClipboardSnapshots({ store = createClipboardSnapshotStore(),
+  notice = (code, path) => process.stderr.write(code + ' ' + JSON.stringify(path) + '\n') } = {}) {
+  const log = (code, path = store.directory) => { try { notice(code, path); } catch {} };
+  let reservation, legacyDeleted = 0;
+  try {
+    if (!store.hasSnapshots({ legacy: true })) return;
+    // Match createClipboardCoordinator's reservation, without creating clipboard
+    // IO. A live paste may be between O_EXCL and its durable snapshot write.
+    const databasePath = join(dirname(store.directory), 'clipboard.sqlite');
+    // SQLite's default creation mode follows the umask. Create the reservation
+    // file privately first, without truncating an existing coordinator database.
+    const databaseFile = openSync(databasePath, constants.O_WRONLY | constants.O_CREAT | constants.O_NOFOLLOW, 0o600);
+    closeSync(databaseFile);
+    reservation = new DatabaseSync(databasePath);
+    try { reservation.exec('PRAGMA busy_timeout=0; BEGIN IMMEDIATE'); }
+    catch { log('CLIPBOARD_SNAPSHOT_SKIPPED_BUSY'); return; }
+    for (const { token, record, path, code } of store.list({ legacy: true })) {
+      const legacy = legacySnapshotName(token?.name);
+      if (code) { log(code, path); continue; }
+      try {
+        if (legacy) {
+          if (record && store.discardReason(record)) { store.remove(token); legacyDeleted++; }
+          else if (!record) log('CLIPBOARD_SNAPSHOT_SKIPPED_UNSAFE', path);
+          continue;
+        }
+        const discard = record ? store.discardReason(record) : 'CLIPBOARD_SNAPSHOT_DISCARDED_INVALID';
+        if (discard) { store.remove(token); log(discard, path); }
+      } catch { log('CLIPBOARD_SNAPSHOT_SKIPPED_UNSAFE', path); }
+    }
+  } catch { log('CLIPBOARD_SNAPSHOT_SKIPPED_UNSAFE'); }
+  finally {
+    if (legacyDeleted) log('CLIPBOARD_LEGACY_SNAPSHOTS_DISCARDED');
+    try { reservation?.close(); } catch { log('CLIPBOARD_SNAPSHOT_RELEASE_FAILED'); }
+  }
 }
 
 // The first live restore uses the short staged deadline. Each subsequent attempt

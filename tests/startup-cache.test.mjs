@@ -505,3 +505,30 @@ test('initialized deadline cannot bypass cached tool verification and close clea
   t.mock.timers.tick(2000);
   assert.equal(closed.server.length,length);
 });
+// The engine's js shape since 26.1103.41825 (handshake cache, 2026-11-09): code or completion_summary at a root oneOf.
+const oneOfJs = { type: 'object', additionalProperties: false,
+  properties: { code: { type: 'string' }, title: { type: 'string' }, completion_summary: { type: 'string' } },
+  oneOf: [{ type: 'object', properties: { code: { type: 'string' }, title: { type: 'string' } }, required: ['code'], additionalProperties: false },
+    { type: 'object', properties: { completion_summary: { type: 'string' } }, required: ['completion_summary'], additionalProperties: false }] };
+test('a cached oneOf js list is advertised flat and still fits the calls queued behind it', t => {
+  const { connect } = fixture(t);
+  const list = { tools: [{ name: 'js', description: 'fixture', inputSchema: oneOfJs }] };
+  warm(connect(), list);
+  const h = connect();
+  h.send(initialization(10));
+  h.send({ jsonrpc: '2.0', method: 'notifications/initialized' });
+  h.send({ jsonrpc: '2.0', id: 11, method: 'tools/list' });
+  assert.deepEqual(h.server.map(msg => msg.method), ['initialize'], 'the list came from the cache');
+  const js = h.client.find(msg => msg.id === 11).result.tools.find(tool => tool.name === 'js');
+  assert.equal(js.inputSchema.oneOf, undefined);
+  assert.equal(js.inputSchema.required, undefined);
+  h.send({ jsonrpc: '2.0', id: 12, method: 'tools/call', params: { name: 'js', arguments: { code: '1', title: 'Read', completion_summary: 'Done' } } });
+  h.send({ jsonrpc: '2.0', id: 13, method: 'tools/call', params: { name: 'js', arguments: { title: 'Read' } } });
+  assert.equal(h.client.find(msg => msg.id === 13)?.result?.isError, true, 'a call with no form is refused before the engine');
+  h.reply({ jsonrpc: '2.0', id: 10, result: structuredClone(init) });
+  h.reply({ jsonrpc: '2.0', id: 11, result: structuredClone(list) });
+  const call = h.server.find(msg => msg.id === 12);
+  assert.ok(call, 'the queued call reaches the engine');
+  assert.deepEqual(Object.keys(call.params.arguments).sort(), ['code', 'title']);
+  assert.equal(h.server.some(msg => msg.id === 13), false);
+});

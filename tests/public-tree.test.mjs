@@ -30,7 +30,7 @@ test('private evidence and root reports are forbidden while nested public report
 
 test('every tracked file is safe for the public tree', () => {
   const identity = privateIdentity();
-  const files = execFileSync('/usr/bin/git', ['ls-files', '-z'], { cwd: root, encoding: 'utf8' }).split('\0').filter(Boolean);
+  const files = execFileSync('/usr/bin/git', ['ls-files', '-z'], { cwd: root, encoding: 'utf8', timeout: 30000, killSignal: 'SIGKILL' }).split('\0').filter(Boolean);
   assert.ok(files.length, 'No tracked files were inspected');
   const hits = [];
   for (const file of files) {

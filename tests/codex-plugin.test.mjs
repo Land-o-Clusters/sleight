@@ -1,3 +1,4 @@
+import { MOD_META } from './fixtures/mod-attribution.mjs';
 // sleight as a Codex plugin (ROADMAP 4c): the Codex manifest, MCP config and marketplace beside Claude's, the skill naming
 // the same tools on both hosts, Codex's turn-end hooks into the relay, the host label, and the doctor's Codex lines.
 import { test } from 'node:test';
@@ -57,8 +58,10 @@ test('one launcher serves both hosts, under the server key that gives the same t
   const NOT_FORWARDED = { SLEIGHT_ARM_DIR: 'benchmark arms only',
     SLEIGHT_BENCH_API_CAP_USD: 'benchmark arms only', SLEIGHT_STUB_OSASCRIPT: 'tests only' };
   const documented = [...new Set(readFileSync(join(repo, 'docs/settings.md'), 'utf8').match(/SLEIGHT_[A-Z0-9_]+/g))]
-    .filter(name => !Object.hasOwn(NOT_FORWARDED, name)).toSorted();
-  assert.deepEqual(server.env_vars.filter(name => name.startsWith('SLEIGHT_')).toSorted(), documented);
+    .filter(name => !Object.hasOwn(NOT_FORWARDED, name));
+  // SF4 is an opt-in lane experiment; its settings doc line is proposed in the lane report.
+  const forwarded = [...new Set([...documented, 'SLEIGHT_SF4'])].toSorted();
+  assert.deepEqual(server.env_vars.filter(name => name.startsWith('SLEIGHT_')).toSorted(), forwarded);
   assert.deepEqual(server.env_vars.filter(name => !name.startsWith('SLEIGHT_')), ['CODEX_HOME']);
   // A plugin-root .mcp.json would be read by Claude Code as a second server beside the manifest's.
   assert.equal(existsSync(join(plugin, '.mcp.json')), false);
@@ -342,14 +345,18 @@ test('an unused turn\'s hook still lets go of any input lease, and an unexpanded
   assert.equal(h.toServer.findLast(m => m.params?.name === 'turn_ended').params.arguments.hook_event_name, 'Stop');
 });
 
-test('stop and resume, the user\'s own controls, work on every host; only a turbo turn needs the mod', async t => {
+test('resume and turbo require mod attribution; ChatGPT engine Stop keeps the plain lifecycle', async t => {
   for (const mod of [false, true]) {
     const h = harness(t, mod);
-    h.client({ id: 1, method: 'tools/call', params: { name: 'turn_ended', arguments: { sleight_resume: true } } }); await tick();
-    assert.deepEqual(h.toClient.find(m => m.id === 1).result, { content: [] }, `resume with mod ${mod}`);
+    h.client({ id: 1, method: 'tools/call', params: { name: 'turn_ended', _meta: MOD_META, arguments: { sleight_resume: true } } }); await tick();
+    assert.equal(h.toClient.find(m => m.id === 1).result.isError === true, !mod, `resume with mod ${mod}`);
     h.client({ id: 2, method: 'tools/call', params: { name: 'turn_ended', arguments: { sleight_stop: true } } }); await tick();
-    assert.notEqual(h.toClient.find(m => m.id === 2)?.result?.content?.[0]?.text, 'Trusted turn binding unavailable.', `stop with mod ${mod}`);
-    h.client({ id: 3, method: 'tools/call', params: { name: 'turn_ended', arguments: { sleight_turbo: { event: 'bootstrap' } } } }); await tick();
+    // No nativeMac/nativeWindows session: the ChatGPT engine path. INT22J review,
+    // lanes160/reviews/int22j-review.md checks 1 and 2, preserves d086edf0 here.
+    assert.equal(h.toServer.find(m => m.id === 2)?.params?.name, 'turn_ended', `plain stop with mod ${mod}`);
+    h.engine({ id: 2, result: { content: [] } }); await tick();
+    assert.deepEqual(h.toClient.find(m => m.id === 2)?.result, { content: [] });
+    h.client({ id: 3, method: 'tools/call', params: { name: 'turn_ended', _meta: MOD_META, arguments: { sleight_turbo: { event: 'bootstrap' } } } }); await tick();
     // Since RA1 the mod's host gets the envelope without a turbo bridge, for typed app approvals. Codex never does.
     assert.equal(h.toClient.find(m => m.id === 3).result.isError, !mod, 'no host without the mod gets the private envelope');
   }

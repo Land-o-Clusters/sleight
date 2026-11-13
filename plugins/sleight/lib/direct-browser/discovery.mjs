@@ -18,25 +18,29 @@ export function validateEndpoint(endpoint) {
   return endpoint;
 }
 const same = (a, b) => a && b && ['application', 'root', 'pid', 'start'].every(k => a[k] === b[k]);
-function validIdentity(s) {
-  return s && typeof s.application === 'string' && path.isAbsolute(s.application) &&
-    typeof s.root === 'string' && path.isAbsolute(s.root) && path.normalize(s.root) === s.root &&
+function validIdentity(s, paths) {
+  return s && typeof s.application === 'string' && paths.isAbsolute(s.application) &&
+    typeof s.root === 'string' && paths.isAbsolute(s.root) && paths.normalize(s.root) === s.root &&
     Number.isSafeInteger(s.pid) && s.pid > 0 && Number.isFinite(s.start) && s.start > 0;
 }
 /** Trusted adapters must supply canonical filesystem evidence, current process
  * incarnation and authenticated connection-peer binding. Browser.getVersion or
  * a GUID alone cannot prove this. If the platform cannot bind the socket to the
  * selected process/root, omit peer evidence and refuse. No profile/context map. */
-export function discoverSelected({ selected, canonicalRoot, processes = [], file, setting, supported, connection } = {}) {
+export function discoverSelected({ selected, canonicalRoot, processes = [], file, setting, supported, connection, platform = process.platform } = {}) {
+  const paths = platform === 'win32' ? path.win32 : path;
+  const equalPath = (a, b) => platform === 'win32' && typeof a === 'string' && typeof b === 'string' ? a.toLowerCase() === b.toLowerCase() : a === b;
+  const identityMatches = (a, b) => platform === 'win32' ? a && b && a.pid === b.pid && a.start === b.start &&
+    equalPath(a.root, b.root) && equalPath(a.application, b.application) : same(a, b);
   const result = (state, reason) => ({ state, reason });
   if (supported === false) return result('unsupported', 'capability');
   if (setting === false) return result('off', 'user-setting');
-  if (supported !== true || setting !== true || !validIdentity(selected) || canonicalRoot !== selected.root)
+  if (supported !== true || setting !== true || !validIdentity(selected, paths) || !equalPath(canonicalRoot, selected.root))
     return result('stale-instance', 'selected-identity-unproved');
-  const matches = processes.filter(p => p.alive === true && p.root === selected.root && p.application === selected.application);
-  if (matches.length !== 1 || !same(matches[0], selected)) return result('stale-instance', 'process-incarnation');
-  const expected = path.join(selected.root, 'DevToolsActivePort');
-  if (!file || file.path !== expected || file.canonicalPath !== expected ||
+  const matches = processes.filter(p => p.alive === true && equalPath(p.root, selected.root) && equalPath(p.application, selected.application));
+  if (matches.length !== 1 || !identityMatches(matches[0], selected)) return result('stale-instance', 'process-incarnation');
+  const expected = paths.join(selected.root, 'DevToolsActivePort');
+  if (!file || !equalPath(file.path, expected) || !equalPath(file.canonicalPath, expected) ||
     !Number.isFinite(file.mtime) || file.mtime < selected.start) return result('stale-instance', 'endpoint-file');
   let hint;
   try { hint = parseActivePort(file.text); } catch { return result('stale-instance', 'endpoint-file'); }
@@ -45,7 +49,7 @@ export function discoverSelected({ selected, canonicalRoot, processes = [], file
   try {
     validateEndpoint(connection.endpoint);
     const url = new URL(connection.endpoint);
-    if (connection.state !== 'connected' || connection.redirected !== false || !same(connection.peer, selected) ||
+    if (connection.state !== 'connected' || connection.redirected !== false || !identityMatches(connection.peer, selected) ||
       Number(url.port || 80) !== hint.port || url.pathname !== hint.path) throw new Error('identity');
   } catch { return result('stale-instance', 'connection-identity-unproved'); }
   return { state: 'connected', identity: { ...selected }, endpoint: connection.endpoint };

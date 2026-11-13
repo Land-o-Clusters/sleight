@@ -49,17 +49,19 @@ test('GIF is readable after every frame and stops at a fixed frame cap', async t
 });
 
 test('a standard independent decoder reads all frames, palette and letterboxing', t => {
-  const python = spawnSync('python3', ['-c', 'from PIL import Image'], { encoding: 'utf8' });
+  // spawnSync blocks the event loop, so each Pillow child needs its own bound.
+  const bound = { encoding: 'utf8', timeout: 60000, killSignal: 'SIGKILL' };
+  const python = spawnSync('python3', ['-c', 'from PIL import Image'], bound);
   if (python.status !== 0) return t.skip('optional independent GIF decoder requires Pillow');
   const files = bank(t);
   writeFileSync(files.path, Buffer.concat([gifHeader(4, 4), gifFrame(image(), limits), gifFrame(image(0, 255, 0), limits), Buffer.from([0x3b])]));
-  const decoded = spawnSync('python3', ['-c', 'from PIL import Image; import json,sys; im=Image.open(sys.argv[1]); out=[]\nfor i in range(im.n_frames):\n im.seek(i); p=im.convert("RGB"); out.append([p.getpixel((0,0)),p.getpixel((1,1)),im.info["duration"]])\nprint(json.dumps(out))', files.path], { encoding: 'utf8' });
+  const decoded = spawnSync('python3', ['-c', 'from PIL import Image; import json,sys; im=Image.open(sys.argv[1]); out=[]\nfor i in range(im.n_frames):\n im.seek(i); p=im.convert("RGB"); out.append([p.getpixel((0,0)),p.getpixel((1,1)),im.info["duration"]])\nprint(json.dumps(out))', files.path], bound);
   assert.equal(decoded.status, 0, decoded.stderr);
   assert.deepEqual(JSON.parse(decoded.stdout), [[[0, 0, 0], [255, 0, 0], 500], [[0, 0, 0], [0, 255, 0], 500]]);
   const large = { width: 1000, height: 700, data: Buffer.alloc(1000 * 700 * 4) };
   for (let at = 0; at < large.data.length; at += 4) { large.data[at] = 255; large.data[at + 3] = 255; }
   writeFileSync(files.path, Buffer.concat([gifHeader(640, 480), gifFrame(large), gifFrame(large), Buffer.from([0x3b])]));
-  const full = spawnSync('python3', ['-c', 'from PIL import Image; import sys; im=Image.open(sys.argv[1]); assert im.n_frames==2 and im.size==(640,480)\nfor i in range(2):\n im.seek(i); p=im.convert("RGB"); assert p.getpixel((320,240))==(255,0,0) and p.getpixel((0,0))==(0,0,0)', files.path], { encoding: 'utf8' });
+  const full = spawnSync('python3', ['-c', 'from PIL import Image; import sys; im=Image.open(sys.argv[1]); assert im.n_frames==2 and im.size==(640,480)\nfor i in range(2):\n im.seek(i); p=im.convert("RGB"); assert p.getpixel((320,240))==(255,0,0) and p.getpixel((0,0))==(0,0,0)', files.path], bound);
   assert.equal(full.status, 0, full.stderr);
 });
 

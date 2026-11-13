@@ -1,3 +1,4 @@
+import { assertChildStatus } from './fixtures/child-status.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { mkdtempSync, mkdirSync, writeFileSync, symlinkSync } from 'node:fs';
@@ -137,8 +138,8 @@ test('round census and CLI emit aggregate task data, retain missing coverage and
   assert.equal(round.tasks.fixture.focusEvents, 1); assert.equal(round.tasks.fixture.turboTabsLeft, 0);
   assert.doesNotMatch(JSON.stringify(round), /SECRET|private.invalid|PRIVATE-APP/);
   assert.match(renderCensus([round]), /fixture/); assert.match(renderCensus([round]), /unavailable/);
-  const cli = spawnSync(process.execPath, ['bench/turbo/census.mjs', '--json', dir], { encoding: 'utf8' });
-  assert.equal(cli.status, 0, cli.stderr); assert.equal(JSON.parse(cli.stdout).rounds[0].tasks.fixture.reads, 1);
+  const cli = spawnSync(process.execPath, ['bench/turbo/census.mjs', '--json', dir], { encoding: 'utf8', timeout: 60000, killSignal: 'SIGKILL' });
+  assertChildStatus(cli, 0, cli.stderr); assert.equal(JSON.parse(cli.stdout).rounds[0].tasks.fixture.reads, 1);
   writeFileSync(file, '{bad json\n'); assert.throws(() => censusRound(dir), /events.jsonl:1/);
   writeFileSync(file, ''); symlinkSync(file, join(dir, 'linked'));
   assert.throws(() => censusRound(dir), /symbolic link/);

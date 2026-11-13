@@ -36,7 +36,7 @@ for (const name of ['cua', 'peekaboo']) test(`${name} setup dry run pins an arti
   try {
     const target = join(temp, 'uncreated');
     const output = execFileSync('/bin/sh', [new URL(`../bench/world/arms/${name}/setup.sh`, import.meta.url).pathname,
-      '--dry-run', '--dir', target, '--tcc-host', 'Fixture Terminal'], { encoding: 'utf8', env: { PATH: process.env.PATH } });
+      '--dry-run', '--dir', target, '--tcc-host', 'Fixture Terminal'], { encoding: 'utf8', env: { PATH: process.env.PATH }, timeout: 60000, killSignal: 'SIGKILL' });
     const plan = JSON.parse(output);
     assert.equal(plan.version, name === 'cua' ? '0.34.0' : '4.9.2');
     assert.ok(plan.artifact.digest.length > 40);
@@ -70,7 +70,7 @@ for (const name of ['cua', 'peekaboo']) test(`${name} setup dry run pins an arti
 
 test('Peekaboo setup requires the exact operator hosting app before writing files', () => {
   assert.throws(() => execFileSync('/bin/sh', [new URL('../bench/world/arms/peekaboo/setup.sh', import.meta.url).pathname, '--dry-run'],
-    { encoding: 'utf8', stdio: 'pipe' }), /--tcc-host/);
+    { encoding: 'utf8', stdio: 'pipe', timeout: 60000, killSignal: 'SIGKILL' }), /--tcc-host/);
 });
 
 test('a bad checksum refuses before creating an arm or extracting anything', async () => {

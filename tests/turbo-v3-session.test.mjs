@@ -37,7 +37,7 @@ test('MTb isolated rounds command forwards the model-time switch and strips unre
   for (const mode of [undefined, '0', '1']) {
     const env = { ...process.env, SLEIGHT_LB12: '0', MTB_UNRELATED: 'must not cross' };
     if (mode === undefined) delete env.SLEIGHT_MT; else env.SLEIGHT_MT = mode;
-    const result = JSON.parse(execFileSync('/bin/sh', ['-c', 'REPO=/fixture; MODEL=fixture;\n' + command, 'mtb-env', process.execPath], { env, encoding: 'utf8' }));
+    const result = JSON.parse(execFileSync('/bin/sh', ['-c', 'REPO=/fixture; MODEL=fixture;\n' + command, 'mtb-env', process.execPath], { env, encoding: 'utf8', timeout: 60000, killSignal: 'SIGKILL' }));
     assert.deepEqual(result, { ...(mode === undefined ? {} : { mt: mode }), lb12: '0' });
   }
 });
@@ -126,17 +126,101 @@ test('a public-web task names no fixture origin and the session still starts; na
 });
 
 test('the bench browser is its own headless Chromium with a temporary profile and no host restriction', async () => {
-  const { BENCH_BROWSER_ARGS, launchOwnedBrowser } = await import('../bench/turbo/v3-worker.mjs');
+  const { BENCH_BROWSER_ARGS, launchOwnedBrowser, headlessExecutable } = await import('../bench/turbo/v3-worker.mjs');
   assert.ok(BENCH_BROWSER_ARGS.includes('--headless'));
   assert.ok(BENCH_BROWSER_ARGS.includes('--remote-debugging-port=0'));
   assert.equal(BENCH_BROWSER_ARGS.filter(arg => /host-resolver|proxy|disable-web-security|no-sandbox|remote-allow-origins/.test(arg)).length, 0);
   const spawned = [];
-  await assert.rejects(launchOwnedBrowser({ timeoutMs: 200, spawnBrowser: (command, args) => {
-    spawned.push({ command, args }); const child = new EventEmitter(); child.exitCode = 1; child.signalCode = null; child.kill = () => {}; return child;
+  await assert.rejects(launchOwnedBrowser({ timeoutMs: 200, spawnBrowser: (command, args, options) => {
+    spawned.push({ command, args, options }); const child = new EventEmitter(); child.exitCode = 1; child.signalCode = null; child.kill = () => {}; return child;
   } }), /BENCH_BROWSER_START_FAILED|BENCH_BROWSER_MISSING/);
-  for (const { args } of spawned) {
+  for (const { command, args, options } of spawned) {
+    assert.equal(command, headlessExecutable(), 'launch Chromium directly with its own content/GPU sandbox');
+    assert.deepEqual(args.slice(1), BENCH_BROWSER_ARGS, 'the original browser flags stay unchanged');
+    assert.deepEqual(options, { stdio: 'ignore' });
     assert.ok(args.some(arg => /^--user-data-dir=.*sleight-bench-v3-/.test(arg)), 'a temporary profile, never a real browser profile');
     assert.ok(!args.some(arg => /Application Support|Google\/Chrome|Helium/.test(arg)));
+  }
+});
+
+test('owned browser cleanup waits for its exit and removes only its exact profile', async t => {
+  const { launchOwnedBrowser } = await import('../bench/turbo/v3-worker.mjs');
+  const { existsSync, mkdtempSync, writeFileSync } = await import('node:fs');
+  const foreign = registerTemp(t, mkdtempSync(join(tmpdir(), 'sleight-bench-v3-')));
+  const child = new EventEmitter();
+  Object.assign(child, { pid: 12345, exitCode: null, signalCode: null });
+  let profile, signals = [];
+  child.kill = signal => { signals.push(signal); };
+  const browser = await launchOwnedBrowser({ executable: () => '/fixture/chromium-headless-shell', spawnBrowser(_command, args) {
+    profile = args.find(arg => arg.startsWith('--user-data-dir=')).slice('--user-data-dir='.length);
+    writeFileSync(join(profile, 'DevToolsActivePort'), '12345\n/devtools/browser/fixture\n');
+    return child;
+  } });
+  t.after(() => browser.stop());
+  assert.equal(existsSync(profile), true);
+  let finished = false;
+  const stopping = browser.stop();
+  stopping.then(() => { finished = true; });
+  assert.equal(browser.stop(), stopping, 'cleanup has one owner');
+  await new Promise(resolve => setImmediate(resolve));
+  assert.equal(finished, false);
+  assert.equal(existsSync(profile), true);
+  child.signalCode = 'SIGTERM'; child.emit('exit', null, 'SIGTERM');
+  assert.deepEqual(await stopping, { pid: 12345, profilePath: profile, browserExited: true, profileDeleted: true });
+  assert.deepEqual(signals, ['SIGTERM']);
+  assert.equal(existsSync(profile), false);
+  assert.equal(existsSync(foreign), true, 'another session\'s profile is untouched');
+});
+
+test('the bench close reply carries its owned receipt after cleanup, while turn replies stay unchanged', async () => {
+  const { startBenchWorker } = await import('../bench/turbo/v3-worker.mjs');
+  const channel = new EventEmitter(), replies = [];
+  channel.connected = true; channel.send = frame => replies.push(frame);
+  let installedChannel, finish, stops = 0;
+  const stopped = new Promise(resolve => { finish = resolve; });
+  const host = { closed: new Promise(() => {}) };
+  assert.equal(await startBenchWorker({ channel, realBrowser: null, ownedBrowserEvidence: true,
+    launch: async () => ({ endpoint: 'ws://fixture', stop: () => { stops++; return stopped; } }),
+    startInstalled: async ({ channel: wrapped }) => { installedChannel = wrapped; return host; },
+  }), host);
+  const receipt = { revoked: true, cleanup: [] };
+  channel.emit('message', { id: 'end1', method: 'end' });
+  const end = { version: 3, id: 'end1', result: receipt };
+  installedChannel.send(end);
+  assert.equal(replies[0], end); assert.equal(stops, 0);
+  channel.emit('message', { id: 'close1', method: 'close' });
+  installedChannel.send({ version: 3, id: 'close1', result: receipt });
+  assert.equal(stops, 1); assert.equal(replies.length, 1);
+  const ownedBrowser = { pid: 12345, profilePath: '/fixture/profile', browserExited: true, profileDeleted: true };
+  finish(ownedBrowser);
+  await new Promise(resolve => setImmediate(resolve));
+  assert.deepEqual(replies[1], { version: 3, id: 'close1', result: { ...receipt, ownedBrowser } });
+  assert.deepEqual(receipt, { revoked: true, cleanup: [] });
+});
+
+test('owned browser evidence is opt-in and absent from ordinary benchmark forks', async () => {
+  const { createSession } = await load();
+  const { startBenchWorker } = await import('../bench/turbo/v3-worker.mjs');
+  const channel = new EventEmitter();
+  await startBenchWorker({ channel, realBrowser: null, ownedBrowserEvidence: false,
+    launch: async () => ({ stop: () => assert.fail('ordinary close timing changed') }),
+    startInstalled: async input => { assert.equal(input.channel, channel); return { closed: new Promise(() => {}) }; },
+  });
+  const old = process.env.SLEIGHT_TURBO_OWNED_BROWSER_EVIDENCE;
+  process.env.SLEIGHT_TURBO_OWNED_BROWSER_EVIDENCE = '1';
+  try {
+    for (const ownedBrowserEvidence of [false, true]) {
+      const fork = fakeFork(async () => ({ call: async () => ({ text: 'ok' }), end: async () => ({ revoked: true, cleanup: [] }) }));
+      const session = await createSession({ origins: [origin], taskMessage: 'Read fixture', ownedBrowserEvidence,
+        forkWorker(path, args, options) {
+          assert.equal(options.env.SLEIGHT_TURBO_OWNED_BROWSER_EVIDENCE, ownedBrowserEvidence ? '1' : undefined);
+          return fork(path, args, options);
+        } });
+      await session.close();
+    }
+  } finally {
+    if (old === undefined) delete process.env.SLEIGHT_TURBO_OWNED_BROWSER_EVIDENCE;
+    else process.env.SLEIGHT_TURBO_OWNED_BROWSER_EVIDENCE = old;
   }
 });
 
@@ -152,7 +236,7 @@ test('runner setup selects all five v3 tools, private task, metrics and v3 guida
   assert.equal(setup.mcpServers['sleight-turbo'].env.SLEIGHT_TURBO_METRICS, `${MAC_TMP}/fixture-task/turbo-metrics.jsonl`);
   assert.equal(setup.mcpServers['plugin:sleight:computer'].env.SLEIGHT_SURFACES, 'browser,computer');
   assert.match(setup.promptPrefix, /A batch stops at a boundary or failed step/);
-  assert.match(setup.promptPrefix, /Never translate refs or handles between paths/);
+  assert.match(setup.promptPrefix, /Never retry a safety refusal or uncertain input through another path, or reuse refs\/handles across paths\./);
   assert.equal(setup.metadata.turboVersion, 3);
 });
 

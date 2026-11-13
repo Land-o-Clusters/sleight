@@ -2,7 +2,7 @@
 // the `js` tool) to draw its pane. It must stay self-contained: it runs in the
 // engine, not here. snapshotCode() fills in the app and the frame size.
 //
-// It writes one line, `SLEIGHT_FRAME <json>`: the app's screenshot as
+// It writes one line, `SLEIGHT_FRAME <token> <json>`: the app's screenshot as
 // terminal cells (upper half blocks, two pixels per cell) for a terminal pane,
 // or else as an image small enough to embed in an SVG. Only one, to keep the
 // result small. The engine's sandbox can't load `sharp`, so it decodes with
@@ -12,7 +12,7 @@ const SNAPSHOT_JS = `await (async () => {
   // Claude Code replaces an MCP result over its token limit (25,000 by default)
   // with a notice, and base64 counts heavily: a 51,135-character image never
   // reached the desktop pane (2026-10-08). So the image stays near 16,000.
-  const APP = __APP__, COLS = __COLS__, ROWS = __ROWS__, TERMINAL = __TERMINAL__, MAX_IMAGE_B64 = 16000;
+  const APP = __APP__, COLS = __COLS__, ROWS = __ROWS__, TERMINAL = __TERMINAL__, FRAME_TOKEN = __TOKEN__, MAX_IMAGE_B64 = 16000;
   const app = await cua.getApp(APP);
   const shot = Buffer.from(await app.getScreenshot({ emit: false }));
   const isJpeg = shot[0] === 0xff && shot[1] === 0xd8;
@@ -47,7 +47,7 @@ const SNAPSHOT_JS = `await (async () => {
       const scale = Math.max(size.width / COLS, size.height / (ROWS * 2));
       const columns = Math.max(1, Math.min(COLS, Math.round(size.width / scale)));
       const rows = Math.ceil(Math.max(2, Math.min(ROWS * 2, Math.round(size.height / scale))) / 2);
-      nodeRepl.write('SLEIGHT_FRAME ' + JSON.stringify({ app: APP, ...size,
+      nodeRepl.write('SLEIGHT_FRAME ' + FRAME_TOKEN + ' ' + JSON.stringify({ app: APP, ...size,
         columns, rows, image: { mime: isJpeg ? 'image/jpeg' : 'image/png', base64: shot.toString('base64') } }));
       return;
     }
@@ -99,7 +99,7 @@ const SNAPSHOT_JS = `await (async () => {
     }
   }
 
-  nodeRepl.write('SLEIGHT_FRAME ' + JSON.stringify({
+  nodeRepl.write('SLEIGHT_FRAME ' + FRAME_TOKEN + ' ' + JSON.stringify({
     app: APP, width, height, columns: outW, rows, cells: TERMINAL ? cells.toString('base64') : undefined, image,
   }));
 })()
@@ -107,10 +107,11 @@ const SNAPSHOT_JS = `await (async () => {
 
 export const FRAME_MARKER = 'SLEIGHT_FRAME '
 
-export function snapshotCode(app: string, columns: number, rows: number, terminal: boolean): string {
-  return SNAPSHOT_JS
-    .replace('__APP__', JSON.stringify(app))
-    .replace('__TERMINAL__', String(terminal))
-    .replace('__COLS__', String(columns))
-    .replace('__ROWS__', String(rows))
+export function snapshotCode(app: string, columns: number, rows: number, terminal: boolean, token: string): string {
+  const replacements: Record<string, string> = {
+    __APP__: JSON.stringify(app), __COLS__: String(columns), __ROWS__: String(rows),
+    __TERMINAL__: String(terminal), __TOKEN__: JSON.stringify(token),
+  }
+  // One pass also prevents placeholder-looking app names from being replaced again.
+  return SNAPSHOT_JS.replace(/__APP__|__COLS__|__ROWS__|__TERMINAL__|__TOKEN__/g, key => replacements[key]!)
 }

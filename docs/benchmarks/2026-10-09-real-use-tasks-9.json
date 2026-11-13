@@ -980,8 +980,8 @@
             "task": "excel-edit",
             "run": 1,
             "passed": false,
-            "reason": "Fixture setup failed: ~/Projects/sleight-wt/real-use-tasks/bench/real-fixture.js: execution error: Error: Error: AX fixture read failed: -25205 (-2700)",
-            "cleanupError": "Launched Microsoft Excel quit unconfirmed: ~/Projects/sleight-wt/real-use-tasks/bench/real-fixture.js: execution error: Error: Error: Launched app quit unconfirmed (-2700)",
+            "reason": "Fixture setup failed: <private-evidence>/real-use-tasks/bench/real-fixture.js: execution error: Error: Error: AX fixture read failed: -25205 (-2700)",
+            "cleanupError": "Launched Microsoft Excel quit unconfirmed: <private-evidence>/real-use-tasks/bench/real-fixture.js: execution error: Error: Error: Launched app quit unconfirmed (-2700)",
             "fixtureDiagnostics": [
               {
                 "app": "Microsoft Excel",
@@ -1709,7 +1709,7 @@
         "passCleanupErrors": [
           {
             "app": "Microsoft Excel",
-            "error": "Launched Microsoft Excel quit unconfirmed: ~/Projects/sleight-wt/real-use-tasks/bench/real-fixture.js: execution error: Error: Error: Launched app quit unconfirmed (-2700)"
+            "error": "Launched Microsoft Excel quit unconfirmed: <private-evidence>/real-use-tasks/bench/real-fixture.js: execution error: Error: Error: Launched app quit unconfirmed (-2700)"
           }
         ]
       }

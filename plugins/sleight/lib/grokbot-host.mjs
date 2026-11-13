@@ -10,7 +10,7 @@ import { fileURLToPath } from 'node:url';
 export function readNativeAccessibility({ exec = execFileSync } = {}) {
   const result = JSON.parse(exec('/usr/bin/osascript', ['-l', 'JavaScript',
     fileURLToPath(new URL('app-health.js', import.meta.url)), '--accessibility-check'],
-  { encoding: 'utf8', timeout: 3000, maxBuffer: 4096, stdio: ['ignore', 'pipe', 'ignore'] }));
+  { encoding: 'utf8', timeout: 3000, maxBuffer: 4096, stdio: ['ignore', 'pipe', 'ignore'], killSignal: 'SIGKILL' }));
   return typeof result.trusted === 'boolean' ? result.trusted : undefined;
 }
 
@@ -31,7 +31,7 @@ export function grokbotStatus({ home = homedir(), read = readFileSync, running =
     try {
       // Decode XML and binary plists from the injected bytes, without letting plutil open another file.
       const info = JSON.parse(execFileSync('/usr/bin/plutil', ['-convert', 'json', '-o', '-', '--', '-'],
-        { input: contents, encoding: 'utf8', timeout: 2000, maxBuffer: 65536, stdio: ['pipe', 'pipe', 'ignore'] }));
+        { input: contents, encoding: 'utf8', timeout: 2000, maxBuffer: 65536, stdio: ['pipe', 'pipe', 'ignore'], killSignal: 'SIGKILL' }));
       if (typeof info?.CFBundleShortVersionString === 'string' && /^\d+\.\d+\.\d+(?:[-+][\w.-]+)?$/.test(info.CFBundleShortVersionString)
         && info.CFBundleShortVersionString.length <= 64) version = info.CFBundleShortVersionString;
     } catch {}

@@ -27,7 +27,8 @@ an install-mode receipt or unconfirmed cleanup blocks the release.
 
 On macOS with Colima installed, append `--linux-runtime colima` to either command. This
 starts an owned VM through the Colima helper, runs the same exact-commit Linux producer,
-then waits for container and VM cleanup. The helper keeps its 20-minute total budget.
+then waits for container and VM cleanup. npm allows 30 minutes, Docker 32 minutes,
+and Colima 38 minutes including startup plus eight minutes for cleanup (46 minutes total).
 A passing Linux receipt with failed VM teardown or an expired runtime budget fails A6.
 `--linux-runtime docker` explicitly selects the default route. Other values are rejected
 before source checks or commands run. Each flag takes one value and may appear only once.
@@ -43,15 +44,45 @@ Run release mode again after the intended tag exists. `releaseReady: true` means
 preflight checks passed. The architect's full check, release pass, A/B, public CI and the
 owner's publication decision retain their separate requirements.
 
+## Host smoke
+
+The 1.6.0 release had a write guard that refused every Bash command or Write naming a path that did not exist yet
+inside Claude Code 2.1.309, while every test passed against hand-written fakes of the mod API. So after the history scan
+and before Linux, the preflight runs `scripts/host-smoke.mjs` on the release tree's `plugins/sleight`. It loads the
+mod in the real CLI (`~/.local/bin/claude -p --plugin-dir`, Haiku at low effort) and makes one headless call per case
+under a fresh `/private/tmp` bank. Each call gets only its case's tools, and a Bash case may run only its exact command.
+The init event must list this plugin dir once and no MCP server.
+
+These must be allowed: `echo x` with `2>&1`, `2>/dev/null` and `&>/dev/null`, redirects to new files (absolute,
+with spaces, through the `/tmp` link and relative), `mkdir -p`, `cp` and `touch` to new paths, `git worktree add`,
+a heredoc, `npm --version 2>&1 | head -1`, a Write of a new file and an Edit. These must be refused: a Write, two
+`>` redirects, `tee`, `cp` and `sed -i` into sleight's settings files, and `SLEIGHT_ACTION_LOG` appended to a `.zshrc`.
+The refused cases fail if the mod never loads. They match the guard's refusal sentences, so rewording one fails the
+release until the case's pattern changes with it.
+
+A case passes only when the stream shows the exact tool input, no other tool call (an Edit or an overwrite may Read
+its file once), and the bank's files agree with the outcome. A host permission denial, a failed command or a model that
+issued something else is inconclusive and retried once. An inconclusive case never passes. The step fails unless 15
+allowed and 7 refused cases passed on this commit's clean tree at the release version. The preflight result
+reports only the counts. Run `node scripts/host-smoke.mjs --plugin-dir plugins/sleight` by hand to see which case failed and why.
+
+The config must be an isolated logged-in one, never `~/.claude`. The default is the benchmark sleight arm's
+(`~/Library/Caches/sleight-bench/sleight-arm/claude`), and `--host-smoke-config DIR` names another. On 2026-11-12,
+each run took 26 to 35 seconds. 1.6.0 failed 12 of 22 cases in 2 of 2 runs, 1.5.2 passed 22 of 22 in 2 of 2, and
+the 1.6.1 fix at 6b2812a2 passed 22 of 22. No attempt needed a retry. After every release,
+`sh scripts/host-smoke-installed.sh` runs the same cases against the installed copy in `~/Projects/sleight`.
+
 ## Plugin size
 
 Before the release preflight, run `nice -n 20 node tools/characters/check.mjs` from the release worktree.
-It checks all six built-in packs against the plugin's SHA-256 manifest and requires lossless VP8L sheets.
-A character bank of 8,000,000 bytes or more (hash manifest included) fails the check. Record its per-pack bytes, total character bytes and
-complete plugin bytes with the release evidence. The generator is included in the plugin at
+It checks all 13 built-in packs against the plugin's SHA-256 manifest and requires lossless VP8L sheets.
+Original packs (6) must total fewer than 8,000,000 bytes. Everyday packs (7) must total at most 15,000,000 bytes.
+These budgets count each group's pack files. Record per-pack bytes, both group totals, total character bytes (including
+the hash manifest) and complete plugin bytes with the release evidence. The generator is included in the plugin at
 `skills/make-character/tool/`. `tools/characters/` contains repository entry points and repository-only checks.
 On macOS with the tested toolchain, also run `tests/character-rebuild.test.mjs`. It compares a fresh build's structure and alpha
-with the committed packs, not their bytes, and skips with a reason on another toolchain.
+with all 13 committed packs and requires the seven everyday packs to match byte for byte. Original packs (6) retain
+the structure and alpha checks. Raster qualification skips with a reason on another toolchain.
 
 ## Checks
 
@@ -99,6 +130,12 @@ username, independently of the supplied notes terms. A generic Linux account doe
 prove the owner's identity is absent from history; retain the owner-identity history
 scan as a separate release requirement.
 
+The history scanner reads added text lines from Git patches, splitting on LF only and keeping CR as content.
+It refuses unrecognized lines inside a hunk. It does not scan binary files (including UTF-16 files Git treats as binary),
+files marked `-diff` in `.gitattributes`, file names, commit author or committer identities, or tag identities.
+It does not join an identity split across multiple added lines. Its patterns cover only the runtime home path and
+username. Supplied private terms apply to the newest release notes. Review binary content, paths and Git metadata before publication.
+
 The Linux step calls the actual A5 `runLinuxPreflight` API with the captured HEAD and
 source worktree. The Colima route calls `runColimaPreflight`, which runs the same producer
 and handles VM cleanup. The history scanner and Linux helper must be tracked; selecting Colima
@@ -118,7 +155,7 @@ commit, counts and cleanup status while omitting the receipt's private host work
 
 `preflight(options)` accepts an injected `runner(request)` returning `{ status, stdout }`
 and an optional document reader. Its operations are `status`, `head`, `tag`, `base`,
-`ancestor`, `sources`, `history` and `linux`. The Linux request includes `head`.
+`ancestor`, `sources`, `history`, `host-smoke` and `linux`. The Linux request includes `head`.
 Version inspection always uses the actual A1 API against the supplied root.
 
 `createReviewedRunner(root, { execute, signal, linuxRuntime })` owns fixed Git reads, the history

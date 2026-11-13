@@ -13,6 +13,7 @@ const script = fileURLToPath(new URL('./real-fixture.js', import.meta.url));
 // Titles, paths, dialog text and raw helper output never enter this schema.
 const finderEnums = {
   stage: ['identified', 'identified-process', 'armed', 'ready', 'closed', 'setup-failure', 'untouched', 'action', 'retry',
+    'finder-creation-start', 'finder-creation-poll', 'finder-creation-recorded',
     'finder-relaunch', 'finder-recovered', 'finder-window-retained', 'finder-folder-submitted', 'finder-folder-dismiss', 'finder-failure', 'finder-baseline-changed', 'finder-cleanup', 'finder-panel-retained', 'finder-panel-cleanup', 'menu-items', 'menu-cancel', 'readiness'],
   app: ['Finder'], bundle: ['com.apple.finder'], observedBundle: ['com.apple.finder'],
   cleanup: ['nothing created', 'closed retained fixture', 'unconfirmed'],
@@ -42,7 +43,7 @@ const finderEnums = {
     -25210, -25211, -25212, -25213, -25214],
   command: ['new-window', 'go-to-folder'], menuCancelMethod: ['AXCancel'],
 };
-const finderNumbers = new Set(['pid', 'fromPid', 'toPid', 'startedAtMs', 'fromStartedAtMs', 'toStartedAtMs',
+const finderNumbers = new Set(['finderCreatedAtMs', 'windowNumber', 'pid', 'fromPid', 'toPid', 'startedAtMs', 'fromStartedAtMs', 'toStartedAtMs',
   'processStartedAtMs', 'code', 'count', 'index', 'duplicateIndex', 'axCode', 'waitMs', 'totalWaitMs', 'elapsedMs', 'deadlineMs', 'hardCapMs', 'enabled']);
 const finderCounts = new Set(['baselineCount', 'currentCount', 'missingIndex', 'scrollAreasBaseline', 'scrollAreasMatched']);
 const finderFlags = new Set(['running', 'launched', 'fresh', 'actionTaken', 'referenceExported', 'originalExitConfirmed', 'appAbsent',
@@ -153,7 +154,7 @@ export async function openFixture(ctx, request, { run = runOwned, open = execute
     throw Object.assign(new Error('Browser blank-window setup requires an explicit owner-away boundary'), { noMutation: true });
   }
   request = { ...request, runToken: ctx.nonce || request.runToken, fixtureLaunch,
-    ...(request.bundle === 'com.apple.finder' && request.mode === 'folder' && { fixtureRoot: ctx.fixtureRoot || ctx.dir }),
+    ...(finderFolder && { fixtureRoot: ctx.dir, finderAdoption: typeof ctx.finderObservation === 'function' }),
     stopOnAppDialog: ctx.stopOnAppDialog || request.stopOnAppDialog, ownerAway: ctx.ownerAway === true };
   ctx.signal?.throwIfAborted();
   ctx.cleanupSignal?.throwIfAborted();
@@ -305,11 +306,15 @@ export async function openFixture(ctx, request, { run = runOwned, open = execute
     },
     async dispose() { controller.abort(); return (await response).groupClean === true; },
   };
-  let command;
+  let command, controlCommand, finderCreationPending = false;
   const writeControl = command => {
+    controlCommand = command;
     const next = control + '.next';
     writeFileSync(next, JSON.stringify({
     command, cancelled: signal?.aborted === true, launched: lease.launched,
+    ...((command === 'close' || finderCreationPending) && finderFolder && request.finderAdoption && diagnostics.finderCreatedAtMs > 0 && { finderObservation: ctx.finderObservation({
+      pid: lease.pid, createdAtMs: diagnostics.finderCreatedAtMs,
+    }) }),
     ...(lease.simulatorBooted === true ? { simulatorBooted: true } : {}),
     }), { mode: 0o600 });
     renameSync(next, control);
@@ -354,6 +359,14 @@ export async function openFixture(ctx, request, { run = runOwned, open = execute
         if (event.pid > 0) { lease.pid = event.pid; diagnostics.pid = event.pid; }
         if (event.bundle) { lease.bundle = event.bundle; diagnostics.observedBundle = event.bundle; }
         if (event.processStartedAtMs > 0) { lease.processStartedAtMs = event.processStartedAtMs; diagnostics.processStartedAtMs = event.processStartedAtMs; }
+        if (event.finderCreatedAtMs > 0) diagnostics.finderCreatedAtMs = event.finderCreatedAtMs;
+        if (event.stage === 'finder-creation-start') finderCreationPending = true;
+        if (event.stage === 'finder-creation-start' || event.stage === 'finder-creation-poll') writeControl(controlCommand);
+        if (event.stage === 'finder-creation-recorded' && event.windowNumber > 0) {
+          diagnostics.createdWindowNumber = event.windowNumber; finderCreationPending = false;
+        }
+        if (event.stage === 'finder-cleanup' && event.windowCleanupConfirmed === true && event.windowNumber > 0)
+          (diagnostics.adoptedWindowNumbers ??= []).push(event.windowNumber);
         if (event.setupCase) lease.setupCase = event.setupCase;
         const recorded = [...(Array.isArray(event.pids) ? event.pids : []), event.pid,
           event.processHandoff?.fromPid, event.processHandoff?.toPid].filter(pid => Number.isInteger(pid) && pid > 0);

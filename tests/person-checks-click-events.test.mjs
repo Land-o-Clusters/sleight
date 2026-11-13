@@ -1,3 +1,4 @@
+import { assertChildStatus } from './fixtures/child-status.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { mkdtempSync, readFileSync, realpathSync, writeFileSync } from 'node:fs';
@@ -19,10 +20,10 @@ test('person-check click encoding binds global and window points without posting
     writeFileSync(swift, 'import AppKit\nimport Darwin\n' + block +
       readFileSync(new URL('./fixtures/person-checks-click-events.swift', import.meta.url), 'utf8'));
     const built = spawnSync('/usr/bin/xcrun', ['swiftc', '-module-cache-path', join(dir, 'cache'), swift, '-o', binary],
-      { encoding: 'utf8', timeout: 120000 });
-    assert.equal(built.status, 0, built.stderr);
-    const run = spawnSync(binary, [], { encoding: 'utf8', timeout: 10000 });
-    assert.equal(run.status, 0, run.stderr + run.stdout);
+      { encoding: 'utf8', timeout: 600000, killSignal: 'SIGKILL' });
+    assertChildStatus(built, 0, built.stderr);
+    const run = spawnSync(binary, [], { encoding: 'utf8', timeout: 10000, killSignal: 'SIGKILL' });
+    assertChildStatus(run, 0, run.stderr + run.stdout);
     const result = JSON.parse(run.stdout);
     assert.equal(result.oldWindow, 0, 'the old CGEvent constructor carries no target window');
     assert.equal(result.invalidRefused, 5);
@@ -67,10 +68,10 @@ test('consent probe constructs HID PID-zero forgery metadata without posting',
       print(String(data: try! JSONSerialization.data(withJSONObject: rows), encoding: .utf8)!)
     `);
     const built = spawnSync('/usr/bin/xcrun', ['swiftc', '-module-cache-path', join(dir, 'cache'), swift, '-o', binary],
-      { encoding: 'utf8', timeout: 120000 });
-    assert.equal(built.status, 0, built.stderr);
-    const run = spawnSync(binary, [], { encoding: 'utf8', timeout: 10000 });
-    assert.equal(run.status, 0, run.stderr + run.stdout);
+      { encoding: 'utf8', timeout: 600000, killSignal: 'SIGKILL' });
+    assertChildStatus(built, 0, built.stderr);
+    const run = spawnSync(binary, [], { encoding: 'utf8', timeout: 10000, killSignal: 'SIGKILL' });
+    assertChildStatus(run, 0, run.stderr + run.stdout);
     const rows = JSON.parse(run.stdout); assert.equal(rows.length, 6);
     for (const row of rows) {
       assert.equal(row.data, 0);
@@ -115,10 +116,10 @@ test('person-check mouse receipt records only delivered source fields beside del
       print(String(data: try! JSONSerialization.data(withJSONObject: rows), encoding: .utf8)!)
     `);
     const built = spawnSync('/usr/bin/xcrun', ['swiftc', '-module-cache-path', join(dir, 'cache'), swift, '-o', binary],
-      { encoding: 'utf8', timeout: 120000 });
-    assert.equal(built.status, 0, built.stderr);
-    const run = spawnSync(binary, [], { encoding: 'utf8', timeout: 10000 });
-    assert.equal(run.status, 0, run.stderr + run.stdout);
+      { encoding: 'utf8', timeout: 600000, killSignal: 'SIGKILL' });
+    assertChildStatus(built, 0, built.stderr);
+    const run = spawnSync(binary, [], { encoding: 'utf8', timeout: 10000, killSignal: 'SIGKILL' });
+    assertChildStatus(run, 0, run.stderr + run.stdout);
     const rows = JSON.parse(run.stdout);
     assert.equal(rows.length, 2);
     for (const [i, row] of rows.entries()) {

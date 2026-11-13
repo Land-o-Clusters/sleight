@@ -8,16 +8,24 @@ import { prepareMailFixture, setupMailImport, checkMailUnchanged, cleanupMailImp
 const hash = path => createHash('sha256').update(readFileSync(path)).digest('hex');
 const headers = ['Reference', 'Item', 'Quantity'];
 
-export function prepareMailToSheet(ctx) {
+export function prepareMailToSheet(ctx, { random = randomBytes } = {}) {
   if (ctx.mailToSheet) return;
   if (ctx.mail) throw new Error('MAIL_TO_SHEET_REQUIRES_FRESH_FIXTURE');
-  const values = [`REF-${randomBytes(6).toString('hex')}`, `Cedar-${randomBytes(4).toString('hex')}`,
-    String(10 + randomBytes(1)[0] % 80)];
-  prepareMailFixture(ctx, { transferValues: values });
   const source = join(ctx.dir, `Transfer-${ctx.nonce}.csv`), output = join(ctx.dir, `Transferred-${ctx.nonce}.csv`);
   const sentinel = [`Keep ${ctx.nonce}`, '', ''];
-  writeFileSync(source, [headers, ['PENDING', 'PENDING', 'PENDING'], sentinel].map(row => row.join(',')).join('\n') + '\n',
-    { flag: 'wx', mode: 0o600 });
+  const sourceText = [headers, ['PENDING', 'PENDING', 'PENDING'], sentinel].map(row => row.join(',')).join('\n') + '\n';
+  const prompt = mailToSheetTask().prompt({ ...ctx, mail: { name: `Sleight-Mail-${ctx.nonce}` }, mailToSheet: { source, output } });
+  // Check the complete prompt (including paths) and CSV before writing either fixture.
+  const values = [() => `REF-${random(6).toString('hex')}`, () => `Cedar-${random(4).toString('hex')}`,
+    () => String(10 + random(1)[0] % 80)].map(draw => {
+    for (let attempt = 0; attempt < 128; attempt++) {
+      const value = draw();
+      if (!prompt.includes(value) && !sourceText.includes(value)) return value;
+    }
+    throw new Error('MAIL_TO_SHEET_HIDDEN_VALUES_UNAVAILABLE');
+  });
+  prepareMailFixture(ctx, { transferValues: values });
+  writeFileSync(source, sourceText, { flag: 'wx', mode: 0o600 });
   ctx.mailToSheet = { source, output, values, sentinel, sourceHash: hash(source) };
 }
 

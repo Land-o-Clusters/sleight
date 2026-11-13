@@ -42,12 +42,14 @@ function launcher(dir, { version = '26.1013.1001501', fail = false } = {}) {
 test('the doctor result carries the engine version or the first problem line', async t => {
   const dir = temp(t);
   const ok = await runDoctor(launcher(dir), process.env);
-  assert.equal(ok.version, '26.1013.1001501');
+  assert.equal(ok.version, '26.1013.1001501'); assert.equal(ok.code, 0);
   assert.equal(ok.result.status, 'pass');
   const bad = await runDoctor(launcher(join(dir, '..', dir.split('/').at(-1)), { fail: true }), process.env);
-  assert.equal(bad.result.status, 'fail');
+  assert.equal(bad.result.status, 'fail'); assert.equal(bad.code, 1);
   assert.equal(bad.result.reason, 'the doctor printed no plain engine version');
   assert.match(bad.result.detail, /^MISSING/);
+  const failedVersion = await runDoctor('fixture', {}, async () => { throw Object.assign(Error('fixture failure'), { code: 7, stdout: 'Codex computer-use 26.1027.51404\n' }); });
+  assert.equal(failedVersion.version, '26.1027.51404'); assert.equal(failedVersion.code, 7); assert.equal(failedVersion.result.status, 'fail');
   const odd = join(dir, 'odd');
   writeFileSync(odd, '#!/bin/sh\necho "Codex computer-use ../../etc"\n', { mode: 0o755 });
   assert.equal((await runDoctor(odd, process.env)).version, undefined);
@@ -245,6 +247,42 @@ test('watch: unchanged versions only log, a new version records and notifies, fa
   assert.equal(await runWatch({ env, logs, deps: { ...deps('3.0'), launcher: launcher(join(dir), { fail: true }) } }), 1);
   assert.match(notes.at(-1), /Doctor failed/);
   assert.equal(readFileSync(join(logs, 'compat.jsonl'), 'utf8').trim().split('\n').length, 4);
+});
+
+test('documentation-only watch saves the observed baseline without doctor, app reads, notifications or qualification', async t => {
+  const dir = temp(t), logs = join(dir, 'logs');
+  const docs = readFileSync(new URL('./fixtures/native-api-docs.txt', import.meta.url), 'utf8');
+  const resolved = { ...server(), version: '26.1027.51404' };
+  const deps = { ...quiet(dir), resolve: () => resolved,
+    launcher: join(dir, 'must-not-run'), notify: () => assert.fail('offline watch notified'),
+    capture: async options => { assert.equal(options.command, resolved.command); assert.deepEqual(options.args, resolved.args); return docs; },
+    open: () => assert.fail('offline watch opened an inventory session'),
+  };
+  assert.equal(await runWatch({ logs, documentationOnly: true, deps }), 0);
+  assert.equal(readFileSync(join(logs, 'watch-engine-version'), 'utf8'), '26.1027.51404\n');
+  assert.equal(readFileSync(join(logs, 'engine-api-26.1027.51404.md'), 'utf8'), docs);
+  assert.equal(existsSync(join(logs, 'compat-accepted')), false);
+  const report = lastRecord(logs, resolved.version);
+  assert.equal(report.tier, 'documentation');
+  assert.equal(report.live, 'not run');
+  assert.ok(!report.steps.some(step => step.id === 'doctor' || step.id === 'repl-probe'));
+  // Seeing docs does not let the next scheduled full check skip this version.
+  const full = { ...deps, launcher: launcher(dir, { version: resolved.version }), notify: async () => {}, open: undefined };
+  assert.equal(await runWatch({ logs, env: { ...process.env, SLEIGHT_COMPAT_LIVE: '0' }, deps: full }), 0);
+  assert.equal(lastRecord(logs, resolved.version).tier, 'engine');
+  assert.equal(readFileSync(join(logs, 'compat-accepted'), 'utf8'), resolved.version + '\n');
+});
+
+test('documentation-only failure keeps the prior watch baseline and accepted version', async t => {
+  const dir = temp(t), logs = join(dir, 'logs'); mkdirSync(logs);
+  writeFileSync(join(logs, 'watch-engine-version'), 'old\n');
+  writeFileSync(join(logs, 'compat-accepted'), 'old\n');
+  const resolved = { ...server(), version: '26.1027.51404' };
+  const deps = { ...quiet(dir), launcher: join(dir, 'must-not-run'), resolve: () => resolved, capture: async () => { throw Error('no documentation'); },
+    notify: () => assert.fail('offline watch notified') };
+  assert.equal(await runWatch({ logs, documentationOnly: true, deps }), 1);
+  assert.equal(readFileSync(join(logs, 'watch-engine-version'), 'utf8'), 'old\n');
+  assert.equal(readFileSync(join(logs, 'compat-accepted'), 'utf8'), 'old\n');
 });
 
 test('watch with live checks on retries them while they are pending', async t => {

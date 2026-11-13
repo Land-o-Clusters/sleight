@@ -14,7 +14,9 @@ const chain = (port, depth) => {
   for (let i = 0; i < depth; i++) routes['/n' + i] = `<!doctype html><div>L${i}</div>` +
     (i + 1 < depth ? `<iframe src="http://${hosts[i + 1]}:${port}/n${i + 1}"></iframe>` : '');
   routes['/plain'] = '<!doctype html><p>plain</p>';
-  return { routes, body: `<input id="a" aria-label="Search"><iframe src="http://${hosts[0]}:${port}/n0"></iframe>` };
+  // A publisher has loaded article text. An empty input and two-letter ads instead exercise the separate
+  // thin-page hydration wait, whose 3 s cap is longer than this auto-attach regression's 2.5 s limit.
+  return { routes, body: `<p>This synthetic publisher article is already loaded while its nested advertising frames finish loading.</p><input id="a" aria-label="Search"><iframe src="http://${hosts[0]}:${port}/n0"></iframe>` };
 };
 // Every frame's readyState, each bounded: a frame whose load never finishes has no answer.
 const states = page => Promise.all(page.frames().map(frame => Promise.race([frame.evaluate(() => document.readyState).catch(() => 'gone'),

@@ -6,13 +6,14 @@ import { mkdtempSync, mkdirSync, readFileSync, writeFileSync, symlinkSync, rmSyn
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { registerTemp, trackTemp } from '../scripts/temp-leftovers.mjs';
+import { hostDiskStat, hostStatFrom } from './fixtures/host-fs-stat.mjs';
 
 const guard = async (...args) => {
   const { preapprovedWriteDenied } = await import('../plugins/sleight/hooks/preapproved-write-guard.mjs');
   return preapprovedWriteDenied(...args);
 };
 const stat = async path => ({ realPath: path });
-for (const filename of ['preapproved.json', 'turbo.json', 'turbo-apps.json', 'turbo-owner.json', 'electron-grants.json', 'grant-seal.key', 'hand.json', 'permissions.json']) {
+for (const filename of ['preapproved.json', 'preapproved.json.lock', 'preapproved.json.lock.reclaim', 'turbo.json', 'turbo-apps.json', 'turbo-owner.json', 'electron-grants.json', 'grant-seal.key', 'hand.json', 'permissions.json']) {
 const policy = `${MAC_USERS}fixture/Library/Application Support/sleight/` + filename;
 
 test(filename + ': each file mutation denies the policy path and case and tilde spellings', async () => {
@@ -48,7 +49,7 @@ test(filename + ': resolved file and parent symlinks protect existing and absent
   const target = join(directory, filename); writeFileSync(target, '{}');
   const alias = join(root, 'alias'); symlinkSync(target, alias);
   const parent = join(root, 'parent'); symlinkSync(directory, parent);
-  const resolve = async path => ({ realPath: realpathSync(path) });
+  const resolve = hostDiskStat;
   for (const path of [alias, join(parent, filename)]) {
     assert.equal(await guard({ tool: 'Write', file_path: path }, { stat: resolve }), true);
     assert.equal(await guard({ tool: 'Bash', command: `tee '${path}'` }, { stat: resolve }), true);
@@ -77,7 +78,7 @@ test(filename + ': symlink traversal precedes dot-dot normalization and HOME is 
   t.after(() => rmSync(root, { recursive: true, force: true }));
   const directory = join(root, 'Library/Application Support/sleight'); mkdirSync(join(directory, 'child'), { recursive: true });
   const alias = join(root, 'alias'); symlinkSync(join(directory, 'child'), alias);
-  const resolve = async path => ({ realPath: realpathSync(path) });
+  const resolve = hostDiskStat;
   const path = `${alias}/../${filename}`;
   assert.equal(await guard({ tool: 'Write', file_path: path }, { stat: resolve }), true);
   assert.equal(await guard({ tool: 'Write', file_path: '~/alias/../' + filename }, { stat: resolve, home: root }), true);
@@ -187,7 +188,7 @@ test('a launcher command word beside a subcommand word passes only as a plain di
         // Substitutions and expansions in the arguments, after or around the launcher.
         `sleight-mcp ${read} \`sleight-mcp ${write}\``, `echo \`sleight-mcp ${write}\``, `sleight-mcp ${read} "\`sleight-mcp ${write}\`"`,
         `sleight-mcp \`echo ${word}\` ${tail}`, `sleight-mcp $(echo ${word}) ${tail}`, `sleight-mcp $'${word}' ${tail}`,
-        `zsh -lc "sleight-mcp ${read} \\\`sleight-mcp ${write}\\\`"`, `sleight-mcp ${read}; echo \`date\``, `sleight-mcp ${write.replace(/[a-z]$/, '?')}`,
+        `zsh -lc "sleight-mcp ${read} \\\`sleight-mcp ${write}\\\`"`, `sleight-mcp ${write.replace(/[a-z]$/, '?')}`,
         `sleight-mcp ${word} ${tail}*`, `sleight-mcp {${word},x} ${tail}`, `sleight-mcp [${word[0]}]${word.slice(1)} ${tail}`, `sleight-mcp ${read} ~`,
         `sleight-mcp ${read} <(true)`, `sleight-mcp ${read} 2>&1`, `(sleight-mcp ${write})`,
         // The command word is a variable, a substitution or a glob (before the launcher, or with no launcher text).
@@ -210,19 +211,22 @@ test('a launcher command word beside a subcommand word passes only as a plain di
         `env -S "sleight-mcp ${write}"`, `env -S"sleight-mcp ${write}"`, `env --split-string="sleight-mcp ${write}"`, `env -S "sleight-mcp ${read}"`,
         `env -iS "sleight-mcp ${write}"`, `timeout --weird 5 sleight-mcp ${write}`, `timeout sleight-mcp ${write}`, `nice --foo sleight-mcp ${read}`,
         `sudo -s sleight-mcp ${write}`, `command -x sleight-mcp ${write}`, `env -S "\$B ${write}"`, `nohup -- -S sleight-mcp ${write}`,
-        // A subcommand word without the launcher's name: no expansion or joined quoting, and no interpreter that isn't
-        // running the launcher's read form literally.
+        // Inline code beside a subcommand word stays conservative. Ordinary scripts without the launcher name pass.
         `python3 -c "import os; os.system('sleight'+'-mcp ${write}')"`, `node -e "require('child_process').execSync('sleight-'+'mcp ${write}')"`,
-        `perl -e 'system("sleight-"."mcp ${write}")'`, `ruby -e 'system("sl" + "eight-mcp ${write}")'`, `swift run.swift ${write}`,
+        `perl -e 'system("sleight-"."mcp ${write}")'`, `ruby -e 'system("sl" + "eight-mcp ${write}")'`,
         `osascript -e 'do shell script "sleight-" & "mcp ${write}"'`, `bash -c 'sleight'"-mcp ${write}"`, `zsh -c "cd /x && sleight-mcp ${read}"`,
-        `sh -c "sleight-mcp ${read}" extra`, `bash script.sh ${write}`, `echo ${word}"" ${tail}`, `echo ${write.replace(/[a-z]$/, '?')}`,
-        `echo {${word},x} ${tail}`, `node /x/lib/launch.mjs ${write}`,
+        `sh -c "sleight-mcp ${read}" extra`, `node /x/lib/launch.mjs ${write}`,
         // A read tool doesn't save a command that can also run something.
         `grep x f | xargs sleight-mcp ${word}`, `grep -l ${word} plugins/sleight/lib/launch.mjs | xargs cat`, `cat plugins/sleight/lib/launch.mjs | bash`,
         `rg --pre sleight-mcp ${word} .`, `git grep -O sleight-mcp ${word}`, `PATH=/tmp/x grep ${word} plugins/sleight/lib/launch.mjs`,
         `grep ${word} plugins/sleight/lib/launch.mjs > /tmp/x`, `find . -name launch.mjs -exec grep ${word} {} \\;`, `grep ${word} $(echo launch.mjs)`,
         `grep ${word} plugins/sleight/lib/launch.mjs; sleight-mcp ${write}`, `(grep ${word} plugins/sleight/lib/launch.mjs)`]) {
         assert.equal(await guard({ tool: 'Bash', command: spelling }, { stat }), true, spelling);
+      }
+      // GD1: fixed print arguments and another pipeline's harmless substitution are data.
+      for (const spelling of [`sleight-mcp ${read}; echo \`date\``, `echo ${word}"" ${tail}`, `swift run.swift ${write}`, `bash script.sh ${write}`,
+        `echo ${write.replace(/[a-z]$/, '?')}`, `echo {${word},x} ${tail}`]) {
+        assert.equal(await guard({ tool: 'Bash', command: spelling }, { stat }), false, spelling);
       }
     }
     for (const form of reads[command]) {
@@ -407,7 +411,7 @@ test('the helper cache and installed plugin copies deny every mutation; a source
   const installed = [`${MAC_USERS}fixture/.claude/plugins/cache/sleight/sleight/1.5.0/lib/launch.mjs`,
     `${MAC_USERS}fixture/.codex/plugins/cache/land-o-clusters/sleight/abc123/lib/person-confirm.mjs`,
     `${MAC_USERS}fixture/.cursor/plugins/cache/market/sleight/hooks/preapproved-write-guard.mjs`];
-  for (const path of [helper, helper.toUpperCase(), '~/Library/Caches/sleight/turbo-host/k/consent-host', ...installed]) {
+  for (const path of [helper, `${MAC_USERS}fixture/Library/Caches/sleight/turbo-host/mac-driver/k/glide-engine`, helper.toUpperCase(), '~/Library/Caches/sleight/turbo-host/k/consent-host', ...installed]) {
     for (const tool of ['Write', 'Edit', 'MultiEdit', 'NotebookEdit']) assert.equal(await guard({ tool, file_path: path, notebook_path: path }, { stat }), true, `${tool} ${path}`);
   }
   for (const command of [`cp /tmp/evil ${helper}`, `printf x > ${installed[0]}`, 'rm -rf ~/Library/Caches/sleight', 'rm -rf ~/Library/Caches',
@@ -459,8 +463,7 @@ test('a link into the helper cache is followed for Write and Edit', async t => {
   const cache = join(root, 'Library/Caches/sleight/turbo-host');
   mkdirSync(cache, { recursive: true }); writeFileSync(join(cache, 'consent-host'), 'x');
   symlinkSync(cache, join(root, 'innocent'));
-  const { lstat, realpath } = await import('node:fs/promises');
-  const real = async path => { await lstat(path); return { realPath: await realpath(path) }; };
+  const real = hostDiskStat;
   assert.equal(await guard({ tool: 'Write', file_path: join(root, 'innocent/consent-host') }, { stat: real }), true);
 });
 
@@ -469,7 +472,7 @@ test('the folders above installed plugin copies deny removal and moves; other ma
   const home = `${MAC_USERS}fixture`, configDir = '/tmp/lane-claude-abc123';
   const installs = new Set([`${home}/.claude/plugins/cache/sleight/sleight`, `${home}/.codex/plugins/cache/land-o-clusters/sleight`,
     `${configDir}/plugins/cache`, `${configDir}/plugins/cache/market/sleight`]);
-  const fsStat = async path => path === '/' || installs.has(path) ? { realPath: path } : undefined;
+  const fsStat = hostStatFrom(path => path === '/' || installs.has(path) ? path : undefined);
   const options = { stat: fsStat, home, configDir };
   for (const command of ['rm -rf ~/.claude/plugins/cache', 'rm -rf ~/.claude/plugins', 'rm -rf ~/.claude', 'rm -rf ~/.codex/plugins/cache',
     'rm -rf ~/.cursor/plugins', 'rm -rf ~/.claude/plugins/cache/sleight', 'rm -rf ~/.codex/plugins/cache/land-o-clusters',
@@ -493,8 +496,7 @@ test('a link to a custom config folder can\'t take its installed copy with it', 
   const configDir = join(root, 'custom-config');
   mkdirSync(join(configDir, 'plugins/cache/mk/sleight'), { recursive: true });
   symlinkSync(configDir, join(root, 'link'));
-  const { lstat, realpath } = await import('node:fs/promises');
-  const real = async path => { await lstat(path); return { realPath: await realpath(path) }; };
+  const real = hostDiskStat;
   const options = { stat: real, home: join(root, 'home'), configDir };
   for (const command of [`rm -rf ${configDir}/plugins/cache`, `rm -rf ${join(root, 'link')}/plugins/cache`, `rm -rf ${join(root, 'link')}`,
     `rm -rf ${join(root, 'link')}/plugins/cache/mk`]) {
@@ -517,7 +519,7 @@ test('the refusal names the protected folder the call reached', async () => {
   for (const [input, label] of cases) assert.equal(await preapprovedWriteTarget(input, options), label, JSON.stringify(input));
   assert.equal(preapprovedWriteReason(PROTECTED.cache), "Only the user changes sleight's helper cache (~/Library/Caches/sleight). Ask them to make this change.");
   const register = readFileSync(new URL('../plugins/sleight/hooks/register.tsx', import.meta.url), 'utf8');
-  assert.match(register, /return denied \? \{ deny: preapprovedWriteReason\(denied\) \} : next\(e\)/);
+  assert.match(register, /return denied \? \{ deny: preapprovedWriteReason\(denied\) \} : (?:next\(e\)|undefined)/);
 });
 
 // Automated finding on 9d72b52e: the bench arm's plugins folder is a link into the real plugin cache, so a write through it,
@@ -531,8 +533,7 @@ test('a write through the bench arm\'s linked plugins folder is refused, with a 
   // A real folder under sleight-bench whose name only looks like a link target.
   mkdirSync(join(home, 'Library/Caches/sleight-bench/arm-2/notes'), { recursive: true });
   symlinkSync(join(home, '.claude/plugins/cache/mkt/sleight'), join(home, 'Library/Caches/sleight-bench/arm-2/sneaky'));
-  const { lstat, realpath } = await import('node:fs/promises');
-  const stat = async path => { await lstat(path); return { realPath: await realpath(path) }; };
+  const stat = hostDiskStat;
   const options = { stat, home, configDir: arm };
   const through = join(arm, 'plugins/cache/mkt/sleight/lib/launch.mjs'), sneaky = join(home, 'Library/Caches/sleight-bench/arm-2/sneaky/lib/launch.mjs');
   for (const command of [`python3 -c "open('${through}','w').write('x')"`, `node -e "require('fs').writeFileSync('${through}','x')"`,
@@ -547,4 +548,37 @@ test('a write through the bench arm\'s linked plugins folder is refused, with a 
     `rm -rf ${join(home, 'Library/Caches/sleight-bench/arm-2/notes')}`]) {
     assert.equal(await guard({ tool: 'Bash', command }, options), false, command);
   }
+});
+
+test('Windows helper builds and person-run copies are protected with native and shell path spellings', async () => {
+  const home = ['C:', 'Users', 'fixture'].join('/'), root = home + '/AppData/Local/sleight/turbo-host';
+  const paths = [root, root + '/abcd/cursor-host.exe', root + '/person-run-123/person-host.exe',
+    root.toUpperCase() + '/PERSON-RUN-123/PERSON-HOST.EXE', root.replaceAll('/', '\\') + '\\person-run-123\\person-host.exe',
+    '%LOCALAPPDATA%/sleight/turbo-host/person-run-123/person-host.exe', '$env:LOCALAPPDATA/sleight/turbo-host/key/person-host.exe'];
+  for (const path of paths) {
+    for (const tool of ['Write', 'Edit', 'MultiEdit', 'NotebookEdit'])
+      assert.equal(await guard({ tool, file_path: path, notebook_path: path }, { stat, home, platform: 'win32' }), true, path);
+    for (const command of [`cp evil '${path}'`, `tee '${path}'`, `rm -rf '${path}'`])
+      assert.equal(await guard({ tool: 'Bash', command }, { stat, home, platform: 'win32' }), true, command);
+    assert.equal(await guard({ tool: 'Read', file_path: path }, { stat, home, platform: 'win32' }), false);
+    assert.equal(await guard({ tool: 'Bash', command: `cat '${path}'` }, { stat, home, platform: 'win32' }), false);
+  }
+  for (const path of [home + '/AppData/Local/sleight-bench/turbo-host/a.exe', root + '-other/person-host.exe', '/repo/plugins/sleight/lib/person-confirm.mjs'])
+    assert.equal(await guard({ tool: 'Write', file_path: path }, { stat, home, platform: 'win32' }), false);
+  assert.equal(await guard({ tool: 'Bash', command: `rm -rf '${home}/AppData/Local/sleight'` }, { stat, home, platform: 'win32' }), true);
+});
+
+test('Windows helper guard follows resolved aliases and catches interpreter writes', async () => {
+  const root = ['C:', 'Users', 'fixture', 'AppData/Local/sleight/turbo-host'].join('/');
+  const resolve = async path => ({ realPath: path === 'C:/alias' ? root : path });
+  assert.equal(await guard({ tool: 'Write', file_path: 'C:\\alias\\person-run-123\\person-host.exe' }, { stat: resolve, platform: 'win32' }), true);
+  for (const command of [`node -e "require('fs').writeFileSync('${root}/key/person-host.exe','x')"`,
+    `python -c "open('${root}/person-run-123/person-host.exe','w').write('x')"`,
+    `node -e "require('fs').writeFileSync('C:\\\\Users\\\\fixture\\\\AppData\\\\Local\\\\sleight\\\\turbo-host\\\\key\\\\person-host.exe','x')"`,
+    "rm -rf '%LOCALAPPDATA%/sleight'"]) assert.equal(await guard({ tool: 'Bash', command }, { stat: resolve, platform: 'win32' }), true, command);
+});
+
+test('Windows helper spellings leave the macOS guard unchanged', async () => {
+  const path = ['C:', 'Users', 'fixture', 'AppData/Local/sleight/turbo-host/person-run-123/person-host.exe'].join('/');
+  assert.equal(await guard({ tool: 'Write', file_path: path }, { stat, platform: 'darwin' }), false);
 });

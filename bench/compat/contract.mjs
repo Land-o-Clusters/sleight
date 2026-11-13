@@ -62,10 +62,14 @@ export function parseDeclarations(source) {
     // Members are the segments between ";" or line ends outside nested braces and parentheses, so a one-line
     // `{ state: string; screenshot?: Uint8Array }` and a multi-line method signature both count once.
     const members = new Set();
+    const signatures = new Map();
     let braces = 0, parens = 0, segment = '', at = start;
     const flush = () => {
       const member = /^\s*(?:readonly\s+)?([A-Za-z_$][\w$]*)\??\s*[(:<]/.exec(segment);
-      if (member) members.add(member[1]);
+      if (member) {
+        members.add(member[1]);
+        signatures.set(member[1], [...signatures.get(member[1]) ?? [], segment.trim()]);
+      }
       segment = '';
     };
     for (; at < block.length; at++) {
@@ -83,8 +87,11 @@ export function parseDeclarations(source) {
     const parents = [...(match[2] ?? '').split(','), ...intersected.split('&')].map(part => part.replace(/<.*$/, '').trim()).filter(Boolean);
     // A repeated interface merges, as TypeScript's declaration merging does.
     const known = owners.get(name);
-    if (known) { for (const member of members) known.members.add(member); known.parents.push(...parents); }
-    else owners.set(name, { members, parents });
+    if (known) {
+      for (const member of members) known.members.add(member);
+      for (const [name, values] of signatures) known.signatures.set(name, [...known.signatures.get(name) ?? [], ...values]);
+      known.parents.push(...parents);
+    } else owners.set(name, { members, parents, signatures });
   }
   return owners;
 }
@@ -108,6 +115,19 @@ export function checkApiContract(docs) {
     if (!owners.has(owner)) { missing.push(`${owner} (whole declaration)`); continue; }
     const have = membersOf(owners, owner);
     for (const name of wanted) if (!have.has(name)) missing.push(`${owner}.${name}`);
+  }
+  // Presence alone missed an incompatible drag call. Both shipped forms use
+  // coordinate pairs; the newer App declaration adds optional Windows options.
+  const signatures = (name, seen = new Set()) => {
+    const owner = owners.get(name);
+    if (!owner || seen.has(name)) return [];
+    seen.add(name);
+    return owner.signatures.get('drag') ?? owner.parents.flatMap(parent => signatures(parent, seen));
+  };
+  const coordinateDrag = /^drag\s*\(\s*from\s*:\s*Vec2\s*,\s*to\s*:\s*Vec2\s*(?:,\s*options\?\s*:\s*\w+\s*)?\)\s*:\s*Promise\s*<\s*void\s*>$/;
+  for (const name of ['App', 'Tab']) {
+    const declared = signatures(name);
+    if (declared.length && !declared.every(signature => coordinateDrag.test(signature))) missing.push(`${name}.drag coordinate signature`);
   }
   const headings = DOC_HEADINGS.filter(heading => !new RegExp(`^${heading.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\s*$`, 'm').test(docs));
   return [

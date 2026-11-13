@@ -143,6 +143,11 @@ export async function executeRealTask(task, ctx, { drive, dryRun = false, setupO
         if (collected !== true) throw new Error('Fixture helper process group cleanup unconfirmed');
       } catch (error) { result.passed = false; result.cleanupError = error.message; cleanupConfirmed = false; }
     }
+    try { await ctx.disposeResources?.(); }
+    catch (error) {
+      result.passed = false; cleanupConfirmed = false;
+      result.cleanupError = [result.cleanupError, error.message].filter(Boolean).join('; ');
+    }
     // Publish the pre-close window metadata after cleanup and helper collection.
     // An unavailable report does not make confirmed fixture cleanup uncertain.
     if (!dryRun && task.leftovers) {

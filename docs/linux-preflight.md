@@ -70,12 +70,23 @@ adds container identity and cleanup evidence. Failed runs retain available test 
 and statuses, and always return nonzero.
 
 Each run uses a unique named container. The helper retains its Docker client, forwards
-cancellation to that child and waits for collection. SIGINT, SIGTERM and the 20-minute
+cancellation to that child and waits for collection. npm has a 30-minute
+hang guard. SIGINT, SIGTERM and the 32-minute Docker
 run deadline stop later work. Cleanup addresses only the owned container name with
 `docker rm --force --volumes`, then requires a successful container-list query showing
 that exact name absent. Cleanup has its own bounded commands and continues after an
 abort. An uncollected child or unconfirmed container cleanup fails the run and retains
 private staging, whose path goes to stderr. Review that retained bank before removal.
+
+Colima allows 38 minutes for startup and execution, followed by an eight-minute cleanup
+reserve (46 minutes total). Its stop command allows 390 seconds. Cleanup checks the
+private instance and configuration before each stop or deletion. A captured usernet PID
+must still belong to the same user, process start time and `limactl usernet` command,
+with the private network path. A stale or changed PID prevents stop and retains the bank.
+After shutdown, Lima reconciles the network before deletion. When no PID was captured,
+the report says "not captured", with `usernetCollected: null`. Existing network logs without a PID
+leave cleanup unconfirmed. These caps remain provisional until a completed Linux run
+establishes the suite duration.
 
 The source guard in `tests/test-path-portability.test.mjs` scans every file under `tests/`,
 including fixtures and comments, for hardcoded macOS temporary and home roots. It has

@@ -1,0 +1,193 @@
+{
+ "claudeCode": "2.1.309",
+ "recorded": "2026-11-12",
+ "call": "$.fs.stat(path, { resolve: true })",
+ "mod": "sleight 1.6.0 (lin160h 87e6790d) with a temporary diagnostic in guardTool, loaded by claude -p --plugin-dir",
+ "fixtures": "{tmp} was the macOS temporary folder; {tmp}/hot161-fx held file, dir, dangling -> nowhere, linkdir -> dir",
+ "notes": "Rejections carry no code or errno (null here means the property was absent). The errno name is only the last word of message.",
+ "cases": [
+  {
+   "case": "existing file",
+   "path": "{tmp}/hot161-fx/file",
+   "resolves": {
+    "constructor": "Object",
+    "ownProperties": [
+     "kind",
+     "size",
+     "mtimeMs",
+     "isLink",
+     "realPath"
+    ],
+    "value": {
+     "kind": "file",
+     "size": 3,
+     "mtimeMs": 1794530691312.3596,
+     "isLink": false,
+     "realPath": "{tmp}/hot161-fx/file"
+    }
+   }
+  },
+  {
+   "case": "existing directory",
+   "path": "{tmp}/hot161-fx/dir",
+   "resolves": {
+    "constructor": "Object",
+    "ownProperties": [
+     "kind",
+     "size",
+     "mtimeMs",
+     "isLink",
+     "realPath"
+    ],
+    "value": {
+     "kind": "dir",
+     "size": 64,
+     "mtimeMs": 1794530691312.1616,
+     "isLink": false,
+     "realPath": "{tmp}/hot161-fx/dir"
+    }
+   }
+  },
+  {
+   "case": "missing path",
+   "path": "{tmp}/hot161-fx/missing",
+   "rejects": {
+    "constructor": "Error",
+    "ownProperties": [
+     "message",
+     "name",
+     "stack",
+     "line",
+     "column"
+    ],
+    "name": "HooksError",
+    "message": "sleight: $.fs.stat({tmp}/hot161-fx/missing) failed: ENOENT",
+    "code": null,
+    "errno": null,
+    "line": 0,
+    "column": 0
+   }
+  },
+  {
+   "case": "path under a missing directory",
+   "path": "{tmp}/hot161-fx/missingdir/child",
+   "rejects": {
+    "constructor": "Error",
+    "ownProperties": [
+     "message",
+     "name",
+     "stack",
+     "line",
+     "column"
+    ],
+    "name": "HooksError",
+    "message": "sleight: $.fs.stat({tmp}/hot161-fx/missingdir/child) failed: ENOENT",
+    "code": null,
+    "errno": null,
+    "line": 0,
+    "column": 0
+   }
+  },
+  {
+   "case": "path under a regular file",
+   "path": "{tmp}/hot161-fx/file/child",
+   "rejects": {
+    "constructor": "Error",
+    "ownProperties": [
+     "message",
+     "name",
+     "stack",
+     "line",
+     "column"
+    ],
+    "name": "HooksError",
+    "message": "sleight: $.fs.stat({tmp}/hot161-fx/file/child) failed: ENOTDIR",
+    "code": null,
+    "errno": null,
+    "line": 0,
+    "column": 0
+   }
+  },
+  {
+   "case": "dangling symbolic link",
+   "path": "{tmp}/hot161-fx/dangling",
+   "resolves": {
+    "constructor": "Object",
+    "ownProperties": [
+     "kind",
+     "size",
+     "mtimeMs",
+     "isLink"
+    ],
+    "value": {
+     "kind": "other",
+     "size": 30,
+     "mtimeMs": 1794530691313.5486,
+     "isLink": true
+    }
+   }
+  },
+  {
+   "case": "symbolic link to a directory",
+   "path": "{tmp}/hot161-fx/linkdir",
+   "resolves": {
+    "constructor": "Object",
+    "ownProperties": [
+     "kind",
+     "size",
+     "mtimeMs",
+     "isLink",
+     "realPath"
+    ],
+    "value": {
+     "kind": "dir",
+     "size": 64,
+     "mtimeMs": 1794530691312.1616,
+     "isLink": true,
+     "realPath": "{tmp}/hot161-fx/dir"
+    }
+   }
+  },
+  {
+   "case": "/dev/null",
+   "path": "/dev/null",
+   "resolves": {
+    "constructor": "Object",
+    "ownProperties": [
+     "kind",
+     "size",
+     "mtimeMs",
+     "isLink",
+     "realPath"
+    ],
+    "value": {
+     "kind": "other",
+     "size": 0,
+     "mtimeMs": 1794530720083.883,
+     "isLink": false,
+     "realPath": "/dev/null"
+    }
+   }
+  },
+  {
+   "case": "missing relative name 1 (what 2>&1 became)",
+   "path": "{tmp}/1",
+   "rejects": {
+    "constructor": "Error",
+    "ownProperties": [
+     "message",
+     "name",
+     "stack",
+     "line",
+     "column"
+    ],
+    "name": "HooksError",
+    "message": "sleight: $.fs.stat({tmp}/1) failed: ENOENT",
+    "code": null,
+    "errno": null,
+    "line": 0,
+    "column": 0
+   }
+  }
+ ]
+}

@@ -1,3 +1,4 @@
+import { assertChildStatus } from './fixtures/child-status.mjs';
 import { macCommandSkip } from './requirements.mjs';
 import { tmpdir } from 'node:os';
 import { idleClock } from './fixtures/socket-clock.mjs';
@@ -235,14 +236,14 @@ test('the native peer helper refuses a regular file at fd 3 without output', { s
   const f = fixture(t), binary = join(f.root, 'peer');
   const built = spawnSync('/usr/bin/clang', ['-Wall', '-Werror',
     fileURLToPath(new URL('../plugins/sleight/lib/socket-peer.c', import.meta.url)), '-o', binary],
-    { encoding: 'utf8', env: { PATH: '/usr/bin:/bin', LANG: 'en_US.UTF-8' } });
-  assert.equal(built.status, 0, built.stderr);
+    { encoding: 'utf8', env: { PATH: '/usr/bin:/bin', LANG: 'en_US.UTF-8' }, timeout: 60000, killSignal: 'SIGKILL' });
+  assertChildStatus(built, 0, built.stderr);
   const path = join(f.root, 'not-a-socket');
   writeFileSync(path, '');
   const fd = openSync(path, 'r');
   t.after(() => closeSync(fd));
-  const result = spawnSync(binary, [], { encoding: 'utf8', env: {}, stdio: ['ignore', 'pipe', 'pipe', fd] });
-  assert.equal(result.status, 1, result.stderr);
+  const result = spawnSync(binary, [], { encoding: 'utf8', env: {}, stdio: ['ignore', 'pipe', 'pipe', fd], timeout: 60000, killSignal: 'SIGKILL' });
+  assertChildStatus(result, 1, result.stderr);
   assert.equal(result.stdout, '');
 });
 

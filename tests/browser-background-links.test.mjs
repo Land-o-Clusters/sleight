@@ -1,3 +1,4 @@
+import { launchTestChromium } from './fixtures/chromium-isolated.mjs';
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { createContext, runInContext } from 'node:vm';
@@ -158,7 +159,7 @@ test('real page redirects a blank-target link and retains a script popup', {
   const { join } = await import('node:path');
   const { pathToFileURL } = await import('node:url');
   const { chromium } = await import(pathToFileURL(join(homedir(), 'Library/Caches/sleight-bench/fowlbrowser/mcp/node_modules/playwright-core/index.mjs')).href);
-  const browser = await chromium.launch({ headless: true });
+  const browser = await launchTestChromium(chromium, { headless: true });
   t.after(() => browser.close());
   const context = await browser.newContext();
   await context.route('https://fixture.test/**', route => route.fulfill({ body: '<p>destination</p>', contentType: 'text/html' }));

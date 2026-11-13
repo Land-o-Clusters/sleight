@@ -104,6 +104,27 @@ test('launcher follows the current plugin registry and reports missing installs'
   assert.equal(await launchRoutine('a'.repeat(20), { home, notify: async message => notices.push(message) }), 1);
   assert.equal(notices.length, 1); assert.match(notices[0], /install|registry/);
 });
+test('launcher verifies watch code before lifecycle reads, cleanup or child launch', async t => {
+  const home = trackTemp(realpathSync(mkdtempSync(join(tmpdir(), 'sleight-launcher-seal-'))));
+  t.after(() => rmSync(home, { recursive: true, force: true }));
+  const installPath = join(home, 'install');
+  mkdirSync(join(installPath, 'bin'), { recursive: true });
+  writeFileSync(join(installPath, 'bin/sleight-mcp'), 'fixture');
+  mkdirSync(join(home, '.claude/plugins'), { recursive: true });
+  writeFileSync(join(home, '.claude/plugins/installed_plugins.json'), JSON.stringify({ plugins: {
+    'sleight@sleight': [{ scope: 'user', installPath }]
+  } }));
+  const id = 'a'.repeat(20), notices = [];
+  let verified = 0;
+  assert.equal(await launchRoutine(id, { home, kind: 'watch', notify: async message => notices.push(message),
+    verify: async () => { verified++; throw Error('SETTINGS_UNTRUSTED'); },
+    launchctl: () => assert.fail('untrusted lifecycle must not run'),
+    spawnChild: () => assert.fail('untrusted code must not run') }), 1);
+  assert.equal(verified, 1);
+  assert.equal(notices.length, 1);
+  assert.match(notices[0], /SETTINGS_UNTRUSTED/);
+  assert.equal(existsSync(join(home, 'Library/Application Support/sleight/watches')), false);
+});
 test('detached replay forwards both terminal signals and removes listeners after collection', async () => {
   const child = new EventEmitter(), signals = new EventEmitter(), sent = [];
   child.pid = 123; child.stdin = new PassThrough(); child.stdout = new PassThrough(); child.stderr = new PassThrough();

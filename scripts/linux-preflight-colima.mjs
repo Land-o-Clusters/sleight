@@ -4,12 +4,18 @@ import { createHash, randomUUID } from 'node:crypto';
 import { basename, dirname, join, resolve } from 'node:path';
 import { tmpdir } from 'node:os';
 import { fileURLToPath, pathToFileURL } from 'node:url';
-import { runLinuxPreflight, runOwnedCommand } from './linux-preflight.mjs';
+import { linuxRunBudget, runLinuxPreflight, runOwnedCommand } from './linux-preflight.mjs';
 
-const runBudget = 17 * 60_000, totalBudget = 20 * 60_000;
+// Recorded cold boot: 258 s (rehearsal 3). Reserve six minutes for startup in
+// addition to the Linux budget, and eight more for shutdown and deletion.
+export const runBudget = linuxRunBudget + 6 * 60_000, totalBudget = runBudget + 8 * 60_000;
 const shaPattern = /^(?:[a-f0-9]{40}|[a-f0-9]{64})$/;
 const digest = text => createHash('sha256').update(text).digest('hex');
 const successful = result => result.status === 0 && result.collected === true;
+const processAlive = pid => {
+  try { process.kill(pid, 0); return true; }
+  catch (error) { if (error.code === 'ESRCH') return false; throw error; }
+};
 
 function ordinary(path, directory = false) {
   const stat = lstatSync(path);
@@ -23,14 +29,16 @@ function ordinary(path, directory = false) {
 export async function runColimaPreflight({ worktree = fileURLToPath(new URL('..', import.meta.url)), commit,
   execute = runOwnedCommand, signal, log = text => process.stderr.write(text),
   makeBank = () => mkdtempSync(join(realpathSync('/tmp'), 'slvm-')), uuid = randomUUID, now = Date.now,
+  pause = ms => new Promise(resolvePause => setTimeout(resolvePause, ms)), isAlive = processAlive,
 } = {}) {
   const began = now(), controller = new AbortController(), hard = new AbortController();
   const cancel = () => controller.abort();
   signal?.addEventListener('abort', cancel, { once: true });
   if (signal?.aborted) cancel();
   const timer = setTimeout(cancel, runBudget), hardTimer = setTimeout(() => hard.abort(), totalBudget);
-  let bank, env, marker, rootStat, configs, attempted = false, collected = true, linuxReceipt = null;
-  const vm = { schemaVersion: 1, cleanupConfirmed: false, childCollected: true, stopped: false, deleted: false };
+  let bank, env, marker, rootStat, configs, usernetFile, usernetProcess, attempted = false, collected = true, linuxReceipt = null;
+  const vm = { schemaVersion: 1, cleanupConfirmed: false, childCollected: true, stopped: false, deleted: false,
+    usernetPids: [], usernetCollected: null, usernetStatus: 'not captured' };
   let exitCode = 1;
   const write = (name, value) => writeFileSync(join(bank, name), JSON.stringify(value) + '\n', { mode: 0o600 });
   const owner = () => {
@@ -47,15 +55,18 @@ export async function runColimaPreflight({ worktree = fileURLToPath(new URL('..'
     // An explicit host wins over mutable context metadata for every engine request.
     const argv = program === 'docker' && args[0] !== 'context'
       ? ['--host', `unix://${join(env.COLIMA_HOME, vm.profile, 'docker.sock')}`, ...args] : args;
+    const startedAt = now();
     const response = await execute(program, argv, { ...options, timeout,
       signal: cleanup ? hard.signal : controller.signal,
-      ...(['colima', 'docker'].includes(program) ? { env: { ...env,
+      ...(['colima', 'docker', 'limactl'].includes(program) ? { env: { ...env,
         ...(program === 'docker' ? { DOCKER_CONTEXT: vm.context } : {}) } } : {}) });
     if (response.collected !== true) collected = false;
     appendFileSync(join(bank, 'commands.jsonl'), JSON.stringify({ program,
       // The inline container program is large; the producer supplies its exact content.
       args: argv.map((arg, i) => argv[i - 1] === '-e' ? '<container program>' : arg),
-      status: response.status, collected: response.collected, stdout: response.stdout, stderr: response.stderr }) + '\n', { mode: 0o600 });
+      startedAt, finishedAt: now(), durationMs: now() - startedAt,
+      status: response.status, signal: response.signal, cancelled: response.cancelled,
+      collected: response.collected, stdout: response.stdout, stderr: response.stderr }) + '\n', { mode: 0o600 });
     if (response.collected !== true) throw Error('Uncollected owned child');
     return response;
   };
@@ -80,6 +91,59 @@ export async function runColimaPreflight({ worktree = fileURLToPath(new URL('..'
     const current = snapshot();
     if (configs && JSON.stringify(current) !== JSON.stringify(configs)) throw Error('Managed profile configuration changed');
     configs ??= current;
+  };
+  const captureUsernet = async (cleanup = false) => {
+    owner();
+    // Lima 2.2.1: pkg/networks/usernet/config.go, PIDFile("user-v2"). Only
+    // this newly created LIMA_HOME can supply a helper identity. Inspect only
+    // that PID, never a host-wide process inventory.
+    const networks = join(env.LIMA_HOME, '_networks'), directory = join(networks, 'user-v2');
+    for (const path of [networks, directory]) {
+      if (!existsSync(path)) return;
+      ordinary(path, true);
+    }
+    const path = join(directory, 'usernet_user-v2.pid');
+    const present = existsSync(path);
+    if (!present && !usernetFile) throw Error('Usernet PID not captured; network cleanup unconfirmed');
+    let file = usernetFile;
+    if (present) {
+      const stat = ordinary(path);
+      if (stat.size > 20) throw Error('Invalid usernet PID file');
+      const text = readFileSync(path, 'utf8').trim(), pid = Number(text);
+      if (!/^[1-9]\d*$/.test(text) || !Number.isSafeInteger(pid) || pid <= 1 || pid === process.pid) throw Error('Invalid usernet PID');
+      file = { pid, dev: stat.dev, ino: stat.ino };
+      if (usernetFile && JSON.stringify(file) !== JSON.stringify(usernetFile)) throw Error('Usernet helper identity changed');
+    }
+    const response = await command('/bin/ps', ['-p', String(file.pid), '-o', 'uid=,lstart=,command='],
+      { timeout: 5_000, env: { PATH: process.env.PATH, LANG: 'C', LC_ALL: 'C' } }, cleanup);
+    // A missing PID file and an exited captured process are safe after stop.
+    // A stale file still lets Lima signal a recycled PID, so refuse that case.
+    if (response.status === 1 && !response.stdout.trim() && !present && usernetProcess) return;
+    const row = successful(response) && /^\s*(\d+)\s+([A-Z][a-z]{2}\s+[A-Z][a-z]{2}\s+\d{1,2}\s+\d{2}:\d{2}:\d{2}\s+\d{4})\s+(.+?)\s*$/.exec(response.stdout);
+    const args = row ? row[3].split(/\s+/) : [];
+    // Match the exact private network path as an argument (or option value).
+    const ownsNetwork = args.slice(2).some(arg => arg.split('=')
+      .some(value => value === directory || value.startsWith(directory + '/')));
+    if (!row || Number(row[1]) !== process.getuid() || basename(args[0]) !== 'limactl' || args[1] !== 'usernet'
+      || args[args.indexOf('-p') + 1] !== path
+      || !ownsNetwork || usernetProcess && response.stdout.trim() !== usernetProcess) throw Error('Usernet process identity changed or unavailable');
+    usernetFile ??= file; usernetProcess ??= response.stdout.trim();
+    if (!vm.usernetPids.length) vm.usernetPids.push(file.pid);
+    vm.usernetCollected = false; vm.usernetStatus = 'captured';
+  };
+  const cleanupIdentity = async expected => {
+    const current = await list(true);
+    if (!current || current.status !== expected) throw Error('Managed instance identity or state changed before cleanup');
+    verifyConfigs();
+    await captureUsernet(true);
+  };
+  const waitFor = async (check, attempts, message) => {
+    for (let i = 0; i < attempts; i++) {
+      if (hard.signal.aborted) throw Error('Colima cleanup deadline');
+      if (await check()) return;
+      if (i + 1 < attempts) await pause(500);
+    }
+    throw Error(message);
   };
   try {
     if (!shaPattern.test(commit ?? '')) throw Error('An exact commit is required');
@@ -119,7 +183,8 @@ export async function runColimaPreflight({ worktree = fileURLToPath(new URL('..'
         const started = await command('colima', ['start', '--profile', vm.profile, '--activate=false', '--ssh-config=false',
           '--template=false', '--ssh-agent=false', '--runtime', 'docker', '--vm-type', 'vz', '--arch', 'aarch64',
           '--cpus', '2', '--memory', '4', '--disk', '10', '--root-disk', '20', '--mount', checkout],
-        { timeout: 300_000, log: { stdout: log, stderr: log } });
+        { timeout: 360_000, log: { stdout: log, stderr: log } });
+        await captureUsernet();
         if (!successful(started)) throw Error('Colima startup failed');
         if ((await list(false))?.status !== 'Running') throw Error('Colima did not start');
         verifyConfigs();
@@ -140,33 +205,55 @@ export async function runColimaPreflight({ worktree = fileURLToPath(new URL('..'
     exitCode = linuxReceipt.exitCode;
   } catch (error) { vm.error = error.message; }
   finally {
+    const runExpired = now() - began >= runBudget;
+    // Cleanup has its own reserve. Finishing tests near the run deadline must
+    // not cancel an otherwise successful stop while the hard timer is open.
+    clearTimeout(timer);
     try {
       if (attempted && collected) {
         const before = await list(true);
         if (!before) throw Error('Managed profile disappeared');
         verifyConfigs();
         if (before.status === 'Running') {
-          const stopped = await command('colima', ['stop', '--profile', vm.profile], { timeout: 30_000 }, true);
-          if (!successful(stopped)) throw Error('Colima stop failed');
+          // Lima's graceful stop can wait 190 s for its agent, then 180 s for
+          // shutdown. The former 30 s timeout killed Colima before reconciliation.
+          await cleanupIdentity('Running');
+          const stopped = await command('colima', ['stop', '--profile', vm.profile], { timeout: 390_000 }, true);
+          vm.stopResult = { status: stopped.status, signal: stopped.signal ?? null, cancelled: stopped.cancelled === true };
+          if (!successful(stopped)) {
+            vm.stopFailure = 'Colima stop failed; checking shutdown independently';
+            // A real nonzero exit remains a failed preflight even if cleanup recovers.
+            if (stopped.status !== null || !stopped.cancelled) exitCode ||= 1;
+          }
         }
-        if ((await list(true))?.status !== 'Stopped') throw Error('Colima shutdown unconfirmed');
+        await waitFor(async () => (await list(true))?.status === 'Stopped', 60, 'Colima shutdown unconfirmed');
         vm.stopped = true; verifyConfigs();
+        // A timed-out stop may have missed Lima's network reconciliation. This
+        // targets only the verified stopped instance in our private LIMA_HOME.
+        await cleanupIdentity('Stopped');
+        const reconciled = await command('limactl', ['stop', '--force', `colima-${vm.profile}`], { timeout: 20_000 }, true);
+        if (!successful(reconciled)) throw Error('Lima network cleanup failed');
+        if (vm.usernetPids.length) {
+          await waitFor(() => vm.usernetPids.every(pid => !isAlive(pid)), 30, 'Usernet helper remains running');
+          vm.usernetCollected = true; vm.usernetStatus = 'collected';
+        }
         if (linuxReceipt?.cleanupConfirmed && linuxReceipt?.childCollected) {
-          const deleted = await command('colima', ['delete', '--force', '--data', '--profile', vm.profile], { timeout: 20_000 }, true);
+          await cleanupIdentity('Stopped');
+          const deleted = await command('colima', ['delete', '--force', '--data', '--profile', vm.profile], { timeout: 60_000 }, true);
           if (!successful(deleted) || await list(true)
             || existsSync(join(env.COLIMA_HOME, vm.profile)) || existsSync(join(env.LIMA_HOME, `colima-${vm.profile}`))) throw Error('Colima deletion unconfirmed');
           vm.deleted = true; vm.cleanupConfirmed = true;
         }
-      } else if (!attempted && collected) vm.cleanupConfirmed = true;
-    } catch (error) { vm.error = error.message; }
+      } else if (!attempted && collected) { vm.cleanupConfirmed = true; }
+    } catch (error) { vm.error = `${error.message}; VM shutdown or deletion unconfirmed, bank retained at ${bank}`; }
     clearTimeout(timer); clearTimeout(hardTimer); signal?.removeEventListener('abort', cancel);
     vm.childCollected = collected;
-    if (!vm.cleanupConfirmed || !collected || controller.signal.aborted || hard.signal.aborted || now() - began >= runBudget) exitCode ||= 1;
+    if (!vm.cleanupConfirmed || !collected || controller.signal.aborted || hard.signal.aborted || runExpired) exitCode ||= 1;
     if (bank && marker) {
       try {
         write('vm-cleanup.json', vm);
         owner();
-        if (exitCode === 0 && vm.cleanupConfirmed) rmSync(bank, { recursive: true, force: false });
+        if (exitCode === 0 && vm.cleanupConfirmed && !vm.stopFailure) rmSync(bank, { recursive: true, force: false });
         else log(`Colima evidence retained: ${bank}\n`);
       } catch (error) { vm.cleanupConfirmed = false; vm.error = error.message; exitCode ||= 1; }
     }

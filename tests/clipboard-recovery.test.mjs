@@ -159,7 +159,7 @@ test('an unsafe snapshot directory prevents stage and input', async t => {
 test('a worker killed after stage leaves a recoverable snapshot on disk', async t => {
   const f = await fixture(t), boardPath = join(f.root, 'board.json');
   const child = spawnSync(process.execPath, [new URL('./fixtures/clipboard-crash.mjs', import.meta.url).pathname, f.directory, boardPath],
-    { encoding: 'utf8', timeout: 5000 });
+    { encoding: 'utf8', timeout: 5000, killSignal: 'SIGKILL' });
   assert.equal(child.signal, 'SIGKILL', child.stderr);
   f.setBoard(JSON.parse(readFileSync(boardPath, 'utf8')).items);
   assert.equal(snapshots(f.directory).length, 1);

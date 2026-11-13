@@ -1,3 +1,4 @@
+import { assertChildStatus } from './fixtures/child-status.mjs';
 import { after, test } from 'node:test';
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
@@ -219,18 +220,18 @@ test('the surface patch applies on the pinned FowlBrowser commit and adds fowl+s
   if (!existsSync(join(cache, '.git'))) return t.skip('pinned FowlBrowser cache is absent');
   const dir = temp('sleight-handoff-patch-');
   t.after(async () => (await import('node:fs')).rmSync(dir, { recursive: true, force: true }));
-  const orig = spawnSync('/usr/bin/git', ['-C', cache, 'show', '6a12d60:tools/rounds.mjs'], { encoding: 'utf8', maxBuffer: 4 * 1024 * 1024 });
-  assert.equal(orig.status, 0, orig.stderr);
+  const orig = spawnSync('/usr/bin/git', ['-C', cache, 'show', '6a12d60:tools/rounds.mjs'], { encoding: 'utf8', maxBuffer: 4 * 1024 * 1024, timeout: 30000, killSignal: 'SIGKILL' });
+  assertChildStatus(orig, 0, orig.stderr);
   mkdirSync(join(dir, 'tools'), { recursive: true });
   writeFileSync(join(dir, 'tools/rounds.mjs'), orig.stdout);
   for (const args of [['init', '-q'], ['add', 'tools/rounds.mjs']]) {
-    const result = spawnSync('/usr/bin/git', args, { cwd: dir, encoding: 'utf8' });
-    assert.equal(result.status, 0, result.stderr);
+    const result = spawnSync('/usr/bin/git', args, { cwd: dir, encoding: 'utf8', timeout: 30000, killSignal: 'SIGKILL' });
+    assertChildStatus(result, 0, result.stderr);
   }
-  const apply = spawnSync('/usr/bin/git', ['apply', join(root, 'bench/fowl/sleight-surface.patch')], { cwd: dir, encoding: 'utf8' });
-  assert.equal(apply.status, 0, apply.stderr + apply.stdout);
-  const diff = spawnSync('/usr/bin/git', ['diff'], { cwd: dir, encoding: 'utf8', maxBuffer: 8 * 1024 * 1024 });
-  assert.equal(diff.status, 0, diff.stderr);
+  const apply = spawnSync('/usr/bin/git', ['apply', join(root, 'bench/fowl/sleight-surface.patch')], { cwd: dir, encoding: 'utf8', timeout: 30000, killSignal: 'SIGKILL' });
+  assertChildStatus(apply, 0, apply.stderr + apply.stdout);
+  const diff = spawnSync('/usr/bin/git', ['diff'], { cwd: dir, encoding: 'utf8', maxBuffer: 8 * 1024 * 1024, timeout: 30000, killSignal: 'SIGKILL' });
+  assertChildStatus(diff, 0, diff.stderr);
   assert.equal(diff.stdout, readFileSync(join(root, 'bench/fowl/sleight-surface.patch'), 'utf8'));
   const patched = readFileSync(join(dir, 'tools/rounds.mjs'), 'utf8');
   assert.match(patched, /fowl\+sleight/);
@@ -242,15 +243,15 @@ test('the surface patch applies on the pinned FowlBrowser commit and adds fowl+s
   assert.match(patched, /gradeFixture/);
   const probe = spawnSync(process.execPath, ['--input-type=module', '-e',
     "import { agentSetup } from './tools/rounds.mjs'; for (const surface of ['fowlbrowser', 'sleight', 'fowl+sleight']) { const s = agentSetup({ task: { name: 'test', browser: 'chrome', prompt: 'save {out}', result: 'done' }, surface, dir: '/tmp/test', mcpRoot: '/fowl', settings: '/tmp/settings', model: 'opus', effort: 'medium' }); if (s instanceof Promise || !s.mcpConfig || !s.prompt.includes('/tmp/test')) throw Error(surface); } const bu = agentSetup({ task: { name: 'test', browser: 'chrome', prompt: 'save {out} in {browser} at {repo}', result: 'done', budgetSeconds: 90 }, surface: 'browser-use', dir: '/tmp/test', mcpRoot: '/fowl', settings: '/tmp/settings', model: 'haiku', effort: 'high' }); if (bu.command !== 'uv' || bu.mcpConfig || !bu.args.includes('--budget-seconds') || !bu.args.includes('--frozen') || !bu.prompt.includes('/tmp/test') || !bu.prompt.includes('Chrome')) throw Error('browser-use');"],
-    { cwd: dir, encoding: 'utf8', env: { ...process.env, SLEIGHT_REPO: root } });
-  assert.equal(probe.status, 0, probe.stderr);
+    { cwd: dir, encoding: 'utf8', env: { ...process.env, SLEIGHT_REPO: root }, timeout: 60000, killSignal: 'SIGKILL' });
+  assertChildStatus(probe, 0, probe.stderr);
   const { fixtureGradeDescriptor } = await import('../bench/world/fowl-fixture-grade.mjs');
   const { closeSync } = await import('node:fs');
   const gradeFd = fixtureGradeDescriptor({ kind: 'local-mdn', expected: { code: 729 } });
   let fixtureProbe;
   try { fixtureProbe = spawnSync(process.execPath, ['--input-type=module', '-e',
     "import { gradeOutcome } from './tools/rounds.mjs'; const task = { worldFixture: 'local-mdn', grade: 'fixture' }; const site = { kind: 'local-mdn', views: [''] }; const run = { exitCode: 0, result: { result: 'RESULT: {\"code\":729}' } }; const grade = () => gradeOutcome({ task, run, grade: site }); if (!grade().ok) throw Error('correct fixture failed'); site.views = []; if (grade().ok) throw Error('unread fixture passed'); site.views = ['']; run.result.result = 'RESULT: {\"code\":730}'; if (grade().ok) throw Error('wrong fixture passed');"],
-    { cwd: dir, encoding: 'utf8', env: { ...process.env, SLEIGHT_REPO: root }, stdio: ['ignore', 'pipe', 'pipe', gradeFd] });
+    { cwd: dir, encoding: 'utf8', env: { ...process.env, SLEIGHT_REPO: root }, stdio: ['ignore', 'pipe', 'pipe', gradeFd], timeout: 60000, killSignal: 'SIGKILL' });
   } finally { closeSync(gradeFd); }
-  assert.equal(fixtureProbe.status, 0, fixtureProbe.stderr);
+  assertChildStatus(fixtureProbe, 0, fixtureProbe.stderr);
 });

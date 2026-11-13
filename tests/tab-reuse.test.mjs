@@ -107,7 +107,7 @@ test('replayed create-then-throw cases name the opened tab with a quoted browser
 test('the relay reads the opened-tab record after an error', t => {
   const h = relayStreams(t);
   h.clientIn.write(JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'tools/call', params: { name: 'js', arguments: {
-    code: "const tab = await cua.createBrowserTab(b.browserId, 'https://en.wikipedia.org/wiki/Mount_Kilimanjaro'); tab.evaluate()",
+    code: "const tab = await cua.createBrowserTab(b.browserId, 'https://en.wikipedia.org/wiki/Mount_Kilimanjaro'); await tab.getAXState()",
   } } }) + '\n');
   assert.match(h.sent[0].params.arguments.code, /__sleightOpenedThisCall/);
   assert.match(h.sent[0].params.arguments.code, /__sleightOpenedCall = "1"/);
@@ -213,7 +213,7 @@ test('openedTabNote skips when the error already has the engine tab line', () =>
 test('the opened-tab note is appended only to the last text item', t => {
   const h = relayStreams(t);
   h.clientIn.write(JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'tools/call', params: { name: 'js', arguments: {
-    code: "const tab = await cua.createBrowserTab(b.browserId, 'https://en.wikipedia.org/wiki/Mount_Kilimanjaro'); tab.evaluate()",
+    code: "const tab = await cua.createBrowserTab(b.browserId, 'https://en.wikipedia.org/wiki/Mount_Kilimanjaro'); await tab.getAXState()",
   } } }) + '\n');
   h.serverOut.write(JSON.stringify({ jsonrpc: '2.0', id: 1, result: { isError: true, content: [
     { type: 'text', text: '## Computer Use\nAlways ask.' },
@@ -229,7 +229,7 @@ test('the opened-tab note is appended only to the last text item', t => {
 test('a stale probe payload from an earlier call is ignored', t => {
   const h = relayStreams(t);
   h.clientIn.write(JSON.stringify({ jsonrpc: '2.0', id: 9, method: 'tools/call', params: { name: 'js', arguments: {
-    code: 'const tab = await cua.createBrowserTab("b", "https://form.test/nine"); tab.evaluate()',
+    code: 'const tab = await cua.createBrowserTab("b", "https://form.test/nine"); await tab.getAXState()',
   } } }) + '\n');
   h.serverOut.write(JSON.stringify({ jsonrpc: '2.0', id: 9, result: { isError: true, content: [{ type: 'text', text: 'tab.evaluate is not a function' }] } }) + '\n');
   const firstProbe = h.sent.findLast(m => String(m.id).startsWith('sleight-opened-tabs-'));

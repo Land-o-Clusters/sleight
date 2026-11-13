@@ -16,7 +16,7 @@
   },
   "timedOut": false,
   "cancelled": false,
-  "stdout": "\n| Arm | Task | Passed | Median s | Model s | Engine s | Local tools s | Relay ms | Median turns | CPU s | API-price cost |\n|---|---|---|---|---|---|---|---|---|---|---|\n| mcp:sleight-plain | calculator-click | 0/1 | 75.7 | – | – | – | – | – | 4.37 | $0.00 |\n\nresults: ~/Projects/sleight-wt/plugin-arm/bench/results/2026-10-10T05-37-50-425Z.json\n",
+  "stdout": "\n| Arm | Task | Passed | Median s | Model s | Engine s | Local tools s | Relay ms | Median turns | CPU s | API-price cost |\n|---|---|---|---|---|---|---|---|---|---|---|\n| mcp:sleight-plain | calculator-click | 0/1 | 75.7 | – | – | – | – | – | 4.37 | $0.00 |\n\nresults: <private-evidence>/plugin-arm/bench/results/2026-10-10T05-37-50-425Z.json\n",
   "stderr": "Waiting for /tmp/sleight-live.lock if another live run holds it.\nFAIL mcp:sleight-plain calculator-click #1 75.7s (unsupported approval: permission observation unavailable)\n",
   "groupClean": true,
   "raw": {

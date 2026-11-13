@@ -1,0 +1,222 @@
+{
+  "ACCESSIBILITY_REQUIRED": {
+    "next": "ask-user",
+    "unhealthy": false,
+    "disposition": "on-action"
+  },
+  "ACTION_UNCONFIRMED": {
+    "next": "read-again",
+    "unhealthy": false,
+    "disposition": "required"
+  },
+  "ACTION_UNSUPPORTED": {
+    "next": "none",
+    "unhealthy": false,
+    "disposition": "required"
+  },
+  "AMBIGUOUS_APP": {
+    "next": "none",
+    "unhealthy": false,
+    "disposition": "on-action"
+  },
+  "AMBIGUOUS_ELEMENT": {
+    "next": "read-again",
+    "unhealthy": false,
+    "disposition": "on-action"
+  },
+  "APP_NOT_FOUND": {
+    "next": "none",
+    "unhealthy": false,
+    "disposition": "on-action"
+  },
+  "AX_TIMEOUT": {
+    "next": "retry-safe",
+    "unhealthy": true,
+    "disposition": "on-action"
+  },
+  "AX_UNAVAILABLE": {
+    "next": "retry-safe",
+    "unhealthy": false,
+    "disposition": "on-action"
+  },
+  "CAPTURE_ENCODING_FAILED": {
+    "next": "none",
+    "unhealthy": false,
+    "disposition": "on-action"
+  },
+  "CAPTURE_GEOMETRY_CHANGED": {
+    "next": "read-again",
+    "unhealthy": false,
+    "disposition": "on-action"
+  },
+  "CAPTURE_SCALE_INVALID": {
+    "next": "none",
+    "unhealthy": false,
+    "disposition": "on-action"
+  },
+  "CAPTURE_SIZE_LIMIT": {
+    "next": "none",
+    "unhealthy": false,
+    "disposition": "on-action"
+  },
+  "CAPTURE_TARGET_INVALID": {
+    "next": "none",
+    "unhealthy": false,
+    "disposition": "on-action"
+  },
+  "CAPTURE_UNAVAILABLE": {
+    "next": "retry-safe",
+    "unhealthy": false,
+    "disposition": "on-action"
+  },
+  "CAPTURE_UNSUPPORTED": {
+    "next": "none",
+    "unhealthy": false,
+    "disposition": "on-action"
+  },
+  "CLIPBOARD_CHANGED": {
+    "next": "stop-tell-user",
+    "unhealthy": false,
+    "disposition": "required"
+  },
+  "CLIPBOARD_RESTORE_FAILED": {
+    "next": "stop-tell-user",
+    "unhealthy": false,
+    "disposition": "required"
+  },
+  "DEADLINE_EXCEEDED": {
+    "next": "restart-helper",
+    "unhealthy": true,
+    "disposition": "on-action"
+  },
+  "DRIVER_INTERNAL": {
+    "next": "restart-helper",
+    "unhealthy": true,
+    "disposition": "on-action"
+  },
+  "DRIVER_PROTOCOL": {
+    "next": "restart-helper",
+    "unhealthy": true,
+    "disposition": "on-action"
+  },
+  "DRIVER_VERSION_MISMATCH": {
+    "next": "restart-helper",
+    "unhealthy": true,
+    "disposition": "on-action"
+  },
+  "ELEMENT_DISABLED": {
+    "next": "none",
+    "unhealthy": false,
+    "disposition": "required"
+  },
+  "IDENTITY_CHANGED": {
+    "next": "read-again",
+    "unhealthy": false,
+    "disposition": "on-action"
+  },
+  "IDENTITY_UNVERIFIED": {
+    "next": "read-again",
+    "unhealthy": false,
+    "disposition": "on-action"
+  },
+  "INVALID_PARAMS": {
+    "next": "none",
+    "unhealthy": false,
+    "disposition": "on-action"
+  },
+  "LAUNCH_FAILED": {
+    "next": "none",
+    "unhealthy": false,
+    "disposition": "on-action"
+  },
+  "METHOD_NOT_FOUND": {
+    "next": "none",
+    "unhealthy": false,
+    "disposition": "on-action"
+  },
+  "NO_WINDOWS_AVAILABLE": {
+    "next": "none",
+    "unhealthy": false,
+    "disposition": "on-action"
+  },
+  "OUTPUT_LIMIT": {
+    "next": "none",
+    "unhealthy": false,
+    "disposition": "on-action"
+  },
+  "PASTE_UNCONFIRMED_CLIPBOARD_HELD": {
+    "next": "stop-tell-user",
+    "unhealthy": false,
+    "disposition": "required"
+  },
+  "PERSON_TOOK_OVER": {
+    "next": "stop-tell-user",
+    "unhealthy": false,
+    "disposition": "required"
+  },
+  "PERSON_HOLDS_MODIFIER": {
+    "next": "stop-tell-user",
+    "unhealthy": false,
+    "disposition": "required"
+  },
+  "SECURE_INPUT_ACTIVE": {
+    "next": "stop-tell-user",
+    "unhealthy": false,
+    "disposition": "required"
+  },
+  "KEY_FOCUS_UNAVAILABLE": {
+    "next": "read-again",
+    "unhealthy": false,
+    "disposition": "required"
+  },
+  "SCREEN_LOCKED": {
+    "next": "ask-user",
+    "unhealthy": false,
+    "disposition": "on-action"
+  },
+  "SCREEN_RECORDING_REQUIRED": {
+    "next": "ask-user",
+    "unhealthy": false,
+    "disposition": "on-action"
+  },
+  "SECURE_FIELD": {
+    "next": "none",
+    "unhealthy": false,
+    "disposition": "required"
+  },
+  "STALE_ELEMENT": {
+    "next": "read-again",
+    "unhealthy": false,
+    "disposition": "on-action"
+  },
+  "STALE_READ": {
+    "next": "read-again",
+    "unhealthy": false,
+    "disposition": "on-action"
+  },
+  "TARGET_CHANGED": {
+    "next": "read-again",
+    "unhealthy": false,
+    "disposition": "required"
+  },
+  "READ_FIRST_REQUIRED": {
+    "next": "read-again",
+    "unhealthy": false,
+    "disposition": "required"
+  },
+  "USER_STOPPED": {
+    "next": "stop-tell-user",
+    "unhealthy": false,
+    "disposition": "on-action"
+  },
+  "VALUE_NOT_SETTABLE": {
+    "next": "none",
+    "unhealthy": false,
+    "disposition": "required"
+  },
+  "WINDOW_NOT_FOUND": {
+    "next": "read-again",
+    "unhealthy": false,
+    "disposition": "on-action"
+  }
+}

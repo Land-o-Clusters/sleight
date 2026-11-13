@@ -9,6 +9,11 @@ import { createHash, randomUUID } from 'node:crypto';
 const shaPattern = /^(?:[a-f0-9]{40}|[a-f0-9]{64})$/;
 const imagePattern = /^sha256:[a-f0-9]{64}$/;
 const containerPattern = /^[a-f0-9]{64}$/;
+// Rehearsals 2 and 3 were still producing tests after 12.5 minutes when the
+// enclosing 17-minute VM budget expired. Allow over twice that observed lower
+// bound for npm, then two minutes for Docker setup and receipt collection.
+export const linuxTestBudget = 30 * 60_000;
+export const linuxRunBudget = linuxTestBudget + 2 * 60_000;
 
 // Own the ChildProcess until close, including cancellation. Never infer collection from kill().
 export function runOwnedCommand(command, args, { signal, timeout = 120_000, log, ...options } = {}) {
@@ -228,7 +233,7 @@ export async function runContainerChecks({ execute = runOwnedCommand, platform =
     if (!tracked.stdout.endsWith('\0')) return fail('invalid-tracked');
     receipt.trackedFiles = tracked.stdout.split('\0').filter(Boolean).length;
     if (!receipt.trackedFiles) return fail('empty-tracked');
-    const npmOptions = { ...options, timeout: 1_200_000, log: { stdout: log, stderr: log } };
+    const npmOptions = { ...options, timeout: linuxTestBudget, log: { stdout: log, stderr: log } };
     // Public CI runs npm test from the checkout without npm install or npm ci.
     stage = 'dependencies';
     if (dependenciesPresent()) return fail('present');
@@ -263,6 +268,7 @@ import { tmpdir } from 'node:os';
 import { join, posix } from 'node:path';
 import { createHash } from 'node:crypto';
 const shaPattern = ${shaPattern};
+const linuxTestBudget = ${linuxTestBudget};
 const runOwnedCommand = ${runOwnedCommand.toString()};
 const testCounts = ${testCounts.toString()};
 const copyDestinationState = ${copyDestinationState.toString()};
@@ -305,7 +311,7 @@ export async function prepareCheckout({ worktree, commit, stage, execute, signal
 }
 
 export async function runLinuxPreflight({ worktree = fileURLToPath(new URL('..', import.meta.url)), commit,
-  execute = runOwnedCommand, signal, timeout = 1_200_000, log = text => process.stderr.write(text),
+  execute = runOwnedCommand, signal, timeout = linuxRunBudget, log = text => process.stderr.write(text),
 } = {}) {
   const result = { schemaVersion: 1, platform: 'linux', command: ['npm', 'test'], commit,
     executed: false, exitCode: 1, cleanupConfirmed: false, childCollected: true };

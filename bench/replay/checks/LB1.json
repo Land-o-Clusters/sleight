@@ -1,6 +1,6 @@
 {
   "id": "LB1",
-  "source": "~/Projects/sleight-wt/race-1017/chrome-sleight-turbo-rel131-r2/mobile",
+  "source": "<private-evidence>/race-1017/chrome-sleight-turbo-rel131-r2/mobile",
   "switch": "SLEIGHT_LB12", "tool": "browser_act", "argumentPattern": "viewport.*none",
   "toolRatioBelow": 1,
   "resultExcludes": "not run|not reached|unconfirmed",

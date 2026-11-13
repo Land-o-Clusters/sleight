@@ -1,3 +1,4 @@
+import { assertChildStatus } from './fixtures/child-status.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
@@ -24,22 +25,22 @@ test('native world route selects the shared fixture and defaults to high effort 
 
 test('world runner cursor dry plan succeeds when Node forbids writes, network and child processes', () => {
   const r = spawnSync(process.execPath, ['--permission', '--allow-fs-read=*', 'bench/run.mjs', '--suite', 'world', '--arm', 'cursor-cu',
-    '--tasks', 'textedit-edit', '--runs', '1', '--dry-run'], { encoding: 'utf8' });
-  assert.equal(r.status, 0, r.stderr); const p = JSON.parse(r.stdout);
+    '--tasks', 'textedit-edit', '--runs', '1', '--dry-run'], { encoding: 'utf8', timeout: 60000, killSignal: 'SIGKILL' });
+  assertChildStatus(r, 0, r.stderr); const p = JSON.parse(r.stdout);
   assert.equal(p.runs[0].task, 'textedit-edit');
 });
 
 test('rounds.sh sends the Cursor surface to its desktop route before Fowl setup or funding', () => {
-  const r = spawnSync('/bin/sh', ['bench/fowl/rounds.sh', '--surface', 'cursor-cu', '--real-browser', 'chrome', '--only', 'mdn', '--dry-run'], { encoding: 'utf8' });
-  assert.equal(r.status, 0, r.stderr); const p = JSON.parse(r.stdout);
+  const r = spawnSync('/bin/sh', ['bench/fowl/rounds.sh', '--surface', 'cursor-cu', '--real-browser', 'chrome', '--only', 'mdn', '--dry-run'], { encoding: 'utf8', timeout: 60000, killSignal: 'SIGKILL' });
+  assertChildStatus(r, 0, r.stderr); const p = JSON.parse(r.stdout);
   assert.equal(p.surface, 'cursor-cu'); assert.equal(p.arms[0].cursorPlan.route, 'desktop');
   assert.equal(p.arms[0].cursorPlan.modelLabel, 'Grok 4.7 High');
 });
 
 test('Chrome dry plan starts no metadata subprocess and cannot write or use the network', () => {
   const r = spawnSync(process.execPath, ['--permission', '--allow-fs-read=*', 'bench/world/arms/cursor-cu/suite.mjs', '--chrome',
-    '--surface', 'cursor-cu', '--real-browser', 'chrome', '--only', 'mdn', '--dry-run'], { encoding: 'utf8' });
-  assert.equal(r.status, 0, r.stderr);
+    '--surface', 'cursor-cu', '--real-browser', 'chrome', '--only', 'mdn', '--dry-run'], { encoding: 'utf8', timeout: 60000, killSignal: 'SIGKILL' });
+  assertChildStatus(r, 0, r.stderr);
   const p = JSON.parse(r.stdout); assert.equal(p.engine.used, false); assert.equal(p.browser.version, null);
 });
 

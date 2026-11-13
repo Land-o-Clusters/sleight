@@ -1,3 +1,4 @@
+import { assertChildStatus } from './fixtures/child-status.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, realpathSync, statSync, symlinkSync, writeFileSync } from 'node:fs';
@@ -43,8 +44,8 @@ for (const { binding, failTurn, modelTool } of cases) test(`configured RA1 Stop 
           const command = settings.hooks.Stop[0].hooks[0].command.match(/^"([^"]+)" "([^"]+)"$/);
           assert.ok(command, 'Stop command is an executable and a script');
           const receipt = spawnSync(command[1], [command[2]], { env: plan.env, encoding: 'utf8', timeout: 5000,
-            input: JSON.stringify({ session_id: plan.env.BENCH_CU_SESSION, hook_event_name: 'Stop' }) });
-          assert.equal(receipt.status, 0, 'configured Stop hook must accept the temporary RA1 receipt path');
+            input: JSON.stringify({ session_id: plan.env.BENCH_CU_SESSION, hook_event_name: 'Stop' }), killSignal: 'SIGKILL' });
+          assertChildStatus(receipt, 0, 'configured Stop hook must accept the temporary RA1 receipt path');
           assert.equal(statSync(plan.env.BENCH_CU_TURN_RECEIPT).mode & 0o777, 0o600);
           if (['foreign nonce', 'foreign session'].includes(binding)) {
             const file = plan.env.BENCH_CU_TURN_RECEIPT, changed = JSON.parse(readFileSync(file, 'utf8'));
