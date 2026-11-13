@@ -7,7 +7,7 @@ import { readdirSync, readFileSync, lstatSync, statSync, unlinkSync } from 'node
 import { userInfo } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { listPreapproved, removePreapproved } from './preapproved.mjs';
+import { removePreapproved, removeAllPreapproved, preapprovedStatus, PREAPPROVED_PROBLEM_NOTICE } from './preapproved.mjs';
 import { writeConfigFile } from './direct-browser/turbo-setup.mjs';
 import { installedConfigPath, readInstalledConfigFile } from './direct-browser/installed-config.mjs';
 import { grantStorePath } from './direct-browser/electron-config.mjs';
@@ -23,7 +23,7 @@ const engineFile = home => join(home, 'Library/Group Containers/2DC432GLL2.com.o
 function installedAppNames(bundleId) {
   try {
     const names = JSON.parse(execFileSync('/usr/bin/osascript', ['-l', 'JavaScript', fileURLToPath(new URL('./app-names.js', import.meta.url)), bundleId],
-      { encoding: 'utf8', timeout: 5000, stdio: ['ignore', 'pipe', 'ignore'] }));
+      { encoding: 'utf8', timeout: 5000, stdio: ['ignore', 'pipe', 'ignore'], killSignal: 'SIGKILL' }));
     return Array.isArray(names) ? names : [];
   } catch { return []; }
 }
@@ -61,8 +61,10 @@ export function standing(options) {
   const o = context(options), grants = [], problems = [];
   try {
     const uses = grantUses({ directory: o.logs });
-    for (const entry of listPreapproved({ home: o.home, uid: o.uid })) grants.push({ title: entry.app, detail: 'always', used: uses.get(entry.app), target: 'app:' + entry.app });
-  } catch (error) { problems.push(error.message); }
+    const preapproved = preapprovedStatus({ home: o.home, uid: o.uid });
+    if (preapproved.notice) problems.push(preapproved.notice);
+    for (const entry of preapproved.apps) grants.push({ title: entry.app, detail: 'always', used: uses.get(entry.app), target: 'app:' + entry.app });
+  } catch { problems.push(PREAPPROVED_PROBLEM_NOTICE); }
   try {
     const seen = new Set();
     for (const record of o.grants().list()) {
@@ -142,8 +144,8 @@ function revokeApp(o, name) {
 const revokeTurbo = o => writeConfigFile(installedConfigPath(o.home), { version: 1, enabled: false }, o.uid);
 // The menu's Revoke All leaves turbo alone: Turn Turbo Off… is turbo's one path, with its one confirmation.
 function revokeAll(o, { includeTurbo = true } = {}) {
-  let apps = 0, debuggers = 0, turbo = false;
-  for (const entry of listPreapproved({ home: o.home, uid: o.uid })) if (removePreapproved(entry.app, { home: o.home, uid: o.uid })) apps++;
+  let debuggers = 0, turbo = false;
+  const apps = removeAllPreapproved({ home: o.home, uid: o.uid });
   const store = o.grants(), bundles = new Set();
   for (const record of store.list()) if (store.remove(record.key)) bundles.add(record.bundleId);
   debuggers = bundles.size;
@@ -326,13 +328,13 @@ const HOST_TARGET = /^(?:app:.{1,255}|electron:[A-Za-z0-9-]+(?:\.[A-Za-z0-9-]+)+
  *  blocked: [title], only? }, with used in seconds. offered: the targets a click may act on, so the menu can only revoke what it
  *  showed and block the app it named. */
 export function permissionsMenu(options) {
-  const o = context(options), { grants } = standing(o), perms = readPermissions(o.path, o.uid), app = currentApp();
+  const o = context(options), { grants, problems } = standing(o), perms = readPermissions(o.path, o.uid), app = currentApp();
   const rows = grants.filter(g => printable(g.title) && printable(g.target) && HOST_TARGET.test(g.target)).slice(0, 24)
     .map(g => ({ title: clip(g.title), detail: g.detail, used: Number.isFinite(g.used) ? Math.floor(g.used / 1000) : null, target: g.target }));
   const blocked = perms.state === 'unsafe' ? ['permissions.json is unsafe: run sleight-mcp permissions repair'] : [...perms.apps.map(a => clip(a.name ?? a.id)), ...perms.sites.map(clip)].slice(0, 24);
   const offerBlock = app && perms.state !== 'unsafe' && perms.apps.length < LIMIT;
   const current = offerBlock && !perms.apps.some(a => a.id.toLowerCase() === app.bundleId.toLowerCase()) ? { title: clip(app.name), target: app.bundleId } : undefined;
-  const payload = { grants: rows, blocked, ...current ? { current } : {}, ...perms.only ? { only: perms.only.slice(0, 12).map(clip) } : {} };
+  const payload = { grants: rows, blocked, ...problems.length ? { problems: problems.slice(0, 3) } : {}, ...current ? { current } : {}, ...perms.only ? { only: perms.only.slice(0, 12).map(clip) } : {} };
   while (Buffer.byteLength(JSON.stringify(payload)) > 5800 && payload.grants.length) payload.grants.pop();
   const offered = new Set(payload.grants.map(g => g.target).filter(target => target !== 'turbo'));
   if (current) offered.add('block:' + current.target);

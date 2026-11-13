@@ -1,6 +1,8 @@
+import { assertChildStatus } from './fixtures/child-status.mjs';
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { spawnSync } from 'node:child_process';
+import { spawn, spawnSync } from 'node:child_process';
+import { createInterface } from 'node:readline';
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { homedir, tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -85,10 +87,10 @@ test('the command line always exits 0, logs one line, and rejects nothing silent
 });
 
 test('the script prints its line and exits 0 when it skips', () => {
-  const run = spawnSync(process.execPath, [join(ROOT, 'bench/hub-refresh.mjs'), '--exit', '1'], { encoding: 'utf8' });
-  assert.equal(run.status, 0);
+  const run = spawnSync(process.execPath, [join(ROOT, 'bench/hub-refresh.mjs'), '--exit', '1'], { encoding: 'utf8', timeout: 60000, killSignal: 'SIGKILL' });
+  assertChildStatus(run, 0);
   assert.match(run.stdout, /^hub: skipped, (the pass did not succeed \(exit 1\)|the checkout is on a detached HEAD or has no Git branch)\n$/);
-  const off = spawnSync(process.execPath, [join(ROOT, 'bench/hub-refresh.mjs')], { encoding: 'utf8', env: { ...process.env, SLEIGHT_NO_HUB: '1' } });
+  const off = spawnSync(process.execPath, [join(ROOT, 'bench/hub-refresh.mjs')], { encoding: 'utf8', env: { ...process.env, SLEIGHT_NO_HUB: '1' }, timeout: 60000, killSignal: 'SIGKILL' });
   assert.match(off.stdout, /^hub: skipped, no-hub flag or SLEIGHT_NO_HUB\n$/);
 });
 
@@ -141,7 +143,7 @@ function snippet(from, to) {
 test('rounds.sh removes --no-hub from the runner arguments, keeps every other argument in order, and sets NOHUB', () => {
   const filter = snippet('NOHUB="${SLEIGHT_NO_HUB:-}"', 'done\n');
   const run = (env, ...args) => spawnSync('/bin/sh', ['-eu', '-c', `${filter}\nprintf '%s|' "$NOHUB"; for a in "$@"; do printf '[%s]' "$a"; done`, 'rounds', ...args],
-    { encoding: 'utf8', env: { PATH: process.env.PATH, ...env } });
+    { encoding: 'utf8', env: { PATH: process.env.PATH, ...env }, timeout: 60000, killSignal: 'SIGKILL' });
   assert.equal(run({}, '--surface', 'sleight', '--out', 'a b').stdout, '|[--surface][sleight][--out][a b]');
   assert.equal(run({}, '--surface', '--no-hub', '', 'x').stdout, '1|[--surface][][x]');
   assert.equal(run({ SLEIGHT_NO_HUB: '1' }, '--only', 'a').stdout, '1|[--only][a]');
@@ -154,7 +156,7 @@ test('rounds.sh refreshes the hub after a round that saved to --out, skips witho
   const record = join(repo, 'calls.log');
   writeFileSync(join(repo, 'bench/hub-refresh.mjs'), `import { appendFileSync } from 'node:fs'; appendFileSync(${JSON.stringify(record)}, process.argv.slice(2).join(' ') + '\\n'); process.exit(7);\n`);
   const fn = snippet('hub_refresh() {', '\n}\n');
-  const run = (vars, tail = 'hub_refresh') => spawnSync('/bin/sh', ['-eu', '-c', `${fn}\n${tail}\necho survived`], { encoding: 'utf8', env: { PATH: process.env.PATH, REPO: repo, ...vars } });
+  const run = (vars, tail = 'hub_refresh') => spawnSync('/bin/sh', ['-eu', '-c', `${fn}\n${tail}\necho survived`], { encoding: 'utf8', env: { PATH: process.env.PATH, REPO: repo, ...vars }, timeout: 60000, killSignal: 'SIGKILL' });
   const lines = () => { try { return readFileSync(record, 'utf8').trim().split('\n'); } catch { return []; } };
   assert.equal(run({ OUT: '' }).stdout, 'survived\n');
   assert.deepEqual(lines(), []);
@@ -184,10 +186,10 @@ test('a checkout on a branch is allowed; a detached HEAD, no Git branch and the 
   assert.equal(checkoutBlock({ root: '/repo/p141', git: branch, real: p => p }), null);
   assert.match(checkoutBlock({ root: '/repo/p141', git: detached, real: p => p }), /detached HEAD/);
   assert.match(checkoutBlock({ root: '/repo/p141', git: () => ({ error: new Error('no git'), status: null }), real: p => p }), /detached HEAD or has no Git branch/);
-  for (const root of ['/tmp/lane-vp1-AbC123/B', '/tmp/lane-vp1-x', MAC_TMP + '/lane-vp1-q/A', '/tmp/lane-ab-9z/old', '/home/x/sleight-wt/ab-old', '/home/x/sleight-wt/ab-new/']) {
+  for (const root of ['/tmp/lane-vp1-AbC123/B', '/tmp/lane-vp1-x', MAC_TMP + '/lane-vp1-q/A', '/tmp/lane-ab-9z/old', '/home/x/worktrees/ab-old', '/home/x/worktrees/ab-new/']) {
     assert.match(checkoutBlock({ root, git: branch, real: p => p }), /staging checkout/, root);
   }
-  for (const root of ['/home/x/sleight-wt/p141-hub1', '/tmp/lane-claude-AbC', '/home/x/sleight-wt/ab-newer', '/home/x/lane-vpn']) {
+  for (const root of ['/home/x/worktrees/p141-hub1', '/tmp/lane-claude-AbC', '/home/x/worktrees/ab-newer', '/home/x/lane-vpn']) {
     assert.equal(checkoutBlock({ root, git: branch, real: p => p }), null, root);
   }
 });
@@ -202,7 +204,7 @@ test('a refused checkout skips the refresh without starting the hub, even with n
 
 test('the real checkout of this repository is judged by Git: a throwaway repository on a branch passes, then detached fails', t => {
   const dir = tmp(t);
-  const git = (...args) => { const r = spawnSync('/usr/bin/git', ['-C', dir, ...args], { encoding: 'utf8', env: { PATH: process.env.PATH, HOME: dir, GIT_CONFIG_GLOBAL: '/dev/null', GIT_CONFIG_NOSYSTEM: '1' } }); assert.equal(r.status, 0, r.stderr); return r.stdout; };
+  const git = (...args) => { const r = spawnSync('/usr/bin/git', ['-C', dir, ...args], { encoding: 'utf8', env: { PATH: process.env.PATH, HOME: dir, GIT_CONFIG_GLOBAL: '/dev/null', GIT_CONFIG_NOSYSTEM: '1' }, timeout: 30000, killSignal: 'SIGKILL' }); assertChildStatus(r, 0, r.stderr); return r.stdout; };
   git('init', '-q', '-b', 'main'); writeFileSync(join(dir, 'a'), 'a');
   git('add', 'a'); git('-c', 'user.name=T', '-c', 'user.email=t@example.invalid', 'commit', '-q', '-m', 'a');
   assert.equal(checkoutBlock({ root: dir }), null);
@@ -254,47 +256,78 @@ function realBranch(child) {
   assert.notEqual(swapped, branch);
   return swapped;
 }
-const waitFor = async (ok, ms = 4000) => { const end = Date.now() + ms; while (Date.now() < end) { if (ok()) return true; await new Promise(r => setTimeout(r, 25)); } return false; };
-
-test('a TERM to the real-browser branch reaches a 3 s runner promptly, the shell exits 130 after its cleanup, and the hub is not refreshed', async t => {
-  const dir = tmp(t), log = join(dir, 'child.log'), ready = join(dir, 'ready'), record = join(dir, 'refresh.log');
-  const runner = join(dir, 'runner.mjs');
-  writeFileSync(runner, `import { writeFileSync, appendFileSync } from 'node:fs'; writeFileSync(${JSON.stringify(ready)}, 'up');
-process.on('SIGTERM', () => { setTimeout(() => { appendFileSync(${JSON.stringify(log)}, 'TERM cleaned up\\n'); process.exit(143); }, 200); });
-setTimeout(() => { appendFileSync(${JSON.stringify(log)}, 'finished\\n'); }, 3000);\n`);
-  const script = `hub_refresh() { echo "refresh RC=$RC" >> ${JSON.stringify(record)}; }\nREAL=1\n${realBranch(`${JSON.stringify(process.execPath)} ${JSON.stringify(runner)}`)}`;
-  const { spawn } = await import('node:child_process');
-  const sh = spawn('/bin/sh', ['-eu', '-c', script], { stdio: 'ignore', env: { PATH: process.env.PATH } });
-  const closed = new Promise(done => sh.once('close', (code, signal) => done({ code, signal })));
-  assert.ok(await waitFor(() => existsSync(ready)), 'the runner started');
-  const sent = Date.now();
-  sh.kill('SIGTERM');
-  const exit = await closed;
-  assert.ok(Date.now() - sent < 2000, `exited ${Date.now() - sent} ms after the TERM`);
-  assert.equal(exit.code, 130);
-  assert.equal(readFileSync(log, 'utf8'), 'TERM cleaned up\n');
-  assert.equal(existsSync(record), false, 'a killed round must not refresh the hub');
+// Exercise the same POSIX shell code on macOS sh, dash (Linux CI's sh), and
+// bash in POSIX mode when installed. No container or shell installation is needed.
+const shells = [['/bin/sh', []], ['/bin/dash', []], ['/bin/bash', ['--posix']]]
+  .filter(([path]) => existsSync(path));
+for (const [shell, flags] of shells) {
+  const shellName = [shell, ...flags].join(' ');
+  test(`${shellName}: a TERM reaches the runner, the shell waits for its cleanup and exits 130 without refreshing the hub`, { timeout: 10000 }, async t => {
+    const dir = tmp(t), log = join(dir, 'child.log'), record = join(dir, 'refresh.log');
+    const runner = join(dir, 'runner.mjs');
+    writeFileSync(runner, `import { appendFileSync } from 'node:fs';
+process.stdin.resume();
+process.on('SIGTERM', () => {
+  process.stdin.once('data', () => { appendFileSync(${JSON.stringify(log)}, 'TERM cleaned up\\n'); process.exit(143); });
+  console.log('TERM received');
 });
+console.log('ready');\n`);
+    const branch = realBranch(`${JSON.stringify(process.execPath)} ${JSON.stringify(runner)} <&3`)
+      .replace('CHILD=$!', 'CHILD=$!\n  echo "shell armed"');
+    const script = `hub_refresh() { echo "refresh RC=$RC" >> ${JSON.stringify(record)}; }\nREAL=1\n${branch}`;
+    const sh = spawn(shell, [...flags, '-eu', '-c', script], { stdio: ['ignore', 'pipe', 'pipe', 'pipe'], env: { PATH: process.env.PATH } });
+    const events = [];
+    const lines = createInterface({ input: sh.stdout });
+    const cleaned = new Promise(resolve => lines.on('line', line => {
+      events.push(line);
+      if (events.includes('ready') && events.includes('shell armed') && events.length === 2) sh.kill('SIGTERM');
+      if (line === 'TERM received') {
+        assert.equal(sh.exitCode, null, 'the shell waits while its runner has not finished cleanup');
+        assert.equal(existsSync(record), false);
+        sh.stdio[3].end('finish cleanup\n');
+        resolve();
+      }
+    }));
+    const closed = new Promise(done => sh.once('close', (code, signal) => done({ code, signal })));
+    await cleaned;
+    const exit = await closed;
+    assert.deepEqual(events.slice(0, 2).sort(), ['ready', 'shell armed']);
+    assert.equal(events[2], 'TERM received');
+    assert.equal(exit.code, 130);
+    assert.equal(readFileSync(log, 'utf8'), 'TERM cleaned up\n');
+    assert.equal(existsSync(record), false, 'a killed round must not refresh the hub');
+  });
 
-test('a round killed while the runner exits 0 on its own still reads as a failure: no refresh, exit 130', async t => {
-  const dir = tmp(t), record = join(dir, 'refresh.log');
-  // The runner sends TERM to the shell, then exits 0 before the shell can handle it.
-  const script = `hub_refresh() { echo "refresh RC=$RC" >> ${JSON.stringify(record)}; }\ntrap 'hub_refresh' EXIT\nREAL=1\n${realBranch(`sh -c 'kill -TERM $PPID; sleep 0.3; exit 0'`)}`;
-  const run = spawnSync('/bin/sh', ['-eu', '-c', script], { encoding: 'utf8', env: { PATH: process.env.PATH }, timeout: 8000 });
-  assert.equal(run.status, 130);
-  assert.equal(existsSync(record) ? readFileSync(record, 'utf8') : '', existsSync(record) ? 'refresh RC=1\n' : '', 'the EXIT trap, if it ran hub_refresh, saw RC=1');
-  assert.doesNotMatch(existsSync(record) ? readFileSync(record, 'utf8') : '', /RC=0/);
-});
+  test(`${shellName}: a round killed while the runner exits 0 on its own still reads as a failure: no refresh, exit 130`, async t => {
+    const dir = tmp(t), record = join(dir, 'refresh.log'), gate = join(dir, 'armed.fifo'), runnerExit = join(dir, 'runner-exit');
+    assertChildStatus(spawnSync('/usr/bin/mkfifo', [gate], { timeout: 30000, killSignal: 'SIGKILL' }), 0);
+    // Without the handshake, TERM can beat CHILD=$! and dash -u exits 2 on the
+    // unset CHILD in stop_child. A sleep after kill cannot prevent that race.
+    // Release the runner only after CHILD is assigned. It ignores the forwarded
+    // TERM and exits 0, so the shell's signal trap must preserve the failed round.
+    const runnerFile = join(dir, 'runner.sh');
+    writeFileSync(runnerFile, `trap '' TERM\ntrap 'printf "%s\\n" "$?" > "$2"' EXIT\nIFS= read -r armed < "$1"\nkill -TERM "$PPID"\nexit 0\n`);
+    const runner = `${shell} ${flags.join(' ')} ${JSON.stringify(runnerFile)} ${JSON.stringify(gate)} ${JSON.stringify(runnerExit)}`;
+    const branch = realBranch(runner).replace('CHILD=$!', `CHILD=$!\n  printf 'armed\\n' > ${JSON.stringify(gate)}`);
+    const script = `hub_refresh() { echo "refresh RC=$RC" >> ${JSON.stringify(record)}; }\ntrap 'hub_refresh' EXIT\nREAL=1\n${branch}`;
+    const run = spawnSync(shell, [...flags, '-eu', '-c', script], { encoding: 'utf8', env: { PATH: process.env.PATH }, timeout: 8000, killSignal: 'SIGKILL' });
+    assert.equal(run.error, undefined, run.stderr);
+    assertChildStatus(run, 130);
+    assert.equal(readFileSync(runnerExit, 'utf8'), '0\n', 'the runner reached its own successful exit');
+    assert.equal(existsSync(record) ? readFileSync(record, 'utf8') : '', existsSync(record) ? 'refresh RC=1\n' : '', 'the EXIT trap, if it ran hub_refresh, saw RC=1');
+    assert.doesNotMatch(existsSync(record) ? readFileSync(record, 'utf8') : '', /RC=0/);
+  });
 
-test('a finished real-browser round refreshes once with its own exit status: 0 for a pass, the runner status for a failure', t => {
-  for (const [command, expected] of [['true', 0], ['sh -c "exit 5"', 5]]) {
-    const dir = tmp(t), record = join(dir, 'refresh.log');
-    const script = `hub_refresh() { echo "refresh RC=$RC" >> ${JSON.stringify(record)}; }\nREAL=1\n${realBranch(command)}`;
-    const run = spawnSync('/bin/sh', ['-eu', '-c', script], { encoding: 'utf8', env: { PATH: process.env.PATH }, timeout: 8000 });
-    assert.equal(run.status, expected);
-    assert.equal(readFileSync(record, 'utf8'), `refresh RC=${expected}\n`);
-  }
-});
+  test(`${shellName}: a finished real-browser round refreshes once with its own exit status: 0 for a pass, the runner status for a failure`, t => {
+    for (const [command, expected] of [['true', 0], ['sh -c "exit 5"', 5]]) {
+      const dir = tmp(t), record = join(dir, 'refresh.log');
+      const script = `hub_refresh() { echo "refresh RC=$RC" >> ${JSON.stringify(record)}; }\nREAL=1\n${realBranch(command)}`;
+      const run = spawnSync(shell, [...flags, '-eu', '-c', script], { encoding: 'utf8', env: { PATH: process.env.PATH }, timeout: 8000, killSignal: 'SIGKILL' });
+      assertChildStatus(run, expected);
+      assert.equal(readFileSync(record, 'utf8'), `refresh RC=${expected}\n`);
+    }
+  });
+}
 
 test('the FowlBrowser path starts with RC=1 and sets it to 0 only on success, so a round killed by the INT trap never reads as a pass', () => {
   const tail = snippet('RC=1\nenv -i HOME', '"$MODEL" && RC=0 || RC=$?');

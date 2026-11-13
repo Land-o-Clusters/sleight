@@ -2,6 +2,7 @@ import AppKit
 import ApplicationServices
 import CoreGraphics
 import Foundation
+import Darwin
 import ImageIO
 import IOKit
 import ScreenCaptureKit
@@ -59,14 +60,31 @@ func write(_ image: CGImage, to path: String, extra: [String: Any] = [:]) {
     emit(["ok": true, "width": width, "height": height].merging(extra) { a, _ in a })
 }
 
+// BEGIN WINDOWSERVER IDENTITY
+func windowServerPID(_ windows: [[String: Any]], executable: (Int32) -> String? = { pid in
+    var path = [CChar](repeating: 0, count: 4096)
+    guard proc_pidpath(pid, &path, UInt32(path.count)) > 0 else { return nil }
+    return String(cString: path)
+}) -> Int? {
+    let candidates = Set(windows.compactMap { row -> Int? in
+        // CGWindowList reports the owner as "Window Server" on current macOS; accept the joined spelling too.
+        guard ["WindowServer", "Window Server"].contains(row["owner"] as? String ?? ""), let number = row["pid"] as? Int,
+            let pid = Int32(exactly: number), pid > 0, let path = executable(pid),
+            path.hasPrefix("/System/Library/"), path.hasSuffix("/WindowServer") else { return nil }
+        return number
+    })
+    return candidates.count == 1 ? candidates.first : nil
+}
+// END WINDOWSERVER IDENTITY
+
 func windowList() -> [[String: Any]] {
     let list = CGWindowListCopyWindowInfo([.optionOnScreenOnly, .excludeDesktopElements], kCGNullWindowID) as? [[String: Any]] ?? []
     return list.compactMap { info in
         guard let id = info[kCGWindowNumber as String] as? Int, let pid = info[kCGWindowOwnerPID as String] as? Int,
               let layer = info[kCGWindowLayer as String] as? Int, let raw = info[kCGWindowBounds as String] as? NSDictionary,
               let bounds = CGRect(dictionaryRepresentation: raw) else { return nil }
-        // No titles or owner names: the pixel test needs ids, pids, layers and frames only.
-        return ["id": id, "pid": pid, "layer": layer, "alpha": info[kCGWindowAlpha as String] as? Double ?? 1,
+        // Retain owner names for the WindowServer identity check. Window titles stay private.
+        return ["id": id, "pid": pid, "owner": info[kCGWindowOwnerName as String] as? String ?? "", "layer": layer, "alpha": info[kCGWindowAlpha as String] as? Double ?? 1,
                 "bounds": ["x": bounds.minX, "y": bounds.minY, "width": bounds.width, "height": bounds.height]]
     }
 }
@@ -126,15 +144,18 @@ func sckWindow(_ id: CGWindowID, _ out: String) async {
 }
 // The user's recording as the film records it: a display filter that includes only the target window and the hand's windows,
 // cropped to the target window. A hand window absent from the shareable content (sharingType none) can't be included.
-func sckComposite(_ id: CGWindowID, _ pid: pid_t, _ out: String) async {
+func sckComposite(_ id: CGWindowID, _ pid: pid_t, _ out: String, extent: CGRect? = nil) async {
     let content = await shareable()
     guard let target = content.windows.first(where: { $0.windowID == id }) else { fail("window-gone") }
-    let hands = pid > 0 ? content.windows.filter { $0.owningApplication?.processID == pid && $0.isOnScreen } : []
+    let hands = pid > 0 ? content.windows.filter { $0.owningApplication?.processID == pid && $0.isOnScreen && $0.windowID != target.windowID } : []
     guard let display = content.displays.first(where: { $0.frame.contains(target.frame) }) else { fail("window-spans-displays") }
+    let rect = extent ?? target.frame
+    guard display.frame.contains(rect) else { fail("extent-spans-displays") }
     let filter = SCContentFilter(display: display, including: [target] + hands)
-    let config = configuration(size: target.frame.size, scale: CGFloat(filter.pointPixelScale))
-    config.sourceRect = target.frame.offsetBy(dx: -display.frame.minX, dy: -display.frame.minY)
-    write(await shoot(filter, config), to: out, extra: ["handWindows": hands.map { Int($0.windowID) }])
+    let config = configuration(size: rect.size, scale: CGFloat(filter.pointPixelScale))
+    config.sourceRect = rect.offsetBy(dx: -display.frame.minX, dy: -display.frame.minY)
+    write(await shoot(filter, config), to: out, extra: ["handWindows": hands.map { Int($0.windowID) },
+        "captureRect": ["x": rect.minX, "y": rect.minY, "width": rect.width, "height": rect.height]])
 }
 
 let args = CommandLine.arguments
@@ -154,7 +175,8 @@ case (2, "preflight"), (2, "--preflight"):
     if let refusal = displayRefusal(CGDisplayIsAsleep(CGMainDisplayID()) != 0, locked) { fail(refusal) }
     emit(["ok": true, "screenRecording": CGPreflightScreenCaptureAccess(), "accessibility": AXIsProcessTrusted()])
 case (2, "windows"):
-    emit(["ok": true, "front": Int(NSWorkspace.shared.frontmostApplication?.processIdentifier ?? 0), "windows": windowList()])
+    let windows = windowList()
+    emit(["ok": true, "front": Int(NSWorkspace.shared.frontmostApplication?.processIdentifier ?? 0), "windows": windows, "windowServerPid": windowServerPID(windows) as Any? ?? NSNull(), "observedAtMs": Date().timeIntervalSince1970 * 1000])
 case (4, "decode"):
     guard let source = CGImageSourceCreateWithURL(URL(fileURLWithPath: args[2]) as CFURL, nil),
           let image = CGImageSourceCreateImageAtIndex(source, 0, nil) else { fail("decode") }
@@ -180,6 +202,13 @@ case (5, "sck-composite"):
     guard let id = UInt32(args[2]), let pid = Int32(args[3]) else { fail("usage") }
     _ = CGMainDisplayID()
     Task { await sckComposite(id, pid, args[4]); exit(0) }
+    dispatchMain()
+case (9, "sck-composite-rect"):
+    guard let id = UInt32(args[2]), let pid = Int32(args[3]),
+        let x = Double(args[5]), let y = Double(args[6]), let w = Double(args[7]), let h = Double(args[8]),
+        [x, y, w, h].allSatisfy({ $0.isFinite && abs($0) <= 20000 }), w > 0, h > 0 else { fail("usage") }
+    _ = CGMainDisplayID()
+    Task { await sckComposite(id, pid, args[4], extent: CGRect(x: x, y: y, width: w, height: h)); exit(0) }
     dispatchMain()
 case (4, "hit"):
     guard let x = Float(args[2]), let y = Float(args[3]) else { fail("usage") }

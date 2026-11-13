@@ -1,3 +1,4 @@
+import { assertChildStatus } from './fixtures/child-status.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import * as fs from 'node:fs';
@@ -149,16 +150,16 @@ test('generated pet atlases reach the existing sandboxed decoder with no windows
   const source = new URL('../plugins/sleight/lib/direct-browser/native/consent-host.swift', import.meta.url).pathname;
   assert.match(fs.readFileSync(source, 'utf8'), /if arguments.first == "--check-character"/);
   const binary = join(w.base, 'host');
-  const build = spawnSync('/usr/bin/xcrun', ['swiftc', '-module-cache-path', swiftModuleCache(), source, '-o', binary], { encoding: 'utf8', timeout: 300000 });
-  assert.equal(build.status, 0, build.stderr);
-  const encoder = spawnSync('cwebp', ['-version'], { encoding: 'utf8', timeout: 5000 });
+  const build = spawnSync('/usr/bin/xcrun', ['swiftc', '-module-cache-path', swiftModuleCache(), source, '-o', binary], { encoding: 'utf8', timeout: 600000, killSignal: 'SIGKILL' });
+  assertChildStatus(build, 0, build.stderr);
+  const encoder = spawnSync('cwebp', ['-version'], { encoding: 'utf8', timeout: 5000, killSignal: 'SIGKILL' });
   for (const version of [1, 2]) for (const ext of ['png', 'webp']) await t.test(`v${version} ${ext} decoding`, {
     skip: ext === 'webp' && encoder.status !== 0 && 'cwebp unavailable for synthetic WebP generation',
   }, t => {
     const f = fixture(t, version), rows = version === 1 ? 9 : 11;
     if (ext === 'webp') {
-      const encoded = spawnSync('cwebp', ['-quiet', '-lossless', '-exact', join(f.source, 'spritesheet.png'), '-o', join(f.source, 'spritesheet.webp')], { encoding: 'utf8', timeout: 30000 });
-      assert.equal(encoded.status, 0, encoded.stderr);
+      const encoded = spawnSync('cwebp', ['-quiet', '-lossless', '-exact', join(f.source, 'spritesheet.png'), '-o', join(f.source, 'spritesheet.webp')], { encoding: 'utf8', timeout: 30000, killSignal: 'SIGKILL' });
+      assertChildStatus(encoded, 0, encoded.stderr);
       fs.chmodSync(join(f.source, 'spritesheet.webp'), 0o600); fs.unlinkSync(join(f.source, 'spritesheet.png'));
       f.pet.spritesheetPath = 'spritesheet.webp'; f.save();
     }
@@ -169,11 +170,11 @@ test('generated pet atlases reach the existing sandboxed decoder with no windows
     const frame = characterFrame(result, { nonce: 'a'.repeat(64), seq: 0, resolve: resolveCharacterStates });
     for (const entry of [...Object.values(frame.table), ...Object.values(frame.perch.table)]) assert.ok(entry.row < rows);
     const run = input => spawnSync(binary, ['--check-character'], { input: JSON.stringify(input) + '\n', encoding: 'utf8', timeout: 15000,
-      env: { PATH: '/usr/bin:/bin', SLEIGHT_CURSOR_TEST: '1', SLEIGHT_CURSOR_CHARACTERS_ROOT: f.root } });
-    const good = run(frame); assert.equal(good.status, 0, good.stderr);
+      env: { PATH: '/usr/bin:/bin', SLEIGHT_CURSOR_TEST: '1', SLEIGHT_CURSOR_CHARACTERS_ROOT: f.root }, killSignal: 'SIGKILL' });
+    const good = run(frame); assertChildStatus(good, 0, good.stderr);
     assert.deepEqual(JSON.parse(good.stdout), { id: 'synthetic-pet', loaded: true, reason: null, warnings: [] });
     fs.writeFileSync(join(result.folder, `sheet.${ext}`), bytes.subarray(0, 16));
-    const broken = run(frame); assert.equal(broken.status, 0, broken.stderr); assert.equal(JSON.parse(broken.stdout).loaded, false);
+    const broken = run(frame); assertChildStatus(broken, 0, broken.stderr); assert.equal(JSON.parse(broken.stdout).loaded, false);
     t.diagnostic(`sheetBytes=${bytes.length} frameBytes=${Buffer.byteLength(JSON.stringify(frame))}`);
   });
   t.diagnostic(`hostBytes=${fs.statSync(binary).size} cwebp=${encoder.stdout.trim()}`);

@@ -5,7 +5,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { WatchStore, watchPlan, watchCommand, recordWatchRead } from '../plugins/sleight/lib/watches.mjs';
 import { terminalConfirm } from '../plugins/sleight/lib/terminal-confirm.mjs';
-import { registerTemp } from '../scripts/temp-leftovers.mjs';
+import { registerTemp, trackTemp } from '../scripts/temp-leftovers.mjs';
 import { EventEmitter } from 'node:events';
 import { pathToFileURL } from 'node:url';
 import { execFile } from 'node:child_process';
@@ -14,7 +14,7 @@ import { promisify } from 'node:util';
 const query = { sleightWatch: 1, url: 'https://example.test/ticket', find: 'shipped' };
 const binding = { browser: 'browser1', incarnation: 'incarnation1', target: 'target1' };
 function fixture(t, options = {}) {
-  const home = registerTemp(t, realpathSync(mkdtempSync(join(tmpdir(), 'sleight-page-watch-'))));
+  const home = registerTemp(t, trackTemp(realpathSync(mkdtempSync(join(tmpdir(), 'sleight-page-watch-')))));
   const calls = [], notices = [];
   let matched = false, reads = 0, time = Date.parse('2026-10-24T12:00:00.000Z');
   const store = new WatchStore({ home, now: () => time, boot: () => 'boot1', launchctl: async args => calls.push(args), confirm: async () => true,
@@ -246,6 +246,29 @@ test('expired and rebooted watches remove themselves even when already paused, b
     assert.deepEqual(f.calls.at(-1), ['bootout', `gui/${process.getuid()}/${plan.label}`]);
     assert.match(readFileSync(plan.logPath, 'utf8'), /WATCH_EXPIRED|WATCH_REBOOTED/);
   }
+});
+
+for (const offset of [0, 1999]) test(`legacy local boot keeps an installed watch with an ISO start ${offset} ms later`, async t => {
+  const legacy = 'Sat Oct 24 08:00:00 2026';
+  const f = fixture(t, { boot: () => legacy }), plan = await f.store.add(query, '10m');
+  assert.equal(f.store.load(plan.id).boot, legacy);
+  f.store.boot = () => new Date(new Date(2026, 9, 24, 8, 0, 0).getTime() + offset).toISOString();
+  const result = await f.store.run(plan.id, { scheduled: true });
+  assert.equal(result.ok, true); assert.equal(result.changed, false); assert.equal(f.reads(), 2);
+  assert.equal(existsSync(plan.directory), true); assert.equal(existsSync(plan.plistPath), true);
+  assert.equal(f.calls.filter(args => args[0] === 'bootout').length, 0);
+  assert.equal(f.notices.length, 0);
+});
+
+for (const offset of [2000, 60000]) test(`legacy local boot retires an installed watch with an ISO start ${offset} ms later`, async t => {
+  const legacy = 'Sat Oct 24 08:00:00 2026';
+  const f = fixture(t, { boot: () => legacy }), plan = await f.store.add(query, '10m');
+  f.store.boot = () => new Date(new Date(2026, 9, 24, 8, 0, 0).getTime() + offset).toISOString();
+  const result = await f.store.run(plan.id, { scheduled: true });
+  assert.equal(result.error, 'WATCH_REBOOTED'); assert.equal(result.removed, true); assert.equal(f.reads(), 1);
+  assert.equal(existsSync(plan.directory), false); assert.equal(existsSync(plan.plistPath), false);
+  assert.deepEqual(f.calls.at(-1), ['bootout', `gui/${process.getuid()}/${plan.label}`]);
+  assert.match(readFileSync(plan.logPath, 'utf8'), /WATCH_REBOOTED/);
 });
 
 test('three consecutive missing-tab ticks remove the job; success resets the streak', async t => {

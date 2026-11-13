@@ -4,12 +4,12 @@
   "trials": [
     {
       "phase": "failure",
-      "error": "Command failed: osascript -l JavaScript ~/Projects/sleight-wt/window-targeting/bench/input-lease-fixture.js open /private/tmp/sleight-window-target-SIwKxa/sleight-window-left.txt\n~/Projects/sleight-wt/window-targeting/bench/input-lease-fixture.js: execution error: Error: Error: Application can't be found. (-2700)\n"
+      "error": "Command failed: osascript -l JavaScript <private-evidence>/window-targeting/bench/input-lease-fixture.js open /private/tmp/sleight-window-target-SIwKxa/sleight-window-left.txt\n<private-evidence>/window-targeting/bench/input-lease-fixture.js: execution error: Error: Error: Application can't be found. (-2700)\n"
     },
     {
       "phase": "fixture-cleanup",
       "path": "/private/tmp/sleight-window-target-SIwKxa/sleight-window-left.txt",
-      "error": "Command failed: osascript -l JavaScript ~/Projects/sleight-wt/window-targeting/bench/input-lease-fixture.js close /private/tmp/sleight-window-target-SIwKxa/sleight-window-left.txt\n~/Projects/sleight-wt/window-targeting/bench/input-lease-fixture.js: execution error: Error: Error: Application can't be found. (-2700)\n"
+      "error": "Command failed: osascript -l JavaScript <private-evidence>/window-targeting/bench/input-lease-fixture.js close /private/tmp/sleight-window-target-SIwKxa/sleight-window-left.txt\n<private-evidence>/window-targeting/bench/input-lease-fixture.js: execution error: Error: Error: Application can't be found. (-2700)\n"
     }
   ],
   "records": [],

@@ -4,11 +4,15 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join, relative } from 'node:path';
 import { PassThrough } from 'node:stream';
 import { batchingDescription, createRelay } from '../plugins/sleight/lib/relay.mjs';
 import { compactJsDescription } from '../plugins/sleight/lib/tool-description.mjs';
 import { FIRST_CALL_WINDOWS, WINDOWS_LINE } from '../plugins/sleight/lib/engine-app-docs.mjs';
-import { traceEnv } from '../bench/fowl/real-gate-setup.mjs';
+import { traceEnv, realAgentSetup } from '../bench/fowl/real-gate-setup.mjs';
+import { realGatePlan } from '../bench/fowl/real-gate.mjs';
+import { answerProblems } from '../bench/fowl/real-gate-grade.mjs';
 
 const firstRule = 'execute exactly one of the API calls shown below, optionally assigning its result to a variable. Do not add other API calls, waits, or snapshots to that invocation.';
 const ENGINE = 'Control native apps or browsers on the user’s computer by reading or operating UI.\n\nOn the first invocation of `cua_repl`, or after resetting it, ' +
@@ -89,8 +93,8 @@ const TREE = '<app_specific_instructions>\n## Browser Computer Use\n\nWhen navig
 
 test('results are the same with the flag: a recorded getState still ends with the windows line, getApp is unchanged', async t => {
   const results = [];
-  for (const firstCallWindows of [false, true]) {
-    const h = harness(t, { firstCallWindows });
+  for (const options of [{ firstCallWindows: false }, { firstCallWindows: true }, { firstWindowGuidance: true }]) {
+    const h = harness(t, options);
     h.call(1, 'const state = await cua.getState(); state');
     const state = await h.reply(1, STATE);
     assert.equal(state.at(-1), WINDOWS_LINE);
@@ -98,6 +102,42 @@ test('results are the same with the flag: a recorded getState still ends with th
     results.push([state, await h.reply(2, TREE)]);
   }
   assert.deepEqual(results[1], results[0]);
+  assert.deepEqual(results[2], results[0]);
+});
+
+test('SF4: unknown-app screening controls hide app hints while preserving the dedicated-window restriction', () => {
+  for (const browser of ['firefox', 'safari']) {
+    const realBrowser = { browser, marker: 'Sleight Gate held-out', profileRoot: '/fixture/profile', pid: 42 };
+    const setup = sf4UnknownApp => realAgentSetup({ surface: 'sleight', repo: '/fixture/repo', dir: '/fixture/run',
+      realBrowser, task: { name: 'lookup', prompt: 'Read the fixture page.', result: 'the answer', sf4UnknownApp } });
+    const named = setup(false), unknown = setup(true);
+    assert.match(named.prompt, new RegExp(browser, 'i'));
+    assert.doesNotMatch(unknown.prompt, /Firefox|Safari|browser PID 42|\/fixture\/profile/);
+    assert.match(unknown.prompt, /app has not been named/);
+    for (const result of [named, unknown]) {
+      assert.match(result.prompt, /Sleight Gate held-out/);
+      assert.match(result.prompt, /If the dedicated window cannot be identified, stop\./);
+      assert.match(result.prompt, /User activity still ends the input lease\./);
+      assert.match(result.prompt, /Never act in a window that was already open/);
+    }
+    assert.equal(unknown.metadata.sf4UnknownApp, true);
+    assert.deepEqual(unknown.allowed, named.allowed);
+    assert.deepEqual(unknown.mcpConfig.mcpServers, named.mcpConfig.mcpServers);
+  }
+});
+
+test('SF4: prepared lookups have answer grades and only the negative control withholds the app name', () => {
+  const tasks = JSON.parse(readFileSync(new URL('../bench/fowl/sf4-tasks.json', import.meta.url), 'utf8'));
+  assert.equal(tasks.length, 4);
+  assert.equal(tasks.filter(task => task.sf4UnknownApp).length, 1);
+  const answers = ['Plum mug $21.00', 'Saffron mug yellow', 'Slate mug grey', 'Stopped: two windows share the same title'];
+  for (const [i, task] of tasks.entries()) {
+    assert.deepEqual(answerProblems(task, answers[i]), []);
+    assert.notDeepEqual(answerProblems(task, 'Unknown'), []);
+    if (!task.sf4SameTitleDecoy) assert.match(task.site.log, /^http:\/\/127\.0\.0\.1:5420\/t\/sf4-[a-z-]+\/api\/log$/);
+    assert.equal(task.prompt.includes('{browser}'), !task.sf4UnknownApp);
+    assert.match(task.prompt, /dedicated.*window/);
+  }
 });
 
 test('the race passes SLEIGHT_TS3=1 to the sleight arm, and nothing else new', () => {
@@ -107,4 +147,20 @@ test('the race passes SLEIGHT_TS3=1 to the sleight arm, and nothing else new', (
   const script = readFileSync(new URL('../bench/fowl/rounds.sh', import.meta.url), 'utf8');
   const branch = script.slice(script.indexOf('if [ -n "$REAL" ]; then'), script.indexOf('fi\n', script.indexOf('if [ -n "$REAL" ]; then')));
   assert.match(branch, /env -i[\s\S]*\$\{SLEIGHT_TS3:\+SLEIGHT_TS3="\$SLEIGHT_TS3"\}[\s\S]*node tools\/rounds\.mjs/);
+});
+
+// The model sees its cwd in Claude Code's environment block. No browser or treatment belongs in it.
+test('SF4R: screening cwd paths are neutral for every task and browser', () => {
+  const tasks = JSON.parse(readFileSync(new URL('../bench/fowl/sf4-tasks.json', import.meta.url), 'utf8'));
+  const out = join(tmpdir(), 'screen-123', 'run-01');
+  for (const browser of ['firefox', 'safari']) {
+    const plan = realGatePlan({ args: { surface: 'sleight', out }, tasks,
+      repo: '/fixture/repo', realBrowser: { browser, marker: 'Sleight Gate 123', profileRoot: '/fixture/profile', pid: 42 } });
+    for (const arm of plan.arms) {
+      assert.match(relative(out, arm.dir), /^run-\d{2}$/);
+      assert.equal(realGatePlan({ args: { surface: 'sleight', out }, tasks: [arm.task], repo: '/fixture/repo', realBrowser: plan.browser }).arms[0].dir, arm.dir);
+      assert.doesNotMatch(arm.dir, /firefox|safari|sf4|plum|saffron|unknown|decoy/i);
+      if (arm.task.sf4UnknownApp) assert.doesNotMatch(arm.prompt, /firefox|safari/i);
+    }
+  }
 });

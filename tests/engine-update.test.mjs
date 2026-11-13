@@ -8,7 +8,7 @@ import { tmpdir } from 'node:os';
 import { fileURLToPath } from 'node:url';
 import { trackTemp } from '../scripts/temp-leftovers.mjs';
 
-async function fixture(t, mode = 'ok', initial = {}) {
+async function fixture(t, mode = 'ok', initial = {}, preapprovedText) {
   const bank = trackTemp(await mkdtemp(join(tmpdir(), 'sleight-update-test-')));
   const codexHome = join(bank, 'codex'), root = join(codexHome, 'plugins/cache/openai-bundled/unified-computer-use');
   const log = join(bank, 'engines.jsonl'), gate = join(bank, 'updated');
@@ -19,8 +19,14 @@ async function fixture(t, mode = 'ok', initial = {}) {
     } } }));
   };
   await writeFile(gate, 'waiting');
+  if (preapprovedText !== undefined) {
+    const folder = join(bank, 'Library/Application Support/sleight');
+    await mkdir(folder, { recursive: true, mode: 0o700 });
+    await writeFile(join(folder, 'preapproved.json'), preapprovedText, { mode: 0o600 });
+  }
   await configure('1.0', initial);
-  const child = spawn(process.execPath, [fileURLToPath(new URL('fixtures/restart-launcher.mjs', import.meta.url)), join(bank, 'leases')], {
+  const child = spawn(process.execPath, [fileURLToPath(new URL('fixtures/restart-launcher.mjs', import.meta.url)), join(bank, 'leases'),
+    ...preapprovedText === undefined ? [] : ['--fixture-preapproved']], {
     stdio: ['pipe', 'pipe', 'pipe'], env: { ...process.env, CODEX_HOME: codexHome, SLEIGHT_TEST_ENGINE_LOG: log,
       SLEIGHT_WARM_REPL: '0', SLEIGHT_SURFACES: 'computer', SLEIGHT_CHANGE_REVIEW: '0', SLEIGHT_APPROVAL_PROMPT: 'client', SLEIGHT_REMOTE_APPROVALS: '0' },
   });
@@ -45,6 +51,16 @@ async function fixture(t, mode = 'ok', initial = {}) {
     release: () => writeFile(gate, 'updated'),
     update: async (overrides) => { await configure('2.0', overrides); await rm(join(root, '1.0'), { recursive: true }); await writeFile(gate, 'updated'); } };
 }
+
+test('real launcher starts with an invalid fixture list, asks on the card and reports repair once', { timeout: 20000 }, async t => {
+  const h = await fixture(t, 'ok', {}, '{');
+  const first = await h.call(1, 'let app = await cua.getApp("TextEdit")');
+  assert.equal(first.result.isError, undefined);
+  assert.equal(h.approvals, 1);
+  assert.equal(first.result.content.filter(item => /Preapproved apps ignored/.test(item.text ?? '')).length, 1);
+  const second = await h.call(2, 'nodeRepl.write("still running")');
+  assert.equal(second.result.content.some(item => /Preapproved apps ignored/.test(item.text ?? '')), false);
+});
 
 for (const mode of ['ok', 'fail']) test(`engine update during a call reconnects once (${mode}) and keeps the client session`, { timeout: 20000 }, async t => {
   const h = await fixture(t, mode);

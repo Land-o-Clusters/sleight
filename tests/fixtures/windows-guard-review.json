@@ -1,0 +1,2241 @@
+{
+  "source": "WIN5R3 re-review of 94a30d95, n.mjs, fp.mjs, full.mjs and w.mjs (commands are data only)",
+  "ordinary": [
+    {
+      "tool": "Bash",
+      "command": "git status",
+      "beforeDenied": false
+    },
+    {
+      "tool": "Bash",
+      "command": "git diff",
+      "beforeDenied": false
+    },
+    {
+      "tool": "Bash",
+      "command": "git log --oneline -n 10",
+      "beforeDenied": false
+    },
+    {
+      "tool": "Bash",
+      "command": "git log HEAD~3..HEAD",
+      "beforeDenied": false
+    },
+    {
+      "tool": "Bash",
+      "command": "git diff HEAD~1..HEAD",
+      "beforeDenied": false
+    },
+    {
+      "tool": "Bash",
+      "command": "git add .",
+      "beforeDenied": false
+    },
+    {
+      "tool": "Bash",
+      "command": "git add src/app.ts package.json",
+      "beforeDenied": false
+    },
+    {
+      "tool": "Bash",
+      "command": "git add *.js",
+      "beforeDenied": true
+    },
+    {
+      "tool": "Bash",
+      "command": "git add -A",
+      "beforeDenied": false
+    },
+    {
+      "tool": "Bash",
+      "command": "git commit -m \"fix login bug\"",
+      "beforeDenied": false
+    },
+    {
+      "tool": "Bash",
+      "command": "git commit -m \"fix: why is it failing?\"",
+      "beforeDenied": true
+    },
+    {
+      "tool": "Bash",
+      "command": "git commit -m \"feat(api): add [beta] flag\"",
+      "beforeDenied": true
+    },
+    {
+      "tool": "Bash",
+      "command": "git commit -m \"chore: bump turbo to 2.0\"",
+      "beforeDenied": true
+    },
+    {
+      "tool": "Bash",
+      "command": "git push origin main",
+      "beforeDenied": false
+    },
+    {
+      "tool": "Bash",
+      "command": "git pull --rebase",
+      "beforeDenied": false
+    },
+    {
+      "tool": "Bash",
+      "command": "git checkout -b feature/x",
+      "beforeDenied": false
+    },
+    {
+      "tool": "Bash",
+      "command": "git checkout main -- src\\app.ts",
+      "beforeDenied": false
+    },
+    {
+      "tool": "Bash",
+      "command": "git stash",
+      "beforeDenied": false
+    },
+    {
+      "tool": "Bash",
+      "command": "git rebase -i HEAD~3",
+      "beforeDenied": false
+    },
+    {
+      "tool": "Bash",
+      "command": "git reset --hard HEAD~1",
+      "beforeDenied": false
+    },
+    {
+      "tool": "Bash",
+      "command": "git log --format=%h:%s -5",
+      "beforeDenied": true
+    },
+    {
+      "tool": "Bash",
+      "command": "git log --pretty=format:\"%h %s\" -5",
+      "beforeDenied": false
+    },
+    {
+      "tool": "Bash",
+      "command": "git diff --stat -E",
+      "beforeDenied": true
+    },
+    {
+      "tool": "Bash",
+      "command": "git clone https://github.com/vercel/turborepo.git",
+      "beforeDenied": true
+    },
+    {
+      "tool": "Bash",
+      "command": "npm install",
+      "beforeDenied": false
+    },
+    {
+      "tool": "Bash",
+      "command": "npm i -E typescript",
+      "beforeDenied": true
+    },
+    {
+      "tool": "Bash",
+      "command": "npm install --save-exact left-pad",
+      "beforeDenied": false
+    },
+    {
+      "tool": "Bash",
+      "command": "npm run build",
+      "beforeDenied": false
+    },
+    {
+      "tool": "Bash",
+      "command": "npm run test -- --coverage",
+      "beforeDenied": false
+    },
+    {
+      "tool": "Bash",
+      "command": "npm test -- -t \"renders\"",
+      "beforeDenied": false
+    },
+    {
+      "tool": "Bash",
+      "command": "npm run lint -- \"src/**/*.ts\"",
+      "beforeDenied": true
+    },
+    {
+      "tool": "Bash",
+      "command": "npm run dev",
+      "beforeDenied": false
+    },
+    {
+      "tool": "Bash",
+      "command": "npx turbo run build",
+      "beforeDenied": true
+    },
+    {
+      "tool": "Bash",
+      "command": "npx prettier --write .",
+      "beforeDenied": false
+    },
+    {
+      "tool": "Bash",
+      "command": "npx eslint src",
+      "beforeDenied": false
+    },
+    {
+      "tool": "Bash",
+      "command": "npx tsc --noEmit",
+      "beforeDenied": false
+    },
+    {
+      "tool": "Bash",
+      "command": "npx jest --testPathPattern=src/.*\\.test",
+      "beforeDenied": true
+    },
+    {
+      "tool": "Bash",
+      "command": "npm config get cache",
+      "beforeDenied": false
+    },
+    {
+      "tool": "Bash",
+      "command": "npm exec -- vite",
+      "beforeDenied": false
+    },
+    {
+      "tool": "Bash",
+      "command": "node -v",
+      "beforeDenied": false
+    },
+    {
+      "tool": "Bash",
+      "command": "node index.js",
+      "beforeDenied": false
+    },
+    {
+      "tool": "Bash",
+      "command": "node -e \"console.log(process.version)\"",
+      "beforeDenied": true
+    },
+    {
+      "tool": "Bash",
+      "command": "node --test tests/",
+      "beforeDenied": false
+    },
+    {
+      "tool": "Bash",
+      "command": "pnpm install",
+      "beforeDenied": false
+    },
+    {
+      "tool": "Bash",
+      "command": "pnpm turbo build",
+      "beforeDenied": true
+    },
+    {
+      "tool": "Bash",
+      "command": "yarn install",
+      "beforeDenied": false
+    },
+    {
+      "tool": "Bash",
+      "command": "dotnet build",
+      "beforeDenied": false
+    },
+    {
+      "tool": "Bash",
+      "command": "dotnet test",
+      "beforeDenied": false
+    },
+    {
+      "tool": "Bash",
+      "command": "dotnet run --project src\\App",
+      "beforeDenied": false
+    },
+    {
+      "tool": "Bash",
+      "command": "dotnet test --filter \"FullyQualifiedName~Foo\"",
+      "beforeDenied": false
+    },
+    {
+      "tool": "Bash",
+      "command": "dotnet publish -c Release -o out",
+      "beforeDenied": false
+    },
+    {
+      "tool": "Bash",
+      "command": "dotnet new console -n MyApp",
+      "beforeDenied": false
+    },
+    {
+      "tool": "Bash",
+      "command": "dotnet restore",
+      "beforeDenied": false
+    },
+    {
+      "tool": "Bash",
+      "command": "dir",
+      "beforeDenied": false
+    },
+    {
+      "tool": "Bash",
+      "command": "dir src",
+      "beforeDenied": false
+    },
+    {
+      "tool": "Bash",
+      "command": "dir *.cs",
+      "beforeDenied": true
+    },
+    {
+      "tool": "Bash",
+      "command": "dir /s /b *.json",
+      "beforeDenied": true
+    },
+    {
+      "tool": "Bash",
+      "command": "ls",
+      "beforeDenied": false
+    },
+    {
+      "tool": "Bash",
+      "command": "ls -la",
+      "beforeDenied": false
+    },
+    {
+      "tool": "Bash",
+      "command": "ls src\\*.ts",
+      "beforeDenied": true
+    },
+    {
+      "tool": "Bash",
+      "command": "type package.json",
+      "beforeDenied": false
+    },
+    {
+      "tool": "Bash",
+      "command": "type README.md",
+      "beforeDenied": false
+    },
+    {
+      "tool": "Bash",
+      "command": "type turbo.json",
+      "beforeDenied": false
+    },
+    {
+      "tool": "Bash",
+      "command": "cat package.json",
+      "beforeDenied": false
+    },
+    {
+      "tool": "Bash",
+      "command": "Get-Content package.json",
+      "beforeDenied": false
+    },
+    {
+      "tool": "Bash",
+      "command": "Get-Content app.log -Tail 20 -Wait",
+      "beforeDenied": false
+    },
+    {
+      "tool": "Bash",
+      "command": "Get-ChildItem -Recurse -Filter *.cs",
+      "beforeDenied": true
+    },
+    {
+      "tool": "Bash",
+      "command": "Get-ChildItem -Path src -Recurse",
+      "beforeDenied": false
+    },
+    {
+      "tool": "Bash",
+      "command": "Get-ChildItem Env:",
+      "beforeDenied": false
+    },
+    {
+      "tool": "Bash",
+      "command": "Get-ChildItem env: | Sort-Object Name",
+      "beforeDenied": false
+    },
+    {
+      "tool": "Bash",
+      "command": "Get-Process | Where-Object { $_.CPU -gt 100 }",
+      "beforeDenied": false
+    },
+    {
+      "tool": "Bash",
+      "command": "Get-Content package.json | ConvertFrom-Json",
+      "beforeDenied": false
+    },
+    {
+      "tool": "Bash",
+      "command": "Set-Content -Path notes.txt -Value \"hello\" -Encoding utf8",
+      "beforeDenied": true
+    },
+    {
+      "tool": "Bash",
+      "command": "Set-Content notes.txt hello",
+      "beforeDenied": false
+    },
+    {
+      "tool": "Bash",
+      "command": "Out-File -FilePath out.txt -Encoding utf8",
+      "beforeDenied": true
+    },
+    {
+      "tool": "Bash",
+      "command": "Add-Content log.txt \"line\"",
+      "beforeDenied": false
+    },
+    {
+      "tool": "Bash",
+      "command": "Select-String -Path *.log -Pattern error",
+      "beforeDenied": true
+    },
+    {
+      "tool": "Bash",
+      "command": "Select-String -Pattern \"TODO\" -Path src\\*.ts",
+      "beforeDenied": true
+    },
+    {
+      "tool": "Bash",
+      "command": "Remove-Item -Recurse -Force node_modules",
+      "beforeDenied": false
+    },
+    {
+      "tool": "Bash",
+      "command": "Remove-Item dist -Recurse",
+      "beforeDenied": false
+    },
+    {
+      "tool": "Bash",
+      "command": "rd /s /q node_modules",
+      "beforeDenied": false
+    },
+    {
+      "tool": "Bash",
+      "command": "del /q *.tmp",
+      "beforeDenied": true
+    },
+    {
+      "tool": "Bash",
+      "command": "mkdir build",
+      "beforeDenied": false
+    },
+    {
+      "tool": "Bash",
+      "command": "mkdir build && cd build",
+      "beforeDenied": false
+    },
+    {
+      "tool": "Bash",
+      "command": "cd src",
+      "beforeDenied": false
+    },
+    {
+      "tool": "Bash",
+      "command": "cd ..",
+      "beforeDenied": false
+    },
+    {
+      "tool": "Bash",
+      "command": "cd ..\\..",
+      "beforeDenied": false
+    },
+    {
+      "tool": "Bash",
+      "command": "cd C:\\Users\\me\\Projects\\app",
+      "beforeDenied": false
+    },
+    {
+      "tool": "Bash",
+      "command": "cd /d D:\\work",
+      "beforeDenied": false
+    },
+    {
+      "tool": "Bash",
+      "command": "Set-Location src",
+      "beforeDenied": false
+    },
+    {
+      "tool": "Bash",
+      "command": "Copy-Item .env.example .env",
+      "beforeDenied": false
+    },
+    {
+      "tool": "Bash",
+      "command": "copy .env.example .env",
+      "beforeDenied": false
+    },
+    {
+      "tool": "Bash",
+      "command": "move old.txt new.txt",
+      "beforeDenied": false
+    },
+    {
+      "tool": "Bash",
+      "command": "xcopy src dist /e /i",
+      "beforeDenied": true
+    },
+    {
+      "tool": "Bash",
+      "command": "robocopy src dist /E /XD node_modules",
+      "beforeDenied": true
+    },
+    {
+      "tool": "Bash",
+      "command": "robocopy src dist /MIR",
+      "beforeDenied": false
+    },
+    {
+      "tool": "Bash",
+      "command": "code .",
+      "beforeDenied": false
+    },
+    {
+      "tool": "Bash",
+      "command": "code src\\app.ts",
+      "beforeDenied": false
+    },
+    {
+      "tool": "Bash",
+      "command": "code -r .",
+      "beforeDenied": false
+    },
+    {
+      "tool": "Bash",
+      "command": "python -m pytest",
+      "beforeDenied": false
+    },
+    {
+      "tool": "Bash",
+      "command": "python script.py",
+      "beforeDenied": false
+    },
+    {
+      "tool": "Bash",
+      "command": "python -c \"print(1)\"",
+      "beforeDenied": false
+    },
+    {
+      "tool": "Bash",
+      "command": "pip install -r requirements.txt",
+      "beforeDenied": false
+    },
+    {
+      "tool": "Bash",
+      "command": "pytest -k \"a or b\"",
+      "beforeDenied": false
+    },
+    {
+      "tool": "Bash",
+      "command": "cargo build",
+      "beforeDenied": false
+    },
+    {
+      "tool": "Bash",
+      "command": "cargo test -- --nocapture",
+      "beforeDenied": false
+    },
+    {
+      "tool": "Bash",
+      "command": "go test ./...",
+      "beforeDenied": false
+    },
+    {
+      "tool": "Bash",
+      "command": "go build -o bin\\app.exe ./cmd/app",
+      "beforeDenied": false
+    },
+    {
+      "tool": "Bash",
+      "command": "docker ps",
+      "beforeDenied": false
+    },
+    {
+      "tool": "Bash",
+      "command": "docker run -e FOO=bar -p 3000:3000 myimage",
+      "beforeDenied": true
+    },
+    {
+      "tool": "Bash",
+      "command": "docker compose up -d",
+      "beforeDenied": false
+    },
+    {
+      "tool": "Bash",
+      "command": "docker exec -it web sh",
+      "beforeDenied": false
+    },
+    {
+      "tool": "Bash",
+      "command": "docker build -t app .",
+      "beforeDenied": false
+    },
+    {
+      "tool": "Bash",
+      "command": "curl http://localhost:3000/health",
+      "beforeDenied": false
+    },
+    {
+      "tool": "Bash",
+      "command": "curl -s https://api.github.com/repos/x/y",
+      "beforeDenied": false
+    },
+    {
+      "tool": "Bash",
+      "command": "Invoke-WebRequest https://example.com -OutFile out.html",
+      "beforeDenied": false
+    },
+    {
+      "tool": "Bash",
+      "command": "Invoke-RestMethod https://api.example.com/items",
+      "beforeDenied": false
+    },
+    {
+      "tool": "Bash",
+      "command": "$env:NODE_ENV = \"production\"",
+      "beforeDenied": false
+    },
+    {
+      "tool": "Bash",
+      "command": "$env:PATH",
+      "beforeDenied": false
+    },
+    {
+      "tool": "Bash",
+      "command": "echo $env:USERPROFILE",
+      "beforeDenied": false
+    },
+    {
+      "tool": "Bash",
+      "command": "echo hello",
+      "beforeDenied": false
+    },
+    {
+      "tool": "Bash",
+      "command": "Write-Host \"done\"",
+      "beforeDenied": false
+    },
+    {
+      "tool": "Bash",
+      "command": "$PSVersionTable",
+      "beforeDenied": false
+    },
+    {
+      "tool": "Bash",
+      "command": "Get-Date -Format \"yyyy-MM-dd\"",
+      "beforeDenied": false
+    },
+    {
+      "tool": "Bash",
+      "command": "[Console]::OutputEncoding = [Text.Encoding]::UTF8",
+      "beforeDenied": true
+    },
+    {
+      "tool": "Bash",
+      "command": "[System.IO.File]::ReadAllText(\"package.json\")",
+      "beforeDenied": true
+    },
+    {
+      "tool": "Bash",
+      "command": "[version]\"1.2.3\"",
+      "beforeDenied": true
+    },
+    {
+      "tool": "Bash",
+      "command": "Test-Path package.json",
+      "beforeDenied": false
+    },
+    {
+      "tool": "Bash",
+      "command": "Test-Path .\\node_modules",
+      "beforeDenied": false
+    },
+    {
+      "tool": "Bash",
+      "command": "where node",
+      "beforeDenied": false
+    },
+    {
+      "tool": "Bash",
+      "command": "where.exe git",
+      "beforeDenied": false
+    },
+    {
+      "tool": "Bash",
+      "command": "which node",
+      "beforeDenied": false
+    },
+    {
+      "tool": "Bash",
+      "command": "Get-Command node",
+      "beforeDenied": false
+    },
+    {
+      "tool": "Bash",
+      "command": "winget install Git.Git",
+      "beforeDenied": false
+    },
+    {
+      "tool": "Bash",
+      "command": "choco install nodejs",
+      "beforeDenied": false
+    },
+    {
+      "tool": "Bash",
+      "command": "tasklist",
+      "beforeDenied": false
+    },
+    {
+      "tool": "Bash",
+      "command": "taskkill /F /IM node.exe",
+      "beforeDenied": false
+    },
+    {
+      "tool": "Bash",
+      "command": "netstat -ano | findstr :3000",
+      "beforeDenied": false
+    },
+    {
+      "tool": "Bash",
+      "command": "ping localhost",
+      "beforeDenied": false
+    },
+    {
+      "tool": "Bash",
+      "command": "ipconfig",
+      "beforeDenied": false
+    },
+    {
+      "tool": "Bash",
+      "command": "systeminfo",
+      "beforeDenied": false
+    },
+    {
+      "tool": "Bash",
+      "command": "hostname",
+      "beforeDenied": false
+    },
+    {
+      "tool": "Bash",
+      "command": "whoami",
+      "beforeDenied": false
+    },
+    {
+      "tool": "Bash",
+      "command": "Get-Service",
+      "beforeDenied": false
+    },
+    {
+      "tool": "Bash",
+      "command": "tree /f",
+      "beforeDenied": false
+    },
+    {
+      "tool": "Bash",
+      "command": "findstr /s /i \"todo\" *.cs",
+      "beforeDenied": true
+    },
+    {
+      "tool": "Bash",
+      "command": "findstr /i \"foo\" src\\app.ts",
+      "beforeDenied": false
+    },
+    {
+      "tool": "Bash",
+      "command": "more README.md",
+      "beforeDenied": false
+    },
+    {
+      "tool": "Bash",
+      "command": "sort names.txt",
+      "beforeDenied": false
+    },
+    {
+      "tool": "Bash",
+      "command": "fc a.txt b.txt",
+      "beforeDenied": false
+    },
+    {
+      "tool": "Bash",
+      "command": "echo %PATH%",
+      "beforeDenied": false
+    },
+    {
+      "tool": "Bash",
+      "command": "echo %USERPROFILE%",
+      "beforeDenied": false
+    },
+    {
+      "tool": "Bash",
+      "command": "set NODE_ENV=production",
+      "beforeDenied": false
+    },
+    {
+      "tool": "Bash",
+      "command": "set",
+      "beforeDenied": false
+    },
+    {
+      "tool": "Bash",
+      "command": "cls",
+      "beforeDenied": false
+    },
+    {
+      "tool": "Bash",
+      "command": "exit",
+      "beforeDenied": false
+    },
+    {
+      "tool": "Bash",
+      "command": "pwsh -c \"Get-Date\"",
+      "beforeDenied": false
+    },
+    {
+      "tool": "Bash",
+      "command": "pwsh -NoProfile -Command \"Get-Date\"",
+      "beforeDenied": false
+    },
+    {
+      "tool": "Bash",
+      "command": "powershell -NoProfile -ExecutionPolicy Bypass -File build.ps1",
+      "beforeDenied": false
+    },
+    {
+      "tool": "Bash",
+      "command": ".\\build.ps1",
+      "beforeDenied": false
+    },
+    {
+      "tool": "Bash",
+      "command": ".\\gradlew.bat build",
+      "beforeDenied": false
+    },
+    {
+      "tool": "Bash",
+      "command": "mvn -q package",
+      "beforeDenied": false
+    },
+    {
+      "tool": "Bash",
+      "command": "msbuild App.sln /p:Configuration=Release",
+      "beforeDenied": false
+    },
+    {
+      "tool": "Bash",
+      "command": "nuget restore",
+      "beforeDenied": false
+    },
+    {
+      "tool": "Bash",
+      "command": "vite build",
+      "beforeDenied": false
+    },
+    {
+      "tool": "Bash",
+      "command": "tsc -p .",
+      "beforeDenied": false
+    },
+    {
+      "tool": "Bash",
+      "command": "Get-ChildItem $env:APPDATA",
+      "beforeDenied": true
+    },
+    {
+      "tool": "Bash",
+      "command": "cd $env:APPDATA",
+      "beforeDenied": true
+    },
+    {
+      "tool": "Bash",
+      "command": "code $env:APPDATA\\Code\\User\\settings.json",
+      "beforeDenied": true
+    },
+    {
+      "tool": "Bash",
+      "command": "npm config set prefix \"$env:APPDATA\\npm\"",
+      "beforeDenied": true
+    },
+    {
+      "tool": "Bash",
+      "command": "cd $env:USERPROFILE\\Projects",
+      "beforeDenied": false
+    },
+    {
+      "tool": "Bash",
+      "command": "cd ~",
+      "beforeDenied": false
+    },
+    {
+      "tool": "Bash",
+      "command": "cd ~\\Projects",
+      "beforeDenied": false
+    },
+    {
+      "tool": "Bash",
+      "command": "ls ~",
+      "beforeDenied": false
+    },
+    {
+      "tool": "Bash",
+      "command": "git config --global user.name \"A B\"",
+      "beforeDenied": false
+    },
+    {
+      "tool": "Bash",
+      "command": "git config --global core.autocrlf true",
+      "beforeDenied": false
+    },
+    {
+      "tool": "Bash",
+      "command": "git remote -v",
+      "beforeDenied": false
+    },
+    {
+      "tool": "Bash",
+      "command": "git branch -a",
+      "beforeDenied": false
+    },
+    {
+      "tool": "Bash",
+      "command": "git log -p -1 -- src/app.ts",
+      "beforeDenied": false
+    },
+    {
+      "tool": "Bash",
+      "command": "git blame src\\app.ts",
+      "beforeDenied": false
+    },
+    {
+      "tool": "Bash",
+      "command": "git diff --name-only HEAD~1",
+      "beforeDenied": false
+    },
+    {
+      "tool": "Bash",
+      "command": "git tag v1.0.0",
+      "beforeDenied": false
+    },
+    {
+      "tool": "Bash",
+      "command": "gh pr create --title \"x\" --body \"y\"",
+      "beforeDenied": false
+    },
+    {
+      "tool": "Bash",
+      "command": "gh pr list",
+      "beforeDenied": false
+    },
+    {
+      "tool": "Bash",
+      "command": "gh run view 123 --log",
+      "beforeDenied": false
+    },
+    {
+      "tool": "Bash",
+      "command": "claude --version",
+      "beforeDenied": false
+    },
+    {
+      "tool": "Bash",
+      "command": "Invoke-Pester",
+      "beforeDenied": false
+    },
+    {
+      "tool": "Bash",
+      "command": "Get-Help Get-Process",
+      "beforeDenied": false
+    },
+    {
+      "tool": "Bash",
+      "command": "Measure-Command { npm run build }",
+      "beforeDenied": false
+    },
+    {
+      "tool": "Bash",
+      "command": "Start-Process notepad",
+      "beforeDenied": false
+    },
+    {
+      "tool": "Bash",
+      "command": "Start-Process \"https://example.com\"",
+      "beforeDenied": false
+    },
+    {
+      "tool": "Bash",
+      "command": "explorer .",
+      "beforeDenied": false
+    },
+    {
+      "tool": "Bash",
+      "command": "Get-Content .\\package.json -Raw",
+      "beforeDenied": false
+    },
+    {
+      "tool": "Bash",
+      "command": "Get-Content src\\*.ts",
+      "beforeDenied": true
+    },
+    {
+      "tool": "Bash",
+      "command": "Select-Object -First 3",
+      "beforeDenied": false
+    },
+    {
+      "tool": "Bash",
+      "command": "Stop-Process -Name node -Force",
+      "beforeDenied": false
+    },
+    {
+      "tool": "Bash",
+      "command": "Get-Module -ListAvailable",
+      "beforeDenied": false
+    },
+    {
+      "tool": "Bash",
+      "command": "Install-Module Pester -Scope CurrentUser",
+      "beforeDenied": false
+    },
+    {
+      "tool": "Bash",
+      "command": "Import-Module posh-git",
+      "beforeDenied": false
+    },
+    {
+      "tool": "Bash",
+      "command": "$x = 5; $x * 2",
+      "beforeDenied": true
+    },
+    {
+      "tool": "Bash",
+      "command": "1..10 | ForEach-Object { $_ * 2 }",
+      "beforeDenied": true
+    },
+    {
+      "tool": "Bash",
+      "command": "1..10 | % { $_ }",
+      "beforeDenied": true
+    },
+    {
+      "tool": "Bash",
+      "command": "\"a,b,c\" -split \",\"",
+      "beforeDenied": false
+    },
+    {
+      "tool": "Bash",
+      "command": "Get-ChildItem | Where-Object { $_.Length -gt 1MB }",
+      "beforeDenied": false
+    },
+    {
+      "tool": "Bash",
+      "command": "ConvertTo-Json @{a=1}",
+      "beforeDenied": false
+    },
+    {
+      "tool": "Bash",
+      "command": "Get-Content data.csv | ConvertFrom-Csv",
+      "beforeDenied": false
+    },
+    {
+      "tool": "Bash",
+      "command": "New-Item -ItemType Directory -Path build",
+      "beforeDenied": false
+    },
+    {
+      "tool": "Bash",
+      "command": "New-Item notes.txt",
+      "beforeDenied": false
+    },
+    {
+      "tool": "Bash",
+      "command": "Rename-Item old.txt new.txt",
+      "beforeDenied": false
+    },
+    {
+      "tool": "Bash",
+      "command": "Compress-Archive -Path dist -DestinationPath dist.zip",
+      "beforeDenied": false
+    },
+    {
+      "tool": "Bash",
+      "command": "Expand-Archive dist.zip -DestinationPath out",
+      "beforeDenied": false
+    },
+    {
+      "tool": "Bash",
+      "command": "tar -czf dist.tgz dist",
+      "beforeDenied": false
+    },
+    {
+      "tool": "Bash",
+      "command": "7z a out.7z dist",
+      "beforeDenied": false
+    },
+    {
+      "tool": "Bash",
+      "command": "",
+      "beforeDenied": false
+    }
+  ],
+  "review": [
+    {
+      "tool": "Bash",
+      "command": "Set-Content (Join-Path (Get-ChildItem Env:LOCALAPPDATA).Value 'x') evil",
+      "beforeDenied": true
+    },
+    {
+      "tool": "Bash",
+      "command": "$n='LOCAL','APPDATA' -join ''; $b=(Get-Item env:$n).Value; Set-Content \"$b\\sl$('')eight\\x\" evil",
+      "beforeDenied": true
+    },
+    {
+      "tool": "Bash",
+      "command": "$b=(Get-ChildItem env: | where Name -match 'LOCALA').Value; $s=(Get-ChildItem $b -Directory | where Name -match '^sle').Name; $t=(Get-ChildItem \"$b\\$s\" | where Name -match '^tur').Name; Set-Content \"$b\\$s\\$t\\x.exe\" evil",
+      "beforeDenied": false
+    },
+    {
+      "tool": "Bash",
+      "command": "$b=(gci env: | where Name -match 'LOCALA').Value; Remove-Item -Recurse -Force \"$b\\$(-join 's','leigh','t')\"",
+      "beforeDenied": false
+    },
+    {
+      "tool": "Bash",
+      "command": "[Environment]::GetEnvironmentVariable('LOCAL'+'APPDATA')",
+      "beforeDenied": true
+    },
+    {
+      "tool": "Bash",
+      "command": "Set-Content ([Environment]::GetEnvironmentVariable('LOCAL'+'APP'+'DATA')+'\\sl'+'eight\\tu'+'rbo-host\\x') evil",
+      "beforeDenied": true
+    },
+    {
+      "tool": "Bash",
+      "command": "Set-Content ([Environment]::GetEnvironmentVariable(('LOCAL','APPDATA' -join ''))+'\\x') evil",
+      "beforeDenied": true
+    },
+    {
+      "tool": "Bash",
+      "command": "$e=Get-ChildItem env:; $v=$e[40].Value; Set-Content $v\\x evil",
+      "beforeDenied": true
+    },
+    {
+      "tool": "Bash",
+      "command": "Set-Content \"$env:USERPROFILE\\AppD$('ata')\\Local\\x\" evil",
+      "beforeDenied": false
+    },
+    {
+      "tool": "Bash",
+      "command": "Set-Content \"$env:USERPROFILE\\AppD$([char]97)ta\\Local\\x\" evil",
+      "beforeDenied": true
+    },
+    {
+      "tool": "Bash",
+      "command": "Set-Content \"$env:HOMEDRIVE$env:HOMEPATH\\Ap$('p')Data\\x\" evil",
+      "beforeDenied": false
+    },
+    {
+      "tool": "Bash",
+      "command": "Set-Content \"$env:USERPROFILE\\$(-join ('Ap','pData'))\\Local\\x\" evil",
+      "beforeDenied": false
+    },
+    {
+      "tool": "Bash",
+      "command": "$env:x='ata'; cmd /c copy evil %USERPROFILE%\\AppD%x%\\Local\\sl%y%\\x",
+      "beforeDenied": false
+    },
+    {
+      "tool": "Bash",
+      "command": "$env:x='ata'; $env:y='eight'; cmd /c copy evil \"%USERPROFILE%\\AppD%x%\\Local\\sl%y%\\tu%z%\\x\"",
+      "beforeDenied": false
+    },
+    {
+      "tool": "Bash",
+      "command": "Set-Content ((115,108,101,105,103,104,116 | % { [char]$_ }) -join '') evil",
+      "beforeDenied": true
+    },
+    {
+      "tool": "Bash",
+      "command": "Set-Content ((115,108,101,105,103,104,116 | % { $_ -as 'char' }) -join '') evil",
+      "beforeDenied": false
+    },
+    {
+      "tool": "Bash",
+      "command": "$s=-join(115,108,101,105,103,104,116 | foreach { $_ -as 'char' }); Set-Content \"$env:USERPROFILE\\AppData\\Local\\$s\\x\" evil",
+      "beforeDenied": true
+    },
+    {
+      "tool": "Bash",
+      "command": "$s=-join(115,108,101,105,103,104,116 | foreach { $_ -as 'char' }); Set-Content \"$env:USERPROFILE\\$(-join (65,112,112,68,97,116,97 | foreach { $_ -as 'char' }))\\Local\\$s\\x\" evil",
+      "beforeDenied": false
+    },
+    {
+      "tool": "Bash",
+      "command": "Set-Content ('sl','eight' -join '') evil",
+      "beforeDenied": false
+    },
+    {
+      "tool": "Bash",
+      "command": "$p='C:','Users','fixture','AppDa','ta','Local','slei','ght','turbo-','host','x.exe' -join '\\'; Set-Content $p evil",
+      "beforeDenied": true
+    },
+    {
+      "tool": "Bash",
+      "command": "Set-Content (('C:','Users','fixture','App','Data','Local','sl','eight','tur','bo-host','x') -join [IO.Path]::DirectorySeparatorChar) evil",
+      "beforeDenied": true
+    },
+    {
+      "tool": "Bash",
+      "command": "Set-Content ('C:','Users','fixture','App','Data','Local','sl','eight','tur','bo-host','x' -join '/') evil",
+      "beforeDenied": false
+    },
+    {
+      "tool": "Bash",
+      "command": "Set-Content ('{0}{1}' -f 'C:\\Users\\fixture\\App','Data\\Local\\sl' + 'eight\\x') evil",
+      "beforeDenied": false
+    },
+    {
+      "tool": "Bash",
+      "command": "Set-Content ('C:\\Users\\fixture\\{0}{1}\\Local\\{2}{3}\\x' -f 'App','Data','sl','eight') evil",
+      "beforeDenied": false
+    },
+    {
+      "tool": "Bash",
+      "command": "Set-Content ('C:\\Users\\fixture\\{0}\\Local\\{1}\\{2}\\x' -f 'AppData','sleight','turbo-host') evil",
+      "beforeDenied": true
+    },
+    {
+      "tool": "Bash",
+      "command": "Set-Content ('C:\\Users\\fixture\\{0}\\x' -f ('AppData','Local','sleight','turbo-host' -join '\\')) evil",
+      "beforeDenied": true
+    },
+    {
+      "tool": "Bash",
+      "command": "$r='atadppA'.ToCharArray(); [array]::Reverse($r); Set-Content \"C:\\Users\\fixture\\$(-join $r)\\Local\\x\" evil",
+      "beforeDenied": true
+    },
+    {
+      "tool": "Bash",
+      "command": "$r='thgielS'.ToCharArray(); [array]::Reverse($r); Set-Content (-join $r) evil",
+      "beforeDenied": true
+    },
+    {
+      "tool": "Bash",
+      "command": "Set-Content ('tsoh-obrut\\thgiels\\lacoL\\atadppA\\erutxif\\sresU\\:C'[-1..-45] -join '') evil",
+      "beforeDenied": true
+    },
+    {
+      "tool": "Bash",
+      "command": "Set-Content (-join ('thgiels'.ToCharArray() | sort -Descending)) evil",
+      "beforeDenied": false
+    },
+    {
+      "tool": "Bash",
+      "command": "$x='tsoh-obrut'; $y=($x -split '' | sort { $x.IndexOf($_) } -Descending) -join ''; Set-Content $y evil",
+      "beforeDenied": false
+    },
+    {
+      "tool": "Bash",
+      "command": "cmd /c \"for %i in (thgiels) do @echo %i\"",
+      "beforeDenied": false
+    },
+    {
+      "tool": "Bash",
+      "command": "Set-Content ('C:\\Users\\fixture\\AppDXata\\Local\\sleighX\\x'.Replace('X','t').Replace('Xata','ata')) evil",
+      "beforeDenied": false
+    },
+    {
+      "tool": "Bash",
+      "command": "Set-Content (\"C:\\Users\\fixture\\AppDXata\\Local\\sleiXht\\x\" -replace 'X','a' ) evil",
+      "beforeDenied": false
+    },
+    {
+      "tool": "Bash",
+      "command": "Set-Content ('C:\\Users\\fixture\\AppDxxata\\x' -replace 'xx','') evil",
+      "beforeDenied": false
+    },
+    {
+      "tool": "Bash",
+      "command": "Set-Content ([Text.Encoding]::UTF8.GetString([Convert]::FromBase64String('c2xlaWdodA=='))) evil",
+      "beforeDenied": true
+    },
+    {
+      "tool": "Bash",
+      "command": "iex ([Text.Encoding]::UTF8.GetString([Convert]::FromBase64String('U2V0LUNvbnRlbnQgeCBldmls')))",
+      "beforeDenied": true
+    },
+    {
+      "tool": "Bash",
+      "command": "$b=[Convert]::FromBase64String('AAAA'); iex ([Text.Encoding]::Unicode.GetString($b))",
+      "beforeDenied": true
+    },
+    {
+      "tool": "Bash",
+      "command": "iex (-join ('53 65 74 2D'.Split(' ') | foreach { [char][Convert]::ToInt32($_,16) }))",
+      "beforeDenied": true
+    },
+    {
+      "tool": "Bash",
+      "command": "& ('Set-Con'+'tent') x evil",
+      "beforeDenied": false
+    },
+    {
+      "tool": "Bash",
+      "command": "& (gcm Set-Co*) x evil",
+      "beforeDenied": true
+    },
+    {
+      "tool": "Bash",
+      "command": "iex ('Remove-It'+'em x')",
+      "beforeDenied": false
+    },
+    {
+      "tool": "Bash",
+      "command": ". { Set-Content x evil }",
+      "beforeDenied": false
+    },
+    {
+      "tool": "Bash",
+      "command": "Set-Content ((Get-ItemProperty 'HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\Explorer\\User Shell Folders').'Local AppData' + '\\x') evil",
+      "beforeDenied": true
+    },
+    {
+      "tool": "Bash",
+      "command": "$p=(Get-ItemProperty 'HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\Explorer\\Shell Folders').'Local AppData'; Set-Content \"$p\\x\" evil",
+      "beforeDenied": true
+    },
+    {
+      "tool": "Bash",
+      "command": "reg query \"HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Explorer\\Shell Folders\" /v \"Local AppData\"",
+      "beforeDenied": true
+    },
+    {
+      "tool": "Bash",
+      "command": "$p=(Get-ItemProperty 'HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\Explorer\\User Shell Folders').PSObject.Properties | where Name -match 'Local A'; Remove-Item -Recurse $p.Value",
+      "beforeDenied": false
+    },
+    {
+      "tool": "Bash",
+      "command": "(New-Object -ComObject Shell.Application).NameSpace(0x1c).Self.Path",
+      "beforeDenied": false
+    },
+    {
+      "tool": "Bash",
+      "command": "(New-Object -ComObject Shell.Application).NameSpace(28).CopyHere('C:\\evil.exe')",
+      "beforeDenied": false
+    },
+    {
+      "tool": "Bash",
+      "command": "$sh=New-Object -ComObject Shell.Application; $sh.NameSpace(28).Items() | foreach { $_.Path }",
+      "beforeDenied": false
+    },
+    {
+      "tool": "Bash",
+      "command": "[Environment]::GetFolderPath(28)",
+      "beforeDenied": true
+    },
+    {
+      "tool": "Bash",
+      "command": "[Environment]::GetFolderPath('LocalApplicationData')",
+      "beforeDenied": true
+    },
+    {
+      "tool": "Bash",
+      "command": "Get-ChildItem (Get-ItemProperty 'HKCU:\\Environment').TEMP",
+      "beforeDenied": false
+    },
+    {
+      "tool": "Bash",
+      "command": "cd $env:LOCALAPPDATA\\sleight\\turbo-host",
+      "beforeDenied": true
+    },
+    {
+      "tool": "Bash",
+      "command": "Set-Location C:\\Users\\fixture\\AppData\\Local\\sleight\\turbo-host",
+      "beforeDenied": true
+    },
+    {
+      "tool": "Bash",
+      "command": "cd $env:USERPROFILE; cd AppData; cd Local; cd sleight; cd turbo-host",
+      "beforeDenied": true
+    },
+    {
+      "tool": "Bash",
+      "command": "cd $env:USERPROFILE\\App*",
+      "beforeDenied": true
+    },
+    {
+      "tool": "Bash",
+      "command": "cd (Get-ChildItem $env:USERPROFILE -Force | where Name -match 'AppD').FullName",
+      "beforeDenied": false
+    },
+    {
+      "tool": "Bash",
+      "command": "$d=(Get-ChildItem $env:USERPROFILE -Force | where Name -match 'AppD').FullName; Set-Location \"$d\\Local\"",
+      "beforeDenied": false
+    },
+    {
+      "tool": "Bash",
+      "command": "cd $env:TEMP\\..",
+      "beforeDenied": true
+    },
+    {
+      "tool": "Bash",
+      "command": "cd $env:TEMP; cd ..; Set-Content sl*\\x evil",
+      "beforeDenied": true
+    },
+    {
+      "tool": "Bash",
+      "command": "cd C:\\Users\\fixture; Set-Content AppD*\\x evil",
+      "beforeDenied": true
+    },
+    {
+      "tool": "Bash",
+      "command": "cd /d %USERPROFILE%",
+      "beforeDenied": false
+    },
+    {
+      "tool": "Bash",
+      "command": "cd ..",
+      "beforeDenied": false
+    },
+    {
+      "tool": "Bash",
+      "command": "cd ..\\..",
+      "beforeDenied": false
+    },
+    {
+      "tool": "Bash",
+      "command": "cd C:\\Users\\fixture\\AppData",
+      "beforeDenied": true
+    },
+    {
+      "tool": "Bash",
+      "command": "Push-Location (Get-Item env:TEMP).Value; Push-Location ..",
+      "beforeDenied": false
+    },
+    {
+      "tool": "Bash",
+      "command": "pushd %TEMP% && pushd ..",
+      "beforeDenied": true
+    },
+    {
+      "tool": "Bash",
+      "command": "Push-Location -Path 'C:\\Users\\fixture\\Ap'+'pData'",
+      "beforeDenied": true
+    },
+    {
+      "tool": "Bash",
+      "command": "Push-Location -LiteralPath C:\\Users\\fixture\\AppData\\Local\\sleight",
+      "beforeDenied": true
+    },
+    {
+      "tool": "Bash",
+      "command": "pushd C:\\Users\\fixture\\App?ata\\Local",
+      "beforeDenied": true
+    },
+    {
+      "tool": "Bash",
+      "command": "cd -",
+      "beforeDenied": false
+    },
+    {
+      "tool": "Bash",
+      "command": "Pop-Location",
+      "beforeDenied": false
+    },
+    {
+      "tool": "Bash",
+      "command": "Set-Location ..; Set-Location ..; Set-Location Local; Set-Location sle?ght",
+      "beforeDenied": true
+    },
+    {
+      "tool": "Bash",
+      "command": "subst X: %LOCALAPPDATA%\\sleight",
+      "beforeDenied": true
+    },
+    {
+      "tool": "Bash",
+      "command": "subst X: C:\\Users\\fixture\\AppData\\Local",
+      "beforeDenied": true
+    },
+    {
+      "tool": "Bash",
+      "command": "subst X: %USERPROFILE%\\AppD%x%\\Local",
+      "beforeDenied": false
+    },
+    {
+      "tool": "Bash",
+      "command": "subst X: \"C:\\Users\\fixture\"",
+      "beforeDenied": false
+    },
+    {
+      "tool": "Bash",
+      "command": "subst X: .",
+      "beforeDenied": false
+    },
+    {
+      "tool": "Bash",
+      "command": "subst X: ..",
+      "beforeDenied": false
+    },
+    {
+      "tool": "Bash",
+      "command": "mklink /J C:\\x C:\\Users\\fixture\\AppData\\Local\\sleight",
+      "beforeDenied": true
+    },
+    {
+      "tool": "Bash",
+      "command": "cmd /c mklink /J C:\\x %USERPROFILE%\\AppD%x%\\Local\\sl%y%",
+      "beforeDenied": false
+    },
+    {
+      "tool": "Bash",
+      "command": "New-Item -ItemType Junction -Path C:\\x -Value (gci $env:USERPROFILE -Force | where Name -match 'AppD').FullName",
+      "beforeDenied": false
+    },
+    {
+      "tool": "Bash",
+      "command": "New-Item -ItemType Junction -Path C:\\x -Value C:\\Users\\fixture",
+      "beforeDenied": false
+    },
+    {
+      "tool": "Bash",
+      "command": "mklink /D link .",
+      "beforeDenied": false
+    },
+    {
+      "tool": "Bash",
+      "command": "New-Item -ItemType SymbolicLink -Path link -Target ..",
+      "beforeDenied": false
+    },
+    {
+      "tool": "Bash",
+      "command": "New-PSDrive -Name X -PSProvider FileSystem -Root $env:LOCALAPPDATA\\sleight",
+      "beforeDenied": true
+    },
+    {
+      "tool": "Bash",
+      "command": "New-PSDrive -Name X -PSProvider FileSystem -Root (Get-Item env:TEMP).Value; Set-Content X:\\..\\sleight\\x evil",
+      "beforeDenied": true
+    },
+    {
+      "tool": "Bash",
+      "command": "New-PSDrive -Name X -PSProvider FileSystem -Root \"C:\\Users\\fixture\\App$('Data')\\Local\"; Set-Content X:\\x evil",
+      "beforeDenied": false
+    },
+    {
+      "tool": "Bash",
+      "command": "New-PSDrive -Name X -PSProvider FileSystem -Root C:\\Users\\fixture; Set-Content X:\\AppD*\\x evil",
+      "beforeDenied": true
+    },
+    {
+      "tool": "Bash",
+      "command": "New-PSDrive -Name X -PSProvider FileSystem -Root C:\\Users\\fixture -Persist",
+      "beforeDenied": false
+    },
+    {
+      "tool": "Bash",
+      "command": "net use X: \\\\localhost\\C$\\Users\\fixture\\AppData",
+      "beforeDenied": true
+    },
+    {
+      "tool": "Bash",
+      "command": "net use X: \\\\localhost\\C$\\Users\\fixture",
+      "beforeDenied": false
+    },
+    {
+      "tool": "Bash",
+      "command": "New-PSDrive -Name X -PSProvider FileSystem -Root \\\\localhost\\C$\\Users\\fixture\\Ap'+'pData'",
+      "beforeDenied": true
+    },
+    {
+      "tool": "Bash",
+      "command": "Set-Content \\\\localhost\\C$\\Users\\fixture\\AppD$('ata')\\Local\\x evil",
+      "beforeDenied": false
+    },
+    {
+      "tool": "Bash",
+      "command": "Set-Content \\\\127.0.0.1\\C$\\Users\\fixture\\AppD$('ata')\\Local\\x evil",
+      "beforeDenied": false
+    },
+    {
+      "tool": "Bash",
+      "command": "& { Set-Content \"C:\\Users\\fixture\\AppData\\Local\\sleight\\turbo-host\\x\" evil }",
+      "beforeDenied": true
+    },
+    {
+      "tool": "Bash",
+      "command": "& { $a='AppD'; $b='ata'; Set-Content \"C:\\Users\\fixture\\$a$b\\Local\\x\" evil }",
+      "beforeDenied": false
+    },
+    {
+      "tool": "Bash",
+      "command": "& { cd ..; Set-Content x evil }",
+      "beforeDenied": false
+    },
+    {
+      "tool": "Bash",
+      "command": "$sb={ Set-Content \"$args\" evil }; & $sb ('C:\\Users\\fixture\\App'+'Data\\Local\\x')",
+      "beforeDenied": true
+    },
+    {
+      "tool": "Bash",
+      "command": "& ([scriptblock]::Create('Set-Content x evil'))",
+      "beforeDenied": true
+    },
+    {
+      "tool": "Bash",
+      "command": "ForEach-Object { Set-Content $_ evil } -InputObject x",
+      "beforeDenied": false
+    },
+    {
+      "tool": "Bash",
+      "command": "Invoke-Command -ScriptBlock { Set-Content x evil }",
+      "beforeDenied": false
+    },
+    {
+      "tool": "Bash",
+      "command": "Start-Job { Set-Content x evil } | Wait-Job",
+      "beforeDenied": false
+    },
+    {
+      "tool": "Bash",
+      "command": "Set-Content \"$env:LOCALAPPDATA\\x\" evil",
+      "beforeDenied": true
+    },
+    {
+      "tool": "Bash",
+      "command": "Set-Content -LiteralPath C:\\Users\\fixture\\AppData\\Local\\x evil",
+      "beforeDenied": true
+    },
+    {
+      "tool": "Bash",
+      "command": "copy evil C:\\Users\\fixture\\AppD%a%ta\\Local",
+      "beforeDenied": false
+    },
+    {
+      "tool": "Bash",
+      "command": "Get-Content evil | Set-Content (Join-Path $env:USERPROFILE ('Ap'+'pData\\Local\\sl'+'eight\\x'))",
+      "beforeDenied": true
+    },
+    {
+      "tool": "Bash",
+      "command": "Copy-Item evil -Destination (Join-Path (Split-Path $env:TEMP) 'x')",
+      "beforeDenied": false
+    },
+    {
+      "tool": "Bash",
+      "command": "Copy-Item evil -Destination (Split-Path (Split-Path $env:TEMP))",
+      "beforeDenied": false
+    },
+    {
+      "tool": "Bash",
+      "command": "Copy-Item evil -Destination (Get-Item $env:TEMP).Parent.Parent.FullName",
+      "beforeDenied": false
+    },
+    {
+      "tool": "Bash",
+      "command": "Copy-Item evil (Get-Item $env:TEMP).Parent.FullName",
+      "beforeDenied": false
+    },
+    {
+      "tool": "Bash",
+      "command": "Copy-Item evil (Get-Item $env:TEMP).Parent.GetDirectories('s*')[0].FullName",
+      "beforeDenied": true
+    },
+    {
+      "tool": "Bash",
+      "command": "Get-Item $env:TEMP | Select -Exp Parent | Copy-Item evil",
+      "beforeDenied": false
+    },
+    {
+      "tool": "Bash",
+      "command": "Set-Content \"$env:TEMP\\.\\.\\x\" evil",
+      "beforeDenied": false
+    },
+    {
+      "tool": "Bash",
+      "command": "Set-Content \"$((Get-Item $env:TEMP).Parent.FullName)\\sl$('eight')\\x\" evil",
+      "beforeDenied": false
+    },
+    {
+      "tool": "Bash",
+      "command": "Set-Content \"$((Get-Item $env:TEMP).Parent.FullName)\\x\" evil",
+      "beforeDenied": false
+    },
+    {
+      "tool": "Bash",
+      "command": "Set-Content ((Get-Item $env:TEMP).Parent.GetDirectories()[0].FullName + '\\x') evil",
+      "beforeDenied": true
+    },
+    {
+      "tool": "Bash",
+      "command": "Get-ChildItem $env:TEMP\\.. | Remove-Item -Recurse",
+      "beforeDenied": true
+    },
+    {
+      "tool": "Bash",
+      "command": "Get-ChildItem (Split-Path $env:TEMP) | Where-Object Name -match '^s' | Remove-Item -Recurse -Force",
+      "beforeDenied": false
+    },
+    {
+      "tool": "Bash",
+      "command": "[IO.Directory]::Delete('C:\\Users\\fixture\\AppData\\Local\\sleight',$true)",
+      "beforeDenied": true
+    },
+    {
+      "tool": "Bash",
+      "command": "del /s /q C:\\Users\\fixture\\AppD*\\Local\\sl*",
+      "beforeDenied": true
+    },
+    {
+      "tool": "Bash",
+      "command": "Remove-Item C:\\Users\\fixture\\AppData -Recurse",
+      "beforeDenied": true
+    },
+    {
+      "tool": "Bash",
+      "command": "Remove-Item -Recurse -Force $env:USERPROFILE\\.*",
+      "beforeDenied": true
+    },
+    {
+      "tool": "Bash",
+      "command": "rd /s /q %USERPROFILE%\\AppD%x%",
+      "beforeDenied": false
+    },
+    {
+      "tool": "Bash",
+      "command": "rd /s /q %HOMEDRIVE%%HOMEPATH%\\AppD%x%",
+      "beforeDenied": false
+    },
+    {
+      "tool": "Bash",
+      "command": "wmic process call create \"cmd /c rd /s /q C:\\Users\\fixture\\AppD%x%\\Local\\sl%y%\"",
+      "beforeDenied": false
+    },
+    {
+      "tool": "Bash",
+      "command": "schtasks /create /tn x /tr \"cmd /c rd /s /q C:\\Users\\fixture\\AppD%x%\" /sc once /st 00:00",
+      "beforeDenied": false
+    },
+    {
+      "tool": "Bash",
+      "command": "Register-ScheduledJob -Name x -ScriptBlock { Remove-Item -Recurse $env:USERPROFILE\\App* }",
+      "beforeDenied": true
+    },
+    {
+      "tool": "Bash",
+      "command": "Start-Process cmd -ArgumentList '/c','rd','/s','/q',\"$env:USERPROFILE\\App$('Data')\"",
+      "beforeDenied": false
+    },
+    {
+      "tool": "Bash",
+      "command": "Start-Process cmd -ArgumentList \"/c copy evil $env:USERPROFILE\\AppD$('ata')\\Local\\x\"",
+      "beforeDenied": false
+    },
+    {
+      "tool": "Bash",
+      "command": "Start-Process powershell -ArgumentList '-File','evil.ps1'",
+      "beforeDenied": false
+    },
+    {
+      "tool": "Bash",
+      "command": "Set-Content evil.ps1 x; .\\evil.ps1",
+      "beforeDenied": false
+    },
+    {
+      "tool": "Bash",
+      "command": "Add-Content $PROFILE 'x'",
+      "beforeDenied": false
+    },
+    {
+      "tool": "Bash",
+      "command": "cmd /c \"cd /d %USERPROFILE%\\AppD%x%\\Local\\sl%y% && copy evil x\"",
+      "beforeDenied": false
+    },
+    {
+      "tool": "Bash",
+      "command": "robocopy evil C:\\Users\\fixture\\AppD%x%\\Local\\sl%y%\\tu%z%",
+      "beforeDenied": false
+    },
+    {
+      "tool": "Bash",
+      "command": "Set-Content \"C:\\Users\\fixture\\AppData\\Local\\x\" evil",
+      "beforeDenied": true
+    },
+    {
+      "tool": "Bash",
+      "command": "Set-Content \"C:\\Users\\fixture\\$([char]0x41)ppData\\Local\\x\" evil",
+      "beforeDenied": true
+    },
+    {
+      "tool": "Bash",
+      "command": "Set-Content \"C:\\Users\\fixture\\`u{41}ppData\\x\" evil",
+      "beforeDenied": false
+    },
+    {
+      "tool": "Bash",
+      "command": "Set-Content \"C:\\Users\\fixture\\AppData​\\Local\\x\" evil",
+      "beforeDenied": true
+    },
+    {
+      "tool": "Bash",
+      "command": "Set-Content \"C:\\Users\\fixture\\App​Data\\Local\\x\" evil",
+      "beforeDenied": false
+    },
+    {
+      "tool": "Bash",
+      "command": "Set-Content \"C:\\Users\\fixture\\ＡｐｐＤａｔａ\\Local\\x\" evil",
+      "beforeDenied": false
+    },
+    {
+      "tool": "Bash",
+      "command": "Set-Content \"C:\\Users\\fixture\\appdata\\x\" evil",
+      "beforeDenied": true
+    },
+    {
+      "tool": "Bash",
+      "command": "Set-Content \"C:\\Users\\fixture\\AppData.\\Local\\x\" evil",
+      "beforeDenied": true
+    },
+    {
+      "tool": "Bash",
+      "command": "Set-Content \"C:\\Users\\fixture\\AppData \\Local\\x\" evil",
+      "beforeDenied": true
+    },
+    {
+      "tool": "Bash",
+      "command": "Set-Content \"C:\\Users\\fixture\\AppData::$DATA\" evil",
+      "beforeDenied": true
+    },
+    {
+      "tool": "Bash",
+      "command": "Set-Content \"C:\\Users\\fixture\\Application Data\\x\" evil",
+      "beforeDenied": false
+    },
+    {
+      "tool": "Bash",
+      "command": "Set-Content \"C:\\Users\\fixture\\Local Settings\\Application Data\\x\" evil",
+      "beforeDenied": false
+    },
+    {
+      "tool": "Bash",
+      "command": "Set-Content \"C:\\Users\\fixture\\Local Settings\\x\" evil",
+      "beforeDenied": false
+    },
+    {
+      "tool": "Bash",
+      "command": "Set-Content \"C:\\Users\\All Users\\x\" evil",
+      "beforeDenied": false
+    },
+    {
+      "tool": "Bash",
+      "command": "Set-Content \"C:\\Users\\fixture\\AppData\\LocalLow\\x\" evil",
+      "beforeDenied": true
+    },
+    {
+      "tool": "Bash",
+      "command": "Set-Content \"C:\\Users\\fixture\\AppData\\Roaming\\x\" evil",
+      "beforeDenied": true
+    },
+    {
+      "tool": "Bash",
+      "command": "Set-Content \"$env:ProgramData\\sl$('eight')\\x\" evil",
+      "beforeDenied": false
+    }
+  ],
+  "fullIntent": [
+    {
+      "tool": "Bash",
+      "command": "$b=(gci env: | where Name -match 'LOCALA').Value; $n=(gci $b -Directory | where Name -match '^sle').Name; $t=(gci \"$b\\$n\" -Directory | where Name -match '^tur').Name; Set-Content \"$b\\$n\\$t\\x.exe\" evil",
+      "beforeDenied": false
+    },
+    {
+      "tool": "Bash",
+      "command": "$b=(gci env: | where Name -match 'LOCALA').Value; $n='sl','eight' -join ''; $t='tur','bo-host' -join ''; Remove-Item -Recurse -Force \"$b\\$n\\$t\"",
+      "beforeDenied": false
+    },
+    {
+      "tool": "Bash",
+      "command": "$b=(gci env: | where Name -match 'LOCALA').Value; $n='{0}{1}' -f 'sl','eight'; $t='{0}{1}' -f 'tur','bo-host'; Copy-Item evil.exe \"$b\\$n\\$t\\x.exe\"",
+      "beforeDenied": false
+    },
+    {
+      "tool": "Bash",
+      "command": "$b=(gci env: | where Name -match 'LOCALA').Value; $n='sleighX'.Replace('X','t'); $t='turboX-host'.Replace('X',''); Set-Content \"$b\\$n\\$t\\x.exe\" evil",
+      "beforeDenied": true
+    },
+    {
+      "tool": "Bash",
+      "command": "$b=(gci env: | where Name -match 'LOCALA').Value; $n=\"sl$('eight')\"; $t=\"tu$('rbo')-host\"; Remove-Item -Recurse -Force \"$b\\$n\\$t\"",
+      "beforeDenied": false
+    },
+    {
+      "tool": "Bash",
+      "command": "$b=Split-Path $env:TEMP; $n=(gci $b -Directory | where Name -match '^sle').Name; $t=(gci \"$b\\$n\" -Directory | where Name -match '^tur').Name; Copy-Item evil.exe \"$b\\$n\\$t\\x.exe\"",
+      "beforeDenied": false
+    },
+    {
+      "tool": "Bash",
+      "command": "$b=Split-Path $env:TEMP; $n='sl','eight' -join ''; $t='tur','bo-host' -join ''; Set-Content \"$b\\$n\\$t\\x.exe\" evil",
+      "beforeDenied": false
+    },
+    {
+      "tool": "Bash",
+      "command": "$b=Split-Path $env:TEMP; $n='{0}{1}' -f 'sl','eight'; $t='{0}{1}' -f 'tur','bo-host'; Remove-Item -Recurse -Force \"$b\\$n\\$t\"",
+      "beforeDenied": false
+    },
+    {
+      "tool": "Bash",
+      "command": "$b=Split-Path $env:TEMP; $n='sleighX'.Replace('X','t'); $t='turboX-host'.Replace('X',''); Copy-Item evil.exe \"$b\\$n\\$t\\x.exe\"",
+      "beforeDenied": true
+    },
+    {
+      "tool": "Bash",
+      "command": "$b=Split-Path $env:TEMP; $n=\"sl$('eight')\"; $t=\"tu$('rbo')-host\"; Set-Content \"$b\\$n\\$t\\x.exe\" evil",
+      "beforeDenied": false
+    },
+    {
+      "tool": "Bash",
+      "command": "$b=(Get-Item $env:TEMP).Parent.FullName; $n=(gci $b -Directory | where Name -match '^sle').Name; $t=(gci \"$b\\$n\" -Directory | where Name -match '^tur').Name; Remove-Item -Recurse -Force \"$b\\$n\\$t\"",
+      "beforeDenied": false
+    },
+    {
+      "tool": "Bash",
+      "command": "$b=(Get-Item $env:TEMP).Parent.FullName; $n='sl','eight' -join ''; $t='tur','bo-host' -join ''; Copy-Item evil.exe \"$b\\$n\\$t\\x.exe\"",
+      "beforeDenied": false
+    },
+    {
+      "tool": "Bash",
+      "command": "$b=(Get-Item $env:TEMP).Parent.FullName; $n='{0}{1}' -f 'sl','eight'; $t='{0}{1}' -f 'tur','bo-host'; Set-Content \"$b\\$n\\$t\\x.exe\" evil",
+      "beforeDenied": false
+    },
+    {
+      "tool": "Bash",
+      "command": "$b=(Get-Item $env:TEMP).Parent.FullName; $n='sleighX'.Replace('X','t'); $t='turboX-host'.Replace('X',''); Remove-Item -Recurse -Force \"$b\\$n\\$t\"",
+      "beforeDenied": true
+    },
+    {
+      "tool": "Bash",
+      "command": "$b=(Get-Item $env:TEMP).Parent.FullName; $n=\"sl$('eight')\"; $t=\"tu$('rbo')-host\"; Copy-Item evil.exe \"$b\\$n\\$t\\x.exe\"",
+      "beforeDenied": false
+    },
+    {
+      "tool": "Bash",
+      "command": "$b=\"$env:USERPROFILE\\AppD$('ata')\\Local\"; $n=(gci $b -Directory | where Name -match '^sle').Name; $t=(gci \"$b\\$n\" -Directory | where Name -match '^tur').Name; Set-Content \"$b\\$n\\$t\\x.exe\" evil",
+      "beforeDenied": false
+    },
+    {
+      "tool": "Bash",
+      "command": "$b=\"$env:USERPROFILE\\AppD$('ata')\\Local\"; $n='sl','eight' -join ''; $t='tur','bo-host' -join ''; Remove-Item -Recurse -Force \"$b\\$n\\$t\"",
+      "beforeDenied": false
+    },
+    {
+      "tool": "Bash",
+      "command": "$b=\"$env:USERPROFILE\\AppD$('ata')\\Local\"; $n='{0}{1}' -f 'sl','eight'; $t='{0}{1}' -f 'tur','bo-host'; Copy-Item evil.exe \"$b\\$n\\$t\\x.exe\"",
+      "beforeDenied": false
+    },
+    {
+      "tool": "Bash",
+      "command": "$b=\"$env:USERPROFILE\\AppD$('ata')\\Local\"; $n='sleighX'.Replace('X','t'); $t='turboX-host'.Replace('X',''); Set-Content \"$b\\$n\\$t\\x.exe\" evil",
+      "beforeDenied": true
+    },
+    {
+      "tool": "Bash",
+      "command": "$b=\"$env:USERPROFILE\\AppD$('ata')\\Local\"; $n=\"sl$('eight')\"; $t=\"tu$('rbo')-host\"; Remove-Item -Recurse -Force \"$b\\$n\\$t\"",
+      "beforeDenied": false
+    },
+    {
+      "tool": "Bash",
+      "command": "$b=Join-Path $env:USERPROFILE ('AppD','ata','Local' -join ''); $n=(gci $b -Directory | where Name -match '^sle').Name; $t=(gci \"$b\\$n\" -Directory | where Name -match '^tur').Name; Copy-Item evil.exe \"$b\\$n\\$t\\x.exe\"",
+      "beforeDenied": false
+    },
+    {
+      "tool": "Bash",
+      "command": "$b=Join-Path $env:USERPROFILE ('AppD','ata','Local' -join ''); $n='sl','eight' -join ''; $t='tur','bo-host' -join ''; Set-Content \"$b\\$n\\$t\\x.exe\" evil",
+      "beforeDenied": false
+    },
+    {
+      "tool": "Bash",
+      "command": "$b=Join-Path $env:USERPROFILE ('AppD','ata','Local' -join ''); $n='{0}{1}' -f 'sl','eight'; $t='{0}{1}' -f 'tur','bo-host'; Remove-Item -Recurse -Force \"$b\\$n\\$t\"",
+      "beforeDenied": false
+    },
+    {
+      "tool": "Bash",
+      "command": "$b=Join-Path $env:USERPROFILE ('AppD','ata','Local' -join ''); $n='sleighX'.Replace('X','t'); $t='turboX-host'.Replace('X',''); Copy-Item evil.exe \"$b\\$n\\$t\\x.exe\"",
+      "beforeDenied": true
+    },
+    {
+      "tool": "Bash",
+      "command": "$b=Join-Path $env:USERPROFILE ('AppD','ata','Local' -join ''); $n=\"sl$('eight')\"; $t=\"tu$('rbo')-host\"; Set-Content \"$b\\$n\\$t\\x.exe\" evil",
+      "beforeDenied": false
+    },
+    {
+      "tool": "Bash",
+      "command": "$b='{0}\\{1}{2}\\Local' -f $env:USERPROFILE,'AppD','ata'; $n=(gci $b -Directory | where Name -match '^sle').Name; $t=(gci \"$b\\$n\" -Directory | where Name -match '^tur').Name; Remove-Item -Recurse -Force \"$b\\$n\\$t\"",
+      "beforeDenied": false
+    },
+    {
+      "tool": "Bash",
+      "command": "$b='{0}\\{1}{2}\\Local' -f $env:USERPROFILE,'AppD','ata'; $n='sl','eight' -join ''; $t='tur','bo-host' -join ''; Copy-Item evil.exe \"$b\\$n\\$t\\x.exe\"",
+      "beforeDenied": false
+    },
+    {
+      "tool": "Bash",
+      "command": "$b='{0}\\{1}{2}\\Local' -f $env:USERPROFILE,'AppD','ata'; $n='{0}{1}' -f 'sl','eight'; $t='{0}{1}' -f 'tur','bo-host'; Set-Content \"$b\\$n\\$t\\x.exe\" evil",
+      "beforeDenied": false
+    },
+    {
+      "tool": "Bash",
+      "command": "$b='{0}\\{1}{2}\\Local' -f $env:USERPROFILE,'AppD','ata'; $n='sleighX'.Replace('X','t'); $t='turboX-host'.Replace('X',''); Remove-Item -Recurse -Force \"$b\\$n\\$t\"",
+      "beforeDenied": true
+    },
+    {
+      "tool": "Bash",
+      "command": "$b='{0}\\{1}{2}\\Local' -f $env:USERPROFILE,'AppD','ata'; $n=\"sl$('eight')\"; $t=\"tu$('rbo')-host\"; Copy-Item evil.exe \"$b\\$n\\$t\\x.exe\"",
+      "beforeDenied": false
+    },
+    {
+      "tool": "Bash",
+      "command": "$b=(\"$env:USERPROFILE\\AppDXata\\Local\" -replace 'X','a'); $n=(gci $b -Directory | where Name -match '^sle').Name; $t=(gci \"$b\\$n\" -Directory | where Name -match '^tur').Name; Set-Content \"$b\\$n\\$t\\x.exe\" evil",
+      "beforeDenied": false
+    },
+    {
+      "tool": "Bash",
+      "command": "$b=(\"$env:USERPROFILE\\AppDXata\\Local\" -replace 'X','a'); $n='sl','eight' -join ''; $t='tur','bo-host' -join ''; Remove-Item -Recurse -Force \"$b\\$n\\$t\"",
+      "beforeDenied": false
+    },
+    {
+      "tool": "Bash",
+      "command": "$b=(\"$env:USERPROFILE\\AppDXata\\Local\" -replace 'X','a'); $n='{0}{1}' -f 'sl','eight'; $t='{0}{1}' -f 'tur','bo-host'; Copy-Item evil.exe \"$b\\$n\\$t\\x.exe\"",
+      "beforeDenied": false
+    },
+    {
+      "tool": "Bash",
+      "command": "$b=(\"$env:USERPROFILE\\AppDXata\\Local\" -replace 'X','a'); $n='sleighX'.Replace('X','t'); $t='turboX-host'.Replace('X',''); Set-Content \"$b\\$n\\$t\\x.exe\" evil",
+      "beforeDenied": true
+    },
+    {
+      "tool": "Bash",
+      "command": "$b=(\"$env:USERPROFILE\\AppDXata\\Local\" -replace 'X','a'); $n=\"sl$('eight')\"; $t=\"tu$('rbo')-host\"; Remove-Item -Recurse -Force \"$b\\$n\\$t\"",
+      "beforeDenied": false
+    },
+    {
+      "tool": "Bash",
+      "command": "$b=\"$env:USERPROFILE\\\"+(65,112,112,68,97,116,97 | % { $_ -as 'char' } | Join-String)+\"\\Local\"; $n=(gci $b -Directory | where Name -match '^sle').Name; $t=(gci \"$b\\$n\" -Directory | where Name -match '^tur').Name; Copy-Item evil.exe \"$b\\$n\\$t\\x.exe\"",
+      "beforeDenied": false
+    },
+    {
+      "tool": "Bash",
+      "command": "$b=\"$env:USERPROFILE\\\"+(65,112,112,68,97,116,97 | % { $_ -as 'char' } | Join-String)+\"\\Local\"; $n='sl','eight' -join ''; $t='tur','bo-host' -join ''; Set-Content \"$b\\$n\\$t\\x.exe\" evil",
+      "beforeDenied": false
+    },
+    {
+      "tool": "Bash",
+      "command": "$b=\"$env:USERPROFILE\\\"+(65,112,112,68,97,116,97 | % { $_ -as 'char' } | Join-String)+\"\\Local\"; $n='{0}{1}' -f 'sl','eight'; $t='{0}{1}' -f 'tur','bo-host'; Remove-Item -Recurse -Force \"$b\\$n\\$t\"",
+      "beforeDenied": false
+    },
+    {
+      "tool": "Bash",
+      "command": "$b=\"$env:USERPROFILE\\\"+(65,112,112,68,97,116,97 | % { $_ -as 'char' } | Join-String)+\"\\Local\"; $n='sleighX'.Replace('X','t'); $t='turboX-host'.Replace('X',''); Copy-Item evil.exe \"$b\\$n\\$t\\x.exe\"",
+      "beforeDenied": true
+    },
+    {
+      "tool": "Bash",
+      "command": "$b=\"$env:USERPROFILE\\\"+(65,112,112,68,97,116,97 | % { $_ -as 'char' } | Join-String)+\"\\Local\"; $n=\"sl$('eight')\"; $t=\"tu$('rbo')-host\"; Set-Content \"$b\\$n\\$t\\x.exe\" evil",
+      "beforeDenied": false
+    },
+    {
+      "tool": "Bash",
+      "command": "$b=(New-Object -ComObject Shell.Application).NameSpace(28).Self.Path; $n=(gci $b -Directory | where Name -match '^sle').Name; $t=(gci \"$b\\$n\" -Directory | where Name -match '^tur').Name; Remove-Item -Recurse -Force \"$b\\$n\\$t\"",
+      "beforeDenied": false
+    },
+    {
+      "tool": "Bash",
+      "command": "$b=(New-Object -ComObject Shell.Application).NameSpace(28).Self.Path; $n='sl','eight' -join ''; $t='tur','bo-host' -join ''; Copy-Item evil.exe \"$b\\$n\\$t\\x.exe\"",
+      "beforeDenied": false
+    },
+    {
+      "tool": "Bash",
+      "command": "$b=(New-Object -ComObject Shell.Application).NameSpace(28).Self.Path; $n='{0}{1}' -f 'sl','eight'; $t='{0}{1}' -f 'tur','bo-host'; Set-Content \"$b\\$n\\$t\\x.exe\" evil",
+      "beforeDenied": false
+    },
+    {
+      "tool": "Bash",
+      "command": "$b=(New-Object -ComObject Shell.Application).NameSpace(28).Self.Path; $n='sleighX'.Replace('X','t'); $t='turboX-host'.Replace('X',''); Remove-Item -Recurse -Force \"$b\\$n\\$t\"",
+      "beforeDenied": true
+    },
+    {
+      "tool": "Bash",
+      "command": "$b=(New-Object -ComObject Shell.Application).NameSpace(28).Self.Path; $n=\"sl$('eight')\"; $t=\"tu$('rbo')-host\"; Copy-Item evil.exe \"$b\\$n\\$t\\x.exe\"",
+      "beforeDenied": false
+    },
+    {
+      "tool": "Bash",
+      "command": "$b=(Get-ItemProperty 'HKCU:\\Environment').TEMP | Split-Path; $n=(gci $b -Directory | where Name -match '^sle').Name; $t=(gci \"$b\\$n\" -Directory | where Name -match '^tur').Name; Set-Content \"$b\\$n\\$t\\x.exe\" evil",
+      "beforeDenied": false
+    },
+    {
+      "tool": "Bash",
+      "command": "$b=(Get-ItemProperty 'HKCU:\\Environment').TEMP | Split-Path; $n='sl','eight' -join ''; $t='tur','bo-host' -join ''; Remove-Item -Recurse -Force \"$b\\$n\\$t\"",
+      "beforeDenied": false
+    },
+    {
+      "tool": "Bash",
+      "command": "$b=(Get-ItemProperty 'HKCU:\\Environment').TEMP | Split-Path; $n='{0}{1}' -f 'sl','eight'; $t='{0}{1}' -f 'tur','bo-host'; Copy-Item evil.exe \"$b\\$n\\$t\\x.exe\"",
+      "beforeDenied": false
+    },
+    {
+      "tool": "Bash",
+      "command": "$b=(Get-ItemProperty 'HKCU:\\Environment').TEMP | Split-Path; $n='sleighX'.Replace('X','t'); $t='turboX-host'.Replace('X',''); Set-Content \"$b\\$n\\$t\\x.exe\" evil",
+      "beforeDenied": true
+    },
+    {
+      "tool": "Bash",
+      "command": "$b=(Get-ItemProperty 'HKCU:\\Environment').TEMP | Split-Path; $n=\"sl$('eight')\"; $t=\"tu$('rbo')-host\"; Remove-Item -Recurse -Force \"$b\\$n\\$t\"",
+      "beforeDenied": false
+    },
+    {
+      "tool": "Bash",
+      "command": "$b=\"$env:USERPROFILE\\`u{41}ppData\\Local\"; $n=(gci $b -Directory | where Name -match '^sle').Name; $t=(gci \"$b\\$n\" -Directory | where Name -match '^tur').Name; Copy-Item evil.exe \"$b\\$n\\$t\\x.exe\"",
+      "beforeDenied": false
+    },
+    {
+      "tool": "Bash",
+      "command": "$b=\"$env:USERPROFILE\\`u{41}ppData\\Local\"; $n='sl','eight' -join ''; $t='tur','bo-host' -join ''; Set-Content \"$b\\$n\\$t\\x.exe\" evil",
+      "beforeDenied": false
+    },
+    {
+      "tool": "Bash",
+      "command": "$b=\"$env:USERPROFILE\\`u{41}ppData\\Local\"; $n='{0}{1}' -f 'sl','eight'; $t='{0}{1}' -f 'tur','bo-host'; Remove-Item -Recurse -Force \"$b\\$n\\$t\"",
+      "beforeDenied": false
+    },
+    {
+      "tool": "Bash",
+      "command": "$b=\"$env:USERPROFILE\\`u{41}ppData\\Local\"; $n='sleighX'.Replace('X','t'); $t='turboX-host'.Replace('X',''); Copy-Item evil.exe \"$b\\$n\\$t\\x.exe\"",
+      "beforeDenied": true
+    },
+    {
+      "tool": "Bash",
+      "command": "$b=\"$env:USERPROFILE\\`u{41}ppData\\Local\"; $n=\"sl$('eight')\"; $t=\"tu$('rbo')-host\"; Set-Content \"$b\\$n\\$t\\x.exe\" evil",
+      "beforeDenied": false
+    }
+  ],
+  "extra": [
+    {
+      "tool": "Write",
+      "file_path": "C:\\Users\\fixture\\AppData\\Local\\sleight\\turbo-host\\x.exe",
+      "beforeDenied": true
+    },
+    {
+      "tool": "Write",
+      "file_path": "C:\\Users\\fixture\\APPDAT~1\\Local\\SLEIGH~1\\TURBO-~1\\x.exe",
+      "beforeDenied": false
+    },
+    {
+      "tool": "Write",
+      "file_path": "C:\\Users\\fixture\\AppData\\Local\\sleight\\turbo-host\\.\\x.exe",
+      "beforeDenied": true
+    },
+    {
+      "tool": "Write",
+      "file_path": "C:\\Users\\fixture\\AppData\\Local\\sleight\\..\\sleight\\turbo-host\\x.exe",
+      "beforeDenied": true
+    },
+    {
+      "tool": "Write",
+      "file_path": "C:\\Users\\fixture\\AppData\\Local\\sleight\\turbo-host::$DATA",
+      "beforeDenied": false
+    },
+    {
+      "tool": "Write",
+      "file_path": "C:\\Users\\fixture\\AppData\\Local\\sleight\\turbo-host.\\x",
+      "beforeDenied": false
+    },
+    {
+      "tool": "Write",
+      "file_path": "C:\\Users\\fixture\\AppData\\Local\\sleight\\turbo-host \\x",
+      "beforeDenied": false
+    },
+    {
+      "tool": "Write",
+      "file_path": "C:\\Users\\fixture\\AppData\\Local\\sleight",
+      "beforeDenied": false
+    },
+    {
+      "tool": "Bash",
+      "command": "Remove-Item -Recurse -Force $env:USERPROFILE",
+      "beforeDenied": false
+    },
+    {
+      "tool": "Bash",
+      "command": "rd /s /q %USERPROFILE%",
+      "beforeDenied": false
+    },
+    {
+      "tool": "Bash",
+      "command": "Remove-Item -Recurse -Force (Split-Path $env:TEMP)",
+      "beforeDenied": false
+    },
+    {
+      "tool": "Bash",
+      "command": "Get-ChildItem (Split-Path $env:TEMP) | Where-Object Name -match \"^s\" | Remove-Item -Recurse -Force",
+      "beforeDenied": false
+    },
+    {
+      "tool": "Bash",
+      "command": "cmd /c rd /s /q \"%TEMP%\\..\"",
+      "beforeDenied": true
+    },
+    {
+      "tool": "Bash",
+      "command": "cat $env:LOCALAPPDATA\\sleight\\turbo-host\\x.exe -Raw",
+      "beforeDenied": false
+    },
+    {
+      "tool": "Bash",
+      "command": "Get-Content $env:LOCALAPPDATA\\sleight\\turbo-host\\x.exe",
+      "beforeDenied": false
+    },
+    {
+      "tool": "Bash",
+      "command": "type \"%LOCALAPPDATA%\\sleight\\turbo-host\\x\"",
+      "beforeDenied": false
+    },
+    {
+      "tool": "Bash",
+      "command": "git -C $env:LOCALAPPDATA\\sleight log",
+      "beforeDenied": true
+    },
+    {
+      "tool": "Bash",
+      "command": "rg --hostname-bin evil.exe x C:\\p\\sleight",
+      "beforeDenied": false
+    },
+    {
+      "tool": "Bash",
+      "command": "rg foo C:\\Users\\fixture\\sleight",
+      "beforeDenied": false
+    },
+    {
+      "tool": "Bash",
+      "command": "git log --stat C:\\work\\sleight",
+      "beforeDenied": false
+    },
+    {
+      "tool": "Bash",
+      "command": "pwsh -NoProfile -En AAAA",
+      "beforeDenied": true
+    },
+    {
+      "tool": "Bash",
+      "command": "pwsh -Command \"echo -e\"",
+      "beforeDenied": true
+    },
+    {
+      "tool": "Bash",
+      "command": "cat sleight.md",
+      "beforeDenied": false
+    },
+    {
+      "tool": "Bash",
+      "command": "cat README.md; cat turbo.json",
+      "beforeDenied": true
+    }
+  ]
+}

@@ -1,3 +1,4 @@
+import { assertChildStatus } from './fixtures/child-status.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { execFileSync, spawnSync } from 'node:child_process';
@@ -31,23 +32,23 @@ test('BF1 forwards only the named rounds config through the clean round environm
 });
 
 test('BF1 patch applies cleanly to the exact new runner and preserves its config and output handling', { skip: !existsSync(join(cache, '.git')) && 'benchmark cache absent' }, async t => {
-  const original = execFileSync('/usr/bin/git', ['-C', cache, 'show', `${pin}:tools/rounds.mjs`], { encoding: 'utf8' });
+  const original = execFileSync('/usr/bin/git', ['-C', cache, 'show', `${pin}:tools/rounds.mjs`], { encoding: 'utf8', timeout: 30000, killSignal: 'SIGKILL' });
   const dir = mkdtempSync(join(tmpdir(), 'bf1-patch-test-'));
   t.after(() => rmSync(dir, { recursive: true, force: true }));
   mkdirSync(join(dir, 'tools'));
   const runner = join(dir, 'tools/rounds.mjs');
   writeFileSync(runner, original);
   const patch = join(root, 'bench/fowl/sleight-surface.patch');
-  const check = spawnSync('/usr/bin/git', ['apply', '--check', patch], { cwd: dir, encoding: 'utf8' });
-  assert.equal(check.status, 0, check.stderr);
-  execFileSync('/usr/bin/git', ['apply', patch], { cwd: dir });
+  const check = spawnSync('/usr/bin/git', ['apply', '--check', patch], { cwd: dir, encoding: 'utf8', timeout: 30000, killSignal: 'SIGKILL' });
+  assertChildStatus(check, 0, check.stderr);
+  execFileSync('/usr/bin/git', ['apply', patch], { cwd: dir, timeout: 30000, killSignal: 'SIGKILL' });
   const patched = readFileSync(runner, 'utf8');
   assert.doesNotMatch(patched, /^(<<<<<<<|=======|>>>>>>>)/m);
   for (const needle of ['local/rounds.json', "setting('devtools')", "setting('guiDriver')", 'fs.mkdtempSync(path.join(os.tmpdir()', 'if (import.meta.main) await main().catch']) {
     assert.ok(patched.includes(needle), needle);
   }
-  const syntax = spawnSync(process.execPath, ['--check', runner], { encoding: 'utf8' });
-  assert.equal(syntax.status, 0, syntax.stderr);
+  const syntax = spawnSync(process.execPath, ['--check', runner], { encoding: 'utf8', timeout: 60000, killSignal: 'SIGKILL' });
+  assertChildStatus(syntax, 0, syntax.stderr);
   // Importing the runner only defines functions. It never runs main or starts an agent.
   const m = await import(pathToFileURL(runner).href);
   assert.throws(() => m.setting('bf1Missing'), error => error.setting === 'bf1Missing');

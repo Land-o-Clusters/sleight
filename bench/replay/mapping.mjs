@@ -1,4 +1,5 @@
-import ts from 'typescript';
+import { createRequire } from 'node:module';
+const require = createRequire(import.meta.url);
 import { FrameMapper, windowReceipts, isNativeSelection } from './frames.mjs';
 import { imageShape, matchingMedia } from './images.mjs';
 import { resultItems, taskResult } from './documentation.mjs';
@@ -81,6 +82,7 @@ const observationMethods = new Set(['getApp', 'getTab', 'getBrowser', 'getState'
 
 function nativeReceiver(args) {
   if (!args.code) return args.app ? `app:${args.app}` : undefined;
+  const ts = require('typescript');
   const ast = ts.createSourceFile('scope.js', args.code, ts.ScriptTarget.Latest, true, ts.ScriptKind.JS), receivers = new Set();
   const visit = node => {
     if (ts.isVariableDeclaration(node) && ts.isIdentifier(node.name)) {
@@ -195,10 +197,41 @@ export class TargetMapper {
     return mapped;
   }
   code(code) {
+    const ts = require('typescript');
     code = this.replaceStrings(code, false);
     const ast = ts.createSourceFile('recorded.js', code, ts.ScriptTarget.Latest, true, ts.ScriptKind.JS);
     if (ast.parseDiagnostics.length) throw Error('Recorded JavaScript cannot be parsed');
     const edits = [];
+    // Recorded traces often shorten AX text with slice(0, N). Those numbers are text offsets, never UI selectors.
+    // Require a proven text source and an unmodified single binding; an app handle's slice remains unsupported.
+    const bindings = new Map(), changed = new Set();
+    const bindText = node => {
+      if (ts.isVariableDeclaration(node) && ts.isIdentifier(node.name)) {
+        const name = node.name.text;
+        if (bindings.has(name)) changed.add(name);
+        bindings.set(name, node.initializer);
+      }
+      if (ts.isParameter(node) && ts.isIdentifier(node.name)) changed.add(node.name.text);
+      if (ts.isBinaryExpression(node) && node.operatorToken.kind >= ts.SyntaxKind.FirstAssignment && node.operatorToken.kind <= ts.SyntaxKind.LastAssignment && ts.isIdentifier(node.left)) changed.add(node.left.text);
+      if ((ts.isPrefixUnaryExpression(node) || ts.isPostfixUnaryExpression(node)) && ts.isIdentifier(node.operand)) changed.add(node.operand.text);
+      ts.forEachChild(node, bindText);
+    };
+    bindText(ast);
+    const textSource = (node, seen = new Set()) => {
+      if (!node) return false;
+      if (ts.isAwaitExpression(node) || ts.isParenthesizedExpression(node)) return textSource(node.expression, seen);
+      if (ts.isStringLiteral(node)) return true;
+      if (ts.isIdentifier(node)) {
+        if (changed.has(node.text) || seen.has(node.text)) return false;
+        return textSource(bindings.get(node.text), new Set([...seen, node.text]));
+      }
+      if (!ts.isCallExpression(node) || !ts.isPropertyAccessExpression(node.expression)) return false;
+      const method = node.expression.name.text;
+      return method === 'getAXState' || method === 'stringify' && node.expression.expression.getText(ast) === 'JSON' && !bindings.has('JSON') && !changed.has('JSON');
+    };
+    const textSlice = node => ts.isCallExpression(node) && ts.isPropertyAccessExpression(node.expression) && node.expression.name.text === 'slice' &&
+      textSource(node.expression.expression) && node.arguments.length >= 1 && node.arguments.length <= 2 &&
+      node.arguments.every(arg => ts.isNumericLiteral(arg) && Number.isSafeInteger(Number(arg.text)) && Number(arg.text) >= 0 && Number(arg.text) <= 40000);
     const assertReceiverBinding = receiver => {
       const visitBinding = node => {
         let init;
@@ -267,14 +300,14 @@ export class TargetMapper {
           }
         } else {
           const numeric = node.arguments.some(arg => {
-            const contains = n => ts.isNumericLiteral(n) || ts.forEachChild(n, contains);
+            const contains = n => textSlice(n) ? false : ts.isNumericLiteral(n) || ts.forEachChild(n, contains);
             return contains(arg);
           });
           // Object window selectors are handled above. Every other unknown numeric method refuses.
-          if (numeric && !['getApp', 'getTab'].includes(method)) throw Error('Unmapped numeric argument to an unsupported method');
+          if (numeric && !textSlice(node) && !['getApp', 'getTab'].includes(method)) throw Error('Unmapped numeric argument to an unsupported method');
           if (['getApp', 'getTab'].includes(method) && node.arguments.some(ts.isNumericLiteral)) throw Error('Unmapped numeric selector');
           const receiver = ts.isPropertyAccessExpression(node.expression) ? node.expression.expression.getText(ast) : '';
-          if (!observationMethods.has(method) && !['console', 'JSON', 'nodeRepl'].includes(receiver) && node.arguments.some(arg => !ts.isStringLiteral(arg)))
+          if (!textSlice(node) && !observationMethods.has(method) && !['console', 'JSON', 'nodeRepl'].includes(receiver) && node.arguments.some(arg => !ts.isStringLiteral(arg)))
             throw Error('Computed arguments to an unsupported method cannot be remapped safely');
         }
       }
@@ -335,6 +368,7 @@ export function normalized(text, mapper = new TargetMapper(), recorded = false, 
 }
 
 export function refreshCode(args) {
+  const ts = require('typescript');
   const ast = ts.createSourceFile('refresh.js', args.code ?? '', ts.ScriptTarget.Latest, true, ts.ScriptKind.JS);
   const receivers = new Set();
   const visit = node => {

@@ -1,6 +1,6 @@
+import { platformPaths } from '../platform/paths.mjs';
 // Character packs are data. This module reads container headers, never decoded pixels.
 import * as fs from 'node:fs';
-import { userInfo } from 'node:os';
 import { basename, dirname, extname, isAbsolute, join, resolve } from 'node:path';
 import { TextDecoder } from 'node:util';
 import { fileURLToPath } from 'node:url';
@@ -8,6 +8,19 @@ import { createHash } from 'node:crypto';
 
 const MiB = 1024 ** 2;
 export const CHARACTER_LIMITS = Object.freeze({ json: 16384, sheet: 8 * MiB, extra: 8 * MiB, preview: MiB, license: 65536, total: 16 * MiB, pixels: 16_000_000, filePixels: 4096 ** 2 });
+export const STAGE_LIMITS = Object.freeze({ files: 24, strip: 4 * MiB, total: 48 * MiB, pixels: 24_000_000, cache: 24 * MiB });
+export const STAGE_STATES = Object.freeze({
+  'stage-lie': 'perch', 'stage-lie-reach': 'perch-point-right', 'stage-lie-peek': 'perch-peek', 'stage-sleep': 'sleep',
+  'stage-sit': 'perch', 'stage-sit-notes': 'perch-peek', 'stage-think': 'perch-peek', 'stage-wait': 'perch-wait', 'stage-cheer': 'high-five',
+  'stage-hang': 'perch', 'stage-hang-peek': 'perch-peek', 'stage-climb': 'running-right', 'stage-stand': 'idle',
+  'stage-point': 'aim', 'stage-carry': 'drag-carry', 'stage-wince': 'error', 'stage-handoff': 'handoff',
+  'stage-paused': 'paused', 'stage-leap': 'jumping', 'stage-run': 'running-right', 'stage-startle': 'startle',
+});
+// Include the seat table's stage-think as well as every pose in the state table.
+export const STAGE_SUCCESSORS = Object.freeze({ 'stage-lie-reach': ['stage-lie'], 'stage-lie-peek': ['stage-lie'],
+  'stage-cheer': ['stage-lie', 'stage-sit'], 'stage-startle': ['stage-lie'], 'stage-leap': ['stage-lie', 'stage-stand'],
+  'stage-run': ['stage-stand'], 'stage-climb': ['stage-hang'], 'stage-handoff': ['stage-sleep'] });
+export const stageFilename = value => typeof value === 'string' && /^stage\/[a-z-]{1,24}\.(png|webp)$/.test(value);
 // Optional named rows are useful to artists and keep imported travel art separate from event states.
 export const CHARACTER_STATES = Object.freeze([
   ['idle', 'Idle', []], ['move', 'Move', ['running-right', 'running-left', 'look', 'idle']],
@@ -183,15 +196,37 @@ function readSafe(path, cap, uid, installed, io = fs, builtin = false) {
 }
 function snapshot(folder, uid, installed = false, io = fs, builtin = false) {
   folder = safeDirectory(folder, uid, { privateMode: installed, io });
-  const entries = fileOperation(folder, 'entries', () => io.readdirSync(folder)).filter(name => {
+  const ignoreMetadata = directory => name => {
     if (name !== '.DS_Store') return true;
-    const stat = fileOperation(join(folder, name), 'entry', () => io.lstatSync(join(folder, name)));
+    const stat = fileOperation(join(directory, name), 'entry', () => io.lstatSync(join(directory, name)));
     if (!stat.isFile() || stat.isSymbolicLink() || stat.nlink !== 1) fail('ignored metadata must be regular, without symlinks or hardlinks', 'entry', name);
     return false;
-  });
+  };
+  const entries = fileOperation(folder, 'entries', () => io.readdirSync(folder)).filter(ignoreMetadata(folder));
   if (entries.length > 8) fail('too many character files', 'entries', folder);
   const files = new Map(); let total = 0;
+  // Inspect the manifest before reading any strip bytes, independent of directory order.
+  if (entries.includes('character.json')) {
+    const bytes = readSafe(join(folder, 'character.json'), CHARACTER_LIMITS.json - 1, uid, installed, io, builtin);
+    const manifest = parseCharacterJSON(bytes);
+    if (entries.includes('stage') && manifest?.stage === undefined) fail('stage directory requires a stage block', 'stage', folder);
+    files.set('character.json', bytes); total += bytes.length;
+  } else if (entries.includes('stage')) fail('stage directory requires a stage block', 'stage', folder);
   for (const name of entries) {
+    if (name === 'character.json') continue;
+    if (name === 'stage') {
+      const directory = safeDirectory(join(folder, name), uid, { privateMode: installed, io });
+      const strips = fileOperation(directory, 'entries', () => io.readdirSync(directory)).filter(ignoreMetadata(directory));
+      if (strips.length > STAGE_LIMITS.files) fail('too many stage files', 'stage', folder);
+      for (const leaf of strips) {
+        const key = `stage/${leaf}`;
+        if (!stageFilename(key)) fail('invalid stage strip filename', 'stage.file', key);
+        const bytes = readSafe(join(directory, leaf), STAGE_LIMITS.strip, uid, installed, io, builtin);
+        total += bytes.length; files.set(key, bytes);
+        if (total > STAGE_LIMITS.total) fail('total character size exceeds 48 MiB', 'entries', folder);
+      }
+      continue;
+    }
     let cap;
     if (['character.json', 'pet.json'].includes(name)) cap = CHARACTER_LIMITS.json - 1;
     else if (name === 'LICENSE.txt') cap = CHARACTER_LIMITS.license;
@@ -199,8 +234,10 @@ function snapshot(folder, uid, installed = false, io = fs, builtin = false) {
     else if (/^[a-zA-Z0-9][a-zA-Z0-9_.-]{0,79}\.(png|webp)$/.test(name)) cap = CHARACTER_LIMITS.sheet;
     else fail('extra character file refused', 'entry', name);
     const bytes = readSafe(join(folder, name), cap, uid, installed, io, builtin); total += bytes.length;
-    if (total > CHARACTER_LIMITS.total) fail('total character size exceeds 16 MiB', 'entries', folder); files.set(name, bytes);
+    if (total > STAGE_LIMITS.total) fail('total character size exceeds 48 MiB', 'entries', folder); files.set(name, bytes);
   }
+  const manifest = files.has('character.json') ? parseCharacterJSON(files.get('character.json')) : undefined;
+  if (total > (manifest?.stage !== undefined ? STAGE_LIMITS.total : CHARACTER_LIMITS.total)) fail(`total character size exceeds ${manifest?.stage !== undefined ? 48 : 16} MiB`, 'entries', folder);
   return { folder, files, total };
 }
 
@@ -211,7 +248,7 @@ function validateManifest(manifest, files, { expectedId, shared = false, sourceF
   // A bad lines block never refuses the pack (A2): it is checked by its own rules and dropped with one warning.
   const rawLines = m.lines; delete m.lines;
   plainData(m, '', sourceFile);
-  unknownKeys(m, ['format', 'version', 'id', 'name', 'description', 'author', 'license', 'sheet', 'extra', 'frame', 'grid', 'scale', 'anchor', 'hotspot', 'states', 'codex', 'perch'], 'manifest', warnings);
+  unknownKeys(m, ['format', 'version', 'id', 'name', 'description', 'author', 'license', 'sheet', 'extra', 'frame', 'grid', 'scale', 'anchor', 'hotspot', 'states', 'codex', 'perch', 'stage'], 'manifest', warnings);
   const lines = characterLines(rawLines, warnings); if (lines) m.lines = lines;
   if (m.perch !== undefined) {
     if (!object(m.perch)) fail('invalid perch block', 'perch');
@@ -230,7 +267,7 @@ function validateManifest(manifest, files, { expectedId, shared = false, sourceF
   if (!files.has(m.sheet)) fail('sheet file missing', 'sheet', m.sheet);
   if (m.extra && !files.has(m.extra)) fail('sheet file missing', 'extra', m.extra);
   if (m.perch?.sheet && !files.has(m.perch.sheet)) fail('sheet file missing', 'perch.sheet', m.perch.sheet);
-  for (const name of files.keys()) if (!allowed.includes(name)) fail('extra character file refused', 'entry', name);
+  for (const name of files.keys()) if (!allowed.includes(name) && !(m.stage !== undefined && stageFilename(name))) fail('extra character file refused', 'entry', name);
   m.frame ??= { w: 192, h: 208 }; m.scale ??= 1;
   // The hand host draws cells of at most 192x208 on sheets of at most 1536x2288 (8 columns, 11 rows of the largest cell).
   if (!object(m.frame) || !integer(m.frame.w, 64, 192) || !integer(m.frame.h, 64, 208)) fail('invalid frame dimensions (cells are at most 192x208)', 'frame');
@@ -294,7 +331,80 @@ function validateManifest(manifest, files, { expectedId, shared = false, sourceF
   for (const key of ['frame', 'grid']) unknownKeys(m[key], key === 'frame' ? ['w', 'h'] : ['cols', 'rows'], key, warnings);
   const resolved = resolveCharacterStates(m);
   if (required.some(name => !resolved.find(s => s.state === name).own)) warnings.push('Partial character: some required states use fallback art.');
-  return { manifest: m, resolved, warnings, sheets, perch: resolvePerchStates(m) };
+  const perch = resolvePerchStates(m);
+  return { manifest: m, resolved, warnings, sheets, perch, stage: resolveStageStates(m, files, warnings, perch) };
+}
+
+export function resolveStageStates(m, files, warnings, perch) {
+  const base = Object.fromEntries(resolveCharacterStates(m).map(s => [s.state, s]));
+  const out = { available: false, sizeWithoutArt: 'medium', states: {} }, stage = m.stage;
+  const cell = (c, label) => {
+    if (!object(c) || !integer(c.w, 192, 1024) || !integer(c.h, 192, 1024)) fail('invalid stage cell', label);
+    unknownKeys(c, ['w', 'h'], label, warnings); return c;
+  };
+  const point = (p, c, label) => {
+    if (!object(p) || !number(p.x, 0, c.w) || !number(p.y, 0, c.h)) fail('invalid stage anchor or hotspot', label);
+    unknownKeys(p, ['x', 'y'], label, warnings); return p;
+  };
+  if (stage !== undefined) {
+    if (!object(stage) || !object(stage.states) || Object.keys(stage.states).length > STAGE_LIMITS.files) fail('invalid stage states', 'stage.states');
+    unknownKeys(stage, ['cell', 'filter', 'anchor', 'lie', 'states'], 'stage', warnings);
+    cell(stage.cell, 'stage.cell'); point(stage.anchor, stage.cell, 'stage.anchor');
+    stage.filter ??= 'linear';
+    if (!['linear', 'nearest'].includes(stage.filter)) fail('invalid stage filter', 'stage.filter');
+    if (stage.lie !== undefined) {
+      if (!object(stage.lie)) fail('invalid stage lie block', 'stage.lie');
+      unknownKeys(stage.lie, ['cell', 'anchor'], 'stage.lie', warnings);
+      if (stage.lie.cell) cell(stage.lie.cell, 'stage.lie.cell');
+      if (stage.lie.anchor) point(stage.lie.anchor, stage.lie.cell ?? stage.cell, 'stage.lie.anchor');
+    }
+    let pixels = 0; const used = new Map(), ignoredFiles = new Set();
+    for (const [name, s] of Object.entries(stage.states)) {
+      if (!Object.hasOwn(STAGE_STATES, name)) {
+        warnings.push('Unknown stage state ignored; its strip is not used.');
+        if (object(s) && stageFilename(s.file)) ignoredFiles.add(s.file);
+        continue;
+      }
+      if (!object(s)) fail('invalid stage state', `stage.states.${name}`);
+      unknownKeys(s, ['file', 'cell', 'anchor', 'frames', 'ms', 'loop', 'hotspot', 'flip', 'next'], 'stage state', warnings);
+      if (!stageFilename(s.file)) fail('invalid stage file', `stage.states.${name}.file`);
+      const lie = ['stage-lie', 'stage-lie-reach', 'stage-lie-peek', 'stage-sleep'].includes(name) ? stage.lie : undefined;
+      const c = cell(s.cell ?? lie?.cell ?? stage.cell, `stage.states.${name}.cell`);
+      const anchor = point(s.anchor ?? lie?.anchor ?? stage.anchor, c, `stage.states.${name}.anchor`);
+      const hotspot = point(s.hotspot ?? anchor, c, `stage.states.${name}.hotspot`);
+      if (!integer(s.frames, 1, 8) || s.frames * c.w > 4096) fail('invalid stage frames or strip dimensions', `stage.states.${name}.frames`);
+      const ms = Array.isArray(s.ms) ? s.ms : Array(s.frames).fill(s.ms);
+      if (ms.length !== s.frames || ms.some(n => !number(n, s.loop ? 40 : 20, 2000)) || ms.reduce((a, b) => a + b, 0) > 8000) fail('invalid stage ms', `stage.states.${name}.ms`);
+      if (typeof s.loop !== 'boolean' || s.flip !== undefined && s.flip !== 'h') fail('invalid stage loop or flip', `stage.states.${name}`);
+      if (s.next !== undefined) {
+        if (!Array.isArray(s.next) || s.next.length > 4 || s.next.some(n => typeof n !== 'string')) fail('invalid stage next states', `stage.states.${name}.next`);
+        if (s.next.some(n => !Object.hasOwn(STAGE_STATES, n))) warnings.push('Unknown stage successor ignored.');
+        s.next = s.next.filter(n => Object.hasOwn(STAGE_STATES, n));
+      }
+      // Shared files must describe exactly the same strip geometry.
+      const geometry = `${c.w},${c.h},${s.frames}`;
+      if (used.has(s.file) && used.get(s.file) !== geometry) fail('conflicting stage strip geometry', 'stage.geometry', s.file);
+      if (!used.has(s.file)) { pixels += s.frames * c.w * c.h; used.set(s.file, geometry); }
+      if (pixels > STAGE_LIMITS.pixels) fail('stage pixel budget exceeded', 'stage.pixels');
+      const bytes = files.get(s.file);
+      if (bytes) {
+        if (bytes.length > STAGE_LIMITS.strip) fail('stage file size cap exceeded', 'stage.file', s.file);
+        const d = imageDimensions(bytes, extname(s.file), s.file);
+        if (d.width !== c.w * s.frames || d.height !== c.h || d.height > 1024) fail('stage dimensions do not match cell and frames', 'stage.dimensions', s.file);
+      } else warnings.push(`Stage strip missing: ${s.file}; shown at medium.`);
+      out.states[name] = { state: name, own: Boolean(bytes), file: s.file, cell: c, anchor, hotspot, frames: s.frames,
+        ms: [...ms], loop: s.loop, flip: s.flip === 'h', filter: stage.filter, next: s.next ?? STAGE_SUCCESSORS[name] ?? [] };
+    }
+    for (const name of files.keys()) if (stageFilename(name) && !used.has(name) && !ignoredFiles.has(name)) fail('extra stage file refused', 'stage.file', name);
+    out.available = Object.values(out.states).some(s => s.own);
+  }
+  for (const [state, fallback] of Object.entries(STAGE_STATES)) {
+    // Base entries use contiguous columns; perch entries already carry explicit columns.
+    const p = perch.states[fallback] ?? base[fallback];
+    const art = p.columns ? p : { ...p, columns: Array.from({ length: p.frames }, (_, i) => p.start + i) };
+    out.states[state] = { state, own: false, ...out.states[state], fallback: { ...art, state: fallback } };
+  }
+  return out;
 }
 
 /** Resolves to concrete cells for a heading (degrees clockwise from up). Built-in cycles skip visited nodes. */
@@ -462,7 +572,7 @@ function codexManifest(pet, sheet) {
     codex: { spriteVersionNumber: version, importedFrom: pet.id } };
 }
 
-export const BUILTIN_CHARACTER_IDS = Object.freeze(['tsugi', 'shizu', 'bit', 'kit', 'yori', 'tab']);
+export const BUILTIN_CHARACTER_IDS = Object.freeze(['tsugi', 'shizu', 'bit', 'kit', 'yori', 'tab', 'mabel', 'biscuit', 'rudy', 'mo', 'dennis', 'nana', 'hal']);
 export const builtinCharactersDirectory = () => fileURLToPath(new URL('../../characters/', import.meta.url)).replace(/\/$/, '');
 const reservedId = id => { if (BUILTIN_CHARACTER_IDS.includes(id)) fail('built-in character id is reserved; choose a different id', 'id'); };
 export function checkBuiltinCharacter(id, { builtinRoot = builtinCharactersDirectory(), uid = process.getuid() } = {}) {
@@ -510,7 +620,7 @@ export function prepareCharacterImport(folder, { uid = process.getuid(), shared 
 }
 
 // Renderers always use the user's storage. Only the CLI has an explicit test-root switch.
-export const charactersDirectory = () => join(userInfo().homedir, 'Library/Application Support/sleight/characters');
+export const charactersDirectory = () => platformPaths().characters;
 function storage(root, uid, create = false, io = fs) {
   if (!isAbsolute(root) || resolve(root) !== root) fail('character storage path must be absolute and normalized', 'root', root);
   if (create && !io.existsSync(root)) {
@@ -525,7 +635,7 @@ export function installCharacter(character, { root = charactersDirectory(), uid 
   // Revalidate the captured data, not a source folder which may have changed during confirmation.
   const files = new Map([...character.files].map(([name, bytes]) => [name, Buffer.from(bytes)]));
   const m = parseCharacterJSON(files.get('character.json')); validateManifest(m, files); reservedId(m.id);
-  if ([...files.values()].reduce((n, b) => n + b.length, 0) > CHARACTER_LIMITS.total) fail('total character size exceeds 16 MiB');
+  if ([...files.values()].reduce((n, b) => n + b.length, 0) > (m.stage ? STAGE_LIMITS.total : CHARACTER_LIMITS.total)) fail('total character size cap exceeded');
   root = storage(root, uid, true, io); const target = join(root, m.id);
   if (io.existsSync(target)) fail('character already exists; remove it first', 'directory', target);
   // A crash can leave unpublished data. Sweep only old, private, owned staging folders.
@@ -538,7 +648,8 @@ export function installCharacter(character, { root = charactersDirectory(), uid 
   const staging = fileOperation(root, 'staging', () => io.mkdtempSync(join(root, '.import-')));
   fileOperation(staging, 'directory', () => io.chmodSync(staging, 0o700));
   try {
-    for (const [name, bytes] of files) { filename(name, 'entry', staging); fileOperation(join(staging, name), 'file', () => io.writeFileSync(join(staging, name), bytes, { flag: 'wx', mode: 0o600 })); }
+    if ([...files.keys()].some(stageFilename)) fileOperation(staging, 'stage', () => io.mkdirSync(join(staging, 'stage'), { mode: 0o700 }));
+    for (const [name, bytes] of files) { if (!stageFilename(name)) filename(name, 'entry', staging); fileOperation(join(staging, name), 'file', () => io.writeFileSync(join(staging, name), bytes, { flag: 'wx', mode: 0o600 })); }
     loadCharacter(staging, { uid, expectedId: m.id, installed: true });
     storage(root, uid, false, io);
     if (io.existsSync(target)) fail('character already exists; remove it first', 'directory', target);
@@ -600,6 +711,8 @@ export function characterCallout(character, { installed = false } = {}) {
     : `This ${noun} has its own animation for ${own} of sleight's ${resolved.length} moves. To animate all of them it needs ${resolved.length - own} more:`,
     ...missing, ...m.codex?.spriteVersionNumber === 1 ? ['The original 9-row atlas has no look directions. Without extra art it uses running left or right while moving and idle while aiming.'] : [],
     `Character: ${m.name}`, `Size: ${total} bytes`, `License: ${m.license === 'unknown' ? 'not stated' : m.license}`,
+    ...m.stage === undefined ? [] : [`Stage: ${Object.values(character.stage?.states ?? {}).filter(s => s.own).length} of ${Object.keys(STAGE_STATES).length} states.`,
+      `Stage size: ${character.stage?.available ? 'stage when its strip is ready; medium otherwise' : 'shown at medium (this character has no stage art)'}.`],
     ...warnings.map(w => `Warning: ${w}`), ...installed ? [] : ['Your source files are not changed. sleight copies them.'],
     'To add animations, draw an extra.webp sheet; see docs/design/character-format.md.'].join('\n') + '\n';
 }

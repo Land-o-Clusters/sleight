@@ -160,7 +160,7 @@ test('backup exclusion uses the metadata xattr and a binary plist value', () => 
 });
 test('macOS backup exclusion xattr is present on the owned fixture directory', { skip: process.platform !== 'darwin' }, t => {
   const f = fixture(t, { excludeFromBackup: excludeClipboardSnapshotsFromBackup }); f.store.save({ original, staged });
-  const value = execFileSync('/usr/bin/xattr', ['-px', 'com.apple.metadata:com_apple_backup_excludeItem', f.directory], { encoding: 'utf8' });
+  const value = execFileSync('/usr/bin/xattr', ['-px', 'com.apple.metadata:com_apple_backup_excludeItem', f.directory], { encoding: 'utf8', timeout: 30000, killSignal: 'SIGKILL' });
   const bytes = Buffer.from(value.replace(/\s/g, ''), 'hex');
   assert.equal(bytes.subarray(0, 8).toString(), 'bplist00'); assert.ok(bytes.includes(Buffer.from('com.apple.backupd')));
 });
@@ -203,7 +203,7 @@ test('relay still accepts and returns a request after unsafe startup recovery', 
 test('a worker crash loses a concealed original because no recovery snapshot exists', async t => {
   const f = fixture(t), boardPath = join(f.root, 'board.json');
   const child = spawnSync(process.execPath, [new URL('./fixtures/clipboard-crash.mjs', import.meta.url).pathname,
-    f.directory, boardPath, 'org.nspasteboard.ConcealedType'], { encoding: 'utf8', timeout: 5000 });
+    f.directory, boardPath, 'org.nspasteboard.ConcealedType'], { encoding: 'utf8', timeout: 5000, killSignal: 'SIGKILL' });
   assert.equal(child.signal, 'SIGKILL', child.stderr);
   assert.deepEqual(readdirSync(f.root), ['board.json']);
   f.setBoard(JSON.parse(readFileSync(boardPath, 'utf8')).items);

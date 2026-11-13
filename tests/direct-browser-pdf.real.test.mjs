@@ -1,3 +1,4 @@
+import { testChromiumExecutable, launchTestChromiumContext, closeTestChromium } from './fixtures/chromium-isolated.mjs';
 import { trackTemp } from '../scripts/temp-leftovers.mjs';
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
@@ -18,8 +19,7 @@ import { textPdf } from '../bench/pdf-fixture.mjs';
 import { type3Pdf } from './fixtures/pdf-type3.mjs';
 
 const pin = JSON.parse(readFileSync(new URL('../plugins/sleight/vendor/playwright-core/browsers.json', import.meta.url))).browsers.find(row => row.name === 'chromium');
-const executablePath = join(homedir(), 'Library/Caches/ms-playwright', `chromium-${pin.revision}`,
-  'chrome-mac-' + process.arch, 'Google Chrome for Testing.app/Contents/MacOS/Google Chrome for Testing');
+const executablePath = testChromiumExecutable({ headless: false, revision: pin.revision });
 const skip = process.env.SLEIGHT_LIVE_DOM_TEST !== '1' ? 'requires opt-in headless Chromium fixture harness'
   : process.platform !== 'darwin' || !existsSync(executablePath) ? 'requires macOS PDFKit and pinned headless Chromium' : false;
 
@@ -46,10 +46,13 @@ test('owned headless PDFs use cached bytes or a same-origin fallback through PDF
   server.on('connection', socket => { sockets.add(socket); socket.once('close', () => sockets.delete(socket)); });
   let browser, dispatcher, blocked = false;
   t.after(async () => {
-    await dispatcher?.end(); await browser?.close();
-    for (const socket of sockets) socket.destroy();
-    if (server.listening) await new Promise(resolve => server.close(resolve));
-    await rm(root, { recursive: true, force: true });
+    try { await closeTestChromium(browser, async () => {
+      try { await dispatcher?.end(); } finally { await browser?.close(); }
+    }); } finally {
+      for (const socket of sockets) socket.destroy();
+      if (server.listening) await new Promise(resolve => server.close(resolve));
+      await rm(root, { recursive: true, force: true });
+    }
   });
   const source = readFileSync(new URL('../plugins/sleight/lib/direct-browser/native/pdf-host.swift', import.meta.url));
   const built = await preparePdfHelper({ cacheRoot: join(root, 'cache'), inventory: { accepted: true, protocol: 1, node: process.version,
@@ -59,7 +62,7 @@ test('owned headless PDFs use cached bytes or a same-origin fallback through PDF
   await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
   const origin = `http://127.0.0.1:${server.address().port}`;
   // Full Chromium in headless mode supports its PDF viewer; headless-shell downloads PDFs instead.
-  const context = await chromium.launchPersistentContext(join(root, 'profile'), { headless: true, executablePath });
+  const context = await launchTestChromiumContext(chromium, join(root, 'profile'), { headless: true, executablePath });
   browser = context.browser();
   t.diagnostic('Pinned headless PDF fixture: Chromium ' + browser.version());
   await context.addCookies([{ name: 'pdf_session', value: 'fixture', url: origin, httpOnly: true, sameSite: 'Strict' }]);

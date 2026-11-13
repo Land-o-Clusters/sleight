@@ -3,17 +3,17 @@ import { spawn, execFileSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { appendFileSync, closeSync, existsSync, mkdirSync, mkdtempSync, openSync,
   readFileSync, renameSync, rmSync, rmdirSync, writeFileSync } from 'node:fs';
-import { homedir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { requireOwnerFree } from './contract.mjs';
 import { setTimeout as sleep } from 'node:timers/promises';
+import { benchmarkStopCode } from '../../../hold.mjs';
+import { benchEvidencePath } from '../../../runtime-options.mjs';
 
 const HERE = fileURLToPath(import.meta.url);
-const W = join(homedir(), 'Projects/sleight-wt');
 // The release build's own harness, frozen during the sitting (one build for every queue).
-export const ROOT = join(W, 'p143');
-export const OUT = join(W, 'race-1017/cursor150');
+export const ROOT = resolve(process.env.SLEIGHT_CURSOR_QUEUE_ROOT || join(dirname(HERE), '../../../..'));
+export const OUT = benchEvidencePath('race-1017/cursor150');
 export const NATIVE = 'calculator-click,calculator-menu,textedit-save,textedit-drag,finder-move,preview-read,textedit-calculator,word-edit,excel-edit,vscode-edit,textedit-edit,finder-rename,finder-create-folder,textedit-two-windows,textedit-window-drag,textedit-replace-save,textedit-insert-line,word-memo,word-brief,textedit-notes-table,cc-list-native';
 export const CHROME = 'form-travel,form-settings,form-checkout,form-settings-helium,shipping-link,size-guide,demoid,mobile,handoff,inject-order,inject-mail,wikipedia,mdn';
 const quote = value => "'" + String(value).replaceAll("'", "'\\''") + "'";
@@ -134,15 +134,19 @@ export async function execute(call, logFile, { planning = false, onChild = () =>
 }
 
 export async function admission(preflight) {
-  let interrupted = false;
-  const stop = () => { interrupted = true; }, hangup = () => {};
-  process.on('SIGINT', stop); process.on('SIGTERM', stop); process.on('SIGHUP', hangup);
+  const controller = new AbortController();
+  const stop = () => controller.abort();
+  for (const signal of ['SIGINT', 'SIGTERM', 'SIGHUP']) process.on(signal, stop);
   try {
     // Admission only reads state and may compile the fixed host helper. Let those owned
     // bounded children settle before this process exits, including after an interrupt.
-    await preflight(); return interrupted ? 130 : 0;
+    await preflight(controller.signal); return controller.signal.aborted ? 130 : 0;
+  } catch (error) {
+    const code = benchmarkStopCode(error, controller.signal);
+    if (!code) throw error;
+    console.error(error.message); return code;
   } finally {
-    process.removeListener('SIGINT', stop); process.removeListener('SIGTERM', stop); process.removeListener('SIGHUP', hangup);
+    for (const signal of ['SIGINT', 'SIGTERM', 'SIGHUP']) process.removeListener(signal, stop);
   }
 }
 
@@ -235,7 +239,7 @@ async function main(argv) {
     if (argv.length !== 2 || argv[1] !== '--owner-says-cursor-free') requireOwnerFree();
     const { DesktopDriver } = await import('./desktop.mjs');
     const { armPaths } = await import('./contract.mjs');
-    process.exitCode = await admission(() => new DesktopDriver().preflight({ paths: armPaths(), ownerSaysCursorFree: true })); return;
+    process.exitCode = await admission(signal => new DesktopDriver().preflight({ paths: armPaths(), ownerSaysCursorFree: true }, { signal })); return;
   }
   const [script, ...options] = argv;
   if (!script) throw Error('Use ledger/p142/cursor150/queue.sh');

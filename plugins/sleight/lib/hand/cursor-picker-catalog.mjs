@@ -17,7 +17,14 @@ function fingerprint(folder) {
     if (!st.isDirectory() || st.isSymbolicLink() || fs.realpathSync(folder) !== folder) return;
     const names = fs.readdirSync(folder).sort();
     if (names.length > 9) return;
-    return [stamp(folder), ...names.map(name => name + ':' + stamp(join(folder, name)))].join('|');
+    const entries = [stamp(folder), ...names.map(name => name + ':' + stamp(join(folder, name)))];
+    if (names.includes('stage')) {
+      const directory = join(folder, 'stage'), st = fs.lstatSync(directory);
+      if (!st.isDirectory() || st.isSymbolicLink()) return;
+      const strips = fs.readdirSync(directory).sort(); if (strips.length > 24) return;
+      entries.push(...strips.map(name => 'stage/' + name + ':' + stamp(join(directory, name))));
+    }
+    return entries.join('|');
   } catch { return; }
 }
 function buildBank({ root, uid, builtin = false }) {
@@ -47,10 +54,11 @@ function buildBank({ root, uid, builtin = false }) {
       try {
         const pack = builtin ? checkBuiltinCharacter(id, { builtinRoot: root, uid }) : checkCharacter(id, { root, uid });
         entry.character.name = pack.manifest.name;
+        entry.character.stage = pack.stage.available;
         const frame = characterFrame(pack, { nonce: '0'.repeat(64), seq: 0, resolve: resolveCharacterStates });
         const idle = frame.table.idle;
         frame.table = { idle: { ...idle, frames: [idle.frames[0]], ms: [100], loop: false } };
-        delete frame.perch; delete frame.perchSheet; delete frame.lines; // a thumbnail is the idle cell alone
+        delete frame.perch; delete frame.perchSheet; delete frame.lines; delete frame.stage; // a thumbnail is the idle cell alone
         const digest = createHash('sha256').update(JSON.stringify(frame)).update(pack.files.get(pack.manifest.sheet));
         if (pack.manifest.extra) digest.update(pack.files.get(pack.manifest.extra));
         entry.thumbnail = { id, key: digest.digest('hex'), frame }; hashes++;

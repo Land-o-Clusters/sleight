@@ -1,3 +1,4 @@
+import { testChromiumExecutable, readTestDevToolsPort, launchTestChromiumContext, closeTestChromium } from './fixtures/chromium-isolated.mjs';
 import { trackTemp } from '../scripts/temp-leftovers.mjs';
 // Loopback pages and disposable headless Chromium only. No engine, owner browser or app UI.
 import test from 'node:test';
@@ -16,8 +17,7 @@ import { createDownloadStore } from '../plugins/sleight/lib/direct-browser/downl
 import { loadPlaywrightCore } from '../plugins/sleight/lib/direct-browser/worlds.mjs';
 
 const spec = JSON.parse(readFileSync(new URL('../plugins/sleight/vendor/playwright-core/browsers.json', import.meta.url))).browsers.find(b => b.name === 'chromium-headless-shell');
-const executable = join(homedir(), 'Library/Caches/ms-playwright', 'chromium_headless_shell-' + spec.revision,
-  'chrome-headless-shell-' + (process.platform === 'darwin' ? 'mac-' + process.arch : 'linux64'), 'chrome-headless-shell');
+const executable = testChromiumExecutable({ revision: spec.revision });
 const skip = process.env.SLEIGHT_LIVE_DOM_TEST !== '1' && 'requires the headless loopback harness';
 const statement = Buffer.from('date,total\n2026-10-24,42\n');
 const hash = bytes => createHash('sha256').update(bytes).digest('hex');
@@ -76,26 +76,28 @@ async function fixture(t, message = 'Download the statement.', options = {}) {
   });
   t.after(async () => {
     active = false;
-    let failure;
     try {
-      const receipt = await runtime?.end();
-      if (receipt) assert.deepEqual(receipt.cleanup, []);
-      assert.deepEqual(losses, []);
-    } catch (error) { failure = error; }
-    try {
-      for (const collect of [() => browser?.close(), () => filter?.dispose(), () => listener?.close(), () => selected?.disconnect(selected.session), () => context?.close()])
-        try { await collect(); } catch (error) { failure ||= error; }
+      await closeTestChromium(context, async () => {
+        let failure;
+        try {
+          const receipt = await runtime?.end();
+          if (receipt) assert.deepEqual(receipt.cleanup, []);
+          assert.deepEqual(losses, []);
+        } catch (error) { failure = error; }
+        for (const collect of [() => browser?.close(), () => filter?.dispose(), () => listener?.close(), () => selected?.disconnect(selected.session), () => context?.close()])
+          try { await collect(); } catch (error) { failure ||= error; }
+        if (failure) throw failure;
+      });
     } finally {
       server.closeAllConnections(); if (server.listening) await new Promise(resolve => server.close(resolve));
       rmSync(root, { recursive: true, force: true });
     }
     assert.equal(existsSync(root), false);
-    if (failure) throw failure;
   });
   await new Promise(resolve => server.listen(0, '127.0.0.1', resolve)); origin = 'http://127.0.0.1:' + server.address().port;
   const { inprocess } = loadPlaywrightCore({ turbo: true });
-  context = await inprocess.playwright.chromium.launchPersistentContext(root, { executablePath: executable, headless: true, args: ['--remote-debugging-port=0'], viewport: null });
-  const port = readFileSync(join(root, 'DevToolsActivePort'), 'utf8').trim().split('\n')[0], pid = process.pid, start = Date.now() - 600000;
+  context = await launchTestChromiumContext(inprocess.playwright.chromium, root, { executablePath: executable, headless: true, args: ['--remote-debugging-port=0'], viewport: null });
+  const port = (await readTestDevToolsPort(root))[0], pid = process.pid, start = Date.now() - 600000;
   symlinkSync(hostname() + '-' + pid, join(root, 'SingletonLock'));
   selected = await createSelectedConnection({ config: { profileRoot: root, executable }, testDependencies: {
     processMetadata: async () => ({ uid: process.getuid(), pid, start, incarnation: `p${pid}-s${start}-u1` }),

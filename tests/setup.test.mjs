@@ -4,6 +4,8 @@ import { mkdtemp, mkdir, readFile, rm, writeFile } from 'node:fs/promises';
 import { existsSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import childProcess from 'node:child_process';
+import { syncBuiltinESMExports } from 'node:module';
 import { resolveServer } from '../plugins/sleight/lib/launch.mjs';
 import { serverFromChatGPTApp, setup } from '../plugins/sleight/lib/setup.mjs';
 import { trackTemp } from '../scripts/temp-leftovers.mjs';
@@ -97,6 +99,12 @@ async function installerCalls(logFile) {
   return text.trim() ? text.trim().split('\n') : [];
 }
 
+function mockVersionRead(t, run) {
+  t.mock.method(childProcess, 'execFileSync', run);
+  syncBuiltinESMExports();
+  t.after(() => { t.mock.restoreAll(); syncBuiltinESMExports(); });
+}
+
 test('setup stops when ChatGPT.app is missing', async () => {
   const lines = [];
   const opened = [];
@@ -109,9 +117,96 @@ test('setup stops when ChatGPT.app is missing', async () => {
     resolveServer: () => assert.fail('resolveServer'),
   });
   assert.equal(code, 1);
-  assert.match(lines.join('\n'), /install.*ChatGPT/i);
+  assert.match(lines.join('\n'), /ChatGPT\.app not found\. Install the ChatGPT desktop app/);
+  assert.doesNotMatch(lines.join('\n'), /timed out/i);
   assert.deepEqual(opened, []);
   assert.deepEqual(doctors, []);
+});
+
+for (const command of ['/usr/bin/plutil', '/usr/bin/defaults']) {
+  test(`setup reports a ${command.split('/').at(-1)} version timeout and stops before installation`, async t => {
+    const bundle = await fakeBundle(t);
+    const h = harness(bundle), calls = [];
+    mockVersionRead(t, file => {
+      calls.push(file);
+      if (file === command) throw Object.assign(new Error(`spawnSync ${file} ETIMEDOUT`), { code: 'ETIMEDOUT', signal: 'SIGKILL' });
+      throw Object.assign(new Error('invalid plist'), { status: 1 });
+    });
+    const code = await setup(h.opts);
+    assert.equal(code, 1);
+    assert.match(h.lines.join('\n'), /version.*timed out/i);
+    assert.match(h.lines.join('\n'), new RegExp(command.split('/').at(-1)));
+    assert.match(h.lines.join('\n'), /run setup again/i);
+    assert.doesNotMatch(h.lines.join('\n'), /not found|Install the ChatGPT desktop app/);
+    assert.deepEqual(calls, ['/usr/bin/plutil', '/usr/bin/defaults']);
+    assert.deepEqual(await installerCalls(bundle.logFile), []);
+    assert.deepEqual(h.opened, []);
+    assert.deepEqual(h.doctors, []);
+  });
+}
+
+test('setup still uses defaults when plutil fails without timing out', async t => {
+  const bundle = await fakeBundle(t);
+  const h = harness(bundle), calls = [];
+  mockVersionRead(t, file => {
+    calls.push(file);
+    if (file === '/usr/bin/plutil') throw Object.assign(new Error('invalid plist'), { status: 1 });
+    assert.equal(file, '/usr/bin/defaults');
+    return '26.0\n';
+  });
+  assert.equal(await setup({ ...h.opts, dryRun: true }), 0);
+  assert.deepEqual(calls, ['/usr/bin/plutil', '/usr/bin/defaults']);
+  assert.match(h.lines.join('\n'), /ChatGPT\.app 26\.0/);
+  assert.deepEqual(await installerCalls(bundle.logFile), []);
+  assert.deepEqual(h.opened, []);
+});
+
+test('setup uses defaults when plutil times out', async t => {
+  const bundle = await fakeBundle(t);
+  const h = harness(bundle), calls = [];
+  mockVersionRead(t, file => {
+    calls.push(file);
+    if (file === '/usr/bin/plutil') throw Object.assign(new Error('spawnSync plutil ETIMEDOUT'), { code: 'ETIMEDOUT', signal: 'SIGKILL' });
+    return '26.0\n';
+  });
+  assert.equal(await setup({ ...h.opts, dryRun: true }), 0);
+  assert.deepEqual(calls, ['/usr/bin/plutil', '/usr/bin/defaults']);
+  assert.match(h.lines.join('\n'), /ChatGPT\.app 26\.0/);
+  assert.doesNotMatch(h.lines.join('\n'), /timed out|not found/);
+});
+
+test('setup names both readers when both time out', async t => {
+  const bundle = await fakeBundle(t);
+  const h = harness(bundle);
+  mockVersionRead(t, file => { throw Object.assign(new Error(`spawnSync ${file} ETIMEDOUT`), { code: 'ETIMEDOUT' }); });
+  assert.equal(await setup(h.opts), 1);
+  assert.match(h.lines.join('\n'), /version check timed out \(plutil and defaults, 30 seconds\)/);
+  assert.doesNotMatch(h.lines.join('\n'), /not found/);
+  assert.deepEqual(h.doctors, []);
+});
+
+test('setup reports an unreadable version separately from a missing app', async t => {
+  const bundle = await fakeBundle(t);
+  const h = harness(bundle);
+  mockVersionRead(t, () => {
+    throw Object.assign(new Error('invalid plist'), { status: 1 });
+  });
+  assert.equal(await setup(h.opts), 1);
+  assert.match(h.lines.join('\n'), /could not read.*version/i);
+  assert.match(h.lines.join('\n'), /run setup again/i);
+  assert.doesNotMatch(h.lines.join('\n'), /not found|timed out/);
+  assert.deepEqual(await installerCalls(bundle.logFile), []);
+  assert.deepEqual(h.opened, []);
+  assert.deepEqual(h.doctors, []);
+});
+
+test('fallback server resolution keeps bundle metadata when the version reader times out', async t => {
+  const bundle = await fakeBundle(t);
+  mockVersionRead(t, () => { throw Object.assign(new Error('version read timed out'), { code: 'ETIMEDOUT' }); });
+  const server = serverFromChatGPTApp({ app: bundle.app, env: { CODEX_HOME: bundle.codexHome } });
+  assert.equal(server.error, undefined);
+  assert.equal(server.version, 'bundle');
+  assert.equal(server.command, join(bundle.app, NODE_REL));
 });
 
 test('setup skips install when installer status is OK', async t => {

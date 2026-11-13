@@ -5,9 +5,20 @@ ObjC.import('CoreGraphics');
 // sleight's own consent host (its menu bar glove, approval and payment cards) is the binary sleight builds in its helper
 // cache. Only the person's click answers it, so no local tool acts on that process (own-host.mjs).
 const OWN_HOST_LINE = "That is sleight's own confirmation window; only you can answer it.";
+const GLIDE_ENGINE_LINE = "That is sleight's Glide engine; tools never act on it.";
+// Refusal classification only. C wins for an old driver still named consent-host.
+function ownHostLine(values) {
+  const names = values.map(value => String(value ?? '').trim().replace(/^.*\//, '').replace(/\.app$/i, '').toLowerCase().replace(/[^a-z0-9]/g, ''));
+  const cache = /\/Library\/Caches\/sleight\/turbo-host\//i;
+  const driver = /\/Library\/Caches\/sleight\/turbo-host\/mac-driver\//i;
+  const prebuilt = /\/lib\/mac-driver\/prebuilt\/darwin-arm64\/glide-engine(?:\/|$)/i;
+  if (names.includes('consenthost') || values.some(value => cache.test(value) && !driver.test(value))) return OWN_HOST_LINE;
+  if (names.includes('glideengine') || values.some(value => driver.test(value) || prebuilt.test(value))) return GLIDE_ENGINE_LINE;
+  return undefined;
+}
 function ownHost(app) {
   const read = fn => { try { return String(ObjC.unwrap(fn()) ?? ''); } catch (e) { return ''; } };
-  return /\/Library\/Caches\/sleight\/turbo-host\//i.test(read(() => app.executableURL.path)) || /^consent-host$/i.test(read(() => app.localizedName).trim());
+  return ownHostLine([read(() => app.localizedName), read(() => app.executableURL.path), read(() => app.bundleURL.path)]);
 }
 
 function performHover(request, native) {
@@ -32,6 +43,8 @@ function performHover(request, native) {
       }
     };
     check();
+    if (typeof sleightPlaceHand === 'function') sleightPlaceHand({ hand: 'aim', kind: 'move', pid: target.pid, windowId: target.windowId,
+      at: [point.x, point.y], windowRect: [target.bounds.X, target.bounds.Y, target.bounds.Width, target.bounds.Height] });
     // A slow or missing hand acknowledgement must stop before pointer or focus takeover.
     // Keep future frames held through the dwell and screenshot, and release on every exit.
     restoreHand = native.hideHand?.();
@@ -56,6 +69,9 @@ function performHover(request, native) {
     result.at = at;
     result.waitMs = waitMs;
     result.windowTitle = target.windowTitle;
+    if (Number.isSafeInteger(target.pid) && Number.isSafeInteger(target.windowId) && target.bounds)
+      result._sleightHand = { hand: 'aim', kind: 'move', pid: target.pid, windowId: target.windowId,
+        at: [point.x, point.y], windowRect: [target.bounds.X, target.bounds.Y, target.bounds.Width, target.bounds.Height] };
     result.ok = true;
   } catch (err) { result.error = String(err.message || err); }
   finally {
@@ -147,7 +163,8 @@ function nativeHover() {
         if ([ObjC.unwrap(app.localizedName), ObjC.unwrap(app.bundleIdentifier),
           app.bundleURL.isNil() ? null : ObjC.unwrap(app.bundleURL.path)].includes(name)) found.push(app);
       }
-      if (found.some(ownHost)) throw new Error(OWN_HOST_LINE);
+      const own = found.map(ownHost).find(Boolean);
+      if (own) throw new Error(own);
       if (found.length !== 1) throw new Error('hover needs exactly one running app');
       return { app: found[0], pid: found[0].processIdentifier };
     },

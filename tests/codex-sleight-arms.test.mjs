@@ -1,3 +1,4 @@
+import { assertChildStatus } from './fixtures/child-status.mjs';
 // The sleight-in-Codex benchmark arms (LAWS, 2026-10-18): codex-sleight on gpt-6-luna and codex-sleight-sol on gpt-6.1-sol.
 // Plans, config.toml content, the approval proxy and its guards. No app, browser, model or Codex login is touched.
 import test from 'node:test';
@@ -152,14 +153,14 @@ test('config.toml text: strings are escaped, servers keep their order, and Codex
   assert.deepEqual(toml.match(/^\[mcp_servers\.[^\]]+\]/gm), ['[mcp_servers.one]', '[mcp_servers.one.env]', '[mcp_servers.two]', '[mcp_servers.two.env]']);
   assert.match(toml, /^approval_policy = "never"$/m); assert.match(toml, /^web_search = "disabled"$/m); assert.match(toml, /^computer_use = false$/m);
   assert.match(toml, /K = "v \\"q\\""/);
-  if (spawnSync('codex', ['--version']).status !== 0) return t.skip('codex is not installed');
+  if (spawnSync('codex', ['--version'], { timeout: 60000, killSignal: 'SIGKILL' }).status !== 0) return t.skip('codex is not installed');
   // Codex parses and validates the real plans' files (an unknown value for a known key is an error). `mcp list` starts no server.
   for (const [surface] of MODELS) for (const browser of [firefox, chrome]) {
     const home = temporary(t);
     const setup = realAgentSetup({ task: { ...raceTask, browser: browser.browser }, surface, dir: '/tmp/x', realBrowser: browser, dryRun: true });
     writeCodexSleightConfig(setup.codexConfig.toml, home);
-    const listed = spawnSync('codex', ['mcp', 'list', '--json'], { encoding: 'utf8', env: { ...process.env, CODEX_HOME: home } });
-    assert.equal(listed.status, 0, listed.stderr);
+    const listed = spawnSync('codex', ['mcp', 'list', '--json'], { encoding: 'utf8', env: { ...process.env, CODEX_HOME: home }, timeout: 60000, killSignal: 'SIGKILL' });
+    assertChildStatus(listed, 0, listed.stderr);
     assert.deepEqual(JSON.parse(listed.stdout).map(server => server.name), setup.codexConfig.servers);
   }
 });
@@ -224,9 +225,14 @@ test('race policy: the round\'s browser and hand-off apps are accepted, everythi
 
 test('bench policy: the claim and world suites\' allowlist, from approve.mjs', async () => {
   const world = { BENCH_SUITE: 'world', BENCH_WORLD_TASKS: '["calculator-click","slack-post","textedit-save"]' };
-  const form = { properties: { choice: { enum: ['once', 'session'] }, remember: { enum: ['This session', 'Always'] } } };
+  const form = { properties: { choice: { enum: ['once', 'session'] } } };
   const accepted = await answerElicitation(engineForm('Calculator', form), { policy: 'bench', env: world });
   assert.deepEqual([accepted.action, accepted.content], ['accept', { choice: 'session' }]);
+  const rememberForm = { properties: { remember: { enum: ['This session', 'Always'], default: 'This session' } } };
+  const remembered = await answerElicitation(engineForm('Calculator', rememberForm), { policy: 'bench', env: world });
+  assert.deepEqual([remembered.action, remembered.content], ['accept', {}], 'the Codex proxy omits remember and keeps the session default');
+  const mixedForm = { properties: { ...form.properties, ...rememberForm.properties } };
+  assert.equal((await answerElicitation(engineForm('Calculator', mixedForm), { policy: 'bench', env: world })).action, 'decline');
   assert.equal((await answerElicitation(engineForm('Terminal', form), { policy: 'bench', env: world })).action, 'decline');
   assert.equal((await answerElicitation(engineForm('Firefox', form), { policy: 'bench', env: world })).action, 'decline', 'the selected world tasks have no Firefox');
   assert.equal((await answerElicitation(engineForm('Slack', form), { policy: 'bench', env: world })).action, 'accept');

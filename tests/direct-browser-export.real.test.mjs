@@ -1,6 +1,8 @@
+import { testChromiumExecutable, launchTestChromium } from './fixtures/chromium-isolated.mjs';
 import { trackTemp } from '../scripts/temp-leftovers.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { randomUUID } from 'node:crypto';
 import { createServer } from 'node:http';
 import fs from 'node:fs';
 import { homedir, tmpdir } from 'node:os';
@@ -15,9 +17,7 @@ import { exportTableFixture, gradeTableExport } from '../bench/export-table.mjs'
 
 const pin = JSON.parse(fs.readFileSync(new URL('../plugins/sleight/vendor/playwright-core/browsers.json', import.meta.url)))
   .browsers.find(browser => browser.name === 'chromium-headless-shell');
-const platform = process.platform === 'darwin' ? 'mac-' + process.arch : 'linux64';
-const executablePath = join(homedir(), 'Library/Caches/ms-playwright', 'chromium_headless_shell-' + pin.revision,
-  'chrome-headless-shell-' + platform, 'chrome-headless-shell');
+const executablePath = testChromiumExecutable({ revision: pin.revision });
 const skip = process.env.SLEIGHT_LIVE_DOM_TEST !== '1' ? 'set SLEIGHT_LIVE_DOM_TEST=1 for headless loopback fixtures'
   : !fs.existsSync(executablePath) ? 'pinned Chromium headless shell is unavailable' : false;
 const options = { skip, timeout: 30000 };
@@ -25,14 +25,20 @@ const ctx = text => ({ userMessage: () => ({ source: 'user', text }) });
 
 async function fixture(t, html) {
   const sockets = new Set(), requests = [];
-  const server = createServer((request, response) => { requests.push([request.method, request.url]); response.setHeader('Content-Type', 'text/html; charset=utf-8'); response.end(html); });
+  const prefix = '/' + randomUUID() + '/';
+  const server = createServer((request, response) => {
+    // A delayed client may reach a reused port. Only this fixture's URLs count.
+    if (!request.url.startsWith(prefix)) { request.resume(); response.writeHead(404).end(); return; }
+    requests.push([request.method, '/' + request.url.slice(prefix.length)]);
+    response.setHeader('Content-Type', 'text/html; charset=utf-8'); response.end(html);
+  });
   server.on('connection', socket => { sockets.add(socket); socket.on('close', () => sockets.delete(socket)); });
   await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
   t.after(() => { for (const socket of sockets) socket.destroy(); return new Promise(resolve => server.close(resolve)); });
-  const browser = await chromium.launch({ headless: true, executablePath });
+  const browser = await launchTestChromium(chromium, { headless: true, executablePath });
   t.after(() => browser.close());
   const page = await browser.newPage();
-  await page.goto('http://127.0.0.1:' + server.address().port);
+  await page.goto('http://127.0.0.1:' + server.address().port + prefix);
   const root = trackTemp(fs.mkdtempSync(join(fs.realpathSync(tmpdir()), 'sleight-export-real-')));
   t.after(() => fs.rmSync(root, { recursive: true, force: true }));
   return { page, browser, root, requests };
@@ -56,6 +62,24 @@ function parseCSV(text) {
   }
   assert.equal(quote, false); return rows;
 }
+test('FL3 export fixture rejects stray requests without logging them', options, async t => {
+  const f = await fixture(t, '<ul><li>owned fixture</li></ul>');
+  const other = await fixture(t, '<ul><li>another fixture</li></ul>');
+  const url = new URL(f.page.url());
+  const foreignPath = new URL(other.page.url()).pathname;
+  const responses = [];
+  for (const path of ['/style.css', foreignPath, foreignPath + 'style.css', url.pathname.slice(0, -1) + '-other/style.css']) {
+    const response = await fetch(new URL(path, url));
+    responses.push([path, response.status, await response.text()]);
+  }
+  assert.deepEqual(f.requests, [['GET', '/']]);
+  for (const [path, status, body] of responses) { assert.equal(status, 404, path); assert.equal(body, ''); }
+  assert.notEqual(url.pathname, foreignPath, 'each server owns a different path prefix');
+  // An unexpected request carrying this fixture's prefix must still be logged.
+  const owned = await fetch(new URL('style.css', url));
+  assert.equal(owned.status, 200); await owned.text();
+  assert.deepEqual(f.requests, [['GET', '/'], ['GET', '/style.css']]);
+});
 test('200 rows beyond the snapshot cap export exactly as CSV and JSON, with only a receipt returned', options, async t => {
   const source = exportTableFixture(17), f = await fixture(t, source.html.replace('<table ', '<table aria-rowcount="201" ')), ref = await refFor(f.page, 'table', 'Prices');
   const capped = await snapshot(f.page, { maxChars: 40000 }); acknowledgeSnapshot(f.page, capped.number);

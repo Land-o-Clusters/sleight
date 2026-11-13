@@ -10,6 +10,7 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 import { windowFromText } from '../plugins/sleight/lib/document-scope.mjs';
 import { acquireLiveLock } from './live-lock.mjs';
 import { trackTemp } from '../scripts/temp-leftovers.mjs';
+import { assertRereadReview, assertReviewDiff } from './change-review-list.mjs';
 
 const ROOT = dirname(dirname(fileURLToPath(import.meta.url)));
 const rereadMode = process.argv.slice(2).includes('--reread');
@@ -110,9 +111,7 @@ try {
       await call('js', { code: `await ${trial.handle}.selectText(2,"beta"); await ${trial.handle}.typeText("delta"); await ${trial.handle}.pressKey("super+s"); await ${trial.handle}.getAXState()` });
       assert.equal(await readFile(trial.path, 'utf8'), edited);
       const listing = await call('review_changes', { op: 'list' });
-      const section = texts(listing).split(/\n\n(?=[^\n]+: \/[^\n]+\nDecision: )/).find(t => t.startsWith(basename(trial.path) + ':'));
-      assert.match(section ?? '', /Undo starts at the later copy/);
-      assert.match(section ?? '', /-alpha beta gamma\n\+alpha delta gamma/);
+      assertRereadReview(texts(listing), trial.path);
       stages.push({ trial: trial.name, path: trial.path, openId: Number(openId), contents: edited, verdict: 'PASS' });
       console.log(`PASS: ${trial.name} reread captured its later copy, edit saved.`);
       await fixture('close', trial.path, trial.path);
@@ -128,8 +127,8 @@ try {
     assert.equal(await readFile(path, 'utf8'), content);
   }
   const listing = await call('review_changes', { op: 'list' });
-  assert.match(texts(listing), /-UNDO ORIGINAL\n\+UNDO AGENT CHANGE/);
-  assert.match(texts(listing), /-KEEP ORIGINAL\n\+KEEP AGENT CHANGE/);
+  assertReviewDiff(texts(listing), 'UNDO ORIGINAL', 'UNDO AGENT CHANGE');
+  assertReviewDiff(texts(listing), 'KEEP ORIGINAL', 'KEEP AGENT CHANGE');
   // Close saved buffers before restoring bytes, to avoid a later autosave.
   await fixture('close');
   console.log('Both saved files changed. The two review panels now show their diffs.');

@@ -1,3 +1,4 @@
+import { testChromiumExecutable, launchTestChromiumContext, closeTestChromium } from './chromium-isolated.mjs';
 import assert from 'node:assert/strict';
 import { createServer } from 'node:http';
 import { existsSync, readFileSync, mkdtempSync, mkdirSync, writeFileSync, realpathSync, rmSync } from 'node:fs';
@@ -12,8 +13,7 @@ import { createPageRegistry, backgroundClick } from '../../plugins/sleight/lib/d
 const pin = JSON.parse(readFileSync(new URL('../../plugins/sleight/vendor/playwright-core/browsers.json', import.meta.url)))
   .browsers.find(browser => browser.name === 'chromium');
 const executablePath = process.platform === 'darwin'
-  ? join(homedir(), 'Library/Caches/ms-playwright', 'chromium-' + pin.revision, 'chrome-mac-' + process.arch,
-    'Google Chrome for Testing.app/Contents/MacOS/Google Chrome for Testing')
+  ? testChromiumExecutable({ headless: false, revision: pin.revision })
   : join(homedir(), 'Library/Caches/ms-playwright', 'chromium-' + pin.revision, 'chrome-linux64/chrome');
 export const skip = process.env.SLEIGHT_LIVE_DOM_TEST !== '1' ? 'real-page qualification belongs to sleight-arch host runner'
   : !existsSync(executablePath) ? 'pinned Chromium headless shell is unavailable' : false;
@@ -32,8 +32,10 @@ export async function fixture(t, html, routes = {}, { observeTabs = false, smoot
   server.on('connection', socket => { sockets.add(socket); socket.on('close', () => sockets.delete(socket)); });
   t.after(async () => {
     try {
-      if (registry) assert.equal((await registry.endTurn()).cleanedUp, true);
-      await context?.close();
+      await closeTestChromium(context, async () => {
+        try { if (registry) assert.equal((await registry.endTurn()).cleanedUp, true); }
+        finally { await context?.close(); }
+      });
     } finally {
       for (const socket of sockets) socket.destroy();
       if (server.listening) await new Promise(resolve => server.close(resolve));
@@ -57,7 +59,7 @@ export async function fixture(t, html, routes = {}, { observeTabs = false, smoot
     writeFileSync(join(extension, 'worker.js'), 'chrome.runtime.onInstalled.addListener(() => {});');
     args.push('--disable-extensions-except=' + extension, '--load-extension=' + extension);
   }
-  context = await inprocess.playwright.chromium.launchPersistentContext(profile, { headless: true, executablePath, args,
+  context = await launchTestChromiumContext(inprocess.playwright.chromium, profile, { headless: true, executablePath, args,
     ...(nativeViewport ? { viewport: null } : {}),
     ...(deviceScaleFactor === undefined ? {} : { deviceScaleFactor }),
     ...(observeTabs ? { channel: 'chromium', ignoreDefaultArgs: ['--disable-extensions'] } : {}) });

@@ -1,12 +1,15 @@
+import { offlineDoctor } from './fixtures/preapproved-storage.mjs';
+import { assertChildStatus } from './fixtures/child-status.mjs';
 // Constructed macOS paths are synthetic validation and redaction data, never allocation roots.
 const MAC_USERS = ['', 'Users', ''].join('/');
 import test from 'node:test';
+import { pageSiteCases } from './fixtures/page-site-cases.mjs';
 import assert from 'node:assert/strict';
 import { chmodSync, existsSync, lstatSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, realpathSync, rmSync, symlinkSync, utimesSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { registerTemp, trackTemp } from '../scripts/temp-leftovers.mjs';
-import { appRefusal, createPermissionCheck, lastUse, noteCurrentApp, pageRefusal, pageSite, permissionsPath, readPermissions, siteRefusal, stampUse, usedWords }
+import { appRefusal, createPermissionCheck, lastUse, noteCurrentApp, pageRefusal, pageSite, pageSiteRefusal, permissionsPath, readPermissions, siteRefusal, stampUse, usedWords }
   from '../plugins/sleight/lib/permissions.mjs';
 import { applyMenuEvent, blockSiteForUser, grantUses, permissionsCommand, permissionsDoctorLines, permissionsMenu } from '../plugins/sleight/lib/permissions-command.mjs';
 import { SiteMemory } from '../plugins/sleight/lib/site-memory.mjs';
@@ -428,11 +431,13 @@ test('the doctor: an unsafe file is the one problem, with its fix; otherwise cou
 test('the doctor prints the permissions section after the ghost hand\'s, read-only', async t => {
   const w = world(t), lines = [];
   const { doctor } = await import('../plugins/sleight/lib/launch.mjs');
-  const code = await doctor({ settings: () => [], env: { CODEX_HOME: '/no-such-sleight-home', SLEIGHT_CHATGPT_APP: '/no-such-ChatGPT.app' }, log: x => lines.push(x),
+  const code = await doctor({ ...offlineDoctor, settings: () => [], env: { CODEX_HOME: '/no-such-sleight-home', SLEIGHT_CHATGPT_APP: '/no-such-ChatGPT.app' }, log: x => lines.push(x),
+    runtime: () => ({ selected: 'engine', ok: true, lines: [] }), documentation: () => {},
+    codex: () => [], cursor: () => [], grok: () => [], grokbot: () => [],
     turbo: async () => ['turbo (direct browser path)'], hand: async () => ['ghost hand'], permissions: async () => permissionsDoctorLines({ home: w.home }) });
   assert.equal(code, 1);
   assert.match(lines[0], /^sleight \d+\.\d+\.\d+$/);
-  assert.deepEqual(lines.slice(1, 5), ['turbo (direct browser path)', 'ghost hand', 'permissions', 'ok        blocks: none (sleight-mcp permissions lists what sleight may do)']);
+  assert.deepEqual(lines.slice(2, 6), ['turbo (direct browser path)', 'ghost hand', 'permissions', 'ok        blocks: none (sleight-mcp permissions lists what sleight may do)']);
   assert.equal(existsSync(w.path), false);
 });
 
@@ -453,8 +458,8 @@ test('a write the reader would refuse never happens, and the menu leaves out a r
 test('without a terminal the launcher refuses an unknown permissions op (VC5S), exit 3, and reads nothing', async () => {
   const { spawnSync } = await import('node:child_process');
   const launch = new URL('../plugins/sleight/lib/launch.mjs', import.meta.url).pathname;
-  const run = spawnSync(process.execPath, [launch, 'permissions', 'frobnicate'], { encoding: 'utf8', timeout: 30000 });
-  assert.equal(run.status, 3, run.stderr);
+  const run = spawnSync(process.execPath, [launch, 'permissions', 'frobnicate'], { encoding: 'utf8', timeout: 30000, killSignal: 'SIGKILL' });
+  assertChildStatus(run, 3, run.stderr);
   assert.match(run.stderr, /^sleight: permissions frobnicate changes sleight's settings, so run it yourself in a terminal/);
   assert.equal(run.stdout, '');
 });
@@ -507,13 +512,22 @@ const safari = url => 'Window: "Personal — HP 24yh 23.8" IPS LED Full HD Monit
   `\t5 HTML content Description: HP monitor, URL: ${url}\n\t\t13 link Shop now, Value: bestbuy.com/top-deals`;
 const firefox = 'Window: "Mozilla Firefox", App: Firefox.\n0 standard window Mozilla Firefox\n\t14 container\n' +
   '\t\t17 combo box (settable) Description: Search with Google or enter address, Value: https://example.test/\n\t\t\t18 text https://example.test/';
+
+// G9/h37: every raw area counts, regardless of its depth or position.
+for (const { name, text, expected, window } of pageSiteCases) {
+  test(`G9 site proof and refusal: ${name}`, () => {
+    assert.deepEqual(pageSiteRefusal(text, window, page => page), expected);
+    assert.deepEqual(pageSite(text, window), expected?.host && !window?.url ? { unproven: true } : expected);
+  });
+}
+
 test('the site an engine read shows: a web area\'s URL with or without scheme, nothing from an address bar, and no guess between two', () => {
-  assert.deepEqual(pageSite(safari('bestbuy.com/product/hp-24yh/JJ86HQ9R94')), { host: 'bestbuy.com' });
-  assert.deepEqual(pageSite(safari('https://www.bestbuy.com/x')), { host: 'www.bestbuy.com', scheme: 'https' });
+  assert.deepEqual(pageSite(safari('bestbuy.com/product/hp-24yh/JJ86HQ9R94')), { unproven: true });
+  assert.deepEqual(pageSite(safari('https://www.bestbuy.com/x')), { unproven: true });
   assert.deepEqual(pageSite(firefox), undefined, 'no web area: the tree shows no page');
   assert.deepEqual(pageSite('Window: "x", App: Some App.\n0 standard window x\n\t1 button Save'), undefined);
   assert.deepEqual(pageSite('Window: "x", App: B.\n0 standard window x\n\t2 HTML content URL: a.example/x\n\t3 HTML content URL: b.example/y'), { unproven: true });
-  assert.deepEqual(pageSite('Window: "x", App: B.\n0 standard window x\n\t2 HTML content URL: a.example/x\n\t\t3 HTML content URL: ads.example/f'), { host: 'a.example' }, 'only the outermost web areas count');
+  assert.deepEqual(pageSite('Window: "x", App: B.\n0 standard window x\n\t2 HTML content URL: a.example/x\n\t\t3 HTML content URL: ads.example/f'), { unproven: true }, 'without a window URL, nested areas also make the site ambiguous');
   for (const bad of ['about:blank', `file://${MAC_USERS}x/page.html`, 'user@evil.example/x', '']) {
     assert.deepEqual(pageSite(`Window: "x", App: B.\n0 standard window x\n\t2 HTML content URL: ${bad}`), { unproven: true }, bad);
   }
@@ -526,7 +540,7 @@ test('the site proof comes only from the window\'s URL field and the web areas\'
   const site = text => pageSite(text, windowFromText(text));
   // A title that names an allowed site, on a page whose web area shows the real one.
   const title = 'Deals URL: https://allowed.example/';
-  assert.deepEqual(site(`Window: "${title}", App: B.\n0 standard window ${title}, ID: W\n\t5 HTML content URL: evil.example/x`), { host: 'evil.example' });
+  assert.deepEqual(site(`Window: "${title}", App: B.\n0 standard window ${title}, ID: W\n\t5 HTML content URL: evil.example/x`), { unproven: true });
   assert.deepEqual(site(`Window: "${title}", App: B.\n0 standard window ${title}, ID: W\n\t5 button Go`), { unproven: true }, 'a title is no proof, and no web area means no site');
   // A description that carries its own URL: token.
   assert.deepEqual(site('Window: "x", App: B.\n0 standard window x\n\t5 HTML content Description: x URL: allowed.example, URL: evil.example/x'), { unproven: true });
@@ -540,7 +554,7 @@ test('the site proof comes only from the window\'s URL field and the web areas\'
 test('a read without the window\'s root line (a find or a diff) proves no site, so a page-written "HTML content" line can\'t stand in', () => {
   assert.equal(pageSite('\t\t\t9 HTML content Description: x, URL: allowed.example/x\n\t\t\t\t10 button Buy'), undefined);
   assert.equal(pageSite('Window: "x", App: B.\n+ \t\t9 HTML content URL: allowed.example/x'), undefined);
-  assert.deepEqual(pageSite('Window: "x", App: B.\n0 standard window x\n\t2 HTML content URL: a.example/x'), { host: 'a.example' });
+  assert.deepEqual(pageSite('Window: "x", App: B.\n0 standard window x\n\t2 HTML content URL: a.example/x'), { unproven: true });
 });
 
 test('engine-path site lines: a blocked host whatever its scheme, an unlisted host in allow-only mode, and an unprovable page', () => {

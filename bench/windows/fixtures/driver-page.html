@@ -1,0 +1,26 @@
+<!doctype html>
+<html lang="en">
+<meta charset="utf-8">
+<title>Sleight WDR7 page</title>
+<style>body { font: 16px sans-serif; background: white; color: black } input { display: block; width: 500px; margin: 8px }</style>
+<h1>Sleight WDR7 page</h1>
+<label for="wdr7-editor">WDR7 editor</label><input id="wdr7-editor" value="WDR7 initial text">
+<p id="wdr7-chord">Chord: saved 0</p>
+<div id="controls"></div>
+<script>
+// 500 controls, including the editor. No network, storage or account data.
+for (let n = 1; n < 500; n++) {
+  const button = document.createElement('button');
+  button.textContent = `Fixture button ${n}`;
+  button.id = `wdr7-button-${n}`;
+  document.querySelector('#controls').append(button);
+}
+let chords = 0;
+document.addEventListener('keydown', event => {
+  if (event.ctrlKey && event.key.toLowerCase() === 's') {
+    event.preventDefault();
+    document.querySelector('#wdr7-chord').textContent = `Chord: saved ${++chords}`;
+  }
+});
+</script>
+</html>

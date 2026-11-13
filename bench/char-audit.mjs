@@ -8,12 +8,13 @@
 // Hold /tmp/sleight-live.lock while it runs. Needs FowlBrowser's demo server for the local pages (started here) and
 // approves only the benchmark's apps and sites (LAWS).
 import { spawn, execFileSync } from 'node:child_process';
-import { appendFileSync, mkdirSync, readFileSync, readdirSync, existsSync, mkdtempSync, writeFileSync, rmSync } from 'node:fs';
+import { appendFileSync, mkdirSync, readFileSync, existsSync, mkdtempSync, writeFileSync, rmSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { homedir, tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { resultKinds } from './fowl/anatomy.mjs';
+import { readEngine } from './engine-version.mjs';
 
 const REPO = join(dirname(fileURLToPath(import.meta.url)), '..');
 const FOWL = join(homedir(), 'Library/Caches/sleight-bench/fowlbrowser');
@@ -98,7 +99,7 @@ async function session(name, target) {
 if (import.meta.main) {
   loadSdk();
   const sha = execFileSync('git', ['-C', REPO, 'rev-parse', '--short', 'HEAD']).toString().trim();
-  const engine = readdirSync(join(homedir(), '.codex/plugins/cache/openai-bundled/unified-computer-use')).sort().at(-1);
+  const engine = readEngine().version;
   const previous = {};
   if (existsSync(HISTORY)) for (const line of readFileSync(HISTORY, 'utf8').split('\n').filter(Boolean)) { const r = JSON.parse(line); previous[r.target] = r; }
   const only = args.only ? String(args.only).split(',') : Object.keys(TARGETS);

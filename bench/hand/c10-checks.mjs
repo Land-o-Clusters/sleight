@@ -351,7 +351,7 @@ export async function runCheck(id, ctx) {
       else {
         const names = readdirSync(source).filter(name => existsSync(join(source, name, 'character.json')));
         const listed = catalog.installed.filter(c => c.builtin).map(c => c.id);
-        const nativeRows = nativeCatalog.rows.filter(r => names.includes(r.character));
+        const nativeRows = nativeCatalog.rows.flatMap(r => r.children ?? [r]).filter(r => names.includes(r.character));
         writeFileSync(join(directory, 'builtins.json'), JSON.stringify({ bundled: names, listed }), { mode: 0o600 });
         check('built-in character list', names.length > 0 && names.every(name => listed.includes(name)) && nativeRows.length === names.length,
           { bundled: names.length, listed: listed.length, nativeRows: nativeRows.length }, baseline, 'Catalog through the real native parser. Opening the hardware menu remains unverified.');

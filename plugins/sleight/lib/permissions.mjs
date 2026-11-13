@@ -1,3 +1,4 @@
+import { platformPaths, platformJoin } from './platform/paths.mjs';
 // The apps and sites the user told sleight never to act in, and when sleight last used each standing permission. The blocks
 // live in ~/Library/Application Support/sleight/permissions.json, written only by `sleight-mcp permissions` (permissions-command
 // .mjs) and the user's click in sleight's menu, and the write guard keeps Claude's file and shell tools away from it. This module
@@ -7,11 +8,12 @@ import { createHash } from 'node:crypto';
 import { closeSync, constants, lstatSync, mkdirSync, openSync, readFileSync, realpathSync, utimesSync } from 'node:fs';
 import { userInfo } from 'node:os';
 import { isAbsolute, join, normalize } from 'node:path';
+import { observeSettingsFile, readSettingsBytes, trustedSettingsContent, SETTINGS_BUILD_POLICY } from './sealed-settings.mjs';
 
-const support = home => join(home, 'Library/Application Support/sleight');
-export const permissionsPath = (home = userInfo().homedir) => join(support(home), 'permissions.json');
+const support = home => platformPaths({ home }).settings;
+export const permissionsPath = (home = userInfo().homedir) => platformJoin()(support(home), 'permissions.json');
 // One empty file per permission whose modification time is its last use (stampUse). Nothing else is ever written there.
-export const usedFolder = (home = userInfo().homedir) => join(support(home), 'used');
+export const usedFolder = (home = userInfo().homedir) => platformJoin()(support(home), 'used');
 export const BUNDLE_ID = /^[A-Za-z0-9-]+(?:\.[A-Za-z0-9-]+)+$/;
 // The most blocks of each kind, and the file's size limit, which 256 apps with long names and ids fit inside.
 export const LIMIT = 256, PERMISSIONS_BYTES = 262144, ALIASES = 4;
@@ -28,14 +30,17 @@ export function siteOrigin(value) {
 /** { state: 'absent' | 'ok' | 'unsafe', apps: [{ id, name?, aliases? }], sites: [origin], only?: [origin] }. Unsafe is a link,
  *  another owner, a mode other than 0600, or anything but { version: 1, apps, sites, only? } with bundle ids and canonical
  *  origins. aliases are the app's other names (at most 4), so a block by bundle id matches what Claude calls the app. */
-export function readPermissions(path = permissionsPath(), uid = process.getuid()) {
+export function readPermissions(path = permissionsPath(), uid = process.getuid(), { seals } = {}) {
+  const verified = seals ?? observeSettingsFile(path), enforced = verified?.enforcing;
   const empty = state => ({ state, apps: [], sites: [] });
   let stat;
-  try { stat = lstatSync(path); } catch (error) { return empty(error.code === 'ENOENT' ? 'absent' : 'unsafe'); }
+  if (!enforced) try { stat = lstatSync(path); } catch (error) { return empty(error.code === 'ENOENT' ? 'absent' : 'unsafe'); }
   try {
-    if (!isAbsolute(path) || normalize(path) !== path || !stat.isFile() || stat.isSymbolicLink() || realpathSync(path) !== path ||
-        stat.uid !== uid || (stat.mode & 0o777) !== 0o600 || stat.size > PERMISSIONS_BYTES) return empty('unsafe');
-    const data = JSON.parse(readFileSync(path, 'utf8'));
+    if (!enforced && (!isAbsolute(path) || normalize(path) !== path || !stat.isFile() || stat.isSymbolicLink() || realpathSync(path) !== path ||
+        stat.nlink !== 1 || stat.uid !== uid || (stat.mode & 0o777) !== 0o600 || stat.size > PERMISSIONS_BYTES)) return empty('unsafe');
+    const bytes = enforced ? trustedSettingsContent(verified, 'permissions.json', 'deny') : readSettingsBytes(path);
+    if (bytes === undefined) return empty('absent');
+    const data = JSON.parse(bytes);
     const origins = list => Array.isArray(list) && list.length <= LIMIT && list.every(site => siteOrigin(site) === site) && new Set(list).size === list.length;
     if (!data || typeof data !== 'object' || Array.isArray(data) || Object.keys(data).some(key => !['version', 'apps', 'sites', 'only'].includes(key)) ||
         data.version !== 1 || !Array.isArray(data.apps) || data.apps.length > LIMIT || !origins(data.sites) ||
@@ -110,30 +115,50 @@ function webSite(value) {
   catch { return undefined; }
 }
 
-/** The site a browser window shows, from an engine read: { host, scheme? } when the read proves one site, { unproven: true }
- *  when it shows web content without one provable site, and undefined when it shows no web content. Only two things count:
+/** The former reply-based site candidate, retained only for refusal checks: { host, scheme? }, { unproven: true }, or
+ *  undefined when it shows no web content. Only two things count:
  *  the window's URL field (the engine's `URL:` line, or the URL attribute on the window's root line) and the URL attribute
- *  of the outermost web areas ("HTML content"), which must all name one site; Safari writes theirs without a scheme
+ *  of the web areas ("HTML content"), which must all name one site; Safari writes theirs without a scheme
  *  (bestbuy.com/product/…). The page writes the title and the descriptions on those same lines, so a line with more than one
  *  `URL: `, or a title with one, proves nothing. When the window field and the web areas both name a site they must agree.
  *  An address bar's text proves nothing: it may be typed and not loaded. */
-export function pageSite(text, window) {
+function candidateSite(text, window, windowOnly = false) {
   const source = String(text ?? ''), tokens = line => line.match(/URL: /g)?.length ?? 0;
-  // Only a read with the window's root line shows the outermost web area. A find or a diff without it proves nothing, since
-  // the page can label its own element "HTML content", and the window keeps the site an earlier full read proved.
+  // A find or a diff without a root cannot supply even the former candidate.
   if (!/^0 /m.test(source)) return undefined;
-  const fields = [...source.matchAll(/^URL: .*$/gm)].length + [...source.matchAll(/^0 .*$/gm)].reduce((n, line) => n + tokens(line[0]), 0);
+  // Match windowFromText's boundary. Lines before a header or after its first root are never fields.
+  const headers = [...source.matchAll(/^Window: (.*), App: (.+)\r?$/gm)].slice(0, 1);
+  const fieldSources = headers.map((header, i) => {
+    const section = source.slice(header.index + header[0].length, headers[i + 1]?.index);
+    const root = /^0 [^\r\n]*\r?$/m.exec(section);
+    return root ? section.slice(0, root.index + root[0].length) : section;
+  });
+  const count = part => [...part.matchAll(/^URL: .*$/gm)].length + [...part.matchAll(/^0 .*$/gm)].reduce((n, line) => n + tokens(line[0]), 0);
+  const fields = fieldSources.reduce((n, part) => n + count(part), 0), allFields = count(source);
   const web = /^https?:\/\//i.test(window?.url ?? '');
-  // A window field the page may have written is left out, and then only the web areas can prove the site.
-  const fromWindow = web && fields === 1 && !/URL:/i.test(window?.title ?? '') ? webSite(window.url) ?? { unproven: true } : undefined;
+  // An ambiguous window field cannot establish a site.
+  const fromWindow = web && fields === 1 && allFields === fields && !/URL:/i.test(window?.title ?? '') ? webSite(window.url) ?? { unproven: true } : undefined;
+  // Continuation lines can print raw at any depth, so every area must agree, including nested and repeated areas.
+  // These text items carry no engine-only provenance, so an area can only supply a refusal candidate.
   const areas = [...source.matchAll(/^(\t*)\d+ HTML content\b(.*)$/gm)];
   if (!areas.length) return fromWindow ?? (web ? { unproven: true } : undefined);
-  const depth = Math.min(...areas.map(area => area[1].length));
-  const sites = areas.filter(area => area[1].length === depth).map(area => tokens(area[2]) === 1 ? webSite(/URL: ([^\s,]+)/.exec(area[2])?.[1]) : undefined);
+  const sites = areas.map(area => tokens(area[2]) === 1 ? webSite(/URL: ([^\s,]+)/.exec(area[2])?.[1]) : undefined);
   const key = site => { const { host, port } = hostPort(site.host); return `${host}:${port}`; };
   if (sites.some(site => !site) || new Set(sites.map(site => `${site.scheme ?? ''}//${key(site)}`)).size !== 1) return { unproven: true };
   if (fromWindow && (fromWindow.unproven || key(fromWindow) !== key(sites[0]))) return { unproven: true };
-  return fromWindow ?? sites[0];
+  return fromWindow ?? (windowOnly ? { unproven: true } : sites[0]);
+}
+
+// Only the window URL can establish a site. Reply text may revoke access, never grant it.
+export function pageSite(text, window) {
+  return candidateSite(text, window, true);
+}
+
+// Preserve every refusal the old reply parser supplied. A missing candidate means no veto,
+// not permission: the relay must obtain a user answer before input without a window URL.
+export function pageSiteRefusal(text, window, refuse) {
+  const candidate = candidateSite(text, window);
+  return candidate ? refuse(candidate) : undefined;
 }
 
 /** The line for acting in a browser window on the engine path, or undefined. With no site blocks and no allow-only list,
@@ -157,7 +182,8 @@ export function createPermissionCheck({ path = permissionsPath(), uid = process.
   let seen, cached, existed = false;
   const state = () => {
     let key;
-    try { const stat = lstatSync(path); key = `${stat.ino}:${stat.size}:${stat.mtimeMs}`; } catch (error) { key = error.code ?? 'error'; }
+    const statKey = file => { try { const s = lstatSync(file); return [s.dev, s.ino, s.mode, s.uid, s.nlink, s.size, s.mtimeMs, s.ctimeMs].join(':'); } catch (error) { return error.code ?? 'error'; } };
+    key = statKey(path) + (SETTINGS_BUILD_POLICY.enforce ? '|' + statKey(path + '.seal') : '');
     if (key !== seen || !cached) {
       seen = key; cached = read(path, uid);
       if (cached.state === 'ok') existed = true;

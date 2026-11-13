@@ -1,3 +1,4 @@
+import { assertChildStatus } from './fixtures/child-status.mjs';
 // Constructed macOS paths are synthetic validation and redaction data, never allocation roots.
 const MAC_TMP = ['', 'private', 'tmp'].join('/');
 // AS-3 A/B harness: SLEIGHT_BROWSER_CORE through the race's engine arm, the held-out browser tasks, the block runner (with
@@ -38,8 +39,8 @@ test('traceEnv forwards SLEIGHT_BROWSER_CORE=1 only, and abFlags records each A/
   assert.deepEqual(traceEnv({ SLEIGHT_BROWSER_CORE: '0' }), {});
   assert.deepEqual(traceEnv({ SLEIGHT_BROWSER_CORE: 'true' }), {});
   assert.deepEqual(traceEnv({ SLEIGHT_TRACE: '/t', SLEIGHT_FS: '1', SLEIGHT_BROWSER_CORE: '1' }), { SLEIGHT_TRACE: '/t', SLEIGHT_FS: '1', SLEIGHT_BROWSER_CORE: '1' });
-  assert.deepEqual(abFlags({ SLEIGHT_BROWSER_CORE: '1' }), { SLEIGHT_TS3: false, SLEIGHT_FS: false, SLEIGHT_BROWSER_CORE: true, SLEIGHT_RS: true, SLEIGHT_MC1: true });
-  assert.deepEqual(abFlags({}), { SLEIGHT_TS3: false, SLEIGHT_FS: false, SLEIGHT_BROWSER_CORE: false, SLEIGHT_RS: true, SLEIGHT_MC1: true });
+  assert.deepEqual(abFlags({ SLEIGHT_BROWSER_CORE: '1' }), { SLEIGHT_TS3: false, SLEIGHT_FS: false, SLEIGHT_SF4: false, SLEIGHT_BROWSER_CORE: true, SLEIGHT_RS: true, SLEIGHT_MC1: true });
+  assert.deepEqual(abFlags({}), { SLEIGHT_TS3: false, SLEIGHT_FS: false, SLEIGHT_SF4: false, SLEIGHT_BROWSER_CORE: false, SLEIGHT_RS: true, SLEIGHT_MC1: true });
   assert.ok(!engineAllowed({}).includes('browser_open'));
   assert.ok(!engineAllowed({ SLEIGHT_BROWSER_CORE: '0' }).includes('browser_open'));
   assert.equal(engineAllowed({ SLEIGHT_BROWSER_CORE: '1' }), engineAllowed({}) + ',' + OPEN);
@@ -131,6 +132,8 @@ n=$(cat "${dir}/count" 2>/dev/null || echo 0); n=$((n + 1)); echo $n > "${dir}/c
 if [ -e "${dir}/busy-once" ]; then rm "${dir}/busy-once"; echo "Error: EEXIST: file already exists, mkdir '/tmp/sleight-live.lock'"; exit 1; fi
 echo "$SLEIGHT_BROWSER_CORE $(basename "$out") $* prompt=\${AS3_WINDOW_PROMPT:-0}" >> "${dir}/calls"
 mkdir -p "$out"; echo '[]' > "$out/results.json"
+if [ -e "${dir}/stop-once" ]; then code=$(cat "${dir}/stop-once"); rm "${dir}/stop-once"; echo 'partial evidence' > "$out/partial"; exit "$code"; fi
+exit 0
 `);
   chmodSync(file, 0o755);
   return file;
@@ -140,11 +143,30 @@ const runner = (dir, extra = {}) => ({ ...process.env, AS3_OUT: join(dir, 'out')
 const script = join(repo, 'bench/fowl/as3-ab.command');
 const calls = dir => existsSync(join(dir, 'calls')) ? readFileSync(join(dir, 'calls'), 'utf8').trim().split('\n') : [];
 
+for (const code of [75, 130]) test(`the block stops on ${code} and resumes a partial round without losing its evidence`, () => {
+  const dir = mkdtempSync(join(tmpdir(), 'as3-ab-stop-'));
+  try {
+    writeFileSync(join(dir, 'stop-once'), String(code));
+    const env = runner(dir, { AS3_ROUNDS: '1' });
+    const stopped = spawnSync('/bin/sh', [script], { env, encoding: 'utf8', timeout: 30000, killSignal: 'SIGKILL' });
+    assertChildStatus(stopped, code, stopped.stderr);
+    assert.equal(calls(dir).length, 1);
+    const output = join(dir, 'out/as3-ao-safari-off-r1');
+    assert.equal(readFileSync(join(output, 'partial'), 'utf8').trim(), 'partial evidence');
+    assert.equal(existsSync(join(dir, 'out/as3-score.txt')), false);
+    const resumed = spawnSync('/bin/sh', [script], { env, encoding: 'utf8', timeout: 30000, killSignal: 'SIGKILL' });
+    assertChildStatus(resumed, 0, resumed.stderr);
+    assert.equal(calls(dir).length, 7);
+    const archive = join(dir, 'out/as3-stopped/as3-ao-safari-off-r1-1');
+    assert.equal(readFileSync(join(archive, 'partial'), 'utf8').trim(), 'partial evidence');
+  } finally { rmSync(dir, { recursive: true, force: true }); }
+});
+
 test('the runner runs 5 rounds per cell and browser in balanced order on the held-out list, then scores, and resumes', () => {
   const dir = mkdtempSync(join(tmpdir(), 'as3-ab-'));
   try {
-    const result = spawnSync('/bin/sh', [script], { env: runner(dir), encoding: 'utf8', timeout: 60000 });
-    assert.equal(result.status, 0, result.stderr);
+    const result = spawnSync('/bin/sh', [script], { env: runner(dir), encoding: 'utf8', timeout: 60000, killSignal: 'SIGKILL' });
+    assertChildStatus(result, 0, result.stderr);
     const lines = calls(dir);
     const expected = [];
     const orders = [['off', 'on', 'on-prompt'], ['on', 'on-prompt', 'off'], ['on-prompt', 'off', 'on'],
@@ -165,11 +187,11 @@ test('the runner runs 5 rounds per cell and browser in balanced order on the hel
     assert.match(log, /^as3-ab done .*as3-score\.txt$/m);
     assert.ok(existsSync(join(dir, 'out/as3-score.txt')));
     // A second start keeps every finished round.
-    assert.equal(spawnSync('/bin/sh', [script], { env: runner(dir), encoding: 'utf8', timeout: 60000 }).status, 0);
+    assertChildStatus(spawnSync('/bin/sh', [script], { env: runner(dir), encoding: 'utf8', timeout: 60000, killSignal: 'SIGKILL' }), 0);
     assert.equal(calls(dir).length, 30);
     assert.match(readFileSync(join(dir, 'out/as3-ab.log'), 'utf8'), /^as3-ao-safari-off-r1 kept /m);
     // A configured sixth round completes the permutation cycle; the default remains five rounds.
-    assert.equal(spawnSync('/bin/sh', [script], { env: runner(dir, { AS3_ROUNDS: '6' }), encoding: 'utf8', timeout: 60000 }).status, 0);
+    assertChildStatus(spawnSync('/bin/sh', [script], { env: runner(dir, { AS3_ROUNDS: '6' }), encoding: 'utf8', timeout: 60000, killSignal: 'SIGKILL' }), 0);
     const sixth = calls(dir).slice(30).map(line => line.split(' ')[1]);
     assert.deepEqual(sixth, ['safari', 'firefox'].flatMap(br => orders[5].map(side => `as3-ao-${br}-${side}-r6`)));
   } finally { rmSync(dir, { recursive: true, force: true }); }
@@ -213,8 +235,8 @@ for (const missing of ['core', 'forwarded prompt', 'recorded prompt']) test(`the
     writeFileSync(join(copy, 'rounds.sh'), missing === 'core' ? rounds.replaceAll('SLEIGHT_BROWSER_CORE', 'MISSING_CORE')
       : missing === 'forwarded prompt' ? rounds.replaceAll('AS3_WINDOW_PROMPT', 'MISSING_PROMPT') : rounds);
     writeFileSync(join(copy, 'real-gate-setup.mjs'), missing === 'recorded prompt' ? setup.replaceAll('AS3_WINDOW_PROMPT', 'MISSING_PROMPT') : setup);
-    const result = spawnSync('/bin/sh', [join(copy, 'as3-ab.command')], { env: runner(dir), encoding: 'utf8', timeout: 10000 });
-    assert.equal(result.status, 1);
+    const result = spawnSync('/bin/sh', [join(copy, 'as3-ab.command')], { env: runner(dir), encoding: 'utf8', timeout: 10000, killSignal: 'SIGKILL' });
+    assertChildStatus(result, 1);
     assert.match(result.stderr, /lacks AS-3 or its harness plumbing/);
     assert.equal(existsSync(join(dir, 'count')), false);
   } finally { rmSync(dir, { recursive: true, force: true }); }
@@ -228,8 +250,8 @@ test('an on-prompt folder with product-on metadata is excluded instead of pollut
     assert.equal(round.side, 'on');
     assert.match(round.excluded, /on-prompt.*AS3_WINDOW_PROMPT.*not recorded/);
     assert.deepEqual(scoreAb([round]).browsers, {});
-    const cli = spawnSync(process.execPath, [join(repo, 'bench/fowl/as3-score.mjs'), dir], { encoding: 'utf8' });
-    assert.equal(cli.status, 0, cli.stderr);
+    const cli = spawnSync(process.execPath, [join(repo, 'bench/fowl/as3-score.mjs'), dir], { encoding: 'utf8', timeout: 60000, killSignal: 'SIGKILL' });
+    assertChildStatus(cli, 0, cli.stderr);
     assert.match(cli.stdout, /excluded, on-prompt folder but AS3_WINDOW_PROMPT was not recorded/);
     const rows = JSON.parse(readFileSync(join(dir, 'results.json'), 'utf8'));
     rows.forEach(row => { row.agentConfig.as3WindowPrompt = true; });
@@ -308,8 +330,8 @@ test('the scorer reads each round\'s side from its rows and applies the bar per 
     assert.equal(slow.browsers.safari.saving, 5);
     assert.ok(slow.browsers.safari.problems.some(p => /opening median saving/.test(p)));
     assert.ok(slow.browsers.safari.problems.some(p => /adoption/.test(p)));
-    const cli = spawnSync(process.execPath, [join(repo, 'bench/fowl/as3-score.mjs'), join(root, 'as3-*')], { encoding: 'utf8' });
-    assert.equal(cli.status, 0, cli.stderr);
+    const cli = spawnSync(process.execPath, [join(repo, 'bench/fowl/as3-score.mjs'), join(root, 'as3-*')], { encoding: 'utf8', timeout: 60000, killSignal: 'SIGKILL' });
+    assertChildStatus(cli, 0, cli.stderr);
     assert.match(cli.stdout, /as3-firefox-on-r9 \(firefox, side unknown, .*excluded, SLEIGHT_BROWSER_CORE not recorded/);
     assert.match(cli.stdout, /browser_open on the on side: 6 of 9 tasks, 6 calls, 0 errors/);
     assert.match(cli.stdout, /^smoke-red +1\/1 20\.0 s 3 calls +1\/1 10\.0 s 2 calls$/m);

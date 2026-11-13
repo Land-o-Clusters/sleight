@@ -1,15 +1,49 @@
 import { fixtureDocumentation } from './helpers/canonical-docs.mjs';
-import test from 'node:test';
+import test, { describe } from 'node:test';
+import { localBackendSkip, localBackends, nativeLocal } from './fixtures/mac-driver-tools.mjs';
+import { createMacDriverTools } from '../plugins/sleight/lib/mac-driver/tools.mjs';
 import assert from 'node:assert/strict';
 import { mkdtempSync, writeFileSync, rmSync, readFileSync, utimesSync } from 'node:fs';
 import { removeTemp } from '../scripts/temp-leftovers.mjs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { PassThrough } from 'node:stream';
+import { EventEmitter } from 'node:events';
 import { runInNewContext } from 'node:vm';
-import * as launch from '../plugins/sleight/lib/launch.mjs';
+import * as scriptLaunch from '../plugins/sleight/lib/launch.mjs';
 import { createRelay } from '../plugins/sleight/lib/relay.mjs';
+import { createV3Bridge, createV3Frontend, serveV3Worker } from '../plugins/sleight/lib/direct-browser/worker.mjs';
 
+for (const backend of localBackends) describe(backend, { skip: localBackendSkip(backend) }, () => {
+function adapter(options = {}) {
+  // A deadline retires a persistent driver. This fake has no OS process, but
+  // must implement the same restart contract before a later open can run.
+  return createMacDriverTools({ ...options, driver: { ping: async () => ({}), restart: async () => {},
+    request: async (method, { args }, { timeoutMs = 1000 } = {}) => {
+    assert.equal(method, 'localTool');
+    const [script, request] = args;
+    if (request.op === 'open') {
+      const f = nativeLocal(script, request, {});
+      if (f.result.ok) await options.exec?.('/usr/bin/open', ['-g', '-b', request.appId, request.path]);
+      return f.result;
+    }
+    let timer;
+    const present = await Promise.race([
+      Promise.resolve().then(() => options.hasDocument?.(request.appId, request.path)),
+      new Promise((_, reject) => { timer = setTimeout(() => reject(Object.assign(new Error('probe deadline'),
+        { code: 'DEADLINE_EXCEEDED' })), timeoutMs); }),
+    ]).finally(() => clearTimeout(timer));
+    return nativeLocal(script, request, { apps: [{ appId: request.appId, hidden: false,
+      tree: { AXWindows: present ? [{ AXDocument: new URL('file://' + request.path.replaceAll(' ', '%20')).href,
+        AXMinimized: false, AXVisible: true, AXMain: true }] : [] } }] }).result;
+  } } });
+}
+const launch = backend === 'script' ? scriptLaunch : { ...scriptLaunch,
+  openDocument: (args, options) => adapter(options).openDocument(args, options),
+  reopenDocument: (id, path, options) => adapter(options).reopenDocument(id, path, options),
+  callLocalTool: (name, args, approve, run, resolved, prepared, options) =>
+    adapter({ ...prepared, ...options }).call(name, args, approve, resolved, prepared, options),
+};
 const app = 'Example Editor', appId = 'org.example.editor';
 const tick = () => new Promise(resolve => setImmediate(resolve));
 const deferred = () => { let resolve; const promise = new Promise(done => { resolve = done; }); return { promise, resolve }; };
@@ -59,7 +93,7 @@ test('fast open overlaps resolution and its one approval with target lookup; the
   const target = deferred(), resolution = deferred(), approval = deferred(), events = [];
   const h = harness(t, { openFast: true, ask: async () => { events.push('approval'); return approval.promise; },
     inputLease: { acquire: () => { events.push('lease'); return 'lease'; }, renew: () => events.push('renew'), release() {}, close() {} },
-    localTools: { tools: [{ name: 'open_file' }], target: () => { events.push('target'); return target.promise; },
+    localTools: { tools: [{ name: 'open_file', inputSchema: { type: 'object' } }], target: () => { events.push('target'); return target.promise; },
       prepareOpen: (args, approve) => launch.prepareOpenFile(args, approve, { resolve: () => { events.push('resolve'); return resolution.promise; } }),
       call: async (_name, _args, approve, _run, _resolved, prepared) => {
         assert.equal(await approve(['open_file', app], 'Allow?'), true);
@@ -80,7 +114,7 @@ test('fast open denial, failed target and Stop during preparation cannot open a 
   for (const mode of ['denied', 'target-failed', 'stopped']) {
     const target = deferred(); let actions = 0, prompts = 0;
     const h = harness(t, { openFast: true, ask: async () => { prompts++; return mode === 'denied' ? 'decline' : 'accept'; },
-      localTools: { tools: [{ name: 'open_file' }], target: () => target.promise,
+      localTools: { tools: [{ name: 'open_file', inputSchema: { type: 'object' } }], target: () => target.promise,
         prepareOpen: (args, approve) => launch.prepareOpenFile(args, approve, { resolve: async () => appId }),
         call: async (_name, _args, approve) => { if (await approve(['open_file', app], 'Allow?')) actions++; return { content: [] }; } } });
     h.send(); await tick();
@@ -95,7 +129,7 @@ test('fast open denial, failed target and Stop during preparation cannot open a 
 test('an approval answered after Stop opens nothing', async t => {
   const answer = deferred(); let prompts = 0, calls = 0;
   const h = harness(t, { openFast: true, ask: async () => { prompts++; return answer.promise; },
-    localTools: { tools: [{ name: 'open_file' }], target: async () => ({ appId, app }),
+    localTools: { tools: [{ name: 'open_file', inputSchema: { type: 'object' } }], target: async () => ({ appId, app }),
       prepareOpen: (args, approve) => launch.prepareOpenFile(args, approve, { resolve: async () => appId }),
       call: async (_name, _args, approve) => { if (await approve(['open_file', app], 'Allow?')) calls++; return { content: [] }; } } });
   h.send(); await tick();
@@ -137,7 +171,7 @@ test('Stop after native observation prevents background open and a false success
 test('flag-off and other local tools do not start speculative preparation', async t => {
   for (const [openFast, name] of [[false, 'open_file'], [true, 'drag']]) {
     const target = deferred(); let prepared = 0;
-    const h = harness(t, { openFast, localTools: { tools: [{ name }], target: () => target.promise,
+    const h = harness(t, { openFast, localTools: { tools: [{ name, inputSchema: { type: 'object' } }], target: () => target.promise,
       prepareOpen: () => { prepared++; }, call: async () => ({ content: [] }) } });
     h.send(name); await tick(); assert.equal(prepared, 0);
     target.resolve({ appId, app }); await tick();
@@ -198,6 +232,12 @@ test('document probe child gets a one-second timeout instead of the generic help
 });
 
 function observe({ ids = [appId], documents = [], mains, hidden = false, minimized = false, visible = true, visibilityError = false, axError = false } = {}) {
+  if (backend === 'driver') {
+    return nativeLocal('open-file-window.js', { appId, path: '/tmp/a b.txt' }, { apps: ids.map(id => ({ appId: id,
+      hidden: visibilityError ? null : hidden,
+      ...axError ? {} : { tree: { AXWindows: documents.map((AXDocument, i) => ({ AXDocument,
+        AXMain: mains ? mains[i] : true, AXMinimized: minimized, AXVisible: visible })) } } })) }).result;
+  }
   const list = values => ({ count: values.length, objectAtIndex: i => values[i] });
   const $ = key => key;
   Object.assign($, { NSWorkspace: { sharedWorkspace: { runningApplications: list(ids.map(bundleIdentifier => ({ bundleIdentifier, processIdentifier: 123 }))) } },
@@ -248,7 +288,7 @@ function failingFirstLookup(t, options) {
   let lookups = 0, opened = 0;
   const first = deferred();
   const h = harness(t, { openFast: true, ...options,
-    localTools: { tools: [{ name: 'open_file' }],
+    localTools: { tools: [{ name: 'open_file', inputSchema: { type: 'object' } }],
       target: () => lookups++ === 0 ? first.promise : { appId, app },
       prepareOpen: (args, approve) => launch.prepareOpenFile(args, approve, { resolve: async () => appId }),
       call: async (_name, _args, approve) => { if (await approve(['open_file', app], 'Allow?')) opened++; return { content: [] }; } } });
@@ -314,23 +354,43 @@ test('reopenDocument runs the background open and records it for the mtime check
   assert.ok(openedFiles.get(JSON.stringify([appId, args.path])) > 0);
 });
 
-async function lazyOpen(t, windows, { reopenFails = false, documentationTrust } = {}) {
+async function lazyOpen(t, windows, { reopenFails = false, handoffOnRead = false, documentationTrust } = {}) {
   const clientIn = new PassThrough(), clientOut = new PassThrough(), serverIn = new PassThrough(), serverOut = new PassThrough();
   const received = [], reads = [], events = [], file = '/tmp/note.txt';
+  let bridge, handoffStarted = false;
+  if (handoffOnRead) {
+    const child = new EventEmitter(), channel = new EventEmitter();
+    child.connected = channel.connected = true;
+    child.send = frame => queueMicrotask(() => channel.emit('message', structuredClone(frame)));
+    channel.send = frame => queueMicrotask(() => child.emit('message', structuredClone(frame)));
+    child.disconnect = () => { child.connected = channel.connected = false; channel.emit('disconnect'); child.emit('disconnect'); };
+    const worker = serveV3Worker({ channel, browser: 'bfixture', begin: async () => ({ end: async () => ({ cleanup: [] }) }) });
+    bridge = await createV3Bridge({}, { readConfig: () => ({}), acceptPackage: () => ({ current: () => true }),
+      shareConsent: () => undefined, forkWorker() { queueMicrotask(() => worker.ready()); return child; } });
+    t.after(() => bridge.detach());
+    await bridge.bind({ ...bridge.bootstrapEnvelope(), event: 'begin', turn: 'lazy-open', text: 'Open the file.' });
+  }
   clientOut.on('data', bytes => received.push(...bytes.toString().trim().split('\n').map(JSON.parse)));
   serverIn.on('data', bytes => {
     for (const msg of bytes.toString().trim().split('\n').map(JSON.parse)) {
       if (msg.method !== 'tools/call' || msg.params.name !== 'js') continue;
       reads.push(msg.id); events.push('read');
+      if (handoffOnRead) {
+        handoffStarted = true;
+        clientIn.write(JSON.stringify({ id: 'handoff', method: 'tools/call', params: { name: 'browser_tabs',
+          arguments: { do: 'handoff', tab: 't1', wait: true } } }) + '\n');
+      }
       const value = windows[Math.min(reads.length, windows.length) - 1];
       const result = typeof value === 'string' ? { content: [{ type: 'text', text: value }] } : value;
       serverOut.write(JSON.stringify({ jsonrpc: '2.0', id: msg.id, result }) + '\n');
     }
   });
   const relay = createRelay({ clientIn, clientOut, serverIn, serverOut, changeReview: false, openFast: true, documentationTrust,
+    ...(bridge ? { directBrowser: createV3Frontend(bridge), remoteApprovals: {
+      presence: () => handoffStarted ? new Promise(() => {}) : Promise.resolve({ locked: false, idleSeconds: 0 }) } } : {}),
     ask: async () => 'accept',
     inputLease: { acquire: () => 'lease', renew() {}, release() {}, close() {} },
-    localTools: { tools: [{ name: 'open_file' }], target: async () => ({ appId, app }),
+    localTools: { tools: [{ name: 'open_file', inputSchema: { type: 'object' } }], target: async () => ({ appId, app }),
       reopen: async (id, path) => { events.push(['reopen', id, path]); if (reopenFails) throw Error('open failed'); },
       call: async (_name, _args, approve) => {
         await approve(['open_file', app], 'Allow?');
@@ -376,6 +436,13 @@ test('lazy open: a failed reopen answers with the first read and its notice', as
   assert.ok(reply.content.some(c => /can't confirm/.test(c.text)));
 });
 
+test('lazy open: handoff beginning during acquisition skips deferred reopen and keeps the read', async t => {
+  const { events, reply } = await lazyOpen(t, [shows('other.txt')], { handoffOnRead: true });
+  assert.deepEqual(events, ['read']);
+  assert.notEqual(reply.isError, true);
+  assert.ok(reply.content.some(c => /can't confirm/.test(c.text)));
+});
+
 for (const combined of [false, true]) for (const repeated of [false, true]) {
   test(`lazy re-acquire keeps every engine docs block for the first js result once, combined=${combined}, repeated=${repeated}`, async t => {
     const docs = ['## Computer Use', '# Other Browser APIs', '# Computer Use Confirmations Policy', '# Browser Safety', '# API Reference']
@@ -401,4 +468,6 @@ test('a discarded window tree cannot turn its document headings into deferred en
   const h = await lazyOpen(t, [shows('other.txt') + '\n# API Reference\nDocument text, not engine docs.', shows('note.txt'), '4']);
   assert.equal(h.reads.length, 2);
   assert.ok(!(await h.js(2)).content.some(c => /Document text, not engine docs/.test(c.text ?? '')));
+});
+
 });

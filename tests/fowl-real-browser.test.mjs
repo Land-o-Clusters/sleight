@@ -1,3 +1,4 @@
+import { assertChildStatus } from './fixtures/child-status.mjs';
 // Constructed macOS paths are synthetic validation and redaction data, never allocation roots.
 const MAC_TMP = ['', 'private', 'tmp'].join('/');
 import test from 'node:test';
@@ -19,11 +20,11 @@ async function runner(t) {
   if (!existsSync(join(cache, '.git'))) { t.skip('pinned FowlBrowser cache is absent'); return; }
   const dir = registerTemp(t, mkdtempSync(join(tmpdir(), 'sleight-real-gate-test-')));
   mkdirSync(join(dir, 'tools'));
-  const original = spawnSync('/usr/bin/git', ['-C', cache, 'show', '6a12d60:tools/rounds.mjs'], { encoding: 'utf8' });
-  assert.equal(original.status, 0, original.stderr);
+  const original = spawnSync('/usr/bin/git', ['-C', cache, 'show', '6a12d60:tools/rounds.mjs'], { encoding: 'utf8', timeout: 30000, killSignal: 'SIGKILL' });
+  assertChildStatus(original, 0, original.stderr);
   const file = join(dir, 'tools/rounds.mjs'); writeFileSync(file, original.stdout);
-  const applied = spawnSync('/usr/bin/git', ['apply', join(root, 'bench/fowl/sleight-surface.patch')], { cwd: dir, encoding: 'utf8' });
-  assert.equal(applied.status, 0, applied.stderr);
+  const applied = spawnSync('/usr/bin/git', ['apply', join(root, 'bench/fowl/sleight-surface.patch')], { cwd: dir, encoding: 'utf8', timeout: 30000, killSignal: 'SIGKILL' });
+  assertChildStatus(applied, 0, applied.stderr);
   const previous = process.env.SLEIGHT_REPO; process.env.SLEIGHT_REPO = root;
   t.after(() => { if (previous === undefined) delete process.env.SLEIGHT_REPO; else process.env.SLEIGHT_REPO = previous; });
   return { dir, file, mod: await import(pathToFileURL(file)) };
@@ -170,7 +171,7 @@ test('the pinned settings page keeps its visible markup and compiles with identi
   const sides = [];
   for (const side of ['A', 'B']) {
     const response = await fetch(origin + '/settings', { headers: { 'sec-fetch-dest': 'document' } });
-    assert.equal(response.status, 200, side);
+    assertChildStatus(response, 200, side);
     const html = await response.text();
     assert.equal(markup(html), markup(original));
     const code = html.match(/<script type="module">([\s\S]*?)<\/script>/)[1];
@@ -237,7 +238,7 @@ for (const failed of [false, true]) test(`mock-only gate lifecycle ${failed ? 'r
   const args = { surface: 'codex', 'real-browser': 'chrome', out: join(dir, 'out') };
   const promise = runRealGate({ args, tasks: [{ ...task, name: 'fixture', grade: null }],
     runner: { gradeOutcome: () => ({ problems: [] }), gradeSite: () => ({ problems: [] }) },
-    runtime: { lockPath, admit: async () => {},
+    runtime: { lockPath, hold: { held: () => false }, admit: async () => {},
       windowCover: async (pid, options) => {
         assert.equal(pid, 1234);
         coverReads.push(options);
@@ -328,8 +329,8 @@ test('the real gate CLI dry plan resolves all five arms without credentials or i
     const out = join(home, 'never', surface);
     const result = spawnSync(process.execPath, [join(root, 'bench/fowl/real-gate.mjs'), '--real-browser', 'helium',
       '--dry-run', '--surface', surface, '--tasks', join(cache, 'tools/agents/codex-h2h.json'), '--out', out],
-    { encoding: 'utf8', env: { HOME: home, PATH: process.env.PATH }, maxBuffer: 4 * 1024 * 1024 });
-    assert.equal(result.status, 0, result.stderr);
+    { encoding: 'utf8', env: { HOME: home, PATH: process.env.PATH }, maxBuffer: 4 * 1024 * 1024, timeout: 60000, killSignal: 'SIGKILL' });
+    assertChildStatus(result, 0, result.stderr);
     const plan = JSON.parse(result.stdout);
     assert.equal(plan.arms.length, 13);
     assert.equal(plan.browser.headless, false);

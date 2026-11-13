@@ -1,3 +1,4 @@
+import { assertChildStatus } from './fixtures/child-status.mjs';
 // The resident host over the real Python launch adapter, with a Python fake standing in for Electron.
 // No app, no browser, no engine: the fake is tests/fixtures/fake-electron.py --fake-host.
 import { test } from 'node:test';
@@ -15,7 +16,7 @@ import { createElectronConnection } from '../plugins/sleight/lib/direct-browser/
 
 const here = fileURLToPath(new URL('.', import.meta.url));
 const launch = join(here, '../plugins/sleight/lib/direct-browser/electron/launch.py'), fake = join(here, 'fixtures/fake-electron.py');
-const python = spawnSync('python3', ['-c', 'import os,sys,ctypes.util;print(os.path.realpath(sys.executable))'], { encoding: 'utf8' });
+const python = spawnSync('python3', ['-c', 'import os,sys,ctypes.util;print(os.path.realpath(sys.executable))'], { encoding: 'utf8', timeout: 60000, killSignal: 'SIGKILL' });
 const skip = python.status !== 0 ? 'python3 is unavailable' : process.platform === 'win32' ? 'POSIX launch primitive unavailable' : false;
 const BUILD = 'adapter-fixture';
 const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
@@ -31,8 +32,8 @@ function expectedPythonEnvironment(userProfile = false) {
     Object.assign(env, { HOME: account.homedir, USER: account.username, LOGNAME: account.username, SHELL: account.shell });
   }
   const baseline = spawnSync(python.stdout.trim(), ['-c', 'import json,os; print(json.dumps(dict(os.environ)))'],
-    { env, encoding: 'utf8', timeout: 10000 });
-  assert.equal(baseline.status, 0, baseline.stderr);
+    { env, encoding: 'utf8', timeout: 10000, killSignal: 'SIGKILL' });
+  assertChildStatus(baseline, 0, baseline.stderr);
   return JSON.parse(baseline.stdout);
 }
 
@@ -70,9 +71,9 @@ async function worker(host, session = 'w') {
 for (const [flag, mode] of [['--census-test'], ...['exact', 'wrong-nonce', 'replaced-directories', 'profile-outside-root', 'missing-marker'].map(m => ['--recover-test', m]),
   ...['arguments', 'protocol', 'host-gone'].map(m => ['--adapter-test', m])]) {
   test('python launch adapter: ' + flag.slice(2) + (mode ? ' ' + mode : ''), { skip }, () => {
-    const result = spawnSync('python3', [fake, flag, ...(mode ? [mode] : [])], { encoding: 'utf8', timeout: 30000, env: { PATH: process.env.PATH, PYTHONDONTWRITEBYTECODE: '1' } });
+    const result = spawnSync('python3', [fake, flag, ...(mode ? [mode] : [])], { encoding: 'utf8', timeout: 30000, env: { PATH: process.env.PATH, PYTHONDONTWRITEBYTECODE: '1' }, killSignal: 'SIGKILL' });
     if (/^SKIP:/m.test(result.stderr + result.stdout)) return;
-    assert.equal(result.status, 0, result.stderr + result.stdout);
+    assertChildStatus(result, 0, result.stderr + result.stdout);
     assert.match(result.stdout, /checks passed/);
   });
 }
@@ -160,8 +161,8 @@ for name, recipe in [('none', {'args': ['{profile}']}), ('dir', {'args': ['{prof
 try: m.launch_args({'args': ['{profile}']}, 'other')
 except ValueError as error: out['mode'] = str(error)
 print(json.dumps(out))`;
-  const result = spawnSync('python3', ['-I', '-B', '-c', script, launch], { encoding: 'utf8', timeout: 20000, env: { PATH: process.env.PATH } });
-  assert.equal(result.status, 0, result.stderr);
+  const result = spawnSync('python3', ['-I', '-B', '-c', script, launch], { encoding: 'utf8', timeout: 20000, env: { PATH: process.env.PATH }, killSignal: 'SIGKILL' });
+  assertChildStatus(result, 0, result.stderr);
   assert.deepEqual(JSON.parse(result.stdout), { none: 'recipe has no user profile', dir: 'a user-profile launch names no profile', sub: 'a user-profile launch names no profile',
     port: 'forbidden launch switch', ok: ['--wait'], mode: 'unknown launch mode' });
 });
@@ -266,8 +267,8 @@ test('resident crash: the app is told by pipe EOF, the new host reports possible
 });
 
 test('the host entry is inert without a trusted parent and accepts only exact, absolute arguments', { skip }, async () => {
-  const direct = spawnSync(process.execPath, [fileURLToPath(new URL('../plugins/sleight/lib/direct-browser/electron-host-entry.mjs', import.meta.url))], { encoding: 'utf8', timeout: 10000 });
-  assert.equal(direct.status, 2);
+  const direct = spawnSync(process.execPath, [fileURLToPath(new URL('../plugins/sleight/lib/direct-browser/electron-host-entry.mjs', import.meta.url))], { encoding: 'utf8', timeout: 10000, killSignal: 'SIGKILL' });
+  assertChildStatus(direct, 2);
   assert.match(direct.stderr, /inert/);
   const ok = ['--state-dir', '/tmp/s', '--registry', '/tmp/r.json', '--temp-root', '/tmp/t', '--builds', 'a,b'];
   assert.equal(parseHostArguments(ok).builds.length, 2);

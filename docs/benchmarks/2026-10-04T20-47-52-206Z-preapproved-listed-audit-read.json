@@ -43,7 +43,7 @@
     "{\"enabledPlugins\":{\"sleight@sleight\":false}}",
     "--strict-mcp-config",
     "--mcp-config",
-    "{\"mcpServers\":{\"sleight\":{\"command\":\"~/Projects/sleight-wt/user-preapproved-apps/plugins/sleight/bin/sleight-mcp\",\"env\":{\"SLEIGHT_APPROVAL_PROMPT\":\"client\",\"SLEIGHT_TRACE\":\"\"}}}}",
+    "{\"mcpServers\":{\"sleight\":{\"command\":\"<private-evidence>/user-preapproved-apps/plugins/sleight/bin/sleight-mcp\",\"env\":{\"SLEIGHT_APPROVAL_PROMPT\":\"client\",\"SLEIGHT_TRACE\":\"\"}}}}",
     "--tools",
     "",
     "--allowedTools",

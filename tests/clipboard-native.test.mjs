@@ -119,7 +119,7 @@ test('a private AppKit pasteboard takes the recorded staged RTF, with no clipboa
     catch (error) { reply = { error: String(error.message) }; }
     finally { board.releaseGlobally; }
     JSON.stringify(reply);`;
-  const reply = JSON.parse(execFileSync('/usr/bin/osascript', ['-l', 'JavaScript', '-e', code], { encoding: 'utf8', timeout: 10000 }));
+  const reply = JSON.parse(execFileSync('/usr/bin/osascript', ['-l', 'JavaScript', '-e', code], { encoding: 'utf8', timeout: 10000, killSignal: 'SIGKILL' }));
   assert.equal(reply.error, undefined);
   assert.equal(reply.ok, true);
   const rtf = (reply.items?.[0] ?? []).find(rep => rep.type === 'public.rtf') ?? { data: recordedRTF };

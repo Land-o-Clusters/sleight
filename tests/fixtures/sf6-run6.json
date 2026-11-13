@@ -1,0 +1,1045 @@
+{
+  "moved": {
+    "source": "moved/driver-5/trace-84991.jsonl:19,26",
+    "finalRead": {
+      "content": [
+        {
+          "type": "text",
+          "text": "Window: \"SF6R focus probe\", App: Firefox.\n0 standard window SF6R focus probe, Secondary Actions: Raise\n\t1 container SF6R focus probe\n\t\t2 toolbar Browser tabs\n\t\t\t3 tab group\n\t\t\t\t4 tab (selected) Value: SF6R focus probe, SF6R focus probe\nClose tab\n\t\t\t\t5 button Open a new tab (\u2318T)\n\t\t\t6 separator\n\t\t\t7 button List all tabs\n\t\t8 toolbar Navigation\n\t\t\t9 button Description: Sidebars, Help: Show sidebar (\u2303Z)\n\t\t\t10 button (disabled) Back\n\t\t\t11 button (disabled) Forward\n\t\t\t12 button Reload\n\t\t\t13 separator\n\t\t\t14 container\n\t\t\t\t15 button View site information\n\t\t\t\t16 combo box (settable) Description: Search with Google or enter address, Value: http://127.0.0.1:52927/312f52a3-c7ff-4862-807a-57613ed16e29/\n\t\t\t\t\t17 text http://127.0.0.1:52927/312f52a3-c7ff-4862-807a-57613ed16e29/\n\t\t\t\t18 button Bookmark this page (\u2318D)\n\t\t\t19 separator\n\t\t\t20 button Account\n\t\t\t21 button Extensions\n\t\t\t22 button Description: Firefox, Help: Open application menu\n\t\t23 toolbar\n\t\t24 scroll area\n\t\t\t25 HTML Content Description: SF6R focus probe, URL: 127.0.0.1:52927/312f52a3-c7ff-4862-807a-57613ed16e29/\n\t\t\t\t26 heading Keyboard memo, Value: 1\n\t\t\t\t\t27 text Keyboard memo\n\t\t\t\t28 container\n\t\t\t\t\t29 text Enter  cobalt heron 47  in Memo. Leave Reference unchanged.\n\t\t\t\t30 container\n\t\t\t\t\t31 text Memo \n\t\t\t\t\t32 text field (settable) Memo, Value: cobalt heron 47\n\t\t\t\t33 container\n\t\t\t\t\t34 text Reference \n\t\t\t\t\t35 text field (settable) Reference, Value: reference stays\n\t\t\t\t36 button Move focus to Reference after refusal\n\t\t\t\t37 container Probe evidence\n\t\t\t\t\t38 text {\n  \"documentId\": \"c8949d5c-363e-46c0-a5ba-a593e452ad65\",\n  \"phase\": \"after-refusal\",\n  \"memo\": \"cobalt heron 47\",\n  \"reference\": \"reference stays\",\n  \"focus\": \"memo\",\n  \"events\": [\n    {\n      \"index\": 0,\n      \"phase\": \"before-refusal\",\n      \"type\": \"focus-observed\",\n      \"field\": \"memo\"\n    },\n    {\n      \"index\": 1,\n      \"phase\": \"after-refusal\",\n      \"type\": \"focus-observed\",\n      \"field\": \"reference\"\n    },\n    {\n      \"index\": 2,\n      \"phase\": \"after-refusal\",\n      \"type\": \"focus-observed\",\n  \n\t39 close button\n\t40 full screen button Help: this button also has an action to zoom the window, Secondary Actions: zoom the window\n\t41 minimize button\n42 menu bar\n\t43 Firefox\n\t44 File\n\t45 Edit\n\t46 View\n\t47 History\n\t48 Bookmarks\n\t49 Tools\n\t50 Window\n\t51 Help\n\nThe focused UI element is 32 text field (settable) Memo, Value: cobalt heron 47"
+        }
+      ],
+      "isError": false,
+      "_meta": {
+        "codex/nodeReplExecutionDurationMs": 51,
+        "codex/toolSurface": {
+          "app": {
+            "appId": "org.mozilla.firefox",
+            "kind": "appId"
+          },
+          "kind": "computerUse"
+        }
+      }
+    },
+    "trace": [
+      {
+        "direction": "call-received",
+        "msg": {
+          "id": 3,
+          "method": "tools/call",
+          "params": {
+            "name": "js",
+            "code": "let app = await cua.getApp(\"Firefox\");\napp"
+          }
+        }
+      },
+      {
+        "direction": "to-client",
+        "msg": {
+          "jsonrpc": "2.0",
+          "id": 3,
+          "result": {
+            "content": [
+              {
+                "type": "text",
+                "text": "Window: \"SF6R focus probe\", App: Firefox.\n0 standard window SF6R focus probe, Secondary Actions: Raise\n\t1 container SF6R focus probe\n\t\t2 toolbar Browser tabs\n\t\t\t3 tab group\n\t\t\t\t4 tab (selected) Value: SF6R focus probe, SF6R focus probe\nClose tab\n\t\t\t\t5 button Open a new tab (\u2318T)\n\t\t\t6 separator\n\t\t\t7 button List all tabs\n\t\t8 toolbar Navigation\n\t\t\t9 button Description: Sidebars, Help: Show sidebar (\u2303Z)\n\t\t\t10 button (disabled) Back\n\t\t\t11 button (disabled) Forward\n\t\t\t12 button Reload\n\t\t\t13 separator\n\t\t\t14 container\n\t\t\t\t15 button View site information\n\t\t\t\t16 combo box (settable) Description: Search with Google or enter address, Value: http://127.0.0.1:52927/312f52a3-c7ff-4862-807a-57613ed16e29/\n\t\t\t\t\t17 text http://127.0.0.1:52927/312f52a3-c7ff-4862-807a-57613ed16e29/\n\t\t\t\t18 button Bookmark this page (\u2318D)\n\t\t\t19 separator\n\t\t\t20 button Account\n\t\t\t21 button Extensions\n\t\t\t22 button Description: Firefox, Help: Open application menu\n\t\t23 toolbar\n\t\t24 scroll area\n\t\t\t25 HTML Content Description: SF6R focus probe, URL: 127.0.0.1:52927/312f52a3-c7ff-4862-807a-57613ed16e29/\n\t\t\t\t26 heading Keyboard memo, Value: 1\n\t\t\t\t\t27 text Keyboard memo\n\t\t\t\t28 container\n\t\t\t\t\t29 text Enter  cobalt heron 47  in Memo. Leave Reference unchanged.\n\t\t\t\t30 container\n\t\t\t\t\t31 text Memo \n\t\t\t\t\t32 text field (settable) Memo\n\t\t\t\t33 container\n\t\t\t\t\t34 text Reference \n\t\t\t\t\t35 text field (settable) Reference, Value: reference stays\n\t\t\t\t36 button Move focus to Reference after refusal\n\t\t\t\t37 container Probe evidence\n\t\t\t\t\t38 text {\n  \"documentId\": \"c8949d5c-363e-46c0-a5ba-a593e452ad65\",\n  \"phase\": \"before-refusal\",\n  \"memo\": \"\",\n  \"reference\": \"reference stays\",\n  \"focus\": \"memo\",\n  \"events\": [\n    {\n      \"index\": 0,\n      \"phase\": \"before-refusal\",\n      \"type\": \"focus-observed\",\n      \"field\": \"memo\"\n    }\n  ]\n}\n\t39 close button\n\t40 full screen button Help: this button also has an action to zoom the window, Secondary Actions: zoom the window\n\t41 minimize button\n42 menu bar\n\t43 Firefox\n\t44 File\n\t45 Edit\n\t46 View\n\t47 History\n\t48 Bookmarks\n\t49 Tools\n\t50 Window\n\t51 Help\n\nThe focused UI element is 1 container SF6R focus probe"
+              }
+            ],
+            "isError": false,
+            "_meta": {
+              "codex/nodeReplExecutionDurationMs": 551,
+              "codex/toolSurface": {
+                "app": {
+                  "appId": "org.mozilla.firefox",
+                  "kind": "appId"
+                },
+                "kind": "computerUse"
+              }
+            }
+          }
+        }
+      },
+      {
+        "direction": "call-received",
+        "msg": {
+          "id": 4,
+          "method": "tools/call",
+          "params": {
+            "name": "js",
+            "code": "await app.typeText(32, \"cobalt heron 47\");"
+          }
+        }
+      },
+      {
+        "direction": "to-client",
+        "msg": {
+          "jsonrpc": "2.0",
+          "id": 4,
+          "result": {
+            "isError": true,
+            "content": [
+              {
+                "type": "text",
+                "text": "typeText(text: string); no target; click field first if focus wrong; nothing was sent."
+              }
+            ]
+          }
+        }
+      },
+      {
+        "direction": "call-received",
+        "msg": {
+          "id": 5,
+          "method": "tools/call",
+          "params": {
+            "name": "turn_ended"
+          }
+        }
+      },
+      {
+        "direction": "to-client",
+        "msg": {
+          "jsonrpc": "2.0",
+          "id": 5,
+          "result": {
+            "content": [],
+            "isError": false,
+            "_meta": {
+              "sleight/stats": {
+                "calls": 2,
+                "reads": 1,
+                "characters": 27980,
+                "text": {
+                  "docs": 20681,
+                  "tree": 2051,
+                  "other": 5248
+                },
+                "errors": 1,
+                "pending": 0,
+                "omitted": 0,
+                "unclassified": 0,
+                "toolMs": 679,
+                "paths": {
+                  "native": {
+                    "actions": 1,
+                    "estimatedActions": 0,
+                    "estimatedCalls": 0,
+                    "actionMs": 0,
+                    "timedActions": 0
+                  },
+                  "turbo": {
+                    "actions": 0,
+                    "estimatedActions": 0,
+                    "estimatedCalls": 0,
+                    "actionMs": 0,
+                    "timedActions": 0
+                  },
+                  "engine": {
+                    "actions": 0,
+                    "estimatedActions": 0,
+                    "estimatedCalls": 0,
+                    "actionMs": 0,
+                    "timedActions": 0
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      {
+        "direction": "call-received",
+        "msg": {
+          "id": 7,
+          "method": "tools/call",
+          "params": {
+            "name": "js",
+            "code": "await app.click(32);\nawait app.getAXState();"
+          }
+        }
+      },
+      {
+        "direction": "to-client",
+        "msg": {
+          "jsonrpc": "2.0",
+          "id": 7,
+          "result": {
+            "content": [
+              {
+                "type": "text",
+                "text": "Window: \"SF6R focus probe\", App: Firefox.\n0 standard window SF6R focus probe, Secondary Actions: Raise\nsleight: lines changed since the last full tree you saw for this window (- removed, + added; numbers on + lines are current):\n-   \"phase\": \"before-refusal\",\n+   \"phase\": \"after-refusal\",\n-     }\n-   ]\n- }\n+     },\n+     {\n+       \"index\": 1,\n+       \"phase\": \"after-refusal\",\n+       \"type\": \"focus-observed\",\n+       \"field\": \"reference\"\n+     },\n+     {\n+       \"index\": 2,\n+       \"phase\": \"after-refusal\",\n+       \"type\": \"focus-observed\",\n+       \"field\": \"m"
+              }
+            ],
+            "isError": false,
+            "_meta": {
+              "codex/nodeReplExecutionDurationMs": 458,
+              "codex/toolSurface": {
+                "app": {
+                  "appId": "org.mozilla.firefox",
+                  "kind": "appId"
+                },
+                "kind": "computerUse"
+              }
+            }
+          }
+        }
+      },
+      {
+        "direction": "call-received",
+        "msg": {
+          "id": 8,
+          "method": "tools/call",
+          "params": {
+            "name": "js",
+            "code": "await app.getAXState({ disableDiffing: true });"
+          }
+        }
+      },
+      {
+        "direction": "to-client",
+        "msg": {
+          "jsonrpc": "2.0",
+          "id": 8,
+          "result": {
+            "content": [
+              {
+                "type": "text",
+                "text": "Window: \"SF6R focus probe\", App: Firefox.\n0 standard window SF6R focus probe, Secondary Actions: Raise\n\t1 container SF6R focus probe\n\t\t2 toolbar Browser tabs\n\t\t\t3 tab group\n\t\t\t\t4 tab (selected) Value: SF6R focus probe, SF6R focus probe\nClose tab\n\t\t\t\t5 button Open a new tab (\u2318T)\n\t\t\t6 separator\n\t\t\t7 button List all tabs\n\t\t8 toolbar Navigation\n\t\t\t9 button Description: Sidebars, Help: Show sidebar (\u2303Z)\n\t\t\t10 button (disabled) Back\n\t\t\t11 button (disabled) Forward\n\t\t\t12 button Reload\n\t\t\t13 separator\n\t\t\t14 container\n\t\t\t\t15 button View site information\n\t\t\t\t16 combo box (settable) Description: Search with Google or enter address, Value: http://127.0.0.1:52927/312f52a3-c7ff-4862-807a-57613ed16e29/\n\t\t\t\t\t17 text http://127.0.0.1:52927/312f52a3-c7ff-4862-807a-57613ed16e29/\n\t\t\t\t18 button Bookmark this page (\u2318D)\n\t\t\t19 separator\n\t\t\t20 button Account\n\t\t\t21 button Extensions\n\t\t\t22 button Description: Firefox, Help: Open application menu\n\t\t23 toolbar\n\t\t24 scroll area\n\t\t\t25 HTML Content Description: SF6R focus probe, URL: 127.0.0.1:52927/312f52a3-c7ff-4862-807a-57613ed16e29/\n\t\t\t\t26 heading Keyboard memo, Value: 1\n\t\t\t\t\t27 text Keyboard memo\n\t\t\t\t28 container\n\t\t\t\t\t29 text Enter  cobalt heron 47  in Memo. Leave Reference unchanged.\n\t\t\t\t30 container\n\t\t\t\t\t31 text Memo \n\t\t\t\t\t32 text field (settable) Memo\n\t\t\t\t33 container\n\t\t\t\t\t34 text Reference \n\t\t\t\t\t35 text field (settable) Reference, Value: reference stays\n\t\t\t\t36 button Move focus to Reference after refusal\n\t\t\t\t37 container Probe evidence\n\t\t\t\t\t38 text {\n  \"documentId\": \"c8949d5c-363e-46c0-a5ba-a593e452ad65\",\n  \"phase\": \"after-refusal\",\n  \"memo\": \"\",\n  \"reference\": \"reference stays\",\n  \"focus\": \"memo\",\n  \"events\": [\n    {\n      \"index\": 0,\n      \"phase\": \"before-refusal\",\n      \"type\": \"focus-observed\",\n      \"field\": \"memo\"\n    },\n    {\n      \"index\": 1,\n      \"phase\": \"after-refusal\",\n      \"type\": \"focus-observed\",\n      \"field\": \"reference\"\n    },\n    {\n      \"index\": 2,\n      \"phase\": \"after-refusal\",\n      \"type\": \"focus-observed\",\n      \"field\": \"m\n\t39 close button\n\t40 full screen button Help: this button also has an action to zoom the window, Secondary Actions: zoom the window\n\t41 minimize button\n42 menu bar\n\t43 Firefox\n\t44 File\n\t45 Edit\n\t46 View\n\t47 History\n\t48 Bookmarks\n\t49 Tools\n\t50 Window\n\t51 Help\n\nThe focused UI element is 1 container SF6R focus probe"
+              }
+            ],
+            "isError": false,
+            "_meta": {
+              "codex/nodeReplExecutionDurationMs": 67,
+              "codex/toolSurface": {
+                "app": {
+                  "appId": "org.mozilla.firefox",
+                  "kind": "appId"
+                },
+                "kind": "computerUse"
+              }
+            }
+          }
+        }
+      },
+      {
+        "direction": "call-received",
+        "msg": {
+          "id": 9,
+          "method": "tools/call",
+          "params": {
+            "name": "js",
+            "code": "await app.typeText(\"cobalt heron 47\");\nawait app.getAXState();"
+          }
+        }
+      },
+      {
+        "direction": "to-client",
+        "msg": {
+          "jsonrpc": "2.0",
+          "id": 9,
+          "result": {
+            "content": [
+              {
+                "type": "text",
+                "text": "Window: \"SF6R focus probe\", App: Firefox.\n0 standard window SF6R focus probe, Secondary Actions: Raise\nsleight: lines changed since the last full tree you saw for this window (- removed, + added; numbers on + lines are current):\n- \t\t\t\t\ttext field (settable) Memo\n+ \t\t\t\t\t32 text field (settable) Memo, Value: cobalt heron 47\n-   \"memo\": \"\",\n+   \"memo\": \"cobalt heron 47\",\n-       \"field\": \"m\n+   \n- The focused UI element is 1 container SF6R focus probe\n+ The focused UI element is 32 text field (settable) Memo, Value: cobalt heron 47"
+              }
+            ],
+            "isError": false,
+            "_meta": {
+              "codex/nodeReplExecutionDurationMs": 486,
+              "codex/toolSurface": {
+                "app": {
+                  "appId": "org.mozilla.firefox",
+                  "kind": "appId"
+                },
+                "kind": "computerUse"
+              }
+            }
+          }
+        }
+      },
+      {
+        "direction": "call-received",
+        "msg": {
+          "id": 10,
+          "method": "tools/call",
+          "params": {
+            "name": "turn_ended"
+          }
+        }
+      },
+      {
+        "direction": "to-client",
+        "msg": {
+          "jsonrpc": "2.0",
+          "id": 10,
+          "result": {
+            "content": [],
+            "isError": false,
+            "_meta": {
+              "sleight/stats": {
+                "calls": 3,
+                "reads": 1,
+                "characters": 3458,
+                "text": {
+                  "docs": 0,
+                  "tree": 3373,
+                  "other": 85
+                },
+                "errors": 0,
+                "pending": 0,
+                "omitted": 0,
+                "unclassified": 0,
+                "toolMs": 1081,
+                "paths": {
+                  "native": {
+                    "actions": 2,
+                    "estimatedActions": 2,
+                    "estimatedCalls": 2,
+                    "actionMs": 0,
+                    "timedActions": 0
+                  },
+                  "turbo": {
+                    "actions": 0,
+                    "estimatedActions": 0,
+                    "estimatedCalls": 0,
+                    "actionMs": 0,
+                    "timedActions": 0
+                  },
+                  "engine": {
+                    "actions": 0,
+                    "estimatedActions": 0,
+                    "estimatedCalls": 0,
+                    "actionMs": 0,
+                    "timedActions": 0
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    ],
+    "transcript": [
+      {
+        "type": "assistant",
+        "message": {
+          "content": [
+            {
+              "type": "tool_use",
+              "id": "toolu_015B6CN4mrvTCdXT2dHomSei",
+              "name": "mcp__plugin_sleight_computer__js",
+              "input": {
+                "code": "let app = await cua.getApp(\"Firefox\");\napp",
+                "title": "Get Firefox app state"
+              },
+              "caller": {
+                "type": "direct"
+              }
+            }
+          ]
+        }
+      },
+      {
+        "type": "assistant",
+        "message": {
+          "content": [
+            {
+              "type": "tool_use",
+              "id": "toolu_01Jdx5K1w1eMrXUpssoRdpVK",
+              "name": "mcp__plugin_sleight_computer__js",
+              "input": {
+                "code": "await app.typeText(32, \"cobalt heron 47\");",
+                "title": "Type into Memo (element 32) once"
+              },
+              "caller": {
+                "type": "direct"
+              }
+            }
+          ]
+        }
+      },
+      {
+        "type": "assistant",
+        "message": {
+          "content": [
+            {
+              "type": "tool_use",
+              "id": "toolu_01DG1wiajjaqj3a3UEJPstbP",
+              "name": "mcp__plugin_sleight_computer__js",
+              "input": {
+                "code": "await app.click(32);\nawait app.getAXState();",
+                "title": "Focus Memo field and read state"
+              },
+              "caller": {
+                "type": "direct"
+              }
+            }
+          ]
+        }
+      },
+      {
+        "type": "assistant",
+        "message": {
+          "content": [
+            {
+              "type": "tool_use",
+              "id": "toolu_0193WSGTEhR9LBFb7sXAYkw9",
+              "name": "mcp__plugin_sleight_computer__js",
+              "input": {
+                "code": "await app.getAXState({ disableDiffing: true });",
+                "title": "Read full accessibility tree"
+              },
+              "caller": {
+                "type": "direct"
+              }
+            }
+          ]
+        }
+      },
+      {
+        "type": "assistant",
+        "message": {
+          "content": [
+            {
+              "type": "tool_use",
+              "id": "toolu_01TvuEzgnQZbfsezWbYVqMmM",
+              "name": "mcp__plugin_sleight_computer__js",
+              "input": {
+                "code": "await app.typeText(\"cobalt heron 47\");\nawait app.getAXState();",
+                "title": "Type cobalt heron 47 and verify"
+              },
+              "caller": {
+                "type": "direct"
+              }
+            }
+          ]
+        }
+      }
+    ],
+    "row": {
+      "control": "moved",
+      "initial": {
+        "documentId": "c8949d5c-363e-46c0-a5ba-a593e452ad65",
+        "phase": "before-refusal",
+        "memo": "",
+        "reference": "reference stays",
+        "focus": "memo",
+        "events": [
+          {
+            "index": 0,
+            "phase": "before-refusal",
+            "type": "focus-observed",
+            "field": "memo"
+          }
+        ],
+        "axFocus": {
+          "element": 1,
+          "field": null,
+          "diagnostic": "AX field focus unavailable (container only)"
+        }
+      },
+      "refusal": {
+        "observed": true,
+        "numericTarget": true,
+        "nothingSent": true,
+        "order": 1,
+        "callId": 4
+      },
+      "stopped": {
+        "observed": true,
+        "order": 2
+      },
+      "afterRefusal": {
+        "documentId": "c8949d5c-363e-46c0-a5ba-a593e452ad65",
+        "phase": "before-refusal",
+        "memo": "",
+        "reference": "reference stays",
+        "focus": "memo",
+        "events": [
+          {
+            "index": 0,
+            "phase": "before-refusal",
+            "type": "focus-observed",
+            "field": "memo"
+          }
+        ],
+        "axFocus": {
+          "element": 1,
+          "field": null,
+          "diagnostic": "AX field focus unavailable (container only)"
+        }
+      },
+      "boundary": {
+        "documentId": "c8949d5c-363e-46c0-a5ba-a593e452ad65",
+        "phase": "after-refusal",
+        "memo": "",
+        "reference": "reference stays",
+        "focus": "reference",
+        "events": [
+          {
+            "index": 0,
+            "phase": "before-refusal",
+            "type": "focus-observed",
+            "field": "memo"
+          },
+          {
+            "index": 1,
+            "phase": "after-refusal",
+            "type": "focus-observed",
+            "field": "reference"
+          }
+        ],
+        "axFocus": {
+          "element": 1,
+          "field": null,
+          "diagnostic": "AX field focus unavailable (container only)"
+        }
+      },
+      "boundaryOrder": 3,
+      "resumeOrder": 4,
+      "error": "Fixture snapshot unavailable",
+      "cleanup": {
+        "browserClosed": true,
+        "profileDeleted": true,
+        "noWindows": true,
+        "driverCollected": true,
+        "modelCollected": true,
+        "serverClosed": true
+      },
+      "modelIds": [
+        "claude-haiku-5-5"
+      ],
+      "sessionIds": [
+        "cb3b6be2-3a47-4f56-b750-3da47af4f678"
+      ],
+      "engineVersion": "26.1023.50603",
+      "modelExit": {
+        "code": 0,
+        "timedOut": false,
+        "cancelled": false
+      },
+      "trace": [
+        "recorded-model-trace.jsonl"
+      ],
+      "transcripts": [
+        "recorded-transcript.jsonl"
+      ]
+    }
+  },
+  "unchanged": {
+    "source": "unchanged/driver-4/trace-86631.jsonl:19,26",
+    "finalRead": {
+      "content": [
+        {
+          "type": "text",
+          "text": "Window: \"SF6R focus probe\", App: Firefox.\n0 standard window SF6R focus probe, Secondary Actions: Raise\n\t1 container SF6R focus probe\n\t\t2 toolbar Browser tabs\n\t\t\t3 tab group\n\t\t\t\t4 tab (selected) Value: SF6R focus probe, SF6R focus probe\nClose tab\n\t\t\t\t5 button Open a new tab (\u2318T)\n\t\t\t6 separator\n\t\t\t7 button List all tabs\n\t\t8 toolbar Navigation\n\t\t\t9 button Description: Sidebars, Help: Show sidebar (\u2303Z)\n\t\t\t10 button (disabled) Back\n\t\t\t11 button (disabled) Forward\n\t\t\t12 button Reload\n\t\t\t13 separator\n\t\t\t14 container\n\t\t\t\t15 button View site information\n\t\t\t\t16 combo box (settable) Description: Search with Google or enter address, Value: http://127.0.0.1:53170/3da16c2c-a621-4f80-ba17-c5cc3f0ee5df/\n\t\t\t\t\t17 text http://127.0.0.1:53170/3da16c2c-a621-4f80-ba17-c5cc3f0ee5df/\n\t\t\t\t18 button Bookmark this page (\u2318D)\n\t\t\t19 separator\n\t\t\t20 button Account\n\t\t\t21 button Extensions\n\t\t\t22 button Description: Firefox, Help: Open application menu\n\t\t23 toolbar\n\t\t24 scroll area\n\t\t\t25 HTML Content Description: SF6R focus probe, URL: 127.0.0.1:53170/3da16c2c-a621-4f80-ba17-c5cc3f0ee5df/\n\t\t\t\t26 heading Keyboard memo, Value: 1\n\t\t\t\t\t27 text Keyboard memo\n\t\t\t\t28 container\n\t\t\t\t\t29 text Enter  cobalt heron 47  in Memo. Leave Reference unchanged.\n\t\t\t\t30 container\n\t\t\t\t\t31 text Memo \n\t\t\t\t\t32 text field (settable) Memo, Value: cobalt heron 47\n\t\t\t\t33 container\n\t\t\t\t\t34 text Reference \n\t\t\t\t\t35 text field (settable) Reference, Value: reference stays\n\t\t\t\t36 button Move focus to Reference after refusal\n\t\t\t\t37 container Probe evidence\n\t\t\t\t\t38 text {\n  \"documentId\": \"63e4295b-1b01-422a-8334-d29e14d5b969\",\n  \"phase\": \"before-refusal\",\n  \"memo\": \"cobalt heron 47\",\n  \"reference\": \"reference stays\",\n  \"focus\": \"memo\",\n  \"events\": [\n    {\n      \"index\": 0,\n      \"phase\": \"before-refusal\",\n      \"type\": \"focus-observed\",\n      \"field\": \"memo\"\n    },\n    {\n      \"index\": 1,\n      \"phase\": \"before-refusal\",\n      \"type\": \"pointerdown\",\n      \"field\": \"memo\"\n    },\n    {\n      \"index\": 2,\n      \"phase\": \"before-refusal\",\n      \"type\": \"beforeinput\",\n      \"fie\n\t39 close button\n\t40 full screen button Help: this button also has an action to zoom the window, Secondary Actions: zoom the window\n\t41 minimize button\n42 menu bar\n\t43 Firefox\n\t44 File\n\t45 Edit\n\t46 View\n\t47 History\n\t48 Bookmarks\n\t49 Tools\n\t50 Window\n\t51 Help\n\nThe focused UI element is 32 text field (settable) Memo, Value: cobalt heron 47"
+        }
+      ],
+      "isError": false,
+      "_meta": {
+        "codex/nodeReplExecutionDurationMs": 49,
+        "codex/toolSurface": {
+          "app": {
+            "appId": "org.mozilla.firefox",
+            "kind": "appId"
+          },
+          "kind": "computerUse"
+        }
+      }
+    },
+    "trace": [
+      {
+        "direction": "call-received",
+        "msg": {
+          "id": 3,
+          "method": "tools/call",
+          "params": {
+            "name": "js",
+            "code": "let app = await cua.getApp(\"Firefox\");\napp"
+          }
+        }
+      },
+      {
+        "direction": "to-client",
+        "msg": {
+          "jsonrpc": "2.0",
+          "id": 3,
+          "result": {
+            "content": [
+              {
+                "type": "text",
+                "text": "Window: \"SF6R focus probe\", App: Firefox.\n0 standard window SF6R focus probe, Secondary Actions: Raise\n\t1 container SF6R focus probe\n\t\t2 toolbar Browser tabs\n\t\t\t3 tab group\n\t\t\t\t4 tab (selected) Value: SF6R focus probe, SF6R focus probe\nClose tab\n\t\t\t\t5 button Open a new tab (\u2318T)\n\t\t\t6 separator\n\t\t\t7 button List all tabs\n\t\t8 toolbar Navigation\n\t\t\t9 button Description: Sidebars, Help: Show sidebar (\u2303Z)\n\t\t\t10 button (disabled) Back\n\t\t\t11 button (disabled) Forward\n\t\t\t12 button Reload\n\t\t\t13 separator\n\t\t\t14 container\n\t\t\t\t15 button View site information\n\t\t\t\t16 combo box (settable) Description: Search with Google or enter address, Value: http://127.0.0.1:53170/3da16c2c-a621-4f80-ba17-c5cc3f0ee5df/\n\t\t\t\t\t17 text http://127.0.0.1:53170/3da16c2c-a621-4f80-ba17-c5cc3f0ee5df/\n\t\t\t\t18 button Bookmark this page (\u2318D)\n\t\t\t19 separator\n\t\t\t20 button Account\n\t\t\t21 button Extensions\n\t\t\t22 button Description: Firefox, Help: Open application menu\n\t\t23 toolbar\n\t\t24 scroll area\n\t\t\t25 HTML Content Description: SF6R focus probe, URL: 127.0.0.1:53170/3da16c2c-a621-4f80-ba17-c5cc3f0ee5df/\n\t\t\t\t26 heading Keyboard memo, Value: 1\n\t\t\t\t\t27 text Keyboard memo\n\t\t\t\t28 container\n\t\t\t\t\t29 text Enter  cobalt heron 47  in Memo. Leave Reference unchanged.\n\t\t\t\t30 container\n\t\t\t\t\t31 text Memo \n\t\t\t\t\t32 text field (settable) Memo\n\t\t\t\t33 container\n\t\t\t\t\t34 text Reference \n\t\t\t\t\t35 text field (settable) Reference, Value: reference stays\n\t\t\t\t36 button Move focus to Reference after refusal\n\t\t\t\t37 container Probe evidence\n\t\t\t\t\t38 text {\n  \"documentId\": \"63e4295b-1b01-422a-8334-d29e14d5b969\",\n  \"phase\": \"before-refusal\",\n  \"memo\": \"\",\n  \"reference\": \"reference stays\",\n  \"focus\": \"memo\",\n  \"events\": [\n    {\n      \"index\": 0,\n      \"phase\": \"before-refusal\",\n      \"type\": \"focus-observed\",\n      \"field\": \"memo\"\n    }\n  ]\n}\n\t39 close button\n\t40 full screen button Help: this button also has an action to zoom the window, Secondary Actions: zoom the window\n\t41 minimize button\n42 menu bar\n\t43 Firefox\n\t44 File\n\t45 Edit\n\t46 View\n\t47 History\n\t48 Bookmarks\n\t49 Tools\n\t50 Window\n\t51 Help\n\nThe focused UI element is 1 container SF6R focus probe"
+              }
+            ],
+            "isError": false,
+            "_meta": {
+              "codex/nodeReplExecutionDurationMs": 478,
+              "codex/toolSurface": {
+                "app": {
+                  "appId": "org.mozilla.firefox",
+                  "kind": "appId"
+                },
+                "kind": "computerUse"
+              }
+            }
+          }
+        }
+      },
+      {
+        "direction": "call-received",
+        "msg": {
+          "id": 4,
+          "method": "tools/call",
+          "params": {
+            "name": "js",
+            "code": "await app.typeText(32, \"cobalt heron 47\");"
+          }
+        }
+      },
+      {
+        "direction": "to-client",
+        "msg": {
+          "jsonrpc": "2.0",
+          "id": 4,
+          "result": {
+            "isError": true,
+            "content": [
+              {
+                "type": "text",
+                "text": "typeText(text: string); no target; click field first if focus wrong; nothing was sent."
+              }
+            ]
+          }
+        }
+      },
+      {
+        "direction": "call-received",
+        "msg": {
+          "id": 5,
+          "method": "tools/call",
+          "params": {
+            "name": "turn_ended"
+          }
+        }
+      },
+      {
+        "direction": "to-client",
+        "msg": {
+          "jsonrpc": "2.0",
+          "id": 5,
+          "result": {
+            "content": [],
+            "isError": false,
+            "_meta": {
+              "sleight/stats": {
+                "calls": 2,
+                "reads": 1,
+                "characters": 27980,
+                "text": {
+                  "docs": 20681,
+                  "tree": 2051,
+                  "other": 5248
+                },
+                "errors": 1,
+                "pending": 0,
+                "omitted": 0,
+                "unclassified": 0,
+                "toolMs": 608,
+                "paths": {
+                  "native": {
+                    "actions": 1,
+                    "estimatedActions": 0,
+                    "estimatedCalls": 0,
+                    "actionMs": 0,
+                    "timedActions": 0
+                  },
+                  "turbo": {
+                    "actions": 0,
+                    "estimatedActions": 0,
+                    "estimatedCalls": 0,
+                    "actionMs": 0,
+                    "timedActions": 0
+                  },
+                  "engine": {
+                    "actions": 0,
+                    "estimatedActions": 0,
+                    "estimatedCalls": 0,
+                    "actionMs": 0,
+                    "timedActions": 0
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      {
+        "direction": "call-received",
+        "msg": {
+          "id": 7,
+          "method": "tools/call",
+          "params": {
+            "name": "js",
+            "code": "await app.click(32);"
+          }
+        }
+      },
+      {
+        "direction": "to-client",
+        "msg": {
+          "jsonrpc": "2.0",
+          "id": 7,
+          "result": {
+            "content": [
+              {
+                "type": "text",
+                "text": "Window: \"SF6R focus probe\", App: Firefox.\n0 standard window SF6R focus probe, Secondary Actions: Raise\n\t1 container SF6R focus probe\n\t\t2 toolbar Browser tabs\n\t\t\t3 tab group\n\t\t\t\t4 tab (selected) Value: SF6R focus probe, SF6R focus probe\nClose tab\n\t\t\t\t5 button Open a new tab (\u2318T)\n\t\t\t6 separator\n\t\t\t7 button List all tabs\n\t\t8 toolbar Navigation\n\t\t\t9 button Description: Sidebars, Help: Show sidebar (\u2303Z)\n\t\t\t10 button (disabled) Back\n\t\t\t11 button (disabled) Forward\n\t\t\t12 button Reload\n\t\t\t13 separator\n\t\t\t14 container\n\t\t\t\t15 button View site information\n\t\t\t\t16 combo box (settable) Description: Search with Google or enter address, Value: http://127.0.0.1:53170/3da16c2c-a621-4f80-ba17-c5cc3f0ee5df/\n\t\t\t\t\t17 text http://127.0.0.1:53170/3da16c2c-a621-4f80-ba17-c5cc3f0ee5df/\n\t\t\t\t18 button Bookmark this page (\u2318D)\n\t\t\t19 separator\n\t\t\t20 button Account\n\t\t\t21 button Extensions\n\t\t\t22 button Description: Firefox, Help: Open application menu\n\t\t23 toolbar\n\t\t24 scroll area\n\t\t\t25 HTML Content Description: SF6R focus probe, URL: 127.0.0.1:53170/3da16c2c-a621-4f80-ba17-c5cc3f0ee5df/\n\t\t\t\t26 heading Keyboard memo, Value: 1\n\t\t\t\t\t27 text Keyboard memo\n\t\t\t\t28 container\n\t\t\t\t\t29 text Enter  cobalt heron 47  in Memo. Leave Reference unchanged.\n\t\t\t\t30 container\n\t\t\t\t\t31 text Memo \n\t\t\t\t\t32 text field (settable) Memo\n\t\t\t\t33 container\n\t\t\t\t\t34 text Reference \n\t\t\t\t\t35 text field (settable) Reference, Value: reference stays\n\t\t\t\t36 button Move focus to Reference after refusal\n\t\t\t\t37 container Probe evidence\n\t\t\t\t\t38 text {\n  \"documentId\": \"63e4295b-1b01-422a-8334-d29e14d5b969\",\n  \"phase\": \"before-refusal\",\n  \"memo\": \"\",\n  \"reference\": \"reference stays\",\n  \"focus\": \"memo\",\n  \"events\": [\n    {\n      \"index\": 0,\n      \"phase\": \"before-refusal\",\n      \"type\": \"focus-observed\",\n      \"field\": \"memo\"\n    }\n  ]\n}\n\t39 close button\n\t40 full screen button Help: this button also has an action to zoom the window, Secondary Actions: zoom the window\n\t41 minimize button\n42 menu bar\n\t43 Firefox\n\t44 File\n\t45 Edit\n\t46 View\n\t47 History\n\t48 Bookmarks\n\t49 Tools\n\t50 Window\n\t51 Help\n\nThe focused UI element is 1 container SF6R focus probe"
+              }
+            ],
+            "isError": false,
+            "_meta": {
+              "codex/nodeReplExecutionDurationMs": 448,
+              "codex/toolSurface": {
+                "app": {
+                  "appId": "org.mozilla.firefox",
+                  "kind": "appId"
+                },
+                "kind": "computerUse"
+              }
+            }
+          }
+        }
+      },
+      {
+        "direction": "call-received",
+        "msg": {
+          "id": 8,
+          "method": "tools/call",
+          "params": {
+            "name": "js",
+            "code": "nodeRepl.emitImage(await app.getScreenshot());"
+          }
+        }
+      },
+      {
+        "direction": "to-client",
+        "msg": {
+          "jsonrpc": "2.0",
+          "id": 8,
+          "result": {
+            "content": [],
+            "isError": false,
+            "_meta": {
+              "codex/nodeReplExecutionDurationMs": 86,
+              "codex/toolSurface": {
+                "app": {
+                  "appId": "org.mozilla.firefox",
+                  "kind": "appId"
+                },
+                "kind": "computerUse"
+              }
+            }
+          }
+        }
+      },
+      {
+        "direction": "call-received",
+        "msg": {
+          "id": 9,
+          "method": "tools/call",
+          "params": {
+            "name": "js",
+            "code": "await app.setValue(32, \"cobalt heron 47\");"
+          }
+        }
+      },
+      {
+        "direction": "to-client",
+        "msg": {
+          "jsonrpc": "2.0",
+          "id": 9,
+          "result": {
+            "content": [
+              {
+                "type": "text",
+                "text": "Window: \"SF6R focus probe\", App: Firefox.\n0 standard window SF6R focus probe, Secondary Actions: Raise\nsleight: lines changed since the last full tree you saw for this window (- removed, + added; numbers on + lines are current):\n- \t\t\t\t\ttext field (settable) Memo\n+ \t\t\t\t\t32 text field (settable) Memo, Value: cobalt heron 47\n-   \"memo\": \"\",\n+   \"memo\": \"cobalt heron 47\",\n-     }\n-   ]\n- }\n+     },\n+     {\n+       \"index\": 1,\n+       \"phase\": \"before-refusal\",\n+       \"type\": \"pointerdown\",\n+       \"field\": \"memo\"\n+     },\n+     {\n+       \"index\": 2,\n+       \"phase\": \"before-refusal\",\n+       \"type\": \"beforeinput\",\n+       \"fie\n- The focused UI element is 1 container SF6R focus probe\n+ The focused UI element is 32 text field (settable) Memo, Value: cobalt heron 47"
+              }
+            ],
+            "isError": false,
+            "_meta": {
+              "codex/nodeReplExecutionDurationMs": 576,
+              "codex/toolSurface": {
+                "app": {
+                  "appId": "org.mozilla.firefox",
+                  "kind": "appId"
+                },
+                "kind": "computerUse"
+              }
+            }
+          }
+        }
+      },
+      {
+        "direction": "call-received",
+        "msg": {
+          "id": 10,
+          "method": "tools/call",
+          "params": {
+            "name": "turn_ended"
+          }
+        }
+      },
+      {
+        "direction": "to-client",
+        "msg": {
+          "jsonrpc": "2.0",
+          "id": 10,
+          "result": {
+            "content": [],
+            "isError": false,
+            "_meta": {
+              "sleight/stats": {
+                "calls": 3,
+                "reads": 1,
+                "characters": 3358,
+                "text": {
+                  "docs": 0,
+                  "tree": 2821,
+                  "other": 537
+                },
+                "errors": 0,
+                "pending": 0,
+                "omitted": 0,
+                "unclassified": 0,
+                "toolMs": 1154,
+                "paths": {
+                  "native": {
+                    "actions": 2,
+                    "estimatedActions": 2,
+                    "estimatedCalls": 2,
+                    "actionMs": 0,
+                    "timedActions": 0
+                  },
+                  "turbo": {
+                    "actions": 0,
+                    "estimatedActions": 0,
+                    "estimatedCalls": 0,
+                    "actionMs": 0,
+                    "timedActions": 0
+                  },
+                  "engine": {
+                    "actions": 0,
+                    "estimatedActions": 0,
+                    "estimatedCalls": 0,
+                    "actionMs": 0,
+                    "timedActions": 0
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    ],
+    "transcript": [
+      {
+        "type": "assistant",
+        "message": {
+          "content": [
+            {
+              "type": "tool_use",
+              "id": "toolu_0134Jx2ZkUkZgfnWWYFYA9Fx",
+              "name": "mcp__plugin_sleight_computer__js",
+              "input": {
+                "code": "let app = await cua.getApp(\"Firefox\");\napp",
+                "title": "Get Firefox app state"
+              },
+              "caller": {
+                "type": "direct"
+              }
+            }
+          ]
+        }
+      },
+      {
+        "type": "assistant",
+        "message": {
+          "content": [
+            {
+              "type": "tool_use",
+              "id": "toolu_01VCDXTEauR349uu7BHg2Nzd",
+              "name": "mcp__plugin_sleight_computer__js",
+              "input": {
+                "code": "await app.typeText(32, \"cobalt heron 47\");",
+                "title": "Single typeText into Memo (element 32)"
+              },
+              "caller": {
+                "type": "direct"
+              }
+            }
+          ]
+        }
+      },
+      {
+        "type": "assistant",
+        "message": {
+          "content": [
+            {
+              "type": "tool_use",
+              "id": "toolu_01PU7BHTQivSnGB2kxQE2MPe",
+              "name": "mcp__plugin_sleight_computer__js",
+              "input": {
+                "code": "await app.click(32);",
+                "title": "Click Memo field to focus it"
+              },
+              "caller": {
+                "type": "direct"
+              }
+            }
+          ]
+        }
+      },
+      {
+        "type": "assistant",
+        "message": {
+          "content": [
+            {
+              "type": "tool_use",
+              "id": "toolu_01RS4mPH5Yt1sV5u1N7V3LX2",
+              "name": "mcp__plugin_sleight_computer__js",
+              "input": {
+                "code": "nodeRepl.emitImage(await app.getScreenshot());",
+                "title": "Screenshot to verify Memo focus"
+              },
+              "caller": {
+                "type": "direct"
+              }
+            }
+          ]
+        }
+      },
+      {
+        "type": "assistant",
+        "message": {
+          "content": [
+            {
+              "type": "tool_use",
+              "id": "toolu_01BBF5ypKBe9mvQeYcooZxsz",
+              "name": "mcp__plugin_sleight_computer__js",
+              "input": {
+                "code": "await app.setValue(32, \"cobalt heron 47\");",
+                "title": "Set Memo value to cobalt heron 47"
+              },
+              "caller": {
+                "type": "direct"
+              }
+            }
+          ]
+        }
+      }
+    ],
+    "row": {
+      "control": "unchanged",
+      "initial": {
+        "documentId": "63e4295b-1b01-422a-8334-d29e14d5b969",
+        "phase": "before-refusal",
+        "memo": "",
+        "reference": "reference stays",
+        "focus": "memo",
+        "events": [
+          {
+            "index": 0,
+            "phase": "before-refusal",
+            "type": "focus-observed",
+            "field": "memo"
+          }
+        ],
+        "axFocus": {
+          "element": 1,
+          "field": null,
+          "diagnostic": "AX field focus unavailable (container only)"
+        }
+      },
+      "refusal": {
+        "observed": true,
+        "numericTarget": true,
+        "nothingSent": true,
+        "order": 1,
+        "callId": 4
+      },
+      "stopped": {
+        "observed": true,
+        "order": 2
+      },
+      "afterRefusal": {
+        "documentId": "63e4295b-1b01-422a-8334-d29e14d5b969",
+        "phase": "before-refusal",
+        "memo": "",
+        "reference": "reference stays",
+        "focus": "memo",
+        "events": [
+          {
+            "index": 0,
+            "phase": "before-refusal",
+            "type": "focus-observed",
+            "field": "memo"
+          }
+        ],
+        "axFocus": {
+          "element": 1,
+          "field": null,
+          "diagnostic": "AX field focus unavailable (container only)"
+        }
+      },
+      "boundary": {
+        "documentId": "63e4295b-1b01-422a-8334-d29e14d5b969",
+        "phase": "before-refusal",
+        "memo": "",
+        "reference": "reference stays",
+        "focus": "memo",
+        "events": [
+          {
+            "index": 0,
+            "phase": "before-refusal",
+            "type": "focus-observed",
+            "field": "memo"
+          }
+        ],
+        "axFocus": {
+          "element": 1,
+          "field": null,
+          "diagnostic": "AX field focus unavailable (container only)"
+        }
+      },
+      "boundaryOrder": 3,
+      "resumeOrder": 4,
+      "error": "Fixture snapshot unavailable",
+      "cleanup": {
+        "browserClosed": true,
+        "profileDeleted": true,
+        "noWindows": true,
+        "driverCollected": true,
+        "modelCollected": true,
+        "serverClosed": true
+      },
+      "modelIds": [
+        "claude-haiku-5-5"
+      ],
+      "sessionIds": [
+        "33fd63e9-ee75-44e7-9fde-014dd848f961"
+      ],
+      "engineVersion": "26.1023.50603",
+      "modelExit": {
+        "code": 0,
+        "timedOut": false,
+        "cancelled": false
+      },
+      "trace": [
+        "recorded-model-trace.jsonl"
+      ],
+      "transcripts": [
+        "recorded-transcript.jsonl"
+      ]
+    }
+  }
+}

@@ -31,6 +31,9 @@ export const WINDOWS_LINE = "Windows: a window's title is the `Window:` header o
 // That line arrives after the turn is spent. Engine-path browser tasks that name a window opened with getState in
 // 37 of 58 race runs (2026-10-18), a mean 2.75 s turn, so SLEIGHT_TS3=1 says it in the js description, before call one.
 export const FIRST_CALL_WINDOWS = "cua.getState() lists no windows: to find a window by its title, start with getApp and read the result's `Window:` header.";
+// SF4 replaces the FS/TS3 additions within the existing pre-call budget. Model choices need a held-out A/B.
+export const FIRST_WINDOW_RULE = 'Known app/window: `let app = await cua.getApp("<app>")` first. Skip inventory. Unknown app: `await cua.getState()` first. Read `Window:` from the getApp result before the next call; mismatch or ambiguity: `select_window` for the named window only, else stop.';
+export const FIRST_WINDOW_LEAN_RULE = 'Named:getApp;else:getState. Read Window: from getApp result before next call; wrong/ambiguous:stop';
 const GETSTATE_SENTENCE = "Use cua.getState() only to find an app or browser you can't name. ";
 
 // The race prompt asks Claude to identify the dedicated window, and the engine's inventory sentence, followed by the

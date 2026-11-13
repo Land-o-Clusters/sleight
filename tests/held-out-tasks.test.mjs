@@ -81,7 +81,7 @@ test('held out: handwritten Word fixtures remain checkable without a zip executa
     if (command === 'zip' || command.endsWith('/zip')) throw Object.assign(Error('zip unavailable'), { code: 'ENOENT' });
     assert.ok(options.timeout > 0 && options.timeout <= 10000, 'the fixture archiver must be bounded');
     assert.equal(options.killSignal, 'SIGKILL');
-    return execFileSync(command, args, options);
+    return execFileSync(command, args, { ...options, timeout: 60000, killSignal: 'SIGKILL' });
   });
   assert.equal(item.check(ctx), true);
   assert.equal(readFileSync(ctx.officePath).readUInt16LE(8), 8, 'independent fixture transport still exercises DEFLATE');
@@ -151,7 +151,7 @@ test('held out: the world suite runs them only by name, as rows outside the clai
   assert.deepEqual(selectSuiteTasks(world, ['word-memo']).map(t => t.id), ['word-memo']);
   const ccTasks = JSON.parse(readFileSync(new URL('../bench/world/tasks/cc-held-out.json', import.meta.url)));
   // BT2 added mail-to-sheet, and LR1 added its three long-thread tasks.
-  assert.deepEqual(suite.heldOut.map(row => row.task), ['mail-to-sheet', ...heldOut.HELD_OUT_TASKS, ...ccTasks.map(row => row.task),
+  assert.deepEqual(suite.heldOut.map(row => row.task), ['preview-early-scroll', 'mail-to-sheet', ...heldOut.HELD_OUT_TASKS, ...ccTasks.map(row => row.task),
     'dm-first-message', 'mail-first-invoice', 'endless-feed-honesty']);
   for (const row of suite.heldOut) {
     assert.equal(row.claim, false);

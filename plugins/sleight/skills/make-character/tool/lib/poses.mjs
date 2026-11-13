@@ -383,6 +383,41 @@ export function usedCells(clips = [...CLIPS, ...PERCH_CLIPS]) {
   return used;
 }
 
+// Stage is a different skeleton, not an enlarged seated sprite. The styles read stage.posture and lay out
+// explicit joints. Sprite/perch poses and their sheet geometry remain unchanged.
+export const STAGE_SCALE = 2;
+const stageClip = (name, posture, ms, loop, extra = {}) => ({
+  name: `stage-${name}`, frames: ms.length, ms, loop,
+  wide: posture === 'lie',
+  pose: (i, ctx = { E: 1 }) => P({
+    stage: { name: `stage-${name}`, posture, frame: i, frames: ms.length, energy: ctx.E, ...extra },
+    face: { eyes: i === ms.length - 1 ? 'half' : 'open', mouth: 'smile' },
+  }),
+});
+export const STAGE_CLIPS = [
+  stageClip('lie', 'lie', [400, 120, 200, 200, 500, 400], true),
+  stageClip('lie-reach', 'lie', [90, 120, 90, 200], false),
+  stageClip('lie-peek', 'lie', [1400, 400], true),
+  stageClip('sleep', 'lie', [1500, 1500], true),
+  stageClip('sit', 'sit', [400, 300, 300, 400], true),
+  stageClip('sit-notes', 'sit', [160, 160, 160, 160, 160, 160], true),
+  stageClip('think', 'sit', [600, 400, 600, 400], true),
+  stageClip('wait', 'sit', [900, 500, 900, 500], true),
+  stageClip('cheer', 'sit', [90, 420, 200], false),
+  stageClip('hang', 'hang', [400, 300, 300, 400], true),
+  stageClip('hang-peek', 'hang', [1400, 400], true),
+  stageClip('climb', 'climb', [110, 110, 110, 110, 110, 110], true),
+  stageClip('stand', 'stand', [280, 110, 110, 140, 140, 320], true),
+  stageClip('point', 'stand', [70, 90, 320], false),
+  stageClip('carry', 'run', [110, 110, 110, 110], true),
+  stageClip('wince', 'stand', [60, 80, 120, 300], false),
+  stageClip('handoff', 'stand', [120, 140, 160, 400], false),
+  stageClip('paused', 'sit', [90, 90, 90, 1200, 1200], true),
+  stageClip('leap', 'leap', [70, 120, 160, 70, 160], false),
+  stageClip('run', 'run', [110, 110, 110, 110, 110, 110, 110, 110], true),
+  stageClip('startle', 'sit', [70, 110], false),
+];
+
 /** Where the last rendered cell's anchors landed in cell px, after the root transform (for per-state hotspots). */
 export const lastAnchors = {};
 export function recordAnchors(anchor, p, names = ['hand.l', 'hand.r', 'tip.l', 'tip.r', 'head']) {

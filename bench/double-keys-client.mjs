@@ -42,14 +42,15 @@ export function probeEnvironment(server, inherited = process.env) {
 }
 
 export async function probeClient(server, { relay: throughRelay, record, timeoutMs = 60000,
-  relayOptions = {},
+  relayOptions = {}, signal, detached = false, onClient,
   approve = benchmarkApproval,
   label = throughRelay ? 'sleight' : 'direct' } = {}) {
+  signal?.throwIfAborted();
   const sessionId = randomUUID();
   let turnId = randomUUID();
   const child = spawn(server.command, server.args, { stdio: ['pipe', 'pipe', 'pipe'],
-    env: probeEnvironment(server) });
-  let ended = false, closing;
+    env: probeEnvironment(server), detached });
+  let ended = false, closing, callsClosed = false;
   const stopped = new Promise(resolve => child.once('close', (code, signal) => {
     ended = true;
     record({ client: label, event: 'engine-close', code, signal });
@@ -96,7 +97,8 @@ export async function probeClient(server, { relay: throughRelay, record, timeout
     if (msg.method && msg.id !== undefined) {
       if (msg.method === 'elicitation/create') {
         // A synchronous approve (xl1-probe's) threw outside any try at 17:18Z and left Excel running.
-        Promise.resolve().then(() => approve(msg.params)).then(result => send({ id: msg.id, result }), fail);
+        Promise.resolve().then(() => callsClosed ? { action: 'decline' } : approve(msg.params))
+          .then(result => send({ id: msg.id, result: callsClosed ? { action: 'decline' } : result }), fail);
       } else send({ id: msg.id, error: { code: -32601, message: 'Method not found' } });
     } else if (!msg.method && pending.has(msg.id)) {
       const reply = pending.get(msg.id);
@@ -104,34 +106,68 @@ export async function probeClient(server, { relay: throughRelay, record, timeout
       msg.error ? reply.reject(new Error(msg.error.message)) : reply.resolve(msg.result);
     }
   });
-  const call = async (name, args) => {
+  const invoke = async (name, args) => {
     const result = await request('tools/call', { name,
       arguments: !throughRelay && name === 'turn_ended' ? { ...args, hook_event_name: 'Stop', session_id: sessionId, turn_id: turnId } : args,
       ...(throughRelay ? {} : { _meta: { 'x-codex-turn-metadata': JSON.stringify({ session_id: sessionId, turn_id: turnId }) } }) });
     if (!throughRelay && name === 'turn_ended') turnId = randomUUID();
     return result;
   };
-  const close = () => closing ||= (async () => {
+  const call = async (name, args) => {
+    if (callsClosed) throw Error('PROBE_CLIENT_CLOSED');
+    signal?.throwIfAborted();
+    return invoke(name, args);
+  };
+  const abort = () => { callsClosed = true; void close().catch(() => {}); };
+  let turnEnd;
+  const endTurn = () => turnEnd ??= (relay ? relay.shutdown() : invoke('turn_ended', { session_id: sessionId, turn_id: turnId }));
+  // The release request goes first. The second interrupt has a bounded wait for
+  // its answer, then collects this client's process group, never ChatGPT itself.
+  let forcing;
+  const forceClose = () => forcing ??= (async () => {
+    callsClosed = true;
+    let timer, released = false;
+    try {
+      if (!ended) await Promise.race([endTurn().then(reply => { released = reply?.isError !== true; }, () => {}),
+        new Promise(resolve => { timer = setTimeout(resolve, 500); })]);
+    } finally {
+      clearTimeout(timer);
+      child.stdin.end();
+      if (!ended || detached) try { detached ? process.kill(-child.pid, 'SIGKILL') : child.kill('SIGKILL'); }
+      catch (error) { if (error.code !== 'ESRCH') throw error; }
+      await stopped;
+    }
+    return { released };
+  })();
+  const close = () => {
+    callsClosed = true;
+    return closing ||= (async () => {
     // Stop only this client's owned server, never the helper or ChatGPT.
     const gentle = setTimeout(() => { if (!ended) child.kill('SIGTERM'); }, 5000);
     const force = setTimeout(() => { if (!ended) child.kill('SIGKILL'); }, 8000);
     try {
       if (!ended) {
-        if (relay) await Promise.race([relay.shutdown(), stopped]);
-        else await Promise.race([call('turn_ended', { session_id: sessionId, turn_id: turnId }), stopped]).catch(error =>
+        await Promise.race([endTurn(), stopped]).catch(error =>
           record({ client: label, event: 'turn-end-error', error: error.message }));
         child.stdin.end();
       }
       await stopped;
     } finally {
-      clearTimeout(gentle); clearTimeout(force);
+      clearTimeout(gentle); clearTimeout(force); signal?.removeEventListener('abort', abort);
       relay?.close(); input.close(); fail(new Error('client closed'));
     }
   })();
+  };
+  signal?.addEventListener('abort', abort, { once: true });
+  if (signal?.aborted) abort();
+  const client = { call, close, forceClose, pid: child.pid };
   try {
+    onClient?.(client);
     await request('initialize', { protocolVersion: '2025-06-18', capabilities: { elicitation: { form: {} } },
       clientInfo: { name: `double-keys-${label}`, version: '1' } });
+    signal?.throwIfAborted();
+    if (callsClosed) throw Error('PROBE_CLIENT_CLOSED');
     send({ method: 'notifications/initialized' });
-    return { call, close, pid: child.pid };
+    return client;
   } catch (error) { await close(); error.cleanupConfirmed = true; throw error; }
 }

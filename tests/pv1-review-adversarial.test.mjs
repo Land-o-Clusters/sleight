@@ -82,7 +82,7 @@ test('hard link to a package file, write through the other name', t => {
 test('xattr and chmod round trip trigger a rehash only', { skip: process.platform !== 'darwin' }, t => {
   const f = fixture(t), file = join(f.root, 'host.mjs');
   assert.equal(f.inventory.current(), true);
-  execFileSync('/usr/bin/xattr', ['-w', 'com.example.x', '1', file]);
+  execFileSync('/usr/bin/xattr', ['-w', 'com.example.x', '1', file], { timeout: 30000, killSignal: 'SIGKILL' });
   const a = lstatSync(file, { bigint: true });
   assert.equal(f.inventory.current(), true);
   chmodSync(file, 0o600); chmodSync(file, 0o644);

@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// VC7's night runner: the agent cursor's five live checks in order, unattended, from ledger/vc/night/vc7.command.
+// VC7's night runner: the agent cursor's five live checks in order, unattended.
 //   1 capture exclusion (h5-capture.mjs --cursor-style ring, seam, sprite)   2 engine cursor (engine-cursor.mjs)
 //   3 idle and active cost (cursor-cost.mjs)   4 the speed A/B (cost-pass.mjs --cursor-style ring, 5 rounds)
 //   5 the visual record (cursor-record.mjs)
@@ -25,15 +25,16 @@
 // Events), kills processes started from this run's bin/, and empties only the night's own temp folders. summary.md lists
 // every step and every fixture that needed a signal.
 // Exit 0: every step measured; 1: a step did not; 4: stopped for the owner; 129, 130 or 143: a signal.
+import { helperCompileArgs } from '../../plugins/sleight/lib/direct-browser/host-cache.mjs';
 import { spawn, execFile, execFileSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { appendFileSync, closeSync, existsSync, lstatSync, mkdirSync, mkdtempSync, openSync, readdirSync, readFileSync, renameSync, rmdirSync, rmSync, statSync, writeFileSync } from 'node:fs';
-import { homedir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { promisify } from 'node:util';
 import { createOwnerWatch, ownerWords, parseInputLine, createInputDetector, QUIET_GAP_MS } from './owner-watch.mjs';
 import { ROOT, HOST_SOURCE, HELPER_SOURCE, RECORDER_SOURCE, TEXTEDIT, tilde, stamp as makeStamp, logsRoot } from './vc7-live.mjs';
+import { benchOutputPath } from '../runtime-options.mjs';
 
 const execute = promisify(execFile);
 export async function prepareCaptureStep(helper, run = execute) {
@@ -45,7 +46,7 @@ export async function prepareCaptureStep(helper, run = execute) {
   if (!pre.ok || !pre.screenRecording) throw Error(`capture preflight refused: ${pre.error ?? 'Screen Recording permission missing'}`);
 }
 export const HOLD = '/tmp/sleight-hold', LOCK = '/tmp/sleight-live.lock';
-export const NIGHT = join(homedir(), 'Projects/sleight-wt/ledger/vc/night');
+export const NIGHT = benchOutputPath('vc7-night');
 export const BUSY_RETRIES = 3;
 export const FAILED_RETRIES = 1;
 export const LOCK_WAIT_MS = 20 * 60000;
@@ -62,7 +63,7 @@ export function nightSteps({ out, bin }) {
   const tools = ['--host', join(bin, 'consent-host'), '--helper', join(bin, 'capture-helper')];
   const live = id => ['--owner-away', '--out', join(out, id), '--receipt', join(out, `${id}.fixture.json`)];
   return [
-    { id: 'build', check: 0, est: 4, input: false, internal: true, what: 'build the hand host, the capture helper and the recorder (xcrun swiftc, no -O)' },
+    { id: 'build', check: 0, est: 4, input: false, internal: true, what: 'build the hand host, the capture helper and the recorder (xcrun swiftc; consent host uses -O)' },
     ...['ring', 'seam', 'sprite'].map(style => ({ id: `capture-${style}`, check: 1, est: 2, input: false, what: `capture exclusion, ${style}`,
       script: 'bench/hand/h5-capture.mjs', args: [...live(`capture-${style}`), '--cursor-style', style, '--samples', '5', ...tools] })),
     { id: 'engine-cursor', check: 2, est: 3, input: true, what: 'engine cursor double-up and timing', script: 'bench/hand/engine-cursor.mjs',
@@ -200,7 +201,7 @@ async function dryRun(opts) {
     console.log(`\n# ${step.check ? `check ${step.check}` : 'setup'}: ${step.id}, about ${step.est} min (timeout ${timeoutMs(step) / 60000} min): ${step.what}${skip}`);
     if (step.internal) {
       for (const [source, name] of [[HOST_SOURCE, 'consent-host'], [HELPER_SOURCE, 'capture-helper'], [RECORDER_SOURCE, 'capture-recorder']]) {
-        console.log(`xcrun swiftc -module-cache-path <swift cache> ${tilde(source)} -o ${tilde(join(bin, name))}`);
+        console.log('xcrun ' + helperCompileArgs(name === 'consent-host' ? name : 'benchmark-helper', { sources: [tilde(source)], binary: tilde(join(bin, name)), moduleCache: '<swift cache>' }).join(' '));
       }
       continue;
     }

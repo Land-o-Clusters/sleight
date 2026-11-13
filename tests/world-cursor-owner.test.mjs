@@ -1,3 +1,4 @@
+import { assertChildStatus } from './fixtures/child-status.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
@@ -21,6 +22,26 @@ const desired = { model: 'Grok 4.7 High', effort: 'High', speed: 'Normal', attac
 const selectedComposer = () => ({ modelConfig: { selectedModels: [{ modelId: 'grok-4.7', parameters: [{ id: 'effort', value: 'high' }, { id: 'fast', value: 'false' }] }] }, contextAttachments: [{ type: 'computer-use' }], target: { type: 'local' } });
 const plan = () => ({ ...composerPlan({ prompt: 'Edit.', paths }), ownerSaysCursorFree: true });
 const fixtureHomes = [];
+
+test('desktop preflight waits before touching host state and aborts a boundary cleanly', async () => {
+  let held = true, waits = 0, inspections = 0;
+  const controller = new AbortController();
+  const d = new DesktopDriver({ exists: () => held, inspect: () => { inspections++; throw Error('inert host'); },
+    hold: { wait: async () => { waits++; controller.abort(); }, log() {} } });
+  await assert.rejects(d.preflight(plan(), { signal: controller.signal }), error => error.exitCode === 130);
+  assert.equal(waits, 1); assert.equal(inspections, 0);
+  held = false;
+});
+
+test('native Cursor entry waits with signal handlers before preflight or lock acquisition', async () => {
+  const before = process.listenerCount('SIGINT');
+  let waits = 0;
+  await assert.rejects(nativeMain(['--owner-away', '--owner-says-cursor-free', '--tasks', 'textedit-edit'], {
+    hold: { held: () => true, wait: async () => { waits++; process.emit('SIGINT'); }, log() {} },
+    preflight: () => assert.fail('host preflight during hold'), lock: () => assert.fail('lock during hold'),
+  }), error => error.exitCode === 130);
+  assert.equal(waits, 1); assert.equal(process.listenerCount('SIGINT'), before);
+});
 process.once('exit', () => { for (const home of fixtureHomes) rmSync(home, { recursive: true, force: true }); });
 function fixture({ failSelection = false, authenticated = true, rows = [identity] } = {}) {
   const home = mkdtempSync(join(realpathSync(tmpdir()), 'cu2-owner-'));
@@ -46,8 +67,8 @@ function fixture({ failSelection = false, authenticated = true, rows = [identity
 }
 
 test('calibrate CLI dry-run exits zero with no host, write or network permission', () => {
-  const r = spawnSync(process.execPath, ['--permission', '--allow-fs-read=*', 'bench/world/arms/cursor-cu/calibrate.mjs', '--dry-run'], { encoding: 'utf8', timeout: 5000 });
-  assert.equal(r.status, 0, r.stderr); assert.equal(r.signal, null);
+  const r = spawnSync(process.execPath, ['--permission', '--allow-fs-read=*', 'bench/world/arms/cursor-cu/calibrate.mjs', '--dry-run'], { encoding: 'utf8', timeout: 5000, killSignal: 'SIGKILL' });
+  assertChildStatus(r, 0, r.stderr); assert.equal(r.signal, null);
   assert.equal(JSON.parse(r.stdout).paths.app, '/Applications/Cursor.app');
   assert.doesNotMatch(r.stderr, /unsettled top-level await/);
 });
@@ -106,8 +127,8 @@ test('whole card snapshot refuses Always Allow and unlisted apps before any pres
 });
 
 test('calibrate live entry without owner flag refuses promptly before host discovery', () => {
-  const r = spawnSync(process.execPath, ['--permission', '--allow-fs-read=*', 'bench/world/arms/cursor-cu/calibrate.mjs'], { encoding: 'utf8', timeout: 5000 });
-  assert.equal(r.status, 1, r.stderr); assert.equal(r.signal, null);
+  const r = spawnSync(process.execPath, ['--permission', '--allow-fs-read=*', 'bench/world/arms/cursor-cu/calibrate.mjs'], { encoding: 'utf8', timeout: 5000, killSignal: 'SIGKILL' });
+  assertChildStatus(r, 1, r.stderr); assert.equal(r.signal, null);
   assert.match(r.stderr, /requires --owner-says-cursor-free/);
   assert.doesNotMatch(r.stderr, /unsettled top-level await/);
 });

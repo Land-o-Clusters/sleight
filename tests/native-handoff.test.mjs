@@ -1,3 +1,4 @@
+import { modCall } from './fixtures/mod-attribution.mjs';
 import { trackTemp } from '../scripts/temp-leftovers.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
@@ -25,8 +26,8 @@ async function fixture(t, options = {}) {
   const relay = createRelay({ clientIn, clientOut, serverIn, serverOut, inputLease, changeReview: false,
     handoffUi: async () => ui, ...options });
   t.after(() => { relay.dispose(); for (const stream of [clientIn, clientOut, serverIn, serverOut]) stream.destroy(); inputLease.close(); rmSync(directory, { recursive: true, force: true }); });
-  const send = message => clientIn.write(JSON.stringify(message) + '\n');
-  const reply = message => serverOut.write(JSON.stringify(message) + '\n');
+  const send = message => clientIn.write(JSON.stringify(modCall(message)) + '\n');
+  const reply = message => serverOut.write(JSON.stringify(modCall(message)) + '\n');
   send(rpc('initial', 'js', { code: 'var app = await cua.getApp("com.example.Reader")' }));
   reply(result('initial')); await tick();
   return { relay, send, reply, outbound, received, cards, dismissed, inputLease,
@@ -118,6 +119,29 @@ test('present native handoff still waits for Continue with a fake presence signa
   assert.match(fresh.params.arguments.code, /cua.getApp/);
   f.reply(result(fresh.id, 'Receipt INV-42')); await tick();
   assert.equal(f.received.find(row => row.id === 'handoff').result.isError, false);
+});
+
+for (const remoteApprovals of ['0', '1']) for (const [state, waiting] of [
+  [{ locked: true, idleSeconds: 0 }, false], [{ locked: false, idleSeconds: 120 }, false],
+  [{ locked: false, idleSeconds: 0 }, true],
+]) test(`desktop native handoff reads Mac presence ${JSON.stringify(state)}, remote approvals=${remoteApprovals}`, async t => {
+  let reads = 0;
+  const options = remoteApprovalOptions({ SLEIGHT_REMOTE_APPROVALS: remoteApprovals }, async (_script, request) => {
+    if (request.operation === 'catalog') return { apps: [], defaults: {} };
+    reads++; return state;
+  });
+  const f = await fixture(t, { ...options, desktopTurns: true });
+  f.send(rpc('bootstrap', 'turn_ended', { sleight_turbo: { event: 'bootstrap' } })); await tick();
+  const envelope = JSON.parse(f.received.find(row => row.id === 'bootstrap').result.content[0].text).sleightTurbo;
+  f.send(rpc('begin', 'turn_ended', { sleight_turbo: { ...envelope, event: 'begin', turn: 'desktop-handoff',
+    text: 'Find my receipt.', origin: 'desktop', turbo: false } })); await tick();
+  assert.equal(f.received.find(row => row.id === 'begin').result.isError, false);
+  reads = 0;
+  f.send(rpc('handoff', 'app_handoff')); await tick();
+  assert.equal(reads, 1, 'desktop origin cannot force the Mac away');
+  assert.equal(f.cards.length, 1);
+  assert.equal(f.received.some(row => row.id === 'handoff'), !waiting);
+  f.answer('cancel'); await tick();
 });
 
 for (const [name, read, waiting] of [

@@ -77,8 +77,20 @@ test('the covered refusal names the endpoint and stops a repeated engine fallbac
   const message = COVERED_NO_TEXT('Finder', '; to is covered by Finder and no part of that element is exposed');
   assert.match(message, /Finder covers the window at the drag points, and this drag has no selected text; to is covered/);
   // A move the app offers without a drag comes before app.drag and before asking the user.
-  assert.match(message, /\. If the app offers this move without a drag \(a button or menu command on the item, or keys it names\), use that\. Otherwise use the engine's app\.drag in js once/);
+  assert.match(message, /\. If the app offers this move without a drag \(a button or menu command on the item, or keys it names\), use that\./);
+  assert.match(message, /Otherwise use the engine's app\.drag in js once if the content may change; if the order or content is unchanged afterwards/);
   assert.match(message, /don't repeat it: stop and tell the user.*nothing was pressed$/);
+  assert.equal(Buffer.byteLength(COVERED_NO_TEXT('<cover>', '<detail>')), 425);
+});
+
+test('the skill and full drag description retain the measured steer to the local drag tool', async () => {
+  const { localToolDefinitions, skillRules } = await import('../plugins/sleight/lib/launch.mjs');
+  const skill = skillRules(undefined, {});
+  assert.ok(skill.includes('Reorder rows or move selected text: `drag` (select text in `js`), not `app.drag`.'));
+  const tool = localToolDefinitions({}).find(tool => tool.name === 'drag');
+  assert.ok(tool.description.startsWith("A drag that holds the mouse down and moves in steps, for what app.drag in the js tool can't do, such as reordering list rows or moving selected text (select it with js first)."));
+  assert.match(tool.description, /element number from the last window read/);
+  assert.doesNotMatch([skill, tool.description, COVERED_NO_TEXT('Finder')].join('\n'), /screenshot points/i);
 });
 
 test('exposure keeps four points from another app\'s window edge and counts every layer', () => {

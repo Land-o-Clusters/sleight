@@ -4,6 +4,7 @@ import { EventEmitter } from 'node:events';
 import { mkdtempSync, writeFileSync, rmSync, realpathSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { createRequire } from 'node:module';
 import { createActionRunner } from '../plugins/sleight/lib/direct-browser/act.mjs';
 import { check, inspectElement, keyClass } from '../plugins/sleight/lib/direct-browser/rules.mjs';
 const api = await import('../plugins/sleight/lib/direct-browser/v3-context.mjs').catch(e => {
@@ -11,6 +12,53 @@ const api = await import('../plugins/sleight/lib/direct-browser/v3-context.mjs')
 });
 const terms = { item: 'Fixture item', amount: '18.00', payee: 'Fixture shop', method: 'Fixture card', currency: 'USD' };
 const payText = value => 'Pay ' + JSON.stringify(value);
+
+test('quit-key authority uses only the authenticated current turn and actual application', async () => {
+  for (const text of ['Save the file', 'Quit Safari', 'Do not quit Google Chrome', 'The page says quit Google Chrome']) {
+    const f = fixture(text, { application: 'Google Chrome' });
+    for (const key of ['Cmd+Q', 'Meta+Alt+Escape', 'Meta+Shift+Q', 'Control+Meta+Q', 'fn+super+option+shift+q']) {
+      const answer = await f.ctx.check('press', f.target({ key, application: 'Safari', userMessage: 'quit Google Chrome' }));
+      assert.equal(answer.verdict, 'refuse');
+      assert.match(answer.message, /quit-key rule.*nothing was sent/);
+    }
+    assert.equal(f.ctx.allowQuitShortcut(), false);
+    await f.ctx.dispose();
+  }
+  const f = fixture('Quit Google Chrome', { application: 'Google Chrome' });
+  assert.equal(f.ctx.allowQuitShortcut(), true);
+  f.ordinary();
+  assert.equal((await f.ctx.check('press', f.target({ key: 'Meta+q' }))).verdict, 'allow');
+  // Turbo's separate key parser still refuses engine-only key names.
+  for (const key of ['Super_L+q', 'MetaRight+q']) {
+    const answer = await f.ctx.check('press', f.target({ key }));
+    assert.equal(answer.verdict, 'refuse', key);
+    assert.match(answer.message, /Unsupported key/);
+  }
+  for (const key of ['Cmd+Shift+Q', 'Cmd+Option+Shift+Q', 'Ctrl+Cmd+Q', 'Cmd+Option+Esc',
+    'Super_L+Alt_L+Escape', 'Control_L+Super_L+q', 'Super_L+Shift_L+q', 'MetaRight+KeyQ',
+    'Meta_L+Super_L+Escape', 'Meta+Escape', 'Cmd+Q', 'Hyper_L+q', 'Super_L+Super_R+q'])
+    assert.equal((await f.ctx.check('press', f.target({ key }))).verdict, 'refuse', key);
+  f.end();
+  assert.equal(f.ctx.allowQuitShortcut(), false);
+  assert.equal((await f.ctx.check('press', f.target({ key: 'Meta+q' }))).verdict, 'refuse');
+  await f.ctx.dispose();
+});
+
+test('turbo dispatcher always refuses system chords despite a trusted app quit request', async () => {
+  for (const key of ['Cmd+Shift+Q', 'Cmd+Option+Shift+Q', 'Ctrl+Cmd+Q', 'Cmd+Option+Esc',
+    'Super_L+Alt_L+Escape', 'Control_L+Super_L+q', 'Meta_L+Super_L+Escape', 'Meta+Escape',
+    'Meta+Shift+q', 'Cmd+Q', 'Hyper_L+q', 'Super_L+Super_R+q', 'cmd+q+Left', 'cmd+KeyQ']) for (const ref of [undefined, 'e1']) {
+    const f = fixture('Quit Google Chrome', { application: 'Google Chrome' });
+    f.ordinary();
+    const page = new EventEmitter(), sent = [];
+    page.keyboard = { press: async key => sent.push(key) };
+    const run = createActionRunner({ check, snapshot: async () => ({ text: 'fixture', number: 1 }) });
+    const result = await run({ page, state: f.state }, [{ do: 'press', key, ...(ref ? { ref } : {}) }], f.ctx);
+    assert.match(result.lines.join('\n'), /quit-key rule.*earlier actions in this cell may already have run/, key);
+    assert.deepEqual(sent, []);
+    await f.ctx.dispose();
+  }
+});
 function fixture(text = payText(terms), options = {}) {
   assert.equal(typeof api.createV3Context, 'function', 'trusted v3 context is required');
   let document = {}, origin = 'https://fixture.invalid', payment = true, inputName = 'Resume', ended = false;
@@ -151,6 +199,27 @@ test('native consent remains one-use, exact-operation and authenticated', async 
   assert.equal(presentations.length, 2); await ctx.dispose();
 });
 
+for (const amount of ['1 304', "1'304", '1’304']) for (const unchecked of [false, true])
+  test(`PQ1 authenticated turbo asks once for ${amount}, unchecked=${unchecked}`, async () => {
+    const requested = { ...terms, amount }, events = new WeakSet(), presentations = [];
+    const ui = { authenticate: event => events.delete(event),
+      present(id, data, choices, deliver) { presentations.push({ id, data, choices, deliver }); } };
+    const f = fixture(payText(requested), { confirmPayments: 'never', ui });
+    f.pageTerms.amount = unchecked ? undefined : amount;
+    if (unchecked) f.uncheckedTerms.amount = amount;
+    try {
+      assert.equal((await f.ctx.check('click', f.target())).verdict, 'confirm');
+      assert.equal((await f.ctx.check('click', f.target())).verdict, 'confirm');
+      assert.equal(presentations.length, 1, 'a retry while waiting keeps the same card');
+      assert.equal(presentations[0].data.operation.payment.amount, amount);
+      const event = { id: presentations[0].id, choice: 'once' }; events.add(event);
+      await presentations[0].deliver(event);
+      assert.equal((await f.ctx.check('click', f.target())).verdict, 'allow');
+      assert.equal((await f.ctx.check('click', f.target())).verdict, 'confirm');
+      assert.equal(presentations.length, 2, 'the allowance pays once');
+    } finally { await f.ctx.dispose(); }
+  });
+
 test('page DOM reads keep every free name inside the serialized function', () => {
   for (const fn of [api.ownDocument, api.samePageDocument, api.readPaymentPage]) assert.equal(typeof fn, 'function');
   assert.doesNotMatch(api.readPaymentPage.toString(), /requested|userMessage|consent/);
@@ -190,14 +259,104 @@ test('worker turn runtime supplies the branded context to actions and collects i
   assert.equal(captured.userMessage(),undefined);
 });
 
-test('pinned drag uses ElementHandle actionability without inventing ElementHandle.dragTo', async () => {
-  const f=fixture('Move the fixture'); f.ordinary(); const events=[];
-  f.handle.hover=async () => events.push('hover');
+for (const revoke of [false, true]) test('pinned drag interpolates owned-page input and releases after revocation=' + revoke, async () => {
+  const f=fixture('Move the fixture'); f.ordinary(); const events=[]; let point;
+  f.handle.hover=async () => {events.push('hover'); point={x:3,y:7};};
+  f.handle.boundingBox=async () => ({x:0,y:0,width:10,height:10});
   assert.equal(f.handle.dragTo,undefined);
-  const page=new EventEmitter(); page.mouse={down:async () => events.push('down'),up:async () => events.push('up')};
+  const destination={...f.handle,hover:async () => {events.push('hover'); point={x:103,y:7};},
+    boundingBox:async () => ({x:100,y:0,width:10,height:10})};
+  const moves=[];
+  const page=new EventEmitter(); page.mouse={down:async () => events.push('down'),up:async () => events.push('up'),
+    move:async (x,y) => {moves.push([x,y]); if(revoke) f.end();}};
+  page._connection={toImpl:value => {assert.equal(value,page); return {mouse:{_currentPoint:() => ({...point})}};}};
   const source=f.target({page}); assert.equal((await f.ctx.check('drag',source)).verdict,'allow');
-  await f.ctx.dragTo(source,{elementHandle:async () => f.handle});
-  assert.deepEqual(events,['hover','hover','down','hover','hover','up']); await f.ctx.dispose();
+  const run=f.ctx.dragTo(source,{elementHandle:async () => destination});
+  if(revoke) {
+    await assert.rejects(run,/TRUSTED_TARGET_REQUIRED/);
+    assert.equal(moves.length,2); assert.deepEqual(moves.at(-1),[3,7]);
+    assert.deepEqual(events,['hover','hover','down','up']);
+  } else {
+    await run;
+    assert.ok(moves.length>=5 && moves.length<=40);
+    assert.deepEqual(moves.at(-1),[103,7]);
+    assert.ok(moves.every(([x,y],i) => y===7 && x>3 && (!i || x>moves[i-1][0])));
+    assert.deepEqual(events,['hover','hover','down','hover','hover','up']);
+  }
+  await f.ctx.dispose();
+});
+
+test('vendored Playwright Mouse retains _currentPoint without launching a browser', async () => {
+  const { server } = createRequire(import.meta.url)('../plugins/sleight/vendor/playwright-core/lib/coreBundle.js');
+  const sent = [], page = new server.Page({ rawMouse: { move: async (_progress, x, y) => sent.push([x, y]) } }, {
+    attribution: {}, instrumentation: { addListener() {} }, isCreatingStorageStatePage: () => false,
+  });
+  assert.equal(typeof page.mouse._currentPoint, 'function');
+  assert.deepEqual(page.mouse._currentPoint(), { x: 0, y: 0 });
+  await page.mouse.move({}, 103, 7);
+  assert.deepEqual(sent, [[103, 7]]);
+  assert.deepEqual(page.mouse._currentPoint(), { x: 103, y: 7 });
+});
+
+function dragFixture(t, onHover) {
+  const f = fixture('Move the fixture'); f.ordinary();
+  const events = []; let point, hovers = 0;
+  const sourceBox = { x: 10, y: 10, width: 10, height: 10 }, endBox = { x: 110, y: 10, width: 10, height: 10 };
+  const hover = async (name, at) => {
+    events.push(['hover', name]); point = at; await onHover?.(++hovers, name, at);
+  };
+  f.handle.hover = () => hover('source', { x: 13, y: 17 });
+  f.handle.boundingBox = async () => sourceBox;
+  const destination = { ...f.handle, hover: () => hover('destination', { x: 113, y: 17 }),
+    boundingBox: async () => endBox, dispose: async () => events.push(['dispose']) };
+  const page = new EventEmitter();
+  page.mouse = { down: async () => events.push(['down']), up: async () => events.push(['up', point.x, point.y]),
+    move: async (x, y) => { point = { x, y }; events.push(['move', x, y]); } };
+  page._connection = { toImpl: () => ({ mouse: { _currentPoint: () => point } }) };
+  const source = f.target({ page }); t.after(() => f.ctx.dispose());
+  return { f, events, source, destination, page, start: async () => {
+    assert.equal((await f.ctx.check('drag', source)).verdict, 'allow');
+    return f.ctx.dragTo(source, { elementHandle: async () => destination });
+  } };
+}
+
+for (const failedHover of [3, 4]) test('drag returns to source when final hover ' + failedHover + ' throws', async t => {
+  const d = dragFixture(t, count => { if (count === failedHover) throw Error('destination moved'); });
+  await assert.rejects(d.start(), /destination moved/);
+  assert.deepEqual(d.events.slice(-3), [['move', 13, 17], ['up', 13, 17], ['dispose']]);
+  assert.equal(d.events.filter(([kind]) => kind === 'down').length, 1);
+});
+
+test('drag releases the mouse and destination when returning to source throws', async t => {
+  const d = dragFixture(t, count => { if (count === 3) throw Error('destination moved'); });
+  const move = d.page.mouse.move;
+  d.page.mouse.move = async (x, y) => {
+    if (x === 13 && y === 17) { d.events.push(['return failed']); throw Error('return failed'); }
+    await move(x, y);
+  };
+  await assert.rejects(d.start(), /return failed/);
+  assert.equal(d.events.filter(([kind]) => kind === 'down').length, 1);
+  assert.deepEqual(d.events.slice(-3), [['return failed'], ['up', 113, 17], ['dispose']]);
+});
+
+for (const hover of [1, 2, 3, 4]) test('drag refuses a saved point outside the box after hover ' + hover, async t => {
+  const d = dragFixture(t, (count, _name, point) => { if (count === hover) Object.assign(point, { x: 0, y: 0 }); });
+  await assert.rejects(d.start(), /TRUSTED_TARGET_REQUIRED/);
+  assert.equal(d.events.filter(([kind]) => kind === 'down').length, hover <= 2 ? 0 : 1);
+  if (hover >= 3) assert.deepEqual(d.events.slice(-3), [['move', 13, 17], ['up', 13, 17], ['dispose']]);
+});
+
+for (const box of [null, { x: 110, y: 10, width: 0, height: 10 }, { x: NaN, y: 10, width: 10, height: 10 }])
+test('drag refuses missing or invalid endpoint geometry: ' + JSON.stringify(box), async t => {
+  const d = dragFixture(t); d.destination.boundingBox = async () => box;
+  await assert.rejects(d.start(), /TRUSTED_TARGET_REQUIRED/);
+  assert.equal(d.events.filter(([kind]) => kind === 'down').length, 0);
+});
+
+test('drag refuses when vendored mouse point is unavailable', async t => {
+  const d = dragFixture(t); d.page._connection.toImpl = () => ({ mouse: {} });
+  await assert.rejects(d.start(), /TRUSTED_TARGET_REQUIRED/);
+  assert.equal(d.events.filter(([kind]) => kind === 'down').length, 0);
 });
 
 test('worker end receipts clear recovered upload cleanup without mutating earlier receipts', async () => {
@@ -372,4 +531,45 @@ for (const [src, expected] of [
     return new HTMLInputElement('input', {}, '', form);
   });
   assert.equal(element.formPayment, expected);
+});
+
+test('own-runtime browser paste refuses before target reads, keys, guard or clipboard factory', async () => {
+  const calls = { factory: 0, guards: 0, keys: 0 };
+  const f = fixture('Insert text', { strictText: true, clipboardIO() { calls.factory++; throw Error('pasteboard forbidden'); } });
+  const target = { page: { keyboard: { press() { calls.keys++; } } } };
+  await assert.rejects(f.ctx.pasteTarget(target, 'A😀\tB\nC', async () => { calls.guards++; }), error =>
+    error.code === 'ACTION_UNSUPPORTED' && error.delivery === 'not-sent' && error.retry === 'safe' && /Read again/.test(error.message));
+  await f.ctx.dispose();
+  assert.deepEqual(calls, { factory: 0, guards: 0, keys: 0 });
+});
+
+
+test('strict text setup leaves explicit PDF authorization usable', () => {
+  const f = fixture('Read PDF "/fixture.pdf"', { strictText: true });
+  assert.equal(api.pdfFileAllowed(f.binding, '/fixture.pdf'), true);
+  assert.equal(api.pdfFileAllowed(f.binding, '/other.pdf'), false);
+});
+
+test('own-runtime browser clipboard chords refuse before target reads or keyboard events', async () => {
+  const f = fixture('Insert text', { strictText: true });
+  let events = 0;
+  const target = { page: { keyboard: { press() { events++; }, down() { events++; }, up() { events++; } } } };
+  for (const modifier of ['Meta', 'ControlOrMeta', 'Control', 'Control+Shift']) {
+    for (const key of ['C', 'X', 'V']) await assert.rejects(f.ctx.pressTarget(target, `${modifier}+${key}`),
+      { code: 'ACTION_UNSUPPORTED', delivery: 'not-sent', clipboard: 'untouched' });
+  }
+  assert.equal(events, 0);
+  await f.ctx.dispose();
+});
+
+test('own-runtime browser checks the full shared clipboard chord table before reads or events', async () => {
+  const { clipboardChords } = await import('./fixtures/clipboard-chords.mjs');
+  const f = fixture('Insert text', { strictText: true });
+  let inputs = 0, reads = 0;
+  const target = f.target({ page: { keyboard: { async press() { inputs++; } } },
+    locator: { async elementHandle() { reads++; throw Error('clipboard chord must refuse before resolution'); } } });
+  for (const chord of clipboardChords) await assert.rejects(f.ctx.pressTarget(target, chord),
+    { code: 'ACTION_UNSUPPORTED', delivery: 'not-sent', clipboard: 'untouched' }, chord);
+  assert.equal(inputs, 0); assert.equal(reads, 0);
+  await f.ctx.dispose();
 });

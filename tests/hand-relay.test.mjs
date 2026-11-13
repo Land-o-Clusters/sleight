@@ -129,7 +129,7 @@ function recorder() {
   const events = [];
   return { events, admit: (id, input) => events.push(['admit', id, input]), approval: (id, meta) => events.push(['approval', id, meta?.tool_name]),
     answered: (id, action) => events.push(['answered', id, action]), result: (id, failed) => events.push(['result', id, failed]),
-    hide: () => events.push(['hide']), close: () => events.push(['close']) };
+    hide: () => events.push(['hide']), pointer: () => events.push(['pointer']), close: () => events.push(['close']) };
 }
 
 test('the relay tells the hand about admitted actions, approvals, results and local pointer tools, and nothing else', async () => {
@@ -159,9 +159,25 @@ test('the relay tells the hand about admitted actions, approvals, results and lo
   assert.deepEqual(sequence, [['approval', 'e1', 'click'], ['answered', 'e1', 'accept'], ['result', 2, false], ['result', 2, true]]);
   h.fromClient({ jsonrpc: '2.0', id: 3, method: 'tools/call', params: { name: 'drag', arguments: { app: 'Calculator', from: [1, 1], to: [2, 2] } } });
   await settle();
-  assert.ok(hand.events.some(([e]) => e === 'hide'), 'hidden before the local drag');
+  assert.ok(hand.events.some(([e]) => e === 'pointer'), 'local pointer admission preserves a safely seated stage');
+  assert.equal(hand.events.some(([e]) => e === 'hide'), false);
   h.relay.close();
   assert.deepEqual(hand.events.at(-1), ['close']);
+});
+
+test('CA7 a local drag callback carries the epoch captured before its helper runs', async () => {
+  let epoch = 7, delivered;
+  const hand = { ...recorder(), get turnEpoch() { return epoch; }, localDrag(frame, value) { delivered = [frame.kind, value]; } };
+  const h = harness({ hand, localTools: { tools: [{ name: 'drag', inputSchema: { type: 'object' } }], call: async (...args) => {
+    epoch++;
+    args.at(-1).onDrag({ kind: 'drag' });
+    return { content: [] };
+  } } });
+  await read(h);
+  h.fromClient({ jsonrpc: '2.0', id: 3, method: 'tools/call', params: { name: 'drag', arguments: { app: 'Calculator', from: [1, 1], to: [2, 2] } } });
+  await settle();
+  assert.deepEqual(delivered, ['drag', 7]);
+  assert.equal(epoch, 8);
 });
 
 test('end to end, an admitted click(N) becomes one frame at the element, after the call reached the engine', async () => {
@@ -176,6 +192,30 @@ test('end to end, an admitted click(N) becomes one frame at the element, after t
   await settle();
   assert.deepEqual(requests.map(r => [r.app, r.title, r.identities]), [['Calculator', 'Calculator', { 1: { role: 'AXButton', id: 'Seven', description: '7', title: undefined } }]]);
   assert.deepEqual(sent.map(f => [f.kind, f.pid, f.windowId, f.at]), [['click', 900, 31, [630, 320]], ['click', 900, 31, [658, 180]]]);
+});
+
+test('CA7 an opened-file alias still identifies the renderer app after a failed read drops the current window', async () => {
+  const hand = recorder();
+  const h = harness({ hand, localTools: { tools: [{ name: 'open_file', inputSchema: { type: 'object' } }],
+    target: async () => ({ app: 'Preview', appId: 'com.apple.Preview', pid: 900 }),
+    call: async () => ({ content: [], _meta: { 'sleight/openedApp': 'com.apple.Preview',
+      'sleight/openedFile': { path: '/tmp/fixture.pdf', real: '/tmp/fixture.pdf', size: 100 } } }) } });
+  h.fromClient({ jsonrpc: '2.0', id: 1, method: 'tools/call', params: { name: 'open_file', arguments: { app: 'Preview', path: '/tmp/fixture.pdf' } } });
+  await settle();
+  const acquire = h.toServer.find(m => /cua\.getApp/.test(m.params?.arguments?.code));
+  assert.ok(acquire, 'open_file acquires its own handle');
+  const handle = acquire.params.arguments.code.match(/var (\w+) =/)[1];
+  h.fromServer({ jsonrpc: '2.0', id: acquire.id, result: { content: [{ type: 'text', text: 'Window: "fixture.pdf", App: Preview.\n0 standard window fixture.pdf\n\t26 scroll area' }],
+    _meta: { 'codex/toolSurface': { app: { appId: 'com.apple.Preview' } } } } });
+  await settle();
+  js(h, 2, `await ${handle}.getAXState()`); await settle();
+  h.fromServer({ jsonrpc: '2.0', id: 2, result: { isError: true, content: [{ type: 'text', text: 'timeoutReached' }] } });
+  await settle();
+  js(h, 3, `let app = ${handle}; await app.scroll(26, "down", 800)`); await settle();
+  const admission = hand.events.find(e => e[0] === 'admit' && e[1] === 3);
+  assert.ok(admission, 'the scroll reached hand admission');
+  assert.equal(admission[2].target?.appId, 'com.apple.Preview');
+  h.relay.close();
 });
 
 // Admission cost: time from the client's line to the engine receiving it, with deferred work between calls.
@@ -202,7 +242,9 @@ async function measureAdmission(options = {}, N = 300) {
   return { median: median(admission), p95: p95(admission), roundTrip: median(roundTrip) };
 }
 
-test('the hand adds under 1 ms to admission', async t => {
+const performanceOnly = { skip: process.env.CI && process.env.SLEIGHT_TEST_PERFORMANCE !== '1' && 'shared CI runners are too noisy for 1 ms bounds (SLEIGHT_TEST_PERFORMANCE=1 runs them)' };
+
+test('the hand adds under 1 ms to admission', performanceOnly, async t => {
   const N = 300, measure = hand => measureAdmission(hand ? { hand } : {});
   const sent = [];
   const makeHand = () => createRelayHand({ client: { enabled: true, send: f => sent.push(f), hide() {}, close() {} }, env: { SLEIGHT_HAND: '1' }, setting: () => ({ enabled: true }), locate: async () => GEOMETRY });
@@ -228,7 +270,7 @@ test('the hand adds under 1 ms to admission', async t => {
   assert.ok(admitUs < 50, `admit took ${admitUs} µs`);
 });
 
-test('recording on versus off admission cost with the existing relay harness', async t => {
+test('recording on versus off admission cost with the existing relay harness', performanceOnly, async t => {
   const directory = registerTemp(t, realpathSync(mkdtempSync(join(tmpdir(), 'sleight-run-cost-'))));
   let lookups = 0;
   const make = enabled => {
@@ -248,4 +290,32 @@ test('recording on versus off admission cost with the existing relay harness', a
     `p95 off ${offTime.p95.toFixed(3)} ms, on ${onTime.p95.toFixed(3)} ms; round trip median off ${offTime.roundTrip.toFixed(3)} ms, on ${onTime.roundTrip.toFixed(3)} ms; ` +
     `0 geometry lookups; ${on.writers[0].stats().bytes} bytes written, ${on.writers[0].stats().dropped} records dropped`);
   assert.ok(onTime.median - offTime.median < 1);
+});
+
+test('CH-1 single-quoted acquisition protects the named app before its reply', async () => {
+  const protectedApps = [];
+  const h = harness({ hand: { protect: value => protectedApps.push(value), close() {}, result() {} } });
+  js(h, 901, "const preview = await cua.getApp('Preview')");
+  await settle();
+  assert.ok(h.toServer.some(m => m.id === 901));
+  assert.ok(protectedApps.some(value => value?.app === 'Preview'));
+});
+
+test('CHV2-A local admission delivers an app-only wide frame through the real hand before target resolution', async t => {
+  const sent = [];
+  const hand = createRelayHand({ env: {}, setting: () => ({ enabled: true, style: 'sprite', size: 'stage' }),
+    client: { enabled: true, send: value => sent.push(value), hide() {}, close() {} },
+    locate: async () => { assert.fail('wide admission needs no geometry helper'); } });
+  t.after(() => hand.close());
+  let release;
+  const h = harness({ hand, localTools: { tools: [{ name: 'open_file', inputSchema: { type: 'object' } }],
+    target: () => new Promise(resolve => { release = resolve; }),
+    call: async () => ({ content: [{ type: 'text', text: 'Fixture read' }] }) } });
+  h.fromClient({ id: 902, method: 'tools/call', params: { name: 'open_file', arguments: { app: 'Preview' } } });
+  await settle();
+  assert.deepEqual(sent, [{ hand: 'wide', app: 'Preview', reason: 'read', epoch: 0 }]);
+  assert.equal(h.toClient.length, 0);
+  release({ app: 'Preview', appId: 'com.apple.Preview', pid: 42 }); await settle();
+  assert.ok(sent.some(frame => frame.hand === 'wide' && frame.pid === 42));
+  assert.ok(h.toClient.some(reply => reply.id === 902));
 });

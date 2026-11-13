@@ -100,3 +100,28 @@ export async function trustedHandleNode(node, reader, arg) {
   if (utility?.world !== 'utility' || typeof utility.evaluateExpressionHandle !== 'function') throw Error('TRUSTED_DOM_REQUIRED');
   return utility.evaluateExpressionHandle(expression(reader), { isFunction: true }, [node, arg]);
 }
+
+// Explicit retention adds two native identity probes, never a selector lookup or
+// a point scan. Ordinary snapshot reuse calls none of these methods. The caller
+// owns release(), including after navigation and failed acquisition.
+export async function retainTrustedNode(handle) {
+  const { node, utility } = await utilityFor(handle);
+  const frame = node._frame, target = frame._page, session = target.delegate?._sessionForFrame?.(frame);
+  if (!session?._client?._sendMayFail || typeof frame._id !== 'string') throw Error('TRUSTED_DOM_REQUIRED');
+  let pinned, document;
+  const release = async () => { await Promise.allSettled([pinned?.dispose(), document?.dispose()]); };
+  try {
+    pinned = await utility.evaluateExpressionHandle('([el]) => el', { isFunction: true }, [node]);
+    document = await utility.evaluateExpressionHandle(expression((el, unused, read) => read(el, 'ownerDocument')), { isFunction: true }, [pinned]);
+    if (!pinned?._objectId || !document?._objectId) throw Error('TRUSTED_DOM_REQUIRED');
+    const [described, root] = await Promise.all([
+      session._client._sendMayFail('DOM.describeNode', { objectId: pinned._objectId }),
+      session._client._sendMayFail('DOM.describeNode', { objectId: document._objectId }),
+    ]);
+    const id = described?.node?.backendNodeId, doc = root?.node?.backendNodeId;
+    if (!Number.isSafeInteger(id) || id < 1 || !Number.isSafeInteger(doc) || doc < 1 || root.node.nodeType !== 9 ||
+        await frame.utilityContext() !== utility || frame.isDetached?.()) throw Error('TRUSTED_DOM_REQUIRED');
+    return Object.freeze({ connection: handle._connection, target, frame, frameId: frame._id,
+      backendNodeId: id, document: doc, release });
+  } catch (error) { await release(); throw error; }
+}

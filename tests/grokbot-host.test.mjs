@@ -1,3 +1,4 @@
+import { offlineDoctor } from './fixtures/preapproved-storage.mjs';
 import { macCommandSkip } from './requirements.mjs';
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
@@ -65,7 +66,7 @@ test('finds a user-installed bundle when the system bundle is absent', { skip: m
 });
 
 test('reads the release from a binary bundle plist', { skip: macCommandSkip('plutil') }, () => {
-  const binary = execFileSync('/usr/bin/plutil', ['-convert', 'binary1', '-o', '-', '--', '-'], { input: plist('0.71.2') });
+  const binary = execFileSync('/usr/bin/plutil', ['-convert', 'binary1', '-o', '-', '--', '-'], { input: plist('0.71.2'), timeout: 30000, killSignal: 'SIGKILL' });
   assert.equal(grokbotStatus(fixture({ ...installed, [systemPlist]: binary })).version, '0.71.2');
 });
 
@@ -142,13 +143,14 @@ test('keeps raw bundle values and unknown permission values out of doctor output
 
 test('launcher prints Grok Bot metadata before unavailable engine discovery stops doctor', { skip: macCommandSkip('plutil') }, async () => {
   const lines = [], io = fixture();
-  const code = await doctor({ settings: () => [], env: { CODEX_HOME: '/no-such-sleight-home', SLEIGHT_CHATGPT_APP: '/no-such-ChatGPT.app' },
+  const code = await doctor({ ...offlineDoctor, settings: () => [], env: { CODEX_HOME: '/no-such-sleight-home', SLEIGHT_CHATGPT_APP: '/no-such-ChatGPT.app' },
+    runtime: () => ({ selected: 'engine', ok: true, lines: [] }), documentation: () => {},
     turbo: async () => [], hand: async () => [], permissions: async () => [], codex: () => [], cursor: () => [], grok: () => [],
     grokbot: () => grokbotDoctorLines(grokbotStatus(io)), log: line => lines.push(line),
   });
   assert.equal(code, 1);
   assert.match(lines[0], /^sleight \d+\.\d+\.\d+$/);
-  assert.match(lines[1], /Grok Bot 0\.71\.2, computer use off, route: shell \(sleight-mcp js\)/);
+  assert.match(lines[2], /Grok Bot 0\.71\.2, computer use off, route: shell \(sleight-mcp js\)/);
   assert.match(lines.join('\n'), /local tool permission: always/);
 });
 

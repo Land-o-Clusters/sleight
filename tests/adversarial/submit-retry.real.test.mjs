@@ -240,14 +240,17 @@ test('clicking a label that forwards to the file input must not open the native 
   await f.safe();
 });
 
-// Backstop: a page script can open a chooser without any label (onclick -> input.click(), showPicker()).
-// Nothing is opened natively, and the outcome tells the model to use the upload step.
+// Page scripts can request a picker without a label. Native-UI guards reject these APIs before the
+// chooser interception backstop, so the outcome must not claim that a chooser opened.
 for (const [name, open] of [['input.click()', `f1.click()`], ['input.showPicker()', `f1.showPicker()`]])
-  test(`a page script calling ${name} on a file input is suppressed and reported`, { skip, timeout: 90000 }, async t => {
+  test(`a page script calling ${name} on a file input is blocked before a chooser opens`, { skip, timeout: 90000 }, async t => {
     const p = files(t), b = await bank(t);
-    const f = await b.start(doc(`<button id="b" type="button">Attach</button><input type="file" id="f1" aria-label="Resume" style="position:absolute;opacity:0;width:1px;height:1px">`, `b.onclick=()=>{${open}}`), `Upload "${p.resume}" to Resume`);
+    const f = await b.start(doc(`<button id="b" type="button">Attach</button><input type="file" id="f1" aria-label="Resume" style="position:absolute;opacity:0;width:1px;height:1px">`,
+      `b.onclick=()=>{try{${open}}catch(error){window.__pickerFailure=error.name}}`), `Upload "${p.resume}" to Resume`);
     const result = await f.act([{ do: 'click', ref: f.ref('Attach') }]);
-    assert.match(result.text, /file picker opened and was suppressed, use an upload step/, result.text);
+    assert.equal(await f.page.evaluate(() => window.__pickerFailure), 'NotAllowedError');
+    assert.equal(f.state.chooser ?? 0, 0, 'no chooser may reach the interception backstop');
+    assert.doesNotMatch(result.text, /file picker opened/, result.text);
     assert.equal(f.delta().upload, 0);
     await f.safe();
   });

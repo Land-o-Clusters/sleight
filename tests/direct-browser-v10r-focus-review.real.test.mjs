@@ -1,3 +1,4 @@
+import { testChromiumExecutable, launchTestChromium } from './fixtures/chromium-isolated.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createServer } from 'node:http';
@@ -13,8 +14,7 @@ const skip=process.env.SLEIGHT_LIVE_DOM_TEST !== '1' ? 'review real-page proof r
 async function fixture(t, text = 'Read only. Do not pay.') {
   const {chromium}=await import('../plugins/sleight/vendor/playwright-core/index.mjs');
   const spec=JSON.parse(readFileSync(new URL('../plugins/sleight/vendor/playwright-core/browsers.json',import.meta.url))).browsers.find(b=>b.name==='chromium-headless-shell');
-  const platform=process.platform==='darwin' ? 'mac-'+process.arch : 'linux64';
-  const executablePath=join(homedir(),'Library/Caches/ms-playwright','chromium_headless_shell-'+spec.revision,'chrome-headless-shell-'+platform,'chrome-headless-shell');
+  const executablePath=testChromiumExecutable({ revision: spec.revision });
   assert.ok(existsSync(executablePath),'pinned Chromium required; real proof cannot skip');
   const sockets=new Set(), server=createServer((req,res)=>{res.setHeader('content-type','text/html');res.end(`<main>
     <h2 id="e9">Ordinary heading</h2><form id="payment"><label>Card<input autocomplete="cc-number"></label><button id="e1">Continue</button></form>
@@ -22,7 +22,7 @@ async function fixture(t, text = 'Read only. Do not pay.') {
   server.on('connection',s=>{sockets.add(s);s.on('close',()=>sockets.delete(s));});
   await new Promise(resolve=>server.listen(0,'127.0.0.1',resolve));
   t.after(async()=>{for(const s of sockets)s.destroy();await new Promise(resolve=>server.close(resolve));t.diagnostic('fixture server and sockets collected');});
-  const browser=await chromium.launch({headless:true,executablePath});
+  const browser=await launchTestChromium(chromium, {headless:true,executablePath});
   t.after(async()=>{await browser.close();t.diagnostic('owned headless Chromium closed');});
   const page=await browser.newPage();await page.goto('http://127.0.0.1:'+server.address().port);
   page.getByRef=ref=>page.locator('#'+ref);

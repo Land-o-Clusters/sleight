@@ -1,3 +1,4 @@
+import { testChromiumExecutable, launchTestChromium } from './fixtures/chromium-isolated.mjs';
 // Explicitly opted-in Chromium headless shell only. No installed browser, model,
 // native host, screenshot, visible window or benchmark runner is used.
 import test from 'node:test';
@@ -11,18 +12,16 @@ import { createActionRunner } from '../plugins/sleight/lib/direct-browser/act.mj
 import { createFillFields } from '../plugins/sleight/lib/direct-browser/fill.mjs';
 import { createToolDispatcher } from '../plugins/sleight/lib/direct-browser/tools.mjs';
 
-const enabled = process.env.SLEIGHT_PF7_HEADLESS_TEST === '1';
+const enabled = (process.env.SLEIGHT_PF7_HEADLESS_TEST ?? process.env.SLEIGHT_LIVE_DOM_TEST) === '1';
 const spec = JSON.parse(readFileSync(new URL('../plugins/sleight/vendor/playwright-core/browsers.json', import.meta.url)))
   .browsers.find(b => b.name === 'chromium-headless-shell');
-const platform = process.platform === 'darwin' ? 'mac-' + process.arch : 'linux64';
-const executablePath = join(homedir(), 'Library/Caches/ms-playwright', 'chromium_headless_shell-' + spec.revision,
-  'chrome-headless-shell-' + platform, 'chrome-headless-shell');
+const executablePath = testChromiumExecutable({ revision: spec.revision });
 const skip = enabled ? false : 'set SLEIGHT_PF7_HEADLESS_TEST=1 for the isolated offline proof';
 const origin = 'http://127.0.0.1:1'; // Every request is fulfilled in memory, before network dispatch.
 
 async function fixture(t, html) {
   assert.ok(existsSync(executablePath), 'pinned headless shell is required; no installed-browser fallback');
-  const browser = await chromium.launch({ headless: true, executablePath });
+  const browser = await launchTestChromium(chromium, { headless: true, executablePath });
   t.after(async () => { await browser.close(); assert.equal(browser.isConnected(), false); t.diagnostic('PF7 cleanup: owned headless browser closed'); });
   const context = await browser.newContext();
   await context.route('**/*', route => route.fulfill({ contentType: 'text/html', body: html }));

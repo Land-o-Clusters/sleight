@@ -1,6 +1,6 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 3108" width="900" height="3108" role="img" aria-labelledby="title desc">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 3908" width="900" height="3908" role="img" aria-labelledby="title desc">
 <title id="title">Validation: pass rates per study and arm</title>
-<desc id="desc">Validation: 1431 of 1480 recorded attempts passed across 74 study and arm rows. Task sets differ between studies.</desc>
+<desc id="desc">Validation: 1609 of 1675 recorded attempts passed across 94 study and arm rows. Task sets differ between studies.</desc>
 <style>
 .bg{fill:#141A26}
 text{font-family:-apple-system,"Segoe UI",Helvetica,Arial,sans-serif;font-size:13px;fill:#EFE9DC}
@@ -16,7 +16,7 @@ text{font-family:-apple-system,"Segoe UI",Helvetica,Arial,sans-serif;font-size:1
 .hsl{stroke:#9AA6B8}
 </style>
 <defs><pattern id="h-me" width="6" height="6" patternUnits="userSpaceOnUse" patternTransform="rotate(45)"><line class="hme" x1="1" y1="0" x2="1" y2="6" stroke-width="2"/></pattern><pattern id="h-ot" width="6" height="6" patternUnits="userSpaceOnUse" patternTransform="rotate(45)"><line class="hot" x1="1" y1="0" x2="1" y2="6" stroke-width="2"/></pattern><pattern id="h-sl" width="6" height="6" patternUnits="userSpaceOnUse" patternTransform="rotate(45)"><line class="hsl" x1="1" y1="0" x2="1" y2="6" stroke-width="2"/></pattern></defs>
-<rect class="bg" width="900" height="3108" rx="12"/>
+<rect class="bg" width="900" height="3908" rx="12"/>
 <text x="24" y="34" class="t">Validation</text>
 <text x="24" y="54" class="m">Pass rate per study and arm. Bars share a 0 to 100% scale. Labels give passed attempts / all attempts.</text>
 <g transform="translate(840 8) scale(0.8)"><g transform="translate(0.6 0.6)"><g transform="translate(10 10) rotate(-35)"><g fill="#141A26" stroke="#141A26" fill-opacity="0.08" stroke-opacity="0.08" stroke-width="3" stroke-linejoin="round"><path d="M-2 12.39 Q-2.2 10.8 -0.6 10.8 L12.4 10.8 Q14 10.8 13.82 12.39 L13.48 15.41 Q13.3 17 12.56 18.42 L11.94 19.58 Q11.2 21 9.6 21 L5.2 21 Q3.6 21 2.35 20 L-0.15 18 Q-1.4 17 -1.6 15.41 Z"/><path d="M-3.8 14.6 A2.5 3.3 0 1 0 1.2 14.6 A2.5 3.3 0 1 0 -3.8 14.6 Z"/><path d="M0.83 13.52 L-5.04 7.13 A1.25 1.25 0 0 0 -6.93 8.76 L-1.43 15.48 Z"/><path d="M2.44 11.48 L1.3 1.09 A1.2 1.2 0 0 0 -1.09 1.3 L-0.44 11.72 Z"/><path d="M6.15 11.51 L5.17 -0.67 A1.2 1.2 0 0 0 2.77 -0.53 L3.25 11.69 Z"/><path d="M9.85 11.59 L9.51 0.29 A1.2 1.2 0 0 0 7.11 0.31 L6.95 11.61 Z"/><path d="M13.5 11.68 L13.68 3.81 A1.15 1.15 0 0 0 11.39 3.68 L10.7 11.52 Z"/></g><g fill="#141A26" stroke="#141A26" fill-opacity="0.12" stroke-opacity="0.12" stroke-width="1.8" stroke-linejoin="round"><path d="M-2 12.39 Q-2.2 10.8 -0.6 10.8 L12.4 10.8 Q14 10.8 13.82 12.39 L13.48 15.41 Q13.3 17 12.56 18.42 L11.94 19.58 Q11.2 21 9.6 21 L5.2 21 Q3.6 21 2.35 20 L-0.15 18 Q-1.4 17 -1.6 15.41 Z"/><path d="M-3.8 14.6 A2.5 3.3 0 1 0 1.2 14.6 A2.5 3.3 0 1 0 -3.8 14.6 Z"/><path d="M0.83 13.52 L-5.04 7.13 A1.25 1.25 0 0 0 -6.93 8.76 L-1.43 15.48 Z"/><path d="M2.44 11.48 L1.3 1.09 A1.2 1.2 0 0 0 -1.09 1.3 L-0.44 11.72 Z"/><path d="M6.15 11.51 L5.17 -0.67 A1.2 1.2 0 0 0 2.77 -0.53 L3.25 11.69 Z"/><path d="M9.85 11.59 L9.51 0.29 A1.2 1.2 0 0 0 7.11 0.31 L6.95 11.61 Z"/><path d="M13.5 11.68 L13.68 3.81 A1.15 1.15 0 0 0 11.39 3.68 L10.7 11.52 Z"/></g><g fill="#141A26" stroke="#141A26" fill-opacity="0.2" stroke-opacity="0.2" stroke-width="0.8" stroke-linejoin="round"><path d="M-2 12.39 Q-2.2 10.8 -0.6 10.8 L12.4 10.8 Q14 10.8 13.82 12.39 L13.48 15.41 Q13.3 17 12.56 18.42 L11.94 19.58 Q11.2 21 9.6 21 L5.2 21 Q3.6 21 2.35 20 L-0.15 18 Q-1.4 17 -1.6 15.41 Z"/><path d="M-3.8 14.6 A2.5 3.3 0 1 0 1.2 14.6 A2.5 3.3 0 1 0 -3.8 14.6 Z"/><path d="M0.83 13.52 L-5.04 7.13 A1.25 1.25 0 0 0 -6.93 8.76 L-1.43 15.48 Z"/><path d="M2.44 11.48 L1.3 1.09 A1.2 1.2 0 0 0 -1.09 1.3 L-0.44 11.72 Z"/><path d="M6.15 11.51 L5.17 -0.67 A1.2 1.2 0 0 0 2.77 -0.53 L3.25 11.69 Z"/><path d="M9.85 11.59 L9.51 0.29 A1.2 1.2 0 0 0 7.11 0.31 L6.95 11.61 Z"/><path d="M13.5 11.68 L13.68 3.81 A1.15 1.15 0 0 0 11.39 3.68 L10.7 11.52 Z"/></g></g></g><g transform="translate(10 10) rotate(-35)"><rect x="-1.95" y="-1.95" width="3.9" height="3.9" rx="0.62" fill="#4E79D9" fill-opacity="0.2" transform="translate(4.2 23) rotate(8)"/><rect x="-1.6" y="-1.6" width="3.2" height="3.2" rx="0.51" fill="#4E79D9" fill-opacity="0.92" transform="translate(4.2 23) rotate(8)"/><rect x="-1.83" y="-1.83" width="3.66" height="3.66" rx="0.59" fill="#7299EA" fill-opacity="0.2" transform="translate(8.8 23.5) rotate(-6)"/><rect x="-1.5" y="-1.5" width="3" height="3" rx="0.48" fill="#7299EA" fill-opacity="0.92" transform="translate(8.8 23.5) rotate(-6)"/><rect x="-1.71" y="-1.71" width="3.42" height="3.42" rx="0.55" fill="#7299EA" fill-opacity="0.2" transform="translate(6.5 26.5) rotate(4)"/><rect x="-1.4" y="-1.4" width="2.8" height="2.8" rx="0.45" fill="#7299EA" fill-opacity="0.92" transform="translate(6.5 26.5) rotate(4)"/><rect x="-1.59" y="-1.59" width="3.17" height="3.17" rx="0.51" fill="#A9C4F5" fill-opacity="0.2" transform="translate(11.5 26.2) rotate(-11)"/><rect x="-1.3" y="-1.3" width="2.6" height="2.6" rx="0.42" fill="#A9C4F5" fill-opacity="0.92" transform="translate(11.5 26.2) rotate(-11)"/><rect x="-1.34" y="-1.34" width="2.68" height="2.68" rx="0.43" fill="#A9C4F5" fill-opacity="0.2" transform="translate(2.6 27.5) rotate(-4)"/><rect x="-1.1" y="-1.1" width="2.2" height="2.2" rx="0.35" fill="#A9C4F5" fill-opacity="0.92" transform="translate(2.6 27.5) rotate(-4)"/><rect x="-1.34" y="-1.34" width="2.68" height="2.68" rx="0.43" fill="#7299EA" fill-opacity="0.2" transform="translate(9.2 29.6) rotate(7)"/><rect x="-1.1" y="-1.1" width="2.2" height="2.2" rx="0.35" fill="#7299EA" fill-opacity="0.92" transform="translate(9.2 29.6) rotate(7)"/><rect x="-1.1" y="-1.1" width="2.2" height="2.2" rx="0.35" fill="#A9C4F5" fill-opacity="0.2" transform="translate(13.9 29.2) rotate(3)"/><rect x="-0.9" y="-0.9" width="1.8" height="1.8" rx="0.29" fill="#A9C4F5" fill-opacity="0.92" transform="translate(13.9 29.2) rotate(3)"/><rect x="-0.98" y="-0.98" width="1.95" height="1.95" rx="0.31" fill="#A9C4F5" fill-opacity="0.2" transform="translate(5.6 30.6) rotate(-8)"/><rect x="-0.8" y="-0.8" width="1.6" height="1.6" rx="0.26" fill="#A9C4F5" fill-opacity="0.92" transform="translate(5.6 30.6) rotate(-8)"/></g><g transform="translate(10 10) rotate(-35)"><path d="M-2 12.39 Q-2.2 10.8 -0.6 10.8 L12.4 10.8 Q14 10.8 13.82 12.39 L13.48 15.41 Q13.3 17 12.56 18.42 L11.94 19.58 Q11.2 21 9.6 21 L5.2 21 Q3.6 21 2.35 20 L-0.15 18 Q-1.4 17 -1.6 15.41 Z" fill="#B9BFC9"/><path d="M-2.02 12.19 Q-2.2 10.8 -0.8 10.8 L10 10.8 Q11.4 10.8 11.24 12.19 L10.86 15.61 Q10.7 17 9.89 18.14 L9.81 18.26 Q9 19.4 7.6 19.4 L5 19.4 Q3.6 19.4 2.34 18.79 L-0.14 17.61 Q-1.4 17 -1.58 15.61 Z" fill="#EFE9DC"/><path d="M-3.8 14.6 A2.5 3.3 0 1 0 1.2 14.6 A2.5 3.3 0 1 0 -3.8 14.6 Z" fill="#B9BFC9"/><path d="M-4 14 A2 2.8 0 1 0 0 14 A2 2.8 0 1 0 -4 14 Z" fill="#EFE9DC"/><path d="M0.83 13.52 L-5.04 7.13 A1.25 1.25 0 0 0 -6.93 8.76 L-1.43 15.48 Z" fill="#B9BFC9"/><path d="M0.83 13.51 L-5.21 6.91 A0.78 0.78 0 0 0 -6.38 7.93 L-0.57 14.74 Z" fill="#EFE9DC"/><path d="M2.44 11.48 L1.3 1.09 A1.2 1.2 0 0 0 -1.09 1.3 L-0.44 11.72 Z" fill="#B9BFC9"/><path d="M1.35 11.58 L0.36 0.91 A0.74 0.74 0 0 0 -1.12 1.03 L-0.45 11.72 Z" fill="#EFE9DC"/><path d="M6.15 11.51 L5.17 -0.67 A1.2 1.2 0 0 0 2.77 -0.53 L3.25 11.69 Z" fill="#B9BFC9"/><path d="M5.05 11.59 L4.24 -0.88 A0.74 0.74 0 0 0 2.75 -0.8 L3.25 11.68 Z" fill="#EFE9DC"/><path d="M9.85 11.59 L9.51 0.29 A1.2 1.2 0 0 0 7.11 0.31 L6.95 11.61 Z" fill="#B9BFC9"/><path d="M8.75 11.6 L8.59 0.04 A0.74 0.74 0 0 0 7.1 0.04 L6.95 11.6 Z" fill="#EFE9DC"/><path d="M13.5 11.68 L13.68 3.81 A1.15 1.15 0 0 0 11.39 3.68 L10.7 11.52 Z" fill="#B9BFC9"/><path d="M12.43 11.63 L12.82 3.52 A0.71 0.71 0 0 0 11.39 3.42 L10.7 11.51 Z" fill="#EFE9DC"/></g></g>
@@ -353,5 +353,95 @@ text{font-family:-apple-system,"Segoe UI",Helvetica,Arial,sans-serif;font-size:1
 <line class="g" x1="234" y1="3051" x2="726" y2="3051"/>
 <path class="ot" d="M234 3038h406a4 4 0 0 1 4 4v6a4 4 0 0 1 -4 4h-406z"/>
 <text x="736" y="3049" data-study="validation-150f-rel3-safari-haiku" data-arm="build-A" data-kind="pass-rate">83.3% (30/36)</text>
-<text x="24" y="3084" class="m">Task sets differ between studies. See the tables for timing, models, engine versions and failed runs.</text>
+<text x="24" y="3085" class="b">1.6.0 tripwire: validation-160a, as3-safari</text>
+<text x="24" y="3104" class="m">build-B</text>
+<line class="g" x1="234" y1="3106" x2="726" y2="3106"/>
+<path class="me" d="M234 3093h488a4 4 0 0 1 4 4v6a4 4 0 0 1 -4 4h-488z"/>
+<text x="736" y="3104" data-study="validation-160a-as3-safari" data-arm="build-B" data-kind="pass-rate">100.0% (5/5)</text>
+<text x="24" y="3129" class="m">build-A</text>
+<line class="g" x1="234" y1="3131" x2="726" y2="3131"/>
+<path class="ot" d="M234 3118h488a4 4 0 0 1 4 4v6a4 4 0 0 1 -4 4h-488z"/>
+<text x="736" y="3129" data-study="validation-160a-as3-safari" data-arm="build-A" data-kind="pass-rate">100.0% (5/5)</text>
+<text x="24" y="3165" class="b">1.6.0 tripwire: validation-160a, cc-haiku</text>
+<text x="24" y="3184" class="m">build-B</text>
+<line class="g" x1="234" y1="3186" x2="726" y2="3186"/>
+<path class="me" d="M234 3173h488a4 4 0 0 1 4 4v6a4 4 0 0 1 -4 4h-488z"/>
+<text x="736" y="3184" data-study="validation-160a-cc-haiku" data-arm="build-B" data-kind="pass-rate">100.0% (4/4)</text>
+<text x="24" y="3209" class="m">build-A</text>
+<line class="g" x1="234" y1="3211" x2="726" y2="3211"/>
+<path class="ot" d="M234 3198h488a4 4 0 0 1 4 4v6a4 4 0 0 1 -4 4h-488z"/>
+<text x="736" y="3209" data-study="validation-160a-cc-haiku" data-arm="build-A" data-kind="pass-rate">100.0% (4/4)</text>
+<text x="24" y="3245" class="b">1.6.0 tripwire: validation-160a, chrome-haiku</text>
+<text x="24" y="3264" class="m">build-B</text>
+<line class="g" x1="234" y1="3266" x2="726" y2="3266"/>
+<path class="me" d="M234 3253h488a4 4 0 0 1 4 4v6a4 4 0 0 1 -4 4h-488z"/>
+<text x="736" y="3264" data-study="validation-160a-chrome-haiku" data-arm="build-B" data-kind="pass-rate">100.0% (26/26)</text>
+<text x="24" y="3289" class="m">build-A</text>
+<line class="g" x1="234" y1="3291" x2="726" y2="3291"/>
+<path class="ot" d="M234 3278h242a4 4 0 0 1 4 4v6a4 4 0 0 1 -4 4h-242z"/>
+<text x="736" y="3289" data-study="validation-160a-chrome-haiku" data-arm="build-A" data-kind="pass-rate">50.0% (13/26)</text>
+<text x="24" y="3325" class="b">1.6.0 tripwire: validation-160a, native-haiku</text>
+<text x="24" y="3344" class="m">build-B</text>
+<line class="g" x1="234" y1="3346" x2="726" y2="3346"/>
+<path class="me" d="M234 3333h389.6a4 4 0 0 1 4 4v6a4 4 0 0 1 -4 4h-389.6z"/>
+<text x="736" y="3344" data-study="validation-160a-native-haiku" data-arm="build-B" data-kind="pass-rate">80.0% (4/5)</text>
+<text x="24" y="3369" class="m">build-A</text>
+<line class="g" x1="234" y1="3371" x2="726" y2="3371"/>
+<path class="ot" d="M234 3358h389.6a4 4 0 0 1 4 4v6a4 4 0 0 1 -4 4h-389.6z"/>
+<text x="736" y="3369" data-study="validation-160a-native-haiku" data-arm="build-A" data-kind="pass-rate">80.0% (4/5)</text>
+<text x="24" y="3405" class="b">1.6.0 tripwire: validation-160b, as3-safari</text>
+<text x="24" y="3424" class="m">build-B</text>
+<line class="g" x1="234" y1="3426" x2="726" y2="3426"/>
+<path class="me" d="M234 3413h488a4 4 0 0 1 4 4v6a4 4 0 0 1 -4 4h-488z"/>
+<text x="736" y="3424" data-study="validation-160b-as3-safari" data-arm="build-B" data-kind="pass-rate">100.0% (5/5)</text>
+<text x="24" y="3449" class="m">build-A</text>
+<line class="g" x1="234" y1="3451" x2="726" y2="3451"/>
+<path class="ot" d="M234 3438h488a4 4 0 0 1 4 4v6a4 4 0 0 1 -4 4h-488z"/>
+<text x="736" y="3449" data-study="validation-160b-as3-safari" data-arm="build-A" data-kind="pass-rate">100.0% (5/5)</text>
+<text x="24" y="3485" class="b">1.6.0 tripwire: validation-160b, cc-haiku</text>
+<text x="24" y="3504" class="m">build-B</text>
+<line class="g" x1="234" y1="3506" x2="726" y2="3506"/>
+<path class="me" d="M234 3493h488a4 4 0 0 1 4 4v6a4 4 0 0 1 -4 4h-488z"/>
+<text x="736" y="3504" data-study="validation-160b-cc-haiku" data-arm="build-B" data-kind="pass-rate">100.0% (5/5)</text>
+<text x="24" y="3529" class="m">build-A</text>
+<line class="g" x1="234" y1="3531" x2="726" y2="3531"/>
+<path class="ot" d="M234 3518h488a4 4 0 0 1 4 4v6a4 4 0 0 1 -4 4h-488z"/>
+<text x="736" y="3529" data-study="validation-160b-cc-haiku" data-arm="build-A" data-kind="pass-rate">100.0% (5/5)</text>
+<text x="24" y="3565" class="b">1.6.0 tripwire: validation-160b, chrome-haiku</text>
+<text x="24" y="3584" class="m">build-B</text>
+<line class="g" x1="234" y1="3586" x2="726" y2="3586"/>
+<path class="me" d="M234 3573h488a4 4 0 0 1 4 4v6a4 4 0 0 1 -4 4h-488z"/>
+<text x="736" y="3584" data-study="validation-160b-chrome-haiku" data-arm="build-B" data-kind="pass-rate">100.0% (26/26)</text>
+<text x="24" y="3609" class="m">build-A</text>
+<line class="g" x1="234" y1="3611" x2="726" y2="3611"/>
+<path class="ot" d="M234 3598h488a4 4 0 0 1 4 4v6a4 4 0 0 1 -4 4h-488z"/>
+<text x="736" y="3609" data-study="validation-160b-chrome-haiku" data-arm="build-A" data-kind="pass-rate">100.0% (26/26)</text>
+<text x="24" y="3645" class="b">1.6.0 tripwire: validation-160b, native-haiku</text>
+<text x="24" y="3664" class="m">build-B</text>
+<line class="g" x1="234" y1="3666" x2="726" y2="3666"/>
+<path class="me" d="M234 3653h488a4 4 0 0 1 4 4v6a4 4 0 0 1 -4 4h-488z"/>
+<text x="736" y="3664" data-study="validation-160b-native-haiku" data-arm="build-B" data-kind="pass-rate">100.0% (5/5)</text>
+<text x="24" y="3689" class="m">build-A</text>
+<line class="g" x1="234" y1="3691" x2="726" y2="3691"/>
+<path class="ot" d="M234 3678h389.6a4 4 0 0 1 4 4v6a4 4 0 0 1 -4 4h-389.6z"/>
+<text x="736" y="3689" data-study="validation-160b-native-haiku" data-arm="build-A" data-kind="pass-rate">80.0% (4/5)</text>
+<text x="24" y="3725" class="b">1.6.0 tripwire: validation-160c, chrome-haiku</text>
+<text x="24" y="3744" class="m">build-B</text>
+<line class="g" x1="234" y1="3746" x2="726" y2="3746"/>
+<path class="me" d="M234 3733h488a4 4 0 0 1 4 4v6a4 4 0 0 1 -4 4h-488z"/>
+<text x="736" y="3744" data-study="validation-160c-chrome-haiku" data-arm="build-B" data-kind="pass-rate">100.0% (13/13)</text>
+<text x="24" y="3769" class="m">build-A</text>
+<line class="g" x1="234" y1="3771" x2="726" y2="3771"/>
+<path class="ot" d="M234 3758h488a4 4 0 0 1 4 4v6a4 4 0 0 1 -4 4h-488z"/>
+<text x="736" y="3769" data-study="validation-160c-chrome-haiku" data-arm="build-A" data-kind="pass-rate">100.0% (13/13)</text>
+<text x="24" y="3805" class="b">1.6.0 tripwire: validation-160c, native-haiku</text>
+<text x="24" y="3824" class="m">build-B</text>
+<line class="g" x1="234" y1="3826" x2="726" y2="3826"/>
+<path class="me" d="M234 3813h365a4 4 0 0 1 4 4v6a4 4 0 0 1 -4 4h-365z"/>
+<text x="736" y="3824" data-study="validation-160c-native-haiku" data-arm="build-B" data-kind="pass-rate">75.0% (3/4)</text>
+<text x="24" y="3849" class="m">build-A</text>
+<line class="g" x1="234" y1="3851" x2="726" y2="3851"/>
+<path class="ot" d="M234 3838h488a4 4 0 0 1 4 4v6a4 4 0 0 1 -4 4h-488z"/>
+<text x="736" y="3849" data-study="validation-160c-native-haiku" data-arm="build-A" data-kind="pass-rate">100.0% (3/3)</text>
+<text x="24" y="3884" class="m">Task sets differ between studies. See the tables for timing, models, engine versions and failed runs.</text>
 </svg>

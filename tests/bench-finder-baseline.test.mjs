@@ -169,7 +169,9 @@ test('documentless recovery rechecks the creation title at the close press bound
 });
 
 for (const name of ['missing', 'replaced', 'window-role']) test(`cleanup closes its fixture despite ${name} baseline window and reports drift`, () => {
-  const f = trial({ cleanup: true }); mutations[name](f); f.close();
+  const f = trial({ cleanup: true }); mutations[name](f);
+  if (name === 'replaced') assert.throws(f.close, /replacement window ownership/);
+  else f.close();
   assert.deepEqual(f.actions, [['close', f.owned]]);
   const diagnostic = f.events.find(event => event.finderBaselineChange)?.finderBaselineChange;
   assert.deepEqual(diagnostic, { failureReason: 'baseline-changed', errorName: 'Error', errorCode: 'unavailable',
@@ -241,7 +243,8 @@ for (const boundary of ['dialog', 'location', 'close-control', 'after-close']) {
   for (const [name, mutate] of Object.entries(mutations)) test(`cleanup handles ${name} baseline mutation at ${boundary}`, () => {
     const f = trial({ cleanup: true }); let changed = false;
     f.hooks[boundary] = () => { if (!changed) { changed = true; mutate(f); } };
-    if (['missing', 'replaced', 'window-role'].includes(name)) f.close();
+    if (name === 'replaced') assert.throws(f.close, /replacement window ownership/);
+    else if (['missing', 'window-role'].includes(name)) f.close();
     else assert.throws(f.close, /inventory|identity|baseline|ownership/);
     assert.equal(changed, true, 'the requested close boundary must be reached');
     assert.ok(f.actions.every(([, target]) => target === f.owned));

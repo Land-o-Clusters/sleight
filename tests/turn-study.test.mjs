@@ -1,3 +1,4 @@
+import { assertChildStatus } from './fixtures/child-status.mjs';
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { mkdtempSync, mkdirSync, readFileSync, writeFileSync, rmSync, symlinkSync } from 'node:fs';
@@ -125,8 +126,8 @@ test('CLI selects a result file, writes JSON and a ranked table, omitting transc
   const stamp = '2026-10-10T00-00-00-000Z';
   writeFileSync(join(dir, 'projects/p/session.jsonl'), [...pair('app', 'private owner'), user(4000, `/tmp/sleight-bench/${stamp}/sleight-textedit-save-1/a.txt`)].map(JSON.stringify).join('\n'));
   writeFileSync(join(dir, 'results.json'), JSON.stringify({ stamp, results: [{ arm: 'sleight', task: 'textedit-save', run: 1, timing: { totalMs: 5000 } }] }));
-  const out = spawnSync(process.execPath, ['bench/turn-study.mjs', '--results', join(dir, 'results.json'), '--projects', join(dir, 'projects'), '--json', join(dir, 'out.json'), '--table', join(dir, 'out.md')], { encoding: 'utf8' });
-  assert.equal(out.status, 0, out.stderr);
+  const out = spawnSync(process.execPath, ['bench/turn-study.mjs', '--results', join(dir, 'results.json'), '--projects', join(dir, 'projects'), '--json', join(dir, 'out.json'), '--table', join(dir, 'out.md')], { encoding: 'utf8', timeout: 60000, killSignal: 'SIGKILL' });
+  assertChildStatus(out, 0, out.stderr);
   assert.equal(out.stdout.includes('private owner'), false);
   assert.equal(out.stdout.includes('1 transcripts'), true);
 });
@@ -146,8 +147,8 @@ test('default trace search prefers durable evidence and falls back to legacy evi
   const env = { ...process.env, HOME: home, TMPDIR: alias, BENCH_ARM_HOME: armHome };
   const read = () => {
     const output = join(root, 'out.json');
-    const result = spawnSync(process.execPath, ['bench/turn-study.mjs', '--results', results, '--projects', projects, '--json', output], { env, encoding: 'utf8' });
-    assert.equal(result.status, 0, result.stderr); return JSON.parse(readFileSync(output, 'utf8'));
+    const result = spawnSync(process.execPath, ['bench/turn-study.mjs', '--results', results, '--projects', projects, '--json', output], { env, encoding: 'utf8', timeout: 60000, killSignal: 'SIGKILL' });
+    assertChildStatus(result, 0, result.stderr); return JSON.parse(readFileSync(output, 'utf8'));
   };
   assert.equal(read().runs[0].match, 'trace');
   rmSync(join(durable, 'trace-1.jsonl')); writeFileSync(join(legacy, 'trace-1.jsonl'), trace(code));
@@ -174,8 +175,8 @@ test('time ranges cut off an unfinished result and retain result rows whose tran
   const stamp = '2026-10-10T00-00-00-000Z';
   writeFileSync(join(dir, 'projects/p/session.jsonl'), [user(0, `/tmp/sleight-bench/${stamp}/sleight-textedit-save-1/a.txt`), call('a', 1000, 'app'), result('a', 4000, 'late')].map(JSON.stringify).join('\n'));
   writeFileSync(join(dir, 'results.json'), JSON.stringify({ stamp, results: [1, 2].map(run => ({ arm: 'sleight', task: 'textedit-save', run })) }));
-  const out = spawnSync(process.execPath, ['bench/turn-study.mjs', '--since', at(0), '--until', at(3000), '--results-dir', dir, '--projects', join(dir, 'projects'), '--json', join(dir, 'out.json')], { encoding: 'utf8' });
-  assert.equal(out.status, 0, out.stderr);
+  const out = spawnSync(process.execPath, ['bench/turn-study.mjs', '--since', at(0), '--until', at(3000), '--results-dir', dir, '--projects', join(dir, 'projects'), '--json', join(dir, 'out.json')], { encoding: 'utf8', timeout: 60000, killSignal: 'SIGKILL' });
+  assertChildStatus(out, 0, out.stderr);
   const data = JSON.parse(readFileSync(join(dir, 'out.json')));
   assert.equal(data.runs[0].calls[0].wallMs, null);
   assert.equal(data.unmatchedResults.length, 1);

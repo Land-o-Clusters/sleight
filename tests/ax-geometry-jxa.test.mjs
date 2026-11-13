@@ -21,7 +21,7 @@ for (const file of ['drag.js', 'window-identity.js', 'element-visibility.js']) {
     try {
       const script = join(dir, file);
       writeFileSync(script, readFileSync(new URL(`../plugins/sleight/lib/${file}`, import.meta.url), 'utf8') + probe);
-      const out = execFileSync('/usr/bin/osascript', ['-l', 'JavaScript', script], { encoding: 'utf8', timeout: 20000 });
+      const out = execFileSync('/usr/bin/osascript', ['-l', 'JavaScript', script], { encoding: 'utf8', timeout: 20000, killSignal: 'SIGKILL' });
       assert.deepEqual(JSON.parse(out), [[152, 73], [656, 422]]);
     } finally { rmSync(dir, { recursive: true, force: true }); }
   });

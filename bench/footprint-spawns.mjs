@@ -12,7 +12,10 @@ export const loadCodec = name => import(pathToFileURL(join(codecs, name, 'lib', 
 export async function pane(code, shot, load = loadCodec) {
   let frame;
   const run = new (Object.getPrototypeOf(async function () {}).constructor)('cua', 'nodeRepl', 'Buffer', 'load', code.replaceAll('import(', 'load('));
-  await run({ getApp: async () => ({ getScreenshot: async () => shot }) }, { write: line => { frame = JSON.parse(line.slice('SLEIGHT_FRAME '.length)); } }, Buffer, load);
+  // Offline pairs can compare the old marker and the token-bearing protocol.
+  await run({ getApp: async () => ({ getScreenshot: async () => shot }) }, { write: line => {
+    frame = JSON.parse(line.replace(/^SLEIGHT_FRAME (?:[a-f0-9]{32} )?/, ''));
+  } }, Buffer, load);
   return frame;
 }
 export function acquisitionTraces(root = join(tmpdir(), 'sleight-bench')) {
@@ -55,7 +58,7 @@ async function offline(root = currentRoot) {
     const png = PNG.sync.write({ width: 674, height: 408, data });
     const jpg = jpeg.encode({ width: 674, height: 408, data }, 70).data;
     for (const [format, shot] of [['png', png], ['jpeg', jpg]]) for (const terminal of [false, true]) {
-      const code = snapshotCode('Calculator', 46, 13, terminal);
+      const code = snapshotCode('Calculator', 46, 13, terminal, '0'.repeat(32));
       results.push({ ...await measured(`pane ${format} ${terminal ? 'terminal' : 'desktop'}`, 12, () => pane(code, shot)), bytes: shot.length });
     }
     return { mode: 'offline', results, acquisitions: acquisitionTraces() };

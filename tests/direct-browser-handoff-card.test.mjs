@@ -1,3 +1,4 @@
+import { assertChildStatus } from './fixtures/child-status.mjs';
 import { trackTemp } from '../scripts/temp-leftovers.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
@@ -13,7 +14,7 @@ test('the consent host with the protected handoff card typechecks', { skip: macC
   const root = trackTemp(mkdtempSync(join(tmpdir(), 'sleight-handoff-typecheck-')));
   t.after(() => rmSync(root, { recursive: true, force: true }));
   const result = spawnSync('/usr/bin/xcrun', ['swiftc', '-typecheck', '-module-cache-path', join(root, 'cache'),
-    resolve('plugins/sleight/lib/direct-browser/native/consent-host.swift')], { encoding: 'utf8', timeout: 300000 });
+    resolve('plugins/sleight/lib/direct-browser/native/consent-host.swift')], { encoding: 'utf8', timeout: 600000, killSignal: 'SIGKILL' });
   assert.ifError(result.error);
-  assert.equal(result.status, 0, result.error?.message ?? result.stderr);
+  assertChildStatus(result, 0, result.error?.message ?? result.stderr);
 });

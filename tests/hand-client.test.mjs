@@ -1,14 +1,339 @@
+import { helperBuildKey, helperSourceHashes, handInventory } from '../plugins/sleight/lib/direct-browser/host-cache.mjs';
+import { assertChildStatus } from './fixtures/child-status.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { EventEmitter } from 'node:events';
-import { createHash } from 'node:crypto';
-import { mkdirSync, mkdtempSync, readFileSync, realpathSync, writeFileSync } from 'node:fs';
+import { chmodSync, existsSync, linkSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, readdirSync, rmSync, statSync, symlinkSync, utimesSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { spawn, spawnSync } from 'node:child_process';
+import { macCommandSkip } from './requirements.mjs';
+import { swiftModuleCache } from '../bench/swift-cache.mjs';
 import { registerTemp, trackTemp } from '../scripts/temp-leftovers.mjs';
 import { createHandClient, handWireFrame, sessionHandClient, shareConsent } from '../plugins/sleight/lib/hand/client.mjs';
 import { handPid, setHandPid } from '../plugins/sleight/lib/hand/pid.mjs';
 import * as host from '../plugins/sleight/lib/direct-browser/host.mjs';
+import * as handClient from '../plugins/sleight/lib/hand/client.mjs';
+
+const SESSION_START = 'Tue Oct 27 08:00:00 2026';
+
+for (const { cast, wantCharacter, wantBadge, allocated } of [
+  { cast: undefined, wantCharacter: 'biscuit', wantBadge: undefined, allocated: false },
+  { cast: [], wantCharacter: 'biscuit', wantBadge: undefined, allocated: false },
+  { cast: ['tsugi', 'biscuit'], wantCharacter: 'tsugi', wantBadge: 'A', allocated: true },
+]) {
+  test(`sprite launch with cast ${JSON.stringify(cast)} preserves the selected character unless the cast has names`, async t => {
+    const root = realpathSync(mkdtempSync(join(tmpdir(), 'sleight-cast-empty-'))), child = fakeChild();
+    const client = createHandClient({ sessionRoot: join(root, 'sessions'),
+      setting: () => ({ enabled: true, style: 'sprite', character: 'biscuit', cast }),
+      loadSprite: async id => { const sprite = testSprite(); sprite.character.manifest.id = id; return sprite; },
+      watch: () => undefined, permissions: null, usage: null, built: () => true,
+      prepare: async () => ({ status: 'ready', spawn: () => child }) });
+    t.after(async () => { client.close(); await settle(); setHandPid(0); rmSync(root, { recursive: true, force: true }); });
+    client.send(frame()); await shareConsent(); await settle();
+    const character = child.lines.find(line => line.hand === 'character');
+    assert.equal(character?.id, wantCharacter);
+    assert.equal(character?.sessionBadge, wantBadge);
+    assert.equal(existsSync(join(root, 'sessions', String(process.pid))), allocated);
+    assert.equal(existsSync(join(root, 'sessions')), allocated, 'single-character launches never allocate a receipt directory');
+  });
+}
+
+test('a recycled PID releases a receipt and allows that PID to claim again', async t => {
+  const root = realpathSync(mkdtempSync(join(tmpdir(), 'sleight-session-recycled-')));
+  t.after(() => rmSync(root, { recursive: true, force: true }));
+  let startTime = SESSION_START;
+  const claim = () => handClient.claimHandSession({ root, pid: 101, cast: ['tsugi', 'biscuit'], alive: () => true, started: () => startTime });
+  const owner = await claim();
+  const first = JSON.parse(readFileSync(join(root, '101'), 'utf8'));
+  startTime = 'Tue Oct 27 08:00:01 2026';
+  const next = await claim();
+  const second = JSON.parse(readFileSync(join(root, '101'), 'utf8'));
+  assert.equal(first.startTime, SESSION_START);
+  assert.equal(next.character, 'tsugi');
+  assert.equal(next.badge, 'A');
+  assert.notEqual(second.token, first.token);
+  assert.equal(second.startTime, startTime);
+  assert.equal(statSync(join(root, '101')).mode & 0o777, 0o600);
+  await owner.close();
+  assert.equal(readFileSync(join(root, '101'), 'utf8'), JSON.stringify(second) + '\n', 'the old owner cannot delete its successor');
+  await next.close();
+});
+
+test('the same PID and start time stay live and keep their cast allocation', async t => {
+  const root = realpathSync(mkdtempSync(join(tmpdir(), 'sleight-session-live-')));
+  t.after(() => rmSync(root, { recursive: true, force: true }));
+  const claim = pid => handClient.claimHandSession({ root, pid, cast: ['tsugi', 'biscuit'], alive: () => true, started: () => SESSION_START });
+  const owner = await claim(101), before = readFileSync(join(root, '101'), 'utf8');
+  await assert.rejects(claim(101), /HAND_SESSION_IN_USE/);
+  const other = await claim(102);
+  assert.equal(other.character, 'biscuit');
+  assert.equal(readFileSync(join(root, '101'), 'utf8'), before);
+  await other.close(); await owner.close();
+});
+
+for (const legacy of [true, false]) {
+  test(`${legacy ? 'a legacy receipt without a start time' : 'a partial receipt'} blocks a live owner, then recovers after PID reuse`, async t => {
+    const root = realpathSync(mkdtempSync(join(tmpdir(), 'sleight-session-legacy-')));
+    t.after(() => rmSync(root, { recursive: true, force: true }));
+    const path = join(root, '101');
+    const text = legacy ? JSON.stringify({ version: 1, pid: 101, character: 'tsugi', badge: 'A', token: 'a'.repeat(32) }) : '{';
+    writeFileSync(path, text, { mode: 0o600 });
+    const written = Date.parse('2026-10-27T12:00:10Z') / 1000;
+    utimesSync(path, written, written);
+    let startTime = '2026-10-27T12:00:00Z';
+    const claim = () => handClient.claimHandSession({ root, pid: 102, cast: ['tsugi', 'biscuit'], alive: () => true,
+      started: pid => pid === 101 ? startTime : SESSION_START });
+    await assert.rejects(claim(), /HAND_SESSION_UNSAFE/);
+    assert.equal(readFileSync(path, 'utf8'), text);
+    startTime = '2026-10-27T12:00:11Z';
+    await assert.rejects(claim(), /HAND_SESSION_UNSAFE/, 'one second is inside the conservative reuse margin');
+    startTime = '2026-10-27T12:00:12Z';
+    await assert.rejects(claim(), /HAND_SESSION_UNSAFE/, 'the two-second boundary still refuses recovery');
+    startTime = '2026-10-27T12:01:00Z';
+    const next = await claim();
+    assert.equal(next.character, 'tsugi');
+    assert.equal(existsSync(path), false);
+    await next.close();
+  });
+}
+
+test('a legacy receipt without a start time is swept after its PID exits', async t => {
+  const root = realpathSync(mkdtempSync(join(tmpdir(), 'sleight-session-legacy-dead-')));
+  t.after(() => rmSync(root, { recursive: true, force: true }));
+  writeFileSync(join(root, '101'), JSON.stringify({ version: 1, pid: 101, character: 'tsugi', badge: 'A', token: 'a'.repeat(32) }), { mode: 0o600 });
+  const next = await handClient.claimHandSession({ root, pid: 102, cast: ['tsugi'], alive: pid => pid !== 101, started: () => SESSION_START });
+  assert.equal(existsSync(join(root, '101')), false);
+  await next.close();
+});
+
+test('an unreadable live process start fails closed without deleting its receipt', async t => {
+  const root = realpathSync(mkdtempSync(join(tmpdir(), 'sleight-session-start-unreadable-')));
+  t.after(() => rmSync(root, { recursive: true, force: true }));
+  const owner = await handClient.claimHandSession({ root, pid: 101, cast: ['tsugi'], alive: () => true, started: () => SESSION_START });
+  const before = readFileSync(join(root, '101'), 'utf8');
+  await assert.rejects(handClient.claimHandSession({ root, pid: 102, cast: ['tsugi'], alive: () => true,
+    started: pid => pid === 101 ? undefined : SESSION_START }), /HAND_SESSION_UNSAFE/);
+  assert.equal(readFileSync(join(root, '101'), 'utf8'), before);
+  await owner.close();
+});
+
+test('a missing claimant start time refuses allocation without leaving a receipt', async t => {
+  const root = realpathSync(mkdtempSync(join(tmpdir(), 'sleight-session-start-missing-')));
+  t.after(() => rmSync(root, { recursive: true, force: true }));
+  await assert.rejects(handClient.claimHandSession({ root, pid: 101, cast: ['tsugi'], started: () => undefined }), /HAND_SESSION_UNSAFE/);
+  assert.equal(existsSync(join(root, '101')), false);
+});
+
+test('cast sessions take least-used names, keep private receipts, and sweep only dead owners', async t => {
+  const root = realpathSync(mkdtempSync(join(tmpdir(), 'sleight-session-')));
+  t.after(() => rmSync(root, { recursive: true, force: true }));
+  const live = new Set([101, 102, 103, 104]), alive = pid => live.has(pid);
+  const claim = pid => handClient.claimHandSession({ root, pid, cast: ['tsugi', 'biscuit'], alive, started: () => SESSION_START });
+  const [a, b] = await Promise.all([claim(101), claim(102)]);
+  assert.deepEqual([a.character, b.character], ['tsugi', 'biscuit']);
+  assert.equal(statSync(join(root, '101')).mode & 0o777, 0o600);
+  assert.equal(statSync(join(root, '102')).mode & 0o777, 0o600);
+  assert.equal(statSync(root).mode & 0o777, 0o700);
+  const c = await claim(103); assert.equal(c.character, 'tsugi'); assert.equal(c.badge, 'B');
+  writeFileSync(join(root, '105'), '{', { mode: 0o600 });
+  live.delete(101); live.delete(102);
+  const d = await claim(104); assert.equal(d.character, 'biscuit');
+  assert.equal(existsSync(join(root, '101')), false); assert.equal(existsSync(join(root, '102')), false);
+  assert.equal(existsSync(join(root, '103')), true);
+  assert.equal(existsSync(join(root, '105')), false, 'a dead partial receipt is swept after a crash');
+  await c.close(); await d.close();
+  assert.deepEqual(readdirSync(root).filter(name => /^\d+$/.test(name)), []);
+});
+
+test('cast receipts refuse links, permissive files and malformed live records without touching their targets', async t => {
+  const root = realpathSync(mkdtempSync(join(tmpdir(), 'sleight-session-unsafe-')));
+  t.after(() => rmSync(root, { recursive: true, force: true }));
+  const claim = (alive = () => true) => handClient.claimHandSession({ root, pid: 102, cast: ['tsugi'], alive, started: () => SESSION_START });
+  const sentinel = join(root, 'sentinel'); writeFileSync(sentinel, 'keep', { mode: 0o600 });
+  symlinkSync(sentinel, join(root, '101'));
+  await assert.rejects(claim(), /HAND_SESSION_UNSAFE/);
+  assert.equal(readFileSync(sentinel, 'utf8'), 'keep'); rmSync(join(root, '101'));
+  linkSync(sentinel, join(root, '101'));
+  await assert.rejects(claim(() => false), /HAND_SESSION_UNSAFE/);
+  assert.equal(readFileSync(sentinel, 'utf8'), 'keep'); rmSync(join(root, '101'));
+  writeFileSync(join(root, '101'), '{}', { mode: 0o600 }); chmodSync(join(root, '101'), 0);
+  await assert.rejects(claim(() => false), /HAND_SESSION_UNSAFE/);
+  assert.equal(existsSync(join(root, '101')), true); rmSync(join(root, '101'));
+  writeFileSync(join(root, '101'), '{}', { mode: 0o600 });
+  await assert.rejects(claim(), /HAND_SESSION_UNSAFE/);
+  rmSync(join(root, '101')); chmodSync(root, 0o755);
+  await assert.rejects(claim(), /HAND_SESSION_UNSAFE/);
+  chmodSync(root, 0o700);
+  rmSync(join(root, '.allocation.sqlite')); symlinkSync(sentinel, join(root, '.allocation.sqlite'));
+  await assert.rejects(claim(), /HAND_SESSION_UNSAFE/);
+  assert.equal(readFileSync(sentinel, 'utf8'), 'keep');
+  const linked = join(root, 'linked'); symlinkSync(root, linked);
+  await assert.rejects(handClient.claimHandSession({ root: join(linked, 'must-not-create'), cast: ['tsugi'] }), /HAND_SESSION_UNSAFE/);
+  assert.equal(existsSync(join(root, 'must-not-create')), false);
+});
+
+for (const zones of [null, ['Pacific/Honolulu', 'Asia/Tokyo'], ['Asia/Tokyo', 'Pacific/Honolulu']]) {
+test(zones ? `live cast receipts survive writer TZ=${zones[0]} and reader TZ=${zones[1]}` :
+  'simultaneous processes allocate different cast names and the next claimant sweeps abandoned receipts', async t => {
+  const root = realpathSync(mkdtempSync(join(tmpdir(), 'sleight-cast-process-'))), children = [];
+  t.after(async () => { for (const c of children) c.child.stdin.end(); await Promise.all(children.map(c => c.ended)); rmSync(root, { recursive: true, force: true }); });
+  const worker = `import { claimHandSession } from ${JSON.stringify(new URL('../plugins/sleight/lib/hand/client.mjs', import.meta.url).href)};
+    const session = await claimHandSession({ root: process.argv[1], cast: ['tsugi', 'biscuit'] });
+    console.log(JSON.stringify({ character: session.character, pid: process.pid }));
+    process.stdin.resume(); process.stdin.on('end', () => process.exit(0));`;
+  const start = TZ => {
+    const child = spawn(process.execPath, ['--input-type=module', '-e', worker, root], {
+      stdio: ['pipe', 'pipe', 'pipe'], env: { ...process.env, ...TZ ? { TZ } : {} },
+    });
+    const ended = new Promise((resolve, reject) => { child.on('exit', code => code === 0 ? resolve() : reject(Error(`worker exit ${code}`))); child.on('error', reject); });
+    const ready = new Promise((resolve, reject) => { let data = '', errors = ''; child.stderr.on('data', c => { errors += c; });
+      child.stdout.on('data', c => { data += c; if (data.includes('\n')) resolve(JSON.parse(data.trim())); });
+      child.on('exit', () => { if (!data.includes('\n')) reject(Error(errors)); }); child.on('error', reject); });
+    children.push({ child, ended }); return ready;
+  };
+  let records;
+  if (zones) {
+    const writer = await start(zones[0]), path = join(root, String(writer.pid));
+    const before = readFileSync(path, 'utf8');
+    records = [writer, await start(zones[1])];
+    assert.equal(readFileSync(path, 'utf8'), before, 'a reader in another zone keeps the live receipt unchanged');
+  } else records = await Promise.all([start(), start()]);
+  assert.deepEqual(records.map(r => r.character).sort(), ['biscuit', 'tsugi']);
+  for (const r of records) assert.equal(statSync(join(root, String(r.pid))).mode & 0o777, 0o600);
+  for (const c of children) c.child.stdin.end(); await Promise.all(children.map(c => c.ended));
+  assert.equal(readdirSync(root).filter(n => /^\d+$/.test(n)).length, 2, 'abandoned receipts await the next start');
+  const next = await handClient.claimHandSession({ root, cast: ['tsugi', 'biscuit'] });
+  assert.equal(next.character, 'tsugi');
+  assert.deepEqual(readdirSync(root).filter(n => /^\d+$/.test(n)), [String(process.pid)]);
+  await next.close();
+});
+}
+
+test('an explicit picker choice moves the session receipt and badge before the next cast allocation', async t => {
+  const root = realpathSync(mkdtempSync(join(tmpdir(), 'sleight-cast-choice-'))), sessions = [];
+  t.after(async () => { await Promise.all(sessions.map(s => s.close())); rmSync(root, { recursive: true, force: true }); });
+  const claim = async pid => { const session = await handClient.claimHandSession({ root, pid, cast: ['tsugi', 'biscuit'], alive: () => true, started: () => SESSION_START }); sessions.push(session); return session; };
+  const a = await claim(101), b = await claim(102);
+  await a.select('biscuit');
+  assert.deepEqual([a.character, a.badge, b.character, b.badge], ['biscuit', 'B', 'biscuit', 'A']);
+  assert.deepEqual([JSON.parse(readFileSync(join(root, '101'), 'utf8')).character, statSync(join(root, '101')).mode & 0o777], ['biscuit', 0o600]);
+  const c = await claim(103); assert.equal(c.character, 'tsugi');
+  await a.select('biscuit'); assert.equal(a.badge, 'B', 'selecting the same character retains the badge');
+});
+
+test('the client pins its cast choice across rechecks and replacement, then releases its receipt on close', async t => {
+  const root = realpathSync(mkdtempSync(join(tmpdir(), 'sleight-client-cast-')));
+  const other = await handClient.claimHandSession({ root, pid: 101, cast: ['tsugi', 'biscuit'], alive: () => true, started: () => SESSION_START });
+  t.after(async () => { await other.close(); setHandPid(0); rmSync(root, { recursive: true, force: true }); });
+  const children = [], asked = [];
+  const client = createHandClient({ sessionRoot: root, sessionAlive: () => true, sessionStarted: () => SESSION_START, setting: () => ({ enabled: true, style: 'sprite', cast: ['tsugi', 'biscuit'] }),
+    cursorPicker: { apply: async choice => ({ ok: true, ...choice }), catalog: async () => ({ rows: [], thumbnails: [] }) },
+    loadSprite: async id => { asked.push(id); const s = testSprite(); s.character.manifest.id = id; return s; }, recheckMs: 0,
+    watch: () => undefined, permissions: null, usage: null, built: () => true,
+    prepare: async () => ({ status: 'ready', spawn: () => { const child = fakeChild(); children.push(child); return child; } }) });
+  t.after(() => client.close());
+  client.send(frame()); await settle();
+  assert.deepEqual(asked, ['biscuit']);
+  assert.equal(children[0].lines.find(l => l.hand === 'character').sessionBadge, 'A');
+  client.send(frame()); await settle(); assert.deepEqual(asked, ['biscuit']);
+  commitPause(children[0], true); children[0].emit('exit', 1); await settle();
+  assert.deepEqual(asked, ['biscuit', 'biscuit']);
+  assert.equal(children[1].lines.find(l => l.hand === 'character').sessionBadge, 'A');
+  children[1].stdout.emit('data', JSON.stringify({ hand: 'picker', nonce: children[1].menus[0].nonce, op: 'select', style: 'sprite', character: 'tsugi' }) + '\n');
+  await settle();
+  assert.deepEqual(children[1].lines.filter(l => l.hand === 'character').map(l => [l.id, l.sessionBadge]), [['biscuit', 'A'], ['tsugi', 'B']]);
+  assert.equal(JSON.parse(readFileSync(join(root, String(process.pid)), 'utf8')).character, 'tsugi');
+  client.close(); await settle();
+  assert.equal(existsSync(join(root, String(process.pid))), false);
+});
+
+test('native stage slots admit one owner per display, fail closed, and recover when the descriptor closes', { skip: macCommandSkip('xcrun') }, async t => {
+  const root = realpathSync(mkdtempSync(join(tmpdir(), 'sleight-display-slot-'))), children = [];
+  t.after(async () => { for (const c of children) c.child.stdin.end(); await Promise.all(children.map(c => c.ended)); rmSync(root, { recursive: true, force: true }); });
+  const source = readFileSync(new URL('../plugins/sleight/lib/direct-browser/native/consent-host.swift', import.meta.url), 'utf8');
+  const body = source.slice(source.indexOf('// BEGIN STAGE SLOT'), source.indexOf('// END STAGE SLOT'));
+  const admission = source.slice(source.indexOf('    // Ordering out precedes unlocking'), source.indexOf('    func performStage('));
+  const file = join(root, 'slot.swift'), binary = join(root, 'slot');
+  writeFileSync(file, `import Foundation\nimport Darwin\n${body}\n
+let root = CommandLine.arguments[1]
+if CommandLine.arguments.count == 3 {
+    let owner = StageSlot(root: root), allowed = owner.claim("77")
+    FileHandle.standardOutput.write(Data((allowed ? "1\\n" : "0\\n").utf8))
+    if allowed { _ = readLine() }; exit(0)
+}
+let a = StageSlot(root: root), b = StageSlot(root: root)
+precondition(a.claim("1")); precondition(a.claim("1"))
+precondition(!b.claim("1")); precondition(b.claim("2"))
+precondition(!a.claim("2")); precondition(!b.claim("1"))
+a.release(); b.release(); precondition(a.claim("2")); precondition(b.claim("1"))
+a.release(); b.release(); precondition(a.claim("1"))
+let path = root + "/stage-1.lock"
+var info = stat(); precondition(lstat(path, &info) == 0 && info.st_mode & 0o7777 == 0o600)
+a.release(); precondition(b.claim("1")); b.release()
+precondition(chmod(path, 0o644) == 0); precondition(!a.claim("1"))
+precondition(unlink(path) == 0)
+precondition(symlink("/dev/null", path) == 0); precondition(!a.claim("1"))
+precondition(unlink(path) == 0)
+precondition(symlink(root, root + "/linked") == 0)
+let unsafe = StageSlot(root: root + "/linked/nested")
+precondition(!unsafe.claim("1")); precondition(access(root + "/nested", F_OK) != 0)
+struct Options { var size = "stage", attention = true }
+struct Entry { var file: String? = "art.webp" }
+struct Frame { var stage: [String: Entry]? = ["stage-lie": Entry()] }
+struct Loaded { var frame = Frame() }
+struct Base { var window = 1 }
+struct StageWorld { var call = false; var stopped = false, inputAge = 20.0, person = 2, base = Base(), displayID: String? = "1" }
+struct Seat { var rung = "stage" }
+struct Runtime {
+    var options = Options(), shown = true, seat: Seat? = Seat()
+    mutating func hide(_ reason: String, immediate: Bool, at: Double? = nil) -> [Int] { shown = false; return [] }
+}
+final class Host {
+    let stageSlot: StageSlot
+    var stage = Runtime(), loaded: Loaded? = Loaded(), panelVisible = true, now = 0.0
+    init() { stageSlot = StageSlot(root: root) }
+    func release() { panelVisible = false; stageSlot.release() }
+${admission}
+}
+let first = Host(), second = Host(), world = StageWorld()
+precondition(first.stageAdmission(world))
+precondition(!second.stageAdmission(world) && second.panelVisible)
+precondition(!second.stageAdmission(world) && second.panelVisible)
+var active = world; active.inputAge = 0
+precondition(!first.stageAdmission(active) && !first.panelVisible && !first.stage.shown)
+precondition(second.stageAdmission(world)); second.yieldStageSlot()
+precondition(first.stageAdmission(world)); first.panelVisible = true; first.stage.shown = true
+precondition(chmod(path, 0o644) == 0)
+precondition(!first.stageAdmission(world) && !first.panelVisible && !first.stage.shown)
+precondition(chmod(path, 0o600) == 0)
+precondition(first.stageAdmission(world)); first.panelVisible = true; first.stage.shown = true
+first.stage.seat = Seat(rung: "medium"); first.releaseUnusedStageSlot(visible: first.panelVisible)
+precondition(first.stageSlot.display == nil && first.panelVisible)
+precondition(second.stageAdmission(world)); second.yieldStageSlot()
+first.stage.seat = Seat(rung: "stage")
+precondition(first.stageAdmission(world)); first.stage.shown = false; first.releaseUnusedStageSlot(visible: first.panelVisible)
+if first.stageSlot.display != "1" { exit(23) }
+first.panelVisible = false; first.releaseUnusedStageSlot(visible: first.panelVisible)
+precondition(first.stageSlot.display == nil)
+print("owners=2 displays=2 duplicateStages=0 unsafeRefusals=4")
+`);
+  const compile = spawnSync('/usr/bin/xcrun', ['swiftc', '-module-cache-path', swiftModuleCache(), file, '-o', binary], { encoding: 'utf8', timeout: 600000, killSignal: 'SIGKILL' });
+  assertChildStatus(compile, 0, compile.stderr);
+  const run = spawnSync(binary, [root], { encoding: 'utf8', timeout: 10000, killSignal: 'SIGKILL' });
+  assertChildStatus(run, 0, run.stderr); assert.match(run.stdout, /duplicateStages=0/);
+  const start = () => {
+    const child = spawn(binary, [root, '--hold'], { stdio: ['pipe', 'pipe', 'pipe'] });
+    const ended = new Promise((resolve, reject) => { child.on('exit', code => code === 0 ? resolve() : reject(Error(`slot exit ${code}`))); child.on('error', reject); });
+    const ready = new Promise((resolve, reject) => { let data = ''; child.stdout.on('data', c => { data += c; if (data.includes('\n')) resolve(data.trim()); }); child.on('error', reject); });
+    const result = { child, ended, ready }; children.push(result); return result;
+  };
+  const first = start(); assert.equal(await first.ready, '1');
+  const second = start(); assert.equal(await second.ready, '0'); await second.ended;
+  first.child.stdin.end(); await first.ended;
+  const successor = start(); assert.equal(await successor.ready, '1');
+  successor.child.stdin.end(); await successor.ended;
+});
 
 const tick = () => new Promise(resolve => setImmediate(resolve));
 const pauseEvent = (child, phase, paused, token = '1'.repeat(32), extra = {}) => child.stdout.emit('data',
@@ -190,7 +515,75 @@ test('a thrown clear write is a real failure and settles without waiting for dra
   assert.equal(await h.client.clearForAction(), false);
   assert.equal(h.client.enabled, false);
 });
+test('CH-4 placement admits the resolved drag before its matching placed acknowledgement', async t => {
+  const h = harness(); t.after(() => h.client.close()); h.client.send(frame()); await settle();
+  const child = h.children[0], start = child.lines.length;
+  let result;
+  const waiting = h.client.clearForAction({ ...frame(), kind: 'drag', path: [[100, 100], [500, 500]] }, Date.now() + 100)
+    .then(value => { result = value; });
+  const [action, request] = child.lines.slice(start);
+  assert.equal(action.kind, 'drag'); assert.equal(request.placed, true);
+  child.stdout.emit('data', JSON.stringify({ hand: 'clear-ready', nonce: request.nonce, token: request.token }) + '\n');
+  await tick(); assert.equal(result, undefined, 'an ordinary clear receipt does not acknowledge placement');
+  child.stdout.emit('data', JSON.stringify({ hand: 'placed-ready', nonce: request.nonce, token: request.token }) + '\n');
+  await waiting; assert.equal(result, true);
+});
+test('CH-4 an expired placement hides immediately without admitting a late target', async t => {
+  const h = harness(); t.after(() => h.client.close()); h.client.send(frame()); await settle();
+  const child = h.children[0], start = child.lines.length;
+  assert.equal(await h.client.clearForAction(frame(), Date.now() - 1), false);
+  assert.deepEqual(child.lines.slice(start).map(f => f.hand), ['hide']);
+});
+test('CH-4 expired placement hiding bypasses a saturated artwork backlog', async t => {
+  const h = harness(); t.after(() => h.client.close()); h.client.send(frame()); await settle();
+  const child = h.children[0]; child.stdin.writableLength = 70000;
+  const start = child.lines.length;
+  assert.equal(await h.client.clearForAction(frame(), Date.now() - 1), false);
+  assert.deepEqual(child.lines.slice(start).map(f => f.hand), ['hide']);
+});
 const settle = async () => { for (let i = 0; i < 5; i++) await tick(); };
+
+test('CA7 an unknown app during startup cannot queue old moods or a stale terminal drawing', async t => {
+  const h = harness({ style: 'ring' }); t.after(() => h.client.close());
+  h.client.send(frame()); h.client.hide('unknown-app');
+  h.client.cursor({ type: 'status', state: 'thinking' });
+  h.client.cursor({ type: 'status', state: 'done' });
+  await settle();
+  assert.ok(h.children.every(c => !c.lines.some(f => f.hand === 'act' || f.hand === 'status')));
+  h.client.send(frame()); await settle();
+  assert.ok(h.children.some(c => c.lines.some(f => f.hand === 'act')), 'known target metadata resumes the host');
+});
+
+test('CA7 stage pointer clearing preserves the character and app-area status retains its terminal boundary', async t => {
+  const { checkBuiltinCharacter, resolveCharacterStates } = await import('../plugins/sleight/lib/hand/character.mjs');
+  const child = fakeChild();
+  const client = createHandClient({ setting: () => ({ enabled: true, style: 'sprite', character: 'tsugi', size: 'stage' }),
+    loadSprite: async () => ({ character: checkBuiltinCharacter('tsugi'), resolve: resolveCharacterStates }),
+    stageCache: { ensure: async () => undefined }, built: () => true, watch: () => undefined, permissions: null, usage: null,
+    prepare: async () => ({ status: 'ready', spawn: () => child }) });
+  t.after(() => { client.close(); setHandPid(0); });
+  client.send({ hand: 'status', state: 'thinking', pid: 42, windowId: 0, area: 'app' });
+  await settle();
+  assert.ok(child.lines.some(f => f.area === 'app' && f.windowId === 0));
+  const clearing = client.clearForAction(), clear = child.lines.at(-1);
+  assert.equal(clear.keepStage, true);
+  child.stdout.emit('data', JSON.stringify({ hand: 'clear-ready', nonce: clear.nonce, token: clear.token }) + '\n');
+  assert.equal(await clearing, true);
+  client.hide('unknown-app');
+  const hiddenCount = child.lines.length;
+  for (const state of ['thinking', 'waiting', 'error', 'done']) client.cursor({ type: 'status', state, call: 'call-unknown' });
+  assert.equal(child.lines.length, hiddenCount, 'moods inheriting the old app area cannot undo unknown-app hiding');
+  client.cursor({ type: 'status', state: 'done' });
+  assert.equal(child.lines.at(-1).state, 'done');
+  assert.equal(child.lines.at(-1).area, 'app');
+  assert.equal(child.lines.at(-1).ok, undefined, 'the end of a turn is distinct from call success');
+  client.cursor({ type: 'status', state: 'thinking' });
+  assert.equal(child.lines.at(-1).state, 'done');
+  client.send({ hand: 'status', state: 'thinking', pid: 43, windowId: 0, area: 'app' });
+  client.cursor({ type: 'status', state: 'waiting', call: 'call-known' });
+  assert.equal(child.lines.at(-1).pid, 43);
+  assert.equal(child.lines.at(-1).state, 'waiting');
+});
 // A fake shared host: act and hide frames land in lines, menu frames in menus, and stdout and fds 3 and 4 are streams.
 function fakeChild(pid = 4242, consent = true) {
   const child = new EventEmitter(), lines = [], menus = [];
@@ -384,8 +777,11 @@ test('an unavailable build, a throwing spawn, a broken pipe and backpressure onl
   assert.equal(broken.client.enabled, false);
   const h = harness(); t.after(() => h.client.close());
   h.client.send(frame()); await settle();
-  h.children[0].stdin.writableLength = 70000; h.client.send(frame());
-  assert.deepEqual(h.traces.at(-1), ['hand-dropped', { reason: 'backpressure' }]);
+  h.children[0].stdin.writableLength = 70000;
+  const before = h.children[0].lines.length;
+  h.client.send(frame());
+  assert.equal(h.children[0].lines.length, before + 1, 'target protection bypasses the art backlog cap');
+  assert.equal(h.children[0].lines.at(-1).hand, 'act');
   h.children[0].stdin.write = () => { throw Object.assign(Error('closed'), { code: 'ERR_STREAM_DESTROYED' }); };
   h.children[0].stdin.writableLength = 0;
   assert.doesNotThrow(() => h.client.send(frame()));
@@ -604,7 +1000,11 @@ test('closing the hand client never kills a host turbo still uses', async t => {
 
 test('the launcher creates the session client before turbo\'s bridge can fork', () => {
   const launch = readFileSync(new URL('../plugins/sleight/lib/launch.mjs', import.meta.url), 'utf8');
-  const run = launch.slice(launch.indexOf('export async function run('));
+  const launchRun = launch.slice(launch.indexOf('export async function run('));
+  // The own-runtime branch prepares its bridge before returning; this check owns the engine branch.
+  const engineStart = launchRun.indexOf('await recoverClipboard();');
+  assert.ok(engineStart > 0, 'engine startup branch is present');
+  const run = launchRun.slice(engineStart);
   assert.ok(run.indexOf('sessionHandClient(') > 0 && run.indexOf('sessionHandClient(') < run.indexOf('prepareInstalledStartup('), 'created first');
   assert.match(run, /process\.once\('exit', \(\) => hand\?\.close\(\)\)/);
 });
@@ -704,13 +1104,12 @@ test('prepareHandHost builds through the helper pipeline and its handle starts o
     [{ cursorStyle: 'seam', consent: true }, '--hand --capture=hidden --cursor-style=seam --consent', 5],
     [{ cursorStyle: 'glove', capture: 'visible' }, '--hand --capture=visible --cursor-style=glove --menu', 3]]) {
     const child = ready.spawn(options);
+    assert.equal(child.spawnfile, join(cacheRoot, helperBuildKey(helperSourceHashes(handInventory(sourceRoot)), 'default'), 'consent-host'));
     assert.match(child.spawnfile, /\/consent-host$/, 'consent runs directly at normal priority');
     assert.equal(child.stdio.filter(Boolean).length, descriptors - 1, args);
     child.stdin.end();
     assert.equal(await new Promise(resolve => child.on('exit', resolve)), 0);
-    const key = createHash('sha256').update(JSON.stringify({ protocol: 1, arch: process.arch,
-      sources: Object.fromEntries(['peer-host.c', 'consent-host.swift'].map(name => [name, createHash('sha256').update('source ' + name).digest('hex')])) })).digest('hex');
-    assert.equal(readFileSync(join(cacheRoot, key, 'consent-host.args'), 'utf8'), args);
+    assert.equal(readFileSync(child.spawnfile + '.args', 'utf8'), args);
   }
   assert.throws(() => ready.spawn({ capture: 'readOnly' }), /HAND_CAPTURE_INVALID/);
   for (const cursorStyle of ['Ring', 'Sprite', '', null, 1]) assert.throws(() => ready.spawn({ cursorStyle }), /HAND_CURSOR_STYLE_INVALID/);
@@ -851,6 +1250,71 @@ const testSprite = () => {
     sheets: { sheet: { width: 512, height: 192 } }, resolved }, resolve: () => resolved };
 };
 
+for (const size of ['stage', 320]) for (const perch of [true, false]) {
+test(`stage first use at ${size} with perch ${perch} renders once and refreshes without a second host`, async t => {
+  const { checkBuiltinCharacter, resolveCharacterStates } = await import('../plugins/sleight/lib/hand/character.mjs');
+  const { createCharacterStageCache } = await import('../plugins/sleight/lib/hand/character-stage.mjs');
+  const { fixtureRender } = await import('./fixtures/character-stage-render.mjs');
+  const root = registerTemp(t, trackTemp(realpathSync(mkdtempSync(join(tmpdir(), 'sleight-client-stage-')))));
+  const loaded = { character: checkBuiltinCharacter('tsugi'), resolve: resolveCharacterStates };
+  const cache = createCharacterStageCache({ root: join(root, 'cache'), render: fixtureRender });
+  let release, calls = 0;
+  const stageCache = { ensure: () => { calls++; return new Promise(done => { release = async () => done(await cache.ensure(loaded.character)); }); } };
+  const child = fakeChild(); let starts = 0;
+  const client = createHandClient({ setting: () => ({ enabled: true, style: 'sprite', character: 'tsugi', perch, size }),
+    stageCache, loadSprite: async () => loaded, watch: () => undefined, built: () => true, permissions: null, usage: null,
+    prepare: async () => ({ status: 'ready', spawn: () => { starts++; return child; } }) });
+  t.after(() => { client.close(); setHandPid(0); }); client.send(frame()); await settle();
+  const before = child.lines.find(f => f.hand === 'character');
+  assert.equal(before.stage, undefined); assert.equal(before.size, size); assert.equal(calls, 1); assert.equal(starts, 1);
+  await release(); await settle();
+  const frames = child.lines.filter(f => f.hand === 'character');
+  assert.equal(frames.length, 2); assert.match(frames[1].stage.cache, /^[a-f0-9]{64}$/); assert.equal(starts, 1); assert.equal(calls, 1);
+  assert.ok(frames[1].seq > frames[0].seq); assert.equal(frames[1].nonce, frames[0].nonce);
+});
+
+}
+
+for (const size of ['small', 'medium']) test(`built-in ${size} size does not request stage rendering`, async t => {
+  const child = fakeChild(), sprite = testSprite(); sprite.character.builtin = true;
+  let renders = 0;
+  const client = createHandClient({ setting: () => ({ enabled: true, style: 'sprite', character: 'pet', perch: false, size }),
+    stageCache: { ensure: async () => { renders++; return null; } }, loadSprite: async () => sprite,
+    watch: () => undefined, built: () => true, permissions: null, usage: null,
+    prepare: async () => ({ status: 'ready', spawn: () => child }) });
+  t.after(() => { client.close(); setHandPid(0); }); client.send(frame()); await settle();
+  assert.equal(renders, 0); assert.equal(child.lines.filter(f => f.hand === 'character').length, 1);
+});
+
+for (const change of ['small', 'character', 'style', 'close']) test(`stage completion after ${change} sends no stale refresh`, async t => {
+  const child = fakeChild(), loaded = testSprite(); loaded.character.builtin = true;
+  let release, calls = 0, size = 'stage';
+  const client = createHandClient({ setting: () => ({ enabled: true, style: 'sprite', character: 'pet', perch: false, size }),
+    stageCache: { ensure: () => { calls++; return new Promise(done => { release = done; }); } }, loadSprite: async id => id === 'pet' ? loaded : testSprite(),
+    cursorPicker: { apply: async event => ({ ok: true, ...event }) }, recheckMs: 0,
+    watch: () => undefined, built: () => true, permissions: null, usage: null,
+    prepare: async () => ({ status: 'ready', spawn: () => child }) });
+  t.after(() => { client.close(); setHandPid(0); }); client.send(frame()); await settle();
+  assert.equal(calls, 1);
+  if (change === 'small') { size = 'small'; client.send(frame()); }
+  else if (change === 'close') client.close();
+  else child.stdout.emit('data', JSON.stringify({ hand: 'picker', nonce: child.menus[0].nonce, op: 'select',
+    ...change === 'character' ? { style: 'sprite', character: 'other' } : { style: 'ring' } }) + '\n');
+  await settle();
+  const before = child.lines.length;
+  release({ ...loaded.character, stageKey: 'a'.repeat(64) }); await settle();
+  assert.equal(child.lines.length, before);
+});
+
+test('stage render failure keeps the existing character frame and host', async t => {
+  const child = fakeChild(), sprite = testSprite(); sprite.character.builtin = true;
+  const client = createHandClient({ setting: () => ({ enabled: true, style: 'sprite', character: 'pet', perch: true, size: 'stage' }),
+    stageCache: { ensure: async () => null }, loadSprite: async () => sprite, watch: () => undefined, built: () => true,
+    permissions: null, usage: null, prepare: async () => ({ status: 'ready', spawn: () => child }) });
+  t.after(() => { client.close(); setHandPid(0); }); client.send(frame()); await settle();
+  assert.equal(child.lines.filter(f => f.hand === 'character').length, 1); assert.equal(client.enabled, true);
+});
+
 test('cursorStyle is an optional spawn option and adds no wait to send', async t => {
   t.after(() => setHandPid(0));
   for (const cursorStyle of ['ring', 'seam', 'glove', 'sprite']) {
@@ -880,9 +1344,10 @@ test('sprite sends the installed character after the menu, and falls back to the
     assert.equal(spawns[0].cursorStyle, 'sprite'); assert.deepEqual(asked, ['pet']);
     const [sprite, sent, act] = child.lines;
     assert.deepEqual([sprite.hand, sprite.id, sprite.seq, sprite.nonce], ['character', 'pet', 1, child.menus[0].nonce]);
-    // A2: the sprite's perch and lines settings follow the character, off and on by default.
-    assert.deepEqual(sent, { hand: "picker", nonce: sprite.nonce, op: "options", perch: false, lines: true });
-    assert.deepEqual(Object.keys(sprite).sort(), ['cell', 'extra', 'hand', 'id', 'nonce', 'seq', 'sheet', 'table']);
+    // Medium is the default and uses the placement runtime, including without a saved perch setting.
+    assert.deepEqual(sent, { hand: "picker", nonce: sprite.nonce, op: "options", perch: true, lines: true });
+    assert.deepEqual(Object.keys(sprite).sort(), ['cell', 'extra', 'hand', 'id', 'nonce', 'seq', 'sheet', 'size', 'table']);
+    assert.equal(sprite.size, 'medium');
     assert.equal(sprite.sheet, '/chars/pet/sheet.png'); assert.equal(sprite.table.idle.scale, 0.5);
     assert.deepEqual([act.hand, act.seq, act.label], ['act', 2, 'Save']);
     client.close();
@@ -935,7 +1400,7 @@ test('host wire frames carry rect and caretX on acts, ok on done, and a move aim
   h.client.cursor({ type: 'action', phase: 'aim', kind: 'click' });
   h.client.cursor({ type: 'action', phase: 'aim', kind: 'click', point: [1, 2] });
   h.client.cursor({ type: 'action', phase: 'aim', kind: 'move', point: [1, 2], window: { pid: 501, id: 77 } });
-  h.client.send(frame({ kind: 'type', rect: [5, 6, 70, 20], caretX: 33 }));
+  h.client.send(frame({ kind: 'type', rect: [5, 6, 70, 20], caretX: 33, windowRect: [100, 200, 900, 350] }));
   h.client.cursor({ type: 'status', state: 'done', call: 'a'.repeat(32) });
   h.client.cursor({ type: 'status', state: 'done' });
   await settle();
@@ -943,6 +1408,7 @@ test('host wire frames carry rect and caretX on acts, ok on done, and a move aim
   const lines = h.children[0].lines;
   assert.deepEqual(lines.map(l => [l.hand, l.kind ?? l.state]), [['aim', 'click'], ['act', 'type'], ['status', 'done'], ['status', 'done']]);
   assert.deepEqual([lines[1].rect, lines[1].caretX], [[5, 6, 70, 20], 33]);
+  assert.ok(lines.slice(1).every(l => JSON.stringify(l.windowRect) === '[100,200,900,350]'), 'the action and both terminal frames keep their measurement identity');
   assert.equal(lines[2].ok, true, 'a call\'s done is its success'); assert.equal(lines[3].ok, undefined);
 });
 
@@ -955,7 +1421,7 @@ test('perch (A2): the character frame carries the perch keys only with perch on,
   };
   let perch = false;
   const child = fakeChild();
-  const client = createHandClient({ setting: () => ({ enabled: true, style: 'sprite', character: 'pet', perch }), loadSprite: async () => sprite(),
+  const client = createHandClient({ setting: () => ({ enabled: true, style: 'sprite', character: 'pet', perch, size: 'small' }), loadSprite: async () => sprite(),
     watch: () => undefined, permissions: null, usage: null, built: () => true, recheckMs: 0,
     prepare: async () => ({ status: 'ready', spawn: () => child }) });
   t.after(() => client.close());
@@ -967,4 +1433,79 @@ test('perch (A2): the character frame carries the perch keys only with perch on,
   const [again, options] = child.lines.filter(l => l.hand === 'character' || l.op === 'options');
   assert.deepEqual([again.hand, Object.keys(again.perch.table), options.perch], ['character', ['perch'], true]);
   assert.ok(again.seq > first.seq);
+});
+
+test('sprite chips require recording, the host nonce and one offered replay coordinate', async t => {
+  const child = fakeChild(), opened = [];
+  let recording = true;
+  const idle = { state: 'idle', sheet: 'sheet.png', row: 0, start: 0, frames: 1, ms: [100], loop: true, hotspot: { x: 32, y: 32 } };
+  const sprite = { manifest: { id: 'cat', frame: { w: 64, h: 64 }, sheet: 'sheet.png', states: {}, scale: 0.5 }, folder: '/fixture/cat',
+    sheets: { sheet: { width: 512, height: 64 } }, resolved: [idle] };
+  const client = createHandClient({ setting: () => ({ enabled: true, style: 'sprite', character: 'cat', record_runs: recording }),
+    built: () => true, watch: () => undefined, permissions: null, usage: null,
+    loadSprite: async () => ({ character: sprite, resolve: () => [idle] }),
+    prepare: async () => ({ status: 'ready', spawn: () => child }), openReplay: async (...args) => opened.push(args) });
+  t.after(() => { client.close(); setHandPid(0); }); client.send(frame()); await settle();
+  const session = 'a'.repeat(32), nonce = child.menus[0].nonce;
+  client.cursor({ type: 'session', state: 'start', session, ts: 1793016000000 });
+  const action = { type: 'action', call: 'b'.repeat(32), index: 0, kind: 'key', window: { pid: 501, id: 77 }, point: [20, 30], retry: true, transfer: 'take' };
+  client.cursor({ ...action, phase: 'aim', seq: 3 });
+  client.send({ ...frame({ kind: 'key' }), retry: true, transfer: 'take' });
+  assert.equal(child.lines.at(-1).transfer, 'take'); assert.equal(child.lines.at(-1).retry, true);
+  client.cursor({ ...action, phase: 'done', seq: 5 });
+  const chip = child.lines.filter(line => line.hand === 'edge' && line.op === 'put').at(-1);
+  assert.equal(chip.first, 3); assert.equal(chip.count, 1); assert.ok(chip.run);
+  const reply = over => child.stdout.emit('data', JSON.stringify({ hand: 'replay', nonce, run: chip.run, first: chip.first, ...over }) + '\n');
+  reply({ nonce: 'f'.repeat(64) }); reply({ first: 999 }); reply({ extra: true }); await settle(); assert.equal(opened.length, 0);
+  recording = false; reply({}); await settle(); assert.equal(opened.length, 0);
+  client.cursor({ type: 'status', state: 'thinking' });
+  assert.equal(child.lines.filter(line => line.hand === 'edge').at(-1).run, null);
+  recording = true; client.cursor({ type: 'status', state: 'thinking' }); reply({}); reply({}); await settle();
+  assert.deepEqual(opened, [[chip.run, 3]]);
+});
+
+
+test('CP1A3 relay and menu clients retain the upgrade lifetime after foreground readiness and cancel on close', async t => {
+  for (const menuOnly of [false, true]) {
+    let options;
+    const child = fakeChild();
+    const client = createHandClient({ menuOnly, setting: () => ({ enabled: true }), built: () => true,
+      watch: () => undefined, permissions: null, usage: null,
+      prepare: async value => { options = value; return { status: 'ready', spawn: () => child }; } });
+    t.after(() => client.close());
+    if (menuOnly) await client.startMenu(); else { client.send(frame()); await settle(); }
+    assert.ok(options.upgradeSignal instanceof AbortSignal);
+    assert.equal(options.upgradeSignal.aborted, false);
+    client.close(); assert.equal(options.upgradeSignal.aborted, true);
+  }
+});
+
+test('CR2A wire carries the measured window on aim, act and terminal status', () => {
+  const windowRect = [100.25, 200.5, 900, 350], base = { pid: 42, windowId: 7, at: [600, 700], windowRect };
+  for (const frame of [{ ...base, kind: 'click' }, { ...base, hand: 'aim', kind: 'click' },
+    { ...base, hand: 'status', state: 'done' }]) {
+    assert.deepEqual(handClient.handWireFrame(frame).windowRect, windowRect);
+    for (const invalid of [[0, 0, 0, 20], [0, 0, true, 20], [0, 0, 20], [0, 0, Infinity, 20]]) {
+      const safe = handClient.handWireFrame({ ...frame, windowRect: invalid });
+      assert.equal(typeof safe, 'object');
+      assert.equal(safe.windowRect, undefined);
+      assert.deepEqual(safe.at, frame.at);
+    }
+  }
+});
+
+test('CH-1 wide frames preserve the action anchor and wide-only turns still send a terminal', async t => {
+  for (const located of [false, true]) {
+    const h = harness({ style: 'ring' }); t.after(() => h.client.close());
+    if (located) h.client.send(frame());
+    h.client.send({ hand: 'wide', app: 'Fixture', reason: 'read', epoch: 0 });
+    await settle();
+    const child = h.children[0]; assert.ok(child);
+    assert.equal(child.lines.filter(line => line.hand === 'wide').length, 1);
+    h.client.cursor({ type: 'status', state: 'handback' });
+    const terminal = child.lines.findLast(line => line.hand === 'status');
+    assert.equal(terminal.state, 'handback');
+    if (located) { assert.equal(terminal.pid, 501); assert.deepEqual(terminal.at, [10.12, 20]); }
+    else assert.equal(terminal.at, undefined, 'the terminal carries no invented action point');
+  }
 });

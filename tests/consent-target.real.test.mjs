@@ -26,7 +26,7 @@ for (const [vendor, record, containerId, rejectId] of [['OneTrust', "document.co
   ['TCF', "localStorage.setItem('euconsent-v2','CPXxRfAPXxRfAAfKABENB-CgAAAAAAAAAAYgAAAAAAAA')", 'cmpbox', 'cmp-reject-all']]) {
   test(`${vendor}: Reject closes the wall and reports decline despite vendor encoding`, { skip, timeout: 30000 }, async t => {
     const f = await setup(t, wall(`<div class="cmp-actions"><button id="${rejectId}" onclick="${record};this.closest('section').remove()">Reject all</button></div>`, `id="${containerId}" role="dialog"`));
-    assert.match(await f.act('Reject all'), /decline confirmed/i);
+    assert.match(await f.act('Reject all'), /cookie wall no longer shown after clicking/i);
     assert.doesNotMatch(await f.act('Continue'), /Cookie acceptance blocked/);
     assert.equal(await f.entry.page.locator('body').getAttribute('data-next'), 'yes');
   });
@@ -57,7 +57,7 @@ for (const [name, visible] of [['Reject all', 'Accept all'], ['Accept all', 'Rej
 for (const label of ['Refuser', 'Alles ablehnen', '拒絕全部', 'Reject optional cookies', 'Deny', 'Continue without accepting']) {
   test(`localized decline ${label} is reported`, { skip, timeout: 30000 }, async t => {
     const f = await setup(t, wall(`<button ${close}>${label}</button>`, 'role="dialog"'));
-    assert.match(await f.act(label), /decline confirmed/i);
+    assert.match(await f.act(label), /cookie wall no longer shown after clicking/i);
   });
 }
 
@@ -67,13 +67,13 @@ for (const [words, label, decline] of [['Çerez kullanıyoruz', 'Tümünü kabul
     const f = await setup(t, `<meta charset="utf-8"><section role="dialog"><p>${words}</p><button ${bad}>${label}</button><button ${close}>${decline}</button></section>`);
     assert.match(await f.act(label), new RegExp(decline));
     assert.equal(await f.entry.page.locator('body').getAttribute('data-accepted'), null);
-    assert.match(await f.act(decline), /decline confirmed/i);
+    assert.match(await f.act(decline), /cookie wall no longer shown after clicking/i);
   });
 }
 
 test('a fading wall is confirmed once its transition finishes', { skip, timeout: 30000 }, async t => {
   const f = await setup(t, wall('<button onclick="const wall=this.closest(\'section\');wall.style.opacity=0;setTimeout(()=>wall.remove(),1200)">Reject all</button>', 'role="dialog" style="transition:opacity 1.2s"'));
-  assert.match(await f.act('Reject all'), /decline confirmed/i);
+  assert.match(await f.act('Reject all'), /cookie wall no longer shown after clicking/i);
 });
 
 test('persistent decline only reports unverified and later input passes', { skip, timeout: 30000 }, async t => {
@@ -111,7 +111,7 @@ test('cross-origin Stripe field passes; a CMP frame blocks only its accept targe
     assert.equal(await checkConsent(decline, 'click', f.entry.state), true);
     return decline.click({ timeout: 1000, ...extra });
   });
-  assert.match(await verifyConsent(f.entry.page, f.entry.state), /decline confirmed/i);
+  assert.match(await verifyConsent(f.entry.page, f.entry.state), /cookie wall no longer shown after clicking/i);
 });
 
 test('keyboard activation blocks an accept target but ordinary preference fill passes', { skip, timeout: 30000 }, async t => {

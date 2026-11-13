@@ -55,7 +55,7 @@ test('BF2 patch hunk counts, offsets and reversible application stay valid witho
   fs.writeFileSync(file, before);
   const filePatch = path.join(root, 'bench/fowl/sleight-surface.patch');
   for (const flags of [['--check'], [], ['--reverse']]) {
-    execFileSync('/usr/bin/git', ['apply', ...flags, filePatch], { cwd: dir });
+    execFileSync('/usr/bin/git', ['apply', ...flags, filePatch], { cwd: dir, timeout: 30000, killSignal: 'SIGKILL' });
   }
   assert.equal(fs.readFileSync(file, 'utf8'), before);
 });

@@ -16,7 +16,7 @@ async function engine(t, { combined = true } = {}) {
   let id = 0, shifted = false, content = [], lastCode = '';
   const actions = [];
   const tree = () => 'Window: "Fixture", App: Fixture Editor.\n0 standard window Fixture\n' +
-    (shifted ? '1 button Different\n2 button Replacement' : '1 button Original\n2 button Different');
+    (shifted ? '\t1 button Different\n\t2 button Replacement' : '\t1 button Original\n\t2 button Different');
   const write = text => content.push({ type: 'text', text });
   const raw = {
     getAXState: async () => tree(),

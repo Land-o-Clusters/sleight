@@ -166,9 +166,12 @@ test('a tree the call printed after the real one in the same text item does not 
   assert.match(clickAfter(c, strip(['Beta', 'Gamma', 'Alpha'], 'Alpha')), moved);
 });
 
-test('a degraded block after the real tree in the same text item never becomes the latest read', () => {
+test('an ambiguous degraded block revokes the earlier tree until a complete read', () => {
   const c = createReadCompactor(), lines = strip(['Alpha', 'Beta', 'Gamma'], 'Beta').split('\n');
   // No window root: the shape observe() already marks as degraded.
   c.process([text(lines.join('\n') + '\n' + [lines[0], ...lines.slice(2, 5)].join('\n'))]);
-  assert.match(clickAfter(c, strip(['Beta', 'Gamma', 'Alpha'], 'Alpha')), moved);
+  const restored = clickAfter(c, strip(['Beta', 'Gamma', 'Alpha'], 'Alpha'));
+  assert.match(restored, /UI unverified \(no earlier read\)/);
+  assert.doesNotMatch(restored, moved);
+  assert.match(restored, /\t\t4 tab Selected, Alpha/);
 });

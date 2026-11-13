@@ -1,3 +1,4 @@
+import { MOD_META } from './fixtures/mod-attribution.mjs';
 // Constructed macOS paths are synthetic validation and redaction data, never allocation roots.
 const MAC_USERS = ['', 'Users', ''].join('/');
 import { test, after } from 'node:test';
@@ -180,7 +181,7 @@ test('outcome receipts time only the input span, excluding guard reads and later
   const f = engine([form(), form(), form()], { timed: true });
   await f.run('await app.click(3); await app.getAXState(); await app.click(3);', { outcomeMark: MARK, actions: ['click', 'click'] });
   assert.deepEqual(f.records(MARK).at(-1).outcomes.map(rec => rec.ms), [7, 7]);
-  const failed = engine([form()], { timed: true });
+  const failed = engine([form('', '0', '\n\t99 button Target')], { timed: true });
   await failed.run('await app.click(99);', { outcomeMark: MARK, actions: ['click'] }).catch(() => {});
   assert.equal(failed.records(MARK).at(-1).outcomes[0].ms, 7);
 });
@@ -209,7 +210,7 @@ test('actions with no read between them share the read that came after, and a st
   const outcomes = f.records(MARK).at(-1).outcomes;
   assert.equal(outcomes[1].g, true);
   assert.deepEqual(outcomes[2].f, [{ o: 'value' }]);
-  const stopped = engine([form()]);
+  const stopped = engine([form('', '0', '\n\t99 button Target')]);
   await stopped.run('await app.click(3); await app.click(99);', { outcomeMark: MARK, actions: ['click', 'click'] }).catch(() => {});
   const last = stopped.records(MARK).at(-1).outcomes;
   assert.equal(last[1].x, 'failed');
@@ -257,7 +258,7 @@ function relayHarness(t, options = {}) {
   const flush = () => new Promise(resolve => setImmediate(resolve));
   return { sent, received,
     async call(id, code, name = 'js', args = { code }) {
-      clientIn.write(JSON.stringify({ id, method: 'tools/call', params: { name, arguments: args } }) + '\n');
+      clientIn.write(JSON.stringify({ id, method: 'tools/call', params: { name, arguments: args, ...(name === 'turn_ended' ? { _meta: MOD_META } : {}) } }) + '\n');
       await flush();
     },
     async reply(id, text, isError = false) {
@@ -789,8 +790,27 @@ test('with both switches off the guard code is the base build\'s, byte for byte'
   // PL1c checks direct rows and stops when focus disappears after keys. Restoring the PL1b picker reproduces its pins.
   // PF2 adds the bounded list-focus recovery click. Restoring the pre-PF2 picker reproduces the previous pins.
   // AS2 embeds the button-option refusal. Removing that addition reproduces the prior pins.
+  // TQ1 adds a single delayed AX reread after unchanged typing to the shared setup. Warm-call bytes stay pinned.
+  // TQ1F shares that read per typing action, charges the settle budget and preserves receipts on a failed reread.
+  // TQ1G excludes guard reads from typing settlement and preserves focus changes in either observation.
+  // AD3Q through AD3Q6 embed quit-chord checks and app-scoped held-key tracking in every full setup.
+  // UC2D2 resolves focused selectors before policy gates; full setup pins change.
+  // INT22E limits UC2D selector validation to target objects, preserving held-key options.
+  // These pins restore only the validator wording and AS2 addition, keeping the merged quit guard.
+  // SCR1's page-count scroll form, and SCR1B's refusal of every object distance, are restored here so the older pins stay the pre-SCR1 setup.
+  // SA2M accepts ascending cookie rows per window section and checks observed wall closure.
+  // SA2Q recognizes selected-row echoes and stops ambiguous ancestry and label reads.
   const current = nativeArgumentError.toString();
-  const previous = current.replace(/      if \(known\(b\) && b != null && typeof b === 'object' && 'button' in b\) \{\n[\s\S]*?\n      \}\n/, '');
+  // Restore SF6's validator wording before checking the AS2 variant. SF6H through SF6M re-pin its embedded focus guard.
+  const priorRecovery = current
+    .replace('function nativeArgumentError(name, args, unknown = Symbol(), inspection = {}) {',
+      'function nativeArgumentError(name, args, unknown = Symbol()) {')
+    .replace(/    case 'scroll': \{\n      signature = 'scroll\(<observed element number or \[x, y\]>, direction, pages\?: number\) e\.g\. scroll\(23, "down", 1\)';\n      const distanceObject = known\(c\) && c !== null && typeof c === 'object' && !Array\.isArray\(c\);\n      valid = args\.length >= 2 && target\(a\) && string\(b\) && \(c == null \|\| number\(c\) \|\| inspection\?\.allowScrollPixels && distanceObject && 'pixels' in c\);\n      break;\n    \}/,
+      "    case 'scroll':\n      signature = 'scroll(target: number | Vec2, direction: Direction, distance?: number | { pixels: number })';\n      valid = args.length >= 2 && target(a) && string(b) && (c == null || number(c) || object(c));\n      break;")
+    .replace(/  return valid \? undefined : [\s\S]*?;\n\}/,
+      "  return valid ? undefined : 'sleight: invalid native arguments. Engine App.' + signature + '; nothing was sent';\n}");
+  assert.notEqual(current, priorRecovery);
+  const previous = priorRecovery.replace(/      if \(known\(b\) && b != null && typeof b === 'object' && 'button' in b\) \{\n[\s\S]*?\n      \}\n/, '');
   assert.notEqual(current, previous);
   const restore = code => code.replace(current, previous);
   assert.deepEqual({
@@ -798,17 +818,50 @@ test('with both switches off the guard code is the base build\'s, byte for byte'
     guardedLean: hash(restore(guardedCode('await app.click(1);', window, undefined, undefined, { prompt: 'lean' }))),
     read: hash(restore(readCode('void 0;', { acknowledge: true }))),
     repl: hash(restore(replSetupCode())),
-  }, { guarded: '75ddffb71fa5b5e4', guardedLean: '396defb39a4665f7', read: '72e105e76c044da6', repl: '72e105e76c044da6' });
+  // AH1/AH1B: the vanished-window advice names select_window only for a selection's pin; that ternary is the whole diff.
+  // SCR1C's pointer quit precedence stays in this restored-validator setup too.
+  // INT28 also bounds window URLs to their headers. SA1X preserves own denominations and joined decimals; SA1V embeds conservative figure and user bounds; SA1T embeds figure bounds and matching whole-number grouping in every full setup.
+  // INT27 merges gl4's Glide identity steps (gl8 to gl9b) with int27's payment and site checks; both changed these bytes.
+  // CW1B restores modal rereads and confines consent evidence to modal rows.
+  // CW1C retains marker evidence, skips window headers without ending a dialog scope and narrows unavailable-read fallback.
+  // lin160g's early-timer top-up in the list helper moved them again.
+  }, { guarded: 'fd0b69a99082cf53', guardedLean: '23867984a3bbd012', read: 'd2a1e2c45da45118', repl: 'd2a1e2c45da45118' });
+  // NF2 adds picker phase diagnostics and bounded final-frame settling.
+  // INT12 recomputes every pin from p171 plus SF6, preserving TQ1G and NF2 setup changes.
+  // SF6 and SF6H changed the serialized guard bytes: validator wording, then the bounded root-focus exception
+  // and its whole-tree safety checks. SF6J limits sensitive words to editable rows and clicked ancestry,
+  // keeps secure roles global, and fixes menu/modal roles. SF6K checks sensitive labels inside the clicked web subtree,
+  // AX/edit-text field spellings and nested popover/web/group dialogs. SF6L scans labels beside the web subtree or
+  // throughout the root content container when ancestry is missing, excluding toolbars. SF6M limits that exclusion
+  // to the container fallback so page toolbars cannot hide sensitive labels. Warm-call bytes stay the same.
+  // INT13 narrows SF6 recovery to numeric targets with input and restores the refusal prefix.
+  // INT13B includes unknown text in that hint and excludes empty text for both keyboard methods.
+  // INT14 re-pins AD3Q through AD3Q6: full setups grow by 9,880 bytes; warm reuse stays byte-identical.
+  // TY1 embeds the typing character rule and runtime refusal in full setups; warm reuse stays byte-identical.
+  // TY1B allows CR, reports concurrent input and chooses typing recovery from the latest field metadata.
+  // TY1C limits secure detection to roles/subroles and adds conditional recovery for unknown focus.
+  // TY1D checks secure roles on ancestor rows and leaves password-named or masked fields unknown.
+  // AD3W adds window-number validation to the embedded identity verifier (re-pinned at the TY1 merge).
+  // INT15 runs the quit refusal before TY1 in every full setup. Warm reuse stays byte-identical.
+  // SG1 reads after role-less menu choices and refuses incomplete numbered reads. Warm reuse stays byte-identical.
+  // SG1B preserves the old stops, shares their format and exempts guard-only headers without a numbered baseline.
+  // AH1/AH1B name select_window in the vanished-window advice only for a selection's pin. Warm reuse stays byte-identical.
+  // SCR1 embeds the macOS page-count scroll refusal. SCR1B refuses every non-number distance on that path.
+  // SCR1C checks blocked pointer holds before argument validation in the shared installation.
+  // Warm reuse stays b824edb3aa6dc2c4. The validator is in the shared setup, not the warm-call payload.
+  // INT27S combines PQ1 with INT28 header URL checks. PQ1 embeds the never-mode quote ambiguity check in full setups; warm reuse stays unchanged.
+  // CW1B scopes native consent evidence and restores modal rereads. Warm reuse stays unchanged.
   assert.deepEqual({
     guarded: hash(guardedCode('await app.click(1);', window)),
     guardedLean: hash(guardedCode('await app.click(1);', window, undefined, undefined, { prompt: 'lean' })),
     reuse: hash(guardedCode('await app.click(1);', window, undefined, undefined, { reuseSetup: true, acknowledge: true })),
     read: hash(readCode('void 0;', { acknowledge: true })),
     repl: hash(replSetupCode()),
-  }, { guarded: 'b253c86530e5c966', guardedLean: 'b16b88c656ba2827', reuse: 'b824edb3aa6dc2c4', read: '017bdf2c3c2b9bbd', repl: '017bdf2c3c2b9bbd' });
+  // CW1C updates the shared consent code; warm reuse stays unchanged.
+  }, { guarded: '56137d5e1fec4dcd', guardedLean: '889742ff3147bf5f', reuse: 'b824edb3aa6dc2c4', read: '02c7c6cd34736829', repl: '02c7c6cd34736829' });
 });
 
-test('DP1 off preserves the pre-DP1 guard, read and REPL bytes', () => {
+test('DP1 off pins the current guard, read and REPL bytes without close tracking', () => {
   const prior = process.env.SLEIGHT_DP1;
   process.env.SLEIGHT_DP1 = '0';
   try {
@@ -820,9 +873,11 @@ test('DP1 off preserves the pre-DP1 guard, read and REPL bytes', () => {
       read: readCode('void 0;', { acknowledge: true, dp1: false }),
       repl: replSetupCode(),
     };
+    // SA1X re-pins the serialized payment figures and yen page check; reuse bytes are unchanged.
+    // The list helper's early-timer top-up (lin160g) moved guarded, lean, read and REPL bytes; reuse is unchanged.
     assert.deepEqual(Object.fromEntries(Object.entries(codes).map(([key, code]) => [key, hash(code)])), {
-      guarded: 'b253c86530e5c966', guardedLean: 'b16b88c656ba2827', reuse: 'b824edb3aa6dc2c4',
-      read: '9a215377d422467a', repl: '9a215377d422467a',
+      guarded: '56137d5e1fec4dcd', guardedLean: '889742ff3147bf5f', reuse: 'b824edb3aa6dc2c4',
+      read: 'aaaa23daf1458b54', repl: 'aaaa23daf1458b54',
     });
     for (const code of Object.values(codes)) assert.doesNotMatch(code, /closedLast|beforeRead|state\.dp1|state\.closeRead|\[sleight:dp1\]/);
   } finally {
@@ -974,7 +1029,7 @@ test('kind, key, role, reason, tool, app and origin come from fixed words or are
   const root = mkdtempSync(join(dir, 'vocab-')), path = join(root, 'vocab.jsonl');
   const log = new ActionLog({ path, root, names: [], now: () => new Date(0) });
   const call = (id, name, args, text = 'ok', record) => {
-    log.request({ id, method: 'tools/call', params: { name, arguments: args } });
+    log.request({ id, method: 'tools/call', params: { name, arguments: args, ...(name === 'turn_ended' ? { _meta: MOD_META } : {}) } });
     if (record) log.outcomes(id, record);
     log.reply({ id, result: { content: [{ type: 'text', text }] } });
   };

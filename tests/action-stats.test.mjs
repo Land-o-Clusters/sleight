@@ -1,3 +1,4 @@
+import { assertChildStatus } from './fixtures/child-status.mjs';
 // sleight-mcp stats and the dropdown's usage row (1.4.0): the action log's timing and reads-saved fields, and the summary
 // read back from the log on this Mac.
 import { test, after } from 'node:test';
@@ -292,8 +293,8 @@ test('sleight-mcp stats runs from the launcher without starting the engine', asy
   const { home } = logHome('launcher');
   const launch = new URL('../plugins/sleight/lib/launch.mjs', import.meta.url).pathname;
   const result = spawnSync(process.execPath, [launch, 'stats', '--json', '--days', '365'], { encoding: 'utf8', timeout: 30000,
-    env: { PATH: '/usr/bin:/bin', HOME: home, SLEIGHT_ACTION_LOG: 'actions.jsonl' } });
-  assert.equal(result.status, 0, result.stderr);
+    env: { PATH: '/usr/bin:/bin', HOME: home, SLEIGHT_ACTION_LOG: 'actions.jsonl' }, killSignal: 'SIGKILL' });
+  assertChildStatus(result, 0, result.stderr);
   assert.deepEqual([JSON.parse(result.stdout).log, JSON.parse(result.stdout).files], ['~/Library/Logs/sleight/actions.jsonl', 2]);
 });
 

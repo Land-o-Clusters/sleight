@@ -1,10 +1,11 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
-import { homedir, tmpdir } from 'node:os';
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { trackTemp, removeTemp } from '../scripts/temp-leftovers.mjs';
 import { describe } from 'node:test';
+import { retainedBank } from './helpers/retained-bank.mjs';
 import { packageSkip } from './requirements.mjs';
 
 describe('offline replay with the source parser', { skip: packageSkip('typescript') }, async () => {
@@ -54,9 +55,10 @@ test('DPm rejects blocked or unrelated-call decisions and after-call reads', t =
   assert.equal(assertCheck(spec, reopened, fixture(t, [event('skipped-read')])).verdict, 'fail');
 });
 
-const retained = join(homedir(), 'Projects/sleight-wt/race-1017/evidence-replay-dp1d');
+const bank = retainedBank('race-1017/evidence-replay-dp1d', ['1-A/result.json']);
+const retained = bank.path;
 test('DPm explains all ten retained DP1d failures without claiming the old campaign passed', {
-  skip: !existsSync(join(retained, '1-A/result.json')) && 'Retained DP1d evidence is not installed',
+  skip: bank.skip,
 }, () => {
   for (let index = 1; index <= 10; index++) {
     const variant = index % 2 ? 'A' : 'B', dir = join(retained, `${index}-${variant}`);

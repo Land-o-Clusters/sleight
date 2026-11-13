@@ -279,6 +279,11 @@ for (const [name, page] of Object.entries(falseCancels))
     const b = await bank(t); let retried = 0, firstOk = 0;
     for (let i = 0; i < 4; i++) {
       const f = await b.start(doc(page.body, page.script, '', { audit: false }), readOnly);
+      await f.page.evaluate(() => {
+        window.__clickInputs = [];
+        for (const type of ['pointerdown', 'mousedown', 'pointerup', 'mouseup', 'click'])
+          addEventListener(type, () => window.__clickInputs.push(type), true);
+      });
       await settleFor(150);
       const first = await f.act([{ do: 'click', ref: f.ref(page.label) }]);
       await settleFor(120);
@@ -288,7 +293,12 @@ for (const [name, page] of Object.entries(falseCancels))
       if (page.pressSeen) {
         assert.match(line, /^1 click \S+: effect unconfirmed; read before retrying\. page changed during the click; the page had already received part of it\./);
         assert.doesNotMatch(line, /not run|retry is safe/);
-      } else assert.match(line, /not run: page changed during the click; read again\. The page received no press, release or click, so a fresh read and one retry is safe\./);
+      } else {
+        // A removed node cannot arm the guard. That capability refusal deliberately sends the model to the
+        // engine path instead of promising a safe retry. Both outcomes must have delivered no click input.
+        assert.match(line, /^1 click \S+: not run: (?:page changed during the click; read again\. The page received no press, release or click, so a fresh read and one retry is safe\.|click guard unavailable; use the engine browser path)$/);
+        assert.deepEqual(await f.page.evaluate(() => window.__clickInputs), [], 'a cancelled click must deliver no press, release or click');
+      }
       const text = await f.read();
       const again = await f.act([{ do: 'click', ref: f.ref(page.label, text) }]);
       await settleFor(120);

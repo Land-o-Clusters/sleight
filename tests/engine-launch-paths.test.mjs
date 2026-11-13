@@ -1,3 +1,4 @@
+import { offlineDoctor } from './fixtures/preapproved-storage.mjs';
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { engineLaunchPaths } from '../plugins/sleight/lib/launch.mjs';
@@ -49,7 +50,8 @@ test('doctor checks the script and the --import hook of an engine that starts wi
       args: ['--import', pathToFileURL(hook).href, script], env: { CUA_REPL_NODE_REPL_PATH: join(home, 'missing-node-repl') } } } }));
     const lines = [];
     const none = () => [];
-    const rc = await doctor({ env: { CODEX_HOME: home, SLEIGHT_SURFACES: 'computer' }, log: line => lines.push(line), app: undefined,
+    const rc = await doctor({ ...offlineDoctor, env: { CODEX_HOME: home, SLEIGHT_SURFACES: 'computer' }, log: line => lines.push(line), app: undefined,
+      runtime: () => ({ selected: 'engine', ok: true, lines: [] }), settings: none, documentation: () => {},
       turbo: none, hand: none, permissions: none, codex: none, cursor: none, grok: none, grokbot: none, forbiddenTargets: () => '0' });
     assert.equal(rc, 1); // node_repl is missing on purpose, so doctor stops before its live read
     assert.ok(lines.includes(`ok        server script: ${script}`), lines.join('\n'));

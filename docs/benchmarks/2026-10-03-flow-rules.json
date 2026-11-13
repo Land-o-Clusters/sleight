@@ -6,10 +6,10 @@
       "stages": [
         {
           "verdict": "FAIL",
-          "error": "Command failed: osascript -l JavaScript ~/Projects/sleight-wt/codex/flow-rules/bench/document-scope-fixture.js open /private/tmp/sleight-flow-rules-rP9wAC/SOURCE-rP9wAC.txt /private/tmp/sleight-flow-rules-rP9wAC/DESTINATION-rP9wAC.txt\n~/Projects/sleight-wt/codex/flow-rules/bench/document-scope-fixture.js: execution error: Error: Error: Application can't be found. (-2700)\n"
+          "error": "Command failed: osascript -l JavaScript <private-evidence>/codex/flow-rules/bench/document-scope-fixture.js open /private/tmp/sleight-flow-rules-rP9wAC/SOURCE-rP9wAC.txt /private/tmp/sleight-flow-rules-rP9wAC/DESTINATION-rP9wAC.txt\n<private-evidence>/codex/flow-rules/bench/document-scope-fixture.js: execution error: Error: Error: Application can't be found. (-2700)\n"
         },
         {
-          "cleanupError": "Command failed: osascript -l JavaScript ~/Projects/sleight-wt/codex/flow-rules/bench/document-scope-fixture.js close /private/tmp/sleight-flow-rules-rP9wAC/SOURCE-rP9wAC.txt /private/tmp/sleight-flow-rules-rP9wAC/DESTINATION-rP9wAC.txt\n~/Projects/sleight-wt/codex/flow-rules/bench/document-scope-fixture.js: execution error: Error: Error: Application can't be found. (-2700)\n"
+          "cleanupError": "Command failed: osascript -l JavaScript <private-evidence>/codex/flow-rules/bench/document-scope-fixture.js close /private/tmp/sleight-flow-rules-rP9wAC/SOURCE-rP9wAC.txt /private/tmp/sleight-flow-rules-rP9wAC/DESTINATION-rP9wAC.txt\n<private-evidence>/codex/flow-rules/bench/document-scope-fixture.js: execution error: Error: Error: Application can't be found. (-2700)\n"
         }
       ],
       "traceFile": "/private/tmp/sleight-flow-rules-rP9wAC/trace.jsonl",

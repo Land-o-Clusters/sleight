@@ -1,0 +1,82 @@
+{
+  "schema": "sleight.character-check4-recordings/1",
+  "scrollFallback": {
+    "input": "/private/tmp/retained-results.json",
+    "task": "textedit-edit",
+    "arm": "sleight",
+    "run": 1,
+    "evidence": "/private/tmp/retained-early-scroll"
+  },
+  "tasks": {
+    "textedit-drag": {
+      "input": "/private/tmp/retained-results.json",
+      "task": "textedit-drag",
+      "arm": "sleight",
+      "run": 1,
+      "evidence": "/private/tmp/retained-textedit-drag"
+    },
+    "finder-move": {
+      "input": "/private/tmp/retained-results.json",
+      "task": "finder-move",
+      "arm": "sleight",
+      "run": 1,
+      "evidence": "/private/tmp/retained-finder-move",
+      "fixture": {
+        "nonce": "1234abcd",
+        "sourceDir": "/private/tmp/recorded-fixture",
+        "files": { "Files-1234abcd/alpha.txt": "RmlsZSAxMjM0YWJjZAo=" },
+        "windows": [
+          { "app": "Finder", "mode": "folder", "target": "Files-1234abcd" },
+          { "app": "Finder", "mode": "folder", "target": "Files-1234abcd/Archive" }
+        ],
+        "context": { "expectedTree": { "Archive/": "", "Archive/alpha.txt": "File 1234abcd\n" } }
+      }
+    },
+    "preview-read": {
+      "input": "/private/tmp/retained-results.json",
+      "task": "preview-read",
+      "arm": "sleight",
+      "run": 1,
+      "evidence": "/private/tmp/retained-preview-read",
+      "fixture": {
+        "nonce": "1234abcd",
+        "sourceDir": "/private/tmp/recorded-fixture",
+        "files": { "Read-1234abcd.pdf": "REPLACE_WITH_ORIGINAL_PDF_BASE64" },
+        "windows": [{ "app": "Preview", "mode": "document", "target": "Read-1234abcd.pdf" }],
+        "context": { "readback": "REPLACE_WITH_ORIGINAL_READBACK", "beforeHash": "REPLACE_WITH_ORIGINAL_SHA256" },
+        "answer": "REPLACE_WITH_ORIGINAL_READBACK"
+      }
+    },
+    "calculator-click": {
+      "input": "/private/tmp/retained-results.json",
+      "task": "calculator-click",
+      "arm": "sleight",
+      "run": 1,
+      "evidence": "/private/tmp/retained-calculator-click",
+      "fixture": {
+        "nonce": "1234abcd",
+        "sourceDir": "/private/tmp/recorded-fixture",
+        "files": {},
+        "windows": [{ "app": "Calculator", "mode": "inherit" }],
+        "context": { "expectedCalculator": "REPLACE_WITH_RECORDED_RESULT" }
+      }
+    },
+    "textedit-calculator": {
+      "input": "/private/tmp/retained-results.json",
+      "task": "textedit-calculator",
+      "arm": "sleight",
+      "run": 1,
+      "evidence": "/private/tmp/retained-textedit-calculator",
+      "fixture": {
+        "nonce": "1234abcd",
+        "sourceDir": "/private/tmp/recorded-fixture",
+        "files": { "Calculation-1234abcd.txt": "MTcK" },
+        "windows": [
+          { "app": "Calculator", "mode": "inherit" },
+          { "app": "TextEdit", "mode": "document", "target": "Calculation-1234abcd.txt" }
+        ],
+        "context": { "expectedCalculator": "391" }
+      }
+    }
+  }
+}

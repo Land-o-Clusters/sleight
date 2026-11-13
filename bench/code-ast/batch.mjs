@@ -1,11 +1,10 @@
 // V8 retains compiled SourceTextModules in their context. Bound the process
 // lifetime and heap instead of retaining millions of modules in the main context.
 import { spawnSync } from 'node:child_process';
-import { existsSync, readFileSync, writeFileSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import { createHash } from 'node:crypto';
-import { homedir } from 'node:os';
-import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { benchGateOpen, benchOutputPath, writeBenchJson } from '../runtime-options.mjs';
 
 const mode = process.argv[2];
 const consumerMode = process.argv.includes('--statement-consumers');
@@ -14,8 +13,6 @@ const jobs = mode === 'differential' ? [{ file: 'differential.mjs', seed: 3, cou
   : mode === 'reviewers' ? ['fuzz.mjs', 'fuzz2.mjs'].flatMap(file => [1, 2].map(seed => ({ file: `reviewer/${file}`, seed, count: 500000, html: seed === 2, wrappers: 1 })))
   : null;
 if (!jobs) throw new Error('expected differential, shaped or reviewers');
-const gate = join(homedir(), 'Projects/sleight-wt/ledger/vc/night/fuzz-may-run');
-const testGate = join(homedir(), 'Projects/sleight-wt/ledger/vc/night/lanes-may-test');
 const wait = ms => new Promise(resolve => setTimeout(resolve, ms));
 let held = false;
 const completedJobs = [];
@@ -24,7 +21,7 @@ for (const job of jobs) {
   let completed = 0;
   const variants = Array(15).fill(0);
   for (let offset = 0; offset < job.count; offset += 25000) {
-    while (!existsSync(gate) || !existsSync(testGate) || existsSync('/tmp/sleight-hold')) await wait(60000);
+    while (!benchGateOpen() || existsSync('/tmp/sleight-hold')) await wait(60000);
     const count = Math.min(25000, job.count - offset);
     const args = job.file === 'corpus-shaped.mjs' ? [count, offset]
       : job.file === 'differential.mjs' ? [job.seed, count, offset]
@@ -61,16 +58,17 @@ for (const job of jobs) {
   completedJobs.push(total);
 }
 if (consumerMode) {
-  const resultsUrl = new URL('results.json', import.meta.url);
+  const resultsUrl = existsSync(benchOutputPath('code-ast/results.json'))
+    ? benchOutputPath('code-ast/results.json') : new URL('results.json', import.meta.url);
   const results = JSON.parse(readFileSync(resultsUrl));
   const sourceHashes = {};
-  for (const path of ['batch.mjs', 'oracle.mjs', 'statement-oracle.mjs', ...jobs.map(job => job.file)])
+  for (const path of ['batch.mjs', '../runtime-options.mjs', 'oracle.mjs', 'statement-oracle.mjs', ...jobs.map(job => job.file)])
     sourceHashes[path] = createHash('sha256').update(readFileSync(new URL(path, import.meta.url))).digest('hex');
   for (const path of ['code-ast.mjs', 'text-save.mjs', 'menu-continuation.mjs', 'tab-probe.mjs'])
     sourceHashes['plugins/sleight/lib/' + path] = createHash('sha256').update(readFileSync(new URL('../../plugins/sleight/lib/' + path, import.meta.url))).digest('hex');
   for (const path of ['index.mjs', 'text-save.mjs', 'menu-continuation.mjs', 'tab-probe.mjs', 'flow-rules.mjs', 'code-line-terminators.mjs'])
     sourceHashes['tests/fixtures/statement-legacy/' + path] = createHash('sha256').update(readFileSync(new URL('../../tests/fixtures/statement-legacy/' + path, import.meta.url))).digest('hex');
   ((results.ps3r ??= {}).fuzz ??= {})[mode] = { jobs: completedJobs, exit: held ? 1 : 0, sourceHashes };
-  writeFileSync(resultsUrl, JSON.stringify(results, null, 2) + '\n');
+  writeBenchJson('code-ast/results.json', results);
 }
 if (held) process.exitCode = 1;

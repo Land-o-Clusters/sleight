@@ -270,11 +270,12 @@ test('legit: Control+Enter in a message field of a payment form counts as a subm
 
 for (const [key, html, label] of [['Meta+Enter', '<input id="a" aria-label="Search">', 'Search'], ['Shift+Enter', '<button id="a">Next</button>', 'Next'],
     ['Control+Shift+Enter', '<input id="a" aria-label="Search">', 'Search'], ['Alt+Enter', '<input id="a" aria-label="Search">', 'Search']])
-  test('refused: ' + key + ' on ' + label + ' says to use the engine path', { skip, timeout: 90000 }, async t => {
+  test('refused: ' + key + ' on ' + label + ' explains the foreground-window risk and sends nothing', { skip, timeout: 90000 }, async t => {
     const b = await bank(t), f = await b.start(doc(html, keyLog), readOnly);
     const result = await f.act([{ do: 'press', ref: f.ref(label), key }]);
-    assert.match(result.text, /engine browser path/);
+    assert.match(result.text.split('\n')[0], /^1 press \S+: not run: This activation chord may open a foreground window\. Only Shift\+Enter and Control\+Enter in a text field are allowed\.(?: Use the engine browser path if needed\.)?$/);
     assert.deepEqual(await f.page.evaluate(() => window.__e), []);
+    await f.safe();
   });
 
 test('refused: an unknown key mentions the engine path and sends nothing', { skip, timeout: 90000 }, async t => {
@@ -332,13 +333,23 @@ test('a key sent into the page field with focus moved into another frame is veto
 for (const [name, host] of [['same-site', '127.0.0.1'], ['cross-site', 'localhost']])
   test('a ' + name + ' frame that never finishes loading is locked, and the key to the page field is delivered', { skip, timeout: 60000 }, async t => {
     const b = await bank(t), port = new URL(b.origin).port;
-    const f = await b.start(doc('<input id="a" aria-label="Search"><iframe src="http://' + host + ':' + port + '/hang"></iframe>', keyLog), 'Search', { routes: { '/hang': () => {} } });
+    // Start the pending frame after browser_open's thin-page readiness wait. This case checks the key lock,
+    // including a document that has not committed, rather than the readiness deadline for opening that page.
+    const f = await b.start(doc('<input id="a" aria-label="Search">', keyLog), 'Search', { routes: { '/hang': () => {} } });
+    await f.page.evaluate(url => {
+      const frame = document.createElement('iframe'); frame.src = url; document.body.append(frame);
+    }, 'http://' + host + ':' + port + '/hang');
     await new Promise(resolve => setTimeout(resolve, 600));
+    assert.equal(f.page.frames().length, 2, 'the uncommitted child must exist before the key');
+    assert.ok(b.hits.some(hit => hit.path === '/hang'), 'the child must have requested the hanging route');
+    const child = f.page.frames().find(frame => frame !== f.page.mainFrame());
+    assert.match(child.url(), /^(?:about:blank)?$/, 'the hanging child must not have committed its document');
     await f.page.evaluate(() => document.getElementById('a').focus());
     const started = Date.now(), result = await f.act([{ do: 'press', key: 'Enter' }]);
     t.diagnostic('hanging frame: ' + (Date.now() - started) + ' ms, ' + result.text.split('\n')[0]);
     assert.doesNotMatch(result.text.split('\n')[0], /not run|may have activated/);
     assert.deepEqual(await f.page.evaluate(() => window.__e), ['keydown:Enter:', 'keypress:Enter:', 'keyup:Enter:']);
+    await f.safe();
   });
 
 for (const [name, host] of [['same-site', '127.0.0.1'], ['cross-site', 'localhost']])

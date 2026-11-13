@@ -1,3 +1,4 @@
+import { assertChildStatus } from './fixtures/child-status.mjs';
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, rmSync } from 'node:fs';
@@ -155,8 +156,8 @@ test('the CLI keeps every path when --out is omitted', () => {
     }
     const cli = spawnSync(process.execPath, ['bench/world/report.mjs', ...files], {
       cwd: join(import.meta.dirname, '..'), encoding: 'utf8',
-    });
-    assert.equal(cli.status, 0, cli.stderr);
+     timeout: 60000, killSignal: 'SIGKILL' });
+    assertChildStatus(cli, 0, cli.stderr);
     assert.match(cli.stdout, /one-task/);
     assert.match(cli.stdout, /two-task/);
   } finally { rmSync(dir, { recursive: true, force: true }); }
@@ -183,8 +184,8 @@ test('the CLI writes one markdown table per model', () => {
     const out = join(dir, 'table.md');
     const cli = spawnSync(process.execPath, ['bench/world/report.mjs', file, '--out', out], {
       cwd: join(import.meta.dirname, '..'), encoding: 'utf8',
-    });
-    assert.equal(cli.status, 0, cli.stderr);
+     timeout: 60000, killSignal: 'SIGKILL' });
+    assertChildStatus(cli, 0, cli.stderr);
     const md = readFileSync(out, 'utf8');
     assert.match(md, /claude-haiku-5-5/);
     assert.match(md, /calculator-click/);

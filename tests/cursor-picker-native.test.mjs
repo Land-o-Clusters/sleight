@@ -1,3 +1,4 @@
+import { assertChildStatus } from './fixtures/child-status.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import * as fs from 'node:fs';
@@ -18,12 +19,12 @@ function build(t) {
   assert.match(fs.readFileSync(source, 'utf8'), /if arguments.first == "--cursor-menu-dump"/, 'headless entry point must exist before invoking the host');
   root = trackTemp(fs.realpathSync(fs.mkdtempSync(join('/private', 'tmp', 'sleight-picker-native-'))));
   binary = join(root, 'host');
-  const r = spawnSync('/usr/bin/xcrun', ['swiftc', '-module-cache-path', swiftModuleCache(), source.pathname, '-o', binary], { encoding: 'utf8', timeout: 300000 });
-  assert.equal(r.status, 0, r.stderr); t.diagnostic(`binaryBytes=${fs.statSync(binary).size}`); return binary;
+  const r = spawnSync('/usr/bin/xcrun', ['swiftc', '-module-cache-path', swiftModuleCache(), source.pathname, '-o', binary], { encoding: 'utf8', timeout: 600000, killSignal: 'SIGKILL' });
+  assertChildStatus(r, 0, r.stderr); t.diagnostic(`binaryBytes=${fs.statSync(binary).size}`); return binary;
 }
 function run(t, frames, more = {}) {
   const output = spawnSync(build(t), ['--cursor-menu-dump'], { input: frames.map(f => JSON.stringify(f)).join('\n') + '\n', encoding: 'utf8', timeout: 30000,
-    env: { PATH: '/usr/bin:/bin', SLEIGHT_CURSOR_TEST: '1', SLEIGHT_CURSOR_THUMBS_ROOT: join(root, 'thumbs'), ...more } });
+    env: { PATH: '/usr/bin:/bin', SLEIGHT_CURSOR_TEST: '1', SLEIGHT_CURSOR_THUMBS_ROOT: join(root, 'thumbs'), ...more }, killSignal: 'SIGKILL' });
   return { ...output, records: output.stdout.trim().split('\n').filter(Boolean).map(JSON.parse) };
 }
 const catalog = rows => ({ hand: 'picker', nonce, op: 'catalog', rows });
@@ -32,9 +33,10 @@ const thumbnail = (fixture, key = 'b'.repeat(64)) => ({ hand: 'picker', nonce, o
     idle: { sheet: 'sheet', row: 0, frames: [0], ms: [100], loop: false, flip: false, hotspot: [64, 64], size: [1024, 128], scale: 1 },
   } } });
 test('menu dump prints model rows and checks fresh hardware input and AX refusal without building an application', options, t => {
-  const rows = cursorMenuModel({ installed: [{ id: 'cat', name: 'Cat' }], found: [{ id: 'dog', name: 'Dog', key: 'c'.repeat(64) }], style: 'sprite', character: 'cat' });
+  const rows = cursorMenuModel({ installed: [{ id: 'cat', name: 'Cat' }, { id: 'mabel', name: 'Mabel' }, { id: 'tsugi', name: 'Tsugi', builtin: true }],
+    found: [{ id: 'dog', name: 'Dog', key: 'c'.repeat(64) }], style: 'sprite', character: 'mabel', size: 'medium' });
   const r = run(t, [catalog(rows), { hand: 'picker', nonce, op: 'input-check' }]);
-  assert.equal(r.status, 0, r.stderr); assert.deepEqual(r.records[0].rows, rows);
+  assertChildStatus(r, 0, r.stderr); assert.deepEqual(r.records[0].rows, rows);
   assert.deepEqual(r.records[1], { hardware: true, synthetic: false, keyboard: true, return: true, enter: true, otherKey: false,
     unhighlighted: false, old: false, future: false, mouseDown: false, wrongWindow: false, ax: false, axMethodsRefused: true, absent: false });
 });
@@ -42,7 +44,7 @@ test('thumbnail misses decode in sandbox, make a 32px PNG and hit the private ca
   build(t); const fixture = installSyntheticCharacter({ base: root }); trackTemp(fixture.root);
   const frames = [thumbnail(fixture), thumbnail(fixture)];
   const r = run(t, frames, { SLEIGHT_CURSOR_CHARACTERS_ROOT: fixture.root });
-  assert.equal(r.status, 0, r.stderr); assert.deepEqual(r.records.map(r => [r.loaded, r.cached]), [[true, false], [true, true]]);
+  assertChildStatus(r, 0, r.stderr); assert.deepEqual(r.records.map(r => [r.loaded, r.cached]), [[true, false], [true, true]]);
   const path = r.records[0].path, bytes = fs.readFileSync(path), st = fs.lstatSync(path);
   assert.equal(bytes.readUInt32BE(16), 32); assert.equal(bytes.readUInt32BE(20), 32);
   assert.equal(st.mode & 0o777, 0o600); assert.equal(st.nlink, 1); assert.ok(st.size < 65536);
@@ -64,13 +66,17 @@ test('thumbnail cache repairs an owned wrong-mode entry and refuses links, linke
   assert.equal(run(t, [thumbnail(fixture, 'e'.repeat(64))], env).records[0].loaded, false);
 });
 test('menu parser rejects forged rows, unknown keys and bad nonce without UI', options, t => {
-  for (const f of [catalog([{ title: 'Bad', op: 'select', style: 'evil' }]), { ...catalog([]), extra: true }, { ...catalog([]), nonce: 'bad' }]) {
-    assert.equal(run(t, [f]).status, 65);
+  const sizeRow = { title: 'Stage', op: 'size', size: 'stage', selected: true };
+  for (const f of [catalog([{ title: 'Bad', op: 'select', style: 'evil' }]), { ...catalog([]), extra: true }, { ...catalog([]), nonce: 'bad' },
+    catalog([sizeRow]), ...[315, 'huge', true].map(size => catalog([{ title: 'Character Size', children: [{ ...sizeRow, size }] }])),
+    catalog([{ title: 'Anime', children: [{ title: 'Ring', op: 'select', style: 'ring', selected: false }] }]),
+    catalog([{ title: 'Anime', children: [{ title: 'Nested', children: [] }] }])]) {
+    assertChildStatus(run(t, [f]), 65);
   }
 });
 test('native thumbnail update preserves both menu rows, selection and placement; AX routes show the fixed notice', options, t => {
   const r = run(t, [{ hand: 'picker', nonce, op: 'menu-check' }]);
-  assert.equal(r.status, 0, r.stderr);
+  assertChildStatus(r, 0, r.stderr);
   assert.deepEqual(r.records[0], { sameItems: true, onlyCatChanged: true, separator: true, aboveHelp: true, axRefused: true,
     notices: ['Choose with the mouse or keyboard', 'Choose with the mouse or keyboard'] });
 });

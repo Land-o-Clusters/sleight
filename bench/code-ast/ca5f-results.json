@@ -1,0 +1,2091 @@
+{
+  "offline": true,
+  "decisionsOnly": true,
+  "A": "ad5367d47f6dc6cae5a3c2aba495f0cf45f52e9f",
+  "oldB": "be330c709d2df60f137c0db6a6113c6fe2c80acb",
+  "B": "a9a28e773b327824f7298b562dc6fbde4a5ddddb",
+  "baselineSha256": "07ab01957a471d2c461072d4b0af9648acddf197cc73ee648348d803aeddfd08",
+  "corpusManifest": "ad4c760b9f428fc7fc5950e0a25205de9112b625b9f1e98f550264a407948b0e",
+  "calls": 8997,
+  "jsCells": 8749,
+  "nonJsCalls": 248,
+  "harnessSha256": "0ae337458c6fba6fdfcb3114b7576ca5edac6e6bb494213b399acfb88ea07527",
+  "od1HarnessSources": {
+    "od1.mjs": "26cd9c2e71c29035824daa423c14966813b374177ae9742c9fe411b7b89c7154",
+    "od1-support.mjs": "3c4603b7e5bb74411b5a29b84e36e75f7b01706c51f99740d74e5be9bc65bdd8",
+    "corpus.mjs": "66480031fc997c35656a14941349f7f139fc6224747b5858ce668d63aa690e4e",
+    "consumer-classifier.mjs": "e53fe8bfc73e97aa303d1f305d2e1d276b556b7f4478eaa1b429e965a935a96b",
+    "../replay/write-effect-bank.mjs": "392dba7d78bf90aaeac84a08119b9aadf05aedb3fcda23a7b5f7f622eefc21be"
+  },
+  "candidateSources": [
+    {
+      "path": "plugins/sleight/lib/action-outcomes.mjs",
+      "sha256": "8f0cd5cc0e67b74bbfdbff0db4ea6536431b52e2b3cf4a4232a47592b73e15f1",
+      "bytes": 42481
+    },
+    {
+      "path": "plugins/sleight/lib/call-inspection.mjs",
+      "sha256": "96ce3701d9388bba2d3e4110377a73673fd0eead8ae3e139d7a60d375b36c9aa",
+      "bytes": 17543
+    },
+    {
+      "path": "plugins/sleight/lib/clipboard-recovery.mjs",
+      "sha256": "efcdd28d3d62c2fe58a257255d5a2de54a6a2a3b9d6c72a74207a16265f97e4f",
+      "bytes": 15659
+    },
+    {
+      "path": "plugins/sleight/lib/clipboard.mjs",
+      "sha256": "64194e28cf7a8e9e43c8bf7281c66b785b1386bcc0f873199778173f338f8e2c",
+      "bytes": 25028
+    },
+    {
+      "path": "plugins/sleight/lib/close-count-reasons.mjs",
+      "sha256": "d975a4ec308dd008a91569cef47bcfd343dfdadea19f9f344e70a4599905faf7",
+      "bytes": 308
+    },
+    {
+      "path": "plugins/sleight/lib/code-ast.mjs",
+      "sha256": "6aaf202036e552b08a82a159beb0ee26203f8f9b626ed61343f56693b63e1f25",
+      "bytes": 15116
+    },
+    {
+      "path": "plugins/sleight/lib/code-line-terminators.mjs",
+      "sha256": "21bff7cc38c27aa86cd7b63158dab45e71e5057beda5b2427c6f34459591f8fe",
+      "bytes": 2136
+    },
+    {
+      "path": "plugins/sleight/lib/consent-wall.mjs",
+      "sha256": "52d5df8f299f7df23a262c4643559bcef419ba398f53a9bc6a3391b7265ef852",
+      "bytes": 17117
+    },
+    {
+      "path": "plugins/sleight/lib/direct-browser/rules.mjs",
+      "sha256": "f053561b8e0fbbca9c45b99567808618e261c6d45d4cb28c0742427339fb1bb8",
+      "bytes": 26349
+    },
+    {
+      "path": "plugins/sleight/lib/dispatched-calls.mjs",
+      "sha256": "6fa9030f422241af0b0dbb06afe5de97a82b68754385f2a8fae4921bb6129893",
+      "bytes": 4391
+    },
+    {
+      "path": "plugins/sleight/lib/document-scope.mjs",
+      "sha256": "eb49614277ac22f02299f56676a6053a113ceb5804a9c845f8edcf82df2a66bc",
+      "bytes": 143459
+    },
+    {
+      "path": "plugins/sleight/lib/dp1-trace.mjs",
+      "sha256": "668a3def30a7007052e4306c5da024608d95775a4d744685db5dec47bcbab2a3",
+      "bytes": 2131
+    },
+    {
+      "path": "plugins/sleight/lib/element-wait.mjs",
+      "sha256": "579e3cfe4d2ed79ed2c4327b0b859bb9a70910af93a97a8318e6a9427b46c7a0",
+      "bytes": 1974
+    },
+    {
+      "path": "plugins/sleight/lib/flow-rules.mjs",
+      "sha256": "89d89535c8a4c1d8e178162ac3482b76e3960b9242a567dea865057426a32922",
+      "bytes": 23581
+    },
+    {
+      "path": "plugins/sleight/lib/literal-elements.mjs",
+      "sha256": "74800accb41058d9275ebe71f1fb3c235aa2b129cd4dba8adc4df02a69508a3b",
+      "bytes": 1957
+    },
+    {
+      "path": "plugins/sleight/lib/loading-settle.mjs",
+      "sha256": "b44335abc8293373d8a0367d3838ad2756df93937f825f20d817103898d30900",
+      "bytes": 1801
+    },
+    {
+      "path": "plugins/sleight/lib/menu-continuation.mjs",
+      "sha256": "2726dbb9262fa8e7b6a08420e6c957abb9b396bba7ecbe363acb48b626fdbe0b",
+      "bytes": 58762
+    },
+    {
+      "path": "plugins/sleight/lib/native-arguments.mjs",
+      "sha256": "82f63ce25e9132687f6a78e0e7241658611628f30759bd865a815f45029cfc18",
+      "bytes": 5777
+    },
+    {
+      "path": "plugins/sleight/lib/native-list-pick.mjs",
+      "sha256": "45f37df092c5eb3f03c4b840a3ea2f1ad7d650cccdcc0330e00e2c3d107cf5b8",
+      "bytes": 48359
+    },
+    {
+      "path": "plugins/sleight/lib/page-callbacks.mjs",
+      "sha256": "4bad69c970a2188cc4d19d49e049f044973a577aada77bdc4414a7e3edf74266",
+      "bytes": 8029
+    },
+    {
+      "path": "plugins/sleight/lib/payment-figures.mjs",
+      "sha256": "786a73a3b8129e7efb46e8bb263b666e8ab50df299b3494d2314086601cdac52",
+      "bytes": 7520
+    },
+    {
+      "path": "plugins/sleight/lib/payment-gate.mjs",
+      "sha256": "2eeb51b66363683572c984ef7c8418e5dd311604f5ac95112682d9bf7c67f9f9",
+      "bytes": 24626
+    },
+    {
+      "path": "plugins/sleight/lib/prompt-notice.mjs",
+      "sha256": "4c30c887041007c48f8f3f0396752112aaee985cd088ad251529a1db2ceecc8b",
+      "bytes": 30989
+    },
+    {
+      "path": "plugins/sleight/lib/relay.mjs",
+      "sha256": "87ac9b8d819f200cf8fbe18b44918484a5a1ad9cabf3364c34117aac8bd8fc92",
+      "bytes": 451914,
+      "instrumentation": "Extract only finalReturnCode with node:vm Script; relay module never imported",
+      "extractedSha256": "d69b02b8574bfd43b9b3a1fe906decb2e08e54472ccc3f2c1dde14781015af30"
+    },
+    {
+      "path": "plugins/sleight/lib/tab-probe.mjs",
+      "sha256": "35a98fb8ad49131e6d79c5b15f737b8a5b6c0d80018ccf9621dbc6b05929ed7d",
+      "bytes": 9465
+    },
+    {
+      "path": "plugins/sleight/lib/text-save.mjs",
+      "sha256": "ae1231e2362235c2cac17c7bd5568d66d311a068b204b106b2b79ecfe674715c",
+      "bytes": 3581
+    },
+    {
+      "path": "plugins/sleight/lib/window-identity.mjs",
+      "sha256": "eb4d9d9b60e85659ae667426dd56e6069b993eacc3a6f587ef66647acaacdcb6",
+      "bytes": 1958
+    },
+    {
+      "path": "plugins/sleight/lib/write-effect.mjs",
+      "sha256": "562d127c5dfa21fa069e1d80c75b767d197fd589a435941cce8940e28b7a878b",
+      "bytes": 9562
+    },
+    {
+      "path": "plugins/sleight/vendor/meriyah/dist/meriyah.min.mjs",
+      "sha256": "d29a5ff8e5fbdb8cb0617a721891fb1d3fb107883dc6f4ee9bda5b32896edf50",
+      "bytes": 133545
+    }
+  ],
+  "reviewedCommit": "bfcac3022c58db0f2f9014acf376a724c526733a",
+  "modules": {
+    "flow-rules": {
+      "baselineDifferences": 1134,
+      "differences": 1131,
+      "findings": 1,
+      "candidateChanges": 5,
+      "flowPolicyEqual": 8643,
+      "exceptions": [
+        0,
+        0,
+        0
+      ],
+      "changedCells": [
+        {
+          "id": "consumers:claude:2026-10-27T04-22-19-705Z/sleight-textedit-notes-table-1/transcript.jsonl:204",
+          "sourceSha256": "e6182fef79abcf611f805265b0ab86d72413484c9b23beac590e9c7c0be58b3c",
+          "matchesA": true,
+          "handlesMatchA": true,
+          "onlyHandleStateChanged": true,
+          "A": {
+            "handles": {
+              "map": [
+                [
+                  {
+                    "stringSha256": "ddc6e2b224d0fd821669202258386936fc9ce2899e215eec6322b95f8dd96d6a",
+                    "utf8Bytes": 3
+                  },
+                  {
+                    "app": {
+                      "stringSha256": "907ab9937a53fb024d01fdd72ca78f84f0a8e1c077a9109bb5a5145f1fbea913",
+                      "utf8Bytes": 8
+                    },
+                    "host": null,
+                    "observed": false,
+                    "web": false
+                  }
+                ]
+              ]
+            },
+            "readApp": {
+              "stringSha256": "907ab9937a53fb024d01fdd72ca78f84f0a8e1c077a9109bb5a5145f1fbea913",
+              "utf8Bytes": 8
+            },
+            "readTarget": {
+              "app": {
+                "stringSha256": "907ab9937a53fb024d01fdd72ca78f84f0a8e1c077a9109bb5a5145f1fbea913",
+                "utf8Bytes": 8
+              },
+              "host": null,
+              "observed": false,
+              "web": false
+            },
+            "tails": {
+              "map": []
+            },
+            "unknownInputs": [],
+            "violations": []
+          },
+          "oldB": {
+            "handles": {
+              "map": []
+            },
+            "readApp": {
+              "stringSha256": "907ab9937a53fb024d01fdd72ca78f84f0a8e1c077a9109bb5a5145f1fbea913",
+              "utf8Bytes": 8
+            },
+            "readTarget": {
+              "app": {
+                "stringSha256": "907ab9937a53fb024d01fdd72ca78f84f0a8e1c077a9109bb5a5145f1fbea913",
+                "utf8Bytes": 8
+              },
+              "host": null,
+              "observed": false,
+              "web": false
+            },
+            "tails": {
+              "map": []
+            },
+            "unknownInputs": [],
+            "violations": []
+          },
+          "B": {
+            "handles": {
+              "map": [
+                [
+                  {
+                    "stringSha256": "ddc6e2b224d0fd821669202258386936fc9ce2899e215eec6322b95f8dd96d6a",
+                    "utf8Bytes": 3
+                  },
+                  {
+                    "app": {
+                      "stringSha256": "907ab9937a53fb024d01fdd72ca78f84f0a8e1c077a9109bb5a5145f1fbea913",
+                      "utf8Bytes": 8
+                    },
+                    "host": null,
+                    "observed": false,
+                    "web": false
+                  }
+                ]
+              ]
+            },
+            "readApp": {
+              "stringSha256": "907ab9937a53fb024d01fdd72ca78f84f0a8e1c077a9109bb5a5145f1fbea913",
+              "utf8Bytes": 8
+            },
+            "readTarget": {
+              "app": {
+                "stringSha256": "907ab9937a53fb024d01fdd72ca78f84f0a8e1c077a9109bb5a5145f1fbea913",
+                "utf8Bytes": 8
+              },
+              "host": null,
+              "observed": false,
+              "web": false
+            },
+            "tails": {
+              "map": []
+            },
+            "unknownInputs": [],
+            "violations": []
+          }
+        },
+        {
+          "id": "validation-150f-rel2:race-firefox-B-r1/handoff/events.jsonl:toolu_01UztDybUyAJNrGTMZt6YSNr",
+          "sourceSha256": "9858e1fbdcdde25bcfcc1a3839f92080244c069341862f793786278c46da1087",
+          "matchesA": true,
+          "handlesMatchA": true,
+          "onlyHandleStateChanged": true,
+          "A": {
+            "handles": {
+              "map": [
+                [
+                  {
+                    "stringSha256": "8d9001d32c6a703d95921a77115050f33dd823d3f1730bd35215dcbecad6dc20",
+                    "utf8Bytes": 4
+                  },
+                  {
+                    "app": {
+                      "stringSha256": "d4c3e8a11256ab82a4fc72560eb4a2b0e87bad820c290dd9b03616de240aa6db",
+                      "utf8Bytes": 7
+                    },
+                    "host": null,
+                    "observed": false,
+                    "web": true
+                  }
+                ]
+              ]
+            },
+            "readApp": {
+              "stringSha256": "d4c3e8a11256ab82a4fc72560eb4a2b0e87bad820c290dd9b03616de240aa6db",
+              "utf8Bytes": 7
+            },
+            "readTarget": {
+              "app": {
+                "stringSha256": "d4c3e8a11256ab82a4fc72560eb4a2b0e87bad820c290dd9b03616de240aa6db",
+                "utf8Bytes": 7
+              },
+              "host": null,
+              "observed": false,
+              "web": true
+            },
+            "tails": {
+              "map": []
+            },
+            "unknownInputs": [],
+            "violations": []
+          },
+          "oldB": {
+            "handles": {
+              "map": []
+            },
+            "readApp": {
+              "stringSha256": "d4c3e8a11256ab82a4fc72560eb4a2b0e87bad820c290dd9b03616de240aa6db",
+              "utf8Bytes": 7
+            },
+            "readTarget": {
+              "app": {
+                "stringSha256": "d4c3e8a11256ab82a4fc72560eb4a2b0e87bad820c290dd9b03616de240aa6db",
+                "utf8Bytes": 7
+              },
+              "host": null,
+              "observed": false,
+              "web": true
+            },
+            "tails": {
+              "map": []
+            },
+            "unknownInputs": [],
+            "violations": []
+          },
+          "B": {
+            "handles": {
+              "map": [
+                [
+                  {
+                    "stringSha256": "8d9001d32c6a703d95921a77115050f33dd823d3f1730bd35215dcbecad6dc20",
+                    "utf8Bytes": 4
+                  },
+                  {
+                    "app": {
+                      "stringSha256": "d4c3e8a11256ab82a4fc72560eb4a2b0e87bad820c290dd9b03616de240aa6db",
+                      "utf8Bytes": 7
+                    },
+                    "host": null,
+                    "observed": false,
+                    "web": true
+                  }
+                ]
+              ]
+            },
+            "readApp": {
+              "stringSha256": "d4c3e8a11256ab82a4fc72560eb4a2b0e87bad820c290dd9b03616de240aa6db",
+              "utf8Bytes": 7
+            },
+            "readTarget": {
+              "app": {
+                "stringSha256": "d4c3e8a11256ab82a4fc72560eb4a2b0e87bad820c290dd9b03616de240aa6db",
+                "utf8Bytes": 7
+              },
+              "host": null,
+              "observed": false,
+              "web": true
+            },
+            "tails": {
+              "map": []
+            },
+            "unknownInputs": [],
+            "violations": []
+          }
+        },
+        {
+          "id": "validation-150f-rel2:race-firefox-B-r3/form-travel/events.jsonl:toolu_01WNBETsTemZfydaj1phMW9S",
+          "sourceSha256": "e5a8d0eb01a60813fa495bbca0ef6bc76dbf5cd501c1567db9ab4e788d03552d",
+          "matchesA": false,
+          "handlesMatchA": true,
+          "onlyHandleStateChanged": true,
+          "A": {
+            "handles": {
+              "map": [
+                [
+                  {
+                    "stringSha256": "7508386a20565f5cbc526eee8b3c9f39edeecd576ee90cb3dbb5ce5ac3fe9566",
+                    "utf8Bytes": 3
+                  },
+                  {
+                    "app": {
+                      "stringSha256": "d4c3e8a11256ab82a4fc72560eb4a2b0e87bad820c290dd9b03616de240aa6db",
+                      "utf8Bytes": 7
+                    },
+                    "host": null,
+                    "observed": false,
+                    "web": true
+                  }
+                ]
+              ]
+            },
+            "readApp": {
+              "stringSha256": "d4c3e8a11256ab82a4fc72560eb4a2b0e87bad820c290dd9b03616de240aa6db",
+              "utf8Bytes": 7
+            },
+            "readTarget": {
+              "app": {
+                "stringSha256": "d4c3e8a11256ab82a4fc72560eb4a2b0e87bad820c290dd9b03616de240aa6db",
+                "utf8Bytes": 7
+              },
+              "host": null,
+              "observed": false,
+              "web": true
+            },
+            "tails": {
+              "map": [
+                [
+                  {
+                    "stringSha256": "67f0c37878a8e08a15f5b0889c406a66395b58b0e94bd98e3365f9788d5e1f45",
+                    "utf8Bytes": 16
+                  },
+                  {
+                    "stringSha256": "ea7322cf2b78b76452513d7f75c3e3c5c7671fe62e66928151017f89111546df",
+                    "utf8Bytes": 21
+                  }
+                ],
+                [
+                  {
+                    "stringSha256": "16e5f60f207a1a0073451c35a9d315d17fdc17d7fab66449b00cdfaadc8b249e",
+                    "utf8Bytes": 7
+                  },
+                  {
+                    "stringSha256": "ea7322cf2b78b76452513d7f75c3e3c5c7671fe62e66928151017f89111546df",
+                    "utf8Bytes": 21
+                  }
+                ]
+              ]
+            },
+            "unknownInputs": [],
+            "violations": []
+          },
+          "oldB": {
+            "handles": {
+              "map": []
+            },
+            "readApp": {
+              "stringSha256": "d4c3e8a11256ab82a4fc72560eb4a2b0e87bad820c290dd9b03616de240aa6db",
+              "utf8Bytes": 7
+            },
+            "readTarget": {
+              "app": {
+                "stringSha256": "d4c3e8a11256ab82a4fc72560eb4a2b0e87bad820c290dd9b03616de240aa6db",
+                "utf8Bytes": 7
+              },
+              "host": null,
+              "observed": false,
+              "web": true
+            },
+            "tails": {
+              "map": [
+                [
+                  {
+                    "stringSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+                    "utf8Bytes": 0
+                  },
+                  {
+                    "stringSha256": "ea7322cf2b78b76452513d7f75c3e3c5c7671fe62e66928151017f89111546df",
+                    "utf8Bytes": 21
+                  }
+                ],
+                [
+                  {
+                    "stringSha256": "c3a310bc2a4f31ef2a14e578090bcd65fc95dc82c1eed42ac8c1b35d37dd7789",
+                    "utf8Bytes": 9
+                  },
+                  {
+                    "stringSha256": "ea7322cf2b78b76452513d7f75c3e3c5c7671fe62e66928151017f89111546df",
+                    "utf8Bytes": 21
+                  }
+                ]
+              ]
+            },
+            "unknownInputs": [],
+            "violations": []
+          },
+          "B": {
+            "handles": {
+              "map": [
+                [
+                  {
+                    "stringSha256": "7508386a20565f5cbc526eee8b3c9f39edeecd576ee90cb3dbb5ce5ac3fe9566",
+                    "utf8Bytes": 3
+                  },
+                  {
+                    "app": {
+                      "stringSha256": "d4c3e8a11256ab82a4fc72560eb4a2b0e87bad820c290dd9b03616de240aa6db",
+                      "utf8Bytes": 7
+                    },
+                    "host": null,
+                    "observed": false,
+                    "web": true
+                  }
+                ]
+              ]
+            },
+            "readApp": {
+              "stringSha256": "d4c3e8a11256ab82a4fc72560eb4a2b0e87bad820c290dd9b03616de240aa6db",
+              "utf8Bytes": 7
+            },
+            "readTarget": {
+              "app": {
+                "stringSha256": "d4c3e8a11256ab82a4fc72560eb4a2b0e87bad820c290dd9b03616de240aa6db",
+                "utf8Bytes": 7
+              },
+              "host": null,
+              "observed": false,
+              "web": true
+            },
+            "tails": {
+              "map": [
+                [
+                  {
+                    "stringSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+                    "utf8Bytes": 0
+                  },
+                  {
+                    "stringSha256": "ea7322cf2b78b76452513d7f75c3e3c5c7671fe62e66928151017f89111546df",
+                    "utf8Bytes": 21
+                  }
+                ],
+                [
+                  {
+                    "stringSha256": "c3a310bc2a4f31ef2a14e578090bcd65fc95dc82c1eed42ac8c1b35d37dd7789",
+                    "utf8Bytes": 9
+                  },
+                  {
+                    "stringSha256": "ea7322cf2b78b76452513d7f75c3e3c5c7671fe62e66928151017f89111546df",
+                    "utf8Bytes": 21
+                  }
+                ]
+              ]
+            },
+            "unknownInputs": [],
+            "violations": []
+          }
+        },
+        {
+          "id": "validation-150f-rel3:race-firefox-A-r3/demoid/events.jsonl:toolu_01XfGp7gMv4fCqQYqyBAaTae",
+          "sourceSha256": "16a5c7606800366b6e494b02990e713f82c098b6381cebb4b4f6a0b59a8ece08",
+          "matchesA": true,
+          "handlesMatchA": true,
+          "onlyHandleStateChanged": true,
+          "A": {
+            "handles": {
+              "map": [
+                [
+                  {
+                    "stringSha256": "7508386a20565f5cbc526eee8b3c9f39edeecd576ee90cb3dbb5ce5ac3fe9566",
+                    "utf8Bytes": 3
+                  },
+                  {
+                    "app": {
+                      "stringSha256": "d4c3e8a11256ab82a4fc72560eb4a2b0e87bad820c290dd9b03616de240aa6db",
+                      "utf8Bytes": 7
+                    },
+                    "host": null,
+                    "observed": false,
+                    "web": true
+                  }
+                ]
+              ]
+            },
+            "readApp": {
+              "stringSha256": "d4c3e8a11256ab82a4fc72560eb4a2b0e87bad820c290dd9b03616de240aa6db",
+              "utf8Bytes": 7
+            },
+            "readTarget": {
+              "app": {
+                "stringSha256": "d4c3e8a11256ab82a4fc72560eb4a2b0e87bad820c290dd9b03616de240aa6db",
+                "utf8Bytes": 7
+              },
+              "host": null,
+              "observed": false,
+              "web": true
+            },
+            "tails": {
+              "map": []
+            },
+            "unknownInputs": [],
+            "violations": []
+          },
+          "oldB": {
+            "handles": {
+              "map": []
+            },
+            "readApp": {
+              "stringSha256": "d4c3e8a11256ab82a4fc72560eb4a2b0e87bad820c290dd9b03616de240aa6db",
+              "utf8Bytes": 7
+            },
+            "readTarget": {
+              "app": {
+                "stringSha256": "d4c3e8a11256ab82a4fc72560eb4a2b0e87bad820c290dd9b03616de240aa6db",
+                "utf8Bytes": 7
+              },
+              "host": null,
+              "observed": false,
+              "web": true
+            },
+            "tails": {
+              "map": []
+            },
+            "unknownInputs": [],
+            "violations": []
+          },
+          "B": {
+            "handles": {
+              "map": [
+                [
+                  {
+                    "stringSha256": "7508386a20565f5cbc526eee8b3c9f39edeecd576ee90cb3dbb5ce5ac3fe9566",
+                    "utf8Bytes": 3
+                  },
+                  {
+                    "app": {
+                      "stringSha256": "d4c3e8a11256ab82a4fc72560eb4a2b0e87bad820c290dd9b03616de240aa6db",
+                      "utf8Bytes": 7
+                    },
+                    "host": null,
+                    "observed": false,
+                    "web": true
+                  }
+                ]
+              ]
+            },
+            "readApp": {
+              "stringSha256": "d4c3e8a11256ab82a4fc72560eb4a2b0e87bad820c290dd9b03616de240aa6db",
+              "utf8Bytes": 7
+            },
+            "readTarget": {
+              "app": {
+                "stringSha256": "d4c3e8a11256ab82a4fc72560eb4a2b0e87bad820c290dd9b03616de240aa6db",
+                "utf8Bytes": 7
+              },
+              "host": null,
+              "observed": false,
+              "web": true
+            },
+            "tails": {
+              "map": []
+            },
+            "unknownInputs": [],
+            "violations": []
+          }
+        },
+        {
+          "id": "validation-150f-rel3:race-firefox-B-r2/form-settings/events.jsonl:toolu_01BPNdPvyYziY4KLMBSQduVQ",
+          "sourceSha256": "bcd01b9465d1e7ecce25671fa0f01877a8f839c529b500904ebabc3ab1076140",
+          "matchesA": false,
+          "handlesMatchA": true,
+          "onlyHandleStateChanged": true,
+          "A": {
+            "handles": {
+              "map": [
+                [
+                  {
+                    "stringSha256": "043a718774c572bd8a25adbeb1bfcd5c0256ae11cecf9f9c3f925d0e52beaf89",
+                    "utf8Bytes": 1
+                  },
+                  {
+                    "app": {
+                      "stringSha256": "d4c3e8a11256ab82a4fc72560eb4a2b0e87bad820c290dd9b03616de240aa6db",
+                      "utf8Bytes": 7
+                    },
+                    "host": null,
+                    "observed": false,
+                    "web": true
+                  }
+                ]
+              ]
+            },
+            "readApp": {
+              "stringSha256": "d4c3e8a11256ab82a4fc72560eb4a2b0e87bad820c290dd9b03616de240aa6db",
+              "utf8Bytes": 7
+            },
+            "readTarget": {
+              "app": {
+                "stringSha256": "d4c3e8a11256ab82a4fc72560eb4a2b0e87bad820c290dd9b03616de240aa6db",
+                "utf8Bytes": 7
+              },
+              "host": null,
+              "observed": false,
+              "web": true
+            },
+            "tails": {
+              "map": [
+                [
+                  {
+                    "stringSha256": "67f0c37878a8e08a15f5b0889c406a66395b58b0e94bd98e3365f9788d5e1f45",
+                    "utf8Bytes": 16
+                  },
+                  {
+                    "stringSha256": "7a61b53701befdae0eeeffaecc73f14e20b537bb0f8b91ad7c2936dc63562b25",
+                    "utf8Bytes": 2
+                  }
+                ],
+                [
+                  {
+                    "stringSha256": "16e5f60f207a1a0073451c35a9d315d17fdc17d7fab66449b00cdfaadc8b249e",
+                    "utf8Bytes": 7
+                  },
+                  {
+                    "stringSha256": "7a61b53701befdae0eeeffaecc73f14e20b537bb0f8b91ad7c2936dc63562b25",
+                    "utf8Bytes": 2
+                  }
+                ]
+              ]
+            },
+            "unknownInputs": [],
+            "violations": []
+          },
+          "oldB": {
+            "handles": {
+              "map": []
+            },
+            "readApp": {
+              "stringSha256": "d4c3e8a11256ab82a4fc72560eb4a2b0e87bad820c290dd9b03616de240aa6db",
+              "utf8Bytes": 7
+            },
+            "readTarget": {
+              "app": {
+                "stringSha256": "d4c3e8a11256ab82a4fc72560eb4a2b0e87bad820c290dd9b03616de240aa6db",
+                "utf8Bytes": 7
+              },
+              "host": null,
+              "observed": false,
+              "web": true
+            },
+            "tails": {
+              "map": [
+                [
+                  {
+                    "stringSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+                    "utf8Bytes": 0
+                  },
+                  {
+                    "stringSha256": "7a61b53701befdae0eeeffaecc73f14e20b537bb0f8b91ad7c2936dc63562b25",
+                    "utf8Bytes": 2
+                  }
+                ],
+                [
+                  {
+                    "stringSha256": "c3a310bc2a4f31ef2a14e578090bcd65fc95dc82c1eed42ac8c1b35d37dd7789",
+                    "utf8Bytes": 9
+                  },
+                  {
+                    "stringSha256": "7a61b53701befdae0eeeffaecc73f14e20b537bb0f8b91ad7c2936dc63562b25",
+                    "utf8Bytes": 2
+                  }
+                ]
+              ]
+            },
+            "unknownInputs": [],
+            "violations": []
+          },
+          "B": {
+            "handles": {
+              "map": [
+                [
+                  {
+                    "stringSha256": "043a718774c572bd8a25adbeb1bfcd5c0256ae11cecf9f9c3f925d0e52beaf89",
+                    "utf8Bytes": 1
+                  },
+                  {
+                    "app": {
+                      "stringSha256": "d4c3e8a11256ab82a4fc72560eb4a2b0e87bad820c290dd9b03616de240aa6db",
+                      "utf8Bytes": 7
+                    },
+                    "host": null,
+                    "observed": false,
+                    "web": true
+                  }
+                ]
+              ]
+            },
+            "readApp": {
+              "stringSha256": "d4c3e8a11256ab82a4fc72560eb4a2b0e87bad820c290dd9b03616de240aa6db",
+              "utf8Bytes": 7
+            },
+            "readTarget": {
+              "app": {
+                "stringSha256": "d4c3e8a11256ab82a4fc72560eb4a2b0e87bad820c290dd9b03616de240aa6db",
+                "utf8Bytes": 7
+              },
+              "host": null,
+              "observed": false,
+              "web": true
+            },
+            "tails": {
+              "map": [
+                [
+                  {
+                    "stringSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+                    "utf8Bytes": 0
+                  },
+                  {
+                    "stringSha256": "7a61b53701befdae0eeeffaecc73f14e20b537bb0f8b91ad7c2936dc63562b25",
+                    "utf8Bytes": 2
+                  }
+                ],
+                [
+                  {
+                    "stringSha256": "c3a310bc2a4f31ef2a14e578090bcd65fc95dc82c1eed42ac8c1b35d37dd7789",
+                    "utf8Bytes": 9
+                  },
+                  {
+                    "stringSha256": "7a61b53701befdae0eeeffaecc73f14e20b537bb0f8b91ad7c2936dc63562b25",
+                    "utf8Bytes": 2
+                  }
+                ]
+              ]
+            },
+            "unknownInputs": [],
+            "violations": []
+          }
+        }
+      ],
+      "remainingFindings": [
+        {
+          "id": "validation-150f-rel3:as3-safari-B-r3/survey-p09/events.jsonl:toolu_01BjCAs85cnrDz6YQnGVe4tv",
+          "intended": null,
+          "change": "CA2 removes catch-wrapped acquisition bindings and changes returned flow state. The existing classifier leaves intent unproven.",
+          "commit": "422356a2",
+          "A": {
+            "handles": {
+              "map": [
+                [
+                  {
+                    "stringSha256": "a172cedcae47474b615c54d510a5d84a8dea3032e958587430b413538be3f333",
+                    "utf8Bytes": 3
+                  },
+                  {
+                    "app": {
+                      "stringSha256": "5f0330392292a13a29ae269a1efe6f7c2a8210572d884d8c2392a9105663a41b",
+                      "utf8Bytes": 6
+                    },
+                    "host": null,
+                    "observed": false,
+                    "web": true
+                  }
+                ]
+              ]
+            },
+            "readApp": {
+              "stringSha256": "5f0330392292a13a29ae269a1efe6f7c2a8210572d884d8c2392a9105663a41b",
+              "utf8Bytes": 6
+            },
+            "readTarget": {
+              "app": {
+                "stringSha256": "5f0330392292a13a29ae269a1efe6f7c2a8210572d884d8c2392a9105663a41b",
+                "utf8Bytes": 6
+              },
+              "host": null,
+              "observed": false,
+              "web": true
+            },
+            "tails": {
+              "map": [
+                [
+                  {
+                    "stringSha256": "493df07f63b34280f2583d9331740e153110a50fa8f8ee284a225e3135405576",
+                    "utf8Bytes": 15
+                  },
+                  {
+                    "stringSha256": "e7162e3326af4078040685834a0bd9c77709c0930c00626cc7c8588036ea582c",
+                    "utf8Bytes": 26
+                  }
+                ],
+                [
+                  {
+                    "stringSha256": "d8e60ebbbb2b1a9d5f0dd2cfc7e810688583ad8afb626fcc6c357f756e799530",
+                    "utf8Bytes": 6
+                  },
+                  {
+                    "stringSha256": "e7162e3326af4078040685834a0bd9c77709c0930c00626cc7c8588036ea582c",
+                    "utf8Bytes": 26
+                  }
+                ]
+              ]
+            },
+            "unknownInputs": [],
+            "violations": []
+          },
+          "B": {
+            "handles": {
+              "map": []
+            },
+            "readApp": {
+              "stringSha256": "5f0330392292a13a29ae269a1efe6f7c2a8210572d884d8c2392a9105663a41b",
+              "utf8Bytes": 6
+            },
+            "readTarget": {
+              "app": {
+                "stringSha256": "5f0330392292a13a29ae269a1efe6f7c2a8210572d884d8c2392a9105663a41b",
+                "utf8Bytes": 6
+              },
+              "host": null,
+              "observed": false,
+              "web": true
+            },
+            "tails": {
+              "map": [
+                [
+                  {
+                    "stringSha256": "493df07f63b34280f2583d9331740e153110a50fa8f8ee284a225e3135405576",
+                    "utf8Bytes": 15
+                  },
+                  {
+                    "stringSha256": "e7162e3326af4078040685834a0bd9c77709c0930c00626cc7c8588036ea582c",
+                    "utf8Bytes": 26
+                  }
+                ],
+                [
+                  {
+                    "stringSha256": "d8e60ebbbb2b1a9d5f0dd2cfc7e810688583ad8afb626fcc6c357f756e799530",
+                    "utf8Bytes": 6
+                  },
+                  {
+                    "stringSha256": "e7162e3326af4078040685834a0bd9c77709c0930c00626cc7c8588036ea582c",
+                    "utf8Bytes": 26
+                  }
+                ]
+              ]
+            },
+            "unknownInputs": [],
+            "violations": []
+          }
+        }
+      ],
+      "recordedCells": [
+        {
+          "id": "validation-150f-rel2:race-firefox-B-r3/form-travel/events.jsonl:toolu_01WNBETsTemZfydaj1phMW9S",
+          "callId": "toolu_01WNBETsTemZfydaj1phMW9S",
+          "sourceSha256": "e5a8d0eb01a60813fa495bbca0ef6bc76dbf5cd501c1567db9ab4e788d03552d",
+          "containsBareUndefined": false,
+          "handlesUnchanged": true,
+          "decisionUnchanged": true,
+          "reviewedHandles": {
+            "map": [
+              [
+                {
+                  "stringSha256": "7508386a20565f5cbc526eee8b3c9f39edeecd576ee90cb3dbb5ce5ac3fe9566",
+                  "utf8Bytes": 3
+                },
+                {
+                  "app": {
+                    "stringSha256": "d4c3e8a11256ab82a4fc72560eb4a2b0e87bad820c290dd9b03616de240aa6db",
+                    "utf8Bytes": 7
+                  },
+                  "host": null,
+                  "observed": false,
+                  "web": true
+                }
+              ]
+            ]
+          },
+          "candidateHandles": {
+            "map": [
+              [
+                {
+                  "stringSha256": "7508386a20565f5cbc526eee8b3c9f39edeecd576ee90cb3dbb5ce5ac3fe9566",
+                  "utf8Bytes": 3
+                },
+                {
+                  "app": {
+                    "stringSha256": "d4c3e8a11256ab82a4fc72560eb4a2b0e87bad820c290dd9b03616de240aa6db",
+                    "utf8Bytes": 7
+                  },
+                  "host": null,
+                  "observed": false,
+                  "web": true
+                }
+              ]
+            ]
+          }
+        },
+        {
+          "id": "validation-150f-rel3:as3-safari-B-r3/survey-p09/events.jsonl:toolu_01BjCAs85cnrDz6YQnGVe4tv",
+          "callId": "toolu_01BjCAs85cnrDz6YQnGVe4tv",
+          "sourceSha256": "c0fd640e1eb45e81796d0c50ef9c8a7141cb928382f768a25e602467d9dd31c6",
+          "containsBareUndefined": false,
+          "handlesUnchanged": true,
+          "decisionUnchanged": true,
+          "reviewedHandles": {
+            "map": []
+          },
+          "candidateHandles": {
+            "map": []
+          }
+        },
+        {
+          "id": "validation-150f-rel3:race-firefox-B-r2/form-settings/events.jsonl:toolu_01BPNdPvyYziY4KLMBSQduVQ",
+          "callId": "toolu_01BPNdPvyYziY4KLMBSQduVQ",
+          "sourceSha256": "bcd01b9465d1e7ecce25671fa0f01877a8f839c529b500904ebabc3ab1076140",
+          "containsBareUndefined": false,
+          "handlesUnchanged": true,
+          "decisionUnchanged": true,
+          "reviewedHandles": {
+            "map": [
+              [
+                {
+                  "stringSha256": "043a718774c572bd8a25adbeb1bfcd5c0256ae11cecf9f9c3f925d0e52beaf89",
+                  "utf8Bytes": 1
+                },
+                {
+                  "app": {
+                    "stringSha256": "d4c3e8a11256ab82a4fc72560eb4a2b0e87bad820c290dd9b03616de240aa6db",
+                    "utf8Bytes": 7
+                  },
+                  "host": null,
+                  "observed": false,
+                  "web": true
+                }
+              ]
+            ]
+          },
+          "candidateHandles": {
+            "map": [
+              [
+                {
+                  "stringSha256": "043a718774c572bd8a25adbeb1bfcd5c0256ae11cecf9f9c3f925d0e52beaf89",
+                  "utf8Bytes": 1
+                },
+                {
+                  "app": {
+                    "stringSha256": "d4c3e8a11256ab82a4fc72560eb4a2b0e87bad820c290dd9b03616de240aa6db",
+                    "utf8Bytes": 7
+                  },
+                  "host": null,
+                  "observed": false,
+                  "web": true
+                }
+              ]
+            ]
+          }
+        }
+      ]
+    },
+    "inspection": {
+      "baselineDifferences": 1133,
+      "differences": 1130,
+      "findings": 1,
+      "candidateChanges": 5,
+      "flowPolicyEqual": 0,
+      "exceptions": [
+        0,
+        0,
+        0
+      ],
+      "changedCells": [
+        {
+          "id": "consumers:claude:2026-10-27T04-22-19-705Z/sleight-textedit-notes-table-1/transcript.jsonl:204",
+          "sourceSha256": "e6182fef79abcf611f805265b0ab86d72413484c9b23beac590e9c7c0be58b3c",
+          "matchesA": true,
+          "handlesMatchA": true,
+          "onlyHandleStateChanged": true,
+          "A": {
+            "flow": {
+              "handles": {
+                "map": [
+                  [
+                    {
+                      "stringSha256": "ddc6e2b224d0fd821669202258386936fc9ce2899e215eec6322b95f8dd96d6a",
+                      "utf8Bytes": 3
+                    },
+                    {
+                      "app": {
+                        "stringSha256": "907ab9937a53fb024d01fdd72ca78f84f0a8e1c077a9109bb5a5145f1fbea913",
+                        "utf8Bytes": 8
+                      },
+                      "host": null,
+                      "observed": false,
+                      "web": false
+                    }
+                  ]
+                ]
+              },
+              "readApp": {
+                "stringSha256": "907ab9937a53fb024d01fdd72ca78f84f0a8e1c077a9109bb5a5145f1fbea913",
+                "utf8Bytes": 8
+              },
+              "readTarget": {
+                "app": {
+                  "stringSha256": "907ab9937a53fb024d01fdd72ca78f84f0a8e1c077a9109bb5a5145f1fbea913",
+                  "utf8Bytes": 8
+                },
+                "host": null,
+                "observed": false,
+                "web": false
+              },
+              "tails": {
+                "map": []
+              },
+              "unknownInputs": [],
+              "violations": []
+            },
+            "refused": false,
+            "stage": {
+              "stringSha256": "5cfc694a09a29773a463d0f3aaa8ed4b3b30ebe70411798535a0c6e9c8e430f4",
+              "utf8Bytes": 9
+            }
+          },
+          "oldB": {
+            "flow": {
+              "handles": {
+                "map": []
+              },
+              "readApp": {
+                "stringSha256": "907ab9937a53fb024d01fdd72ca78f84f0a8e1c077a9109bb5a5145f1fbea913",
+                "utf8Bytes": 8
+              },
+              "readTarget": {
+                "app": {
+                  "stringSha256": "907ab9937a53fb024d01fdd72ca78f84f0a8e1c077a9109bb5a5145f1fbea913",
+                  "utf8Bytes": 8
+                },
+                "host": null,
+                "observed": false,
+                "web": false
+              },
+              "tails": {
+                "map": []
+              },
+              "unknownInputs": [],
+              "violations": []
+            },
+            "refused": false,
+            "stage": {
+              "stringSha256": "5cfc694a09a29773a463d0f3aaa8ed4b3b30ebe70411798535a0c6e9c8e430f4",
+              "utf8Bytes": 9
+            }
+          },
+          "B": {
+            "flow": {
+              "handles": {
+                "map": [
+                  [
+                    {
+                      "stringSha256": "ddc6e2b224d0fd821669202258386936fc9ce2899e215eec6322b95f8dd96d6a",
+                      "utf8Bytes": 3
+                    },
+                    {
+                      "app": {
+                        "stringSha256": "907ab9937a53fb024d01fdd72ca78f84f0a8e1c077a9109bb5a5145f1fbea913",
+                        "utf8Bytes": 8
+                      },
+                      "host": null,
+                      "observed": false,
+                      "web": false
+                    }
+                  ]
+                ]
+              },
+              "readApp": {
+                "stringSha256": "907ab9937a53fb024d01fdd72ca78f84f0a8e1c077a9109bb5a5145f1fbea913",
+                "utf8Bytes": 8
+              },
+              "readTarget": {
+                "app": {
+                  "stringSha256": "907ab9937a53fb024d01fdd72ca78f84f0a8e1c077a9109bb5a5145f1fbea913",
+                  "utf8Bytes": 8
+                },
+                "host": null,
+                "observed": false,
+                "web": false
+              },
+              "tails": {
+                "map": []
+              },
+              "unknownInputs": [],
+              "violations": []
+            },
+            "refused": false,
+            "stage": {
+              "stringSha256": "5cfc694a09a29773a463d0f3aaa8ed4b3b30ebe70411798535a0c6e9c8e430f4",
+              "utf8Bytes": 9
+            }
+          }
+        },
+        {
+          "id": "validation-150f-rel2:race-firefox-B-r1/handoff/events.jsonl:toolu_01UztDybUyAJNrGTMZt6YSNr",
+          "sourceSha256": "9858e1fbdcdde25bcfcc1a3839f92080244c069341862f793786278c46da1087",
+          "matchesA": true,
+          "handlesMatchA": true,
+          "onlyHandleStateChanged": true,
+          "A": {
+            "flow": {
+              "handles": {
+                "map": [
+                  [
+                    {
+                      "stringSha256": "8d9001d32c6a703d95921a77115050f33dd823d3f1730bd35215dcbecad6dc20",
+                      "utf8Bytes": 4
+                    },
+                    {
+                      "app": {
+                        "stringSha256": "d4c3e8a11256ab82a4fc72560eb4a2b0e87bad820c290dd9b03616de240aa6db",
+                        "utf8Bytes": 7
+                      },
+                      "host": null,
+                      "observed": false,
+                      "web": true
+                    }
+                  ]
+                ]
+              },
+              "readApp": {
+                "stringSha256": "d4c3e8a11256ab82a4fc72560eb4a2b0e87bad820c290dd9b03616de240aa6db",
+                "utf8Bytes": 7
+              },
+              "readTarget": {
+                "app": {
+                  "stringSha256": "d4c3e8a11256ab82a4fc72560eb4a2b0e87bad820c290dd9b03616de240aa6db",
+                  "utf8Bytes": 7
+                },
+                "host": null,
+                "observed": false,
+                "web": true
+              },
+              "tails": {
+                "map": []
+              },
+              "unknownInputs": [],
+              "violations": []
+            },
+            "refused": false,
+            "stage": {
+              "stringSha256": "5cfc694a09a29773a463d0f3aaa8ed4b3b30ebe70411798535a0c6e9c8e430f4",
+              "utf8Bytes": 9
+            }
+          },
+          "oldB": {
+            "flow": {
+              "handles": {
+                "map": []
+              },
+              "readApp": {
+                "stringSha256": "d4c3e8a11256ab82a4fc72560eb4a2b0e87bad820c290dd9b03616de240aa6db",
+                "utf8Bytes": 7
+              },
+              "readTarget": {
+                "app": {
+                  "stringSha256": "d4c3e8a11256ab82a4fc72560eb4a2b0e87bad820c290dd9b03616de240aa6db",
+                  "utf8Bytes": 7
+                },
+                "host": null,
+                "observed": false,
+                "web": true
+              },
+              "tails": {
+                "map": []
+              },
+              "unknownInputs": [],
+              "violations": []
+            },
+            "refused": false,
+            "stage": {
+              "stringSha256": "5cfc694a09a29773a463d0f3aaa8ed4b3b30ebe70411798535a0c6e9c8e430f4",
+              "utf8Bytes": 9
+            }
+          },
+          "B": {
+            "flow": {
+              "handles": {
+                "map": [
+                  [
+                    {
+                      "stringSha256": "8d9001d32c6a703d95921a77115050f33dd823d3f1730bd35215dcbecad6dc20",
+                      "utf8Bytes": 4
+                    },
+                    {
+                      "app": {
+                        "stringSha256": "d4c3e8a11256ab82a4fc72560eb4a2b0e87bad820c290dd9b03616de240aa6db",
+                        "utf8Bytes": 7
+                      },
+                      "host": null,
+                      "observed": false,
+                      "web": true
+                    }
+                  ]
+                ]
+              },
+              "readApp": {
+                "stringSha256": "d4c3e8a11256ab82a4fc72560eb4a2b0e87bad820c290dd9b03616de240aa6db",
+                "utf8Bytes": 7
+              },
+              "readTarget": {
+                "app": {
+                  "stringSha256": "d4c3e8a11256ab82a4fc72560eb4a2b0e87bad820c290dd9b03616de240aa6db",
+                  "utf8Bytes": 7
+                },
+                "host": null,
+                "observed": false,
+                "web": true
+              },
+              "tails": {
+                "map": []
+              },
+              "unknownInputs": [],
+              "violations": []
+            },
+            "refused": false,
+            "stage": {
+              "stringSha256": "5cfc694a09a29773a463d0f3aaa8ed4b3b30ebe70411798535a0c6e9c8e430f4",
+              "utf8Bytes": 9
+            }
+          }
+        },
+        {
+          "id": "validation-150f-rel2:race-firefox-B-r3/form-travel/events.jsonl:toolu_01WNBETsTemZfydaj1phMW9S",
+          "sourceSha256": "e5a8d0eb01a60813fa495bbca0ef6bc76dbf5cd501c1567db9ab4e788d03552d",
+          "matchesA": false,
+          "handlesMatchA": true,
+          "onlyHandleStateChanged": true,
+          "A": {
+            "flow": {
+              "handles": {
+                "map": [
+                  [
+                    {
+                      "stringSha256": "7508386a20565f5cbc526eee8b3c9f39edeecd576ee90cb3dbb5ce5ac3fe9566",
+                      "utf8Bytes": 3
+                    },
+                    {
+                      "app": {
+                        "stringSha256": "d4c3e8a11256ab82a4fc72560eb4a2b0e87bad820c290dd9b03616de240aa6db",
+                        "utf8Bytes": 7
+                      },
+                      "host": null,
+                      "observed": false,
+                      "web": true
+                    }
+                  ]
+                ]
+              },
+              "readApp": {
+                "stringSha256": "d4c3e8a11256ab82a4fc72560eb4a2b0e87bad820c290dd9b03616de240aa6db",
+                "utf8Bytes": 7
+              },
+              "readTarget": {
+                "app": {
+                  "stringSha256": "d4c3e8a11256ab82a4fc72560eb4a2b0e87bad820c290dd9b03616de240aa6db",
+                  "utf8Bytes": 7
+                },
+                "host": null,
+                "observed": false,
+                "web": true
+              },
+              "tails": {
+                "map": [
+                  [
+                    {
+                      "stringSha256": "67f0c37878a8e08a15f5b0889c406a66395b58b0e94bd98e3365f9788d5e1f45",
+                      "utf8Bytes": 16
+                    },
+                    {
+                      "stringSha256": "ea7322cf2b78b76452513d7f75c3e3c5c7671fe62e66928151017f89111546df",
+                      "utf8Bytes": 21
+                    }
+                  ],
+                  [
+                    {
+                      "stringSha256": "16e5f60f207a1a0073451c35a9d315d17fdc17d7fab66449b00cdfaadc8b249e",
+                      "utf8Bytes": 7
+                    },
+                    {
+                      "stringSha256": "ea7322cf2b78b76452513d7f75c3e3c5c7671fe62e66928151017f89111546df",
+                      "utf8Bytes": 21
+                    }
+                  ]
+                ]
+              },
+              "unknownInputs": [],
+              "violations": []
+            },
+            "refused": false,
+            "stage": {
+              "stringSha256": "5cfc694a09a29773a463d0f3aaa8ed4b3b30ebe70411798535a0c6e9c8e430f4",
+              "utf8Bytes": 9
+            }
+          },
+          "oldB": {
+            "flow": {
+              "handles": {
+                "map": []
+              },
+              "readApp": {
+                "stringSha256": "d4c3e8a11256ab82a4fc72560eb4a2b0e87bad820c290dd9b03616de240aa6db",
+                "utf8Bytes": 7
+              },
+              "readTarget": {
+                "app": {
+                  "stringSha256": "d4c3e8a11256ab82a4fc72560eb4a2b0e87bad820c290dd9b03616de240aa6db",
+                  "utf8Bytes": 7
+                },
+                "host": null,
+                "observed": false,
+                "web": true
+              },
+              "tails": {
+                "map": [
+                  [
+                    {
+                      "stringSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+                      "utf8Bytes": 0
+                    },
+                    {
+                      "stringSha256": "ea7322cf2b78b76452513d7f75c3e3c5c7671fe62e66928151017f89111546df",
+                      "utf8Bytes": 21
+                    }
+                  ],
+                  [
+                    {
+                      "stringSha256": "c3a310bc2a4f31ef2a14e578090bcd65fc95dc82c1eed42ac8c1b35d37dd7789",
+                      "utf8Bytes": 9
+                    },
+                    {
+                      "stringSha256": "ea7322cf2b78b76452513d7f75c3e3c5c7671fe62e66928151017f89111546df",
+                      "utf8Bytes": 21
+                    }
+                  ]
+                ]
+              },
+              "unknownInputs": [],
+              "violations": []
+            },
+            "refused": false,
+            "stage": {
+              "stringSha256": "5cfc694a09a29773a463d0f3aaa8ed4b3b30ebe70411798535a0c6e9c8e430f4",
+              "utf8Bytes": 9
+            }
+          },
+          "B": {
+            "flow": {
+              "handles": {
+                "map": [
+                  [
+                    {
+                      "stringSha256": "7508386a20565f5cbc526eee8b3c9f39edeecd576ee90cb3dbb5ce5ac3fe9566",
+                      "utf8Bytes": 3
+                    },
+                    {
+                      "app": {
+                        "stringSha256": "d4c3e8a11256ab82a4fc72560eb4a2b0e87bad820c290dd9b03616de240aa6db",
+                        "utf8Bytes": 7
+                      },
+                      "host": null,
+                      "observed": false,
+                      "web": true
+                    }
+                  ]
+                ]
+              },
+              "readApp": {
+                "stringSha256": "d4c3e8a11256ab82a4fc72560eb4a2b0e87bad820c290dd9b03616de240aa6db",
+                "utf8Bytes": 7
+              },
+              "readTarget": {
+                "app": {
+                  "stringSha256": "d4c3e8a11256ab82a4fc72560eb4a2b0e87bad820c290dd9b03616de240aa6db",
+                  "utf8Bytes": 7
+                },
+                "host": null,
+                "observed": false,
+                "web": true
+              },
+              "tails": {
+                "map": [
+                  [
+                    {
+                      "stringSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+                      "utf8Bytes": 0
+                    },
+                    {
+                      "stringSha256": "ea7322cf2b78b76452513d7f75c3e3c5c7671fe62e66928151017f89111546df",
+                      "utf8Bytes": 21
+                    }
+                  ],
+                  [
+                    {
+                      "stringSha256": "c3a310bc2a4f31ef2a14e578090bcd65fc95dc82c1eed42ac8c1b35d37dd7789",
+                      "utf8Bytes": 9
+                    },
+                    {
+                      "stringSha256": "ea7322cf2b78b76452513d7f75c3e3c5c7671fe62e66928151017f89111546df",
+                      "utf8Bytes": 21
+                    }
+                  ]
+                ]
+              },
+              "unknownInputs": [],
+              "violations": []
+            },
+            "refused": false,
+            "stage": {
+              "stringSha256": "5cfc694a09a29773a463d0f3aaa8ed4b3b30ebe70411798535a0c6e9c8e430f4",
+              "utf8Bytes": 9
+            }
+          }
+        },
+        {
+          "id": "validation-150f-rel3:race-firefox-A-r3/demoid/events.jsonl:toolu_01XfGp7gMv4fCqQYqyBAaTae",
+          "sourceSha256": "16a5c7606800366b6e494b02990e713f82c098b6381cebb4b4f6a0b59a8ece08",
+          "matchesA": true,
+          "handlesMatchA": true,
+          "onlyHandleStateChanged": true,
+          "A": {
+            "flow": {
+              "handles": {
+                "map": [
+                  [
+                    {
+                      "stringSha256": "7508386a20565f5cbc526eee8b3c9f39edeecd576ee90cb3dbb5ce5ac3fe9566",
+                      "utf8Bytes": 3
+                    },
+                    {
+                      "app": {
+                        "stringSha256": "d4c3e8a11256ab82a4fc72560eb4a2b0e87bad820c290dd9b03616de240aa6db",
+                        "utf8Bytes": 7
+                      },
+                      "host": null,
+                      "observed": false,
+                      "web": true
+                    }
+                  ]
+                ]
+              },
+              "readApp": {
+                "stringSha256": "d4c3e8a11256ab82a4fc72560eb4a2b0e87bad820c290dd9b03616de240aa6db",
+                "utf8Bytes": 7
+              },
+              "readTarget": {
+                "app": {
+                  "stringSha256": "d4c3e8a11256ab82a4fc72560eb4a2b0e87bad820c290dd9b03616de240aa6db",
+                  "utf8Bytes": 7
+                },
+                "host": null,
+                "observed": false,
+                "web": true
+              },
+              "tails": {
+                "map": []
+              },
+              "unknownInputs": [],
+              "violations": []
+            },
+            "refused": false,
+            "stage": {
+              "stringSha256": "5cfc694a09a29773a463d0f3aaa8ed4b3b30ebe70411798535a0c6e9c8e430f4",
+              "utf8Bytes": 9
+            }
+          },
+          "oldB": {
+            "flow": {
+              "handles": {
+                "map": []
+              },
+              "readApp": {
+                "stringSha256": "d4c3e8a11256ab82a4fc72560eb4a2b0e87bad820c290dd9b03616de240aa6db",
+                "utf8Bytes": 7
+              },
+              "readTarget": {
+                "app": {
+                  "stringSha256": "d4c3e8a11256ab82a4fc72560eb4a2b0e87bad820c290dd9b03616de240aa6db",
+                  "utf8Bytes": 7
+                },
+                "host": null,
+                "observed": false,
+                "web": true
+              },
+              "tails": {
+                "map": []
+              },
+              "unknownInputs": [],
+              "violations": []
+            },
+            "refused": false,
+            "stage": {
+              "stringSha256": "5cfc694a09a29773a463d0f3aaa8ed4b3b30ebe70411798535a0c6e9c8e430f4",
+              "utf8Bytes": 9
+            }
+          },
+          "B": {
+            "flow": {
+              "handles": {
+                "map": [
+                  [
+                    {
+                      "stringSha256": "7508386a20565f5cbc526eee8b3c9f39edeecd576ee90cb3dbb5ce5ac3fe9566",
+                      "utf8Bytes": 3
+                    },
+                    {
+                      "app": {
+                        "stringSha256": "d4c3e8a11256ab82a4fc72560eb4a2b0e87bad820c290dd9b03616de240aa6db",
+                        "utf8Bytes": 7
+                      },
+                      "host": null,
+                      "observed": false,
+                      "web": true
+                    }
+                  ]
+                ]
+              },
+              "readApp": {
+                "stringSha256": "d4c3e8a11256ab82a4fc72560eb4a2b0e87bad820c290dd9b03616de240aa6db",
+                "utf8Bytes": 7
+              },
+              "readTarget": {
+                "app": {
+                  "stringSha256": "d4c3e8a11256ab82a4fc72560eb4a2b0e87bad820c290dd9b03616de240aa6db",
+                  "utf8Bytes": 7
+                },
+                "host": null,
+                "observed": false,
+                "web": true
+              },
+              "tails": {
+                "map": []
+              },
+              "unknownInputs": [],
+              "violations": []
+            },
+            "refused": false,
+            "stage": {
+              "stringSha256": "5cfc694a09a29773a463d0f3aaa8ed4b3b30ebe70411798535a0c6e9c8e430f4",
+              "utf8Bytes": 9
+            }
+          }
+        },
+        {
+          "id": "validation-150f-rel3:race-firefox-B-r2/form-settings/events.jsonl:toolu_01BPNdPvyYziY4KLMBSQduVQ",
+          "sourceSha256": "bcd01b9465d1e7ecce25671fa0f01877a8f839c529b500904ebabc3ab1076140",
+          "matchesA": false,
+          "handlesMatchA": true,
+          "onlyHandleStateChanged": true,
+          "A": {
+            "flow": {
+              "handles": {
+                "map": [
+                  [
+                    {
+                      "stringSha256": "043a718774c572bd8a25adbeb1bfcd5c0256ae11cecf9f9c3f925d0e52beaf89",
+                      "utf8Bytes": 1
+                    },
+                    {
+                      "app": {
+                        "stringSha256": "d4c3e8a11256ab82a4fc72560eb4a2b0e87bad820c290dd9b03616de240aa6db",
+                        "utf8Bytes": 7
+                      },
+                      "host": null,
+                      "observed": false,
+                      "web": true
+                    }
+                  ]
+                ]
+              },
+              "readApp": {
+                "stringSha256": "d4c3e8a11256ab82a4fc72560eb4a2b0e87bad820c290dd9b03616de240aa6db",
+                "utf8Bytes": 7
+              },
+              "readTarget": {
+                "app": {
+                  "stringSha256": "d4c3e8a11256ab82a4fc72560eb4a2b0e87bad820c290dd9b03616de240aa6db",
+                  "utf8Bytes": 7
+                },
+                "host": null,
+                "observed": false,
+                "web": true
+              },
+              "tails": {
+                "map": [
+                  [
+                    {
+                      "stringSha256": "67f0c37878a8e08a15f5b0889c406a66395b58b0e94bd98e3365f9788d5e1f45",
+                      "utf8Bytes": 16
+                    },
+                    {
+                      "stringSha256": "7a61b53701befdae0eeeffaecc73f14e20b537bb0f8b91ad7c2936dc63562b25",
+                      "utf8Bytes": 2
+                    }
+                  ],
+                  [
+                    {
+                      "stringSha256": "16e5f60f207a1a0073451c35a9d315d17fdc17d7fab66449b00cdfaadc8b249e",
+                      "utf8Bytes": 7
+                    },
+                    {
+                      "stringSha256": "7a61b53701befdae0eeeffaecc73f14e20b537bb0f8b91ad7c2936dc63562b25",
+                      "utf8Bytes": 2
+                    }
+                  ]
+                ]
+              },
+              "unknownInputs": [],
+              "violations": []
+            },
+            "refused": false,
+            "stage": {
+              "stringSha256": "5cfc694a09a29773a463d0f3aaa8ed4b3b30ebe70411798535a0c6e9c8e430f4",
+              "utf8Bytes": 9
+            }
+          },
+          "oldB": {
+            "flow": {
+              "handles": {
+                "map": []
+              },
+              "readApp": {
+                "stringSha256": "d4c3e8a11256ab82a4fc72560eb4a2b0e87bad820c290dd9b03616de240aa6db",
+                "utf8Bytes": 7
+              },
+              "readTarget": {
+                "app": {
+                  "stringSha256": "d4c3e8a11256ab82a4fc72560eb4a2b0e87bad820c290dd9b03616de240aa6db",
+                  "utf8Bytes": 7
+                },
+                "host": null,
+                "observed": false,
+                "web": true
+              },
+              "tails": {
+                "map": [
+                  [
+                    {
+                      "stringSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+                      "utf8Bytes": 0
+                    },
+                    {
+                      "stringSha256": "7a61b53701befdae0eeeffaecc73f14e20b537bb0f8b91ad7c2936dc63562b25",
+                      "utf8Bytes": 2
+                    }
+                  ],
+                  [
+                    {
+                      "stringSha256": "c3a310bc2a4f31ef2a14e578090bcd65fc95dc82c1eed42ac8c1b35d37dd7789",
+                      "utf8Bytes": 9
+                    },
+                    {
+                      "stringSha256": "7a61b53701befdae0eeeffaecc73f14e20b537bb0f8b91ad7c2936dc63562b25",
+                      "utf8Bytes": 2
+                    }
+                  ]
+                ]
+              },
+              "unknownInputs": [],
+              "violations": []
+            },
+            "refused": false,
+            "stage": {
+              "stringSha256": "5cfc694a09a29773a463d0f3aaa8ed4b3b30ebe70411798535a0c6e9c8e430f4",
+              "utf8Bytes": 9
+            }
+          },
+          "B": {
+            "flow": {
+              "handles": {
+                "map": [
+                  [
+                    {
+                      "stringSha256": "043a718774c572bd8a25adbeb1bfcd5c0256ae11cecf9f9c3f925d0e52beaf89",
+                      "utf8Bytes": 1
+                    },
+                    {
+                      "app": {
+                        "stringSha256": "d4c3e8a11256ab82a4fc72560eb4a2b0e87bad820c290dd9b03616de240aa6db",
+                        "utf8Bytes": 7
+                      },
+                      "host": null,
+                      "observed": false,
+                      "web": true
+                    }
+                  ]
+                ]
+              },
+              "readApp": {
+                "stringSha256": "d4c3e8a11256ab82a4fc72560eb4a2b0e87bad820c290dd9b03616de240aa6db",
+                "utf8Bytes": 7
+              },
+              "readTarget": {
+                "app": {
+                  "stringSha256": "d4c3e8a11256ab82a4fc72560eb4a2b0e87bad820c290dd9b03616de240aa6db",
+                  "utf8Bytes": 7
+                },
+                "host": null,
+                "observed": false,
+                "web": true
+              },
+              "tails": {
+                "map": [
+                  [
+                    {
+                      "stringSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+                      "utf8Bytes": 0
+                    },
+                    {
+                      "stringSha256": "7a61b53701befdae0eeeffaecc73f14e20b537bb0f8b91ad7c2936dc63562b25",
+                      "utf8Bytes": 2
+                    }
+                  ],
+                  [
+                    {
+                      "stringSha256": "c3a310bc2a4f31ef2a14e578090bcd65fc95dc82c1eed42ac8c1b35d37dd7789",
+                      "utf8Bytes": 9
+                    },
+                    {
+                      "stringSha256": "7a61b53701befdae0eeeffaecc73f14e20b537bb0f8b91ad7c2936dc63562b25",
+                      "utf8Bytes": 2
+                    }
+                  ]
+                ]
+              },
+              "unknownInputs": [],
+              "violations": []
+            },
+            "refused": false,
+            "stage": {
+              "stringSha256": "5cfc694a09a29773a463d0f3aaa8ed4b3b30ebe70411798535a0c6e9c8e430f4",
+              "utf8Bytes": 9
+            }
+          }
+        }
+      ],
+      "remainingFindings": [
+        {
+          "id": "validation-150f-rel3:as3-safari-B-r3/survey-p09/events.jsonl:toolu_01BjCAs85cnrDz6YQnGVe4tv",
+          "intended": null,
+          "change": "CA2 removes catch-wrapped acquisition bindings and changes returned flow state. The existing classifier leaves intent unproven.",
+          "commit": "422356a2",
+          "A": {
+            "flow": {
+              "handles": {
+                "map": [
+                  [
+                    {
+                      "stringSha256": "a172cedcae47474b615c54d510a5d84a8dea3032e958587430b413538be3f333",
+                      "utf8Bytes": 3
+                    },
+                    {
+                      "app": {
+                        "stringSha256": "5f0330392292a13a29ae269a1efe6f7c2a8210572d884d8c2392a9105663a41b",
+                        "utf8Bytes": 6
+                      },
+                      "host": null,
+                      "observed": false,
+                      "web": true
+                    }
+                  ]
+                ]
+              },
+              "readApp": {
+                "stringSha256": "5f0330392292a13a29ae269a1efe6f7c2a8210572d884d8c2392a9105663a41b",
+                "utf8Bytes": 6
+              },
+              "readTarget": {
+                "app": {
+                  "stringSha256": "5f0330392292a13a29ae269a1efe6f7c2a8210572d884d8c2392a9105663a41b",
+                  "utf8Bytes": 6
+                },
+                "host": null,
+                "observed": false,
+                "web": true
+              },
+              "tails": {
+                "map": [
+                  [
+                    {
+                      "stringSha256": "493df07f63b34280f2583d9331740e153110a50fa8f8ee284a225e3135405576",
+                      "utf8Bytes": 15
+                    },
+                    {
+                      "stringSha256": "e7162e3326af4078040685834a0bd9c77709c0930c00626cc7c8588036ea582c",
+                      "utf8Bytes": 26
+                    }
+                  ],
+                  [
+                    {
+                      "stringSha256": "d8e60ebbbb2b1a9d5f0dd2cfc7e810688583ad8afb626fcc6c357f756e799530",
+                      "utf8Bytes": 6
+                    },
+                    {
+                      "stringSha256": "e7162e3326af4078040685834a0bd9c77709c0930c00626cc7c8588036ea582c",
+                      "utf8Bytes": 26
+                    }
+                  ]
+                ]
+              },
+              "unknownInputs": [],
+              "violations": []
+            },
+            "refused": false,
+            "stage": {
+              "stringSha256": "5cfc694a09a29773a463d0f3aaa8ed4b3b30ebe70411798535a0c6e9c8e430f4",
+              "utf8Bytes": 9
+            }
+          },
+          "B": {
+            "flow": {
+              "handles": {
+                "map": []
+              },
+              "readApp": {
+                "stringSha256": "5f0330392292a13a29ae269a1efe6f7c2a8210572d884d8c2392a9105663a41b",
+                "utf8Bytes": 6
+              },
+              "readTarget": {
+                "app": {
+                  "stringSha256": "5f0330392292a13a29ae269a1efe6f7c2a8210572d884d8c2392a9105663a41b",
+                  "utf8Bytes": 6
+                },
+                "host": null,
+                "observed": false,
+                "web": true
+              },
+              "tails": {
+                "map": [
+                  [
+                    {
+                      "stringSha256": "493df07f63b34280f2583d9331740e153110a50fa8f8ee284a225e3135405576",
+                      "utf8Bytes": 15
+                    },
+                    {
+                      "stringSha256": "e7162e3326af4078040685834a0bd9c77709c0930c00626cc7c8588036ea582c",
+                      "utf8Bytes": 26
+                    }
+                  ],
+                  [
+                    {
+                      "stringSha256": "d8e60ebbbb2b1a9d5f0dd2cfc7e810688583ad8afb626fcc6c357f756e799530",
+                      "utf8Bytes": 6
+                    },
+                    {
+                      "stringSha256": "e7162e3326af4078040685834a0bd9c77709c0930c00626cc7c8588036ea582c",
+                      "utf8Bytes": 26
+                    }
+                  ]
+                ]
+              },
+              "unknownInputs": [],
+              "violations": []
+            },
+            "refused": false,
+            "stage": {
+              "stringSha256": "5cfc694a09a29773a463d0f3aaa8ed4b3b30ebe70411798535a0c6e9c8e430f4",
+              "utf8Bytes": 9
+            }
+          }
+        }
+      ],
+      "recordedCells": [
+        {
+          "id": "validation-150f-rel2:race-firefox-B-r3/form-travel/events.jsonl:toolu_01WNBETsTemZfydaj1phMW9S",
+          "callId": "toolu_01WNBETsTemZfydaj1phMW9S",
+          "sourceSha256": "e5a8d0eb01a60813fa495bbca0ef6bc76dbf5cd501c1567db9ab4e788d03552d",
+          "containsBareUndefined": false,
+          "handlesUnchanged": true,
+          "decisionUnchanged": true,
+          "reviewedHandles": {
+            "map": [
+              [
+                {
+                  "stringSha256": "7508386a20565f5cbc526eee8b3c9f39edeecd576ee90cb3dbb5ce5ac3fe9566",
+                  "utf8Bytes": 3
+                },
+                {
+                  "app": {
+                    "stringSha256": "d4c3e8a11256ab82a4fc72560eb4a2b0e87bad820c290dd9b03616de240aa6db",
+                    "utf8Bytes": 7
+                  },
+                  "host": null,
+                  "observed": false,
+                  "web": true
+                }
+              ]
+            ]
+          },
+          "candidateHandles": {
+            "map": [
+              [
+                {
+                  "stringSha256": "7508386a20565f5cbc526eee8b3c9f39edeecd576ee90cb3dbb5ce5ac3fe9566",
+                  "utf8Bytes": 3
+                },
+                {
+                  "app": {
+                    "stringSha256": "d4c3e8a11256ab82a4fc72560eb4a2b0e87bad820c290dd9b03616de240aa6db",
+                    "utf8Bytes": 7
+                  },
+                  "host": null,
+                  "observed": false,
+                  "web": true
+                }
+              ]
+            ]
+          }
+        },
+        {
+          "id": "validation-150f-rel3:as3-safari-B-r3/survey-p09/events.jsonl:toolu_01BjCAs85cnrDz6YQnGVe4tv",
+          "callId": "toolu_01BjCAs85cnrDz6YQnGVe4tv",
+          "sourceSha256": "c0fd640e1eb45e81796d0c50ef9c8a7141cb928382f768a25e602467d9dd31c6",
+          "containsBareUndefined": false,
+          "handlesUnchanged": true,
+          "decisionUnchanged": true,
+          "reviewedHandles": {
+            "map": []
+          },
+          "candidateHandles": {
+            "map": []
+          }
+        },
+        {
+          "id": "validation-150f-rel3:race-firefox-B-r2/form-settings/events.jsonl:toolu_01BPNdPvyYziY4KLMBSQduVQ",
+          "callId": "toolu_01BPNdPvyYziY4KLMBSQduVQ",
+          "sourceSha256": "bcd01b9465d1e7ecce25671fa0f01877a8f839c529b500904ebabc3ab1076140",
+          "containsBareUndefined": false,
+          "handlesUnchanged": true,
+          "decisionUnchanged": true,
+          "reviewedHandles": {
+            "map": [
+              [
+                {
+                  "stringSha256": "043a718774c572bd8a25adbeb1bfcd5c0256ae11cecf9f9c3f925d0e52beaf89",
+                  "utf8Bytes": 1
+                },
+                {
+                  "app": {
+                    "stringSha256": "d4c3e8a11256ab82a4fc72560eb4a2b0e87bad820c290dd9b03616de240aa6db",
+                    "utf8Bytes": 7
+                  },
+                  "host": null,
+                  "observed": false,
+                  "web": true
+                }
+              ]
+            ]
+          },
+          "candidateHandles": {
+            "map": [
+              [
+                {
+                  "stringSha256": "043a718774c572bd8a25adbeb1bfcd5c0256ae11cecf9f9c3f925d0e52beaf89",
+                  "utf8Bytes": 1
+                },
+                {
+                  "app": {
+                    "stringSha256": "d4c3e8a11256ab82a4fc72560eb4a2b0e87bad820c290dd9b03616de240aa6db",
+                    "utf8Bytes": 7
+                  },
+                  "host": null,
+                  "observed": false,
+                  "web": true
+                }
+              ]
+            ]
+          }
+        }
+      ]
+    }
+  }
+}

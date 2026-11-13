@@ -1,3 +1,4 @@
+import { assertChildStatus } from './fixtures/child-status.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { EventEmitter } from 'node:events';
@@ -197,16 +198,16 @@ test('the actual wrapper stops at an unresolved API marker before cloning, key l
   writeFileSync(tasks, JSON.stringify([{ name: 'fixture', browser: 'chrome', surface: 'browser-use' }]));
   const result = spawnSync('/bin/sh', [new URL('../bench/fowl/rounds.sh', import.meta.url).pathname,
     '--model', 'haiku', '--tasks', tasks], { encoding: 'utf8', timeout: 10000,
-    env: { HOME: home, PATH: process.env.PATH, USER: 'fixture' } });
-  assert.equal(result.status, 1, result.stderr);
+    env: { HOME: home, PATH: process.env.PATH, USER: 'fixture' }, killSignal: 'SIGKILL' });
+  assertChildStatus(result, 1, result.stderr);
   assert.match(result.stderr, /unpriced.*\nFix: 'nano'/);
   assert.equal(existsSync(join(home, 'Library/Caches/sleight-bench/fowlbrowser')), false);
 });
 test('a fresh Fowl cache gives the exact bootstrap command without cloning during preflight', t => {
   const home = mkdtempSync(join(tmpdir(), 'sleight-preflight-')); t.after(() => removeTemp(home));
   const result = spawnSync(process.execPath, [new URL('../bench/fowl/preflight.mjs', import.meta.url).pathname], {
-    encoding: 'utf8', env: { HOME: home, PATH: process.env.PATH } });
-  assert.equal(result.status, 1);
+    encoding: 'utf8', env: { HOME: home, PATH: process.env.PATH }, timeout: 60000, killSignal: 'SIGKILL' });
+  assertChildStatus(result, 1);
   assert.match(result.stderr, /Fix: 'git' 'clone' '-q' 'https:\/\/github.com\/argofowl\/FowlBrowser'/);
   assert.equal(existsSync(join(home, 'Library/Caches/sleight-bench/fowlbrowser')), false);
 });
@@ -215,6 +216,6 @@ test('relative round task paths resolve in the cache exactly as the runner resol
   const dir = join(home, 'Library/Caches/sleight-bench/fowlbrowser/tools/agents'); mkdirSync(dir, { recursive: true });
   writeFileSync(join(dir, 'empty.json'), '[]');
   const result = spawnSync(process.execPath, [new URL('../bench/fowl/preflight.mjs', import.meta.url).pathname,
-    '--tasks', 'tools/agents/empty.json'], { encoding: 'utf8', env: { HOME: home, PATH: process.env.PATH } });
-  assert.equal(result.status, 0, result.stderr);
+    '--tasks', 'tools/agents/empty.json'], { encoding: 'utf8', env: { HOME: home, PATH: process.env.PATH }, timeout: 60000, killSignal: 'SIGKILL' });
+  assertChildStatus(result, 0, result.stderr);
 });

@@ -1,7 +1,7 @@
 import { trackTemp } from '../scripts/temp-leftovers.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { appendFileSync, copyFileSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
+import { appendFileSync, copyFileSync, existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { runInNewContext } from 'node:vm';
@@ -142,25 +142,66 @@ test('Mail-to-sheet is held out, owner-present, cross-app and absent from defaul
   assert.equal(claim.includes(task.id), false);
 });
 
-test('prepare creates local Mail and CSV fixtures with three fresh hidden values and no passing output', t => {
-  const ctx = context(t); prepareMailToSheet(ctx);
-  const original = ctx.mailToSheet;
-  prepareMailToSheet(ctx); assert.equal(ctx.mailToSheet, original);
+test('prepare creates local Mail and CSV fixtures with three fresh hidden values and no passing output, 200 contexts', t => {
+  let previous;
+  for (let iteration = 0; iteration < 200; iteration++) {
+    const ctx = context(t); prepareMailToSheet(ctx);
+    const original = ctx.mailToSheet;
+    prepareMailToSheet(ctx); assert.equal(ctx.mailToSheet, original);
+    const message = ctx.mail.messages.find(m => m.subject === 'Orchard transfer note');
+    assert.ok(message && message.sender === 'mira.cole@example.test');
+    for (const value of original.values) {
+      assert.ok(message.body.includes(value));
+      assert.equal(mailToSheetTask().prompt(ctx).includes(value), false);
+      assert.equal(readFileSync(original.source, 'utf8').includes(value), false);
+    }
+    assert.ok(ctx.mail.files.some(path => readFileSync(path, 'utf8').includes(message.body)));
+    assert.equal(existsSync(original.output), false);
+    assert.deepEqual(transferCSV(readFileSync(original.source, 'utf8')), [
+      ['Reference', 'Item', 'Quantity'], ['PENDING', 'PENDING', 'PENDING'], ['Keep bt2test', '', ''],
+    ]);
+    if (previous) assert.notDeepEqual(original.values, previous);
+    previous = original.values;
+    assert.throws(() => prepareMailToSheet({ ...ctx, mailToSheet: undefined }), /FRESH_FIXTURE/);
+  }
+});
+
+for (const location of ['path', 'nonce']) test(`prepare regenerates hidden values colliding with the ${location}`, t => {
+  const ctx = context(t, location === 'nonce' ? 'REF-000000000000-Cedar-00000000-42' : 'bt2test');
+  if (location === 'path') {
+    ctx.dir = join(ctx.dir, 'REF-000000000000-Cedar-00000000-42');
+    mkdirSync(ctx.dir);
+  }
+  const quantity = Array.from({ length: 80 }, (_, i) => String(i + 10))
+    .find(value => !ctx.dir.includes(value) && !ctx.nonce.includes(value));
+  const draws = [Buffer.alloc(6), Buffer.alloc(6, 255), Buffer.alloc(4), Buffer.alloc(4, 255),
+    Buffer.from([32]), Buffer.from([Number(quantity) - 10])];
+  const calls = [];
+  prepareMailToSheet(ctx, { random: size => {
+    calls.push(size);
+    const bytes = draws.shift();
+    assert.equal(bytes?.length, size, 'unexpected random draw');
+    return bytes;
+  } });
+  assert.deepEqual(calls, [6, 6, 4, 4, 1, 1]);
+  assert.deepEqual(ctx.mailToSheet.values, ['REF-ffffffffffff', 'Cedar-ffffffff', quantity]);
   const message = ctx.mail.messages.find(m => m.subject === 'Orchard transfer note');
-  assert.ok(message && message.sender === 'mira.cole@example.test');
-  for (const value of original.values) {
+  for (const value of ctx.mailToSheet.values) {
     assert.ok(message.body.includes(value));
     assert.equal(mailToSheetTask().prompt(ctx).includes(value), false);
-    assert.equal(readFileSync(original.source, 'utf8').includes(value), false);
+    assert.equal(readFileSync(ctx.mailToSheet.source, 'utf8').includes(value), false);
   }
-  assert.ok(ctx.mail.files.some(path => readFileSync(path, 'utf8').includes(message.body)));
-  assert.equal(existsSync(original.output), false);
-  assert.deepEqual(transferCSV(readFileSync(original.source, 'utf8')), [
-    ['Reference', 'Item', 'Quantity'], ['PENDING', 'PENDING', 'PENDING'], ['Keep bt2test', '', ''],
-  ]);
-  const other = context(t); prepareMailToSheet(other);
-  assert.notDeepEqual(original.values, other.mailToSheet.values);
-  assert.throws(() => prepareMailToSheet({ ...ctx, mailToSheet: undefined }), /FRESH_FIXTURE/);
+});
+
+test('prepare refuses an exhausted random source before writing fixtures', t => {
+  const ctx = context(t, 'REF-000000000000');
+  let draws = 0;
+  assert.throws(() => prepareMailToSheet(ctx, { random: size => { draws++; return Buffer.alloc(size); } }),
+    /MAIL_TO_SHEET_HIDDEN_VALUES_UNAVAILABLE/);
+  assert.equal(draws, 128);
+  assert.equal(ctx.mail, undefined);
+  assert.equal(ctx.mailToSheet, undefined);
+  assert.deepEqual(readdirSync(ctx.dir), []);
 });
 
 test('the prompt limits both apps to owned fixtures and requests one row paste and a local export', t => {

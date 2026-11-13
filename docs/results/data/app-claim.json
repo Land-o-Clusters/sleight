@@ -2,8 +2,8 @@
  "family": "app-claim",
  "title": "App claim",
  "source": {
-  "results": "~/Projects/sleight-wt/app-claim/results-1018",
-  "rules": "~/Projects/sleight-wt/app-claim/scorer/bench/claim-exclusions.json",
+  "results": "<private-evidence>/app-claim/results-1018",
+  "rules": "<private-evidence>/app-claim/scorer/bench/claim-exclusions.json",
   "since": "2026-10-18T02-39",
   "sinceNote": "the first app-task claim pass",
   "files": [

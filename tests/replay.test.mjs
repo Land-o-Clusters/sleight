@@ -14,14 +14,14 @@ import { FlowRules } from '../plugins/sleight/lib/flow-rules.mjs';
 import { elementLine, elementSpec, portableCode, recordSteps, replay } from '../plugins/sleight/lib/replay.mjs';
 import { guardedCode, windowFromText } from '../plugins/sleight/lib/document-scope.mjs';
 
-const TREE = 'Window: "Calculator", App: Calculator.\n0 standard window Calculator, ID: main\n\t67 View\n\t\t3 Scientific, ID: menuAction:\n\t\t4 Programmer, ID: menuAction:\n\t\t9 button Description: Equals, ID: Equals\n\t\t12 button All Clear\n\t\t13 button Seven, ID: Seven\n\t\t14 text 7';
+const TREE = 'Window: "Calculator", App: Calculator.\n0 standard window Calculator, ID: main\n\t1 View\n\t\t3 Scientific, ID: menuAction:\n\t\t4 Programmer, ID: menuAction:\n\t\t9 button Description: Equals, ID: Equals\n\t\t12 button All Clear\n\t\t13 button Seven, ID: Seven\n\t\t14 text 7';
 
 test('an element number becomes a unique ID, then a unique label, then its whole line', () => {
   assert.deepEqual(elementSpec(elementLine([TREE], 13)), { id: 'Seven' });
   assert.deepEqual(elementSpec(elementLine([TREE], 3)), { label: 'Scientific' });
   assert.deepEqual(elementSpec(elementLine([TREE], 12)), { label: 'All Clear' });
   // A menu bar item named alone is its own label (hasLabel, 2026-10-09); older scripts' { line } still resolve.
-  assert.deepEqual(elementSpec(elementLine([TREE], 67)), { label: 'View' });
+  assert.deepEqual(elementSpec(elementLine([TREE], 1)), { label: 'View' });
   assert.equal(elementSpec(elementLine([TREE], 99)), undefined);
   // Two lines alike can't be told apart, so the number stays and the step needs positions.
   assert.equal(elementSpec(elementLine(['\t1 button OK\n\t2 button OK'], 1)), undefined);

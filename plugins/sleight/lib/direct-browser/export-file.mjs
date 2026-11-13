@@ -35,7 +35,7 @@ function visibleNamedFolders(identities) {
   // Node's stat does not expose Finder's hidden flag. Read only metadata for the already checked parents.
   let output;
   try { output = execFileSync('/bin/ls', ['-dlenO', '--', ...identities.map(record => record.path)],
-    { encoding: 'utf8', timeout: 2000, maxBuffer: 65536, env: { LC_ALL: 'C', PATH: '/usr/bin:/bin' } }); }
+    { encoding: 'utf8', timeout: 2000, maxBuffer: 65536, env: { LC_ALL: 'C', PATH: '/usr/bin:/bin' }, killSignal: 'SIGKILL' }); }
   catch { refuse('Export folder visibility could not be checked'); }
   const entries = output.split('\n').map(line => /^([bcdlps-][rwxstST-]{9})[+@]?\s+\d+\s+(\d+)\s+\d+\s+(\S+)\s+\d+\s+\S+\s+\d+\s+\S+\s+(.+)$/.exec(line)).filter(Boolean);
   if (entries.length !== identities.length) refuse('Export folder visibility could not be checked');

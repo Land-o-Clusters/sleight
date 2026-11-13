@@ -7,10 +7,14 @@ type GuardInput = {
 };
 type GuardOptions = {
   stat: (path: string) => Promise<{ realPath?: string } | undefined>;
+  cwd?: string;
+  after?: (ms: number, fn: () => void) => { cancel: () => void };
   home?: string;
   configDir?: string;
+  platform?: NodeJS.Platform;
 };
-export const PROTECTED: Readonly<Record<'settings' | 'cache' | 'install' | 'aboveSleight' | 'aboveInstall' | 'launcher' | 'shim' | 'unresolved', string>>;
+export const PROTECTED: Readonly<Record<'settings' | 'cache' | 'windowsCache' | 'install' | 'aboveSleight' | 'aboveInstall' | 'launcher' | 'shim' | 'unknownDirectory' | 'unresolved' | 'oversized', string>>;
+export const MAX_PROTECTED_COMMAND: number;
 export const guardUnavailableReason: string;
 export const guardPathReason: string;
 export function preapprovedWriteTarget(input: GuardInput, options: GuardOptions): Promise<string | undefined>;

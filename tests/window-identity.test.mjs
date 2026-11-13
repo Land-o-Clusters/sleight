@@ -8,6 +8,34 @@ import { verifyWindowIdentity } from '../plugins/sleight/lib/window-identity.mjs
 const target = { appId: 'com.apple.TextEdit', app: 'TextEdit', title: 'Untitled', url: null };
 const observed = { status: 'ok', appId: target.appId, title: target.title, url: null,
   epoch: 'helper-a', window: 1, pid: 123, processStart: 1000, matches: 1 };
+for (const url of [null, 'file:///fixture/Source.txt']) {
+  test(`selected-number refusal advises reselection by ${url ? 'URL' : 'title'} without the stale number`, () => {
+    assert.throws(() => verifyWindowIdentity({ ...target, url, windowNumber: 11, windowNumberSource: 'selection' }, {
+      status: 'mismatch', error: 'Known window number disappeared',
+    }), error => {
+      assert.match(error.message, /Next: select_window\.$/);
+      assert.doesNotMatch(error.message, /getApp|windowNumber/);
+      return true;
+    });
+  });
+}
+test('a selection source changes only advice and preserves every identity check', () => {
+  const current = { ...observed, windowNumber: 11 };
+  for (const windowNumberSource of [undefined, 'selection']) {
+    const expected = { ...target, windowNumber: 11, windowNumberSource, nativeIdentity: current };
+    assert.equal(verifyWindowIdentity(expected, current), current);
+    for (const change of [{ windowNumber: 77 }, { matches: 2 }, { epoch: 'helper-b' }, { window: 2 },
+      { pid: 456 }, { processStart: 2000 }, { title: 'Other' }, { url: 'file:///fixture/other' }, { status: 'unknown' }]) {
+      assert.throws(() => verifyWindowIdentity(expected, { ...current, ...change }), error => {
+        assert.ok(error.message.endsWith(windowNumberSource === 'selection'
+          ? 'Next: select_window.' : 'Next: await cua.getApp("com.apple.TextEdit").'));
+        return true;
+      });
+      assert.equal(expected.windowNumber, 11);
+      assert.equal(expected.nativeIdentity, current);
+    }
+  }
+});
 test('an unsaved window needs one native match and retains its AX reference identity', () => {
   assert.deepEqual(verifyWindowIdentity(target, observed), observed);
   for (const reply of [{ ...observed, matches: 2 }, { ...observed, matches: 0 },
@@ -23,14 +51,15 @@ test('same-title replacement, app restart or helper replacement cannot reuse a l
   }
   assert.deepEqual(verifyWindowIdentity(leased, observed), observed);
 });
-test('native duplicate-title identity uses the focused window number or an explicit selection', () => {
+test('native duplicate-title identity needs an explicit number instead of guessing from focus', () => {
   const current = inspect(target, [11, 22]);
-  assert.equal(current.matches, 1); assert.equal(current.windowNumber, 22);
+  assert.equal(current.matches, 2);
+  assert.throws(() => verifyWindowIdentity(target, current), /ambiguous/);
   assert.equal(inspect({ ...target, windowNumber: 22 }, [11, 22]).windowNumber, 22);
   assert.notEqual(inspect({ ...target, windowNumber: 11 }, [11, 22]).status, 'ok');
   assert.notEqual(inspect(target, [null, null]).matches, 1, 'missing numbers remain inconclusive');
 });
-test('LW1: native identity reports how many windows had the header before focus narrowed them', () => {
+test('LW1: native identity reports how many windows had the header before an explicit number narrowed them', () => {
   assert.equal(inspect(target, [11, 22]).headerMatches, 2);
   assert.equal(inspect({ ...target, windowNumber: 22 }, [11, 22]).headerMatches, 2);
   assert.equal(inspect(target, [11], 0).headerMatches, 1);
@@ -55,8 +84,8 @@ test('a window without a title (Finder\'s desktop) is skipped instead of failing
 });
 
 test('OT2: native identity reports the matched window\'s subrole for the parent lease', () => {
-  assert.equal(inspect(target, [11, 22], 1, false, [], (app, windows) => { windows[1].AXSubrole = 'AXStandardWindow'; }).windowSubrole, 'AXStandardWindow');
-  assert.equal(inspect(target, [11, 22]).windowSubrole, null);
+  assert.equal(inspect({ ...target, windowNumber: 22 }, [11, 22], 1, false, [], (app, windows) => { windows[1].AXSubrole = 'AXStandardWindow'; }).windowSubrole, 'AXStandardWindow');
+  assert.equal(inspect({ ...target, windowNumber: 22 }, [11, 22]).windowSubrole, null);
 });
 
 test('native identity includes the HID system idle duration without requesting trust', () => {
@@ -302,4 +331,182 @@ test('DPh does not traverse menu contents when a windowless app exposes its menu
   assert.equal(reply.status, 'ok');
   assert.equal(reply.windowCount, 0);
   assert.equal(reply.modalCount, 0);
+});
+
+// AD3 uses the real helper in a VM; only the OS metadata calls are faked.
+const cursor = { appId: 'com.todesktop.230313mzl4w4u92', title: 'sleight', url: null };
+function mac27(request = cursor, numbers = [null], focused = 0, setup = () => {}) {
+  return inspect(request, numbers, focused, true, [], (app, windows, list, runtime) => {
+    runtime.running.bundleIdentifier = cursor.appId;
+    for (const window of windows) {
+      window.AXTitle = 'sleight'; window.missing = ['AXWindowNumber', 'AXDocument'];
+    }
+    setup(app, windows, list, runtime);
+  });
+}
+test('AD3 single macOS 27 window binds the server number, pid and process start', () => {
+  const reply = mac27();
+  assert.equal(reply.status, 'ok'); assert.equal(reply.windowNumber, 11);
+  assert.equal(reply.pid, 123); assert.equal(reply.processStart, 1);
+  assert.equal(verifyWindowIdentity(cursor, reply), reply);
+});
+test('AD3 equal-title replacement with a retained AX object but a new server number refuses', () => {
+  const baseline = { ...observed, windowNumber: 11 };
+  assert.throws(() => verifyWindowIdentity({ ...target, nativeIdentity: baseline },
+    { ...baseline, windowNumber: 12 }), /changed/);
+});
+test('AD3 recycled pid with a new launch time refuses', () => {
+  const baseline = mac27();
+  const replacement = mac27(cursor, [null], 0, (_app, _windows, _list, runtime) => {
+    runtime.running.launchDate.timeIntervalSince1970 = 2;
+  });
+  assert.throws(() => verifyWindowIdentity({ ...cursor, nativeIdentity: baseline }, replacement), /changed/);
+});
+test('AD3 same-title server windows stay ambiguous without an explicit number', () => {
+  const reply = mac27(cursor, [null, null], 1);
+  assert.throws(() => verifyWindowIdentity(cursor, reply), /ambiguous|unavailable/);
+});
+test('AD3 unreadable server list cannot certify even a readable AX number', () => {
+  const reply = mac27(cursor, [11], 0, (_app, _windows, _list, runtime) => { runtime.cgUnavailable = true; });
+  assert.throws(() => verifyWindowIdentity(cursor, reply), /unavailable/);
+});
+test('AD3 missing AXDocument uses server identity but a readable conflicting document refuses', () => {
+  const request = { ...cursor, url: 'file:///synthetic/example.txt' };
+  assert.equal(verifyWindowIdentity(request, mac27(request)).windowNumber, 11);
+  const conflict = mac27(request, [null], 0, (_app, windows) => {
+    windows[0].missing = ['AXWindowNumber']; windows[0].AXDocument = 'file:///synthetic/other.txt';
+  });
+  assert.throws(() => verifyWindowIdentity(request, conflict), /ambiguous|unavailable/);
+});
+test('AD3 server title must corroborate pid and geometry', () => {
+  const reply = mac27(cursor, [null], 0, (_app, _windows, _list, runtime) => { runtime.cgTitle = 'Other'; });
+  assert.throws(() => verifyWindowIdentity(cursor, reply), /unavailable/);
+});
+
+test('AD3 server matching rejects missing titles, invalid numbers, wrong owners and conflicting bounds', () => {
+  const row = { kCGWindowOwnerPID: 123, kCGWindowLayer: 0, kCGWindowNumber: 11, kCGWindowName: 'sleight',
+    kCGWindowBounds: { X: 0, Y: 20, Width: 300, Height: 200 } };
+  for (const rows of [[{ ...row, kCGWindowName: undefined }], [{ ...row, kCGWindowNumber: null }],
+    [{ ...row, kCGWindowOwnerPID: 456 }], [{ ...row, kCGWindowBounds: { ...row.kCGWindowBounds, X: 1 } }],
+    [row, { ...row, kCGWindowNumber: 12 }]]) {
+    const reply = mac27(cursor, [null], 0, (_app, _windows, _list, runtime) => { runtime.cgWindows = rows; });
+    assert.throws(() => verifyWindowIdentity(cursor, reply), /unavailable/);
+  }
+});
+test('AD3 a restart during the metadata sample cannot certify either process', () => {
+  const reply = mac27(cursor, [null], 0, (_app, _windows, _list, runtime) => {
+    runtime.onRead = name => { if (name === 'AXSubrole') runtime.running.launchDate.timeIntervalSince1970 = 2; };
+  });
+  assert.throws(() => verifyWindowIdentity(cursor, reply), /changed/);
+});
+
+const serverRow = (more = {}) => ({ kCGWindowOwnerPID: 123, kCGWindowLayer: 0, kCGWindowNumber: 11,
+  kCGWindowName: 'sleight', kCGWindowBounds: { X: 0, Y: 20, Width: 300, Height: 200 }, ...more });
+test('AD3X only layer zero can certify a matching title and bounds', () => {
+  for (const layer of [-1, 1, 3, 23]) {
+    const reply = mac27(cursor, [null], 0, (_app, _windows, _list, runtime) => {
+      runtime.cgWindows = [serverRow({ kCGWindowLayer: layer })];
+    });
+    assert.equal(reply.status, 'unknown');
+    assert.equal(reply.error, 'Window server identity unavailable');
+  }
+});
+test('AD3X off-screen and minimized duplicates still prevent server certification', () => {
+  for (const extra of [{ kCGWindowIsOnscreen: false }, { kCGWindowIsOnscreen: 0, minimized: true }]) {
+    const reply = mac27(cursor, [null], 0, (_app, _windows, _list, runtime) => {
+      runtime.cgWindows = [serverRow(), serverRow({ ...extra, kCGWindowNumber: 12 })];
+    });
+    assert.equal(reply.status, 'unknown');
+    assert.equal(reply.error, 'Window server identity unavailable');
+  }
+});
+test('AD3X a different-bounds duplicate cannot move input off the bound window', () => {
+  const baseline = mac27();
+  const expected = { ...cursor, nativeIdentity: baseline };
+  assert.equal(verifyWindowIdentity(expected, mac27(expected, [null, null], 0)).windowNumber, 11);
+  const movedFocus = mac27(expected, [null, null], 1);
+  assert.equal(movedFocus.status, 'mismatch');
+  assert.equal(movedFocus.error, 'Focused window differs');
+});
+test('AD3X Foundation filters machine rows before bridging and reuses each window number', t => {
+  const events = [];
+  const reply = inspect({ ...target, windowNumber: 11 }, [11], 0, false, events, (_app, _windows, _list, runtime) => {
+    runtime.cgWindows = [serverRow({ kCGWindowName: 'Untitled' }),
+      ...Array.from({ length: 1000 }, (_, i) => serverRow({ kCGWindowOwnerPID: 456 + i })),
+      serverRow({ kCGWindowLayer: 3 })];
+  });
+  assert.equal(reply.windowNumber, 11);
+  assert.equal(events.filter(e => e === 'cg-row').length, 1);
+  assert.equal(events.filter(e => e === 'AXWindowNumber').length, 1);
+  for (const name of ['AXPosition', 'AXSize']) assert.equal(events.filter(e => e === name).length, 1);
+  assert.equal(events.filter(e => e === 'kCGWindowOwnerPID').length, 0);
+  assert.equal(events.filter(e => Array.isArray(e) && e[0] === 'cg').length, 1);
+  t.diagnostic('1002 machine rows, 1 bridged row, 1 AX number/position/size read');
+});
+test('AD3X JXA BOOL process liveness accepts boolean and numeric representations', () => {
+  for (const terminated of [false, 0, { boxedScalar: 0 }]) {
+    const reply = mac27(cursor, [null], 0, (_app, _windows, _list, runtime) => { runtime.running.terminated = terminated; });
+    assert.equal(reply.status, 'ok'); assert.equal(reply.matches, 1);
+  }
+  for (const terminated of [true, 1, { boxedScalar: 1 }]) {
+    const reply = mac27(cursor, [null], 0, (_app, _windows, _list, runtime) => { runtime.running.terminated = terminated; });
+    assert.equal(reply.status, 'mismatch'); assert.equal(reply.error, 'Window owner process changed during inspection');
+  }
+  for (const terminated of [undefined, null, '0', 'false', 2, {}, []]) {
+    const reply = mac27(cursor, [null], 0, (_app, _windows, _list, runtime) => { runtime.running.terminated = terminated; });
+    assert.equal(reply.status, 'unknown'); assert.equal(reply.error, 'Window owner terminated invalid');
+  }
+});
+test('AD3X JXA isNil supports methods and scalar BOOLs and rejects wrong shapes', () => {
+  for (const owner of [false, true]) {
+    for (const isNil of [undefined, false, 0, () => false, () => 0]) {
+      const reply = mac27(cursor, [null], 0, (_app, _windows, _list, runtime) => {
+        Object.assign(owner ? runtime.running : (runtime.cgListShape = {}), { isNil });
+      });
+      assert.equal(reply.status, 'ok', `owner=${owner}`);
+    }
+    for (const isNil of [true, 1, () => true, () => 1]) {
+      const reply = mac27(cursor, [null], 0, (_app, _windows, _list, runtime) => {
+        Object.assign(owner ? runtime.running : (runtime.cgListShape = {}), { isNil });
+      });
+      assert.equal(reply.status, owner ? 'mismatch' : 'unknown');
+      assert.equal(reply.error, owner ? 'Window owner process changed during inspection' : 'Window server list unavailable');
+    }
+    for (const isNil of [null, '0', 2, {}, () => undefined, () => 'false', () => { throw Error('synthetic bridge'); }]) {
+      const reply = mac27(cursor, [null], 0, (_app, _windows, _list, runtime) => {
+        Object.assign(owner ? runtime.running : (runtime.cgListShape = {}), { isNil });
+      });
+      assert.equal(reply.status, 'unknown');
+      assert.equal(reply.error, (owner ? 'Window owner' : 'Window server list') + ' isNil invalid');
+    }
+  }
+});
+test('AD3X AXWindowNumber scalar unwraps NSNumber and refuses malformed or conflicting values', () => {
+  for (const value of [11, { boxedScalar: 11 }]) {
+    const reply = inspect(target, [value], 0, true);
+    assert.equal(reply.status, 'ok'); assert.equal(reply.windowNumber, 11);
+  }
+  for (const value of ['11', {}, [11], true, 0, -1, 1.5]) {
+    const reply = inspect(target, [value], 0, true);
+    assert.equal(reply.status, 'unknown'); assert.equal(reply.error, 'AXWindowNumber invalid');
+  }
+  const conflict = inspect(target, [12], 0, true);
+  assert.equal(conflict.status, 'unknown'); assert.equal(conflict.error, 'AXWindowNumber differs from Window server');
+});
+test('AD3X metadata-only close counts share the BOOL and nil validation', () => {
+  for (const terminated of [false, 0, true, 1]) {
+    const reply = inspect(closeRequest, [], 0, false, [], (_app, _windows, _list, runtime) => {
+      runtime.running.terminated = terminated; runtime.running.isNil = 0;
+    });
+    assert.equal(reply.status, 'ok'); assert.equal(reply.running, !terminated);
+  }
+  for (const [key, value, reason] of [['terminated', '0', 'process-state'], ['terminated', undefined, 'process-state'],
+    ['isNil', 'false', 'process-nil'], ['isNil', () => undefined, 'process-nil']]) {
+    const reply = inspect(closeRequest, [], 0, false, [], (_app, _windows, _list, runtime) => { runtime.running[key] = value; });
+    assert.equal(reply.status, 'unknown'); assert.equal(reply.unknownReason, reason);
+  }
+  const badList = inspect(closeRequest, [], 0, false, [], (_app, _windows, _list, runtime) => {
+    runtime.cgListShape = { isNil: 2 };
+  });
+  assert.equal(badList.status, 'unknown'); assert.equal(badList.unknownReason, 'cg-invalid');
 });

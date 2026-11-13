@@ -1,3 +1,4 @@
+import { testChromiumExecutable, launchTestChromium } from './fixtures/chromium-isolated.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { existsSync, readFileSync } from 'node:fs';
@@ -14,10 +15,9 @@ const spoof = `Object.defineProperty(window, 'screenX', { get: () => -12345 }); 
 test('a page that spoofs screenX, outerWidth, devicePixelRatio and visibility in its main world does not change the isolated-world geometry', { skip }, async t => {
   const { chromium } = await import('../plugins/sleight/vendor/playwright-core/index.mjs');
   const spec = JSON.parse(readFileSync(new URL('../plugins/sleight/vendor/playwright-core/browsers.json', import.meta.url))).browsers.find(b => b.name === 'chromium-headless-shell');
-  const platform = process.platform === 'darwin' ? 'mac-' + process.arch : 'linux64';
-  const executablePath = join(homedir(), 'Library/Caches/ms-playwright', 'chromium_headless_shell-' + spec.revision, 'chrome-headless-shell-' + platform, 'chrome-headless-shell');
+  const executablePath = testChromiumExecutable({ revision: spec.revision });
   assert.ok(existsSync(executablePath), 'pinned headless Chromium required; host tests must not skip');
-  const browser = await chromium.launch({ headless: true, executablePath });
+  const browser = await launchTestChromium(chromium, { headless: true, executablePath });
   t.after(async () => { await browser.close(); });
   const context = await browser.newContext({ viewport: { width: 640, height: 480 } });
   const page = await context.newPage();

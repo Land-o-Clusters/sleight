@@ -1,4 +1,6 @@
 import test from 'node:test';
+import { macCommandSkip } from './requirements.mjs';
+import { registerTemp } from '../scripts/temp-leftovers.mjs';
 import assert from 'node:assert/strict';
 import { EventEmitter } from 'node:events';
 import { PassThrough } from 'node:stream';
@@ -36,6 +38,7 @@ test('compile-only builds two visible sources without spawning a running fixture
   compileShellCard('/fake/bank', { write: (...args) => calls.push(['write', ...args]),
     compile: (...args) => { calls.push(['compile', ...args]); return { status: 0 }; } });
   assert.equal(calls.filter(c => c[0] === 'compile').length, 2);
+  assert.deepEqual(calls.filter(c => c[0] === 'compile').map(c => c[2].includes('-O')), [true, false]);
   assert.ok(calls.filter(c => c[0] === 'compile').every(c => c[1] === '/usr/bin/xcrun' && c[2][0] === 'swiftc'));
 });
 
@@ -390,4 +393,11 @@ test('shell poster uses exact protected button, no-prompt preflights and PID-onl
   assert.match(source, /appendingPathComponent\("shell-card"\)/);
   assert.match(source, /event\.postToPid\(pid\)/);
   assert.doesNotMatch(source, /Always allow|CGRequest|AXIsProcessTrustedWithOptions|event\.post\(tap:/);
+});
+
+
+test('CP1A2 shell guard compiles the optimized host without launching its card', { skip: macCommandSkip('xcrun'), timeout: 900000 }, t => {
+  const directory = registerTemp(t, mkdtempSync(join(tmpdir(), 'sleight-shell-optimized-')));
+  const binaries = compileShellCard(directory);
+  assert.ok(existsSync(binaries.host)); assert.ok(existsSync(binaries.poster));
 });

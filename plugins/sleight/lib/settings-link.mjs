@@ -5,6 +5,7 @@ import * as path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { createInterface } from 'node:readline';
 import { createHash } from 'node:crypto';
+import { observeSettingsFile, trustedSettingsContent, SETTINGS_BUILD_POLICY } from './sealed-settings.mjs';
 
 const install = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
 const marker = '# sleight managed settings shim v1';
@@ -46,7 +47,7 @@ export function resolveShimLauncher({ fs, path, home, config, recorded, uid = pr
   throw Error('sleight: no installed sleight launcher found. Reinstall sleight, then run its bin/sleight-mcp link in your terminal.');
 }
 // Shared by recognition and the installed script. HOME cannot redirect this receipt: link records the OS home in the shim.
-export function verifyShim({ fs, path, createHash, home, self, uid = process.getuid() }) {
+export function verifyShim({ fs, path, createHash, home, self, uid = process.getuid(), sealedContent }) {
   const folder = path.join(home, 'Library/Application Support/sleight');
   const target = path.join(home, '.local/bin/.sleight-shim-v1');
   const receipt = path.join(folder, 'settings-link.json');
@@ -68,7 +69,7 @@ export function verifyShim({ fs, path, createHash, home, self, uid = process.get
         return bytes;
       } finally { fs.closeSync(fd); }
     };
-    const record = JSON.parse(read(receipt, 0o600, 4096));
+    const record = JSON.parse(sealedContent ?? read(receipt, 0o600, 4096));
     if (record.version !== 1 || !/^[a-f0-9]{64}$/.test(record.sha256) ||
         createHash('sha256').update(read(target, 0o700, 32768)).digest('hex') !== record.sha256) throw Error();
     return true;
@@ -76,15 +77,20 @@ export function verifyShim({ fs, path, createHash, home, self, uid = process.get
 }
 const quote = value => "'" + value.replaceAll("'", "'\\''") + "'";
 export function shimText(recorded, home = userInfo().homedir) {
-  const script = `const fs=require('node:fs'),path=require('node:path'),{createHash}=require('node:crypto'),home=${JSON.stringify(home)};try{(${verifyShim.toString()})({fs,path,createHash,home,self:process.argv[1]});console.log((${resolveShimLauncher.toString()})({fs,path,home,config:process.env.CLAUDE_CONFIG_DIR,recorded:${JSON.stringify(recorded)}}))}catch(e){console.error(e.message);process.exit(1)}`;
+  const sealCheck = SETTINGS_BUILD_POLICY.enforce
+    ? `const seals=await import(require('node:url').pathToFileURL(path.join(path.dirname(bin),'../lib/sealed-settings.mjs')).href),view=seals.observeSettingsFile(path.join(home,'Library/Application Support/sleight/settings-link.json'));if(!view?.enforcing)throw Error('SETTINGS_UNTRUSTED');(${verifyShim.toString()})({fs,path,createHash,home,self:process.argv[1],sealedContent:seals.trustedSettingsContent(view,'settings-link.json','deny')});`
+    : '';
+  const script = `const fs=require('node:fs'),path=require('node:path'),{createHash}=require('node:crypto'),home=${JSON.stringify(home)};(async()=>{(${verifyShim.toString()})({fs,path,createHash,home,self:process.argv[1]});const bin=(${resolveShimLauncher.toString()})({fs,path,home,config:process.env.CLAUDE_CONFIG_DIR,recorded:${JSON.stringify(recorded)}});${sealCheck}console.log(bin)})().catch(e=>{console.error(e.message);process.exit(1)})`;
   return `#!/bin/sh\n${marker}\n# installPath: ${JSON.stringify(recorded)}\nAPP_NODE="\${SLEIGHT_CHATGPT_APP:-/Applications/ChatGPT.app}/Contents/Resources/cua_node/bin/node"\nif [ -x "$APP_NODE" ]; then NODE="$APP_NODE"; elif command -v node >/dev/null 2>&1; then NODE="$(command -v node)"; else echo 'sleight: install ChatGPT.app or Node.js to run sleight.' >&2; exit 1; fi\nTARGET="$("$NODE" -e ${quote(script)} "$0")" || exit 1\nexec "$TARGET" "$@"\n`;
 }
 export function managedShim(home = userInfo().homedir) {
+  const seals = observeSettingsFile(path.join(privateFolder(home), receiptName));
   const file = path.join(home, '.local/bin/sleight');
   try {
     const link = fs.lstatSync(file);
     if (!link.isSymbolicLink() || link.uid !== process.getuid() || fs.readlinkSync(file) !== shimName) return false;
-    verifyShim({ fs, path, createHash, home, self: file });
+    verifyShim({ fs, path, createHash, home, self: file,
+      sealedContent: seals?.enforcing ? trustedSettingsContent(seals, receiptName, 'deny') : undefined });
     const text = fs.readFileSync(path.join(home, '.local/bin', shimName), 'utf8');
     const recorded = JSON.parse(text.split('\n')[2]?.replace(/^# installPath: /, ''));
     // The private receipt authenticates the installed bytes. Comparing against this version's generator would stop

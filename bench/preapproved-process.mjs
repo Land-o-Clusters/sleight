@@ -1,17 +1,25 @@
 import { spawn } from 'node:child_process';
 import { AgentClock } from './agent-time.mjs';
+import { loadavg, cpus } from 'node:os';
 
 // A fresh process group contains only this driver's Claude and its descendants.
 // Return after close, which also collects inherited output pipes.
-export async function runOwned(command, args, { cwd, env, timeoutMs = 180000, graceMs = 7000, signal, onStdout, onSpawn } = {}) {
+export async function runOwned(command, args, { cwd, env, timeoutMs = 180000, graceMs = 7000, signal, onStdout, onSpawn, input } = {}) {
   const clock = new AgentClock(Date.now());
-  const child = spawn(command, args, { cwd, env, detached: true, stdio: ['ignore', 'pipe', 'pipe'] });
+  const child = spawn(command, args, { cwd, env, detached: true, stdio: [input ? 'pipe' : 'ignore', 'pipe', 'pipe'] });
+  const stamps = { spawnAt: Date.now(), loadStart: loadavg(), loadCores: cpus().length };
+  // An optional stream keeps one CLI session alive across driver-controlled turns.
+  let inputError;
+  if (input) {
+    inputError = () => {};
+    child.stdin.on('error', inputError);
+    input.pipe(child.stdin);
+  }
   // The new process group's ID, which is the leader's pid (detached).
   if (child.pid) onSpawn?.(child.pid);
   let leaderExited = false, groupCollected = false;
   // Epoch-ms stamps for the harness tail: the last output, the leader's exit, the pipes' close, the group gone.
-  const stamps = { spawnAt: Date.now() };
-  child.once('exit', () => { leaderExited = true; stamps.exitAt = Date.now(); });
+  child.once('exit', () => { leaderExited = true; stamps.exitAt = Date.now(); stamps.loadEnd = loadavg(); });
   let stdout = '', stderr = '', spawnError, timedOut = false, cancelled = false, stopping = false, force;
   const signalErrors = [];
   child.stdout.on('data', data => { stdout += data; stamps.stdoutAt = Date.now(); clock.append(data); onStdout?.(data); });
@@ -45,6 +53,7 @@ export async function runOwned(command, args, { cwd, env, timeoutMs = 180000, gr
   child.on('error', error => { spawnError = error.message; });
   const exit = await new Promise(resolve => child.once('close', (code, signal) => resolve({ code, signal })));
   stamps.closeAt = Date.now();
+  if (input) { input.unpipe(child.stdin); child.stdin.removeListener('error', inputError); }
   clearTimeout(timer); clearTimeout(force); signal?.removeEventListener('abort', abort);
   const alive = () => {
     if (!child.pid || groupCollected) return false;

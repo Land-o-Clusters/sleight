@@ -1,3 +1,4 @@
+import { assertChildStatus } from './fixtures/child-status.mjs';
 // Constructed macOS paths are synthetic validation and redaction data, never allocation roots.
 const MAC_TMP = ['', 'private', 'tmp'].join('/');
 const MAC_USERS = ['', 'Users', ''].join('/');
@@ -58,8 +59,8 @@ test('battery dry-run never starts an executable, writes outside stdout, or take
     const open = fs.openSync; fs.openSync = (path, flags, ...rest) => { if (flags !== 'r') throw Error('write forbidden'); return open(path, flags, ...rest); };
     require('node:module').syncBuiltinESMExports();`);
   const result = spawnSync(process.execPath, ['--require', guard, 'bench/run.mjs', '--suite', 'battery', '--dry-run', '--owner-present'],
-    { cwd: new URL('..', import.meta.url), encoding: 'utf8' });
-  assert.equal(result.status, 0, result.stderr);
+    { cwd: new URL('..', import.meta.url), encoding: 'utf8', timeout: 60000, killSignal: 'SIGKILL' });
+  assertChildStatus(result, 0, result.stderr);
   const out = JSON.parse(result.stdout);
   assert.equal(out.runs.length, 70);
   assert.deepEqual(out.counts, { 'doc-file': 12, 'self-message': 5, 'web-page': 5, 'app-state': 9, 'app-flow': 4 });
@@ -116,7 +117,7 @@ test('battery approval is suite scoped and account apps require the owner', asyn
   for (const task of tasks) {
     const input = JSON.stringify({ mcp_server_name: 'plugin:sleight:computer', message: `Allow Computer Use to use "${task.bundle}"?` });
     const approve = owner => spawnSync(process.execPath, ['bench/approve.mjs'], { cwd: new URL('..', import.meta.url),
-      input, encoding: 'utf8', env: { ...process.env, BENCH_SUITE: 'battery', BENCH_OWNER_PRESENT: owner ? '1' : '' } });
+      input, encoding: 'utf8', env: { ...process.env, BENCH_SUITE: 'battery', BENCH_OWNER_PRESENT: owner ? '1' : '' }, timeout: 60000, killSignal: 'SIGKILL' });
     assert.equal(JSON.parse(approve(true).stdout).hookSpecificOutput.action, 'accept', task.app);
     if (task.ownerPresent) assert.equal(approve(false).stdout, '', task.app);
   }
@@ -220,10 +221,10 @@ test('OOXML readback joins styled runs instead of breaking a saved marker', asyn
   const { writeDocument, readDocument } = await load('documents');
   const dir = bank(t), path = join(dir, 'fixture.docx');
   writeDocument(path, 'docx', 'BATTERY-abc123', 'DONE');
-  assert.equal(spawnSync('/usr/bin/unzip', ['-q', path], { cwd: dir }).status, 0);
+  assertChildStatus(spawnSync('/usr/bin/unzip', ['-q', path], { cwd: dir, timeout: 30000, killSignal: 'SIGKILL' }), 0);
   const xmlPath = join(dir, 'word/document.xml');
   writeFileSync(xmlPath, readFileSync(xmlPath, 'utf8').replace('BATTERY-abc123', 'BATTERY-</w:t></w:r><w:r><w:t>abc123'));
-  assert.equal(spawnSync('/usr/bin/zip', ['-q', path, 'word/document.xml'], { cwd: dir }).status, 0);
+  assertChildStatus(spawnSync('/usr/bin/zip', ['-q', path, 'word/document.xml'], { cwd: dir, timeout: 30000, killSignal: 'SIGKILL' }), 0);
   assert.match(readDocument(path, 'docx'), /BATTERY-abc123 DONE/);
 });
 
@@ -231,7 +232,7 @@ test('presentation fixtures include the layout, master and theme relationships u
   const { writeDocument } = await load('documents');
   const path = join(bank(t), 'fixture.pptx');
   writeDocument(path, 'pptx', 'BATTERY-abc123');
-  const part = name => spawnSync('/usr/bin/unzip', ['-p', path, name], { encoding: 'utf8' }).stdout;
+  const part = name => spawnSync('/usr/bin/unzip', ['-p', path, name], { encoding: 'utf8', timeout: 30000, killSignal: 'SIGKILL' }).stdout;
   assert.match(part('ppt/slides/_rels/slide1.xml.rels'), /slideLayout/);
   assert.match(part('ppt/slideLayouts/_rels/slideLayout1.xml.rels'), /slideMaster/);
   assert.match(part('ppt/slideMasters/_rels/slideMaster1.xml.rels'), /theme/);

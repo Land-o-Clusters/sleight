@@ -3,6 +3,7 @@
 // auto-attach is installed: it would attach to the user's other tabs too.
 import { randomBytes } from 'node:crypto';
 import { createRequire } from 'node:module';
+import { parseWindowsWindowBounds } from './windows-geometry.mjs';
 
 const refuse = () => { throw Error('CDP_COMMAND_REFUSED'); };
 const object = value => value && typeof value === 'object' && !Array.isArray(value);
@@ -63,7 +64,7 @@ function guardBrowser(upstream, port, isProtected) {
 
 // app: { admit(targetInfo), current(targetId) } from electron-targets.mjs. With it, a top-level target is owned only after
 // admit() and current() agree, an initial owned list is refused, and children are frames only.
-export function createCDPFilter({ session: upstream, ownedTargets = [], protectedPort, app } = {}) {
+export function createCDPFilter({ session: upstream, ownedTargets = [], protectedPort, app, platform = process.platform } = {}) {
   if (!upstream || !id(upstream.sessionId) || !['send', 'on', 'off'].every(name => typeof upstream[name] === 'function') ||
       !Array.isArray(ownedTargets) || !ownedTargets.every(id)) throw Error('CDP_CONNECTION_REQUIRED');
   if (app !== undefined && (typeof app?.admit !== 'function' || typeof app?.current !== 'function' || ownedTargets.length || protectedPort !== undefined))
@@ -688,5 +689,16 @@ export function createCDPFilter({ session: upstream, ownedTargets = [], protecte
       .finally(() => { disposal = undefined; });
     return disposal;
   }
-  return Object.freeze({ session, owns, own, release: revoke, frames, listen, dispose, endpointBlocked: target => endpointTargets.has(target) });
+  // A trusted Windows cursor adapter can sample the one owned page's window. The public Playwright socket still
+  // refuses Browser.getWindowForTarget/getWindowBounds/setWindowBounds. Bounds never grant visibility or input.
+  const windowBounds = platform === 'win32' ? async target => {
+    live();
+    if (!owned.has(target)) throw Error('CDP_TARGET_NOT_OWNED');
+    const result = await upstream.send('Browser.getWindowForTarget', { targetId: target });
+    live();
+    if (!owned.has(target)) throw Error('CDP_TARGET_NOT_OWNED');
+    return parseWindowsWindowBounds(result);
+  } : undefined;
+  return Object.freeze({ session, owns, own, release: revoke, frames, listen, dispose, endpointBlocked: target => endpointTargets.has(target),
+    ...(windowBounds ? { windowBounds } : {}) });
 }

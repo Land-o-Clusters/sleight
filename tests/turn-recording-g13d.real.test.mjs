@@ -1,3 +1,4 @@
+import { assertChildStatus } from './fixtures/child-status.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
@@ -44,8 +45,8 @@ for (const moduleSize of [4, 8, 12, 16, 20, 24, 32]) test(`QR with ${moduleSize}
   const tool = imageGrader(t);
   if (!tool) return t.skip('Core Image QR fixture generator requires macOS');
   const path = join(tool.dir, 'qr.png');
-  const made = spawnSync(tool.executable, ['qr', String(moduleSize), path], { encoding: 'utf8', timeout: 15000 });
-  assert.equal(made.status, 0, made.stderr);
+  const made = spawnSync(tool.executable, ['qr', String(moduleSize), path], { encoding: 'utf8', timeout: 15000, killSignal: 'SIGKILL' });
+  assertChildStatus(made, 0, made.stderr);
   const bytes = readFileSync(path);
   const f = await fixture(t, `<style>body{margin:0;background:white;font:20px monospace}img{position:absolute;left:40px;top:40px}</style><img id=leak src="data:image/png;base64,${bytes.toString('base64')}">`);
   await f.entry.page.setViewportSize({ width: 1280, height: 1200 });

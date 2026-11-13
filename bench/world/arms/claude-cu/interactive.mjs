@@ -1,7 +1,8 @@
 import { randomUUID } from 'node:crypto';
+import { waitForBenchmark, benchmarkStopCode } from '../../../hold.mjs';
 import { spawn, execFileSync } from 'node:child_process';
 import { existsSync, lstatSync, mkdirSync, readFileSync, writeFileSync, readdirSync, openSync, readSync, closeSync, statSync, realpathSync } from 'node:fs';
-import { homedir } from 'node:os';
+import { homedir, loadavg, cpus } from 'node:os';
 import { join, resolve, dirname, relative } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { StringDecoder } from 'node:string_decoder';
@@ -263,6 +264,8 @@ export function launchPty(plan, onOutput, { onSpawn } = {}) {
   const bridge = fileURLToPath(new URL('./pty-bridge.py', import.meta.url));
   const child = spawn('/usr/bin/python3', [bridge, '/usr/bin/script', '-q', '/dev/null', plan.command, ...plan.args],
     { cwd: plan.cwd, env: plan.env, detached: true, stdio: ['pipe', 'pipe', 'pipe'] });
+  const stamps = { spawnAt: Date.now(), loadStart: loadavg(), loadCores: cpus().length };
+  child.once('exit', () => { stamps.exitAt = Date.now(); stamps.loadEnd = loadavg(); });
   child.stdin.on('error', () => {});
   child.stdout.setEncoding('utf8'); child.stderr.setEncoding('utf8');
   let cleanupReceipt = '';
@@ -273,7 +276,7 @@ export function launchPty(plan, onOutput, { onSpawn } = {}) {
     child.once('error', error => { spawnError = error.code; });
     child.once('close', code => {
       clearTimeout(timer);
-      child.stdin.destroy(); resolve({ code, clean: !spawnError && cleanupReceipt.includes('[sleight-cu-cleanup:ok]') });
+      child.stdin.destroy(); resolve({ code, stamps, clean: !spawnError && cleanupReceipt.includes('[sleight-cu-cleanup:ok]') });
     });
   });
   const control = { closed, write: text => child.stdin.write(text), stop: async () => {
@@ -368,6 +371,7 @@ export async function runInteractive(plan, { dryRun = false, prepare = prepareIn
   const state = transcript.summary(), clean = !reason && closed?.clean === true && closed.code === 0;
   const priced = Object.keys(state.modelUsage).length && Object.keys(state.modelUsage).every(m => PRICES[m]);
   return { type: 'result', subtype: clean ? 'success' : 'error', is_error: !clean, result: state.answer ?? state.lastText ?? '',
+    stamps: closed?.stamps,
     duration_ms: Date.now() - start, num_turns: state.modelCalls, calls: state.calls, usage: state.usage, modelUsage: state.modelUsage,
     agentSeconds: agentEndAt === undefined ? null : (agentEndAt - agentStartAt) / 1000,
     agentTiming: { start: 'ready-prompt-and-mcp-submit', end: 'result-and-idle', startupIncluded: false },
@@ -376,7 +380,20 @@ export async function runInteractive(plan, { dryRun = false, prepare = prepareIn
     ...(reason && { reason }), requestedModel: plan.model, effort: plan.effort, session_id: plan.sessionId, auth: plan.auth };
 }
 
+export async function admitInteractive({ parentLock = false, signal } = {}, {
+  wait = waitForBenchmark, exists = existsSync, stat = statSync,
+  lock = async options => (await import('../../../live-lock.mjs')).acquireLiveLock(undefined, options),
+} = {}) {
+  if (parentLock) {
+    if (!exists('/tmp/sleight-live.lock') || !stat('/tmp/sleight-live.lock').isDirectory()) throw new Error('parent benchmark lock is absent');
+    return;
+  }
+  await wait({ signal });
+  return lock({ signal });
+}
+
 async function main() {
+  const controller = new AbortController();
   try {
     const options = {}, args = process.argv.slice(2); let live = false, dryRun = false, parentLock = false;
     for (let i = 0; i < args.length; i++) {
@@ -393,14 +410,11 @@ async function main() {
     const plan = interactivePlan({ ...rest, ...(rest.allowedApps && { allowedApps: JSON.parse(rest.allowedApps) }),
       ...(rest.allowedGrants && { allowedGrants: JSON.parse(rest.allowedGrants) }),
       ...(rest.timeoutMs && { timeoutMs: Number(rest.timeoutMs) }), prompt: promptFile ? readFileSync(promptFile, 'utf8') : rest.prompt });
-    const controller = new AbortController(); process.once('SIGINT', () => controller.abort()); process.once('SIGTERM', () => controller.abort());
+    process.once('SIGINT', () => controller.abort()); process.once('SIGTERM', () => controller.abort());
     let release, result;
     try {
       if (live) {
-        if (existsSync('/tmp/sleight-hold')) throw new Error('timed window is held');
-        if (parentLock) {
-          if (!existsSync('/tmp/sleight-live.lock') || !statSync('/tmp/sleight-live.lock').isDirectory()) throw new Error('parent benchmark lock is absent');
-        } else release = await (await import('../../../live-lock.mjs')).acquireLiveLock();
+        release = await admitInteractive({ parentLock, signal: controller.signal });
       }
       result = await runInteractive(plan, { dryRun: !live, signal: controller.signal, onEvent: event => process.stdout.write(JSON.stringify(event) + '\n') });
       console.log(JSON.stringify(result)); if (live && result.is_error) process.exitCode = 1;
@@ -408,7 +422,7 @@ async function main() {
       if (release && (!result || result.groupClean)) await release();
       else if (release) console.error('interactive cleanup is unverified; retain the live lock for sleight-arch');
     }
-  } catch (error) { console.error(error.message); process.exitCode = 1; }
+  } catch (error) { console.error(error.message); process.exitCode = benchmarkStopCode(error, controller.signal) ?? 1; }
 }
 
 if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) void main();

@@ -1,3 +1,4 @@
+import { assertChildStatus } from './fixtures/child-status.mjs';
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
@@ -13,12 +14,12 @@ test('hover fixture refuses other apps, unknown operations and unnamed Chess win
     const directory = registerTemp(t, mkdtempSync(join(tmpdir(), 'sleight-hover-fixture-')));
     const binary = join(directory, 'hover-window-fixture');
     const build = spawnSync('/usr/bin/swiftc', ['-module-cache-path', swiftModuleCache(),
-      'bench/hover-window-fixture.swift', '-o', binary], { encoding: 'utf8', timeout: 180000 });
-    assert.equal(build.status, 0, build.stderr);
+      'bench/hover-window-fixture.swift', '-o', binary], { encoding: 'utf8', timeout: 600000, killSignal: 'SIGKILL' });
+    assertChildStatus(build, 0, build.stderr);
     for (const request of [{ app: 'Mail', op: 'prepare' }, { app: 'TextEdit', op: 'prepare' },
       { app: 'Calculator', op: 'unknown' }, { app: 'Chess', op: 'prepare' }]) {
-      const run = spawnSync(binary, [JSON.stringify(request)], { encoding: 'utf8', timeout: 5000 });
-      assert.equal(run.status, 0, run.stderr);
+      const run = spawnSync(binary, [JSON.stringify(request)], { encoding: 'utf8', timeout: 5000, killSignal: 'SIGKILL' });
+      assertChildStatus(run, 0, run.stderr);
       const result = JSON.parse(run.stdout);
       assert.equal(result.ok, false);
       assert.match(result.error, /invalid fixture request|exact window title/);

@@ -3,6 +3,27 @@
 Facts about the ChatGPT computer-use engine that sleight's code relies on, each learned the hard way. They change only when the
 engine does, so recheck them after an engine update.
 
+- 2026-11-02: ChatGPT 26.1027.51404 (build 23880) returned 19,965 bytes of raw API documentation, identical to the
+  saved raw 26.1027.30824 snapshot. Both declare coordinate-only `App.drag(from: Vec2, to: Vec2)`. Element numbers and
+  `{id}` endpoints belong to sleight's local drag paths. The ChatGPT path keeps its coordinate validation and lease checks.
+- 2026-11-02: the latest earlier `engine-api` snapshot, 26.1013.40934, includes sleight's rewritten confirmation policy.
+  Its policy diff against a raw snapshot does not establish an upstream policy change. The raw-to-raw diff above is empty.
+- 2026-11-02: the current approval form observed by the owner-away diagnostic uses `remember` with `This session` and
+  `Always`. The benchmark answers `This session`. Older `choice: session` forms remain supported. sleight's relay also
+  supplies a `remember` field, so that diagnostic alone does not date an upstream approval change.
+- 2026-11-02: a Codex plugin-cache directory can keep an old version while its launch config points into an updated
+  ChatGPT app. The watch's 09:00 log reported 26.1027.30824. The app read 26.1027.51404 at 20:30Z. Version resolution
+  now reads the app's plist when both the runtime and REPL resolve to that app. `scripts/watch.sh --docs-only` saves the
+  observed version and API snapshot without app checks or notifications. The full compatibility check remains due.
+- 2026-11-02: the owner-away diagnostic recorded one HID idle reset after ChatGPT clicks. Its cause and frequency remain
+  unverified. This update doesn't change the HID allowance or input guards.
+- 2026-11-02: since the 26.1013.40934 snapshot, the API adds Windows screenshot regions and screenshot IDs, plus Linux
+  targeted typing and optional `typeCharacters`. Mac screenshots still return bytes; the Windows and Linux additions
+  are unused by sleight's Mac path. The current native-app instructions are Mac-specific.
+- 2026-11-02: the current raw documentation includes Workflow and Output guidance for fresh reads, diffing and automatic
+  output. The prior raw 26.1027.30824 snapshot has the same guidance. The update leaves sleight's policy and Workflow
+  rewrites unchanged.
+
 - The engine diffs UI state against the latest read of an app, whoever made it. The pane snapshots only between turns, and the next
   prompt asks Claude for a full read.
 - Real pointer activity in an app counts as a person taking over.

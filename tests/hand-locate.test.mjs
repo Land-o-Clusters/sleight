@@ -25,6 +25,31 @@ function locateContext(now = Date.now) {
 }
 const button = (title, x) => ({ AXRole: 'AXButton', AXTitle: title, AXPosition: [x, 10], AXSize: [20, 20] });
 
+test('CA7 area lookup resolves an app and optional window through OS metadata without AX', () => {
+  const c = locateContext();
+  c.findApp = () => ({ processIdentifier: 42 });
+  c.$.AXIsProcessTrusted = () => assert.fail('area protection cannot depend on an element read');
+  const bounds = { X: 100, Y: 500, Width: 500, Height: 300 };
+  c.cgWindows = () => [{ id: 7, pid: 42, layer: 0, bounds }, { id: 8, pid: 99, layer: 0, bounds }];
+  const lookup = extra => JSON.parse(c.run([JSON.stringify({ area: true, app: 'Fixture', ...extra })]));
+  assert.deepEqual(lookup(), { ok: true, pid: 42 });
+  assert.deepEqual(lookup({ windowNumber: 7 }), { ok: true, pid: 42, window: { pid: 42, windowId: 7, bounds } });
+  assert.deepEqual(lookup({ windowNumber: 8 }), { ok: true, pid: 42 });
+  c.findApp = () => null;
+  assert.equal(lookup().ok, false);
+});
+
+test('drop hints read the CG owner only, without AX trust, titles or app content', () => {
+  const c = locateContext();
+  let windows = [{ id: 77, pid: 42, layer: 0, owner: 'Editor', bounds: { X: 0, Y: 0, Width: 300, Height: 200 }, title: 'Private document' }];
+  c.cgWindows = onScreen => { assert.equal(onScreen, true); return windows; };
+  c.$.AXIsProcessTrusted = () => assert.fail('pointing must not read AX even for an unleased app');
+  const lookup = extra => JSON.parse(c.run([JSON.stringify({ hint: { pid: 42, windowId: 77, at: [10, 20], ...extra } })]));
+  assert.deepEqual(lookup(), { ok: true, app: 'Editor', pid: 42, windowId: 77 });
+  for (const extra of [{ pid: 43 }, { windowId: 78 }, { at: [300, 200] }, { at: [NaN, 20] }, { pid: true }]) assert.deepEqual(lookup(extra), { ok: false });
+  windows = []; assert.deepEqual(lookup(), { ok: false });
+});
+
 test('locate.js reports an element only when a whole walk found exactly one', () => {
   const { elements } = locateContext();
   const win = { AXRole: 'AXWindow', AXChildren: [button('Save', 100), button('Other', 200), button('Cancel', 300), button('Cancel', 400)] };

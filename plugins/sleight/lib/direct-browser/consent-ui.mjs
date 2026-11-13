@@ -99,7 +99,7 @@ export function createConsentUi({ authenticate, present, checkCurrent = () => fa
       const key = card ? cardKey(kind, operation) : operationKey(operation), id = randomUUID();
       const snapshot = JSON.parse(key), choices = card ? cardChoices(kind, snapshot) : ['once', 'cancel'];
       pending.set(id, { key, snapshot, kind, choices, epoch, expires: now() + ttlMs });
-      try { cursorStatus('waiting'); } catch {}
+      try { cursorStatus('waiting', { detail: card ? 'approval' : 'payment' }); } catch {}
       try {
         // The host renders escaped observations as text outside page DOM. It
         // renders exact data/payment details from the second, private argument

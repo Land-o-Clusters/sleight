@@ -7,8 +7,8 @@ import { fileURLToPath } from 'node:url';
 
 function run(file, args) {
   const child = spawnSync(process.execPath, ['--max-old-space-size=512', '--experimental-vm-modules',
-    fileURLToPath(new URL(`../bench/code-ast/${file}`, import.meta.url)), ...args.map(String)], { encoding: 'utf8', timeout: 30000 });
-  assert.ok([0, 1].includes(child.status), child.stderr);
+    fileURLToPath(new URL(`../bench/code-ast/${file}`, import.meta.url)), ...args.map(String)], { encoding: 'utf8', timeout: 30000, killSignal: 'SIGKILL' });
+  assert.ok([0, 1].includes(child.status), `${child.error?.code ?? child.signal}: ${child.stderr}`);
   const entries = child.stdout.trim().split('\n').map(JSON.parse);
   const counts = entries.find(entry => entry.tested !== undefined);
   assert.ok(counts);

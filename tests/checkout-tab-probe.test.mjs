@@ -4,6 +4,7 @@ import { constants, openSync, closeSync, mkdtempSync, existsSync, writeFileSync,
 import * as engineFS from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { runInNewContext } from 'node:vm';
 import { registerTemp, trackTemp } from '../scripts/temp-leftovers.mjs';
 import { guardedCode } from '../plugins/sleight/lib/document-scope.mjs';
 import { createTabProbe, tabProbeRefusal, nativeTabPlan } from '../plugins/sleight/lib/tab-probe.mjs';
@@ -94,6 +95,7 @@ for (const replacement of ['file', 'symlink']) {
 }
 
 async function fixture(t, { observe = async () => identity, current = () => tree, onType = () => {}, onOutput = () => {}, guardDate = Date,
+  guardPerformance = performance, guardSetTimeout = setTimeout,
   sandboxFS = engineFS, setupProbe = () => {}, probeFreshMs = 30, probeDeadlineMs = 650 } = {}) {
   const directory = registerTemp(t, trackTemp(mkdtempSync(join(tmpdir(), 'sleight-ck3-'))));
   const probe = createTabProbe({ directory, observe, intervalMs: 2, timeoutMs: 20, deadlineMs: probeDeadlineMs, freshMs: probeFreshMs });
@@ -108,14 +110,16 @@ async function fixture(t, { observe = async () => identity, current = () => tree
     try {
       const code = guardedCode('await app.typeText("https://example.test"); await app.pressKey("Return");',
         expected, 'window changed', lease, { careful: true, tabProbe: info, guardStopMark: '[ck]', ...checks });
-      await new AsyncFunction('app', 'cua', 'nodeRepl', 'Date', 'sandboxFS', code.replace("await import('node:fs')", 'sandboxFS'))(raw,
-        { getApp: async () => raw }, { write: value => { output.push(value); onOutput(value); } }, guardDate, sandboxFS);
+      await new AsyncFunction('app', 'cua', 'nodeRepl', 'Date', 'sandboxFS', 'performance', 'setTimeout',
+        code.replace("await import('node:fs')", 'sandboxFS'))(raw,
+        { getApp: async () => raw }, { write: value => { output.push(value); onOutput(value); } }, guardDate, sandboxFS,
+        guardPerformance, guardSetTimeout);
     } finally { delete globalThis.__sleightDocumentGuard; delete globalThis.__sleightDocumentGuardSetup; probe.end(1); }
   } };
 }
 
 test('CK3 remainder probes address focus before typing and Return and keeps its final tree', async t => {
-  const f = await fixture(t);
+  const f = await certifiedFixture(t);
   await f.run({ payment: { setting: 'always', message: null } });
   assert.deepEqual(f.calls, ['typeText', 'pressKey', 'read']);
   assert.equal(existsSync(f.info.path), false);
@@ -261,31 +265,36 @@ test('CK3 off restores the old continuation reads', async t => {
   assert.deepEqual(f.calls, ['read', 'typeText', 'read', 'pressKey', 'read']);
 });
 
-// Feed two valid samples 50 ms apart, then expire the accepted certificate by one
-// millisecond. Scheduling cannot age a sample before this test reaches dispatch.
-async function expiringFixture(t, options = {}) {
-  let now, request = 0, info;
+// Guard policy tests use logical time and requested samples. FIFO transport is
+// covered separately, so a descheduled reader cannot expire a valid certificate.
+async function certifiedFixture(t, { observe = () => identity, expire = false, onOutput = () => {}, ...options } = {}) {
+  let now = 1000, request = 0, info;
   const sandboxFS = { ...engineFS, promises: { ...engineFS.promises,
-    open: async () => ({ stat: async () => ({ isFIFO: () => true }), close: async () => { if (request === 1) now += 50; } }),
+    open: async () => { request++; return { stat: async () => ({ isFIFO: () => true }), close: async () => {} }; },
     readFile: async (path, ...args) => path === info.path
-      ? JSON.stringify({ request: ++request, start: now, end: now, observed: identity })
+      ? JSON.stringify({ request, start: now, end: now, observed: await observe() })
       : engineFS.promises.readFile(path, ...args),
   } };
   const f = await fixture(t, { ...options, sandboxFS, guardDate: { now: () => now },
-    setupProbe: value => { info = value; now = value.since; },
-    onOutput: value => { if (value.includes('"decision":"probe"')) now += info.freshMs + 1; } });
+    guardPerformance: { now: () => now },
+    guardSetTimeout: (resolve, ms) => { now += ms; queueMicrotask(resolve); },
+    setupProbe: value => { info = value; info.since = now; },
+    onOutput: value => {
+      if (expire && value.includes('"decision":"probe"')) now += info.freshMs + 1;
+      onOutput(value);
+    } });
   return f;
 }
 
 test('CK3 a certificate that ages before dispatch reads and stops before input', async t => {
-  const f = await expiringFixture(t);
+  const f = await certifiedFixture(t, { expire: true });
   await assert.rejects(f.run(), /native tab certificate expired/);
   assert.equal(f.output.filter(value => value.includes('"decision":"probe"')).length, 1);
   assert.deepEqual(f.calls, ['read']);
 });
 
 test('CK3 an expired certificate cannot type into a newly tracking menu', async t => {
-  const f = await expiringFixture(t, {
+  const f = await certifiedFixture(t, { expire: true,
     current: () => tree + '\n3 menu bar\n\t4 menu bar item File, Selected: true' });
   await assert.rejects(f.run(), /native tab certificate expired/);
   assert.equal(f.output.filter(value => value.includes('"decision":"probe"')).length, 1);
@@ -294,12 +303,13 @@ test('CK3 an expired certificate cannot type into a newly tracking menu', async 
 
 test('CK3 loss of the lease during certification stops before sending input', async t => {
   let path;
-  const f = await fixture(t, { onOutput: value => {
-    if (value.includes('"decision":"probe"')) writeFileSync(path, JSON.stringify({ token: 'other', expires: Date.now() + 10000 }));
+  const f = await certifiedFixture(t, { onOutput: value => {
+    if (value.includes('"decision":"probe"')) writeFileSync(path, JSON.stringify({ token: 'other', expires: 11000 }));
   } });
   path = f.info.path + '.lease';
-  writeFileSync(path, JSON.stringify({ token: 'owned', expires: Date.now() + 10000 }));
+  writeFileSync(path, JSON.stringify({ token: 'owned', expires: 11000 }));
   await assert.rejects(f.run({ lease: { path, token: 'owned' } }), /ownership lost or expired/);
+  assert.equal(f.output.filter(value => value.includes('"decision":"probe"')).length, 1);
   assert.deepEqual(f.calls, []);
 });
 
@@ -308,9 +318,12 @@ test('CK3 rechecks focus after typing and a payment-page fallback still stops Re
   const checkout = 'Window: "New Tab", App: Fixture Browser.\n0 standard window New Tab\n' +
     '\t1 HTML content Checkout, URL: https://shop.test/checkout\n\t\t2 text field (settable) Card number\n' +
     '\t\t3 button Pay now $268.00\nThe focused UI element is 2 text field (settable) Card number';
-  const f = await fixture(t, { observe: async () => inPage ? { ...identity, focus: { ...identity.focus, inPage: true } } : identity,
+  const f = await certifiedFixture(t, { observe: async () => inPage ? { ...identity, focus: { ...identity.focus, inPage: true } } : identity,
     onType: () => { inPage = true; }, current: () => inPage ? checkout : tree });
   await assert.rejects(f.run({ payment: { setting: 'always', message: null } }), /sleight stopped this payment/);
+  const decisions = f.output.map(value => JSON.parse(value.slice(4)).tabProbe).filter(Boolean);
+  assert.deepEqual(decisions.map(value => value.decision), ['probe', 'read']);
+  assert.equal(decisions[1].reason, 'focus-in-page');
   assert.deepEqual(f.calls, ['typeText', 'read']);
 });
 
@@ -477,7 +490,7 @@ test('CK3 startup removes only stale observation and request files', t => {
 
 test('CK3 timing variation does not change the chrome stability signature', async t => {
   let walkMs = 0;
-  const f = await fixture(t, { observe: async () => ({ ...identity, chrome: { ...identity.chrome, walkMs: ++walkMs } }) });
+  const f = await certifiedFixture(t, { observe: async () => ({ ...identity, chrome: { ...identity.chrome, walkMs: ++walkMs } }) });
   await f.run();
   assert.deepEqual(f.calls, ['typeText', 'pressKey', 'read']);
 });
@@ -497,25 +510,53 @@ test('CK3 a timed-out request never queues another native walk or publishes a la
   assert.equal(JSON.parse(readFileSync(info.path)).observed, undefined);
 });
 
-test('CK3 skips the baseline probe when the ordinary first read covers Cmd+T', async t => {
-  const directory = registerTemp(t, trackTemp(mkdtempSync(join(tmpdir(), 'sleight-ck3-first-read-'))));
-  let current = initial, samples = 0;
-  const calls = [];
-  const probe = createTabProbe({ directory, intervalMs: 2, observe: async () => { samples++; return current; } });
-  t.after(() => probe.dispose());
-  const info = probe.begin(1, { ...expected, title: 'Before', nativeIdentity: initial }, Date.now(), 'new-tab');
-  const raw = { getAXState: async () => { calls.push('read'); return current === initial ? tree.replaceAll('New Tab', 'Before') : tree; },
-    pressKey: async key => { if (key === 'super+t') assert.equal(samples, 0); calls.push(key); current = added; },
-    typeText: async () => calls.push('typeText') };
-  try {
-    await new AsyncFunction('app', 'cua', 'nodeRepl', guardedCode(
-      'await app.pressKey("super+t"); await app.typeText("https://example.test"); await app.pressKey("Return");',
-      { ...expected, title: 'Before' }, 'window changed', undefined, { tabProbe: info }))(
-      raw, { getApp: async () => raw }, { write() {} });
+for (const transport of ['logical clock', 'real FIFO']) {
+  test(`CK3 skips the baseline probe when the ordinary first read covers Cmd+T (${transport})`, { timeout: 30000 }, async t => {
+    const directory = registerTemp(t, trackTemp(mkdtempSync(join(tmpdir(), 'sleight-ck3-first-read-'))));
+    let current = initial, samples = 0, now = 1000, request = 0, published = 0, sample;
+    const logical = transport === 'logical clock', calls = [], decisions = [];
+    // Policy runs on a logical clock. The paired real-client transport check has
+    // generous test-only budgets; production keeps 650 ms and 100 ms defaults.
+    const probe = createTabProbe({ directory, intervalMs: 2,
+      ...(logical ? {} : { deadlineMs: 10000, freshMs: 10000, timeoutMs: 10000 }),
+      observe: async () => { samples++; return current; } });
+    t.after(() => probe.dispose());
+    const info = probe.begin(1, { ...expected, title: 'Before', nativeIdentity: initial }, logical ? now : Date.now(), 'new-tab');
+    const sandboxFS = logical ? { constants, promises: {
+      open: async path => {
+        assert.equal(path, info.request + '-' + request++);
+        return { stat: async () => ({ isFIFO: () => true }), close: async () => {} };
+      },
+      readFile: async path => {
+        assert.equal(path, info.path);
+        if (request > published) {
+          published = request; samples++;
+          sample = { request, start: now, end: now, observed: current };
+        }
+        if (!sample) throw Object.assign(Error('not published'), { code: 'ENOENT' });
+        return JSON.stringify(sample);
+      },
+    } } : engineFS;
+    const raw = { getAXState: async () => { calls.push('read'); return current === initial ? tree.replaceAll('New Tab', 'Before') : tree; },
+      pressKey: async key => { if (key === 'super+t') assert.equal(samples, 0); calls.push(key); current = added; },
+      typeText: async () => calls.push('typeText') };
+    // The VM supplies globalThis.performance too; an AsyncFunction parameter named
+    // performance would leave the guard's global clock tied to wall time.
+    const code = guardedCode(
+        'await app.pressKey("super+t"); await app.typeText("https://example.test"); await app.pressKey("Return");',
+        { ...expected, title: 'Before' }, 'window changed', undefined, { tabProbe: info, guardStopMark: '[ck]' });
+    await runInNewContext(`(async () => { ${code.replace("await import('node:fs')", 'sandboxFS')} })()`, {
+      app: raw, cua: { getApp: async () => raw }, sandboxFS,
+      nodeRepl: { write: value => { if (value.includes('"tabProbe"')) decisions.push(JSON.parse(value.slice(4)).tabProbe); } },
+      Date: logical ? { now: () => now } : Date,
+      performance: logical ? { now: () => now } : performance,
+      setTimeout: logical ? (resolve, ms) => { now += ms; queueMicrotask(resolve); } : setTimeout,
+    });
     assert.deepEqual(calls, ['read', 'super+t', 'typeText', 'Return', 'read']);
     assert.equal(samples, 4);
-  } finally { delete globalThis.__sleightDocumentGuard; delete globalThis.__sleightDocumentGuardSetup; }
-});
+    assert.deepEqual(decisions.map(d => [d.decision, d.transition]), [['probe', true], ['probe', false]]);
+  });
+}
 
 for (const side of ['baseline', 'observed']) {
   test(`CK2d traces the ${side} native chrome check and preserves the full-read fallback`, async t => {

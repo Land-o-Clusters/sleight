@@ -115,6 +115,24 @@ test('Calculator menu requires the requested mode change as well as the generate
   ctx.calculatorModeBefore = 'scientific';
   assert.notEqual(await task.check(ctx), true, 'an unchanged mode does not prove the requested menu task');
 });
+test('popup smoke requires Basic initially and grades Scientific without arithmetic', async () => {
+  const { tasks: defaults } = await import('../bench/tasks.mjs');
+  const { realTasks: real } = await import('../bench/tasks-real.mjs');
+  const tasks = getWorldTasks({ defaults, real, calculatorPopupSmoke: true, open: async () => ({ fixture: true }) });
+  assert.doesNotMatch(tasks.find(t => t.id === 'calculator-menu').prompt({}), /Mode popup/,
+    'the smoke must not change the claim task or publish its shorter work as calculator-menu');
+  const task = tasks.find(t => t.id === 'calculator-popup-smoke');
+  assert.ok(task, 'the smoke has its own task identity');
+  let mode = 'basic';
+  const ctx = { calculatorProcessCheck: async () => ({ groupClean: true, exit: { code: 1 } }),
+    readCalculator: async () => `1 text Description: Edit field, Value: 0\n2 button ID: Mode: ${mode}; unitConversion: false` };
+  await task.setup(ctx);
+  assert.match(task.prompt(ctx), /Mode popup/); assert.match(task.prompt(ctx), /next cell/);
+  assert.match(task.prompt(ctx), /Scientific/); assert.match(task.prompt(ctx), /one attempt/);
+  assert.notEqual(await task.check(ctx), true);
+  mode = 'scientific'; assert.equal(await task.check(ctx), true);
+  await assert.rejects(task.setup({ ...ctx }), /WORLD_CALCULATOR_BASIC_REQUIRED/);
+});
 
 test('multi-window setup acquires each exact fixture path and retains a failed acquisition', async () => {
   const { tasks: defaults } = await import('../bench/tasks.mjs');

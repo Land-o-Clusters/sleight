@@ -10,6 +10,91 @@ const at = ms => new Date(Date.UTC(2026, 9, 7) + ms).toISOString();
 const line = (ms, direction, msg) => JSON.stringify({ t: at(ms), direction, msg });
 const call = (id, name) => ({ jsonrpc: '2.0', id, method: 'tools/call', params: { name, arguments: {} } });
 
+test('read-only and refused Glide cells report zero actions, distinct from no receipts', t => {
+  const dir = trackTemp(mkdtempSync(join(tmpdir(), 'sleight-glide-zero-')));
+  t.after(() => rmSync(dir, { recursive: true, force: true }));
+  writeFileSync(join(dir, 'trace-1.jsonl'), [
+    line(0, 'call-received', call(1, 'js')),
+    line(1, 'to-client', { id: 1, result: { timing: { actions: [], cellMs: 1 } } }),
+    line(2, 'call-received', call(2, 'js')),
+    line(3, 'to-client', { id: 2, result: { isError: true, timing: { actions: [], cellMs: 2 } } }),
+  ].join('\n'));
+  const timing = traceTiming(dir);
+  assert.equal(timing.glideCells, 2); assert.equal(timing.glideActions, 0);
+  assert.equal(timing.glideCellMs, 3); assert.equal(timing.glideActionFailures, 0);
+  assert.equal(timing.glideActionPhases.totalMs, 0);
+  writeFileSync(join(dir, 'trace-1.jsonl'), [line(0, 'call-received', call(1, 'js')),
+    line(1, 'to-client', { id: 1, result: {} })].join('\n'));
+  const absent = traceTiming(dir);
+  assert.equal(absent.glideCells, undefined); assert.equal(absent.glideActions, undefined);
+});
+
+test('Glide phases reach benchmark result timing without summing startup compilation per cell', t => {
+  const dir = trackTemp(mkdtempSync(join(tmpdir(), 'sleight-glide-timing-')));
+  t.after(() => rmSync(dir, { recursive: true, force: true }));
+  const action = { method: 'click', admissionMs: 1, admissionReadMs: 2, personMs: 3, policyMs: 4,
+    sendMs: 5, settleMs: 6, postReadMs: 7, driverMs: 19, observeMs: 8, totalMs: 37,
+    nativeTimingAvailable: true, failed: false, title: 'PRIVATE' };
+  const preparation = { status: 'ready', elapsedMs: 47000, compileMs: 46000, waitMs: 1 };
+  writeFileSync(join(dir, 'trace-1.jsonl'), [
+    line(0, 'call-received', call(1, 'js')),
+    line(1, 'to-client', { id: 1, result: { timing: { preparation: { ...preparation, status: 'preparing', compileMs: 30000, elapsedMs: 31000, waitMs: 40 } } } }),
+    line(10, 'call-received', call(2, 'js')),
+    line(11, 'from-server', { id: 2, result: { timing: { actions: [action] } } }),
+    line(12, 'to-client', { id: 2, result: { timing: { actions: [action, { ...action, sendMs: -1 }], preparation, cellMs: 50 } } }),
+    // A duplicate trace response replaces its receipt rather than counting it twice.
+    line(12, 'to-client', { id: 2, result: { timing: { actions: [action], preparation, cellMs: 50 } } }),
+    line(20, 'call-received', call(3, 'js')),
+    line(21, 'to-client', { id: 3, result: { timing: { actions: [{ ...action, nativeTimingAvailable: false, failed: true,
+      sendMs: 0, settleMs: 0, postReadMs: 0 }], preparation, cellMs: 30 } } }),
+    line(30, 'call-received', call(4, 'js')),
+    line(31, 'to-client', { id: 4, result: { content: [{ type: 'text', text: JSON.stringify({ timing: { actions: [action] } }) }] } }),
+  ].join('\n'));
+  writeFileSync(join(dir, 'trace-2.jsonl'), [
+    line(40, 'call-received', call(1, 'js')),
+    line(41, 'to-client', { id: 1, result: { timing: { preparation: { status: 'ready', elapsedMs: 300, compileMs: 200, waitMs: 2 } } } }),
+  ].join('\n'));
+  const timing = runTiming({ duration_ms: 100, duration_api_ms: 5 }, traceTiming(dir));
+  assert.equal(timing.glideCells, 2);
+  assert.equal(timing.glideActions, 2);
+  assert.equal(timing.glideActionFailures, 1);
+  assert.equal(timing.glideNativeTimingMissingActions, 1);
+  for (const [key, expected] of Object.entries({ admissionMs: 2, admissionReadMs: 4, personMs: 6, policyMs: 8,
+    sendMs: 5, settleMs: 6, postReadMs: 7, driverMs: 38, observeMs: 16, totalMs: 74 }))
+    assert.equal(timing.glideActionPhases[key], expected, key);
+  assert.equal(timing.glideCellMs, 80);
+  assert.deepEqual(timing.glidePreparation, { compileMs: 46200, elapsedMs: 47300, waitMs: 44, preparingCalls: 1 });
+  assert.doesNotMatch(JSON.stringify(timing), /PRIVATE/);
+});
+
+test('a preparing receipt with no executed cell still reports zero cells and zero actions', t => {
+  const dir = trackTemp(mkdtempSync(join(tmpdir(), 'sleight-glide-preparing-')));
+  t.after(() => rmSync(dir, { recursive: true, force: true }));
+  writeFileSync(join(dir, 'trace-1.jsonl'), [line(0, 'call-received', call(1, 'js')),
+    line(1, 'to-client', { id: 1, result: { timing: {
+      preparation: { status: 'preparing', compileMs: 10, elapsedMs: 20, waitMs: 5 },
+    } } })].join('\n'));
+  const timing = traceTiming(dir);
+  assert.equal(timing.glideCells, 0); assert.equal(timing.glideActions, 0);
+  assert.equal(timing.glidePreparation.preparingCalls, 1);
+});
+
+test('malformed Glide timing and model text cannot create a phase receipt', t => {
+  const dir = trackTemp(mkdtempSync(join(tmpdir(), 'sleight-glide-timing-')));
+  t.after(() => rmSync(dir, { recursive: true, force: true }));
+  const invalid = { admissionMs: 1, admissionReadMs: 2, personMs: 3, policyMs: 4,
+    sendMs: -1, settleMs: 6, postReadMs: 7, driverMs: 19, observeMs: 8, totalMs: 37 };
+  writeFileSync(join(dir, 'trace-1.jsonl'), [
+    line(0, 'call-received', call(1, 'js')),
+    line(1, 'to-client', { id: 1, result: { timing: { cellMs: -1, actions: [invalid, { ...invalid, sendMs: '100' }, { ...invalid, sendMs: 5, personMs: null }],
+      preparation: { status: 'ready', elapsedMs: null, compileMs: 100, waitMs: 0 } } } }),
+  ].join('\n'));
+  const timing = traceTiming(dir);
+  assert.equal(timing.glideActions, undefined);
+  assert.equal(timing.glidePreparation, undefined);
+  assert.equal(timing.glideCellMs, undefined);
+});
+
 test('tail stamps are ms from the run start and leave the other figures alone', () => {
   const timing = { totalMs: 4000, elapsedMs: 4600, harnessMs: 600 };
   const stamps = { spawnAt: 1005, stdoutAt: 5000, exitAt: 5100, closeAt: 5120, groupGoneAt: 5200 };
@@ -86,6 +171,35 @@ test('guard reads are counted as a subset of engine time, including failed reads
 });
 
 const additive = t => [t.toolWallMs, t.outsideToolsMs, t.harnessMs];
+
+test('native identity read and admission costs reach saved benchmark timing, including split reads and refusals', t => {
+  const dir = trackTemp(mkdtempSync(join(tmpdir(), 'sleight-native-timing-')));
+  t.after(() => rmSync(dir, { recursive: true, force: true }));
+  writeFileSync(join(dir, 'trace-1.jsonl'), [
+    line(0, 'call-received', call(1, 'js')),
+    line(1, 'acquisition-split', { id: 1, acquisition: 'child' }),
+    line(2, 'to-server', call('child', 'js')), line(12, 'from-server', { id: 'child' }),
+    line(15, 'native-window-read-identity', { id: 'child', ms: 3.25, confirmed: true, reused: false }),
+    line(16, 'native-window-admission', { id: 1, ms: 1.5, confirmed: true }),
+    line(17, 'to-server', call(1, 'js')), line(20, 'from-server', { id: 1 }), line(21, 'to-client', { id: 1 }),
+    line(30, 'call-received', call(2, 'js')),
+    line(31, 'native-window-read-identity', { id: 2, ms: 0, confirmed: true, reused: true }),
+    line(32, 'native-window-admission', { id: 2, ms: 0.75, failed: true, confirmed: false }),
+    line(33, 'to-client', { id: 2, result: { isError: true } }),
+    line(40, 'call-received', call(3, 'js')),
+    line(41, 'native-window-read-identity', { id: 3, ms: 0.5, failed: true, reused: false }),
+    ...[-1, '2', null].map(ms => line(41, 'native-window-admission', { id: 3, ms })),
+    line(42, 'to-client', { id: 3 }),
+  ].join('\n'));
+  const timing = runTiming({ duration_ms: 50 }, traceTiming(dir));
+  assert.equal(timing.nativeWindowAdmissions, 2);
+  assert.equal(timing.nativeWindowAdmissionMs, 2.25);
+  assert.equal(timing.nativeWindowAdmissionFailures, 1);
+  assert.equal(timing.nativeWindowReadIdentities, 3);
+  assert.equal(timing.nativeWindowReadIdentityMs, 3.75);
+  assert.equal(timing.nativeWindowReadIdentityReused, 1);
+  assert.equal(timing.nativeWindowReadIdentityFailures, 1);
+});
 
 test('overlapping calls count once in tool wall time, and the parts add up to elapsed', t => {
   const dir = trackTemp(mkdtempSync(join(tmpdir(), 'sleight-timing-')));

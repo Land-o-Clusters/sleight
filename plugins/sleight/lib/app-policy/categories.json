@@ -1,0 +1,43 @@
+{
+  "password-managers": {
+    "code": "FORBIDDEN_TARGET",
+    "sentence": "sleight refuses password managers because they contain passwords and other secrets. The user must operate this app.",
+    "cardRisk": "Claude could read or change passwords and other secrets in this app."
+  },
+  "terminals": {
+    "code": "FORBIDDEN_TARGET",
+    "sentence": "sleight refuses terminals because they can run commands. Only the user may lift this restriction with ComputerUseAllowForbiddenTargets.",
+    "cardRisk": "Claude could type and run commands in this terminal."
+  },
+  "authentication-agents": {
+    "code": "FORBIDDEN_TARGET",
+    "sentence": "sleight refuses authentication dialogs. The user must answer the authentication request.",
+    "cardRisk": "Claude could approve authentication or change who has access."
+  },
+  "protected-system-surfaces": {
+    "code": "FORBIDDEN_TARGET",
+    "sentence": "sleight refuses this system app because it controls the desktop, accessibility or login session. The user must operate it.",
+    "cardRisk": "Claude could control the desktop and session or change accessibility access."
+  },
+  "agent-hosts": {
+    "code": "FORBIDDEN_TARGET",
+    "sentence": "sleight refuses agent hosts because Claude could approve another agent's actions or its own requests. The user must operate this app.",
+    "cardRisk": "Claude could approve another agent's actions or its own requests in this app.",
+    "overrideSentence": "sleight refuses this OpenAI app because Claude could approve another agent's actions. Only the user may lift this restriction with ComputerUseAllowForbiddenTargets."
+  },
+  "settings-windows": {
+    "code": "FORBIDDEN_TARGET",
+    "sentence": "sleight refuses this settings window so Claude cannot change approval or safety settings. Claude must ask the user.",
+    "cardRisk": "Claude could change approval or safety settings in this window."
+  },
+  "secure-input": {
+    "code": "SECURE_INPUT_ACTIVE",
+    "sentence": "sleight refuses key input during secure input, and other input when its status is unknown. The user must finish secure input or restore its status.",
+    "cardRisk": "Key input could enter a secret or answer a prompt while secure input is active."
+  },
+  "secure-field": {
+    "code": "SECURE_FIELD",
+    "sentence": "sleight refuses key input and semantic writes while a secure field has focus or its status is unknown. The user must enter the secret or restore focus status.",
+    "cardRisk": "Key input or a semantic write could change a secret while a secure field has focus."
+  }
+}

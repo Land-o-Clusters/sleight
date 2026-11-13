@@ -1,0 +1,8 @@
+{
+  "id": "CH4",
+  "source": "<private-evidence>/chv1b-1/textedit-drag-1-NiveQM/bench-result.json",
+  "task": "textedit-drag", "arm": "sleight", "run": 1,
+  "tool": "drag", "comparison": "worktrees", "toolRatioBelow": 1.05,
+  "fixturePass": true,
+  "assertion": "The placed receipt replaces the pre-input clear. Every drag iteration must pass with confirmed cleanup, and each candidate drag median divided by its baseline median must be below 1.05. Reply timing does not prove visibility or receipt delivery; check 4 measures visibility separately."
+}

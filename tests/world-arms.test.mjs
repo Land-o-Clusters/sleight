@@ -1,3 +1,4 @@
+import { assertChildStatus } from './fixtures/child-status.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { existsSync, mkdtempSync, readFileSync, rmSync } from 'node:fs';
@@ -16,7 +17,7 @@ const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 const LIB = join(ROOT, 'bench/world/arms/lib');
 const ARM = join(ROOT, 'bench/world/arms/browser-use');
 const uvSkip = commandSkip('uv') || (spawnSync('uv', ['python', 'find', '--offline', '--no-python-downloads', '--no-cache', '3.12'],
-  { encoding: 'utf8' }).status !== 0 && 'needs an installed Python 3.12 for uv');
+  { encoding: 'utf8', timeout: 30000, killSignal: 'SIGKILL' }).status !== 0 && 'needs an installed Python 3.12 for uv');
 
 function tmp(t) {
   const dir = trackTemp(mkdtempSync(join(tmpdir(), 'sleight-world-arm-')));
@@ -31,7 +32,7 @@ function source(arm) {
 function py(code) {
   return spawnSync('uv', ['run', '--python', '3.12', '--no-project', '--', 'python', '-c', code], {
     encoding: 'utf8', env: { ...process.env, PYTHONPATH: LIB },
-  });
+   timeout: 600000, killSignal: 'SIGKILL' });
 }
 
 test('Browser Use is the only world arm', () => {
@@ -76,7 +77,7 @@ from pathlib import Path
 arm = Path(${JSON.stringify(ARM)})
 project = tomllib.loads((arm / 'pyproject.toml').read_text())
 lock = tomllib.loads((arm / 'uv.lock').read_text())
-patched = {'anyio': '4.14.2', 'pypdf': '6.19.0', 'mcp': '2.2.0', 'aiohttp': '3.14.4'}
+patched = {'anyio': '4.14.2', 'pypdf': '6.21.2', 'mcp': '2.2.0', 'aiohttp': '3.14.4', 'pillow': '13.0.0', 'certifi': '2026.10.18'}
 for name, minimum in patched.items():
     packages = [p for p in lock['package'] if p['name'] == name]
     assert len(packages) == 1, (name, packages)
@@ -88,7 +89,7 @@ for name, minimum in patched.items():
         assert re.fullmatch(r'sha256:[0-9a-f]{64}', artifact['hash']), artifact
 print('ok')
 `);
-  assert.equal(ran.status, 0, ran.stderr + ran.stdout);
+  assertChildStatus(ran, 0, ran.stderr + ran.stdout);
 });
 
 test('UsageSummary fakes of the 0.13.11 shape price from PRICES, not total_cost', { skip: uvSkip }, () => {
@@ -117,7 +118,7 @@ assert loaded['claude-haiku-5-5']['input'] == 0.10
 assert loaded['claude-opus-5-5']['output'] == 20
 print('ok')
 `);
-  assert.equal(ran.status, 0, ran.stderr + ran.stdout);
+  assertChildStatus(ran, 0, ran.stderr + ran.stdout);
   assert.match(ran.stdout, /ok/);
 });
 
@@ -143,7 +144,7 @@ a, err = history_outcome(H(errors=[], done=True, answer='RESULT: 1815'))
 assert not err and a == 'RESULT: 1815'
 print('ok')
 `);
-  assert.equal(ran.status, 0, ran.stderr + ran.stdout);
+  assertChildStatus(ran, 0, ran.stderr + ran.stdout);
 });
 
 test('llm_kwargs uses adaptive thinking and output_config effort', { skip: uvSkip }, () => {
@@ -162,7 +163,7 @@ assert 'temperature' not in kw
 assert 'thinking_budget' not in kw
 print('ok')
 `);
-  assert.equal(ran.status, 0, ran.stderr + ran.stdout);
+  assertChildStatus(ran, 0, ran.stderr + ran.stdout);
 });
 
 test('fake model dry-run writes the FowlBrowser result event via uv 3.12', { skip: uvSkip }, t => {
@@ -181,7 +182,7 @@ test('fake model dry-run writes the FowlBrowser result event via uv 3.12', { ski
     arm: 'browser-use', out, prompt: 'open wikipedia and tell me when Ada Lovelace was born',
     model: 'opus', effort: 'medium', fake: true,
   });
-  assert.equal(ran.status, 0, ran.stderr || ran.stdout);
+  assertChildStatus(ran, 0, ran.stderr || ran.stdout);
   const events = ran.stdout.split('\n').filter(line => line.startsWith('{')).map(line => JSON.parse(line));
   const result = resultEvent(events);
   assert.equal(result.is_error, false);
@@ -202,7 +203,7 @@ from cli import parse_args
 args = parse_args(['--prompt', 'x', '--out', ${JSON.stringify(out)}, '--arm', 'browser-use'])
 fail(args, SystemExit('missing key'))
 `);
-  assert.equal(ran.status, 0, ran.stderr + ran.stdout);
+  assertChildStatus(ran, 0, ran.stderr + ran.stdout);
   const result = resultEvent(ran.stdout.split('\n').filter(line => line.startsWith('{')).map(line => JSON.parse(line)));
   assert.equal(result.is_error, true);
   assert.match(String(result.result), /missing key/);
@@ -249,8 +250,8 @@ asyncio.run(client.messages.create(model=kw['model'], max_tokens=kw['max_tokens'
 assert transport.requests, 'SDK sent a request'
 print('ok')
 `,
-  ], { encoding: 'utf8', env: { ...process.env, PYTHONPATH: LIB, UV_PROJECT_ENVIRONMENT: envDir } });
-  assert.equal(ran.status, 0, ran.stderr + ran.stdout);
+  ], { encoding: 'utf8', env: { ...process.env, PYTHONPATH: LIB, UV_PROJECT_ENVIRONMENT: envDir }, timeout: 600000, killSignal: 'SIGKILL' });
+  assertChildStatus(ran, 0, ran.stderr + ran.stdout);
   assert.match(ran.stdout, /ok/);
   assert.equal(existsSync(join(ARM, '.venv')), hadVenv);
 });
@@ -276,7 +277,7 @@ asyncio.run(kill_browser(b))
 assert b.kills == 2 and b.stops == 0
 print('ok')
 `);
-  assert.equal(ran.status, 0, ran.stderr + ran.stdout);
+  assertChildStatus(ran, 0, ran.stderr + ran.stdout);
 });
 
 test('a Browser constructor error removes the throwaway profile and reports failure', { skip: uvSkip }, t => {
@@ -322,7 +323,7 @@ finally:
         shutil.rmtree(path, ignore_errors=True)
 print('ok')
 `);
-  assert.equal(ran.status, 0, ran.stderr + ran.stdout);
+  assertChildStatus(ran, 0, ran.stderr + ran.stdout);
 });
 
 test('timeout and exception paths report spend from token_cost_service', { skip: uvSkip }, () => {
@@ -347,16 +348,16 @@ empty, zero = asyncio.run(spend(None, 'claude-haiku-5-5'))
 assert empty == {} and zero == 0
 print('ok')
 `);
-  assert.equal(ran.status, 0, ran.stderr + ran.stdout);
+  assertChildStatus(ran, 0, ran.stderr + ran.stdout);
 });
 
 test('setup.sh --dry-run prints the pin and does not create a venv', t => {
   const cwd = tmp(t);
   const script = join(ROOT, 'bench/world/arms/browser-use/setup.sh');
-  const ran = spawnSync('sh', [script, '--dry-run'], { encoding: 'utf8', cwd });
-  assert.equal(ran.status, 0, ran.stderr);
+  const ran = spawnSync('sh', [script, '--dry-run'], { encoding: 'utf8', cwd, timeout: 60000, killSignal: 'SIGKILL' });
+  assertChildStatus(ran, 0, ran.stderr);
   assert.match(ran.stdout, /uv sync --python 3\.12 --frozen/);
   assert.match(ran.stdout, /browser-use==0\.13\.11, security overrides in pyproject\.toml/);
-  const listing = spawnSync('/bin/ls', ['-A', cwd], { encoding: 'utf8' });
+  const listing = spawnSync('/bin/ls', ['-A', cwd], { encoding: 'utf8', timeout: 30000, killSignal: 'SIGKILL' });
   assert.equal(listing.stdout.trim(), '');
 });

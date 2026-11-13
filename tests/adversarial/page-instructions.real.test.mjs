@@ -194,31 +194,66 @@ test('hygiene: a long page-chosen hostname is capped in the navigation line, the
   assert.doesNotMatch(line, new RegExp(label), line);
 });
 
-// A page can open a file chooser after its step returned. The count since the last result the model received is reported once.
-test('hygiene: a file chooser opened after the step returned is reported on the next result, once', { skip, timeout: 60000 }, async t => {
+// Native picker APIs are blocked before a chooser opens, including calls delayed until after the step returns.
+test('hygiene: delayed file picker calls are blocked before opening and are never reported as opened', { skip, timeout: 60000 }, async t => {
   const b = await bank(t), f = await b.start(doc('<button id="b1" type="button">Soon</button><button id="b2" type="button">Late</button><input type="file" id="f1" style="position:absolute;opacity:0;width:1px;height:1px" aria-label="Resume">',
-    'b1.onclick=()=>setTimeout(()=>f1.click(),700);b2.onclick=()=>setTimeout(()=>f1.click(),2500)'), readOnly);
-  const note = /^A file picker opened and was suppressed, use an upload step with the user-named file\.$/m;
+    'window.__pickerFailures=[];const attempt=()=>{try{f1.click()}catch(error){__pickerFailures.push(error.name)}};b1.onclick=()=>setTimeout(attempt,700);b2.onclick=()=>setTimeout(attempt,2500)'), readOnly);
   const first = await f.act([{ do: 'click', ref: f.ref('Soon') }]);
-  assert.doesNotMatch(first.text, /file picker/, 'nothing opened yet: ' + first.text);
-  await new Promise(resolve => setTimeout(resolve, 1200));
-  const second = await f.read(); assert.match(second, note, second.split('\n').slice(0, 3).join(' | '));
-  assert.doesNotMatch(await f.read(), /file picker/, 'a delivered report is not repeated');
+  assert.doesNotMatch(first.text, /file picker opened/, first.text);
+  await f.page.waitForFunction(() => window.__pickerFailures.length === 1, undefined, { timeout: 5000 });
+  assert.doesNotMatch(await f.read(), /file picker opened/);
+  assert.doesNotMatch(await f.read(), /file picker opened/);
   await f.act([{ do: 'click', ref: f.ref('Late') }]);
-  await new Promise(resolve => setTimeout(resolve, 3000));
-  const third = await f.act([{ do: 'hover', ref: f.ref('Late') }]); assert.match(third.text, note, third.text.split('\n').slice(0, 3).join(' | '));
-  assert.equal(f.state.chooser, 2);
+  await f.page.waitForFunction(() => window.__pickerFailures.length === 2, undefined, { timeout: 5000 });
+  const third = await f.act([{ do: 'hover', ref: f.ref('Late') }]);
+  assert.doesNotMatch(third.text, /file picker opened/, third.text);
+  assert.deepEqual(await f.page.evaluate(() => window.__pickerFailures), ['NotAllowedError', 'NotAllowedError']);
+  assert.equal(f.state.chooser ?? 0, 0, 'no chooser may reach the interception backstop');
   assert.equal(f.delta().upload, 0);
+  await f.safe();
 });
-for (const [name, input, expect] of [
-  ['display:none', '<input type="file" id="f1" aria-label="Resume" style="display:none">', 'hidden'], ['hidden attribute', '<input type="file" id="f1" aria-label="Resume" hidden>', 'hidden'],
-  ['visible', '<input type="file" id="f1" aria-label="Resume">', 'visible']])
-  test(`hygiene: a suppressed chooser on a ${name} input says whether an upload ref exists`, { skip, timeout: 60000 }, async t => {
-    const b = await bank(t), f = await b.start(doc('<button id="dz" type="button">Drop or click to attach</button>' + input, 'dz.onclick=()=>f1.click()'), readOnly);
+for (const [name, input] of [
+  ['display:none', '<input type="file" id="f1" aria-label="Resume" style="display:none">'], ['hidden attribute', '<input type="file" id="f1" aria-label="Resume" hidden>'],
+  ['visible', '<input type="file" id="f1" aria-label="Resume">']])
+  test(`hygiene: a picker on a ${name} input is blocked before a chooser opens`, { skip, timeout: 60000 }, async t => {
+    const b = await bank(t), f = await b.start(doc('<button id="dz" type="button">Drop or click to attach</button>' + input,
+      'dz.onclick=()=>{try{f1.click()}catch(error){window.__pickerFailure=error.name}}'), readOnly);
     const result = await f.act([{ do: 'click', ref: f.ref('Drop or click to attach') }]);
-    if (expect === 'hidden') {
-      assert.match(result.text, /^A file picker opened and was suppressed, but its input has no ref in the snapshot; upload with the engine browser path\.$/m, result.text);
-      assert.doesNotMatch(result.text, /use an upload step/, result.text);
-    } else assert.match(result.text, /^A file picker opened and was suppressed, use an upload step with the user-named file\.$/m, result.text);
+    assert.equal(await f.page.evaluate(() => window.__pickerFailure), 'NotAllowedError');
+    assert.equal(f.state.chooser ?? 0, 0, 'no chooser may reach the interception backstop');
+    assert.doesNotMatch(result.text, /file picker opened/, result.text);
     assert.equal(f.delta().upload, 0);
+    await f.safe();
+  });
+
+// The native-UI guard prevents these APIs from reaching Playwright's chooser event. Feed explicit test
+// observations to that event listener to retain coverage of the interception backstop's delivery bookkeeping.
+// No picker API is called here, and these cases make no claim about a real chooser opening.
+const observeChooser = f => f.page.emit('filechooser', { element: () => f.page.locator('#f1') });
+test('hygiene: a simulated chooser observation after a delivered step is reported on the next result, once', { skip, timeout: 60000 }, async t => {
+  const b = await bank(t), f = await b.start(doc('<button type="button">Attach</button><input type="file" id="f1" aria-label="Resume">'), readOnly);
+  const note = /^A file picker opened and was suppressed, use an upload step with the user-named file\.$/m;
+  const first = await f.act([{ do: 'hover', ref: f.ref('Attach') }]);
+  assert.doesNotMatch(first.text, /file picker opened/);
+  observeChooser(f);
+  assert.match(await f.read(), note);
+  assert.doesNotMatch(await f.read(), /file picker opened/, 'a delivered observation must not repeat');
+  observeChooser(f);
+  assert.match((await f.act([{ do: 'hover', ref: f.ref('Attach') }])).text, note);
+  assert.doesNotMatch(await f.read(), /file picker opened/);
+  assert.equal(f.state.chooser, 2);
+  await f.safe();
+});
+for (const [name, attribute, hidden] of [['display:none', 'style="display:none"', true], ['hidden attribute', 'hidden', true], ['visible', '', false]])
+  test(`hygiene: a simulated chooser observation on a ${name} input reports the upload route`, { skip, timeout: 60000 }, async t => {
+    const b = await bank(t), f = await b.start(doc(`<button type="button">Attach</button><input type="file" id="f1" aria-label="Resume" ${attribute}>`), readOnly);
+    await f.act([{ do: 'hover', ref: f.ref('Attach') }]);
+    observeChooser(f);
+    const result = await f.read();
+    assert.match(result, hidden
+      ? /^A file picker opened and was suppressed, but its input has no ref in the snapshot; upload with the engine browser path\.$/m
+      : /^A file picker opened and was suppressed, use an upload step with the user-named file\.$/m);
+    assert.equal(f.state.chooser, 1);
+    assert.doesNotMatch(await f.read(), /file picker opened/);
+    await f.safe();
   });

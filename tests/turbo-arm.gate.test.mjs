@@ -1,3 +1,4 @@
+import { assertChildStatus } from './fixtures/child-status.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { spawn, spawnSync } from 'node:child_process';
@@ -18,11 +19,11 @@ const fixtureTask = { name: 'fixture', browser: 'chrome', prompt: 'Read http://1
 async function runner(t) {
   const dir = registerTemp(t, mkdtempSync(join(tmpdir(), 'sleight-turbo-gate-')));
   mkdirSync(join(dir, 'tools'));
-  const original = spawnSync('/usr/bin/git', ['-C', cache, 'show', '6a12d60:tools/rounds.mjs'], { encoding: 'utf8' });
-  assert.equal(original.status, 0, original.stderr);
+  const original = spawnSync('/usr/bin/git', ['-C', cache, 'show', '6a12d60:tools/rounds.mjs'], { encoding: 'utf8', timeout: 30000, killSignal: 'SIGKILL' });
+  assertChildStatus(original, 0, original.stderr);
   const file = join(dir, 'tools/rounds.mjs'); writeFileSync(file, original.stdout);
-  const applied = spawnSync('/usr/bin/git', ['apply', join(root, 'bench/fowl/sleight-surface.patch')], { cwd: dir, encoding: 'utf8' });
-  assert.equal(applied.status, 0, applied.stderr);
+  const applied = spawnSync('/usr/bin/git', ['apply', join(root, 'bench/fowl/sleight-surface.patch')], { cwd: dir, encoding: 'utf8', timeout: 30000, killSignal: 'SIGKILL' });
+  assertChildStatus(applied, 0, applied.stderr);
   const previous = process.env.SLEIGHT_REPO; process.env.SLEIGHT_REPO = root;
   t.after(() => { if (previous === undefined) delete process.env.SLEIGHT_REPO; else process.env.SLEIGHT_REPO = previous; });
   return { dir, file, mod: await import(pathToFileURL(file)) };
@@ -41,7 +42,7 @@ test('turbo arm offers the engine companion and the installed turbo skill before
   const browserRules = readFileSync(join(root, 'plugins/sleight/skills/drive-mac-apps/BROWSERS.turbo-v3.md'), 'utf8').trimEnd().replace('{browser}', 'bbench').replace('{application}', ' (Google Chrome)');
   const installed = skillRules(undefined, {}).replace(/## Browsers\n[\s\S]*?(?=\n## |$)/, browserRules + '\n');
   assert.equal(setup.promptPrefix, turboFirstRules(installed) + '\n\n', 'same first-browser projection as the product relay');
-  assert.match(setup.promptPrefix, /Never translate refs or handles between paths/);
+  assert.match(setup.promptPrefix, /Never retry a safety refusal or uncertain input through another path, or reuse refs\/handles across paths\./);
 });
 
 test('fixture and open-web tasks receive the same installed prompt and tools without per-task routing', t => {
@@ -63,7 +64,7 @@ test('the combined turbo prompt shares the screenshot A/B switch and keeps lint 
     const env = { SLEIGHT_PROMPT: prompt, SLEIGHT_SCREENSHOT_READS: flag };
     const setup = turboSetup({ task: fixtureTask, repo: root, dir, prompt: fixtureTask.prompt, env });
     assert.doesNotMatch(setup.promptPrefix, /<!--|vale ai-tells/);
-    assert.equal(setup.promptPrefix.includes('When a document pane or table exposes no text'), prompt !== 'lean' && flag !== '0');
+    assert.equal(setup.promptPrefix.includes('Textless document pane/table'), prompt !== 'lean' && flag !== '0');
     const native = turboFirstRules(skillRules(undefined, env)).split('## Browsers')[0];
     assert.ok(setup.promptPrefix.startsWith(native));
   }
@@ -75,7 +76,7 @@ test('the prompt names the task browser as the one the tools drive and sends no 
     const task = { ...fixtureTask, browser };
     const { promptPrefix } = turboSetup({ task, repo: root, dir, prompt: task.prompt });
     assert.match(promptPrefix, new RegExp('Turbo selects `bbench` \\(' + application + '\\)\\.'));
-    assert.match(promptPrefix, /Drive this browser with these tools, not engine `js`\. `js` serves native apps and other browsers/);
+    assert.match(promptPrefix, /Drive this browser with these tools, not `js`\. Engine `js` for native apps\/other browsers keeps its approvals\/guards\./);
     assert.doesNotMatch(promptPrefix, /listBrowsers|createBrowserTab|extensionInstanceId|Find (Helium|Chrome)/);
   }
 });
@@ -118,8 +119,7 @@ test('the gate tasks and optional takeover in both browser orders keep both serv
       const setup = mod.agentSetup({ task, surface: 'sleight-turbo', dir, mcpRoot: '/fixture/mcp',
         settings: '/fixture/settings.json', model: 'haiku', effort: 'high', world: true });
       assert.deepEqual(Object.keys(setup.mcpConfig.mcpServers).sort(), ['plugin:sleight:computer', 'sleight-turbo'], task.name);
-      assert.ok(setup.args[setup.args.indexOf('--allowedTools') + 1].split(',').includes('mcp__plugin_sleight_computer__js'),
-        'native tools stay available while native how-to is deferred');
+      assert.ok(setup.args[setup.args.indexOf('--allowedTools') + 1].split(',').includes('mcp__plugin_sleight_computer__js'));
       assert.equal(mod.surfaceObserved('sleight-turbo', task), false, 'route choice cannot prove extension tab ownership');
     }
     const settings = mod.roundSettings('sleight-turbo', { mcpRoot: '/fixture/mcp' });
@@ -178,8 +178,8 @@ test('the full gate dry plan has twenty-six supported rows across both browser o
       const plan = spawnSync(process.execPath, [file, '--tasks', join(cache, 'tools/agents/codex-h2h.json'),
         '--surface', 'sleight-turbo', '--world', '--dry-run', '--model', 'haiku', '--effort', 'high',
         '--out', join(dir, swap ? 'swap' : 'normal'), ...(swap ? ['--swap'] : [])],
-      { encoding: 'utf8', env: { ...process.env, SLEIGHT_REPO: root }, maxBuffer: 4 * 1024 * 1024 });
-      assert.equal(plan.status, 0, plan.stderr);
+      { encoding: 'utf8', env: { ...process.env, SLEIGHT_REPO: root }, maxBuffer: 4 * 1024 * 1024, timeout: 60000, killSignal: 'SIGKILL' });
+      assertChildStatus(plan, 0, plan.stderr);
       const rows = JSON.parse(plan.stdout.slice(plan.stdout.indexOf('[\n')));
       assert.equal(rows.length, 13, 'takeover stays behind the existing --gui requirement');
       for (const row of rows) {

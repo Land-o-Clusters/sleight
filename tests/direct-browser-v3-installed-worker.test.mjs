@@ -41,6 +41,21 @@ const begin = async (f, use = true) => {
   await settle(); assert.equal(f.frames.find(x=>x.id==='begin').result.available,true);
   if(use){f.channel.emit('message',{version:3,id:'first-call',method:'call',params:{name:'browser_tabs',arguments:{do:'list'}}});await settle();}
 };
+test('invalid runtime selection closes startup before clipboard recovery or connection work', async () => {
+  const previous = process.env.SLEIGHT_RUNTIME;
+  process.env.SLEIGHT_RUNTIME = 'invalid-fixture';
+  const f = fixture(); let recovery = 0;
+  f.dependencies.recoverClipboard = async () => { recovery++; };
+  try {
+    await assert.rejects(startInstalledV3Worker({ channel: f.channel }, f.dependencies), error =>
+      error.stage === 'runtime-choice' && /SLEIGHT_RUNTIME/.test(error.message));
+    assert.equal(recovery, 0); assert.equal(f.events.includes('connect'), false);
+    assert.equal(f.channel.listenerCount('disconnect'), 0);
+  } finally {
+    if (previous === undefined) delete process.env.SLEIGHT_RUNTIME;
+    else process.env.SLEIGHT_RUNTIME = previous;
+  }
+});
 test('worker recovery completes before connection selection or ready publication', async () => {
   const f = fixture(); let finish, entered;
   const started = new Promise(resolve => { entered = resolve; });
@@ -658,4 +673,13 @@ test('while connected the menu offers Never Act on the site turbo last worked on
   assert.equal(f.views.at(-1).data.site, undefined, 'a blocked site is not offered again');
   assert.ok(!f.views.at(-1).choices.includes('block-site'));
   assert.ok(!f.events.includes('disconnect'), 'blocking a site leaves turbo connected');
+});
+
+test('own-runtime browser startup and shutdown never invoke legacy clipboard recovery', async () => {
+  const f = fixture(); let accesses = 0;
+  f.dependencies.strictText = true;
+  f.dependencies.recoverClipboard = async () => { accesses++; throw Error('pasteboard factory forbidden'); };
+  const host = await startInstalledV3Worker({ channel: f.channel }, f.dependencies);
+  assert.ok(host); assert.equal(f.frames.some(frame => frame.type === 'unavailable'), false);
+  await host.close(); assert.equal(accesses, 0);
 });

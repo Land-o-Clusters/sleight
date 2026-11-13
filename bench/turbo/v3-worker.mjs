@@ -25,18 +25,28 @@ export function headlessExecutable(home = homedir()) {
 // touched. The product's own guards still apply on top: the DevTools port and endpoint guards, http(s)-only opens.
 export const BENCH_BROWSER_ARGS = ['--headless', '--remote-debugging-port=0', '--no-first-run', '--no-default-browser-check', 'about:blank'];
 
-export async function launchOwnedBrowser({ spawnBrowser = spawn, timeoutMs = 15000 } = {}) {
+export async function launchOwnedBrowser({ spawnBrowser = spawn, executable = headlessExecutable, timeoutMs = 15000 } = {}) {
   const root = realpathSync(mkdtempSync(join(tmpdir(), 'sleight-bench-v3-')));
-  const child = spawnBrowser(headlessExecutable(), ['--user-data-dir=' + root, ...BENCH_BROWSER_ARGS], { stdio: 'ignore' });
-  const stop = async () => {
+  const child = spawnBrowser(executable(), ['--user-data-dir=' + root, ...BENCH_BROWSER_ARGS], { stdio: 'ignore' });
+  const hasExited = () => child.exitCode !== null || child.signalCode !== null;
+  const waitForExit = async () => {
+    if (hasExited()) return;
+    let timer, done;
+    try { await new Promise(resolve => {
+      done = resolve; child.once('exit', done); timer = setTimeout(done, 5000);
+    }); } finally { clearTimeout(timer); child.off('exit', done); }
+  };
+  let stopping;
+  const stop = () => stopping ??= (async () => {
     if (child.exitCode === null && child.signalCode === null) {
-      const exited = new Promise(done => child.once('exit', done));
+      const exited = waitForExit();
       child.kill('SIGTERM');
-      await Promise.race([exited, new Promise(done => setTimeout(done, 5000))]);
-      if (child.exitCode === null && child.signalCode === null) child.kill('SIGKILL');
+      await exited;
+      if (!hasExited()) { child.kill('SIGKILL'); await waitForExit(); }
     }
     rmSync(root, { recursive: true, force: true });
-  };
+    return { pid: child.pid, profilePath: root, browserExited: hasExited(), profileDeleted: !existsSync(root) };
+  })();
   const file = join(root, 'DevToolsActivePort'), deadline = Date.now() + timeoutMs;
   while (!existsSync(file) || readFileSync(file, 'utf8').trim().split('\n').length < 2) {
     if (Date.now() > deadline || child.exitCode !== null) { await stop(); throw Error('BENCH_BROWSER_START_FAILED'); }
@@ -44,6 +54,23 @@ export async function launchOwnedBrowser({ spawnBrowser = spawn, timeoutMs = 150
   }
   const [port, path] = readFileSync(file, 'utf8').trim().split('\n');
   return { endpoint: 'ws://127.0.0.1:' + port + path, stop };
+}
+
+// Keep benchmark-owned lifecycle evidence on the existing close reply. The product
+// protocol and tool replies stay unchanged; an end-turn reply never stops the browser.
+function ownedCleanupChannel(channel, owned) {
+  let closeId;
+  channel.on('message', frame => { if (frame?.method === 'close') closeId = frame.id; });
+  return {
+    get connected() { return channel.connected; },
+    on: (...args) => channel.on(...args), off: (...args) => channel.off(...args),
+    disconnect: () => channel.disconnect?.(),
+    send(frame, callback) {
+      if (frame.id !== closeId || frame.result?.revoked !== true) return channel.send(frame, callback);
+      owned.stop().then(ownedBrowser => channel.send({ ...frame, result: { ...frame.result, ownedBrowser } }, callback))
+        .catch(error => callback?.(error));
+    },
+  };
 }
 
 export function selectedConnection(endpoint, browser = 'bbench') {
@@ -120,10 +147,11 @@ const atStage = (stage, work) => work().catch(error => {
 
 export async function startBenchWorker({ channel = process, launch = launchOwnedBrowser,
   realBrowser = process.env.SLEIGHT_TURBO_REAL_BROWSER ? JSON.parse(process.env.SLEIGHT_TURBO_REAL_BROWSER) : null,
+  ownedBrowserEvidence = process.env.SLEIGHT_TURBO_OWNED_BROWSER_EVIDENCE === '1',
   startInstalled = startInstalledV3Worker, realOptions = realBrowserDependencies } = {}) {
   if (realBrowser) return startInstalled({ channel }, await atStage('bench-config', () => realOptions(realBrowser)));
   const owned = await atStage('bench-browser', () => launch());
-  const host = await startInstalledV3Worker({ channel }, {
+  const host = await startInstalled({ channel: ownedBrowserEvidence ? ownedCleanupChannel(channel, owned) : channel }, {
     readConfig: () => ({}), acceptPackage: () => ({ current: () => true }),
     prepareHelpers: async () => ({ status: 'ready', receipt: {} }),
     selectConnection: async () => selectedConnection(owned.endpoint),

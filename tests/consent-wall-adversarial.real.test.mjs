@@ -33,7 +33,7 @@ for (const [language, heading, reject, necessary] of labels) {
     for (const [i, label] of [reject, necessary].entries()) {
       await f.entry.page.goto(new URL('/locale' + i, f.entry.page.url()).href);
       const result = await f.act(label);
-      assert.match(result, /decline confirmed/i);
+      assert.match(result, /cookie wall no longer shown after clicking/i);
       assert.equal(await f.entry.page.locator('section').count(), 0);
     }
   });
@@ -50,7 +50,7 @@ for (const label of ['Manage preferences', 'Customise', 'Save choices', 'X', 'Re
   test(`turbo passes nonaccept control ${label} without claiming decline`, { skip, timeout: 30000 }, async t => {
     const f = await setup(t, wall(`<button aria-label="${label}" onclick="document.body.dataset.next='sent'">◼</button>`));
     const result = await f.act(label);
-    assert.doesNotMatch(result, /Cookie acceptance blocked|decline confirmed/i);
+    assert.doesNotMatch(result, /Cookie acceptance blocked|decline confirmed|cookie wall no longer shown after clicking/i);
     assert.equal(await f.entry.page.locator('body').getAttribute('data-next'), 'sent');
   });
 }
@@ -65,7 +65,8 @@ for (const [why, handler, status] of [
   test(`turbo only reports closure when ${why} and never fences later input`, { skip, timeout: 30000 }, async t => {
     const f = await setup(t, wall('<button id="reject">Reject all</button>', `document.querySelector('#reject').onclick=()=>{${handler}}`));
     const result = await f.act('Reject all');
-    assert.match(result, new RegExp('decline ' + status, 'i'));
+    assert.match(result, status === 'confirmed' ? /cookie wall no longer shown after clicking/i : /decline unverified/i);
+    assert.doesNotMatch(result, /decline confirmed|declined non-essential cookies/i);
     assert.doesNotMatch(await f.act('Read article'), /Cookie acceptance blocked/);
     assert.equal(await f.entry.page.locator('body').getAttribute('data-next'), 'sent');
   });
@@ -98,7 +99,7 @@ test('a cookie decline that opens another surface reports unverified', { skip, t
     { '/settings': '<h1>Cookie settings</h1><button>Save choices</button>' });
   const result = await f.act('Reject all');
   assert.match(result, /decline unverified/i);
-  assert.doesNotMatch(result, /decline confirmed/i);
+  assert.doesNotMatch(result, /cookie wall no longer shown after clicking/i);
 });
 
 test('a decline with lost completion reports unverified and does not fence later input', { skip, timeout: 30000 }, async t => {
@@ -110,7 +111,7 @@ test('a decline with lost completion reports unverified and does not fence later
   });
   const result = await f.act('Reject all');
   assert.match(result, /decline unverified/i);
-  assert.doesNotMatch(result, /decline confirmed/i);
+  assert.doesNotMatch(result, /cookie wall no longer shown after clicking/i);
   const again = await f.act('Read article');
   assert.doesNotMatch(again, /Cookie acceptance blocked/);
   assert.equal(await f.entry.page.locator('body').getAttribute('data-next'), 'sent');
@@ -126,7 +127,7 @@ test('a same-origin frame uses its own cookie text and target', { skip, timeout:
     assert.equal(await checkConsent(target, 'click', f.entry.state), true);
     return target.click({ timeout: 1000, ...extra });
   });
-  assert.match(await verifyConsent(f.entry.page, f.entry.state), /decline confirmed/i);
+  assert.match(await verifyConsent(f.entry.page, f.entry.state), /cookie wall no longer shown after clicking/i);
   assert.equal(await f.entry.page.locator('section').count(), 0);
 });
 

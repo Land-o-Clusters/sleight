@@ -32,7 +32,7 @@
         }
       ],
       "expected": "a",
-      "readError": "Command failed: /usr/bin/osascript -l JavaScript ~/Projects/sleight-wt/double-keys/bench/double-keys-fixture.js read /private/tmp/sleight-double-keys-Zk4nfu/double-keys.txt\n~/Projects/sleight-wt/double-keys/bench/double-keys-fixture.js: execution error: Error: Error: AppleEvent timed out. (-1712)\n",
+      "readError": "Command failed: /usr/bin/osascript -l JavaScript <private-evidence>/double-keys/bench/double-keys-fixture.js read /private/tmp/sleight-double-keys-Zk4nfu/double-keys.txt\n<private-evidence>/double-keys/bench/double-keys-fixture.js: execution error: Error: Error: AppleEvent timed out. (-1712)\n",
       "finished": "2026-10-04T16:15:53.192Z",
       "exact": false,
       "correctMultiplicity": false,
@@ -556,6 +556,6 @@
       "status": "fulfilled"
     }
   ],
-  "fixtureCloseError": "Command failed: /usr/bin/osascript -l JavaScript ~/Projects/sleight-wt/double-keys/bench/double-keys-fixture.js close /private/tmp/sleight-double-keys-Zk4nfu/double-keys.txt\n",
+  "fixtureCloseError": "Command failed: /usr/bin/osascript -l JavaScript <private-evidence>/double-keys/bench/double-keys-fixture.js close /private/tmp/sleight-double-keys-Zk4nfu/double-keys.txt\n",
   "finished": "2026-10-04T16:18:45.653Z"
 }

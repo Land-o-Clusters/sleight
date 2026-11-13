@@ -1,19 +1,323 @@
 # Known problems
 
-What doesn't work, or works only partly, with the measurements behind it. We found all of these in
-our own runs. Dates and engine versions are given where they matter.
+What doesn't work, or works only partly, with the measurements behind it. Some limits come from code inspection
+and await live qualification. Dates and engine versions are given where they matter.
 
 ## Before you start
+
+- In 1.5.0 and 1.5.1, Claude Code sessions running sleight without its mod (bare MCP setup, mods off or the Agent SDK)
+  could let the model forge typed app approvals and user-message bindings for payments and bookings. Fixed in 1.6.0.
+  Another installed plugin's mod receives the same attribution label and remains outside sleight's protection.
+- When the mod is loaded but the relay never got the mod's first message of the session, typed `allow <app>` approvals
+  don't count, and a user away from the Mac is told to approve on the card. Without that first message, sleight clears
+  its clipboard turn state at every plain turn end, as it does in Cursor. After the relay restarts mid-session, a stale
+  turn end from the mod leaves that state set until the next turn the mod binds.
 
 New apps need an approval card, and `claude -p` cannot answer it. The [install validation limits](../README.md#install-validation) apply, and the engine
 refuses terminals and OpenAI's own apps. See [approvals and guards](#approvals-and-guards) before an unattended session.
 
+- Sealed settings only report in 1.6.0. Enforcement, adoption and the I4 tool-result line arrive with the signed helper.
+  Sealing is same-user strength until that helper is released. Rewriting the cached binary and `build.json` can defeat the preview proof.
+  The copied routine launcher is JavaScript. Editing it can remove its seal check. A signed launchd bootstrap is still needed.
 - First access can be slow: one Calculator acquisition took 29.475 s, including 27.683 s inside the engine after approval ([engine and helper](#the-engine-and-its-helper)).
 - The helper can crash: 4 segfaults were recorded from 2026-10-05 to 2026-10-11 ([engine and helper](#the-engine-and-its-helper)).
 - Full screen and Split View can break background drags and reads: 8 of 21 runs failed in a Split View pass ([pointer and drags](#the-pointer-drags-and-hover)).
 - A covered window can prevent a drop: TextEdit moves passed 3/3 uncovered and 0/3 covered. `drag` now refuses a covered drag and points to `app.drag` ([pointer and drags](#the-pointer-drags-and-hover)).
 - Turbo may ask about an honest checkout: on 2026-10-15, 50/98 honest payment fixtures allowed without asking (83/98 in round 12) ([browsers](#browsers)).
 - Safari may stop between opening a tab and typing: 36 of 36 Codex chains and 19 of 19 Claude Code chains stopped. The fix is untested live ([approvals and guards](#approvals-and-guards)).
+
+## The own runtime preview
+
+- In the 2026-11-08 live Calculator runs (Haiku 5.5 high, 3 a side, load about 5 on 10 cores) the Glide engine and
+  the ChatGPT engine both passed 6 of 6, with Glide slower on every task. Clicking a sum took Glide 17.7, 16.5 and 30.1 s against 10.8,
+  11.9 and 8.6 s. Switching modes by menu took Glide 97.7, 36.7 and 67.8 s (9 to 33 turns) against 14.2, 11.6 and 11.0 s
+  (4 or 5 turns). The read before each Glide action is its largest cost (4.0 to 6.5 s per attempt).
+- The first Glide call after an install or update waits for its helper to compile (30 to 47 s on the test Mac).
+- A number or selector binds after renumbering only when every row before the target, its ancestors and any dialog are
+  unchanged. A read-only identified scroll area may change a numeric value (12 to 12000) or appear and vanish whole
+  before a plain control. Consequential controls still need an unchanged read. A plain two-decimal number such as 0.25
+  counts as money there, so a change from 0.25 to 0.50 needs a new read.
+- A field sleight wrote must show the written text in the next read. A field that reformats or hides its value refuses
+  the next action on that form until the model reads again.
+- Session and Apple-menu commands need a request, matched on English words. Localized labels such as Beenden are not
+  matched, Sign Out is missing, and app commands named Restart, Sleep or Lock Screen also need a request.
+- `SLEIGHT_RUNTIME=own` opts into MCP-only reads. The shell strips it and the ChatGPT engine stays the default.
+  Installed input is unregistered. The input limits below concern a private compiled helper plus host capability and
+  await live qualification. Environment/tool arguments cannot enable input. Switching to `engine` needs a restart.
+- `getApp` forces `launch: false` and needs an existing window. An absent app can prompt before `NO_WINDOWS_AVAILABLE`.
+  Missing/invalid policy or permissions refuse. Site limits block native reads/captures without a trusted site reader.
+  Chromium/Electron trees may remain thin because renderer activation is unavailable in the installed preview.
+- Without ChatGPT, use Node 25 or later and Xcode command-line tools (300 s per compiler invocation). The launcher
+  prefers bundled Node. Missing `--permission`/`--allow-net` yields `REPL_NODE_UNSUPPORTED`, never PATH fallback.
+  Bundled flag support is unchecked. Doctor starts/compiles nothing and reports AX/Screen Recording grants as `unknown`.
+  A Terminal grant covers other scripts it launches. The helper pin identifies source/protocol, not compiler flags or
+  binary authenticity. Source-scan tripwires cannot prove arbitrary future source safe.
+- App policy refuses password managers, authentication agents, protected system surfaces and agent hosts, including
+  the current host from ancestry. `ComputerUseAllowForbiddenTargets`, read once at startup, lifts terminal/OpenAI-app
+  refusals but never protected settings/current-host refusals. Ancestry and bundle metadata do not verify signatures.
+  Exact-ID evidence covers 13 earlier missing apps. Older direct-download LastPass needs name patterns because its
+  2 identities cannot distinguish roles. Matching can miss double/nonbreaking spaces and `_`. Prefixes wrongly refuse
+  `Hyper-V Manager`/`Kitty-Cat Viewer` without the override. `HyperDock`/`Hello Kitty` remain eligible.
+- Settings-title matching can allow Vietnamese `càl đặt` for `cài đặt` when the forbidden-target override is on,
+  or refuse ordinary titles such as `Setting sail` and `Offsetting Sync`. AX subrole and identifier checks still apply.
+  The recorded 2,338-title comparison newly allowed 56 titles in the short Vietnamese class.
+- Dotted-version Claude Code names need a full lsof path under `/claude/versions/<one segment>` or refuse with
+  `APP_POLICY_INVALID_METADATA`. Trailing/repeated slashes, dot segments and child `bin` fail. `2.1.5-beta`, `2.1.5.` and `2`
+  bypass that rule. Trailing spaces refuse. Path provenance is unproved. `listApps()` drops malformed-app refusals.
+- Numbers need a complete delivered tree, never hidden/sliced reads. One safe block insertion/removal can remap to one
+  reported destination (90 recorded actions: 32 refused, 7 remapped, 0 wrong). Identical insertions, sibling swaps and
+  changed text leaves can escape text comparison or cost a reread. Guard markers/duplicate numbers yield `DRIVER_PROTOCOL`;
+  identical trees/titles in 2 windows cannot bind. The scroll-area AXIdentifier exemption was studied only on Safari.
+  Rereads return full trees. Consequential targets never remap and need a byte-identical tree: changed Total below Pay
+  yields `STALE_READ`, while unchanged text still cannot authorize payment. There is no figures-based gate. Fill-then-Submit,
+  edit-then-Save/Send/Delete or selection-then-Open can cost a turn. Empty buttons after fields bind the whole tree.
+  The 364-entry, 9-language vocabulary lacks native review. Russian, Arabic, Dutch and letter-spaced verbs can stay neutral.
+  Mixed Latin/Greek or Latin/Cyrillic words fail closed.
+- Guards have offline coverage only. Missing node geometry can exhaust the settle cap with `settled: false`. Transient
+  frame-read failures cannot prove change. Synthetic frames covered 226 nodes in 2 trees, with 0 frameless nodes.
+  A person-sample timeout after admission reports unknown delivery and requires a read before retry. An absent
+  `CGSSessionScreenIsLocked` key counts as unlocked with valid console/login flags. 2 unlocked samples at least 100 ms
+  apart clear a lock, even within one request. A locked session omitting that key could clear. There are 0 live locked trials.
+  Off-Space, hidden, minimized, unverified or missing-on-screen windows refuse. AXFullScreen needs a whole display within
+  1 pt. Split View tiles reporting true refuse, while false can pass normally. Notched/scaled displays may falsely refuse.
+  Local Escape and HID clicks require 1 corroborated window per PID, so multi-window apps refuse. Public metadata cannot identify a numbered Space.
+- Renderer activation changes app-level `AXManualAccessibility`/`AXEnhancedUserInterface`, risking session races. A second
+  plain walk has no delay. Enhanced activation needs a web area in at most 20 nodes. Discord/Slack/VS Code have 0 live trials.
+  Recovery inventories records and prunes exited processes. Attributes may remain until exit, reported by notices/doctor. Same-read
+  cleanup checks request/window/process/value. Known assistive sources veto it, unknown Voice Control/Full Keyboard Access
+  does not. An intervening third-party enable is indistinguishable. Store failure/lock or unreadable live PID start disables
+  activation, retaining plain reads. Mid-read revocation/expiry is unseen, bounded by deadlines and 3 s retirement. Restart needs a renewed lease.
+- Local tools fall back to JXA only on unavailable preparation, never after refusal/uncertain input. Hard timeouts restart
+  the helper and expire bindings. The next call can fall back if preparation fails. Cooperative timeouts can replace
+  completed results with unknown delivery. Uncertain Escape needs a reread. Key-up requires the original PID/kernel start.
+  Failed cleanup prevents another Escape that episode. Menu-bar AXPress can precede an unverified-Space HID refusal;
+  read before retry because an action may have occurred.
+- AXPress timeout can yield `ACTION_UNCONFIRMED` after acting, never retried. If both frontmost reads fail, restoration
+  checks target PID without kernel start. Focus changes without counted physical input (Mission Control) can be pulled back.
+  Failed shortcut belief without a key sent reports `PERSON_TOOK_OVER` or `KEY_FOCUS_UNAVAILABLE` as not sent.
+- Each MCP server has its own helper/worker. Offline stress ran 4 sessions for 30 rounds (120 reads) in one Node process.
+  This leaves 4-server, cross-process POSIX SQLite lock release and four-session Excel unproved. Shutdown waits 5 s before signaling
+  owned children and synchronously releasing leases. Process exit cannot await children. Failed async lease close is not retried.
+- Malformed/duplicate `Screenshot frame:` markers, even in document text, drop coordinate association. Pixel size remains
+  without a complete scale/bounds record. The format study encoded 240 synthetic images with 0 live captures.
+- Disappearing targets or setValue readbacks over 1 MiB yield `sent-unverified`. Text reads cap UTF-8 at 1 MiB with
+  UTF-16 ranges. Without an AX character count, oversized AXValue rejection can allocate the whole value with no peak bound.
+  Direct paste needs a readable, nonsecure focused field and selected range. HTML, Markdown and rich private paste are unsupported.
+- Compound menu/choose/save preparation validates each input. Identity change, physical input, consequential controls or
+  uncertain effects stop later steps. Person/AX/OS checks are non-atomic with no measured race bound. Stop cannot retract input.
+  `prepareSaveAs` stops before Save without a save receipt. Replay found 50 menu-path/157 popup-click cells in 396 transcripts. 0/207 qualified.
+- The compact runtime API leaves `doubleClick`, `selectText`, `paste` and `performSecondaryAction` in the reference,
+  available through `cua.rewriteDocumentation()` or after 4 API misuses. One offline comparison reduced the first result
+  from 5,083 to 1,166 text bytes (5,667 to 1,639 JSON-RPC bytes). A malformed reply can produce a TypeError/fix line
+  without establishing earlier delivery. Read state before repeating input.
+- Feed records can drop under contention/backpressure. A successful reply without a terminal record marks missing completion and hides the hand.
+  Detach clears visuals. Dropped channels remain closed. Enabling the cursor needs a helper restart. Typing uses the key animation.
+- Structured text follows the unchanged tree only for added style/table/cursor/selection information, capped at 4,000
+  UTF-16 units, secure aggregates redacted, outside logs/drag evidence. Plain text adds 0 blocks. An empty group frame
+  alone cannot justify an auto screenshot. Headings can repeat about 4 KB, also on unchanged reads/full-read action replies.
+  Malformed blocks fail the read with `DRIVER_PROTOCOL`, even after possible input delivery.
+- Coordinate input uses a 100 ms AX hit test. Hung apps can return `AX_UNAVAILABLE` for clicks, scrolls, right-clicks or drags.
+  Nonsecure hits need readable roles and window/app ancestry within 66 nodes. Gaps yield `ACTION_UNSUPPORTED` before input;
+  use another read element or keys. Parent PID changes/cycles yield `STALE_ELEMENT`. Fixtures without injected hit tests refuse.
+- The Glide engine's person wait refuses a takeover since the previous request, so it mostly helps the first action
+  in a window. The default request advertises about 4,850 ms, but validation needs 500 ms and leaves about 4,350 ms
+  useful waiting time. Coordinate waits compare the whole window region. Unrelated changes or an incomplete digest
+  can refuse `STALE_READ`. Owner-present 10/10 acceptance is pending and covers fewer cases under the takeover rule.
+- Stop's mod attribution reads `claudecode/toolUseId` `toolu_plugin_` ids, measured under `claude -p` on Claude Code 2.1.309 (2026-11-01). Glide Stop lasts the session in the Claude desktop app and on hosts without the mod. In Claude Code with attributed mod prompts, the person's next typed composer or bridge message clears Stop. `/sleight <text>` does not. The desktop app is unmeasured.
+
+- On the ChatGPT engine path a model-forged `turn_ended{sleight_stop:true}` can stop its own engine and end its turn. It cannot set or lift a person Stop latch.
+
+- Glide helper idle exit remains default off. With `SLEIGHT_HELPER_TURN_END_EXIT=1`, an idle helper exits 60 seconds after turn cleanup and restarts on demand. Public read IDs are unique across helpers. Crash and explicit restart clear helper-bound parent state even with the switch off. A retirement listener that throws blocks the client until a new runtime. Nested read identity fields are refused instead of reaching a replacement helper untranslated.
+
+## Windows driver
+
+- In 1.6.0, the Windows driver treats any input within 500 ms as person activity when the target's process is
+  foreground or under the pointer. It cannot tell keys from pointer motion. Moving the pointer elsewhere while
+  the target is foreground, or typing in another app while the pointer rests over the target, can refuse input.
+- A physical Escape stopped Windows typing in 10 of 10 owner trials, within 16 ms, and the next action was refused
+  each time (2026-11-12). In 1 of those 10 the driver reported the stop as `PERSON_TOOK_OVER` instead of
+  `USER_STOPPED`, because its person-input check saw the Escape key before the Escape check did. Both codes stop
+  the work. Only the reported reason differs.
+- This release refuses packaged Windows apps whose windows ApplicationFrameHost hosts, including Calculator, Settings
+  and Photos. Windows can expose separate app and frame windows without a proven link between them.
+  Until sleight can bind the intended app window safely, reads and input return `HOSTED_APP_UNRESOLVED`.
+  The guest measured Calculator's and Settings' layouts (their frames hold 0 child CoreWindows). Photos is expected
+  to match and is unmeasured. No frame-to-CoreWindow association tested so far survives forged or reused windows, so
+  this stays refused until one is proven. The driver refuses frame windows, CoreWindow windows and windows owned by
+  hosted processes.
+- A person working in an unresolved packaged frame doesn't stop sleight acting on an ordinary Win32 window: the
+  person check uses the frame window's own process, which never matches an ordinary target. Activity in the target's
+  own process within 500 ms still refuses. An unresolved frame while the target is itself packaged refuses
+  `person-unknown`. The person check reads the frame's class and its CoreWindow children on every action, and that
+  cost is unmeasured.
+- The read-only window lifetime check can't tell a window handle reused on the same thread, with identical sampled
+  fields, from the original when the lifecycle event hasn't arrived before the check. A root with more than 4,096
+  retained members refuses `TARGET_UNAVAILABLE` until it is destroyed or released. Other roots keep working. A virtual
+  desktop switch revokes the binding. Approval covers the whole app, so an explicit window handle can pick another
+  window of an approved app. The false-refusal rate and the check's cost are unmeasured.
+- Windows checkpoints report their own native time with all safety checks active. Keyboard latency is not measured in this sitting, and cost is never qualified. Optional timings can be omitted to keep a reply under 8 MiB. The worker bank resets per action and the lifecycle bank per turn. A saturated bank records omissions. Native timing and callback clocks still need VM validation.
+- After 24.9 days without hardware input the Windows driver refuses `person-unknown` until someone types. Its 32-bit input clock wraps after 49.7 days. This is unchanged by read-probe memoization.
+- Windows hook removal retries twice on the pump per round. After 3 failed rounds the peer retires with `hook-unhook-exhausted`. The actual native error code and fresh-process recovery remain unverified in the VM. A dead pump can lose its callback samples.
+- The observer and trial clocks can differ by up to 250 ms under the accepted clock check. Trial edges have no skew padding. Input near an edge needs a measured clock comparison in the VM.
+
+- The Windows UI Automation preview has 0 live driver runs. Mac fakes do not qualify native compilation, behavior,
+  background delivery or speed. Node 25 or later is required, though older discovery accepts Node 24 that the worker refuses.
+  Only `C:\Windows` is supported. Registration edits one checkout's manifest and updates replace it. Browser turbo lacks
+  peer verification/trusted consent. See the [Windows preview](windows.md).
+- Modifier chords need one matching UIA accelerator, except Alt with a printable mnemonic. Shift+Tab, Ctrl+Left and Alt+F4
+  have no general fallback. Named clicks need the target's click pattern. Edit/Document/Text/Pane refuse, possibly requiring coordinates.
+  Scroll never borrows an ancestor's pattern, including on Chromium/offscreen targets.
+- Named/coordinate actions refuse same-depth overlaps in one host root. Shallower overlays can escape HitTest's deeper-node
+  choice (depth-1 Pane over depth-3 Button). Post-read popups are unseen. Reread after window changes.
+- Paste bypasses the clipboard and posts up to 4,000 UTF-16 units to a proved focused, writable native Edit/RichEdit.
+  Other classes, C0 (tabs/newlines included) and DEL refuse. Uncertain/partial delivery needs a reread. `typeText` also
+  caps at 4,000 units but sends newline as Return and can submit a single-line field.
+- Windows refuses recognized Copy/Cut keys and labels, including requested Copy, and samples only the clipboard sequence
+  number. An app action can still overwrite the clipboard irreversibly before `CLIPBOARD_CHANGED` reports it. The detector misses a late write
+  when the user's typing between actions resets its baseline. Rich images, files and formatting cannot be copied.
+- Windows clipboard guards have 0 live runs. Scheduled-task counter access, real Copy accelerator strings, German labels,
+  Dvorak/Russian key mappings, asynchronous copy lag, selection-copy timing, history/cloud updates and counter-read cost
+  remain unmeasured. A sequence number of 0 read with no error counts as the baseline, because the counter stays 0
+  until the first copy after sign-in. Typing from that 0 baseline through the driver has 0 live runs. AccessKey/Alt menu
+  behavior also needs the VM sitting.
+- Windows 11 Notepad typing stopped with `IDENTITY_CHANGED` after 191 typed units in 5 of 5 attempts under the old
+  row harness. Three direct `typeText` attempts on 2026-11-05 typed 1,441 units with 0 stops, so the cause is unknown
+  and the driver's lifecycle guard stays strict. If Notepad does change its window structure mid-typing, the guard
+  drops the binding even though the window and element still match.
+- A live UIA Name change refuses with `STALE_ELEMENT`, even if the control still does the same thing. Target checks add
+  2 UIA metadata reads, or 4 with a pattern retry. Newline text pays these reads too. Native cost remains unmeasured.
+- Accelerator labels use US letter, digit and OEM punctuation virtual keys without a layout lookup. Typed characters still
+  use the target layout. Localized modifier names rely on the label table and counter. Russian layout behavior needs Windows.
+- Standalone Alt refuses before input because a ribbon key-tip sequence has no resolved target yet. Alt plus a letter needs
+  a matching UIA AccessKey and checks that target, so an app that exposes none (probably browsers' Alt+D, unmeasured) refuses
+  it. Multi-letter tips may refuse at an earlier prefix. Use a read element instead.
+  Space typed onto a focused button and real ribbon behavior still need the Windows sitting.
+- Capture tries PrintWindow, Windows.Graphics.Capture, then BitBlt (refused for covered/uncertain windows). Any nonzero RGB
+  counts as nonblack, allowing white/grey/partial/half-black frames. `tookFocus: false` excludes only sleight-requested focus;
+  apps can activate themselves. Service/SSH sessions may lack the interactive desktop. See the [VM runbook](../bench/windows/vm-runbook.md) for guest-kit notes.
+- The shell guard reads literal commands. It misses some PowerShell spellings of a launcher (`pwsh -ec`, `powershell
+  Start-Process notepad`, `-com` prefixes), opaque scripts, computed launcher names and attached cmd forms such as
+  `cmd /c"start x"`. When the mod can't read the platform it checks both shell dialects, so a bare `start <file>` is
+  refused there too.
+- Until item D2 is merged, a renamed browser with its version resources stripped and an Electron app showing a web page pass
+  the Windows browser policy, and site limits don't bind the Windows driver. Browser lookups by name still refuse, but
+  with `WINDOW_NOT_FOUND` or `TARGET_REFUSED` instead of `BROWSER_TARGET_REFUSED`. Packaged Edge frames refuse as
+  `HOSTED_APP_UNRESOLVED`.
+- `foregroundChanged` compares the foreground window before and after an action, so a change that reverses between the
+  two samples isn't reported, and each action adds one inventory read (cost unmeasured until the Windows sitting).
+  Session approval keys use the executable's creation time and size, not a content hash. NTFS tunneling can keep the old
+  creation time when a file is deleted and recreated quickly, so a same-size replacement can keep its approval.
+- Until lane B2's native cleanup is merged, a driver process killed within 300 ms of a cancel can leave input held. That
+  action then reports no `delivery=unknown`.
+- The Windows safety sitting's evidence comes with a SHA-256 sidecar that catches accidental edits and a mismatched guest
+  kit. It isn't authentication: a process running as the same Windows user can rewrite both. Seven of its 19 rows need the
+  owner at the Mac, and its cost row waits for a reviewed noise constant.
+- The UC3F lease and go files are plain same-user files. They bound an orphaned injector's lifetime and start.
+  A hostile process running as the same Windows user can write both, including `presence: present`.
+  These files don't authenticate the owner or protect against that process.
+
+## Windows cursor
+
+- Windows cursor support has had 0 Windows runs, with testing on the Mac limited to mock pipes and source checks. C# compilation,
+  PowerShell 5.1 execution, native registry and pipe ACL enforcement, focus, click-through behavior, capture exclusion,
+  mixed-DPI placement and x64/ARM64 operation still need Windows qualification. Replay does not qualify app driving.
+- Start renderer listeners from a normal, unelevated shell. An elevated listener can have Administrators as its pipe owner.
+  sleight refuses that owner even if the DACL grants access only to the current user. Current-user ownership is required.
+- The listener seals its pipe before publishing it. Pre-publication connections can occupy up to 16 slots but never reach
+  the parser. Whether libuv's later pipe instances retain the sealed DACL remains unverified on Windows.
+- A private Windows `hand.json` can opt into the event stream. Native ACL enforcement and relay delivery need VM checks.
+  Unsafe files leave the stream off. `hand on` or `hand off` replaces an unsafe user-owned regular file after the terminal
+  check. Status names the unsafe state. Reparse points, hardlinks and foreign ownership still refuse.
+- Node paths containing a reparse point refuse, including nvm-windows links, fnm junctions and Scoop shims. Use a regular
+  Node 24 or later installation. Discovery keeps searching after an older Node and ignores a home-level `package.json`;
+  the exact project-marker rule is in [Windows design](design/windows.md#windows-plugin-registration-and-settings).
+- Discovery uses one persistent PowerShell worker, a 15-second startup budget and a 4-second deadline per request and scan.
+  Cold startup and the first Add-Type compile
+  remain unmeasured on Windows. A failed scan preserves connected peers, and scans skip their pipe verification. New
+  connections still require verification. SHA-256-pinned helper bytes run through `-EncodedCommand` with no execution-policy
+  flag. A policy that blocks PowerShell or Add-Type still refuses startup. Failed starts back off for 1 second, 5 seconds
+  and 30 seconds, then stop after the fourth failure and report the reason.
+- Pipe checks open the name because Node does not expose its connected handle. The protected DACL and server PID check
+  protect against other users. Processes running as the same user remain outside that boundary. The discovery registry key
+  has one current-user ACE and doesn't grant access to SYSTEM or Administrators.
+- The C# example uses a magenta color key and an antialiased pen. A pink fringe is possible and has not been measured.
+
+## Windows settings confirmation
+
+- With 0 Windows runs of the person gate, the following limits come from code inspection. An agent can open a fresh `wt`
+  or add a tab with `wt -w 0 nt`.
+  Both pass the ancestor walk after 10 seconds, provided Windows returns the expected process and console observations.
+  Windows Hello or the account password is the only control for high-stakes forms against that route. Forms that only
+  take access away or change looks have no age wait. Most use the walk alone. On Windows, `hand off`, `turbo off`,
+  `turbo app off`, `permissions block` and `permissions revoke` run the walk with no age wait, as macOS does. If the
+  in-box compiler is missing, these five exact forms fall back to TTY and agent-marker checks alone, with one stderr notice.
+  ACL, package-integrity and unknown preparation failures still refuse.
+  A completed refusing or failed walk still refuses. Presence and confirmation are skipped.
+- Presence requires an active, unlocked session with input less than 120 seconds ago. Windows `GetLastInputInfo` counts
+  synthetic input too, so a session can satisfy the idle rule without a person present.
+- The Claude file and shell guard for `%LOCALAPPDATA%/sleight/turbo-host` refuses common forms that name the folder.
+  Windows shell text with sleight or local app-data hints, environment parent traversal, hinted wildcard words or cmd variable
+  substitutions passes only as one literal reader. Wildcards need a path hint in the same word. Relative `./` and `../` words
+  count only with a wildcard before the final segment, or a final 1 to 4 character prefix followed by `*` or `?`.
+  Hint-free relative globs such as `./turbo-h*`, `./slei*ht`, `./???` and `../../sleigh*` pass, including after a directory
+  change in an earlier call.
+  Encoded-command flags refuse beside PowerShell or pwsh, including script blocks, Start-Process argument lists and
+  cmd, wsl, runas, wmic, schtasks and iex wrappers, including parenthesized strings. Quoted execution arguments are inspected.
+  Echo, Write-Host, Write-Output, printf, git, winget, choco, scoop, brew, which and Get-Command treat shell names as data.
+  Inside parentheses or backtick substitutions, those data commands no longer hide shell names from the encoded-flag check.
+  Script arguments matching encoded-command flags such as `pwsh -File x.ps1 -e value` still refuse.
+  Bare `turbo`, roaming `$env:APPDATA`, ordinary globs, `node -e` and git formats pass without another hint.
+  Tuning commands stay at 0 refusals of 214. Held-out refusals fall from 3 of 366 (0.82 percent) to 2 (0.55 percent),
+  also 2 in the reviewer's original 364-command subset. Hint-adjacent refusals fall from 15 of 52 to 13 (25 percent).
+  The recovered 46-command mixed developer set falls from 10 refusals to 3 on Windows through both Bash and PowerShell;
+  its 19 Windows-specific commands fall from 9 to 2. These probes do not measure real-session refusal rates.
+  POSIX PowerShell non-readers naming sleight, Application Support or protected settings filenames refuse anywhere,
+  including other apps' files and Turborepo's `turbo.json`. Wildcard commands naming Library/Caches or Library/Application
+  words refuse too, including Set-Location followed by a write, Homebrew and pip cache globs,
+  and `Get-ChildItem ~/Library/Caches/*`. Mac PowerShell refusals rose
+  from 7 of 27 to 8 of 27 (29.63 percent) on the recovered corpus. The held-out set stays at 1 of 366 (0.27 percent), adjacent at 0 of 52.
+  Mac Bash decisions are unchanged on 39 original and 182 additional commands on darwin and Linux, 442 decisions.
+  Windows false positives remain for sleight checkout paths, local-app-data configuration, environment traversal,
+  wildcards in hinted paths, cmd substitutions and legitimate encoded PowerShell calls.
+  All 23 home and drive wildcard attacks still refuse. Of 100 attack and control probes, 92 refuse.
+  Encoded wrappers stay at 31 refusals of 35. Unicode dashes (3) and `pwsh-preview` (1) pass.
+  Additional wrapper refusals rise from 92 of 111 to 98, with 6 newly refused and 0 newly passing.
+  Additional wildcard refusals stay at 39 of 60.
+  The hook cannot see script-file contents, piped commands or a script written by a file tool and then run.
+  Building folder names from pieces or finding them by listing can pass without encoding. So can an alias created in one
+  call and used in another (`subst`, `New-PSDrive`, `mklink /J` or a junction), or changing into a parent without a hint
+  and using a relative path in a later call. The guard doesn't track shell cwd across calls. All 55 full-intent name-building
+  probes pass, compared with 44 before. All 53 retained hint-word probes still refuse.
+  Windows Hello or the account password, plus the helper hash, remain the real controls. This is a courtesy barrier.
+  A same-user program outside the hook can replace the helper. Re-hashing its private copy
+  before snapshot, presence and confirmation narrows that window but does not close the replacement race.
+- The password fallback makes one interactive logon attempt and compares the resulting SID with the launcher and helper.
+  An interactive logon can accept a cached account verifier while offline, including a stale cached password. Windows
+  qualification still needs local, Microsoft and domain accounts, secure-desktop prompt behavior and cancellation.
+
+## Windows browser gates
+
+- Windows browser startup still refuses. WIN7R has native gate source and mocked JavaScript tests, with 0 C# compilations
+  and 0 Windows runs in this lane. Physical-input consent, Narrator reading and UI Automation refusal need interactive
+  guest checks. Broker integration, connected controls and revocation remain unqualified.
+- The browser executable check verifies its disk signature, with cached trust retrieval and revocation checking off.
+  It cannot prove the live image or loaded modules and does not defend against same-user code execution in the browser.
+- Private files require a fixed local NTFS volume. ReFS (including Dev Drive), mapped drives and SUBST refuse. A tilde
+  anywhere in the path refuses as an alias defense. sleight doesn't repair ownership or DACLs automatically. Browser-created
+  endpoint reads allow safe inherited ACEs only for the DevToolsActivePort leaf. That leaf shares read and write access
+  while inspected, with write-time, size, identity and DACL rechecks. Parents and strict files share read access only.
+  Real Chrome ACLs, concurrent writes and parent-handle rename locks still need VM checks.
+- Consent accepts mouse and keyboard hardware sources only. Touch and pen refuse. Precision Touchpad clicks may report
+  an unsupported device type, which could require an external mouse or the random-word keyboard path on a laptop.
+  RDP and Hyper-V input provenance remain unmeasured. The card refuses input during its 500 ms arming delay.
+- An active IME prevents typing the card's confirmation word. Switch to direct input first. On-screen keyboard,
+  voice input and injected RDP-style keystrokes cannot answer. UI Automation `SetFocus` on the read-only request box
+  blocks keyboard answers until the person clicks the card again. These limits follow the input checks in source;
+  none has been tested in a Windows guest.
+- Consent uses desktop-wide low-level hooks while the card is open. Endpoint security products may flag them. A removed
+  hook causes refusal until the card expires. Card layout now measures fonts at the monitor's DPI and uses the same
+  rectangles for drawing and hit testing. Hung-window behavior, hook cleanup, layout at 125, 150 and 200 percent DPI,
+  monitor changes and time per peer check remain unmeasured. See the [Windows VM checks](design/windows.md#open-vm-checks-for-browser-safety).
 
 ## Character sharing and creation
 
@@ -36,8 +340,51 @@ refuses terminals and OpenAI's own apps. See [approvals and guards](#approvals-a
   not documented upstream. Other Codex versions are unverified. Claude Code keeps make-character
   available through explicit invocation with `disable-model-invocation: true`.
 
+## Character placement
+
+- In the 2026-11-07 cost runs, medium (the default) added 0.6 to 1.2 points of WindowServer CPU on a quiet screen
+  and 3.3 to 3.8 while content behind it changed. Stage added 0.4 to 1.3 and 3.3 to 3.6 points; small added
+  7.7 to 9.1 and 3.3 to 3.7. The bar is 3 points over a hidden-character control. Memory for the whole process tree peaked
+  at 119 MiB for small, 151 to 158 MiB for medium and 149 MiB for stage, including about 12.6 MiB for the microphone
+  worker, against a 160 MiB limit. Small and stage remain opt-in sizes.
+- In the quiet cost rerun of 2026-11-10 (three runs at medium, load 3 to 5), frame pacing missed its 95% bar: the 600 ms
+  trial captured 34 or 35 unique frames of 36 at one of 60 or 120 Hz, so one dropped frame fails it. No build has met
+  it since chv8. We don't know whether the characters drop frames or the 36-frame trial is too short to tell.
+- In the same rerun, medium decode took 42.3 ms once in three runs (bar 40 ms) and layer install 4.16 ms once (bar 4 ms).
+  Stage decode took 40.8 and 56.9 ms in two of three runs. The WindowServer, CPU and memory bars passed at medium in all
+  three runs. The cause of each miss is unknown.
+- The H5 stage capture was not measured in that rerun: the stage fixture exited 65, a harness fault fixed on a later branch.
+  Stage frame pacing and layer install (4.80 ms once) are single readings.
+- A window whose reported frame moves by 1 or 2 points between reads (one recorded window alternated between
+  `[29,592,668,350]` and `[30,592,666,350]`) makes the next action protect the whole window plus 48 points for that
+  turn. The character then moves away or hides even though nothing moved. With that window it can happen on about every
+  other acting turn at medium. How often it happens on other windows hasn't been counted.
+- The character hides during a call only while the microphone reading says input is live. Notification delivery was
+  measured with a silent playback (20 of 20, 28 to 60 ms), never with a real microphone recording, which 1.6.0 doesn't
+  require.
+- When sleight can't be sure where a window's targets are, it protects the whole window frame plus 48 points until
+  the turn ends, so the character may sit farther away or hide. A maximized window that scrolls can keep it hidden
+  for the rest of the turn. In the live check 4 runs of 2026-11-05 (two full runs), the character was visible for
+  92.3% to 99.9% of driving time per task, with 0 contacts.
+- Beside a window close to full screen width, the character doesn't fit at full size. It shrinks to a smaller rung or
+  hides. The test fixtures open at most 1,000 points wide for that reason.
+- With no clear seat beside a window, the character hangs below the menu bar or stands above the Dock. That seat can
+  overlap the unprotected inside of a window that touches the screen edge.
+- Wide window frames refresh every 0.2 seconds, so a window that moves or resizes inside that interval can briefly
+  reach the character before protection follows it.
+- An aim that isn't awaited can race the next action for a few milliseconds when its target is in a window behind
+  the acting window and under the character. sleight doesn't wait before input to close it.
+- Typing and key actions don't widen their window in 1.6.0. Reflowed text can move a target under the character's
+  seat. Protected target boxes don't follow the reflow.
+- A drop that arrives before sleight knows the window layout is resolved against the first layout it sees, and the
+  character is hidden until then. If the window moved in between, the wrong window can be protected.
+- Reloading the character clears its turn state, and protection with it.
+
 ## Release qualification
 
+- Check 4's method audit can't prove a cross-window drag that the model starts from the current selection through
+  Accessibility. One of two runs ended `WORLD_DRAG_METHOD_UNPROVEN` after a drag the transcript shows succeeding,
+  with no real cross-window drag frame recorded.
 - Release qualification applies to the final integrated commit. The 1.5.0 manifests, doctor output and unreleased
   CHANGELOG heading must agree in the integrated tree. The full check, release pass and final-build A/B remain required
   on that final commit. Passing offline tests does not qualify a release.
@@ -137,6 +484,37 @@ refuses terminals and OpenAI's own apps. See [approvals and guards](#approvals-a
 
 ## Approvals and guards
 
+- After a plain native alert, Return or a click on the alert is sent if the consent reread reports a known AX failure or
+  timeout (3 offline cases). A cookie dialog appearing meanwhile can receive that input. A label line spelled exactly like
+  the ChatGPT engine's window header is skipped, so consent wording on that line alone is missed. Live behavior is unverified.
+- Engine menu choices invalidate numbers. Replay stops 11/11 stale Safari dropdown pairs (whose earlier notice compared
+  open/closed menus) and adds a Word submenu read. Header-only reads without a numeric baseline leave validation to the
+  engine. Partial trees/missing numbers refuse, sometimes needing a reread despite a shown complete tree. Without
+  action-time trees, the corpus cannot certify historical remaps.
+- The 1.6.0 settings shell guard accepts ordinary relative outputs after an unknown directory change while refusing
+  writes naming protected settings, startup files or the launcher. Literal `source` and init-tool `eval` forms can pass.
+  Each filesystem probe has a 100 ms deadline. An unavailable result leaves the directory unknown. The guard inspects
+  command text and metadata, so interpreters, unmodeled writers, prefix wrappers and changes after preflight can bypass
+  it. In a 3,907-command bypass corpus, 451 passed, including 7 shell-level gaps, 3 with a destination inside a substitution.
+  The guard wrongly refused 2 of 455 ordinary commands, with real-session refusal rates still unmeasured.
+- Native engine leases bind AX PID/title/bounds to WindowServer number/owner PID/kernel start, with a 600 ms input check.
+  Missing or ambiguous metadata warns at first binding and refuses after a successful bind. The 6 saved replies had no
+  native metadata. Rereads bind replacement windows/processes only with full proof. Otherwise the old pin stays. Sticky
+  `Input lease:` errors need a reread. `select_window` cannot recover a stale pin, and `{windowId}` costs a helper call per reread.
+  Cross-window drags need identity unless no observer starts (dialog/menu roots, change-review or no lease). Same-number
+  retitles also check helper epoch/window. Restarts, cover roles, `getState`, dialog ambiguity and mixed filtered reads/actions refuse recovery.
+- Runtime `SLEIGHT_APPROVAL_SCOPE=once` asks per operation, even existing-handle reads, with the cached acquisition title.
+  Native steps ask at inspection and dispatch (offline: 4 asks for 2 attempted steps, fourth declined). Pickers refuse
+  internally paged rows absent from the last delivered tree and may exhaust 64 retained person tokens. Restart after scope
+  changes to refresh tools. Only `document_scope` follows engine host selection. App cards omit window-read/per-risk questions.
+  Consent close times out at 5 s, allowing lease cleanup with host exit unconfirmed. First-use panel budget is 175 s.
+- The quit-key guard refuses unrequested quit shortcuts and treats Hyper as all 4 modifiers. In the gated runtime,
+  Command with physical Q keycode 12 refuses on every layout, including a requested quit. On AZERTY this also removes
+  Select All by chord. Held keys add a guard read per input.
+
+- In 1.5.0 and 1.5.1, the settings shell guard falsely refuses `--doctor` beside grep patterns and log or document edits containing words such as `hand`, `link` or `turbo` beside `$`, glob or brace characters. Offline fixtures reproduce 4/4 refusals. The fix is pending release.
+- If Claude Code can't report the session's working folder, the shell guard applies its Windows rules on a Mac too, so a
+  shell command whose text mentions sleight or AppData can be refused. Claude Code always reported a folder in tests.
 - Code inspection catches mistakes and common indirect forms, and a script written to evade it can still get through:
   values passed through callbacks (`["x"].forEach(s => app.typeText(s))`) and strings built at run time aren't followed.
   Use direct calls with literal arguments, and `Object.keys(app)` to list a handle's methods.
@@ -176,6 +554,12 @@ refuses terminals and OpenAI's own apps. See [approvals and guards](#approvals-a
   timing check too. That only keeps the 500 ms delay from restarting, and approving still needs a real down and up on the
   card. When neither check passes, the first click can show "Too soon: try again", and a second click after 500 ms works.
 
+- The Claude desktop Code tab, dialog mode and clients without form elicitation offer session-only app approvals.
+  Their JXA panel cannot write standing grants. Claude Code's form still offers Always allow.
+
+- The relay reads the engine's ComputerUseAllowForbiddenTargets preference once when it starts. A change mid-session
+  takes effect in the next session: until then the relay and Glide keep allowing forbidden targets with the warning card.
+
 - When a card or menu-bar alert closes, sleight returns activation to the app that was in front just before the card
   was clicked. This also happens when a card times out or is aborted while the card's own app is in front, even if
   the person switched to that app themselves. The card's app itself is never activated. Only fake-driven tests cover
@@ -191,10 +575,12 @@ refuses terminals and OpenAI's own apps. See [approvals and guards](#approvals-a
 - The preapproval loader proves file ownership, not who wrote it. The mod refuses Claude's file edits
   and common shell writes to it (unit-tested, 2026-10-12), but any other process running as you can
   write it, and a path built at run time gets past the check.
-- The consent-host refusal (2026-10-18) hasn't run against the live engine. It assumes the engine's approval card and read
-  header name the host as `consent-host`, its file or its pid. A `getApp` argument computed at run time is checked only at that
-  card. We haven't checked whether the engine's `pressKey` to another app can answer a frontmost host card, or whether the
-  engine's own clicks at a point under the card press its buttons. Any process named `consent-host` is refused, sleight's or not.
+- The consent-window and Glide engine refusals have not run against live approval cards (2026-11-01). The consent window
+  keeps `consent-host`; the Glide engine uses `glide-engine`. Tools refuse both by normalized name or executable path, and
+  recheck a pid on each call. An old cached `mac-driver/<key>/consent-host` belongs to both refusal sets and gets the consent
+  window's line. A computed `getApp` target still depends on the ChatGPT engine's approval card naming it by name, path or
+  pid, or on the returned header. Any process with either exact normalized name is refused. Cross-app keystrokes and clicks
+  at a point under a protected card remain unmeasured.
 - The form rule decides "safer" from the switch's name and the value the message gives. A setting whose name doesn't say which
   way it goes still asks. `SLEIGHT_CONFIRM_PAYMENTS=always` keeps form and switch confirmations too.
 - The hook that keeps `SLEIGHT_OUTCOMES` and `SLEIGHT_ACTION_LOG` the user's choice matches text, so it stops
@@ -208,6 +594,20 @@ refuses terminals and OpenAI's own apps. See [approvals and guards](#approvals-a
   to decide which reads Claude asked for. Turbo counts one read saved per diff it returns. Unit-tested only: no
   live run has checked these numbers.
 - `claude -p` can't answer approval prompts. List apps in the user's [preapproval file](settings.md#preapproved-apps) before starting.
+- In 1.5.1, an app listed twice in the [preapproval file](settings.md#preapproved-apps) stops sleight from starting in every
+  new session, and `sleight-mcp --doctor` doesn't say why. `sleight-mcp allow remove` can't fix it, so delete the later copy
+  of the line by hand. Seen once (2026-11-01), writer unknown. The fix is PA1 in 1.6.0.
+- In 1.6.0, when the preapproval file is unreadable, invalid or unsafe, sleight starts without saved app approvals. Rename
+  `~/Library/Application Support/sleight/preapproved.json` and allow each app again. The doctor, first tool result
+  and Permissions menu explain the repair. Duplicate app IDs use their lowest risk ceiling in Node and Swift.
+  Always allow cleans repeated entries on its next write. Removal deletes the app's repeated entries too.
+- Always allow waits asynchronously for the approval writer for at most 5 seconds. A failed save leaves an explicit
+  approval click valid for this session and reports why persistence failed. Writer locks record PID and process start time.
+  A dead holder or a different process with the same PID can be recovered. A crashed reclaimer's kernel lock is released.
+  A malformed or unsafe lock, or a holder that cannot be proved gone, refuses persistent edits, including revocation.
+  The error specifies the lock and the recovery command to run after stopping approval writers. Unconditional revocation
+  under an unprovable holder and mixed-version writers remain unqualified. Linux process identity uses `ps lstart`;
+  a wall-clock step could make a live holder appear reused. Linux recovery has not been qualified.
 - `sleight-mcp setup` hasn't had a full live run: macOS permissions always need the user's click.
 - The engine refuses terminals (Terminal, iTerm2) and OpenAI's own apps (ChatGPT, Codex, Atlas, with
   their beta builds). The list is in the helper; [a setting](settings.md#driving-apps-the-engine-refuses)
@@ -226,6 +626,7 @@ refuses terminals and OpenAI's own apps. See [approvals and guards](#approvals-a
   3 clicks), and the cause wasn't recorded. It no longer needs HID idle over the call, which the engine's key presses reset
   (above). It needs idle since the stop result arrived, so a user typing after the stop still refuses it. The relay trace
   records the refusal reason and the idle sample, but no traced round has run since.
+- The typing reread waits 700 ms once per typing action. Cursor's recorded gaps were 3.9 to 10.9 s, so the miss notice can still fire there.
 - Safari's tab continuation never fired in race-1017, where Cmd+T followed by typing stopped 36 of 36 runs inside Codex and 19 of 19
   Claude Code chains. It also stopped 6 of 6 times in the b10 to b12 rounds (2026-10-19), a turn each.
   Safari's Start Page has no page content, so the navigation continuation took the stop first and then
@@ -305,6 +706,15 @@ refuses terminals and OpenAI's own apps. See [approvals and guards](#approvals-a
 - With VoiceOver or Switch Control on, any Accessibility client, the engine included, can focus the handoff word field and take key focus from the page. The check reads a system-wide flag that a privileged process can toggle.
 - Screen readers cannot pick a cursor style from the menu, the same limit the consent cards have. Use a hardware mouse or Return or Space on a highlighted row.
 - Typed confirmation needs a physical keyboard, so cards can't be answered from Switch Control's on-screen keyboard. The mask length is readable over AX. VoiceOver reading and key-window behavior are unverified live.
+- Local tools recheck browser handoff after approval, after preparation and before each new helper. A call still awaiting
+  admission is refused during handoff. Helpers already running report their real results. Refused drags skip input release
+  and focus restoration. Started drags keep their cleanup after unknown termination. Worker loss lifts the handoff fence
+  before confirmed exit, and a failed begin can retain the old fence until a successful bind.
+- Lost turbo workers get a graceful close, then TERM after 500 ms and KILL after 1,500 ms only while the spawned PID,
+  process start and parent identity match. Healthy close gets 1,500 ms before TERM. Identity reads can delay timers by
+  up to 500 ms each. Missing identity prevents signals and unrefs the child, leaving exit and card dismissal unproved.
+  Confirmed exit clears the card through host reset or pipe closure. Physical card dismissal and live cleanup timing are
+  unverified. These checks have headless coverage.
 - Waiting handoff covers owned turbo browser tabs and native apps with a lease. Document-scoped native mode and Electron turbo still stop.
 - At turn end, sleight keeps a tab it stopped on for your answer, such as a page dialog or a form with unsent edits. A new automatic keep closes the previous automatically kept tab and discards any unsent input in it. A pending JavaScript alert, confirm or prompt does not keep a tab. Turn end closes that tab and dismisses the dialog.
 - After a turbo worker is lost, sleight disconnects it and stops using it but doesn't kill it. If the worker's event loop hangs, we haven't verified that its sign-in card goes away.
@@ -312,14 +722,31 @@ refuses terminals and OpenAI's own apps. See [approvals and guards](#approvals-a
 - Turbo reuses a full package verification for up to 1 second. A same-user process writing through a live shared mapping on APFS changes bytes without changing file timestamps. The verifier can accept such bytes in that window. Bytes restored before the next full verification escape detection. A lasting change is refused at the first check after the second ends. Verification isn't atomic with later code loading.
 - The card lasts 4 minutes, and a shorter host tool timeout ends the wait earlier. Closed shadow-root login forms and custom auth controls are not checked. A populated text field beside a login form refuses resume.
 - The shell guard reads literal commands only. Once any loop uses sleight, it fences launchers for every caller in that mod registration. Each loop's completion removes only its own fence. Codex, Cursor and Grok hosts do not get it.
+- The shell guard covers Bash, PowerShell and Monitor. Commands in MCP terminal tools such as `run_in_terminal` are not guarded. Monitor's live host event shape has not been observed.
+- Headless Chromium needs `--user-data-dir <path>`. Firefox needs `--no-remote --profile <path>`. Use a new empty directory. Default macOS browser profile roots and their subfolders are refused, as are unresolved paths and Firefox profile names (`-P`). The check resolves literal paths without checking symlinks or whether a directory is empty.
 - Split-pane teammates have separate mod instances. Whether their launch loads the lead's plugin and mod needs a live check. Promptless teammate cleanup has only offline coverage.
 - A child prompt cannot lift Stop. Send a new message to the lead to resume sleight. An abandoned child's refresh, record and replay fence expires at the lead's next completion, session start, compaction or Stop. Its shell fence (launcher commands refused) stays until Stop or a new session, and compaction never lifts the shell fence.
 - Missing or relative HOME and CLAUDE_CONFIG_DIR values refuse writes that need those roots, with a path-resolution message. Literal paths still get protected-file and alias checks. A plain `ls` passes. Malformed hook envelopes get a generic refusal message.
 - Variables, aliases, ANSI-C quoting, ssh, scripts on disk and encoded payloads (`base64 | sh`) get past the shell guard. It can also refuse harmless text, such as a launcher word in interpreter process arguments or any `osascript` or `launchctl submit/load/bootstrap/kickstart`. How the installed host presents a denial is unchecked.
+- Claude Code's write guard covers sealed settings, routines, watches and bundled engine caches. The Windows path cases
+  passed with synthetic metadata on macOS. Native Windows enforcement is unverified. Codex has no mod hook.
+- Claude Code's shell guard refuses literal launcher `replay` and `record` commands. Use the replay tool in the current session.
+  Literal launcher names are refused as shell or interpreter script arguments too, including relative paths and wrappers.
+  Ordinary scripts with `replay`, `record`, `hand` or `turbo` in their paths or arguments stay allowed. Scripts on disk and
+  aliases can still reach the launcher beyond these literal-command checks.
+- Link-creating copies check protected sources: `cp -l`, `-s`, GNU long-option prefixes, `pax -rw -l`, and rsync's
+  `-H`, `-L`, `--copy-links` and `--link-dest`. `cpio -pdl` checks visible piped source paths; opaque input lists remain
+  unchecked. Plain copies out stay allowed. Preapproval and permissions readers refuse hard-linked files.
+  Native copy-command behavior is unverified.
+- Launcher traces use a new 0600 file in an owned 0700 directory. Only the default log folder, `~/Library/Logs/sleight`,
+  is tightened to 0700. A custom trace folder must already be 0700 or be newly created by the tracer.
+  Symlinks, unowned directories and other initialization failures disable tracing with one stderr line. Startup continues.
+- The engine launch command still comes from the host's bundled-plugin configuration. sleight does not bind it to a
+  signed path when spawning it.
 - The optional PATH command is stored in a user-writable folder, so a process with your shell can rewrite or shadow it just
   as it can `git` or a shell startup file. Claude's guards refuse direct writes by name to `~/.local/bin/sleight`, its
-  `.sleight-shim-v1` file and `~/Library/Application Support/sleight/settings-link.json`, while globs,
-  hard-link tools and aliases can evade the name check. Doctor reports hash mismatches as tamper evidence, and changes that widen access still need Touch ID
+  `.sleight-shim-v1` file and `~/Library/Application Support/sleight/settings-link.json`. Globs, other hard-link tools, aliases,
+  scripts and encoded payloads can evade these literal-path checks. Doctor reports hash mismatches as tamper evidence, and changes that widen access still need Touch ID
   or your account password.
 - Uploads refuse group-writable files (including files made under umask 002), writable parents, mutating ACL entries and unreadable metadata. Copy the file to a visible file in Documents. Folder uploads are unsupported. The iCloud and `/Volumes` exceptions ran on synthetic metadata only.
 - Cookie handling is model guidance plus a guard on identified containers. A container counts when it's a known CMP root, or a fixed, sticky or dialog element under 1,500 characters with a consent phrase.
@@ -328,6 +755,13 @@ refuses terminals and OpenAI's own apps. See [approvals and guards](#approvals-a
 
 ## The pointer, drags and hover
 
+- The runtime has no background hover. A mouse-entered then mouse-moved probe is planned and has not run.
+  The ordinary hover tool still moves the real pointer after its idle check. Try help text, secondary actions, right-click or keys first.
+- Drag cleanup in both runtimes retries a failed Shift release once and reports persistent failure beside the drop
+  outcome. Text may have moved even when release failed, and a posted drop remains unverified. Stopping the helper
+  between Shift-down and cleanup can leave Shift held in the app.
+
+- `claude plugin test` supplies `session.append` only from Claude Code [2.1.293](https://github.com/anthropics/claude-code/blob/main/CHANGELOG.md#21293). The mod's 6 narration tests fail on 2.1.288 to 2.1.292 (61 of 67 pass) and all 67 pass on 2.1.293 and later. The observer is registered on 2.1.288 by source, and live narration there is untested.
 - Cursor narration is off by default and takes its sentence only from Claude's assistant prose. Tool results and
   thinking blocks are excluded as sources, but Claude can paraphrase screen text in its prose. Names and short secrets
   such as `hunter2` can pass the filter. It strips recognized key shapes, long tokens and Luhn-valid cards, including a
@@ -349,6 +783,80 @@ refuses terminals and OpenAI's own apps. See [approvals and guards](#approvals-a
   but failed on uncertain group cleanup. After verified recovery, a new run passed four cases with 40/40 events
   and complete cleanup. Invocation/return delay was 0 to 9 ms with action and retry identity intact. Completion
   could arrive after the next action began, so this proves neither current-action pacing nor native dispatch.
+
+- Stage size, honest moods, edge chips and session coordination have headless geometry, stream and integration coverage.
+  Appearance, physical badge dragging, hardware menu selection, screenshot exclusion, CPU, WindowServer cost, RSS and
+  frame pacing still need live qualification. The three-round cost run at small, medium and stage is unmeasured, and
+  ScreenCaptureKit delivery at 120 Hz is unqualified. The owner's ten stage-study decisions remain open; current defaults
+  are provisional. Front-sit is off and has no setting to enable it.
+- Characters keep target protection until turn end. Scrolls, drags, stale window bounds, window moves, visibility gaps,
+  PID reuse and geometry overflow can hide them for the rest of the turn. A complete observation of the same window
+  incarnation can certify moved geometry or map every retained scroll reference. Current producers don't send these
+  observations, so ordinary frames cannot restore visibility after uncertain geometry.
+- Private producer certificates collect geometry with the character hidden. Their freshness stamp is the
+  admission time, not proof that input finished. A read can start after admission but before input reaches the app.
+  The host cannot verify the acquisition interval supplied by the client. GP4 must keep recovery disabled until
+  an input-completion barrier and presentation ordering are established.
+- A lost, late or rejected producer acknowledgement hides the character through that logical turn. Ring statuses,
+  narration and pause frames still pass. A poisoned turn keeps its targets until its attributed public terminal
+  frame; `endTurn` cannot clear it. The next turn has a fresh session and needs a new baseline before admission.
+  Clean ends return the client and host to idle. The host refuses tokens among its last 512 ended turns.
+- Public action or aim geometry during a producer turn makes that turn uncertain. Status anchors position ring
+  art without adding target protection. A delayed terminal ring drawing from an older session or turn cannot
+  release the current turn's targets. These rules have offline coverage. Live delivery and drawing remain unverified.
+- An ordinary status that omits both its point and window rectangle doesn't admit the ring's inherited anchor
+  as another target reference. CHRET4 admitted it. The current client includes a point after acquiring a target;
+  statuses with target geometry still protect it.
+- Hosts without the Claude Code mod and without a Stop hook keep a character's target exclusions until the client closes
+  or a real turn boundary arrives. The stage hides the character at 64 target boxes or 512 contributors, so it never
+  covers a target it could not record.
+- A paused host admits forwarded targets without drawing them. Target frames skip the 64 KiB artwork backlog
+  limit. When a host's queue reaches 4 MiB, the client retires it and starts one replacement, which shows its
+  character only after a real turn boundary accounts for every target. The 32-frame cold-start queue still drops
+  valid targets when it is full or expired, as in CHRET4.
+- Glide geometry collection runs only with the private `privateGeometryProducer` option, which no production caller
+  sets, and producer recovery stays off. Its cost was measured offline only, on maps of 500 and 3,000 elements. A
+  person's Stop isn't attributed to the producer, so that turn keeps its protection; GP4 must bind that boundary
+  before the producer can be turned on.
+- Turbo character geometry declines pages with multiple frames, including out-of-process iframes. Any semantic change
+  anywhere in the document, including a changed input value, refuses old held references for the rest of the turn.
+  Drags with held endpoints remain unmappable, and navigation or scroll does not trigger adapter invalidation yet.
+  Collection cannot restore drawing. Its paint box uses layout bounds and descendant bounds; outlines, shadows and
+  pseudo-element ink are unproved. A private worker channel, a trusted native-window transform and presentation ordering
+  still need qualification before browser recovery can be enabled.
+- Stage placement uses the full cell box, including transparent padding. It can shrink or hide a figure when only its
+  visible ink would fit. Targets use separate rectangles up to a cap of 64. Conservative pair unions can exclude safe space.
+  Seated art whose legs enter the person's front window uses corner-hang. Edge-lie requires the whole box to clear that
+  window, without a title-bar exception.
+- With no front window (Finder's desktop with no window open, a menu-bar app, an app on another Space), the character
+  still shows, but never in the edge-sit or front-sit pose. A display-size window of a background app behind the
+  window sleight drives, on the same display, isn't protected: a Split View partner or a borderless full-screen
+  window can be covered. Native full screen hides the character.
+- A Notification Center alert puts a display-size window on screen, and the stage counts it as a covering window. The
+  character can't find a seat on that display and is hidden there until the alert is dismissed (0% visible through a
+  26 s task, 2026-11-09).
+- Microphone checks hide every size and the ring-trail character sprite only while the latest successful reading says
+  input is live. Pending, slow, failed
+  or unavailable checks retain that reading's effect. A call already live at startup leaves the character visible until
+  the first successful reading. After a live reading, failed checks keep it hidden until a successful quiet reading;
+  retries back off to 30 s. Microphone reasons are logged once per reason. The ring trail uses the selected character art
+  and its speech follows the same call rule. Seated legs can force a pop between windows. Hides remove the
+  old panel immediately, and size changes fade in the new one. There is no two-panel crossfade. Stage lock recovery after
+  polling stops depends on system notifications. Multiple displays and Mission Control still need live checks.
+- Stage startup includes loader time and four-strip preselection. Small and medium keep four resident 2x strips.
+  The stage harness's strict fallback-warning gate refuses the synthetic Codex v1 import's partial-character warning.
+  Badge dragging and consent-card checks require separate observations. A chip's tooltip with recording off is unverified: the
+  panel passes mouse events through, which may prevent the tooltip from appearing. Chip polling cost is unmeasured.
+- Stage cache receipts detect accidental damage. By design, a process running as the same user can substitute a valid
+  strip and recompute its receipt. The renderer denies direct network access, but permits reads, Mach services and writes
+  throughout the per-user temporary directory needed by `sips`.
+- A stage-cache lock with no owner receipt, or an abandoned recovery folder, is recovered after 65 s. If a session times out
+  inside that window, it shows medium art once. A live owner with a matching process start keeps its lock.
+- Stage cache repair covers strip hash and file-list damage in a private cache with a receipt. Missing or invalid receipts
+  and missing or invalid `stage.json` files keep medium art. Plugin versions installed side by side can prune each other's unused cache folders
+  after 10 minutes, causing another background render.
+- Mabel, Biscuit, Rudy, Mo, Dennis, Nana and Hal are reserved built-in IDs. An older imported pack with one of those IDs stays
+  on disk, but the built-in takes precedence. Rename the imported pack's ID before importing it again.
 
 - The sprite cursor style's decode child uses the private `sandbox_init` call with an SBPL string, tested on macOS 27
   only. If it fails, characters show the ring with reason `sandbox`.
@@ -458,6 +966,22 @@ refuses terminals and OpenAI's own apps. See [approvals and guards](#approvals-a
   review found it on 2026-10-13. No recorded run wrote such code.
 
 ## Browsers
+
+- After a later turbo failure, the session keeps turbo's browser rules. The fallback notice points to the engine
+  browser path but does not include the engine's browser instructions. Model recovery after that failure is unmeasured.
+- Turbo worker startup has a 120 s limit, including first-use helper compilation. A cold AppKit module cache took
+  more than 120 s at load 31 to 38 (2026-10-14), so preparation can stop before the compiler's 300 s allowance.
+
+- Offline replay fit 6/6 Safari overflows with 0 valid-number changes in 4,396 results. Hidden duplicates still refuse.
+  Firefox new-tab recovery can need a standalone `cua.getApp` after mixed acquire/read and navigation refusals (2 stops);
+  a 6-call Safari mail sequence had 0 stops. Firefox's retry helper reply was not retained. Live savings are unmeasured.
+  Experimental form/first-window guidance stays off. A title match alone cannot prove browser-profile identity.
+
+- Turbo's 50 ms point-geometry limit can refuse a point click with "use a control ref" before any input. A replay that
+  advanced the page clock reproduced it. We haven't proved that load causes it or measured how often it happens on a
+  user's Mac. The refusal tells the model to use a control ref.
+
+- Firefox's root-container focus exception matches labels only on text, heading and label rows, using English payment and credential words. A non-English card or password label beside a field the page leaves unnamed is not refused.
 
 - Turbo's short browser and Electron tab handles have 45 random bits, less guessing resistance than UUID v4's 122.
   An independent guess hits one registered handle with probability 1 in 35,184,372,088,832; with N records the probability is
@@ -784,7 +1308,7 @@ compaction, so it cannot isolate wording alone. That A/B has not run live.
 - With `SLEIGHT_POINT_INPUT=1`, point input scans element boxes and ignores paint order and `pointer-events`. A backdrop over Subscribe still needs a ref when the button's box contains the point (2/2 refused).
 - With point input on, pages over 20,000 node visits, 50 ms of scan or 129 native subjects need refs. So do closed shadow hosts, cross-origin frames and transformed frames. Canvas and video repaints are not detected.
 - With point input on, page handlers can still reach a payment control. Both headless fixtures fired payment once, through a forwarding listener and a document-level handler. A `pointerover` handler ran payment twice before the stale-view refusal.
-- A page handler that changes `form.action` after the guard is caught only by the navigation notification. A server redirect to `mailto:` or another app scheme is blocked before the browser passes the URL to macOS, in installed Chrome and Helium alike (2026-10-25). A popup the page opens itself with `window.open` can still reach Mail. Each page load pauses once at its response for this check.
+- A page that assigns an app URL to `location`, adds a meta refresh or changes `form.action` after the guard can trigger the OS handler. The navigation notification reports the attempt and requests cancellation, but cancellation can arrive after the app opens. The result says "Native UI outcome unconfirmed". Direct app links and native form destinations refuse before input. Server redirects to app schemes are failed at the paused HTTP response on owned targets. A server redirect to `mailto:` or another app scheme was blocked before the browser passed the URL to macOS, in installed Chrome and Helium alike (2026-10-25). A popup the page opens itself with `window.open` can still reach Mail. Each page load pauses once at its response for this check. Headless Chromium can open OS apps too. Mac test browsers run inside a sandbox that denies app handoffs.
 - Ready, quiet pages can return before a later timer adds content. A "text gone" wait cannot prove absence over masked content.
 - Links mode omits destinations the protected snapshot does not expose, including closed shadow roots. Browser reads write `_ariaRef` on element wrappers in Playwright's isolated world, so they are not strictly DOM-write-free.
 - Turbo downloads take observed HTTP(S) links on the page's exact origin, redirects included. They refuse executables, archives, HTML, SVG and unsupported types, and have no blob, scripted or POST-only exports. Files stay until the user removes them. The engine-path download stall remains. Chrome and Helium attachment handling is unverified.
@@ -819,16 +1343,43 @@ compaction, so it cannot isolate wording alone. That A/B has not run live.
 
 ## Clipboard
 
-- Preservation cannot snapshot unreadable formats, file promises or more than 64 MiB, and macOS has
+- The Mac runtime never reads, stages or restores general pasteboard contents. Command Copy/Cut chords refuse by physical
+  key and menu equivalent. Known Copy/Cut labels refuse even requested Copy. Control+C/X with optional Shift are allowed,
+  with change-count detection. Control+Option+C/X, Command+V and Control+V, Command+Shift/Option+C and default screenshot
+  hotkeys refuse. Control+C is expected to send SIGINT in embedded terminals. This has not been measured here.
+  Rich images/files/formatting cannot be copied. Menu Paste may insert the current clipboard through the app, without
+  staging/restoration. Old snapshots remain untouched on disk.
+- An app can still overwrite the clipboard on its own, including in response to an allowed Control+C/X. Content-free
+  change-count samples report `CLIPBOARD_CHANGED` with `stop-tell-user` after the change. The runtime then refuses further
+  input until the bootstrapped mod reports Stop or Interrupt, including across idle cleanup. Reads still work.
+  Before mod bootstrap, idle cleanup or a model call to `turn_ended` clears the stop (idle defaults to 30 s).
+  With idle cleanup off and no turn signal, the stop lasts until session close.
+  An old turn's late failure can leave the new turn with a changed pasteboard nobody reported to the user.
+  The overwrite is irreversible.
+  Person input masking a late write before the next action can hide it. Overhead on real pasteboard and AX IPC is unmeasured.
+
+- On the engine path, preservation cannot snapshot unreadable formats, file promises or more than 64 MiB, and macOS has
   no atomic compare-and-restore, so a failed Copy/Cut leaves new clipboard data alone.
-- sleight doesn't check whether a native Cut key took effect. An app that disables Cut for the
+- On the engine path, sleight doesn't check whether a native Cut key took effect. An app that disables Cut for the
   selection ignores the key, and the result only says so as a possibility. A click by label on a
   disabled item stops and names the enabled items beside it, but only items at the same depth of
   the tree.
-- An asynchronous paste handler that reads after restoration receives the restored clipboard. A worker crash loses the recovery snapshot of concealed originals.
-- Snapshots expire after 10 minutes or a reboot. On APFS and SSDs, zeroing a snapshot before unlink doesn't guarantee erasure, and backup exclusions are advisory. Google Sheets, Notion and iframe editors are untested.
+- On paths that stage clipboard data, an asynchronous paste handler that reads after restoration receives the restored clipboard. A worker crash loses the recovery snapshot of concealed originals.
+- Those snapshots expire after 10 minutes or a reboot. On APFS and SSDs, zeroing a snapshot before unlink doesn't guarantee erasure, and backup exclusions are advisory. Google Sheets, Notion and iframe editors are untested.
 
 ## The engine and its helper
+
+- The ChatGPT engine's software cursor (drawn by its SkyComputerUseService helper) can stay on screen after a turn ends,
+  until the Claude Code session running sleight is closed. Closing that session removes it. Seen once on the
+  owner's Mac on 2026-11-11. How often it happens, and which engine versions do it, is unmeasured.
+- On engine 26.1027.30824 (2026-10-31), `café crème`, `日本語テスト` and `smile 🙂 ok` garbled in 9 of 9 typeText trials,
+  3 per string, without an engine error. ASCII was exact. Paste of `café 日本 🙂` was exact in 208 ms. sleight now refuses
+  engine typeText outside printable ASCII, CR, LF and tab. A known plain field gets paste guidance, a secure role asks
+  the user to type, and unknown focus requires a reread before choosing. Earlier input in the cell clears cached focus,
+  so click-then-type can cost another read. Password-named or masked fields remain unknown. Role/subrole checks include
+  ancestors. Up to 10 completed actions can appear in the refusal.
+- The character-stage cache publishes private files with fsync and rename and waits within a bounded grace for incomplete
+  receipts. Unsafe modes, symlinks and hardlinks refuse. The changed sandboxed render has not run live.
 
 - If the installed engine documentation bundle is unreadable or its format changes, sleight stops promoting its docs for deferral, replay and deduplication. The trace and `sleight-mcp --doctor` report the failure. Restore a readable supported bundle and restart the engine to retry validation.
 
@@ -917,6 +1468,9 @@ compaction, so it cannot isolate wording alone. That A/B has not run live.
   REPL probe checks 3 of the 8 `cua` methods. The static check (`bench/compat-static.mjs`) still checks that the engine's
   JavaScript defines all 8. The Mac suite's first run on 2026-10-19 failed because the suite started the engine with computer alone
   and required all 8 (fixed in 1.3.1).
+- The ChatGPT engine's own tool description advertises a `{ pixels }` scroll distance. macOS scroll refuses that
+  object. A model that copies the description gets one refused call, and nothing is sent.
+
 - The first live-tier run (2026-10-19, engine 26.1013.40934) failed both checks on the checks' own bugs, never reaching
   an engine fault. The Calculator check wrote a `getAXState` tree the call had already printed, so the display read found
   two edit fields. The Safari fixture pressed File > New Window and saw zero window-created events in 3 s. With Safari profiles that
@@ -929,6 +1483,20 @@ compaction, so it cannot isolate wording alone. That A/B has not run live.
 
 ## Specific apps
 
+- On the own runtime, iPhone Mirroring and Simulator chrome-only scrolls lower to bounded swipes through native admission.
+  PNG/pixel screenshots after input use 2 matching captures within 1,500 ms. An initial JPEG or point-scale capture can
+  keep stale MIME or frame metadata because additional settling captures use default PNG/pixel settings.
+  iPhone Mirroring checks require the person at the Mac.
+- UTM background input is unqualified (0/3 guest deliveries). Inactive-window first-click filtering and cleared key
+  responders are unconfirmed causes. Cursor motion cannot prove guest input. Unicode at keycode 0 can arrive as A.
+  Probe release can hit a recycled PID, and stopping mid-pair can leave input held until helper resume or exit.
+
+- On the ChatGPT engine path, word-memo's time swings widely from run to run with the same build. In the 1.6.0 A/B
+  (2026-11-07, one run a round), 1.5.1 took 147 s and 70 s and the candidate 95 s, 202 s and 218 s. A separate trace
+  passed 4 of 5 with no cause in the skill. The 218 s run failed after Word refused to save a document it reported open
+  elsewhere, and sleight refused that alert's OK twice as an unverifiable cookie wall (fixed after that run, unit-tested
+  only: a native alert with no consent wording is no longer treated as a cookie wall). The 1.6.0 release rests on
+  those first rounds, with no further engine-path A/B.
 - In Excel, the first click on another sheet's tab after renaming a sheet swapped the two tabs' order in 6 of 6 runs that did it
   (2026-10-16 and 2026-10-17), whether the rename came from a double-click or the tab's context menu, and through lcu's raw engine
   arm as well as sleight. excel-edit then fails on sheet order. A second tab click didn't swap. The engine's native click code is
@@ -962,6 +1530,8 @@ compaction, so it cannot isolate wording alone. That A/B has not run live.
   textedit-edit runs while the owner worked (2026-10-10, WindowServer log).
 - In a TextEdit typing probe on 2026-10-08, select-all followed by `typeText("engine01")` and save
   left `Engine01engine01` instead of replacing the text. Part of it is macOS auto-capitalization.
+- Exact-text outcome comparison checks the whole AX value only for `setValue`. Paste and typing get the save
+  receipt wording, with no whole-value comparison. A save receipt or byte count cannot verify their requested text.
 - TextEdit hung 3 times on 2026-10-05, each time after Claude set a document's text with `setValue`
   and then pressed a save shortcut. Its main thread waits forever on the document's save lock. The
   skill tells Claude to select and type in TextEdit instead of using `setValue`.
@@ -995,8 +1565,12 @@ compaction, so it cannot isolate wording alone. That A/B has not run live.
 
 ## Hosts and platform
 
+- A stale plugin cache that cannot load the mod is a host-loading failure. Outage handling begins only after the module
+  loads. A failed unchecked `turn_ended` after sleight use is debug-only, so a stuck lease can remain invisible until the
+  next turn or manual Stop. Whether the engine releases that lease on its own is unmeasured.
+
 - The desktop app's command picker still says "/sleight isn't a command here", though the mod handles it.
-- It's macOS on Apple Silicon only. The engine's JavaScript has Linux and Windows instructions, but
+- The ChatGPT engine path is macOS on Apple Silicon only. Its JavaScript has Linux and Windows instructions, but
   the helper that clicks and types comes only with the Mac ChatGPT app, and there's no ChatGPT desktop
   app for Linux (checked 2026-10-04). We haven't checked the Windows app.
 - Cursor and generic MCP clients can use sleight's native approval panel and idle turn cleanup
@@ -1095,6 +1669,10 @@ compaction, so it cannot isolate wording alone. That A/B has not run live.
 
 ## Desktop replay
 
+- Each relay checks the settings file once a second, so turning run recording off while idle still deletes expired
+  runs when folder notifications are lost. Measured over 120 idle seconds on 2026-11-04: 0.0058 CPU seconds and 552
+  involuntary context switches with the check, against 0.0016 s and 45 without it. On this Mac, folder watching gets no
+  events for paths under `/private/tmp`; folders under `~/Library`, which hold the settings file, do get them.
 - Recording only supports initially empty TextEdit fields, and checks using constructed events do not
   prove app notification delivery.
 - A pane replay is untested in Auto mode, where the classifier may refuse the mod's `replay` call
@@ -1119,6 +1697,15 @@ compaction, so it cannot isolate wording alone. That A/B has not run live.
   whose workbooks they are. The launch flags don't turn off Office AutoRecovery.
 
 ## Benchmark environment
+
+- Public CI receives the split-document compatibility fix only at release. Failed builds retry on a changed sleight
+  commit. The same build/commit retains its skip. CI remains pinned to Claude Code 2.1.288, whose mod-test failure is
+  described under [pointer, drags and hover](#the-pointer-drags-and-hover).
+
+- SF6's focus probe samples the page every 100 ms and on document focus and blur. It also requires the focused AX field
+  from the same read to agree with the page. A silent focus round trip between two samples (under 100 ms) cannot be
+  observed. Background timer throttling can make the interval longer, so an unchanged control does not prove that focus
+  stayed in Memo throughout the gap.
 
 - A CDP `No target with given id found` from any call other than `Target.closeTarget` during the reset still ends the browser round.
 
@@ -1467,3 +2054,17 @@ compaction, so it cannot isolate wording alone. That A/B has not run live.
 
 - Cursor pause controls refuse screen-reader presses, as consent cards do; the menu accepts a fresh hardware mouse click or
   Space, Return or Enter on its highlighted row. A paused cursor host is replaced once; if that fails, start a new session.
+
+
+## Owner-present input sitting
+
+Terminal ancestry and typed `go` cannot tell a person from a script. Terminal's AppleScript `do script`
+can start the command and type `go` without a person at the Mac. The owner-present hands-off sitting
+requires Touch ID or the account password after `go`, before a guard, lock or ChatGPT engine
+starts. This proves presence only at the start. Until a hardware-input observer is qualified, the owner
+stays at the Mac to watch the whole block with hands off, by rule. Reset timing cannot identify hardware.
+The sheet, physical stop latency and held-input release on a forced second Control-C remain unmeasured.
+
+1.6.0 drops the 30-minute Glide hands-off block. Glide input in the preview rests on the ChatGPT engine path's safety
+core and live smoke runs (one-cell type and save in TextEdit, 3 of 3). Physical stop latency during a long Glide run,
+and Glide's behavior while a person types or moves the mouse, are unmeasured.

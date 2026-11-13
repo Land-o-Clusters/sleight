@@ -267,7 +267,7 @@ test('filename cap measures UTF-8 bytes without breaking code points or dropping
 });
 test('Downloads files carry a browser-format quarantine xattr before publication', { skip: process.platform !== 'darwin' }, async t => {
   const f = fixture(t), file = await f.save(undefined, { message: { id: 'request', text: 'Download this to Downloads.' } });
-  const value = execFileSync('/usr/bin/xattr', ['-p', 'com.apple.quarantine', file.path], { encoding: 'utf8' }).trim();
+  const value = execFileSync('/usr/bin/xattr', ['-p', 'com.apple.quarantine', file.path], { encoding: 'utf8', timeout: 30000, killSignal: 'SIGKILL' }).trim();
   assert.match(value, /^0081;[a-f0-9]+;sleight;[A-F0-9-]{36}$/);
 });
 test('a quarantine failure refuses publication and cleans the partial file', async t => {

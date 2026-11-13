@@ -7,6 +7,7 @@ import { open, mkdir, mkdtemp, lstat, stat, readFile, writeFile, readdir, rename
 import { homedir, tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
+import { benchOutputPath } from '../bench/runtime-options.mjs';
 
 const MAX_TIMEOUT = 600_000;
 const MAX_OUTPUT = 512_000;
@@ -141,7 +142,7 @@ async function waitForHold(signal) {
 }
 
 export function createRunner({
-  folder = join(homedir(), 'Projects/sleight-wt/ledger/live-dom'),
+  folder = benchOutputPath('live-dom'),
   repository = fileURLToPath(new URL('..', import.meta.url)),
   temporaryRoot = tmpdir(), command = runCommand, environment = process.env,
   waitForHold: hold = waitForHold,

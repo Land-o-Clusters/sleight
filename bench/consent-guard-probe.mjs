@@ -3,6 +3,7 @@
 // Run: CLAUDE_CONFIG_DIR=$(mktemp -d /tmp/lane-claude-XXXXXX) node bench/consent-guard-probe.mjs
 // JSONL stdout is the receipt. Redirect it to an evidence file if it must outlive temporary-state cleanup.
 import { spawn, spawnSync } from 'node:child_process';
+import { helperCompileArgs } from '../plugins/sleight/lib/direct-browser/host-cache.mjs';
 import { mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -19,12 +20,12 @@ export function probeHostSource(source = readFileSync(hostUrl, 'utf8')) {
   return source.slice(0, source.indexOf(entry)).replace(refusal, refusal + '\n    probeReceipt("refused", ["reason": tooSoon ? "timing" : "provenance"])') +
     readFileSync(new URL('./consent-guard-card.swift', import.meta.url), 'utf8');
 }
-export function compileProbe(directory) {
+export function compileProbe(directory, run = spawnSync) {
   const swift = join(directory, 'main.swift'), host = join(directory, 'consent-host'), poster = join(directory, 'poster');
   writeFileSync(swift, probeHostSource(), { flag: 'wx', mode: 0o600 });
   for (const [source, binary] of [[swift, host], [fileURLToPath(new URL('./consent-guard-poster.swift', import.meta.url)), poster]]) {
-    const result = spawnSync('/usr/bin/xcrun', ['swiftc', '-module-cache-path', join(directory, 'cache'), source, '-o', binary],
-      { encoding: 'utf8', timeout: 120000 });
+    const result = run('/usr/bin/xcrun', helperCompileArgs(binary === host ? 'consent-host' : 'probe-poster', { sources: [source], binary, moduleCache: join(directory, 'cache') }),
+      { encoding: 'utf8', timeout: 300000, killSignal: 'SIGKILL' });
     if (result.status !== 0) throw new Error(result.stderr || 'CONSENT_PROBE_COMPILE_FAILED');
   }
   return { host, poster };
@@ -86,7 +87,7 @@ export async function runProbe({ directory, binaries, say = record => console.lo
       // Each poster gets a fully armed card, including a newly shown replacement card.
       await new Promise(resolve => setTimeout(resolve, 600));
       const posted = spawnSync(binaries.poster, [mode, String(ready.pid), String(ready.x), String(ready.y)],
-        { cwd: directory, encoding: 'utf8', timeout: 15000 });
+        { cwd: directory, encoding: 'utf8', timeout: 15000, killSignal: 'SIGKILL' });
       say({ poster: mode, exit: posted.status, attempted: posted.stdout?.trim(), error: posted.stderr?.trim() });
       await until(() => stepVerdict(records.slice(start)) !== 'no-receipt', 5000);
       // Leave time for mouse-up delivery and re-arming after an unexpected acceptance.

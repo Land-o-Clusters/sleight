@@ -1,3 +1,4 @@
+import { modCall } from './fixtures/mod-attribution.mjs';
 import { fixtureDocumentation } from './helpers/canonical-docs.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
@@ -132,8 +133,8 @@ function relayFixture(t, options = {}) {
   const relay = createRelay({ documentationTrust: fixtureDocumentation('# Browser safety\nKeep approval and ownership checks.'), clientIn, clientOut, serverIn, serverOut, warmRepl: true, browserChoice: choice,
     changeReview: false, firstCallRules: '', ...options });
   t.after(() => relay.close());
-  const send = msg => clientIn.write(JSON.stringify(msg) + '\n');
-  const respond = msg => serverOut.write(JSON.stringify(msg) + '\n');
+  const send = msg => clientIn.write(JSON.stringify(modCall(msg)) + '\n');
+  const respond = msg => serverOut.write(JSON.stringify(modCall(msg)) + '\n');
   send({ id: 1, method: 'initialize' }); respond({ id: 1, result: { capabilities: {} } });
   send({ method: 'notifications/initialized' });
   return { sent, received, relay, send, respond, warm: sent.find(m => String(m.id).startsWith('sleight-warm-')) };
@@ -251,8 +252,8 @@ function restartingFixture(t, collected = true) {
     changeReview: false, firstCallRules: '', stopEngine: async () => ({ collected }), restartEngine: async () => fresh(),
     inspectInput: async () => ({ ok: true }), ask: async message => { asked.push(message); return 'accept'; } });
   t.after(() => relay.close());
-  const send = msg => clientIn.write(JSON.stringify(msg) + '\n');
-  const respond = msg => current.serverOut.write(JSON.stringify(msg) + '\n');
+  const send = msg => clientIn.write(JSON.stringify(modCall(msg)) + '\n');
+  const respond = msg => current.serverOut.write(JSON.stringify(modCall(msg)) + '\n');
   async function start() {
     send({ id: 1, method: 'initialize' }); await tick(); send({ method: 'notifications/initialized' }); await tick();
     assert.ok(sent.some(msg => String(msg.id).startsWith('sleight-warm-')));

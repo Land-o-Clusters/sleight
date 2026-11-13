@@ -21,7 +21,7 @@ const methods = new Set(['getApp', 'getState', 'listApps', 'listWindows', 'getAX
   'performAction', 'performSecondaryAction', 'focus', 'hover', 'waitFor', 'log', 'stringify', 'find', 'filter',
   // Pure string and array reads. The engine API has no method by these names, so none can type or paste.
   'slice', 'includes', 'indexOf', 'lastIndexOf', 'startsWith', 'endsWith', 'trim', 'split', 'join', 'map', 'some', 'every',
-  'match', 'test', 'toString', 'toLowerCase', 'toUpperCase', 'at', 'keys', 'values', 'entries']);
+  'match', 'test', 'codePointAt', 'toString', 'toLowerCase', 'toUpperCase', 'at', 'keys', 'values', 'entries']);
 function refusedBeforeExecution(name, success, content) {
   if (success || name !== 'mcp__plugin_sleight_computer__js') return false;
   const text = typeof content === 'string' ? content : Array.isArray(content) && content.length === 1 && content[0]?.type === 'text' ? content[0].text : '';

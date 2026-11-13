@@ -333,7 +333,7 @@ test('the foreground executable clears loader and guard variables before Node st
   const text = execFileSync(fileURLToPath(new URL('../plugins/sleight/bin/sleight-mcp', import.meta.url)), ['session'], {
     encoding: 'utf8', env: { ...process.env, SLEIGHT_CHATGPT_APP: fakeApp, NODE_OPTIONS: '--require /not/caller.cjs',
       DYLD_INJECT_TEST: 'hostile', SLEIGHT_CK1: '0', SLEIGHT_FLOW_RULES: 'caller.json' },
-  });
+   timeout: 60000, killSignal: 'SIGKILL' });
   assert.doesNotMatch(text, /NODE_OPTIONS|SLEIGHT_CK1|SLEIGHT_FLOW_RULES|DYLD_INJECT_TEST/);
   assert.match(text, /PATH=\/usr\/bin:\/bin/);
 });

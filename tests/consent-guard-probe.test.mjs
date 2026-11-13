@@ -1,3 +1,4 @@
+import { assertChildStatus } from './fixtures/child-status.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { mkdtempSync, existsSync, writeFileSync, chmodSync, readFileSync } from 'node:fs';
@@ -26,8 +27,8 @@ test('probe compiles without launch and separate poster rejects invalid argument
   assert.ok(existsSync(binaries.host));
   assert.ok(existsSync(binaries.poster));
   for (const args of [[], ['unknown', '123', '10', '20'], ['hidpid', '0', '10', '20']]) {
-    const invalid = spawnSync(binaries.poster, args, { encoding: 'utf8', timeout: 10000 });
-    assert.equal(invalid.status, 1); assert.match(invalid.stderr, /^usage:/);
+    const invalid = spawnSync(binaries.poster, args, { encoding: 'utf8', timeout: 10000, killSignal: 'SIGKILL' });
+    assertChildStatus(invalid, 1); assert.match(invalid.stderr, /^usage:/);
     assert.equal(invalid.stdout, '');
   }
 });
@@ -76,4 +77,12 @@ process.exitCode = sinceShow >= 600 ? 0 : 1;
   assert.ok(log.filter(record => record.poster).every(record => JSON.parse(record.attempted).sinceShow >= 600));
   assert.equal(readFileSync(stopped, 'utf8'), 'closed');
   assert.equal(existsSync(join(directory, 'grants.json')), false);
+});
+
+
+test('CP1A2 guard probe compiles the host with the optimized product recipe', t => {
+  const directory = registerTemp(t, trackTemp(mkdtempSync(join(tmpdir(), 'sleight-guard-recipe-')))), calls = [];
+  compileProbe(directory, (file, args, options) => { calls.push({ file, args, options }); return { status: 0 }; });
+  assert.deepEqual(calls.map(c => c.args.includes('-O')), [true, false]);
+  assert.ok(calls.every(c => c.options.timeout === 300000 && c.options.killSignal === 'SIGKILL'));
 });

@@ -7,6 +7,7 @@
 # says when the engine changed or a check failed.
 #   scripts/watch.sh            check now
 #   scripts/watch.sh --force    run the engine checks even if the version didn't change
+#   scripts/watch.sh --docs-only  snapshot API docs and observed version, no app checks or notification
 set -u
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 mkdir -p "$HOME/Library/Logs/sleight"

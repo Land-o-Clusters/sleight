@@ -20,7 +20,8 @@ async function readHandoffPresence(run) {
   } catch { return true; } finally { clearTimeout(timer); }
 }
 
-export async function createSession({ origins, taskMessage, forkWorker = fork, realBrowser, runMetadata = runProductMetadata } = {}) {
+export async function createSession({ origins, taskMessage, forkWorker = fork, realBrowser, runMetadata = runProductMetadata,
+  ownedBrowserEvidence = false } = {}) {
   // Tasks on the public web name no local fixture; any origins that are named still have to be runner fixtures.
   if (!Array.isArray(origins)) throw Error('Runner fixture origins required');
   if (origins.length) fixturePolicy(origins);
@@ -44,6 +45,7 @@ export async function createSession({ origins, taskMessage, forkWorker = fork, r
         typeof process.env[key] === 'string' ? [[key, process.env[key]]] : []));
       Object.assign(env, workerSwitches(process.env));
       env.SLEIGHT_TURBO_ORIGINS = JSON.stringify(origins);
+      if (ownedBrowserEvidence) env.SLEIGHT_TURBO_OWNED_BROWSER_EVIDENCE = '1';
       if (realBrowser) env.SLEIGHT_TURBO_REAL_BROWSER = JSON.stringify(realBrowser);
       return forkWorker(fileURLToPath(new URL('./v3-worker.mjs', import.meta.url)), [], { ...options, env });
     },
@@ -56,6 +58,7 @@ export async function createSession({ origins, taskMessage, forkWorker = fork, r
         const waiting = input?.name === 'browser_tabs' && input.arguments?.do === 'handoff' && input.arguments.wait === true;
         return waiting ? bridge.call(input, { handoffPresent: await readHandoffPresence(runMetadata) }) : bridge.call(input);
       }, delivered: bridge.delivered,
+      // Opt-in headless cleanup evidence is returned through the existing close receipt.
       close: () => closing ??= bridge.close() });
   } catch (error) { await bridge.close(); throw startupError(error, 'bind'); }
 }

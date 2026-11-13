@@ -1,6 +1,6 @@
 {
   "id": "CK3",
-  "source": "~/Projects/sleight-wt/race-1017/firefox-sleight-fs2on-r1/form-checkout",
+  "source": "<private-evidence>/race-1017/firefox-sleight-fs2on-r1/form-checkout",
   "switch": "SLEIGHT_CK3", "tool": "js", "argumentPattern": "(?:super|cmd|command|meta)\\+t",
   "resultExcludes": "call failed|sleight stopped before",
   "tabProbeChain": true,

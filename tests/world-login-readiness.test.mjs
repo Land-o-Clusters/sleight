@@ -1,3 +1,4 @@
+import { assertChildStatus } from './fixtures/child-status.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
@@ -55,8 +56,8 @@ test('readiness never admits an API-key status as logged in', () => {
 });
 
 test('the readiness script given only Codex checks nothing and exits 0', () => {
-  const result = spawnSync(process.execPath, ['bench/world/login-readiness.mjs', '--arm', 'codex'], { encoding: 'utf8', cwd: new URL('..', import.meta.url).pathname });
-  assert.equal(result.status, 0, result.stderr);
+  const result = spawnSync(process.execPath, ['bench/world/login-readiness.mjs', '--arm', 'codex'], { encoding: 'utf8', cwd: new URL('..', import.meta.url).pathname, timeout: 60000, killSignal: 'SIGKILL' });
+  assertChildStatus(result, 0, result.stderr);
   assert.equal(result.stdout.trim(), '');
 });
 

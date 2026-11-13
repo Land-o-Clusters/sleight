@@ -67,7 +67,7 @@ export function parseCodesign(text) {
   return out;
 }
 const tool = (path, args) => {
-  const result = spawnSync(path, args, { encoding: 'utf8', timeout: 10000, maxBuffer: 1 << 20, env: { PATH: '/usr/bin:/bin' } });
+  const result = spawnSync(path, args, { encoding: 'utf8', timeout: 10000, maxBuffer: 1 << 20, env: { PATH: '/usr/bin:/bin' }, killSignal: 'SIGKILL' });
   if (result.error) fail('CODE_IDENTITY_UNAVAILABLE');
   return result;
 };

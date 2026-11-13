@@ -19,7 +19,7 @@ for (const [field, length] of [['text area Description: Card number', false], ['
       { type: 'tool_result', tool_use_id: id, content: tree },
     ] } });
     writeFileSync(file, [event('read', 'await app.getAXState()'), event('type', 'await app.typeText("1234")')].map(JSON.stringify).join('\n'));
-    const output = execFileSync(process.execPath, [new URL('../bench/outcome-chars.mjs', import.meta.url).pathname, '--show', file], { encoding: 'utf8' });
+    const output = execFileSync(process.execPath, [new URL('../bench/outcome-chars.mjs', import.meta.url).pathname, '--show', file], { encoding: 'utf8', timeout: 60000, killSignal: 'SIGKILL' });
     assert.equal(/1 typeText 4 chars/.test(output), length);
     assert.doesNotMatch(output.split('\n').find(line => line.startsWith('1 typeText')), /1234/);
   });

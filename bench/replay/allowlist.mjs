@@ -1,4 +1,5 @@
-import ts from 'typescript';
+import { createRequire } from 'node:module';
+const require = createRequire(import.meta.url);
 import { BENCH_APPS, REAL_APPS } from '../tasks.mjs';
 import { answer } from '../fowl/origin-hook.mjs';
 
@@ -24,6 +25,7 @@ export function assertReplayArguments(args) {
     if (['app', 'appId', 'bundleId', 'bundleIdentifier'].includes(key)) assertApp(value);
     if (['url', 'origin', 'href'].includes(key)) assertURL(value);
     if (key === 'code' && typeof value === 'string') {
+      const ts = require('typescript');
       const ast = ts.createSourceFile('allowlist.js', value, ts.ScriptTarget.Latest, true, ts.ScriptKind.JS);
       const visit = node => {
         if (ts.isPropertyAssignment(node) && ['url', 'origin', 'href'].includes(node.name?.text)) {

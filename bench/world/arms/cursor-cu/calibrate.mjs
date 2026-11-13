@@ -5,6 +5,7 @@ import { armPaths, ordinaryPath, guardLive, requireOwnerFree } from './contract.
 import { DesktopDriver } from './desktop.mjs';
 import { detectRun, assertComputerUseOnly } from './state.mjs';
 import { scrubCursor } from './scrub.mjs';
+import { benchmarkStopCode } from '../../../hold.mjs';
 
 export { makeCalibration, validateCalibration, verifySelection } from './selection.mjs';
 import { makeCalibration } from './selection.mjs';
@@ -26,7 +27,7 @@ export async function calibrate({ dryRun = false, ownerAway = false, ownerSaysCu
   (guard ?? guardLive)({ ownerAway, supervised: true, ownerSaysCursorFree });
   driver ??= new DesktopDriver();
   // Admission is read-only and precedes lock acquisition and UI changes.
-  await driver.preflight(plan, { calibration: true });
+  await driver.preflight(plan, { calibration: true, signal });
   const release = await (lock ?? (await import('../../../live-lock.mjs')).acquireLiveLock)();
   let opened = false, clean = true, capture, pinnedRun;
   const start = now();
@@ -70,6 +71,6 @@ if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.ur
     const args = process.argv.slice(2);
     if (args.some(a => !['--dry-run', '--owner-says-cursor-free'].includes(a)) || new Set(args).size !== args.length) throw Error('calibrate accepts --dry-run and --owner-says-cursor-free; live mode requires the owner present');
     console.log(JSON.stringify(scrubCursor(await calibrate({ dryRun: args.includes('--dry-run'), ownerSaysCursorFree: args.includes('--owner-says-cursor-free') }, { signal: controller.signal })), null, 2));
-  } catch (error) { console.error(error.message); process.exitCode = 1; }
+  } catch (error) { console.error(error.message); process.exitCode = benchmarkStopCode(error, controller.signal) ?? 1; }
   finally { for (const s of ['SIGINT', 'SIGTERM', 'SIGHUP']) process.removeListener(s, abort); }
 }

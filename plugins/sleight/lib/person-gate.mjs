@@ -1,10 +1,12 @@
 // The launcher's second check behind the guard hook: a command that changes sleight's settings runs only when a person
-// started it in a terminal. The hook reads command text; this reads the process itself. Read-only forms run anywhere.
+// started it in a terminal. Replay and record use the same check so an agent cannot start a relay outside Stop.
+// The hook reads command text; this reads the process itself. Read-only forms run anywhere.
 // Tests inject the ancestor walk as a function. Nothing in the environment turns this off.
-import { execFileSync } from 'node:child_process';
+import { getPlatform } from './platform/index.mjs';
 import { closeSync, constants, fstatSync, ftruncateSync, lstatSync, openSync, realpathSync, statSync, writeFileSync } from 'node:fs';
 import { userInfo } from 'node:os';
-import { basename, dirname, join, resolve } from 'node:path';
+import { basename, dirname, join, resolve, win32 } from 'node:path';
+import { platformPaths } from './platform/paths.mjs';
 
 // Each command family the launcher gates, with the forms that only read. Every other form in a family is refused
 // unless a person started it, so a new writer is covered before anyone lists it here.
@@ -18,6 +20,7 @@ const READS = {
   routine: a => a.length === 1 && a[0] === 'list' || a[0] === 'run-now',
   watch: a => a.length === 1 && ['list', 'notes'].includes(a[0]) || a[0] === 'run-now',
   runs: a => a.length === 1 && a[0] === 'list' || a.length === 2 && a[0] === 'open' && /^\d{4}-\d{2}-\d{2}-[a-f0-9]{32}$/.test(a[1]),
+  replay: () => false, record: () => false,
   menu: () => false, link: () => false, unlink: () => false,
 };
 export const GATED_COMMANDS = Object.keys(READS);
@@ -26,6 +29,18 @@ export const GATED_COMMANDS = Object.keys(READS);
 export function settingsCommand(args) {
   const [family, ...rest] = args;
   if (!Object.hasOwn(READS, family) || READS[family](rest)) return undefined;
+  // These permission arguments change the effect. Keep every flag, but bound
+  // printed origins so a large site limit still fits in a terminal notice.
+  if (family === 'permissions' && ['repair', 'sites', 'unblock'].includes(rest[0])) {
+    let origins = 0, omitted = 0;
+    const words = [family, ...rest].map(word => {
+      const text = String(word).replace(/[\p{Cc}\p{Cf}\p{Zl}\p{Zp}]/gu, '');
+      if (/^https?:\/\//i.test(text.trim()) && ++origins > 8) { omitted++; return undefined; }
+      return /^[A-Za-z0-9_.:/@*-]+$/.test(text) ? text : JSON.stringify(text);
+    }).filter(word => word !== undefined);
+    if (omitted) words.push('and', String(omitted), 'more');
+    return words.join(' ');
+  }
   const words = [family, ...rest.slice(0, family === 'turbo' && rest[0] === 'app' || family === 'permissions' && rest[0] === 'memory' ? 2 : 1)];
   return words.map(word => String(word).replace(/[^\w.:/@-]/g, '').slice(0, 40)).filter(Boolean).join(' ');
 }
@@ -35,129 +50,27 @@ const REASONS = { 'no terminal': 'no terminal', claude: 'started under an agent'
   multiplexer: 'inside a terminal multiplexer', timeout: 'check timed out', 'fresh session': 'the terminal opened less than 10 s ago, so try again' };
 const NOT_FROM_TERMINAL = ['no tty', 'no terminal app', 'unknown ancestor', 'session', 'orphaned', 'too deep'];
 export const reasonText = code => REASONS[code] ?? (NOT_FROM_TERMINAL.includes(code) ? 'not started from a terminal app' : 'check failed');
-export const refusalLine = (command, code = 'check failed') =>
-  `sleight: ${command} changes sleight's settings, so run it yourself in a terminal (or use the menu bar). Reason: ${reasonText(code)}.`;
+export const refusalLine = (command, code = 'check failed') => {
+  if (/^(?:replay|record)(?: |$)/.test(command))
+    return `sleight: ${command} starts a separate recording or replay, so run it yourself in a terminal. Reason: ${reasonText(code)}.`;
+  return `sleight: ${command} changes sleight's settings, so run it yourself in a terminal (or use the menu bar). Reason: ${reasonText(code)}.`;
+};
 
-const base = path => path.split('/').at(-1).toLowerCase();
-/** One `ps -o ppid=,comm=,args=` row without its ppid, split into argv. macOS cuts comm to 16 characters and takes it from
- *  argv[0], so comm is the longest prefix of argv[0] (16 characters at most, spaces allowed) that args repeats after it. */
-export function rowArgs(row) {
-  for (let at = Math.min(16, row.length - 1); at > 0; at--) {
-    if (row[at] === ' ' && row.startsWith(row.slice(0, at), at + 1)) return row.slice(at + 1);
-  }
-  return row; // a ps without the cut (Linux prints a short name): match on everything
-}
-
-/** The agent an args string belongs to, or undefined: Claude Code (npm, the native installer's versions folder, the desktop
- *  app's claude.app), the Claude app, the Codex CLI, ChatGPT.app and Codex.app. Words before the first option are the
- *  command and its script, so a path with spaces still ends in its own basename. */
-export function agentProcess(args) {
-  if (typeof args !== 'string') return 'unreadable';
-  if (/\/claude\.app\/contents\/|\/claude\/versions\/|\/claude-code\//i.test(args) || args.includes('@anthropic-ai/claude-code')) return 'claude';
-  if (/\/(?:chatgpt|codex)\.app\/contents\//i.test(args) || args.includes('@openai/codex')) return 'openai';
-  const words = args.trim().split(/\s+/), end = words.findIndex((word, at) => at > 0 && word.startsWith('-'));
-  const lead = words.slice(0, end < 0 ? words.length : end).map(base);
-  if (lead.includes('claude')) return 'claude';
-  if (lead.includes('codex')) return 'openai';
-  return undefined;
-}
-
-// A tmux or screen server re-parents to launchd, so a client anywhere can drive a session that looks clean.
-const MULTIPLEXERS = new Set(['tmux', 'screen', 'zellij', 'abduco', 'dtach']);
-// What may sit between the launcher and the terminal app: shells and the commands that start them.
-const PASS_THROUGH = new Set(['sh', 'bash', 'zsh', 'fish', 'dash', 'ksh', 'tcsh', 'csh', 'login', 'sudo', 'su', 'env', 'nice']);
-const command = args => base(args.trim().split(/\s+/)[0] ?? '').replace(/^-/, '');
-// GUI terminals by bundle path, never by name alone. Editors and terminals that host their own agents (VS Code, Cursor, Warp)
-// aren't listed: their agents run commands in those terminals.
-const TERMINAL_BUNDLES = ['iTerm.app', 'Ghostty.app', 'WezTerm.app', 'kitty.app', 'Alacritty.app'];
-export const terminalBundles = home => ['/System/Applications/Utilities/Terminal.app/Contents/', '/Applications/Utilities/Terminal.app/Contents/',
-  ...TERMINAL_BUNDLES.flatMap(bundle => [`/Applications/${bundle}/Contents/`, ...home ? [`${home.replace(/\/$/, '')}/Applications/${bundle}/Contents/`] : []])];
-
-const run = (file, argv, timeout, env = process.env) => execFileSync(file, argv,
-  { encoding: 'utf8', timeout: Math.max(1, Math.ceil(timeout)), stdio: ['ignore', 'pipe', 'ignore'], env });
-/** Milliseconds from ps's etime ([[dd-]hh:]mm:ss), or NaN for anything else. */
-export function elapsedMs(text) {
-  const match = /^\s*(?:(?:(\d+)-)?(\d{1,2}):)?(\d{1,2}):(\d{2})\s*$/.exec(String(text ?? ''));
-  if (!match) return NaN;
-  const [, days = 0, hours = 0, minutes, seconds] = match;
-  return (((Number(days) * 24 + Number(hours)) * 60 + Number(minutes)) * 60 + Number(seconds)) * 1000;
-}
-// LC_ALL=C keeps ps's output in one format whatever language the person's terminal uses. lsof keeps the person's own
-// locale: under C it escapes non-ASCII bytes (`Jos\xc3\xa9`), and a terminal under such a home would stop matching its path.
-export const systemPs = (argv, timeout) => run('/bin/ps', argv, timeout, { ...process.env, LC_ALL: 'C' });
-/** The file a process actually runs. ps takes comm and args from argv[0], which `exec -a` sets to anything, so a terminal is
- *  confirmed by its mapped executable: lsof lists it first among the txt entries. */
-export const systemExecutable = (pid, timeout) =>
-  /^n(.+)$/m.exec(run('/usr/sbin/lsof', ['-a', '-p', String(pid), '-d', 'txt', '-Fn'], timeout))?.[1];
-const TIMEOUT = Symbol('timeout');
+export { rowArgs, agentProcess, terminalBundles, elapsedMs, systemPs, systemExecutable } from './platform/darwin-ancestry.mjs';
+export const walkAncestors = ({ platform = process.platform, ...options } = {}) =>
+  getPlatform(platform).person.walkAncestors(options);
 const homeFolder = () => { try { return userInfo().homedir; } catch { return undefined; } };
 
-/** An allow-list walk from `pid` (the launcher's parent) up to launchd, one ps call per level, at most `levels` levels within
- *  `budgetMs` for every call together. Only shells and their starters may sit below a GUI terminal app, the terminal's own
- *  processes above it (each confirmed by its executable), then launchd. The session leader of the launcher's controlling tty
- *  (`self`) must be one of those shells, started `freshMs` or more ago. ps(argv, msLeft) returns ps's output, executable(pid, msLeft) the running file.
- *  Returns { ok: true } or { ok: false, reason }; anything it can't read fails closed. */
-export function walkAncestors({ pid = process.ppid, self = process.pid, ps = systemPs, executable = systemExecutable, home = homeFolder(),
-  levels = 32, budgetMs = 1000, now = Date.now, freshMs = 10000 } = {}) {
-  const deadline = now() + budgetMs, bundles = terminalBundles(home);
-  const timed = (fn, value) => {
-    const left = deadline - now();
-    if (left <= 0) throw TIMEOUT;
-    const result = fn(value, left);
-    if (now() > deadline) throw TIMEOUT;
-    return result;
-  };
-  const call = argv => { const text = timed(ps, argv); return typeof text === 'string' ? text : ''; };
-  try {
-    if (!Number.isInteger(pid) || pid <= 1) return { ok: false, reason: 'orphaned' }; // a person's shell is always the parent
-    const tty = call(['-o', 'tty=', '-p', String(self)]).trim();
-    if (!/^[\w/]{1,32}$/.test(tty)) return { ok: false, reason: 'no tty' };
-    const chain = [];
-    let terminal, terminalAt;
-    for (let level = 0; ; level++) {
-      if (level >= levels) return { ok: false, reason: 'too deep' };
-      const match = /^\s*(\d+) (.+)$/.exec(call(['-o', 'ppid=,comm=,args=', '-p', String(pid)]).split('\n').find(line => line.trim()) ?? '');
-      if (!match) return { ok: false, reason: 'unreadable' };
-      const args = rowArgs(match[2]), agent = agentProcess(args);
-      if (agent) return { ok: false, reason: agent };
-      if (MULTIPLEXERS.has(command(args))) return { ok: false, reason: 'multiplexer' };
-      const bundle = bundles.find(prefix => args.startsWith(prefix));
-      if (terminal ? bundle !== terminal : !bundle && !PASS_THROUGH.has(command(args))) return { ok: false, reason: 'unknown ancestor' };
-      if (bundle) {
-        const file = timed(executable, pid);
-        if (typeof file !== 'string' || !file.startsWith(bundle)) return { ok: false, reason: 'unknown ancestor' };
-        if (!terminal) { terminal = bundle; terminalAt = chain.length; }
-      }
-      chain.push(pid);
-      pid = Number(match[1]);
-      if (pid <= 1) break;
-    }
-    if (!terminal) return { ok: false, reason: 'no terminal app' };
-    // macOS prints 0 for sess, so the leader is the process on this tty whose stat has the s flag.
-    const leaders = call(['-t', tty, '-o', 'pid=,stat=']).split('\n').map(line => /^\s*(\d+)\s+(\S+)/.exec(line))
-      .filter(m => m && m[2].includes('s')).map(m => Number(m[1]));
-    const at = leaders.length === 1 ? chain.indexOf(leaders[0]) : -1;
-    if (at < 0 || at >= terminalAt) return { ok: false, reason: 'session' };
-    // A speed bump, not a guarantee: an agent that opens a fresh terminal and types at once meets a session under 10 s old.
-    // etime has no month or day names, so no locale changes it; anything that isn't etime fails closed.
-    if (freshMs > 0) {
-      const age = elapsedMs(call(['-o', 'etime=', '-p', String(leaders[0])]));
-      if (!Number.isFinite(age)) return { ok: false, reason: 'unreadable' };
-      if (age < freshMs) return { ok: false, reason: 'fresh session' };
-    }
-    return { ok: true };
-  } catch (error) { return { ok: false, reason: error === TIMEOUT ? 'timeout' : 'ps failed' }; }
-}
-
 // The real path of `value`, or of its nearest existing folder with the rest appended.
-const canonicalPath = (value, real = realpathSync.native) => { let at = resolve(value), rest = []; for (;;) {
-  try { return join(real(at), ...rest); } catch (error) { if (error?.code !== 'ENOENT' || dirname(at) === at) throw error; }
-  rest.unshift(basename(at)); at = dirname(at);
+const canonicalPath = (value, real = realpathSync.native, pathApi = { resolve, join, dirname, basename }) => { let at = pathApi.resolve(value), rest = []; for (;;) {
+  try { return pathApi.join(real(at), ...rest); } catch (error) { if (error?.code !== 'ENOENT' || pathApi.dirname(at) === at) throw error; }
+  rest.unshift(pathApi.basename(at)); at = pathApi.dirname(at);
 } };
 // Whether a real path is sleight's settings folder or inside it. APFS ignores case by default, so the comparison does too.
-function underSettings(realPath, home, real = realpathSync.native) {
-  const folder = join(home, 'Library/Application Support/sleight');
-  const target = realPath.toLowerCase(), roots = [folder, canonicalPath(folder, real)].map(root => root.toLowerCase().replace(/\/$/, ''));
+function underSettings(realPath, home, real = realpathSync.native, platform = process.platform, pathApi) {
+  const folder = platformPaths({ home, platform }).settings;
+  const fold = value => (platform === 'win32' ? value.replace(/\\/g, '/') : value).toLowerCase().replace(/\/$/, '');
+  const target = fold(realPath), roots = [folder, canonicalPath(folder, real, pathApi)].map(fold);
   return roots.some(root => target === root || target.startsWith(root + '/'));
 }
 
@@ -165,11 +78,12 @@ function underSettings(realPath, home, real = realpathSync.native) {
  *  the file's own real path when it exists, else its nearest existing folder's real path with the rest appended. A file
  *  with another hard link could be a settings file under a second name, so it counts as inside. This is a courtesy check
  *  before a long recording; writeOutsideSettings is the one that holds. */
-export function insideSettings(path, { home = homeFolder(), real = realpathSync.native, stat = lstatSync } = {}) {
+export function insideSettings(path, { home = homeFolder(), real = realpathSync.native, stat = lstatSync, platform = process.platform,
+  pathApi = platform === 'win32' ? win32 : undefined } = {}) {
   if (typeof path !== 'string' || !path || !home) return true;
   try {
     try { if (stat(path).nlink > 1) return true; } catch (error) { if (error?.code !== 'ENOENT') return true; }
-    return underSettings(canonicalPath(path, real), home, real);
+    return underSettings(canonicalPath(path, real, pathApi), home, real, platform, pathApi);
   } catch { return true; }
 }
 
@@ -179,7 +93,9 @@ const outsideRefusal = () => Object.assign(Error("record doesn't write into slei
  *  afterwards (`between`, a test seam) can't redirect the write. The folder's real location is read from that inode and
  *  checked, the file is opened relative to it without following a link, and a file with another hard link is refused
  *  before anything is truncated. exclusive adds O_EXCL. Throws an Error with code SETTINGS_OUT on a refusal. */
-export function writeOutsideSettings(path, text, { home = homeFolder(), exclusive = false, mode = 0o644, between = () => {} } = {}) {
+export function writeOutsideSettings(path, text, { home = homeFolder(), exclusive = false, mode = 0o644, between = () => {}, platform = process.platform } = {}) {
+  // The held-working-directory/O_NOFOLLOW proof is POSIX-only. A Windows writer needs held handles and reparse checks.
+  if (platform === 'win32') throw outsideRefusal();
   if (typeof path !== 'string' || !path || !home) throw outsideRefusal();
   const name = basename(path);
   if (!name || name === '.' || name === '..' || path.endsWith('/')) throw outsideRefusal();
@@ -188,7 +104,7 @@ export function writeOutsideSettings(path, text, { home = homeFolder(), exclusiv
   try {
     between();
     const here = realpathSync.native('.'), held = statSync('.'), named = statSync(here);
-    if (held.dev !== named.dev || held.ino !== named.ino || underSettings(here, home)) throw outsideRefusal();
+    if (held.dev !== named.dev || held.ino !== named.ino || underSettings(here, home, undefined, platform)) throw outsideRefusal();
     const { O_WRONLY, O_CREAT, O_EXCL, O_NOFOLLOW } = constants;
     let fd;
     try { fd = openSync(name, O_WRONLY | O_CREAT | O_NOFOLLOW | (exclusive ? O_EXCL : 0), mode); }
@@ -212,7 +128,8 @@ const AGENT_ENV = ['CLAUDECODE', 'CLAUDE_CODE_ENTRYPOINT'];
  *  started from an agent's shell sits under the agent, and a multiplexer server sits under launchd, so both refuse). */
 // freshMs: the session-age bar, 10 s by default. The launcher passes 0 for forms that only take access away or change looks,
 // so a person stopping sleight from a terminal they just opened isn't held up.
-export function settingsRefusal(args, { stdin = process.stdin, stdout = process.stdout, env = process.env, ancestors = walkAncestors, freshMs = 10000 } = {}) {
+export function settingsRefusal(args, { stdin = process.stdin, stdout = process.stdout, env = process.env, platform = process.platform,
+  ancestors = options => walkAncestors({ ...options, platform }), freshMs = 10000 } = {}) {
   const command = settingsCommand(args);
   if (command === undefined) return undefined;
   try {
@@ -222,4 +139,31 @@ export function settingsRefusal(args, { stdin = process.stdin, stdout = process.
     if (walked?.ok !== true) return refusalLine(command, walked?.reason);
   } catch { return refusalLine(command); }
   return undefined;
+}
+
+// A first Windows call may need to build WIN5's helper. Keep that asynchronous build outside the synchronous walk.
+// macOS retains its existing walk and performs no new imports, builds or process reads here.
+export async function settingsRefusalAsync(args, { platform = process.platform, stdin = process.stdin, stdout = process.stdout,
+  env = process.env, stderr = process.stderr, prepare = options => getPlatform(platform).person.prepareGate(options), ...options } = {}) {
+  // These exact forms only remove access. Run the walk when available, with no session-age delay.
+  const removal = args.length === 2 && args[0] === 'hand' && args[1] === 'off' ||
+    args[0] === 'turbo' && (args.length === 2 && args[1] === 'off' ||
+    args.length === 4 && args[1] === 'app' && args[2] === 'off') ||
+    args[0] === 'permissions' && args.length === 3 && ['block', 'revoke'].includes(args[1]);
+  if (platform === 'win32' && removal) options.freshMs = 0;
+  if (platform === 'win32' && settingsCommand(args) !== undefined && stdin?.isTTY === true && stdout?.isTTY === true &&
+      !AGENT_ENV.some(name => env?.[name]) && !options.ancestors) {
+    let host;
+    try { host = await prepare({ platform }); } catch {}
+    if (host?.status !== 'ready') {
+      if (!removal || host?.status !== 'unavailable' || host.code !== 'WINDOWS_COMPILER_MISSING') return refusalLine(settingsCommand(args));
+      // A missing compiler/helper must not prevent a person from withdrawing access.
+      // Unknown failures and ACL/package-integrity failures retain the ordinary refusal.
+      // Reuse the terminal and marker checks; never replace a completed refusing walk.
+      const refusal = settingsRefusal(args, { ...options, platform, stdin, stdout, env, ancestors: () => ({ ok: true }) });
+      if (!refusal) stderr.write("sleight: could not verify the terminal's ancestry; this form only removes access, so it ran on the terminal and agent-marker checks.\n");
+      return refusal;
+    }
+  }
+  return settingsRefusal(args, { ...options, platform, stdin, stdout, env });
 }

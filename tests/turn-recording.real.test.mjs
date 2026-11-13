@@ -11,6 +11,8 @@ import { createV3TurnBinding } from '../plugins/sleight/lib/direct-browser/v3-co
 import { createV3TurnRuntime } from '../plugins/sleight/lib/direct-browser/worker.mjs';
 import { snapshot, acknowledgeSnapshot } from '../plugins/sleight/lib/direct-browser/snapshot.mjs';
 import { createTurnRecording } from '../plugins/sleight/lib/turn-recording.mjs';
+// spawnSync blocks the event loop, so a stalled Pillow child would outlive the test's own timeout.
+const PIL_TIMEOUT_MS = 60000;
 
 const html = `<!doctype html><style>body{margin:0;background:white}h1{margin:0;height:80px;background:#00ff00}input,textarea,select,[contenteditable],[role=textbox],iframe,canvas{display:block;width:240px;height:40px;box-sizing:border-box;border:0;margin:0;background:#ff0000;color:red}</style>
 <h1>Recording fixture</h1><input type=password value=secret-password><input autocomplete=cc-number value=4242424242424242>
@@ -27,8 +29,8 @@ for i,checks in enumerate(frames):
  if sys.argv[3]=='1': assert not any(r>200 and g<30 and b<30 for r,g,b in p.getdata()),('unmasked red field or media pixels',i)
  for x,y,rgb in checks:
   assert p.getpixel((x,y))==tuple(rgb),(i,x,y,p.getpixel((x,y)),rgb)
-`, path, JSON.stringify(frames), noRed ? '1' : '0'], { encoding: 'utf8' });
-  assert.equal(decoded.status, 0, decoded.stderr);
+`, path, JSON.stringify(frames), noRed ? '1' : '0'], { encoding: 'utf8', timeout: PIL_TIMEOUT_MS, killSignal: 'SIGKILL' });
+  assert.equal(decoded.status, 0, `${decoded.error?.code ?? decoded.signal ?? ''}\n${decoded.stderr}`);
 }
 
 function gifChecks(box, width = 1280, height = 720) {

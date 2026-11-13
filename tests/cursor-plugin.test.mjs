@@ -78,7 +78,8 @@ test('Cursor reads Claude Code skills, while Codex lists only drive-mac-apps', (
     // Both skills load on explicit invocation. The relay adds drive-mac-apps to the first engine docs reply.
     assert.match(front, /^disable-model-invocation: true$/m);
   }
-  // One copy: nothing generated that could drift from the skill.
+  assert.deepEqual(readdirSync(skills), ['drive-mac-apps', 'make-character'], 'host discovery retains the Mac and character skills');
+  // The private Windows skill is read only by the win32 relay, outside host discovery.
   const copies = [];
   const walk = dir => { for (const entry of readdirSync(dir, { withFileTypes: true })) {
     if (['vendor', 'node_modules'].includes(entry.name)) continue;
@@ -86,7 +87,7 @@ test('Cursor reads Claude Code skills, while Codex lists only drive-mac-apps', (
     if (entry.isDirectory()) walk(full); else if (entry.name === 'SKILL.md' || entry.name.endsWith('.mdc')) copies.push(full.slice(plugin.length + 1));
   } };
   walk(plugin);
-  assert.deepEqual(copies, ['skills/drive-mac-apps/SKILL.md', 'skills/make-character/SKILL.md']);
+  assert.deepEqual(copies, ['lib/windows-repl/skills/drive-windows-apps/SKILL.md', 'skills/drive-mac-apps/SKILL.md', 'skills/make-character/SKILL.md']);
 });
 
 test('the repo is a Cursor marketplace named like the Claude one, so cursor-agent\'s loader keeps its plugin over the Claude import', () => {

@@ -1,6 +1,6 @@
 # Background drag product checks
 
-Branch `codex/background-drag-product`, worktree `~/Projects/sleight-wt/background-drag-product`,
+Branch `codex/background-drag-product`, worktree `<private-evidence>/background-drag-product`,
 2026-10-04. Started from `origin/main` at `5782453`. The architect's rebase dispatch confirmed
 `codex/drag-polish` merged. Its `2e0e607` is an ancestor of main. Research `91cdda0` merged as `f4fb71a`.
 

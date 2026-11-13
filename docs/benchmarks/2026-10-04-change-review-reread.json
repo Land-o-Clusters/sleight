@@ -57,10 +57,10 @@
         "stages": [
           {
             "verdict": "FAIL",
-            "error": "Command failed: osascript -l JavaScript ~/Projects/sleight-wt/codex/change-review-reread/bench/document-scope-fixture.js open /private/tmp/sleight-change-review-kimNDv/UNDO-kimNDv.txt /private/tmp/sleight-change-review-kimNDv/KEEP-kimNDv.txt\n~/Projects/sleight-wt/codex/change-review-reread/bench/document-scope-fixture.js: execution error: Error: Error: Application can't be found. (-2700)\n"
+            "error": "Command failed: osascript -l JavaScript <private-evidence>/codex/change-review-reread/bench/document-scope-fixture.js open /private/tmp/sleight-change-review-kimNDv/UNDO-kimNDv.txt /private/tmp/sleight-change-review-kimNDv/KEEP-kimNDv.txt\n<private-evidence>/codex/change-review-reread/bench/document-scope-fixture.js: execution error: Error: Error: Application can't be found. (-2700)\n"
           },
           {
-            "cleanupError": "Command failed: osascript -l JavaScript ~/Projects/sleight-wt/codex/change-review-reread/bench/document-scope-fixture.js close /private/tmp/sleight-change-review-kimNDv/UNDO-kimNDv.txt /private/tmp/sleight-change-review-kimNDv/KEEP-kimNDv.txt\n~/Projects/sleight-wt/codex/change-review-reread/bench/document-scope-fixture.js: execution error: Error: Error: Application can't be found. (-2700)\n"
+            "cleanupError": "Command failed: osascript -l JavaScript <private-evidence>/codex/change-review-reread/bench/document-scope-fixture.js close /private/tmp/sleight-change-review-kimNDv/UNDO-kimNDv.txt /private/tmp/sleight-change-review-kimNDv/KEEP-kimNDv.txt\n<private-evidence>/codex/change-review-reread/bench/document-scope-fixture.js: execution error: Error: Error: Application can't be found. (-2700)\n"
           },
           {
             "liveLockCleanup": "HELD",

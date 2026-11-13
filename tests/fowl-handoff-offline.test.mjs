@@ -1,3 +1,4 @@
+import { assertChildStatus } from './fixtures/child-status.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
@@ -14,8 +15,8 @@ test('offline handoff fixtures cannot invoke live app control when presence chan
   const env = Object.fromEntries(Object.entries(process.env).filter(([name]) => name !== 'NODE_TEST_CONTEXT'));
   env.SLEIGHT_GUARD_RECORDS = recordsDir;
   const child = spawnSync(process.execPath, ['--import', guard, '--test', '--test-concurrency=2', 'tests/fowl-handoff-runner.test.mjs'],
-    { cwd, env, encoding: 'utf8', timeout: 20000 });
-  assert.equal(child.status, 0, child.stderr + child.stdout);
+    { cwd, env, encoding: 'utf8', timeout: 20000, killSignal: 'SIGKILL' });
+  assertChildStatus(child, 0, child.stderr + child.stdout);
   writeFileSync(join(recordsDir, 'handoff-guarded.log'), child.stdout + child.stderr);
   const records = readdirSync(recordsDir).filter(name => name.endsWith('.json')).map(name => JSON.parse(readFileSync(join(recordsDir, name), 'utf8')));
   assert.ok(records.length, child.stdout);

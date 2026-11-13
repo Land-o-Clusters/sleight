@@ -59,6 +59,9 @@ function player() {
   slider.addEventListener('input', draw);
   document.getElementById('previous').addEventListener('click', () => { slider.value = Math.max(0, Number(slider.value) - 1); draw(); });
   document.getElementById('next').addEventListener('click', () => { slider.value = Math.min(Number(slider.max), Number(slider.value) + 1); draw(); });
+  const initial = Number(document.getElementById('timeline').dataset.seq);
+  const found = records.findIndex(row => row.v === 'sleight.cursor/1' && row.seq === initial);
+  if (found >= 0) slider.value = found;
   draw();
 }
 
@@ -83,11 +86,11 @@ ${body}
 <script id="run-data" type="application/json">${json(data)}</script><script>${script}</script></html>`;
 }
 
-export function buildRunHTML(records) {
+export function buildRunHTML(records, { atSeq } = {}) {
   // Only the selected JSONL's records are embedded. No disk paths, app queries or screenshot sidecars are read.
   const data = records.filter(r => r && Number.isFinite(r.ts) && ['sleight.cursor/1', 'sleight.run/1'].includes(r.v));
   const script = replayFrame.toString() + '\n(' + player.toString() + ')();';
-  return documentHTML(data, script, `<label for="timeline">Timeline</label><input id="timeline" type="range" min="0" step="1" value="0">
+  return documentHTML(data, script, `<label for="timeline">Timeline</label><input id="timeline" type="range" min="0" step="1" value="0" data-seq="${Number.isSafeInteger(atSeq) && atSeq > 0 ? atSeq : 0}">
 <button id="previous" type="button">Previous</button><button id="next" type="button">Next</button>
 <output id="position"></output><p id="event"></p><p id="narration" aria-live="polite"></p>
 <div id="stage"><img id="screenshot" alt="Recorded app screenshot" hidden><span id="ring" aria-hidden="true" hidden></span></div>

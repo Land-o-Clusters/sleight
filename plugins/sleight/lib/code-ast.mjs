@@ -28,42 +28,90 @@ const safeReason = reason => reason.replace(/[\p{Cc}\p{Cf}\p{Zl}\p{Zp}]/gu, '').
 // Bounded source cache shares immutable syntax trees between request consumers.
 // Each distinct rewritten cell has its own entry; no source is evaluated.
 const cells = new Map();
-let cellBytes = 0, activeCells;
-export function withCellCache(run) {
-  const previous = activeCells;
+let cellBytes = 0, activeCells, scriptCells = false;
+export function withCellCache(run, { script = scriptCells } = {}) {
+  const previous = activeCells, previousScript = scriptCells;
+  scriptCells = script;
   activeCells ??= new Map();
-  try { return run(); } finally { activeCells = previous; }
+  try { return run(); } finally { activeCells = previous; scriptCells = previousScript; }
 }
 export function clearCellCache() { cells.clear(); cellBytes = 0; }
 export function parseCell(code) {
-  if (activeCells?.has(code)) return activeCells.get(code);
-  if (cells.has(code)) { const result = cells.get(code); activeCells?.set(code, result); return result; }
+  if (typeof code !== 'string') return parseUncachedCell(code);
+  const key = (scriptCells ? 'script:' : 'module:') + code;
+  if (activeCells?.has(key)) return activeCells.get(key);
+  if (cells.has(key)) { const result = cells.get(key); activeCells?.set(key, result); return result; }
   const result = parseUncachedCell(code);
-  activeCells?.set(code, result);
+  activeCells?.set(key, result);
   if (typeof code === 'string' && code.length <= 262144) {
-    while (cells.size >= 32 || cellBytes + code.length > 524288) {
+    while (cells.size >= 32 || cellBytes + key.length > 524288) {
       const first = cells.keys().next().value; cellBytes -= first.length; cells.delete(first);
     }
-    cells.set(code, result); cellBytes += code.length;
+    cells.set(key, result); cellBytes += key.length;
   }
   return result;
 }
 function parseUncachedCell(code) {
-  let loaded = false;
+  let loaded = false, cellErrorPosition, wrappedEnd = false;
   try {
     const cellParser = loadParser();
     loaded = true;
     if (typeof code !== 'string') throw new TypeError('cell source must be a string');
     const comments = [];
-    const ast = cellParser.parseModule(code, { ...ENGINE_PARSE_OPTIONS,
-      onComment: (_type, _text, start, end) => comments.push({ range: [start, end] }) });
+    const onComment = (_type, _text, start, end) => comments.push({ range: [start, end] });
+    let ast;
+    if (scriptCells) {
+      // Node's REPL treats await (app).method() as an await expression, though
+      // a plain script parser reads await as a function name. Prefer an async
+      // body, then allow sloppy await identifiers if that body does not parse.
+      const options = { next: true, ranges: true, lexical: true, webcompat: true, onComment };
+      const prefix = 'async function __cell__(){\n';
+      let wrapped = false;
+      try {
+        const source = prefix + code + '\n}', program = cellParser.parseScript(source, options);
+        const wrapper = program.body[0];
+        // A cell must not close this function and leave uninspected statements
+        // beside it, or replace its closing brace with another function's body.
+        if (program.body.length !== 1 || wrapper?.type !== 'FunctionDeclaration' ||
+            wrapper.start !== 0 || wrapper.end !== source.length ||
+            wrapper.body.start !== prefix.length - 2 || wrapper.body.end !== source.length)
+          throw new SyntaxError('cell escaped the async wrapper');
+        ast = wrapper.body; wrapped = true;
+      } catch (wrappedError) {
+        comments.length = 0;
+        try { ast = cellParser.parseScript(code, options); }
+        catch (plainError) {
+          // Prefer the grammar that progressed furthest through the cell. Await
+          // expressions reach their actual typo in the async body; sloppy await
+          // identifiers reach it in the plain script. The appended closing
+          // brace instead points at the original cell's end of input.
+          const asyncAt = wrappedError.loc?.start, plainAt = plainError.loc?.start;
+          const lines = code.split(/\r\n|[\r\n\u2028\u2029]/);
+          const beyondCell = asyncAt && asyncAt.line - 1 > lines.length;
+          const line = asyncAt && Math.max(1, Math.min(lines.length, asyncAt.line - 1));
+          const column = beyondCell ? lines.at(-1).length : asyncAt?.column;
+          if (asyncAt && plainAt && (line > plainAt.line || line === plainAt.line && column >= plainAt.column)) {
+            cellErrorPosition = { line, column }; wrappedEnd = beyondCell; throw wrappedError;
+          }
+          throw plainError;
+        }
+      }
+      if (wrapped) {
+        for (const node of walk(ast)) if (node.range) {
+          node.range = node.range.map(n => n - prefix.length);
+          node.start -= prefix.length; node.end -= prefix.length;
+        }
+        for (const comment of comments) comment.range = comment.range.map(n => n - prefix.length);
+        ast = { ...ast, type: 'Program', sourceType: 'script', start: 0, end: code.length, range: [0, code.length] };
+      }
+    } else ast = cellParser.parseModule(code, { ...ENGINE_PARSE_OPTIONS, onComment });
     return { ast, comments, error: null };
   } catch (error) {
     // No stack, source excerpt or caller string is added to the upstream reason.
     const syntax = error instanceof SyntaxError && typeof error.description === 'string';
-    const line = syntax && Number.isInteger(error.loc?.start?.line) ? error.loc.start.line : 0;
-    const column = syntax && Number.isInteger(error.loc?.start?.column) ? error.loc.start.column : 0;
-    let reason = syntax ? error.description : loaded ? 'cannot parse this cell'
+    const line = cellErrorPosition?.line ?? (syntax && Number.isInteger(error.loc?.start?.line) ? error.loc.start.line : 0);
+    const column = cellErrorPosition?.column ?? (syntax && Number.isInteger(error.loc?.start?.column) ? error.loc.start.column : 0);
+    let reason = wrappedEnd ? 'Unexpected end of input' : syntax ? error.description : loaded ? 'cannot parse this cell'
       : `cannot parse this cell: parser unavailable on Node ${process.version}. Use Node 22.12+ with synchronous ESM loading.`;
     if (syntax && code.includes('\r') && /unterminated string/i.test(reason)) reason += '. Escape literal CR as \\r.';
     return { ast: null, error: { line, column, reason: safeReason(reason) } };
@@ -214,10 +262,40 @@ export function invalidHandleNames(ast) {
 export function handleBindings(ast, previous = new Map()) {
   const bindings = new Map(previous), assigned = invalidHandleNames(ast);
   for (const name of assigned) bindings.delete(name);
+  const nonHandle = node => {
+    if (literalValue(node) !== UNKNOWN) return true;
+    // Even undefined can name a handle from an earlier REPL cell. No identifier
+    // proves a non-handle value; void of literal data needs no scope inference.
+    return node?.type === 'UnaryExpression' && node.operator === 'void' && literalValue(node.argument) !== UNKNOWN;
+  };
+  function nonHandleCatch(handler) {
+    if (!['ArrowFunctionExpression', 'FunctionExpression'].includes(handler?.type) || handler.async || handler.generator ||
+        handler.params.some(param => param.type !== 'Identifier')) return false;
+    if (handler.body.type !== 'BlockStatement') return nonHandle(handler.body);
+    // Only a single return/rethrow (or implicit undefined). No calls, mutations,
+    // sequences, default parameters or control-flow inference in this proof.
+    if (!handler.body.body.length) return true;
+    if (handler.body.body.length !== 1) return false;
+    const statement = handler.body.body[0];
+    if (statement.type === 'ReturnStatement') return !statement.argument || nonHandle(statement.argument);
+    return statement.type === 'ThrowStatement' && statement.argument.type === 'Identifier' &&
+      handler.params[0]?.name === statement.argument.name;
+  }
   const locatorFactories = new Set(['getByRole', 'getByText', 'getByLabel', 'getByPlaceholder', 'getByTestId', 'locator', 'frameLocator', 'filter', 'first', 'last', 'nth', 'and', 'or']);
   function bind(name, source) {
     if (!name || assigned.has(name)) return;
-    const node = source?.type === 'AwaitExpression' ? source.argument : source;
+    let node = source?.type === 'AwaitExpression' ? source.argument : source;
+    const caught = memberCall(node);
+    if (caught?.method === 'catch') {
+      const acquisition = memberCall(caught.receiver);
+      if (!caught.computed && !caught.optional && caught.args.length === 1 && nonHandleCatch(caught.args[0]) &&
+          acquisition && !acquisition.computed && !acquisition.optional &&
+          (acquisition.receiver.type === 'Identifier' && acquisition.receiver.name === 'cua' &&
+            ['getApp', 'getBrowser', 'getTab', 'createBrowserTab'].includes(acquisition.method) ||
+           acquisition.receiver.type === 'MemberExpression' && !acquisition.receiver.computed &&
+            acquisition.receiver.property.name === 'tabs' && ['get', 'new'].includes(acquisition.method))) node = caught.receiver;
+      else { bindings.delete(name); return; }
+    }
     let hint;
     if (node?.type === 'Identifier' && /^__sleightOpenedApp\d+$/.test(node.name)) hint = { kind: 'app', source: node.name };
     const call = memberCall(node);

@@ -19,7 +19,7 @@
   "timedOut": false,
   "cancelled": false,
   "stdout": "Claude arms run on the API key: $0.86 of the $200 monthly cap spent.\n",
-  "stderr": "node:fs:2914\n    return binding.writeFileUtf8(\n                   ^\n\nError: EPERM: operation not permitted, open '~/Projects/sleight-wt/plugin-arm/bench/results/2026-10-10T07-40-01-155Z-dry.json'\n    at writeFileSync (node:fs:2914:20)\n    at save (file://~/Projects/sleight-wt/plugin-arm/bench/run.mjs:323:3)\n    at file://~/Projects/sleight-wt/plugin-arm/bench/run.mjs:535:5\n    at process.processTicksAndRejections (node:internal/process/task_queues:104:5) {\n  errno: -1,\n  code: 'EPERM',\n  syscall: 'open',\n  path: '~/Projects/sleight-wt/plugin-arm/bench/results/2026-10-10T07-40-01-155Z-dry.json'\n}\n\nNode.js v26.4.0\n",
+  "stderr": "node:fs:2914\n    return binding.writeFileUtf8(\n                   ^\n\nError: EPERM: operation not permitted, open '<private-evidence>/plugin-arm/bench/results/2026-10-10T07-40-01-155Z-dry.json'\n    at writeFileSync (node:fs:2914:20)\n    at save (file://<private-evidence>/plugin-arm/bench/run.mjs:323:3)\n    at file://<private-evidence>/plugin-arm/bench/run.mjs:535:5\n    at process.processTicksAndRejections (node:internal/process/task_queues:104:5) {\n  errno: -1,\n  code: 'EPERM',\n  syscall: 'open',\n  path: '<private-evidence>/plugin-arm/bench/results/2026-10-10T07-40-01-155Z-dry.json'\n}\n\nNode.js v26.4.0\n",
   "groupClean": true,
   "traces": [
     {

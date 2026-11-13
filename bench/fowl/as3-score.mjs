@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+import { benchEvidencePath } from '../runtime-options.mjs';
 // Scores the AS-3 A/B (bench/fowl/as3-ab.command): the sleight arm with SLEIGHT_BROWSER_CORE off and on, per browser.
 // Each round's side is what its rows recorded (agentConfig.abFlags, real-gate-setup.mjs), never its folder name; a round
 // without that record, or with mixed rows, is left out with its reason, as are race-score's harness failures. Rows are
@@ -10,13 +11,12 @@
 // Product-on and on-prompt are separate cells; prompt-only wins cannot qualify the product.
 //   node bench/fowl/as3-score.mjs [round folders or <dir>/<prefix>*] [--json]
 import { readFileSync } from 'node:fs';
-import { homedir } from 'node:os';
 import { basename, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { expandRounds, loadRound } from './race-score.mjs';
 
 export const SAVING_PER_TASK_S = 30 / 12;
-const DEFAULT = join(homedir(), 'Projects/sleight-wt/race-1017/as3-ao-*');
+const DEFAULT = benchEvidencePath('race-1017/as3-ao-*');
 const readJson = file => { try { return JSON.parse(readFileSync(file, 'utf8')); } catch { return undefined; } };
 const readText = file => { try { return readFileSync(file, 'utf8'); } catch { return ''; } };
 const median = list => { const s = [...list].sort((a, b) => a - b); return s.length ? (s.length % 2 ? s[(s.length - 1) / 2] : (s[s.length / 2 - 1] + s[s.length / 2]) / 2) : null; };

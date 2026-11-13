@@ -1,3 +1,4 @@
+import { assertChildStatus } from './fixtures/child-status.mjs';
 import { test } from './macos-only.mjs';
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
@@ -16,7 +17,7 @@ const PAST = new Date(Date.now() - 7 * 60 * 60 * 1000);
 function run(args, env = {}) {
   return spawnSync(process.execPath, [SCRIPT, ...args], {
     encoding: 'utf8', cwd: ROOT, env: { ...process.env, ...env },
-  });
+   timeout: 60000, killSignal: 'SIGKILL' });
 }
 
 function tempRoots() {
@@ -55,7 +56,7 @@ test('lists old sleight folders without removing them and skips sleight-bench', 
   writeFileSync(join(oldDir, 'note.txt'), 'x');
   utimesSync(oldDir, PAST, PAST);
   const listed = run(['--root', root]);
-  assert.equal(listed.status, 0, listed.stderr);
+  assertChildStatus(listed, 0, listed.stderr);
   assert.match(listed.stdout, /sleight-old/);
   assert.match(listed.stdout, /sleight-old-.*\n|sleight-old/);
   assert.doesNotMatch(listed.stdout, /sleight-new-/);
@@ -71,11 +72,11 @@ test('refuses a path that is not a sleight- folder', t => {
   const root = harness(t);
   const other = mkdtempSync(join(root, 'other-'));
   const listed = run(['--root', root, other]);
-  assert.notEqual(listed.status, 0);
+  assertChildStatus(listed, 0, undefined, 'notEqual');
   assert.match(`${listed.stderr}${listed.stdout}`, /refuses a path that is not sleight-/);
   assert.equal(existsSync(other), true);
   const removed = run(['--remove', other]);
-  assert.notEqual(removed.status, 0);
+  assertChildStatus(removed, 0, undefined, 'notEqual');
   assert.match(`${removed.stderr}${removed.stdout}`, /refuses a path that is not sleight-/);
   assert.equal(existsSync(other), true);
 });
@@ -92,7 +93,7 @@ test('--remove deletes only old sleight folders and leaves a held-open one', t =
   const fd = openSync(join(held, 'open.txt'), 'r');
   t.after(() => closeSync(fd));
   const removed = run(['--root', root, '--remove']);
-  assert.equal(removed.status, 0, removed.stderr);
+  assertChildStatus(removed, 0, removed.stderr);
   assert.equal(existsSync(oldDir), false);
   assert.equal(existsSync(held), true);
   assert.equal(existsSync(join(root, 'sleight-bench')), true);
@@ -104,8 +105,8 @@ function leftoverAfter(file, prefix) {
   delete env.NODE_TEST_CONTEXT;
   const result = spawnSync(process.execPath, ['--test', fileURLToPath(new URL(file, import.meta.url))], {
     encoding: 'utf8', cwd: ROOT, env,
-  });
-  assert.equal(result.status, 0, result.stderr + result.stdout);
+   timeout: 60000, killSignal: 'SIGKILL' });
+  assertChildStatus(result, 0, result.stderr + result.stdout);
   return listPrefix(prefix).filter(path => !before.includes(path));
 }
 

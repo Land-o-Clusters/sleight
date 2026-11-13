@@ -1,3 +1,4 @@
+import { assertChildStatus } from './fixtures/child-status.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
@@ -46,7 +47,7 @@ test('nativeMain grades the raw Cursor answer and saves a scrubbed copy', async 
   const dir = temp(), exit = process.exitCode, answer = 'Done. password: hunter2';
   let graded;
   try {
-    const out = await nativeMain(['--tasks', 'textedit-edit', '--runs', '1', '--owner-away', '--out', join(dir, 'results.json')], {
+    const out = await nativeMain(['--tasks', 'textedit-edit', '--runs', '1', '--owner-away', '--owner-says-cursor-free', '--out', join(dir, 'results.json')], {
       guard: () => {}, held: () => false, preflight: async () => {}, inspect: () => {}, readiness: async () => ({ authStored: true }), lock: async () => () => {},
       run: async () => ({ is_error: false, duration_ms: 2000, agentSeconds: 2, groupClean: true, result: answer }),
       execute: async (_task, _ctx, { drive }) => { const d = await drive('Edit.'); graded = d.out.result; return { ...d, seconds: 9, passed: true }; },
@@ -63,7 +64,7 @@ test('nativeMain grades the raw Cursor answer and saves a scrubbed copy', async 
 for (const passed of [false, true]) test(`nativeMain retains ${passed ? 'passing' : 'failed'} rows in cursor-cu score`, async () => {
   const dir = temp(), exit = process.exitCode;
   try {
-    const out = await nativeMain(['--tasks', 'textedit-edit', '--runs', '1', '--owner-away', '--out', join(dir, 'results.json')], {
+    const out = await nativeMain(['--tasks', 'textedit-edit', '--runs', '1', '--owner-away', '--owner-says-cursor-free', '--out', join(dir, 'results.json')], {
       guard: () => {}, held: () => false, preflight: async () => {}, inspect: () => {}, readiness: async () => ({ authStored: true }), lock: async () => () => {},
       run: async () => ({ is_error: !passed, duration_ms: passed ? 2000 : null, agentSeconds: passed ? 2 : null, groupClean: true }),
       execute: async (_task, _ctx, { drive }) => ({ ...await drive('Edit.'), seconds: 9, passed }),
@@ -282,11 +283,11 @@ test('claim and race scorer JSON and text expose per-arm timing counts for score
     writeFileSync(join(round, 'results.json'), JSON.stringify(rows.map(r => ({ task: { name: 'mdn' }, surface: r.arm, wallMs: r.seconds * 1000,
       agentSeconds: r.agentSeconds, agentTiming: r.agentTiming, successfulBrowserCalls: 1, outcome: { ok: r.passed } }))));
     for (const [script, args] of [['bench/claim-score.mjs', ['--results', results, '--rules', rules]], ['bench/fowl/race-score.mjs', [round]]]) {
-      const run = format => spawnSync(process.execPath, [script, ...args, '--agent-seconds', ...format], { encoding: 'utf8' });
-      const json = run(['--json']); assert.equal(json.status, 0, json.stderr);
+      const run = format => spawnSync(process.execPath, [script, ...args, '--agent-seconds', ...format], { encoding: 'utf8', timeout: 60000, killSignal: 'SIGKILL' });
+      const json = run(['--json']); assertChildStatus(json, 0, json.stderr);
       const out = JSON.parse(json.stdout), summary = out.timingByArm['cursor-cu'];
       assert.equal(summary.agentSeconds, 1); assert.equal(summary.secondsFallback, 1); assert.equal(summary.startupIncluded.no, 1); assert.equal(summary.startupIncluded.unknown, 1);
-      const text = run([]); assert.equal(text.status, 0, text.stderr); assert.match(text.stdout, /"cursor-cu":\{"agentSeconds":1,"secondsFallback":1/);
+      const text = run([]); assertChildStatus(text, 0, text.stderr); assert.match(text.stdout, /"cursor-cu":\{"agentSeconds":1,"secondsFallback":1/);
     }
     const rounds = [{ browser: 'chrome', rows: [{ ...rows[0], harnessCover: true }, rows[1]], coverMarked: true }];
     const scored = scoreRounds(rounds, { agentSeconds: true, excludeCovered: true });

@@ -70,7 +70,7 @@ for (const selector of ['"Insert"', '{ label: "Insert" }']) {
 for (const [name, rows] of [
   ['two content matches', '\t1 tab group Ribbon\n\t\t2 tab Insert\n\t3 group Tools\n\t\t4 button Insert\n5 menu bar\n\t6 Insert'],
   ['only menu matches', '1 menu bar\n\t2 Insert\n\t3 menu More\n\t\t4 menu item Insert'],
-  ['unknown root', '\t1 group Tools\n\t\t2 button Insert\n3 button Insert'],
+  ['unknown root', '0 group Unknown\n\t1 group Tools\n\t\t2 button Insert\n\t3 button Insert'],
   ['menu words in a content label', '\t1 group menu bar\n\t\t2 button Insert\n\t3 button Insert'],
 ]) test(`${name} stays ambiguous and lists candidate numbers and parents`, async () => {
   const f = await execute(rows, 'await app.click({ label: "Insert" });');
@@ -101,9 +101,9 @@ for (const selector of ['"Table"', '{ label: "Table" }']) {
     assert.deepEqual(f.inputs, [7]);
   });
   test(`a menu-bar title and two other elements stop before input, naming both sides, for ${selector}`, async () => {
-    const f = await execute('3 toolbar Tools\n\t4 button Table\n8 group Panel\n\t9 button Table\n5 menu bar\n\t7 Table', `await app.click(${selector});`);
+    const f = await execute('\t3 toolbar Tools\n\t\t4 button Table\n\t8 group Panel\n\t\t9 button Table\n10 menu bar\n\t11 Table', `await app.click(${selector});`);
     assert.deepEqual(f.inputs, []);
-    assert.match(f.error?.message ?? '', /3 elements with label (?:or ID )?"Table" in this window\. menu-bar item 7; other elements 4 \(parent toolbar Tools\), 9 \(parent group Panel\)\./);
+    assert.match(f.error?.message ?? '', /3 elements with label (?:or ID )?"Table" in this window\. menu-bar item 11; other elements 4 \(parent toolbar Tools\), 9 \(parent group Panel\)\./);
   });
 }
 
@@ -250,7 +250,7 @@ test('typeText with an element first stops before its earlier click, and typed t
   const note = await failedCall(t, 'await app.click(1); await app.typeText(1, "secret words");',
     { click: async () => { clicks++; }, typeText: async value => value.trim() });
   assert.equal(clicks, 0);
-  assert.match(note, /Engine App\.typeText\(text: string\); nothing was sent\.$/);
+  assert.equal(note, 'sleight: invalid native arguments. Engine App.typeText(text: string); no target; click field first if focus wrong; nothing was sent.');
   assert.doesNotMatch(note, /secret/);
 });
 

@@ -1,0 +1,428 @@
+{
+  "text_limit": 45000,
+  "serialized_ceiling": 48000,
+  "originalFixtures": [
+    {
+      "step": "race-safari-A-r1",
+      "original": {
+        "text_chars": 192414,
+        "joined_text_chars": 192416,
+        "serialized_bytes": 231463
+      },
+      "baseline": {
+        "text_chars": 192414,
+        "joined_text_chars": 192416,
+        "serialized_bytes": 231463
+      },
+      "candidate": {
+        "text_chars": 40935,
+        "joined_text_chars": 40937,
+        "serialized_bytes": 47563
+      },
+      "previous_omitted_lines": 113,
+      "omitted_lines": 2749,
+      "identity_and_notices_unchanged": true,
+      "omission_accounting_exact": true
+    },
+    {
+      "step": "race-safari-A-r2",
+      "original": {
+        "text_chars": 192500,
+        "joined_text_chars": 192502,
+        "serialized_bytes": 231549
+      },
+      "baseline": {
+        "text_chars": 192500,
+        "joined_text_chars": 192502,
+        "serialized_bytes": 231549
+      },
+      "candidate": {
+        "text_chars": 40712,
+        "joined_text_chars": 40714,
+        "serialized_bytes": 47316
+      },
+      "previous_omitted_lines": 76,
+      "omitted_lines": 2714,
+      "identity_and_notices_unchanged": true,
+      "omission_accounting_exact": true
+    },
+    {
+      "step": "race-safari-A-r3",
+      "original": {
+        "text_chars": 192471,
+        "joined_text_chars": 192473,
+        "serialized_bytes": 231520
+      },
+      "baseline": {
+        "text_chars": 192471,
+        "joined_text_chars": 192473,
+        "serialized_bytes": 231520
+      },
+      "candidate": {
+        "text_chars": 40685,
+        "joined_text_chars": 40687,
+        "serialized_bytes": 47289
+      },
+      "previous_omitted_lines": 76,
+      "omitted_lines": 2714,
+      "identity_and_notices_unchanged": true,
+      "omission_accounting_exact": true
+    },
+    {
+      "step": "race-safari-B-r1",
+      "original": {
+        "text_chars": 192505,
+        "joined_text_chars": 192507,
+        "serialized_bytes": 231554
+      },
+      "baseline": {
+        "text_chars": 192505,
+        "joined_text_chars": 192507,
+        "serialized_bytes": 231554
+      },
+      "candidate": {
+        "text_chars": 40712,
+        "joined_text_chars": 40714,
+        "serialized_bytes": 47316
+      },
+      "previous_omitted_lines": 76,
+      "omitted_lines": 2714,
+      "identity_and_notices_unchanged": true,
+      "omission_accounting_exact": true
+    },
+    {
+      "step": "race-safari-B-r2",
+      "original": {
+        "text_chars": 192403,
+        "joined_text_chars": 192405,
+        "serialized_bytes": 231452
+      },
+      "baseline": {
+        "text_chars": 192403,
+        "joined_text_chars": 192405,
+        "serialized_bytes": 231452
+      },
+      "candidate": {
+        "text_chars": 40935,
+        "joined_text_chars": 40937,
+        "serialized_bytes": 47563
+      },
+      "previous_omitted_lines": 113,
+      "omitted_lines": 2749,
+      "identity_and_notices_unchanged": true,
+      "omission_accounting_exact": true
+    },
+    {
+      "step": "race-safari-B-r3",
+      "original": {
+        "text_chars": 192471,
+        "joined_text_chars": 192473,
+        "serialized_bytes": 231520
+      },
+      "baseline": {
+        "text_chars": 192471,
+        "joined_text_chars": 192473,
+        "serialized_bytes": 231520
+      },
+      "candidate": {
+        "text_chars": 40685,
+        "joined_text_chars": 40687,
+        "serialized_bytes": 47289
+      },
+      "previous_omitted_lines": 76,
+      "omitted_lines": 2714,
+      "identity_and_notices_unchanged": true,
+      "omission_accounting_exact": true
+    }
+  ],
+  "groups": {
+    "validation-150f-rel2/firefox/race-as3": {
+      "files": 102,
+      "results": 814,
+      "changed": 0,
+      "unchanged": 648,
+      "skipped": 166,
+      "reasons": {
+        "no native tree header": 166
+      },
+      "newly_bounded": 0,
+      "candidate_over_text": 0,
+      "candidate_over_serialized": 12,
+      "over_serialized_with_images": 12,
+      "over_serialized_text_only": 0,
+      "text_chars_saved": 0,
+      "serialized_bytes_saved": 0,
+      "numeric_lines": 48039,
+      "nonincreasing_numeric_continuations": 34,
+      "results_with_numeric_continuations": 9,
+      "nonincreasing_indented": 34,
+      "nonincreasing_unindented": 0,
+      "nonincreasing_shapes": {
+        "plain:tab": 2,
+        "plain:combo": 1,
+        "plain:heading": 1,
+        "plain:text": 13,
+        "plain:radio": 4,
+        "plain:toggle": 11,
+        "plain:list": 2
+      },
+      "rating_label_lines": 0,
+      "results_with_rating_labels": 0,
+      "slash_prose_lines": 0
+    },
+    "validation-150f-rel2/safari/race-as3": {
+      "files": 102,
+      "results": 989,
+      "changed": 6,
+      "unchanged": 825,
+      "skipped": 158,
+      "reasons": {
+        "no native tree header": 158
+      },
+      "newly_bounded": 6,
+      "candidate_over_text": 0,
+      "candidate_over_serialized": 73,
+      "over_serialized_with_images": 73,
+      "over_serialized_text_only": 0,
+      "text_chars_saved": 910751,
+      "serialized_bytes_saved": 1105421,
+      "numeric_lines": 74609,
+      "nonincreasing_numeric_continuations": 356,
+      "results_with_numeric_continuations": 63,
+      "nonincreasing_indented": 356,
+      "nonincreasing_unindented": 0,
+      "nonincreasing_shapes": {
+        "diff:text": 47,
+        "plain:text": 199,
+        "plain:slider": 9,
+        "plain:value": 8,
+        "plain:combo": 6,
+        "plain:list": 5,
+        "plain:heading": 5,
+        "plain:button": 28,
+        "plain:email": 2,
+        "plain:telephone": 2,
+        "plain:other": 2,
+        "plain:container": 12,
+        "plain:radio": 6,
+        "plain:scroll": 6,
+        "plain:HTML": 3,
+        "plain:toolbar": 2,
+        "plain:menu": 2,
+        "plain:tab": 6,
+        "plain:image": 4,
+        "plain:close": 2
+      },
+      "rating_label_lines": 0,
+      "results_with_rating_labels": 0,
+      "slash_prose_lines": 0
+    },
+    "validation-150f-rel2/firefox/cc": {
+      "files": 42,
+      "results": 225,
+      "changed": 0,
+      "unchanged": 206,
+      "skipped": 19,
+      "reasons": {
+        "no native tree header": 19
+      },
+      "newly_bounded": 0,
+      "candidate_over_text": 0,
+      "candidate_over_serialized": 23,
+      "over_serialized_with_images": 23,
+      "over_serialized_text_only": 0,
+      "text_chars_saved": 0,
+      "serialized_bytes_saved": 0,
+      "numeric_lines": 11385,
+      "nonincreasing_numeric_continuations": 9,
+      "results_with_numeric_continuations": 7,
+      "nonincreasing_indented": 9,
+      "nonincreasing_unindented": 0,
+      "nonincreasing_shapes": {
+        "plain:text": 8,
+        "plain:button": 1
+      },
+      "rating_label_lines": 0,
+      "results_with_rating_labels": 0,
+      "slash_prose_lines": 0
+    },
+    "validation-150f-rel2/safari/cc": {
+      "files": 42,
+      "results": 163,
+      "changed": 0,
+      "unchanged": 158,
+      "skipped": 5,
+      "reasons": {
+        "no native tree header": 5
+      },
+      "newly_bounded": 0,
+      "candidate_over_text": 0,
+      "candidate_over_serialized": 4,
+      "over_serialized_with_images": 4,
+      "over_serialized_text_only": 0,
+      "text_chars_saved": 0,
+      "serialized_bytes_saved": 0,
+      "numeric_lines": 7932,
+      "nonincreasing_numeric_continuations": 8,
+      "results_with_numeric_continuations": 6,
+      "nonincreasing_indented": 8,
+      "nonincreasing_unindented": 0,
+      "nonincreasing_shapes": {
+        "plain:text": 2,
+        "plain:button": 1,
+        "diff:text": 5
+      },
+      "rating_label_lines": 0,
+      "results_with_rating_labels": 0,
+      "slash_prose_lines": 0
+    },
+    "validation-150f-rel3/firefox/race-as3": {
+      "files": 102,
+      "results": 796,
+      "changed": 0,
+      "unchanged": 620,
+      "skipped": 176,
+      "reasons": {
+        "no native tree header": 176
+      },
+      "newly_bounded": 0,
+      "candidate_over_text": 0,
+      "candidate_over_serialized": 14,
+      "over_serialized_with_images": 14,
+      "over_serialized_text_only": 0,
+      "text_chars_saved": 0,
+      "serialized_bytes_saved": 0,
+      "numeric_lines": 53409,
+      "nonincreasing_numeric_continuations": 6,
+      "results_with_numeric_continuations": 6,
+      "nonincreasing_indented": 6,
+      "nonincreasing_unindented": 0,
+      "nonincreasing_shapes": {
+        "plain:text": 6
+      },
+      "rating_label_lines": 0,
+      "results_with_rating_labels": 0,
+      "slash_prose_lines": 0
+    },
+    "validation-150f-rel3/safari/race-as3": {
+      "files": 102,
+      "results": 1027,
+      "changed": 6,
+      "unchanged": 809,
+      "skipped": 212,
+      "reasons": {
+        "no native tree header": 212
+      },
+      "newly_bounded": 6,
+      "candidate_over_text": 0,
+      "candidate_over_serialized": 61,
+      "over_serialized_with_images": 61,
+      "over_serialized_text_only": 0,
+      "text_chars_saved": 910100,
+      "serialized_bytes_saved": 1104722,
+      "numeric_lines": 79551,
+      "nonincreasing_numeric_continuations": 222,
+      "results_with_numeric_continuations": 43,
+      "nonincreasing_indented": 221,
+      "nonincreasing_unindented": 1,
+      "nonincreasing_shapes": {
+        "plain:other": 1,
+        "plain:text": 149,
+        "plain:container": 5,
+        "plain:checkbox": 1,
+        "plain:pop up": 1,
+        "diff:text": 48,
+        "plain:slider": 1,
+        "plain:value": 1,
+        "plain:list": 3,
+        "plain:combo": 2,
+        "plain:heading": 1,
+        "plain:button": 8,
+        "plain:menu": 1
+      },
+      "rating_label_lines": 0,
+      "results_with_rating_labels": 0,
+      "slash_prose_lines": 1
+    },
+    "validation-150f-rel3/firefox/cc": {
+      "files": 42,
+      "results": 215,
+      "changed": 0,
+      "unchanged": 200,
+      "skipped": 15,
+      "reasons": {
+        "no native tree header": 15
+      },
+      "newly_bounded": 0,
+      "candidate_over_text": 0,
+      "candidate_over_serialized": 22,
+      "over_serialized_with_images": 22,
+      "over_serialized_text_only": 0,
+      "text_chars_saved": 0,
+      "serialized_bytes_saved": 0,
+      "numeric_lines": 11327,
+      "nonincreasing_numeric_continuations": 7,
+      "results_with_numeric_continuations": 7,
+      "nonincreasing_indented": 7,
+      "nonincreasing_unindented": 0,
+      "nonincreasing_shapes": {
+        "plain:text": 7
+      },
+      "rating_label_lines": 0,
+      "results_with_rating_labels": 0,
+      "slash_prose_lines": 0
+    },
+    "validation-150f-rel3/safari/cc": {
+      "files": 42,
+      "results": 167,
+      "changed": 0,
+      "unchanged": 162,
+      "skipped": 5,
+      "reasons": {
+        "no native tree header": 5
+      },
+      "newly_bounded": 0,
+      "candidate_over_text": 0,
+      "candidate_over_serialized": 2,
+      "over_serialized_with_images": 2,
+      "over_serialized_text_only": 0,
+      "text_chars_saved": 0,
+      "serialized_bytes_saved": 0,
+      "numeric_lines": 8359,
+      "nonincreasing_numeric_continuations": 6,
+      "results_with_numeric_continuations": 6,
+      "nonincreasing_indented": 6,
+      "nonincreasing_unindented": 0,
+      "nonincreasing_shapes": {
+        "diff:text": 6
+      },
+      "rating_label_lines": 0,
+      "results_with_rating_labels": 0,
+      "slash_prose_lines": 0
+    }
+  },
+  "source_files_hashed": 762,
+  "full_replay_sha256": "bd318ae988ae076ee1c5288aa0774652983aeeed95f74e676d5259adb5e68dca",
+  "module_sources": {
+    "<private-evidence>/sf1/plugins/sleight/lib/result-budget.mjs": {
+      "bytes": 14862,
+      "sha256": "43729dc5f8876e44fd8126ad71666700f4b2cee4a72011443602f88b96768127"
+    },
+    "<private-evidence>/sf1/plugins/sleight/lib/browser-read-cap.mjs": {
+      "bytes": 7178,
+      "sha256": "325b144ef5641b1e8a1581e1a132d79932c13a0550386541e7dc1f5ab1dd6f3b"
+    },
+    "<private-evidence>/sf2/plugins/sleight/lib/result-budget.mjs": {
+      "bytes": 18208,
+      "sha256": "9f0fe8225c39539a6b5ba533886c42384d79a118c3cd9bcc4bac66be4d230b50"
+    },
+    "<private-evidence>/sf2/plugins/sleight/lib/browser-read-cap.mjs": {
+      "bytes": 7178,
+      "sha256": "325b144ef5641b1e8a1581e1a132d79932c13a0550386541e7dc1f5ab1dd6f3b"
+    },
+    "<private-evidence>/sf2/scripts/replay-native-result-budget.mjs": {
+      "bytes": 9855,
+      "sha256": "8b69fd0e04633f531f3a985b2f13b3c6e724e55ee8e259fdfe4966f91272aea6"
+    }
+  }
+}

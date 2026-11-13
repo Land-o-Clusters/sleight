@@ -13,13 +13,16 @@
 // the rows each step moved. Rows rendered past the list's visible band have no frame (Safari r1, -10005), so a matched
 // row is brought toward the middle of the rendered rows before the click.
 export function listPicker({ read, observe, press, scroll, click, parse, sameElement, expected, clicked, lineSeen, uniqueSeen, rebound,
-  sleep = ms => new Promise(resolve => setTimeout(resolve, ms)), now = () => Date.now() }) {
+  trace, sleep = ms => new Promise(resolve => setTimeout(resolve, ms)), now = () => Date.now() }) {
   const LIST_ROLE = /^(?:list box|listbox|list)(?: \([^()]*\))*(?: |,|$)/;
   // Totals per search; a key step with fewer rows a key than MIN_KEY_ROWS moves to the wheel. GROW caps an extrapolated jump.
   // BURST caps the keys sent between two reads.
   const MAX_KEYS = 400, MAX_TICKS = 400, MIN_KEY_ROWS = 5, FIRST_TICKS = 2, MAX_TICK_STEP = 32, MAX_CENTERING = 3, GROW = 4, BURST = 16;
   const compare = (a, b) => a.localeCompare(b, undefined, { numeric: true, sensitivity: 'base' });
   const words = value => String(value).replace(/\s+/g, ' ').trim();
+  // Exact metadata-bearing lines can differ only in their selection state after a click. sameElement also
+  // accepts the engine's ordinary abbreviated lines, but its label matcher does not cover every metadata suffix.
+  const selectionLine = body => body.replace(/^([a-z][a-z ]*?)(?: \((?:selectable|selected|focused)(?:, (?:selectable|selected|focused))*\))+(?= |$)/, '$1');
   // The list's rows from one tree: a row's label is its first line without role and states.
   // Its later lines (a name above a code) are kept, so the name alone can name the row.
   // The list is the focused element or its parent; or, when the read names only a "Selected:" row, that row's
@@ -162,11 +165,12 @@ export function listPicker({ read, observe, press, scroll, click, parse, sameEle
       throw new Error('pickFromList takes maxReads from 1 to 100, coarse from 1 to 8 pages and timeoutMs up to 60000.');
     }
     // "Norcrest Point International\nMAO" (Firefox r2, b7) is the row's name and code on two lines.
-    const target = words(label), deadline = now() + timeoutMs;
+    const target = words(label), started = now(), deadline = started + timeoutMs;
     const isMatch = row => row.label === target || words(row.name ?? '') === target;
     let identity = expected, reads = 0, keys = 0, ticks = 0, v, listLine, previous, direction = 0, fine = false, confirmed = null;
     // The mover in use, the units of the last move, and the rows one unit moved (measured, per mover).
     let mover = 'key', step = coarse, lastStep = 0, lastMover = 'key', centering = 0, centerDir = 0, heldAt = 0, retried = false;
+    let frameWaits = 0, frameBefore;
     // The first and last labels seen in this search, which tell whether the list can be at its top or end.
     let lowest, highest, lastText, focusRow;
     const rate = {};
@@ -175,6 +179,14 @@ export function listPicker({ read, observe, press, scroll, click, parse, sameEle
     // adds the rows its overlap shows, or its units times the measured rate; a move that measures nothing starts a new frame.
     let pos = 0, era = 0, frameView, pending, marks = [], lastWidth, stalls = 0, circled = false;
     const windows = new Map();
+    let events = 0;
+    const phase = (name, outcome = 'pending') => {
+      if (!trace || events++ >= 16) return;
+      try {
+        const at = now();
+        trace({ phase: name, outcome, at, ms: Math.max(0, at - started), reads, keys, ticks });
+      } catch {}
+    };
     const look = async () => {
       const text = await read();
       reads++;
@@ -357,6 +369,7 @@ export function listPicker({ read, observe, press, scroll, click, parse, sameEle
       return movers.sort((a, b) => rate[a] - rate[b])[0] ?? (scroll && (rate.key === 0 || !keyed) ? 'wheel' : 'key');
     };
     const moverName = how => how === 'key' ? (direction > 0 ? 'Page_Down' : 'Page_Up') : 'the scroll wheel';
+    const search = async () => {
     v = await look();
     // CC2: a list named in the call that the read doesn't show focused gets one click on a row in the band shown wherever
     // the list is scrolled (the middle of the rendered rows), or on the list itself after that row has no frame. Haiku's own
@@ -406,18 +419,26 @@ export function listPicker({ read, observe, press, scroll, click, parse, sameEle
           return matches[0];
         };
         if (v.problem && focusCandidate() && reads < maxReads && now() < deadline) {
+          phase('focus-wait');
           // No system double-click interval reader is available in the engine realm. Use a 600 ms gap from
           // completion of the first click so fast reads cannot turn the recovery into a double-click.
           const repeatGap = 600;
           await sleep(Math.min(Math.max(80, repeatGap - (now() - focusClickedAt)), deadline - now()));
+          // Timers can fire a millisecond early by Date.now(), which skipped the repeat click (Linux preflight, 2026-11-12).
+          // At most three top-ups, so a clock that never moves still ends without the second click.
+          for (let topUp = 0; topUp < 3 && now() - focusClickedAt < repeatGap && now() < deadline; topUp++) {
+            await sleep(Math.min(repeatGap - (now() - focusClickedAt) + 1, deadline - now()));
+          }
           if (now() < deadline) v = await look();
           const row = focusCandidate();
           if (v.problem && row && /\((?:[^()]*, )?selected(?:, [^()]*)?\)/.test(row.body) && reads < maxReads &&
               now() < deadline && now() - focusClickedAt >= repeatGap) {
+            phase('focus-repeat');
             await click(row.body);
             lastClick = { number: row.number, line: row.body };
             v = await look();
           }
+          phase('focus-ready');
         }
         if (v.problem || !sameElement(v.list, named.list.body)) return stop('focus-lost', 'The click did not focus the named list. No key was sent.');
       }
@@ -485,6 +506,35 @@ export function listPicker({ read, observe, press, scroll, click, parse, sameEle
       const hits = v.rows.filter(isMatch);
       if (hits.length > 1) return stop('ambiguous', hits.length + ' rows match ' + JSON.stringify(target) + '.');
       if (hits.length === 1) {
+        // No-frame can arrive while the renderer is changing its band. Reenter the checks above on each read,
+        // then allow two read-only settling intervals. Never move from an unchecked tree in the error handler.
+        if (frameWaits) {
+          if (reads >= maxReads - 2 || now() >= deadline) return stop('cap', 'The search reached its ' + (now() >= deadline ? 'time' : 'read') + ' cap.');
+          phase('frame-wait');
+          await sleep(Math.min(80, deadline - now()));
+          if (now() >= deadline) return stop('cap', 'The search reached its time cap.');
+          frameWaits--;
+          v = await look();
+          continue;
+        }
+        if (frameBefore) {
+          const before = frameBefore;
+          frameBefore = undefined;
+          // Preserve the one-unit inward nudge when the settled band stayed put. A changed band goes through
+          // ordinary centering below, using its fresh row position rather than a position from the failed click.
+          if (sameRows(v, before) && reads < maxReads - 2 && now() < deadline) {
+            const d = v.rows.indexOf(hits[0]) > (v.rows.length - 1) / 2 ? 1 : -1;
+            const how = finest();
+            if (how === 'key' ? keys < MAX_KEYS : ticks < MAX_TICKS) {
+              phase('frame-move');
+              const fresh = v;
+              v = await move(d, 1, how);
+              if (!sameRows(v, fresh)) { heldAt = 0; measure(lastMover, fresh, v, d, 1); }
+              centerDir = d; previous = undefined;
+              continue;
+            }
+          }
+        }
         // Rows rendered past the visible band have no frame, or a frame under other controls. The travel list renders 16
         // rows and shows 10: rendered rows 3 to 12 in the middle of the list, 0 to 9 at its top and 6 to 15 at its end. The
         // row is clicked inside the band shown at every place the list can still be. It can be at its top until a row before
@@ -533,29 +583,25 @@ export function listPicker({ read, observe, press, scroll, click, parse, sameEle
         // The match came from a tree taken before any later key or redraw. Click only a row that the newest tree shows
         // once, with no key pressed since the tree before it. A row outside the band moves first and is confirmed after.
         if (confirmed !== hits[0].label) {
-          if (reads >= maxReads) return stop('cap', 'The search reached its read cap before confirming the row.');
+          if (reads >= maxReads - 1 || now() >= deadline) return stop('cap', 'The search reached its ' + (now() >= deadline ? 'time' : 'read') + ' cap before confirming the row.');
           confirmed = hits[0].label; previous = undefined;
           v = await look();
           continue;
         }
+        // The selection read is part of the same bounded search. Do not click when it cannot be verified.
+        if (reads >= maxReads || now() >= deadline) return stop('cap', 'The search reached its ' + (now() >= deadline ? 'time' : 'read') + ' cap.');
+        if (retried) phase('frame-ready');
         try { await click(hits[0].body); }
         catch (error) {
           if (!/elementHasNoFrame|\bis an invalid element ID\b/.test(String(error?.message ?? error))) throw error;
-          // The engine sends nothing for a row with no frame. Read again, move the row one unit toward the middle, and
-          // retry once.
+          // The engine sends nothing for a row with no frame. Read again, settle and validate the fresh band,
+          // then retry once. The loop owns any nudge, after the same list, order and focus checks as search input.
           if (!retried && reads < maxReads - 2 && now() < deadline) {
+            phase('frame-retry');
             retried = true; previous = undefined; confirmed = null;
-            const before = v;
-            v = await look();
-            const again = v.rows?.find(isMatch);
+            frameBefore = v; frameWaits = 2;
             centering = 0; centerDir = 0;
-            if (again && sameRows(v, before)) {
-              const d = v.rows.indexOf(again) > (v.rows.length - 1) / 2 ? 1 : -1;
-              v = await move(d, 1, finest());
-              if (!sameRows(v, before)) { heldAt = 0; measure(lastMover, before, v, d, 1); }
-              // Centering may go on the same way; back the other way only into the band, never to where it had no frame.
-              centerDir = d;
-            }
+            v = await look();
             continue;
           }
           return { found: true, clicked: false, reason: 'click-failed', reads, keys, ...(ticks ? { ticks } : {}), label: hits[0].label,
@@ -564,8 +610,12 @@ export function listPicker({ read, observe, press, scroll, click, parse, sameEle
         // The read after the click must show this row selected: a click on a row the list does not show reaches what is
         // drawn there (in Firefox's travel form, the Back and Next buttons sit right under the list).
         const after = await look();
-        const picked = after.rows?.find(isMatch);
-        if (!picked || !/\((?:[^()]*, )?selected(?:, [^()]*)?\)/.test(picked.body)) {
+        const picked = after.rows?.filter(isMatch) ?? [];
+        if (after.problem || !sameElement(listLine, after.list) || after.labels.length < 3 ||
+            after.labels.some((text, i) => i && compare(after.labels[i - 1], text) >= 0) ||
+            picked.length !== 1 || picked[0].label !== hits[0].label ||
+            (!sameElement(hits[0].body, picked[0].body) && selectionLine(hits[0].body) !== selectionLine(picked[0].body)) ||
+            !/\((?:[^()]*, )?selected(?:, [^()]*)?\)/.test(picked[0].body)) {
           return { found: true, clicked: false, reason: 'click-unverified', reads, keys, ...(ticks ? { ticks } : {}), label: hits[0].label,
             note: 'The row was clicked, but the read after it does not show it selected, so the click may have reached another control. Read the window before retrying.' };
         }
@@ -622,6 +672,14 @@ export function listPicker({ read, observe, press, scroll, click, parse, sameEle
       previous = v;
       v = await move(direction, step);
     }
+    };
+    phase('start');
+    let outcome = 'error';
+    try {
+      const result = await search();
+      outcome = result.clicked ? 'selected' : 'refused';
+      return result;
+    } finally { phase('end', outcome); }
   };
 }
 

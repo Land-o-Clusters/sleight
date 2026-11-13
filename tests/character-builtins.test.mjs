@@ -6,24 +6,26 @@ import { tmpdir } from 'node:os';
 import * as api from '../plugins/sleight/lib/hand/character.mjs';
 import { cursorMenuModel, createCursorPicker } from '../plugins/sleight/lib/hand/cursor-picker.mjs';
 import { registerTemp } from '../scripts/temp-leftovers.mjs';
-const ids = ['tsugi', 'shizu', 'bit', 'kit', 'yori', 'tab'];
+const ids = api.BUILTIN_CHARACTER_IDS;
 function world(t) {
   const base = registerTemp(t, fs.realpathSync(fs.mkdtempSync(join(tmpdir(), 'sleight-builtins-'))));
   return { base, root: join(base, 'characters') };
 }
-test('six bundled characters load before any user bank exists without writing it', t => {
+test('thirteen bundled characters load before any user bank exists without writing it', t => {
   const w = world(t), packs = api.listCharacters({ root: w.root });
   assert.deepEqual(packs.map(c => c.manifest?.id), ids);
   for (const c of packs) {
     assert.equal(c.builtin, true); assert.equal(c.manifest.license, 'MIT');
     assert.equal(c.manifest.sheet, 'sheet.webp');
     assert.equal(c.resolved.filter(s => s.own).length, 19);
-    assert.equal(Object.keys(c.manifest.lines).length, 10);
+    assert.equal(Object.keys(c.manifest.lines).length, c.manifest.id === 'rudy' ? 7 : 10);
     assert.equal(api.checkCharacter(c.manifest.id, { root: w.root }).folder, c.folder);
     assert.throws(() => api.removeCharacter(c.manifest.id, { root: w.root }), /built.in/i);
     assert.throws(() => api.removeCharacter(c.manifest.id, { root: api.builtinCharactersDirectory() }), /built.in/i);
   }
-  assert.ok(packs.reduce((n, c) => n + c.total, 0) < 8_000_000);
+  assert.ok(packs.slice(0, 6).reduce((n, c) => n + c.total, 0) < 8_000_000);
+  assert.ok(packs.slice(6).reduce((n, c) => n + c.total, 0) <= 15_000_000);
+  assert.ok(packs.every(c => !c.manifest.stage && ![...c.files.keys()].some(n => n.startsWith('stage/'))));
   assert.equal(fs.existsSync(w.root), false);
 });
 test('built-in ids are reserved even if an import changes its display name', t => {
@@ -40,12 +42,13 @@ test('picker labels built-ins and offers them before imported characters', async
   const w = world(t), writes = [], controller = createCursorPicker({ home: w.base, env: {}, root: w.root, writeSetting: s => writes.push(s) });
   const catalog = await controller.catalog({ style: 'ring' });
   assert.deepEqual(catalog.installed.map(c => c.id), ids);
-  assert.equal(catalog.thumbnails.length, 6);
+  assert.equal(catalog.thumbnails.length, 13);
+  assert.ok(catalog.rows.find(r => r.title === 'Anime').children.every(r => /built.in/i.test(r.title)));
   assert.ok(catalog.rows.filter(r => r.character).every(r => /built.in/i.test(r.title)));
   assert.equal((await controller.apply({ op: 'select', style: 'sprite', character: 'kit' })).ok, true);
   assert.deepEqual(writes, [{ style: 'sprite', character: 'kit' }]);
   const rows = cursorMenuModel({ installed: [{ id: 'aaa', name: 'Aaa' }, ...catalog.installed] });
-  assert.deepEqual(rows.filter(r => r.character).map(r => r.character), [...ids, 'aaa']);
+  assert.deepEqual(rows.flatMap(r => r.children ?? [r]).filter(r => r.character).map(r => r.character), [...ids.slice(6), ...ids.slice(0, 6), 'aaa']);
   assert.equal(fs.existsSync(w.root), false);
 });
 test('tampering with any bundled file skips that pack and produces a doctor line', t => {
@@ -58,7 +61,7 @@ test('tampering with any bundled file skips that pack and produces a doctor line
     } else { changed[changed.length - 1] ^= 1; fs.writeFileSync(path, changed); }
     assert.throws(() => api.checkCharacter('tsugi', { root: w.root, builtinRoot }), /hash mismatch/);
     const listed = api.listCharacters({ root: w.root, builtinRoot });
-    assert.equal(listed.filter(c => c.manifest).length, 5);
+    assert.equal(listed.filter(c => c.manifest).length, 12);
     assert.match(listed.find(c => c.id === 'tsugi').error, /hash mismatch/);
     assert.match(api.builtinCharacterDoctorLines({ builtinRoot }).join('\n'), /PROBLEM.*tsugi.*skipped.*hash mismatch/);
     fs.writeFileSync(path, saved);
@@ -91,7 +94,7 @@ test('picker cache drops a changed built-in and its thumbnail on the next catalo
   const w = world(t), builtinRoot = join(w.base, 'bundled');
   fs.cpSync(api.builtinCharactersDirectory(), builtinRoot, { recursive: true });
   const controller = createCursorPicker({ home: w.base, env: {}, root: w.root, builtinRoot, writeSetting: () => {} });
-  const first = await controller.catalog(); assert.equal(first.installed.length, 6);
+  const first = await controller.catalog(); assert.equal(first.installed.length, 13);
   const path = join(builtinRoot, 'kit', 'sheet.webp'), bytes = fs.readFileSync(path); bytes[bytes.length - 1] ^= 1;
   fs.writeFileSync(path, bytes);
   const next = await controller.catalog();
@@ -108,7 +111,10 @@ test('built-in modes and canonical roots agree with the native loader', t => {
   const files = [join(builtinRoot, 'manifest.json'), ...fs.readdirSync(join(builtinRoot, 'bit')).map(n => join(builtinRoot, 'bit', n))];
   for (const mode of [0o600, 0o644, 0o400, 0o440, 0o444, 0o640, 0o660, 0o664, 0o666, 0o700, 0o744, 0o1644, 0o2644, 0o4644]) {
     for (const file of files) {
+      // macOS clears setgid on files inherited from the temporary root's wheel group.
+      if (process.platform === 'darwin') fs.chownSync(file, process.getuid(), process.getgid());
       fs.chmodSync(file, mode);
+      assert.equal(fs.statSync(file).mode & 0o7777, mode, 'fixture must expose the requested mode');
       if ([0o600, 0o644].includes(mode)) assert.equal(api.checkCharacter('bit', { root: w.root, builtinRoot }).builtin, true);
       else assert.throws(() => api.checkCharacter('bit', { root: w.root, builtinRoot }), /unsafe character file mode/, `${file} ${mode.toString(8)}`);
       fs.chmodSync(file, 0o644);

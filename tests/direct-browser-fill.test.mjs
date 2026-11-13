@@ -399,18 +399,17 @@ test('a custom slider with no native value property is still moved by keys and r
   const r = await h.fill([{ ref: 'e1', value: '4' }]);
   assert.equal(r.rows[0].status, 'set'); assert.deepEqual(h.input.map(a => a[2]), ['Home', 'ArrowRight', 'ArrowRight', 'ArrowRight', 'ArrowRight']);
 });
-test('reorder validates a permutation, drags each misplaced row and observes the final order', async () => {
+test('reorder factory refuses an untrusted drag without changing the list', async () => {
   const node = element('UL'), names = ['Alpha', 'Beta', 'Gamma'];
   node.children = names.map(name => ({ textContent: name, getAttribute(key) { return key === 'draggable' ? 'true' : key === 'aria-label' ? name : null; } }));
-  const h = harness({ e1: node }, { mutate(n, kind, emit, target) {
-    if (kind === 'drag') { const from = node.children.indexOf(n), to = node.children.indexOf(target); node.children.splice(from, 1); node.children.splice(to, 0, n); }
-  } });
+  const h = harness({ e1: node });
   const base = h.tab.page.locator;
   h.tab.page.locator = selector => { const loc = base(selector);
     loc.locator = selector => { assert.equal(selector, ':scope > li'); return { nth: i => h.locator(node.children[i]) }; };
     return loc; };
   const r = await h.fill([{ ref: 'e1', value: ['Gamma', 'Alpha', 'Beta'] }]);
-  assert.equal(r.rows[0].status, 'set'); assert.deepEqual(node.children.map(n => n.textContent), ['Gamma', 'Alpha', 'Beta']);
+  assert.equal(r.rows[0].status, 'failed'); assert.equal(r.rows[0].reason, 'field unavailable; read the page before retrying');
+  assert.deepEqual(h.input, []); assert.deepEqual(node.children.map(n => n.textContent), names);
 });
 test('an invalid reorder permutation never starts a drag', async () => {
   const node = element('UL'); node.children = [{ textContent: 'Alpha', getAttribute: key => key === 'draggable' ? 'true' : null }];

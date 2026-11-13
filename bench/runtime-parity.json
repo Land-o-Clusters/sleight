@@ -1,0 +1,466 @@
+{
+  "schema": "sleight.runtime-parity-manifest/1",
+  "source": "RT1-runtime-architecture.md section 1 plus LAWS runtime requirement",
+  "rows": [
+    {
+      "id": "rt1-01",
+      "capability": "`js`: persistent JavaScript session, top-level `await`, `nodeRepl.write` and `emitImage`, bindings kept between cells, `js_reset`, `cua.rewriteDocumentation()`",
+      "background": "n/a",
+      "proofRequired": "relay tests, `native-docs-replay`, `installed-documentation-replay`, `compat-contract`",
+      "check": "runtime-side/rt1-01",
+      "testFile": "tests/runtime-parity/rt1-01.test.mjs",
+      "resultFile": "runtime-parity/rt1-01.json",
+      "proofStatus": "engine-only, runtime proof missing"
+    },
+    {
+      "id": "rt1-02",
+      "capability": "First-call docs plus sleight's skill in one result, rewritten js description, payment policy and workflow rewrites with hash pins",
+      "background": "n/a",
+      "proofRequired": "prompt-budget and pin tests, `SLEIGHT_FS` A/B (24/27 vs 25/27, 2026-10-19)",
+      "check": "runtime-side/rt1-02",
+      "testFile": "tests/runtime-parity/rt1-02.test.mjs",
+      "resultFile": "runtime-parity/rt1-02.json",
+      "proofStatus": "engine-only, runtime proof missing"
+    },
+    {
+      "id": "rt1-03",
+      "capability": "Inventory: `cua.getState()`, `cua.listApps()` (id, display name, running, use count; no window list on Mac)",
+      "background": "yes",
+      "proofRequired": "doctor, compat probe",
+      "check": "runtime-side/rt1-03",
+      "testFile": "tests/runtime-parity/rt1-03.test.mjs",
+      "resultFile": "runtime-parity/rt1-03.json",
+      "proofStatus": "engine-only, runtime proof missing"
+    },
+    {
+      "id": "rt1-04",
+      "capability": "Acquisition: `cua.getApp(name, path or bundle id)` launches the app in the background when needed, returns header plus tree; `{ windowId }` refused on Mac",
+      "background": "yes (File > Open panel can activate, 3 of 21)",
+      "proofRequired": "`input-lease`, `acquisition-probe`, app-speed-map (TextEdit 1,247 ms median, 2026-10-14)",
+      "check": "runtime-side/rt1-04",
+      "testFile": "tests/runtime-parity/rt1-04.test.mjs",
+      "resultFile": "runtime-parity/rt1-04.json",
+      "proofStatus": "engine-only, runtime proof missing"
+    },
+    {
+      "id": "rt1-05",
+      "capability": "Reads: `getAXState({ disableDiffing, emit })`, `getScreenshot()`, `getAXStateAndScreenshot()` in one capture; settle wait after input (48 ms idle, 416 ms after input, engine-time.md)",
+      "background": "yes",
+      "proofRequired": "`bench/engine-time.mjs`, `bench/guard-reads.mjs`, compact-reads tests",
+      "check": "runtime-side/rt1-05",
+      "testFile": "tests/runtime-parity/rt1-05.test.mjs",
+      "resultFile": "runtime-parity/rt1-05.json",
+      "proofStatus": "engine-only, runtime proof missing"
+    },
+    {
+      "id": "rt1-06",
+      "capability": "Tree text format: `Window: \"<title>\", App: <name>.` then `<n> <role> <label>` lines with `ID:`, `Help:`, `Secondary Actions:`, `URL:`, menus and sheets in the tree, `<redacted>` for secure fields",
+      "background": "yes",
+      "proofRequired": "`document-scope`, `compact-reads`, `literal-elements` tests (the guards parse this format)",
+      "check": "runtime-side/rt1-06",
+      "testFile": "tests/runtime-parity/rt1-06.test.mjs",
+      "resultFile": "runtime-parity/rt1-06.json",
+      "proofStatus": "engine-only, runtime proof missing"
+    },
+    {
+      "id": "rt1-07",
+      "capability": "Diff after actions against the last read of that app, whoever read it; baseline reset at turn end; full read on request",
+      "background": "yes",
+      "proofRequired": "`compact-reads`, `compact-reacquire`, replay banks",
+      "check": "runtime-side/rt1-07",
+      "testFile": "tests/runtime-parity/rt1-07.test.mjs",
+      "resultFile": "runtime-parity/rt1-07.json",
+      "proofStatus": "engine-only, runtime proof missing"
+    },
+    {
+      "id": "rt1-08",
+      "capability": "Element numbers per read, `{ id }` and `{ label }` targets resolved by a fresh read, batch remap after renumber, stale-number refusal",
+      "background": "yes",
+      "proofRequired": "`document-scope`, `batch-stale`, `call-trees` tests",
+      "check": "runtime-side/rt1-08",
+      "testFile": "tests/runtime-parity/rt1-08.test.mjs",
+      "resultFile": "runtime-parity/rt1-08.json",
+      "proofStatus": "engine-only, runtime proof missing"
+    },
+    {
+      "id": "rt1-09",
+      "capability": "`click(n or point, { mouseButton, clickCount })`: posted pointer click to the pid, right-click, double-click",
+      "background": "yes (Calculator covered 10/10, 2026-10-17)",
+      "proofRequired": "claim suite, `app-speed-map`, compat live Calculator check",
+      "check": "runtime-side/rt1-09",
+      "testFile": "tests/runtime-parity/rt1-09.test.mjs",
+      "resultFile": "runtime-parity/rt1-09.json",
+      "proofStatus": "engine-only, runtime proof missing"
+    },
+    {
+      "id": "rt1-10",
+      "capability": "`app.drag(from, to)` instant drag",
+      "background": "yes (covered pawn 1/1, 2026-10-09; drops under another app's window fail, 0/3)",
+      "proofRequired": "`chess-drag` tests, drag product report",
+      "check": "runtime-side/rt1-10",
+      "testFile": "tests/runtime-parity/rt1-10.test.mjs",
+      "resultFile": "runtime-parity/rt1-10.json",
+      "proofStatus": "engine-only, runtime proof missing"
+    },
+    {
+      "id": "rt1-11",
+      "capability": "`scroll(target, direction, pages or { pixels })`",
+      "background": "yes (918 ms TextEdit scroll, app-speed-map)",
+      "proofRequired": "app-speed-map",
+      "check": "runtime-side/rt1-11",
+      "testFile": "tests/runtime-parity/rt1-11.test.mjs",
+      "resultFile": "runtime-parity/rt1-11.json",
+      "proofStatus": "engine-only, runtime proof missing"
+    },
+    {
+      "id": "rt1-12",
+      "capability": "`setValue(n, value)`, `selectText(n, text, { prefix, suffix, selectionType })`, `performSecondaryAction(n, action)`",
+      "background": "yes",
+      "proofRequired": "`action-outcomes`, Excel name-box note (4 of 9 runs held the old cell)",
+      "check": "runtime-side/rt1-12",
+      "testFile": "tests/runtime-parity/rt1-12.test.mjs",
+      "resultFile": "runtime-parity/rt1-12.json",
+      "proofStatus": "engine-only, runtime proof missing"
+    },
+    {
+      "id": "rt1-13",
+      "capability": "`paste(text, { format: text, md, html })` with the user's clipboard restored",
+      "background": "yes",
+      "proofRequired": "clipboard tests (6 files), `SLEIGHT_CLIPBOARD=preserve`",
+      "check": "runtime-side/rt1-13",
+      "testFile": "tests/runtime-parity/rt1-13.test.mjs",
+      "resultFile": "runtime-parity/rt1-13.json",
+      "proofStatus": "engine-only, runtime proof missing"
+    },
+    {
+      "id": "rt1-14",
+      "capability": "`pressKey` (xdotool names, chords) and `typeText` to a background app; bare modifiers posted by sleight's own helper since the engine refuses them",
+      "background": "yes",
+      "proofRequired": "`native-arguments`, `typing-settle`, `typed-text-receipt`, TextEdit save probe (keys 4,088 ms, text 1,411 ms)",
+      "check": "runtime-side/rt1-14",
+      "testFile": "tests/runtime-parity/rt1-14.test.mjs",
+      "resultFile": "runtime-parity/rt1-14.json",
+      "proofStatus": "engine-only, runtime proof missing"
+    },
+    {
+      "id": "rt1-15",
+      "capability": "Several actions in one call, acquisition split from actions by the relay, stops at menus, dialogs and navigation with continuation rules and HID-idle checks",
+      "background": "yes",
+      "proofRequired": "`menu-continuation`, `sf6` replay suites, `tab-continuation` live runs",
+      "check": "runtime-side/rt1-15",
+      "testFile": "tests/runtime-parity/rt1-15.test.mjs",
+      "resultFile": "runtime-parity/rt1-15.json",
+      "proofStatus": "engine-only, runtime proof missing"
+    },
+    {
+      "id": "rt1-16",
+      "capability": "`pickFromList`, `sleight.fillForm`, `sleight.dragTo` helpers injected into the session",
+      "background": "yes",
+      "proofRequired": "their unit tests",
+      "check": "runtime-side/rt1-16",
+      "testFile": "tests/runtime-parity/rt1-16.test.mjs",
+      "resultFile": "runtime-parity/rt1-16.json",
+      "proofStatus": "engine-only, runtime proof missing"
+    },
+    {
+      "id": "rt1-17",
+      "capability": "Per-app approval card (Allow, Always allow, Decline), session memory, Always allow only by the user's click, ChatGPT's own list honored, `preapproved.json`, risk levels, remote `allow <app>`, away detection at 120 s",
+      "background": "n/a",
+      "proofRequired": "`bench-approve`, `consent-*` (30 files), `remote-approvals` tests",
+      "check": "runtime-side/rt1-17",
+      "testFile": "tests/runtime-parity/rt1-17.test.mjs",
+      "resultFile": "runtime-parity/rt1-17.json",
+      "proofStatus": "engine-only, runtime proof missing"
+    },
+    {
+      "id": "rt1-18",
+      "capability": "Terminals and OpenAI apps refused before any card, `ComputerUseAllowForbiddenTargets` lifts it, settings windows refused by title",
+      "background": "n/a",
+      "proofRequired": "`blocked-apps` tests, live 2026-10-05 (echo 2/2, settings refused 1/1)",
+      "check": "runtime-side/rt1-18",
+      "testFile": "tests/runtime-parity/rt1-18.test.mjs",
+      "resultFile": "runtime-parity/rt1-18.json",
+      "proofStatus": "engine-only, runtime proof missing"
+    },
+    {
+      "id": "rt1-19",
+      "capability": "Input leases (one holder per window, 30 s expiry, sqlite coordinator), window identity (bundle id, title or URL, pid, launch time), same-title replacement undetected",
+      "background": "n/a",
+      "proofRequired": "`input-lease`, `lease-broker`, `window-identity` tests",
+      "check": "runtime-side/rt1-19",
+      "testFile": "tests/runtime-parity/rt1-19.test.mjs",
+      "resultFile": "runtime-parity/rt1-19.json",
+      "proofStatus": "engine-only, runtime proof missing"
+    },
+    {
+      "id": "rt1-20",
+      "capability": "Payment, booking, requested submit, sign-up, security-switch, cookie and sign-in handoff rules; `app_handoff`; person gate and confirm; document scope; change review; flow exceptions",
+      "background": "n/a",
+      "proofRequired": "`payment-*`, `flow-rules`, `requested-submit`, `person-*`, `document-scope` tests",
+      "check": "runtime-side/rt1-20",
+      "testFile": "tests/runtime-parity/rt1-20.test.mjs",
+      "resultFile": "runtime-parity/rt1-20.json",
+      "proofStatus": "engine-only, runtime proof missing"
+    },
+    {
+      "id": "rt1-21",
+      "capability": "Own-host refusal (consent host windows never driven), blocked apps and sites, shell guard, protected card buttons (physical input or typed word)",
+      "background": "n/a",
+      "proofRequired": "`own-host-native`, `consent-person-input`, hook tests",
+      "check": "runtime-side/rt1-21",
+      "testFile": "tests/runtime-parity/rt1-21.test.mjs",
+      "resultFile": "runtime-parity/rt1-21.json",
+      "proofStatus": "engine-only, runtime proof missing"
+    },
+    {
+      "id": "rt1-22",
+      "capability": "Turn semantics: session and turn ids, `turn_ended` after 30 idle seconds and by the mod, diff baseline per turn, pane snapshots",
+      "background": "n/a",
+      "proofRequired": "`turn-receipts`, mod tests (67 on 2.1.293)",
+      "check": "runtime-side/rt1-22",
+      "testFile": "tests/runtime-parity/rt1-22.test.mjs",
+      "resultFile": "runtime-parity/rt1-22.json",
+      "proofStatus": "engine-only, runtime proof missing"
+    },
+    {
+      "id": "rt1-23",
+      "capability": "Engine failure handling: `-10005` timeouts, \"native pipe closed\", helper restarts, two-timeout recovery reads, AX health probes (0.5 s then 3 s)",
+      "background": "n/a",
+      "proofRequired": "`app-health`, `read-failure`, `scripts/live-helper-check.sh`",
+      "check": "runtime-side/rt1-23",
+      "testFile": "tests/runtime-parity/rt1-23.test.mjs",
+      "resultFile": "runtime-parity/rt1-23.json",
+      "proofStatus": "engine-only, runtime proof missing"
+    },
+    {
+      "id": "rt1-24",
+      "capability": "`drag`: AX text move, pid-posted window-local drag (500 ms hold, 25 steps, stationary move before release), foreground only after 2 s idle, covered-point refusal, Shift pair after AX writes, text verification",
+      "background": "yes for posts; drops need an uncovered point",
+      "proofRequired": "`background-drag*`, `drag-*` (12 files), product report 2026-10-04",
+      "check": "runtime-side/rt1-24",
+      "testFile": "tests/runtime-parity/rt1-24.test.mjs",
+      "resultFile": "runtime-parity/rt1-24.json",
+      "proofStatus": "engine-only, runtime proof missing"
+    },
+    {
+      "id": "rt1-25",
+      "capability": "`hover`: real pointer after idle, 1,500 ms dwell, Screen Recording preflight, pointer and front app restored",
+      "background": "no (no background hover exists, measured 2026-10-04)",
+      "proofRequired": "`hover*` tests, live report 2026-10-04",
+      "check": "runtime-side/rt1-25",
+      "testFile": "tests/runtime-parity/rt1-25.test.mjs",
+      "resultFile": "runtime-parity/rt1-25.json",
+      "proofStatus": "engine-only, runtime proof missing"
+    },
+    {
+      "id": "rt1-26",
+      "capability": "`select_window`: raise a window by title or file URL without activating",
+      "background": "yes",
+      "proofRequired": "`select-window` test",
+      "check": "runtime-side/rt1-26",
+      "testFile": "tests/runtime-parity/rt1-26.test.mjs",
+      "resultFile": "runtime-parity/rt1-26.json",
+      "proofStatus": "engine-only, runtime proof missing"
+    },
+    {
+      "id": "rt1-27",
+      "capability": "`menu_bar` and `notifications`: status items and banners through System Events, AX press or a real click for SwiftUI items",
+      "background": "no (foreground, takes the keyboard while a menu is open)",
+      "proofRequired": "`menubar` test; live sitting result disputed (ROADMAP live checks owed)",
+      "check": "runtime-side/rt1-27",
+      "testFile": "tests/runtime-parity/rt1-27.test.mjs",
+      "resultFile": "runtime-parity/rt1-27.json",
+      "proofStatus": "engine-only, runtime proof missing"
+    },
+    {
+      "id": "rt1-28",
+      "capability": "`open_file` with `open -g`, never the Open panel",
+      "background": "yes",
+      "proofRequired": "`open-file` test",
+      "check": "runtime-side/rt1-28",
+      "testFile": "tests/runtime-parity/rt1-28.test.mjs",
+      "resultFile": "runtime-parity/rt1-28.json",
+      "proofStatus": "engine-only, runtime proof missing"
+    },
+    {
+      "id": "rt1-29",
+      "capability": "Stuck-menu Escape posted to the pid once per episode, only with HID quiet",
+      "background": "yes",
+      "proofRequired": "`stuck-escape` test, Word release 2026-10-17",
+      "check": "runtime-side/rt1-29",
+      "testFile": "tests/runtime-parity/rt1-29.test.mjs",
+      "resultFile": "runtime-parity/rt1-29.json",
+      "proofStatus": "engine-only, runtime proof missing"
+    },
+    {
+      "id": "rt1-30",
+      "capability": "AXPress exception for sibling buttons and tabs, CC8 static-text compare, WD5 whitespace peek",
+      "background": "yes",
+      "proofRequired": "their unit tests, Excel 6 of 8 posted tab clicks became drags",
+      "check": "runtime-side/rt1-30",
+      "testFile": "tests/runtime-parity/rt1-30.test.mjs",
+      "resultFile": "runtime-parity/rt1-30.json",
+      "proofStatus": "engine-only, runtime proof missing"
+    },
+    {
+      "id": "rt1-31",
+      "capability": "Front restore after a launch activates the app; keyboard-tap report at turn end",
+      "background": "n/a",
+      "proofRequired": "`front-restore` test, Device Hub incident 2026-10-09",
+      "check": "runtime-side/rt1-31",
+      "testFile": "tests/runtime-parity/rt1-31.test.mjs",
+      "resultFile": "runtime-parity/rt1-31.json",
+      "proofStatus": "engine-only, runtime proof missing"
+    },
+    {
+      "id": "rt1-32",
+      "capability": "Person took over: real pointer or key input in the app makes Claude re-read; another agent in the foreground counts",
+      "background": "n/a",
+      "proofRequired": "observed only (engine-notes); no sleight test",
+      "check": "runtime-side/rt1-32",
+      "testFile": "tests/runtime-parity/rt1-32.test.mjs",
+      "resultFile": "runtime-parity/rt1-32.json",
+      "proofStatus": "engine-only, runtime proof missing"
+    },
+    {
+      "id": "rt1-33",
+      "capability": "Electron and Chromium trees (Discord 11 nodes 12 s after launch, 509 after the engine's read; Slack, Firefox, WhatsApp thin) and the 2.5 s launch re-read",
+      "background": "yes",
+      "proofRequired": "known-problems counts only; app-speed-map VS Code and Cursor rows",
+      "check": "runtime-side/rt1-33",
+      "testFile": "tests/runtime-parity/rt1-33.test.mjs",
+      "resultFile": "runtime-parity/rt1-33.json",
+      "proofStatus": "engine-only, runtime proof missing"
+    },
+    {
+      "id": "rt1-34",
+      "capability": "iPhone Mirroring and the simulator: scroll turned into a swipe, two matching screenshots as settle",
+      "background": "yes",
+      "proofRequired": "unit only; live `iphone-mirroring-settings` owed",
+      "check": "runtime-side/rt1-34",
+      "testFile": "tests/runtime-parity/rt1-34.test.mjs",
+      "resultFile": "runtime-parity/rt1-34.json",
+      "proofStatus": "engine-only, runtime proof missing"
+    },
+    {
+      "id": "rt1-35",
+      "capability": "Other Spaces: clicks and typing reach apps on another Space; `app.drag` answers `noWindowsAvailable`; Split View pass failed 8 of 21",
+      "background": "partly",
+      "proofRequired": "`2026-10-08-await-split-view.json`",
+      "check": "runtime-side/rt1-35",
+      "testFile": "tests/runtime-parity/rt1-35.test.mjs",
+      "resultFile": "runtime-parity/rt1-35.json",
+      "proofStatus": "engine-only, runtime proof missing"
+    },
+    {
+      "id": "rt1-36",
+      "capability": "Screenshot scale and frame notes (Retina pixels, 2000-pixel shown frame vs 2560 original)",
+      "background": "n/a",
+      "proofRequired": "`drag-exposed`, frame-note tests",
+      "check": "runtime-side/rt1-36",
+      "testFile": "tests/runtime-parity/rt1-36.test.mjs",
+      "resultFile": "runtime-parity/rt1-36.json",
+      "proofStatus": "engine-only, runtime proof missing"
+    },
+    {
+      "id": "rt1-37",
+      "capability": "Multi-session: one helper serves every session; leases coordinate; four-session Excel cohorts crashed it 21 of 30",
+      "background": "n/a",
+      "proofRequired": "app-speed-map cohort",
+      "check": "runtime-side/rt1-37",
+      "testFile": "tests/runtime-parity/rt1-37.test.mjs",
+      "resultFile": "runtime-parity/rt1-37.json",
+      "proofStatus": "engine-only, runtime proof missing"
+    },
+    {
+      "id": "rt1-38",
+      "capability": "`replay` and `record`: recorded `js` calls sent again with no model; desktop pane replay",
+      "background": "yes",
+      "proofRequired": "`replay`, `bench-replay-*` (9 files)",
+      "check": "runtime-side/rt1-38",
+      "testFile": "tests/runtime-parity/rt1-38.test.mjs",
+      "resultFile": "runtime-parity/rt1-38.json",
+      "proofStatus": "engine-only, runtime proof missing"
+    },
+    {
+      "id": "rt1-39",
+      "capability": "Ghost hand, agent cursor, characters, narration: pacing from the engine's per-action approvals (GH8 blocked on missing per-action events)",
+      "background": "n/a",
+      "proofRequired": "hand and stage tests; live qualification owed",
+      "check": "runtime-side/rt1-39",
+      "testFile": "tests/runtime-parity/rt1-39.test.mjs",
+      "resultFile": "runtime-parity/rt1-39.json",
+      "proofStatus": "engine-only, runtime proof missing"
+    },
+    {
+      "id": "rt1-40",
+      "capability": "Safari and Firefox native windows; engine extension surface excluded by RT1 section 1",
+      "background": "yes",
+      "proofRequired": "browser race (engine path), `browser-*` tests; LAWS tests browsers only against turbo",
+      "check": "runtime-side/rt1-40",
+      "testFile": "tests/runtime-parity/rt1-40.test.mjs",
+      "resultFile": "runtime-parity/rt1-40.json",
+      "proofStatus": "engine-only, runtime proof missing"
+    },
+    {
+      "id": "rt1-41",
+      "capability": "Electron turbo and browser turbo (sleight's own CDP path), unchanged by the runtime",
+      "background": "yes",
+      "proofRequired": "turbo banks",
+      "check": "runtime-side/rt1-41",
+      "testFile": "tests/runtime-parity/rt1-41.test.mjs",
+      "resultFile": "runtime-parity/rt1-41.json",
+      "proofStatus": "engine-only, runtime proof missing"
+    },
+    {
+      "id": "rt1-42",
+      "capability": "Doctor, setup, compat watch (static and live checks after every engine update), engine version in every result",
+      "background": "n/a",
+      "proofRequired": "compat tests, CI job",
+      "check": "runtime-side/rt1-42",
+      "testFile": "tests/runtime-parity/rt1-42.test.mjs",
+      "resultFile": "runtime-parity/rt1-42.json",
+      "proofStatus": "engine-only, runtime proof missing"
+    },
+    {
+      "id": "rt1-43",
+      "capability": "Shell route (`sleight-mcp js`) and the Grok Bot socket bridge, Cursor and Codex hosts",
+      "background": "n/a",
+      "proofRequired": "host tests; live checks partly owed",
+      "check": "runtime-side/rt1-43",
+      "testFile": "tests/runtime-parity/rt1-43.test.mjs",
+      "resultFile": "runtime-parity/rt1-43.json",
+      "proofStatus": "engine-only, runtime proof missing"
+    },
+    {
+      "id": "rt1-44",
+      "capability": "Driving while the screen is locked",
+      "background": "unknown",
+      "proofRequired": "not checked (known-problems, remote approvals)",
+      "check": "runtime-side/rt1-44",
+      "testFile": "tests/runtime-parity/rt1-44.test.mjs",
+      "resultFile": "runtime-parity/rt1-44.json",
+      "proofStatus": "engine-only, runtime proof missing"
+    },
+    {
+      "id": "laws-background-hover",
+      "capability": "Hover without taking focus, switching Spaces or moving the owner pointer",
+      "background": "yes",
+      "proofRequired": "runtime background-hover fixture with front app, Space and pointer witness",
+      "check": "runtime-side/laws-background-hover",
+      "testFile": "tests/runtime-parity/laws-background-hover.test.mjs",
+      "resultFile": "runtime-parity/laws-background-hover.json",
+      "proofStatus": "runtime proof missing"
+    },
+    {
+      "id": "laws-release-ab",
+      "capability": "Release suite A/B against the same-session engine, every group inside its detectable limit, no two-pass loss",
+      "background": "yes",
+      "proofRequired": "release suite runtime A/B, all canonical release groups and tasks, ABBA order",
+      "check": "runtime-side/laws-release-ab",
+      "testFile": "tests/runtime-parity/laws-release-ab.test.mjs",
+      "resultFile": "runtime-parity/laws-release-ab.json",
+      "proofStatus": "runtime proof missing"
+    }
+  ]
+}

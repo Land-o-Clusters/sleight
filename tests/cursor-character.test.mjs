@@ -1,3 +1,4 @@
+import { assertChildStatus } from './fixtures/child-status.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import * as fs from 'node:fs';
@@ -40,6 +41,25 @@ function pet(w, kind = 'png') {
 }
 
 test('character API exists', () => { assert.equal(typeof api.loadCharacter, 'function'); });
+test('cursor size accepts stops and bounded decimal points without enabling the hand or changing the cast', async t => {
+  const w = world(t), path = join(w.base, 'hand.json'); let output = '';
+  fs.writeFileSync(path, JSON.stringify({ version: 1, enabled: false, style: 'sprite', character: 'cat', cast: ['cat', 'biscuit'] }), { mode: 0o600 });
+  const opts = { path, platform: 'darwin', env: {}, out: text => output += text, built: () => false };
+  for (const arg of ['small', 'medium', 'stage', '104', '315.5', '560']) {
+    assert.equal(await cli.cursorCommand(['size', arg], opts), 0);
+    const saved = JSON.parse(fs.readFileSync(path));
+    assert.equal(saved.size, /^\d/.test(arg) ? Number(arg) : arg);
+    assert.equal(saved.enabled, false); assert.equal(saved.character, 'cat'); assert.deepEqual(saved.cast, ['cat', 'biscuit']);
+  }
+  const before = fs.readFileSync(path, 'utf8');
+  for (const args of [['size'], ['size', 'stage', 'extra'], ...['huge', '103', '561', 'NaN', 'Infinity', '0x100', '3e2', ' 315'].map(s => ['size', s])]) {
+    assert.equal(await cli.cursorCommand(args, opts), 2); assert.equal(fs.readFileSync(path, 'utf8'), before);
+  }
+  output = ''; assert.equal(await cli.cursorCommand(['status'], opts), 0);
+  assert.match(output, /size      560 pt/); assert.match(output, /cast      cat, biscuit/);
+  fs.chmodSync(path, 0o644);
+  assert.equal(await cli.cursorCommand(['size', 'small'], opts), 1);
+});
 test('cursor style saves only valid installed sprites and status is read-only', async t => {
   const w = world(t); api.installCharacter(api.prepareCharacterImport(w.folder), { root: w.root });
   const path = join(w.base, 'hand.json'); let output = '';
@@ -540,8 +560,8 @@ test('real readline confirmation handles a TTY-shaped stream and EOF defaults No
   assert.equal(fs.existsSync(w.root), false);
 });
 test('real CLI routes cursor without starting an engine or touching settings', t => {
-  const w = world(t); const result = spawnSync(process.execPath, ['plugins/sleight/lib/launch.mjs', 'cursor', 'list'], { encoding: 'utf8', env: { ...process.env, SLEIGHT_CURSOR_TEST: '1', SLEIGHT_CHARACTERS_DIR: w.root } });
-  assert.equal(result.status, 0, result.stderr); assert.match(result.stdout, /tsugi: Tsugi \[built-in\]/); assert.equal(fs.existsSync(w.root), false);
+  const w = world(t); const result = spawnSync(process.execPath, ['plugins/sleight/lib/launch.mjs', 'cursor', 'list'], { encoding: 'utf8', env: { ...process.env, SLEIGHT_CURSOR_TEST: '1', SLEIGHT_CHARACTERS_DIR: w.root }, timeout: 60000, killSignal: 'SIGKILL' });
+  assertChildStatus(result, 0, result.stderr); assert.match(result.stdout, /tsugi: Tsugi \[built-in\]/); assert.equal(fs.existsSync(w.root), false);
 });
 
 test('Codex optional events use the specified row slices, with source names in the callout', t => {

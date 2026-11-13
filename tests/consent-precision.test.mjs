@@ -55,7 +55,7 @@ test('engine ordinary typing on Accept does not activate it', () => {
   assert.equal(engineConsent('typeText', ['fixture'], tree() + '\nThe focused UI element is 4 button Accept all'), undefined);
 });
 for (const method of ['click', 'doubleClick', 'press']) test(`engine maps ${method} point to deepest framed row`, () => {
-  const before = tree('dialog', 'We use cookies', 'group Accept all, Frame: [20, 30, 100, 40]', false) + '\n\t\t\t\t6 text Accept all, Frame: [30, 35, 60, 20]\n\t\t\t5 button Reject all';
+  const before = tree('dialog', 'We use cookies', 'group Accept all, Frame: [20, 30, 100, 40]', false) + '\n\t\t\t\t5 text Accept all, Frame: [30, 35, 60, 20]\n\t\t\t6 button Reject all';
   assert.equal(engineConsent(method, [[40, 40]], before)?.blocked, true);
   assert.equal(engineConsent(method, [[500, 500]], before), undefined);
 });
@@ -87,23 +87,24 @@ for (const row of ['text Reject all', 'button (disabled) Reject all']) test(`eng
   assert.match(result.why, /no reject option.*stop and ask/i);
 });
 
-test('engine retry blocks a newly identified cookie dialog and names the decline', async () => {
-  const before = header + '\n\t\t2 dialog\n\t\t\t10 heading Preferences\n\t\t\t3 text Choices\n\t\t\t4 button Allow all\n\t\t\t5 button Reject all\n\t\t8 button Read recipe';
+for (const sparse of [false, true]) test('engine retry blocks a newly identified cookie dialog and names the decline, sparse=' + sparse, async () => {
+  const accept = sparse ? 6 : 5, reject = sparse ? 7 : 6, body = sparse ? 9 : 7;
+  const before = header + `\n\t\t2 dialog\n\t\t\t3 heading Preferences\n\t\t\t4 text Choices\n\t\t\t${accept} button Allow all\n\t\t\t${reject} button Reject all\n\t\t${body} button Read recipe`;
   const after = before.replace('heading Preferences', 'heading Cookie preferences');
   let current = before;
   const sent = [];
   const raw = { getAXState: async () => current, click: async number => {
     sent.push(number);
-    if (number === 4) { current = after; throw Error('4 is an invalid element ID'); }
+    if (number === accept) { current = after; throw Error(accept + ' is an invalid element ID'); }
   } };
   const context = { cua: { getApp: async () => raw }, nodeRepl: { write() {} }, setTimeout, clearTimeout };
   const run = source => runInNewContext(`(async()=>{${source}})()`, context);
   await run(readCode('await cua.getApp("Browser");'));
   let error;
-  try { await run(guardedCode('await app.click(8); await app.click(4);', windowFromText(before), 'Stopped.')); } catch (caught) { error = caught; }
+  try { await run(guardedCode(`await app.click(${body}); await app.click(${accept});`, windowFromText(before), 'Stopped.')); } catch (caught) { error = caught; }
   assert.match(error?.message ?? '', /accepting cookies is blocked/);
   assert.doesNotMatch(error.message, /stop and ask|needs the user's decision/i);
-  assert.deepEqual(sent, [8, 4]);
+  assert.deepEqual(sent, [body, accept]);
 });
 
 for (const [code, target] of [

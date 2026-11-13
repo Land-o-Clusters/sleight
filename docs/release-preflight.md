@@ -27,7 +27,8 @@ an install-mode receipt or unconfirmed cleanup blocks the release.
 
 On macOS with Colima installed, append `--linux-runtime colima` to either command. This
 starts an owned VM through the Colima helper, runs the same exact-commit Linux producer,
-then waits for container and VM cleanup. The helper keeps its 20-minute total budget.
+then waits for container and VM cleanup. npm allows 30 minutes, Docker 32 minutes,
+and Colima 38 minutes including startup plus eight minutes for cleanup (46 minutes total).
 A passing Linux receipt with failed VM teardown or an expired runtime budget fails A6.
 `--linux-runtime docker` explicitly selects the default route. Other values are rejected
 before source checks or commands run. Each flag takes one value and may appear only once.
@@ -46,12 +47,14 @@ owner's publication decision retain their separate requirements.
 ## Plugin size
 
 Before the release preflight, run `nice -n 20 node tools/characters/check.mjs` from the release worktree.
-It checks all six built-in packs against the plugin's SHA-256 manifest and requires lossless VP8L sheets.
-A character bank of 8,000,000 bytes or more (hash manifest included) fails the check. Record its per-pack bytes, total character bytes and
-complete plugin bytes with the release evidence. The generator is included in the plugin at
+It checks all 13 built-in packs against the plugin's SHA-256 manifest and requires lossless VP8L sheets.
+Original packs (6) must total fewer than 8,000,000 bytes. Everyday packs (7) must total at most 15,000,000 bytes.
+These budgets count each group's pack files. Record per-pack bytes, both group totals, total character bytes (including
+the hash manifest) and complete plugin bytes with the release evidence. The generator is included in the plugin at
 `skills/make-character/tool/`. `tools/characters/` contains repository entry points and repository-only checks.
 On macOS with the tested toolchain, also run `tests/character-rebuild.test.mjs`. It compares a fresh build's structure and alpha
-with the committed packs, not their bytes, and skips with a reason on another toolchain.
+with all 13 committed packs and requires the seven everyday packs to match byte for byte. Original packs (6) retain
+the structure and alpha checks. Raster qualification skips with a reason on another toolchain.
 
 ## Checks
 
@@ -98,6 +101,12 @@ base-to-HEAD range. The result omits scanner output. That scanner checks its run
 username, independently of the supplied notes terms. A generic Linux account does not
 prove the owner's identity is absent from history; retain the owner-identity history
 scan as a separate release requirement.
+
+The history scanner reads added text lines from Git patches, splitting on LF only and keeping CR as content.
+It refuses unrecognized lines inside a hunk. It does not scan binary files (including UTF-16 files Git treats as binary),
+files marked `-diff` in `.gitattributes`, file names, commit author or committer identities, or tag identities.
+It does not join an identity split across multiple added lines. Its patterns cover only the runtime home path and
+username. Supplied private terms apply to the newest release notes. Review binary content, paths and Git metadata before publication.
 
 The Linux step calls the actual A5 `runLinuxPreflight` API with the captured HEAD and
 source worktree. The Colima route calls `runColimaPreflight`, which runs the same producer

@@ -108,7 +108,7 @@ func shellLifecycle() {
 func shellStop(_ reason: String) -> Never {
     if let monitor = shellMouseMonitor { NSEvent.removeMonitor(monitor); shellMouseMonitor = nil }
     host.channelClosed()
-    host.visibility?.cancel(); host.hookupTimer?.invalidate()
+    host.retireControl()
     NSStatusBar.system.removeStatusItem(host.item)
     shellReceipt("cleanup", ["visible": shellCards(), "pending": host.pending.count, "reason": reason])
     exit(0)

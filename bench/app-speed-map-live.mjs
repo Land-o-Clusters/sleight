@@ -13,6 +13,7 @@ import { benchmarkDecision } from './approve.mjs';
 import { acquireLiveLock } from './live-lock.mjs';
 import { speedMarkdown, speedScope } from './app-speed-map.mjs';
 import { EDITOR_FLAGS, EDITOR_SETTINGS } from './editor-profile.mjs';
+import { runtimeName, runtimeBuild, assertOwnRelay } from './runtime-arm.mjs';
 
 const cleanupCodes = new Set(['FIXTURE_WINDOW_AMBIGUOUS', 'FOREIGN_WINDOW_ON_START', 'DOCUMENT_NOT_MATCHED', 'WINDOW_NOT_RETAINED',
   'SHEET_PRESENT', 'SHEETS_READ_FAILED', 'FIXTURE_WINDOW_NOT_RETAINED', 'CLOSE_BUTTON_MISSING', 'AXPRESS_FAILED',
@@ -108,6 +109,7 @@ export function validateSpeedReceipt(task, receipt) {
 export function speedEnvironment(inherited) {
   const keys = new Set(['PATH', 'HOME', 'USER', 'LOGNAME', 'SHELL', 'TMPDIR', 'TMP', 'TEMP', 'LANG', 'LC_ALL', 'LC_CTYPE', 'TERM']);
   return { ...Object.fromEntries(Object.entries(inherited).filter(([key]) => keys.has(key))),
+    SLEIGHT_RUNTIME: runtimeName(inherited),
     SLEIGHT_SURFACES: 'computer,browser', SLEIGHT_APPROVAL_PROMPT: 'client', SLEIGHT_TRACE: '', SLEIGHT_RECEIPTS: '0',
     BENCH_HOOK_LOG: '', BENCH_SUITE: 'app-speed-map', BENCH_ARM_SERVERS: JSON.stringify(['plugin:sleight:computer']) };
 }
@@ -147,6 +149,11 @@ export async function liveSpeedRuntime(plan, options, {
   if (existsSync('/tmp/sleight-hold')) throw Error('HOLD');
   for (const task of plan.apps) speedScope(plan, task);
   const receipts = options.receipts ? JSON.parse(readFileSync(options.receipts, 'utf8')) : {};
+  const selectedRuntime = runtimeName();
+  if (selectedRuntime === 'own') assertOwnRelay(repositoryRoot);
+  const { readEngine } = await import('./engine-version.mjs');
+  const engineVersion = readEngine().version;
+  const selectedBuild = runtimeBuild(repositoryRoot, selectedRuntime, engineVersion);
   // Validate account boundaries before any child, fixture, server or lock.
   for (const task of plan.apps) validateSpeedReceipt(task, receipts[task.id]);
   const controller = new AbortController();
@@ -293,6 +300,8 @@ export async function liveSpeedRuntime(plan, options, {
       return { confirmed, reasons, windows, focusChanged: fixture.attention?.stopped === true, attention: fixture.attention?.events ?? [] };
     },
     async publish(report) {
+      report.runtime = selectedRuntime; report.runtimeBuild = selectedBuild; report.engineVersion = engineVersion;
+      for (const row of report.rows ?? []) Object.assign(row, { runtime: selectedRuntime, runtimeBuild: selectedBuild, engineVersion });
       report.approvalStopped = approvalStopped;
       mkdirSync(dirname(output), { recursive: true });
       writeFileSync(output + '.json', JSON.stringify(report, null, 2) + '\n', { mode: 0o600 });

@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { PassThrough } from 'node:stream';
-import { callLocalTool, runScript } from '../plugins/sleight/lib/launch.mjs';
+import { callLocalTool, runScript } from './fixtures/local-tools.mjs';
 import { createRelay } from '../plugins/sleight/lib/relay.mjs';
 import { readFileSync } from 'node:fs';
 import { runInNewContext } from 'node:vm';
@@ -21,7 +21,7 @@ const withEnv = async (t, name, value) => {
 test('launcher appends one read after changed text and keeps the drag result if the read fails', async () => {
   for (const changed of [true, false, null]) for (const fail of [false, true]) {
     let reads = 0;
-    const result = await callLocalTool('drag', { app }, async () => true,
+    const result = await callLocalTool('drag', { app, from: [1, 2], to: [3, 4] }, async () => true,
       async (_script, args) => args.op === 'capture' ? { ok: true } : { ok: true, path: 'accessibility', textChanged: changed },
       undefined, undefined, { afterDrag: async () => { reads++; if (fail) throw Error('read failed'); return [{ type: 'text', text: 'changed lines' }]; } });
     assert.equal(reads, changed === true ? 1 : 0);
@@ -32,7 +32,7 @@ test('launcher appends one read after changed text and keeps the drag result if 
 
 test('DP4 off preserves the launcher result byte for byte and runs no read', async t => {
   await withEnv(t, 'SLEIGHT_DP4', '0');
-  const result = await callLocalTool('drag', { app }, async () => true,
+  const result = await callLocalTool('drag', { app, from: [1, 2], to: [3, 4] }, async () => true,
     async (_script, args) => args.op === 'capture' ? { ok: true } : { ok: true, path: 'accessibility', textChanged: true },
     undefined, undefined, { afterDrag: () => assert.fail('off arm read') });
   assert.deepEqual(result, { content: [{ type: 'text', text: '{\n "path": "accessibility",\n "textChanged": true\n}' }] });
@@ -77,7 +77,7 @@ async function fixture(t, { readError = false, otherWindow = false, changed = tr
       pid: 7, processStart: 1, windowNumber: target.windowNumber ?? (target.title === 'destination.txt' ? 12 : 11) }),
     inputLease: { acquire: () => { leases.push('lease'); return 'lease'; }, renew() {},
       release: () => { leases.pop(); }, close() {}, blockers: () => [] },
-    localTools: { tools: [{ name: 'drag' }], target: async () => ({ appId, app, title: 'note.txt', url: 'file:///tmp/note.txt', windowNumber: 11 }),
+    localTools: { tools: [{ name: 'drag', inputSchema: { type: 'object' } }], target: async () => ({ appId, app, title: 'note.txt', url: 'file:///tmp/note.txt', windowNumber: 11 }),
       call: (name, args, approve, _run, resolved, prepared, options) => callLocalTool(name, args, approve,
         async (_script, request) => request.op === 'capture' ? { ok: true } : {
           ok: true, path: 'accessibility', textChanged: changed, windowId: 11, ...(cross ? { toWindowId: 12 } : {}),

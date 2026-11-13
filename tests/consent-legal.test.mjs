@@ -16,7 +16,8 @@ for (const [title, words, label] of ordinary) test(`engine permits ${title}`, as
   assert.deepEqual(sent, [4]);
 });
 for (const words of ['Cookie settings', 'Cookie policy']) test(`engine excludes link subtree ${words}`, () => {
-  assert.equal(engineConsent('click', [4], tree(`\t\t\t3 link\n\t\t\t\t5 text ${words}`, 'Yes, subscribe')), undefined);
+  const before = tree(`\t\t\t3 link\n\t\t\t\t4 text ${words}`, 'Yes, subscribe').replace('4 button', '5 button');
+  assert.equal(engineConsent('click', [5], before), undefined);
 });
 for (const phrase of phrases) test(`common phrase blocks: ${phrase}`, () => {
   assert.equal(cookieWording(phrase), true);
@@ -28,7 +29,7 @@ for (const root of roots) test(`CMP root blocks: ${root}`, () => {
 });
 for (const decline of declines) test(`engine observes one-click decline: ${decline}`, () => {
   assert.equal(declinesCookies(decline), true);
-  const before = tree('\t\t\t3 text We use cookies\n\t\t\t5 button ' + decline);
+  const before = tree('\t\t\t3 text We use cookies') + '\n\t\t\t5 button ' + decline;
   const blocked = engineConsent('click', [4], before);
   assert.equal(blocked?.blocked, true);
   assert.ok(blocked.why.includes(JSON.stringify(decline)));
@@ -60,8 +61,8 @@ test('CMP reset instructions cannot hide a cookie-use sentence', () => {
 });
 // Review g11g: the engine path matches turbo's rule that a cookie settings control beside Accept all marks a wall.
 for (const settings of ['link Cookie settings', 'button Cookies settings', 'button Manage cookies']) test(`engine blocks Accept all beside ${settings}`, () => {
-  assert.equal(engineConsent('click', [4], tree(`\t\t\t3 text We value your privacy\n\t\t\t5 ${settings}`, 'Accept all'))?.blocked, true);
+  assert.equal(engineConsent('click', [4], tree('\t\t\t3 text We value your privacy', 'Accept all') + `\n\t\t\t5 ${settings}`)?.blocked, true);
 });
 test('engine permits Accept all without a cookie settings control', () => {
-  assert.equal(engineConsent('click', [4], tree('\t\t\t3 text We value your privacy\n\t\t\t5 button Learn more', 'Accept all')), undefined);
+  assert.equal(engineConsent('click', [4], tree('\t\t\t3 text We value your privacy', 'Accept all') + '\n\t\t\t5 button Learn more'), undefined);
 });

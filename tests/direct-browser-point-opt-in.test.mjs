@@ -45,8 +45,17 @@ for (const mode of ['1', '0']) for (const enabled of [false, true])
     if (enabled) process.env.SLEIGHT_POINT_INPUT = '1'; else delete process.env.SLEIGHT_POINT_INPUT;
     const json = JSON.stringify(browserTools('bfixture'));
     const pins = mode === '0'
-      ? { off: ['a2c815d6f1f3f8f711c23375882dd61e22756ea5a17f3c8f886b6a149bb021d4', 6162], on: ['6c6bd659d3ca4f40a5d12d45668e025e900938591798ed20af2572cd0bb55218', 6581] }
-      : { off: ['5eee412683a79e8b826169bb2c03cb9302f623d015c35f4f914670d3ff8bf6ea', 6083], on: ['f114d4c2fbf4c341be50194e44a50c0ba98ddea6adbf1df26d15a5e5fdeb7637', 6502] };
+      ? {
+        // HO1 pins the legacy catalog without point input.
+        off: ['5e34ae4d2b0d4a250ff865c50e27421a059c81f3712d773de8d6658abacfb9bf', 6101],
+        // HO1 pins the legacy catalog with point input.
+        on: ['7b4622a6eb2b28bc611a999a123063884745297d027638b5453ea6ec1c041c03', 6520],
+      } : {
+        // HO1 pins the MT catalog without point input.
+        off: ['e86f834fcbd2925113c94378bcd721363aee5f683799550249831f60e0bf8465', 6242],
+        // HO1 pins the MT catalog with point input.
+        on: ['048abe61536e210452d61e66535d5be927dcc78ee2ca67395c3db96181d8c432', 6661],
+      };
     const [hash, length] = pins[enabled ? 'on' : 'off'];
     assert.equal(json.length, length);
     assert.equal(createHash('sha256').update(json).digest('hex'), hash);

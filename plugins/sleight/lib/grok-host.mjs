@@ -7,7 +7,7 @@ import { basename, join, resolve } from 'node:path';
 export const GROK_INSTALL = 'grok plugin marketplace add Land-o-Clusters/sleight && grok plugin install sleight --trust';
 
 export function grokStatus({ home = homedir(), env = process.env, read = path => readFileSync(path, 'utf8'), list = readdirSync,
-  version = () => execFileSync('grok', ['--version'], { encoding: 'utf8', timeout: 2000, stdio: ['ignore', 'pipe', 'ignore'] }) } = {}) {
+  version = () => execFileSync('grok', ['--version'], { encoding: 'utf8', timeout: 2000, stdio: ['ignore', 'pipe', 'ignore'], killSignal: 'SIGKILL' }) } = {}) {
   const dir = env.GROK_HOME || join(home, '.grok');
   const tilde = path => path.startsWith(home + '/') ? '~' + path.slice(home.length) : path;
   const json = path => { try { return JSON.parse(read(path)); } catch { return undefined; } };

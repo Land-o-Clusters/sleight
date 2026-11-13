@@ -1,3 +1,4 @@
+import { assertChildStatus } from './fixtures/child-status.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { cpSync, mkdtempSync, mkdirSync, readFileSync, realpathSync, rmSync, writeFileSync, existsSync } from 'node:fs';
@@ -7,6 +8,7 @@ import { tmpdir } from 'node:os';
 import { EventEmitter } from 'node:events';
 import { trackTemp } from '../scripts/temp-leftovers.mjs';
 import { runContainerChecks, runOwnedCommand } from '../scripts/linux-preflight.mjs';
+import { runBudget } from '../scripts/linux-preflight-colima.mjs';
 import { preflight, main, createReviewedRunner, manifestFiles } from '../scripts/release-preflight.mjs';
 
 const head = 'a'.repeat(40), base = 'b'.repeat(40);
@@ -14,6 +16,15 @@ const identity = { home: '/home/private-fixture', username: 'private-fixture' };
 const tap = '# tests 2\n# suites 0\n# pass 2\n# fail 0\n# cancelled 0\n# skipped 0\n# todo 0\n';
 const ok = stdout => ({ status: 0, stdout, collected: true });
 const parserReceipt = JSON.stringify({ id: 'cell-parser', status: 'pass', version: '7.0.0' });
+
+test('Linux release documentation states the current execution and cleanup caps', () => {
+  for (const name of ['linux-preflight', 'release-preflight']) {
+    const text = readFileSync(new URL(`../docs/${name}.md`, import.meta.url), 'utf8');
+    for (const minutes of [30, 32, 38, 46]) assert.match(text, new RegExp(`\\b${minutes}[- ]minute`), name);
+    assert.doesNotMatch(text, /20-minute/, name);
+    assert.match(text, /eight[- ]minute/, name);
+  }
+});
 
 // A6 calls the real A5 checkout and receipt producer; replace only process execution.
 function processBoundary(root, overrides = {}) {
@@ -292,25 +303,25 @@ test('a hub check that crashes or cannot run is a hub-error, never stale-output,
 
 test('the committed hub output is fresh, and a data file that moved on without its pages fails the same check', () => {
   const hub = new URL('../bench/results-hub.mjs', import.meta.url).pathname;
-  const run = (...extra) => spawnSync(process.execPath, [hub, '--render-only', '--hub-only', '--check', ...extra], { encoding: 'utf8' });
-  assert.equal(run().status, 0, run().stdout);
+  const run = (...extra) => spawnSync(process.execPath, [hub, '--render-only', '--hub-only', '--check', ...extra], { encoding: 'utf8', timeout: 60000, killSignal: 'SIGKILL' });
+  assertChildStatus(run(), 0, run().stdout);
   const results = new URL('../docs/results', import.meta.url).pathname;
   const copy = mkdtempSync(join(tmpdir(), 'hub-stale-'));
   try {
     cpSync(results, copy, { recursive: true });
-    assert.equal(run('--out', copy).status, 0);
+    assertChildStatus(run('--out', copy), 0);
     const file = join(copy, 'data/validation.json'), data = JSON.parse(readFileSync(file, 'utf8'));
     data.studies[0].cells[0].expected += 1;
     writeFileSync(file, JSON.stringify(data));
     const stale = run('--out', copy);
-    assert.equal(stale.status, 1);
+    assertChildStatus(stale, 1);
     assert.match(stale.stdout, /would change data\/validation\.json/);
     assert.match(stale.stdout, /would change validation\.md/);
     // A crash is not a stale tree: no "would change" line, so the preflight reports it as hub-error.
     const empty = mkdtempSync(join(tmpdir(), 'hub-crash-'));
     try {
       const crashed = run('--out', empty);
-      assert.equal(crashed.status, 1);
+      assertChildStatus(crashed, 1);
       assert.doesNotMatch(crashed.stdout, /^would change /m);
     } finally { rmSync(empty, { recursive: true, force: true }); }
   } finally { rmSync(copy, { recursive: true, force: true }); }
@@ -321,16 +332,16 @@ test('release hub collection rejects stale data even when every page matches tha
   const hub = join(root, 'bench/results-hub.mjs');
   const readme = readFileSync(join(root, 'README.md'), 'utf8');
   const out = mkdtempSync(join(tmpdir(), 'hub-collect-check-'));
-  const run = (...args) => spawnSync(process.execPath, [hub, '--hub-only', '--out', out, ...args], { encoding: 'utf8' });
+  const run = (...args) => spawnSync(process.execPath, [hub, '--hub-only', '--out', out, ...args], { encoding: 'utf8', timeout: 60000, killSignal: 'SIGKILL' });
   try {
     cpSync(join(root, 'docs/results'), out, { recursive: true });
     const file = join(out, 'data/release-passes.json'), data = JSON.parse(readFileSync(file, 'utf8'));
     data.runs[0].seconds += 1;
     writeFileSync(file, JSON.stringify(data));
-    assert.equal(run('--render-only').status, 0);
-    assert.equal(run('--render-only', '--check').status, 0, 'render consistency alone accepts stale data');
+    assertChildStatus(run('--render-only'), 0);
+    assertChildStatus(run('--render-only', '--check'), 0, 'render consistency alone accepts stale data');
     const checked = run('--check', '--wt', join(out, 'no-external-banks'));
-    assert.equal(checked.status, 1);
+    assertChildStatus(checked, 1);
     assert.match(checked.stdout, /would change data\/release-passes\.json/);
     assert.equal(readFileSync(join(root, 'README.md'), 'utf8'), readme, 'temp output never rewrites the root README');
   } finally { rmSync(out, { recursive: true, force: true }); }
@@ -498,7 +509,7 @@ test('reviewed Linux runner calls actual helper on this host and rejects wrong c
   const { options, boundary } = fixture();
   const runner = createReviewedRunner(options.root, { execute: boundary.execute });
   const produced = await runner({ step: 'linux', head });
-  assert.equal(produced.status, 0);
+  assertChildStatus(produced, 0);
   const receipt = JSON.parse(produced.stdout);
   assert.equal(receipt.commit, head);
   assert.equal(receipt.counts.tests, 2);
@@ -540,7 +551,7 @@ test('A6 signal channel waits for actual helper cancellation and confirmed Docke
   }) });
   const runner = createReviewedRunner(options.root, { execute: boundary.execute, signal: controller.signal });
   const result = await runner({ step: 'linux', head });
-  assert.notEqual(result.status, 0);
+  assertChildStatus(result, 0, undefined, 'notEqual');
   assert.equal(JSON.parse(result.stdout).cleanupConfirmed, true);
   assert.deepEqual(boundary.calls.filter(c => c.command === 'docker').slice(-2).map(c => c.args[0]), ['rm', 'container']);
 });
@@ -561,7 +572,7 @@ async function colimaFixture(t, overrides = {}) {
   const env = { PATH: process.env.PATH, HOME: termsBank, GIT_CONFIG_GLOBAL: '/dev/null', GIT_CONFIG_NOSYSTEM: '1' };
   const git = async args => {
     const result = await runOwnedCommand('/usr/bin/git', args, { cwd: root, env });
-    assert.equal(result.status, 0, result.stderr); return result.stdout.trim();
+    assertChildStatus(result, 0, result.stderr); return result.stdout.trim();
   };
   await git(['init', '--quiet']); await git(['add', '--', '.']);
   await git(['-c', 'user.name=Fixture', '-c', 'user.email=fixture@example.invalid', 'commit', '--quiet', '-m', 'Fixture']);
@@ -581,6 +592,12 @@ async function colimaFixture(t, overrides = {}) {
     }
     const args = command === 'docker' && originalArgs[0] === '--host' ? originalArgs.slice(2) : originalArgs;
     if (options.env?.COLIMA_HOME) { control = dirname(options.env.COLIMA_HOME); banks.add(trackTemp(control)); }
+    if (command === 'limactl') {
+      assert.equal(state, 'Stopped');
+      assert.deepEqual(args, ['stop', '--force', `colima-${profile}`]);
+      assert.equal(options.env.LIMA_HOME, join(control, 'l'));
+      return ok('');
+    }
     if (command === 'colima') {
       if (args[0] === 'list') return ok(state ? JSON.stringify({ name: profile, status: state,
         arch: 'aarch64', cpus: 2, memory: 4294967296, disk: 10737418240, runtime: 'docker' }) : '');
@@ -657,7 +674,7 @@ test('explicit Docker runtime keeps the original fixed source gate and Docker ro
   const runner = createReviewedRunner(options.root, { execute: boundary.execute, linuxRuntime: 'docker' });
   await runner({ step: 'sources' });
   assert.deepEqual(boundary.calls[0].args, ['ls-files', '--error-unmatch', '--', 'scripts/release-history-scan.mjs', 'scripts/linux-preflight.mjs', 'bench/results-hub.mjs', 'bench/compat/parser.mjs']);
-  assert.equal((await runner({ step: 'linux', head })).status, 0);
+  assertChildStatus(await runner({ step: 'linux', head }), 0);
   assert.equal(boundary.calls.some(call => call.command === 'colima'), false);
 });
 
@@ -695,7 +712,7 @@ test('Colima Linux success cannot pass failed or uncollected VM teardown', async
 
 test('Colima composite deadline failure survives a passing Linux receipt and completed VM cleanup', async t => {
   let now = Date.now(); t.mock.method(Date, 'now', () => now);
-  const f = await colimaFixture(t, { attached() { now += 17 * 60_000; } }), output = [];
+  const f = await colimaFixture(t, { attached() { now += runBudget; } }), output = [];
   assert.equal(await main(f.args, { root: f.root, execute: f.execute, log: text => output.push(text) }), 1);
   assert.equal(JSON.parse(readFileSync(join(f.control(), 'linux-receipt.json'))).exitCode, 0);
   assert.equal(JSON.parse(readFileSync(join(f.control(), 'vm-cleanup.json'))).cleanupConfirmed, true);

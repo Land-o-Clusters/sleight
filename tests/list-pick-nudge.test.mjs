@@ -68,12 +68,12 @@ test('CC1: sortedListShift reads the list role, states and the Firefox name and 
 test('CC1: the skill puts the list line in Calls, right after the form line, with the list number first', () => {
   const rules = skillRules();
   const calls = rules.slice(rules.indexOf('## Calls'), rules.indexOf('## Text, menus and files'));
-  const form = calls.indexOf('- In a form, fill every independent'), list = calls.indexOf('- List exceeds visible rows:');
+  const form = calls.indexOf('- `setValue` independent visible fields'), list = calls.indexOf('- Long list:');
   assert.ok(form >= 0 && list > form, 'in Calls after the form line');
   assert.equal(calls.slice(form, list).match(/^- /gm).length, 1, 'next to it');
-  assert.match(calls, /`await app\.pickFromList\(<list number>, "<whole row text>"\)`/);
+  assert.match(calls, /`await app\.pickFromList\(<list number>, "<whole row>"\)` before scroll\/prefix\/read loops\./);
   assert.equal(rules.split('pickFromList(<list number>').length - 1, 1, 'said once');
-  assert.match(skillRules(undefined, { SLEIGHT_PROMPT: 'lean' }), /Long list: `await app\.pickFromList\(<list number>, "<whole row text>"\)`\./);
+  assert.match(skillRules(undefined, { SLEIGHT_PROMPT: 'lean' }), /List: `await app\.pickFromList\(<list number>, "<whole row>"\)`\./);
 });
 
 test('CC13 review: no line for a list of buttons or tabs, which the helper would refuse', () => {

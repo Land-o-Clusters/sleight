@@ -1,9 +1,9 @@
 #!/bin/bash
-# Run after the lane gate opens. Only the npm registry supplies vendor bytes.
+# Optional load gate. Only the npm registry supplies vendor bytes.
 set -euo pipefail
 cd "$(dirname "$0")/../.."
-gate="$HOME/Projects/sleight-wt/ledger/vc/night/lanes-may-test"
-while [ ! -e "$gate" ] || [ -e /tmp/sleight-hold ]; do sleep 30; done
+gate="${SLEIGHT_BENCH_GATE_FILE:-}"
+while { [ -n "$gate" ] && [ ! -e "$gate" ]; } || [ -e /tmp/sleight-hold ]; do sleep 30; done
 stage=$(mktemp -d /private/tmp/ca1-meriyah-pack.XXXXXX)
 trap 'rm -rf "$stage"' EXIT
 curl -fsSL https://registry.npmjs.org/meriyah/7.0.0 -o "$stage/registry.json"

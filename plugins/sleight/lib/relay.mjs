@@ -1,3 +1,5 @@
+import { checkSessionMenu } from './session-menu.mjs';
+import { macIdentityError, identityFieldStep, identityErrorStep } from './repl/identity-steps.mjs';
 import { unsupportedCodeLines } from './code-line-terminators.mjs';
 import { parseCell, withCellCache } from './code-ast.mjs';
 import { dispatchInspection, sameGuardedCalls } from './dispatched-calls.mjs';
@@ -56,21 +58,28 @@ import { turboFirstRules } from './turbo-first-rules.mjs';
 // blocked-apps.mjs). The refusal itself is OpenAI's and is never changed.
 //
 // `idleTurnEndMs`, when given, ends a used turn once no engine call has been
-// running for that long. Hosts without the mod (the desktop app's Claude Code)
-// never end the engine's turn, and the engine keeps holding the app (its badge
-// on the window) until the session closes.
+// running for that long. It releases leases and closes receipts, retaining stage targets. In the Mac
+// runtime it clears the clipboard stop only on hosts without the mod; the mod
+// supplies the real user-turn boundary in Claude Code.
 //
 // `trace`, when given, receives every message as it passes, for debugging.
 
 import { createHash, randomBytes, randomUUID } from 'node:crypto';
 import { Script } from 'node:vm';
+import { DRIVER_ACTION_METHODS } from './mac-driver/protocol.mjs';
+import { macInputSurfaceChanged } from './mac-driver/surfaces.mjs';
+import { helperInspection, validateHelperInspection } from './repl/helpers.mjs';
+import { enginePayment } from './payment-gate.mjs';
+import { MAC_DRIVER_NEXT, GLIDE_STOP_SESSION_NOTICE, GLIDE_STOP_PERSON_NOTICE } from './mac-driver/errors.mjs';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { isV3Frontend, isV3Bridge, failure as turboFailure } from './direct-browser/worker.mjs';
 import { browserBundleId } from './direct-browser/browsers.mjs';
 import { engineBrowserOpen as engineBrowserOpenSetting, engineOpenTool, widenTurboOpen, turboRoute, parseEngineOpen, siteOf, acquisitionCode, openCode,
   openedNote, invalidAppReply, invalidAppNote, notBrowserNote, unknownBrowserNote, browserWindowProblem, withBrowserOpenFirst, CLEANUP_NOTE, DOCUMENT_SCOPE_NOTE, STOPPED_NOTE } from './engine-browser-open.mjs';
-import { pageSite } from './permissions.mjs';
-import { DOCUMENT_TOOL, WINDOW_HEADER, documentKey, documentLabel, windowFromText, lastWindowFromText, isDocumentRead, withoutEcho, readCode, guardedCode, WINDOWS_MARK, GUARD_READY, GUARD_MARK, GUARD_END, GUARD_OMIT_MARK, menuRoot, selectedMenuEntry } from './document-scope.mjs';
+import { pageSite, pageSiteRefusal } from './permissions.mjs';
+import { siteConsentKey, siteConsentQuestion } from './engine-site-consent.mjs';
+import { DOCUMENT_TOOL, WINDOW_HEADER, elementLines, documentKey, documentLabel, windowFromText, lastWindowFromText, isDocumentRead, withoutEcho, readCode, guardedCode, WINDOWS_MARK, GUARD_READY, GUARD_MARK, GUARD_END, GUARD_OMIT_MARK, menuRoot, selectedMenuEntry } from './document-scope.mjs';
+import { cardText } from './card-text.mjs';
 import { ChangeReview, REVIEW_TOOL, isChangeCancel } from './change-review.mjs';
 import { FLOW_TOOL } from './flow-rules.mjs';
 import { hasWrite, writeCodeTrace } from './write-trace.mjs';
@@ -81,17 +90,18 @@ import { nativeArgumentsProblem } from './native-arguments.mjs';
 import { BrowserRecovery } from './browser-recovery.mjs';
 import { selectedBrowserCode } from './browser-discovery.mjs';
 import { rewritePaymentPolicy } from './payment-policy.mjs';
+import { guardWindowsAction, windowsDriverResult } from './windows-driver/guard.mjs';
 import { requestedSubmitRules } from './requested-submit.mjs';
 import { rewriteWorkflow } from './workflow-docs.mjs';
 import { createPaymentMessages, PAYMENT_ALLOWED, PAYMENT_WAITING } from './payment-gate.mjs';
-import { rewriteBrowserInstructions, isNativeGetState, WINDOWS_LINE, withFirstCallWindows, withInventoryNote } from './engine-app-docs.mjs';
+import { rewriteBrowserInstructions, isNativeGetState, WINDOWS_LINE, FIRST_WINDOW_RULE, FIRST_WINDOW_LEAN_RULE, withFirstCallWindows, withInventoryNote } from './engine-app-docs.mjs';
 import { rewriteTabError, isTabBinding } from './tab-errors.mjs';
 import { isLeaseRead, isFilteredRead } from './input-lease.mjs';
 import { evaluateWrite } from './evaluate-write.mjs';
 import { verifyWindowIdentity } from './window-identity.mjs';
 import { guardStopMark, splitMenuActions, takeGuardStop, withoutStopTree, hasWholeTree, menuRemainder, dialogRemainder, dialogRefusal, returnRefusal, windowGone, stopNote, continuedNote, menuIdentity,
   unchangedMenuWindow, menuWindowRefusal, idleSample, tabRefusal, tabRemainder, tabFocusRefusal, shownStandardWindows, parentLeaseRefusal, parentLeaseGate,
-  failedActionText, paletteRefusal, oneTabAdded, landingRefusal, replaceLastTree, lastHeader } from './menu-continuation.mjs';
+  failedActionText, paletteRefusal, oneTabAdded, landingRefusal, replaceLastTree, lastHeader, COVER_ROLES } from './menu-continuation.mjs';
 import { checkedStop, stopText } from './checked-stop.mjs';
 import { TurnOutcomes, unconfirmedInput } from './turn-outcomes.mjs';
 import { resultCompleteness, filteredRead } from './read-completeness.mjs';
@@ -100,10 +110,12 @@ import { narrationLine } from '../hooks/narration.mjs';
 import { cursorRecord } from './hand/events.mjs';
 import { createSessionPause, PAUSED_NOTE, PAUSE_DRAIN_NOTE, PAUSE_CONTROL_LOST_NOTE, NATIVE_PAUSE_CUT_NOTE } from './session-pause.mjs';
 import { stripGuardTiming } from './guard-timing.mjs';
+import { stripPickerTrace, documentationCounts } from './native-picker-trace.mjs';
 import { stripDP1Trace } from './dp1-trace.mjs';
 import { createStuckEscapes } from './stuck-escape.mjs';
 import { isInventoryRead } from './inventory-read.mjs';
 import { createReadCompactor, dropAcquisitionTree, hasFullTree, filteredReadCode, filteredReadMark, failureReason, TEXTLESS_NOTE } from './compact-reads.mjs';
+import { flatTool, fitBranch } from './tool-schema.mjs';
 import { promptNotice } from './prompt-notice.mjs';
 export { promptNotice };
 import { dropRepeatedText } from './repeated-text.mjs';
@@ -114,7 +126,9 @@ import { literalElements } from './literal-elements.mjs';
 import { createResultBudget, requestsFullDocumentation, grokResult } from './result-budget.mjs';
 import { createDocumentationTrust } from './canonical-documentation.mjs';
 import { forbiddenTargetWarning, isForbiddenSettingsWindow, refusalNotice, refusedApp } from './blocked-apps.mjs';
+import { validateLocalArguments, localTargetPolicy } from './local-tool-policy.mjs';
 import { OWN_HOST_LINE, AUTH_DIALOG_LINE, isOwnHost, ownLine, mentionsOwnHost, namesOwnHost as appNamesOwnHost, getAppTargets, ownHostPid as isOwnHostPid } from './own-host.mjs';
+import { ownedHelperPid } from './owned-helpers.mjs';
 import { clipboardCode, clipboardPlan, clipboardActions, createClipboardSession, createNativeClipboardIO } from './clipboard.mjs';
 import { fillFormCode } from './fill-form.mjs';
 import { dragToCode } from './drag-to.mjs';
@@ -198,7 +212,7 @@ export function finalReturnCode(code) {
 // `app.click(3); …` with no await and more code after it: the call goes on without the action,
 // and a failure then ends the session. A last statement is fine, since the call returns its promise.
 // Strings are blanked first, so typed text that mentions an action doesn't count.
-export function unawaitedAction(code) { return unawaitedCall(code)?.method; }
+export function unawaitedAction(code, handles) { return unawaitedCall(code, handles)?.method; }
 
 // The methods an engine handle takes. Input methods act on the app; read methods only look. One list for the unawaited-action
 // check and for the handles a call uses (recovery must see every handle an action goes through, GA1).
@@ -206,8 +220,8 @@ const INPUT_METHODS = 'click|drag|dragTo|scroll|selectText|setValue|performSecon
 const HANDLE_METHODS = `${INPUT_METHODS}|doubleClick|rightClick|getAXState|getAXStateAndScreenshot|getScreenshot|waitFor|getJsDialog`;
 const UNAWAITED_CALL = new RegExp(String.raw`(?:^|[;{}\n])\s*((?:(?:const|let|var)\s+)?[A-Za-z_$][\w$]*\s*=\s*)?([A-Za-z_$][\w$]*(?:\.[A-Za-z_$][\w$]*)*\.(?:${INPUT_METHODS})\()`, 'g');
 
-function unawaitedCall(code) {
-  code = withoutPageCallbacks(code);
+function unawaitedCall(code, handles) {
+  code = withoutPageCallbacks(code, handles);
   const bare = code.replace(/"(?:[^"\\\n]|\\[\s\S])*"|'(?:[^'\\\n]|\\[\s\S])*'|`(?:[^`\\]|\\[\s\S])*`/g, literal => literal.replace(/[^\r\n]/g, ' '));
   for (const m of bare.matchAll(UNAWAITED_CALL)) {
     let end = m.index + m[0].length - 1, chained = false;
@@ -249,7 +263,7 @@ function requireNote(refused, saved, prompt) {
 // did (acquiring, choosing a window, opening a document), tap coordinates, the drag, hover and banner tools,
 // the list-picker recipe, and the doctor line. Full rules arrive on the next js result.
 // Every safety passage stays word for word, and a heading left empty goes too.
-const OPEN_DROPS = /^(?:- When the task specifies an app|- After renumbering|- If acquisition returns an empty tree|- After an empty acquisition tree|- Among windows|- A window other than the one getApp shows|- Other window than getApp shows|- Multiply tap coordinates|- Multiply coordinates by screenshot multiplier|- List exceeds visible rows|- Acquire a document that's already open|- Reorder rows or move selected text|- Engine events don't trigger hover|(?:- )?In a browser, |(?:- )?Browser: `setValue` address bar|- `notifications` presses|Rows, text selected in |If `js` fails to start|Startup(?: failure)?: )/;
+const OPEN_DROPS = /^(?:- When the task specifies an app|- After renumbering|- If acquisition returns an empty tree|- After an empty acquisition tree|- Among windows|- A window other than the one getApp shows|- Other window than getApp shows|- Multiply tap coordinates|- Multiply coordinates by screenshot multiplier|- List exceeds visible rows|- Long list:|- Acquire a document that's already open|- Reorder rows or move selected text|- Engine events don't trigger hover|(?:- )?In a browser, |(?:- )?Browser: `setValue` address bar|- `notifications` presses|Rows, text selected in |If `js` fails to start|Startup(?: failure)?: )/;
 export function openFileRules(rules) {
   if (typeof rules !== 'string') return rules;
   const blocks = [];
@@ -488,7 +502,7 @@ function reachesGetApp(code) {
 function numberedHandles(code) {
   return [...new Set([...String(code ?? '').matchAll(/([A-Za-z_$][\w$]*)?\.(?:click|setValue|selectText|performSecondaryAction|scroll|pickFromList)\(\s*\d+\s*[,)]/g)].map(m => m[1]))];
 }
-export function batchingDescription(description, variant = true, prompt, windows = false) {
+export function batchingDescription(description, variant = true, prompt, windows = false, firstWindow = false) {
   const text = prompt === 'lean' ? (variant === 'merge' ?
     'start with `let app = await cua.getApp("<app>")`; batch known actions: sleight acquires the app and checks its window before they run. Do not end a call only to read the window before an action you already know: sleight waits for the app after each click, shortcut or Return, follows a Save or Open panel, a new window or a document saved under a name the call typed, and stops the rest of the call if any other window appears.' :
     'start with `let app = await cua.getApp("<app>")`; batch known actions: sleight acquires the app and checks its window before they run. Chain known actions, but end the call after a shortcut that opens or names a window (Cmd+N, Cmd+O, or Cmd+S on an untitled document): sleight stops the rest of a call when its window changes.') :
@@ -496,14 +510,18 @@ export function batchingDescription(description, variant = true, prompt, windows
   const stops = variant === 'nosavestop' ? text.replace(
     ', but end the call after a shortcut that opens or names a window (Cmd+N, Cmd+O, or Cmd+S on an untitled document): sleight stops the rest of a call when its window changes.',
     '. sleight waits for the sheet a shortcut opens.') : text;
-  const replacement = windows ? withFirstCallWindows(stops) : stops;
+  const replacement = firstWindow ? (prompt === 'lean' ? FIRST_WINDOW_LEAN_RULE : FIRST_WINDOW_RULE) + ' sleight acquires the app and checks its window first. ' +
+    (variant === 'merge' ? 'Batch known actions; sleight waits after clicks, shortcuts or Return, follows panels, new windows and names saved by this call; any other window stops it.' :
+      variant === 'nosavestop' ? 'sleight waits for the sheet a shortcut opens.' :
+        'Batch known actions; end after Cmd+N, Cmd+O or Cmd+S on an untitled document: sleight stops when its window changes.')
+    : windows ? withFirstCallWindows(stops) : stops;
   return typeof description === 'string' && description.includes(FIRST_CALL_RULE) ? description.replace(FIRST_CALL_RULE, replacement) : description;
 }
 // Both browser-guard sites refuse native access with this text.
 const NATIVE_DENIED = /* lean notice */ 'Native access stopped: use the handle returned by cua.getApp directly, after a standalone native app read. No native lease for this browser call.';
 // SLEIGHT_PROMPT=lean descriptions of the tools sleight adds. Each tool keeps its default text.
 const LEAN_TOOL_DESCRIPTIONS = {
-  app_handoff: "Non-browser app: wait Continue, reread. Away: end turn, ask user to sign in and reply. Never request passwords/codes. Cancel keeps app open.",
+  app_handoff: "Non-browser: wait Continue, reread app. Away: end turn, ask user to sign in and reply. Never request passwords/codes. Cancel keeps app open.",
   document_scope: 'Ask the user to approve the last observed document or window for this session, after a js call with only let app = await cua.getApp("App") (or { windowId: 123 }). Actions need an approved matching Window and URL; window changes stop them. A mistake guard, not isolation from arbitrary JavaScript.',
   review_changes: 'Shows this session\'s saved-file changes. Before editing, read the window with a standalone cua.getApp call. op "list": each touched document\'s diff or size/date summary; op "review": the user picks Keep, Undo or Later per document. Only the user can decide. Undo restores the session backup, refusing if the file changed after the last agent action; unsaved buffers aren\'t restored. Backups end with the session.',
   flow_exception: 'Ask the user to allow, once, the exact call a flow rule last stopped. No decision arguments. Retry the identical call after approval; never work around a refusal.',
@@ -549,14 +567,36 @@ export function imageSize(data) {
   return undefined;
 }
 
-// The engine's screenshots are in pixels, 2× a window's points on a Retina display, and Claude
+// Read the own runtime's existing frame note without assuming a Retina multiplier.
+// Dimensions come from the encoded image; check rounded note ratios against the
+// full bounds before accepting the frame for screenshot association.
+export function screenshotFrame(content) {
+  const notes = content.filter(c => c?.type === 'text').flatMap(c => (c.text ?? '').split('\n').filter(line => line.startsWith('Screenshot frame:')));
+  if (notes.length !== 1 || notes[0].length > 1024) return undefined;
+  const m = /^Screenshot frame: (\d+)x(\d+) pixels; window bounds \(([^,]+), ([^,]+), ([^,]+), ([^)]+)\) points; scale ([\d.]+)x([\d.]+) pixels per point; origin top-left; window-only, overlays excluded\.$/.exec(notes[0]);
+  if (!m) return undefined;
+  const [pixelWidth, pixelHeight, x, y, width, height, scaleX, scaleY] = m.slice(1).map(Number);
+  const image = content.filter(c => c?.type === 'image' && typeof c.data === 'string').at(-1);
+  const size = image && imageSize(image.data);
+  if (!size || size.width !== pixelWidth || size.height !== pixelHeight ||
+      ![pixelWidth, pixelHeight, x, y, width, height, scaleX, scaleY].every(Number.isFinite) ||
+      pixelWidth < 1 || pixelHeight < 1 || pixelWidth > 16384 || pixelHeight > 16384 || pixelWidth * pixelHeight > 16777216 ||
+      width <= 0 || height <= 0 || width > 16384 || height > 16384 ||
+      scaleX <= 0 || scaleY <= 0 || Math.abs(pixelWidth / width - scaleX) > 0.000051 ||
+      Math.abs(pixelHeight / height - scaleY) > 0.000051) return undefined;
+  return { windowBounds: { x, y, width, height }, pixelWidth, pixelHeight, scaleX: pixelWidth / width, scaleY: pixelHeight / height };
+}
+
+// Screenshots use their encoded pixels, which may equal points on the own runtime. Claude
 // reads drag points off them. Returns [app name, size, window title] for the last image in an
 // engine result that names one app ("Window: "Game 1", App: Chess."), so drag can convert. The
 // title is undefined when the result names more than one window. A headerless
-// image can instead use the one acquired handle identified by the caller.
-export function screenshotOf(content, target) {
+// image can instead use the one acquired handle identified by the caller. Only the own runtime
+// writes frame notes, so engine results (ownFrame false) skip the frame check.
+export function screenshotOf(content, target, { ownFrame = true } = {}) {
   const image = content.filter(c => c?.type === 'image' && typeof c.data === 'string').at(-1);
   if (!image) return undefined;
+  if (ownFrame && content.some(c => c?.type === 'text' && /^Screenshot frame:/m.test(c.text ?? '')) && !screenshotFrame(content)) return undefined;
   const headers = content.filter(c => c?.type === 'text').flatMap(c => [...(c.text ?? '').matchAll(/^Window: ("(?:[^"\\]|\\.)*"), App: ([^\n]+?)\.?$/gm)]);
   const apps = new Set(headers.map(m => m[2].trim()));
   const titles = new Set(headers.map(m => { try { return JSON.parse(m[1]); } catch { return undefined; } }));
@@ -735,6 +775,10 @@ function internalTurnEnd(tool, keepHidden = false) {
 
 const STATS_TOOLS = new Set(['js', 'replay', 'browser_open', 'browser_read', 'browser_act', 'browser_fill']);
 
+// Claude Code 2.1.309 stamps mod calls separately from API/model calls. Never
+// coerce a value or accept a new prefix without a measured host contract.
+export const modToolUseId = value => typeof value === 'string' && value.length === 45 && /^toolu_plugin_[0-9a-f]{32}$/.test(value);
+
 export function createRelay({
   documentationTrust,
   directBrowser,
@@ -742,10 +786,12 @@ export function createRelay({
   directHost,
   remoteApprovals,
   presence = () => remoteApprovals?.presence?.(),
-  // Whether sleight's mod runs in this host (Claude Code). Only the mod can call turn_ended for the model, end a turn
-  // after a used one only, and bind a turbo turn to the user's message. Elsewhere (Codex, Cursor) turn_ended stays hidden
+  // Host eligibility for the mod protocol (Claude Code). Each private frame also needs the host's mod attribution.
+  // The mod ends used turns and binds the user's message. Elsewhere (Codex, Cursor) turn_ended stays hidden
   // from the model as the engine marks it, turbo's tools are left out, and a turn sleight sat out ends here.
   modHost = () => true,
+  // Desktop SDK provenance is an opt-in environment convention, pending owner approval.
+  desktopTurns = process.env.SLEIGHT_DESKTOP_TURNS === '1',
   // Lists apps holding keyboard filter taps ([{ app, bundleId }]), checked when a turn ends.
   keyboardTaps,
   windowIdentity,
@@ -814,8 +860,9 @@ export function createRelay({
   inputLease,
   onLeaseFault = () => {},
   engineForbiddenTargets = false,
-  // Whether a pid is sleight's own consent host (own-host.mjs); tests pass a fake.
-  ownHostPid = isOwnHostPid,
+  // The launcher's live osascript panels, consent host, Glide engine and auth sheets are never targets.
+  ownHostPid = pid => ownedHelperPid(pid) || isOwnHostPid(pid),
+  ownHostLine = ownLine,
   // The user's blocks (permissions.mjs): app({ bundleId, name }) gives the line to relay for a blocked app, and noteApp records
   // the app sleight acts in for the menu's Never Act in row. The launcher supplies them; without them nothing is blocked.
   // page(site) and sitesLimited() hold site blocks on the engine path; webBrowser(appId) says whether an app is a web browser
@@ -841,8 +888,16 @@ export function createRelay({
   // word-brief went 67.2 to 100.2 s, so it stays behind the flag. Fix 4, the browser's keyboard new-tab sentence, is default
   // (engine-app-docs.mjs KEYBOARD_TAB_SENTENCE).
   firstCallSteering = process.env.SLEIGHT_FS === '1',
+  // SF4 replaces the FS/TS3 pre-call guidance; keep opt-in until the two-browser held-out screening passes.
+  firstWindowGuidance = process.env.SLEIGHT_SF4 === '1',
   // Under A/B (SLEIGHT_TS3=1): the js description says getState lists no windows (FIRST_CALL_WINDOWS).
   firstCallWindows = process.env.SLEIGHT_TS3 === '1' || firstCallSteering,
+  // The Windows worker's inventory includes windows. Keep the Mac-only advice off there.
+  nativeWindows = false,
+  // The own Mac preview uses parent-side admission, like Windows.
+  nativeMac = false,
+  // Windows admission owns its HWND leases outside the JavaScript worker.
+  nativeSession,
   // Under A/B (SLEIGHT_RESULT_TRIM=1): leaves out a split acquisition's tree when its call returns a
   // newer full one. Trimming Save-panel file lists with it lost (11/12, 2026-10-11) and is gone.
   resultTrim = false,
@@ -927,6 +982,9 @@ export function createRelay({
   openAutoShot = process.env.SLEIGHT_OPEN_AUTO_SHOT !== '0',
   openShotTimeoutMs = 5000,
   onClientReply = () => {},
+  onStageTurnEnd = () => {},
+  onStageTurnStop = () => {},
+  stageProducerEnabled = false,
   // The ghost hand (hand/relay-hand.mjs), told about admitted calls, approvals and results. Fire-and-forget:
   // the relay never awaits it or reads its state, and without it nothing changes.
   hand,
@@ -934,6 +992,7 @@ export function createRelay({
   pause = createSessionPause(),
   pauseHost,
 }) {
+  const nativeRuntime = nativeWindows || nativeMac;
   const pauseChecks = new Map(), pausedCalls = new Set(), nativePauseCuts = new Set();
   const applyPause = value => {
     if (value) for (const id of engineCalls) if (running.has(id) && !localRunning.has(id)) pausedCalls.add(id);
@@ -958,7 +1017,15 @@ export function createRelay({
   }
   const localCursor = new Map();
   const callNarration = new Map();
-  const cursorStatus = (state, detail) => { try { cursor?.status(state, detail); } catch {} };
+  const cursorStatus = (state, detail, turnEnd = false) => {
+    try {
+      if (stageProducerEnabled && state === 'handback') return;
+      // Only rotation ends the turn. Generic tool replies have no action record to supply their call marker.
+      if (state === 'done' && !turnEnd && !detail?.call && cursor?.enabled && typeof cursor.call === 'function')
+        detail = { ...detail, call: cursor.call() };
+      cursor?.status(state, detail);
+    } catch {}
+  };
   const runScreenshotDetails = new WeakMap();
   // Tags carry geometry through split replies without saving pixels before final delivery.
   const tagRunScreenshots = (content, detail) => { for (const item of content ?? []) if (item?.type === 'image') runScreenshotDetails.set(item, detail); };
@@ -974,16 +1041,30 @@ export function createRelay({
   }
   if (directBrowser !== undefined && !isV3Frontend(directBrowser)) throw Error('TRUSTED_ROUTE_REQUIRED');
   if (directHost !== undefined && !(isV3Bridge(directHost) && isV3Frontend(directBrowser))) throw Error('TRUSTED_ROUTE_REQUIRED');
-  let installedBootstrapped = false;
-  const remoteEnvelope = directHost?.bootstrapEnvelope() ?? { version: 1, session: randomUUID(), nonce: randomBytes(32).toString('hex') };
+  let installedBootstrapped = false, modPersonPromptAttributable = false, modPersonPromptFrames = false;
+  let remoteEnvelope = directHost?.bootstrapEnvelope() ?? { version: 1, session: randomUUID(), nonce: randomBytes(32).toString('hex') };
+  let remoteEpoch = 0;
+  let remoteBinding = Promise.resolve();
   const remoteTurns = new Set(), typedApps = new Set(), remoteRefusedCalls = new Set(), remoteUnboundNotices = new Map(), awayCards = new Map();
   function bindTurboPrompt(frame) {
     // Both envelope forms are authenticated before this helper. A late bind must not replace a newer prompt's authority.
-    paymentMessages.set(frame.text);
-    const binding = directHost.bind(frame, turboApps(), clientHost).then(available => {
+    const epoch = remoteEpoch;
+    // The relay rotates its mod envelope on reload. The private worker retains
+    // its own envelope, which never needs to be returned to the mod again.
+    const binding = remoteBinding.then(async () => {
+      if (epoch !== remoteEpoch) return { available: false, deferred: false };
+      paymentMessages.set(frame.text);
+      let available = await directHost.bind({ ...frame, ...directHost.bootstrapEnvelope() }, turboApps(), clientHost);
+      if (epoch !== remoteEpoch) {
+        // bind can await the worker's pause acknowledgment. Drain its stale
+        // authority before a new envelope is allowed to start another bind.
+        await directHost.endTurn();
+        available = false;
+      }
       if (available) { resumeRequested = true; resumeAfterStop(); }
       return { available, deferred: false };
     });
+    remoteBinding = binding.catch(() => {});
     // prompt.submit awaits turn_ended. During pause even a slow worker must not hold the person's message.
     // Binding continues in the background; both the relay and worker still refuse calls until Resume.
     if (pause.paused) { binding.catch(() => {}); return Promise.resolve({ available: false, deferred: true }); }
@@ -1029,6 +1110,7 @@ export function createRelay({
   let grokClient = false;
   const originalModHost = modHost;
   modHost = () => !grokClient && originalModHost();
+  const modAttributed = msg => modHost() && modToolUseId(msg.params?._meta?.['claudecode/toolUseId']);
   // Codex sends its sandbox state on each tool call (codex/sandbox-state, because the engine advertises it), and the engine
   // runs a call in a kernel for that state. The relay's own calls carry the client's latest state so they reach the same
   // kernel, and a change in it means a fresh kernel: no guard setup and no handles (the first getApp in Codex failed on
@@ -1096,7 +1178,8 @@ export function createRelay({
   }) });
   // Validate the original engine bytes before policy, size or reference transforms.
   const heldDocumentation = documentationTrust.trusted;
-  let resultBudget = createResultBudget({ documentationTrust, validateDocumentation: false });
+  const onTreeTrim = (tree, hidden, delivered) => compactor.hideNumbers(tree, hidden, delivered);
+  let resultBudget = createResultBudget({ platform: nativeWindows ? 'win32' : process.platform, documentationTrust, validateDocumentation: false, onTreeTrim });
   const docOrigin = documentationOrigin();
   let documentationClientMeta = {};
   const documentationContext = () => stableJson([engineEpoch, kernelEpoch, engineContext, documentationClientMeta,
@@ -1107,8 +1190,12 @@ export function createRelay({
   let computerSurface = false;
   // The tool list as this session shows it: the engine's tools rewritten by this session's settings, then sleight's own.
   // The handshake cache stores the engine's list and answers through this too (startup-cache.mjs).
+  // The engine's own schema for each tool listed flat, so calls can be fitted back to one of its forms.
+  const flatSchemas = new Map(), unflatLogged = new Set();
+  const unflatLog = line => { if (unflatLogged.has(line)) return; unflatLogged.add(line); try { stderr.write(line + '\n'); } catch {} };
   const clientTools = ({ tools, ...result }) => ({ ...result, tools: tools
     .filter(t => !HIDDEN_TOOLS.has(t.name))
+    .map(t => { const flat = flatTool(t, unflatLog); if (flat !== t) flatSchemas.set(t.name, t.inputSchema); return flat; })
     .filter(t => !documentMode || t.name === 'js' || t.name === TURN_END_TOOL)
     .map(t => (t.name === TURN_END_TOOL ? internalTurnEnd(t, !modHost()) : t))
     .map(t => {
@@ -1116,10 +1203,12 @@ export function createRelay({
       // The engine's computer-only description says its browser APIs are disabled (cua-repl's browser-disabled part).
       computerSurface = typeof t.description === 'string' &&
         (engineJsVariant(t.description)?.variant === 'computer' || /(?:^|\n)Browser APIs are disabled\.(?:\n|$)/.test(t.description));
-      const compact = compactJsDescription(t.description, firstCallBatch, leanCalls, firstCallWindows, { current: firstCallSteering });
+      const firstWindow = firstWindowGuidance && !!firstCallBatch;
+      const compact = compactJsDescription(t.description, firstCallBatch, leanCalls, firstCallWindows,
+        { current: firstCallSteering || firstWindow, firstWindow });
       if (compact !== undefined) return { ...t, description: engineBrowserOpen && !documentMode ? withBrowserOpenFirst(compact) : compact };
-      const batched = firstCallBatch ? batchingDescription(t.description, firstCallBatch, prompt, firstCallWindows) : t.description;
-      const description = firstCallSteering ? withInventoryNote(batched) : batched;
+      const batched = firstCallBatch ? batchingDescription(t.description, firstCallBatch, prompt, firstCallWindows, firstWindow) : t.description;
+      const description = firstCallSteering && !firstWindow ? withInventoryNote(batched) : batched;
       const final = leanCalls ? leanCallDescription(description) : description;
       return { ...t, description: engineBrowserOpen && !documentMode ? withBrowserOpenFirst(final) : final };
     })
@@ -1128,7 +1217,7 @@ export function createRelay({
         : engineBrowserOpen && !documentMode ? [engineOpenTool(prompt)] : [],
       codexTurbo() ? [structuredClone(TURN_START)] : [],
       // app_handoff refuses document-scoped surfaces, so document mode doesn't advertise it.
-      documentMode ? [] : [structuredClone(NATIVE_HANDOFF_TOOL)])
+      documentMode || nativeRuntime ? [] : [structuredClone(NATIVE_HANDOFF_TOOL)])
     // Claude Code defers MCP tools behind a search, which cost a turn before the first call, and
     // again before the first drag (3/3 textedit-drag runs, 2026-10-08). sleight's descriptions
     // are short, so all but the internal turn_ended load up front, local tools included.
@@ -1272,13 +1361,14 @@ export function createRelay({
     const meta = msg.params?._meta;
     const app = meta?.tool_params?.app, riskLevel = meta?.riskLevel ?? 'high';
     // The engine names an app by bundle ID or by name, so check both ways.
-    if (!alwaysAllow || approvalScope !== 'session' || approvalKey(msg) === undefined) return undefined;
+    if (ask?.allowsAlways === false || !alwaysAllow || approvalScope !== 'session' || approvalKey(msg) === undefined) return undefined;
     if (!['low', 'medium', 'high'].includes(riskLevel)) return undefined;
     return { app, riskLevel };
   }
   function rememberAlways(choice) {
-    try { alwaysAllow(choice.app, choice.riskLevel); trace('always-allow', choice); }
-    catch (error) { process.stderr.write(`sleight: couldn't add ${choice.app} to the pre-approved list: ${error.message}\n`); }
+    const failed = error => process.stderr.write(`sleight: couldn't add ${choice.app} to the pre-approved list: ${error.message}\n`);
+    try { Promise.resolve(alwaysAllow(choice.app, choice.riskLevel)).then(() => trace('always-allow', choice), failed); }
+    catch (error) { failed(error); }
   }
   const approved = new Set(); // approval keys the user accepted this session
   const listApproved = new Set(); // apps the user's pre-approved list answered for the engine this session
@@ -1331,7 +1421,7 @@ export function createRelay({
   let stopCollected = false;
   let backendRestartUnconfirmed = false;
   let stopUnconfirmed = false, resumeRequested = false;
-  let stopFinished = false, restarting, initialization;
+  let stopFinished = false, glideStopLatched = false, restarting, initialization;
   let engineEpoch = 0, nextEngineRequest = 0, updatePending = false;
   const engineRequests = new Map();
   let stopGeneration = 0;
@@ -1349,10 +1439,12 @@ export function createRelay({
     catch (error) {
       if (observed?.status === 'mismatch' || !/identity is unavailable|identity is ambiguous/.test(error.message)) throw error;
       if (!identityWarned) { identityWarned = true; identityWarning = true; }
+      if (target.nativeIdentity) throw error;
       return undefined;
     }
   }
   function resumeAfterStop() {
+    if (nativeRuntime && glideStopLatched) return;
     if (!stopFinished || !resumeRequested || (!stopUnconfirmed && !(stopCollected && restartEngine))) return;
     closing = false; stopUnconfirmed = false; resumeRequested = false;
     // Existing in-flight calls and their leases remain reserved until they actually finish.
@@ -1364,6 +1456,14 @@ export function createRelay({
     if (!stopCollected && !serverIn.writableEnded && !serverIn.destroyed) {
       for (const state of helperStates.values()) if (state.stuck && state.pending === undefined) scheduleHelperRead(state);
     }
+  }
+  function resumeAtPersonPrompt() {
+    if (!stopFinished) return !glideStopLatched;
+    if (nativeSession?.userPrompt?.() !== false) {
+      glideStopLatched = false; resumeRequested = true; resumeAfterStop();
+      return true;
+    }
+    return false;
   }
   async function restartCollectedEngine(backend = false, update = false, preparedServer) {
     const generation = stopGeneration;
@@ -1393,7 +1493,7 @@ export function createRelay({
       clipboard = newClipboard();
       if (!update) { compactor = createReadCompactor({ leanCalls, prompt, compactAcquisition, compactReacquire, screenshotReads: textlessHint, readHints, routeSteering, undoReceipts, outcomes, actionNumbers: workflowDocs }); selectorWindows.clear(); helperHandles.clear(); helperAliases.clear(); }
       resultCalls.clear(); docsShown = backend; priorRead = undefined; lastTree = undefined;
-      if (!backend) { deferredEngineDocs = []; clientJsDelivered = false; }
+      if (!backend) { deferredEngineDocs = []; engineDocsInFlight.clear(); retryEngineDocs = false; clientJsDelivered = false; }
       // Rules held for Claude's first js result go with the next engine docs instead.
       if (deferredRules) { deferredRules = undefined; rulesShown = browserRulesShown = false; }
       for (const state of helperStates.values()) clearTimeout(state.timer);
@@ -1441,10 +1541,10 @@ export function createRelay({
     attempt.promise = (async () => {
       const preparedServer = await prepareEngine?.();
       if (generation !== stopGeneration || closing || disposed) throw new Error(/* notice */ 'Engine restart was stopped.');
-      // End the open turn on the engine being replaced, as a normal turn end does, so it releases what it
-      // holds. A hung or dead engine costs one grace period, never the reconnect.
+      // Rotate resources on the ChatGPT engine being replaced, retaining only the stage's targets.
+      // A hung or dead ChatGPT engine costs one grace period, never the reconnect.
       let graceTimer;
-      await Promise.race([Promise.resolve().then(() => endOpenTurn(false, id)).catch(() => {}),
+      await Promise.race([Promise.resolve().then(() => endOpenTurn(false, id, undefined, true)).catch(() => {}),
         new Promise(resolve => { graceTimer = setTimeout(resolve, stopGraceMs); })]);
       clearTimeout(graceTimer);
       if (generation !== stopGeneration || closing || disposed) throw new Error(/* notice */ 'Engine restart was stopped.');
@@ -1584,6 +1684,9 @@ export function createRelay({
   const callSeqs = new Map();
   let docsShown = false;
   let deferredEngineDocs = [], clientJsDelivered = false, deferredRules;
+  let retryEngineDocs = false;
+  const engineDocDelivery = Symbol('sleight deferred documentation');
+  const engineDocsInFlight = new Set();
   let undeliveredGuidance = [];
   const engineDocs = (content = [], embedded = false) => content.flatMap(item => {
     if (item.type !== 'text') return [];
@@ -1613,7 +1716,7 @@ export function createRelay({
     if (turbo && !rulesShown) {
       if (browserRulesShown) return;
       browserRulesShown = true;
-      // Keep rulesShown false: a later engine acquisition still needs all native guidance.
+      // A later native acquisition still receives the complete native guidance.
       return guidanceForHost(turboFirstRules(requestedSubmitRules(firstCallRules, {
         SLEIGHT_RS: '0', SLEIGHT_CONFIRM_PAYMENTS: confirmPayments, SLEIGHT_PROMPT: prompt,
       })), grokClient);
@@ -1885,9 +1988,10 @@ export function createRelay({
       for (const entry of entries) {
         if (generation !== stopGeneration || closing || disposed) { failed = true; results.push('Review stopped; changes remain pending.'); break; }
         const detail = changes.describe(entry);
-        const answer = queueDecision(() => ask
-          ? askPrompt([msg.id], `Review ${entry.title}`, false, { kind: 'review', detail })
-          : elicitReview(`Review ${entry.title}\n${detail}\nChoose Keep, Undo or Later. Undo restores the saved copy shown above. Reopen it in the app afterward.`), [msg.id]);
+        const question = `Review\n${cardText(entry.title, { maxBytes: 256, indent: true })}`;
+        const answer = queueDecision(() => ask && ask.allowsReview !== false
+          ? askPrompt([msg.id], question, false, { kind: 'review', detail })
+          : elicitReview(`${question}\n${detail}\nChoose Keep, Undo or Later. Undo restores the saved copy. A capped preview is shown above. Reopen it in the app afterward.`), [msg.id]);
         const decision = await answer.catch(() => 'cancel');
         if (disposed) return;
         if (generation !== stopGeneration || closing) { failed = true; results.push('Review stopped; changes remain pending.'); break; }
@@ -2151,7 +2255,7 @@ export function createRelay({
           const allowed = await approve(parts, message, msg.id, options); current();
           if (allowed) inputLease.renew([key]);
           return allowed;
-        }, undefined, target);
+        }, undefined, target, undefined, { internal: true, allowForbidden: engineForbiddenTargets });
         current();
         const value = !result.isError && JSON.parse(result.content?.find(c => c.type === 'text')?.text ?? '{}');
         if (!value?.ok || value.target?.appId !== target.appId || !sameWindow(value.target, target) ||
@@ -2214,6 +2318,36 @@ export function createRelay({
     // app, its entry is the old window and the lease target is the current one.
     return window && fallback && window.app !== fallback.app && numbers.every(n => lines?.[n] !== undefined) ? window : fallback;
   }
+  // Renderer metadata only. A failed read can erase the current lease header while an
+  // admitted open_file alias still names its app. This never chooses an input destination.
+  function cursorWindow(code, fallback, id) {
+    const handles = [...new Set([...codeOnly(code).matchAll(HANDLE_CALL)].map(m => m[1]))];
+    const aliases = openedAliases.get(id);
+    const known = handles.map(name => aliases?.get(name) ?? openedWindows.get(name) ?? handleBundles.get(name));
+    if (!known.length || known.some(w => !w?.appId) || known.some(w => w.appId !== known[0].appId)) return fallback;
+    if (fallback && (fallback.appId === known[0].appId || fallback.app === known[0].app)) return fallback;
+    return known.every(w => sameWindow(w, known[0])) ? known[0] : { app: known[0].app, appId: known[0].appId };
+  }
+  function cursorAreas(code, id) {
+    const aliases = openedAliases.get(id), targets = [];
+    const handles = [...new Set([...codeOnly(code).matchAll(HANDLE_CALL)].map(m => m[1]))];
+    if (handles.length > 1) for (const name of handles)
+      targets.push(aliases?.get(name) ?? openedWindows.get(name) ?? handleBundles.get(name));
+    const visit = node => {
+      if (!node || typeof node.type !== 'string') return;
+      if (node.type === 'CallExpression' && node.callee?.type === 'MemberExpression' && !node.callee.computed &&
+          node.callee.object?.name === 'cua' && node.callee.property?.name === 'getApp') {
+        const selector = node.arguments?.[0];
+        targets.push(selector?.type === 'Literal' && typeof selector.value === 'string' ? { app: selector.value } : undefined);
+      }
+      for (const value of Object.values(node)) {
+        if (Array.isArray(value)) value.forEach(visit);
+        else if (value && typeof value === 'object') visit(value);
+      }
+    };
+    visit(parseCell(code).ast);
+    return targets.length ? [...new Map(targets.map(t => [JSON.stringify(t), t])).values()] : undefined;
+  }
   const handleOrigins = new Map(); // handle -> the getApp argument that acquired it
   const handleSelectors = new Map();
   const selectorWindows = new Map();
@@ -2237,7 +2371,7 @@ export function createRelay({
   // it, and a reply whose window is it reaches Claude only as the line (ported from claude/p130-pm1 ba365bcf, ccf2ed6f).
   // reply id -> the line Claude gets instead of the reply: OWN_HOST_LINE, or the user's line for an app or site they blocked.
   const withheld = new Map();
-  const ownWindow = window => !!window && isOwnHost(window.appId, window.app);
+  const ownWindow = window => !!window && (ownedHelperPid(window.pid) || isOwnHost(window.appId, window.app));
   // macOS's Touch ID and password sheets (coreautha, SecurityAgent) are refused the same way, with their own line.
   function ownStop(msg, line = OWN_HOST_LINE) {
     toClient({ jsonrpc: '2.0', id: msg.id, result: { isError: true, content: [{ type: 'text', text: line }] } });
@@ -2249,15 +2383,21 @@ export function createRelay({
     if (name !== 'js') return isOwnHost(args.app) ? ownLine(args.app) : undefined;
     const code = String(args.code ?? '');
     const target = getAppTargets(code).find(target => appNamesOwnHost(target, ownHostPid));
-    if (target !== undefined) return ownLine(target);
+    if (target !== undefined) return ownHostLine(target);
     const held = [...codeOnly(code).matchAll(HANDLE_CALL)].map(match => handleBundles.get(match[1])).find(ownWindow);
     return held ? ownLine(held.appId, held.app) : undefined;
   }
   // The engine's approval card names the host by its app (a name, alias, path or pid) or in its message.
   const ownApproval = msg => isAppApproval(msg) &&
     (appNamesOwnHost(msg.params?._meta?.tool_params?.app, ownHostPid) || mentionsOwnHost(msg.params?.message));
-  const approvalLine = msg => ownLine(msg.params?._meta?.tool_params?.app) === AUTH_DIALOG_LINE ||
-    /\b(?:coreautha|coreauthd|securityagent|com\.apple\.localauthentication)\b/i.test(String(msg.params?.message ?? '')) ? AUTH_DIALOG_LINE : OWN_HOST_LINE;
+  const approvalLine = msg => {
+    const app = msg.params?._meta?.tool_params?.app, message = String(msg.params?.message ?? '');
+    const named = appNamesOwnHost(app, ownHostPid) ? ownHostLine(app) : undefined;
+    if (named === AUTH_DIALOG_LINE || /\b(?:coreautha|coreauthd|securityagent|com\.apple\.localauthentication)\b/i.test(message)) return AUTH_DIALOG_LINE;
+    if (named) return named;
+    const names = [...message.matchAll(/(?:consent[\s_-]*host|glide[\s_-]*engine)(?![a-z])/gi)].map(match => match[0]);
+    return ownLine(message, ...names);
+  };
 
   function failLease(error) {
     nativeHandoff?.cancel?.();
@@ -2281,6 +2421,7 @@ export function createRelay({
   }
   // A blocked app answers with the user's one line and nothing reaches the engine.
   function blockStop(msg, line) {
+    hand?.hide();
     toClient({ jsonrpc: '2.0', id: msg.id, result: { isError: true, content: [{ type: 'text', text: line }] } });
   }
   // Every app a call names: a local tool's app, a js call's getApp strings, and the apps its handles hold from earlier reads.
@@ -2301,20 +2442,47 @@ export function createRelay({
     }
     return undefined;
   }
-  // Site blocks on the engine path: a browser window's action needs a read that proves an allowed site. webBrowser is asked
-  // only once the user has site limits. While its answer is pending (undefined), every app counts as a browser: a proven
-  // site is judged, and an action without one is refused. When the lookup failed or the window has no bundle id (null), a
-  // window counts as a browser's when its read shows web content. A confirmed browser's read of a page whose site can't be
-  // proven is withheld; a read with no web content still reaches Claude, so a start page can be read.
+  // A window URL decides site limits. Without one, reply text can veto access, and input needs the user's page answer.
+  // Browser classification runs only under site limits. While pending, apps count as browsers; a failed lookup (null)
+  // treats a window as web content only when its read has an area. Existing ambiguous and blocked reads stay withheld.
   const UNKNOWN_BROWSERS = "You limited the sites sleight acts on, and it doesn't know yet whether this app is a web browser, so it doesn't act here. Try again in a moment (sleight-mcp permissions lists your limits).";
+  // Window objects are serialized into the engine guard. Keep evidence, limits and user answers in the parent only.
+  const windowSites = new WeakMap();
   const pageLine = (window, read = false) => {
     if (!permissions?.sitesLimited?.()) return undefined;
-    const browser = webBrowser(window?.appId), page = window?.page;
+    const browser = webBrowser(window?.appId), page = window?.page, site = windowSites.get(window);
     if (browser === false || browser === null && !page) return undefined;
+    if (site?.text) {
+      site.veto = pageSiteRefusal(site.text, window, page => permissions.page(page));
+    }
+    if (site?.decision !== undefined && site.policy !== JSON.stringify(permissions.state?.())) delete site.decision;
+    if (site?.veto) return site.veto;
+    if (!window?.url) return read || site?.decision === 'accept' ? undefined : permissions.page({ unproven: true });
     if (read) return !page || page.unproven && browser !== true ? undefined : permissions.page(page);
     if (browser === undefined && (!page || page.unproven)) return UNKNOWN_BROWSERS;
     return permissions.page(page);
   };
+  function needsSiteConsent(window) {
+    if (!permissions?.sitesLimited?.() || !window?.appId) return false;
+    const site = windowSites.get(window), browser = webBrowser(window?.appId);
+    return site?.key && !window.url && !site.veto &&
+      browser !== false && !(browser === null && !window.page) && site.decision === undefined;
+  }
+  function approveSite(msg, target) {
+    const site = windowSites.get(target), generation = stopGeneration, key = site.key, policy = JSON.stringify(permissions.state?.());
+    running.add(msg.id);
+    askDocument(siteConsentQuestion(target), false, [msg.id]).then(answer => {
+      running.delete(msg.id);
+      if (generation !== stopGeneration || closing || disposed) return;
+      if (leaseWindow !== target || key !== site.key || policy !== JSON.stringify(permissions.state?.())) {
+        blockStop(msg, permissions.page({ unproven: true })); return;
+      }
+      site.decision = answer === 'accept' ? 'accept' : 'decline';
+      site.policy = policy;
+      if (site.decision !== 'accept') { blockStop(msg, permissions.page({ unproven: true })); return; }
+      handleClient(msg);
+    });
+  }
   function leaseStop(msg, reason, browserAdvice = false) {
     const note = browserAdvice && msg.params?.name === 'js' && browserLeaseNote(msg.params.arguments?.code, browserHandles);
     const content = [{ type: 'text', text: reason.startsWith('Input lease:') ? reason : `Input lease: ${reason}` }];
@@ -2386,6 +2554,11 @@ export function createRelay({
   }
   function releaseLeases() {
     stopHeartbeat();
+    // Lease cleanup and receipt rotation can happen while the mod's user turn
+    // is still open. Only the turn_ended request may clear its clipboard stop.
+    // Windows cleanup is asynchronous: trace a rejected cleanup as well as a thrown one.
+    try { Promise.resolve(nativeSession?.endTurn({ clipboardTurnEnded: false })).catch(err => trace('input-lease-release-error', { error: err?.message })); }
+    catch (err) { trace('input-lease-release-error', { error: err.message }); }
     try { inputLease?.close(); }
     catch (err) { trace('input-lease-release-error', { error: err.message }); }
     leaseFault = undefined;
@@ -2395,11 +2568,29 @@ export function createRelay({
   function prepareLease(msg, browser) {
     if (msg.method !== 'tools/call') return true;
     const name = msg.params?.name;
+    if (localNames.has(name)) {
+      try { validateLocalArguments(localTools.tools.find(tool => tool.name === name), msg.params.arguments ?? {}); }
+      catch (error) { blockStop(msg, error.message); return false; }
+      const policy = localTargetPolicy(name, msg.params.arguments ?? {}, undefined, engineForbiddenTargets);
+      if (policy.refusal) { blockStop(msg, policy.refusal); return false; }
+    }
     const own = (name === 'js' || localNames.has(name)) && namesOwnHost(name, msg.params.arguments ?? {});
     if (own) { ownStop(msg, own); return false; }
     const blocked = (name === 'js' || localNames.has(name)) && callBlock(name, msg.params.arguments ?? {});
     if (blocked) { blockStop(msg, blocked); return false; }
-    if (!inputLease) return true;
+    // Site limits apply even when the runtime owns its own native leases.
+    if (name === 'js' && browser && permissions?.sitesLimited?.()) {
+      blockStop(msg, "You limited the sites sleight acts on, and it can't check the site of an engine browser call, so it doesn't make one (turbo checks each page; sleight-mcp permissions lists your limits).");
+      return false;
+    }
+    if (!inputLease) {
+      if (nativeMac && name === 'js' && running.size) {
+        // Reuse the pending-call notice already inventoried below.
+        const pendingCall = 'another call in this session is pending.';
+        leaseStop(msg, pendingCall); return false;
+      }
+      return true;
+    }
     if (name === TURN_END_TOOL) {
       if (running.size) { leaseStop(msg, 'an action or read is still running; end the turn after it finishes.'); return false; }
       return true;
@@ -2411,8 +2602,6 @@ export function createRelay({
     const code = args.code;
     if (name === 'js' && typeof code !== 'string') { leaseStop(msg, 'js needs code.'); return false; }
     if (name === 'js' && browser) {
-      // The engine's browser surface names no page sleight can check, so site limits refuse it.
-      if (permissions?.sitesLimited?.()) { blockStop(msg, "You limited the sites sleight acts on, and it can't check the site of an engine browser call, so it doesn't make one (turbo checks each page; sleight-mcp permissions lists your limits)."); return false; }
       if (running.size) { leaseStop(msg, 'another call in this session is pending.'); return false; }
       // Tabs are isolated by the extension. Never reserve the previous native app for a tab call.
       const nativeDenied = promptNotice(NATIVE_DENIED, prompt);
@@ -2434,6 +2623,13 @@ export function createRelay({
       if (running.size) { leaseStop(msg, 'another call in this session is pending.'); return false; }
       if (leaseFault) { leaseStop(msg, leaseFault); return false; }
       if (ownWindow(leaseWindow)) { ownStop(msg, ownLine(leaseWindow.appId, leaseWindow.app)); return false; }
+      pageLine(leaseWindow); // Refresh vetoes and expire answers after a permission change.
+      if (needsSiteConsent(leaseWindow) && !appLine(leaseWindow.appId, leaseWindow.app)) {
+        approveSite(msg, leaseWindow); return false;
+      }
+      if (permissions?.sitesLimited?.() && windowSites.get(leaseWindow)?.decision === 'decline') {
+        blockStop(msg, permissions.page({ unproven: true })); return false;
+      }
       if (name !== 'js') {
         leaseCalls.set(msg.id, { localAction: true }); return true;
       }
@@ -2545,7 +2741,7 @@ export function createRelay({
     if (!idleTurnEndMs || disposed || closing || running.size || reviewing || (!turnUsed && !failedTurnEnds.size)) return;
     idleTimer = setTimeout(() => {
       trace('idle-turn-end', { turnId });
-      endOpenTurn(false);
+      endOpenTurn(false, undefined, undefined, true);
     }, idleTurnEndMs);
     idleTimer.unref?.();
   }
@@ -2666,11 +2862,16 @@ export function createRelay({
   }
   // The last screenshot's size per app and window title, for drag to convert Claude's pixels.
   function recordScreenshot(content, certifiedRead, target) {
-    const shot = screenshotOf(content, target);
+    const shot = screenshotOf(content, target, { ownFrame: nativeMac });
     if (!shot) return;
-    const entry = screenshots.get(shot[0].toLowerCase()) ?? { byTitle: {}, byWindow: {} };
-    entry.latest = shot[1];
-    if (shot[2] !== undefined) entry.byTitle[shot[2]] = [shot[1].width, shot[1].height];
+    const entry = screenshots.get(shot[0].toLowerCase()) ?? { byTitle: {}, byWindow: {}, frames: {} };
+    const frame = nativeMac ? screenshotFrame(content) : undefined;
+    entry.latest = { ...shot[1], frame };
+    if (shot[2] !== undefined) {
+      entry.byTitle[shot[2]] = [shot[1].width, shot[1].height];
+      if (frame) entry.frames[shot[2]] = frame;
+      else delete entry.frames[shot[2]];
+    }
     // Equal titles share a byTitle key; a cross-window drag converts B's points only with B's own (XD1R).
     if (shot[2] !== undefined && certifiedRead?.title === shot[2] && certifiedRead.app?.toLowerCase() === shot[0].toLowerCase()) {
       entry.byWindow[certifiedRead.number] = [shot[1].width, shot[1].height];
@@ -2797,11 +2998,13 @@ export function createRelay({
       updateRetries.delete(msg.id); reconnectNotes.delete(msg.id);
     }
     if (clientOut.writableEnded || clientOut.destroyed) {
-      const guidance = (msg.result?.content ?? []).filter(item => ruleBlocks.trusted(item) || heldDocumentation(item)).map(docOrigin.full);
+      const guidance = (msg.result?.content ?? []).filter(item => ruleBlocks.trusted(item) ||
+        !msg.error && !msg.result?.isError && engineDocs([item], true).length).map(docOrigin.full);
       ruleBlocks.retry(guidance);
       resultBudget.retry(guidance);
       for (const item of guidance) if (!undeliveredGuidance.some(c => c.text === item.text)) undeliveredGuidance.push(item);
       if (msg.method === undefined) { resultBudget.finish(msg.id); fullDocumentationCalls.delete(msg.id); }
+      if (guardTiming && clientTool) trace('native-doc-delivery', { id: msg.id, ...documentationCounts(msg.result?.content), outcome: 'closed', ms: 0 });
       trace('client-output-closed', { id: msg.id }); return;
     }
     if (receiptEnds.has(msg.id) && msg.method === undefined) {
@@ -2827,7 +3030,8 @@ export function createRelay({
       else msg.result = { ...msg.result, content: [...(msg.result?.content ?? []), { type: 'text', text: saveNote }] };
     }
     // Internal acquisitions, and an opt-in first getApp, keep the skill and tree in their
-    // result, then deliver the reference with Claude's next JS result (including errors).
+    // result, then deliver the reference with Claude's next successful JS result. Error results can be
+    // middle-truncated by the host, so only a complete successful write acknowledges the reference.
     const modelVisible = clientTool && clientTool !== TURN_END_TOOL && !HIDDEN_TOOLS.has(clientTool);
     const leanAcquisition = leanFirst && !clientJsSeen && !deferredEngineDocs.length && nativeAcquisition &&
       msg.result?._meta?.['codex/toolSurface']?.kind !== 'browserUse' && !msg.error && !msg.result?.isError;
@@ -2841,15 +3045,24 @@ export function createRelay({
         return [];
       });
     }
-    if (modelVisible && deferredEngineDocs.length &&
-        (clientJsDelivered || msg.error || msg.result?.isError)) {
-      if (msg.error) msg = { jsonrpc: msg.jsonrpc, id: msg.id, result: { isError: true,
-        content: [{ type: 'text', text: msg.error.message }] } };
+    // Retry only the reference already held by sleight. A failed JS call can print arbitrary
+    // page or script text, so its documentation-looking output must never become guidance.
+    deferredEngineDocs = deferredEngineDocs.filter(heldDocumentation);
+    if (modelVisible && (msg.error || msg.result?.isError) && deferredEngineDocs.length) retryEngineDocs = true;
+    let engineDocsDelivery = [];
+    if (modelVisible && deferredEngineDocs.length && clientJsDelivered && !msg.error && !msg.result?.isError) {
       if (Array.isArray(msg.result?.content)) {
-        const texts = msg.result.content.filter(heldDocumentation).map(item => item.text);
-        msg.result.content = [...deferredEngineDocs.filter(item => !texts.some(text => text.startsWith(item.text.trimEnd())))
-          .filter(heldDocumentation), ...msg.result.content];
-        deferredEngineDocs = [];
+        const pending = deferredEngineDocs.filter(docs => !engineDocsInFlight.has(docs));
+        const matched = new Set();
+        const content = msg.result.content.map(item => {
+          const docs = item.type === 'text' && pending.find(docs => item.text.startsWith(docs.text.trimEnd()));
+          if (!docs) return item;
+          matched.add(docs);
+          return { ...item, [engineDocDelivery]: docs };
+        });
+        msg.result.content = [...pending.filter(docs => !matched.has(docs))
+          .map(docs => ({ ...docs, [engineDocDelivery]: docs })), ...content];
+        engineDocsDelivery = pending.map(docs => ({ docs }));
       }
     }
     if (modelVisible && deferredRules && clientTool === 'js') {
@@ -2858,7 +3071,7 @@ export function createRelay({
     }
     let documentationDelivery;
     if (modelVisible && Array.isArray(msg.result?.content)) {
-      if (undeliveredGuidance.length) {
+      if (undeliveredGuidance.length && !msg.error && !msg.result.isError) {
         msg.result.content = [...undeliveredGuidance.filter(item => ruleBlocks.trusted(item) || heldDocumentation(item)), ...msg.result.content];
         undeliveredGuidance = [];
       }
@@ -2868,8 +3081,12 @@ export function createRelay({
       browserStale.observe(msg.result.content);
       saveReceipted ||= msg.result.content.some(c => c.type === 'text' && /\bsaved: observed [^\n]*; on disk: /.test(c.text ?? ''));
       documentationDelivery = docOrigin.project(msg.result.content, { context: documentationContext(),
-        full: process.env.SLEIGHT_ENGINE_DOCS === 'full' || fullDocumentationCalls.has(msg.id), isError: !!msg.result.isError });
+        full: retryEngineDocs || process.env.SLEIGHT_ENGINE_DOCS === 'full' || fullDocumentationCalls.has(msg.id), isError: !!msg.result.isError });
       msg.result.content = documentationDelivery.content;
+      for (const delivery of engineDocsDelivery) {
+        delivery.text = msg.result.content.find(item => item[engineDocDelivery] === delivery.docs)?.text;
+      }
+      if (nativeRuntime) msg.result.content = msg.result.content.filter(item => item.type !== 'text' || item.text?.trim());
     }
     if (msg.method === undefined) fullDocumentationCalls.delete(msg.id);
     if (msg.method === undefined) resultBudget.finish(msg.id);
@@ -2877,12 +3094,15 @@ export function createRelay({
       // Replay only guidance, never an image or action output. It already passed the docs and rule
       // transforms, whose once-per-session state advanced before the final serialized cap.
       msg.result = grokResult(msg.result, () => {
-        const guidance = msg.result.content.filter(item => ruleBlocks.trusted(item) || heldDocumentation(item)).map(docOrigin.full);
+        const guidance = msg.result.content.filter(item => ruleBlocks.trusted(item) ||
+          !msg.error && !msg.result.isError && engineDocs([item], true).length).map(docOrigin.full);
         ruleBlocks.retry(guidance);
         resultBudget.retry(guidance);
-        for (const item of guidance) if (!undeliveredGuidance.some(c => c.text === item.text)) undeliveredGuidance.push(item);
-        return guidance;
-      });
+        for (const item of guidance) if (!deferredEngineDocs.includes(item[engineDocDelivery]) &&
+          !undeliveredGuidance.some(c => c.text === item.text)) undeliveredGuidance.push(item);
+        if (guidance.some(item => engineDocs([item], true).length)) retryEngineDocs = true;
+        return guidance.filter(item => ruleBlocks.trusted(item));
+      }, onTreeTrim);
     }
     if (grokClient && msg.method === 'elicitation/create' && msg.id !== undefined) grokElicitations.add(msg.id);
     if (msg.method === undefined && msg.id !== undefined && outcomes) {
@@ -2907,26 +3127,52 @@ export function createRelay({
       }
     }
     journal?.reply(msg);
+    if (modelVisible && Array.isArray(msg.result?.content)) {
+      const hint = hand?.takeHint?.();
+      if (hint) msg.result.content.push({ type: 'text', text: `The person pointed the character at ${JSON.stringify(hint.app)} (window ${hint.windowId}) at (${hint.at[0]}, ${hint.at[1]}) ${hint.age} s ago.` });
+    }
     // The log is a side record: its failure never costs Claude a reply.
     recordAction('reply', msg);
     trace('to-client', msg);
     if (msg.method === undefined && msg.id !== undefined) onClientReply(msg);
     const retainedGuidance = modelVisible && Array.isArray(msg.result?.content)
-      ? msg.result.content.filter(item => ruleBlocks.trusted(item) || heldDocumentation(item)) : [];
+      ? msg.result.content.filter(item => ruleBlocks.trusted(item) ||
+        !msg.error && !msg.result.isError && engineDocs([item], true).length) : [];
     const runImages = msg.method === undefined && !msg.error && !msg.result?.isError
       ? msg.result?.content?.filter(item => item?.type === 'image') : undefined;
     const runDetail = runScreenshotDetails.get(runImages?.at(-1)) ?? { source: 'native' };
     // Keep immutable image fields from exactly this serialized reply, even if a caller later mutates its objects.
     const deliveredImages = runImages?.map(({ type, data, mimeType }) => ({ type, data, mimeType }));
+    const docCounts = guardTiming && modelVisible ? documentationCounts(msg.result?.content) : undefined;
+    const writeStarted = docCounts ? clock() : 0;
+    const completeEngineDocs = !msg.error && !msg.result?.isError && engineDocsDelivery.length &&
+      engineDocsDelivery.every(({ text }) => typeof text === 'string' &&
+        msg.result?.content?.some(item => item.type === 'text' && item.text === text));
+    if (completeEngineDocs) for (const { docs } of engineDocsDelivery) engineDocsInFlight.add(docs);
+    if (nativeRuntime && msg.method === undefined && msg.result)
+      msg = { ...msg, result: nativeSession?.displayResult?.(msg.id, msg.result) ?? msg.result };
     clientOut.write(JSON.stringify(msg) + '\n', error => {
       // Every replacement, cap, split and helper-probe return is above this boundary. Never record a failed write or refusal.
       if (!error && deliveredImages?.length) try { cursor?.screenshot?.(deliveredImages, runDetail); } catch {}
       const missing = docOrigin.settle(documentationDelivery, msg.result, error);
+      if (completeEngineDocs) for (const { docs } of engineDocsDelivery) engineDocsInFlight.delete(docs);
+      if (!error && completeEngineDocs) {
+        const delivered = new Set(engineDocsDelivery.map(({ docs }) => docs));
+        deferredEngineDocs = deferredEngineDocs.filter(docs => !delivered.has(docs));
+        if (!deferredEngineDocs.length) retryEngineDocs = false;
+      }
+      if (!error && !msg.error && !msg.result?.isError && !deferredEngineDocs.length &&
+          engineDocs(msg.result?.content, true).length) retryEngineDocs = false;
+      if (docCounts) trace('native-doc-delivery', { id: msg.id, ...docCounts,
+        outcome: error ? 'write-failed' : msg.error || msg.result?.isError ? 'refused' : 'written',
+        ms: Math.max(0, clock() - writeStarted), projected: documentationDelivery?.copies?.length ?? 0, retained: missing.length,
+        queued: deferredEngineDocs.length + undeliveredGuidance.length + (deferredRules ? 1 : 0) });
       if (error) { ruleBlocks.retry(retainedGuidance); resultBudget.retry(retainedGuidance); }
       for (const item of [...missing, ...(error ? retainedGuidance : [])]) {
         const full = docOrigin.full(item);
         if (!ruleBlocks.trusted(full) && !heldDocumentation(full)) continue;
-        if (!undeliveredGuidance.some(c => c.text === full.text)) undeliveredGuidance.push(full);
+        if (!deferredEngineDocs.includes(full[engineDocDelivery]) &&
+            !undeliveredGuidance.some(c => c.text === full.text)) undeliveredGuidance.push(full);
       }
       if (!error && !disposed && !closing) afterWrite?.(msg);
     });
@@ -2967,8 +3213,24 @@ export function createRelay({
     else if (msg.error) msg.error = { ...msg.error, data: { detail: msg.error.data, preapprovals: grants } };
   }
 
-  function endTurnArgs(args = {}) {
+  function modEndFrame(args = {}) {
+    const frame = args.sleight_turbo;
+    return installedBootstrapped && modHost() && frame && typeof frame === 'object' && !Array.isArray(frame) &&
+      Object.keys(frame).length === 4 && frame.event === 'end' && frame.version === remoteEnvelope.version &&
+      frame.session === remoteEnvelope.session && frame.nonce === remoteEnvelope.nonce &&
+      ['Stop', 'Interrupt'].includes(args.hook_event_name);
+  }
+
+  function endTurnArgs(args = {}, attributed = false) {
+    const modEnd = attributed && modEndFrame(args);
+    const unboundModEnd = attributed && args.sleight_turbo?.event === 'end' && !modEnd;
     return {
+      // Parent-only lifecycle metadata, computed before the fallback Stop below.
+      // Unattributed ends still clear the clipboard stop outside a bootstrapped
+      // mod session, and the idle end reaches the same lifecycle path.
+      ...(nativeRuntime ? { sleight_clipboard_turn_end: !unboundModEnd && (!modHost() || !installedBootstrapped || modEnd === true) } : {}),
+      // Windows Escape ownership requires the host-attributed mod lifecycle.
+      ...(nativeWindows ? { sleight_windows_turn_end: modEnd === true } : {}),
       // The mod and Codex's hooks send Stop or Interrupt. Anything else, an unexpanded template included, is a Stop.
       hook_event_name: ['Stop', 'Interrupt'].includes(args.hook_event_name) ? args.hook_event_name : 'Stop',
       session_id: sessionId,
@@ -3022,7 +3284,7 @@ export function createRelay({
     if (plain && pendingTyped.size) { await waitCatalog(); applyTyped(); }
     if (disposed || closing || generation !== stopGeneration) { toServer({ jsonrpc: '2.0', id: msg.id, result: { action: 'cancel' } }); return; }
     let identity = appIdentity(app);
-    const typedEligible = plain && key !== undefined && !forbiddenTargetWarning(app) && !forbiddenTargetWarning(identity?.id) &&
+    const typedEligible = modHost() && installedBootstrapped && plain && key !== undefined && !forbiddenTargetWarning(app) && !forbiddenTargetWarning(identity?.id) &&
       !/could be dangerous/i.test(msg.params?.message ?? '') && msg.params?._meta?.riskLevel === 'low';
     const typed = typedEligible && identity && typedApps.has(JSON.stringify([identity.id, msg.params._meta.riskLevel]));
     let listed = false, auditFailed = false;
@@ -3138,7 +3400,10 @@ export function createRelay({
         }
         if (generation !== stopGeneration) return { action: 'cancel' };
         try { pauseCheck(); } catch { return { action: 'decline' }; }
-        if (action === 'always' && always) { rememberAlways(always); action = 'accept'; }
+        if (action === 'always') {
+          if (always) { rememberAlways(always); action = 'accept'; }
+          else action = 'decline';
+        }
         if (action !== 'accept') return { action };
         if (key === undefined) return { action, content: {} };
         approved.add(key);
@@ -3197,11 +3462,11 @@ export function createRelay({
   // open_file per app, but never a once ask.
   function approve(keyParts, message, callId, options = {}) {
     const generation = stopGeneration;
-    const key = JSON.stringify(['sleight', ...keyParts]);
+    const key = JSON.stringify(['sleight', ...keyParts, ...options.appWarning ? [options.appWarning] : []]);
     // A once ask must reach the user every time: never answered from the
     // pre-approved list and never from session memory.
     const scoped = !panelOnly && approvalScope === 'session' && !options.once;
-    const preapprovable = !panelOnly && !options.once && keyParts.length === 2 &&
+    const preapprovable = !panelOnly && !options.once && !options.noPreapproved && keyParts.length === 2 &&
       ['drag', 'menu_bar', 'open_file'].includes(keyParts[0]);
     // withdraw() declines a pending ask whose call failed first: later asks stop waiting on it, an
     // elicitation of ours is cancelled, and a later answer grants nothing. A native panel stays up.
@@ -3221,8 +3486,9 @@ export function createRelay({
       try {
         cursorStatus('waiting', localCursor.get(callId));
         action = await physicalDecision(() => ask
-          ? askPrompt([callId], message, scoped, options.kind ? { kind: options.kind, detail: options.detail } : undefined)
-          : elicit(options.detail ? `${message} ${options.detail}` : message, id => { elicitation = id; }), [callId], present);
+          ? askPrompt([callId], message, scoped, { ...options.kind ? { kind: options.kind, detail: options.detail } : {},
+            ...options.appWarning ? { appWarning: options.appWarning } : {} })
+          : elicit([message, options.detail, options.appWarning].filter(Boolean).join(' '), id => { elicitation = id; }), [callId], present);
       } catch {
         action = 'cancel';
       }
@@ -3287,20 +3553,27 @@ export function createRelay({
   async function callLocal(msg, plan) {
     const generation = stopGeneration;
     const pauseCheck = pauseChecks.get(msg.id) ?? pause.checkpoint();
-    const current = () => {
+    const current = ({ handoff = true } = {}) => {
       pauseCheck();
       if (closing || disposed) throw new Error(/* notice */ 'Input lease: this session is closing.');
       if (generation !== stopGeneration) throw new Error(/* notice */ 'Input lease: this call was stopped.');
+      if (handoff && (handoffPresencePending || directBrowser?.handoffPending?.())) throw new Error(handoffMessages.pending);
     };
     localRunning.add(msg.id);
     let result;
     const name = msg.params.name;
+    const pointerPlacement = ['drag', 'hover'].includes(name) && hand?.placementEnabled === true;
     let args = msg.params.arguments ?? {};
-    let resolved, prepared, preparedAsk, preparedFailed = false;
+    let resolved, policyTarget, prepared, preparedAsk, preparedFailed = false, localDeclined = false;
     if (name === 'select_window') { clearSelection(); openedWindow = undefined; }
+    const appTool = ['drag', 'hover', 'select_window', 'open_file'].includes(name);
+    let localPolicy;
     try {
+      validateLocalArguments(localTools.tools.find(tool => tool.name === name), args);
       current();
-      if (pauseHost?.clearForAction && ['drag', 'hover', 'menu_bar'].includes(name)) { await pauseHost.clearForAction(); current(); }
+      // The named app is enough to protect its windows while the target probe runs.
+      if (appTool) hand?.protect?.({ app: args.app }, () => !localDeclined);
+      if (!pointerPlacement && pauseHost?.clearForAction && ['drag', 'hover', 'menu_bar'].includes(name)) { await pauseHost.clearForAction(); current(); }
       if (openFast && name === 'open_file' && localTools.prepareOpen) {
         prepared = localTools.prepareOpen(args, async (parts, message, options) => {
           preparedAsk = approve(parts, message, msg.id, options);
@@ -3317,7 +3590,6 @@ export function createRelay({
         Promise.resolve(prepared.approval).catch(() => {});
       }
       // These tools reserve the whole app for their actions.
-      const appTool = ['drag', 'hover', 'select_window', 'open_file'].includes(name);
       if (appTool) {
         current();
         try {
@@ -3335,9 +3607,20 @@ export function createRelay({
         const blocked = resolved?.appId && appLine(resolved.appId, resolved.app);
         if (blocked) throw new Error(blocked);
       }
+      if (name === 'menu_bar' && args.op !== 'apps') {
+        // System Events status-item names need not resolve to a bundle. Keep
+        // their known identity for policy without replacing the desktop lease.
+        policyTarget = await localTools.resolve?.(args.app);
+        if (ownWindow(policyTarget)) throw new Error(ownLine(policyTarget.appId, policyTarget.app));
+        const blocked = policyTarget?.appId && appLine(policyTarget.appId, policyTarget.app);
+        if (blocked) throw new Error(blocked);
+      }
+      localPolicy = localTargetPolicy(name, args, policyTarget ?? resolved, engineForbiddenTargets);
+      if (localPolicy.refusal) throw new Error(localPolicy.refusal);
       current();
       if (leaseCalls.get(msg.id)?.localAction && !(name === 'open_file' && !resolved)) {
-        const target = resolved ?? { appId: 'desktop', app: 'macOS', title: 'local desktop controls', url: null };
+        const target = resolved ?? (policyTarget?.appId ? policyTarget : undefined) ??
+          { appId: 'desktop', app: 'macOS', title: 'local desktop controls', url: null };
         const key = inputLease.acquire(target, appTool ? 'app' : 'desktop');
         leaseCalls.set(msg.id, { key }); refreshHeartbeat();
       }
@@ -3420,24 +3703,38 @@ export function createRelay({
             windowId: window.windowNumber ?? window.nativeIdentity?.windowNumber } : undefined;
         }
         callArgs = { ...callArgs, ...endpoints, screenshot: shot ? [shot.latest.width, shot.latest.height] : undefined, screenshots: shot?.byTitle,
+          screenshotFrame: shot?.latest.frame, screenshotFrames: shot?.frames,
           screenshotsByWindow: shot?.byWindow, toElementLines: undefined, toElementWindow: undefined, ...evidence };
       }
       current();
       pauseHost?.activity();
+      // Local helpers exclude the host PID. Protect the app without clearing a safely seated character.
+      hand?.protect?.(resolved ?? { app: args.app }, () => !localDeclined);
+      const handEpoch = hand?.turnEpoch;
       result = await localTools.call(name, callArgs, async (parts, message, options) => {
-        const allowed = await (prepared?.approval ?? approve(parts, message, msg.id, options));
+        const allowed = await (prepared?.approval ?? approve(parts, message, msg.id,
+          { ...options, ...localPolicy.warning ? { appWarning: localPolicy.warning, noPreapproved: true } : {} }));
         current();
+        if (!allowed) localDeclined = true;
         if (allowed) {
           // Approval can emit waiting after the admission clear. Remove any control again before pointer input.
-          if (pauseHost?.clearForAction && ['drag', 'hover', 'menu_bar'].includes(name)) { await pauseHost.clearForAction(); current(); }
+          if (!pointerPlacement && pauseHost?.clearForAction && ['drag', 'hover', 'menu_bar'].includes(name)) { await pauseHost.clearForAction(); current(); }
           const key = leaseCalls.get(msg.id)?.key;
           if (key) inputLease.renew([key]);
         }
         return allowed;
-      // The fourth argument stays runLocal for callLocalTool; the resolved
-      // lease target rides fifth.
-      }, undefined, resolved, prepared, { afterDrag: outcome => dragChangedLines(msg, outcome, current) });
-      current();
+      // The fourth argument stays runLocal for callLocalTool. The fifth carries
+      // the resolved identity, including a status-item name without a bundle.
+      }, undefined, resolved ?? policyTarget, prepared, { current, internal: true, allowForbidden: engineForbiddenTargets,
+        afterDrag: outcome => dragChangedLines(msg, outcome, current),
+        ...pointerPlacement ? { placeHand: {
+          current,
+          place: (frame, deadline) => hand.placeLocal(frame, handEpoch, deadline),
+          hide: () => pauseHost?.hide('pointer-placement'),
+        } } : { onDrag: frame => { hand?.localDrag?.(frame, handEpoch); } } });
+      if (localDeclined) hand?.hide();
+      // Handoff fences new helpers, but an action that ran must keep its real result.
+      current({ handoff: false });
       if (msg.params.name === 'select_window' && !result.isError) {
         const value = JSON.parse(result.content.find(c => c.type === 'text')?.text ?? '{}');
         if (!value.ok || !value.target?.appId || typeof value.target?.title !== 'string' ||
@@ -3448,7 +3745,7 @@ export function createRelay({
         leaseWindow = undefined;
         if (windowIdentity && selected.windowNumber !== undefined) {
           const observed = await windowIdentity(selected);
-          current();
+          current({ handoff: false });
           selected.nativeIdentity = nativeIdentity(selected, observed);
           noteProcess(selected.nativeIdentity);
         }
@@ -3456,6 +3753,8 @@ export function createRelay({
     } catch (err) {
       // A failed lookup or lease leaves the early open_file approval unanswered; decline it here.
       preparedFailed = true; preparedAsk?.withdraw();
+      localDeclined = true;
+      if (appTool) hand?.hide();
       result = { content: [{ type: 'text', text: String(err?.message ?? err) }], isError: true };
     }
     localRunning.delete(msg.id);
@@ -3487,7 +3786,8 @@ export function createRelay({
           let shownPath;
           try { shownPath = shown?.url ? fileURLToPath(shown.url) : undefined; } catch { shownPath = null; }
           const confirmed = shownPath === undefined || [openedFile.path, openedFile.real].includes(shownPath);
-          if (lazy && ![openedFile.path, openedFile.real].includes(shownPath)) {
+          if (lazy && ![openedFile.path, openedFile.real].includes(shownPath) &&
+              !handoffPresencePending && !directBrowser?.handoffPending?.()) {
             lazy = false;
             const started = Date.now();
             let opened = false;
@@ -3548,8 +3848,24 @@ export function createRelay({
     toClient(reply);
   }
 
-  function rotateTurn(carryId) {
-    cursorStatus('done'); cursorStatus('idle');
+  let retainedCursorTurn = false;
+  // Person Stop drops current observations and leaves the target bank in place.
+  // The next attributed prompt or ordinary end owns release. A second Stop is a no-op.
+  function revokeStageProducer() {
+    if (!stageProducerEnabled) return;
+    try { onStageTurnStop(); }
+    catch (error) { trace('stage-revoke-error', { error: error?.message }); }
+  }
+  function releaseCursorTurn(attributed = false) {
+    if (stageProducerEnabled && !attributed) { retainedCursorTurn = true; return; }
+    if (attributed) try { onStageTurnEnd(); } catch {}
+    hand?.endTurn?.();
+    cursorStatus('done', undefined, true); cursorStatus('idle');
+    retainedCursorTurn = false;
+  }
+  function rotateTurn(carryId, { release = true, attributed = false } = {}) {
+    if (release) releaseCursorTurn(attributed);
+    else retainedCursorTurn = true;
     const outcome = outcomeCalls.get(carryId), read = completenessCalls.get(carryId);
     releaseLeases();
     turnOutcomes = new TurnOutcomes();
@@ -3562,8 +3878,22 @@ export function createRelay({
     spaceNoted.clear();
   }
 
+  function refuseModFrame(msg) {
+    if (msg.id !== undefined && !disposed && !clientOut.destroyed && !clientOut.writableEnded)
+      clientOut.write(JSON.stringify({ jsonrpc: '2.0', id: msg.id,
+        result: { isError: true, content: [{ type: 'text', text: 'Trusted turn binding unavailable.' }] } }) + '\n');
+  }
+
   lines(clientIn, clientLine);
-  function clientLine(line, startupReady = false) { return withCellCache(() => inspectClientLine(line, startupReady)); }
+  function clientLine(line, startupReady = false) { return withCellCache(() => inspectClientLine(line, startupReady), { script: nativeMac }); }
+  // Predicts the chrome-only swipe lowering. A pixels distance is a swipe length only when this changes the call.
+  function chromeScrollPolicy(code) {
+    if (typeof code !== 'string' || browserPlan(code) || isLeaseRead(code)) return code;
+    const key = lastWindow && (helperAliases.get(lastWindow.app.toLowerCase()) ?? lastWindow.app.toLowerCase());
+    return chromeScrollCode(code, lastWindowText,
+      screenshots.get(lastWindow?.app.toLowerCase())?.byTitle[lastWindow?.title],
+      new Set([...helperHandles].filter(([, plan]) => plan.key === key).map(([handle]) => handle)));
+  }
   function inspectClientLine(line, startupReady = false) {
     let msg;
     try {
@@ -3571,6 +3901,141 @@ export function createRelay({
     } catch {
       if (documentMode || flowRules) return;
       serverIn.write(line + '\n');
+      return;
+    }
+    if (msg.method === 'tools/call' && flatSchemas.has(msg.params?.name)) {
+      const { args, dropped, missing } = fitBranch(flatSchemas.get(msg.params.name), msg.params.arguments ?? {});
+      // The flat list no longer requires code, so a call that meets none of the engine's forms is answered here.
+      if (missing) {
+        if (msg.id !== undefined) blockStop(msg, `${msg.params.name} needs ${missing.join(' or ')}.`);
+        return;
+      }
+      if (dropped.length) {
+        msg.params.arguments = args;
+        try { stderr.write(`sleight: ${msg.params.name} call sent with ${dropped.join(', ')} dropped (the engine takes one of its forms per call).\n`); } catch {}
+      }
+    }
+    // Check attribution before any stats ownership, documentation state, pause,
+    // trace, lease, clipboard, payment or worker state can change. Host names
+    // alone do not prove that a mod is installed. On the ChatGPT engine path an
+    // unattributed sleight_stop is an ordinary Stop with no latch. On Glide it
+    // is a person Stop and needs mod attribution. An attributed end with a stale
+    // envelope still stops the turn, with no clipboard-latch authority.
+    if (msg.method === 'tools/call' && msg.params?.name === TURN_END_TOOL) {
+      const args = msg.params.arguments ?? {};
+      const privateFrame = ['sleight_stop', 'sleight_person_prompt', 'sleight_turbo', 'sleight_resume', 'sleight_stats_begin', 'sleight_say',
+        'sleight_stats_skip', 'sleight_stats'].some(key => (nativeRuntime || key !== 'sleight_stop') && Object.hasOwn(args, key));
+      if (privateFrame && (!modAttributed(msg) || disposed || msg.id === undefined)) {
+        try { stderr.write('sleight: mod frame refused: Claude Code mod attribution missing or unsupported; typed approvals and turbo require toolu_plugin_ plus 32 lowercase hex.\n'); } catch {}
+        refuseModFrame(msg); return;
+      }
+      if (Object.hasOwn(args, 'sleight_person_prompt')) {
+        if (Object.keys(args).length !== 1 || !['composer', 'bridge'].includes(args.sleight_person_prompt)) {
+          refuseModFrame(msg); return;
+        }
+        modPersonPromptAttributable = true;
+        modPersonPromptFrames = true;
+        if (!resumeAtPersonPrompt()) {
+          leaseStop(msg, GLIDE_STOP_PERSON_NOTICE); return;
+        }
+        if (retainedCursorTurn || stageProducerEnabled) releaseCursorTurn(true);
+        toClient({ jsonrpc: '2.0', id: msg.id, result: { content: [] } }); return;
+      }
+      if (args.sleight_turbo?.event === 'end') {
+        remoteEpoch++; pendingTyped.clear();
+        // Esc takes the interrupt path before ordinary end cleanup below.
+        if (args.hook_event_name) paymentMessages.end();
+      }
+    }
+    // Private bootstrap and begin frames never enter the ordinary tool pipeline.
+    if (msg.method === 'tools/call' && msg.params?.name === TURN_END_TOOL && Object.hasOwn(msg.params.arguments ?? {}, 'sleight_turbo') &&
+        msg.params.arguments.sleight_turbo?.event !== 'end') {
+      // Host-protected own hook calls only. Bypass journals, tracing, result
+      // compaction and the engine so the private bootstrap never reaches them.
+      const reply = result => {
+        if (!disposed && !clientOut.destroyed && !clientOut.writableEnded)
+          clientOut.write(JSON.stringify({ jsonrpc: '2.0', id: msg.id, result }) + '\n');
+      };
+      const refuse = () => refuseModFrame(msg);
+      // Without the mod nothing stops the model from calling turn_ended, so no host but the mod's binds a turbo turn.
+      if (!modHost() || disposed || msg.id === undefined || Object.keys(msg.params.arguments).length !== 1) { refuse(); return; }
+      const frame = msg.params.arguments.sleight_turbo;
+      if (frame && Object.keys(frame).length === 1 && frame.event === 'bootstrap') {
+        if (installedBootstrapped) {
+          remoteEpoch++;
+          remoteEnvelope = { ...remoteEnvelope, nonce: randomBytes(32).toString('hex') };
+          pendingTyped.clear();
+          promptOrigin = undefined;
+          paymentMessages.end();
+          void directHost?.endTurn();
+        }
+        installedBootstrapped = true;
+        if (nativeWindows) nativeSession?.windowsLifecycleAttributed?.();
+        reply({ isError: false, content: [{ type: 'text', text: JSON.stringify({ sleightTurbo: remoteEnvelope }) }] }); return;
+      }
+      if (!installedBootstrapped || frame?.event !== 'begin') { refuse(); return; }
+      if (!Object.hasOwn(frame, 'origin')) {
+        // Older mods retain their turbo-only contract, without typed app authority.
+        if (!directHost) { refuse(); return; }
+        // Validate before a paused turn's immediate reply. The background bridge still validates its own envelope.
+        const keys = ['version', 'session', 'nonce', 'event', 'turn', 'text'];
+        if (Object.keys(frame).length !== keys.length || !keys.every(k => Object.hasOwn(frame, k)) ||
+            frame.version !== remoteEnvelope.version || frame.session !== remoteEnvelope.session || frame.nonce !== remoteEnvelope.nonce ||
+            typeof frame.turn !== 'string' || !/^[A-Za-z0-9_-]{1,128}$/.test(frame.turn) || remoteTurns.has(frame.turn) ||
+            remoteTurns.size >= 10000 || typeof frame.text !== 'string' || Buffer.byteLength(frame.text) > 65536) { refuse(); return; }
+        remoteTurns.add(frame.turn);
+        if (retainedCursorTurn || stageProducerEnabled) releaseCursorTurn(true);
+        // Legacy begin frames have no person origin and cannot lift Stop.
+        bindTurboPrompt(frame).then(({ available, deferred }) => {
+          reply({ isError: !available && !deferred, content: [] });
+        }).catch(refuse);
+        return;
+      }
+      const keys = ['version', 'session', 'nonce', 'event', 'turn', 'text', 'origin', 'turbo'];
+      if (Object.keys(frame).length !== keys.length || !keys.every(k => Object.hasOwn(frame, k)) ||
+          frame.version !== remoteEnvelope.version || frame.session !== remoteEnvelope.session || frame.nonce !== remoteEnvelope.nonce ||
+          !['composer', 'bridge', ...(desktopTurns ? ['desktop'] : [])].includes(frame.origin) || typeof frame.turbo !== 'boolean' ||
+          typeof frame.turn !== 'string' || !/^[A-Za-z0-9_-]{1,128}$/.test(frame.turn) || remoteTurns.has(frame.turn) ||
+          remoteTurns.size >= 10000 || typeof frame.text !== 'string' || Buffer.byteLength(frame.text) > 65536) { refuse(); return; }
+      remoteTurns.add(frame.turn);
+      if (retainedCursorTurn || stageProducerEnabled) releaseCursorTurn(true);
+      modPersonPromptAttributable = frame.origin !== 'desktop';
+      trace('mod-turn-begin', { origin: frame.origin });
+      const generation = stopGeneration, epoch = remoteEpoch;
+      const current = () => !disposed && !closing && generation === stopGeneration && epoch === remoteEpoch;
+      (async () => {
+        // New mods send the person boundary before asynchronous turbo setup.
+        // Its later begin must not clear a Stop clicked during that setup.
+        if (!disposed && generation === stopGeneration && epoch === remoteEpoch && !modPersonPromptFrames && frame.origin !== 'desktop') resumeAtPersonPrompt();
+        // Desktop provenance is only an inherited convention. Retire prior
+        // authority synchronously, then allow only the typed session-app path.
+        // No desktop text reaches payment, booking, submit or quit-key policy.
+        if (frame.origin === 'desktop') {
+          paymentMessages.end();
+          await directHost?.endTurn();
+          if (!current()) { refuse(); return; }
+        }
+        promptOrigin = frame.origin;
+        const present = await remotePresent();
+        if (!current()) { refuse(); return; }
+        const typedLine = /^[ \t]*allow\s/i.test(frame.text);
+        if (typedLine) pendingTyped.add(frame.text.split(/\r?\n/, 1)[0]);
+        if (!present || typedLine) await waitCatalog();
+        if (!current()) { refuse(); return; }
+        applyTyped();
+        const alreadyApproved = app => typedApps.has(typedKey(app.id)) || [...approved].some(key => {
+          try { return appIdentity(JSON.parse(key)[0])?.id === app.id; } catch { return false; }
+        }) || (() => { try { return preapproved?.list?.().some(name => appIdentity(name)?.id === app.id); } catch { return false; } })();
+        // Typed grants are session approvals, so other scopes get no up-front ask.
+        const context = !present && approvalScope === 'session' ? upfrontAsk(predictApps(frame.text, remoteCatalog).filter(app => !forbiddenTargetWarning(app.id) && !alreadyApproved(app))) : undefined;
+        let turboBound = false;
+        if (frame.origin !== 'desktop' && frame.turbo && directHost) {
+          const { origin: _origin, turbo: _turbo, ...binding } = frame;
+          try { turboBound = (await bindTurboPrompt(binding)).available; } catch {}
+        }
+        if (!current()) { refuse(); return; }
+        reply({ isError: false, content: [{ type: 'text', text: JSON.stringify({ sleightRemote: { turboBound, ...(context ? { context } : {}) } }) }] });
+      })().catch(refuse);
       return;
     }
     // Resolve private data before startup caching, tracing, journals or execution. A model-supplied
@@ -3600,12 +4065,12 @@ export function createRelay({
       const id = statsId(msg.params.arguments.sleight_stats_begin);
       const accepted = modHost() && !disposed && msg.id !== undefined && id !== undefined &&
         Object.keys(msg.params.arguments).length === 1 && !closedStats.has(id);
-      statsOpen = accepted ? id : undefined;
+      if (accepted) statsOpen = id;
       if (msg.id !== undefined && !disposed && !clientOut.destroyed && !clientOut.writableEnded)
         clientOut.write(JSON.stringify({ jsonrpc: '2.0', id: msg.id, result: { isError: !accepted, content: [] } }) + '\n');
       return;
     }
-    // These frames are reachable only by the mod: its tool.call hook refuses model turn_ended.
+    // Attribution above protects these frames even when the mod hook is absent.
     // Handle them before docs ownership, approval origins, turn rotation, journals and the engine.
     if (msg.method === 'tools/call' && msg.params?.name === TURN_END_TOOL &&
         ['sleight_say', 'sleight_stats_skip'].some(key => Object.hasOwn(msg.params.arguments ?? {}, key))) {
@@ -3653,70 +4118,6 @@ export function createRelay({
     }
     if (msg.method === undefined && msg.id !== undefined) recordAction('waitEnd', 'c:' + msg.id);
     if (msg.method === 'tools/call' && msg.params?.name === TURN_START_TOOL && !modHost()) { codexTurnStart(msg); return; }
-    // Stop and resume are the user's controls and work on every host. Only binding a turbo turn needs the mod. (A turbo
-    // tool called by name in another host reaches a bridge no turn ever bound, which fails it.)
-    if (msg.method === 'tools/call' && msg.params?.name === TURN_END_TOOL && Object.hasOwn(msg.params.arguments ?? {}, 'sleight_turbo')) {
-      // Host-protected own hook calls only. Bypass journals, tracing, result
-      // compaction and the engine so the private bootstrap never reaches them.
-      const reply = result => {
-        if (!disposed && !clientOut.destroyed && !clientOut.writableEnded)
-          clientOut.write(JSON.stringify({ jsonrpc: '2.0', id: msg.id, result }) + '\n');
-      };
-      const refuse = () => reply({ isError: true, content: [{ type: 'text', text: 'Trusted turn binding unavailable.' }] });
-      // Without the mod nothing stops the model from calling turn_ended, so no host but the mod's binds a turbo turn.
-      if (!modHost() || disposed || msg.id === undefined || Object.keys(msg.params.arguments).length !== 1) { refuse(); return; }
-      const frame = msg.params.arguments.sleight_turbo;
-      if (frame && Object.keys(frame).length === 1 && frame.event === 'bootstrap' && !installedBootstrapped) {
-        installedBootstrapped = true;
-        reply({ isError: false, content: [{ type: 'text', text: JSON.stringify({ sleightTurbo: remoteEnvelope }) }] }); return;
-      }
-      if (!installedBootstrapped || frame?.event !== 'begin') { refuse(); return; }
-      if (!Object.hasOwn(frame, 'origin')) {
-        // Older mods retain their turbo-only contract, without typed app authority.
-        if (!directHost) { refuse(); return; }
-        // Validate before a paused turn's immediate reply. The background bridge still validates its own envelope.
-        const keys = ['version', 'session', 'nonce', 'event', 'turn', 'text'];
-        if (Object.keys(frame).length !== keys.length || !keys.every(k => Object.hasOwn(frame, k)) ||
-            frame.version !== remoteEnvelope.version || frame.session !== remoteEnvelope.session || frame.nonce !== remoteEnvelope.nonce ||
-            typeof frame.turn !== 'string' || !/^[A-Za-z0-9_-]{1,128}$/.test(frame.turn) || remoteTurns.has(frame.turn) ||
-            remoteTurns.size >= 10000 || typeof frame.text !== 'string' || Buffer.byteLength(frame.text) > 65536) { refuse(); return; }
-        remoteTurns.add(frame.turn);
-        bindTurboPrompt(frame).then(({ available, deferred }) => {
-          reply({ isError: !available && !deferred, content: [] });
-        }).catch(refuse);
-        return;
-      }
-      const keys = ['version', 'session', 'nonce', 'event', 'turn', 'text', 'origin', 'turbo'];
-      if (Object.keys(frame).length !== keys.length || !keys.every(k => Object.hasOwn(frame, k)) ||
-          frame.version !== remoteEnvelope.version || frame.session !== remoteEnvelope.session || frame.nonce !== remoteEnvelope.nonce ||
-          !['composer', 'bridge'].includes(frame.origin) || typeof frame.turbo !== 'boolean' ||
-          typeof frame.turn !== 'string' || !/^[A-Za-z0-9_-]{1,128}$/.test(frame.turn) || remoteTurns.has(frame.turn) ||
-          remoteTurns.size >= 10000 || typeof frame.text !== 'string' || Buffer.byteLength(frame.text) > 65536) { refuse(); return; }
-      remoteTurns.add(frame.turn);
-      trace('mod-turn-begin', { origin: frame.origin });
-      const generation = stopGeneration;
-      (async () => {
-        promptOrigin = frame.origin;
-        const present = await remotePresent();
-        const typedLine = /^[ \t]*allow\s/i.test(frame.text);
-        if (typedLine) pendingTyped.add(frame.text.split(/\r?\n/, 1)[0]);
-        if (!present || typedLine) await waitCatalog();
-        if (disposed || closing || generation !== stopGeneration) { refuse(); return; }
-        applyTyped();
-        const alreadyApproved = app => typedApps.has(typedKey(app.id)) || [...approved].some(key => {
-          try { return appIdentity(JSON.parse(key)[0])?.id === app.id; } catch { return false; }
-        }) || (() => { try { return preapproved?.list?.().some(name => appIdentity(name)?.id === app.id); } catch { return false; } })();
-        // Typed grants are session approvals, so other scopes get no up-front ask.
-        const context = !present && approvalScope === 'session' ? upfrontAsk(predictApps(frame.text, remoteCatalog).filter(app => !forbiddenTargetWarning(app.id) && !alreadyApproved(app))) : undefined;
-        let turboBound = false;
-        if (frame.turbo && directHost) {
-          const { origin: _origin, turbo: _turbo, ...binding } = frame;
-          try { turboBound = (await bindTurboPrompt(binding)).available; } catch {}
-        }
-        reply({ isError: false, content: [{ type: 'text', text: JSON.stringify({ sleightRemote: { turboBound, ...(context ? { context } : {}) } }) }] });
-      })().catch(refuse);
-      return;
-    }
     if (modHost() && msg.method === 'tools/call' && msg.params?.name === TURN_END_TOOL) promptOrigin = undefined;
     if (msg.method === 'tools/call' && msg.params?.name === TURN_END_TOOL && msg.params.arguments?.sleight_stop === true) startup?.cancel();
     if (modHost() && msg.method === 'tools/call' && msg.params?.name === TURN_END_TOOL && msg.id !== undefined &&
@@ -3738,6 +4139,10 @@ export function createRelay({
     // SLEIGHT_TRACE_CODE=1 also keeps Claude's code, for benchmark diagnosis on this Mac only.
     if (msg.method === 'tools/call') { trace('call-received', { id: msg.id, method: msg.method, params: { name: msg.params?.name,
       ...(traceCode && typeof msg.params?.arguments?.code === 'string' ? { code: writeCodeTrace(msg.params.arguments.code).code.slice(0, 4000) } : {}) } }); callSeqs.set(msg.id, ++callSeq); callStarts.set(msg.id, Date.now()); }
+    if (msg.method === 'tools/call' && msg.params?.name !== TURN_END_TOOL && pauseHost?.primeCall) {
+      const began = performance.now(); pauseHost.primeCall();
+      trace('hand-call-admission', { addedMs: performance.now() - began });
+    }
     if (msg.method === 'tools/call' && ['js', 'js_reset'].includes(msg.params?.name)) {
       const next = {};
       for (const key of ENGINE_CONTEXT_KEYS) if (msg.params._meta && Object.hasOwn(msg.params._meta, key)) next[key] = msg.params._meta[key];
@@ -3817,7 +4222,7 @@ export function createRelay({
       if (!routed) { engineOpen(msg); return; }
       msg.params.arguments = routed;
     }
-    const write = jsArgs && evaluateWrite(msg.params.arguments?.code);
+    const write = jsArgs && evaluateWrite(msg.params.arguments?.code, browserHandles);
     if (write) {
       finishedCall(msg.id);
       toClient({ jsonrpc: '2.0', id: msg.id, result: { isError: true, content: [{ type: 'text', text: write }] } });
@@ -3830,8 +4235,13 @@ export function createRelay({
     // A blocked app stops here, before an acquisition is split off and sent ahead of the call.
     const blocked = msg.method === 'tools/call' && (msg.params?.name === 'js' || localNames.has(msg.params?.name)) && callBlock(msg.params.name, msg.params.arguments ?? {});
     if (blocked) { finishedCall(msg.id); blockStop(msg, blocked); return; }
-    if (jsArgs && typeof msg.params.arguments?.code === 'string') {
-      const problem = nativeArgumentsProblem(msg.params.arguments.code, nativeHandles, browserHandles);
+    if (!nativeRuntime && jsArgs && typeof msg.params.arguments?.code === 'string') {
+      const code = msg.params.arguments.code;
+      let problem = nativeArgumentsProblem(code, nativeHandles, browserHandles);
+      // iPhone Mirroring lowers scroll to a swipe before send. A pixels distance there is the swipe length.
+      // The page-count refusal still applies when that lowering does not happen, and any other invalid argument still stops the call.
+      if (problem && chromeScrollPolicy(code) !== code &&
+          nativeArgumentsProblem(code, nativeHandles, browserHandles, { allowScrollPixels: true }) === undefined) problem = undefined;
       if (problem) {
         finishedCall(msg.id);
         toClient({ jsonrpc: '2.0', id: msg.id, result: { isError: true, content: [{ type: 'text', text: problem }] } });
@@ -3849,6 +4259,7 @@ export function createRelay({
       if (msg.id !== undefined && !disposed && !clientOut.destroyed && !clientOut.writableEnded)
         clientOut.write(JSON.stringify({ jsonrpc: '2.0', id: msg.id, result: { content: [] } }) + '\n');
     };
+    if (nativeRuntime && glideStopLatched) { reply(); return; }
     const frame = codexTurbo() ? codexTurnFrame(msg.params) : undefined;
     // One binding per Codex turn. A prompt the user adds mid-turn keeps the first binding (and turbo's tabs); a payment it
     // names asks on sleight's card. An ended turn's id never binds again.
@@ -3889,7 +4300,7 @@ export function createRelay({
     if (!plan) return false;
     if (!settleTextWrite) { skippedSettle(msg.id, 'helper unavailable'); return false; }
     // Keep refusals that inspect the entire call ahead of any write in its prefix.
-    if (unawaitedAction(msg.params.arguments.code) ||
+    if (unawaitedAction(msg.params.arguments.code, browserHandles) ||
         flowRules?.analyze('js', msg.params.arguments, lastWindow).violations.length) return false;
     if (clipboard) {
       try { clipboardPlan(msg.params.arguments.code); } catch { return false; }
@@ -4104,6 +4515,11 @@ export function createRelay({
       inspectionStop(msg);
       return true;
     }
+    // A main-window certificate cannot identify a dialog tree's target. A mixed read/action call
+    // also keeps SL4's stale-title refusal. Pure filtered reads keep their existing path.
+    // Every cover role counts (sheets, dialogs, palettes, floating windows, popovers): none is the certified window.
+    const retitleAmbiguous = !isFilteredRead(rest) && (new RegExp(`^\\t*\\d+ (?:${COVER_ROLES.join('|')})\\b`, 'm').test(lastWindowText) ||
+      /\.\s*(?:getAXState|getAXStateAndScreenshot|getScreenshot|getState)\s*\(/.test(codeOnly(rest)));
     // Split even for the app the lease holds: the guard's setup refers to `app` before a `let app`
     // in the same script, which throws (2/3 simulator-form runs, 2026-10-08).
     const prefixId = `sleight-acquire-${nextInternalId++}`;
@@ -4123,13 +4539,14 @@ export function createRelay({
       // The same native window under a title the previous result already showed: a page that loaded after the
       // lease was taken, or a result whose trees named two titles. Claude acted on the new title, so the number
       // must still be the leased window's, and the helper has to see that number under that title.
-      const retitled = unchanged || saveBaseline || !windowIdentity || !leaseWindow?.appId || leaseWindow.appId !== expected.appId || leaseWindow.app !== expected.app ||
+      const retitled = unchanged || saveBaseline || retitleAmbiguous || !windowIdentity || !leaseWindow?.appId || leaseWindow.appId !== expected.appId || leaseWindow.app !== expected.app ||
         !shown.has(documentKey({ title: leaseWindow.title, app: leaseWindow.app, url: leaseWindow.url })) ? undefined
         : (sameWindow(expected, selectedWindow) ? selectedWindow.windowNumber : undefined) ?? expected.nativeIdentity?.windowNumber;
       if (!unchanged && Number.isSafeInteger(retitled) && retitled > 0 && (!acquiredNumber || Number(acquiredNumber) === retitled)) {
         const target = leaseWindow;
         running.add(msg.id); callDetails.set(msg.id, 'retitled window check');
-        menuIdentity(windowIdentity, { appId: target.appId, title: target.title, url: target.url, windowNumber: retitled }, menuContinuationTimeoutMs).then(observed => {
+        menuIdentity(windowIdentity, { appId: target.appId, title: target.title, url: target.url, windowNumber: retitled,
+          nativeIdentity: expected.nativeIdentity }, menuContinuationTimeoutMs).then(observed => {
           running.delete(msg.id); callDetails.delete(msg.id);
           if (ended()) return;
           if (!observed || leaseWindow !== target || observed.windowNumber !== retitled) { trace('retitle-refused', { id: msg.id }); changed(); return; }
@@ -4341,7 +4758,7 @@ export function createRelay({
     // A palette is a window of its own: the helper must find it focused, under its title and with no URL (paletteRefusal).
     const expected = remainder.dialog ? { appId: covered.appId, title: covered.title, app: covered.app, url: covered.url }
       : remainder.palette ? { appId: call.target.appId, title: remainder.window.title, app: remainder.window.app, url: null }
-      : remainder.navigation ? { ...call.target, ...remainder.window, windowNumber: call.baseline.windowNumber, nativeIdentity: call.baseline,
+      : remainder.navigation ? { ...call.target, ...remainder.window, windowNumber: call.baseline.windowNumber, windowNumberSource: undefined, nativeIdentity: call.baseline,
         ...(remainder.tab ? { focus: true, ...(ck3 ? { tabCertificate: true } : {}) } : {}) } : call.target;
     // A palette the lease held must be gone, not just behind the document, unless Escape closed it.
     const gone = remainder.closeCheck ? windowGone(windowIdentity, { appId: covered.appId, title: call.target.title, url: call.target.url }, menuContinuationTimeoutMs)
@@ -4453,7 +4870,7 @@ export function createRelay({
     })().catch(() => {}).finally(() => observeServerMessage(msg));
     return true;
   }
-  function handleClient(msg) { return withCellCache(() => inspectClient(msg)); }
+  function handleClient(msg) { return withCellCache(() => inspectClient(msg), { script: nativeMac }); }
   function inspectClient(msg) {
     if (pauseBlocked(msg)) { pauseReply(msg); return; }
     if (msg.result?.action === 'accept' && (pause.paused || pausedCalls.size)) {
@@ -4473,7 +4890,7 @@ export function createRelay({
     }
     // js can retain a tab handle; local app tools can target its browser window
     // directly. Fence both routes, including presence reads before dispatch.
-    if (msg.method === 'tools/call' && ['js', 'drag', 'hover', 'menu_bar', 'notifications', 'open_file', 'select_window'].includes(msg.params?.name) &&
+    if (msg.method === 'tools/call' && ['js', 'drag', 'hover', 'menu_bar', 'open_file', 'select_window', 'notifications'].includes(msg.params?.name) &&
         (handoffPresencePending || directBrowser?.handoffPending?.())) {
       if (msg.id !== undefined) toClient({ jsonrpc: '2.0', id: msg.id, result: { isError: true,
         content: [{ type: 'text', text: handoffMessages.pending }] } });
@@ -4553,7 +4970,7 @@ export function createRelay({
       onInitialize(msg.params?.clientInfo);
       clientHost = hostLabel(msg.params?.clientInfo);
       grokClient = isGrokClient(msg.params?.clientInfo);
-      if (grokClient) resultBudget = createResultBudget({ limit: 16000, documentationTrust, validateDocumentation: false });
+      if (grokClient) resultBudget = createResultBudget({ platform: nativeWindows ? 'win32' : process.platform, limit: 16000, documentationTrust, validateDocumentation: false, onTreeTrim });
       if (typeof msg.params?.clientInfo?.name === 'string') clientName = msg.params.clientInfo.name.slice(0, 64);
       const capabilities = msg.params?.capabilities ?? {};
       const elicitation = capabilities.elicitation;
@@ -4579,7 +4996,8 @@ export function createRelay({
       elicitations.get(msg.id)?.(msg);
       return;
     }
-    if (msg.method === 'tools/call' && msg.params?.name === TURN_END_TOOL && msg.params.arguments?.sleight_resume === true) {
+    if (msg.method === 'tools/call' && msg.params?.name === TURN_END_TOOL && msg.params.arguments?.sleight_resume === true &&
+        !(nativeRuntime && closing)) {
       resumeRequested = true; resumeAfterStop();
       toClient({ jsonrpc: '2.0', id: msg.id, result: { content: [] } }); return;
     }
@@ -4591,26 +5009,48 @@ export function createRelay({
       codexBinding = undefined; codexEpoch++;
       void directBrowser?.end();
     }
+    if (msg.method === 'tools/call' && msg.params?.name === TURN_END_TOOL && stopEngine &&
+        (msg.params.arguments?.sleight_stop === true || nativeRuntime && msg.params.arguments?.hook_event_name === 'Interrupt')) {
+      if (closing) {
+        revokeStageProducer(); // person-stop-reentry
+        if (nativeRuntime && glideStopLatched && stopFinished) {
+          leaseStop(msg, modPersonPromptAttributable ? GLIDE_STOP_PERSON_NOTICE : GLIDE_STOP_SESSION_NOTICE); return;
+        }
+        leaseStop(msg, 'stop is already pending or the session is closing.'); return;
+      }
+      void interruptTurn(msg, nativeRuntime && msg.params.arguments?.sleight_stop === true && modAttributed(msg)); return;
+    }
     if (msg.method === 'tools/call' && msg.params?.name === TURN_END_TOOL && msg.id !== undefined && !modHost() &&
         Object.keys(msg.params.arguments ?? {}).every(key => HOOK_ARGS.includes(key))) {
       if (!turnUsed && !failedTurnEnds.size && !running.size && !tabsMayNeedCleanup && !tabCleanupPending) {
         // A call refused after taking the input lease leaves the turn unused; let go of the lease all the same.
-        releaseLeases();
+        releaseLeases(); releaseCursorTurn();
         toClient({ jsonrpc: '2.0', id: msg.id, result: { content: [] } }); return;
       }
       // Codex fires Interrupt while the interrupted call may still run, and gives the hook 3 seconds. Answer now and end
       // the turn once the call finishes, instead of refusing it and leaving the turn to the 30-second idle end.
       // Only with an input lease, whose drain wait keeps the turn open until the call has finished.
       if (running.size && inputLease && msg.params.arguments?.hook_event_name === 'Interrupt') {
+        revokeStageProducer(); // person-stop-drain
         toClient({ jsonrpc: '2.0', id: msg.id, result: { content: [] } });
-        endOpenTurn(true, undefined, 'Interrupt').catch(error => trace('interrupt-end-error', { error: error?.message })); return;
+        const interruptedTurn = turnId;
+        const end = () => {
+          if (disposed || closing || turnId !== interruptedTurn) return;
+          endOpenTurn(true, undefined, 'Interrupt').then(ended => {
+            if (ended !== false || disposed || closing || turnId !== interruptedTurn) return;
+            // Keep the real Esc boundary owed after the bounded drain wait. Idle cleanup retains targets.
+            if (running.size) drained.add(end); else end();
+          }).catch(error => trace('interrupt-end-error', { error: error?.message }));
+        };
+        end(); return;
       }
     }
-    if (msg.method === 'tools/call' && msg.params?.name === TURN_END_TOOL && msg.params.arguments?.sleight_stop === true && stopEngine) {
-      if (closing) { leaseStop(msg, 'stop is already pending or the session is closing.'); return; }
-      void interruptTurn(msg); return;
+    if (closing && msg.method === 'tools/call') {
+      if (nativeRuntime && glideStopLatched && stopFinished) {
+        leaseStop(msg, modPersonPromptAttributable ? GLIDE_STOP_PERSON_NOTICE : GLIDE_STOP_SESSION_NOTICE); return;
+      }
+      leaseStop(msg, 'this session is closing.'); return;
     }
-    if (closing && msg.method === 'tools/call') { leaseStop(msg, 'this session is closing.'); return; }
     if (backendRestartUnconfirmed && msg.method === 'tools/call') {
       leaseStop(msg, 'Engine collection is unconfirmed. Run /sleight stop before retrying.'); return;
     }
@@ -4730,7 +5170,7 @@ export function createRelay({
     // A failed action without await, with more code after it, can end the engine's session and
     // every handle (3/3, 2026-10-07), so it never reaches the engine.
     const unawaited = msg.method === 'tools/call' && msg.params?.name === 'js' && msg.id !== undefined &&
-      typeof originalCode === 'string' && unawaitedCall(originalCode);
+      typeof originalCode === 'string' && unawaitedCall(originalCode, browserHandles);
     if (unawaited) {
       toClient({ jsonrpc: '2.0', id: msg.id, result: { isError: true, content: [{ type: 'text', text:
         promptNotice(`sleight stopped this call before it ran: \u0060${unawaited.method}…)\u0060 has no await and more code follows it. A failed action without await can end the engine's session and lose every handle. Add await at line ${unawaited.line} and send it again.`, prompt) }] } });
@@ -4774,7 +5214,7 @@ export function createRelay({
         screenshots.get(lastWindow?.app.toLowerCase())?.byTitle[lastWindow?.title],
         new Set([...helperHandles].filter(([, plan]) => plan.key === key).map(([handle]) => handle))) : code;
       originalCode = msg.params.arguments.code;
-      const problem = nativeArgumentsProblem(policyCode, nativeHandles, browserHandles, swipeInspection);
+      const problem = nativeRuntime ? undefined : nativeArgumentsProblem(policyCode, nativeHandles, browserHandles, swipeInspection);
       if (problem) { finishedCall(msg.id); toClient({ jsonrpc: '2.0', id: msg.id, result: { isError: true,
         content: [{ type: 'text', text: problem }] } }); return; }
     }
@@ -4817,6 +5257,7 @@ export function createRelay({
         running.add(msg.id); callDetails.set(msg.id, 'menu window admission');
         // The baseline is sampled before the call is sent, so HID idle has to cover the call from this moment.
         admission.sampledAt = clock();
+        admission.identityStarted = performance.now();
         admission.nativeTab = ck3 && tabContinuation && tabFirst && guardMode !== 'careful' && nativeTabPlan(plan);
         admission.identity = Promise.resolve().then(() => windowIdentity(admission.nativeTab ? { ...target, tabCertificate: true } : target));
         menuIdentity(() => admission.identity, target, menuContinuationTimeoutMs).then(baseline => {
@@ -4847,7 +5288,7 @@ export function createRelay({
       const generation = stopGeneration;
       running.add(msg.id);
       callDetails.set(msg.id, 'native window admission');
-      const started = performance.now();
+      const started = menuAdmissions.get(msg.id)?.identityStarted ?? performance.now();
       Promise.resolve().then(() => menuAdmissions.get(msg.id)?.identity ?? windowIdentity(expected)).then(observed => {
         // The parent lease's pin fails closed: an unavailable or ambiguous identity stops instead of dropping the pin. It
         // holds until the pinned call's reply, so it covers the calls split from it (a text write's head) too.
@@ -4859,8 +5300,10 @@ export function createRelay({
         trace('native-window-admission', { id: msg.id, ms: performance.now() - started, confirmed: !!identity });
         running.delete(msg.id); nativeChecked.set(msg.id, identity); handleClient(msg);
       }).catch(error => { if (stopCollected || generation !== stopGeneration) return;
+        trace('native-window-admission', { id: msg.id, ms: performance.now() - started, confirmed: false, failed: true });
         // An optional focus probe that is unavailable leaves the full first read in place.
         // Existing identity requirements and confirmed mismatches still stop admission.
+        if (leaseWindow === target && /^Input lease:/.test(error.message)) target.identityError = error.message;
         if (!expected.identityRequired && !/^Input lease:/.test(error.message)) {
           running.delete(msg.id); nativeChecked.set(msg.id, undefined); handleClient(msg); return;
         }
@@ -4894,8 +5337,8 @@ export function createRelay({
     } else if (!prepareLease(msg, browser)) return;
     refreshHeartbeat();
     if (msg.method === 'tools/call' && localNames.has(msg.params?.name)) {
-      // The local pointer tools check what covers the window and move the real pointer: no hand on screen.
-      if (msg.params.name === 'drag' || msg.params.name === 'hover') hand?.hide();
+      // Glove and ring markers clear before pointer input. The stage seats outside protected areas.
+      if (msg.params.name === 'drag' || msg.params.name === 'hover') hand?.pointer?.();
       try {
         const name = msg.params.name, op = msg.params.arguments?.op;
         const kind = ({ drag: 'drag', hover: 'move', open_file: 'navigate', select_window: 'select' })[name] ??
@@ -4951,7 +5394,7 @@ export function createRelay({
           // first so parsing and synchronous file I/O cannot delay the engine receiving it.
           const ending = { pending: true, replies: [] };
           if (journal) receiptEnds.set(msg.id, ending);
-          msg.params.arguments = endTurnArgs(msg.params.arguments);
+          msg.params.arguments = endTurnArgs(msg.params.arguments, modAttributed(msg));
           if (msg.id !== undefined) trackTurnEnd(msg.id, msg.params.arguments);
           if (note && msg.id !== undefined) tabCleanupNotes.set(msg.id, note);
           if (keyboardTaps && msg.id !== undefined && drivenApps.size) turnEnds.add(msg.id);
@@ -4968,14 +5411,14 @@ export function createRelay({
           const receipt = finishReceipt();
           if (journal) receiptEnds.set(msg.id, receipt);
           for (const reply of ending.replies) toClient(reply);
-          rotateTurn();
+          rotateTurn(undefined, { attributed: modAttributed(msg) });
         };
         if (tabsMayNeedCleanup || tabCleanupPending) cleanupBrowserTabs().then(end);
         else end();
         return;
       }
       if (name === 'js') {
-        const copies = !clipboard && typeof originalCode === 'string' ? clipboardActions(policyCode, swipeInspection) : [];
+        const copies = !nativeRuntime && !clipboard && typeof originalCode === 'string' ? clipboardActions(policyCode, swipeInspection) : [];
         if (copies.includes('c') || copies.includes('x')) nativeCopies.set(msg.id, copies.includes('x'));
         const read = typeof originalCode === 'string' && isLeaseRead(originalCode);
         const swipeCode = policyCode;
@@ -5011,9 +5454,9 @@ export function createRelay({
         }
         changeCalls.set(msg.id, { read, safe, entry, window: lastWindow, expected: documentKey(lastWindow), target: leaseWindow ?? lastWindow,
           observe: !browser && (!read || (!isInventoryRead(originalCode) && /cua\.getApp\(|\.(?:getAXState|getAXStateAndScreenshot)\(/.test(originalCode))) });
-        if (typeof originalCode === 'string') {
+        if (!nativeRuntime && typeof originalCode === 'string') {
           dispatchCheck = dispatchInspection(swipeCode);
-          const setup = { reuseSetup: guardReady, acknowledge: true, prompt, ...outcomeSetup, ...(kernelEpoch ? { kernel: kernelEpoch } : {}) };
+          const setup = { reuseSetup: guardReady, acknowledge: true, prompt, ...outcomeSetup, quitApps: paymentMessages.quitApps(), ...(kernelEpoch ? { kernel: kernelEpoch } : {}) };
           const modes = guardMode?.split(',').map(mode => mode.trim()) ?? [], careful = modes.includes('careful');
           const target = documentMode ? observedDocument : inputLease ? leaseWindow : lastWindow;
           const reason = /* notice */ documentMode ? undefined : selectedWindow ? `Selected window changed. ${selectionRecovery()}` : inputLease
@@ -5125,9 +5568,14 @@ export function createRelay({
         const shotHandle = openShots.get(msg.id);
         if (shotHandle) msg.params.arguments.code += `;\ntry { await ${shotHandle}.getScreenshot(); } catch {}`;
         resultBudget.request(msg.id, { browser: !!browser, code: originalCode });
-        if (typeof msg.params.arguments?.code === 'string') msg.params.arguments.code = dispatchCheck ? dispatchCheck.rewrite(msg.params.arguments.code, code => resultBudget.code(code)) : resultBudget.code(msg.params.arguments.code);
+        if (nativeRuntime) {
+          // The parent driver dispatcher owns native guards and signatures.
+          // No worker-authored guard receipt is an admission credential.
+          msg.params.arguments.code = originalCode;
+          dispatchCheck = undefined;
+        } else if (typeof msg.params.arguments?.code === 'string') msg.params.arguments.code = dispatchCheck ? dispatchCheck.rewrite(msg.params.arguments.code, code => resultBudget.code(code)) : resultBudget.code(msg.params.arguments.code);
       }
-      if (name === 'js' && typeof msg.params.arguments?.code === 'string') {
+      if (!nativeRuntime && name === 'js' && typeof msg.params.arguments?.code === 'string') {
         msg.params.arguments.code = dispatchCheck.rewrite(msg.params.arguments.code, code => browserWarmupUseCode(code,
           { browserChoice, scope: `${sessionId}:${turnId}`, token: browserWarmToken, confirmed: browserWarmConfirmed }));
       }
@@ -5147,9 +5595,15 @@ export function createRelay({
       if (flowPlan) { flowRules.forward(flowPlan); flowCalls.set(msg.id, flowPlan); }
       // Admission has decided. The hand plans on a later tick, outside the guard path, from what Claude last saw.
       if (hand && name === 'js' && (!browser || cursor?.enabled) && msg.id !== undefined && typeof originalCode === 'string' && ACTION.test(originalCode)) {
-        const target = documentMode ? observedDocument : inputLease ? leaseWindow : lastWindow, seen = numberWindow(originalCode, target);
-        hand.admit(msg.id, { code: originalCode, target, say: callNarration.get(msg.id), ...(browser ? { unplanned: true } : {}), lines: () => compactor.seenLines(seen),
+        const target = cursorWindow(originalCode, documentMode ? observedDocument : inputLease ? leaseWindow : lastWindow, msg.id), seen = numberWindow(originalCode, target);
+        hand.admit(msg.id, { code: originalCode, target, areaTargets: !browser ? cursorAreas(originalCode, msg.id) : undefined,
+          say: callNarration.get(msg.id), ...(browser ? { unplanned: true } : {}), lines: () => compactor.seenLines(seen),
           screenshotSize: () => screenshots.get(target?.app?.toLowerCase())?.byTitle[target?.title] });
+      } else if (hand && name === 'js' && !browser && typeof originalCode === 'string') {
+        const known = cursorWindow(originalCode, documentMode ? observedDocument : inputLease ? leaseWindow : lastWindow, msg.id);
+        const targets = cursorAreas(originalCode, msg.id) ?? [known];
+        for (const target of targets.filter(Boolean)) hand.protect?.(target);
+        if (targets.some(target => !target)) hand.protect?.(undefined);
       }
     }
     if (jsCalls.has(msg.id)) {
@@ -5192,7 +5646,6 @@ export function createRelay({
   // getApp calls, 2026-10-19), and every session's retry then lands at the same instant on the next
   // cold helper. A random extra delay spreads those retries out.
   const restartRetries = new Map();
-  const debuggerDocs = new Map();
   const HELPER_RESTARTING = /Sky Computer Use native pipe startup failed/;
   const HELPER_START_FAILED = /Sky Computer Use (?:native pipe|service) startup (?:request )?failed/;
   let staleHelperDiagnosis;
@@ -5226,8 +5679,6 @@ export function createRelay({
     }
     if (!(crashed || unattached || failedWith(HELPER_RESTARTING)) || entry === true || closing) { restartRetries.delete(msg.id); return false; }
     restartRetries.set(msg.id, true);
-    const docs = engineDocs(msg.result.content, unattached);
-    if (docs.length) debuggerDocs.set(msg.id, docs);
     trace(unattached ? 'browser-debugger-retry' : crashed ? 'helper-crash-retry' : 'helper-restart-retry', { id: msg.id });
     const generation = stopGeneration, epoch = engineEpoch;
     setTimeout(() => {
@@ -5268,6 +5719,16 @@ export function createRelay({
       msg = { ...msg, id };
     }
     trace('from-server', { id: msg.id, method: msg.method });
+    // Strip before recovery, refusal and result-cap branches can replace the engine's reply.
+    if (msg.method === undefined) {
+      let records = 0;
+      const record = metric => { if (records++ < 256) trace('native-picker', { id: msg.id, ...metric }); };
+      if (Array.isArray(msg.result?.content)) msg.result.content = stripPickerTrace(msg.result.content, record);
+      if (typeof msg.error?.message === 'string' && msg.error.message.includes('[sleight:picker-phase]')) {
+        const cleaned = stripPickerTrace([{ type: 'text', text: msg.error.message }], record);
+        msg.error = { ...msg.error, message: cleaned.map(block => block.text).join('') };
+      }
+    }
     if (msg.method === undefined && jsCalls.has(msg.id) && Array.isArray(msg.result?.content)) {
       msg.result.content = stripDP1Trace(msg.result.content, event => {
         closeRead?.pause(msg.id);
@@ -5282,11 +5743,6 @@ export function createRelay({
       const pending = clipboardReplies.get(msg.id); clipboardReplies.delete(msg.id); pending.receive(msg); return;
     }
     if (retriedHelperStart(msg)) return;
-    if (msg.method === undefined && debuggerDocs.has(msg.id)) {
-      if (msg.error) msg = { jsonrpc: msg.jsonrpc, id: msg.id, result: { isError: true, content: [{ type: 'text', text: msg.error.message }] } };
-      if (msg.result) msg.result.content = [...debuggerDocs.get(msg.id).filter(heldDocumentation), ...(msg.result.content ?? [])];
-      debuggerDocs.delete(msg.id);
-    }
     if (staleHelperCheck && msg.method === undefined && msg.result?.isError &&
       msg.result.content?.some(c => c.type === 'text' && HELPER_START_FAILED.test(c.text ?? ''))) {
       staleHelperDiagnosis ??= Promise.resolve().then(staleHelperCheck).catch(() => []);
@@ -5321,6 +5777,7 @@ export function createRelay({
       msg.result = { ...msg.result, content: [...msg.result.content ?? [], { type: 'text', text: NATIVE_PAUSE_CUT_NOTE }] };
     }
     if (docOrigin.owns(msg.id) && msg.result?.content?.some(item => item.type === 'text' && !heldDocumentation(item) && !/^\[sleight:guard-ready\]\n?$/.test(item.text))) docOrigin.invalidate();
+    if (nativeRuntime && msg.method === undefined && msg.result) nativeSession?.guardResult?.(msg);
     docOrigin.reply(msg, documentationContext());
     if (msg.method === 'elicitation/create' || msg.error || msg.result?.isError) docOrigin.invalidate();
     // A completed warmup ID remains private, including duplicate engine replies.
@@ -5414,7 +5871,9 @@ export function createRelay({
     // Keep the original engine verdict even when close recovery rewrites noWindowsAvailable.
     const resultFailed = !!msg.error || !!msg.result?.isError;
     const failure = resultCalls.get(msg.id)?.failure ?? (resultFailed ?
-      { message: msg.error?.message ?? failureReason(msg.result?.content) } : undefined);
+      { message: msg.error?.message ?? failureReason(msg.result?.content),
+        delivery: nativeMac ? nativeSession?.inputFailure?.(msg.id)?.delivery : undefined,
+        noInput: nativeMac && nativeSession?.inputFailure?.(msg.id)?.noInput === true } : undefined);
     if (msg.method === undefined && guardCalls.has(msg.id)) {
       const generation = guardCalls.get(msg.id); guardCalls.delete(msg.id);
       let installed = false;
@@ -5499,6 +5958,8 @@ export function createRelay({
       if (window && !window.url && selectedWindow.url && window.title === selectedWindow.title && window.app === selectedWindow.app &&
           (menuRoot(text) || /^0 (?:sheet|dialog)\b/m.test(text))) {
         const expected = selectedWindow, generation = stopGeneration;
+        const started = performance.now();
+        let confirmed = false, failed = false;
         identityCall.selectedChildChecked = true;
         Promise.resolve().then(() => {
           const selector = identityCall.selector ?? handleSelectors.get(identityCall.handle);
@@ -5520,15 +5981,18 @@ export function createRelay({
           identityCall.nativeIdentity = identity; identityCall.identityRequired = true;
           expected.nativeIdentity = identity;
           noteProcess(identity);
+          confirmed = true;
         }).catch(error => {
+          failed = true;
           msg.result = { ...msg.result, isError: true, content: [...(msg.result.content ?? []), { type: 'text', text: error.message }] };
         }).finally(() => {
+          trace('native-window-read-identity', { id: msg.id, ms: performance.now() - started, confirmed, failed, reused: false });
           observeServerMessage(msg);
         });
         return;
       }
     }
-    if (windowIdentity && identityCall?.observe && identityCall.read && !identityCall.identityChecked && !identityCall.selectedParent) {
+    if (windowIdentity && inputLease && !documentMode && !changeReview && identityCall?.observe && identityCall.read && !identityCall.identityChecked && !identityCall.selectedParent) {
       const text = (msg.result?.content ?? []).filter(c => c.type === 'text').map(c => c.text).join('\n');
       const window = !msg.result?.isError && windowFromText(text);
       const appId = observedAppId(identityCall, window, msg.result);
@@ -5546,20 +6010,79 @@ export function createRelay({
       candidates ??= health?.windowTitles?.filter(title => title === window?.title).length ??
         (sameWindow(leaseWindow, window) ? leaseWindow?.nativeCandidates : undefined) ?? 1;
       identityCall.nativeCandidates = candidates;
-      // A sheet belongs to its document; AXWindows contains parent windows, not this header.
-      if (window && !window.url && !/^0 sheet\b/m.test(text) && appId && candidates > 1) {
+      // AXWindows contains parent windows, not the menu, sheet or dialog in a child header.
+      const root = /^\d+ ([^\n]*)/m.exec(text)?.[1];
+      if (window && (!root || /^(?:standard window|window)\b/.test(root)) && appId &&
+          (!webBrowser(appId) || !window.url && candidates > 1)) {
         identityCall.identityChecked = true;
         const generation = stopGeneration;
         const selector = identityCall.selector ?? handleSelectors.get(identityCall.handle);
         const acquiredNumber = selector?.match(/^\{\s*(?:windowId|"windowId")\s*:\s*(\d+)\s*\}$/)?.[1];
         const expected = { ...window, appId, ...(sameWindow(selectedWindow, window) && selectedWindow.appId === appId
-          ? { windowNumber: selectedWindow.windowNumber } : acquiredNumber ? { windowNumber: Number(acquiredNumber) } : {}) };
-        Promise.resolve().then(() => windowIdentity(expected)).then(observed => {
+          ? { windowNumber: selectedWindow.windowNumber, windowNumberSource: 'selection' } : acquiredNumber ? { windowNumber: Number(acquiredNumber) } : {}) };
+        identityCall.windowNumberSource = expected.windowNumberSource;
+        const previous = sameHeader(leaseWindow, window) && leaseWindow.appId === appId && !leaseWindow.selectedParent &&
+          (expected.windowNumber === undefined || expected.windowNumber === leaseWindow.nativeIdentity?.windowNumber) ? leaseWindow : undefined;
+        if (previous?.nativeIdentity && previous.identityRequired) {
+          expected.nativeIdentity = previous.nativeIdentity;
+          identityCall.nativeIdentity = previous.nativeIdentity;
+          identityCall.identityRequired = true;
+          // Reuse only with an independent sample of the same sole window and
+          // process. Equal headers alone cannot rule out replacement or relaunch.
+          if (!identityCall.acquisition && !previous.identityError && previous.nativeCandidates === candidates &&
+              health?.status === 'responding' && health.pid === previous.nativeIdentity.pid &&
+              health.processStart === previous.nativeIdentity.processStart && health.windows === 1 && health.allWindows === 1 &&
+              Number.isSafeInteger(previous.nativeIdentity.windowNumber) && previous.nativeIdentity.windowNumber > 0 &&
+              Array.isArray(health.windowNumbers) && health.windowNumbers.length === 1 && health.windowNumbers[0] === previous.nativeIdentity.windowNumber &&
+              (!rootWindowId(text) || rootWindowId(text) === previous.rootId)) {
+            trace('native-window-read-identity', { id: msg.id, ms: 0, reused: true, confirmed: true });
+            observeServerMessage(msg);
+            return;
+          }
+        }
+        const started = performance.now();
+        let confirmed = false, failed = false;
+        const timeout = Symbol('identity timeout');
+        const look = request => {
+          let timer;
+          return Promise.race([Promise.resolve().then(() => windowIdentity(request)),
+            new Promise(resolve => { timer = setTimeout(() => resolve(timeout), menuContinuationTimeoutMs); })])
+            .then(observed => observed === timeout ? verifyWindowIdentity(request, undefined) : observed)
+            .finally(() => clearTimeout(timer));
+        };
+        look(expected).then(async observed => {
           if (generation !== stopGeneration) return;
-          identityCall.nativeIdentity = nativeIdentity(expected, observed);
+          if (expected.nativeIdentity && observed?.status === 'mismatch' &&
+              ['Known window number disappeared', 'Window owner process changed'].includes(observed.error)) {
+            // This read accepts the current window. Keep explicit number selectors,
+            // and replace the old pin only after a complete, unambiguous fresh proof.
+            const fresh = { ...expected, nativeIdentity: undefined };
+            const current = await look(fresh);
+            if (generation !== stopGeneration) return;
+            identityCall.nativeIdentity = verifyWindowIdentity(fresh, current);
+          } else {
+            // A fresh engine handle can rebind a restarted helper's AX references,
+            // but the WindowServer number and owning process must still agree.
+            const rebound = identityCall.acquisition && expected.nativeIdentity && observed?.status === 'ok' &&
+              observed.epoch !== expected.nativeIdentity.epoch &&
+              ['windowNumber', 'pid', 'processStart'].every(key => observed[key] === expected.nativeIdentity[key]);
+            identityCall.nativeIdentity = nativeIdentity(rebound
+              ? { ...expected, nativeIdentity: undefined, windowNumber: expected.nativeIdentity.windowNumber } : expected, observed);
+          }
           noteProcess(identityCall.nativeIdentity);
           identityCall.identityRequired = !!identityCall.nativeIdentity;
-        }).catch(error => { identityCall.identityError = error.message; }).finally(() => {
+          confirmed = !!identityCall.nativeIdentity;
+        }).catch(error => {
+          failed = true;
+          if (/^Input lease:/.test(error.message)) identityCall.identityError = error.message;
+          else {
+            // Helper failures may warn on an initial read. A retained pin must
+            // keep refusing even when the helper rejects instead of resolving.
+            try { nativeIdentity(expected, { status: 'unknown' }); }
+            catch (identityError) { identityCall.identityError = identityError.message; }
+          }
+        }).finally(() => {
+          trace('native-window-read-identity', { id: msg.id, ms: performance.now() - started, confirmed, failed, reused: false });
           if (generation === stopGeneration || callGenerations.has(msg.id)) observeServerMessage(msg);
         });
         return;
@@ -5659,8 +6182,14 @@ export function createRelay({
     const emptyNote = !msg.error && !msg.result?.isError && noOutputNotice(jsCode, msg.result?.content);
     if (emptyNote) msg.result.content.push({ type: 'text', text: promptNotice(emptyNote, prompt) });
     if (jsCode !== undefined) {
-      replWarmup.docs = replWarmup.docs.filter(heldDocumentation);
-      replWarmup.attach(msg);
+      if (msg.error || msg.result?.isError) {
+        // These are the private preparation's held docs, never text from this JS result.
+        retainEngineDocs(replWarmup.docs.splice(0));
+        if (deferredEngineDocs.length) retryEngineDocs = true;
+      } else {
+        replWarmup.docs = replWarmup.docs.filter(heldDocumentation);
+        replWarmup.attach(msg);
+      }
     }
     if (jsCode !== undefined) browserRecovery.observe(jsCode, msg);
     if (pendingBrowser && !msg.result?._meta?.['codex/toolSurface']?.app?.appId &&
@@ -5763,7 +6292,7 @@ export function createRelay({
         msg.result.content = rulesFirst ? beforeFirstTree(msg.result.content, item) : [...msg.result.content, item];
       }
       if (docs) docsShown = true;
-      if (isNativeGetState(jsCode, msg.result)) msg.result.content.push({ type: 'text', text: promptNotice(WINDOWS_LINE, prompt) });
+      if (!nativeRuntime && isNativeGetState(jsCode, msg.result)) msg.result.content.push({ type: 'text', text: promptNotice(WINDOWS_LINE, prompt) });
     }
     if (pendingBrowser) {
       for (const handle of pendingBrowser.handles) {
@@ -5942,6 +6471,19 @@ export function createRelay({
       const previous = leaseWindow;
       if (guardStop && window && selectedWindow && window.app !== selectedWindow.app) clearSelection();
       leaseWindow = window ? { ...window, ...(known ? { appId: known } : {}), ...(shownId ? { rootId: shownId } : {}) } : undefined;
+      if (leaseWindow && !call.read && sameWindow(previous, window)) {
+        // The parent lease's pin lasts one call; what the window had before it carries on.
+        const kept = previous.parentPin?.id === msg.id ? { ...previous, nativeIdentity: previous.parentPin.nativeIdentity,
+          identityRequired: previous.parentPin.identityRequired } : previous;
+        for (const key of ['nativeCandidates', 'nativeIdentity', 'identityRequired', 'identityError', 'windowNumberSource']) {
+          if (kept[key] !== undefined) leaseWindow[key] = kept[key];
+        }
+      }
+      if (leaseWindow && call.nativeCandidates !== undefined) leaseWindow.nativeCandidates = call.nativeCandidates;
+      if (leaseWindow && call.identityRequired) leaseWindow.identityRequired = true;
+      if (leaseWindow && call.nativeIdentity) leaseWindow.nativeIdentity = call.nativeIdentity;
+      if (leaseWindow && call.identityError) leaseWindow.identityError = call.identityError;
+      if (leaseWindow && call.windowNumberSource) leaseWindow.windowNumberSource = call.windowNumberSource;
       if ((call.read || call.acquisition) && leaseWindow?.appId === openedWindow?.appId &&
           !sameWindow(leaseWindow, openedWindow)) openedWindow = undefined;
       if (ownWindow(leaseWindow)) withheld.set(msg.id, ownLine(leaseWindow.appId, leaseWindow.app));
@@ -5949,6 +6491,23 @@ export function createRelay({
         // The site this read shows. A read without web-area lines (a diff) keeps what the same window showed before.
         const page = pageSite(text, window);
         if (page) leaseWindow.page = page; else if (previous?.page && sameWindow(previous, window)) leaseWindow.page = previous.page;
+        const earlier = windowSites.get(previous);
+        let site;
+        if (/^\d+ standard window\b/m.test(text)) site = { text, key: siteConsentKey(leaseWindow, text) };
+        else if (sameWindow(previous, window) && earlier) {
+          // A diff can add a URL or title marker. Retain full-read evidence, but compare every new marker
+          // before carrying an answer. Deduplicate lines so unchanged diffs do not grow the retained text.
+          if (!shownId && previous.rootId) leaseWindow.rootId = previous.rootId;
+          const combined = [...new Set([...earlier.text.split('\n'), ...text.split('\n')])].join('\n');
+          site = { text: combined, key: siteConsentKey(leaseWindow, combined) };
+        }
+        if (site) {
+          if (site.key && site.key === earlier?.key) {
+            site.decision = earlier.decision;
+            site.policy = earlier.policy;
+          }
+          windowSites.set(leaseWindow, site);
+        }
         const line = appLine(leaseWindow.appId, leaseWindow.app) ?? pageLine(leaseWindow, true);
         if (line) withheld.set(msg.id, line);
         else if (leaseWindow.appId) permissions?.noteApp?.({ bundleId: leaseWindow.appId, name: leaseWindow.app });
@@ -5968,18 +6527,7 @@ export function createRelay({
           if (!closedLast) recoveryTarget = acquired.length === 1 ? `cua.getApp(${acquired[0]})` : undefined;
         }
       }
-      if (leaseWindow && !call.read && sameWindow(previous, window)) {
-        // The parent lease's pin lasts one call; what the window had before it carries on.
-        const kept = previous.parentPin?.id === msg.id ? { ...previous, nativeIdentity: previous.parentPin.nativeIdentity,
-          identityRequired: previous.parentPin.identityRequired } : previous;
-        for (const key of ['nativeCandidates', 'nativeIdentity', 'identityRequired', 'identityError']) {
-          if (kept[key] !== undefined) leaseWindow[key] = kept[key];
-        }
-      }
-      if (leaseWindow && call.nativeCandidates !== undefined) leaseWindow.nativeCandidates = call.nativeCandidates;
-      if (leaseWindow && call.identityRequired) leaseWindow.identityRequired = true;
-      if (leaseWindow && call.nativeIdentity) leaseWindow.nativeIdentity = call.nativeIdentity;
-      if (leaseWindow && call.identityError) leaseWindow.identityError = call.identityError;
+      if ((call.read || call.acquisition) && leaseWindow && !withheld.has(msg.id)) hand?.protect?.(leaseWindow);
       // A dialog or sheet remembers the standard window it covered, so a call whose own action closes it can go on
       // there. Word shows a document with a sheet as a dialog root, under the title and URL it had as a standard window,
       // so standard windows are kept by title, app and URL apart from the lease object: in 19-02-45 a degraded read
@@ -6024,7 +6572,9 @@ export function createRelay({
         if (Number.isSafeInteger(number) && number > 0) {
           const key = `${leaseWindow.appId}:${number}`;
           dragWindows.delete(key);
-          if (!call.identityError && !leaseWindow.identityError && (!leaseWindow.identityRequired || leaseWindow.nativeIdentity)) {
+          // An advisory unavailable lookup still cannot certify numbered drag endpoints.
+          if (!call.identityError && !leaseWindow.identityError && (!call.identityChecked || call.nativeIdentity) &&
+              (!leaseWindow.identityRequired || leaseWindow.nativeIdentity)) {
             dragWindows.set(key, { ...leaseWindow, windowNumber: number });
             certifiedRead = { number, title: leaseWindow.title, app: leaseWindow.app };
           }
@@ -6381,9 +6931,9 @@ export function createRelay({
     finish();
   }
 
-  // Ends the open turn, if any call used it. Resolves once the server answers
-  // or after a short grace period.
-  async function endOpenTurn(cleanupTabs = true, carryId, event) {
+  // Reconnect and idle cleanup retain stage targets, while leases, receipts and turn IDs always rotate.
+  // Resolves once the server answers or after a short grace period.
+  async function endOpenTurn(cleanupTabs = true, carryId, event, preserveTargets = false) {
     if (inputLease && running.size) {
       const ready = await new Promise(resolve => {
         const done = () => { clearTimeout(timer); resolve(true); };
@@ -6393,7 +6943,11 @@ export function createRelay({
       if (!ready) return false;
     }
     if (cleanupTabs && (tabsMayNeedCleanup || tabCleanupPending)) await cleanupBrowserTabs();
-    const owed = [...failedTurnEnds.values(), ...(turnUsed ? [endTurnArgs(event ? { hook_event_name: event } : {})] : [])];
+    // Retrying an older cleanup is not another user-turn boundary. Its first
+    // attempt already cleared the latch; a retry must leave newer stops alone.
+    const owed = [...failedTurnEnds.values()].map(args => nativeRuntime ? { ...args, sleight_clipboard_turn_end: false } : args);
+    if (nativeWindows) for (const args of owed) args.sleight_windows_turn_end = false;
+    if (turnUsed) owed.push(endTurnArgs(event ? { hook_event_name: event } : {}));
     failedTurnEnds.clear();
     const done = owed.map(args => {
       const id = `sleight-${nextInternalId++}`;
@@ -6405,15 +6959,22 @@ export function createRelay({
       toServer({ jsonrpc: '2.0', id, method: 'tools/call', params: { name: TURN_END_TOOL, arguments: args } });
       return answered;
     });
+    const carried = carryId === undefined ? undefined : journal?.take(carryId);
     if (turnUsed) {
-      // The call that triggered a reconnect belongs to the next turn's receipt, not the one being closed.
-      const carried = carryId === undefined ? undefined : journal?.take(carryId);
-      finishReceipt(); journal?.put(carried); rotateTurn(carryId);
+      finishReceipt(); journal?.put(carried); rotateTurn(carryId, { release: !preserveTargets });
+    } else {
+      // Keep the unused turn and its REPL warm-up scope. Cleanup still releases resources.
+      releaseLeases();
+      if (preserveTargets) retainedCursorTurn = true; else releaseCursorTurn();
     }
     return Promise.all(done);
   }
 
-  async function interruptTurn(msg) {
+  async function interruptTurn(msg, latch = false) {
+    revokeStageProducer(); // person-stop-entry
+    if (latch) { glideStopLatched = true; nativeSession?.stop?.(); }
+    else nativeSession?.interrupt?.();
+    nativeSession?.cancelPending?.();
     let tabNote;
     // Revocation enters synchronously. Collecting the owned engine does not
     // cancel a separate broker operation or prove its resource cleanup.
@@ -6449,7 +7010,7 @@ export function createRelay({
           const timer = setTimeout(() => { internalRequests.delete(id); pauseChecks.delete(id); resolve(undefined); }, stopGraceMs);
           internalRequests.set(id, reply => { clearTimeout(timer); resolve(reply); });
           toServer({ jsonrpc: '2.0', id, method: 'tools/call', params: { name: TURN_END_TOOL,
-            arguments: endTurnArgs({ hook_event_name: 'Interrupt' }) } });
+            arguments: endTurnArgs({ ...msg.params.arguments, hook_event_name: 'Interrupt' }, modAttributed(msg)) } });
         });
         return !!ended?.result && !ended.error && !ended.result.isError;
       },
@@ -6483,7 +7044,7 @@ export function createRelay({
         helperStates.clear(); helperHandles.clear(); helperAliases.clear();
         leaseCalls.clear(); changeCalls.clear(); documentCalls.clear(); jsCalls.clear(); syntaxOrigins.clear(); browserCalls.clear();
         engineCalls.clear();
-        spaceChecks.clear(); preHealth.clear(); nativeChecked.clear(); focusedChecked.clear(); restartRetries.clear(); debuggerDocs.clear();
+        spaceChecks.clear(); preHealth.clear(); nativeChecked.clear(); focusedChecked.clear(); restartRetries.clear();
         // The stopped turn's receipt keeps its unanswered calls as unknown; nothing carries into the next engine.
         resultCalls.clear(); guardCalls.clear(); finishReceipt();
         // A collected engine can't take an old turn's cleanup; the next engine starts its own turns.
@@ -6506,14 +7067,16 @@ export function createRelay({
       const summary = turnOutcomes.text(pending);
       if (summary) outcomeEnds.set(msg.id, summary);
     }
-    turnOutcomes = new TurnOutcomes();
-    outcomeCalls.clear();
-    completenessCalls.clear();
-    toClient({ jsonrpc: '2.0', id: msg.id, result: { isError: report.resources !== 'clear' || report.leases !== 'released and checked',
+    // Keep producer targets on this path. An attributed prompt or ordinary end still releases them.
+    rotateTurn(undefined, { attributed: stageProducerEnabled ? false : modAttributed(msg) });
+    if (msg.id !== undefined) toClient({ jsonrpc: '2.0', id: msg.id, result: { isError: report.resources !== 'clear' || report.leases !== 'released and checked',
       content: [{ type: 'text', text: promptNotice(stopText(report), prompt) }, ...(report.directBrowser ? [{ type: 'text',
         text: JSON.stringify({ directBrowser: report.directBrowser }) }] : []), ...(tabNote ? [{ type: 'text', text: tabNote }] : [])], _meta: { 'sleight/stop': report } } });
     onStopReported(report);
     stopUnconfirmed = report.engine === 'unconfirmed'; stopFinished = true;
+    // On Glide a plain interrupt can continue after collection. A person's Stop still
+    // needs an attributed prompt/end or a new session.
+    if (nativeRuntime && !latch && !glideStopLatched && report.engine === 'exited and collected' && report.leases === 'released and checked') resumeRequested = true;
     resumeAfterStop();
   }
 
@@ -6597,7 +7160,7 @@ export function createRelay({
     helperProbes.clear(); helperStates.clear(); helperReads.clear(); helperControls.clear(); helperFullReads.clear(); helperDiagnosticReplies.clear(); lateDiagnosticControls.clear();
     helperHandles.clear(); helperAliases.clear(); helperActive = undefined;
     changeCalls.clear(); documentCalls.clear(); jsCalls.clear(); syntaxOrigins.clear(); browserCalls.clear();
-    spaceChecks.clear(); preHealth.clear(); nativeChecked.clear(); focusedChecked.clear(); restartRetries.clear(); debuggerDocs.clear();
+    spaceChecks.clear(); preHealth.clear(); nativeChecked.clear(); focusedChecked.clear(); restartRetries.clear();
     flowCalls.clear(); flowPending = undefined; flowPermit = undefined;
     resultCalls.clear(); guardCalls.clear(); promptFailures.clear();
     stopHeartbeat();
@@ -6629,6 +7192,7 @@ export function createRelay({
     for (const pending of clipboardReplies.values()) pending.reject(new Error(/* notice */ 'Clipboard guard: engine connection closed.'));
     clipboardReplies.clear();
     clearTimeout(idleTimer);
+    if (!disposed) cursorStatus('done', undefined, true);
     hand?.close();
     localCursor.clear();
     const recordingClosed = cursor?.close();
@@ -6644,5 +7208,192 @@ export function createRelay({
     return true;
   }
   if (pause.paused) applyPause(true);
+  const helperCells = new Map(), helperPauseCalls = nativeRuntime ? new Map() : undefined;
+  if (nativeRuntime && stopEngine) nativeSession?.setStopHandler?.(() => {
+    if (disposed || !stopEngine) return;
+    if (closing) {
+      revokeStageProducer(); // person-stop-glide-reentry
+      glideStopLatched = true; nativeSession?.stop?.(); nativeSession?.cancelPending?.();
+      return;
+    }
+    void interruptTurn({ params: { arguments: {} } }, true);
+  });
+  if (nativeRuntime) nativeSession?.setPolicy?.({
+    endCell(cell) {
+      helperCells.delete(cell);
+      pauseChecks.delete(helperPauseCalls.get(cell)?.id); helperPauseCalls.delete(cell);
+    },
+    reset() {
+      helperCells.clear();
+      for (const call of helperPauseCalls.values()) pauseChecks.delete(call.id);
+      helperPauseCalls.clear();
+    },
+    checkPause(cell) {
+      // One checkpoint for the whole cell, including a Pause/Resume between
+      // steps. Symbols cannot collide with the relay's JSON-RPC request ids.
+      if (!helperPauseCalls.has(cell)) helperPauseCalls.set(cell,
+        { id: Symbol(), method: 'tools/call', params: { name: 'js' } });
+      // applyPause also marks the outer call, even if a helper has only read
+      // so far and has not reached its first input checkpoint yet.
+      if (pauseBlocked(helperPauseCalls.get(cell)) || pausedCalls.size) throw Object.assign(Error(PAUSED_NOTE),
+        { code: 'PAUSED', paused: true, parentSafety: true, delivery: 'not-sent', retry: 'safe' });
+    },
+    async inspectHelperStep(proposal, context) {
+      validateHelperInspection(proposal);
+      for (const [key, value] of [['windowId', context?.window?.windowId],
+        ['processStart', context?.window?.processStart], ['readId', context?.readId]]) {
+        if (proposal.params[key] !== value) throw Object.assign(macIdentityError(key === 'readId' ? 'read-id' : identityFieldStep(key)),
+          { parentSafety: true, delivery: 'not-sent', retry: 'safe' });
+      }
+      await this.beforeAction({ ...context, method: proposal.method, args: proposal.params.args,
+        readId: proposal.params.readId, helper: proposal.helper, inspectOnly: true }, context);
+      return true;
+    },
+    menuReadRequests() { return paymentMessages.menuRequests().filter(value => value.startsWith('menu:label:')).map(value => value.slice(11)); },
+    observe(result, { action = false } = {}) {
+      // Includes emit:false and reads made inside a cell whose source claims to be a read.
+      if (nativeMac) {
+        // Safety calls observe only for acquired, verified parent reads.
+        const observed = windowFromText(result.text);
+        if (observed && !action) leaseWindow = { ...observed, appId: result.window.bundleId };
+        flowRules?.observe({ content: [{ type: 'text', text: result.text }],
+          _meta: { 'codex/toolSurface': { app: { appId: result.window.bundleId } } } }, { readApp: result.window.app });
+      } else flowRules?.observe(windowsDriverResult(result), { readApp: result.window.app });
+    },
+    async beforeAction(action, { isActive = () => true } = {}) {
+      this.checkPause(action.cell);
+      if (nativeMac) {
+        // Both entry points use this one rule. mac-safety supplies window and
+        // text from acquired.get(params.windowId) and a new parent read.
+        const stop = (code, step) => {
+          const error = code === 'IDENTITY_CHANGED' ? macIdentityError(step) : Error(code);
+          error.message += ': ' + MAC_DRIVER_NEXT['stop-tell-user'];
+          throw Object.assign(error, { code, parentSafety: true, delivery: 'not-sent', retry: 'safe' });
+        };
+        const active = () => { this.checkPause(action.cell); if (!isActive() || closing || disposed || stopCollected) stop('REPL_CELL_ENDED'); };
+        active();
+        const { window, method, args, text, readId, cell, helper } = action;
+        if (!window || typeof text !== 'string' || !Number.isSafeInteger(readId)) stop('IDENTITY_UNVERIFIED');
+        const proposal = helperInspection(helper ?? 'fillForm', method,
+          { windowId: window.windowId, processStart: window.processStart, readId, args });
+        validateHelperInspection(proposal);
+        const code = proposal.code, target = { ...windowFromText(text), appId: window.bundleId };
+        if (!target.app || target.app !== window.app || target.title !== window.title) stop('IDENTITY_UNVERIFIED');
+        checkSessionMenu(action, paymentMessages.menuRequests());
+        // The relay's last window only corroborates the app. It never chooses
+        // the binding, tree, read id or native lease for this step.
+        if (!leaseWindow?.appId || leaseWindow.appId !== window.bundleId) stop('IDENTITY_CHANGED', 'lease-app');
+        const prior = helperCells.get(cell);
+        if (helper !== undefined && !['pickFromList', 'fillForm', 'dragTo'].includes(helper)) stop('INVALID_PARAMS');
+        if (prior) for (const [i, key] of ['windowId', 'processStart', 'bundleId'].entries())
+          if (window[key] !== prior.binding[i]) stop('IDENTITY_CHANGED', identityFieldStep(key));
+        if (helper && prior?.helper && helper !== prior.helper) stop('HELPER_CONFLICT');
+        // Adding a helper tag can only add restrictions, never skip a direct
+        // check. Compare navigation and newly opened surfaces to step one.
+        const baseline = prior?.text ?? action.before;
+        if (typeof baseline !== 'string') stop('IDENTITY_UNVERIFIED');
+        // The parent binds this admission read to the session's native window,
+        // process and bounds. Its verified title supersedes the earlier tree's
+        // title for direct actions, including when the previous action returned
+        // no tree. Helpers retain their original header restriction. The old
+        // app, URL and surfaces remain independent navigation checks.
+        const expected = helper === undefined ? { ...windowFromText(baseline), title: window.title } : windowFromText(baseline);
+        if (!sameWindow(expected, target)) stop('IDENTITY_CHANGED', !expected?.app ? 'header-parse' :
+          ['title', 'app', 'url'].find(key => expected[key] !== target[key]));
+        if (macInputSurfaceChanged(baseline, text)) stop('IDENTITY_CHANGED', 'surface');
+        if (namesOwnHost('js', { code }) || ownWindow(target) || ownHostPid?.(window.pid)) stop('OWN_HOST_REFUSED');
+        if (callBlock('js', { code }) || appLine(window.bundleId, window.app)) stop('APP_BLOCKED');
+        if ([...running].filter(id => !localRunning.has(id)).length > 1 || localRunning.size || documentAsking || reviewing) stop('REPL_BUSY');
+        if (compactor.staleIndex(numberWindow(code, target), code)) stop('STALE_READ');
+        if (isForbiddenSettingsWindow(target)) stop('FORBIDDEN_SETTINGS');
+        if (documentMode && (!documentAllowed() || !sameWindow(observedDocument, target))) stop('DOCUMENT_SCOPE_REFUSED');
+        // The runtime never writes the general pasteboard. The shared parser
+        // covers its documented chords; these extra forms close its gaps.
+        const clipboardAction = clipboardPlan(code), copies = clipboardActions(code);
+        const chord = method === 'pressKey' ? String(args[0]).normalize('NFKC').toLowerCase().split('+') : [];
+        if (clipboardAction || copies.length || method === 'paste' ||
+            chord.includes('shift') && chord.at(-1) === 'insert' ||
+            chord.some(part => ['super','cmd','command','meta','controlormeta'].includes(part)) && /^(?:key)?[cxv]$/.test(chord.at(-1)) ||
+            method === 'performSecondaryAction' && /^(?:copy|cut|paste)$/i.test(args[1].trim())) stop('CLIPBOARD_CHANGED');
+        const print = JSON.stringify([code, window.windowId, window.processStart, window.bundleId, readId]);
+        const plan = flowRules?.analyze('js', { code }, target);
+        const permitted = flowPermit?.fingerprint === print && flowPermit.revision === flowRules?.revision;
+        if (plan?.violations.length && !permitted) {
+          flowPending = { fingerprint: print, name: 'js', args: { code },
+            reason: 'FLOW_RULE_REFUSED', rules: plan.violations.map(value => value.rule) };
+          stop('FLOW_RULE_REFUSED');
+        }
+        let state = prior;
+        const payment = paymentMessages.guard(confirmPayments);
+        // Global card state is usable only for this exact step, including its
+        // original worker read id, across inspection and the dispatch recheck.
+        if (state?.paymentPrint !== print) payment.allow = null;
+        let paid = enginePayment(method, args, text, payment);
+        if (paid && !paid.allowed) {
+          if (state?.askedPrint === print) stop('PAYMENT_REQUIRED');
+          state ??= { binding: [window.windowId, window.processStart, window.bundleId], text: baseline,
+            helper, personToken: action.personToken };
+          state.askedPrint = print; helperCells.set(cell, state);
+          paymentMessages.asked();
+          let choice, answer;
+          try { answer = paymentCard?.ask({ session: clientName ?? 'the agent', site: paid.site, shown: paid.shown, control: paid.control }); choice = await answer; }
+          catch { /* An unavailable card grants nothing. */ }
+          active();
+          if (choice !== 'once' || !answer || typeof answer !== 'object' || grantedCards.has(answer)) stop('PAYMENT_REQUIRED');
+          grantedCards.add(answer);
+          paymentMessages.allowed(paid); state.paymentPrint = print;
+          Object.assign(payment, paymentMessages.guard(confirmPayments));
+          paid = enginePayment(method, args, text, payment);
+          if (!paid?.allowed) stop('PAYMENT_REQUIRED');
+        }
+        // Reuse the engine guard against a parent-owned facade that can only
+        // record admission. No worker source, native call or dispatch enters it.
+        let admitted;
+        const outputs = [], app = { getAXState: async () => text };
+        for (const name of DRIVER_ACTION_METHODS) app[name] = async (...resolved) => {
+          if (name !== method || admitted) stop('INVALID_PARAMS');
+          admitted = JSON.parse(JSON.stringify(resolved));
+        };
+        const source = guardedCode('const app = await cua.getApp("parent-bound"); ' + code,
+          expected, undefined, undefined, { careful: true, payment, quitApps: paymentMessages.quitApps(),
+            seenLines: Object.fromEntries(elementLines(text)), literals: literalNumbers(code) });
+        try { await new Script(`(async () => { ${source} })()`).runInNewContext({
+          cua: { getApp: async () => app }, nodeRepl: { write: value => outputs.push(value) },
+        }, { timeout: 1000 }); }
+        catch (error) { stop(paid && !paid.allowed ? 'PAYMENT_REQUIRED' : 'IDENTITY_CHANGED',
+          identityErrorStep(error) ?? (error?.code === 'ERR_SCRIPT_EXECUTION_TIMEOUT' ? 'guard-timeout' : 'guard-refused')); }
+        active();
+        if (!admitted || JSON.stringify(admitted) !== JSON.stringify(args)) stop('INVALID_PARAMS');
+        if (helper) {
+          state ??= { binding: [window.windowId, window.processStart, window.bundleId], text: baseline,
+            helper, personToken: action.personToken };
+          state.helper ??= helper; helperCells.set(cell, state);
+        }
+        if (!action.inspectOnly) {
+          if (paid?.allowed) paymentMessages.paid(paid);
+          if (state) state.paymentPrint = undefined;
+          if (plan) flowRules.forward(plan);
+          if (permitted) flowPermit = undefined;
+        }
+        return { args: admitted, personToken: state?.personToken ?? action.personToken };
+      }
+      const target = windowFromText(action.text);
+      if (documentMode && (!documentAllowed() || !sameWindow(observedDocument, target)))
+        throw Object.assign(Error('DOCUMENT_SCOPE_REFUSED'), { code: 'DOCUMENT_SCOPE_REFUSED' });
+      // Flow analysis uses a parent-authored action, with the actual destination and
+      // serialized native arguments. Escaped IPC cannot substitute source code or aliases.
+      const code = `let windowsTarget = await cua.getApp(${JSON.stringify(action.window.app)}); await windowsTarget.${action.method}(...${JSON.stringify(action.args)});`;
+      // The flow parser understands literal argument lists, not spread syntax.
+      const literal = code.replace(`...${JSON.stringify(action.args)}`, action.args.map(arg => JSON.stringify(arg)).join(', '));
+      const plan = flowRules?.analyze('js', { code: literal }, { ...target, appId: action.window.image });
+      if (plan?.violations.length) throw Object.assign(Error('FLOW_RULE_REFUSED: ' + plan.violations.map(v => v.rule).join(', ')), { code: 'FLOW_RULE_REFUSED' });
+      const guarded = await guardWindowsAction({ ...action, expected: documentMode ? observedDocument : target,
+        payment: paymentMessages.guard(confirmPayments) });
+      this.checkPause(action.cell);
+      if (guarded.paid) paymentMessages.paid(guarded.paid);
+      if (plan) flowRules.forward(plan);
+      return guarded.args;
+    },
+  });
   return { endOpenTurn, shutdown, engineEnded, close, dispose: close, get snapshotDirectory() { return changes.directory; }, get sessionId() { return sessionId; }, get turnId() { return turnId; } };
 }

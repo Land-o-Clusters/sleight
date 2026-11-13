@@ -5,7 +5,9 @@
 //
 //   osascript -l JavaScript menubar.js '<json request>'
 //
-// Prints one JSON object. Requests:
+// Prints one JSON object. Each request also needs caller: "menu_bar" for
+// apps/open/choose/press/close, or "notifications" for the banner operations.
+// Requests:
 //   { op: "apps" }                          apps that have a status item
 //   { op: "open", app, item? }              click an app's status item and read what opened
 //                                           (a menu is read and closed again)
@@ -29,20 +31,33 @@ function attempt(fn, fallback) {
 // helper cache. Only the person's click answers it, so no op opens, chooses, presses or closes it, and "apps" leaves it
 // out. The process counts by its name, its file, or the executable behind its pid (own-host.mjs).
 const OWN_HOST_LINE = "That is sleight's own confirmation window; only you can answer it.";
-const HELPER_CACHE = /\/Library\/Caches\/sleight\/turbo-host\//i;
+const GLIDE_ENGINE_LINE = "That is sleight's Glide engine; tools never act on it.";
+// Refusal classification only. C wins for an old driver still named consent-host.
+function ownHostLine(values) {
+  const names = values.map(value => String(value ?? '').trim().replace(/^.*\//, '').replace(/\.app$/i, '').toLowerCase().replace(/[^a-z0-9]/g, ''));
+  const cache = /\/Library\/Caches\/sleight\/turbo-host\//i;
+  const driver = /\/Library\/Caches\/sleight\/turbo-host\/mac-driver\//i;
+  const prebuilt = /\/lib\/mac-driver\/prebuilt\/darwin-arm64\/glide-engine(?:\/|$)/i;
+  if (names.includes('consenthost') || values.some(value => cache.test(value) && !driver.test(value))) return OWN_HOST_LINE;
+  if (names.includes('glideengine') || values.some(value => driver.test(value) || prebuilt.test(value))) return GLIDE_ENGINE_LINE;
+  return undefined;
+}
 function ownHostPid(pid) {
   const app = attempt(() => $.NSRunningApplication.runningApplicationWithProcessIdentifier(pid), null);
-  return !!app && HELPER_CACHE.test(attempt(() => String(ObjC.unwrap(app.executableURL.path) ?? ''), ''));
+  return app ? ownHostLine([attempt(() => String(ObjC.unwrap(app.localizedName) ?? ''), ''),
+    attempt(() => String(ObjC.unwrap(app.executableURL.path) ?? ''), '')]) : undefined;
 }
 function ownHost(proc, name) {
-  return /^consent-host$/i.test(String(name ?? '').trim()) || HELPER_CACHE.test(attempt(() => String(proc.applicationFile().posixPath() ?? ''), '')) ||
-    ownHostPid(attempt(() => proc.unixId(), 0));
+  const direct = ownHostLine([String(name ?? ''), attempt(() => String(proc.applicationFile().posixPath() ?? ''), '')]);
+  const pid = ownHostPid(attempt(() => proc.unixId(), 0));
+  return direct === OWN_HOST_LINE || pid === OWN_HOST_LINE ? OWN_HOST_LINE : direct || pid;
 }
 
 function statusItems(app) {
   const proc = se.processes.byName(app);
   if (!attempt(() => proc.exists(), false)) throw new Error(`${app} isn't running`);
-  if (ownHost(proc, attempt(() => proc.name(), app))) throw new Error(OWN_HOST_LINE);
+  const own = ownHost(proc, attempt(() => proc.name(), app));
+  if (own) throw new Error(own);
   const bars = proc.menuBars();
   if (bars.length < 2) throw new Error(`${app} has no status item in the menu bar. Its own menus (File, Edit, Format…) are in its tree: use js.`);
   return { proc, items: bars[1].menuBarItems() };
@@ -251,6 +266,9 @@ function run(argv) {
   let request;
   try {
     request = JSON.parse(argv[0]);
+    const permitted = request.caller === 'menu_bar' ? ['apps', 'open', 'choose', 'press', 'close']
+      : request.caller === 'notifications' ? ['notifications', 'notify-press'] : [];
+    if (!permitted.includes(request.op)) throw new Error('Invalid menu helper caller or op');
     let result;
     switch (request.op) {
       case 'apps': {

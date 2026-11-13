@@ -110,7 +110,7 @@
           "task": "safari-form",
           "run": 1,
           "passed": false,
-          "reason": "Fixture setup failed: ~/Projects/sleight-wt/real-use-tasks/bench/real-fixture.js: execution error: Error: Error: Safari must already be running to create an isolated fixture without restoring a session (-2700)",
+          "reason": "Fixture setup failed: <private-evidence>/real-use-tasks/bench/real-fixture.js: execution error: Error: Error: Safari must already be running to create an isolated fixture without restoring a session (-2700)",
           "cleanupError": "Owned fixture window cleanup unconfirmed",
           "fixtureDir": "<temp>/sleight-bench/2026-10-08T22-22-25-208Z/sleight-safari-form-1",
           "models": []
@@ -134,7 +134,7 @@
           "task": "safari-form",
           "run": 1,
           "passed": false,
-          "reason": "Fixture setup failed: ~/Projects/sleight-wt/real-use-tasks/bench/real-fixture.js: execution error: Error: Error: Safari must already be running to create an isolated fixture without restoring a session (-2700)",
+          "reason": "Fixture setup failed: <private-evidence>/real-use-tasks/bench/real-fixture.js: execution error: Error: Error: Safari must already be running to create an isolated fixture without restoring a session (-2700)",
           "models": []
         },
         {
@@ -142,7 +142,7 @@
           "task": "safari-form",
           "run": 2,
           "passed": false,
-          "reason": "Fixture setup failed: ~/Projects/sleight-wt/real-use-tasks/bench/real-fixture.js: execution error: Error: Error: Safari must already be running to create an isolated fixture without restoring a session (-2700)",
+          "reason": "Fixture setup failed: <private-evidence>/real-use-tasks/bench/real-fixture.js: execution error: Error: Error: Safari must already be running to create an isolated fixture without restoring a session (-2700)",
           "models": []
         },
         {
@@ -150,7 +150,7 @@
           "task": "safari-form",
           "run": 3,
           "passed": false,
-          "reason": "Fixture setup failed: ~/Projects/sleight-wt/real-use-tasks/bench/real-fixture.js: execution error: Error: Error: Safari must already be running to create an isolated fixture without restoring a session (-2700)",
+          "reason": "Fixture setup failed: <private-evidence>/real-use-tasks/bench/real-fixture.js: execution error: Error: Error: Safari must already be running to create an isolated fixture without restoring a session (-2700)",
           "models": []
         }
       ],

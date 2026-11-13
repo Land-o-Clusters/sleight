@@ -1,3 +1,4 @@
+import { offlineDoctor } from './fixtures/preapproved-storage.mjs';
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { mkdtemp, mkdir, writeFile, rm } from 'node:fs/promises';
@@ -5,11 +6,17 @@ import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { fileURLToPath } from 'node:url';
 import * as fs from 'node:fs';
-import { doctor } from '../plugins/sleight/lib/launch.mjs';
+import { doctor as runDoctor } from '../plugins/sleight/lib/launch.mjs';
 import { probeHelper, staleHelperJobs } from '../plugins/sleight/lib/helper-health.mjs';
 import { trackTemp } from '../scripts/temp-leftovers.mjs';
 
 const STALE_LISTING = 'PID\tStatus\tLabel\n-\t0\tapplication.com.openai.sky.CUAService.1.2\n83422\t0\tapplication.com.openai.codex.3.4\n';
+// These tests exercise only the fake engine server, never the owner's host
+// settings, helper cache, external host sessions or installed documentation.
+const empty = () => [];
+const doctor = options => runDoctor({ hand: empty, permissions: empty, settings: empty,
+  codex: empty, cursor: empty, grok: empty, grokbot: empty, documentation: () => {}, forbiddenTargets: () => '0',
+  runtime: () => ({ selected: 'engine', ok: true, lines: ['runtime (opt-in preview)', 'selected  engine (preview off)'] }), ...options });
 
 for (const [mode, code, message] of [
   ['ok', 0, /live read.*ok/i],
@@ -36,7 +43,7 @@ for (const [mode, code, message] of [
     // 2026-10-09, while benchmark runs went on).
     const timeoutMs = ['timeout', 'js-timeout', 'read-hang'].includes(mode) ? 100 : 2000;
     const startupTimeoutMs = mode === 'startup-hang' ? 200 : 5000;
-    assert.equal(await doctor({ turbo: async () => [], env: { CODEX_HOME: bank, SLEIGHT_SURFACES: 'computer' }, log: line => lines.push(line), timeoutMs, startupTimeoutMs,
+    assert.equal(await doctor({ ...offlineDoctor, turbo: async () => [], env: { CODEX_HOME: bank, SLEIGHT_SURFACES: 'computer' }, log: line => lines.push(line), timeoutMs, startupTimeoutMs,
       launchctlList: async () => STALE_LISTING }), code);
     assert.match(lines.join('\n'), message);
   });
@@ -69,7 +76,7 @@ for (const [mode, entries, auditFails, expected] of [
       command: process.execPath, args: [script, mode, auditFile], env: { CUA_REPL_NODE_REPL_PATH: script, SKY_CUA_SERVICE_PATH: script },
     } } }));
     const lines = [];
-    assert.equal(await doctor({ turbo: async () => [], app: 'Calculator', preapprovedIO, auditDirectory,
+    assert.equal(await doctor({ ...offlineDoctor, turbo: async () => [], app: 'Calculator', preapprovedIO, auditDirectory,
       env: { CODEX_HOME: bank, SLEIGHT_SURFACES: 'computer' }, log: line => lines.push(line),
       timeoutMs: 2000, forbiddenTargets: () => '0' }), 0);
     assert.match(lines.join('\n'), new RegExp(`app read ${expected}`));
@@ -90,7 +97,7 @@ for (const [mode, entries, auditFails, expected] of [
 
 test('doctor does not start a live read when required files are missing', async () => {
   const lines = [];
-  assert.equal(await doctor({ turbo: async () => [], env: { CODEX_HOME: '/no-such-sleight-home', SLEIGHT_CHATGPT_APP: '/no-such-ChatGPT.app' }, log: line => lines.push(line) }), 1);
+  assert.equal(await doctor({ ...offlineDoctor, turbo: async () => [], env: { CODEX_HOME: '/no-such-sleight-home', SLEIGHT_CHATGPT_APP: '/no-such-ChatGPT.app' }, log: line => lines.push(line) }), 1);
   assert.match(lines.join('\n'), /no Codex computer-use plugin/);
 });
 
@@ -133,7 +140,7 @@ for (const [mode, app, code, message] of [
       command: process.execPath, args: [script, mode], env: { CUA_REPL_NODE_REPL_PATH: script, SKY_CUA_SERVICE_PATH: script },
     } } }));
     const lines = [];
-    assert.equal(await doctor({ turbo: async () => [], app, env: { CODEX_HOME: bank, SLEIGHT_SURFACES: 'computer' },
+    assert.equal(await doctor({ ...offlineDoctor, turbo: async () => [], app, env: { CODEX_HOME: bank, SLEIGHT_SURFACES: 'computer' },
       log: line => lines.push(line), timeoutMs: 2000, forbiddenTargets: () => '0' }), code);
     assert.match(lines.join('\n'), /live read ok \(helper inventory\)/);
     assert.match(lines.join('\n'), message);
@@ -146,7 +153,7 @@ for (const fails of [false, true]) test(`doctor reports installed documentation 
   const empty = () => [];
   // Missing server config ends doctor before any helper probe. Every host section
   // is stubbed, so this checks only the offline bundle diagnostic.
-  const code = await doctor({
+  const code = await doctor({ ...offlineDoctor,
     documentation: options => { calls.push(options); if (fails) throw Error('unknown bundle format'); },
     env: { CODEX_HOME: '/no-such-di1r3-home', SLEIGHT_CHATGPT_APP: '/fixture/ChatGPT.app' },
     log: line => lines.push(line), turbo: empty, hand: empty, permissions: empty,

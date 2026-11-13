@@ -4,6 +4,7 @@ import { trustedReadNode } from './trusted-dom.mjs';
 import { readNativeEditContext, retainNativeEditContext, sameNativeEditContext } from './edit-context.mjs';
 import { declaredRows, readCompleteness } from '../read-completeness.mjs';
 import { capturePointView, invalidatePointView, acknowledgePointView } from './points.mjs';
+import { beginBrowserLayout, recordBrowserLayout, finishBrowserLayout, cancelBrowserLayout } from './geometry-observation.mjs';
 // Compact page snapshots for turbo v3, with an independent CR1 closed-root reader.
 const pages = new WeakMap();
 const REF = /^(?:(?:f\d+)?e\d+|[sx]\d+)$/;
@@ -331,9 +332,11 @@ function closedCandidates({ strings, documents }) {
   return { hasClosed, controls };
 }
 
-async function closedRoots(page, state, completeness) {
+async function closedRoots(page, state, completeness, layout) {
   const results = await sessionsOf(page, async ({ frame, send }) => {
+    const started = performance.now();
     const capture = await send('DOMSnapshot.captureSnapshot', { computedStyles: completeness ? ['overflow-x', 'overflow-y'] : [] });
+    recordBrowserLayout(layout, frame, capture, started, performance.now());
     const secrets = sensitiveValues(capture), { hasClosed, controls } = closedCandidates(capture);
     const children = [], refs = new Map();
     if (hasClosed) {
@@ -645,19 +648,22 @@ export async function snapshot(page, { ref, find, maxChars = 8000, since, links,
   state.busy = true;
   invalidatePointView(page);
   const keyboardEpoch = ++state.keyboardEpoch, generation = state.generation, url = page.url();
+  let layout;
   try {
+    layout = beginBrowserLayout(page);
     const pointBefore = await bounded(() => capturePointView(page)).catch(() => null);
     const keyboardTask = keyboardEditors(page, state, generation, keyboardEpoch);
     state.keyboardTasks.add(keyboardTask);
     keyboardTask.then(() => state.keyboardTasks.delete(keyboardTask), () => state.keyboardTasks.delete(keyboardTask));
     const acquired = await Promise.allSettled([
-      bounded(() => page.ariaSnapshotJSON({ mode: 'ai', boxes: true, timeout: TIMEOUT })), closedRoots(page, state, completenessEnabled),
+      bounded(() => page.ariaSnapshotJSON({ mode: 'ai', boxes: true, timeout: TIMEOUT })), closedRoots(page, state, completenessEnabled, layout),
       bounded(() => keyboardTask),
     ]);
     // A failed tree read leaves the frames' maps unknown, so the ref check falls back to Playwright's own lookup.
     state.listed = acquired[0].status === 'fulfilled' && generation === state.generation ? listedRefs(acquired[0].value) : null;
     const failed = acquired.find(result => result.status === 'rejected');
     if (failed) throw failed.reason;
+    finishBrowserLayout(layout);
     const tree = acquired[0].value, closed = acquired[1].value, keyboard = acquired[2].value, secrets = closed.secrets;
     publicRefs(tree, state);
     const rows = rowsOf([...tree, ...closed.sections, ...keyboard.sections], secrets, closed.viewport);
@@ -726,6 +732,7 @@ export async function snapshot(page, { ref, find, maxChars = 8000, since, links,
       ...(history.rows.some(row => row.pendingUserInput) ? { pendingUserInput: true } : {}),
       ...(pointView ? { viewSignature: pointView.signature } : {}) };
   } catch (error) {
+    cancelBrowserLayout(layout);
     retireKeyboard(state);
     state.deliveredClosed.clear();
     if (error.message === 'blocked: DevTools endpoint') throw error;

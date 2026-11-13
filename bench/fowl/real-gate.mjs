@@ -1,4 +1,5 @@
-import { appendFileSync, existsSync, mkdirSync, readFileSync, rmdirSync, writeFileSync } from 'node:fs';
+import { waitForBenchmark, runTaskWithHold, benchmarkStopCode } from '../hold.mjs';
+import { appendFileSync, existsSync, mkdirSync, mkdtempSync, readFileSync, renameSync, rmdirSync, writeFileSync } from 'node:fs';
 import { randomUUID } from 'node:crypto';
 import { createServer } from 'node:net';
 import { homedir } from 'node:os';
@@ -114,8 +115,9 @@ export function realGatePlan({ args, tasks, repo = repoRoot, mcpRoot, armHome, r
   if (selected.some(task => !/^[a-zA-Z0-9_-]+$/.test(task.name) || !['chrome', 'helium', 'firefox', 'safari'].includes(task.browser))) throw Error('Invalid browser task');
   if (new Set(selected.map(task => task.name)).size !== selected.length) throw Error('Duplicate gate task names');
   const arms = selected.map(original => {
-    const task = { ...original, browser: browser.browser };
-    const dir = join(out, task.name);
+    const task = { ...original, browser: browser.browser, ...(original.heldOutFor?.startsWith('SF4') ? { sf4RunIndex: original.sf4RunIndex ?? tasks.findIndex(row => row.name === original.name) + 1 } : {}) };
+    if (task.sf4SameTitleDecoy) task.site = { ...task.site, log: task.site.log.replaceAll('{sf4Marker}', encodeURIComponent(browser.marker)) };
+    const dir = join(out, task.heldOutFor?.startsWith('SF4') ? `run-${String(task.sf4RunIndex).padStart(2, '0')}` : task.name);
     // After launch the pin is the device ID read from the round's own profile copy.
     const deviceFile = browser.claudeDeviceFile ?? args['chrome-device-file'];
     const chromeFiles = { ...(deviceFile ? { deviceFile } : {}),
@@ -344,13 +346,14 @@ export async function runRealGate({ args, repo = repoRoot, mcpRoot, runner, task
   if (args['chrome-local-state']) throw Error('--chrome-local-state is for dry runs only');
   await (runtime.admit || admitRealGate)(plan);
   const lockPath = runtime.lockPath || '/tmp/sleight-live.lock';
-  if (existsSync('/tmp/sleight-hold')) throw Error('Benchmark hold is active');
-  mkdirSync(lockPath);
   const controller = new AbortController(), abort = () => controller.abort();
   for (const signal of ['SIGINT', 'SIGTERM', 'SIGHUP']) process.on(signal, abort);
-  let browser, sites, monitor, armPrep, allow, cleanupProven = true, engineStart, engine;
+  let locked = false, stopCode;
+  let browser, sites, monitor, armPrep, allow, cleanupProven = true, agentCollected = true, engineStart, engine;
   const rows = [];
   try {
+    await waitForBenchmark({ signal: controller.signal, ...runtime.hold });
+    mkdirSync(lockPath); locked = true;
     mkdirSync(plan.out, { recursive: true, mode: 0o700 });
     writeFileSync(join(plan.out, 'commits.json'), JSON.stringify((runtime.commits || roundCommits)({ repo, mcpRoot }), null, 2));
     // The ChatGPT engine version, read again at the end: every published result names it (LAWS, owner 2026-10-19).
@@ -371,6 +374,8 @@ export async function runRealGate({ args, repo = repoRoot, mcpRoot, runner, task
     plan = realGatePlan({ args, tasks, repo, mcpRoot, realBrowser: identity(), dryRun: false });
     writeFileSync(join(plan.out, 'browser.json'), JSON.stringify(identity(), null, 2));
     writeFileSync(join(plan.out, 'unsupported.json'), JSON.stringify(plan.unsupported, null, 2));
+    if (plan.arms.some(arm => arm.task.heldOutFor?.startsWith('SF4'))) writeFileSync(join(plan.out, 'screening-manifest.json'),
+      JSON.stringify(plan.arms.map(arm => ({ cwd: arm.dir, browser: plan.browser.browser, side: arm.metadata.abFlags.SLEIGHT_SF4 ? 'B' : 'A', task: arm.task.name })), null, 2));
     if (sleightKind(plan.surface, plan.browser.browser) === 'sleight-turbo') { monitor = await (runtime.startMonitor || startHostMonitor)(join(plan.out, 'monitor.jsonl')); await monitor.ready?.(); }
     // Claude in Chrome rounds only: press Allow on the extension's own permission prompt for the round's sites (LAWS, 2026-10-18).
     // It returns null for every other surface and browser, and approvals.jsonl in the round's folder records each decision.
@@ -380,107 +385,121 @@ export async function runRealGate({ args, repo = repoRoot, mcpRoot, runner, task
     if (plan.surface === 'claude-in-chrome') await (runtime.settle || (ms => new Promise(resolve => setTimeout(resolve, ms))))(10000);
     let coverLogged = 0;
     const coverWaits = new Map();
-    for (let arm of plan.arms) {
-      if (controller.signal.aborted) throw Error('Gate interrupted');
-      const census = async () => {
-        const ownerCheck = await (runtime.checkOwner || checkBrowserOwner)(browser, { ownedPid: browser.pid }).catch(error => {
-          if (error.ownerCheck) {
-            browser.ownerCheck = error.ownerCheck;
-            writeFileSync(join(plan.out, 'browser.json'), JSON.stringify(identity(), null, 2));
-          }
+    for (const originalArm of plan.arms) {
+      await runTaskWithHold(async attempt => {
+        let arm = originalArm;
+        if (controller.signal.aborted) throw Error('Gate interrupted');
+        const census = async () => {
+          const ownerCheck = await (runtime.checkOwner || checkBrowserOwner)(browser, { ownedPid: browser.pid }).catch(error => {
+            if (error.ownerCheck) {
+              browser.ownerCheck = error.ownerCheck;
+              writeFileSync(join(plan.out, 'browser.json'), JSON.stringify(identity(), null, 2));
+            }
+            throw error;
+          });
+          browser.ownerCheck = ownerCheck;
+          writeFileSync(join(plan.out, 'browser.json'), JSON.stringify({ ...identity(), ownerCheck }, null, 2));
+        };
+        if (browser.browser !== 'firefox') await census();
+        const start = await (runtime.resetBrowser || resetRealBrowser)(browser).catch(error => {
+          if (error.ownerCheck) browser.ownerCheck = error.ownerCheck;
+          writeFileSync(join(plan.out, 'browser.json'), JSON.stringify(identity(), null, 2));
           throw error;
         });
-        browser.ownerCheck = ownerCheck;
-        writeFileSync(join(plan.out, 'browser.json'), JSON.stringify({ ...identity(), ownerCheck }, null, 2));
-      };
-      if (browser.browser !== 'firefox') await census();
-      const start = await (runtime.resetBrowser || resetRealBrowser)(browser).catch(error => {
-        if (error.ownerCheck) browser.ownerCheck = error.ownerCheck;
-        writeFileSync(join(plan.out, 'browser.json'), JSON.stringify(identity(), null, 2));
-        throw error;
-      });
-      if (browser.browser === 'firefox') await census();
-      const startKeys = new Set(Object.keys(start));
-      // Firefox and Safari launch a browser per task, so each task's prompt names that task's browser PID.
-      if (['firefox', 'safari'].includes(browser.browser)) {
-        arm = realGatePlan({ args, tasks: [arm.task], repo, mcpRoot, realBrowser: identity(), dryRun: false }).arms[0];
-        writeFileSync(join(plan.out, 'browser.json'), JSON.stringify(identity(), null, 2));
-      }
-      if (controller.signal.aborted) throw Error('Gate interrupted');
-      // The browser's own window goes where the fewest other windows overlap it, and what still covers it is recorded beside the
-      // task's outcome. An offline test that injects the browser never reads or moves the Mac's windows.
-      const readCover = runtime.windowCover || (runtime.launchBrowser ? async () => null : windowCover);
-      await readCover(browser.pid, { place: true });
-      // Check the actual owned browser frame before any agent starts. Safari and Firefox relaunch on reset,
-      // so every task checks again. Only proven Finder fixture covers may close; each owner cover gets three minutes per round.
-      await (runtime.guardBrowserGroup || (runtime.launchBrowser ? async () => {} : guardBrowserGroup))(browser.pid, {
-        signal: controller.signal,
-        coverWaits,
-        log: event => appendFileSync(join(plan.out, 'group-cover.jsonl'), JSON.stringify(event) + '\n'),
-      });
-      const cover = await readCover(browser.pid, {});
-      // Windows can come over it while the agent runs, so the cover is read again every 5 s and at the end (read only).
-      const coverWatch = (runtime.watchCover || (runtime.launchBrowser ? null : watchCover))?.(browser.pid) ?? null;
-      // Chrome and Helium report every page URL while the agent runs; the lookup graders need that visit.
-      let watch = null, navigation, coverRun = null;
-      if (!['firefox', 'safari'].includes(browser.browser)) {
-        try { watch = await (runtime.watchBrowser || watchNavigations)(browser); }
-        catch (error) { navigation = { observed: false, reason: error.message }; }
-      }
-      const settingsLog = settingsLogUrl(arm.task);
-      const beforeSettings = settingsLog ? await getJson(settingsLog) : null;
-      const run = await (runtime.runAgent || runGateAgent)(arm, { signal: controller.signal }).catch(error => {
-        if (error.groupClean === false || error.collectionError) cleanupProven = false;
-        throw error;
-      }).finally(async () => {
-        coverRun = await coverWatch?.stop().catch(error => ({ error: error.message })) ?? null;
-        if (!watch) return;
-        navigation = { observed: true, urls: watch.urls() };
-        await watch.close().catch(() => {});
-      });
-      if (!run.groupClean) { cleanupProven = false; throw Error('BENCH_AGENT_CLEANUP_UNPROVED'); }
-      const snapshot = await (runtime.observeBrowser || observeRealBrowser)(browser);
-      const observation = ['firefox', 'safari'].includes(browser.browser) ? snapshot : { observed: true, tabs: snapshot };
-      const after = observation.tabs;
-      if (browser.browser === 'firefox') {
-        // Positions can move or be reused; the first history entry identifies the start tab.
-        startKeys.clear();
-        for (const [key, tab] of Object.entries(after)) if (tab.initialUrl === browser.args.at(-1) || tab.url === browser.args.at(-1)) startKeys.add(key);
-        if (observation.ownerCheck) browser.ownerCheck = observation.ownerCheck;
-        writeFileSync(join(plan.out, 'browser.json'), JSON.stringify(identity(), null, 2));
-      }
-      run.afterExit = after;
-      run.tabs = new Set(Object.keys(after));
-      const grade = await getJson(arm.task.grade);
-      const site = settingsLog ? (Number.isSafeInteger(beforeSettings?.cursor)
-        ? await getJson(`${settingsLog}?after=${beforeSettings.cursor}`) : { error: 'settings submission cursor unavailable' })
-        : await getJson(arm.task.name === 'form-checkout' ? 'http://127.0.0.1:5413/gate-log/p04' : arm.task.site?.log);
-      const evidence = run.evidence;
-      // A failed navigation log on Chrome or Helium proves no visit; only Firefox and Safari fall back to tool text.
-      const visits = navigation ? (navigation.observed ? navigation.urls : []) : null;
-      const text = name => { try { return readFileSync(join(arm.dir, name), 'utf8'); } catch { return ''; } };
-      const outcome = gradeGateTask({ task: arm.task, run, grade, site, runner, after, startKeys, eventsText: text('events.jsonl'),
-        observed: observation.observed, observationReason: observation.reason, ownerCheck: observation.ownerCheck, evidence, visits });
-      if (run.inventoryErrors?.length) {
-        outcome.problems.push(...run.inventoryErrors);
-        outcome.ok = false;
-        outcome.cell = 'FAIL: ' + outcome.problems.join('; ');
-      }
-      const errorClass = outcome.ok ? null : runErrorClass({ eventsText: text('events.jsonl'), stderr: text('stderr.txt') });
-      // Cover evidence on every row, pass or fail; race-score --exclude-covered decides over all rounds which rows to leave out.
-      const covered = coverEvidence({ eventsText: text('events.jsonl'), readings: [cover, coverRun] });
-      // The first watched tasks name every window owner the watch saw, overlays included, so a new overlay owner shows up early.
-      if (coverRun?.seen?.length && coverLogged++ < 3) console.error(`cover watch ${arm.task.name}: ${coverRun.seen.map(w =>
-        `${w.owner} ${Math.round(w.fraction * 100)}% layer ${w.layer ?? '?'}${w.counted ? '' : ' (overlay, not counted)'}`).join('; ')}`);
-      const row = { task: arm.task, surface: arm.surface, status: 'ran', wallMs: run.finished - run.started, agentSeconds: run.agentSeconds ?? null,
-        agentTiming: run.agentTiming, secondsTiming: run.secondsTiming, toolCalls: run.toolCalls, toolErrors: run.toolErrors,
-        successfulBrowserCalls: evidence?.successfulCalls ?? null, run: { ...run, tabs: [...run.tabs] }, start, observation, navigation: navigation ?? null,
-        agentConfig: arm.metadata, grade, site, outcome, errorClass, cover, coverRun, ...(covered ? { coverEvidence: covered } : {}) };
-      const savedRow = arm.surface === 'cursor-cu' ? scrubCursor(row) : row;
-      rows.push(savedRow);
-      writeFileSync(join(arm.dir, 'run.json'), JSON.stringify(savedRow, null, 2));
-      writeFileSync(join(plan.out, 'results.json'), JSON.stringify(rows, null, 2));
-      if (run.safetyStop) throw Error(run.safetyStop);
+        if (browser.browser === 'firefox') await census();
+        const startKeys = new Set(Object.keys(start));
+        // Firefox and Safari launch a browser per task, so each task's prompt names that task's browser PID.
+        if (['firefox', 'safari'].includes(browser.browser)) {
+          arm = realGatePlan({ args, tasks: [arm.task], repo, mcpRoot, realBrowser: identity(), dryRun: false }).arms[0];
+          writeFileSync(join(plan.out, 'browser.json'), JSON.stringify(identity(), null, 2));
+        }
+        if (controller.signal.aborted) throw Error('Gate interrupted');
+        // The browser's own window goes where the fewest other windows overlap it, and what still covers it is recorded beside the
+        // task's outcome. An offline test that injects the browser never reads or moves the Mac's windows.
+        const readCover = runtime.windowCover || (runtime.launchBrowser ? async () => null : windowCover);
+        await readCover(browser.pid, { place: true });
+        // Check the actual owned browser frame before any agent starts. Safari and Firefox relaunch on reset,
+        // so every task checks again. Only proven Finder fixture covers may close; each owner cover gets three minutes per round.
+        await (runtime.guardBrowserGroup || (runtime.launchBrowser ? async () => {} : guardBrowserGroup))(browser.pid, {
+          signal: controller.signal,
+          coverWaits,
+          log: event => appendFileSync(join(plan.out, 'group-cover.jsonl'), JSON.stringify(event) + '\n'),
+        });
+        const cover = await readCover(browser.pid, {});
+        // Windows can come over it while the agent runs, so the cover is read again every 5 s and at the end (read only).
+        const coverWatch = (runtime.watchCover || (runtime.launchBrowser ? null : watchCover))?.(browser.pid) ?? null;
+        // Chrome and Helium report every page URL while the agent runs; the lookup graders need that visit.
+        let watch = null, navigation, coverRun = null;
+        if (!['firefox', 'safari'].includes(browser.browser)) {
+          try { watch = await (runtime.watchBrowser || watchNavigations)(browser); }
+          catch (error) { navigation = { observed: false, reason: error.message }; }
+        }
+        const settingsLog = settingsLogUrl(arm.task);
+        const beforeSettings = settingsLog ? await getJson(settingsLog) : null;
+        const run = await (runtime.runAgent || runGateAgent)(arm, { signal: controller.signal }).catch(error => {
+          if (error.groupClean === false || error.collectionError) { cleanupProven = false; agentCollected = false; }
+          throw error;
+        }).finally(async () => {
+          coverRun = await coverWatch?.stop().catch(error => ({ error: error.message })) ?? null;
+          if (!watch) return;
+          navigation = { observed: true, urls: watch.urls() };
+          await watch.close().catch(() => {});
+        });
+        if (!run.groupClean) { cleanupProven = false; agentCollected = false; throw Error('BENCH_AGENT_CLEANUP_UNPROVED'); }
+        const snapshot = await (runtime.observeBrowser || observeRealBrowser)(browser);
+        const observation = ['firefox', 'safari'].includes(browser.browser) ? snapshot : { observed: true, tabs: snapshot };
+        const after = observation.tabs;
+        if (browser.browser === 'firefox') {
+          // Positions can move or be reused; the first history entry identifies the start tab.
+          startKeys.clear();
+          for (const [key, tab] of Object.entries(after)) if (tab.initialUrl === browser.args.at(-1) || tab.url === browser.args.at(-1)) startKeys.add(key);
+          if (observation.ownerCheck) browser.ownerCheck = observation.ownerCheck;
+          writeFileSync(join(plan.out, 'browser.json'), JSON.stringify(identity(), null, 2));
+        }
+        run.afterExit = after;
+        run.tabs = new Set(Object.keys(after));
+        const grade = await getJson(arm.task.grade);
+        const site = settingsLog ? (Number.isSafeInteger(beforeSettings?.cursor)
+          ? await getJson(`${settingsLog}?after=${beforeSettings.cursor}`) : { error: 'settings submission cursor unavailable' })
+          : await getJson(arm.task.name === 'form-checkout' ? 'http://127.0.0.1:5413/gate-log/p04' : arm.task.site?.log);
+        const evidence = run.evidence;
+        // A failed navigation log on Chrome or Helium proves no visit; only Firefox and Safari fall back to tool text.
+        const visits = navigation ? (navigation.observed ? navigation.urls : []) : null;
+        const text = name => { try { return readFileSync(join(arm.dir, name), 'utf8'); } catch { return ''; } };
+        const outcome = gradeGateTask({ task: arm.task, run, grade, site, runner, after, startKeys, eventsText: text('events.jsonl'),
+          observed: observation.observed, observationReason: observation.reason, ownerCheck: observation.ownerCheck, evidence, visits });
+        if (run.inventoryErrors?.length) {
+          outcome.problems.push(...run.inventoryErrors);
+          outcome.ok = false;
+          outcome.cell = 'FAIL: ' + outcome.problems.join('; ');
+        }
+        const errorClass = outcome.ok ? null : runErrorClass({ eventsText: text('events.jsonl'), stderr: text('stderr.txt') });
+        // Cover evidence on every row, pass or fail; race-score --exclude-covered decides over all rounds which rows to leave out.
+        const covered = coverEvidence({ eventsText: text('events.jsonl'), readings: [cover, coverRun] });
+        // The first watched tasks name every window owner the watch saw, overlays included, so a new overlay owner shows up early.
+        if (coverRun?.seen?.length && coverLogged++ < 3) console.error(`cover watch ${arm.task.name}: ${coverRun.seen.map(w =>
+          `${w.owner} ${Math.round(w.fraction * 100)}% layer ${w.layer ?? '?'}${w.counted ? '' : ' (overlay, not counted)'}`).join('; ')}`);
+        const row = { task: arm.task, surface: arm.surface, status: 'ran', wallMs: run.finished - run.started, agentSeconds: run.agentSeconds ?? null,
+          agentTiming: run.agentTiming, secondsTiming: run.secondsTiming, toolCalls: run.toolCalls, toolErrors: run.toolErrors,
+          successfulBrowserCalls: evidence?.successfulCalls ?? null, run: { ...run, tabs: [...run.tabs] }, start, observation, navigation: navigation ?? null,
+          agentConfig: arm.metadata, grade, site, outcome, errorClass, cover, coverRun, ...(covered ? { coverEvidence: covered } : {}) };
+        const savedRow = arm.surface === 'cursor-cu' ? scrubCursor(row) : row;
+        rows.push(savedRow);
+        writeFileSync(join(arm.dir, 'run.json'), JSON.stringify(savedRow, null, 2));
+        writeFileSync(join(plan.out, 'results.json'), JSON.stringify(rows, null, 2));
+        if (run.safetyStop) throw Error(run.safetyStop);
+        return savedRow;
+      }, { signal: controller.signal, ...runtime.hold, onRetry: (row, attempt) => {
+        console.error(`HOLD ${row.task.name}: attempt ${attempt} excluded; rerunning after the hold clears.`);
+        mkdirSync(join(plan.out, 'held-attempts'), { recursive: true, mode: 0o700 });
+        let archive = join(plan.out, 'held-attempts', `${row.task.name}-${attempt}`);
+        if (existsSync(archive)) archive = mkdtempSync(join(plan.out, 'held-attempts', `${row.task.name}-${attempt}-`));
+        renameSync(originalArm.dir, archive);
+        writeFileSync(join(archive, 'harness-failure.json'), JSON.stringify({ reason: 'benchmark hold overlapped task' }));
+        rows.pop();
+        appendFileSync(join(plan.out, 'held-attempts.jsonl'), JSON.stringify({ ...row, excluded: 'benchmark hold overlapped task' }) + '\n');
+        writeFileSync(join(plan.out, 'results.json'), JSON.stringify(rows, null, 2));
+      } });
     }
   } catch (error) {
     if (existsSync(plan.out)) {
@@ -488,14 +507,16 @@ export async function runRealGate({ args, repo = repoRoot, mcpRoot, runner, task
         ...(typeof error.cdpMethod === 'string' ? { cdpMethod: error.cdpMethod } : {}) }));
       markHarnessFailure(plan.out, rows, plan.arms.length);
     }
-    throw error;
+    stopCode = benchmarkStopCode(error);
+    if (!stopCode) throw error;
+    console.error(error.message);
   } finally {
-    try { await allow?.stop(); } catch (error) { console.error(`Claude in Chrome prompt watcher did not stop cleanly (${error.message})`); }
-    await armPrep?.release();
+    try { await allow?.stop(); } catch (error) { cleanupProven = false; console.error(`Claude in Chrome prompt watcher did not stop cleanly (${error.message})`); }
+    try { await armPrep?.release(); } catch { cleanupProven = false; }
     try { await monitor?.stop(); } catch { cleanupProven = false; }
     try { await sites?.close(); } catch { cleanupProven = false; }
     // A leaked agent may still drive this window. Retain both profile and lock.
-    if (cleanupProven) try {
+    if (agentCollected) try {
       if (browser) {
         try { writeFileSync(join(plan.out, 'cleanup.json'), JSON.stringify(await browser.stop())); }
         finally {
@@ -505,14 +526,16 @@ export async function runRealGate({ args, repo = repoRoot, mcpRoot, runner, task
       }
     }
     catch { cleanupProven = false; }
+    try { await browser?.dispose?.(); } catch { cleanupProven = false; }
     if (engineStart) try {
       engine = engineSpan(engineStart, (runtime.readEngine || readEngine)());
       writeFileSync(join(plan.out, 'engine.json'), JSON.stringify(engine, null, 2));
     } catch (error) { console.error(`Engine version at the end not recorded (${error.message})`); }
     for (const signal of ['SIGINT', 'SIGTERM', 'SIGHUP']) process.removeListener(signal, abort);
-    if (cleanupProven) rmdirSync(lockPath);
-    else console.error(`Cleanup unproved; retained ${lockPath} and ${plan.browser.profileRoot}`);
+    if (locked && cleanupProven) rmdirSync(lockPath);
+    else if (locked) console.error(`Cleanup unproved; retained ${lockPath} and ${plan.browser.profileRoot}`);
   }
+  if (stopCode) { process.exitCode = cleanupProven ? stopCode : 1; return rows; }
   for (const row of rows) row.focusGrade = sleightKind(row.surface, row.task.browser) === 'sleight-turbo' ? gradeHostMonitor(monitor?.log || [], row.run, rows.map(row => row.run))
     : { ok: null, cell: 'not measured', events: [], problems: [] };
   writeFileSync(join(plan.out, 'results.json'), JSON.stringify(rows, null, 2));

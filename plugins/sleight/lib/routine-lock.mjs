@@ -12,8 +12,12 @@ export const aliveProcess = pid => {
 // 2026-10-10), so no stored start ever matched and a live owner's lock looked stale.
 export function processStartTime(pid) {
   try {
-    const text = execFileSync('/bin/ps', ['-o', 'lstart=', '-p', String(pid)], { encoding: 'utf8', timeout: 2000 }).trim();
-    return text || undefined;
+    // lstart has no zone. Pin its clock and locale, then include the zone before parsing.
+    const text = execFileSync('/bin/ps', ['-o', 'lstart=', '-p', String(pid)], {
+      env: { ...process.env, TZ: 'UTC0', LC_ALL: 'C' }, encoding: 'utf8', timeout: 2000,
+     killSignal: 'SIGKILL' }).trim();
+    const time = text ? Date.parse(`${text} GMT`) : NaN;
+    return Number.isFinite(time) ? new Date(time).toISOString() : undefined;
   } catch { return; }
 }
 

@@ -29,6 +29,7 @@ function harness(t, options = {}) {
   const tool = name => ({ name, description: 'x', inputSchema: { type: 'object' } });
   const relay = createRelay({ clientIn, clientOut, serverIn, serverOut, sessionId: 's', ask: async () => 'accept',
     inputLease: new InputLease({ directory, holder: 'A' }), ownHostPid: pid => pid === HOST_PID,
+    ownHostLine: value => /^\s*\d+\s*$/.test(String(value)) ? OWN : identity.ownLine(value),
     localTools: { tools: ['menu_bar', 'hover', 'drag', 'select_window', 'open_file'].map(tool),
       target: async args => options.targets?.[args.app] ?? ({ appId: `com.example.${String(args.app).toLowerCase()}`, app: args.app, title: null, url: null }),
       call: async name => { ran.push(name); return { content: [{ type: 'text', text: 'ok' }] }; } }, ...options.relay });
@@ -55,6 +56,19 @@ test('the line and the identity checks: name, a file in the helper cache, and a 
   assert.equal(ownHostPid(HOST_PID, ps('/Applications/TextEdit.app/Contents/MacOS/TextEdit')), false);
   assert.equal(ownHostPid(HOST_PID, () => { throw new Error('no such process'); }), false);
   assert.equal(ownHostPid('4242', ps(HOST_FILE)), false, 'only an integer pid is looked up');
+});
+
+test('INT22C installed prebuilt Glide paths refuse a renamed helper and keep path boundaries', () => {
+  const path = '/cache/test-market/sleight/1.6.0/lib/mac-driver/prebuilt/darwin-arm64/glide-engine/Contents/MacOS/Helper';
+  assert.equal(identity.isGlideEngine('Helper', path), true);
+  assert.equal(identity.isConsentHost('Helper', path), false);
+  assert.equal(isOwnHost(path), true);
+  assert.equal(identity.ownLine('Helper', path), identity.GLIDE_ENGINE_LINE);
+  assert.equal(ownHostPid(HOST_PID, () => path + '\n'), true);
+  const nearMiss = path.replace('/glide-engine/', '/glide-engine-other/');
+  assert.equal(identity.isGlideEngine('Helper', nearMiss), false);
+  assert.equal(isOwnHost(nearMiss), false);
+  assert.equal(ownHostPid(HOST_PID, () => nearMiss + '\n'), false);
 });
 
 test('engine: getApp of the host by name, by its file or by its pid never reaches the engine', async t => {
@@ -294,4 +308,120 @@ test('auth dialogs: a read that turns out to be the sheet shows Claude only the 
   h.js(2, 'await s.typeText("hunter2")'); await settle();
   assert.equal(h.sent(2), false);
   assert.equal(h.reply(2)?.result?.content?.[0]?.text, AUTH);
+});
+
+
+// GL1A: classification only refuses. It never issues a binary receipt or grants access.
+import * as identity from '../plugins/sleight/lib/own-host.mjs';
+const GLIDE = "That is sleight's Glide engine; tools never act on it.";
+const CACHE = `${MAC_USERS}x/Library/Caches/sleight/turbo-host`;
+const DRIVER = `${CACHE}/mac-driver/k2/glide-engine`;
+const STALE = `${CACHE}/mac-driver/k0/consent-host`;
+const PREBUILT = new URL('../plugins/sleight/lib/mac-driver/prebuilt/darwin-arm64/glide-engine', import.meta.url).pathname;
+
+test('GL1A 1: C and G separate current hosts, overlap only for the stale driver, and normalize names', () => {
+  assert.equal(typeof identity.isConsentHost, 'function');
+  assert.equal(typeof identity.isGlideEngine, 'function');
+  for (const value of [HOST_FILE, `${MAC_USERS}x/Library/Caches/sleight/run-abc123/consent-host`, 'consent-host', 'Consent Host.app']) {
+    assert.equal(identity.isConsentHost(value), true, value);
+    assert.equal(identity.isGlideEngine(value), false, value);
+    assert.equal(identity.ownLine(value), OWN, value);
+  }
+  for (const value of [DRIVER, PREBUILT, 'glide-engine', 'Glide Engine.app', 'GLIDE_ENGINE']) {
+    assert.equal(identity.isGlideEngine(value), true, value);
+    assert.equal(identity.isConsentHost(value), false, value);
+    assert.equal(identity.ownLine(value), GLIDE, value);
+  }
+  assert.equal(identity.isConsentHost(STALE), true);
+  assert.equal(identity.isGlideEngine(STALE), true);
+  assert.equal(identity.ownLine(STALE), OWN);
+  for (const value of ['/Applications/Chess.app', 'com.apple.Chess', 'glide', 'engineer', 'consent-hosting']) {
+    assert.equal(identity.isOwnHost(value), false, value);
+    assert.equal(identity.isConsentHost(value), false, value);
+    assert.equal(identity.isGlideEngine(value), false, value);
+  }
+});
+
+test('GL1A 2: a named driver outside the cache is refused without granting binary trust', () => {
+  const path = '/usr/local/bin/glide-engine';
+  assert.equal(identity.isOwnHost(path), true);
+  assert.equal(identity.isGlideEngine(path), true);
+  assert.equal(identity.ownLine(path), GLIDE);
+  assert.equal(identity.ownHostPid(500, () => path), true);
+  assert.equal(identity.namesOwnHost(500, pid => identity.ownHostPid(pid, () => path)), true);
+  assert.equal(identity.isOwnHost('/tmp/link'), false);
+  assert.equal(identity.ownHostPid(500, () => DRIVER), true);
+});
+
+test('GL1A 5: card text names both hosts without matching ordinary near names', () => {
+  for (const text of ['Allow glide-engine to control Safari?', 'Glide Engine wants…', 'glide_engine', DRIVER, HOST_FILE])
+    assert.equal(identity.mentionsOwnHost(text), true, text);
+  for (const text of ['glide path', 'engine', 'glide-engineer']) assert.equal(identity.mentionsOwnHost(text), false, text);
+});
+
+test('GL1A 5: a driver card without tool_params.app is declined and the read gets the Glide line', async t => {
+  for (const message of ['Allow glide-engine to control Safari?', 'Glide Engine wants permission', 'glide_engine', DRIVER]) {
+    const asked = [], h = harness(t, { relay: { ask: async () => { asked.push(true); return 'accept'; } } });
+    h.js(1, 'let app = await cua.getApp("Some Alias")'); await settle();
+    assert.equal(h.sent(1), true);
+    h.fromServer({ jsonrpc: '2.0', id: 'g1', method: 'elicitation/create', params: { message,
+      _meta: { connector_id: 'computer-use', persist: ['session'], riskLevel: 'high', tool_params: {} } } });
+    await settle();
+    assert.deepEqual(h.toServer.find(m => m.id === 'g1')?.result, { action: 'decline' });
+    assert.deepEqual(asked, []);
+    h.fromServer({ jsonrpc: '2.0', id: 1, result: { isError: true, content: [{ type: 'text', text: 'The user declined.' }] } }); await settle();
+    assert.equal(h.reply(1)?.result?.content?.[0]?.text, GLIDE);
+  }
+});
+
+test('GL1A 7: pid reuse rechecks comm on every call, including namesOwnHost', () => {
+  let calls = 0;
+  const run = () => ++calls % 2 ? DRIVER : '/System/Applications/Chess.app/Contents/MacOS/Chess';
+  assert.equal(identity.ownHostPid(4242, run), true);
+  assert.equal(identity.ownHostPid(4242, run), false);
+  const check = pid => identity.ownHostPid(pid, run);
+  assert.equal(identity.namesOwnHost('4242', check), true);
+  assert.equal(identity.namesOwnHost('4242', check), false);
+  assert.equal(calls, 4);
+});
+
+test('GL1A 10: Glide literals, concatenation and pid stop before the engine; header reads are withheld', async t => {
+  const h = harness(t, { relay: { ownHostPid: pid => pid === HOST_PID,
+    ownHostLine: app => /^\s*4242\s*$/.test(String(app)) ? GLIDE : identity.ownLine(app) } });
+  for (const [index, code] of ['cua.getApp("glide-engine")', 'cua.getApp("Glide " + "Engine.app")', 'cua.getApp(4242)'].entries()) {
+    h.js(index + 1, `let app = await ${code}`); await settle();
+    assert.equal(h.sent(index + 1), false);
+    assert.equal(h.reply(index + 1)?.result?.content?.[0]?.text, GLIDE);
+  }
+  h.js(4, 'let card = await cua.getApp({ windowId: 9 })'); await settle();
+  assert.equal(h.sent(4), true);
+  h.fromServer(read(4, 'glide-engine', undefined, 'Private', '\t1 button Secret')); await settle();
+  assert.equal(h.reply(4)?.result?.content?.[0]?.text, GLIDE);
+  assert.doesNotMatch(JSON.stringify(h.reply(4)), /Secret/);
+  h.js(5, 'await card.click(1)'); await settle();
+  assert.equal(h.sent(5), false);
+  assert.equal(h.reply(5)?.result?.content?.[0]?.text, GLIDE);
+});
+
+test('GL1A 12: prebuilt origin and an executable inside its prebuilt path are refused', () => {
+  assert.equal(identity.ownHostPid(500, () => PREBUILT), true);
+  assert.equal(identity.isGlideEngine(PREBUILT + '/Contents/MacOS/Helper'), true);
+  assert.equal(identity.ownHostPid(500, () => PREBUILT + '/Contents/MacOS/Helper'), true);
+});
+
+
+import childProcess from 'node:child_process';
+import { syncBuiltinESMExports } from 'node:module';
+test('GL1A 10: the default pid refusal line classifies the executable without memoizing', async t => {
+  let calls = 0;
+  t.mock.method(childProcess, 'execFileSync', (file, args) => {
+    assert.equal(file, '/bin/ps'); assert.deepEqual(args, ['-p', '4242', '-o', 'comm=']);
+    calls++; return DRIVER;
+  });
+  syncBuiltinESMExports(); t.after(() => { t.mock.restoreAll(); syncBuiltinESMExports(); });
+  const h = harness(t, { relay: { ownHostLine: identity.ownLine } });
+  h.js(1, 'let app = await cua.getApp(4242)'); await settle();
+  assert.equal(h.sent(1), false);
+  assert.equal(h.reply(1)?.result?.content?.[0]?.text, GLIDE);
+  assert.ok(calls > 0);
 });

@@ -1,3 +1,4 @@
+import { assertChildStatus } from './fixtures/child-status.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { mkdtempSync, readFileSync, realpathSync, statSync } from 'node:fs';
@@ -23,8 +24,8 @@ function build(t) {
   const dir = trackTemp(realpathSync(mkdtempSync(join(tmpdir(), 'sleight-ring-'))));
   const output = join(dir, 'consent-host');
   const started = performance.now();
-  const built = spawnSync('/usr/bin/xcrun', ['swiftc', '-module-cache-path', swiftModuleCache(), sourcePath, '-o', output], { encoding: 'utf8' });
-  assert.equal(built.status, 0, built.stderr);
+  const built = spawnSync('/usr/bin/xcrun', ['swiftc', '-module-cache-path', swiftModuleCache(), sourcePath, '-o', output], { encoding: 'utf8', timeout: 600000, killSignal: 'SIGKILL' });
+  assertChildStatus(built, 0, built.stderr);
   binary = output;
   t.diagnostic(`compileMs=${Math.round(performance.now() - started)} binaryBytes=${statSync(binary).size}`);
   return binary;
@@ -33,7 +34,7 @@ function run(t, frames, flags = ['--cursor-style=ring']) {
   return spawnSync(build(t), ['--ring-plan-dump', ...flags], {
     input: frames.map(f => JSON.stringify(f) + '\n').join(''), encoding: 'utf8', timeout: 20000, maxBuffer: 1 << 28,
     env: { PATH: '/usr/bin:/bin', LANG: 'en_US.UTF-8' },
-  });
+   killSignal: 'SIGKILL' });
 }
 const near = (a, b, e = 1e-6) => assert.ok(Math.abs(a - b) < e, `${a} != ${b}`);
 // Every drawn plan: monotonic keyTimes from 0 to 1, a value per time, every track inside the plan, and D2's budget.
@@ -55,7 +56,7 @@ function check(p) {
 const spaced = frames => frames.some(f => 'dumpClock' in f) ? frames : frames.flatMap((f, i) => [clock(i), f]);
 function effects(t, frames, flags) {
   const result = run(t, spaced(frames), flags);
-  assert.equal(result.status, 0, result.stderr);
+  assertChildStatus(result, 0, result.stderr);
   const lines = result.stdout.trim().split('\n').map(JSON.parse);
   for (const line of lines) if (line.effect === 'draw') check(line);
   return lines;
@@ -427,14 +428,14 @@ test('ring frames enforce exact keys, nonce, sequence, numeric bounds and types'
     act('click', { rect: [0, 0, 0, 1] }), status('waiting', { nonce: 'x' }), aim({ seq: true }), aim({ seq: 9007199254740992 }),
     aim({ pid: 0 }), aim({ windowId: 4294967296 }), aim({ at: [100001, 0] }), aim({ at: [true, 0] }), status('waiting', { surprise: false }),
     status('waiting', { state: 1 }), clock(-1), { dumpClock: true }, { dumpClock: 1, extra: 1 }]) {
-    assert.equal(run(t, [frame]).status, 65, JSON.stringify(frame));
+    assertChildStatus(run(t, [frame]), 65, JSON.stringify(frame));
   }
-  for (const tail of [status('done', { nonce: 'b'.repeat(64), seq: 2 }), status('done'), aim()]) assert.equal(run(t, [act(), tail]).status, 65);
-  assert.equal(run(t, [act(), clock(1), clock(.5)]).status, 65, 'the clock never goes back');
+  for (const tail of [status('done', { nonce: 'b'.repeat(64), seq: 2 }), status('done'), aim()]) assertChildStatus(run(t, [act(), tail]), 65);
+  assertChildStatus(run(t, [act(), clock(1), clock(.5)]), 65, 'the clock never goes back');
   const bad = run(t, [act(), aim({ seq: 2, holdMs: 601 }), act('click', { seq: 3 })]);
-  assert.equal(bad.status, 65); assert.equal(bad.stdout.trim().split('\n').filter(l => JSON.parse(l).effect === 'draw').length, 1);
+  assertChildStatus(bad, 65); assert.equal(bad.stdout.trim().split('\n').filter(l => JSON.parse(l).effect === 'draw').length, 1);
   for (const flags of [['--cursor-style=other'], ['--cursor-style=ring', '--cursor-style=seam'], ['--reduce-motion', '--reduce-motion'],
-    ['--clip=0,0,-1,2'], ['--seed=x'], ['--gone=1,x'], ['--surprise']]) assert.equal(run(t, [], flags).status, 64, flags.join(' '));
+    ['--clip=0,0,-1,2'], ['--seed=x'], ['--gone=1,x'], ['--surprise']]) assertChildStatus(run(t, [], flags), 64, flags.join(' '));
   const [hidden, fresh] = effects(t, [act(), { hand: 'hide', nonce }, status('thinking', { seq: 2 })]).filter(l => l.effect !== 'draw' && l.effect !== 'park').slice(0, 2);
   assert.equal(hidden.state, 'hidden'); assert.equal(fresh.dropped, true);
 });
@@ -452,13 +453,13 @@ test('ring mode: launch styles are strict and the live reader accepts or rejects
       status('done', { seq: 4, ok: true })];
     const result = spawnSync(build(t), ['--hand', '--cursor-style=' + style], {
       input: frames.map(f => JSON.stringify(f) + '\n').join(''), encoding: 'utf8', timeout: 10000, env: { PATH: '/usr/bin:/bin', LANG: 'en_US.UTF-8' },
-    });
-    assert.equal(result.status, 0, result.stderr); assert.equal(result.stdout, '');
-    const bad = spawnSync(build(t), ['--hand', '--cursor-style=' + style], { input: JSON.stringify(aim({ holdMs: 601 })) + '\n', encoding: 'utf8', timeout: 10000 });
-    assert.equal(bad.status, 65); assert.equal(bad.stdout, '');
+     killSignal: 'SIGKILL' });
+    assertChildStatus(result, 0, result.stderr); assert.equal(result.stdout, '');
+    const bad = spawnSync(build(t), ['--hand', '--cursor-style=' + style], { input: JSON.stringify(aim({ holdMs: 601 })) + '\n', encoding: 'utf8', timeout: 10000, killSignal: 'SIGKILL' });
+    assertChildStatus(bad, 65); assert.equal(bad.stdout, '');
   }
   for (const args of [['--hand', '--cursor-style=other'], ['--hand', '--cursor-style=ring', '--cursor-style=seam']]) {
-    assert.equal(spawnSync(build(t), args, { input: '', encoding: 'utf8', timeout: 10000 }).status, 64);
+    assertChildStatus(spawnSync(build(t), args, { input: '', encoding: 'utf8', timeout: 10000, killSignal: 'SIGKILL' }), 64);
   }
 });
 
@@ -473,7 +474,7 @@ test('ring source: Core Animation only, no timer, display link or per-frame Swif
   assert.match(host.match(/    func voiceBars[\s\S]*?(?=    func installRing)/)?.[0] ?? '', /animation.duration = 0.6/);
   assert.match(host.match(/    func voiceBars[\s\S]*?(?=    func installRing)/)?.[0] ?? '', /animation.repeatCount = .infinity/);
   // The host's ring code keeps one one-shot wake-up.
-  const ringHost = host.slice(host.indexOf('var ringEnvironment'), host.indexOf('func installRing'));
+  const ringHost = host.slice(host.indexOf('var ringEnvironment: RingEnvironment'), host.indexOf('func installRing'));
   assert.equal((ringHost.match(/asyncAfter/g) ?? []).length, 1);
   assert.doesNotMatch(ringHost, /Timer/);
 });

@@ -1,7 +1,7 @@
 {
   "date": "2026-10-04",
   "branch": "codex/local-hover",
-  "workspace": "~/Projects/sleight-wt/local-hover",
+  "workspace": "<private-evidence>/local-hover",
   "liveStatus": "Tooltip and hover-menu observations completed in the second owner-away window. Default 1500 ms is supported by these captures. See 2026-10-04-local-hover.md.",
   "defaultWaitMs": 1500,
   "delayMeasured": true,

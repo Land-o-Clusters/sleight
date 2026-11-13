@@ -104,3 +104,58 @@ Run it only when you intend to show an overlay. The automated test checks the sa
 Visibility, capture exclusion, focus behavior, Spaces, multiple displays and drag cover still need live qualification on
 your Mac. Merge this kit after VC1 supplies the linked protocol document; integration must confirm its emitter uses
 lowercase 32-hex session ids and requires sockets at mode `0600` exactly.
+
+## Windows
+
+Node 24 uses named pipes on Windows. Run these commands from `cmd.exe` in the repository root:
+
+```bat
+node examples\cursor-renderer\listen.mjs --name reference
+```
+
+In another terminal:
+
+```bat
+node examples\cursor-renderer\replay.mjs examples\cursor-renderer\sample-session.jsonl --speed 4
+```
+
+Windows uses `\\.\pipe\sleight-cursor-<user-sid>-<name>` and discovers listeners in
+`HKCU\Software\sleight\cursor\renderers`. `SLEIGHT_CURSOR_STREAM_DIR` applies only to Unix sockets.
+The shared adapter at `plugins/sleight/lib/hand/windows-transport.mjs` and its `windows-security.ps1` helper are
+required for these Windows commands. Keep both beside their existing imports when copying the kit.
+The helper uses Windows PowerShell 5.1 and .NET Framework, with no added packages or execution-policy changes.
+It checks the helper's SHA-256 before every worker start and runs those bytes through `-EncodedCommand`, without an
+execution-policy flag. It receives JSON data on stdin. A policy that blocks PowerShell or Add-Type causes startup to fail closed.
+The registry key and pipe require current-user ownership
+and protected DACLs with one full-control ACE for that SID. Startup refuses an unsafe existing registry key.
+The listener binds, seals its pipe, then publishes its registry value. It never unlinks a Windows pipe.
+Writers verify the registry token, owner, ACL and server PID before delivery and again after connecting.
+Worker startup and Add-Type have a separate 15-second budget, followed by a 4-second deadline per security request.
+Worker failures, including exits after readiness, back off for 1 second, 5 seconds and 30 seconds, then stop after the fourth failure and report the reason. A successful security request resets the count.
+Windows replay allows 5 seconds for connection and validation after discovery has started the worker.
+Replay still allows at most 1 second per write. The relay's event writes never await these checks.
+
+The relay's stream is off by default. A private Windows `hand.json` can opt in with `"stream":true`.
+`SLEIGHT_HAND=0` suppresses both the stream and drawing. Native ACL enforcement and relay delivery need VM checks.
+The commands above exchange fixture events independently of the relay's setting.
+
+`RingOverlay.cs` draws a plain circle from the listener's stdout. Compile it in `cmd.exe` with the in-box .NET Framework
+4.8 compiler, then run it only when you intend to show an overlay:
+
+```bat
+"%WINDIR%\Microsoft.NET\Framework64\v4.0.30319\csc.exe" /nologo /target:exe /out:RingOverlay.exe /r:System.Windows.Forms.dll /r:System.Drawing.dll /r:System.Web.Extensions.dll examples\cursor-renderer\RingOverlay.cs
+node examples\cursor-renderer\listen.mjs --name ring | RingOverlay.exe
+```
+
+The example requires Windows 10 2004 or later. It requests per-monitor-v2 DPI awareness before creating a window.
+Incoming coordinates are physical pixels. Its 48-DIP ring size uses `display.scale`. A renderer using local DIPs
+subtracts the monitor's physical origin before dividing by scale, as specified in the protocol.
+The window uses `WS_EX_LAYERED | WS_EX_TRANSPARENT | WS_EX_TOOLWINDOW | WS_EX_NOACTIVATE` and requests
+`WDA_EXCLUDEFROMCAPTURE` before showing. A rejected affinity call stops the example. It keeps at most 4 session
+windows, 64 tracked drags per session and 128 queued records, with 32 records per UI tick. Lines are capped at
+65,536 UTF-8 bytes. Rings hide for drags and terminal events and expire after 3 seconds without an accepted event.
+Ending stdin exits the overlay. Stop the listener separately if it is still running.
+
+The Mac tests use mock pipes and check the C# safety properties in source. They do not compile C#, execute the
+PowerShell helper or prove Windows ACL enforcement. Compilation, focus, click-through behavior, capture exclusion,
+mixed-DPI placement and x64/ARM64 operation need a Windows session. Replay does not qualify Windows app driving.

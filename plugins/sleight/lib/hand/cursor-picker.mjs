@@ -9,6 +9,11 @@ import { installedCharacterPlugins, characterPackDigest, codexPluginSnapshot, ch
 import { importPluginCharacter } from './character-sharing.mjs';
 import { loadCharacter } from './character.mjs';
 import { writeHandSetting } from './command.mjs';
+import { CHARACTER_SIZES, DEFAULT_CHARACTER_SIZE } from './settings.mjs';
+
+// Names are reserved for grouping only. A pack that is not installed contributes no row.
+export const EVERYDAY_CHARACTERS = Object.freeze(['mabel', 'biscuit', 'rudy', 'mo', 'dennis', 'nana', 'hal']);
+export const ANIME_CHARACTERS = Object.freeze(['tsugi', 'shizu', 'bit', 'kit', 'yori', 'tab']);
 
 const hash = bytes => createHash('sha256').update(bytes).digest('hex');
 const sort = entries => [...entries].sort((a, b) => a.builtin && b.builtin ? 0 : Number(!!b.builtin) - Number(!!a.builtin) || a.name.localeCompare(b.name) || a.id.localeCompare(b.id));
@@ -18,11 +23,20 @@ const menuTitle = (name, fallback) => [...name.replace(/[\p{C}\p{Zl}\p{Zp}]/gu, 
 const pluginWarning = ' (warning: check plugin)';
 const skippedRow = (name, reason) => ({ title: [...menuTitle(name, 'Plugin')].slice(0, 50).join('') + ' (skipped)', op: 'skipped',
   reason: skippedCharacterReason(reason) });
-export function cursorMenuModel({ installed = [], found = [], plugins = [], style = 'glove', character, lines = 'on' } = {}) {
+export function cursorMenuModel({ installed = [], found = [], plugins = [], style = 'glove', character, lines = 'on', size = DEFAULT_CHARACTER_SIZE } = {}) {
   const ids = new Set(installed.map(c => c.id));
+  const mediumFallback = style === 'sprite' && !installed.find(c => c.id === character && !c.renameNeeded)?.stage;
+  const characterRow = c => c.renameNeeded ? { title: `${c.id} (renamed needed)`, op: 'folder' } : ({ title: c.builtin ? `${[...menuTitle(c.name, c.id)].slice(0, 49).join('')} (built-in)` : menuTitle(c.name, c.id), op: 'select', style: 'sprite', character: c.id, selected: style === 'sprite' && character === c.id });
+  const groups = [['Everyday', EVERYDAY_CHARACTERS], ['Anime', ANIME_CHARACTERS]].flatMap(([name, names]) => {
+    const members = names.flatMap(id => installed.filter(c => c.id === id && !c.renameNeeded));
+    return members.length ? [{ title: name, children: members.map(characterRow) }] : [];
+  });
   return [
     ...[['ring', 'Ring (Split Seam+)'], ['seam', 'Plain ring'], ['glove', 'Glove']].map(([value, name]) => ({ title: name, op: 'select', style: value, selected: style === value })),
-    ...sort(installed).map(c => c.renameNeeded ? { title: `${c.id} (renamed needed)`, op: 'folder' } : ({ title: c.builtin ? `${[...menuTitle(c.name, c.id)].slice(0, 49).join('')} (built-in)` : menuTitle(c.name, c.id), op: 'select', style: 'sprite', character: c.id, selected: style === 'sprite' && character === c.id })),
+    ...groups,
+    ...sort(installed.filter(c => c.renameNeeded || ![...EVERYDAY_CHARACTERS, ...ANIME_CHARACTERS].includes(c.id))).map(characterRow),
+    { title: 'Character Size', children: [...CHARACTER_SIZES.map(value => ({ title: value === 'stage' && mediumFallback ? 'Stage (shown at medium: no stage art)' : value[0].toUpperCase() + value.slice(1), op: 'size', size: value, selected: size === value })),
+      ...typeof size === 'number' ? [{ title: `${size} pt (custom)`, op: 'installed' }] : []] },
     // A2: the character's lines, a toggle shown with a sprite selected.
     ...style === 'sprite' ? [{ title: 'Character lines', op: 'lines', selected: lines !== 'off' }] : [],
     { title: 'Add your Codex pets', children: sort(found.filter(p => !ids.has(p.id))).map(p => ({ title: menuTitle(p.name, p.id), op: 'import', key: p.key })) },
@@ -78,7 +92,7 @@ export function createCursorPicker({ home = userInfo().homedir, env = process.en
   let tracedSymlink = false;
   const discoveryTrace = (...args) => { if (!tracedSymlink) { tracedSymlink = true; try { trace(...args); } catch {} } };
   return {
-    async catalog({ style = 'glove', character, lines, open = true } = {}) {
+    async catalog({ style = 'glove', character, lines, size, open = true } = {}) {
       if (open || !codexRecord) {
         const start = performance.now(); codexRecord = await codexSnapshot(pluginOptions);
         try { trace('hand-picker-codex-list', { ms: performance.now() - start }); } catch {}
@@ -90,7 +104,7 @@ export function createCursorPicker({ home = userInfo().homedir, env = process.en
       pluginOffers = new Map(plugins.flatMap(group => group.packs.filter(pack => !characters.some(c => c.id === pack.id)).map(pack => [pack.key, { ...pack, warning: group.warning }])));
       offered = new Map(found.map(p => [p.key, p])); installed = new Set(characters.filter(c => !c.renameNeeded).map(c => c.id));
       return { installed: characters, pets: found.map(({ folder, ...p }) => p), plugins: plugins.map(({ folder, packs, ...p }) => ({ ...p, packs: packs.map(({ folder, ...pack }) => pack) })), thumbnails,
-        rows: cursorMenuModel({ installed: characters, found, plugins, style, character, lines }) };
+        rows: cursorMenuModel({ installed: characters, found, plugins, style, character, lines, size }) };
     },
     async apply(event) {
       if (busy) return { ok: false, text: 'A character import is already running. Try again when it finishes.' };
@@ -117,6 +131,9 @@ export function createCursorPicker({ home = userInfo().homedir, env = process.en
           try { await writeSetting({ style: 'sprite', character: pack.manifest.id }); }
           catch (error) { return { ok: false, text: `Imported, but could not select it: ${error.message}\n${characterCallout(pack, { installed: true })}` }; }
           return { ok: true, text: characterCallout(pack, { installed: true }), style: 'sprite', character: pack.manifest.id };
+        }
+        if (event.op === 'size' && Object.keys(event).sort().join() === 'op,size' && CHARACTER_SIZES.includes(event.size)) {
+          await writeSetting({ size: event.size }); return { ok: true, size: event.size };
         }
         if (event.op === 'lines' && Object.keys(event).sort().join() === 'lines,op' && ['on', 'off'].includes(event.lines)) {
           await writeSetting({ lines: event.lines }); return { ok: true, lines: event.lines };

@@ -1,6 +1,6 @@
 {
   "id": "DP1",
-  "source": "~/Projects/sleight-wt/p131-int/bench/results/2026-10-19T20-41-28-692Z.json",
+  "source": "<private-evidence>/p131-int/bench/results/2026-10-19T20-41-28-692Z.json",
   "task": "textedit-drag", "arm": "sleight", "run": 1,
   "switch": "SLEIGHT_DP1",
   "tool": "js", "argumentPattern": "(?:super|cmd|command|meta)\\+w",

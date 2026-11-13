@@ -1,4 +1,6 @@
-import { test } from 'node:test';
+import { test, describe } from 'node:test';
+import { localBackendSkip, localBackends, nativeLocal, nativeToolsClient, nativeToolsSkip, prepareNativeToolsFixture, localSpaceFixture } from './fixtures/mac-driver-tools.mjs';
+import { createMacDriverTools, macDriverStuckEscapeNote } from '../plugins/sleight/lib/mac-driver/tools.mjs';
 import assert from 'node:assert/strict';
 import { readFileSync, mkdtempSync } from 'node:fs';
 import { runInNewContext } from 'node:vm';
@@ -13,9 +15,33 @@ import { createStuckEscapes, sendStuckEscape, stuckEscapeOption } from '../plugi
 
 // The helper: one Escape down and up to the verified pid, after reading the app's own menu bar. `ax` is that app's
 // menu bar: a title selected, a menu open, and what the title shows after the Escape.
+for (const backend of localBackends) describe(backend, { skip: localBackendSkip(backend) }, () => {
 const source = readFileSync(new URL('../plugins/sleight/lib/stuck-escape.js', import.meta.url), 'utf8');
 const stuckBar = () => ({ selected: true, open: false, after: false });
 function helper(options = {}) {
+  if (backend === 'driver') {
+    prepareNativeToolsFixture();
+    const ax = options.ax ?? stuckBar();
+    const request = { appId: 'org.test.editor', pid: 321, processStart: 42, lease: { path: '/lease', token: 'owned' },
+      quietSeconds: 0.5, waitSeconds: 1.5, ...options.request };
+    const app = { appId: request.appId, pid: options.pid ?? 321, processStart: options.processStart ?? 42 };
+    const spaceInventory = localSpaceFixture(app.pid, app.appId);
+    spaceInventory.windows[0].processStart = String(app.processStart);
+    const actual = { ...spaceInventory.windows[0], identityVerified: true };
+    const expected = { ...actual, pid: request.pid, processStart: String(request.processStart) };
+    request.processStart = expected.processStart;
+    request.driverIdentity = expected;
+    request.resultAt ??= Date.now();
+    const f = nativeLocal('stuck-escape.js', request, { apps: Array.from({ length: options.count ?? 1 }, () => app),
+      spaceInventory, driverIdentities: [actual], focusedWindowId: '7',
+      idle: options.idle ?? 5, menuState: { selected: ax.noMenuBar ? null : ax.selected, open: ax.open || ['AXMenu', 'AXMenuItem'].includes(ax.focused) },
+      afterEscape: ax.after ?? null, lease: { token: options.token ?? 'owned', expires: options.expired ? 0 : Date.now() + 30000,
+        window: { appId: options.appId ?? request.appId, title: 'Fixture', windowNumber: 7, url: null } } });
+    const posted = f.events.filter(e => e[0] === 'key').map(e => e.slice(1));
+    if (posted.length) ax.selected = ax.after;
+    return { result: f.result, posted, waits: f.events.filter(e => e[0] === 'wait').map(e => e[1]),
+      stderr: posted.length ? ['[sleight:stuck-escape-posted]\n'] : [] };
+  }
   const posted = [], waits = [], stderr = [];
   let reads = 0;
   const ax = options.ax ?? stuckBar();
@@ -64,7 +90,7 @@ const helperRun = (ax, posted) => async (script, request) => {
 
 test('the helper posts one Escape down and up to the verified pid, with no modifiers, then reads the menu bar', () => {
   const h = helper();
-  assert.deepEqual(h.result, { ok: true, posted: true, selected: false });
+  assert.deepEqual(h.result, { ok: true, posted: true, ...backend === 'driver' ? { released: true } : {}, selected: false });
   assert.deepEqual(h.posted, [[321, 53, true, 0], [321, 53, false, 0]]);
   assert.deepEqual(h.stderr, ['[sleight:stuck-escape-posted]\n']);
   assert.equal(helper({ ax: { ...stuckBar(), after: true } }).result.selected, true);
@@ -85,7 +111,8 @@ test('the helper posts nothing unless the app\'s own menu bar has a title select
 
 test('the helper waits for half a second with no key or mouse input, up to 1.5 s, and posts nothing without it', () => {
   // The engine's typing reset idle just before the result; the user isn't at the Mac.
-  const quiet = helper({ idle: [0.05, 0.5] });
+  // The native binding also checks idle against result age before and after the wait.
+  const quiet = helper({ idle: backend === 'driver' ? [20, 0.05, 0.5, 20] : [0.05, 0.5] });
   assert.equal(quiet.result.ok, true); assert.equal(quiet.posted.length, 2); assert.equal(quiet.waits[0], 0.45);
   const busy = helper({ idle: 0.2 });
   assert.deepEqual(busy.result, { ok: false, posted: false, error: 'User input at the Mac' }); assert.deepEqual(busy.posted, []);
@@ -357,4 +384,165 @@ test('the note says plainly that sleight sent one Escape, in the default and lea
     'sleight sent one Escape to Editor for stuck menu-bar item 132; still selected.\n' + fallback);
   assert.equal(stuckEscapeNote({ posted: true, selected: null }, 'Editor', '132', fallback, 'lean'),
     'sleight sent one Escape to Editor for stuck menu-bar item 132. Read to check it closed.');
+});
+
+});
+
+const releaseWindow = { windowId: '42', pid: 321, processStart: '100.25', bundleId: 'org.test.editor',
+  identityVerified: true, title: 'Draft' };
+function escapeSpaceFixture() {
+  const data = localSpaceFixture(321, releaseWindow.bundleId);
+  data.windows[0] = { ...data.windows[0], ...releaseWindow };
+  data.trees = { 42: { ...data.trees[7], AXWindowNumber: 42, AXTitle: 'Draft' } };
+  return data;
+}
+function boundEscape(patch = {}, argsPatch = {}) {
+  prepareNativeToolsFixture();
+  const args = { appId: releaseWindow.bundleId, pid: 321, processStart: '100.25', driverIdentity: releaseWindow,
+    lease: { path: '/fixture/lease', token: 'owned' }, quietSeconds: 0.5, waitSeconds: 1.5,
+    resultAt: Date.now() - 100, ...argsPatch };
+  return nativeLocal('stuck-escape.js', args, { apps: [{ appId: releaseWindow.bundleId, pid: 321 }],
+    spaceInventory: escapeSpaceFixture(),
+    driverIdentities: [releaseWindow], focusedWindowId: '42', idle: 20,
+    menuState: { selected: true, open: false }, afterEscape: false,
+    lease: { token: 'owned', expires: Date.now() + 30000,
+      window: { appId: releaseWindow.bundleId, title: 'Draft', url: null, windowNumber: 42 } }, ...patch });
+}
+const escapeKeys = reply => reply.events.filter(event => event[0] === 'key');
+
+test('Escape binds the leased window among siblings and cannot borrow another window', { skip: nativeToolsSkip }, () => {
+  const data = escapeSpaceFixture();
+  data.windows.unshift({ ...data.windows[0], windowId: '43', title: 'Sibling',
+    bounds: { x: 400, y: 0, width: 200, height: 200 } });
+  const admitted = boundEscape({ spaceInventory: data });
+  assert.equal(admitted.result.ok, true, JSON.stringify(admitted));
+  assert.deepEqual(escapeKeys(admitted), [['key', 321, 53, true, 0], ['key', 321, 53, false, 0]]);
+  for (const patch of [
+    f => { f.windows[1].onScreen = false; },
+    f => { f.windows = [f.windows[0]]; },
+    f => { f.windows[1].processStart = 'replaced'; },
+    f => { delete f.trees[42]; },
+    f => { f.windowSnapshots = [f.windows, [f.windows[0], { ...f.windows[1], onScreen: false }]]; },
+  ]) {
+    const invalid = structuredClone(data); patch(invalid);
+    const refused = boundEscape({ spaceInventory: invalid });
+    assert.equal(refused.result.posted, false, JSON.stringify(refused));
+    assert.deepEqual(escapeKeys(refused), []);
+  }
+  for (const idle of [[20, 20, 20, 0], [20, 20, 20, 20, 20, 0]]) {
+    const refused = boundEscape({ spaceInventory: data, idle });
+    assert.equal(refused.result.posted, false, JSON.stringify(refused));
+    assert.match(refused.result.error, /User input at the Mac/);
+    assert.deepEqual(escapeKeys(refused), []);
+  }
+});
+
+test('Escape refuses an absent leased window even with one visible app window', { skip: nativeToolsSkip }, () => {
+  const reply = boundEscape({ apps: [{ appId: releaseWindow.bundleId, pid: 321, processStart: 9 }],
+    lease: { token: 'owned', expires: Date.now() + 30000, window: { appId: releaseWindow.bundleId } } },
+  { driverIdentity: undefined, processStart: 9 });
+  assert.equal(reply.result.posted, false, JSON.stringify(reply));
+  assert.deepEqual(escapeKeys(reply), []);
+});
+
+test('Escape releases to the same process after its window changes following key-down', { skip: nativeToolsSkip }, () => {
+  const reply = boundEscape({ driverIdentities: [releaseWindow, releaseWindow, { ...releaseWindow, windowId: '43', title: 'Other' }] });
+  assert.equal(reply.result.ok, true, JSON.stringify(reply));
+  assert.equal(reply.result.released, true);
+  assert.deepEqual(escapeKeys(reply), [['key', 321, 53, true, 0], ['key', 321, 53, false, 0]]);
+});
+
+test('Escape sends no release to a replaced or vanished process and reports why', { skip: nativeToolsSkip }, async t => {
+  for (const [name, last] of [['pid', { ...releaseWindow, pid: 322 }], ['start', { ...releaseWindow, processStart: '101.25' }], ['gone', {}]]) await t.test(name, () => {
+    const reply = boundEscape({ driverIdentities: [releaseWindow, releaseWindow, last] });
+    assert.equal(reply.result.ok, false, JSON.stringify(reply));
+    assert.equal(reply.result.posted, true); assert.equal(reply.result.released, false);
+    assert.match(reply.result.releaseError, /target process changed/);
+    assert.deepEqual(escapeKeys(reply), [['key', 321, 53, true, 0]]);
+  });
+});
+
+test('Escape release failure is reported without retrying the key-up', { skip: nativeToolsSkip }, async t => {
+  await t.test('release fault', () => {
+    const reply = boundEscape({ escapeReleaseFails: true });
+    assert.equal(reply.result.ok, false, JSON.stringify(reply));
+    assert.equal(reply.result.posted, true); assert.equal(reply.result.released, false);
+    assert.match(reply.result.releaseError, /Escape release failed/);
+    assert.deepEqual(escapeKeys(reply), [['key', 321, 53, true, 0]]);
+    assert.equal(reply.events.filter(event => event[0] === 'release-attempt').length, 1);
+  });
+  await t.test('wait and release faults', () => {
+    const both = boundEscape({ escapeReleaseFails: true, escapeWaitFails: true });
+    assert.equal(both.result.posted, true); assert.equal(both.result.released, false);
+    assert.match(both.result.error, /Escape wait failed/); assert.match(both.result.releaseError, /Escape release failed/);
+    assert.deepEqual(escapeKeys(both), [['key', 321, 53, true, 0]]);
+    assert.equal(both.events.filter(event => event[0] === 'release-attempt').length, 1);
+  });
+  await t.test('wait fault still releases', () => {
+    const waitOnly = boundEscape({ escapeWaitFails: true });
+    assert.equal(waitOnly.result.posted, true); assert.equal(waitOnly.result.released, true);
+    assert.match(waitOnly.result.error, /Escape wait failed/);
+    assert.deepEqual(escapeKeys(waitOnly), [['key', 321, 53, true, 0], ['key', 321, 53, false, 0]]);
+  });
+});
+
+test('native Escape refuses appId, pid and processStart arguments that disagree with driverIdentity', { skip: nativeToolsSkip }, async t => {
+  for (const patch of [{ appId: 'org.test.other' }, { pid: 322 }, { processStart: '101.25' }]) await t.test(Object.keys(patch)[0], () => {
+    const reply = boundEscape({}, patch);
+    assert.equal(reply.result.posted, false, JSON.stringify(patch));
+    assert.match(reply.result.error, /Invalid stuck-menu Escape target/);
+    assert.deepEqual(escapeKeys(reply), []);
+  });
+});
+
+test('native Escape refuses a leased window with a non-null url in both lease shapes', { skip: nativeToolsSkip }, async t => {
+  for (const window of [
+    { appId: releaseWindow.bundleId, title: 'Draft', windowNumber: 42, url: 'https://example.test/' },
+    { appId: releaseWindow.bundleId, title: JSON.stringify(['42', 321, '100.25']), url: 'https://example.test/' },
+  ]) await t.test(window.title === 'Draft' ? 'displayed' : 'identity-keyed', () => {
+    const reply = boundEscape({ lease: { token: 'owned', expires: Date.now() + 30000, window } });
+    assert.equal(reply.result.posted, false); assert.match(reply.result.error, /leased window changed/);
+    assert.deepEqual(escapeKeys(reply), []);
+  });
+});
+
+test('registerLocalTools refuses a non-check Escape without driverIdentity', { skip: nativeToolsSkip }, async t => {
+  const driver = nativeToolsClient({ localTools: {} }); t.after(() => driver.close());
+  await assert.rejects(driver.request('localTool', { args: ['stuck-escape.js', {
+    appId: releaseWindow.bundleId, pid: 321, processStart: 42,
+    lease: { path: '/fixture/lease', token: 'owned' }, quietSeconds: 0.5, waitSeconds: 1.5,
+  }] }), { code: 'INVALID_PARAMS' });
+  const window = { ...releaseWindow, app: 'Editor', onScreen: true, layer: 0, hidden: false,
+    bounds: { x: 0, y: 0, width: 400, height: 300 } };
+  const bound = nativeToolsClient({ windows: [window],
+    trees: { 42: { AXRole: 'AXWindow', AXTitle: 'Draft', AXMinimized: false, AXFullScreen: false,
+      pid: 321, frame: window.bounds } },
+    localTools: { apps: [{ appId: window.bundleId, name: 'Editor', pid: 321 }], focusedWindowId: '42',
+      spaceInventory: escapeSpaceFixture(),
+      idle: 20, menuState: { selected: true, open: false }, afterEscape: false,
+      lease: { token: 'owned', expires: Date.now() + 30000,
+        window: { appId: window.bundleId, title: JSON.stringify(['42', 321, '100.25']), url: null } } } });
+  t.after(() => bound.close());
+  const escape = createMacDriverTools({ driver: bound }).stuckEscape({ env: {}, binding: () => window });
+  assert.deepEqual(await escape.send({ appId: window.bundleId, title: 'Draft', url: null },
+    { path: '/fixture/lease', token: 'owned' }, { since: 0, clock: () => 100 }), { posted: true, selected: false });
+});
+
+test('runtime Escape refuses a non-finite since before binding or driver access', async t => {
+  const tools = createMacDriverTools({ driver: { ping: () => assert.fail('no ping'), request: () => assert.fail('no driver access') } });
+  const escape = tools.stuckEscape({ binding: () => assert.fail('no binding'), env: {} });
+  for (const since of [NaN, Infinity, -Infinity, undefined]) await t.test(String(since), async () => {
+    assert.deepEqual(await escape.send({ appId: releaseWindow.bundleId }, {}, { since }),
+      { posted: false, reason: 'result time unknown' });
+  });
+});
+
+test('runtime Escape preserves the helper release outcome in its result and notice', async () => {
+  const result = { ok: false, posted: true, released: false, releaseError: 'Escape release failed' };
+  const tools = createMacDriverTools({ driver: { ping: async () => ({}), request: async method =>
+    method === 'verifyWindowIdentity' ? { window: releaseWindow } : method === 'health' ? { hidIdleSeconds: 20 } : result } });
+  const escape = tools.stuckEscape({ binding: () => releaseWindow, env: {} });
+  const reply = await escape.send({ appId: releaseWindow.bundleId, title: 'Draft', url: null }, {}, { since: 0, clock: () => 100 });
+  assert.equal(reply.posted, true); assert.equal(reply.released, false); assert.equal(reply.releaseError, result.releaseError);
+  assert.equal(macDriverStuckEscapeNote(reply), result.releaseError);
 });

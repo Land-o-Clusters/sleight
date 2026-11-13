@@ -6,6 +6,7 @@ import { execFileSync } from 'node:child_process';
 import { cpSync, existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, utimesSync, writeFileSync } from 'node:fs';
 import { homedir, tmpdir, userInfo } from 'node:os';
 import { join } from 'node:path';
+import { retainedBank } from './helpers/retained-bank.mjs';
 import vm from 'node:vm';
 import { claim, score } from '../bench/claim-score.mjs';
 import { engineMix, summarizeEngines } from '../bench/engine-version.mjs';
@@ -20,7 +21,6 @@ import {
 
 const ROOT = new URL('..', import.meta.url).pathname;
 const OUT = join(ROOT, 'docs/results');
-const WT = join(homedir(), 'Projects/sleight-wt');
 const readJson = file => JSON.parse(readFileSync(file, 'utf8'));
 const committed = () => Object.fromEntries(FAMILIES.map(f => [f.id, readJson(join(OUT, 'data', `${f.id}.json`))]));
 const page = name => readFileSync(join(OUT, name), 'utf8');
@@ -111,7 +111,7 @@ test('the claim pages equal claim-score.mjs run on the same results folder', t =
     run('lcu', 'preview-read', 1, 4, true), run('lcu', 'preview-read', 2, 4.2, false, 'wrong page count'), run('lcu', 'preview-read', 3, 4.1, true),
   ] }));
   const rules = readJson(join(ROOT, 'bench/claim-exclusions.json'));
-  const cli = JSON.parse(execFileSync(process.execPath, [join(ROOT, 'bench/claim-score.mjs'), '--results', dir, '--json'], { encoding: 'utf8' }));
+  const cli = JSON.parse(execFileSync(process.execPath, [join(ROOT, 'bench/claim-score.mjs'), '--results', dir, '--json'], { encoding: 'utf8', timeout: 60000, killSignal: 'SIGKILL' }));
   const mine = scoreClaimDir(dir, rules, rules.since);
   assert.deepEqual(JSON.parse(JSON.stringify(mine.table)), cli.table);
   assert.deepEqual(JSON.parse(JSON.stringify(mine.verdict)), cli.claim);
@@ -125,9 +125,10 @@ test('the claim pages equal claim-score.mjs run on the same results folder', t =
 });
 
 test('the committed native claim equals the saved claim-score output for its folder', t => {
-  const saved = join(WT, 'app-claim/native-score-1018b.json');
-  const dir = join(WT, 'app-claim/native-results-1018b');
-  if (!existsSync(saved) || !existsSync(dir)) { t.skip('the raw native claim folder is not on this Mac'); return; }
+  const bank = retainedBank('app-claim', ['native-score-1018b.json', 'native-results-1018b']);
+  if (bank.skip) { t.skip(bank.skip); return; }
+  const saved = join(bank.path, 'native-score-1018b.json');
+  const dir = join(bank.path, 'native-results-1018b');
   const study = committed()['native-claim'].studies[0];
   const cli = readJson(saved);
   for (const cell of study.cells) {
@@ -141,12 +142,13 @@ test('the committed native claim equals the saved claim-score output for its fol
 });
 
 test('a race set scores the same as race-score.mjs on the same round folders', t => {
-  const raceDir = join(WT, 'race-1017');
-  if (!existsSync(raceDir)) { t.skip('the race folder is not on this Mac'); return; }
+  const bank = retainedBank('race-1017');
+  if (bank.skip) { t.skip(bank.skip); return; }
+  const raceDir = bank.path;
   const fresh = collectRace({ raceDir, browsers: ['safari', 'firefox'], family: 'browser-race', title: 'race' });
   for (const study of fresh.studies.filter(s => s.latest)) {
     const dirs = study.rounds.map(r => join(raceDir, r.round));
-    const cli = JSON.parse(execFileSync(process.execPath, [join(ROOT, 'bench/fowl/race-score.mjs'), ...dirs, '--json'], { encoding: 'utf8', maxBuffer: 1 << 28 }));
+    const cli = JSON.parse(execFileSync(process.execPath, [join(ROOT, 'bench/fowl/race-score.mjs'), ...dirs, '--json'], { encoding: 'utf8', maxBuffer: 1 << 28, timeout: 60000, killSignal: 'SIGKILL' }));
     const scored = cli.browsers[study.browser];
     for (const cell of study.cells) {
       const t2 = scored.table[cell.arm][cell.task];
@@ -205,7 +207,7 @@ test('no generated file holds a home path, the account name or the owner\'s name
   // A fixed list, plus the full name macOS reports for this account (id -F) so no name is written into the repo. The account
   // name alone isn't used: on CI it is 'runner', a word the pages use.
   const names = [];
-  if (process.platform === 'darwin') try { names.push(...execFileSync('id', ['-F'], { encoding: 'utf8' }).trim().split(/\s+/)); } catch { /* no full name */ }
+  if (process.platform === 'darwin') try { names.push(...execFileSync('id', ['-F'], { encoding: 'utf8', timeout: 30000, killSignal: 'SIGKILL' }).trim().split(/\s+/)); } catch { /* no full name */ }
   const banned = [/\/Users\//, /\/var\/folders\//, ...[...new Set(names.filter(name => name.length >= 3))].map(name => new RegExp(`\\b${name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`, 'i'))];
   const files = [...readdirSync(OUT).filter(n => !n.startsWith('.')).map(n => join(OUT, n)), ...readdirSync(join(OUT, 'data')).map(n => join(OUT, 'data', n))]
     .filter(path => /\.(md|html|json)$/.test(path));
@@ -441,7 +443,9 @@ test('the validation family carries no claim or scorer wording, and a bank\'s na
   assert.equal(/wording|fastest|"lowest"|completed every task/.test(text), false);
   assert.equal(data.banks.find(b => b.id === 'validation-x').source, 'validation-x', 'a bank outside the home folder shows only its folder name');
   const committedData = readJson(join(OUT, 'data/validation.json'));
-  assert.ok(committedData.banks.every(b => b.source.startsWith('~/') || !b.source.includes('/')));
+  // Published sources name the private evidence root by a placeholder (HY1B), never a home path.
+  assert.ok(committedData.banks.every(b => b.source.startsWith('<private-evidence>/') || b.source.startsWith('~/') || !b.source.includes('/')));
+  assert.equal(committedData.banks.some(b => /sleight-wt|\/Users\//.test(b.source)), false);
   assert.equal(JSON.stringify(committedData).match(/wording|"verdict"|completed every task/), null);
   assert.equal(page('validation.md').match(/Scorer wording|completed every task|fastest on \d+ of/), null);
   // The id, browser and runner are scrubbed like every other string copied from a bank.
@@ -489,9 +493,9 @@ test('claim rows and claim-score carry the engine and date inferred from the pas
   const rules = readJson(join(ROOT, 'bench/claim-exclusions.json'));
   const [row] = scoreClaimDir(dir, { ...rules, since: '2026-10-18' }, '2026-10-18').rows;
   assert.deepEqual(row.engine, { version: '26.1007.71326', provenance: 'inferred', startedAt: '2026-10-18T02:39:00.000Z', endedAt: '2026-10-18T03:00:00.000Z', dated: 'inferred' });
-  const cli = JSON.parse(execFileSync(process.execPath, [join(ROOT, 'bench/claim-score.mjs'), '--results', dir, '--json'], { encoding: 'utf8' }));
+  const cli = JSON.parse(execFileSync(process.execPath, [join(ROOT, 'bench/claim-score.mjs'), '--results', dir, '--json'], { encoding: 'utf8', timeout: 60000, killSignal: 'SIGKILL' }));
   assert.deepEqual([cli.engines.sleight.versions['26.1007.71326'].runs, cli.engines.sleight.versions['26.1007.71326'].first], [1, '2026-10-18T02:39:00.000Z']);
-  assert.match(execFileSync(process.execPath, [join(ROOT, 'bench/claim-score.mjs'), '--results', dir], { encoding: 'utf8' }),
+  assert.match(execFileSync(process.execPath, [join(ROOT, 'bench/claim-score.mjs'), '--results', dir], { encoding: 'utf8', timeout: 60000, killSignal: 'SIGKILL' }),
     /sleight +engine 26\.1007\.71326 \(1 inferred\), 2026-10-18 \(dates inferred\)/);
 });
 

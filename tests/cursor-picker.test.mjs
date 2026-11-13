@@ -25,14 +25,38 @@ function world(t) {
 test('pure menu model has built-ins, sorted characters, only unimported pets and folder action', () => {
   const rows = picker.cursorMenuModel({ installed: [{ id: 'zed', name: 'Zed' }, { id: 'a', name: 'Ada' }],
     found: [{ id: 'zed', key: '1', name: 'Zed' }, { id: 'b', key: '2', name: 'Bee' }], style: 'sprite', character: 'a' });
-  assert.deepEqual(rows.map(r => r.title), ['Ring (Split Seam+)', 'Plain ring', 'Glove', 'Ada', 'Zed', 'Character lines', 'Add your Codex pets', 'Open characters folder']);
+  assert.deepEqual(rows.map(r => r.title), ['Ring (Split Seam+)', 'Plain ring', 'Glove', 'Ada', 'Zed', 'Character Size', 'Character lines', 'Add your Codex pets', 'Open characters folder']);
   assert.equal(rows[3].selected, true); assert.equal(rows.filter(r => r.op === 'select' && r.selected).length, 1);
-  assert.deepEqual(rows[6].children.map(r => [r.title, r.key]), [['Bee', '2']]);
+  assert.deepEqual(rows[7].children.map(r => [r.title, r.key]), [['Bee', '2']]);
   // A2: the lines toggle shows with a sprite selected, and says the saved setting.
-  assert.deepEqual(rows[5], { title: 'Character lines', op: 'lines', selected: true });
-  assert.equal(picker.cursorMenuModel({ installed: [{ id: 'a', name: 'Ada' }], style: 'sprite', character: 'a', lines: 'off' })[4].selected, false);
+  assert.deepEqual(rows[6], { title: 'Character lines', op: 'lines', selected: true });
+  assert.equal(picker.cursorMenuModel({ installed: [{ id: 'a', name: 'Ada' }], style: 'sprite', character: 'a', lines: 'off' }).find(r => r.op === 'lines').selected, false);
   assert.ok(!picker.cursorMenuModel({ installed: [{ id: 'a', name: 'Ada' }], style: 'ring' }).some(r => r.op === 'lines'));
   assert.deepEqual(picker.cursorMenuModel({}).slice(0, 3).map(r => r.style), ['ring', 'seam', 'glove']);
+});
+test('size stops and cast groups contain only installed packs and preserve selection', () => {
+  const installed = [...picker.EVERYDAY_CHARACTERS, ...picker.ANIME_CHARACTERS].map(id => ({ id, name: id, stage: true }));
+  const rows = picker.cursorMenuModel({ installed, style: 'sprite', character: 'biscuit', size: 'stage' });
+  assert.deepEqual(rows.find(r => r.title === 'Everyday').children.map(r => r.character), picker.EVERYDAY_CHARACTERS);
+  assert.deepEqual(rows.find(r => r.title === 'Anime').children.map(r => r.character), picker.ANIME_CHARACTERS);
+  assert.equal(rows.find(r => r.title === 'Everyday').children.find(r => r.character === 'biscuit').selected, true);
+  assert.deepEqual(rows.find(r => r.title === 'Character Size').children.map(r => [r.title, r.size, r.selected]),
+    [['Small', 'small', false], ['Medium', 'medium', false], ['Stage', 'stage', true]]);
+  const missing = picker.cursorMenuModel({ installed: installed.filter(c => c.id === 'tsugi') });
+  assert.equal(missing.some(r => r.title === 'Everyday'), false);
+  assert.deepEqual(missing.find(r => r.title === 'Anime').children.map(r => r.character), ['tsugi']);
+  assert.equal(picker.cursorMenuModel().some(r => ['Everyday', 'Anime'].includes(r.title)), false);
+  const fallback = picker.cursorMenuModel({ installed: [{ id: 'cat', name: 'Cat' }], style: 'sprite', character: 'cat', size: 315 });
+  assert.deepEqual(fallback.find(r => r.title === 'Character Size').children.slice(-2).map(r => r.title),
+    ['Stage (shown at medium: no stage art)', '315 pt (custom)']);
+});
+test('size choices persist only the named stop and reject forged values and extra keys', async () => {
+  const writes = [], controller = picker.createCursorPicker({ writeSetting: s => writes.push(s) });
+  for (const size of ['small', 'medium', 'stage']) assert.deepEqual(await controller.apply({ op: 'size', size }), { ok: true, size });
+  for (const event of [{ op: 'size', size: 315 }, { op: 'size', size: 'huge' }, { op: 'size', size: 'small', style: 'sprite' }]) {
+    assert.equal((await controller.apply(event)).ok, false);
+  }
+  assert.deepEqual(writes, [{ size: 'small' }, { size: 'medium' }, { size: 'stage' }]);
 });
 test('discovery finds both Codex roots, deduplicates and refuses linked pet folders', t => {
   const w = world(t); w.put('cat');

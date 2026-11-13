@@ -5,7 +5,7 @@
   "family": "browser-turbo",
   "title": "Chrome and Helium race",
   "source": {
-   "race": "~/Projects/sleight-wt/race-1017, ~/Library/Caches/sleight-bench/evidence/fw1-e51c52a-haiku, ~/Library/Caches/sleight-bench/evidence/fw1-e51c52a-opus",
+   "race": "<private-evidence>/race-1017, ~/Library/Caches/sleight-bench/evidence/fw1-e51c52a-haiku, ~/Library/Caches/sleight-bench/evidence/fw1-e51c52a-opus",
    "browsers": ["chrome","helium"]
   },
   "inProgress": [],

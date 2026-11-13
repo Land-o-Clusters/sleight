@@ -76,6 +76,67 @@ The menu runs without a computer-use engine or cursor overlay. See [settings com
 
 Start a new Claude Code session so the plugin loads.
 
+## Windows with Claude Code
+
+Windows support is in development. Install Node 24 or later and use native terminal Claude Code 2.1.288 or later
+with mods enabled, the same minimum as macOS. Windows mod loading still needs a VM check. The CMD launcher tries
+account-based Program Files folders, then absolute PATH entries. Project markers and reparse points refuse.
+It keeps searching after Node older than 24. You don't need to install an npm package.
+
+In PowerShell, install the plugin:
+
+```powershell
+claude plugin marketplace add Land-o-Clusters/sleight
+claude plugin install sleight@sleight
+```
+
+Print the installed plugin listing, then use the matching `installPath`:
+
+```powershell
+claude plugin list --json
+& '<installPath>\bin\sleight-mcp.cmd' --doctor
+```
+
+How Claude Code launches the shared extensionless MCP command on Windows remains unverified. The gated `register`
+diagnostic accepts Node in Program Files and can change this copy's MCP entry to the checked absolute `node.exe`
+and `lib\launch.mjs` paths:
+
+```powershell
+& '<installPath>\bin\sleight-mcp.cmd' register
+```
+
+Run it yourself in a terminal that has been open for at least 10 seconds. It checks presence and asks for Windows Hello,
+or your account password when Hello is unavailable. Start a new Claude Code session after diagnosis.
+A plugin update replaces the cached manifest edit. If the server disappears after an update, inspect `/plugin` errors and
+rerun the launcher diagnostics. Registration from a local marketplace checkout or `--plugin-dir` edits that source tree's
+`plugin.json`. It is a diagnostic, and a separate Windows distribution manifest is the planned durable fallback.
+See the [registration design and VM checks](docs/design/windows.md#windows-plugin-registration-and-settings).
+
+The current Windows build starts MCP with 5 browser tool definitions and has a cursor ring renderer. Browser actions
+refuse pending native peer verification and trusted consent controls. Native app driving is unavailable.
+Windows plugin loading, CMD execution and rendering have not run in a VM. The macOS setup and Calculator check below
+do not apply to Windows.
+
+From your own Windows terminal:
+
+```powershell
+& '<installPath>\bin\sleight-mcp.cmd' hand on
+& '<installPath>\bin\sleight-mcp.cmd' cursor style ring
+& '<installPath>\bin\sleight-mcp.cmd' turbo status
+& '<installPath>\bin\sleight-mcp.cmd' permissions list
+```
+
+Settings live in the account's local application-data folder under `sleight`. The stream uses `"stream":true` in a private
+`hand.json`, as on macOS. The CLI has no stream command. Only read forms bypass the terminal gate. Off, block and revoke keep
+terminal and agent-marker checks, then run the ancestor walk with no session-age delay. If the in-box compiler is missing,
+these exact removal forms fall back to terminal and agent-marker checks alone and print one stderr notice.
+ACL, package-integrity and unknown preparation failures still refuse, as does a refusing walk.
+Removal skips presence and authentication.
+High-stakes forms ask for Windows Hello or your password.
+Unsafe hand settings can be replaced with `hand on` or `hand off`. After confirmation, `permissions repair` fixes the ACL on `permissions.json`.
+Foreign owners, links and hardlinks still refuse. Glove drawing, character commands, Electron settings and control-recipe storage remain unavailable. Turbo stores a
+preference while browser connections await native peer verification and trusted consent.
+
 ## Codex
 
 ```bash

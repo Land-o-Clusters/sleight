@@ -139,6 +139,7 @@ function parseActions(code) {
     const { args, end } = callArguments(code, i + m[0].length - 1);
     const method = m[1], kind = KINDS[method];
     const action = { method, kind, receiver };
+    if (method === 'pressKey') action.transfer = transferMark(literalString(args[0]));
     action.target = ['pressKey', 'typeText', 'paste'].includes(method) ? { focus: true } : literalTarget(args[0]);
     if (method === 'drag') action.to = literalTarget(args[1]);
     const text = method === 'typeText' ? literalString(args[0]) : undefined;
@@ -216,7 +217,10 @@ export function screenshotScale(size, bounds) {
 export function exposure(p, window, windows, displays, ignorePids = []) {
   if (!inside(window.bounds, p) || (Array.isArray(displays) && !displays.some(d => inside(d, p)))) return 'offscreen';
   if (!Array.isArray(windows)) return 'no-geometry';
-  const top = windows.find(w => w?.bounds && inside(w.bounds, p) && !/Computer Use$/.test(w.owner ?? '') && !ignorePids.includes(w.pid));
+  const top = windows.find(w => w?.bounds && w.alpha !== 0 && inside(w.bounds, p) && !/Computer Use$/.test(w.owner ?? '') && !ignorePids.includes(w.pid));
+  if (top?.systemOverlay === true && top.layer > 0 && displays?.some(d =>
+      top.bounds.X <= d.X && top.bounds.Y <= d.Y && top.bounds.X + top.bounds.Width >= d.X + d.Width &&
+      top.bounds.Y + top.bounds.Height >= d.Y + d.Height)) return 'uncertain-cover';
   return top && top.id === window.windowId && top.pid === window.pid ? undefined : 'covered';
 }
 
@@ -263,8 +267,32 @@ export function planHandFrames({ code, lines, screenshotSize, window, elements =
     const at = round(from.at);
     if (action.kind !== 'scroll' && action.kind !== 'drag') last = at;
     frames.push({ kind: action.kind, pid: window.pid, windowId: window.windowId, at,
-      path: to ? [at, round(to.at)] : [at], delayMs, beats: action.beats });
+      windowRect: [window.bounds.X, window.bounds.Y, window.bounds.Width, window.bounds.Height],
+      path: to ? [at, round(to.at)] : [at], delayMs, beats: action.beats, ...action.retry === true ? { retry: true } : {}, ...action.transfer ? { transfer: action.transfer } : {} });
     actions.push(index);
   });
   return { frames, skipped, actions };
+}
+
+// These marks never retain keys, clipboard contents or labels in the public record.
+export function transferMark(key) {
+  if (typeof key !== 'string') return undefined;
+  const chord = key.toLowerCase().replace(/command|meta|super/g, 'cmd').replace(/\s+/g, '');
+  return /^(?:cmd[+-][cx]|[cx][+-]cmd)$/.test(chord) ? 'take'
+    : /^(?:cmd[+-]v|v[+-]cmd)$/.test(chord) ? 'give' : undefined;
+}
+export function createRetryMarks({ now = Date.now } = {}) {
+  const seen = new Map();
+  return {
+    mark(kind, window, target) {
+      const time = now();
+      for (const [key, at] of seen) if (time < at || time - at > 10000) seen.delete(key);
+      if (!window || !target) return false;
+      const key = JSON.stringify([kind, window, target]), prior = seen.get(key);
+      seen.delete(key); seen.set(key, time);
+      if (seen.size > 64) seen.delete(seen.keys().next().value);
+      return prior !== undefined;
+    },
+    clear() { seen.clear(); },
+  };
 }

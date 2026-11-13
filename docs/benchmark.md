@@ -14,7 +14,7 @@ rounds a validation or A/B runner starts for itself run with `SLEIGHT_NO_HUB=1` 
 `docs/results` or README only while `node bench/results-hub.mjs --render-only --check` passes. Refreshing rewrites `docs/results` and the README's generated blocks in the
 checkout that ran the pass, so commit the result. `node scripts/release-preflight.mjs` fails when those files are stale relative to
 `docs/results/data`. Validation and re-measure banks (`plan.json` with `score.json` or `comparison.json`) get their own page, `validation.md`, which is kept out of the interactive page's All families view;
-the race folders are the dated `race-MMDD` folders under `~/Projects/sleight-wt`, and the native and app claim folders stay pinned in the
+the race folders are the dated `race-MMDD` folders under the evidence root selected with `--wt`, and the native and app claim folders stay pinned in the
 hub, so a new claim pass appears only after someone points the hub at its folder.
 
 Results are published at [sleight benchmarks](https://land-o-clusters.github.io/sleight/results/) and the
@@ -213,7 +213,7 @@ Code's process in sleight's arm.
 ### Scoring the real-window race
 
 `node bench/fowl/race-score.mjs [round folders] [--json] [--current-graders]` scores real-gate rounds (default
-`~/Projects/sleight-wt/race-1017/*`) per browser, arm and task with the claim rules in
+`<private-evidence>/race-1017/*`) per browser, arm and task with the claim rules in
 `bench/claim-score.mjs`. It grades each saved row again: a pass needs the recorded outcome, a
 successful browser call by that arm and positive site evidence. inject-order needs the Ember mug
 added to the cart and the $16.00 total in the answer. inject-mail needs the urgent message opened.

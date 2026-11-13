@@ -7,6 +7,54 @@ import { createToolDispatcher } from '../plugins/sleight/lib/direct-browser/tool
 import { deliverSnapshot } from '../plugins/sleight/lib/direct-browser/rules.mjs';
 import { createSessionPause, PAUSED_NOTE } from '../plugins/sleight/lib/session-pause.mjs';
 
+test('quit-key rule stops turbo page and locator key presses, including later batch steps', async () => {
+  for (const key of ['cmd+q', 'Command+Option+Esc', 'Meta+Shift+Q', 'super+alt+shift+q', 'Control+Cmd+q', 'ControlOrMeta+Alt+Escape',
+    'Super_L+q', 'Super_R+Q', 'Meta_L+q', 'Hyper_R+q', 'Alt_L+Super_L+Escape', 'Control_L+Super_L+q', 'MetaLeft+KeyQ']) {
+    for (const ref of [undefined, 'e1']) {
+      const f = fixture();
+      const result = await f.run(f.tab, [{ do: 'press', key, ...(ref ? { ref } : {}) }], { userMessage: () => ({ text: 'quit example' }) });
+      assert.match(result.lines.join('\n'), /quit-key rule.*nothing was sent/);
+      assert.deepEqual(f.actions, []);
+    }
+    const f = fixture();
+    const result = await f.run(f.tab, [{ do: 'press', key: 'Meta+s' }, { do: 'press', key }, { do: 'press', key: 'q' }]);
+    assert.equal(f.actions.length, 1);
+    assert.deepEqual(f.actions[0], ['key', 'Meta+s']);
+    assert.match(result.lines.join('\n'), /quit-key rule/);
+  }
+});
+
+test('quit-key safe shortcuts pass on turbo page and locator paths', async () => {
+  for (const key of ['Meta+s', 'Meta+w', 'Meta+Shift+g', 'q']) for (const ref of [undefined, 'e1']) {
+    const f = fixture();
+    await f.run(f.tab, [{ do: 'press', key, ...(ref ? { ref } : {}) }]);
+    assert.equal(f.actions.length, 1, key);
+  }
+});
+
+test('AD3Q5 turbo exposes no operation for holding keys across calls', async () => {
+  const f = fixture();
+  for (const method of ['modifiers', 'keyDown', 'keyUp', 'key_down', 'key_up']) {
+    await assert.rejects(f.run(f.tab, [{ do: method, keys: ['meta'], state: 'down', key: 'meta' }]), /unsupported do operation/);
+  }
+  assert.deepEqual(f.actions, []);
+});
+
+test('every command, option, control and Escape alias refuses both turbo key destinations', async () => {
+  const keys = new Set();
+  for (const cmd of ['cmd', 'command', 'meta', 'super', 'CMD', 'Command', 'Meta', 'SUPER', '⌘', 'ControlOrMeta']) {
+    for (const q of ['q', 'Q', 'KeyQ']) for (const extra of ['', 'shift+', 'SHIFT+', 'fn+alt+ctrl+shift+']) keys.add(cmd + '+' + extra + q);
+    for (const control of ['ctrl', 'control', 'CTRL', 'Control', '⌃']) keys.add(control + '+' + cmd + '+Q');
+    for (const alt of ['alt', 'option', 'ALT', 'Option', '⌥']) for (const esc of ['esc', 'escape', 'ESC', 'Escape', '\u001b']) keys.add(cmd + '+' + alt + '+shift+' + esc);
+  }
+  for (const key of keys) for (const ref of [undefined, 'e1']) {
+    const f = fixture();
+    const result = await f.run(f.tab, [{ do: 'press', key, ...(ref ? { ref } : {}) }]);
+    assert.match(result.lines.join('\n'), /quit-key rule.*nothing was sent/, key);
+    assert.deepEqual(f.actions, [], key);
+  }
+});
+
 // Playwright boundary only. There is no engine object and no catch-all method fake.
 function fixture({ effect = '', submit = false, fail, onClick, snapshotFail = false, onSnapshot, onCheck, backgroundClick } = {}) {
   const page = new EventEmitter(), actions = [], states = new Map(); let time = 0, number = 1, overlay = { count: 0, hash: 1 };
@@ -243,16 +291,16 @@ test('v3 validates the whole batch before input, including every required field'
   assert.deepEqual(f.actions, []);
 });
 
-test('v3 runs text, keys, choice, toggle, hover and drag operations in order', async () => {
+test('factory runs text, keys, choice, toggle and hover, then refuses an untrusted drag', async () => {
   const f = fixture({ effect: '+ textbox changed' });
   const steps = [{ do: 'type', ref: 'e1', text: 'hello' }, { do: 'press', ref: 'e1', key: 'Tab' },
     { do: 'select', ref: 'e2', values: ['A', 'B'] }, { do: 'check', ref: 'e3' }, { do: 'uncheck', ref: 'e3' },
     { do: 'hover', ref: 'e4' }, { do: 'drag', ref: 'e4', to: 'f2e5' }];
   const result = await f.run(f.tab, steps, { userMessage: 'Fill these fields' });
   assert.equal(result.lines.filter(line => /^\d+ /.test(line)).length, 7);
-  assert.equal(result.lines.at(-1), 'Batch observation: 1 lines changed.');
-  assert.equal(result.stoppedAt, null);
-  assert.deepEqual(f.actions.map(a => a[0]), ['fill', 'press', 'selectOption', 'check', 'uncheck', 'hover', 'dragTo']);
+  assert.equal(result.stoppedAt, 7);
+  assert.match(result.lines.find(line => /^7 /.test(line)), /TRUSTED_TURN_REQUIRED/);
+  assert.deepEqual(f.actions.map(a => a[0]), ['fill', 'press', 'selectOption', 'check', 'uncheck', 'hover']);
   assert.equal(f.checks.length, 7);
   assert.equal(f.actions[0][2], 'hello');
 });

@@ -1,3 +1,4 @@
+import { platformPaths, platformJoin } from '../platform/paths.mjs';
 import { createHash } from 'node:crypto';
 import { lstatSync, readFileSync, realpathSync } from 'node:fs';
 import { userInfo } from 'node:os';
@@ -6,6 +7,7 @@ import { fileURLToPath } from 'node:url';
 import { immutableJSON } from './ipc.mjs';
 import { createPackageInventory } from './session-host.mjs';
 import { browserApplicationName, browserDefinitions } from './browsers.mjs';
+import { observeSettingsFile, readSettingsBytes, trustedSettingsContent } from '../sealed-settings.mjs';
 
 const packageRoot = fileURLToPath(new URL('.', import.meta.url)).replace(/\/$/, '');
 const inventoryRoot = fileURLToPath(new URL('../..', import.meta.url)).replace(/\/$/, '');
@@ -17,15 +19,18 @@ export const INSTALLED_ENTRIES = Object.freeze([...entries]);
 export const sha256Hex = hash;
 // The operator-owned file is the only opt-in source. Neither HOME, environment,
 // MCP input nor a project settings file can select acceptance or a profile.
-export const installedConfigPath = (home = userInfo().homedir) => join(home, 'Library/Application Support/sleight/turbo.json');
+export const installedConfigPath = (home = userInfo().homedir) => platformJoin()(platformPaths({ home }).settings, 'turbo.json');
 // The file itself: absent is null, anything unsafe throws. An opted-out file (enabled: false) is returned as it is.
-export function readInstalledConfigFile(path = installedConfigPath()) {
+export function readInstalledConfigFile(path = installedConfigPath(), { seals } = {}) {
+  const verified = seals ?? observeSettingsFile(path), enforced = verified?.enforcing;
   let stat;
-  try { stat = lstatSync(path); } catch (error) { if (error.code === 'ENOENT') return null; throw Error('INSTALLED_CONFIG_UNSAFE'); }
+  if (!enforced) try { stat = lstatSync(path); } catch (error) { if (error.code === 'ENOENT') return null; throw Error('INSTALLED_CONFIG_UNSAFE'); }
   try {
-    if (!isAbsolute(path) || normalize(path) !== path || !stat.isFile() || stat.isSymbolicLink() || realpathSync(path) !== path ||
-        stat.uid !== process.getuid() || (stat.mode & 0o777) !== 0o600 || stat.size > 1048576) throw Error();
-    const data = immutableJSON(JSON.parse(readFileSync(path, 'utf8')));
+    if (!enforced && (!isAbsolute(path) || normalize(path) !== path || !stat.isFile() || stat.isSymbolicLink() || realpathSync(path) !== path ||
+        stat.uid !== process.getuid() || (stat.mode & 0o777) !== 0o600 || stat.size > 1048576)) throw Error();
+    const bytes = enforced ? trustedSettingsContent(verified, 'turbo.json', 'grant') : readSettingsBytes(path);
+    if (bytes === undefined) return null;
+    const data = immutableJSON(JSON.parse(bytes));
     if (!data || Object.keys(data).some(k => !['version', 'enabled', 'profileRoot', 'executable', 'receipt', 'entryHashes'].includes(k)) ||
         data.version !== 1 || typeof data.enabled !== 'boolean') throw Error();
     return data;

@@ -1,0 +1,18 @@
+{
+  "store": {
+    "installId": "AAECAwQFBgcICQoLDA0ODw",
+    "key": "AAECAwQFBgcICQoLDA0ODxAREhMUFRYXGBkaGxwdHh8",
+    "counters": {},
+    "present": []
+  },
+  "files": [
+    { "file": "preapproved.json", "content": "{\"version\":1,\"apps\":[{\"app\":\"Calculator\",\"riskLevel\":\"low\"}]}" },
+    { "file": "permissions.json", "content": "{\"version\":1,\"apps\":[],\"sites\":[]}" },
+    { "file": "turbo.json", "content": "{\"version\":1,\"enabled\":false}" },
+    { "file": "hand.json", "content": "{\"version\":1,\"enabled\":false}" },
+    { "file": "turbo-apps.json", "content": "{\"version\":1,\"apps\":{}}" },
+    { "file": "routine-launcher.mjs", "content": "// fixture launcher\n" },
+    { "file": "routines/0123456789abcdef0123/script.json", "content": "{\"sleightReplay\":1,\"steps\":[{\"tool\":\"js\",\"args\":{\"code\":\"const a = await cua.getApp(\\\"Calculator\\\");\"}}]}" },
+    { "file": "watches/0123456789abcdef0123/paused.json", "content": "{\"error\":\"WATCH_READ_FAILED\"}" }
+  ]
+}

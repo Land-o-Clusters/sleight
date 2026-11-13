@@ -30,7 +30,7 @@
             "task": "word-edit",
             "run": 1,
             "passed": false,
-            "reason": "Fixture setup failed: ~/Projects/sleight-wt/codex-real/bench/real-fixture.js: execution error: Error: Error: AX fixture read failed: -25204 (AXFocusedWindow) (-2700)",
+            "reason": "Fixture setup failed: <private-evidence>/codex-real/bench/real-fixture.js: execution error: Error: Error: AX fixture read failed: -25204 (AXFocusedWindow) (-2700)",
             "fixtureDiagnostics": [
               {
                 "app": "Microsoft Word",

@@ -10,7 +10,8 @@ import { prepareHandHost } from '../direct-browser/host.mjs';
 export async function checkSharedCharacterInHost(frame, root) {
   const host = await prepareHandHost();
   if (host.status !== 'ready') throw Error(`the hand host is unavailable (${host.code ?? host.status})`);
-  return host.checkCharacter(frame, { root });
+  // At most 24 strips, checked sequentially with a 2 s child deadline and a bounded reap each.
+  return host.checkCharacter(frame, { root, timeoutMs: frame.stage ? 75000 : 10000 });
 }
 
 export async function withSharedCharacter(files, { uid = process.getuid(), hostCheck = checkSharedCharacterInHost } = {}, action = character => character) {
@@ -22,6 +23,7 @@ export async function withSharedCharacter(files, { uid = process.getuid(), hostC
   fs.chmodSync(root, 0o700);
   try {
     const folder = join(root, manifest.id); fs.mkdirSync(folder, { mode: 0o700 });
+    if ([...files.keys()].some(name => name.startsWith('stage/'))) fs.mkdirSync(join(folder, 'stage'), { mode: 0o700 });
     for (const [name, bytes] of files) fs.writeFileSync(join(folder, name), bytes, { flag: 'wx', mode: 0o600 });
     const character = loadCharacter(folder, { uid, installed: true, shared: true });
     const result = await hostCheck(characterFrame(character, { nonce: randomBytes(32).toString('hex'), seq: 0, resolve: resolveCharacterStates }), root);

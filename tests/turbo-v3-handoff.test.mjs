@@ -1,3 +1,4 @@
+import { MOD_META } from './fixtures/mod-attribution.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { EventEmitter } from 'node:events';
@@ -89,7 +90,7 @@ const productSession = (origin, remoteApprovals) => async ({ forkWorker, runMeta
       request.operation === 'catalog' ? { apps: [], defaults: {} } : runMetadata(script, request)) });
   const call = (name, args) => new Promise(resolve => {
     const id = ++serial; pending.set(id, resolve);
-    clientIn.write(JSON.stringify({ id, method: 'tools/call', params: { name, arguments: args } }) + '\n');
+    clientIn.write(JSON.stringify({ id, method: 'tools/call', params: { name, arguments: args, ...(name === 'turn_ended' ? { _meta: MOD_META } : {}) } }) + '\n');
   });
   const bootstrap = await call('turn_ended', { sleight_turbo: { event: 'bootstrap' } });
   const envelope = JSON.parse(bootstrap.content[0].text).sleightTurbo;

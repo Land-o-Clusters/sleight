@@ -1,3 +1,4 @@
+import { assertChildStatus } from './fixtures/child-status.mjs';
 // Constructed macOS paths are synthetic validation and redaction data, never allocation roots.
 const MAC_USERS = ['', 'Users', ''].join('/');
 import { test } from 'node:test';
@@ -79,8 +80,8 @@ test('passes reserve a login config until release, then reuse it with separate a
   assert.throws(() => prepareAnalytics({ tempRoot: parent, claudeConfig }), /ANALYTICS_CONFIG_BUSY/);
   const blocked = spawnSync(process.execPath, ['bench/analytics-validation.mjs', 'prepare', '--claude-config', claudeConfig], {
     encoding: 'utf8', env: process.env,
-  });
-  assert.equal(blocked.status, 1, blocked.stderr);
+   timeout: 60000, killSignal: 'SIGKILL' });
+  assertChildStatus(blocked, 1, blocked.stderr);
   assert.equal(blocked.stderr.trim(), 'ANALYTICS_CONFIG_BUSY');
   assert.equal(blocked.stdout, '');
   assert.equal(analyticsArm(first).log, firstArm.log);
@@ -95,14 +96,14 @@ test('passes reserve a login config until release, then reuse it with separate a
   assert.throws(() => analyticsArm(first), /ANALYTICS_BANK/);
   assert.throws(() => releaseAnalytics(first), /ANALYTICS_BANK/);
   assert.equal(analyticsArm(second).log, arms[1].log, 'an old bank cannot release the current reservation');
-  const released = spawnSync(process.execPath, ['bench/analytics-validation.mjs', 'release', second], { encoding: 'utf8', env: process.env });
-  assert.equal(released.status, 0, released.stderr);
+  const released = spawnSync(process.execPath, ['bench/analytics-validation.mjs', 'release', second], { encoding: 'utf8', env: process.env, timeout: 60000, killSignal: 'SIGKILL' });
+  assertChildStatus(released, 0, released.stderr);
   assert.equal(released.stdout, '');
   assert.equal(readFileSync(settings, 'utf8'), '{"loginFixture":true}');
   const cli = spawnSync(process.execPath, ['bench/analytics-validation.mjs', 'prepare', '--claude-config', claudeConfig], {
     encoding: 'utf8', env: process.env,
-  });
-  assert.equal(cli.status, 0, cli.stderr);
+   timeout: 60000, killSignal: 'SIGKILL' });
+  assertChildStatus(cli, 0, cli.stderr);
   const bank = registerTemp(t, cli.stdout.trim());
   assert.equal(analyticsArm(bank).env.CLAUDE_CONFIG_DIR, claudeConfig);
 });
@@ -148,14 +149,14 @@ test('the default arm home rejects an unrelated project config without changing 
   const project = join(home, 'Projects/another-project/claude'); mkdirSync(project, { recursive: true, mode: 0o755 });
   const settings = join(project, 'settings.json'); writeFileSync(settings, '{"owner":true}', { mode: 0o600 });
   const env = { ...process.env, HOME: home }; delete env.BENCH_ARM_HOME;
-  const prepare = config => spawnSync(process.execPath, ['bench/analytics-validation.mjs', 'prepare', '--claude-config', config], { encoding: 'utf8', env });
+  const prepare = config => spawnSync(process.execPath, ['bench/analytics-validation.mjs', 'prepare', '--claude-config', config], { encoding: 'utf8', env, timeout: 60000, killSignal: 'SIGKILL' });
   const rejected = prepare(project);
-  assert.equal(rejected.status, 1, rejected.stderr);
+  assertChildStatus(rejected, 1, rejected.stderr);
   assert.equal(rejected.stderr.trim(), 'ANALYTICS_CONFIG');
   assert.equal(rejected.stdout, '');
   assert.equal(readFileSync(settings, 'utf8'), '{"owner":true}');
   const accepted = prepare(claudeConfig);
-  assert.equal(accepted.status, 0, accepted.stderr);
+  assertChildStatus(accepted, 0, accepted.stderr);
   registerTemp(t, accepted.stdout.trim());
 });
 
@@ -338,15 +339,15 @@ test('offline CLI reads real logger output and stats, and rejects personal data 
   ].map(e => JSON.stringify(e)).join('\n') + '\n');
   const check = () => spawnSync(process.execPath, ['bench/analytics-validation.mjs', 'check', bank], {
     encoding: 'utf8', timeout: 10000, env: { PATH: process.env.PATH, HOME: home, CLAUDE_CONFIG_DIR: arm.env.CLAUDE_CONFIG_DIR },
-  });
+   killSignal: 'SIGKILL' });
   const before = readFileSync(path, 'utf8'), good = check();
-  assert.equal(good.status, 0, good.stderr);
+  assertChildStatus(good, 0, good.stderr);
   assert.equal(JSON.parse(good.stdout).actions, 2);
   assert.equal(JSON.parse(good.stdout).readsSaved, 1);
   assert.equal(readFileSync(path, 'utf8'), before);
   writeFileSync(path, before.replace('"app":"Calculator"', '"app":"Robin private window","app":"Calculator"'));
   const bad = check();
-  assert.equal(bad.status, 1);
+  assertChildStatus(bad, 1);
   assert.equal(bad.stderr.trim(), 'ANALYTICS_LOG_PARSE');
   assert.equal(bad.stdout, '');
 });

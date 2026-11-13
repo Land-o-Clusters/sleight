@@ -1,3 +1,4 @@
+import { assertChildStatus } from './fixtures/child-status.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
@@ -23,9 +24,9 @@ test('v3 stdio server lists five tools and refuses before allocation when the pi
   const child = spawnSync(process.execPath, ['bench/turbo/v3-server.mjs'], {
     cwd: fileURLToPath(new URL('..', import.meta.url)), env, encoding: 'utf8', timeout: 15000,
     maxBuffer: 131072, input: requests.map(value => JSON.stringify(value)).join('\n') + '\n',
-  });
+   killSignal: 'SIGKILL' });
   assert.equal(child.error, undefined, child.error?.message);
-  assert.equal(child.status, 0, child.stderr);
+  assertChildStatus(child, 0, child.stderr);
   assert.equal(child.signal, null);
   const replies = child.stdout.trim().split('\n').map(line => JSON.parse(line));
   assert.deepEqual(replies.map(reply => reply.id), [1, 2, 3]);

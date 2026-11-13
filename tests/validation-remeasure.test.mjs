@@ -1,3 +1,4 @@
+import { assertChildStatus } from './fixtures/child-status.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { execFileSync, spawnSync } from 'node:child_process';
@@ -25,7 +26,7 @@ function native(build, tasks, seconds = 34, passed = true) {
 function fixture({ runner = 'native', count = 3, reuse = false, legacy = false, external = false, nativeResult = native } = {}) {
   const bank = mkdtempSync(join(tmpdir(), 'remeasure-test-')), root = join(bank, 'repo'), baseline = join(bank, 'baseline'), out = join(bank, 'final');
   mkdirSync(root); mkdirSync(baseline);
-  const git = (...args) => execFileSync('/usr/bin/git', ['-C', root, ...args], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] }).trim();
+  const git = (...args) => execFileSync('/usr/bin/git', ['-C', root, ...args], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'], timeout: 30000, killSignal: 'SIGKILL' }).trim();
   git('init', '-q'); git('config', 'user.name', 'Fixture'); git('config', 'user.email', 'fixture@example.invalid');
   const paths = ['plugins/sleight/product.mjs', 'bench/run.mjs', 'bench/validation/driver.mjs'];
   for (const path of paths) put(join(root, path), 'original');
@@ -356,7 +357,7 @@ for (const alias of [false, true]) test(`external reused browser evidence reject
 test('CLI refuses incomplete, duplicate and unacknowledged live requests without invoking a runner', () => {
   const script = new URL('../bench/validation/remeasure.mjs', import.meta.url).pathname;
   for (const args of [['--run'], ['--tasks'], ['--run', '--run'], ['--unknown'], ['--baseline', 'missing']]) {
-    const got = spawnSync(process.execPath, [script, ...args], { encoding: 'utf8' });
-    assert.equal(got.status, 1); assert.ok(got.stderr.length);
+    const got = spawnSync(process.execPath, [script, ...args], { encoding: 'utf8', timeout: 60000, killSignal: 'SIGKILL' });
+    assertChildStatus(got, 1); assert.ok(got.stderr.length);
   }
 });

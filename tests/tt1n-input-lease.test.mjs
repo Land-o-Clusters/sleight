@@ -275,7 +275,7 @@ const cases = [
   ['a different menu title', { after: menu.replace('0 File,', '0 Edit,') }],
   ['a helper error', { identity: async () => { throw Error('helper unavailable'); } }],
   ['missing native fields', { identity: async () => ({ status: 'ok' }) }],
-  ['a helper timeout', { identity: () => new Promise(() => {}), menuContinuationTimeoutMs: 5 }],
+  ['a helper timeout', { identity: () => new Promise(() => {}), menuContinuationTimeoutMs: 5 }, undefined, []],
   ['code that does not split', {}, 'if (true) { await app.click("File"); await app.click("Save"); }'],
 ];
 for (const [name, options, code = 'await app.click("File"); await app.click("Save");', clicks = [2]] of cases) {
@@ -418,7 +418,8 @@ for (const [name, options] of [
   ['a lost focus', { identity: lostFocus() }],
   ['a dialog read without the window it covered', { bare: true }],
   // LW1 review: window-identity narrows two same-title windows to the focused one.
-  ['a second window with the same title and URL', { identity: (expected, native) => ({ ...dialogIdentity(expected, native), ...(expected.title ? { headerMatches: 2 } : {}) }) }],
+  ['a second window with the same title and URL', { identity: (expected, native) => ({ ...dialogIdentity(expected, native), ...(expected.title ? { headerMatches: 2,
+    ...(!expected.nativeIdentity && !expected.windowNumber ? { matches: 2, window: 0 } : {}) } : {}) }) }],
   // LW1 review: a parent recorded from a dialog would continue into that dialog.
   ['a covered window that was itself a dialog', { base: 'Window: "Find", App: Fixture Editor.\n0 dialog Find, URL: file:///tmp/find\n\t1 text area (settable) Value: \n\t2 button Replace All' }],
 ]) test(`DR1: closing the dialog onto ${name} stops`, async t => {
@@ -514,13 +515,15 @@ test('LW2: a window change outranks a stale number, and the stop is a window sto
 for (const [name, options, reason] of [
   ['no covered window', { bare: true }, 'no-covered-window'],
   ['another document', { afterItem: page.replaceAll('report.txt', 'other.txt') }, 'other-title'],
-  ['a second same-title window', { identity: (expected, native) => ({ ...dialogIdentity(expected, native), ...(expected.title ? { headerMatches: 2 } : {}) }) }, 'header-matches-2'],
+  ['a second same-title window', { identity: (expected, native) => ({ ...dialogIdentity(expected, native), ...(expected.title ? { headerMatches: 2,
+    ...(!expected.nativeIdentity && !expected.windowNumber ? { matches: 2, window: 0 } : {}) } : {}) }) }, 'identity: Input lease: step=window-inventory window identity is ambiguous'],
   ['HID input', { identity: (expected, native) => ({ ...dialogIdentity(expected, native), ...(expected.title ? { hidIdleSeconds: 0 } : {}) }) }, 'hid-input'],
-  ['lost focus', { identity: lostFocus() }, 'identity: Input lease: Focused window differs'],
+  ['lost focus', { identity: lostFocus() }, 'identity: Input lease: step=window-root the native window changed'],
 ]) test(`LW2: the trace names why a dialog stop did not continue (${name})`, async t => {
   const events = [];
   const h = await dialogFixture(t, { ...options, trace: (direction, msg) => { if (direction === 'dialog-continuation-refused') events.push(msg.reason); } });
   assert.equal((await h.call(dismiss)).isError, true);
+  assert.deepEqual(h.keys, []);
   assert.ok(events.some(event => event.startsWith(reason)), JSON.stringify(events));
 });
 
@@ -595,10 +598,12 @@ test('LW3: a relaunched app forgets the standard windows it showed before', asyn
     trace: (direction, msg) => { if (direction === 'dialog-continuation-refused') events.push(msg.reason); } });
   assert.notEqual((await h.call('await app.click(1); await app.pressKey("a");')).isError, true);
   pid = 456;
-  assert.match(JSON.stringify(await h.call('await app.click({ label: "Replace All" });')), /All done/);
-  assert.equal((await h.call(dismiss)).isError, true);
+  const stopped = await h.call('await app.click({ label: "Replace All" });');
+  assert.equal(stopped.isError, true);
+  assert.match(JSON.stringify(stopped), /native window or its process changed/);
+  assert.deepEqual(h.clicks, [1], 'the new process is refused before opening the alert');
   assert.deepEqual(h.keys, ['a']);
-  assert.ok(events.includes('no-covered-window'), JSON.stringify(events));
+  assert.deepEqual(events, []);
 });
 
 // LW4 review 1: nothing noted a process before the alert, so a relaunch between the document's read and the alert left
@@ -613,7 +618,16 @@ for (const [name, unknownAtRead] of [['the read learned', false], ['the read cou
     },
     trace: (direction, msg) => { if (direction === 'dialog-continuation-refused') events.push(msg.reason); } });
   pid = 456;
-  assert.match(JSON.stringify(await h.call('await app.click({ label: "Replace All" });')), /All done/);
+  const opened = await h.call('await app.click({ label: "Replace All" });');
+  if (!unknownAtRead) {
+    assert.equal(opened.isError, true);
+    assert.match(JSON.stringify(opened), /native window or its process changed/);
+    assert.deepEqual(h.clicks, [], 'the retained read identity refuses before opening the alert');
+    assert.deepEqual(h.keys, []);
+    assert.deepEqual(events, []);
+    return;
+  }
+  assert.match(JSON.stringify(opened), /All done/);
   assert.equal((await h.call(dismiss)).isError, true);
   assert.deepEqual(h.keys, []);
   assert.deepEqual(events, ['no-covered-window']);
@@ -625,7 +639,12 @@ for (const [name, unknownAtRead] of [['the read learned', false], ['the read cou
 test('LW4: a document without a URL or a certified window never continues after its dialog closes', async t => {
   const untitled = page.replace(', URL: file:///tmp/report.txt', '').replaceAll('report.txt', 'Document1');
   const events = [];
-  const h = await fixture(t, { base: untitled, after: alert, afterItem: untitled, identity: dialogIdentity,
+  const h = await fixture(t, { base: untitled, after: alert, afterItem: untitled,
+    identity: (expected, native) => {
+      const observed = dialogIdentity(expected, native);
+      if (expected.title === 'Document1') delete observed.windowNumber;
+      return observed;
+    },
     trace: (direction, msg) => { if (direction === 'dialog-continuation-refused') events.push(msg.reason); } });
   assert.match(JSON.stringify(await h.call('await app.click({ label: "Replace All" });')), /All done/);
   assert.equal((await h.call(dismiss)).isError, true);
@@ -656,7 +675,7 @@ test('DR1: a lease stop says which actions ran and which were not sent', async t
 
 // OF1: the real engine puts the exception first, so a call that went on past its own OK still opened with "Input lease
 // stopped" in 6 of 6 Office runs (2026-10-17), and 4 cost a turn redoing an action that had run. The calls are those runs'
-// (transcript lines in ledger/fable-1017-office-turns.md), on Word's shapes.
+// in the recorded Office turn study, on Word's shapes.
 const allText = result => result.content.map(c => c.text ?? '').join('\n');
 const wordMenus = wordDoc + '\n8 menu bar\n\t9 Table';
 const replaceAll = (name, argument, text) => name === 'click' && argument === 7 && text !== wordAlert ? wordAlert : text === wordAlert ? wordMenus : text;
@@ -859,6 +878,33 @@ const stoppedAtTab = (h, result) => {
   assert.equal(h.sent.length, 1);
 };
 
+for (const selected of [false, true]) test(`AH1B: a tab-continuation baseline keeps getApp advice and refuses a replacement number (selection=${selected})`, async t => {
+  const expecteds = [];
+  const target = { appId: 'org.test.editor', app: 'Fixture Editor', title: 'Marker', url: null };
+  const h = await tabFixture(t, { ...(selected ? { localTools: {
+    tools: [SELECT_WINDOW_TOOL], target: async () => target,
+    call: async () => ({ content: [{ type: 'text', text: JSON.stringify({ ok: true, target,
+      identity: { pid: 123, windowNumber: 22 } }) }] }),
+  } } : {}), identity: (expected, native) => {
+    expecteds.push(structuredClone(expected));
+    return { ...expected, ...native, matches: 1, epoch: 'helper', window: 1, pid: 123, processStart: 1,
+      ...(expected.focus ? { windowNumber: 77 } : {}) };
+  } });
+  if (selected) {
+    h.send({ jsonrpc: '2.0', id: 50, method: 'tools/call', params: { name: 'select_window',
+      arguments: { app: 'Fixture Editor', title: 'Marker', windowNumber: 22 } } });
+    for (let i = 0; i < 5; i++) await tick();
+    await h.call('await cua.getApp("Fixture Editor");');
+  }
+  expecteds.length = 0; // The fixture's setup read is outside the continuation.
+  const result = await h.call(tabCall);
+  assert.equal(result.isError, true);
+  assert.deepEqual(h.typed, []);
+  assert.equal(expecteds.find(expected => expected.focus).windowNumber, 22, 'the continuation pins its baseline number');
+  assert.deepEqual(h.refusals, ['identity: Input lease: step=window-number the selected window number changed. Changed target identity. Read the intended window again before acting. Next: await cua.getApp("org.test.editor").']);
+  assert.deepEqual(h.continued, []);
+});
+
 test('AB1: the call\'s own Cmd+T into a new tab of the same window types the URL there in the same call', async t => {
   const h = await tabFixture(t);
   const result = await h.call(tabCall);
@@ -895,10 +941,10 @@ test('AB1: Ctrl+T without a trailing read continues too', async t => {
 for (const [name, options, reason] of [
   ['the baseline flag', { tabContinuation: false }, 'off'],
   ['careful mode', { guardMode: 'careful' }, 'careful'],
-  ['another window in front', { nativeChange: 'window' }, 'identity: Input lease: the selected window number changed. Changed target identity. Read the intended window again before acting. Next: await cua.getApp("org.test.editor").'],
-  ['the window no longer focused', { nativeChange: 'unfocused' }, 'identity: Input lease: the native window changed. Unconfirmed target identity. Read the intended window again before acting. Next: await cua.getApp("org.test.editor").'],
+  ['another window in front', { nativeChange: 'window' }, 'identity: Input lease: step=window-number the selected window number changed. Changed target identity. Read the intended window again before acting. Next: await cua.getApp("org.test.editor").'],
+  ['the window no longer focused', { nativeChange: 'unfocused' }, 'identity: Input lease: step=native-identity the native window changed. Unconfirmed target identity. Read the intended window again before acting. Next: await cua.getApp("org.test.editor").'],
   ['a new process', { identity: (expected, native, count) => ({ ...expected, ...native, matches: 1, epoch: 'helper', window: 1,
-    pid: count === 1 ? 123 : 456, processStart: 1 }) }, 'identity: Input lease: the native window or its process changed. Changed target identity. Read the intended window again before acting. Next: await cua.getApp("org.test.editor").'],
+    pid: count === 1 ? 123 : 456, processStart: 1 }) }, 'identity: Input lease: step=pid the native window or its process changed. Changed target identity. Read the intended window again before acting. Next: await cua.getApp("org.test.editor").'],
   ['a sheet only the helper sees', { focus: { ...fieldFocus, sheets: 1 } }, 'native-sheet'],
   ['a password field in focus', { focus: { ...fieldFocus, role: 'AXTextField', subrole: 'AXSecureTextField' } }, 'secure-field'],
   ['focus outside the window', { focus: { ...fieldFocus, inWindow: false } }, 'focus-outside-window'],
@@ -1100,14 +1146,14 @@ const tabIdentity = change => async (expected, native, count) => ({ ...expected,
 test('AB1 review: a baseline without a window number never continues', async t => {
   const h = await tabFixture(t, { identity: tabIdentity(count => count === 1 ? { windowNumber: null } : {}) });
   stoppedAtTab(h, await h.call(tabCall));
-  assert.deepEqual(h.refusals, ['no-window-number']);
+  assert.deepEqual(h.refusals, ['no-baseline']);
 });
 
 test('AB1 review: a helper that matches other than one window never continues', async t => {
   for (const matches of [0, 2]) {
     const h = await tabFixture(t, { identity: tabIdentity(count => count === 2 ? { matches } : {}) });
     stoppedAtTab(h, await h.call(tabCall));
-    assert.deepEqual(h.refusals, [`identity: Input lease: window identity is ambiguous (${matches} matching windows). Unconfirmed target identity. Read the intended window again before acting. Next: await cua.getApp("org.test.editor").`]);
+    assert.deepEqual(h.refusals, ['identity: Input lease: step=window-inventory window identity is ambiguous. Unconfirmed target identity. Read the intended window again before acting. Next: await cua.getApp("org.test.editor").']);
   }
 });
 
@@ -1218,7 +1264,7 @@ test('LB4: another window raised during the call stays a stop at the native chec
   const h = await safariTab(t, { nativeChange: 'window' });
   stoppedAtTab(h, await h.call(sfCall));
   assert.deepEqual(h.continued, []);
-  assert.match(h.refusals[0], /^identity: Input lease: the selected window number changed/);
+  assert.match(h.refusals[0], /^identity: Input lease: step=window-number the selected window number changed/);
 });
 
 // LB6: the rest's Return result names the page in its header over the Start Page's tree; the relay reads again and delivers
@@ -1322,7 +1368,11 @@ async function parentFixture(t, { parent = {}, gone = true, reply, cover = inser
     identity: (expected, native) => !state.closed ? dialogIdentity(expected, native)
       : expected.title === coverTitle ? (typeof gone === 'function' ? gone(expected, native)
         : gone ? { status: 'ok', matches: 0, headerMatches: 0 } : dialogIdentity(expected, native))
-      : typeof parent === 'function' ? parent(expected, native, h) : parentOf(expected, native, parent),
+      // AD3 reads the document during recovery too. Faults here concern the
+      // parent proof and its admission, after that successful read.
+      : expected.focus === true || events.includes('accepted')
+        ? typeof parent === 'function' ? parent(expected, native, h) : parentOf(expected, native, parent)
+        : dialogIdentity(expected, native),
     trace: (direction, msg) => { if (/^parent-lease/.test(direction)) events.push(direction === 'parent-lease' ? 'accepted' : msg.reason); } });
   assert.match(JSON.stringify(await h.call('await app.click({ label: "Replace All" });')), /All done/);
   const closed = await h.call('await app.click({ id: "ok" }); nodeRepl.write(\'Window: "report.txt", App: Fixture Editor.\\n\');');
@@ -1346,10 +1396,14 @@ test('OT2: the parent lease pins the native window for that call only', async t 
   let epoch = 'helper';
   const h = await parentFixture(t, { parent: (expected, native) => parentOf(expected, native, { epoch }) });
   assert.notEqual((await h.call(nextCall)).isError, true);
-  // A new helper epoch (it quits after about 20 s idle) refuses a pinned identity; the next call's keys still go.
+  // AD3 retains the read's identity after the one-call parent pin ends.
   epoch = 'helper-2';
   const later = await h.call('await app.pressKey("Return");');
-  assert.notEqual(later.isError, true, JSON.stringify(later).slice(0, 400));
+  assert.equal(later.isError, true);
+  assert.match(JSON.stringify(later), /native window or its process changed/);
+  assert.deepEqual(h.keys, ['super+End']);
+  await h.call('await cua.getApp("Fixture Editor");');
+  assert.notEqual((await h.call('await app.pressKey("Return");')).isError, true);
   assert.deepEqual(h.keys, ['super+End', 'Return']);
 });
 
@@ -1357,7 +1411,7 @@ test('OT2: the pinned native window must still match when the rest is admitted',
   // The real helper narrows by the pinned number and answers mismatch once that window is gone.
   const pinned = [];
   const h = await parentFixture(t, { parent: (expected, native) => {
-    if (expected.nativeIdentity) { pinned.push(expected.nativeIdentity.windowNumber); return { status: 'mismatch', error: 'Known window number disappeared' }; }
+    if (expected.nativeIdentity && expected.focus !== true) { pinned.push(expected.nativeIdentity.windowNumber); return { status: 'mismatch', error: 'Known window number disappeared' }; }
     return parentOf(expected, native);
   } });
   const result = await h.call(nextCall);
@@ -1372,7 +1426,7 @@ for (const [name, answer] of [
   ['unavailable', { status: 'unknown', error: 'probe unavailable' }],
   ['ambiguous', { status: 'ok', matches: 2, headerMatches: 2, epoch: 'helper', window: 0, pid: 123, processStart: 1 }],
 ]) test(`OT2: an ${name} identity at the pinned admission stops`, async t => {
-  const h = await parentFixture(t, { parent: (expected, native) => expected.nativeIdentity ? answer : parentOf(expected, native) });
+  const h = await parentFixture(t, { parent: (expected, native) => expected.nativeIdentity && expected.focus !== true ? answer : parentOf(expected, native) });
   const result = await h.call(nextCall);
   assert.equal(result.isError, true);
   assert.deepEqual(h.keys, []);
@@ -1387,7 +1441,7 @@ for (const [name, answer] of [
 ]) test(`OT2: an ${name} identity stops a text write and save split from the parent-leased call before the write`, async t => {
   const settled = [];
   const h = await parentFixture(t, { base: pageWithBody, afterItem: pageWithBody, settleTextWrite: async target => { settled.push(target); },
-    parent: (expected, native) => expected.nativeIdentity ? answer : parentOf(expected, native) });
+    parent: (expected, native) => expected.nativeIdentity && expected.focus !== true ? answer : parentOf(expected, native) });
   const result = await h.call('await app.setValue({ id: "body" }, "x"); await app.pressKey("super+s");');
   assert.equal(result.isError, true);
   assert.deepEqual(h.values, []);
@@ -1418,12 +1472,16 @@ test('OT2: a labelled click in the rest goes on after the parent lease', async t
 // Review D: a call that stops before any result is observed still ends its pin.
 test('OT2: the pin ends with its call when the rest stops at admission', async t => {
   let epoch = 'helper', refuse = true;
-  const h = await parentFixture(t, { parent: (expected, native) => expected.nativeIdentity && refuse
+  const h = await parentFixture(t, { parent: (expected, native) => expected.nativeIdentity && expected.focus !== true && refuse
     ? { status: 'mismatch', error: 'Known window number disappeared' } : parentOf(expected, native, { epoch }) });
   assert.equal((await h.call(nextCall)).isError, true);
   refuse = false; epoch = 'helper-2';
   const later = await h.call('await app.pressKey("Return");');
-  assert.notEqual(later.isError, true, JSON.stringify(later).slice(0, 400));
+  assert.equal(later.isError, true);
+  assert.match(JSON.stringify(later), /Input lease: step=window-number the native window changed/);
+  assert.deepEqual(h.keys, []);
+  await h.call('await cua.getApp("Fixture Editor");');
+  assert.notEqual((await h.call('await app.pressKey("Return");')).isError, true);
   assert.deepEqual(h.keys, ['Return']);
 });
 
@@ -1431,7 +1489,7 @@ test('OT2: the pin ends with its call when the rest stops at admission', async t
 test('OT2: a lease that moved during the parent check refuses', async t => {
   let sent = false;
   const h = await parentFixture(t, { parent: async (expected, native, fixture) => {
-    if (!sent && !expected.nativeIdentity) {
+    if (!sent && expected.focus === true) {
       sent = true;
       fixture.send({ jsonrpc: '2.0', id: 99, method: 'tools/call', params: { name: 'js', arguments: { code: 'let s = await app.getAXState(); s' } } });
       for (let i = 0; i < 20; i++) await tick();
@@ -1447,7 +1505,7 @@ test('OT2: a lease that moved during the parent check refuses', async t => {
 for (const [name, options, reason, code = nextCall] of [
   ['the flag off', { parentLease: false }, undefined],
   ['user input since the document was seen', { parent: { hidIdleSeconds: 0 } }, 'hid-input'],
-  ['another window with the same title and URL', { parent: { headerMatches: 2 } }, 'header-matches-2'],
+  ['another window with the same title and URL', { parent: { headerMatches: 2, windowNumber: 23, window: 2 } }, 'identity-mismatch'],
   ['a new process', { parent: { pid: 456 } }, 'covered-process-changed'],
   ['the dialog still present natively', { gone: false }, 'dialog-still-open'],
   ['a sheet in the returned tree', { reply: page + '\n\t5 sheet Confirm' }, 'dialog-present'],
@@ -1489,7 +1547,7 @@ const identityFor = number => (expected, native) => ({ ...expected, ...native, w
 // The first call's result shows Shop and then Product (the page loaded between the acquisition and the end of the
 // call; the fixture prints the page as it stands last); `tail` is anything written between the two trees.
 async function shown(t, { page = 'Product', tail = '', ...options } = {}) {
-  const h = await fixture(t, { base: storePage('Shop'), ...options });
+  const h = await fixture(t, { base: storePage('Shop'), identity: () => ({ status: 'unknown' }), ...options });
   h.setText(storePage(page));
   const first = await h.call(`app = await cua.getApp("Fixture Editor"); nodeRepl.write(${JSON.stringify(storePage('Shop') + tail)});`);
   return { h, first };
@@ -1585,6 +1643,94 @@ test('SL4: a filtered read that also clicks is still refused after the page reti
   assert.equal(result.isError, true);
   assert.equal(h.clicks.length, 0);
   assert.match(JSON.stringify(result), /nothing from this call ran/);
+});
+
+for (const code of [
+  'nodeRepl.write((await app.getAXState()).split("\\n").filter(line => line.includes("button")).join("\\n"));',
+  'nodeRepl.write((await app.getAXState({ emit: false })).includes("button Other"));',
+]) test(`SA1R: a parenthesized read proceeds after retitle: ${code}`, async t => {
+  const events = [];
+  const { h } = await shown(t, { tail: '\n' + echo, trace: direction => events.push(direction) });
+  const result = await h.call(code);
+  assert.notEqual(result.isError, true, JSON.stringify(result));
+  assert.match(JSON.stringify(result), code.includes('includes("button Other")') ? /true/ : /button Other/);
+  assert.deepEqual(h.clicks, []);
+  assert.ok(events.includes('filtered-read-stale-window'));
+});
+
+// INT16: AD3W certifies ordinary reads too. Keep each unavailable-helper case above and pin its certified twin.
+for (const [name, payload] of [
+  ['regex', 'const s = await app.getAXState(); return /"/, await app.click([1, 1]), /"/;'],
+  ['division', 'let n = 1; const s = await app.getAXState(); n++ / await app.click([1, 1]) / 2;'],
+]) test(`SA1H F5: ${name} payload refuses the changed window before dispatch`, async t => {
+  const events = [];
+  const { h } = await shown(t, { tail: '\n' + echo, trace: direction => events.push(direction) });
+  const result = await h.call(payload);
+  assert.equal(result.isError, true);
+  assert.equal(h.clicks.length, 0);
+  assert.match(JSON.stringify(result), /nothing from this call ran/);
+  assert.ok(!events.includes('filtered-read-stale-window'));
+});
+
+test('SL4: the no-known-number retitle proceeds with the same certified number and process', async t => {
+  const events = [];
+  const { h } = await shown(t, { identity: identityFor(22), tail: '\n' + echo, trace: retitles(events) });
+  const result = await h.call(followUp);
+  assert.notEqual(result.isError, true, JSON.stringify(result));
+  assert.deepEqual(h.clicks, [1]);
+  assert.deepEqual(events, ['retitle-accepted']);
+});
+
+test('SL4: a certified retitle still refuses a changed process start', async t => {
+  let processStart = 1;
+  const { h } = await shown(t, { identity: (expected, native) => ({ ...identityFor(22)(expected, native), processStart }), tail: '\n' + echo });
+  processStart = 2;
+  const result = await h.call(followUp);
+  assert.equal(result.isError, true);
+  assert.deepEqual(h.clicks, []);
+});
+
+for (const number of [22, 23]) test(`SL4: a pure filtered read keeps its certified retitle check with window ${number}`, async t => {
+  const { h } = await shown(t, { identity: identityFor(number), tail: '\n' + echo });
+  const result = await h.call(filteredRead);
+  assert.equal(result.isError === true, number === 23);
+  assert.deepEqual(h.clicks, []);
+  if (number === 22) assert.match(JSON.stringify(result), /button Other/);
+});
+
+test('SL4: a certified main window cannot disambiguate a dialog among the shown trees', async t => {
+  const dialog = 'Window: "Insert", App: Fixture Editor.\n0 dialog Insert\n\t1 button OK';
+  const { h } = await shown(t, { identity: identityFor(22), tail: '\n' + dialog });
+  const result = await h.call(followUp);
+  assert.equal(result.isError, true);
+  assert.deepEqual(h.clicks, []);
+  assert.ok(result.content.some(item => item.text === 'sleight: nothing from this call ran. Fixture Editor\'s window changed since the last call (it was "Shop" in Fixture Editor). Act on the window above.'));
+});
+
+// INT16 review S1: every cover role among the shown trees keeps the refusal, not only sheets and dialogs.
+for (const role of ['sheet', 'system dialog', 'window', 'floating window', 'popover']) {
+  test(`SL4: a certified main window cannot disambiguate a ${role} among the shown trees`, async t => {
+    const cover = `Window: "Insert", App: Fixture Editor.\n0 ${role} Insert\n\t1 button OK`;
+    const { h } = await shown(t, { identity: identityFor(22), tail: '\n' + cover });
+    const result = await h.call(followUp);
+    assert.equal(result.isError, true);
+    assert.deepEqual(h.clicks, []);
+  });
+}
+
+test('SL4: a getState read plus click refuses a retitle even with the same certified number', async t => {
+  const { h } = await shown(t, { identity: identityFor(22), tail: '\n' + echo });
+  const result = await h.call('await cua.getState(); ' + followUp);
+  assert.equal(result.isError, true);
+  assert.deepEqual(h.clicks, []);
+});
+
+test('SL4: a filtered read plus click refuses a retitle even with the same certified number', async t => {
+  const { h } = await shown(t, { identity: identityFor(22), tail: '\n' + echo });
+  const result = await h.call(filteredRead.replace('nodeRepl.write', 'await app.click("Other"); nodeRepl.write'));
+  assert.equal(result.isError, true);
+  assert.deepEqual(h.clicks, []);
+  assert.ok(result.content.some(item => item.text === 'sleight: nothing from this call ran. Fixture Editor\'s window changed since the last call (it was "Shop" in Fixture Editor). Act on the window above.'));
 });
 
 // WB1 (SLEIGHT_WB1=1): the call's own label click opened a gallery window titled like that label (Word's Styles button,

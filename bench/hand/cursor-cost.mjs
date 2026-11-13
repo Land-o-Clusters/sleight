@@ -48,6 +48,9 @@ export function phaseFigures(samples, { start, activeEnd, idleEnd }) {
     idleHostCpuS: settled?.hand?.hosts ? settled.hand.cpuS : null,
     idleIntervals: settled?.hand?.hosts ? `${settled.hand.idleIntervals} of ${settled.hand.liveIntervals}` : null,
     peakRssMiB: whole.hand?.peakRssMB ?? null, hosts: whole.hand?.hosts ?? 0,
+    ...(active.hand?.processTree || settled?.hand?.processTree ? {
+      processTree: { animating: active.hand?.processTree ?? null, parked: settled?.hand?.processTree ?? null },
+    } : {}),
   };
 }
 
@@ -101,7 +104,7 @@ export function dryRunPlan(opts, { out }) {
   return [
     `VC7 cursor cost check, styles ${opts.styles.join(', ')} (dry run: nothing opened); about ${Math.round(est / 60000 * 10) / 10} min of phases`,
     '1. refuse with /tmp/sleight-hold present, take /tmp/sleight-live.lock (no wait); refuse when TextEdit runs',
-    ...(opts.host && opts.helper ? [] : ['2. build the capture helper and the hand host with xcrun swiftc (no -O, as the product)']),
+    ...(opts.host && opts.helper ? [] : ['2. build the capture helper and the hand host with xcrun swiftc (consent host uses the optimized product recipe)']),
     `3. /usr/bin/open -g -a TextEdit <work>/sleight-vc7-cost.txt --args -ApplePersistenceIgnoreState YES ...${opts.receipt ? `   (receipt ${tilde(opts.receipt)})` : ''}`,
     ...phases(opts.styles).map((p, i) => `${4 + i}. ${p.id}: ${p.style ? `${p.style === 'sprite' ? 'SLEIGHT_CURSOR_TEST=1 SLEIGHT_CURSOR_CHARACTERS_ROOT=<root> ' : ''}${host} ${hostArgs({ style: p.style }).join(' ')}; ` : 'no host; '}` +
       `${ACTIONS} actions every ${SPACING_MS} ms${p.style ? `, then ${IDLE_MS / 1000} s idle` : ''}; ps -A -o pid=,ppid=,time=,rss=,command= once a second`),

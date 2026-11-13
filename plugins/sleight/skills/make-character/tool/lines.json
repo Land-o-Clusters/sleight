@@ -429,5 +429,422 @@
       "Rebooting. Done!",
       "Hello again. Crisp as ever."
     ]
+  },
+  "mabel": {
+    "lang": "en",
+    "start": [
+      "This edge will do.",
+      "I was sitting here already.",
+      "Yes, I see the ring.",
+      "A new window. More furniture.",
+      "One paw on the job."
+    ],
+    "first-click": [
+      "That dot again.",
+      "I meant to do that.",
+      "Paw placed.",
+      "You saw nothing.",
+      "A respectable first bat."
+    ],
+    "typing": [
+      "The keys are warm.",
+      "These paws were built for this.",
+      "Tap. Tap. Enough.",
+      "I prefer the quiet keys.",
+      "Still spelling it out."
+    ],
+    "long-wait": [
+      "I can wait in this position.",
+      "An excellent edge for a loaf.",
+      "Still here. Obviously.",
+      "The tail has its own schedule.",
+      "Wake me when it moves."
+    ],
+    "approval": [
+      "Your call. I have no thumbs.",
+      "I will hold the card.",
+      "You decide. I will sit.",
+      "Waiting for your answer.",
+      "One yes or no, please."
+    ],
+    "error": [
+      "Ears back. Taking a breath.",
+      "That did not land.",
+      "A small indignity.",
+      "I saw that too.",
+      "Pausing to inspect the damage."
+    ],
+    "done": [
+      "Pencil off the edge. My contribution.",
+      "A slow blink for that one.",
+      "Done. The edge is mine again.",
+      "You may admire the paw work.",
+      "That is the last bat."
+    ],
+    "handback": [
+      "Your pointer. Try not to lose it.",
+      "Back to you.",
+      "I am leaving the ring here.",
+      "You have the next move.",
+      "My shift ends on this edge."
+    ],
+    "wake": [
+      "I was resting my eyes.",
+      "Yes, yes. Awake.",
+      "The window is still here.",
+      "Tail first, then the rest.",
+      "A stretch before we continue."
+    ]
+  },
+  "biscuit": {
+    "lang": "en",
+    "start": [
+      "Is this fetch? I am ready.",
+      "A whole new window!",
+      "I brought my paws.",
+      "Ready when you are. Tail included.",
+      "I can carry the little box."
+    ],
+    "first-click": [
+      "Was that a ball?",
+      "First click! Tail says yes.",
+      "Caught the first one.",
+      "Good start. Can we do another?",
+      "Paws in position."
+    ],
+    "typing": [
+      "Tap tap. Tail wag.",
+      "All four paws accounted for.",
+      "The keyboard smells interesting.",
+      "Letters first, fetch later.",
+      "Trying to keep my paws tidy."
+    ],
+    "long-wait": [
+      "I can sit. See? Sitting.",
+      "Tail still on duty.",
+      "The ball can wait too.",
+      "Staying right here.",
+      "I have not forgotten the box."
+    ],
+    "approval": [
+      "Your call. I will hold this card.",
+      "Sitting until you say.",
+      "You read it. I will wait.",
+      "I need your yes or no.",
+      "Card in mouth. Decision is yours."
+    ],
+    "error": [
+      "Head tilt. That was odd.",
+      "That one got away.",
+      "Paws down for a moment.",
+      "A little muddle. Still here.",
+      "I will sit while we look."
+    ],
+    "done": [
+      "Ball delivery!",
+      "That deserves two bounces.",
+      "Done! Is there another one?",
+      "Tail approval.",
+      "Good work. Here is the ball."
+    ],
+    "handback": [
+      "Your turn to throw.",
+      "Pointer delivered.",
+      "Back to you, paws off.",
+      "I will watch from here.",
+      "You have the next move."
+    ],
+    "wake": [
+      "Up! I am up!",
+      "Was there a new task?",
+      "Quick stretch. Ready.",
+      "Tail woke up first.",
+      "Where did the ring go?"
+    ]
+  },
+  "mo": {
+    "lang": "en",
+    "start": [
+      "I am here. Give the arm a moment.",
+      "Arrived. Eventually is a place.",
+      "Found a comfortable edge.",
+      "Ready enough.",
+      "One slow breath. Then we begin."
+    ],
+    "first-click": [
+      "There. A point.",
+      "The arm was already on its way.",
+      "First click, in good time.",
+      "I saw it. Slowly.",
+      "A gentle start."
+    ],
+    "typing": [
+      "The agent types. I supervise.",
+      "Plenty of time for a blink.",
+      "Words move faster than I do.",
+      "Keeping the paper steady.",
+      "A very small nod."
+    ],
+    "long-wait": [
+      "My specialty.",
+      "No need to fill the silence.",
+      "This is a good hanging spot.",
+      "Still here. Same blink.",
+      "We can share the quiet."
+    ],
+    "approval": [
+      "Your decision. I have time.",
+      "Holding the card steady.",
+      "You can read it at your own pace.",
+      "I will wait for your answer.",
+      "A yes or no when you are ready."
+    ],
+    "error": [
+      "A slow wince.",
+      "That needs a moment.",
+      "Let the arm come back down.",
+      "I saw the snag.",
+      "Hanging here while we sort it out."
+    ],
+    "done": [
+      "A smile. Nearly there. There.",
+      "Finished before my blink.",
+      "That went quickly for one of us.",
+      "One very slow nod.",
+      "The work is done. I can rest."
+    ],
+    "handback": [
+      "Back to you, at your pace.",
+      "The pointer is yours.",
+      "Take the next move.",
+      "I will keep this edge warm.",
+      "Handing back. Slowly."
+    ],
+    "wake": [
+      "Was I asleep?",
+      "Same pose. New task.",
+      "The eyes are opening.",
+      "I did notice.",
+      "Let me finish this blink."
+    ]
+  },
+  "rudy": {
+    "lang": "en",
+    "start": [
+      "..."
+    ],
+    "first-click": [
+      "..."
+    ],
+    "long-wait": [
+      "..."
+    ],
+    "approval": [
+      "..."
+    ],
+    "error": [
+      "..."
+    ],
+    "done": [
+      "..."
+    ]
+  },
+  "dennis": {
+    "lang": "en",
+    "start": [
+      "Right. Let me put the mug down.",
+      "One task, then coffee.",
+      "I have a clean sheet for this.",
+      "Tuesday again. On we go.",
+      "Tie straight enough. Ready."
+    ],
+    "first-click": [
+      "First entry in the ledger.",
+      "That gets us started.",
+      "One click accounted for.",
+      "A modest opening move.",
+      "Coffee can wait a moment."
+    ],
+    "typing": [
+      "Two fingers, full attention.",
+      "Putting that in writing.",
+      "A few more keys to press.",
+      "This part needs both hands.",
+      "Mug safely out of the way."
+    ],
+    "long-wait": [
+      "Time for a careful sip.",
+      "Nothing to enter just yet.",
+      "Still waiting on this step.",
+      "The coffee is cooling.",
+      "I can keep the place."
+    ],
+    "approval": [
+      "Your signature on this one.",
+      "Holding the memo for you.",
+      "This decision is yours.",
+      "Waiting for your answer.",
+      "I can hold here."
+    ],
+    "error": [
+      "That entry needs another look.",
+      "The figures need another look.",
+      "Let me loosen the tie.",
+      "That step hit a snag.",
+      "Back to the figures."
+    ],
+    "done": [
+      "Mug up. That is the task.",
+      "Ready for filing.",
+      "That calls for fresh coffee.",
+      "One less thing on the list.",
+      "Pencils down for this one."
+    ],
+    "handback": [
+      "Desk is yours again.",
+      "Over to you. Mug stays with me.",
+      "Returning the pointer.",
+      "Your turn at the desk.",
+      "I will keep the receipts."
+    ],
+    "wake": [
+      "Ah. Back at the desk.",
+      "Still Tuesday, I see.",
+      "Let me find my place.",
+      "Coffee first. No, task first.",
+      "Ready for the next entry."
+    ]
+  },
+  "nana": {
+    "lang": "en",
+    "start": [
+      "Glasses on. Let us begin.",
+      "I have brought my knitting.",
+      "One stitch at a time.",
+      "Let me find the right page.",
+      "Bag tucked away. Ready."
+    ],
+    "first-click": [
+      "There is our first stitch.",
+      "A good place to begin.",
+      "Just there, dear.",
+      "Off we go, steady now.",
+      "First button found."
+    ],
+    "typing": [
+      "Both index fingers today.",
+      "These keys are rather small.",
+      "One letter, then the next.",
+      "Putting the knitting aside.",
+      "Mind the space between words."
+    ],
+    "long-wait": [
+      "Another row while we wait.",
+      "No need to pull the wool.",
+      "I can keep my place here.",
+      "Plenty of yarn left.",
+      "This stitch can wait too."
+    ],
+    "approval": [
+      "You decide this part.",
+      "I will hold the card.",
+      "Take your time reading it.",
+      "Your answer comes first.",
+      "Waiting right here for you."
+    ],
+    "error": [
+      "Tsk. A stitch has slipped.",
+      "We should look at that again.",
+      "Let me lower my glasses.",
+      "A small snag in the wool.",
+      "That needs unpicking."
+    ],
+    "done": [
+      "There. Have a biscuit.",
+      "A tidy end to that row.",
+      "Plate is ready.",
+      "That is one task put away.",
+      "Time to rest the needles."
+    ],
+    "handback": [
+      "Back to you now.",
+      "Your hands, your pointer.",
+      "I will be by my knitting.",
+      "Take the chair if you like.",
+      "All yours, dear."
+    ],
+    "wake": [
+      "Oh. Where were we?",
+      "Just resting my eyes.",
+      "Let me lift my glasses.",
+      "The needles are still here.",
+      "Ready for another row."
+    ]
+  },
+  "hal": {
+    "lang": "en",
+    "start": [
+      "Hat on. Clear view ahead.",
+      "Let me set the cones out.",
+      "A fresh pane to work on.",
+      "Squeegee ready.",
+      "Checking the edge first."
+    ],
+    "first-click": [
+      "First mark on the job sheet.",
+      "A clean starting point.",
+      "Cone in place. Here we go.",
+      "That is our first foothold.",
+      "Starting at this corner."
+    ],
+    "typing": [
+      "Steady hands on the keys.",
+      "A bit of rattle from the rig.",
+      "Both hands on this part.",
+      "Writing up the job sheet.",
+      "Keeping the view clear."
+    ],
+    "long-wait": [
+      "Holding the platform steady.",
+      "No rush on the ladder.",
+      "Squeegee gets a short rest.",
+      "Waiting at this landing.",
+      "I will leave the cones here."
+    ],
+    "approval": [
+      "Stop here for your decision.",
+      "The sign is for you to read.",
+      "Waiting for your answer.",
+      "Your call before the next step.",
+      "Holding position."
+    ],
+    "error": [
+      "Dropped the squeegee.",
+      "That pane needs another pass.",
+      "A snag on the platform.",
+      "Let me check the rig.",
+      "That did not go to plan."
+    ],
+    "done": [
+      "A hat tip for a finished job.",
+      "Packing the cones away.",
+      "One pane off the list.",
+      "Tools down for this task.",
+      "A good place to stop."
+    ],
+    "handback": [
+      "Back on the ground. Your turn.",
+      "Handing the pointer over.",
+      "The view is yours again.",
+      "I will take the ladder.",
+      "Over to you from here."
+    ],
+    "wake": [
+      "Hat still on. Good.",
+      "Back on the platform.",
+      "Another pane waiting?",
+      "Let me check my footing.",
+      "Squeegee accounted for."
+    ]
   }
 }

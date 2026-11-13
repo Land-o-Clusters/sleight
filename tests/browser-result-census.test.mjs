@@ -1,3 +1,4 @@
+import { assertChildStatus } from './fixtures/child-status.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { mkdtempSync, mkdirSync, writeFileSync, symlinkSync } from 'node:fs';
@@ -109,8 +110,8 @@ test('round reader includes nested runs and requires an explicit shared clock fo
   const r = roundResultCensus(dir, { sharedClock: true });
   assert.equal(r.arms.devtools.toolUnionMs, 30); assert.equal(r.malformedLines, 2);
   assert.equal(roundResultCensus(dir).arms.devtools.toolUnionMs, null);
-  const cli = spawnSync(process.execPath, ['bench/fowl/browser-result-census.mjs', '--json', '--shared-clock', dir], { encoding: 'utf8' });
-  assert.equal(cli.status, 0, cli.stderr); assert.deepEqual(JSON.parse(cli.stdout)[0], r);
+  const cli = spawnSync(process.execPath, ['bench/fowl/browser-result-census.mjs', '--json', '--shared-clock', dir], { encoding: 'utf8', timeout: 60000, killSignal: 'SIGKILL' });
+  assertChildStatus(cli, 0, cli.stderr); assert.deepEqual(JSON.parse(cli.stdout)[0], r);
   assert.doesNotMatch(cli.stdout, /Successfully clicked|never-read/);
 });
 

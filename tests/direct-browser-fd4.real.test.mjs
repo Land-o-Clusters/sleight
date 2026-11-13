@@ -1,3 +1,4 @@
+import { testChromiumExecutable, launchTestChromium } from './fixtures/chromium-isolated.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createServer } from 'node:http';
@@ -27,11 +28,9 @@ async function fixture(t) {
   t.after(async () => { for (const socket of sockets) socket.destroy(); await new Promise(resolve => server.close(resolve)); });
   const spec = JSON.parse(readFileSync(new URL('../plugins/sleight/vendor/playwright-core/browsers.json', import.meta.url)))
     .browsers.find(browser => browser.name === 'chromium-headless-shell');
-  const platform = process.platform === 'darwin' ? 'mac-' + process.arch : 'linux64';
-  const executablePath = join(homedir(), 'Library/Caches/ms-playwright', 'chromium_headless_shell-' + spec.revision,
-    'chrome-headless-shell-' + platform, 'chrome-headless-shell');
+  const executablePath = testChromiumExecutable({ revision: spec.revision });
   const runtime = loadPlaywrightCore({ turbo: true });
-  const browser = await runtime.inprocess.playwright.chromium.launch({ headless: true, executablePath });
+  const browser = await launchTestChromium(runtime.inprocess.playwright.chromium, { headless: true, executablePath });
   t.after(() => browser.close());
   const page = await browser.newPage(); await page.goto('http://127.0.0.1:' + server.address().port);
   page.on('filechooser', () => { choosers++; });

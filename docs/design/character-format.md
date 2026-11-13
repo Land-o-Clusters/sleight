@@ -1,6 +1,7 @@
-# sleight character format v1
+# sleight character format v1.1
 
-A character is a local folder of images and a `character.json` manifest. sleight includes Tsugi, Shizu, Bit, Kit, Yori and Tab, six original MIT characters. Codex pets and vendor art are never bundled.
+A character is a local folder of images and a `character.json` manifest. sleight's 13 original MIT characters are
+Tsugi, Shizu, Bit, Kit, Yori, Tab, Mabel, Biscuit, Rudy, Mo, Dennis, Nana and Hal. Codex pets and vendor art are never bundled.
 The default cursor is sleight's ring. Importing a character leaves its sprite hidden. In overlay mode the sprite trails
 that ring, which always marks the exact point. The sprite's anchor controls its offset. Rendering and style selection
 are separate from importing.
@@ -16,13 +17,14 @@ my-character/
   sheet.png          # or sheet.webp
   extra.webp         # optional extra rows (or extra.png)
   perch.webp         # optional perch-mode rows (or perch.png)
+  stage/             # optional per-state PNG or WebP strips
   preview.png        # optional, at most 256 by 256 pixels
   LICENSE.txt        # terms for a license the validator does not recognize
 ```
 
 Installed folder names must equal the manifest's `id`. A source folder can have any name. `.DS_Store` is ignored and never
-copied. Other files or subfolders are refused. This CLI accepts folders.
-Archive extraction is outside this version of the importer. Do not put a `pet.json` beside `character.json`.
+copied. Only the optional `stage/` subfolder is accepted. Other subfolders are refused. This CLI accepts folders.
+The bounded `.sleightchar` archive also accepts these stage paths. Do not put a `pet.json` beside `character.json`.
 
 Imported characters install under `~/Library/Application Support/sleight/characters/<id>/`. Directories have mode 0700 and files
 have mode 0600, owned by the current user. Sources must be user-owned, have no executable files and have no group or world
@@ -42,7 +44,8 @@ rename. An existing character is never replaced. Remove it before importing a re
 ## Built-in characters
 
 Built-in packs live at `plugins/sleight/characters/<id>/` inside the plugin. They are read-only built-ins and are never
-copied to the user character directory. List and the picker show them first, marked as built-in. Selecting one enables
+copied to the user character directory. List shows them first, marked as built-in. The picker groups Mabel, Biscuit,
+Rudy, Mo, Dennis, Nana and Hal under Everyday, and Tsugi, Shizu, Bit, Kit, Yori and Tab under Anime. Selecting one enables
 its sprite style. Installing the plugin leaves the current cursor settings unchanged.
 
 `plugins/sleight/characters/manifest.json` pins every pack file with SHA-256. A failed hash skips the pack in the picker;
@@ -57,18 +60,22 @@ same user: it can rewrite the manifest and art together, and it can write the op
 and decoder read. The native pins cover sheets only, not character names, personality lines or previews. The same-user
 write window also exists for the private user bank.
 
-The IDs `tsugi`, `shizu`, `bit`, `kit`, `yori` and `tab` are reserved, including when a bundled file needs repair.
+The IDs `tsugi`, `shizu`, `bit`, `kit`, `yori`, `tab`, `mabel`, `biscuit`, `rudy`, `mo`, `dennis`, `nana` and `hal` are reserved,
+including when a bundled file needs repair.
 Import refuses those IDs regardless of display name. To make a variant, give it a different manifest ID.
 Remove refuses built-ins. An old user folder with a reserved ID cannot shadow the bundled pack, but remains removable
 with `sleight-mcp cursor remove <id>`. The picker shows a separate "renamed needed" row that opens the user bank for repair.
 
 The generator is included in the plugin at `skills/make-character/tool/`. The repository entry point is
-`tools/characters/build.mjs`. Its cast data, poses and styles draw all six characters in code under MIT.
+`tools/characters/build.mjs`. Its cast data, poses and styles draw all 13 characters in code under MIT.
 On macOS with `cwebp` 1.6.0 on PATH, build into a new directory with no symlink ancestors:
 
 ```sh
 nice -n 20 node tools/characters/build.mjs --out /private/tmp/sleight-cast-build
 ```
+
+To build only the seven everyday base packs, run
+`node tools/characters/build.mjs --everyday --out NEW_DIRECTORY`. Without `--everyday`, `--out` builds all 13.
 
 macOS `sips` rasterizes the SVGs without a browser or window. After PNG metadata is stripped, `cwebp` encodes every atlas
 with lossless WebP (`-lossless -z 9 -exact`). `sheet.webp` is already allowed by format v1. Each pack includes the main sheet,
@@ -79,15 +86,44 @@ difference 0.26 to 0.64 of 255 per pack and up to 125 on single edge pixels, mos
 luminance masks for hair shine. `tools/characters/proof.mjs` compares every generated frame with approved art and
 checks isolated shine against the hair's alpha support on all three sheets.
 
-`tests/character-rebuild.test.mjs` compares manifests, resolved states, sheet dimensions and alpha structure, without
-requiring identical image bytes. Its tested toolchain is macOS 27.0.1 and cwebp 1.6.0, recorded in
+`tests/character-rebuild.test.mjs` compares manifests, resolved states, sheet dimensions and alpha structure for all 13 packs.
+Everyday packs (7) also rebuild byte for byte on the tested toolchain. Original packs (6) retain the structure
+and alpha checks. Their image bytes differ from a fresh build. The tested toolchain is macOS 27.0.1 and cwebp 1.6.0, recorded in
 `tools/characters/toolchain.mjs`. The test skips raster qualification with a reason when cwebp is missing or
 the operating system or encoder version is untested. The native pin and packaged hash checks still run on every platform.
 
 After replacing the committed packs and manifest with reviewed output, run
 `node tools/characters/build.mjs --sync-native-pins` to update the host's compiled sheet pins. The pin test checks that
-these match. Run `node tools/characters/check.mjs` to verify hashes, lossless encoding and the 8,000,000-byte character
-budget, including the hash manifest. It also reports the complete plugin's uncompressed size.
+these match. Run `node tools/characters/check.mjs` to verify hashes and lossless encoding. Original packs (6) must total
+fewer than 8,000,000 bytes. Everyday packs (7) must total at most 15,000,000 bytes. Each budget counts that group's pack
+files. The check reports both group totals, total character bytes including the hash manifest, and the complete plugin's
+uncompressed size.
+
+### Built-in stage cache
+
+Built-ins include base art. On first use at stage or numeric size, the relay renders their 21 stage strips in the background and keeps
+medium art until publication. Imported packs never run this renderer. Generated strips live under
+`~/Library/Application Support/sleight/character-stage/<id>/<hash>/`. The hash covers the generator source, designs, version,
+worker and pinned base pack. Each published folder contains `stage.json`, `stage/` and `receipt.json`. Directories require
+0700 and data files 0600, owned by the current user, with symlinks and hardlinks refused.
+
+The receipt records the cache key, stage manifest hash and each strip's SHA-256. Character frames send the key as
+`stage.cache` and each strip's pin as `sha256`. The native host rechecks paths and hashes before decoding. Publication uses
+one rename after validation. A hash or file-list failure in a private cache with a receipt gets one render attempt per
+session. Permission and ownership failures keep medium art. After publication, old private cache and staging folders
+for that character become eligible for pruning at 10 minutes. Fresh folders and unsafe paths remain untouched.
+
+A fresh stage-cache lock with no owner receipt, or an abandoned recovery folder, waits up to 65 s before recovery.
+A session that reaches its deadline inside that window shows medium art once. The next session can recover.
+
+The receipt detects accidental damage. By design, a process running as the same user can plant a valid substitute strip
+and recompute the receipt. The host accepts that strip if its path, hash, format and pixels pass validation. This has the
+same trust level as the user editing plugin and pack files.
+
+The renderer uses `sandbox-exec` with direct network access denied and file writes limited to its private staging folder,
+`/dev/null` and the whole per-user temporary directory returned by `getconf DARWIN_USER_TEMP_DIR`. `sips` writes temporary
+files there even with a private `TMPDIR`. The profile allows reads and Mach services, so it does not prevent every form
+of data transfer. A missing or failed sandbox leaves medium art. The relay never retries without the sandbox.
 
 ## Manifest
 
@@ -312,13 +348,14 @@ The Node loader checks these on import, installation and every load:
 
 - Valid UTF-8 JSON, fewer than 16,384 bytes, no duplicate keys, nesting at most 32 levels, correct format/version and field
   types. Folder and manifest IDs must match only for installed characters.
-- Only the listed files, at most 8 entries, no subdirectories, executable files, links or shared writable files. Installed
+- Only the listed files, at most 8 root entries and the bounded `stage/` subfolder. Executable files, links and shared writable files are refused. Installed
   modes must be exactly 0700 for the directory and 0600 for files. File descriptors are checked after opening with no-follow.
 - PNG requires IHDR first, at least one IDAT before IEND, bounded chunk lengths and no data after IEND. WebP requires VP8,
   VP8L or VP8X first and exactly one image chunk. A VP8X canvas must equal the image bitstream's dimensions and appear only
   once, first. APNG and animated WebP are refused. A header check does not prove decoding succeeds.
 - Main, extra and perch images at most 8 MiB each, preview at most 1 MiB and `LICENSE.txt` at most 64 KiB. Total bytes, including
-  JSON and license, at most 16 MiB. Each image side is at most 4096 pixels; all images together are at most 16,000,000 pixels.
+  JSON and license, at most 16 MiB without stage art (48 MiB with a stage block). Each base image side is at most 4096
+  pixels, and base images together have at most 16,000,000 pixels. Stage strips have the separate limits below.
 - Exact cell grids, valid row and frame ranges, duration limits, scale, coordinates and acyclic explicit fallback names.
 - Required license field. A source with `character.json` must state a license. Only the generated Codex-import manifest may
   have `unknown`.
@@ -358,7 +395,8 @@ host's caps.
 
 `plugins/sleight/lib/hand/character.mjs` exports `loadCharacter(folder)` and `checkCharacter(id)` for validated loads.
 Results contain the normalized `manifest`, header-only `sheets`, `files` as a map of snapshot buffers, total byte count,
-`warnings`, a 19-entry `resolved` table and the `perch` table from `resolvePerchStates`. Installed loads use `installed: true` to enforce private file modes.
+`warnings`, a 19-entry `resolved` table, the `perch` table from `resolvePerchStates`, and a `stage` table with fallback art.
+Installed loads use `installed: true` to enforce private file modes.
 `checkCharacter(id)` resolves built-ins through their hash manifest. Built-in results have `builtin: true`.
 `listCharacters()` returns built-ins first, then user packs. It also returns `{ id, skipped, reason }` for stray entries and `{ id, error }` for broken characters.
 
@@ -371,3 +409,78 @@ Call `loadCharacter` again before a later load from disk. A previous result prov
 must perform the native pixel checks before drawing it. No character file is evaluated or imported as code.
 The Node path checks and descriptor rechecks do not exclude every directory-swap race by a process with the same user ID.
 Node has no directory-relative `openat` API. Snapshot buffers remain fixed once read and are revalidated before installation.
+
+
+## Stage strips (v1.1)
+
+The optional `stage` block extends manifest `version: 1`. Existing packs and Codex imports keep their atlas bytes and
+state tables. Stage placement belongs to the stage runtime. This format supplies art and medium-size fallbacks.
+
+```json
+{
+  "stage": {
+    "cell": { "w": 384, "h": 416 },
+    "filter": "linear",
+    "anchor": { "x": 192, "y": 392 },
+    "lie": { "cell": { "w": 640, "h": 416 }, "anchor": { "x": 192, "y": 300 } },
+    "states": {
+      "stage-lie": { "file": "stage/lie.webp", "frames": 6, "ms": [400, 120, 200, 200, 500, 400], "loop": true },
+      "stage-point": { "file": "stage/point.webp", "frames": 3, "ms": [70, 90, 320], "loop": false, "hotspot": { "x": 350, "y": 60 } }
+    }
+  }
+}
+```
+
+Each state references one horizontal strip with 1 to 8 cells. A path must match `stage/[a-z-]{1,24}.(png|webp)`, with the dot
+literal. No other path components are accepted. A pack has at most 24 stage files, each at most 4 MiB and 4096 by 1024
+pixels. Cell sides are integers from 192 to 1024 pixels. The strip must be exactly `frames * cell.w` by `cell.h`.
+The stage strips together have at most 24,000,000 pixels, counting missing declared strips as well. The complete pack
+has at most 48 MiB only when a valid stage block is present. The base atlas limits are unchanged.
+
+Use 384 by 416 cells for 2x art, or 576 by 624 for 3x. Wide poses can override `cell` per state. `lie.cell` and `lie.anchor`
+apply to `stage-lie`, `stage-lie-reach`, `stage-lie-peek` and `stage-sleep`. State `anchor` overrides that default.
+Anchors and optional hotspots are finite coordinates inside their cell. The anchor is the feet or hip line; a missing
+hotspot uses the anchor. `filter` defaults to `linear`. `nearest` draws sharp pixel edges. Optional `flip: "h"` mirrors
+stage art. The placement runtime chooses when stage poses face the target.
+
+`ms` is a number or one duration per cell, from 20 to 2000 ms (40 ms minimum when looping), totaling at most 8000 ms.
+`loop` is required. Optional `next` lists at most four stage state names to prefetch when this state starts. When absent,
+the loader uses a fixed successor table for reaches, peeks, cheers, startles, leaps, runs, climbs and handoffs.
+
+| Stage state | Medium fallback |
+| --- | --- |
+| `stage-lie`, `stage-sit`, `stage-hang` | `perch` |
+| `stage-lie-reach` | `perch-point-right`, or left when facing left |
+| `stage-lie-peek`, `stage-sit-notes`, `stage-hang-peek`, `stage-think` | `perch-peek` |
+| `stage-sleep` | `sleep` |
+| `stage-wait` | `perch-wait` |
+| `stage-cheer` | `high-five` |
+| `stage-climb`, `stage-run` | `running-right`, or left when facing left |
+| `stage-stand` | `idle` |
+| `stage-point` | `aim` |
+| `stage-carry` | `drag-carry` |
+| `stage-wince` | `error` |
+| `stage-handoff` | `handoff` |
+| `stage-paused` | `paused` |
+| `stage-leap` | `jumping` |
+| `stage-startle` | `startle` |
+
+The stage table has 21 named states. Packs can omit any of them. Unknown stage states and successor names are ignored
+with a warning. For a pack with a stage block, the callout at import reports how many states have art, their size and
+whether stage is shown at medium. Packs without stage art, including imported Codex pets, use medium art by default.
+Perch states then use their existing atlas fallbacks. No pixel pet is automatically enlarged to stage height.
+
+The host decodes stage strips on `SpriteLoader.queue` only after a state requests one. The drawing path returns the
+medium fallback while loading, on a missing file, or after a refused decode. Timeout and spawn failures retry with
+backoff from 1 to 30 seconds. Invalid strips stay failed until the character reloads. The decoded-byte LRU cache has a
+hard 24 MiB cap, measured as `image.bytesPerRow * image.height`. Prefetch uses only free cache space and cannot evict
+a resident strip. A strip skipped for space stays at medium until it can be admitted. Layers can retain their current
+image after cache eviction. The cache cap is not an RSS limit. Strips pass the same ownership, no-link, image-header and sandboxed pixel checks as atlas images. Installed
+stage directories have mode 0700 and files 0600. Animation chunks are refused before decode. Import checks decode
+each unique referenced stage strip in the sandbox before installation. Live loads decode on demand. Finder's `.DS_Store`
+is ignored at the pack root and inside `stage/`. Metadata links and directories are refused.
+
+The headless `--stage-cache-dump` accepts a character frame followed by `{"stageState":"stage-lie"}` requests and optional
+`{"stageAwait":true}` lines. It reports fallback selection, selection time, current and peak cache bytes, decode count
+and evictions. It doesn't create an application or window. Its explicit await is for diagnostics. Drawing never awaits decode.
+CPU, frame pacing, capture exclusion and the first-draw performance bar require separate live qualification.

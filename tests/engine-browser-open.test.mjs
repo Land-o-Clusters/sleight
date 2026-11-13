@@ -298,13 +298,15 @@ test('relay: a bad URL, a blocked app, sleight\'s own host and a blocked site ne
   h.open(2, { url: 'https://example.com/', browser: 'Blocked App' });
   h.open(3, { url: 'https://example.com/', browser: 'consent-host' });
   h.open(4, { url: 'https://www.bestbuy.com/site/x', browser: 'Example Browser' });
+  h.open(5, { url: 'https://example.com/', browser: 'glide-engine' });
   await settle();
   assert.deepEqual(h.engineCalls(), []);
   assert.match(text(h.reply(1)), /^browser_open: /);
   assert.equal(text(h.reply(2)), LINE);
   assert.equal(text(h.reply(3)), OWN_HOST_LINE);
   assert.match(text(h.reply(4)), /You blocked sleight on https:\/\/bestbuy\.com/);
-  for (const id of [1, 2, 3, 4]) assert.equal(h.reply(id).result.isError, true);
+  assert.equal(text(h.reply(5)), "That is sleight's Glide engine; tools never act on it.");
+  for (const id of [1, 2, 3, 4, 5]) assert.equal(h.reply(id).result.isError, true);
 });
 
 test('relay: an allow-only list refuses a destination outside it before the engine', async t => {

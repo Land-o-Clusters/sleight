@@ -1,3 +1,4 @@
+import { assertChildStatus } from './fixtures/child-status.mjs';
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { EventEmitter } from 'node:events';
@@ -123,11 +124,11 @@ test('read-only host observer compiles on macOS without starting observation', {
   const dir = registerTemp(t, mkdtempSync(join(tmpdir(), 'sleight-host-monitor-')));
   const source = new URL('../bench/fowl/host-monitor.swift', import.meta.url).pathname;
   // The shared module cache: a fresh one rebuilds AppKit's modules and passed 120 s at load 33 (2026-10-14).
-  const result = spawnSync(compiler, ['-module-cache-path', swiftModuleCache(), source, '-o', join(dir, 'observer')], { encoding: 'utf8', timeout: 180000 });
-  assert.equal(result.status, 0, result.stderr);
+  const result = spawnSync(compiler, ['-module-cache-path', swiftModuleCache(), source, '-o', join(dir, 'observer')], { encoding: 'utf8', timeout: 180000, killSignal: 'SIGKILL' });
+  assertChildStatus(result, 0, result.stderr);
   // This mode exits before NSWorkspace, AX or window metadata access.
-  const checked = spawnSync(join(dir, 'observer'), ['--self-test'], { encoding: 'utf8', timeout: 10000 });
-  assert.equal(checked.status, 0, checked.stderr);
+  const checked = spawnSync(join(dir, 'observer'), ['--self-test'], { encoding: 'utf8', timeout: 10000, killSignal: 'SIGKILL' });
+  assertChildStatus(checked, 0, checked.stderr);
   const report = JSON.parse(checked.stdout);
   assert.equal(report.kind, 'subscription-self-test');
   for (const key of ['partial', 'recovered', 'backgroundLaunch', 'failedLaunch', 'terminated', 'pendingBeforeSubscribe', 'gone', 'handIgnored', 'handReused', 'handGone'])
@@ -163,11 +164,11 @@ test('patched rounds grade turbo host events even though extension tab checks re
   const root = fileURLToPath(new URL('..', import.meta.url));
   const dir = registerTemp(t, mkdtempSync(join(tmpdir(), 'sleight-host-monitor-')));
   mkdirSync(join(dir, 'tools'));
-  const source = spawnSync('/usr/bin/git', ['-C', cache, 'show', '6a12d60:tools/rounds.mjs'], { encoding: 'utf8' });
-  assert.equal(source.status, 0, source.stderr);
+  const source = spawnSync('/usr/bin/git', ['-C', cache, 'show', '6a12d60:tools/rounds.mjs'], { encoding: 'utf8', timeout: 30000, killSignal: 'SIGKILL' });
+  assertChildStatus(source, 0, source.stderr);
   writeFileSync(join(dir, 'tools/rounds.mjs'), source.stdout);
-  const applied = spawnSync('/usr/bin/git', ['apply', join(root, 'bench/fowl/sleight-surface.patch')], { cwd: dir, encoding: 'utf8' });
-  assert.equal(applied.status, 0, applied.stderr);
+  const applied = spawnSync('/usr/bin/git', ['apply', join(root, 'bench/fowl/sleight-surface.patch')], { cwd: dir, encoding: 'utf8', timeout: 30000, killSignal: 'SIGKILL' });
+  assertChildStatus(applied, 0, applied.stderr);
   const previous = process.env.SLEIGHT_REPO; process.env.SLEIGHT_REPO = root;
   t.after(() => { if (previous === undefined) delete process.env.SLEIGHT_REPO; else process.env.SLEIGHT_REPO = previous; });
   const runner = await import(pathToFileURL(join(dir, 'tools/rounds.mjs')));

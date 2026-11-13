@@ -64,6 +64,49 @@ test('sprite selection sends the style before its validated character, on the sh
   const style = h.lines.findIndex(f => f.op === 'style'), character = h.lines.findIndex(f => f.hand === 'character');
   assert.ok(style >= 0 && character > style); assert.equal(h.lines[character].id, 'cat'); assert.equal(h.lines[character].seq, 2);
 });
+test('size selection and watched settings rebuild the character with stage options, keeping lines and style', async t => {
+  const sprite = { manifest: { id: 'cat', frame: { w: 64, h: 64 }, sheet: 'sheet.png', states: {}, scale: 1 }, folder: '/fixture/cat',
+    sheets: { sheet: { width: 512, height: 64 } }, resolved: [{ state: 'idle', sheet: 'sheet.png', row: 0, start: 0, frames: 1, ms: [100], loop: false, hotspot: { x: 32, y: 32 } }],
+    perch: { anchor: { x: 32, y: 64 }, states: {} } };
+  let setting = { enabled: true, style: 'sprite', character: 'cat', lines: 'off' }, changed;
+  const h = harness(t, async e => ({ ok: true, size: e.size }), { setting: () => setting,
+    watch: (_folder, listener) => { changed = listener; }, loadSprite: async () => ({ character: sprite, resolve: () => [] }) });
+  await settle();
+  assert.equal(h.lines.find(f => f.hand === 'character').size, 'medium', 'CHV17 defaults an unset character to medium');
+  h.event({ op: 'size', size: 'stage', nonce: 'f'.repeat(64) });
+  h.event({ op: 'size', size: 315 }); h.event({ op: 'size', size: 'stage', extra: true }); await settle();
+  assert.deepEqual(h.calls, []);
+  h.event({ op: 'size', size: 'stage' }); await settle();
+  const stage = h.lines.filter(f => f.hand === 'character').at(-1);
+  assert.equal(stage.size, 'stage'); assert.equal(stage.stageAttention, undefined, 'attention defaults on in the host'); assert.ok(stage.perch);
+  assert.deepEqual(h.lines.filter(f => f.op === 'options').at(-1).lines, false);
+  assert.equal(h.catalogs.at(-1).size, 'stage');
+  assert.equal(h.lines.some(f => f.op === 'style'), false);
+  setting = { ...setting, size: 315.5, stageAttention: false }; changed('change', 'hand.json'); await settle();
+  const numeric = h.lines.filter(f => f.hand === 'character').at(-1);
+  assert.equal(numeric.size, 315.5); assert.equal(numeric.stageAttention, false);
+  h.event({ op: 'size', size: 'small' }); await settle();
+  const small = h.lines.filter(f => f.hand === 'character').at(-1);
+  assert.equal(small.size, 'small'); assert.equal(small.perch, undefined);
+  const seqs = h.lines.filter(f => f.hand === 'character').map(f => f.seq);
+  assert.deepEqual(seqs, [...seqs].sort((a, b) => a - b)); assert.equal(new Set(seqs).size, seqs.length);
+});
+test('Windows character frames keep the strict base schema despite Mac size and perch settings', async t => {
+  const sprite = { manifest: { id: 'cat', frame: { w: 64, h: 64 }, sheet: 'sheet.png', states: {}, scale: 1,
+    lines: { ignored: 'Mac speech' } }, folder: '/fixture/cat', sheets: { sheet: { width: 512, height: 64 } },
+    resolved: [{ state: 'idle', sheet: 'sheet.png', row: 0, start: 0, frames: 1, ms: [100], loop: false, hotspot: { x: 32, y: 32 } }],
+    perch: { anchor: { x: 32, y: 64 }, states: {} } };
+  for (const size of [undefined, 'small', 'medium', 'stage', 315]) {
+    const h = harness(t, undefined, { platform: 'win32', setting: () => ({ enabled: true, style: 'sprite', character: 'cat',
+      size, perch: true, stageAttention: false }), loadSprite: async () => ({ character: sprite, resolve: () => [] }) });
+    await settle();
+    const frame = h.lines.find(f => f.hand === 'character');
+    assert.ok(frame, String(size));
+    assert.deepEqual(Object.keys(frame).sort(), 'hand nonce seq id sheet extra cell table'.split(' ').sort());
+    assert.deepEqual(frame.cell, [64, 64]); assert.equal(frame.table.idle.scale, 1);
+    assert.equal(h.lines.some(f => f.op === 'options'), false);
+  }
+});
 test('notice text removes format characters and bounds Unicode bytes to the host limit', async t => {
   const h = harness(t, async () => ({ ok: false, text: '\u202e' + '猫'.repeat(10000) })); await settle();
   h.event({ op: 'import', key: 'b'.repeat(64) }); await settle();

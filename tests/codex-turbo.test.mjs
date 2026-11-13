@@ -1,3 +1,5 @@
+import { createGlideStopSession } from '../plugins/sleight/lib/mac-driver/stop.mjs';
+import { MOD_META } from './fixtures/mod-attribution.mjs';
 // Turbo inside Codex (1.3.1): Codex's UserPromptSubmit hook binds each turbo turn to the user's own message through a
 // tool the model can't see or call, the Stop and Interrupt hooks release it, and Claude Code's path stays byte for byte.
 import { test } from 'node:test';
@@ -45,15 +47,34 @@ async function worker() {
   return { bridge, events };
 }
 
-async function harness(t, { clientInfo = CODEX, mod = false, turbo = true } = {}) {
+async function harness(t, { clientInfo = CODEX, mod = false, turbo = true, nativeSession } = {}) {
   const w = turbo ? await worker() : { events: [] };
   const prepared = turbo ? await prepareInstalledStartup(() => w.bridge) : {};
   const clientIn = new PassThrough(), clientOut = new PassThrough(), serverIn = new PassThrough(), serverOut = new PassThrough();
   const toClient = [], toServer = [];
   clientOut.on('data', bytes => toClient.push(...bytes.toString().trim().split('\n').map(JSON.parse)));
   serverIn.on('data', bytes => toServer.push(...bytes.toString().trim().split('\n').map(JSON.parse)));
-  const relay = createRelay({ clientIn, clientOut, serverIn, serverOut, ...prepared, changeReview: false, modHost: () => mod,
-    sessionId: '00000000-0000-4000-8000-00000000000a' });
+  let makeRelay = createRelay;
+  if (process.env.INT22D_MUTANT === 'e') {
+    const url = new URL('../plugins/sleight/lib/relay.mjs', import.meta.url);
+    let body = readFileSync(url, 'utf8');
+    for (const before of ['    if (nativeRuntime && glideStopLatched) return;',
+      '    if (nativeRuntime && glideStopLatched) { reply(); return; }']) {
+      assert.ok(body.includes(before), 'missing mutation anchor: ' + before); body = body.replace(before, '');
+    }
+    body = body.replace(/(from\s*|import\s*\()(['"])(\.[^'"]+)\2/g,
+      (_, prefix, quote, relative) => prefix + quote + new URL(relative, url).href + quote)
+      .replace(/new URL\((['"])(\.[^'"]+)\1,\s*import.meta.url\)/g,
+        (_, quote, relative) => `new URL(${JSON.stringify(new URL(relative, url).href)})`);
+    makeRelay = (await import('data:text/javascript;base64,' + Buffer.from(body).toString('base64'))).createRelay;
+  }
+  let reportStop;
+  const stopReported = new Promise(resolve => { reportStop = resolve; });
+  const relay = makeRelay({ clientIn, clientOut, serverIn, serverOut, ...prepared, changeReview: false, modHost: () => mod,
+    sessionId: '00000000-0000-4000-8000-00000000000a',
+    ...nativeSession ? { nativeMac: true, nativeSession, stopGraceMs: 1,
+      stopEngine: async () => { await nativeSession.settled(); return { collected: true }; },
+      restartEngine: async () => ({ serverIn, serverOut }), inspectInput: async () => ({ ok: true }), onStopReported: reportStop } : {} });
   t.after(async () => { relay.dispose(); await w.bridge?.detach(); for (const s of [clientIn, clientOut, serverIn, serverOut]) s.destroy(); });
   const settle = async () => { for (let i = 0; i < 30; i++) await new Promise(resolve => setImmediate(resolve)); };
   const client = async msg => { clientIn.write(JSON.stringify({ jsonrpc: '2.0', ...msg }) + '\n'); await settle(); };
@@ -63,7 +84,7 @@ async function harness(t, { clientInfo = CODEX, mod = false, turbo = true } = {}
     await engine({ id: 'init', result: { protocolVersion: '2025-06-18', capabilities: {}, serverInfo: { name: 'engine' } } });
   }
   const reply = id => toClient.find(m => m.id === id);
-  return { ...w, toClient, toServer, client, engine, reply, raw: text => clientIn.write(text) };
+  return { ...w, stopReported, toClient, toServer, client, engine, reply, raw: text => clientIn.write(text) };
 }
 
 // What Codex's hook runner sends: the template expanded from the event, and _meta with only the thread id
@@ -222,7 +243,7 @@ test('a used engine turn\'s Stop goes to the engine as before and releases turbo
 
 test('Codex never gets the private envelope: the mod\'s bootstrap stays refused, and no reply carries the nonce', async t => {
   const h = await harness(t);
-  await h.client({ id: 1, method: 'tools/call', params: { name: 'turn_ended', arguments: { sleight_turbo: { event: 'bootstrap' } } } });
+  await h.client({ id: 1, method: 'tools/call', params: { name: 'turn_ended', _meta: MOD_META, arguments: { sleight_turbo: { event: 'bootstrap' } } } });
   assert.equal(h.reply(1).result.isError, true);
   await h.client(hookCall(2));
   const { nonce } = h.bridge.bootstrapEnvelope();
@@ -243,9 +264,9 @@ test('under Claude Code the relay\'s traffic is unchanged by Codex turbo', async
   const h = await harness(t, { clientInfo: CLAUDE, mod: true });
   await h.client({ id: 1, method: 'tools/list' });
   await h.engine({ id: h.toServer.at(-1).id, result: { tools: ENGINE_TOOLS } });
-  await h.client({ id: 2, method: 'tools/call', params: { name: 'turn_ended', arguments: { sleight_turbo: { event: 'bootstrap' } } } });
+  await h.client({ id: 2, method: 'tools/call', params: { name: 'turn_ended', _meta: MOD_META, arguments: { sleight_turbo: { event: 'bootstrap' } } } });
   const envelope = JSON.parse(h.reply(2).result.content[0].text).sleightTurbo;
-  await h.client({ id: 3, method: 'tools/call', params: { name: 'turn_ended', arguments: { sleight_turbo: { ...envelope, event: 'begin', turn: 'turbo-1', text: 'read' } } } });
+  await h.client({ id: 3, method: 'tools/call', params: { name: 'turn_ended', _meta: MOD_META, arguments: { sleight_turbo: { ...envelope, event: 'begin', turn: 'turbo-1', text: 'read' } } } });
   await h.client({ id: 4, method: 'tools/call', params: { name: 'browser_read', arguments: { tab: 't1' } } });
   await h.client({ id: 5, method: 'tools/call', params: { name: 'js', arguments: { code: '1 + 1' } } });
   await h.engine({ id: 5, result: { content: [{ type: 'text', text: '2' }] } });
@@ -263,7 +284,7 @@ test('under Claude Code the relay\'s traffic is unchanged by Codex turbo', async
   const transcript = normalize({ toClient: h.toClient, toServer, worker: h.events });
   const path = fixturePath(process.env.SLEIGHT_MT === '0' ? 'claude-code-parity.json' : 'claude-code-parity-mt.json');
   if (process.env.SLEIGHT_WRITE_PARITY === '1') writeFileSync(path, JSON.stringify(transcript, null, 1) + '\n');
-  // HO1 re-pins the shorter browser_tabs and app_handoff descriptions.
+  // TX1 re-pins descriptions with one shared sign-in rule.
   assert.deepEqual(transcript, json(path));
 });
 
@@ -318,4 +339,20 @@ test('Grok cannot expose turbo or forge a turn binding, even with the mod enable
   assert.deepEqual(h.events, []);
   assert.deepEqual(h.reply(2).result.content, []);
   assert.match(JSON.stringify(h.reply(3)), /unavailable|Turbo is off/);
+});
+
+test('INT22D an unattributed Codex prompt cannot reopen a person Stop through turbo binding', async t => {
+  let click;
+  const session = createGlideStopSession({ control: { async beginGlideStop(_, stop) { click = stop; return () => {}; } } });
+  const h = await harness(t, { nativeSession: { ...session, setPolicy() {}, stopTurnEnded: session.turnEnded } });
+  const end = await session.begin({}, () => {}); click(); await end();
+  await h.stopReported;
+  const before = begins(h.events).length;
+  await h.client(hookCall('after-stop', { turn: 'after-stop' }));
+  assert.equal(begins(h.events).length, before, 'a stopped session cannot bind another Codex turn');
+  await h.client({ id: 'still-stopped', method: 'tools/call', params: { name: 'js_reset', arguments: {} } });
+  assert.equal(h.reply('still-stopped')?.result.isError, true, 'closing must outlive the unattributed prompt');
+  assert.match(h.reply('still-stopped').result.content[0].text, /start a new session/);
+  assert.doesNotMatch(h.reply('still-stopped').result.content[0].text, /next prompt/);
+  assert.throws(session.check, { code: 'USER_STOPPED' });
 });

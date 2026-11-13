@@ -2,12 +2,16 @@
 // binary sleight builds in its helper cache (direct-browser/host.mjs). Only the person's click may answer them, so no
 // tool acts on that process. The native helpers (lease-target.js, hover.js, drag.js, select-window.js, menubar.js)
 // check the same identity by pid themselves.
+// The Glide engine is also refused, with a separate identity and result line. These sets confer no launch trust.
 import { execFileSync } from 'node:child_process';
 
 export const OWN_HOST_LINE = "That is sleight's own confirmation window; only you can answer it.";
+export const GLIDE_ENGINE_LINE = "That is sleight's Glide engine; tools never act on it.";
 const HELPER_CACHE = /\/Library\/Caches\/sleight\/turbo-host\//i;
+const DRIVER_CACHE = /\/Library\/Caches\/sleight\/turbo-host\/mac-driver\//i;
+const PREBUILT_DRIVER = /\/lib\/mac-driver\/prebuilt\/darwin-arm64\/glide-engine(?:\/|$)/i;
 // The host's name however it is spelled: case, spaces, `-` or `_`, a path before it or `.app` after it.
-const hostName = value => value.trim().replace(/^.*\//, '').replace(/\.app$/i, '').toLowerCase().replace(/[^a-z0-9]/g, '') === 'consenthost';
+const normalizedName = value => value.trim().replace(/^.*\//, '').replace(/\.app$/i, '').toLowerCase().replace(/[^a-z0-9]/g, '');
 
 // macOS's own authentication sheets: Touch ID and password for LocalAuthentication (coreautha, which sleight's high-stakes
 // settings changes use, person-confirm.mjs) and authorization prompts (SecurityAgent). Bundle ids and paths found on this Mac
@@ -20,22 +24,30 @@ const authName = value => { const key = value.trim().replace(/^.*\//, '').replac
   return AUTH_BUNDLES.includes(key) || AUTH_NAMES.includes(key.replace(/[^a-z0-9]/g, '')); };
 export const isAuthDialog = (...values) => values.some(value => typeof value === 'string' && (authName(value) || AUTH_PATH.test(value)));
 
-const isConsentHost = (...values) => values.some(value => typeof value === 'string' && (hostName(value) || HELPER_CACHE.test(value)));
-// A name, bundle id or path that only the person may answer: the host (its name, or any file in sleight's helper cache) or a
-// system authentication sheet.
-export const isOwnHost = (...values) => isConsentHost(...values) || isAuthDialog(...values);
-/** The line Claude gets for values that name one of them: the system sheet's own line, or the host's. */
-export const ownLine = (...values) => isAuthDialog(...values) ? AUTH_DIALOG_LINE : OWN_HOST_LINE;
+// Names and paths classify for refusal only. Launch trust still requires receipts and hashes.
+export const isConsentHost = (...values) => values.some(value => typeof value === 'string' &&
+  (normalizedName(value) === 'consenthost' || HELPER_CACHE.test(value) && !DRIVER_CACHE.test(value)));
+export const isGlideEngine = (...values) => values.some(value => typeof value === 'string' &&
+  (normalizedName(value) === 'glideengine' || DRIVER_CACHE.test(value) || PREBUILT_DRIVER.test(value)));
+export const isOwnHost = (...values) => isConsentHost(...values) || isGlideEngine(...values) || isAuthDialog(...values);
+/** C takes precedence over G for an old cached driver still named consent-host. */
+export function ownLine(...values) {
+  const identities = values.map(value => typeof value === 'number' || typeof value === 'string' && /^\s*\d+\s*$/.test(value)
+    ? pidExecutable(Number(value)) : value);
+  return isAuthDialog(...identities) ? AUTH_DIALOG_LINE : isConsentHost(...identities) ? OWN_HOST_LINE
+    : isGlideEngine(...identities) ? GLIDE_ENGINE_LINE : OWN_HOST_LINE;
+}
 // Text that names the host or a system authentication agent anywhere, such as an approval card's message.
-export const mentionsOwnHost = text => typeof text === 'string' && (/consent[\s_-]*host(?![a-z])/i.test(text) || HELPER_CACHE.test(text) ||
+export const mentionsOwnHost = text => typeof text === 'string' && (/(?:consent[\s_-]*host|glide[\s_-]*engine)(?![a-z])/i.test(text) || HELPER_CACHE.test(text) ||
   /\b(?:coreautha|coreauthd|securityagent|com\.apple\.localauthentication)\b/i.test(text));
 
 // Whether a running pid is the host or an authentication agent, from the executable ps names (both start by full path).
-export function ownHostPid(pid, run = execFileSync) {
-  if (!Number.isSafeInteger(pid) || pid <= 0) return false;
-  try { return isOwnHost(String(run('/bin/ps', ['-p', String(pid), '-o', 'comm='], { encoding: 'utf8', timeout: 1000 })).trim()); }
-  catch { return false; }
+function pidExecutable(pid, run = execFileSync) {
+  if (!Number.isSafeInteger(pid) || pid <= 0) return undefined;
+  try { return String(run('/bin/ps', ['-p', String(pid), '-o', 'comm='], { encoding: 'utf8', timeout: 1000, killSignal: 'SIGKILL' })).trim(); }
+  catch { return undefined; }
 }
+export function ownHostPid(pid, run = execFileSync) { return isOwnHost(pidExecutable(pid, run)); }
 
 // An app as Claude or the engine names it (a name, bundle id, path, or pid as a number or digits) that is the host.
 export function namesOwnHost(app, pidCheck = ownHostPid) {

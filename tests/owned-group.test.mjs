@@ -23,7 +23,7 @@ test('macOS zombie-only owned group is collected despite EPERM', {
   let status = '';
   const deadline = Date.now() + 3000;
   while (!status.startsWith('Z') && Date.now() < deadline) {
-    status = execFileSync('/bin/ps', ['-o', 'stat=', '-p', String(pid)], { encoding: 'utf8' }).trim();
+    status = execFileSync('/bin/ps', ['-o', 'stat=', '-p', String(pid)], { encoding: 'utf8', timeout: 30000, killSignal: 'SIGKILL' }).trim();
     if (!status.startsWith('Z')) await new Promise(resolve => setTimeout(resolve, 20));
   }
   assert.match(status, /^Z/, 'fixture child exited and remains unreaped');

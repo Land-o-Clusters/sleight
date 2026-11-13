@@ -106,10 +106,11 @@ for (const native of [false, true]) for (const dedupeRules of [false, true]) tes
   assert.equal(h.received.at(-1).result.isError, true);
   assert.match(h.received.at(-1).result.content[0].text, /Do not replay input automatically/);
   assert.match(JSON.stringify(h.received.at(-1).result.content), /computer__js/);
-  assert.ok(h.received.at(-1).result.content.some(c => c.text?.includes('# Computer Use Confirmations Policy')), 'delivery error keeps trusted policy when it fits');
+  assert.doesNotMatch(JSON.stringify(h.received.at(-1).result.content), /## Computer Use|# Computer Use Confirmations Policy/);
   call(2);
   h.engine({ id: 2, result: { content: [{ type: 'image', data: 'A'.repeat(30000), mimeType: 'image/png' }] } });
   assert.equal(h.received.at(-1).result.isError, true, 'a second delivery failure retains the guidance');
+  assert.doesNotMatch(JSON.stringify(h.received.at(-1).result.content), /## Computer Use|# Computer Use Confirmations Policy/);
   call(3);
   h.engine({ id: 3, result: { content: [{ type: 'text', text: '4' }] } });
   const next = h.received.at(-1).result;
@@ -197,7 +198,7 @@ for (const clientInfo of [grokInfo, grokDirect]) for (const mode of ['always', '
   const policy = readFileSync(new URL('fixtures/engine-confirmations-policy.txt', import.meta.url), 'utf8').trimEnd();
   for (const [id, content, meta] of [
     [1, [{ type: 'text', text: '## Computer Use\nNative reference.\n\n' + policy },
-      { type: 'text', text: 'Window: "Editor", App: Editor\n0 standard window\n' + '\t1 text area 界\\\"\n'.repeat(5000) }]],
+      { type: 'text', text: 'Window: "Editor", App: Editor\n0 standard window\n' + Array.from({ length: 5000 }, (_, i) => `\t${i + 1} text area 界\\\"\n`).join('') }]],
     [2, [{ type: 'text', text: '界\\\"\n'.repeat(15000) }]],
     [3, [{ type: 'image', data: 'A'.repeat(30000), mimeType: 'image/png' }]],
     [4, [{ type: 'text', text: 'done' }], { huge: 'x'.repeat(30000) }],
@@ -216,4 +217,24 @@ for (const clientInfo of [grokInfo, grokDirect]) for (const mode of ['always', '
       assert.equal(result.isError, undefined);
     }
   }
+});
+
+test('Grok refuses an indivisible repeated-number label and retries its undelivered policy', t => {
+  const h = grokRelay(t, { firstCallRules: skillRules() });
+  const policy = readFileSync(new URL('fixtures/engine-confirmations-policy.txt', import.meta.url), 'utf8').trimEnd();
+  const docs = '## Computer Use\nNative reference.\n\n' + policy;
+  h.client({ id: 1, method: 'tools/call', params: { name: 'js', arguments: { code: 'nodeRepl.write(4)' } } });
+  h.engine({ id: 1, result: { content: [{ type: 'text', text: docs }, {
+    type: 'text', text: 'Window: "Editor", App: Editor\n0 standard window\n' + '\t1 text area 界\\\"\n'.repeat(5000),
+  }] } });
+  const refused = h.received.at(-1).result;
+  assert.equal(refused.isError, true);
+  assert.match(refused.content[0].text, /Do not replay input automatically/);
+  assert.ok(Buffer.byteLength(JSON.stringify(refused)) <= 20000);
+  h.client({ id: 2, method: 'tools/call', params: { name: 'js', arguments: { code: 'nodeRepl.write(4)' } } });
+  h.engine({ id: 2, result: { content: [{ type: 'text', text: '4' }] } });
+  const retry = h.received.at(-1).result;
+  assert.equal(retry.isError, undefined);
+  assert.ok(retry.content.map(item => item.text ?? '').join('\n').includes(rewritePaymentPolicy(policy)));
+  assert.ok(Buffer.byteLength(JSON.stringify(retry)) <= 20000);
 });

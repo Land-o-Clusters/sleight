@@ -2,6 +2,7 @@
 // request-before-input watching and short Playwright actionability timeouts.
 // No upstream source copied. All browser input stays on the owned Playwright page.
 import { inspectTarget } from './target-info.mjs';
+import { quitKeyBlocked, QUIT_KEY_REFUSAL } from '../quit-key.mjs';
 export { inspectTarget } from './target-info.mjs';
 import { stageUserUploads } from './files.mjs';
 import { isV3Context } from './v3-context.mjs';
@@ -232,6 +233,7 @@ export function createActionRunner({ check, snapshot, backgroundClick = (tab, lo
       const pointCache = {};
       let pointHandle, endpoint, endHandle, popupTab, popupNotice;
       let locator, target, started = false, armed, activity, deferred = false, staging, submit, inputPending = false, stepFinished = false, settleCapped = false, settleNote, clickRetry = '', recoverClick = false, controlRecipe, consentDecline = false, consentNote, controlObserved = false, cursorToken, cursorFailed = false;
+      let endPageWait;
       let pointsReleased = false;
       const releasePoints = async () => {
         if (!point || pointsReleased) return;
@@ -244,6 +246,7 @@ export function createActionRunner({ check, snapshot, backgroundClick = (tab, lo
       };
       try {
         pauseCheck?.();
+        if (step.do === 'press' && quitKeyBlocked('pressKey', [step.key], isV3Context(ctx) && ctx.allowQuitShortcut())) throw Error(QUIT_KEY_REFUSAL);
         await ensurePageResponsive(tab);
         if (state.dialog && step.do !== 'dialog') throw Error('a page dialog is waiting; answer it with the dialog operation');
         if (step.do === 'dialog' && !state.dialog) throw Error('no waiting dialog; read the page');
@@ -331,7 +334,8 @@ export function createActionRunner({ check, snapshot, backgroundClick = (tab, lo
           pauseCheck?.();
           assertPageResponsive(tab);
           started = true;
-          if (hand && !point && !cursorToken) try { cursorToken = hand.step({ op: named.do, page, locator, ref: step.ref, text: step.text,
+          if (!endPageWait && (['wait', 'navigate', 'back', 'forward', 'reload'].includes(named.do) || named.until !== undefined)) try { endPageWait = hand?.pageWait?.(); } catch {}
+          if (hand && !point && !cursorToken) try { cursorToken = hand.step({ op: named.do, page, locator, ref: step.ref, text: step.text, key: step.key,
             role: info.role || ({ button: 'button', input: 'textbox', textarea: 'textbox', select: 'combobox', a: 'link' })[info.tag], inputType: info.inputType, title: info.cursorTitle, description: info.cursorDescription,
             to: step.do === 'drag' ? page.getByRef(step.to) : undefined }); } catch {}
         };
@@ -408,7 +412,10 @@ export function createActionRunner({ check, snapshot, backgroundClick = (tab, lo
           if (step.do === 'check') return locator.check({ ...options, ...await aimedAt(locator) });
           if (step.do === 'uncheck') return locator.uncheck({ ...options, ...await aimedAt(locator) });
           if (step.do === 'hover') return locator.hover(options);
-          if (step.do === 'drag') return trusted ? ctx.dragTo(target, page.getByRef(step.to)) : locator.dragTo(page.getByRef(step.to), options);
+          if (step.do === 'drag') {
+            if (!trusted) throw Error('TRUSTED_TURN_REQUIRED');
+            return ctx.dragTo(target, page.getByRef(step.to));
+          }
           if (step.do === 'upload') return locator.setInputFiles(staging.payloads, options);
           if (step.do === 'viewport') return setViewport(page, step);
           if (step.do === 'back') return page.goBack({ ...options, waitUntil: 'commit' });
@@ -627,6 +634,7 @@ export function createActionRunner({ check, snapshot, backgroundClick = (tab, lo
           : started && !unsent ? 'effect unconfirmed; read before retrying. ' : 'not run: ') + detail + clickRetry);
         stoppedAt = index + 1; break;
       } finally {
+        try { endPageWait?.(); } catch {}
         try { hand?.finish?.(cursorToken, cursorFailed); } catch {}
         if (!cursorToken && ['click', 'check', 'uncheck', 'select', 'navigate', 'type', 'paste', 'press', 'drag', 'scroll', 'hover', 'move', 'back', 'forward', 'reload', 'upload'].includes(named.do)) try { hand?.skipped?.({ op: named.do }); } catch {}
         stepFinished = true;

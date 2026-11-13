@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { callLocalTool, stopHelpers } from '../plugins/sleight/lib/launch.mjs';
+import { callLocalTool, stopHelpers } from './fixtures/local-tools.mjs';
 import { readFileSync } from 'node:fs';
 import vm from 'node:vm';
 import { execFile } from 'node:child_process';
@@ -8,13 +8,26 @@ import { execFile } from 'node:child_process';
 test('background results never restore focus, including a changed-text failure', async () => {
   for (const outcome of [{ ok: true, path: 'background' }, { ok: false, path: 'background', lostText: true, error: 'Cmd+Z' }, { ok: false, path: 'none', error: 'ambiguous' }]) {
     const calls = [];
-    const result = await callLocalTool('drag', { app: 'TextEdit' }, async () => true, async (_script, args) => {
+    const result = await callLocalTool('drag', { app: 'TextEdit', from: [1, 2], to: [3, 4] }, async () => true, async (_script, args) => {
       calls.push(args.op ?? 'drag');
       return args.op === 'capture' ? { ok: true, previousPid: 99, targetPid: 7 } : outcome;
     });
     assert.deepEqual(calls, ['capture', 'drag']);
     assert.match(result.content[0].text, new RegExp(outcome.path));
   }
+});
+
+test('DS1 the relay surfaces a failed modifier release as an error without more input', async () => {
+  const calls = [], error = 'Shift release failed twice for pid 7; Shift may still be held in that app. Text may already have moved; read the window before continuing';
+  const result = await callLocalTool('drag', { app: 'Editor', from: [1, 2], to: [3, 4] }, async () => true, async (script, args) => {
+    calls.push([script, args.op]);
+    return args.op === 'capture' ? { ok: true, previousPid: 99, targetPid: 7 }
+      : { ok: false, path: 'accessibility', deliveryVerified: false, error };
+  });
+  assert.equal(result.isError, true);
+  const outcome = JSON.parse(result.content[0].text);
+  assert.equal(outcome.error, error); assert.equal(outcome.deliveryVerified, false);
+  assert.deepEqual(calls, [['drag-focus.js', 'capture'], ['drag.js', undefined]]);
 });
 
 test('the launcher restores focus after a timed-out drag child', async () => {
@@ -88,7 +101,7 @@ test('shutdown waits for an active drag and its delayed focus restoration', asyn
   let finishDrag, finishRestore, startedDrag, startedRestore;
   const dragStarted = new Promise(resolve => { startedDrag = resolve; });
   const restoreStarted = new Promise(resolve => { startedRestore = resolve; });
-  const drag = callLocalTool('drag', { app: 'Chess' }, async () => true, async (_script, args) => {
+  const drag = callLocalTool('drag', { app: 'Chess', from: [1, 2], to: [3, 4] }, async () => true, async (_script, args) => {
     if (args.op === 'capture') return { ok: true, previousPid: 99, targetPid: 7 };
     if (args.op === 'restore') { startedRestore(); return new Promise(resolve => { finishRestore = resolve; }); }
     if (args.op === 'release') return { ok: true, released: false };
@@ -113,12 +126,12 @@ test('collected helpers reopen for local tools after an engine restart', async (
   assert.equal((await launch.runScript('select-window.js', {}, run)).ok, true);
 });
 test('a rejected app approval cannot capture focus or launch a helper', async () => {
-  const result = await callLocalTool('drag', { app: 'Chess' }, async () => false, () => assert.fail('no helper allowed'));
+  const result = await callLocalTool('drag', { app: 'Chess', from: [1, 2], to: [3, 4] }, async () => false, () => assert.fail('no helper allowed'));
   assert.equal(result.isError, true);
 });
 test('a thrown drag child still restores focus and a cleanup failure cannot report success', async () => {
   const operations = [];
-  const result = await callLocalTool('drag', { app: 'Chess' }, async () => true, async (script, args) => {
+  const result = await callLocalTool('drag', { app: 'Chess', from: [1, 2], to: [3, 4] }, async () => true, async (script, args) => {
     operations.push(args.op ?? 'drag');
     if (args.op === 'capture') return { ok: true, previousPid: 99, targetPid: 7 };
     if (args.op === 'restore') return { ok: false, error: 'previous app exited' };

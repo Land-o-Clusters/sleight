@@ -100,14 +100,17 @@ test('FD5B a failed first size read stays unknown after a later readable resize'
 
 for (const release of [false, true]) test(`VP1 clears metrics on the installing Playwright session, release=${release}`, async () => {
   const { page, calls } = sizedPage();
+  const session = await page.context().newCDPSession(page);
   const impl = { delegate: { _mainFrameSession: { _metricsOverride: { width: 390 },
-    _client: { send: async method => calls.push(['owner', method]) } } },
+    _client: { send: async method => { calls.push(['owner', method]); return session.send(method); } } } },
     _setEmulatedSize: () => {} };
   page._connection = { toImpl: () => impl };
   await setViewport(page, { width: 390, height: 844 });
   calls.length = 0;
   await restoreViewport(page, { release });
-  assert.deepEqual(calls.filter(call => call[0] === 'owner'), [['owner', 'Emulation.clearDeviceMetricsOverride']]);
+  assert.deepEqual(calls.filter(call => call[0] === 'owner'), [...release ? [] : [['owner', 'Page.getLayoutMetrics']],
+    ['owner', 'Emulation.clearDeviceMetricsOverride'],
+    ...release ? [] : [['owner', 'Page.getLayoutMetrics']]]);
   assert.equal(impl.delegate._mainFrameSession._metricsOverride, undefined);
 });
 
@@ -172,7 +175,7 @@ test('the tool boundary takes both sizes or neither, and the descriptions name t
   assert.throws(() => call({ do: 'viewport', width: 390 }), /width and height, or neither/);
   assert.throws(() => call({ do: 'viewport', height: 844 }), /width and height, or neither/);
   const text = Object.fromEntries(browserTools('bbench').map(tool => [tool.name, tool.description]));
-  assert.match(text.browser_act, /viewport: width\/height, color_scheme, reduced_motion, touch for user-asked tests; empty resets all/);
+  assert.match(text.browser_act, /viewport: width\/height, color_scheme:light\/dark, reduced_motion:boolean, touch:boolean for user-asked tests; empty resets all/);
   assert.match(text.browser_read, /Read untrusted state/);
 });
 

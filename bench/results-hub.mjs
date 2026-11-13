@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 // The benchmark hub: one generator for docs/results/. It runs in two stages.
-//   collect: reads the raw results (docs/benchmarks, and the claim and race folders under ~/Projects/sleight-wt) and writes one
+//   collect: reads the raw results (docs/benchmarks, and the claim and race folders under the configured evidence root) and writes one
 //            scrubbed data file per family to docs/results/data/. A family whose raw folder is missing on this Mac keeps the
 //            data file already in the repo, so the pages rebuild anywhere.
 //   render:  reads only those data files and writes the index (README.md, index.html), one Markdown page per family, the chart
@@ -12,9 +12,11 @@
 // bench/fowl/race-score.mjs for the browser race rounds. Nothing in the output depends on the clock. Every arm's numbers name the
 // ChatGPT engine versions they ran on with their UTC dates, read from the results or inferred from the checked-in timeline
 // (bench/engine-versions.json; run `node bench/engine-version.mjs refresh` on the benchmark Mac before collecting).
-//   node bench/results-hub.mjs [--wt ~/Projects/sleight-wt] [--out docs/results] [--render-only] [--hub-only] [--check] [--exclude-covered] [--bank <folder>]...
+//   node bench/results-hub.mjs [--wt PATH] [--out docs/results] [--render-only | --validation-only] [--hub-only] [--check] [--exclude-covered] [--bank <folder>]...
+// --validation-only collects only explicit --bank folders, retaining every other family's published data.
 // --hub-only leaves the root README alone, including during --check. Release preflight always checks it too.
 // The runners run collect and render once after a successful pass through bench/hub-refresh.mjs (--no-hub or SLEIGHT_NO_HUB=1 stops it).
+import { benchEvidencePath } from './runtime-options.mjs';
 import { execFileSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { existsSync, mkdirSync, readFileSync, readdirSync, statSync, writeFileSync } from 'node:fs';
@@ -22,6 +24,7 @@ import { homedir, userInfo } from 'node:os';
 import { basename, dirname, join, relative, resolve } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { isDeepStrictEqual } from 'node:util';
+import { collectTripwire } from './results-tripwire.mjs';
 import { claim, excluded, regradeFor, score, warnings } from './claim-score.mjs';
 import { coveredRows, loadRound, markCover, scoreRounds } from './fowl/race-score.mjs';
 import { ANSWER_GRADER_FILE, currentAnswerGraders } from './fowl/real-gate-grade.mjs';
@@ -737,6 +740,10 @@ const bankSource = dir => (resolve(dir).startsWith(homedir() + '/') ? tilde(dir)
 // comparison file yet (an aborted attempt, or a run in progress).
 export function readBank(dir) {
   const release = tryJson(join(dir, 'final-verdict.json')), schedule = tryJson(join(dir, 'schedule.json'));
+  const identity = tryJson(join(dir, 'queue-identity.json'));
+  if (/^validation-160[a-z]+$/.test(basename(dir)) && identity?.builds && Array.isArray(schedule)) {
+    return { id: scrub(basename(dir)), dir, kind: 'tripwire', format: 'tripwire160', identity, schedule };
+  }
   if (release?.identity?.builds && Array.isArray(release.verdicts) && Array.isArray(schedule)) {
     return { id: scrub(basename(dir)), dir, kind: 'validation', format: 'release150', file: 'final-verdict.json', result: release, schedule };
   }
@@ -855,6 +862,7 @@ function bankStudy(bank, group, tables, extra) {
 }
 
 export function collectBank(bank) {
+  if (bank.format === 'tripwire160') return collectTripwire(bank, { scrub, bankSource, dateRange, cellsFor });
   if (bank.format === 'release150') return collectReleaseBank(bank);
   const { plan, result } = bank, record = { id: bank.id, kind: bank.kind, source: bankSource(bank.dir), file: bank.file };
   const span = logSpan(join(bank.dir, bank.kind === 'remeasure' ? 'remeasure.log' : 'validate-140.log'));
@@ -1338,7 +1346,7 @@ const previousRelease = bank => bank.id === 'validation-150f-rel3'
 function validationHeadline(data) {
   const release = data.banks.filter(bank => bank.release).sort((a, b) => (a.date ?? '').localeCompare(b.date ?? '')).at(-1);
   if (release) return `${release.passed ? 'RELEASE PASS' : 'RELEASE BLOCKED'}: ${lowFirst(bankLabel(release.id))}${previousRelease(release)}, ${release.release.verdicts.filter(v => !v.regressed).length} of ${release.release.verdicts.length} groups within their time and pass-loss limits ` +
-    `(${release.date}, engine ${release.engine}). ${data.banks.filter(b => !b.pending).length} scored banks, including the older engine records`;
+    `(${release.date}, engine ${release.engine}). ${data.banks.filter(b => !b.pending && !b.tripwire).length} scored banks, including the older engine records`;
   const scored = data.banks.filter(bank => !bank.pending), unscored = data.banks.length - scored.length;
   if (!scored.length) return 'No validation bank has a score yet';
   const rows = data.studies.flatMap(compareTasks);
@@ -1392,6 +1400,46 @@ function bankSection(data, bank) {
   return out.join('\n');
 }
 
+function tripwireSection(data) {
+  const banks = data.banks.filter(bank => bank.tripwire);
+  if (!banks.length) return '';
+  const out = ['## 1.6.0 tripwire A/B\n',
+    'The owner chose to release 1.6.0 on these first rounds on November 7, 2026, and stopped the remaining A/B. ' +
+    'The `AS-3 Safari` gate missed in 160a. Native missed in 160b. All three banks stopped before the planned three runs per side finished. ' +
+    'Native and Safari use the engine path, Chrome uses turbo. Glide was outside this A/B.\n',
+    'The recorded first-cycle gate sums mean attempt times on tasks with at least one pass on each side, including failed attempt times. ' +
+    'The passing lower-median totals below use the same comparable tasks and exclude failed times. The gate change and limit refer to the mean attempt totals. ' +
+    'Groups without a recorded gate are incomplete, even when some tasks passed.\n',
+    'A uses the 1.5.1 plugin tree (release `a7390782`) in the `a160h` harness: `2918a758` in 160a, then `13205dc4` in 160b/c. ' +
+    'B is `8e1c0ca7` in 160a and `5ad549a1` in 160b/c. Both A harnesses have the release plugin tree.\n',
+    'Chrome 160a A round 1 lost all 13 tasks to turbo signature refusals. A recorded Chrome 156.0.8078.48 before launch and B recorded 156.0.8078.80 four minutes later. ' +
+    'A Chrome update during the round is the likeliest cause, but the bank does not show which signature check failed. Those failures remain counted. ' +
+    'In the `AS-3 Safari` miss, B took 12 more turns than A, and 6 of its calls were invalid native `pressKey(target,key)` calls. ' +
+    'Whether the skill wording caused them is not proven. The skl1 wording fix preceded 160b, whose single `AS-3 Safari` round changed by -12.5%.\n',
+    'Native word-memo varied on the same A plugin build from 147.0 s (29 turns) in 160a to 69.9 s (17 turns) in 160b. ' +
+    'B took 94.9 s (22 turns), 202.2 s (30 turns), then 218.4 s (46 turns). The trace study found 4 passes in 5 attempts and did not establish a skill cause. ' +
+    'In 160c, Word said the file was already open elsewhere. Sleight twice refused the alert OK as an unverifiable cookie wall. ' +
+    'The checker reported unexpected Word paragraphs, and fixture cleanup failed with AXFocusedWindow -25204. The bank stopped at `native-B-r1-ba`. ' +
+    'Native textedit-notes-table failed on A in 160a and 160b and on B in 160a.\n'];
+  for (const bank of banks) {
+    const t = bank.tripwire, studies = data.studies.filter(s => s.bank === bank.id);
+    out.push(`### ${bank.id}\n`, `${bank.date}. A ${code(bank.aBuild)}, B ${code(bank.bBuild)}. ChatGPT engine ${code(bank.engine)} (receipt start and end).\n`);
+    out.push(mdTable(['Group', 'A passes/runs', 'B passes/runs', 'Comparable tasks', 'A passing lower-median s', 'B passing lower-median s', 'A gate mean s', 'B gate mean s', 'Gate change', 'Limit', 'Gate'], t.groups.map(g => [
+      code(g.kind), `${g.passA}/${g.runsA}`, `${g.passB}/${g.runsB}`, g.comparable, g.status === 'incomplete' ? 'partial, no gate' : f1(g.aPassingTotal), g.status === 'incomplete' ? 'partial, no gate' : f1(g.bPassingTotal), f1(g.aTotal), f1(g.bTotal), pct(g.slowdown), pct(g.limit), g.status])) + '\n');
+    out.push(mdTable(['Group', 'A actual model ids', 'A effort', 'B actual model ids', 'B effort'], t.groups.map(g => {
+      const s = studies.find(s => s.group === g.kind);
+      return [code(g.kind), s?.models[BUILD_A].map(code).join(', ') || 'not run', s?.effortBySide[BUILD_A].join(', ') || 'not run',
+        s?.models[BUILD_B].map(code).join(', ') || 'not run', s?.effortBySide[BUILD_B].join(', ') || 'not run'];
+    })) + '\n');
+    out.push(t.exclusions.length ? list(t.exclusions.map(e => `${code(e.task)}, ${e.kinds.map(code).join(', ')}, sides ${e.sides.join('/')}: ${code(e.reason)}.`)) + '\n' : 'No task exclusions.\n');
+    if (t.excludedRuns.length) out.push(details('Excluded recorded task attempts', mdTable(['Task', 'Side', 'Round', 'Passed', 's'], t.excludedRuns.map(r => [code(r.task), r.arm, code(r.round), r.passed ? 'yes' : 'no', f1(r.seconds)]))));
+    if (t.aborted.length) out.push(mdTable(['Aborted step', 'Side', 'Exit', 'Reason'], t.aborted.map(r => [code(r.step), r.side, r.rc, code(r.reason)])) + '\n');
+    out.push(details('Every scheduled step', mdTable(['Step', 'Group', 'Side', 'Status', 'Reason'], t.steps.map(s => [code(s.id), code(s.kind), s.side, s.status, s.reason ? code(s.reason) : '']))));
+    for (const study of studies) out.push(details(`${study.group}: every recorded task attempt`, mdTable(['Task', 'Side', 'Round', 'Passed', 's', 'Receipt', 'Reason'], study.runs.map(r => [code(r.task), r.arm, code(r.round), r.passed ? 'yes' : 'no', f1(r.seconds), r.receiptStatus, r.problem ? code(r.problem) : '']))));
+  }
+  return out.join('\n');
+}
+
 export function renderValidationPage(all, id) {
   const data = all[id], fam = family(id);
   const out = [pageHead(fam.page, fam.title)];
@@ -1406,7 +1454,8 @@ export function renderValidationPage(all, id) {
     'The re-measure runner (`bench/validation/remeasure.mjs`) runs 3 rounds of the final build against the stored build A rounds. Its gate needs build B to have no higher expected time and no lower pass rate on every selected task.',
     'A score file keeps each run\'s seconds and whether it passed, and not the failure reason. Each bank\'s folder keeps the receipts and logs.',
   ])));
-  const banks = data.banks.filter(bank => !bank.pending).sort((a, b) => (b.date ?? '').localeCompare(a.date ?? '') || b.id.localeCompare(a.id));
+  out.push(tripwireSection(data));
+  const banks = data.banks.filter(bank => !bank.pending && !bank.tripwire).sort((a, b) => (b.date ?? '').localeCompare(a.date ?? '') || b.id.localeCompare(a.id));
   if (!banks.length) out.push('No bank has a score yet.\n');
   for (const bank of banks) out.push(bankSection(data, bank));
   const pending = data.banks.filter(bank => bank.pending);
@@ -1528,7 +1577,7 @@ function renderIndex(all) {
     'The full rules are in [LAWS](../status/LAWS.md), and the tasks and harnesses in [benchmark.md](../benchmark.md).',
   ]) + '\n');
   out.push(details('Rebuild', '```sh\nnode bench/results-hub.mjs                # collect from the raw folders this Mac has, then render\nnode bench/results-hub.mjs --render-only  # render from docs/results/data only\nnode bench/results-hub.mjs --check        # exit 1 if a page, data file or README block would change\n```\n\n' +
-    'The raw claim, race and validation folders live outside the repo, in `~/Projects/sleight-wt/app-claim`, `~/Projects/sleight-wt/race-1017` and the banks under `~/Projects/sleight-wt` (any folder with a validation or re-measure `plan.json`). The FowlBrowser rematch banks are `~/Library/Caches/sleight-bench/evidence/fw1-e51c52a-haiku` and `fw1-e51c52a-opus`. Whole-thread corrections come from the tracked [regrade data](data/whole-thread-regrade.txt). Job-motion corrections use the tracked [color-synonym regrade](data/job-motion-regrade.json). On a Mac without the raw folders, the generator keeps the data files already here. `--wt <dir>` points it at another worktrees root and looks for rematch banks in its `evidence/` folder. The benchmark runners run the collect and render once after a successful pass (`bench/hub-refresh.mjs`), and `--no-hub` or `SLEIGHT_NO_HUB=1` stops that.'));
+    'The raw claim, race and validation folders live outside the repo, under an operator-selected evidence root (any folder with a validation or re-measure `plan.json`). The FowlBrowser rematch banks are `~/Library/Caches/sleight-bench/evidence/fw1-e51c52a-haiku` and `fw1-e51c52a-opus`. Whole-thread corrections come from the tracked [regrade data](data/whole-thread-regrade.txt). Job-motion corrections use the tracked [color-synonym regrade](data/job-motion-regrade.json). On a Mac without the raw folders, the generator keeps the data files already here. `--wt <dir>` points it at another worktrees root and looks for rematch banks in its `evidence/` folder. The benchmark runners run the collect and render once after a successful pass (`bench/hub-refresh.mjs`), and `--no-hub` or `SLEIGHT_NO_HUB=1` stops that.'));
   out.push(engineFooter(FAMILIES.flatMap(fam => headlineStudies(fam.id, all[fam.id]))) + '\n');
   return out.join('\n');
 }
@@ -1680,7 +1729,7 @@ export function collect({ wt, out, excludeCovered = false, banks: extraBanks = [
     all['browser-turbo'] = { ...kept, gates: gates.filter(s => s.family === 'browser-turbo') };
     notes.push('race: raw folder missing, kept the race data');
   }
-  const evidence = resolve(wt) === join(homedir(), 'Projects/sleight-wt') ? join(homedir(), 'Library/Caches/sleight-bench/evidence') : join(wt, 'evidence');
+  const evidence = join(wt, 'evidence');
   const rematchBanks = ['haiku', 'opus'].map(model => ({ dir: join(evidence, `fw1-e51c52a-${model}`), model })).filter(b => isDir(b.dir));
   verifyJobMotionRegrade(readJson(join(ROOT, 'docs/results/data/job-motion-regrade.json')), rematchBanks);
   if (rematchBanks.length) {
@@ -1771,12 +1820,17 @@ function argValue(argv, name) { const i = argv.indexOf(name); return i < 0 ? und
 const argValues = (argv, name) => argv.flatMap((arg, i) => (arg === name && argv[i + 1] ? [argv[i + 1]] : []));
 
 export function main(argv = process.argv.slice(2)) {
-  const wt = resolve(argValue(argv, '--wt') ?? join(homedir(), 'Projects/sleight-wt'));
+  const wt = resolve(argValue(argv, '--wt') ?? benchEvidencePath());
   const out = resolve(ROOT, argValue(argv, '--out') ?? 'docs/results');
   let all, notes = [];
-  if (argv.includes('--render-only')) {
+  if (argv.includes('--render-only') || argv.includes('--validation-only')) {
     verifyJobMotionRegrade(readJson(join(ROOT, 'docs/results/data/job-motion-regrade.json')));
     all = Object.fromEntries(FAMILIES.map(f => [f.id, readJson(join(out, 'data', `${f.id}.json`))]));
+    if (argv.includes('--validation-only')) {
+      const banks = argValues(argv, '--bank');
+      if (!banks.length) throw Error('--validation-only needs at least one --bank');
+      all.validation = collectValidation({ wt: null, kept: all.validation, banks });
+    }
   } else ({ all, notes } = collect({ wt, out, excludeCovered: argv.includes('--exclude-covered'), banks: argValues(argv, '--bank') }));
   const files = render(all);
   const readmeFile = join(ROOT, 'README.md');

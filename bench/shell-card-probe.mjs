@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 // Architect-run qualification. Importing this module does not compile, open UI or touch the shared lock.
 import { spawn, spawnSync } from 'node:child_process';
+import { helperCompileArgs } from '../plugins/sleight/lib/direct-browser/host-cache.mjs';
 import { mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync, openSync, closeSync, fsyncSync } from 'node:fs';
 import { lstat, mkdir, rmdir } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
@@ -25,8 +26,8 @@ export function compileShellCard(directory, { write = writeFileSync, compile = s
   const source = join(directory, 'main.swift'), host = join(directory, 'shell-card'), poster = join(directory, 'shell-poster');
   write(source, shellCardSource(), { flag: 'wx', mode: 0o600 });
   for (const [file, binary] of [[source, host], [fileURLToPath(new URL('./shell-card-poster.swift', import.meta.url)), poster]]) {
-    const result = compile('/usr/bin/xcrun', ['swiftc', '-module-cache-path', join(directory, 'cache'), file, '-o', binary],
-      { encoding: 'utf8', timeout: 120000, detached: true });
+    const result = compile('/usr/bin/xcrun', helperCompileArgs(binary === host ? 'consent-host' : 'probe-poster', { sources: [file], binary, moduleCache: join(directory, 'cache') }),
+      { encoding: 'utf8', timeout: 300000, killSignal: 'SIGKILL', detached: true });
     if (result.status !== 0) throw Error(result.stderr || result.error?.message || 'SHELL_CARD_COMPILE_FAILED');
   }
   return { host, poster };
