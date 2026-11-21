@@ -155,12 +155,15 @@ test('installed engine core and browser rendering agree byte for byte, without s
 });
 
 test('the installed reader selects legacy or platform-specific files without missing-file fallback', () => {
-  let modern = true, missing = false;
+  let modern = true, missing = false, split = false, builder = 'n(`${t}-${i}`)';
   const requests = [];
   const read = path => {
     requests.push(path);
-    if (path.endsWith('create_documentation.js')) return modern ? 'n(`${t}-${i}`)' : 'const i=yield n(t);';
-    if (path.endsWith('browser-service.mjs')) return 'l=["# Selected Browser",`- Name: ${t.name}`,`- Type: ${t.type}`,`- ID: ${t.id}`,"Reuse.","Recover."].join';
+    if (path.endsWith('create_documentation.js')) return modern ? builder : 'const i=yield n(t);';
+    // 26.1117 moved the selected-browser block into browser-service-core.mjs; earlier engines have no core file.
+    const block = 'l=["# Selected Browser",`- Name: ${t.name}`,`- Type: ${t.type}`,`- ID: ${t.id}`,"Reuse.","Recover."].join';
+    if (path.endsWith('browser-service.mjs')) return split ? 'import"./browser-service-core.mjs";' : block;
+    if (path.endsWith('browser-service-core.mjs')) { if (split) return block; throw Object.assign(Error('ENOENT'), { code: 'ENOENT' }); }
     if (path.endsWith('documents.json')) return '[]';
     if (path.endsWith('api.json')) return '{"root":"Agent","interfaces":{"Agent":{}},"types":{}}';
     if (missing && path.endsWith('core-cua-repl-mac.md')) throw Error('ENOENT');
@@ -172,6 +175,10 @@ test('the installed reader selects legacy or platform-specific files without mis
     assert.deepEqual(loaded.coreNames, [`core-cua-repl-${suffix}`, 'core-cua-repl-no-cua', `core-node-repl-${suffix}`, 'core-node-repl-no-cua']);
     assert.equal(requests.some(p => p.endsWith('core-cua-repl.md')), false);
   }
+  // 26.1117's minifier renamed the reader's variables; the shape is what selects the platform files.
+  builder = 'e(`${i}-${o}`)'; split = true;
+  assert.deepEqual(loadInstalledDocumentation({ platform: 'darwin', read }).coreNames,
+    ['core-cua-repl-mac', 'core-cua-repl-no-cua', 'core-node-repl-mac', 'core-node-repl-no-cua']);
   missing = true;
   assert.throws(() => loadInstalledDocumentation({ platform: 'darwin', read }), /ENOENT/);
   missing = false; modern = false;

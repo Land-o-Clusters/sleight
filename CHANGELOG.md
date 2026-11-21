@@ -1,5 +1,15 @@
 # Changelog
 
+## 1.6.2 (2026-11-21)
+
+ChatGPT 26.1117 changed how its computer-use engine lays out its documentation. Its bundle renamed the variables in
+the code that picks each platform's docs, and it moved the browser service into a new file,
+`browser-service-core.mjs`. sleight matched the old layout byte for byte, so on 26.1117 it stopped recognizing the
+engine's docs. Driving still worked, but sleight no longer deferred, replayed or deduplicated them, so every result
+carried the full docs again. sleight now matches that code's pattern with any variable names, and reads the
+browser service from the new file when it exists. Both layouts are covered by tests, and 118 of 118 documentation,
+budget and compatibility tests pass against the installed 26.1117.
+
 ## 1.6.1 (2026-11-13)
 
 In Claude Code, 1.6.0 refused every Bash command and every Write or Edit whose path did not exist yet, such as

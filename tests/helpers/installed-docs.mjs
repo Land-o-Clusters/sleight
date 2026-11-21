@@ -1,13 +1,15 @@
 // Read and render the real installed bundle offline. Never import its service.
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { runInNewContext } from 'node:vm';
 import { MODULES_REL } from '../../plugins/sleight/lib/setup.mjs';
 
 export function installedBrowserRenderer(app = process.env.SLEIGHT_CHATGPT_APP || '/Applications/ChatGPT.app') {
   const root = join(app, MODULES_REL, '@oai/browser-desktop');
-  const source = readFileSync(join(root, 'scripts/browser-service.mjs'), 'utf8');
+  // 26.1117 moved the service body into browser-service-core.mjs and left a loader in browser-service.mjs.
+  const core = join(root, 'scripts/browser-service-core.mjs');
+  const source = readFileSync(existsSync(core) ? core : join(root, 'scripts/browser-service.mjs'), 'utf8');
   // Independent oracle: execute only the installed pure document renderer in an
   // empty VM, with fixture browser metadata and file reads. No service is imported.
   const counter = /id:String\((\w+)\+\+\)/.exec(source)?.[1];
@@ -20,7 +22,9 @@ export function installedBrowserRenderer(app = process.env.SLEIGHT_CHATGPT_APP |
   const support = /new Set\((\w+)\(\{apiManifest:r,browserInfo:t/.exec(classText)?.[1];
   const start = source.indexOf(`function ${support}({apiManifest:e,browserInfo:t,disabledMemberIds:r})`);
   const capAt = source.indexOf('let r=e==="browser"?', selectedAt);
-  const end = source.indexOf('}c();function ', capAt) + 1;
+  // The next declaration can be var or function. Stop before the initializer
+  // call instead of including unrelated service code up to a later function.
+  const end = source.indexOf('}c();', capAt) + 1;
   const globals = /let r=e==="browser"\?(\w+):(\w+),/.exec(source.slice(capAt));
   assert.ok(start > 0 && end > start && className && globals);
   const infos = new Map([...source.matchAll(/\{id:"([A-Za-z]+)",description:"((?:\\.|[^"\\])*)"\}/g)].map(m => [m[1], JSON.parse(`"${m[2]}"`)]));

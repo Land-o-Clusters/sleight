@@ -23,7 +23,8 @@ export function loadInstalledDocumentation({ app = process.env.SLEIGHT_CHATGPT_A
   let coreNames;
   // The newer emitter passes computer.target (or "no-cua") to read_core.
   // Select from that version's actual reader, never fall back on a missing file.
-  if (builder.includes('n(`${t}-${i}`)') && target) coreNames = [`core-cua-repl-${target}`, 'core-cua-repl-no-cua', `core-node-repl-${target}`, 'core-node-repl-no-cua'];
+  // The minifier renames the two variables between releases (26.1111: n(`${t}-${i}`); 26.1117: e(`${i}-${o}`)).
+  if (/\b[A-Za-z_$]\(`\$\{[A-Za-z_$]\}-\$\{[A-Za-z_$]\}`\)/.test(builder) && target) coreNames = [`core-cua-repl-${target}`, 'core-cua-repl-no-cua', `core-node-repl-${target}`, 'core-node-repl-no-cua'];
   else if (builder.includes('const i=yield n(t);')) coreNames = ['core-cua-repl', 'core-node-repl'];
   else throw Error('Unknown engine core documentation format');
   const cores = coreNames.map(doc), policy = doc('confirmations');
@@ -38,9 +39,15 @@ export function loadInstalledDocumentation({ app = process.env.SLEIGHT_CHATGPT_A
 // Browser documentation is rendered from the installed manifest. All prose and API
 // declarations come from the bundle. The selected-browser name must be a literal
 // shipped name; custom names fail closed. Only the ID slot admits variable data.
+function readIfPresent(read, path) {
+  try { return read(path, 'utf8'); }
+  catch (error) { if (error?.code === 'ENOENT') return ''; throw error; }
+}
+
 function loadBrowserDocumentation(modules, read) {
   const root = join(modules, '@oai/browser-desktop');
-  const source = read(join(root, 'scripts/browser-service.mjs'), 'utf8');
+  // 26.1117 moved the service body into browser-service-core.mjs and left a loader in browser-service.mjs.
+  const source = [read(join(root, 'scripts/browser-service.mjs'), 'utf8'), readIfPresent(read, join(root, 'scripts/browser-service-core.mjs'))].join('\n');
   const names = new Set([...source.matchAll(/\b(?:displayName|shortDisplayName):"((?:\\.|[^"\\])*)"/g)].map(m => JSON.parse(`"${m[1]}"`)));
   for (const match of source.matchAll(/\{id:"[A-Za-z0-9_-]+",name:"((?:\\.|[^"\\])*)",type:"(?:iab|extension|cdp|mcpapps)"\}/g)) names.add(JSON.parse(`"${match[1]}"`));
   const selected = /l=\["# Selected Browser",`- Name: \$\{t.name\}`,`- Type: \$\{t.type\}`,`- ID: \$\{t.id\}`,((?:"(?:\\.|[^"\\])*",?){2})\]\.join/.exec(source);
