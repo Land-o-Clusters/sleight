@@ -1,0 +1,57 @@
+{
+  "mcpServers": {
+    "cua_repl": {
+      "command": "/bin/sh",
+      "args": [
+        "-c",
+        "export BROWSER_USE_ACCESS_EXECUTOR_ID=\"${BROWSER_USE_ACCESS_EXECUTOR_ID-}\"; exec \"$@\"",
+        "cua-repl",
+        "/Applications/ChatGPT.app/Contents/Resources/cua_node/bin/node_repl"
+      ],
+      "enabled": true,
+      "enabled_tools": [
+        "js",
+        "js_reset",
+        "turn_ended"
+      ],
+      "omit_tools_from": [
+        "code_mode",
+        "deferred"
+      ],
+      "startup_timeout_sec": 120,
+      "tools": {
+        "js": {
+          "output_token_limit": 25000
+        }
+      },
+      "env_vars": [
+        "BROWSER_USE_ACCESS_EXECUTOR_ID",
+        "BROWSER_USE_ACCESS_PIPE_PATH",
+        "BROWSER_USE_ACCESS_VERIFYING_IDENTITY"
+      ],
+      "env": {
+        "NODE_REPL_NATIVE_PIPE_CONNECT_TIMEOUT_MS": "1000",
+        "NODE_REPL_NODE_MODULE_DIRS": "/Applications/ChatGPT.app/Contents/Resources/cua_node/lib/node_modules",
+        "NODE_REPL_NODE_PATH": "/Applications/ChatGPT.app/Contents/Resources/cua_node/bin/node",
+        "NODE_REPL_TRUSTED_CODE_PATHS": "__HOME__/.codex:/Applications/ChatGPT.app/Contents/Resources/cua_node/lib/node_modules",
+        "CODEX_HOME": "__HOME__/.codex",
+        "BROWSER_USE_AVAILABLE_BACKENDS": "chrome,iab,mcpapps",
+        "BROWSER_USE_TINYSKY_ENABLED": "1",
+        "NODE_REPL_INSTRUCTIONS_USE_CASE_BROWSER": "Control the in-app browser in conjunction with the Browser Plugin.",
+        "NODE_REPL_INSTRUCTIONS_USE_CASE_CHROME": "Control the Chrome browser in conjunction with the Chrome Plugin. Prefer this method of controlling Chrome over alternatives (such as Computer Use) unless the user explicitly mentions an alternative.",
+        "NODE_REPL_INSTRUCTIONS_USE_CASE_COMPUTER_USE": "Control desktop apps on macOS through Computer Use.",
+        "BROWSER_USE_CODEX_APP_BUILD_FLAVOR": "prod",
+        "BROWSER_USE_CODEX_APP_VERSION": "26.1117.41037",
+        "NODE_REPL_TRUSTED_SERVICES": "{\"browser\":\"@oai/browser-desktop/service\",\"sky\":\"@oai/sky/service\"}",
+        "SKY_CUA_SERVICE_PATH": "__HOME__/.codex/computer-use/Codex Computer Use.app",
+        "CODEX_CLI_PATH": "/Applications/ChatGPT.app/Contents/Resources/codex-cli/CodexCLI.app/Contents/MacOS/codex",
+        "NODE_REPL_LAZY_TRUSTED_WORKER": "0",
+        "CUA_REPL_OMIT_CONFIRMATION_POLICY": "{\"aeon\":false}",
+        "NODE_REPL_UNTRUSTED_ENV_ALLOWLIST": "CUA_REPL_OMIT_CONFIRMATION_POLICY,CUA_REPL_ENABLED_SURFACES,CUA_REPL_BROWSER_ENV",
+        "CUA_REPL_ENABLED_SURFACES": "browser,computer",
+        "NODE_REPL_JS_BANNER": "await import(\"@oai/cua/tinyskyAlt\");\n",
+        "NODE_REPL_TOOL_OVERRIDES": "{\"server_instructions\":\"UI automation through cua_repl using the initialized cua API.\",\"tools\":{\"js\":{\"description\":\"Control native apps or browsers on the user’s computer by reading or operating UI. Prefer purpose-built skills, connectors, APIs, or CLIs when available.\\n\\nOn the first invocation of `cua_repl`, or after resetting it, execute exactly one of the API calls shown below, optionally assigning its result to a variable. Do not add other API calls, waits, or snapshots to that invocation.\\nThe tool result will include documentation and, when creating or selecting a tab or selecting an app, its initial UI state. Selecting a browser does not open a tab. Read that result before continuing.\\nUse only APIs described in the tool instructions or returned documentation.\\n\\nWhen you need an inventory of available apps, browsers, and tabs, get a snapshot of all enabled surfaces. Otherwise, use the relevant entry point below:\\n\\n```javascript\\nawait cua.getState();\\n```\\n\\nUse the first matching browser control option from the user's request:\\n\\nFor a tab @-mention (`mention=tab-v1`):\\nPass the complete `plugin://...` URL to get the referenced tab.\\n\\n```javascript\\nlet tab = await cua.getTab({ mention: tabMentionUrl });\\n```\\n\\nFor an existing tab identified by URL in browser context (including the current IAB tab):\\n\\n```javascript\\nlet tab = await cua.getTab({ url }, { browser: browserId });\\n```\\n\\nKnown tab ID (`tabId` or `providerTabId`) and browser (name or browser @-mention):\\n\\n```javascript\\nlet tab = await cua.getTab(tabId, { browser: browserId });\\n```\\n\\nTo open a URL in the in-app browser (`@Browser`):\\n\\n```javascript\\nlet tab = await cua.createBrowserTab(\\\"iab\\\", url, { visible: boolean });\\n```\\n\\nTo open a URL in another named browser: pass its name directly; do not call `getBrowser` first.\\n\\n```javascript\\nlet tab = await cua.createBrowserTab(browserName, url, browserOptions);\\n```\\n\\nKnown URL, only when the user has not specified a browser by name or @-mention:\\n\\n```javascript\\nlet browser = await cua.getBrowser({ url });\\n```\\n\\nBrowser IDs and options:\\n\\n- `\\\"mcpapps\\\"`: use `cua.getBrowser({ id: \\\"mcpapps\\\" })` for existing full-screen MCP Apps in the task’s side panel.\\n- `\\\"iab\\\"` (in-app browser): in `createBrowserTab`, use `visible: true` to show the browser; `false` to keep it hidden.\\n- `\\\"dot\\\"` (Dot): use only when present in browser inventory. It accesses tabs on Dot's active main thread. `cua.getTab(tabId, { browser: \\\"dot\\\" })` selects an existing tab. `cua.createBrowserTab(\\\"dot\\\", url, { visible: boolean })` creates one with the same visibility options as `\\\"iab\\\"`.\\n- `\\\"chrome\\\"` (@Chrome), `\\\"edge\\\"` (@Edge): pass a short, emoji-prefixed `sessionName` (e.g. `\\\"🔎 Task\\\"`) to `createBrowserTab` when starting a task.\\n\\nIf the user specifies an app to use, get the app by name, bundle ID, or path:\\n\\n```javascript\\nlet app = await cua.getApp(\\\"Example App\\\");\\n```\\n\\nTo add other content to the tool result, use `nodeRepl.write(value)` for text or other values and `await nodeRepl.emitImage(image)` for images. The APIs listed above already display their documentation or UI state; do not wrap their results in `write` or `emitImage`.\\n\\nIf your context begins with a summary of an existing computer use task, call `await cua.rewriteDocumentation()` before continuing the computer use task to ensure you have a complete view of the necessary documentation.\\n\\nSeveral `cua_repl.js` calls may work toward the same goal. As soon as you observe the final outcome of the CUA part of the task, your next output item must be a standalone assistant commentary message containing only `::browser-complete{title=\\\"<headline>\\\"}`. Emit it exactly once. Do this before using another tool for the next part of the user’s request or sending your reply, even if the overall request continues. If you hand control to the user, wait to summarize until the handoff has ended and you’ve observed the final outcome of the CUA part of the task. Follow the commentary in the same response with your next tool call or final answer.\\n\\nWrite a headline for the observed outcome in three to six words total. Start with a past-tense verb and name the result in plain language, as in 'Booked a plumber for Thursday' or 'Renewed vehicle registration'. Leave identifiers, values, and explanations for the reply.\",\"field_descriptions\":{\"code\":\"JavaScript to execute using the initialized cua_repl runtime.\",\"title\":\"Short user-facing description of what this code block is doing. Prefer a few words in present-progressive form, such as 'Checking the mobile layout' or 'Comparing prices', over imperative or past-tense titles.\"}},\"js_reset\":{\"description\":\"Reset the persistent cua_repl JavaScript session. All JavaScript bindings are discarded. The next cua_repl.js call initializes a fresh runtime for the enabled surfaces. This does not close browser tabs or native apps, or erase their state.\"}}}"
+      }
+    }
+  }
+}

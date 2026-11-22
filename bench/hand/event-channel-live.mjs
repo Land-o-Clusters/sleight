@@ -9,6 +9,7 @@ import { openClient } from '../compat/client.mjs';
 import { acquireLiveLock } from '../live-lock.mjs';
 import { bounded, closeOwnedClient, runProbe } from './event-channel.mjs';
 import { inspectLiveLock } from './event-channel-recovery.mjs';
+import { shellExecWrapper } from '../../plugins/sleight/lib/engine-launch.mjs';
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '../..');
 const sha256 = value => createHash('sha256').update(value).digest('hex');
@@ -27,9 +28,12 @@ function fileHash(path) {
 /** Hash argument bytes and entrypoint bytes without recording unknown argument strings or environment values. */
 export function captureIdentity(server) {
   try {
+    // ChatGPT 26.1117's `/bin/sh -c 'export …; exec "$@"'` wrapper names its entrypoint (node_repl) at args[3].
+    const wrapped = Boolean(shellExecWrapper(server.command, server.args));
     if (typeof server.command !== 'string' || !server.command.startsWith('/') || !Array.isArray(server.args) ||
-        !server.args.every(arg => typeof arg === 'string') || server.args.length && !server.args[0].startsWith('/'))
+        !server.args.every(arg => typeof arg === 'string') || !wrapped && server.args.length && !server.args[0].startsWith('/'))
       throw Error('engine command or entrypoint shape is unsupported');
+    const entrypointArgIndex = wrapped ? 3 : server.args.length ? 0 : null;
     const hashes = paths => Object.freeze(Object.fromEntries(paths.map(path => [path, fileHash(resolve(ROOT, path))])));
     const probes = hashes(['bench/hand/event-channel.mjs', 'bench/hand/event-channel-live.mjs', 'tests/hand-event-channel.test.mjs',
       'bench/hand/event-channel-recovery.mjs', 'tests/hand-event-channel-recovery.test.mjs']);
@@ -39,7 +43,7 @@ export function captureIdentity(server) {
     if (!/^[a-f0-9]{40}$/.test(head)) throw Error('invalid source HEAD');
     return Object.freeze({ source: Object.freeze({ head, probes, dependencies }), engine: Object.freeze({
       commandSha256: fileHash(server.command), commandSelectorSha256: sha256(server.command),
-      entrypointSha256: fileHash(server.args[0] ?? server.command), entrypointArgIndex: server.args.length ? 0 : null,
+      entrypointSha256: fileHash(entrypointArgIndex === null ? server.command : server.args[entrypointArgIndex]), entrypointArgIndex,
       argsSha256: sha256(JSON.stringify(server.args)), argCount: server.args.length,
     }) });
   } catch { throw Error('candidate or engine identity could not be captured safely'); }

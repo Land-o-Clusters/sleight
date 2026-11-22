@@ -17,7 +17,7 @@ import { execFile, execFileSync } from 'node:child_process';
 import { randomBytes } from 'node:crypto';
 import { appendFileSync, existsSync, mkdirSync, mkdtempSync, readFileSync, renameSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { homedir, tmpdir, userInfo } from 'node:os';
-import { dirname, isAbsolute, join, resolve } from 'node:path';
+import { basename, dirname, isAbsolute, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { promisify } from 'node:util';
 import { DOCS_CODE, engineDocsText, captureEngineDocs } from '../scripts/engine-docs.mjs';
@@ -64,24 +64,40 @@ function nodeOptionArities(help) {
 // This check never starts the engine or reads script contents. Non-path values are placeholders so a title,
 // inline program or future credential argument cannot end up in a local report.
 export async function launchShapeCheck({ env = process.env, resolve: findServer, server, nodeHelp, run = execute } = {}) {
-  const { engineLaunchPaths, NODE_VALUE_FLAGS, resolveServer } = await import('../plugins/sleight/lib/launch.mjs');
+  const { engineLaunchPaths, NODE_VALUE_FLAGS, resolveServer, unwrappedLaunch } = await import('../plugins/sleight/lib/launch.mjs');
   const result = { id: 'launch-shape', status: 'fail' };
   const checked = reason => ({ version: server?.version, result: { ...result, reason } });
   try { server ??= (findServer ?? resolveServer)(env); }
   catch { return checked('could not resolve the installed engine'); }
   if (!server || server.error) return checked('could not resolve the installed engine');
-  const args = server.args;
-  if (!Array.isArray(args) || args.some(arg => typeof arg !== 'string' || !arg)) return checked('launch args must be nonempty strings');
-  const paths = engineLaunchPaths(args);
+  if (!Array.isArray(server.args) || server.args.some(arg => typeof arg !== 'string' || !arg)) return checked('launch args must be nonempty strings');
   const pathValue = value => value.startsWith('file:') || isAbsolute(value) || /^\.\.?\//.test(value);
   const valueShape = value => pathValue(value) ? value.replaceAll(homedir(), '~') : '<value>';
-  result.shape = args.map(arg => {
+  result.shape = server.args.map(arg => {
     if (!arg.startsWith('-')) return valueShape(arg);
     const eq = arg.indexOf('=');
     return eq < 0 ? arg : `${arg.slice(0, eq)}=${valueShape(arg.slice(eq + 1))}`;
   });
+  const isFile = path => { try { return Boolean(path) && statSync(path).isFile(); } catch { return false; } };
+  // ChatGPT 26.1117 wraps the launch in `/bin/sh -c 'export …; exec "$@"'`. Only that exact wrapper unwraps; the
+  // checks below then read the program it execs. A wrapped node_repl is the server itself, with no Node options.
+  const launch = unwrappedLaunch(server.command, server.args);
+  if (server.command === '/bin/sh' && !launch.wrapper) return checked('unrecognized /bin/sh launch wrapper');
+  if (launch.wrapper) {
+    result.wrapper = { shell: launch.wrapper.shell, exports: launch.wrapper.exports };
+    if (!isFile(server.command)) return checked('missing launch shell');
+    if (!isFile(launch.runtime)) return checked('missing wrapped program');
+  }
+  if (launch.nodeRepl) {
+    result.status = 'pass';
+    return checked(`/bin/sh wrapper around node_repl, ${launch.args.length} program argument${launch.args.length === 1 ? '' : 's'}`);
+  }
+  // Only a wrapped Node gets its option help read: compat never runs another wrapped program.
+  if (launch.wrapper && basename(launch.runtime) !== 'node') return checked('wrapped program is neither node nor node_repl');
+  const args = launch.args;
+  const paths = engineLaunchPaths(args);
   try {
-    nodeHelp ??= (await run(server.command, ['--help'], { env: {}, timeout: 10000, maxBuffer: 1 << 20 })).stdout;
+    nodeHelp ??= (await run(launch.runtime, ['--help'], { env: {}, timeout: 10000, maxBuffer: 1 << 20 })).stdout;
   } catch { return checked('could not read the Node runtime option help'); }
   const arities = nodeOptionArities(String(nodeHelp));
   if (!arities.has('--import') || !arities.has('--require')) return checked('could not parse the Node runtime option help');
@@ -97,7 +113,6 @@ export async function launchShapeCheck({ env = process.env, resolve: findServer,
     }
     if (arities.get(name) && !inline) i++;
   }
-  const isFile = path => { try { return Boolean(path) && statSync(path).isFile(); } catch { return false; } };
   if (!isFile(paths.script)) return checked('missing server script file');
   const missing = paths.optionFiles.filter(path => !isFile(path));
   if (missing.length) return checked(`${missing.length} missing option file${missing.length === 1 ? '' : 's'}`);

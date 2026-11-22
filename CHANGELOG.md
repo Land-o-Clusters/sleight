@@ -1,5 +1,16 @@
 # Changelog
 
+## 1.6.3 (2026-11-22)
+
+ChatGPT 26.1117 starts its computer-use engine through a shell wrapper,
+`/bin/sh -c 'export BROWSER_USE_ACCESS_EXECUTOR_ID="${BROWSER_USE_ACCESS_EXECUTOR_ID-}"; exec "$@"'`, around node_repl.
+sleight read the wrapper's script text as the engine's server file, so `sleight-mcp --doctor`, `sleight-mcp setup` and
+`npm run compat` reported the engine missing and exited 1, though sessions still worked. Restarting the engine inside a
+session, after an engine update, would have failed the same way. sleight now recognizes that exact wrapper, checks the
+shell and node_repl it names, and still starts the engine exactly as configured. Any other shell launch fails the
+doctor. On a Mac with 26.1117.41037 the doctor exits 0 and its live read passes, and 13,736 of 13,846 tests pass with
+110 skipped.
+
 ## 1.6.2 (2026-11-21)
 
 ChatGPT 26.1117 changed how its computer-use engine lays out its documentation. Its bundle renamed the variables in

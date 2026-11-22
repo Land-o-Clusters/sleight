@@ -1392,6 +1392,10 @@ compaction, so it cannot isolate wording alone. That A/B has not run live.
 
 ## The engine and its helper
 
+- On ChatGPT 26.1117.41037 (2026-11-22), `npm run compat` fails its repl-probe step with "Sky Computer Use native pipe
+  startup failed" when it starts the engine on its own, in 1.6.2 and 1.6.3 alike. The daily watch reports that failure.
+  Sessions are unaffected: the engine passed 51 of 59 paired trials and 12 of 12 canary trials on that version. Why the
+  pipe fails only under compat is not known yet.
 - The ChatGPT engine's software cursor (drawn by its SkyComputerUseService helper) can stay on screen after a turn ends,
   until the Claude Code session running sleight is closed. Closing that session removes it. Seen once on the
   owner's Mac on 2026-11-11. How often it happens, and which engine versions do it, is unmeasured.

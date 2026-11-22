@@ -9,7 +9,7 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 import { openClient } from './compat/client.mjs';
 import { acquireAdmission } from './shell-card-probe.mjs';
 import { collectOwnedGroup } from '../plugins/sleight/lib/owned-group.mjs';
-import { resolveServer } from '../plugins/sleight/lib/launch.mjs';
+import { resolveServer, shellExecWrapper } from '../plugins/sleight/lib/launch.mjs';
 import { sessionEnvironment } from '../plugins/sleight/lib/socket-bridge.mjs';
 
 const ROOT = fileURLToPath(new URL('../', import.meta.url));
@@ -17,7 +17,9 @@ const sha256 = data => createHash('sha256').update(data).digest('hex');
 export function engineIdentity(server, read = readFileSync) {
   if (server.error) throw Error('ACQUISITION_ENGINE_UNAVAILABLE');
   const args = server.args ?? [];
-  const paths = [server.command, ...args.filter(arg => isAbsolute(arg) && /\.(?:mjs|cjs|js)$/.test(arg))];
+  // ChatGPT 26.1117 execs node_repl through a `/bin/sh -c` wrapper; that program's bytes belong in the identity too.
+  const wrapper = shellExecWrapper(server.command, args);
+  const paths = [server.command, ...wrapper ? [wrapper.program] : [], ...args.filter(arg => isAbsolute(arg) && /\.(?:mjs|cjs|js)$/.test(arg))];
   const files = Object.fromEntries(paths.map(path => [path, sha256(read(path))]));
   const argsSha256 = sha256(JSON.stringify(args));
   const identity = { version: server.version, command: server.command, files, argsSha256,

@@ -53,7 +53,9 @@ import { SELECT_WINDOW_TOOL, selectWindow } from './select-window.mjs';
 import { loadInstalledDocumentation } from './canonical-documentation.mjs';
 import { probeHelper, staleHelperJobs } from './helper-health.mjs';
 import { replayBridge } from './replay.mjs';
-import { serverFromChatGPTApp, setup, NODE_REL, REPL_REL } from './setup.mjs';
+import { serverFromChatGPTApp, setup, NODE_REL, NODE_REPL_REL, REPL_REL } from './setup.mjs';
+import { unwrappedLaunch } from './engine-launch.mjs';
+export { shellExecWrapper, unwrappedLaunch } from './engine-launch.mjs';
 import { handPid } from './hand/pid.mjs';
 import { ActionLog, actionLogPath } from './action-outcomes.mjs';
 import { codexDoctorLines, codexStatus } from './codex-host.mjs';
@@ -146,13 +148,16 @@ export function resolveServer(env = process.env) {
   serverEnv.CUA_REPL_ENABLED_SURFACES = env.SLEIGHT_SURFACES || 'computer';
 
   // Cache directories can lag an in-place ChatGPT update. Only relabel a launch
-  // when both its runtime and REPL resolve to this app's installed files.
+  // when both its runtime and REPL resolve to this app's installed files, or when
+  // its shell wrapper execs this app's node_repl (ChatGPT 26.1117).
   const args = server.args || [];
   const app = env.SLEIGHT_CHATGPT_APP || '/Applications/ChatGPT.app';
+  const launch = unwrappedLaunch(server.command, args);
   let installed, appLaunch = false;
   try {
-    if (realpathSync(server.command) === realpathSync(join(app, NODE_REL)) &&
-        realpathSync(engineLaunchPaths(args).script) === realpathSync(join(app, REPL_REL))) {
+    if (launch.nodeRepl ? realpathSync(launch.runtime) === realpathSync(join(app, NODE_REPL_REL))
+      : realpathSync(launch.runtime) === realpathSync(join(app, NODE_REL)) &&
+        realpathSync(engineLaunchPaths(launch.args).script) === realpathSync(join(app, REPL_REL))) {
       appLaunch = true;
       const plist = readFileSync(join(app, 'Contents/Info.plist'), 'utf8');
       installed = /<key>CFBundleShortVersionString<\/key>\s*<string>(\d+(?:\.\d+)*)<\/string>/.exec(plist)?.[1];
@@ -193,6 +198,15 @@ export function engineLaunchPaths(args) {
     if (arg.startsWith('file:') || isAbsolute(arg)) others.push(asPath(arg));
   }
   return { script, others, optionFiles };
+}
+
+// The files an engine restart needs before it spawns. A wrapped node_repl has no script; a wrapped node keeps the
+// script check; an unrecognized shell launch keeps the plain reading, whose inline script never exists.
+export function restartLaunchFiles(command, args) {
+  const launch = unwrappedLaunch(command, args);
+  const { script, others } = launch.nodeRepl ? { others: launch.args.filter(arg => isAbsolute(arg)) } : engineLaunchPaths(launch.args);
+  return [['runtime', command], ...launch.wrapper ? [['program', launch.runtime]] : [],
+    ...launch.nodeRepl ? [] : [['script', script]], ...others.map(path => ['argument', path])];
 }
 
 export function selectSurfaces(server, env = process.env, options) {
@@ -275,7 +289,7 @@ export function claudeModDoctorLine() {
   return 'Claude Code mod attribution: toolu_plugin_ plus 32 lowercase hex (measured 2.1.309, 4 runs). Missing or changed IDs refuse typed approvals and turbo; approve on the Mac. Payments ask on sleight\'s card. This doctor has no live mod probe.';
 }
 
-export async function doctor({ platform = process.platform, windows, documentation = loadInstalledDocumentation, env = process.env, log = console.log, app = process.argv.includes('--doctor') ? process.argv[process.argv.indexOf('--doctor') + 1] : undefined, timeoutMs = 5000, startupTimeoutMs = 10000, launchctlList = listLaunchdJobs, forbiddenTargets = readForbiddenTargets, preapprovedIO, auditDirectory, seals = settingsSealDoctorLine, turbo = turboDoctorLines, hand = handDoctorSection, permissions = permissionsDoctorSection, settings = async () => [(await import('./settings-link.mjs')).settingsDoctorLine(undefined, env)], codex = codexDoctor, cursor = cursorDoctor, grok = grokDoctor, grokbot = grokbotDoctor, runtime = options => import('./runtime-doctor.mjs').then(module => module.runtimeDoctor(options)) } = {}) {
+export async function doctor({ platform = process.platform, windows, documentation = loadInstalledDocumentation, env = process.env, log = console.log, app = process.argv.includes('--doctor') ? process.argv[process.argv.indexOf('--doctor') + 1] : undefined, timeoutMs = 5000, startupTimeoutMs = 10000, launchctlList = listLaunchdJobs, forbiddenTargets = readForbiddenTargets, preapprovedIO, auditDirectory, seals = settingsSealDoctorLine, turbo = turboDoctorLines, hand = handDoctorSection, permissions = permissionsDoctorSection, settings = async () => [(await import('./settings-link.mjs')).settingsDoctorLine(undefined, env)], codex = codexDoctor, cursor = cursorDoctor, grok = grokDoctor, grokbot = grokbotDoctor, liveRead = probeHelper, runtime = options => import('./runtime-doctor.mjs').then(module => module.runtimeDoctor(options)) } = {}) {
   if (platform === 'win32') return (await import('./windows-launch.mjs')).windowsDoctor({ ...windows, log });
   if (app !== undefined && (typeof app !== 'string' || !app.trim() || app.startsWith('-'))) {
     log('usage: sleight-mcp --doctor [running app name or bundle ID]'); return 1;
@@ -309,12 +323,14 @@ export async function doctor({ platform = process.platform, windows, documentati
   const s = resolveServer(env);
   if (s.error) { log(`sleight: ${s.error}`); return 1; }
   await probeSurfaces(s, env);
-  const launchPaths = engineLaunchPaths(s.args);
+  // A wrapped node_repl is the server itself; a wrapped node keeps the script and option-file checks.
+  const launch = unwrappedLaunch(s.command, s.args);
+  const launchPaths = launch.nodeRepl ? undefined : engineLaunchPaths(launch.args);
   const checks = [
-    ['node', s.command],
-    ['server script', launchPaths.script],
-    ...launchPaths.optionFiles.map(path => ['server file', path]),
-    ['node_repl', s.env.CUA_REPL_NODE_REPL_PATH],
+    ...launch.wrapper ? [['shell', s.command]] : [],
+    ...launch.nodeRepl ? [] : [['node', launch.runtime], ['server script', launchPaths.script],
+      ...launchPaths.optionFiles.map(path => ['server file', path])],
+    ['node_repl', launch.nodeRepl ? launch.runtime : s.env.CUA_REPL_NODE_REPL_PATH],
     ['computer-use helper', s.env.SKY_CUA_SERVICE_PATH],
   ];
   log(`Codex computer-use ${s.version}`);
@@ -322,8 +338,10 @@ export async function doctor({ platform = process.platform, windows, documentati
   if (s.appVersionUnreadable) log(`WARNING: ChatGPT app version is unreadable; using configured version ${s.version}.`);
   log(`config    ${s.configPath}`);
   log(`surfaces  ${s.env.CUA_REPL_ENABLED_SURFACES}`);
+  if (launch.wrapper) log(`launch    ${s.command} exec wrapper (exports ${launch.wrapper.exports.join(', ')})`);
   log(`refused apps  ${forbiddenTargetsAllowed(forbiddenTargets) ? 'allowed through the engine (ComputerUseAllowForbiddenTargets is on)' : `refused by the engine (the user can run ${ALLOW_FORBIDDEN_COMMAND})`}`);
   let ok = true;
+  if (s.command === '/bin/sh' && !launch.wrapper) { ok = false; log('MISSING   engine launch: /bin/sh with an unrecognized wrapper'); }
   for (const [label, path] of checks) {
     const found = Boolean(path) && existsSync(path);
     ok &&= found;
@@ -337,7 +355,7 @@ export async function doctor({ platform = process.platform, windows, documentati
     grantAudit = preapproved.size ? createGrantAudit(auditDirectory) : undefined;
   }
   let probe;
-  try { probe = await probeHelper(s, { app, preapproved, grantAudit, timeoutMs, startupTimeoutMs }); }
+  try { probe = await liveRead(s, { app, preapproved, grantAudit, timeoutMs, startupTimeoutMs }); }
   catch (err) { log(`live read cleanup FAILED: ${err.message}`); return 1; }
   if (probe.ok || probe.inventoryOk) log('live read ok (helper inventory)');
   if (probe.appRead) {
@@ -1297,9 +1315,7 @@ export async function run({ platform = process.platform, windows, leaseDirectory
     if (!Array.isArray(latest.args) || !latest.args.length || latest.args.some(arg => typeof arg !== 'string')) {
       throw new Error('Engine launch arguments are invalid.');
     }
-    const { script, others } = engineLaunchPaths(latest.args);
-    const paths = [['runtime', latest.command], ['script', script], ...others.map(path => ['argument', path])];
-    for (const [label, path] of paths) {
+    for (const [label, path] of restartLaunchFiles(latest.command, latest.args)) {
       if (typeof path !== 'string' || !existsSync(path)) throw new Error(`server ${label} missing: ${path}`);
     }
     return latest;
